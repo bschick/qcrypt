@@ -1,0 +1,55 @@
+<!-- MIT License
+
+Copyright (c) 2024 Brad Schick
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. -->
+<h1 mat-dialog-title style="margin: 0 0 1px 0">Decryption Parameters</h1>
+<div mat-dialog-content style="min-width: 440px; padding-top: 10px">
+  <p *ngIf="error">{{error}}</p>
+  <div *ngIf="!error">
+    <!--  <div [style.visibility]="error ? 'hidden' : 'visible'"> -->
+    <ul style="list-style-type: none; width: 160px; float: left; margin: 0">
+      <li><b>Hash Iterations:</b></li>
+      <li><b>Derived Keys:</b></li>
+      <li><b>AES Mode:</b></li>
+      <li><b>MAC Added:</b></li>
+      <li><b>Salt (base64):</b></li>
+      <li><b>IV (base64):</b></li>
+    </ul>
+    <ul style="list-style-type: none; width: 300px; float: left; margin: 0">
+      <li>{{ic}}</li>
+      <!-- hard-coded -->
+      <li>256-bit</li>
+      <li>{{alg}}</li>
+      <li>{{mac}}</li>
+      <li>{{slt}}</li>
+      <li>{{iv}}</li>
+    </ul>
+  </div>
+  <!--last so it doesn't get focus-->
+  <button
+    class="team-button3"
+    matSuffix
+    mat-icon-button
+    matDialogClose
+    aria-label="Close"
+  >
+    <mat-icon>close</mat-icon>
+  </button>
+</div>
