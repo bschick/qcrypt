@@ -1,0 +1,6 @@
+{
+  "installDependencies": true,
+  "startCommand": "npm start",
+  "env": {
+  }
+}
