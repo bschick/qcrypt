@@ -1447,7 +1447,6 @@ export class CipherInfoDialog {
   selector: 'help-dialog',
   standalone: true,
   templateUrl: './help-dialog.html',
-  styleUrl: './help-dialog.css',
   imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
          MatButtonModule],
 })
