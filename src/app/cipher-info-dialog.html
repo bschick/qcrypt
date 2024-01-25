@@ -19,32 +19,73 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
-<h1 mat-dialog-title style="margin: 0 0 1px 0">Decryption Parameters</h1>
-<div mat-dialog-content style="width: 555px;padding-top: 10px">
-  <p *ngIf="error">{{error}}</p>
-  <div *ngIf="!error"
-    style="width:100%; display:flex; flex-wrap:nowrap; justify-content:center; align-items:flex-start; column-gap: 15px">
-    <!--  <div [style.visibility]="error ? 'hidden' : 'visible'"> -->
-    <ul style="list-style-type: none; width:160px; margin: 0; padding:0; flex:none">
-      <li><b>Hash Iterations:</b></li>
-      <li><b>Derived Keys:</b></li>
-      <li><b>AES Mode:</b></li>
-      <li><b>HMAC Added:</b></li>
-      <li><b>Salt (base64):</b></li>
-      <li><b>IV (base64):</b></li>
-    </ul>
-    <ul style="list-style-type: none; width:230px; margin: 0; padding:0; flex:none">
-      <li>{{ic}}</li>
-      <!-- hard-coded -->
-      <li>256-bit</li>
-      <li>{{alg}}</li>
-      <li>{{mac}}</li>
-      <li>{{slt}}</li>
-      <li>{{iv}}</li>
-    </ul>
+<style nonce="ew26COJKMG8qrA/bjTcl0w==">
+  .cipher-info .header {
+    margin: 0 0 1px 0;
+  }
+
+  .cipher-info .dialog-content {
+    width: 555px;
+    padding-top: 10px;
+  }
+
+  .cipher-info .dialog-body {
+    width: 100%;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: center;
+    align-items: flex-start;
+    column-gap: 15px;
+  }
+
+  .cipher-info .tech-list {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    flex: none;
+  }
+
+  .cipiher-info .width160 {
+    width: 160px;
+  }
+
+  .cipiher-info .width230 {
+    width: 230px;
+  }
+
+  .cipher-info .close-button3 {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 999;
+  }
+</style>
+<span class="cipher-info">
+  <h1 mat-dialog-title class="header">Decryption Parameters</h1>
+  <div mat-dialog-content class="dialog-content">
+    <p *ngIf="error">{{error}}</p>
+    <div *ngIf="!error" class="dialog-body">
+      <ul class="tech-list width160">
+        <li><b>Hash Iterations:</b></li>
+        <li><b>Derived Keys:</b></li>
+        <li><b>AES Mode:</b></li>
+        <li><b>HMAC Added:</b></li>
+        <li><b>Salt (base64):</b></li>
+        <li><b>IV (base64):</b></li>
+      </ul>
+      <ul class="tech-list width230">
+        <li>{{ic}}</li>
+        <!-- hard-coded -->
+        <li>256-bit</li>
+        <li>{{alg}}</li>
+        <li>{{mac}}</li>
+        <li>{{slt}}</li>
+        <li>{{iv}}</li>
+      </ul>
+    </div>
+    <!--last so it doesn't get focus-->
+    <button class="close-button3" matSuffix mat-icon-button matDialogClose aria-label="Close">
+      <mat-icon>close</mat-icon>
+    </button>
   </div>
-  <!--last so it doesn't get focus-->
-  <button class="close-button3" matSuffix mat-icon-button matDialogClose aria-label="Close">
-    <mat-icon>close</mat-icon>
-  </button>
-</div>
+</span>
