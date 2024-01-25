@@ -10,3 +10,12 @@ body {
     padding: 30px;
     font-family: Roboto, "Helvetica Neue", sans-serif;
 }
+
+
+/* used in dialogs */
+.close-button3 {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 999;
+}
