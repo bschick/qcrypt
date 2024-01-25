@@ -19,102 +19,77 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
-<h1 mat-dialog-title style="margin: 0 0 1px 0">Quick Crypt Help</h1>
+<span class="help">
+  <h1 mat-dialog-title class="header">Quick Crypt Help</h1>
 
-<div mat-dialog-content style="min-height: 600px; padding-top: 10px">
-  <p>
-    Quick Crypt encrypts and decrypts text using a password you provide. Quick
-    Crypt uses cryptographic features built into modern browsers, ensuring that
-    your password, clear text, and even encrypted cipher text
-    <b>do not unexpectedly traverse the internet.</b> A typical use is to
-    encrypt text before storing or sending it through an untrusted channel. Your
-    original text can only be retrieved by someone who knows your password.
-    Remember your password, or you won't be able to retrieve the original text
-    either.
-  </p>
-  <p>
-    To use Quick Crypt, paste or upload the text you want to be encrypted in the
-    field on the left labeled <i>Enter Clear Text</i>, then click the
-    <b>Encrypt</b> button and enter a password. You can enter an optional
-    password hint to remind yourself which password you used. The hint is stored
-    in the clear with the encrypted text, so don't make it too revealing. The
-    encrypted results are displayed to the right and can be copied or saved to
-    disk. To decrypt information previously encrypted with Quick Crypt, paste or
-    open the encrypted text in the field on the right labeled
-    <i>Enter Cipher Text</i> and click the <b>Decrypt</b> button. If you've
-    forgotten your password, you are out of luck unless you have access to a
-    supercomputer and time to spare.
-  </p>
-  <p>
-    You can customize some of Quick Crypt's functionality by opening the
-    <i>Advanced Encryptions Options</i> panel and making changes. Other than
-    your password choice, Quick Crypt does not provide options known to be
-    insecure, so adjusting settings should be safe. If you want even more
-    security, you can encrypt something multiple times with the
-    <i>Loop Encrypt</i> option; just be sure to use a different password for
-    each loop.
-  </p>
-  <u>Technical Details</u>
-  <ul style="margin-top: 5px">
-    <li>
-      <b>Cryto Library: </b>Browser native
-      <a
-        href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API"
-        target="_blank"
-        >Web Crypto API</a
-      >
-    </li>
-    <li>
-      <b>Key Derivation: </b>
-      <a
-        href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey"
-        target="_blank"
-        >PBKDF2 using SHA-512</a
-      >
-      and selectable iterations (default 0.5s of hashing or 800K)
-    </li>
-    <li><b>Key Length: </b>256 bits (max for web crypto)</li>
-    <li>
-      <b>Encryption: </b>
-      <a
-        href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt"
-        target="_blank"
-        >AES</a
-      >
-      with selectable mode of operation and optional
-      <a
-        href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/sign"
-        target="_blank"
-        >HMAC-SHA256</a
-      >
-    </li>
-    <li>
-      <b>Random Data: </b>
-      <a href="https://random.org" target="_blank">random.org</a> or
-      <a
-        href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues"
-        target="_blank"
-        >window.crypto.getRandomValues</a
-      >
-    </li>
-    <li>
-      <b>Site Security: </b>
-      <a
-        href="https://observatory.mozilla.org/analyze/qcrypt.schicks.net"
-        target="_blank"
-        >Mozilla Observatory A+ rating</a
-      >
-    </li>
-  </ul>
+  <div mat-dialog-content class="dialog-content">
+    <p>
+      Quick Crypt encrypts and decrypts text using a password you provide. Quick
+      Crypt uses cryptographic features built into modern browsers, ensuring that
+      your password, clear text, and even encrypted cipher text
+      <b>do not unexpectedly traverse the internet.</b> A typical use is to
+      encrypt text before storing or sending it through an untrusted channel. Your
+      original text can only be retrieved by someone who knows your password.
+      Remember your password, or you won't be able to retrieve the original text
+      either.
+    </p>
+    <p>
+      To use Quick Crypt, paste or upload the text you want to be encrypted in the
+      field on the left labeled <i>Enter Clear Text</i>, then click the
+      <b>Encrypt</b> button and enter a password. You can enter an optional
+      password hint to remind yourself which password you used. The hint is stored
+      in the clear with the encrypted text, so don't make it too revealing. The
+      encrypted results are displayed to the right and can be copied or saved to
+      disk. To decrypt information previously encrypted with Quick Crypt, paste or
+      open the encrypted text in the field on the right labeled
+      <i>Enter Cipher Text</i> and click the <b>Decrypt</b> button. If you've
+      forgotten your password, you are out of luck unless you have access to a
+      supercomputer and time to spare.
+    </p>
+    <p>
+      You can customize some of Quick Crypt's functionality by opening the
+      <i>Advanced Encryptions Options</i> panel and making changes. Other than
+      your password choice, Quick Crypt does not provide options known to be
+      insecure, so adjusting settings should be safe. If you want even more
+      security, you can encrypt something multiple times with the
+      <i>Loop Encrypt</i> option; just be sure to use a different password for
+      each loop.
+    </p>
+    <u>Technical Details</u>
+    <ul class="tech-list">
+      <li>
+        <b>Cryto Library: </b>Browser native
+        <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API" target="_blank">Web Crypto API</a>
+      </li>
+      <li>
+        <b>Key Derivation: </b>
+        <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey" target="_blank">PBKDF2 using
+          SHA-512</a>
+        and selectable iterations (default 0.5s of hashing or 800K)
+      </li>
+      <li><b>Key Length: </b>256 bits (max for web crypto)</li>
+      <li>
+        <b>Encryption: </b>
+        <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt" target="_blank">AES</a>
+        with selectable mode of operation and optional
+        <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/sign" target="_blank">HMAC-SHA256</a>
+      </li>
+      <li>
+        <b>Random Data: </b>
+        <a href="https://random.org" target="_blank">random.org</a> or
+        <a href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues"
+          target="_blank">window.crypto.getRandomValues</a>
+      </li>
+      <li>
+        <b>Site Security: </b>
+        <a href="https://observatory.mozilla.org/analyze/qcrypt.schicks.net" target="_blank">Mozilla Observatory A+
+          rating</a>
+      </li>
+    </ul>
 
-  <!--last so it doesn't get focus-->
-  <button
-    class="team-button3"
-    matSuffix
-    mat-icon-button
-    matDialogClose
-    aria-label="Close"
-  >
-    <mat-icon>close</mat-icon>
-  </button>
-</div>
+    <!--last so it doesn't get focus-->
+    <button class="close-button3" matSuffix mat-icon-button matDialogClose aria-label="Close">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+</span>

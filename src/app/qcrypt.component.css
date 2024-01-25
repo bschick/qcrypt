@@ -44,14 +44,6 @@ SOFTWARE. */
   z-index: 999;
 }
 
-/* used in dialogs */
-.team-button3 {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  z-index: 999;
-}
-
 .spinner {
   position: absolute;
   top: 32%;
