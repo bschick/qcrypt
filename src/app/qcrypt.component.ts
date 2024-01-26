@@ -928,8 +928,8 @@ export class QCryptComponent implements OnInit {
       const minWidth = 200;
 
       const areaWidth = this.inputArea.nativeElement.offsetWidth - 16; // 16 for the size of the drag area
-      const clearWidth = this.clearField.nativeElement.offsetWidth;
-      const cipherWidth = this.cipherField.nativeElement.offsetWidth;
+//      const clearWidth = this.clearField.nativeElement.offsetWidth;
+//      const cipherWidth = this.cipherField.nativeElement.offsetWidth;
 
       var newclearWidth = Math.max(minWidth, pointerRelativeXpos - 8); // 8 to center in drag area
 
@@ -1349,7 +1349,6 @@ export class QCryptComponent implements OnInit {
   selector: 'password-dialog',
   standalone: true,
   templateUrl: './password-dialog.html',
-  styleUrl: './qcrypt.component.css',
   imports: [MatDialogModule, CommonModule, MatFormFieldModule, MatMenuModule, MatInputModule, 
     MatIconModule, PasswordStrengthMeterComponent, FormsModule, ReactiveFormsModule,
     MatTooltipModule, MatButtonModule],
@@ -1415,7 +1414,6 @@ export class PasswordDialog {
   selector: 'cipher-info-dialog',
   standalone: true,
   templateUrl: './cipher-info-dialog.html',
-  styleUrl: './qcrypt.component.css',
   imports: [MatDialogModule, MatIconModule, CommonModule, MatButtonModule],
 })
 export class CipherInfoDialog {
