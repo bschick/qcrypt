@@ -19,21 +19,77 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-.link {
-  cursor: pointer;
+.header {
+  line-height: 1;
+  font-size: 26px;
+  margin: 0 0 20px 0;
+  display: flex;
+  height: 30.5px;
+  min-width: 590px;
 }
 
-.txt-area-button2 {
-  position: absolute;
-  top: 2px;
-  margin-left: -84px;
-  z-index: 999;
+.mtop3 {
+  margin-top: 3px;
+}
+
+.mright2 {
+  margin-right: 2px;
+}
+
+.mtop10 {
+  margin-top: 10px;
+}
+
+.mtop20 {
+  margin-top: 20px;
+}
+
+.mleft15 {
+  margin-left: 15pt;
+}
+
+.mtop0 {
+  margin-top: 0px;
+}
+
+.header-msg {
+  font-size: 16px;
+  margin: 7px 0 0 15px;
+}
+
+.header-help {
+  font-size: 19px;
+  position: relative;
+  top: 5px;
+}
+
+.header-newtab {
+  margin-left: auto;
+  font-size: 16px;
+}
+
+.header-newtab-icon {
+  font-size: 18px;
+  position: relative;
+  top: 6px;
+  margin-left: 2px;
+}
+
+.link {
+  cursor: pointer;
 }
 
 .txt-area-button3 {
   position: absolute;
   top: 2px;
   margin-left: -34px;
+  z-index: 999;
+}
+
+.txt-area-button2 {
+  position: absolute;
+  top: 2px;
+  margin-left: -84px;
   z-index: 999;
 }
 
@@ -52,17 +108,32 @@ SOFTWARE. */
   z-index: 999;
 }
 
-.toggler {
-  position: relative;
-  top: -5px;
-}
-
 .option-input {
   width: 146px;
 }
 
-.input-spacing {
-  margin-left: 15pt;
+.open-new-icon1 {
+  font-size: 18px;
+  position: relative;
+  top: 4px;
+  left: -2px;
+}
+
+.open-new-icon2 {
+  font-size: 18px;
+  position: relative;
+  top: 6px;
+  left: 2px
+}
+
+.algorithms {
+  width: 476px;
+  position: relative;
+  top: -5px;
+}
+
+.clear-button {
+  padding: 4px 20px;
 }
 
 .top-button {
@@ -77,15 +148,16 @@ SOFTWARE. */
   font-size: 14px;
 }
 
+/*
 .top-button-right {
   position: absolute;
   right: -1px;
   margin-right: 15px;
-}
+}*/
 
-mat-slider {
+/*mat-slider {
   width: 200px;
-}
+}*/
 
 .pasword-input {
   width: 230px;
@@ -119,21 +191,43 @@ mat-slider {
   cursor: ew-resize;
   padding: 50px 0 72px 0;
   flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
-.txt-areas {
+.dragger-icon {
+  font-size: 18px;
+  margin-left: 0px;
+}
+
+.panel-title {
+  font-size: 15px;
+}
+
+.txt-area {
   min-height: 265px;
   min-width: 195px;
   margin-top: 20px;
   resize: none;
 }
 
-.help-dialog-section {
-  margin: 5px 10px;
-  font-weight: bold;
-  background-color: lightgray;
-  padding: 8px;
-  display: flex;
+.github {
+  display: block;
+  text-align: right;
+  margin-top: 50px;
+}
+
+.github a {
+  text-decoration:none;
+}
+
+.github button {
+  background-color: #8A8FB2; height: 36px; padding-left: 16px; padding-right: 9px;
+}
+
+.github-label {
+  margin: 0 0 0 -4px;
 }
 
 .file-input {

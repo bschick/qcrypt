@@ -19,18 +19,18 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
-<p style="line-height: 1; font-size: 26px; margin: 0 0 20px 0; display: flex; height: 30.5px; min-width: 590px;">
-  <mat-icon inline="true" style="margin-top: 3px">enhanced_encryption</mat-icon>
-  <span style="margin-top:3px">Quick Crypt</span>
+<p class="header">
+  <mat-icon inline="true" class="mtop3">enhanced_encryption</mat-icon>
+  <span class="mtop3">Quick Crypt</span>
   <a (click)="showHelp()" class="link">
-    <span style="font-size: 16px; margin: 7px 0 0 15px">
+    <span class="header-msg">
       ...your sensitive data remains local
     </span>
-    <mat-icon style="font-size: 19px; position: relative; top: 5px">help_outline</mat-icon></a>
-  <span style="margin-left: auto; font-size: 16px">
+    <mat-icon class="header-help">help_outline</mat-icon></a>
+  <span class="header-newtab">
     <a (click)="onNewPage()" class="link">
-      open new tab<mat-icon
-        style="font-size: 18px; position: relative; top: 6px; margin-left: 2px">open_in_new</mat-icon></a></span>
+      open new tab
+      <mat-icon class="header-newtab-icon">open_in_new</mat-icon></a></span>
 </p>
 <div class="input-area flx-container" (mouseup)="onDraggerMouseUp();">
   <span class="flx-buttons">
@@ -38,10 +38,10 @@ SOFTWARE. -->
       accesskey="E" [disabled]="showProgress ? 'true' : 'false'">
       <u>E</u>ncrypt
     </button>
-    <button mat-raised-button class="top-button input-spacing" color="basic" [matMenuTriggerFor]="clearMenu"
+    <button mat-raised-button class="top-button mleft15" color="basic" [matMenuTriggerFor]="clearMenu"
       matTooltip="Load file containing clear text" [disabled]="showProgress ? 'true' : 'false'">
       Clear File
-      <mat-icon style="margin-right: 2px">expand_more</mat-icon>
+      <mat-icon class="mright2">expand_more</mat-icon>
     </button>
     <mat-menu #clearMenu="matMenu" xPosition="before">
       <button mat-menu-item (click)="onClearFileUpload($event)">
@@ -53,17 +53,17 @@ SOFTWARE. -->
     </mat-menu>
   </span>
   <span class="flx-buttons">
-    <button mat-raised-button (click)="clearCaches()" class="top-button input-spacing" style="padding: 4px 20px"
-      color="basic" matTooltip="Clear decrypted text and cached password" [disabled]="showProgress ? 'true' : 'false'"
+    <button mat-raised-button (click)="clearCaches()" class="top-button mleft15 clear-button" color="basic"
+      matTooltip="Clear decrypted text and cached password" [disabled]="showProgress ? 'true' : 'false'"
       [style.visibility]="passwordCached ? 'visible' : 'hidden'">
       {{'Clear&nbsp;Data ('+ cacheTimeout+')'}}
     </button>
   </span>
   <span class="flx-buttons">
-    <button mat-raised-button class="top-button input-spacing" color="basic" [matMenuTriggerFor]="cipherMenu"
+    <button mat-raised-button class="top-button mleft15" color="basic" [matMenuTriggerFor]="cipherMenu"
       matTooltip="Load file containing cipher text" [disabled]="showProgress ? 'true' : 'false'">
       Cipher File
-      <mat-icon style="margin-right: 2px">expand_more</mat-icon>
+      <mat-icon class="mright2">expand_more</mat-icon>
     </button>
     <mat-menu #cipherMenu="matMenu" xPosition="before">
       <button mat-menu-item (click)="onCipherFileUpload($event)">
@@ -73,7 +73,7 @@ SOFTWARE. -->
         <mat-icon>file_download</mat-icon>Save
       </button>
     </mat-menu>
-    <button mat-raised-button (click)="onDecryptClicked()" class="top-button input-spacing" color="primary"
+    <button mat-raised-button (click)="onDecryptClicked()" class="top-button mleft15" color="primary"
       matTooltip="Decrypt Text" accesskey="D" [disabled]="showProgress ? 'true' : 'false'">
       <u>D</u>ecrypt
     </button>
@@ -87,7 +87,7 @@ SOFTWARE. -->
   <div #clearField class="flx-item">
     <mat-form-field [style.width.%]="100" [style.height.%]="100">
       <mat-label>{{clearLabel}}</mat-label>
-      <textarea matInput id="clearInput" autofocus cdkTextareaAutosize placeholder="" class="txt-areas"
+      <textarea matInput id="clearInput" autofocus cdkTextareaAutosize placeholder="" class="txt-area"
         [(ngModel)]="clearText" [ngModelOptions]="{standalone: true}" [style.color]="errorClear ? 'red' : 'black'"
         [disabled]="showProgress ? 'true' : 'false'"></textarea>
       <button class="txt-area-button2" *ngIf="clearText && !showProgress" mat-icon-button aria-label="Clear"
@@ -101,15 +101,14 @@ SOFTWARE. -->
       </button>
     </mat-form-field>
   </div>
-  <div class="dragger" (mousedown)="onDraggerMouseDown();"
-    style="display: flex; flex-direction: column; justify-content: center">
-    <mat-icon style="font-size: 18px; margin-left: 0px">drag_indicator
+  <div class="dragger" (mousedown)="onDraggerMouseDown();">
+    <mat-icon class="dragger-icon">drag_indicator
     </mat-icon>
   </div>
   <div #cipherField class="flx-item">
     <mat-form-field [style.width.%]="100" [style.height.%]="100">
       <mat-label>{{cipherLabel}}</mat-label>
-      <textarea matInput id="cipherInput" placeholder="" class="txt-areas" cdkTextareaAutosize [(ngModel)]="cipherText"
+      <textarea matInput id="cipherInput" placeholder="" class="txt-area" cdkTextareaAutosize [(ngModel)]="cipherText"
         [ngModelOptions]="{standalone: true}" [style.color]="errorCipher ? 'red' : 'black'"
         [disabled]="showProgress ? 'true' : 'false'">
       </textarea>
@@ -132,23 +131,23 @@ SOFTWARE. -->
 <mat-accordion multi class="input-area" (mouseup)="onDraggerMouseUp();">
   <mat-expansion-panel matRipple [matRippleDisabled]="true" [expanded]="expandOptions" class="input-area">
     <mat-expansion-panel-header>
-      <mat-panel-title style="font-size:15px">Advanced Encryption Options</mat-panel-title>
+      <mat-panel-title class="panel-title">Advanced Encryption Options</mat-panel-title>
     </mat-expansion-panel-header>
 
-    <p style="margin-top: 0px"><span class="options-header">
+    <p class="mtop0"><span class="options-header">
         &nbsp;Password & Clear Text<br /></span>
-      <mat-form-field class="option-input" style="margin-top: 10px">
+      <mat-form-field class="option-input mtop10">
         <mat-label>Hash Iterations</mat-label>
         <input type="number" [min]="icountMin" [max]="icountMax" step="200000" matInput [(ngModel)]="icount"
           (change)="clearCaches()"
           [matTooltip]="'Larger values make password guessing slower. Range ['+icountMin/1000+'K,'+icountMax/1000000+'M]'" />
       </mat-form-field>
-      <mat-form-field class="option-input input-spacing">
+      <mat-form-field class="option-input mleft15">
         <mat-label>Clear Timer (secs)</mat-label>
         <input type="number" min="0" step="10" matInput [(ngModel)]="cacheTime" (change)="onClearTimerChange()"
           matTooltip="Number of seconds until your decrypted text and cached password are automatically cleared" />
       </mat-form-field>
-      <mat-form-field class="option-input input-spacing">
+      <mat-form-field class="option-input mleft15">
         <mat-label>Min Strength</mat-label>
         <mat-select [(value)]="minPwdStrength" (selectionChange)="clearCaches()">
           <mat-option value="0">Terrible</mat-option>
@@ -158,58 +157,58 @@ SOFTWARE. -->
           <mat-option value="4">Best</mat-option>
         </mat-select>
       </mat-form-field>
-      <mat-slide-toggle class="input-spacing" [(ngModel)]="hidePwd"
+      <mat-slide-toggle class="mleft15" [(ngModel)]="hidePwd"
         matTooltip="Uncheck to default to showing your password while typing">Hide Password
       </mat-slide-toggle>
-      <mat-slide-toggle class="input-spacing" [(ngModel)]="checkPwned" (change)="clearCaches()"
+      <mat-slide-toggle class="mleft15" [(ngModel)]="checkPwned" (change)="clearCaches()"
         matTooltip="Check if your password matches a known stolen password">Check If Stolen
       </mat-slide-toggle>
       <br /><span class="options-header">
         &nbsp;AES Mode</span>
       <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt#supported_algorithms"
         target="_blank">
-        <mat-icon style="font-size: 18px; position: relative; top: 4px; left: -2px">open_in_new</mat-icon>
+        <mat-icon class="open-new-icon1">open_in_new</mat-icon>
       </a>
 
       <br />
-      <mat-button-toggle-group style="margin-top: 10px; width: 476px" [(ngModel)]="algorithm" aria-label="Algorithm"
-        class="toggler" matTooltip="AES block cipher mode of operation" (change)="onAlgorithmChange($event.value)">
+      <mat-button-toggle-group class="mtop10 algorithms" [(ngModel)]="algorithm" aria-label="Algorithm"
+        matTooltip="AES block cipher mode of operation" (change)="onAlgorithmChange($event.value)">
         <mat-button-toggle value="AES-GCM">{{algName('AES-GCM')}}</mat-button-toggle>
         <mat-button-toggle value="AES-CBC">{{algName('AES-CBC')}}</mat-button-toggle>
         <mat-button-toggle value="AES-CTR">{{algName('AES-CTR')}}</mat-button-toggle>
       </mat-button-toggle-group>
 
-      <mat-slide-toggle class="input-spacing" [(ngModel)]="addMac" (change)="onMacChange($event.checked)"
+      <mat-slide-toggle class="mleft15" [(ngModel)]="addMac" (change)="onMacChange($event.checked)"
         matTooltip="Add message authentication code to encrypted content. Not needed for GCM mode">Add HMAC
       </mat-slide-toggle>
     </p><span class="options-header">
       &nbsp;Other Options<br /></span>
-    <p style="margin-top: 10px">
+    <p class="mtop10">
       <mat-form-field class="option-input">
         <mat-label>Loop Encrypt</mat-label>
         <input type="number" min="1" max="10" step="1" matInput [(ngModel)]="loops"
           matTooltip="Number of times to run encryption in a loop. Enter a different password each loop" />
       </mat-form-field>
 
-      <mat-slide-toggle class="input-spacing" [(ngModel)]="trueRandom" (change)="onTrueRandomChanged($event.checked)"
+      <mat-slide-toggle class="mleft15" [(ngModel)]="trueRandom" (change)="onTrueRandomChanged($event.checked)"
         matTooltip="Random data for encryption securely downloaded from random.org">True Random Data
       </mat-slide-toggle>
-      <a href="https://random.org" target="_blank"><mat-icon
-          style="font-size: 18px; position: relative; top: 6px; left: 2px">open_in_new</mat-icon>
+      <a href="https://random.org" target="_blank">
+        <mat-icon class="open-new-icon2">open_in_new</mat-icon>
       </a>
 
-      <mat-slide-toggle class="input-spacing" [(ngModel)]="pseudoRandom" [disabled]="trueRandom ? 'false' : 'true'"
+      <mat-slide-toggle class="mleft15" [(ngModel)]="pseudoRandom" [disabled]="trueRandom ? 'false' : 'true'"
         (change)="clearCaches()"
         matTooltip="Random data for encryption generated by browser native pseudorandom function">Pseudo Random Fallback
       </mat-slide-toggle>
-      <a href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues" target="_blank"><mat-icon
-          style="font-size: 18px; position: relative; top: 6px; left: 2px">open_in_new</mat-icon>
+      <a href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues" target="_blank">
+        <mat-icon class="open-new-icon2">open_in_new</mat-icon>
       </a>
-      <mat-slide-toggle class="input-spacing" [(ngModel)]="pretty"
+      <mat-slide-toggle class="mleft15" [(ngModel)]="pretty"
         matTooltip="Add hash based message authentication code to results. Not needed for GCM mode">Format Cipher Text
       </mat-slide-toggle>
     </p>
-    <div style="margin-top: 20px">
+    <div class="mtop20">
       <button mat-raised-button (click)="onResetOptions()" color="basic"
         matTooltip="Reset all options to intial values">
         Reset All Options
@@ -218,12 +217,14 @@ SOFTWARE. -->
   </mat-expansion-panel>
 </mat-accordion>
 <p>
-  <span style="display:block; text-align:right; margin-top: 50px">
-    <a href="https://github.com/bschick/qcrypt?tab=readme-ov-file" target="_blank"
-      style="text-decoration:none"><button mat-fab extended color="primary"
-        style="background-color: #8A8FB2; height: 36px; padding-left: 16px; padding-right: 9px;"
+  <span class="github">
+    <a href="https://github.com/bschick/qcrypt?tab=readme-ov-file" target="_blank">
+      <button mat-fab extended color="primary"
         matTooltip="Quick Crypt is on GitHub: Get the source, report issues, or make improvements">
-        <mat-icon svgIcon="github"></mat-icon><span style="margin: 0 0 0 -4px">GitHub</span></button></a></span>
+        <mat-icon svgIcon="github"></mat-icon><span class="github-label">GitHub</span>
+      </button>
+    </a>
+  </span>
 </p>
 <input type="file" (click)="onClickFileUpload($event)" class="file-input" accept="text/*,application/json"
   #fileUpload />
