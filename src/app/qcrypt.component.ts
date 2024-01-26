@@ -27,6 +27,7 @@ import {
   ElementRef,
   OnInit,
   PLATFORM_ID,
+  ViewEncapsulation,
 } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { A11yModule } from '@angular/cdk/a11y';
@@ -1349,6 +1350,7 @@ export class QCryptComponent implements OnInit {
   selector: 'password-dialog',
   standalone: true,
   templateUrl: './password-dialog.html',
+  encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
   imports: [MatDialogModule, CommonModule, MatFormFieldModule, MatMenuModule, MatInputModule, 
     MatIconModule, PasswordStrengthMeterComponent, FormsModule, ReactiveFormsModule,
     MatTooltipModule, MatButtonModule],
