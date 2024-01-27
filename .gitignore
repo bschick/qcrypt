@@ -1,5 +1,6 @@
 # See http://help.github.com/ignore-files/ for more about ignoring files.
-localssl/
+localssl/*
+!localssl/localssl.sh
 
 # Compiled output
 /dist
