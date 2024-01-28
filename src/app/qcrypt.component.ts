@@ -25,7 +25,7 @@ import {
   Inject,
   ViewChild,
   ElementRef,
-  OnInit,
+  OnInit, AfterViewInit,
   PLATFORM_ID,
   ViewEncapsulation,
 } from '@angular/core';
@@ -59,7 +59,7 @@ import * as zxcvbnCommonPackage from '@zxcvbn-ts/language-common';
 import * as zxcvbnEnPackage from '@zxcvbn-ts/language-en';
 import { translations } from '@zxcvbn-ts/language-en';
 import { matcherPwnedFactory } from '@zxcvbn-ts/matcher-pwned';
-import { Duration } from 'luxon';
+import { Duration, DateTime } from 'luxon';
 import { PasswordStrengthMeterComponent } from 'angular-password-strength-meter';
 import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -106,7 +106,7 @@ function isDecContext(context: EncContext | DecContext): context is DecContext {
 const ICOUNT_DEFAULT = 800000;
 const ENC_VERSION = 1;
 
-let AlgNames: { [key: string]: string } = {
+const AlgNames: { [key: string]: string } = {
   'AES-GCM': 'Galois Counter (GCM)',
   'AES-CBC': 'Cipher Block Chaining (CBC)',
   'AES-CTR': 'Counter (CTR)',
@@ -157,7 +157,7 @@ function setIfBetween(
   max: number | null,
   setter: (num: number) => void
 ): void {
-  let num = Number(check);
+  const num = Number(check);
   if (check != null && !Number.isNaN(num)) {
     if ((min == null || num >= min) && (max == null || num <= max)) {
       setter(num);
@@ -202,7 +202,7 @@ class Random32 {
     if (!trueRand) {
       return crypto.getRandomValues(new Uint8Array(32));
     } else {
-      let lastCache = this.trueRandCache;
+      const lastCache = this.trueRandCache;
       this.trueRandCache = this.downloadTrueRand();
       return lastCache
         .then((buffer) => {
@@ -253,7 +253,7 @@ class Random32 {
     MatTooltipModule, MatRippleModule, CommonModule
   ],
 })
-export class QCryptComponent implements OnInit {
+export class QCryptComponent implements OnInit, AfterViewInit {
   private mouseDown = false;
   private password: string = '';
   private hint: string | undefined;
@@ -265,14 +265,14 @@ export class QCryptComponent implements OnInit {
   private random32: Random32;
   private actionStart: number = 0;
   private matcherPwned: Matcher;
-  public cacheTimeout = 0;
+  public cacheTimeout!: DateTime;
   public icountMin: number = 400000;
   public icountMax: number = 400000000; // Default since benchmark is async
   public icountDefault: number = ICOUNT_DEFAULT; // Default since benchmark is async
   public clearText = '';
-  public passwordCached = false;
-  public cipherLabel = 'Enter Cipher Text';
-  public clearLabel = 'Enter Clear Text';
+  public stuffCached = false;
+  public cipherLabel = 'Cipher Text';
+  public clearLabel = 'Clear Text';
   public cipherText = '';
   public showProgress = false;
   public errorCipher = false;
@@ -283,6 +283,8 @@ export class QCryptComponent implements OnInit {
   @ViewChild('cipherField') cipherField!: ElementRef;
   @ViewChild('inputArea') inputArea!: ElementRef;
   @ViewChild('fileUpload') fileUpload!: ElementRef;
+  @ViewChild('formatLabel') formatLabel!: ElementRef;
+  @ViewChild('minStrLabel') minStrLabel!: ElementRef;
 
   // options
   public algorithm = 'AES-GCM';
@@ -291,7 +293,7 @@ export class QCryptComponent implements OnInit {
   public hidePwd = true;
   public cacheTime = 30;
   public minPwdStrength = '3';
-  public pretty = false;
+  public ctFormat = 'compact';
   public loops = 1;
   public checkPwned = false;
   public trueRandom = true;
@@ -380,10 +382,10 @@ export class QCryptComponent implements OnInit {
     });
   }
 
-  setPretty(pretty: string | null): void {
-    setIfBoolean(pretty, (bool) => {
-      this.pretty = bool;
-    });
+  setCTFormat(ctFormat: string | null): void {
+    if (['compact', 'indent', 'link'].includes(ctFormat!)) {
+      this.ctFormat = ctFormat!;
+    }
   }
 
   setTrueRandom(trand: string | null): void {
@@ -396,6 +398,12 @@ export class QCryptComponent implements OnInit {
     setIfBoolean(prand, (bool) => {
       this.pseudoRandom = bool;
     });
+  }
+
+  ngAfterViewInit() {
+    // ugly hack to make angular not clip the label for dropdown select elements
+    this.formatLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.75)";
+    this.minStrLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.75)";
   }
 
   ngOnInit(): void {
@@ -424,7 +432,7 @@ export class QCryptComponent implements OnInit {
         this.setCheckPwned(localStorage.getItem('checkpwned'));
         this.setMinPwdStrength(localStorage.getItem('minpwdstrength'));
         this.setLoops(localStorage.getItem('loops'));
-        this.setPretty(localStorage.getItem('pretty'));
+        this.setCTFormat(localStorage.getItem('ctformat'));
         this.setTrueRandom(localStorage.getItem('trand'));
         this.setPseudoRandom(localStorage.getItem('prand'));
       }
@@ -443,13 +451,17 @@ export class QCryptComponent implements OnInit {
       this.setCheckPwned(params.get('checkpwned'));
       this.setMinPwdStrength(params.get('minpwdstrength'));
       this.setLoops(params.get('loops'));
-      this.setPretty(params.get('pretty'));
+      this.setCTFormat(params.get('ctformat'));
       this.setTrueRandom(params.get('trand'));
       this.setPseudoRandom(params.get('prand'));
 
       if (params.get('ciphertext')) {
         this.cipherText = decodeURIComponent(params.get('ciphertext')!);
       }
+      if (params.get('cleartext')) {
+        this.clearText = decodeURIComponent(params.get('cleartext')!);
+      }
+
     });
   }
 
@@ -542,8 +554,8 @@ export class QCryptComponent implements OnInit {
       params = params.append('loops', this.loops);
     }
 
-    if (this.pretty) {
-      params = params.append('pretty', true);
+    if (this.ctFormat != 'compact') {
+      params = params.append('ctformat', this.ctFormat);
     }
 
     if (this.trueRandom) {
@@ -570,7 +582,7 @@ export class QCryptComponent implements OnInit {
     this.minPwdStrength = '3';
     this.checkPwned = false;
     this.loops = 1;
-    this.pretty = false;
+    this.ctFormat = 'compact';
     this.trueRandom = true;
     this.pseudoRandom = true;
 
@@ -591,7 +603,7 @@ export class QCryptComponent implements OnInit {
         localStorage.setItem('checkpwned', this.checkPwned.toString());
         localStorage.setItem('minpwdstrength', this.minPwdStrength);
         localStorage.setItem('loops', this.loops.toString());
-        localStorage.setItem('pretty', this.pretty.toString());
+        localStorage.setItem('ctformat', this.ctFormat.toString());
         localStorage.setItem('trand', this.trueRandom.toString());
         localStorage.setItem('prand', this.pseudoRandom.toString());
       }
@@ -601,9 +613,17 @@ export class QCryptComponent implements OnInit {
     }
   }
 
+  secondsRemaining() {
+    let result = 0;
+    if (this.stuffCached) {
+      const diff = this.cacheTimeout.diff(DateTime.now());
+      result = Math.max(0, Math.round(diff.toMillis() / 1000));
+    }
+    return result;
+  }
+
   timerTick(): void {
-    this.cacheTimeout -= 1;
-    if (this.cacheTimeout <= 0) {
+    if (DateTime.now() > this.cacheTimeout) {
       this.clearCaches();
     }
   }
@@ -613,13 +633,13 @@ export class QCryptComponent implements OnInit {
       clearInterval(this.intervalId);
       this.intervalId = 0;
     }
-    this.cacheTimeout = this.cacheTime;
+    this.cacheTimeout = DateTime.now().plus({ seconds: this.cacheTime });
     // @ts-ignore
     this.intervalId = setInterval(() => this.timerTick(), 1000);
   }
 
   clearPassword(): void {
-    this.passwordCached = false;
+    this.stuffCached = false;
     this.password = '';
     this.hint = '';
     if (this.intervalId != 0) {
@@ -677,8 +697,10 @@ export class QCryptComponent implements OnInit {
           if (this.cacheTime > 0 && result[0]) {
             this.password = result[0];
             this.hint = result[1];
-            this.passwordCached = true;
+            this.stuffCached = true;
             this.restartTimer();
+          } else if (result[0]) {
+            this.clearCaches();
           }
           resolve([result[0], result[1]]);
         }
@@ -691,7 +713,7 @@ export class QCryptComponent implements OnInit {
     minStrength: number,
     context: EncContext | DecContext
   ): Promise<[string, string | undefined]> {
-    if (this.passwordCached) {
+    if (this.stuffCached) {
       this.restartTimer();
       return Promise.resolve([this.password, this.hint]);
     } else {
@@ -724,7 +746,7 @@ export class QCryptComponent implements OnInit {
       ['deriveBits', 'deriveKey']
     );
 
-    let kbits = await window.crypto.subtle.deriveBits(
+    const kbits = await window.crypto.subtle.deriveBits(
       {
         name: 'PBKDF2',
         salt: cparams.slt as Uint8Array,
@@ -929,8 +951,8 @@ export class QCryptComponent implements OnInit {
       const minWidth = 200;
 
       const areaWidth = this.inputArea.nativeElement.offsetWidth - 16; // 16 for the size of the drag area
-//      const clearWidth = this.clearField.nativeElement.offsetWidth;
-//      const cipherWidth = this.cipherField.nativeElement.offsetWidth;
+      //      const clearWidth = this.clearField.nativeElement.offsetWidth;
+      //      const cipherWidth = this.cipherField.nativeElement.offsetWidth;
 
       var newclearWidth = Math.max(minWidth, pointerRelativeXpos - 8); // 8 to center in drag area
 
@@ -967,14 +989,14 @@ export class QCryptComponent implements OnInit {
   onClearCipher(): void {
     this.errorCipher = false;
     this.cipherText = '';
-    this.cipherLabel = 'Enter Cipher Text';
+    this.cipherLabel = 'Cipher Text';
     //    this.toastMessage('Cipher Text Cleared');
   }
 
   onClearClear(): void {
     this.errorClear = false;
     this.clearText = '';
-    this.clearLabel = 'Enter Clear Text';
+    this.clearLabel = 'Clear Text';
     //    this.toastMessage('Cleat Text Cleared');
   }
 
@@ -1017,7 +1039,9 @@ export class QCryptComponent implements OnInit {
     this.makeCipherText(econtext).then(() => {
       this.saveOptions();
       // After > 1 loop, its confusing to leave intermediate stuff
-      this.clearText = savedClearText;
+      if (this.stuffCached) {
+        this.clearText = savedClearText;
+      }
     });
   }
 
@@ -1043,16 +1067,16 @@ export class QCryptComponent implements OnInit {
       econtext.p.slt = randomArray.slice(0, 16);
       econtext.p.iv = randomArray.slice(16);
 
-      let clearBuffer = new TextEncoder().encode(this.clearText);
+      const clearBuffer = new TextEncoder().encode(this.clearText);
       this.actionStart = Date.now();
-      let cipherText = await this.do_encrypt(clearBuffer, econtext.p, pwd);
+      const encrypted = await this.do_encrypt(clearBuffer, econtext.p, pwd);
 
       // null means aborted, without an error to report
-      if (cipherText != null) {
+      if (encrypted != null) {
         econtext.lpCount += 1;
 
         const dcontext: DecContext = {
-          ct: new Uint8Array(cipherText),
+          ct: new Uint8Array(encrypted),
           hint: hint,
           ...econtext,
         };
@@ -1100,7 +1124,7 @@ export class QCryptComponent implements OnInit {
       });
     } catch (err) {
       if (err instanceof Error) {
-        this.showDecryptError(err.message + ' while decoding Cipher Text');
+        this.showDecryptError(err.message);
       }
     }
   }
@@ -1119,7 +1143,7 @@ export class QCryptComponent implements OnInit {
 
     try {
       this.actionStart = Date.now();
-      let decrypted = await this.do_decrypt(dcontext.ct, dcontext.p, pwd);
+      const decrypted = await this.do_decrypt(dcontext.ct, dcontext.p, pwd);
 
       // null means aborted, without an error to report
       if (decrypted != null) {
@@ -1199,23 +1223,44 @@ export class QCryptComponent implements OnInit {
       }
     }
 
-    const space = this.pretty ? 3 : 0;
-    return JSON.stringify(result, null, space);
+    // Link injection and indenting only happen at the last loop
+    if (dcontext.lpCount == dcontext.lps) {
+      if (this.ctFormat == 'link') {
+        const ctParam = encodeURIComponent(JSON.stringify(result));
+        return 'https://' + location.host + '?ciphertext=' + ctParam;
+      } else {
+        const space = this.ctFormat == 'indent' ? 3 : 0;
+        return JSON.stringify(result, null, space);
+      }
+    } else {
+      return JSON.stringify(result);
+    }
   }
 
   getDecContextFrom(cipherText: string): DecContext {
     try {
-      var jsonParts = JSON.parse(cipherText);
+      let trimmed = cipherText.trim();
+      if (trimmed.startsWith('https://')) {
+        const ct = new URL(trimmed).searchParams.get('ciphertext');
+        if (ct != null) {
+          trimmed = decodeURIComponent(ct);
+        } else {
+          const err = new Error();
+          err.name = 'Url missing cihpertext';
+          throw err;
+        }
+      }
+      var jsonParts = JSON.parse(trimmed);
     } catch (err) {
       console.error(err);
       if (err instanceof Error) {
-        throw new Error('cipher text not formatted correctly. ' + err.name);
+        throw new Error('Cipher text not formatted correctly. ' + err.name);
       }
     }
 
     if (!('ct' in jsonParts) || !('p' in jsonParts)) {
       throw new Error(
-        'cipher text not formatted correctly. Missing one of ct or p'
+        'Cipher text not formatted correctly. Missing one of ct or p'
       );
     }
 
@@ -1326,18 +1371,18 @@ export class QCryptComponent implements OnInit {
   }
 
   onClearTimerChange(): void {
-    if (this.cacheTime >= 0 && this.cacheTime < this.cacheTimeout) {
-      this.cacheTimeout = this.cacheTime;
+    if (this.stuffCached) {
+      this.restartTimer();
     }
   }
 
   onCipherTextInfo(): void {
     try {
-      let dcontext = this.getDecContextFrom(this.cipherText);
-      let dialogRef = this.dialog.open(CipherInfoDialog, { data: dcontext.p });
+      const dcontext = this.getDecContextFrom(this.cipherText);
+      this.dialog.open(CipherInfoDialog, { data: dcontext.p });
     } catch (err) {
       console.error(err);
-      let dialogRef = this.dialog.open(CipherInfoDialog, { data: null });
+      this.dialog.open(CipherInfoDialog, { data: null });
     }
   }
 
@@ -1351,7 +1396,7 @@ export class QCryptComponent implements OnInit {
   standalone: true,
   templateUrl: './password-dialog.html',
   encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
-  imports: [MatDialogModule, CommonModule, MatFormFieldModule, MatMenuModule, MatInputModule, 
+  imports: [MatDialogModule, CommonModule, MatFormFieldModule, MatMenuModule, MatInputModule,
     MatIconModule, PasswordStrengthMeterComponent, FormsModule, ReactiveFormsModule,
     MatTooltipModule, MatButtonModule],
 })
@@ -1448,7 +1493,7 @@ export class CipherInfoDialog {
   standalone: true,
   templateUrl: './help-dialog.html',
   imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
-         MatButtonModule],
+    MatButtonModule],
 })
 export class HelpDialog {
   constructor(
