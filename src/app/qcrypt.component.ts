@@ -699,8 +699,6 @@ export class QCryptComponent implements OnInit, AfterViewInit {
             this.hint = result[1];
             this.stuffCached = true;
             this.restartTimer();
-          } else if (result[0]) {
-            this.clearCaches();
           }
           resolve([result[0], result[1]]);
         }
@@ -1041,6 +1039,8 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       // After > 1 loop, its confusing to leave intermediate stuff
       if (this.stuffCached) {
         this.clearText = savedClearText;
+      } else {
+        this.onClearClear();
       }
     });
   }
