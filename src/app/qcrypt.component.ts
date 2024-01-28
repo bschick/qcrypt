@@ -802,7 +802,6 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       clear_buffer
     );
 
-    //    if (cparams.alg != 'AES-GCM' && cparams.mac) {
     if (cparams.mac) {
       const algEnc = new TextEncoder().encode(cparams.alg);
       const icEnc = new TextEncoder().encode(cparams.ic.toString());
