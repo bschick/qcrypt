@@ -150,7 +150,7 @@ SOFTWARE. -->
       <mat-form-field class="option-input mleft15">
         <mat-label #minStrLabel>Minimum Strength</mat-label>
         <mat-select [(value)]="minPwdStrength" (selectionChange)="clearCaches()"
-        matTooltip="Minimum required password strength used for encryption">
+          matTooltip="Minimum required password strength used for encryption">
           <mat-option value="0">Terrible</mat-option>
           <mat-option value="1">Weak</mat-option>
           <mat-option value="2">Decent</mat-option>
@@ -193,10 +193,10 @@ SOFTWARE. -->
       <mat-form-field class="option-input mleft15">
         <mat-label #formatLabel>Cipher Text Format</mat-label>
         <mat-select [(value)]="ctFormat"
-        matTooltip="Format of resulting cipher text. Select 'link' to get a url usable in browsers">
+          matTooltip="Format of resulting cipher text. Select 'link' to get a url usable in browsers">
+          <mat-option value="link">Link</mat-option>
           <mat-option value="compact">Compact</mat-option>
           <mat-option value="indent">Indent</mat-option>
-          <mat-option value="link">Link</mat-option>
         </mat-select>
       </mat-form-field>
 

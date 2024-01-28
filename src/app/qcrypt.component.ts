@@ -293,7 +293,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
   public hidePwd = true;
   public cacheTime = 30;
   public minPwdStrength = '3';
-  public ctFormat = 'compact';
+  public ctFormat = 'link';
   public loops = 1;
   public checkPwned = false;
   public trueRandom = true;
@@ -383,7 +383,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
   }
 
   setCTFormat(ctFormat: string | null): void {
-    if (['compact', 'indent', 'link'].includes(ctFormat!)) {
+    if (['link', 'compact', 'indent'].includes(ctFormat!)) {
       this.ctFormat = ctFormat!;
     }
   }
@@ -556,7 +556,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       params = params.append('loops', this.loops);
     }
 
-    if (this.ctFormat != 'compact') {
+    if (this.ctFormat != 'link') {
       params = params.append('ctformat', this.ctFormat);
     }
 
@@ -584,7 +584,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     this.minPwdStrength = '3';
     this.checkPwned = false;
     this.loops = 1;
-    this.ctFormat = 'compact';
+    this.ctFormat = 'link';
     this.trueRandom = true;
     this.pseudoRandom = true;
 
@@ -1245,13 +1245,21 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       if (trimmed.startsWith('https://')) {
         const ct = new URL(trimmed).searchParams.get('ciphertext');
         if (ct != null) {
-          trimmed = decodeURIComponent(ct);
+          trimmed = ct;
         } else {
           const err = new Error();
           err.name = 'Url missing cihpertext';
           throw err;
         }
+      } else if (trimmed.startsWith('ciphertext=')) {
+        trimmed = trimmed.slice('ciphertext='.length);
       }
+
+      // %7B is urlencoded '{' character, so decode
+      if (trimmed.startsWith('%7B')) {
+        trimmed = decodeURIComponent(trimmed);
+      }
+
       var jsonParts = JSON.parse(trimmed);
     } catch (err) {
       console.error(err);
