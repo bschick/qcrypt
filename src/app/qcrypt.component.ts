@@ -779,7 +779,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     return [ek, sk];
   }
 
-  async do_encrypt(
+  async doEncrypt(
     clear_buffer: Uint8Array,
     cparams: CParams,
     pwd: string
@@ -834,7 +834,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     return cipherText;
   }
 
-  async do_decrypt(
+  async doDecrypt(
     cipher_buffer: Uint8Array,
     cparams: CParams,
     pwd: string
@@ -1071,7 +1071,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
 
       const clearBuffer = new TextEncoder().encode(this.clearText);
       this.actionStart = Date.now();
-      const encrypted = await this.do_encrypt(clearBuffer, econtext.p, pwd);
+      const encrypted = await this.doEncrypt(clearBuffer, econtext.p, pwd);
 
       // null means aborted, without an error to report
       if (encrypted != null) {
@@ -1145,7 +1145,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
 
     try {
       this.actionStart = Date.now();
-      const decrypted = await this.do_decrypt(dcontext.ct, dcontext.p, pwd);
+      const decrypted = await this.doDecrypt(dcontext.ct, dcontext.p, pwd);
 
       // null means aborted, without an error to report
       if (decrypted != null) {
