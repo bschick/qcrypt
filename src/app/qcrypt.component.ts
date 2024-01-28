@@ -437,7 +437,16 @@ export class QCryptComponent implements OnInit, AfterViewInit {
         this.setPseudoRandom(localStorage.getItem('prand'));
       }
 
-      var params = new HttpParams({ fromString: window.location.search });
+      let params = new HttpParams({ fromString: window.location.search });
+
+      if (params.get('ciphertext')) {
+        this.cipherText = decodeURIComponent(params.get('ciphertext')!);
+        params = params.delete('ciphertext');
+      }
+      if (params.get('cleartext')) {
+        this.clearText = decodeURIComponent(params.get('cleartext')!);
+        params = params.delete('cleartext');
+      }
 
       // If there are customized options, expand the panel by default
       if (params.keys().length > 0) {
@@ -454,13 +463,6 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       this.setCTFormat(params.get('ctformat'));
       this.setTrueRandom(params.get('trand'));
       this.setPseudoRandom(params.get('prand'));
-
-      if (params.get('ciphertext')) {
-        this.cipherText = decodeURIComponent(params.get('ciphertext')!);
-      }
-      if (params.get('cleartext')) {
-        this.clearText = decodeURIComponent(params.get('cleartext')!);
-      }
 
     });
   }
