@@ -55,8 +55,8 @@ SOFTWARE. -->
   <span class="flx-buttons">
     <button mat-raised-button (click)="clearCaches()" class="top-button mleft15 clear-button" color="basic"
       matTooltip="Clear decrypted text and cached password" [disabled]="showProgress ? 'true' : 'false'"
-      [style.visibility]="passwordCached ? 'visible' : 'hidden'">
-      {{'Clear&nbsp;Data ('+ cacheTimeout+')'}}
+      [style.visibility]="stuffCached ? 'visible' : 'hidden'">
+      {{'Clear&nbsp;Data ('+ secondsRemaining() +')'}}
     </button>
   </span>
   <span class="flx-buttons">
@@ -135,7 +135,7 @@ SOFTWARE. -->
     </mat-expansion-panel-header>
 
     <p class="mtop0"><span class="options-header">
-        &nbsp;Password & Clear Text<br /></span>
+        &nbsp;Password<br /></span>
       <mat-form-field class="option-input mtop10">
         <mat-label>Hash Iterations</mat-label>
         <input type="number" [min]="icountMin" [max]="icountMax" step="200000" matInput [(ngModel)]="icount"
@@ -145,11 +145,12 @@ SOFTWARE. -->
       <mat-form-field class="option-input mleft15">
         <mat-label>Clear Timer (secs)</mat-label>
         <input type="number" min="0" step="10" matInput [(ngModel)]="cacheTime" (change)="onClearTimerChange()"
-          matTooltip="Number of seconds until your decrypted text and cached password are automatically cleared" />
+          matTooltip="Number of seconds until your clear text and cached password are automatically cleared" />
       </mat-form-field>
       <mat-form-field class="option-input mleft15">
-        <mat-label>Min Strength</mat-label>
-        <mat-select [(value)]="minPwdStrength" (selectionChange)="clearCaches()">
+        <mat-label #minStrLabel>Minimum Strength</mat-label>
+        <mat-select [(value)]="minPwdStrength" (selectionChange)="clearCaches()"
+        matTooltip="Minimum required password strength used for encryption">
           <mat-option value="0">Terrible</mat-option>
           <mat-option value="1">Weak</mat-option>
           <mat-option value="2">Decent</mat-option>
@@ -189,6 +190,16 @@ SOFTWARE. -->
         <input type="number" min="1" max="10" step="1" matInput [(ngModel)]="loops"
           matTooltip="Number of times to run encryption in a loop. Enter a different password each loop" />
       </mat-form-field>
+      <mat-form-field class="option-input mleft15">
+        <mat-label #formatLabel style="min-width:160px">Cipher Text Format</mat-label>
+        <mat-select [(value)]="ctFormat"
+        matTooltip="Format of resulting cipher text. Select 'link' to get a url usable in browsers">
+          <mat-option value="compact">Compact</mat-option>
+          <mat-option value="indent">Indent</mat-option>
+          <mat-option value="link">Link</mat-option>
+        </mat-select>
+      </mat-form-field>
+
 
       <mat-slide-toggle class="mleft15" [(ngModel)]="trueRandom" (change)="onTrueRandomChanged($event.checked)"
         matTooltip="Random data for encryption securely downloaded from random.org">True Random Data
@@ -204,9 +215,6 @@ SOFTWARE. -->
       <a href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues" target="_blank">
         <mat-icon class="open-new-icon2">open_in_new</mat-icon>
       </a>
-      <mat-slide-toggle class="mleft15" [(ngModel)]="pretty"
-        matTooltip="Add hash based message authentication code to results. Not needed for GCM mode">Format Cipher Text
-      </mat-slide-toggle>
     </p>
     <div class="mtop20">
       <button mat-raised-button (click)="onResetOptions()" color="basic"
