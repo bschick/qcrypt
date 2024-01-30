@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<body>
+<p>
+  <b>Agents</b><br/>
+  <img src="https://latex.codecogs.com/svg.image?\begin{tabular}{p{2mm} l}
+      $A$ & \textrm{ - Alice} \\
+      $S$ & \textrm{ - Browser with SubtleCrypto API} \\
+      $R$ & \textrm{ - https://www.random.org/cgi-bin/randbyte?nbytes=32} \\
+      $D$ & \textrm{ - Insecure persistent storage system} \\
+  \end{tabular}" /><br />
+</p>
+<p>
+  <b>Browser Functions</b><br />
+  <img src="https://latex.codecogs.com/svg.image?\begin{tabular}{p{2mm} l}
+      $E_O$ & \textrm{ - AES-256 cipher in mode of operation }$o$ \\
+      $K$ & \textrm{ - PBKDF2 512 bit key derivation function using SHA-512} \\
+      $H$ & \textrm{ - 256 bit FIPS 198-1 HMAC tag generator} \\
+      $V$ & \textrm{ - 256 bit FIPS 198-1 HMAC tag validator} \\
+      $P$ & \textrm{ - Cryptographically strong pseudo random generator} \\
+  \end{tabular}" /><br />
+</p>
+<p>
+  <b>Variables</b><br />
+  <img src="https://latex.codecogs.com/svg.image?\begin{tabular}{p{2mm} l}
+      $m$ & \textrm{ - Clear text message} \\
+      $p$ & \textrm{ - Clear text password} \\
+      $i$ & \textrm{ - PBKDF2 iteration count (minimum 800,000)} \\
+      $d$ & \textrm{ - 512 bits of PBKDF2 derived key material} \\
+      $k_C$ & \textrm{ - 256 bit cipher key} \\
+      $k_S$ & \textrm{ - 256 bit signing key} \\
+      $o$ & \textrm{ - Block cipher mode of operation [GCM, CBC, CTR]} \\
+      $r$ & \textrm{ - 256 bits of either true or pseudo random data} \\
+      $n_{IV}$ & \textrm{ - 128 bit true or pseudo random initialization vector} \\
+      $n_S$ & \textrm{ - 128 bit true or pseudo random salt} \\
+      $c$ & \textrm{ - Encrypted text} \\
+      $t$ & \textrm{ - 256 bit HMAC tag} \\
+      $b$ & \textrm{ - Valid or invalid HMAC tag} \\
+  \end{tabular}" /><br />
+</p>
+<p>
+  <b>Message Encryption by A</b><br/>
+  <img src="https://latex.codecogs.com/svg.image?\begin{tabular}{p{2mm} l}
+      \multicolumn{2}{l}{$A\rightarrow S : m, p, i, o$} \\
+      \multicolumn{2}{l}{$S\textrm{ computes}: $} \\
+      & $r = P(256) \lor S \overset{\textrm{https}}{\leftarrow} R: r$\\
+      & $n_S = r[0:128)$\\
+      & $n_{IV} = r[128:256)$\\
+      & $d = K(p, n_S, i)$\\
+      & $k_C = d[0:256)$\\
+      & $k_S = d[256:512)$\\
+      & $c = E_O(m, n_{IV}, k_C)$\\
+      & $t = H( c \mathbin\Vert n_{IV} \mathbin\Vert n_S \mathbin\Vert o \mathbin\Vert i, k_S)$\\
+      \multicolumn{2}{l}{$S \rightarrow A: t \mathbin\Vert c \mathbin\Vert  n_{IV} \mathbin\Vert n_S \mathbin\Vert o \mathbin\Vert i$}\\
+    \end{tabular}" />
+  <br />
+</p>
+<p>
+    <b>Message Storage by A</b><br/>
+    <img src="https://latex.codecogs.com/svg.image?
+        A \rightarrow D: t \mathbin\Vert c \mathbin\Vert n_{IV} \mathbin\Vert n_S \mathbin\Vert o \mathbin\Vert i" />
+    <br />
+  </p>
+<p>
+  <b>Message Decryption by A</b><br/>
+  <img src="https://latex.codecogs.com/svg.image?\begin{tabular}{p{2mm} l}
+      \multicolumn{2}{l}{$A \leftarrow D:  t \mathbin\Vert c \mathbin\Vert  n_{IV} \mathbin\Vert n_S \mathbin\Vert o \mathbin\Vert i$} \\
+      \multicolumn{2}{l}{$A \rightarrow S:  p , t \mathbin\Vert c \mathbin\Vert  n_{IV} \mathbin\Vert n_S \mathbin\Vert o \mathbin\Vert i$} \\
+      \multicolumn{2}{l}{$S\textrm{ computes}: $} \\
+      & $d = K(p, n_S, i)$\\
+      & $k_C = d[0:256)$\\
+      & $k_S = d[256:512)$\\
+      & $b = V( c \mathbin\Vert n_{IV} \mathbin\Vert n_S \mathbin\Vert o \mathbin\Vert i, k_S, t)$\\
+      & $\textrm{if }b:$\\
+      & \hspace{15pt}$m = E_O^{-1}(c, n_{IV}, k_C)$\\
+      \multicolumn{2}{l}{$S \rightarrow A : b, m\textrm{ if }b$}\\
+    \end{tabular}" />
+  <br />
+</p>
+</body>
+</html>
