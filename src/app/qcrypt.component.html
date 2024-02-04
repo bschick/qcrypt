@@ -179,9 +179,6 @@ SOFTWARE. -->
         <mat-button-toggle value="AES-CTR">{{algName('AES-CTR')}}</mat-button-toggle>
       </mat-button-toggle-group>
 
-      <mat-slide-toggle class="mleft15" [(ngModel)]="addMac" (change)="onMacChange($event.checked)"
-        matTooltip="Add message authentication code to encrypted content. Not needed for GCM mode">Add HMAC
-      </mat-slide-toggle>
     </p><span class="options-header">
       &nbsp;Other Options<br /></span>
     <p class="mtop10">

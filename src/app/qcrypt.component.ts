@@ -64,6 +64,7 @@ import { PasswordStrengthMeterComponent } from 'angular-password-strength-meter'
 import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { ClipboardModule } from '@angular/cdk/clipboard';
+import * as sodium from 'libsodium-wrappers';
 
 type PwdDialogData = {
   message: string;
@@ -79,12 +80,18 @@ type PwdDialogData = {
 type MuteableLps = { -readonly [P in keyof T]: T[P] };
 type mlp = Muteable<EncContext["lps"]>;
 */
+const ALG_BYTES = 7;
+const IV_BYTES = 24;
+const SLT_BYTES = 16;
+const IC_MIN_BYTES = 6;
+const HMAC_BYTES = 32;
+
 type CParams = {
+  // Length of alg, iv, slt should remain constant
   readonly alg: string;
-  readonly ic: number;
-  readonly mac: boolean;
   iv: Uint8Array;
   slt: Uint8Array;
+  readonly ic: number;
 };
 
 type EncContext = {
@@ -92,24 +99,28 @@ type EncContext = {
   readonly v: number;
   p: CParams;
   lpCount: number;
+  ek: CryptoKey;
+  sk: CryptoKey;
 };
 
 type DecContext = EncContext & {
-  ct: Uint8Array;
+  et: Uint8Array;
   hint?: string;
 };
 
 function isDecContext(context: EncContext | DecContext): context is DecContext {
-  return (context as DecContext).ct !== undefined;
+  return (context as DecContext).et !== undefined;
 }
 
 const ICOUNT_DEFAULT = 800000;
 const ENC_VERSION = 1;
 
+// AlgNames number always be 7 ascii character (that encode to 7 bytes)
 const AlgNames: { [key: string]: string } = {
-  'AES-GCM': 'Galois Counter (GCM)',
-  'AES-CBC': 'Cipher Block Chaining (CBC)',
-  'AES-CTR': 'Counter (CTR)',
+  'AES-GCM': 'AES Galois Counter (GCM)',
+  'AES-CBC': 'AES Cipher Block Chaining (CBC)',
+  'AES-CTR': 'AEX Counter (CTR)',
+  'X20-PLY': 'XChaCha20 Poly1305',
 };
 
 interface EncDecParams {
@@ -188,58 +199,6 @@ function setIfBoolean(
   }
 }
 
-class Random32 {
-  private trueRandCache: Promise<Uint8Array>;
-
-  constructor() {
-    this.trueRandCache = this.downloadTrueRand();
-  }
-
-  async getRandomArray(
-    trueRand: boolean,
-    fallback: boolean
-  ): Promise<Uint8Array> {
-    if (!trueRand) {
-      return crypto.getRandomValues(new Uint8Array(32));
-    } else {
-      const lastCache = this.trueRandCache;
-      this.trueRandCache = this.downloadTrueRand();
-      return lastCache
-        .then((buffer) => {
-          return buffer;
-        })
-        .catch((err) => {
-          console.error(err);
-          // If pseudo random fallback is disabled, then throw error
-          if (!fallback) {
-            throw new Error('no connection to random.org: ' + err.message);
-          }
-          return crypto.getRandomValues(new Uint8Array(32));
-        });
-    }
-  }
-
-  async downloadTrueRand(): Promise<Uint8Array> {
-    const url = 'https://www.random.org/cgi-bin/randbyte?nbytes=' + 32;
-
-    return fetch(url, {
-      cache: 'no-store',
-    })
-      .then((response) => {
-        if (response.ok) {
-          return response.arrayBuffer();
-        } else {
-          throw new Error('random.org response: ' + response.statusText);
-        }
-      })
-      .then((array) => {
-        if (array.byteLength != 32) {
-          throw new Error('missing bytes from random.org');
-        }
-        return new Uint8Array(array!);
-      });
-  }
-}
 
 @Component({
   selector: 'qcrypt-root',
@@ -257,12 +216,10 @@ export class QCryptComponent implements OnInit, AfterViewInit {
   private mouseDown = false;
   private password: string = '';
   private hint: string | undefined;
-  private addMacChanged = false;
   private intervalId: number = 0;
-  //  private loopCount = 0;
   private hashRate: number = 1000; // Default since benchmark is async
   private spinnerAbove: number = 1500000; // Default since benchmark is async
-  private random32: Random32;
+  private random40: Random40;
   private actionStart: number = 0;
   private matcherPwned: Matcher;
   public cacheTimeout!: DateTime;
@@ -289,7 +246,6 @@ export class QCryptComponent implements OnInit, AfterViewInit {
   // options
   public algorithm = 'AES-GCM';
   public icount: number = ICOUNT_DEFAULT; // Default since benchmark is async
-  public addMac = false;
   public hidePwd = true;
   public cacheTime = 30;
   public minPwdStrength = '3';
@@ -327,22 +283,13 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     this.matcherPwned = matcherPwnedFactory(fetch, zxcvbnOptions);
 
     // cache in case any use of true random
-    this.random32 = new Random32();
+    this.random40 = new Random40();
   }
 
-  setAlgorithmAndMac(alg: string | null, mac: string | null): void {
-    if (['AES-GCM', 'AES-CBC', 'AES-CTR'].includes(alg!)) {
+  setAlgorithm(alg: string | null): void {
+    if (['AES-GCM', 'AES-CBC', 'AES-CTR', 'X20-PLY'].includes(alg!)) {
       this.algorithm = alg!;
     }
-    setIfBoolean(mac, (bool) => {
-      this.addMac = bool;
-      if (
-        (this.algorithm == 'AES-GCM' && bool) ||
-        (this.algorithm != 'AES-GCM' && !bool)
-      ) {
-        this.addMacChanged = true;
-      }
-    });
   }
 
   setIcount(ic: string | null): void {
@@ -407,9 +354,10 @@ export class QCryptComponent implements OnInit, AfterViewInit {
   }
 
   ngOnInit(): void {
-    // Is is can be greatly delayed is there is a  long running encrpt or decrypt
-    // from a previous instance (tab that has not fully closed). Seems to be no way
-    // to prevent that or abort an ongoing SubtleCrypto action.
+
+    // This can be greatly delayed is there is a long running async benchmark or
+    // encrpt or decrypt from a previous instance (tab that has not fully closed). 
+    // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
 
     this.benchmark().finally(() => {
 
@@ -422,10 +370,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
           console.log(`${key}: ${localStorage.getItem(key)}`);
          } */
 
-        this.setAlgorithmAndMac(
-          localStorage.getItem('algorithm'),
-          localStorage.getItem('addmac')
-        );
+        this.setAlgorithm(localStorage.getItem('algorithm'));
         this.setIcount(localStorage.getItem('icount'));
         this.setHidePwd(localStorage.getItem('hidepwd'));
         this.setCacheTime(localStorage.getItem('cachetime'));
@@ -453,7 +398,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
         this.expandOptions = true;
       }
 
-      this.setAlgorithmAndMac(params.get('algorithm'), params.get('addmac'));
+      this.setAlgorithm(params.get('algorithm'));
       this.setIcount(params.get('icount'));
       this.setHidePwd(params.get('hidepwd'));
       this.setCacheTime(params.get('cachetime'));
@@ -475,7 +420,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     const target_hash_millis = 500;
     const max_hash_millis = 5 * 60 * 1000; //5 minutes
 
-    const pseudoRand = await this.random32.getRandomArray(false, true);
+    const pseudoRand = await this.random40.getRandomArray(false, true);
 
     // Pseudo-random is good enough for testing
     var cparams: CParams = {
@@ -483,7 +428,6 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       iv: pseudoRand.slice(16),
       ic: test_size,
       alg: 'AES-GCM',
-      mac: false,
     };
 
     const start = Date.now();
@@ -495,7 +439,8 @@ export class QCryptComponent implements OnInit, AfterViewInit {
 
     // Don't allow more then ~5 minutes of pwd hashing (rounded to millions)
     this.icountMax =
-      Math.round((max_hash_millis * this.hashRate) / 1000000) * 1000000;
+      Math.min(cipher.MAX_ICCOUNT,
+         Math.round((max_hash_millis * this.hashRate) / 1000000) * 1000000);
 
     let rounded =
       Math.round((this.hashRate * target_hash_millis) / 100000) * 100000;
@@ -522,10 +467,6 @@ export class QCryptComponent implements OnInit, AfterViewInit {
 
     if (this.algorithm != 'AES-GCM') {
       params = params.append('algorithm', this.algorithm);
-    }
-
-    if (this.addMacChanged) {
-      params = params.append('addmac', this.addMac);
     }
 
     if (this.icount != this.icountDefault) {
@@ -577,8 +518,6 @@ export class QCryptComponent implements OnInit, AfterViewInit {
   onResetOptions(): void {
     this.algorithm = 'AES-GCM';
     this.icount = this.icountDefault;
-    this.addMac = false;
-    this.addMacChanged = false;
     this.hidePwd = true;
     this.cacheTime = 30;
     this.minPwdStrength = '3';
@@ -598,7 +537,6 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     try {
       if (isPlatformBrowser(this.platformId)) {
         localStorage.setItem('algorithm', this.algorithm);
-        localStorage.setItem('addmac', this.addMac.toString());
         localStorage.setItem('icount', this.icount.toString());
         localStorage.setItem('hidepwd', this.hidePwd.toString());
         localStorage.setItem('cachetime', this.cacheTime.toString());
@@ -764,7 +702,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       'raw',
       ebits,
       { name: cparams.alg, length: 256 },
-      false,
+      true,
       ['encrypt', 'decrypt']
     );
 
@@ -802,35 +740,78 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       clear_buffer
     );
 
-    if (cparams.mac) {
-      const algEnc = new TextEncoder().encode(cparams.alg);
-      const icEnc = new TextEncoder().encode(cparams.ic.toString());
-      let ct = new Uint8Array(
-        cipherText.byteLength +
-        cparams.iv.length +
-        cparams.slt.length +
-        algEnc.length +
-        icEnc.length
-      );
+    const algEnc = new TextEncoder().encode(cparams.alg);
+    const icEnc = new TextEncoder().encode(cparams.ic.toString());
+    let ct = new Uint8Array(
+      cipherText.byteLength +
+      cparams.iv.length +
+      cparams.slt.length +
+      algEnc.length +
+      icEnc.length
+    );
 
-      let offset = 0;
-      ct.set(new Uint8Array(cipherText), offset);
-      offset += cipherText.byteLength;
-      ct.set(cparams.iv as Uint8Array, offset);
-      offset += cparams.iv.length;
-      ct.set(cparams.slt as Uint8Array, offset);
-      offset += cparams.slt.length;
-      ct.set(algEnc, offset);
-      offset += algEnc.length;
-      ct.set(icEnc, offset);
-      const hmac = await crypto.subtle.sign('HMAC', sk, ct);
+    let offset = 0;
+    ct.set(new Uint8Array(cipherText), offset);
+    offset += cipherText.byteLength;
+    ct.set(cparams.iv as Uint8Array, offset);
+    offset += cparams.iv.length;
+    ct.set(cparams.slt as Uint8Array, offset);
+    offset += cparams.slt.length;
+    ct.set(algEnc, offset);
+    offset += algEnc.length;
+    ct.set(icEnc, offset);
+    const hmac = await crypto.subtle.sign('HMAC', sk, ct);
 
-      let extended = new Uint8Array(hmac.byteLength + cipherText.byteLength);
-      extended.set(new Uint8Array(hmac));
-      extended.set(new Uint8Array(cipherText), hmac.byteLength);
-      cipherText = extended;
-    }
+    let extended = new Uint8Array(hmac.byteLength + cipherText.byteLength);
+    extended.set(new Uint8Array(hmac));
+    extended.set(new Uint8Array(cipherText), hmac.byteLength);
+    cipherText = extended;
+
     return cipherText;
+  }
+
+
+  async doEncrypt2(
+    clear_buffer: Uint8Array,
+    econtext: EncContext,
+  ): Promise<Uint8Array> {
+
+    let encryptedBytes: Uint8Array;
+
+    if (econtext.p.alg == 'X20-PLY') {
+      const exported = await window.crypto.subtle.exportKey("raw", econtext.ek);
+      const keyBytes = new Uint8Array(exported);
+
+      await sodium.ready;
+      encryptedBytes = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+        clear_buffer,
+        null,
+        null,
+        econtext.p.iv,
+        keyBytes,
+        "uint8array"
+      );
+    } else {
+      let ed_params: EncDecParams = {
+        name: econtext.p.alg,
+      };
+
+      if (econtext.p.alg == 'AES-CTR') {
+        ed_params['counter'] = econtext.p.iv.slice(0, 16);
+        ed_params['length'] = 64;
+      } else {
+        ed_params['iv'] = econtext.p.iv;
+      }
+
+      const cipherBuf = await window.crypto.subtle.encrypt(
+        ed_params,
+        econtext.ek,
+        clear_buffer
+      );
+      encryptedBytes = new Uint8Array(cipherBuf);
+    }
+
+    return encryptedBytes;
   }
 
   async doDecrypt(
@@ -851,91 +832,182 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       ed_params['iv'] = cparams.iv;
     }
 
-    if (cparams.mac) {
-      const hmac = cipher_buffer.slice(0, 32);
-      const cipherText = cipher_buffer.slice(32);
+    const hmac = cipher_buffer.slice(0, 32);
+    const cipherText = cipher_buffer.slice(32);
 
-      const algEnc = new TextEncoder().encode(cparams.alg);
-      const icEnc = new TextEncoder().encode(cparams.ic.toString());
-      let ct = new Uint8Array(
-        cipherText.byteLength +
-        cparams.iv.length +
-        cparams.slt.length +
-        algEnc.length +
-        icEnc.length
-      );
+    const algEnc = new TextEncoder().encode(cparams.alg);
+    const icEnc = new TextEncoder().encode(cparams.ic.toString());
+    let ct = new Uint8Array(
+      cipherText.byteLength +
+      cparams.iv.length +
+      cparams.slt.length +
+      algEnc.length +
+      icEnc.length
+    );
 
-      let offset = 0;
-      ct.set(cipherText, offset);
-      offset += cipherText.byteLength;
-      ct.set(cparams.iv as Uint8Array, offset);
-      offset += cparams.iv.length;
-      ct.set(cparams.slt as Uint8Array, offset);
-      offset += cparams.slt.length;
-      ct.set(algEnc, offset);
-      offset += algEnc.length;
-      ct.set(icEnc, offset);
+    let offset = 0;
+    ct.set(cipherText, offset);
+    offset += cipherText.byteLength;
+    ct.set(cparams.iv as Uint8Array, offset);
+    offset += cparams.iv.length;
+    ct.set(cparams.slt as Uint8Array, offset);
+    offset += cparams.slt.length;
+    ct.set(algEnc, offset);
+    offset += algEnc.length;
+    ct.set(icEnc, offset);
 
-      const valid = await crypto.subtle.verify('HMAC', sk, hmac, ct);
-      if (!valid) {
-        throw new Error('HMAC does not match');
-      }
-      cipher_buffer = cipherText;
+    const valid = await crypto.subtle.verify('HMAC', sk, hmac, ct);
+    if (!valid) {
+      throw new Error('HMAC does not match');
     }
+    cipher_buffer = cipherText;
 
     let decrypted = window.crypto.subtle.decrypt(ed_params, ek, cipher_buffer);
     return decrypted;
   }
 
-  /* Considered encrypting CParams for storage, but it would have to use the
-  same PWD and the clearText with fixed cipher settings, and if those settings
-  are less secure than the settings selected by the user for the main
-  cipher it could be the weak link in guessing their PWD. So just encode
-  the data to base64 to reduce desire to tamper */
-  encodeCParams(cparams: CParams): string {
-    let cp_copy: { [key: string]: any } = { ...cparams };
-    cp_copy['slt'] = bytesToBase64(cparams.slt!);
-    cp_copy['iv'] = bytesToBase64(cparams.iv!);
+  async doDecrypt2(
+    cipher_buffer: Uint8Array,
+    dcontext: DecContext,
+  ): Promise<ArrayBuffer> {
 
-    // only include these if needed (helps keep cipher text small)
-    if (!cp_copy['mac']) {
-      delete cp_copy['mac'];
-    }
+    const hmac = cipher_buffer.slice(0, 32);
+    const cipherText = cipher_buffer.slice(32);
 
-    const p_buffer = new TextEncoder().encode(JSON.stringify(cp_copy));
-    return bytesToBase64(p_buffer);
-  }
-
-  /* caller should catch json parse and base64 decode errors */
-  decodeCParams(b64Params: string): CParams {
-    const jsbytes = base64ToBytes(b64Params);
-    const json = JSON.parse(new TextDecoder().decode(jsbytes));
-
-    // Just in case someone messed with these, constrain them
-    // Need to merge this with the logic in ngOnInit...
-    if (!('ic' in json) || !('iv' in json) || !('slt' in json)) {
-      throw new Error(
-        'cipher params formatted correctly. Missing one of ic, iv, slt'
-      );
-    }
-
-    if (!['AES-GCM', 'AES-CBC', 'AES-CTR'].includes(json.alg)) {
-      throw new Error(
-        'cipher params formatted correctly. alg was: ' + json.alg
-      );
-    }
-
-    json.ic = Math.min(
-      this.icountMax,
-      Math.max(this.icountMin, Number(json.ic) ? Number(json.ic) : 0)
+    const algEnc = new TextEncoder().encode(dcontext.p.alg);
+    const icEnc = new TextEncoder().encode(dcontext.p.ic.toString());
+    let ct = new Uint8Array(
+      cipherText.byteLength +
+      dcontext.p.iv.length +
+      dcontext.p.slt.length +
+      algEnc.length +
+      icEnc.length
     );
 
+    let offset = 0;
+    ct.set(cipherText, offset);
+    offset += cipherText.byteLength;
+    ct.set(dcontext.p.iv as Uint8Array, offset);
+    offset += dcontext.p.iv.length;
+    ct.set(dcontext.p.slt as Uint8Array, offset);
+    offset += dcontext.p.slt.length;
+    ct.set(algEnc, offset);
+    offset += algEnc.length;
+    ct.set(icEnc, offset);
+
+    const valid = await crypto.subtle.verify('HMAC', dcontext.sk, hmac, ct);
+    if (!valid) {
+      throw new Error('HMAC does not match');
+    }
+    cipher_buffer = cipherText;
+
+    let decrypted: Promise<ArrayBuffer>;
+
+    if (dcontext.p.alg == 'X20-PLY') {
+      const exported = await window.crypto.subtle.exportKey("raw", dcontext.ek);
+      const keyBytes = new Uint8Array(exported);
+
+      const decryptedBytes = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null,
+        cipher_buffer,
+        null,
+        dcontext.p.iv,
+        keyBytes,
+        "uint8array"
+      );
+
+      const aBSlice = decryptedBytes.buffer.slice(decryptedBytes.byteOffset, decryptedBytes.byteOffset + decryptedBytes.byteLength);
+      // Since we aren't sure how sodiiumwrapper managers the buffer, ensure we limit to slide
+      decrypted = Promise.resolve(aBSlice);
+
+    } else {
+      let ed_params: EncDecParams = {
+        name: dcontext.p.alg,
+      };
+
+      if (dcontext.p.alg == 'AES-CTR') {
+        ed_params['counter'] = dcontext.p.iv.slice(0, 16);
+        ed_params['length'] = 64;
+      } else {
+        ed_params['iv'] = dcontext.p.iv;
+      }
+      decrypted = window.crypto.subtle.decrypt(ed_params, dcontext.ek, cipher_buffer);
+    }
+    return decrypted;
+  }
+
+  encodeCParams(cparams: CParams): Uint8Array {
+
+    const algEnc = new TextEncoder().encode(cparams.alg);
+    const icEnc = new TextEncoder().encode(cparams.ic.toString());
+
+    /* Only the length of the last parameter is allowed to vary */
+    if (algEnc.byteLength != ALG_BYTES || cparams.iv.byteLength != IV_BYTES ||
+      cparams.slt.byteLength != SLT_BYTES || icEnc.byteLength < IC_MIN_BYTES) {
+      throw new Error('Invalid cparam lengths');
+    }
+
+    let pbytes = new Uint8Array(
+      algEnc.byteLength +
+      cparams.iv.byteLength +
+      cparams.slt.byteLength +
+      icEnc.byteLength
+    );
+
+    let offset = 0;
+    pbytes.set(algEnc, offset);
+    offset += ALG_BYTES;
+    pbytes.set(cparams.iv, offset);
+    offset += IV_BYTES;
+    pbytes.set(cparams.slt, offset);
+    offset += SLT_BYTES;
+    pbytes.set(icEnc, offset);
+
+    return pbytes;
+  }
+
+  /* Caller should have validate the singature of the ciphertext before
+     calling this method. 
+   */
+  decodeCParams(pbytes: Uint8Array): CParams {
+
+    // Should not get here if invlaid, but check anyway
+    if (pbytes.byteLength < ALG_BYTES + IV_BYTES + SLT_BYTES + IC_MIN_BYTES) {
+      throw new Error('Invalid cparam lengths');
+    }
+
+    let offset = 0;
+    const alg = new TextDecoder().decode(pbytes.slice(offset, offset + ALG_BYTES));
+    offset += ALG_BYTES;
+    const iv = pbytes.slice(offset, offset + IV_BYTES);
+    offset += IV_BYTES;
+    const slt = pbytes.slice(offset, offset + SLT_BYTES);
+    offset += SLT_BYTES;
+    const ic = Number(new TextDecoder().decode(pbytes.slice(offset)));
+
+    // Again, the following should  not be possible since signature should 
+    // be validated first, but just in case...
+    if (!['AES-GCM', 'AES-CBC', 'AES-CTR', 'X20-PLY'].includes(alg)) {
+      throw new Error('Invalid alg of: ' + alg);
+    }
+
+    if (ic < this.icountMin || ic > this.icountMax) {
+      throw new Error('Invalid ic value of: ' + ic);
+    }
+
+    if (iv.byteLength != IV_BYTES) {
+      throw new Error('Invalid iv len of: ' + iv.byteLength);
+    }
+
+    if (slt.byteLength != SLT_BYTES) {
+      throw new Error('Invalid slt len: ' + slt.byteLength);
+    }
+
     return {
-      alg: json.alg,
-      ic: json.ic,
-      mac: json.mac ? true : false,
-      iv: base64ToBytes(json.iv),
-      slt: base64ToBytes(json.slt),
+      alg: alg,
+      iv: iv,
+      slt: slt,
+      ic: ic,
     };
   }
 
@@ -966,13 +1038,6 @@ export class QCryptComponent implements OnInit, AfterViewInit {
   }
 
   onAlgorithmChange(value: string): void {
-    if (!this.addMacChanged) {
-      this.addMac = value != 'AES-GCM';
-    }
-  }
-
-  onMacChange(value: boolean) {
-    this.addMacChanged = true;
   }
 
   toastMessage(msg: string): void {
@@ -1024,7 +1089,6 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     let cp: CParams = {
       alg: this.algorithm,
       ic: this.icount,
-      mac: this.addMac,
       iv: new Uint8Array(), // placeholder
       slt: new Uint8Array(), // placeholder
     };
@@ -1033,6 +1097,8 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       lpCount: 0,
       v: ENC_VERSION,
       p: cp,
+      ek: new CryptoKey(), // placeholder
+      sk: new CryptoKey(), // placeholder
     };
 
     this.makeCipherText(econtext).then(() => {
@@ -1050,38 +1116,43 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     this.onClearCipher();
 
     try {
-      var [pwd, hint] = await this.getPassword(+this.minPwdStrength, econtext);
-    } catch (err) {
-      // ignore since it was likely a cancel of the password dialog
-      console.log(err);
-      return;
-    }
-
-    try {
-      const randomArray = await this.random32.getRandomArray(
+      // Setup EncContext for this loop
+      // Create a new salt each time a key is derviced from the password.
+      // https://crypto.stackexchange.com/questions/53032/salt-for-non-stored-passwords
+      const randomArray = await this.random40.getRandomArray(
         this.trueRandom,
         this.pseudoRandom
       );
 
-      // Create a new salt each time a key is derviced from the password.
-      // https://crypto.stackexchange.com/questions/53032/salt-for-non-stored-passwords
-      econtext.p.slt = randomArray.slice(0, 16);
-      econtext.p.iv = randomArray.slice(16);
+      econtext.p.slt = randomArray.slice(0, SLT_BYTES);
+      econtext.p.iv = randomArray.slice(SLT_BYTES, IV_BYTES);
+
+      try {
+        var [pwd, hint] = await this.getPassword(+this.minPwdStrength, econtext);
+      } catch (err) {
+        // ignore since it was likely a cancel of the password dialog
+        console.log(err);
+        return;
+      }
+
+      this.actionStart = Date.now();
+      const [ek, sk] = await this.genKeys(econtext.p, pwd);
+      econtext.ek = ek;
+      econtext.sk = sk;
 
       const clearBuffer = new TextEncoder().encode(this.clearText);
-      this.actionStart = Date.now();
-      const encrypted = await this.doEncrypt(clearBuffer, econtext.p, pwd);
+      const encryptedBytes = await this.doEncrypt2(clearBuffer, econtext);
 
       // null means aborted, without an error to report
-      if (encrypted != null) {
+      if (encryptedBytes != null) {
         econtext.lpCount += 1;
 
         const dcontext: DecContext = {
-          ct: new Uint8Array(encrypted),
+          et: encryptedBytes,
           hint: hint,
           ...econtext,
         };
-        this.showCipherText(this.getCiherTextFrom(dcontext));
+        this.showCipherText(await this.getCiherTextFrom(dcontext));
 
         if (econtext.lpCount < econtext.lps) {
           this.clearCaches();
@@ -1134,17 +1205,8 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     this.onClearClear();
 
     try {
-      //-1 means no pwd strength requirments
-      var [pwd, _] = await this.getPassword(-1, dcontext);
-    } catch (err) {
-      // ignore since it was likely a cancel of the password dialog
-      console.log(err);
-      return;
-    }
-
-    try {
       this.actionStart = Date.now();
-      const decrypted = await this.doDecrypt(dcontext.ct, dcontext.p, pwd);
+      const decrypted = await this.doDecrypt2(dcontext.ct, dcontext.p, pwd);
 
       // null means aborted, without an error to report
       if (decrypted != null) {
@@ -1202,19 +1264,36 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     this.clearLabel = 'Clear Text ' + tookMsg;
   }
 
-  getCiherTextFrom(dcontext: DecContext): string {
+  async getCiherTextFrom(dcontext: DecContext): Promise<string> {
     // Rebuild object to control ordering (better way to do this?)
     let result: { [key: string]: string | number } = {};
     if (dcontext.hint) {
       result['hint'] = dcontext.hint;
     }
 
-    result['ct'] = bytesToBase64(dcontext.ct);
-    result['p'] = this.encodeCParams(dcontext.p);
+    const paramBytes = this.encodeCParams(dcontext.p);
 
-    // To reduce CT size, only include this stuff at the outer
-    // most loop (and lps when there is > 1). Should consider moving cparams.mac
-    // to context since it cannot change during loops
+    let sign = new Uint8Array(
+      dcontext.et.byteLength +
+      paramBytes.byteLength
+    );
+    sign.set(dcontext.et, 0);
+    sign.set(paramBytes, dcontext.et.byteLength);
+
+    const hmac = await crypto.subtle.sign('HMAC', dcontext.sk, sign);
+    if( hmac.byteLength != HMAC_BYTES ) {
+      throw new Error('Invalid HMAC length of: ' +  hmac.byteLength);
+    }
+
+    let extended = new Uint8Array(hmac.byteLength + dcontext.et.byteLength);
+    extended.set(new Uint8Array(hmac));
+    extended.set(dcontext.et, hmac.byteLength);
+
+    result['et'] = bytesToBase64(dcontext.et);
+    result['p'] = bytesToBase64(paramBytes);
+
+    // To reduce CT size, only include this extra stuff at the
+    // out most loop.
     if (dcontext.lpCount == dcontext.lps) {
       if (dcontext.v) {
         result['v'] = dcontext.v;
@@ -1222,10 +1301,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       if (dcontext.lps > 1) {
         result['lps'] = dcontext.lps;
       }
-    }
 
-    // Link injection and indenting only happen at the last loop
-    if (dcontext.lpCount == dcontext.lps) {
       if (this.ctFormat == 'link') {
         const ctParam = encodeURIComponent(JSON.stringify(result));
         return 'https://' + location.host + '?ciphertext=' + ctParam;
@@ -1238,7 +1314,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     }
   }
 
-  getDecContextFrom(cipherText: string): DecContext {
+  async getDecContextFrom(cipherText: string): Promise<DecContext> {
     try {
       let trimmed = cipherText.trim();
       if (trimmed.startsWith('https://')) {
@@ -1266,15 +1342,64 @@ export class QCryptComponent implements OnInit, AfterViewInit {
         throw new Error('Cipher text not formatted correctly. ' + err.name);
       }
     }
-
-    if (!('ct' in jsonParts) || !('p' in jsonParts)) {
+    if (!('et' in jsonParts) || !('p' in jsonParts)) {
       throw new Error(
-        'Cipher text not formatted correctly. Missing one of ct or p'
+        'Cipher text not formatted correctly. Missing one of et or p'
       );
     }
 
+    const lps = Math.min(
+      10,
+      Math.max(1, Number(jsonParts.lps) ? Number(jsonParts.lps) : 0)
+    );
+    const version = jsonParts.v;
+
+
     try {
-      var cparams = this.decodeCParams(jsonParts.p);
+      //-1 means no pwd strength requirments
+      var [pwd, _] = await this.getPassword(-1, dcontext);
+    } catch (err) {
+      // ignore since it was likely a cancel of the password dialog
+      console.log(err);
+      return;
+    }
+
+    try {
+      var extended = base64ToBytes(jsonParts.et);
+     var p = base64ToBytes(jsonParts.p);
+    } catch (err) {
+      console.error(err);
+      if (err instanceof Error) {
+        throw new Error(err.name + ' while decoding Cipher Text');
+      } else {
+        throw err;
+      }
+    }
+    
+    const hmac = extended.slice(0, HMAC_BYTES);
+    const et = extended.slice(HMAC_BYTES);
+
+
+    this.actionStart = Date.now();
+    const [ek, sk] = await this.genKeys(econtext.p, pwd);
+    econtext.ek = ek;
+    econtext.sk = sk;
+
+
+    let check = new Uint8Array(
+      et.byteLength +
+      p.byteLength
+    );
+    check.set(et, 0);
+    check.set(p, et.byteLength);
+
+    const valid = await crypto.subtle.verify('HMAC', dcontext.sk, hmac, check);
+    if (!valid) {
+      throw new Error('HMAC is not valid');
+    }
+
+    try {
+      var cparams = this.decodeCParams(p);
     } catch (err) {
       console.error(err);
       if (err instanceof Error) {
@@ -1284,28 +1409,13 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       }
     }
 
-    try {
-      var ctBytes = base64ToBytes(jsonParts.ct);
-    } catch (err) {
-      console.error(err);
-      if (err instanceof Error) {
-        throw new Error(err.name + ' while decoding Cipher Text.ct');
-      } else {
-        throw err;
-      }
-    }
-
-    jsonParts.lps = Math.min(
-      10,
-      Math.max(1, Number(jsonParts.lps) ? Number(jsonParts.lps) : 0)
-    );
 
     return {
       lps: jsonParts.lps,
       lpCount: 0,
       v: jsonParts.v,
       p: cparams,
-      ct: ctBytes,
+      et: et,
       hint: jsonParts.hint,
     };
   }
@@ -1476,7 +1586,6 @@ export class CipherInfoDialog {
   public error;
   public ic!: number;
   public alg!: string;
-  public mac!: string;
   public slt!: string;
   public iv!: string;
 
@@ -1492,7 +1601,6 @@ export class CipherInfoDialog {
       this.alg = AlgNames[cparams.alg] ? AlgNames[cparams.alg] : 'Invalid';
       this.iv = bytesToBase64(cparams.iv as Uint8Array);
       this.slt = bytesToBase64(cparams.slt as Uint8Array);
-      this.mac = cparams.mac ? 'yes' : 'no';
     }
   }
 }
