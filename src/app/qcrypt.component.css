@@ -132,9 +132,13 @@ SOFTWARE. */
 }
 
 .algorithms {
-  width: 476px;
+/*  width: 476px;*/
   position: relative;
   top: -5px;
+}
+
+.algoption {
+  width:189px;
 }
 
 .clear-button {

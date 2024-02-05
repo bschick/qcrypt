@@ -8,9 +8,9 @@ export const CURRENT_VERSION = 1;
 
 export const AlgInfo: { [key: string]: [string, number] } = {
    'AES-GCM': ['AES Galois Counter (GCM)', 1],
-   'AES-CBC': ['AES Cipher Block Chaining (CBC)', 2],
-   'AES-CTR': ['AEX Counter (CTR)', 3],
-   'X20-PLY': ['XChaCha20 Poly1305', 4],
+   //  'AES-CBC': ['AES Cipher Block Chaining (CBC)', 2],
+   //   'AES-CTR': ['AES Counter (CTR)', 3],
+   'X20-PLY': ['XChaCha20 Poly1305', 2],
 };
 
 // Length of all parameter except hint and et are fixed
@@ -30,6 +30,7 @@ export const IC_BYTES = 4;
 export const VER_BYTES = 2;
 export const HMAC_BYTES = 32;
 export const KEY_BYTES = 32;
+export const PKSIG_BYTES = 32;
 
 interface EnDeParams {
    name: string;
@@ -155,24 +156,18 @@ export class Cipher {
       this.ic = ic;
    }
 
-   // Move to callers
-   // Avoid briefly putting up spinner and disabling buttons
-   /*            if (this.p.ic > this.spinnerAbove) {
-                   this.showProgress = true;
-                 }
-   */
-   private async genKeys(
+   // Public because the function is used for timing/benchmark
+   async genCipherKey(
       pwd: string,
-      signature: Uint8Array,
       slt: Uint8Array
-   ): Promise<[CryptoKey, CryptoKey]> {
+   ): Promise<CryptoKey> {
 
       if (slt.byteLength != SLT_BYTES) {
          throw new Error("Invalid slt size of: " + slt.byteLength);
       }
 
-      if (!pwd || signature.byteLength == 0) {
-         throw new Error('password or signature is empty');
+      if (!pwd) {
+         throw new Error('Invalid empty password');
       }
 
       if (this.ic < ICOUNT_MIN || this.ic > ICOUNT_MAX) {
@@ -180,65 +175,88 @@ export class Cipher {
       }
 
       const pwdBytes = new TextEncoder().encode(pwd);
-      let input = new Uint8Array(pwdBytes.byteLength + signature.byteLength);
-      input.set(pwdBytes);
-      input.set(signature, pwdBytes.byteLength);
 
-      const keyMaterial = await window.crypto.subtle.importKey(
+      const ekMaterial = await window.crypto.subtle.importKey(
          'raw',
-         input,
+         pwdBytes,
          'PBKDF2',
          false,
          ['deriveBits', 'deriveKey']
       );
-
-      const kbits = await window.crypto.subtle.deriveBits(
-         {
-            name: 'PBKDF2',
-            salt: slt,
-            iterations: this.ic,
-            hash: 'SHA-512',
-         },
-         keyMaterial,
-         KEY_BYTES * 2 * 8
-      );
-
-      const ebits = kbits.slice(0, KEY_BYTES);
-      const sbits = kbits.slice(KEY_BYTES);
 
       // A bit of a hack, but subtle doesn't support other algorithms... so lie.
       // This is safe because the key is exported as bits and used in libsodium
       // TODO: If more non-browser cipher are added, make this more generic.
       const alg = this.alg != 'X20-PLY' ? this.alg : 'AES-GCM';
 
-      // Will throw error if alg is invalid
-      const ek = await window.crypto.subtle.importKey(
-         'raw',
-         ebits,
+      const ek = await window.crypto.subtle.deriveKey(
+         {
+            name: 'PBKDF2',
+            salt: slt,
+            iterations: this.ic,
+            hash: 'SHA-512',
+         },
+         ekMaterial,
          { name: alg, length: 256 },
          true,
          ['encrypt', 'decrypt']
       );
 
-      const sk = await window.crypto.subtle.importKey(
+      return ek;
+   }
+
+   private static async _genSigningKey(
+      pksig: Uint8Array,
+      slt: Uint8Array
+   ): Promise<CryptoKey> {
+
+      if (slt.byteLength != SLT_BYTES) {
+         throw new Error("Invalid slt size of: " + slt.byteLength);
+      }
+
+      // Confirm how  long PassKey signature will be and check for that directly
+      if (pksig.byteLength != PKSIG_BYTES) {
+         throw new Error('Invalid pksig length of: ' + pksig.byteLength);
+      }
+      const skMaterial = await window.crypto.subtle.importKey(
          'raw',
-         sbits,
+         pksig,
+         'HKDF',
+         false,
+         ['deriveBits', 'deriveKey']
+      );
+
+      const sk = await window.crypto.subtle.deriveKey(
+         {
+            name: 'HKDF',
+            salt: slt,
+            hash: 'SHA-512',
+            info: new Uint8Array(0),
+         },
+         skMaterial,
          { name: 'HMAC', hash: 'SHA-256', length: 256 },
          false,
          ['sign', 'verify']
       );
-      return [ek, sk];
+
+      return sk;
    }
 
    async encrypt(
       pwd: string,
       hint: string,
-      signature: Uint8Array,
-      clear: Uint8Array
+      pksig: Uint8Array,
+      clear: Uint8Array,
+      readyNotice?: (cparams: CParams) => void
    ): Promise<string> {
 
-      if (!pwd || signature.byteLength == 0) {
-         throw new Error('password or signature is empty');
+      if (!pwd || pksig.byteLength != PKSIG_BYTES) {
+         throw new Error('Invalid password or pksig');
+      }
+
+      // assume encrypting nothing is a mistake
+      if (clear.byteLength == 0) {
+         throw new Error('No data to encrypt');
       }
 
       // Setup EncContext for new key derivation (and encryption)
@@ -252,7 +270,19 @@ export class Cipher {
       const slt = randomArray.slice(0, SLT_BYTES);
       const iv = randomArray.slice(SLT_BYTES, SLT_BYTES + IV_BYTES);
 
-      const [ek, sk] = await this.genKeys(pwd, signature, slt);
+      if (readyNotice) {
+         readyNotice({
+            alg: this.alg,
+            ic: this.ic,
+            iv: iv,
+            slt: slt,
+            hint: hint,
+            et: new Uint8Array(0),
+         });
+      }
+
+      const ek = await this.genCipherKey(pwd, slt);
+      const sk = await Cipher._genSigningKey(pksig, slt);
 
       let encryptedBytes: Uint8Array;
       if (this.alg == 'X20-PLY') {
@@ -273,13 +303,7 @@ export class Cipher {
             name: this.alg,
          };
 
-         if (this.alg == 'AES-CTR') {
-            enParams['counter'] = iv.slice(0, 16);
-            enParams['length'] = 64;
-         } else {
-            enParams['iv'] = iv.slice(0, 16);
-         }
-
+         enParams['iv'] = iv.slice(0, 16);
          const cipherBuf = await window.crypto.subtle.encrypt(
             enParams,
             ek,
@@ -287,7 +311,7 @@ export class Cipher {
          );
          encryptedBytes = new Uint8Array(cipherBuf);
       }
-      const encoded = Cipher.encode({
+      const encoded = Cipher._encodeCipherText({
          alg: this.alg,
          ic: this.ic,
          iv: iv,
@@ -296,7 +320,7 @@ export class Cipher {
          et: encryptedBytes
       });
 
-      const hmac = await Cipher.sign(sk, encoded);
+      const hmac = await Cipher._signCipherText(sk, encoded);
 
       let extended = new Uint8Array(hmac.byteLength + encoded.byteLength);
       extended.set(new Uint8Array(hmac));
@@ -307,16 +331,25 @@ export class Cipher {
 
    static async decrypt(
       pwdProvider: (hint: string) => Promise<string>,
-      signature: Uint8Array,
-      ct: string
+      pksig: Uint8Array,
+      ct: string,
+      readyNotice?: (cparams: CParams) => void
    ): Promise<Uint8Array> {
 
       // This does HMAC signature verification on CT and throws if invalid
-      const [cparams, ek] = await Cipher.getCipherParamsImpl(
-         pwdProvider,
-         signature,
-         ct
-      );
+      const cparams = await Cipher.getCipherParams(pksig, ct);
+
+      const pwd = await pwdProvider(cparams.hint);
+      if (!pwd) {
+         throw new Error('password is empty');
+      }
+
+      if (readyNotice) {
+         readyNotice(cparams);
+      }
+
+      const cipher = new Cipher(cparams.alg, cparams.ic);
+      const ek = await cipher.genCipherKey(pwd, cparams.slt);
 
       let decrypted: Uint8Array;
 
@@ -333,17 +366,12 @@ export class Cipher {
             "uint8array"
          );
       } else {
-         let ed_params: EnDeParams = {
+         let enParams: EnDeParams = {
             name: cparams.alg,
          };
 
-         if (cparams.alg == 'AES-CTR') {
-            ed_params['counter'] = cparams.iv.slice(0, 16);
-            ed_params['length'] = 64;
-         } else {
-            ed_params['iv'] = cparams.iv.slice(0, 16);
-         }
-         const buffer = await window.crypto.subtle.decrypt(ed_params, ek, cparams.et);
+         enParams['iv'] = cparams.iv.slice(0, 16);
+         const buffer = await window.crypto.subtle.decrypt(enParams, ek, cparams.et);
          decrypted = new Uint8Array(buffer);
       }
 
@@ -351,29 +379,12 @@ export class Cipher {
    }
 
    static async getCipherParams(
-      pwdProvider: (hint: string) => Promise<string>,
-      signature: Uint8Array,
+      pksig: Uint8Array,
       ct: string
    ): Promise<CParams> {
 
-      // This does HMAC signature verification on CT and throws if invalid
-      const [cparams, _] = await Cipher.getCipherParamsImpl(
-         pwdProvider,
-         signature,
-         ct
-      );
-
-      return cparams;
-   }
-
-   private static async getCipherParamsImpl(
-      pwdProvider: (hint: string) => Promise<string>,
-      signature: Uint8Array,
-      ct: string
-   ): Promise<[CParams, CryptoKey]> {
-
-      if (signature.byteLength == 0) {
-         throw new Error('signature is empty');
+      if (pksig.byteLength != PKSIG_BYTES) {
+         throw new Error('Invalid pksig length of: ' + pksig.byteLength);
       }
 
       const extended = base64ToBytes(ct);
@@ -384,32 +395,29 @@ export class Cipher {
       }
       const encoded = extended.slice(HMAC_BYTES);
 
-      // Do not return this until signature verified. It may be used or the
-      // data displayed by the caller so the signature must be verified first
-      const cparams = Cipher.decode(encoded);
+      // This is not a crypto function, just unpacking. We need to unpack to
+      // get the salt used for signing key generation.
+      //
+      // IMPORTANT: The returned CParams could be corrupted. Do not return
+      //       this to caller until after signature verified.
+      const cparams = Cipher._decodeCipherText(encoded);
 
-      const pwd = await pwdProvider(cparams.hint);
-      if (!pwd) {
-         throw new Error('password is empty');
-      }
-
-      let cipher = new Cipher(cparams.alg, cparams.ic);
-      const [ek, sk] = await cipher.genKeys(pwd, signature, cparams.slt);
+      const sk = await Cipher._genSigningKey(pksig, cparams.slt);
 
       // Avoiding the Doom Principle and verify signature before crypto operations.
-      // Aka, check as soon as possible after we have the signing key. This will raise
-      // and exception if invalid, but the boolean return is an extra precaution 
-      // requiring an explicit true result and no exception
-      const validSig = await Cipher.verify(sk, hmac, encoded);
+      // Aka, check HMAC as soon as possible after we have the signing key.
+      // _verifyCipherText should raise and exception if invalid, but the boolean
+      // return is a precaution... requires an explicit true result and no exception
+      const validSig = await Cipher._verifyCipherText(sk, hmac, encoded);
       if (validSig) {
-         return [cparams, ek];
+         return cparams;
       }
 
       // Should never get here since verify throws on bad signature
       throw new Error('Invalid HMAC signature');
    }
 
-   static async sign(
+   private static async _signCipherText(
       sk: CryptoKey,
       encoded: Uint8Array
    ): Promise<Uint8Array> {
@@ -422,7 +430,7 @@ export class Cipher {
       return new Uint8Array(hmac);
    }
 
-   static async verify(
+   private static async _verifyCipherText(
       sk: CryptoKey,
       hmac: Uint8Array,
       encoded: Uint8Array
@@ -436,7 +444,9 @@ export class Cipher {
       throw new Error('Invalid HMAC signature');
    }
 
-   static encode(cparams: CParams): Uint8Array {
+   // User of Cipher should not need this function directly
+   // but it is public for unit testing
+   static _encodeCipherText(cparams: CParams): Uint8Array {
 
       Cipher.validateCParams(cparams);
 
@@ -481,10 +491,12 @@ export class Cipher {
       return encoded;
    }
 
-   static decode(encoded: Uint8Array): CParams {
+   // User of Cipher should not need this function directly,
+   // but it is public for unit testing
+   static _decodeCipherText(encoded: Uint8Array): CParams {
 
-      // Need to treat all values an UNTRUSTED since the signature has
-      // not yet been tested (slt param extracted here is required) 
+      // Need to treat all values an UNTRUSTED since the signature has not
+      // been tested (slt param extracted here is required for HMAC test)
 
       if (encoded.byteLength < ALG_BYTES + IV_BYTES + SLT_BYTES + IC_BYTES +
          VER_BYTES + 1 + 1) {
@@ -549,8 +561,8 @@ export class Cipher {
       const hintEnc = encoded.slice(offset, offset + hintLen)
       offset += hintLen;
       // Can happen if the encode data was clipped and reencoded
-      if (hintLen != hintEnc.byteLength) {
-         throw new Error('Hint length does not match: ' + hintEnc.byteLength);
+      if (hintLen != hintEnc.byteLength || hintLen > HINT_MAX_LEN) {
+         throw new Error('Invalid hint length of: ' + hintLen);
       }
       const hint = new TextDecoder().decode(hintEnc);
 

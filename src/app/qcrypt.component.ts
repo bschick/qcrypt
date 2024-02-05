@@ -65,6 +65,9 @@ import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import * as sodium from 'libsodium-wrappers';
+import * as cs from './cipher-stuff';
+
+const MAX_LOOPS = 10;
 
 type PwdDialogData = {
   message: string;
@@ -80,67 +83,23 @@ type PwdDialogData = {
 type MuteableLps = { -readonly [P in keyof T]: T[P] };
 type mlp = Muteable<EncContext["lps"]>;
 */
-const ALG_BYTES = 7;
-const IV_BYTES = 24;
-const SLT_BYTES = 16;
-const IC_MIN_BYTES = 6;
-const HMAC_BYTES = 32;
 
-type CParams = {
-  // Length of alg, iv, slt should remain constant
-  readonly alg: string;
-  iv: Uint8Array;
-  slt: Uint8Array;
-  readonly ic: number;
+type Context = {
+  readonly lpEnd: number;
+  lp: number;
+}
+type EncContext = Context & {
+  cipher: cs.Cipher;
 };
 
-type EncContext = {
-  readonly lps: number;
-  readonly v: number;
-  p: CParams;
-  lpCount: number;
-  ek: CryptoKey;
-  sk: CryptoKey;
+type DecContext = Context & {
+  ct: string;
 };
 
-type DecContext = EncContext & {
-  et: Uint8Array;
-  hint?: string;
-};
-
-function isDecContext(context: EncContext | DecContext): context is DecContext {
-  return (context as DecContext).et !== undefined;
+function isDecContext(context: Context): context is DecContext {
+  return (context as DecContext).ct !== undefined;
 }
 
-const ICOUNT_DEFAULT = 800000;
-const ENC_VERSION = 1;
-
-// AlgNames number always be 7 ascii character (that encode to 7 bytes)
-const AlgNames: { [key: string]: string } = {
-  'AES-GCM': 'AES Galois Counter (GCM)',
-  'AES-CBC': 'AES Cipher Block Chaining (CBC)',
-  'AES-CTR': 'AEX Counter (CTR)',
-  'X20-PLY': 'XChaCha20 Poly1305',
-};
-
-interface EncDecParams {
-  name: string;
-  [key: string]: any;
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  var binString = '';
-  bytes.forEach((b, i) => {
-    binString += String.fromCharCode(b);
-  });
-  return btoa(binString);
-}
-
-function base64ToBytes(b64: string): Uint8Array {
-  var binString: string = atob(b64);
-  // @ts-ignore
-  return Uint8Array.from(binString, (m) => m.codePointAt(0));
-}
 
 // Min and max are inclusive and only used if not null
 /*function setClamped(
@@ -213,24 +172,24 @@ function setIfBoolean(
   ],
 })
 export class QCryptComponent implements OnInit, AfterViewInit {
+  private pksig = new Uint8Array([101, 246, 72, 149, 67, 228, 149, 35, 60, 124, 81, 187, 157, 96, 208, 217, 123, 147, 228, 60, 84, 214, 198, 116, 192, 162, 178, 147, 50, 119, 97, 251]);
   private mouseDown = false;
-  private password: string = '';
-  private hint: string | undefined;
+  private cachedPassword: string = '';
+  private cachedHint: string = '';
   private intervalId: number = 0;
   private hashRate: number = 1000; // Default since benchmark is async
   private spinnerAbove: number = 1500000; // Default since benchmark is async
-  private random40: Random40;
   private actionStart: number = 0;
   private matcherPwned: Matcher;
   public cacheTimeout!: DateTime;
   public icountMin: number = 400000;
   public icountMax: number = 400000000; // Default since benchmark is async
-  public icountDefault: number = ICOUNT_DEFAULT; // Default since benchmark is async
+  public icountDefault: number = cs.ICOUNT_DEFAULT; // Default since benchmark is async
   public clearText = '';
   public stuffCached = false;
-  public cipherLabel = 'Cipher Text';
+  public cipherLabel = 'Cipher Armor';
   public clearLabel = 'Clear Text';
-  public cipherText = '';
+  public cipherArmor = '';
   public showProgress = false;
   public errorCipher = false;
   public errorClear = false;
@@ -245,7 +204,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
 
   // options
   public algorithm = 'AES-GCM';
-  public icount: number = ICOUNT_DEFAULT; // Default since benchmark is async
+  public icount: number = cs.ICOUNT_DEFAULT; // Default since benchmark is async
   public hidePwd = true;
   public cacheTime = 30;
   public minPwdStrength = '3';
@@ -281,13 +240,10 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     };
     zxcvbnOptions.setOptions(options);
     this.matcherPwned = matcherPwnedFactory(fetch, zxcvbnOptions);
-
-    // cache in case any use of true random
-    this.random40 = new Random40();
   }
 
   setAlgorithm(alg: string | null): void {
-    if (['AES-GCM', 'AES-CBC', 'AES-CTR', 'X20-PLY'].includes(alg!)) {
+    if (Object.keys(cs.AlgInfo).includes(alg!)) {
       this.algorithm = alg!;
     }
   }
@@ -323,8 +279,8 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     }
   }
 
-  setLoops(lps: string | null): void {
-    setIfBetween(lps, 0, 10, (num) => {
+  setLoops(lpEnd: string | null): void {
+    setIfBetween(lpEnd, 0, 10, (num) => {
       this.loops = num;
     });
   }
@@ -384,9 +340,9 @@ export class QCryptComponent implements OnInit, AfterViewInit {
 
       let params = new HttpParams({ fromString: window.location.search });
 
-      if (params.get('ciphertext')) {
-        this.cipherText = decodeURIComponent(params.get('ciphertext')!);
-        params = params.delete('ciphertext');
+      if (params.get('cipherarmor')) {
+        this.cipherArmor = decodeURIComponent(params.get('cipherarmor')!);
+        params = params.delete('cipherarmor');
       }
       if (params.get('cleartext')) {
         this.clearText = decodeURIComponent(params.get('cleartext')!);
@@ -420,18 +376,10 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     const target_hash_millis = 500;
     const max_hash_millis = 5 * 60 * 1000; //5 minutes
 
-    const pseudoRand = await this.random40.getRandomArray(false, true);
-
-    // Pseudo-random is good enough for testing
-    var cparams: CParams = {
-      slt: pseudoRand.slice(0, 16),
-      iv: pseudoRand.slice(16),
-      ic: test_size,
-      alg: 'AES-GCM',
-    };
+    let cipher = new cs.Cipher('AES-GCM', test_size, false);
 
     const start = Date.now();
-    await this.genKeys(cparams, 'AVeryBogusPwd');
+    await cipher.genCipherKey('AVeryBogusPwd', new Uint8Array(cs.SLT_BYTES));
     const test_millis = Date.now() - start;
 
     // Calculate how many iterations take target_spinner_millis. Above that we'll show spinner
@@ -439,13 +387,13 @@ export class QCryptComponent implements OnInit, AfterViewInit {
 
     // Don't allow more then ~5 minutes of pwd hashing (rounded to millions)
     this.icountMax =
-      Math.min(cipher.MAX_ICCOUNT,
-         Math.round((max_hash_millis * this.hashRate) / 1000000) * 1000000);
+      Math.min(cs.ICOUNT_MAX,
+        Math.round((max_hash_millis * this.hashRate) / 1000000) * 1000000);
 
     let rounded =
       Math.round((this.hashRate * target_hash_millis) / 100000) * 100000;
     rounded += rounded % 200000;
-    const default_icount = Math.max(ICOUNT_DEFAULT, rounded);
+    const default_icount = Math.max(cs.ICOUNT_DEFAULT, rounded);
 
     const spinner_icount = Math.round(target_spinner_millis * this.hashRate);
 
@@ -489,8 +437,8 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       params = params.append('minpwdstrength', this.minPwdStrength);
     }
 
-    if (this.cipherText.length > 1) {
-      params = params.append('ciphertext', encodeURIComponent(this.cipherText));
+    if (this.cipherArmor.length > 1) {
+      params = params.append('cipherarmor', encodeURIComponent(this.cipherArmor));
     }
 
     if (this.loops > 1) {
@@ -580,8 +528,8 @@ export class QCryptComponent implements OnInit, AfterViewInit {
 
   clearPassword(): void {
     this.stuffCached = false;
-    this.password = '';
-    this.hint = '';
+    this.cachedPassword = '';
+    this.cachedHint = '';
     if (this.intervalId != 0) {
       clearInterval(this.intervalId);
       this.intervalId = 0;
@@ -591,424 +539,6 @@ export class QCryptComponent implements OnInit, AfterViewInit {
   clearCaches(): void {
     this.clearPassword();
     this.onClearClear();
-  }
-
-  async askForPassword(
-    minStrength: number,
-    context: EncContext | DecContext
-  ): Promise<[string, string | undefined]> {
-    if (this.checkPwned) {
-      if (!zxcvbnOptions.matchers['pwned']) {
-        zxcvbnOptions.addMatcher('pwned', this.matcherPwned);
-      }
-    } else {
-      delete zxcvbnOptions.matchers['pwned'];
-    }
-
-    let hint: undefined | string;
-    let loopCount: number;
-    let askHint: boolean;
-    if (isDecContext(context)) {
-      loopCount = context.lps - context.lpCount;
-      hint = context.hint;
-      askHint = false;
-    } else {
-      loopCount = context.lpCount + 1;
-      askHint = true;
-    }
-
-    var dialogRef = this.dialog.open(PasswordDialog, {
-      data: {
-        hint: hint,
-        askHint: askHint,
-        minStrength: minStrength,
-        hidePwd: this.hidePwd,
-        loopCount: loopCount,
-        loops: context.lps,
-      },
-    });
-
-    return new Promise((resolve, reject) => {
-      dialogRef.afterClosed().subscribe((result) => {
-        if (!result) {
-          reject('process cancelled');
-        } else {
-          this.clearPassword();
-          if (this.cacheTime > 0 && result[0]) {
-            this.password = result[0];
-            this.hint = result[1];
-            this.stuffCached = true;
-            this.restartTimer();
-          }
-          resolve([result[0], result[1]]);
-        }
-      });
-    });
-  }
-
-  //-1 minStrength means no pwd strength requirments
-  async getPassword(
-    minStrength: number,
-    context: EncContext | DecContext
-  ): Promise<[string, string | undefined]> {
-    if (this.stuffCached) {
-      this.restartTimer();
-      return Promise.resolve([this.password, this.hint]);
-    } else {
-      return this.askForPassword(minStrength, context);
-    }
-  }
-
-  async genKeys(
-    cparams: CParams,
-    pwd: string
-  ): Promise<[CryptoKey, CryptoKey]> {
-    // may want to add a key-length option at some point, using max available now
-    const KEYBYTES = 32;
-
-    if (!pwd) {
-      throw new Error('password is empty');
-    }
-
-    // Avoid briefly putting up spinner and disabling buttons
-    if (cparams.ic > this.spinnerAbove) {
-      this.showProgress = true;
-    }
-
-    const enc = new TextEncoder();
-    const keyMaterial = await window.crypto.subtle.importKey(
-      'raw',
-      enc.encode(pwd),
-      'PBKDF2',
-      false,
-      ['deriveBits', 'deriveKey']
-    );
-
-    const kbits = await window.crypto.subtle.deriveBits(
-      {
-        name: 'PBKDF2',
-        salt: cparams.slt as Uint8Array,
-        iterations: cparams.ic,
-        hash: 'SHA-512',
-      },
-      keyMaterial,
-      KEYBYTES * 2 * 8
-    );
-
-    const ebits = kbits.slice(0, KEYBYTES);
-    const sbits = kbits.slice(KEYBYTES);
-
-    const ek = await window.crypto.subtle.importKey(
-      'raw',
-      ebits,
-      { name: cparams.alg, length: 256 },
-      true,
-      ['encrypt', 'decrypt']
-    );
-
-    const sk = await window.crypto.subtle.importKey(
-      'raw',
-      sbits,
-      { name: 'HMAC', hash: 'SHA-256', length: 256 },
-      false,
-      ['sign', 'verify']
-    );
-
-    return [ek, sk];
-  }
-
-  async doEncrypt(
-    clear_buffer: Uint8Array,
-    cparams: CParams,
-    pwd: string
-  ): Promise<ArrayBuffer | null> {
-    const [ek, sk] = await this.genKeys(cparams, pwd);
-    let ed_params: EncDecParams = {
-      name: cparams.alg,
-    };
-
-    if (cparams.alg == 'AES-CTR') {
-      ed_params['counter'] = cparams.iv;
-      ed_params['length'] = 64;
-    } else {
-      ed_params['iv'] = cparams.iv;
-    }
-
-    let cipherText = await window.crypto.subtle.encrypt(
-      ed_params,
-      ek,
-      clear_buffer
-    );
-
-    const algEnc = new TextEncoder().encode(cparams.alg);
-    const icEnc = new TextEncoder().encode(cparams.ic.toString());
-    let ct = new Uint8Array(
-      cipherText.byteLength +
-      cparams.iv.length +
-      cparams.slt.length +
-      algEnc.length +
-      icEnc.length
-    );
-
-    let offset = 0;
-    ct.set(new Uint8Array(cipherText), offset);
-    offset += cipherText.byteLength;
-    ct.set(cparams.iv as Uint8Array, offset);
-    offset += cparams.iv.length;
-    ct.set(cparams.slt as Uint8Array, offset);
-    offset += cparams.slt.length;
-    ct.set(algEnc, offset);
-    offset += algEnc.length;
-    ct.set(icEnc, offset);
-    const hmac = await crypto.subtle.sign('HMAC', sk, ct);
-
-    let extended = new Uint8Array(hmac.byteLength + cipherText.byteLength);
-    extended.set(new Uint8Array(hmac));
-    extended.set(new Uint8Array(cipherText), hmac.byteLength);
-    cipherText = extended;
-
-    return cipherText;
-  }
-
-
-  async doEncrypt2(
-    clear_buffer: Uint8Array,
-    econtext: EncContext,
-  ): Promise<Uint8Array> {
-
-    let encryptedBytes: Uint8Array;
-
-    if (econtext.p.alg == 'X20-PLY') {
-      const exported = await window.crypto.subtle.exportKey("raw", econtext.ek);
-      const keyBytes = new Uint8Array(exported);
-
-      await sodium.ready;
-      encryptedBytes = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-        clear_buffer,
-        null,
-        null,
-        econtext.p.iv,
-        keyBytes,
-        "uint8array"
-      );
-    } else {
-      let ed_params: EncDecParams = {
-        name: econtext.p.alg,
-      };
-
-      if (econtext.p.alg == 'AES-CTR') {
-        ed_params['counter'] = econtext.p.iv.slice(0, 16);
-        ed_params['length'] = 64;
-      } else {
-        ed_params['iv'] = econtext.p.iv;
-      }
-
-      const cipherBuf = await window.crypto.subtle.encrypt(
-        ed_params,
-        econtext.ek,
-        clear_buffer
-      );
-      encryptedBytes = new Uint8Array(cipherBuf);
-    }
-
-    return encryptedBytes;
-  }
-
-  async doDecrypt(
-    cipher_buffer: Uint8Array,
-    cparams: CParams,
-    pwd: string
-  ): Promise<ArrayBuffer> {
-    const [ek, sk] = await this.genKeys(cparams, pwd);
-
-    let ed_params: EncDecParams = {
-      name: cparams.alg,
-    };
-
-    if (cparams.alg == 'AES-CTR') {
-      ed_params['counter'] = cparams.iv;
-      ed_params['length'] = 64;
-    } else {
-      ed_params['iv'] = cparams.iv;
-    }
-
-    const hmac = cipher_buffer.slice(0, 32);
-    const cipherText = cipher_buffer.slice(32);
-
-    const algEnc = new TextEncoder().encode(cparams.alg);
-    const icEnc = new TextEncoder().encode(cparams.ic.toString());
-    let ct = new Uint8Array(
-      cipherText.byteLength +
-      cparams.iv.length +
-      cparams.slt.length +
-      algEnc.length +
-      icEnc.length
-    );
-
-    let offset = 0;
-    ct.set(cipherText, offset);
-    offset += cipherText.byteLength;
-    ct.set(cparams.iv as Uint8Array, offset);
-    offset += cparams.iv.length;
-    ct.set(cparams.slt as Uint8Array, offset);
-    offset += cparams.slt.length;
-    ct.set(algEnc, offset);
-    offset += algEnc.length;
-    ct.set(icEnc, offset);
-
-    const valid = await crypto.subtle.verify('HMAC', sk, hmac, ct);
-    if (!valid) {
-      throw new Error('HMAC does not match');
-    }
-    cipher_buffer = cipherText;
-
-    let decrypted = window.crypto.subtle.decrypt(ed_params, ek, cipher_buffer);
-    return decrypted;
-  }
-
-  async doDecrypt2(
-    cipher_buffer: Uint8Array,
-    dcontext: DecContext,
-  ): Promise<ArrayBuffer> {
-
-    const hmac = cipher_buffer.slice(0, 32);
-    const cipherText = cipher_buffer.slice(32);
-
-    const algEnc = new TextEncoder().encode(dcontext.p.alg);
-    const icEnc = new TextEncoder().encode(dcontext.p.ic.toString());
-    let ct = new Uint8Array(
-      cipherText.byteLength +
-      dcontext.p.iv.length +
-      dcontext.p.slt.length +
-      algEnc.length +
-      icEnc.length
-    );
-
-    let offset = 0;
-    ct.set(cipherText, offset);
-    offset += cipherText.byteLength;
-    ct.set(dcontext.p.iv as Uint8Array, offset);
-    offset += dcontext.p.iv.length;
-    ct.set(dcontext.p.slt as Uint8Array, offset);
-    offset += dcontext.p.slt.length;
-    ct.set(algEnc, offset);
-    offset += algEnc.length;
-    ct.set(icEnc, offset);
-
-    const valid = await crypto.subtle.verify('HMAC', dcontext.sk, hmac, ct);
-    if (!valid) {
-      throw new Error('HMAC does not match');
-    }
-    cipher_buffer = cipherText;
-
-    let decrypted: Promise<ArrayBuffer>;
-
-    if (dcontext.p.alg == 'X20-PLY') {
-      const exported = await window.crypto.subtle.exportKey("raw", dcontext.ek);
-      const keyBytes = new Uint8Array(exported);
-
-      const decryptedBytes = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        null,
-        cipher_buffer,
-        null,
-        dcontext.p.iv,
-        keyBytes,
-        "uint8array"
-      );
-
-      const aBSlice = decryptedBytes.buffer.slice(decryptedBytes.byteOffset, decryptedBytes.byteOffset + decryptedBytes.byteLength);
-      // Since we aren't sure how sodiiumwrapper managers the buffer, ensure we limit to slide
-      decrypted = Promise.resolve(aBSlice);
-
-    } else {
-      let ed_params: EncDecParams = {
-        name: dcontext.p.alg,
-      };
-
-      if (dcontext.p.alg == 'AES-CTR') {
-        ed_params['counter'] = dcontext.p.iv.slice(0, 16);
-        ed_params['length'] = 64;
-      } else {
-        ed_params['iv'] = dcontext.p.iv;
-      }
-      decrypted = window.crypto.subtle.decrypt(ed_params, dcontext.ek, cipher_buffer);
-    }
-    return decrypted;
-  }
-
-  encodeCParams(cparams: CParams): Uint8Array {
-
-    const algEnc = new TextEncoder().encode(cparams.alg);
-    const icEnc = new TextEncoder().encode(cparams.ic.toString());
-
-    /* Only the length of the last parameter is allowed to vary */
-    if (algEnc.byteLength != ALG_BYTES || cparams.iv.byteLength != IV_BYTES ||
-      cparams.slt.byteLength != SLT_BYTES || icEnc.byteLength < IC_MIN_BYTES) {
-      throw new Error('Invalid cparam lengths');
-    }
-
-    let pbytes = new Uint8Array(
-      algEnc.byteLength +
-      cparams.iv.byteLength +
-      cparams.slt.byteLength +
-      icEnc.byteLength
-    );
-
-    let offset = 0;
-    pbytes.set(algEnc, offset);
-    offset += ALG_BYTES;
-    pbytes.set(cparams.iv, offset);
-    offset += IV_BYTES;
-    pbytes.set(cparams.slt, offset);
-    offset += SLT_BYTES;
-    pbytes.set(icEnc, offset);
-
-    return pbytes;
-  }
-
-  /* Caller should have validate the singature of the ciphertext before
-     calling this method. 
-   */
-  decodeCParams(pbytes: Uint8Array): CParams {
-
-    // Should not get here if invlaid, but check anyway
-    if (pbytes.byteLength < ALG_BYTES + IV_BYTES + SLT_BYTES + IC_MIN_BYTES) {
-      throw new Error('Invalid cparam lengths');
-    }
-
-    let offset = 0;
-    const alg = new TextDecoder().decode(pbytes.slice(offset, offset + ALG_BYTES));
-    offset += ALG_BYTES;
-    const iv = pbytes.slice(offset, offset + IV_BYTES);
-    offset += IV_BYTES;
-    const slt = pbytes.slice(offset, offset + SLT_BYTES);
-    offset += SLT_BYTES;
-    const ic = Number(new TextDecoder().decode(pbytes.slice(offset)));
-
-    // Again, the following should  not be possible since signature should 
-    // be validated first, but just in case...
-    if (!['AES-GCM', 'AES-CBC', 'AES-CTR', 'X20-PLY'].includes(alg)) {
-      throw new Error('Invalid alg of: ' + alg);
-    }
-
-    if (ic < this.icountMin || ic > this.icountMax) {
-      throw new Error('Invalid ic value of: ' + ic);
-    }
-
-    if (iv.byteLength != IV_BYTES) {
-      throw new Error('Invalid iv len of: ' + iv.byteLength);
-    }
-
-    if (slt.byteLength != SLT_BYTES) {
-      throw new Error('Invalid slt len: ' + slt.byteLength);
-    }
-
-    return {
-      alg: alg,
-      iv: iv,
-      slt: slt,
-      ic: ic,
-    };
   }
 
   onDraggerMouseDown(): void {
@@ -1052,9 +582,9 @@ export class QCryptComponent implements OnInit, AfterViewInit {
 
   onClearCipher(): void {
     this.errorCipher = false;
-    this.cipherText = '';
-    this.cipherLabel = 'Cipher Text';
-    //    this.toastMessage('Cipher Text Cleared');
+    this.cipherArmor = '';
+    this.cipherLabel = 'Cipher Armor';
+    //    this.toastMessage('Cipher Armor Text Cleared');
   }
 
   onClearClear(): void {
@@ -1062,6 +592,14 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     this.clearText = '';
     this.clearLabel = 'Clear Text';
     //    this.toastMessage('Cleat Text Cleared');
+  }
+
+  cipherReadyNotice(cparams: cs.CParams) {
+    this.actionStart = Date.now();
+    // Avoid briefly putting up spinner and disabling buttons
+    if (cparams.ic > this.spinnerAbove) {
+      this.showProgress = true;
+    }
   }
 
   onEncryptClicked(): void {
@@ -1072,9 +610,10 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     }
 
     const savedClearText = this.clearText;
+
     this.loops = Math.min(
       Math.max(1, Number(this.loops) ? Number(this.loops) : 0),
-      10
+      MAX_LOOPS
     );
     if (this.icount < this.icountMin) {
       this.icount = this.icountMin;
@@ -1086,22 +625,21 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       this.clearPassword();
     }
 
-    let cp: CParams = {
-      alg: this.algorithm,
-      ic: this.icount,
-      iv: new Uint8Array(), // placeholder
-      slt: new Uint8Array(), // placeholder
-    };
+    let cipher = new cs.Cipher(
+      this.algorithm,
+      this.icount,
+      this.trueRandom,
+      this.pseudoRandom
+    );
+
     let econtext: EncContext = {
-      lps: this.loops,
-      lpCount: 0,
-      v: ENC_VERSION,
-      p: cp,
-      ek: new CryptoKey(), // placeholder
-      sk: new CryptoKey(), // placeholder
+      lpEnd: this.loops,
+      lp: 0,
+      cipher: cipher
     };
 
-    this.makeCipherText(econtext).then(() => {
+    // Don't expect makeCipherArmor to throw
+    this.makeCipherArmor(econtext).then(() => {
       this.saveOptions();
       // After > 1 loop, its confusing to leave intermediate stuff
       if (this.stuffCached) {
@@ -1112,60 +650,43 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     });
   }
 
-  async makeCipherText(econtext: EncContext): Promise<void> {
+  async makeCipherArmor(econtext: EncContext): Promise<void> {
     this.onClearCipher();
 
     try {
-      // Setup EncContext for this loop
-      // Create a new salt each time a key is derviced from the password.
-      // https://crypto.stackexchange.com/questions/53032/salt-for-non-stored-passwords
-      const randomArray = await this.random40.getRandomArray(
-        this.trueRandom,
-        this.pseudoRandom
-      );
-
-      econtext.p.slt = randomArray.slice(0, SLT_BYTES);
-      econtext.p.iv = randomArray.slice(SLT_BYTES, IV_BYTES);
-
       try {
-        var [pwd, hint] = await this.getPassword(+this.minPwdStrength, econtext);
+        var [pwd, hint] = await this.getPassword(+this.minPwdStrength, '', econtext);
       } catch (err) {
         // ignore since it was likely a cancel of the password dialog
         console.log(err);
         return;
       }
 
-      this.actionStart = Date.now();
-      const [ek, sk] = await this.genKeys(econtext.p, pwd);
-      econtext.ek = ek;
-      econtext.sk = sk;
-
-      const clearBuffer = new TextEncoder().encode(this.clearText);
-      const encryptedBytes = await this.doEncrypt2(clearBuffer, econtext);
+      const clearBytes = new TextEncoder().encode(this.clearText);
+      const encryptedBytes = await econtext.cipher.encrypt(
+        pwd, hint, this.pksig, clearBytes, this.cipherReadyNotice.bind(this)
+      );
 
       // null means aborted, without an error to report
       if (encryptedBytes != null) {
-        econtext.lpCount += 1;
+        econtext.lp += 1;
 
         const dcontext: DecContext = {
-          et: encryptedBytes,
-          hint: hint,
+          ct: encryptedBytes,
           ...econtext,
         };
-        this.showCipherText(await this.getCiherTextFrom(dcontext));
+        this.showCipherArmorAndTime(this.getCipherArmorFrom(dcontext));
 
-        if (econtext.lpCount < econtext.lps) {
+        if (econtext.lp < econtext.lpEnd) {
           this.clearCaches();
-          this.clearText = this.cipherText;
-          return this.makeCipherText(econtext);
+          this.clearText = this.cipherArmor;
+          return this.makeCipherArmor(econtext);
         }
       }
     } catch (something) {
       console.error(something);
       if (something instanceof Error) {
-        this.showEncryptError(
-          'Could not encrypt text: (' + something.message + ')'
-        );
+        this.showEncryptError('Could not encrypt text');
       }
     } finally {
       this.showProgress = false;
@@ -1173,52 +694,64 @@ export class QCryptComponent implements OnInit, AfterViewInit {
   }
 
   onDecryptClicked(): void {
-    if (this.cipherText.length < 1) {
-      this.showDecryptError('Enter cipher text to decrypt');
+    if (this.cipherArmor.length < 1) {
+      this.showDecryptError('Enter cipher armor text to decrypt');
       this.r2.selectRootElement('#cipherInput').focus();
       return;
     }
 
-    const savedCipherText = this.cipherText;
+    const savedCipherArmor = this.cipherArmor;
 
-    try {
-      const dcontext = this.getDecContextFrom(this.cipherText);
-
-      if (dcontext.lps! > 1) {
+    // There may be a cleaner way to do this, but create an async wrapper
+    // so that we can have a unified catch hanlder with extra try catch nesting
+    const awrap = async () => {
+      const dcontext = this.getDecContextFrom(this.cipherArmor);
+      if (dcontext.lpEnd! > 1) {
         // it's confusing to use cached password when looping so
         // start from scratch
         this.clearPassword();
       }
 
-      this.makeClearText(dcontext).then(() => {
-        // After > 1 loops, tbere is intermediate stuff in cipherText
-        this.cipherText = savedCipherText;
-      });
-    } catch (err) {
+      // This updates Cipher Armor UI field
+      await this.makeClearText(dcontext);
+
+      // In case > 1 loops, tbere is intermediate stuff in cipherArmor
+      this.cipherArmor = savedCipherArmor;
+    }
+
+    // Execute and catch error from sync or async code
+    awrap().catch((err) => {
       if (err instanceof Error) {
         this.showDecryptError(err.message);
       }
-    }
+    });
   }
 
   async makeClearText(dcontext: DecContext): Promise<void> {
     this.onClearClear();
 
     try {
-      this.actionStart = Date.now();
-      const decrypted = await this.doDecrypt2(dcontext.ct, dcontext.p, pwd);
+      const decrypted = await cs.Cipher.decrypt(
+        async (hint) => {
+          const [pwd, _] = await this.getPassword(+this.minPwdStrength, hint, dcontext);
+          return pwd;
+        },
+        this.pksig,
+        dcontext.ct,
+        this.cipherReadyNotice.bind(this)
+      );
 
       // null means aborted, without an error to report
       if (decrypted != null) {
-        this.showClearText(decrypted);
-        dcontext.lpCount += 1;
+        this.showClearTextAndTime(decrypted);
+        dcontext.lp += 1;
 
-        if (dcontext.lpCount < dcontext.lps!) {
-          this.cipherText = this.clearText;
+        if (dcontext.lp < dcontext.lpEnd) {
+          this.cipherArmor = this.clearText;
           const nextContext = this.getDecContextFrom(this.clearText);
           // A bit hacky... preserve top level loop information
-          (nextContext.lps as number) = dcontext.lps;
-          nextContext.lpCount = dcontext.lpCount;
+          (nextContext.lpEnd as number) = dcontext.lpEnd;
+          nextContext.lp = dcontext.lp;
           this.clearCaches();
           return this.makeClearText(nextContext);
         }
@@ -1227,8 +760,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       console.error(something);
       if (something instanceof Error) {
         this.showDecryptError(
-          'Could not decrypt Cipher Text. You may be using the wrong password or the Cipher Text was changed. (' +
-          something.message + ')'
+          'Could not decrypt cipher armor text. You may be using the wrong password or the cipher armor was changed'
         );
       }
     } finally {
@@ -1243,20 +775,20 @@ export class QCryptComponent implements OnInit, AfterViewInit {
   }
 
   showEncryptError(msg: string): void {
-    this.cipherText = msg;
+    this.cipherArmor = msg;
     this.errorCipher = true;
     this.cipherLabel = 'Error';
   }
 
-  showCipherText(cipherText: string): void {
-    this.cipherText = cipherText;
+  showCipherArmorAndTime(cipherArmor: string): void {
+    this.cipherArmor = cipherArmor;
     this.errorCipher = false;
 
     const tookMsg = makeTookMsg(this.actionStart, Date.now());
-    this.cipherLabel = 'Cipher Text ' + tookMsg;
+    this.cipherLabel = 'Cipher Armor ' + tookMsg;
   }
 
-  showClearText(clear: ArrayBuffer): void {
+  showClearTextAndTime(clear: ArrayBuffer): void {
     this.clearText = new TextDecoder().decode(clear);
     this.errorClear = false;
 
@@ -1264,70 +796,43 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     this.clearLabel = 'Clear Text ' + tookMsg;
   }
 
-  async getCiherTextFrom(dcontext: DecContext): Promise<string> {
+  getCipherArmorFrom(dcontext: DecContext): string {
     // Rebuild object to control ordering (better way to do this?)
     let result: { [key: string]: string | number } = {};
-    if (dcontext.hint) {
-      result['hint'] = dcontext.hint;
-    }
-
-    const paramBytes = this.encodeCParams(dcontext.p);
-
-    let sign = new Uint8Array(
-      dcontext.et.byteLength +
-      paramBytes.byteLength
-    );
-    sign.set(dcontext.et, 0);
-    sign.set(paramBytes, dcontext.et.byteLength);
-
-    const hmac = await crypto.subtle.sign('HMAC', dcontext.sk, sign);
-    if( hmac.byteLength != HMAC_BYTES ) {
-      throw new Error('Invalid HMAC length of: ' +  hmac.byteLength);
-    }
-
-    let extended = new Uint8Array(hmac.byteLength + dcontext.et.byteLength);
-    extended.set(new Uint8Array(hmac));
-    extended.set(dcontext.et, hmac.byteLength);
-
-    result['et'] = bytesToBase64(dcontext.et);
-    result['p'] = bytesToBase64(paramBytes);
+    result['ct'] = dcontext.ct;
 
     // To reduce CT size, only include this extra stuff at the
-    // out most loop.
-    if (dcontext.lpCount == dcontext.lps) {
-      if (dcontext.v) {
-        result['v'] = dcontext.v;
-      }
-      if (dcontext.lps > 1) {
-        result['lps'] = dcontext.lps;
+    // outer most loop
+    if (dcontext.lp == dcontext.lpEnd) {
+      if (dcontext.lp > 1) {
+        result['lps'] = dcontext.lpEnd;
       }
 
       if (this.ctFormat == 'link') {
         const ctParam = encodeURIComponent(JSON.stringify(result));
-        return 'https://' + location.host + '?ciphertext=' + ctParam;
+        return 'https://' + location.host + '?cipherarmor=' + ctParam;
       } else {
         const space = this.ctFormat == 'indent' ? 3 : 0;
         return JSON.stringify(result, null, space);
       }
-    } else {
-      return JSON.stringify(result);
     }
+
+    return JSON.stringify(result);
   }
 
-  async getDecContextFrom(cipherText: string): Promise<DecContext> {
+  getDecContextFrom(cipherArmor: string): DecContext {
     try {
-      let trimmed = cipherText.trim();
+      let trimmed = cipherArmor.trim();
       if (trimmed.startsWith('https://')) {
-        const ct = new URL(trimmed).searchParams.get('ciphertext');
-        if (ct != null) {
-          trimmed = ct;
-        } else {
-          const err = new Error();
-          err.name = 'Url missing cihpertext';
+        const ct = new URL(trimmed).searchParams.get('cipherarmor');
+        if (ct == null) {
+          let err = Error();
+          err.name = 'Url missing cipherarmor';
           throw err;
         }
-      } else if (trimmed.startsWith('ciphertext=')) {
-        trimmed = trimmed.slice('ciphertext='.length);
+        trimmed = ct;
+      } else if (trimmed.startsWith('cipherarmor=')) {
+        trimmed = trimmed.slice('cipherarmor='.length);
       }
 
       // %7B is urlencoded '{' character, so decode
@@ -1339,85 +844,93 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     } catch (err) {
       console.error(err);
       if (err instanceof Error) {
-        throw new Error('Cipher text not formatted correctly. ' + err.name);
+        throw new Error('Cipher armor text not formatted correctly. ' + err.name);
       }
     }
-    if (!('et' in jsonParts) || !('p' in jsonParts)) {
-      throw new Error(
-        'Cipher text not formatted correctly. Missing one of et or p'
-      );
+    if (!('ct' in jsonParts)) {
+      throw new Error('Missing ct in cipher armor text');
     }
-
+    const ct = jsonParts.ct;
     const lps = Math.min(
-      10,
-      Math.max(1, Number(jsonParts.lps) ? Number(jsonParts.lps) : 0)
+      MAX_LOOPS,
+      Math.max(1, +jsonParts.lps ? +jsonParts.lps : 0)
     );
-    const version = jsonParts.v;
-
-
-    try {
-      //-1 means no pwd strength requirments
-      var [pwd, _] = await this.getPassword(-1, dcontext);
-    } catch (err) {
-      // ignore since it was likely a cancel of the password dialog
-      console.log(err);
-      return;
-    }
-
-    try {
-      var extended = base64ToBytes(jsonParts.et);
-     var p = base64ToBytes(jsonParts.p);
-    } catch (err) {
-      console.error(err);
-      if (err instanceof Error) {
-        throw new Error(err.name + ' while decoding Cipher Text');
-      } else {
-        throw err;
-      }
-    }
-    
-    const hmac = extended.slice(0, HMAC_BYTES);
-    const et = extended.slice(HMAC_BYTES);
-
-
-    this.actionStart = Date.now();
-    const [ek, sk] = await this.genKeys(econtext.p, pwd);
-    econtext.ek = ek;
-    econtext.sk = sk;
-
-
-    let check = new Uint8Array(
-      et.byteLength +
-      p.byteLength
-    );
-    check.set(et, 0);
-    check.set(p, et.byteLength);
-
-    const valid = await crypto.subtle.verify('HMAC', dcontext.sk, hmac, check);
-    if (!valid) {
-      throw new Error('HMAC is not valid');
-    }
-
-    try {
-      var cparams = this.decodeCParams(p);
-    } catch (err) {
-      console.error(err);
-      if (err instanceof Error) {
-        throw new Error(err.name + ' while decoding Cipher Text.p');
-      } else {
-        throw err;
-      }
-    }
-
 
     return {
-      lps: jsonParts.lps,
-      lpCount: 0,
-      v: jsonParts.v,
-      p: cparams,
-      et: et,
-      hint: jsonParts.hint,
+      lpEnd: jsonParts.lps,
+      lp: 0,
+      ct: ct,
     };
+  }
+
+  //-1 minStrength means no pwd strength requirments
+  async getPassword(
+    minStrength: number,
+    hint: string,
+    context: Context
+  ): Promise<[string, string]> {
+    if (this.stuffCached) {
+      this.restartTimer();
+      return Promise.resolve([this.cachedPassword, this.cachedHint]);
+    } else {
+      return this.askForPassword(minStrength, hint, context);
+    }
+  }
+
+  async askForPassword(
+    minStrength: number,
+    hint: string,
+    context: Context
+  ): Promise<[string, string]> {
+    if (this.checkPwned) {
+      if (!zxcvbnOptions.matchers['pwned']) {
+        zxcvbnOptions.addMatcher('pwned', this.matcherPwned);
+      }
+    } else {
+      delete zxcvbnOptions.matchers['pwned'];
+    }
+
+    let loopCount: number = context.lp + 1;
+    let askHint: boolean = true;
+    if (isDecContext(context)) {
+      loopCount = context.lpEnd - context.lp;
+      askHint = false;
+    }
+
+    var dialogRef = this.dialog.open(PasswordDialog, {
+      data: {
+        hint: hint,
+        askHint: askHint,
+        minStrength: minStrength,
+        hidePwd: this.hidePwd,
+        loopCount: loopCount,
+        loops: context.lpEnd,
+      },
+    });
+
+    return new Promise((resolve, reject) => {
+      dialogRef.afterClosed().subscribe((result) => {
+        if (!result) {
+          reject('process cancelled');
+        } else {
+          this.clearPassword();
+          if (this.cacheTime > 0 && result[0]) {
+            this.cachedPassword = result[0];
+            this.cachedHint = result[1];
+            this.stuffCached = true;
+            this.restartTimer();
+          }
+          resolve([result[0], result[1]]);
+        }
+      });
+    });
+  }
+
+  onFormatChange(selected: string) {
+    let dcontext = this.getDecContextFrom(this.cipherArmor);
+    // make it the "last loop" so we get the full cipher armor
+    dcontext.lp = dcontext.lpEnd;
+    this.cipherArmor = this.getCipherArmorFrom(dcontext);
   }
 
   onTrueRandomChanged(checked: boolean) {
@@ -1447,7 +960,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
   onCipherFileUpload(event: any): void {
     this.fileUpload.nativeElement.onchange = (event: any) => {
       this.onFileUpload(event, (val) => {
-        this.cipherText = val;
+        this.cipherArmor = val;
         this.errorCipher = false;
       });
     };
@@ -1480,7 +993,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
 
   onCipherFileDownload(event: any): void {
     this.onFileDownload('cipher.json', () => {
-      return this.cipherText;
+      return this.cipherArmor;
     });
   }
   onClearFileDownload(event: any): void {
@@ -1496,17 +1009,23 @@ export class QCryptComponent implements OnInit, AfterViewInit {
   }
 
   onCipherTextInfo(): void {
-    try {
-      const dcontext = this.getDecContextFrom(this.cipherText);
-      this.dialog.open(CipherInfoDialog, { data: dcontext.p });
-    } catch (err) {
+    // There may be a cleaner way to do this, but create an async wrapper
+    // so that we can have a unified catch hanlder with extra try catch nesting
+    const awrap = async () => {
+      const dcontext = this.getDecContextFrom(this.cipherArmor);
+      const cparams = await cs.Cipher.getCipherParams(this.pksig, dcontext.ct);
+      this.dialog.open(CipherInfoDialog, { data: cparams });
+    };
+
+    // Execute and catch error from sync or async code
+    awrap().catch((err) => {
       console.error(err);
-      this.dialog.open(CipherInfoDialog, { data: null });
-    }
+      this.dialog.open(CipherInfoDialog, { data: null })
+    });
   }
 
   algName(alg: string): string {
-    return AlgNames[alg] ? AlgNames[alg] : 'Invalid';
+    return cs.AlgInfo[alg] ? cs.AlgInfo[alg][0] : 'Invalid';
   }
 }
 
@@ -1588,19 +1107,21 @@ export class CipherInfoDialog {
   public alg!: string;
   public slt!: string;
   public iv!: string;
+  public hint!: string;
 
   constructor(
     private r2: Renderer2,
     public dialogRef: MatDialogRef<CipherInfoDialog>,
-    @Inject(MAT_DIALOG_DATA) public cparams: CParams | null
+    @Inject(MAT_DIALOG_DATA) public cparams: cs.CParams | null
   ) {
     if (cparams == null) {
-      this.error = 'Invalid cipher text format';
+      this.error = 'Invalid cipher armor text';
     } else {
       this.ic = cparams.ic;
-      this.alg = AlgNames[cparams.alg] ? AlgNames[cparams.alg] : 'Invalid';
-      this.iv = bytesToBase64(cparams.iv as Uint8Array);
-      this.slt = bytesToBase64(cparams.slt as Uint8Array);
+      this.alg = cs.AlgInfo[cparams.alg] ? cs.AlgInfo[cparams.alg][0] : 'Invalid';
+      this.iv = cs.bytesToBase64(cparams.iv as Uint8Array);
+      this.slt = cs.bytesToBase64(cparams.slt as Uint8Array);
+      this.hint = cparams.hint;
     }
   }
 }

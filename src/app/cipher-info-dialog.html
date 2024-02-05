@@ -66,13 +66,15 @@ SOFTWARE. -->
     <p *ngIf="error">{{error}}</p>
     <div *ngIf="!error" class="dialog-body">
       <ul class="tech-list width160">
+        <li *ngIf="hint"><b>Password Hint:</b></li>
         <li><b>Hash Iterations:</b></li>
         <li><b>Derived Keys:</b></li>
-        <li><b>AES Mode:</b></li>
+        <li><b>Cipher and Mode:</b></li>
         <li><b>Salt (base64):</b></li>
         <li><b>IV (base64):</b></li>
       </ul>
       <ul class="tech-list width230">
+        <li *ngIf="hint">{{hint}}</li>
         <li>{{ic}}</li>
         <!-- hard-coded -->
         <li>256-bit</li>
