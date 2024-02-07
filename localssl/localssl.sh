@@ -20,7 +20,8 @@ subjectAltName = @alt_names
 DNS.1 = localhost
 DNS.2 = 127.0.0.1
 DNS.3 = ::1
-DNS.4 = $LOCLAIP
+DNS.4 = t1.schicks.net
+DNS.5 = $LOCALIP
 EOF
 
 openssl req -new -nodes -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
@@ -34,4 +35,4 @@ openssl x509 -req -sha512 -days 365 \
  -out localhost.crt
 
 
- # ng serve --host $LOCLAIP --ssl --ssl-cert localhost.crt --ssl-key localhost.key
+ # ng serve --host $LOCALIP --ssl --ssl-cert localhost.crt --ssl-key localhost.key
