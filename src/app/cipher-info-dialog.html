@@ -71,7 +71,7 @@ SOFTWARE. -->
         <li><b>Derived Keys:</b></li>
         <li><b>Cipher and Mode:</b></li>
         <li><b>Salt (base64):</b></li>
-        <li><b>IV (base64):</b></li>
+        <li><b>IV/Nonce (base64):</b></li>
       </ul>
       <ul class="tech-list width230">
         <li *ngIf="hint">{{hint}}</li>
@@ -80,7 +80,7 @@ SOFTWARE. -->
         <li>256-bit</li>
         <li>{{alg}}</li>
         <li>{{slt}}</li>
-        <li>{{iv}}</li>
+        <li >{{iv}}</li>
       </ul>
     </div>
     <!--last so it doesn't get focus-->

@@ -87,51 +87,58 @@ describe("Encryption and decryption", function () {
    });
 
    const b64a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-   const b64o = 'BCDEFGHIJKLMNOPQRSTUVWXYZAbcdefghijklmnopqrstuvwxyza1234567890,/+';
+   const b64o = 'BCDEFGHIJKLMNOPQRSTUVWXYZAbcdefghijklmnopqrstuvwxyza1234567890/+';
 
    it("detect corrupt cipher text", async function () {
-      const ct = "oWu4W89MIyapikE4hQYaL6ZkUqOEamrDBHGs/u0Qk9kBAEahmxcmyK/OkZqWywE9MbE4x333o40s8v5Ql/ZL5J4r9g5iRd/CBI9AQg8AAQAEYXNkZggOIhCJpt562Xz44hM0m/slMtPzxxXUzEyvA6Zx6bjluQcjFKo9";
-      const ctBytes = cs.base64ToBytes(ct);
+      //AES-GCM then X20-PLY
+      const cts = [
+         "4AEDSY/goj/gdfAbMVm4QXR9/rfrzltaJ44svUQQQggBAJoLWk2WFmecTJMBuE5lEt7SYfvwda8PATepGw67nb6t1FDt8MT/UipAdxsAAQAEYXNkZip2+iUy86w5ApFCc6AnmMDk5cZuhD6jGMdkzXufWfaeC/F4v0Rp",
+         "tYW/OZT6MEDKzBp9xReZ1WJEgw4cs6czLNZAR0v5hisCAAJXh1tbhZuJQHS4mQpYbAPY0CSWnU/eZKoSSHXltfWFoZVX+fYp4ptAdxsAAQAEYXNkZmPlx2rQdgQh18mG8MVECQ5PPoi4KJUEoSKgzWbocizryceUviYC"
+      ];
 
-      // pksig used for encryption in testing
-      const pksig = new Uint8Array([101, 246, 72, 149, 67, 228, 149, 35, 60, 124, 81, 187, 157, 96, 208, 217, 123, 147, 228, 60, 84, 214, 198, 116, 192, 162, 178, 147, 50, 119, 97, 251]);
+      for (let ct of cts) {
+         const ctBytes = cs.base64ToBytes(ct);
 
-      // First ensure we can decrypt with valid inputs
-      const clear = await cs.Cipher.decrypt(
-         async (hint) => {
-            expect(hint).toBe("asdf");
-            return "asdf";
-         },
-         pksig,
-         ct
-      );
-      expect(new TextDecoder().decode(clear)).toBe("this 🐞 is encrypted");
+         // pksig used for creation of the CTS above
+         const pksig = new Uint8Array([101, 246, 72, 149, 67, 228, 149, 35, 60, 124, 81, 187, 157, 96, 208, 217, 123, 147, 228, 60, 84, 214, 198, 116, 192, 162, 178, 147, 50, 119, 97, 251]);
 
-      let skipCount = 0;
+         // First ensure we can decrypt with valid inputs
+         const clear = await cs.Cipher.decrypt(
+            async (hint) => {
+               expect(hint).toBe("asdf");
+               return "asdf";
+            },
+            pksig,
+            ct
+         );
+         expect(new TextDecoder().decode(clear)).toBe("this 🐞 is encrypted");
 
-      // Tweak on character at a time using b64o offsets (will remain a valid b64 string)
-      for (let i = 0; i < ct.length; ++i) {
-         const pos = b64a.indexOf(ct[i]);
-         let corruptCt = setCharAt(ct, i, b64o[pos]);
+         let skipCount = 0;
 
-         // Multiple b64 strings can produce the same result, so skip those
-         const corruptBytes = cs.base64ToBytes(corruptCt);
+         // Tweak on character at a time using b64o offsets (will remain a valid b64 string)
+         for (let i = 0; i < ct.length; ++i) {
+            const pos = b64a.indexOf(ct[i]);
+            let corruptCt = setCharAt(ct, i, b64o[pos]);
 
-         if (isEqualArray(ctBytes, corruptBytes)) {
-            ++skipCount;
-            expect(skipCount).toBeLessThan(10);
-            continue;
+            var corruptBytes = cs.base64ToBytes(corruptCt);
+
+            // Multiple b64 strings can produce the same result, so skip those
+            if (isEqualArray(ctBytes, corruptBytes!)) {
+               ++skipCount;
+               expect(skipCount).toBeLessThan(10);
+               continue;
+            }
+
+            await expectAsync(
+               cs.Cipher.decrypt(
+                  async (hint) => {
+                     expect(hint).toBe("asdf");
+                     return "asdf";
+                  },
+                  pksig,
+                  corruptCt
+               )).toBeRejectedWithError(Error);
          }
-
-         await expectAsync(
-            cs.Cipher.decrypt(
-               async (hint) => {
-                  expect(hint).toBe("asdf");
-                  return "asdf";
-               },
-               pksig,
-               corruptCt
-            )).toBeRejectedWithError();
       }
    });
 
@@ -150,14 +157,13 @@ describe("Encryption and decryption", function () {
          await expectAsync(
             cs.Cipher.decrypt(
                async (decHint) => {
-                  console.log(alg + ' decrypt');
                   expect(decHint).toBe(hint);
                   return 'the wrong pwd';
                },
                pksig,
                cipherText
             )
-         ).toBeRejectedWithError();
+         ).toBeRejectedWithError(DOMException);
       }
    });
 
@@ -186,11 +192,11 @@ describe("Encryption and decryption", function () {
                pksig,
                cipherText
             )
-         ).toBeRejectedWithError();
+         ).toBeRejectedWithError(Error, new RegExp('.+HMAC.+'));
       }
    });
 
-   it("detect corrupted cipher text, all algorithms", async function () {
+   it("detect crafted bad cipher text, all algorithms", async function () {
 
       for (let alg in cs.AlgInfo) {
          const clearEnc = crypto.getRandomValues(new Uint8Array(16));
@@ -216,7 +222,7 @@ describe("Encryption and decryption", function () {
                pksig,
                problemText
             )
-         ).toBeRejectedWithError();
+         ).toBeRejectedWithError(Error, new RegExp('.+HMAC.+'));
 
          // Set character in cipher text (past first ~32*4/3 characters) 
          // this changes the encrypted text
@@ -232,7 +238,97 @@ describe("Encryption and decryption", function () {
                pksig,
                problemText
             )
-         ).toBeRejectedWithError();
+         ).toBeRejectedWithError(Error, new RegExp('.+HMAC.+'));
+      }
+   });
+
+   async function repack(
+      pksig: Uint8Array,
+      slt: Uint8Array,
+      encoded: Uint8Array
+   ): Promise<[string, CryptoKey, Uint8Array]> {
+
+      const sk = await cs.Cipher._genSigningKey(pksig, slt);
+      const hmac = await cs.Cipher._signCipherBytes(sk, encoded);
+      let extended = new Uint8Array(hmac.byteLength + encoded.byteLength);
+      extended.set(hmac);
+      extended.set(encoded, hmac.byteLength);
+
+      return [cs.bytesToBase64(extended), sk, hmac];
+   }
+
+   // More complext test to ensure that changing pass-key signatures causes
+   // decryption to fail. We test this by extracting and not changing original
+   // CParams (with its encrypted text) from "Alice's" original encryption,
+   // then creating a new valid signature with "Bob's" pksigB signature
+   // attached to the front of the Alice's CParams (and encypted txt).
+   //
+   // In the wild if the outer signature was swapped like with someone else's
+   // valid signature Quick Crypt would report the error to Alice at signature
+   // validation time because it would use Alice's pksigA not Bob's pksigB to
+   // test.
+   //
+   // But would could happen is that an evil site might closely mimicked
+   // Quick Crypt, and if Alice was tricked into going there, it could just
+   // not tell Alice about an outer signature failure. So what this test
+   // validate is that even in such a case a replaced valid out signature
+   // (which is equivalent to an ignored outer signature), that the clear
+   // text can still not be retrived. This test tries to ensures that
+   // even having tricked Alice into entering her PWD at the evil website,
+   // the ciphertext still cannot be decrypted. That works because the
+   // evil site does not have access to Alice's pksigA signature which is
+   // combined with her password to generate the cipher key.
+   //
+   it("decryption should fail with replaced valid signature", async function () {
+
+      for (let alg in cs.AlgInfo) {
+
+         const clearText = 'This is a secret 🐓';
+         const pwd = 'a good pwd';
+         const hint = 'not really';
+         const pksigA = crypto.getRandomValues(new Uint8Array(cs.PKSIG_BYTES));
+         const pksigB = crypto.getRandomValues(new Uint8Array(cs.PKSIG_BYTES));
+
+         let cipher = new cs.Cipher(alg, cs.ICOUNT_MIN, false, true);
+         const clearEnc = new TextEncoder().encode(clearText);
+
+         const cipherTextA = await cipher.encrypt(pwd, hint, pksigA, clearEnc);
+         const extendedA = cs.base64ToBytes(cipherTextA);
+         const encodedA = extendedA.slice(cs.HMAC_BYTES);
+         const cparamsA = cs.Cipher._decodeCipherBytes(encodedA);
+
+         // First repack with the original values to help ensure the code for
+         // repacking is valid and that the 2nd attempt with a new signature
+         // detects the pksig change not just bad packing code
+         const [cipherTextAA, skA, hmacA] = await repack(pksigA, cparamsA.slt, encodedA);
+         const [cipherTextB, skB, hmacB] = await repack(pksigB, cparamsA.slt, encodedA);
+
+         // both should work sing the singatures are valid (just cannot decrypt ct2)
+         expect(await cs.Cipher._verifyCipherBytes(skA, hmacA, encodedA)).toBeTrue();
+         expect(await cs.Cipher._verifyCipherBytes(skB, hmacB, encodedA)).toBeTrue();
+
+         // The original should still work
+         const decryptedAA = await cs.Cipher.decrypt(
+            async (decHint) => {
+               return pwd;
+            },
+            pksigA,
+            cipherTextAA
+         );
+         const clearTest = new TextDecoder().decode(decryptedAA);
+         expect(clearTest).toBe(clearText);
+
+         // The big moment! Perhaps should validate better that the decryption
+         // failed, but not much else returns DOMException from cipher-stuff
+         await expectAsync(
+            cs.Cipher.decrypt(
+               async (decHint) => {
+                  return pwd;
+               },
+               pksigB,
+               cipherTextB
+            )
+         ).toBeRejectedWithError(DOMException);
       }
    });
 
@@ -253,22 +349,22 @@ describe("Encryption and decryption", function () {
       // empty pwd
       await expectAsync(
          cipher.encrypt('', hint, pksig, clearEnc)
-      ).toBeRejectedWithError();
+      ).toBeRejectedWithError(Error, new RegExp('.+pksig.*'));
 
       // no signature
       await expectAsync(
          cipher.encrypt(pwd, hint, new Uint8Array(0), clearEnc)
-      ).toBeRejectedWithError();
+      ).toBeRejectedWithError(Error, new RegExp('.+pksig.*'));
 
-      // extra signature
+      // extra long signature
       await expectAsync(
          cipher.encrypt(pwd, hint, crypto.getRandomValues(new Uint8Array(cs.PKSIG_BYTES + 2)), clearEnc)
-      ).toBeRejectedWithError();
+      ).toBeRejectedWithError(Error, new RegExp('.+pksig.*'));
 
       // empty clear data
       await expectAsync(
          cipher.encrypt(pwd, hint, pksig, new Uint8Array(0))
-      ).toBeRejectedWithError();
+      ).toBeRejectedWithError(Error, new RegExp('No data.+'));
 
    });
 });
@@ -326,7 +422,7 @@ describe("Get cipher params from cipher text", function () {
                pksig,
                cipherText
             )
-         ).toBeRejectedWithError();
+         ).toBeRejectedWithError(Error);
       }
    });
 
@@ -347,16 +443,16 @@ describe("Get cipher params from cipher text", function () {
             problemSig,
             cipherText
          )
-      ).toBeRejectedWithError();
+      ).toBeRejectedWithError(Error, new RegExp('.+HMAC.+'));
 
-      // Doesn't missing on byte
+      // Missing one byte of sig
       problemSig = pksig.slice(0, pksig.byteLength - 1);
       await expectAsync(
          cs.Cipher.getCipherParams(
             problemSig,
             cipherText
          )
-      ).toBeRejectedWithError();
+      ).toBeRejectedWithError(Error);
 
       // One bytes extra
       problemSig = new Uint8Array(cs.PKSIG_BYTES + 1);
@@ -367,7 +463,7 @@ describe("Get cipher params from cipher text", function () {
             problemSig,
             cipherText
          )
-      ).toBeRejectedWithError();
+      ).toBeRejectedWithError(Error);
    });
 });
 
@@ -388,27 +484,27 @@ describe("Cipher object creation", function () {
       // ic too small
       expect(() =>
          new cs.Cipher('AES-GCM', cs.ICOUNT_MIN - 1, false, true)
-      ).toThrowError();
+      ).toThrowError(Error);
 
       // ic too big
       expect(() =>
          new cs.Cipher('AES-GCM', cs.ICOUNT_MAX + 1, false, true)
-      ).toThrowError();
+      ).toThrowError(Error);
 
       // invalid alg 
       expect(() =>
          new cs.Cipher('ABS-GCM', cs.ICOUNT_DEFAULT, false, true)
-      ).toThrowError();
+      ).toThrowError(Error);
 
       // really invalid alg 
       expect(() =>
          new cs.Cipher('asdfadfsk', cs.ICOUNT_DEFAULT, false, true)
-      ).toThrowError();
+      ).toThrowError(Error);
 
       // both rands false 
       expect(() =>
          new cs.Cipher('AES-GCM', cs.ICOUNT_DEFAULT, false, false)
-      ).toThrowError();
+      ).toThrowError(Error);
    });
 });
 
@@ -425,8 +521,8 @@ describe("CParam encode and decode", function () {
          et: crypto.getRandomValues(new Uint8Array(42))
       }
 
-      const packed = cs.Cipher._encodeCipherText(cp);
-      const rcp = cs.Cipher._decodeCipherText(packed);
+      const packed = cs.Cipher._encodeCipherBytes(cp);
+      const rcp = cs.Cipher._decodeCipherBytes(packed);
 
       expect(rcp.alg).toBe(cp.alg);
       expect(rcp.ic).toBe(cp.ic);
@@ -448,54 +544,54 @@ describe("CParam encode and decode", function () {
          et: new Uint8Array(1)
       }
       // exect we start valid
-      expect(() => cs.Cipher._encodeCipherText(cp)).not.toThrowError();
+      expect(() => cs.Cipher._encodeCipherBytes(cp)).not.toThrowError();
 
       // iv too short
       cp.iv = new Uint8Array(cs.IV_BYTES - 1);
-      expect(() => cs.Cipher._encodeCipherText(cp)).toThrowError();
+      expect(() => cs.Cipher._encodeCipherBytes(cp)).toThrowError();
 
       // iv too long
       cp.iv = new Uint8Array(cs.IV_BYTES + 1);
-      expect(() => cs.Cipher._encodeCipherText(cp)).toThrowError();
+      expect(() => cs.Cipher._encodeCipherBytes(cp)).toThrowError();
 
       // iv ok, salt too short
       cp.iv = new Uint8Array(cs.IV_BYTES);
       cp.slt = new Uint8Array(0);
-      expect(() => cs.Cipher._encodeCipherText(cp)).toThrowError();
+      expect(() => cs.Cipher._encodeCipherBytes(cp)).toThrowError();
 
       // salt too long
       cp.slt = new Uint8Array(cs.SLT_BYTES + 1);
-      expect(() => cs.Cipher._encodeCipherText(cp)).toThrowError();
+      expect(() => cs.Cipher._encodeCipherBytes(cp)).toThrowError();
 
       // slt ok, hint too long
       cp.slt = new Uint8Array(cs.SLT_BYTES);
       cp.hint = 'try a hint that is more than 128 chars, it should throw an error.......................................................................';
-      expect(() => cs.Cipher._encodeCipherText(cp)).toThrowError();
+      expect(() => cs.Cipher._encodeCipherBytes(cp)).toThrowError();
 
       // make sure we're good...
       cp.hint = 'better';
-      expect(() => cs.Cipher._encodeCipherText(cp)).not.toThrowError();
+      expect(() => cs.Cipher._encodeCipherBytes(cp)).not.toThrowError();
 
       // ic too large
       cp.ic = cs.ICOUNT_MAX + 1;
-      expect(() => cs.Cipher._encodeCipherText(cp)).toThrowError();
+      expect(() => cs.Cipher._encodeCipherBytes(cp)).toThrowError();
 
       // ic too small
       cp.ic = -1;
-      expect(() => cs.Cipher._encodeCipherText(cp)).toThrowError();
+      expect(() => cs.Cipher._encodeCipherBytes(cp)).toThrowError();
 
       // invalid alg
       cp.ic = cs.ICOUNT_DEFAULT;
       cp.alg = 'AES-XYV';
-      expect(() => cs.Cipher._encodeCipherText(cp)).toThrowError();
+      expect(() => cs.Cipher._encodeCipherBytes(cp)).toThrowError();
 
       cp.ic = cs.ICOUNT_DEFAULT;
       cp.alg = '';
-      expect(() => cs.Cipher._encodeCipherText(cp)).toThrowError();
+      expect(() => cs.Cipher._encodeCipherBytes(cp)).toThrowError();
 
       // make sure end good...
       cp.alg = 'AES-GCM';
-      expect(() => cs.Cipher._encodeCipherText(cp)).not.toThrowError();
+      expect(() => cs.Cipher._encodeCipherBytes(cp)).not.toThrowError();
 
    });
 
@@ -512,34 +608,34 @@ describe("CParam encode and decode", function () {
       };
       // Expect we start valie
       expect(() => cs.Cipher.validateCParams(cp)).not.toThrowError();
-      let packed = cs.Cipher._encodeCipherText(cp);
-      expect(() => cs.Cipher._decodeCipherText(packed)).not.toThrowError();
+      let packed = cs.Cipher._encodeCipherBytes(cp);
+      expect(() => cs.Cipher._decodeCipherBytes(packed)).not.toThrowError();
 
-      packed = cs.Cipher._encodeCipherText(cp);
+      packed = cs.Cipher._encodeCipherBytes(cp);
       // Invalid alrogirthm id
       packed.set([7], 0);
       // So that this should throw an exception
-      expect(() => cs.Cipher._decodeCipherText(packed)).toThrowError();
+      expect(() => cs.Cipher._decodeCipherBytes(packed)).toThrowError();
 
-      packed = cs.Cipher._encodeCipherText(cp);
+      packed = cs.Cipher._encodeCipherBytes(cp);
       // Invalid version number
       packed.set([5], 46);
       // So that this should throw an exception
-      expect(() => cs.Cipher._decodeCipherText(packed)).toThrowError();
+      expect(() => cs.Cipher._decodeCipherBytes(packed)).toThrowError();
 
-      packed = cs.Cipher._encodeCipherText(cp);
+      packed = cs.Cipher._encodeCipherBytes(cp);
       // This pokes in a zero at the top two bytes of IC, making out of range
       // 44 = ALG_BYTES+IV_BYTES+SLT_BYTES+IC_BYTES-2
       packed.set([0, 0], 44);
       // So that this should throw an exception
-      expect(() => cs.Cipher._decodeCipherText(packed)).toThrowError();
+      expect(() => cs.Cipher._decodeCipherBytes(packed)).toThrowError();
 
-      packed = cs.Cipher._encodeCipherText(cp);
+      packed = cs.Cipher._encodeCipherBytes(cp);
       // Change changes the hint length length
       // 48 = ALG_BYTES+IV_BYTES+SLT_BYTES+IC_BYTES+VER_BYTES
       packed.set([75], 48);
       // So that this should throw an exception
-      expect(() => cs.Cipher._decodeCipherText(packed)).toThrowError();
+      expect(() => cs.Cipher._decodeCipherBytes(packed)).toThrowError();
 
       // shortest valid CParams
       cp = {
@@ -551,27 +647,45 @@ describe("CParam encode and decode", function () {
          et: new Uint8Array(1)
       }
       // Expect we start valid
-      packed = cs.Cipher._encodeCipherText(cp);
-      expect(() => cs.Cipher._decodeCipherText(packed)).not.toThrowError();
+      packed = cs.Cipher._encodeCipherBytes(cp);
+      expect(() => cs.Cipher._decodeCipherBytes(packed)).not.toThrowError();
 
       // should be too short with 1 byte removed
       let sliced = packed.slice(0, packed.byteLength - 1);
-      expect(() => cs.Cipher._decodeCipherText(sliced)).toThrowError();
+      expect(() => cs.Cipher._decodeCipherBytes(sliced)).toThrowError();
 
    });
 
 });
 
 describe("Base64 encode decode", function () {
+
    it("random bytes", function () {
       const rb = crypto.getRandomValues(new Uint8Array(43))
       const b64 = cs.bytesToBase64(rb);
       expect(b64.length).toBeGreaterThanOrEqual(rb.byteLength);
       expect(isEqualArray(rb, cs.base64ToBytes(b64))).toBeTrue();
    });
+
+   it("detect bad encodings", function () {
+      // expect we start valid
+      const good = 'aGVsbG8gMQ==';
+      const bytes = cs.base64ToBytes(good);
+      expect(bytes).toEqual(new Uint8Array([104, 101, 108, 108, 111, 32, 49]));
+
+      const badPadding = 'aGVsbG8gMQ=';
+      expect(() => cs.base64ToBytes(badPadding)).toThrowError();
+
+      const badChar = 'aGVsbG8.MQ==';
+      expect(() => cs.base64ToBytes(badChar)).toThrowError();
+
+      const badLen = 'aGVsbG8MQ==';
+      expect(() => cs.base64ToBytes(badLen)).toThrowError();
+   });
 });
 
 describe("Random40 tests", function () {
+
    it("true random", async function () {
       let rand = new cs.Random40();
       const r1 = await rand.getRandomArray(true, false);
@@ -590,7 +704,7 @@ describe("Random40 tests", function () {
       expect(r1.byteLength).toBe(40);
       expect(r2.byteLength).toBe(40);
       expect(isEqualArray(r1, r2)).toBeFalse();
-      await expectAsync(rand.getRandomArray(false, false)).toBeRejectedWithError();
+      await expectAsync(rand.getRandomArray(false, false)).toBeRejectedWithError(Error);
    });
 });
 
@@ -635,5 +749,4 @@ describe("Number byte packing", function () {
       expect(cs.bytesToNum(a4)).toBe(4294000000);
       expect(a4.byteLength).toBe(4);
    });
-
 });

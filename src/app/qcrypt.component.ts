@@ -182,8 +182,8 @@ export class QCryptComponent implements OnInit, AfterViewInit {
   private actionStart: number = 0;
   private matcherPwned: Matcher;
   public cacheTimeout!: DateTime;
-  public icountMin: number = 400000;
-  public icountMax: number = 400000000; // Default since benchmark is async
+  public icountMin: number = cs.ICOUNT_MIN;
+  public icountMax: number = cs.ICOUNT_MAX; // Default since benchmark is async
   public icountDefault: number = cs.ICOUNT_DEFAULT; // Default since benchmark is async
   public clearText = '';
   public stuffCached = false;
@@ -194,6 +194,10 @@ export class QCryptComponent implements OnInit, AfterViewInit {
   public errorCipher = false;
   public errorClear = false;
   public expandOptions = false;
+
+  public challenge = new Uint8Array([87, 77, 111, 230, 232, 248, 72, 143, 107, 250, 84, 22, 31, 111, 131, 234, 158, 121, 216, 207, 213, 49, 35, 230, 235, 129, 43, 41, 224, 197, 190, 70]);
+  public uid = new Uint8Array([143, 101, 176, 207, 203, 0, 213, 172, 64, 130, 128, 168, 47, 111, 85, 72, 92, 131, 0, 76, 97, 205, 129, 141, 34, 246, 141, 247, 222, 243, 224, 20]);
+
   //  @ViewChild(MatRipple) ripple: MatRipple;
   @ViewChild('clearField') clearField!: ElementRef;
   @ViewChild('cipherField') cipherField!: ElementRef;
@@ -366,6 +370,114 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       this.setPseudoRandom(params.get('prand'));
 
     });
+
+    this.getPKSignature().catch(
+      () => {
+        console.log('fail1')
+        this.createPKSignature().then( () => {
+          // 1pass for example fails if call too quickly
+          setTimeout( () => {
+            this.getPKSignature();
+          }, 2000);
+        })
+      }
+    ).then( () => {
+      console.log('worked')
+    }).catch( (err) => {
+      console.log('fail2')
+    });
+
+  }
+
+  async getPKSignature() : Promise<Credential | null> {
+
+    console.log('enter getPKSignature')
+
+    const publicKey = {
+      challenge: this.challenge,
+      userVerification: "discouraged" as UserVerificationRequirement,
+    }
+    return navigator.credentials.get({ publicKey }).then((publicKeyCredential) => {
+      if( publicKeyCredential && publicKeyCredential instanceof PublicKeyCredential) {
+        const response = publicKeyCredential.response;
+        if (response && response instanceof AuthenticatorAssertionResponse) {
+          console.log(response.clientDataJSON);
+
+          console.log(response.authenticatorData);
+
+          console.log(
+            "Signature: " + response.signature.byteLength + " : " +
+            new Uint8Array(response.signature));
+
+          console.log(response.userHandle);
+
+          return null;
+        }
+      }
+
+      throw new Error("unknown user");
+    });
+  }
+
+  async createPKSignature() : Promise<Credential | null> {
+    console.log('enter createPKSignature')
+
+    const publicKey: PublicKeyCredentialCreationOptions = {
+      authenticatorSelection: {
+        residentKey: "required"
+      },
+      challenge: this.challenge,
+      rp: {
+        id: "t1.schicks.net",
+        name: "Quick Crypt" }, // For testing, do not include Id directly (comes from browser)
+      user: {
+        id: this.uid,
+        name: "user@qcrypt.schicks.net",
+        displayName: "Quick Crypt User"
+      },
+      pubKeyCredParams: [
+        { type: "public-key", alg: 3 },
+        { type: "public-key", alg: 24 },
+        { type: "public-key", alg: 1 },
+        { type: "public-key", alg: 7 },
+        { type: "public-key", alg: -7 },]
+    };
+
+    return navigator.credentials.create({ publicKey }).then((publicKeyCredential) => {
+      if (publicKeyCredential && publicKeyCredential instanceof PublicKeyCredential) {
+        const response = publicKeyCredential.response;
+        if (response && response instanceof AuthenticatorAttestationResponse) {
+
+          // Access attestationObject ArrayBuffer
+          const attestationObj = response.attestationObject;
+          console.log(attestationObj);
+
+          // Access client JSON
+          const clientJSON = response.clientDataJSON;
+          console.log(clientJSON);
+
+          // Return authenticator data ArrayBuffer
+          const authenticatorData = response.getAuthenticatorData();
+          console.log(authenticatorData);
+
+          // Return public key ArrayBuffer
+          const pk = response.getPublicKey();
+          console.log(pk);
+
+          // Return public key algorithm identifier
+          const pkAlgo = response.getPublicKeyAlgorithm();
+          console.log(pkAlgo);
+
+          // Return permissible transports array
+          const transports = response.getTransports();
+          console.log(transports);
+
+          return null;
+        }
+      }
+      throw new Error("pk creation failed");
+    });
+
   }
 
   async benchmark(): Promise<void> {
@@ -379,7 +491,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     let cipher = new cs.Cipher('AES-GCM', test_size, false);
 
     const start = Date.now();
-    await cipher.genCipherKey('AVeryBogusPwd', new Uint8Array(cs.SLT_BYTES));
+    await cipher.genCipherKey('AVeryBogusPwd', this.pksig, new Uint8Array(cs.SLT_BYTES));
     const test_millis = Date.now() - start;
 
     // Calculate how many iterations take target_spinner_millis. Above that we'll show spinner
@@ -390,10 +502,9 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       Math.min(cs.ICOUNT_MAX,
         Math.round((max_hash_millis * this.hashRate) / 1000000) * 1000000);
 
-    let rounded =
-      Math.round((this.hashRate * target_hash_millis) / 100000) * 100000;
-    rounded += rounded % 200000;
-    const default_icount = Math.max(cs.ICOUNT_DEFAULT, rounded);
+    let target_icount = Math.round((this.hashRate * target_hash_millis) / 100000) * 100000;
+    target_icount += 200000;
+    const default_icount = Math.max(cs.ICOUNT_DEFAULT, target_icount);
 
     const spinner_icount = Math.round(target_spinner_millis * this.hashRate);
 
@@ -733,7 +844,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     try {
       const decrypted = await cs.Cipher.decrypt(
         async (hint) => {
-          const [pwd, _] = await this.getPassword(+this.minPwdStrength, hint, dcontext);
+          const [pwd, _] = await this.getPassword(-1, hint, dcontext);
           return pwd;
         },
         this.pksig,
@@ -1141,3 +1252,4 @@ export class HelpDialog {
   ) { }
 
 }
+

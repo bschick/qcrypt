@@ -84,14 +84,15 @@ SOFTWARE. -->
     <u>Technical Details</u>
     <ul class="tech-list">
       <li>
-        <b>Cryto Library: </b>Browser native
-        <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API" target="_blank">Web Crypto API</a>
+        <b>Cryto Library: </b>
+        <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API" target="_blank">Web Crypto API</a> and 
+        <a href="https://doc.libsodium.org/" target="_blank">Libsodium</a> 
       </li>
       <li>
         <b>Key Derivation: </b>
         <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey" target="_blank">PBKDF2 using
           SHA-512</a>
-        and selectable iterations (default 0.5s of hashing or 800K)
+        and selectable iterations (default 0.5s of hashing or 400K)
       </li>
       <li><b>Key Length: </b>256 bits (max for web crypto)</li>
       <li>

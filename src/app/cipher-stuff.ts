@@ -159,26 +159,31 @@ export class Cipher {
    // Public because the function is used for timing/benchmark
    async genCipherKey(
       pwd: string,
+      pksig: Uint8Array,
       slt: Uint8Array
    ): Promise<CryptoKey> {
 
       if (slt.byteLength != SLT_BYTES) {
          throw new Error("Invalid slt size of: " + slt.byteLength);
       }
-
+      if (pksig.byteLength != PKSIG_BYTES) {
+         throw new Error("Invalid pksig size of: " + pksig.byteLength);
+      }
       if (!pwd) {
          throw new Error('Invalid empty password');
       }
-
       if (this.ic < ICOUNT_MIN || this.ic > ICOUNT_MAX) {
          throw new Error('Invalid ic of: ' + this.ic);
       }
 
       const pwdBytes = new TextEncoder().encode(pwd);
+      let rawMaterial = new Uint8Array(pwdBytes.byteLength + PKSIG_BYTES)
+      rawMaterial.set(pwdBytes);
+      rawMaterial.set(pksig, pwdBytes.byteLength);
 
       const ekMaterial = await window.crypto.subtle.importKey(
          'raw',
-         pwdBytes,
+         rawMaterial,
          'PBKDF2',
          false,
          ['deriveBits', 'deriveKey']
@@ -205,7 +210,8 @@ export class Cipher {
       return ek;
    }
 
-   private static async _genSigningKey(
+   // Public for testing, normal callers should not need this
+   static async _genSigningKey(
       pksig: Uint8Array,
       slt: Uint8Array
    ): Promise<CryptoKey> {
@@ -270,18 +276,21 @@ export class Cipher {
       const slt = randomArray.slice(0, SLT_BYTES);
       const iv = randomArray.slice(SLT_BYTES, SLT_BYTES + IV_BYTES);
 
+      const cparamsReady = {
+         alg: this.alg,
+         ic: this.ic,
+         iv: iv,
+         slt: slt,
+         hint: hint,
+         et: new Uint8Array(0)
+      };
+
       if (readyNotice) {
-         readyNotice({
-            alg: this.alg,
-            ic: this.ic,
-            iv: iv,
-            slt: slt,
-            hint: hint,
-            et: new Uint8Array(0),
-         });
+         readyNotice(cparamsReady);
       }
 
-      const ek = await this.genCipherKey(pwd, slt);
+      const additionalData = Cipher._encodeCipherBytes(cparamsReady);
+      const ek = await this.genCipherKey(pwd, pksig, slt);
       const sk = await Cipher._genSigningKey(pksig, slt);
 
       let encryptedBytes: Uint8Array;
@@ -290,28 +299,31 @@ export class Cipher {
          const keyBytes = new Uint8Array(exported);
 
          await sodium.ready;
-         encryptedBytes = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-            clear,
-            null,
-            null,
-            iv,
-            keyBytes,
-            "uint8array"
-         );
+         try {
+            encryptedBytes = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+               clear,
+               additionalData,
+               null,
+               iv,
+               keyBytes,
+               "uint8array"
+            );
+         } catch (err) {
+            // Match behavior of Web Crytpo functions that throws limited DOMException
+            throw new DOMException('', 'OperationError');
+         }
       } else {
-         let enParams: EnDeParams = {
+         const cipherBuf = await window.crypto.subtle.encrypt({
             name: this.alg,
-         };
-
-         enParams['iv'] = iv.slice(0, 16);
-         const cipherBuf = await window.crypto.subtle.encrypt(
-            enParams,
-            ek,
-            clear
+            iv: iv,
+            additionalData: additionalData,
+            tagLength: 128
+         },
+            ek, clear
          );
          encryptedBytes = new Uint8Array(cipherBuf);
       }
-      const encoded = Cipher._encodeCipherText({
+      const encoded = Cipher._encodeCipherBytes({
          alg: this.alg,
          ic: this.ic,
          iv: iv,
@@ -320,10 +332,10 @@ export class Cipher {
          et: encryptedBytes
       });
 
-      const hmac = await Cipher._signCipherText(sk, encoded);
+      const hmac = await Cipher._signCipherBytes(sk, encoded);
 
       let extended = new Uint8Array(hmac.byteLength + encoded.byteLength);
-      extended.set(new Uint8Array(hmac));
+      extended.set(hmac);
       extended.set(encoded, hmac.byteLength);
 
       return bytesToBase64(extended);
@@ -344,34 +356,51 @@ export class Cipher {
          throw new Error('password is empty');
       }
 
+      const cparamsReady = {
+         alg: cparams.alg,
+         ic: cparams.ic,
+         iv: cparams.iv,
+         slt: cparams.slt,
+         hint: cparams.hint,
+         et: new Uint8Array(0)
+      };
+
       if (readyNotice) {
-         readyNotice(cparams);
+         readyNotice(cparamsReady);
       }
 
+      const additionalData = Cipher._encodeCipherBytes(cparamsReady);
       const cipher = new Cipher(cparams.alg, cparams.ic);
-      const ek = await cipher.genCipherKey(pwd, cparams.slt);
+      const ek = await cipher.genCipherKey(pwd, pksig, cparams.slt);
 
       let decrypted: Uint8Array;
-
       if (cparams.alg == 'X20-PLY') {
          const exported = await window.crypto.subtle.exportKey("raw", ek);
          const keyBytes = new Uint8Array(exported);
 
-         decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-            null,
-            cparams.et,
-            null,
-            cparams.iv,
-            keyBytes,
-            "uint8array"
-         );
-      } else {
-         let enParams: EnDeParams = {
-            name: cparams.alg,
-         };
+         try {
+            decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+               null,
+               cparams.et,
+               additionalData,
+               cparams.iv,
+               keyBytes,
+               "uint8array"
+            );
+         } catch (err) {
+            // Match behavior of Web Crytpo functions that throws limited DOMException
+            throw new DOMException('', 'OperationError');
+         }
 
-         enParams['iv'] = cparams.iv.slice(0, 16);
-         const buffer = await window.crypto.subtle.decrypt(enParams, ek, cparams.et);
+      } else {
+         const buffer = await window.crypto.subtle.decrypt({
+            name: cparams.alg,
+            iv: cparams.iv,
+            additionalData: additionalData,
+            tagLength: 128
+         },
+            ek, cparams.et
+         );
          decrypted = new Uint8Array(buffer);
       }
 
@@ -400,15 +429,15 @@ export class Cipher {
       //
       // IMPORTANT: The returned CParams could be corrupted. Do not return
       //       this to caller until after signature verified.
-      const cparams = Cipher._decodeCipherText(encoded);
+      const cparams = Cipher._decodeCipherBytes(encoded);
 
       const sk = await Cipher._genSigningKey(pksig, cparams.slt);
 
       // Avoiding the Doom Principle and verify signature before crypto operations.
       // Aka, check HMAC as soon as possible after we have the signing key.
-      // _verifyCipherText should raise and exception if invalid, but the boolean
+      // _verifyCipherBytes should raise and exception if invalid, but the boolean
       // return is a precaution... requires an explicit true result and no exception
-      const validSig = await Cipher._verifyCipherText(sk, hmac, encoded);
+      const validSig = await Cipher._verifyCipherBytes(sk, hmac, encoded);
       if (validSig) {
          return cparams;
       }
@@ -417,7 +446,8 @@ export class Cipher {
       throw new Error('Invalid HMAC signature');
    }
 
-   private static async _signCipherText(
+   // public for testing, callers should not need to use this directly
+   static async _signCipherBytes(
       sk: CryptoKey,
       encoded: Uint8Array
    ): Promise<Uint8Array> {
@@ -430,7 +460,8 @@ export class Cipher {
       return new Uint8Array(hmac);
    }
 
-   private static async _verifyCipherText(
+   // public for testing, callers should not need to use this directly
+   static async _verifyCipherBytes(
       sk: CryptoKey,
       hmac: Uint8Array,
       encoded: Uint8Array
@@ -445,8 +476,9 @@ export class Cipher {
    }
 
    // User of Cipher should not need this function directly
-   // but it is public for unit testing
-   static _encodeCipherText(cparams: CParams): Uint8Array {
+   // but it is public for unit testing. Allows encoding with 
+   // zero length encrypted text
+   static _encodeCipherBytes(cparams: CParams): Uint8Array {
 
       Cipher.validateCParams(cparams);
 
@@ -492,8 +524,9 @@ export class Cipher {
    }
 
    // User of Cipher should not need this function directly,
-   // but it is public for unit testing
-   static _decodeCipherText(encoded: Uint8Array): CParams {
+   // but it is public for unit testing. Does not allow encoding
+   // with zero length encrypted text since that is not needed
+   static _decodeCipherBytes(encoded: Uint8Array): CParams {
 
       // Need to treat all values an UNTRUSTED since the signature has not
       // been tested (slt param extracted here is required for HMAC test)
@@ -568,7 +601,7 @@ export class Cipher {
 
       // ### encrypted text ###
       const et = encoded.slice(offset);
-      // Agaim, can happen if the encode data was clipped and reencoded
+      // Again, can happen if the encode data was clipped and reencoded
       if (et.byteLength == 0) {
          throw new Error('Missing et data, found only: ' + et.byteLength);
       }
