@@ -1,4 +1,5 @@
 import * as sodium from 'libsodium-wrappers';
+import {base64URLStringToBuffer, bufferToBase64URLString} from '@simplewebauthn/browser';
 
 export const ICOUNT_MIN = 400000;
 export const ICOUNT_DEFAULT = 800000;
@@ -30,7 +31,7 @@ export const IC_BYTES = 4;
 export const VER_BYTES = 2;
 export const HMAC_BYTES = 32;
 export const KEY_BYTES = 32;
-export const PKSIG_BYTES = 32;
+export const SITEKEY_BYTES = 32;
 
 interface EnDeParams {
    name: string;
@@ -62,69 +63,71 @@ export function bytesToNum(arr: Uint8Array): number {
    return num;
 }
 
-
+// Returns base64Url text
 export function bytesToBase64(bytes: Uint8Array): string {
-   var binString = '';
-   bytes.forEach((b, i) => {
-      binString += String.fromCharCode(b);
-   });
-   return btoa(binString);
+   // simplewebauthn functions return base64Url format, but accepts
+   // either as input to base64ToBytes
+   return(bufferToBase64URLString(bytes));
 }
 
+// accepts either base64 or base64Url text
 export function base64ToBytes(b64: string): Uint8Array {
-   var binString: string = atob(b64);
-   // @ts-ignore
-   return Uint8Array.from(binString, (m) => m.codePointAt(0));
+   return new Uint8Array(base64URLStringToBuffer(b64));
 }
 
 export class Random40 {
-   private trueRandCache: Promise<Uint8Array>;
+   private trueRandCache: Promise<Response>;
 
    constructor() {
       this.trueRandCache = this.downloadTrueRand();
    }
 
    async getRandomArray(
-      trueRand: boolean,
-      fallback: boolean
+      trueRand: boolean = true,
+      fallback: boolean = true
    ): Promise<Uint8Array> {
       if (!trueRand) {
          if (!fallback) {
             throw new Error('both trueRand and fallback disabled');
          }
-         return window.crypto.getRandomValues(new Uint8Array(40));
+         return crypto.getRandomValues(new Uint8Array(40));
       } else {
          const lastCache = this.trueRandCache;
          this.trueRandCache = this.downloadTrueRand();
-         return lastCache.then((buffer) => {
-            return buffer;
+         return lastCache.then((response) => {
+            if (!response.ok) {
+               throw new Error('random.org response: ' + response.statusText);
+            }
+            return response.arrayBuffer();
+         }).then((array) => {
+            if (array.byteLength != 40) {
+               throw new Error('missing bytes from random.org');
+            }
+            return new Uint8Array(array!);
          }).catch((err) => {
             console.error(err);
             // If pseudo random fallback is disabled, then throw error
             if (!fallback) {
                throw new Error('no connection to random.org and no fallback: ' + err.message);
             }
-            return window.crypto.getRandomValues(new Uint8Array(40));
+            return crypto.getRandomValues(new Uint8Array(40));
          });
       }
    }
 
-   async downloadTrueRand(): Promise<Uint8Array> {
+   async downloadTrueRand(): Promise<Response> {
       const url = 'https://www.random.org/cgi-bin/randbyte?nbytes=' + 40;
-
-      return fetch(url, {
-         cache: 'no-store',
-      }).then((response) => {
-         if (!response.ok) {
-            throw new Error('random.org response: ' + response.statusText);
-         }
-         return response.arrayBuffer();
-      }).then((array) => {
-         if (array.byteLength != 40) {
-            throw new Error('missing bytes from random.org');
-         }
-         return new Uint8Array(array!);
-      });
+      try {
+         const p = fetch(url, {
+            cache: 'no-store',
+         });
+         return p;
+      } catch (err) {
+         // According to the docs, this should not happend but it seems to sometimes
+         // (perfhaps just one nodejs, but not sure)
+         console.error('wtf fetch, ', err);
+         return Promise.reject();
+      }
    }
 }
 
@@ -159,15 +162,15 @@ export class Cipher {
    // Public because the function is used for timing/benchmark
    async genCipherKey(
       pwd: string,
-      pksig: Uint8Array,
+      siteKey: Uint8Array,
       slt: Uint8Array
    ): Promise<CryptoKey> {
 
       if (slt.byteLength != SLT_BYTES) {
          throw new Error("Invalid slt size of: " + slt.byteLength);
       }
-      if (pksig.byteLength != PKSIG_BYTES) {
-         throw new Error("Invalid pksig size of: " + pksig.byteLength);
+      if (siteKey.byteLength != SITEKEY_BYTES) {
+         throw new Error("Invalid siteKey size of: " + siteKey.byteLength);
       }
       if (!pwd) {
          throw new Error('Invalid empty password');
@@ -177,9 +180,9 @@ export class Cipher {
       }
 
       const pwdBytes = new TextEncoder().encode(pwd);
-      let rawMaterial = new Uint8Array(pwdBytes.byteLength + PKSIG_BYTES)
+      let rawMaterial = new Uint8Array(pwdBytes.byteLength + SITEKEY_BYTES)
       rawMaterial.set(pwdBytes);
-      rawMaterial.set(pksig, pwdBytes.byteLength);
+      rawMaterial.set(siteKey, pwdBytes.byteLength);
 
       const ekMaterial = await window.crypto.subtle.importKey(
          'raw',
@@ -212,7 +215,7 @@ export class Cipher {
 
    // Public for testing, normal callers should not need this
    static async _genSigningKey(
-      pksig: Uint8Array,
+      siteKey: Uint8Array,
       slt: Uint8Array
    ): Promise<CryptoKey> {
 
@@ -221,12 +224,12 @@ export class Cipher {
       }
 
       // Confirm how  long PassKey signature will be and check for that directly
-      if (pksig.byteLength != PKSIG_BYTES) {
-         throw new Error('Invalid pksig length of: ' + pksig.byteLength);
+      if (siteKey.byteLength != SITEKEY_BYTES) {
+         throw new Error('Invalid siteKey length of: ' + siteKey.byteLength);
       }
       const skMaterial = await window.crypto.subtle.importKey(
          'raw',
-         pksig,
+         siteKey,
          'HKDF',
          false,
          ['deriveBits', 'deriveKey']
@@ -248,16 +251,25 @@ export class Cipher {
       return sk;
    }
 
+   // Overall order of operations:
+   //
+   // 1. Generate new salt and iv/nonce values
+   // 2. Encode cipher parameters as additional data
+   // 3. Generate signing key from siteKey and cipher key from pwd + siteKey
+   // 4. Encrypt cleartext using cipher key (with addition data)
+   // 5. Sign addtional data + cipher text with signing key
+   // 6. Concat and return
+   //
    async encrypt(
       pwd: string,
       hint: string,
-      pksig: Uint8Array,
+      siteKey: Uint8Array,
       clear: Uint8Array,
       readyNotice?: (cparams: CParams) => void
    ): Promise<string> {
 
-      if (!pwd || pksig.byteLength != PKSIG_BYTES) {
-         throw new Error('Invalid password or pksig');
+      if (!pwd || siteKey.byteLength != SITEKEY_BYTES) {
+         throw new Error('Invalid password or siteKey');
       }
 
       // assume encrypting nothing is a mistake
@@ -290,8 +302,8 @@ export class Cipher {
       }
 
       const additionalData = Cipher._encodeCipherBytes(cparamsReady);
-      const ek = await this.genCipherKey(pwd, pksig, slt);
-      const sk = await Cipher._genSigningKey(pksig, slt);
+      const ek = await this.genCipherKey(pwd, siteKey, slt);
+      const sk = await Cipher._genSigningKey(siteKey, slt);
 
       let encryptedBytes: Uint8Array;
       if (this.alg == 'X20-PLY') {
@@ -341,15 +353,28 @@ export class Cipher {
       return bytesToBase64(extended);
    }
 
+   // Password is a callback because we need to extract any hint from ciphertext first.
+   // We also don't want the caller (web page) to show anything from extracted from
+   // ciphertext until after it has been verified again the siteKey (pass-key). Order
+   // of operations is:
+   //
+   // 1. Unpack parameters from ct
+   // 1.1.    Unpack validated values and checks siteKey based signature
+   // 2. Callback to get the password with the hint unpacked & validated hint
+   // 3. Encode cipher parameters as additional data
+   // 4. Generate cipher keys using returned pwd + siteKey
+   // 5. Decrypt encrypted text using cipher key and addtional data
+   // 6. Return cleat text bytes
+   //
    static async decrypt(
       pwdProvider: (hint: string) => Promise<string>,
-      pksig: Uint8Array,
+      siteKey: Uint8Array,
       ct: string,
       readyNotice?: (cparams: CParams) => void
    ): Promise<Uint8Array> {
 
       // This does HMAC signature verification on CT and throws if invalid
-      const cparams = await Cipher.getCipherParams(pksig, ct);
+      const cparams = await Cipher.getCipherParams(siteKey, ct);
 
       const pwd = await pwdProvider(cparams.hint);
       if (!pwd) {
@@ -371,7 +396,7 @@ export class Cipher {
 
       const additionalData = Cipher._encodeCipherBytes(cparamsReady);
       const cipher = new Cipher(cparams.alg, cparams.ic);
-      const ek = await cipher.genCipherKey(pwd, pksig, cparams.slt);
+      const ek = await cipher.genCipherKey(pwd, siteKey, cparams.slt);
 
       let decrypted: Uint8Array;
       if (cparams.alg == 'X20-PLY') {
@@ -408,12 +433,12 @@ export class Cipher {
    }
 
    static async getCipherParams(
-      pksig: Uint8Array,
+      siteKey: Uint8Array,
       ct: string
    ): Promise<CParams> {
 
-      if (pksig.byteLength != PKSIG_BYTES) {
-         throw new Error('Invalid pksig length of: ' + pksig.byteLength);
+      if (siteKey.byteLength != SITEKEY_BYTES) {
+         throw new Error('Invalid siteKey length of: ' + siteKey.byteLength);
       }
 
       const extended = base64ToBytes(ct);
@@ -431,7 +456,7 @@ export class Cipher {
       //       this to caller until after signature verified.
       const cparams = Cipher._decodeCipherBytes(encoded);
 
-      const sk = await Cipher._genSigningKey(pksig, cparams.slt);
+      const sk = await Cipher._genSigningKey(siteKey, cparams.slt);
 
       // Avoiding the Doom Principle and verify signature before crypto operations.
       // Aka, check HMAC as soon as possible after we have the signing key.

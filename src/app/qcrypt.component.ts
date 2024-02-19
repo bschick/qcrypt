@@ -66,6 +66,7 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import * as sodium from 'libsodium-wrappers';
 import * as cs from './cipher-stuff';
+import { startRegistration, startAuthentication } from '@simplewebauthn/browser';
 
 const MAX_LOOPS = 10;
 
@@ -158,6 +159,157 @@ function setIfBoolean(
   }
 }
 
+function storeLoginInfo(userId: any) {
+  //  localStorage.setItem('passkey', pkCred.id);
+  localStorage.setItem('userid', userId.toString());
+}
+
+async function siteLogin1(userId?: number, userName?: string, credentialId?: string): Promise<Uint8Array> {
+
+  if (credentialId && (userId || userName)) {
+    throw new Error('login excepts credentialId or userId + userName, not both');
+  }
+  if (!credentialId && (!userId || !userName)) {
+    throw new Error('login needs credentialId or userId + userName');
+  }
+
+  let optUrl;
+  if (credentialId) {
+    optUrl = new URL(`https://qcrypt.schicks.net/authoptions?credid=${credentialId}`);
+  } else {
+    optUrl = new URL(`https://qcrypt.schicks.net/authoptions?username=${userName}&userid=${userId}`);
+  }
+
+  const optionsResp = await fetch(optUrl, {
+    method: 'GET',
+    mode: 'cors',
+    cache: 'no-store'
+  });
+
+  console.log('optionsResp, ', optionsResp);
+  if (!optionsResp.ok) {
+    throw new Error('authentication failed: ' + await optionsResp.text());
+  }
+
+  const optionsJson = await optionsResp.json();
+  console.log('optionsJson, ', optionsJson);
+
+  let pkCred;
+  try {
+    pkCred = await startAuthentication(optionsJson);
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
+
+  const expanded = {
+    ...pkCred,
+    userId: optionsJson.userId,
+    userName: optionsJson.userName
+  }
+
+  console.log(JSON.stringify(expanded));
+
+  const verifyUrl = new URL('https://qcrypt.schicks.net/verifyauth');
+  const verificationResp = await fetch(verifyUrl, {
+    method: 'POST',
+    mode: 'cors',
+    cache: 'no-store',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(expanded),
+  });
+
+  let verificationJson;
+  console.log('verifyResp, ', verificationResp);
+  if (verificationResp.ok) {
+    verificationJson = await verificationResp.json();
+    console.log('verifyJson, ', verificationJson);
+  } else {
+    throw new Error('authentication failed: ' + await verificationResp.text());
+  }
+
+  if (verificationJson && verificationJson.verified) {
+    storeLoginInfo(optionsJson.userId);
+    return Promise.resolve(cs.base64ToBytes(verificationJson.siteKey));
+  } else {
+    throw new Error('authentication failed');
+  }
+}
+
+async function siteLogin2(userId?: number): Promise<Uint8Array> {
+
+  let optUrl;
+
+  if (!userId) {
+    // Trying to link to an existing passkey but have lost track of user id
+    // start the process without userId doesn't limit authenticator creds to the
+    // user can look for an existing credential
+    optUrl = new URL('https://qcrypt.schicks.net/authoptions');
+  } else {
+    optUrl = new URL(`https://qcrypt.schicks.net/authoptions?userid=${userId}`);
+  }
+
+  const optionsResp = await fetch(optUrl, {
+    method: 'GET',
+    mode: 'cors',
+    cache: 'no-store'
+  });
+
+  console.log('optionsResp, ', optionsResp);
+  if (!optionsResp.ok) {
+    throw new Error('authentication failed: ' + await optionsResp.text());
+  }
+
+  const optionsJson = await optionsResp.json();
+  console.log('optionsJson, ', optionsJson);
+
+  let startAuth;
+  try {
+    startAuth = await startAuthentication(optionsJson);
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
+
+  // Need to return challenge because in some cases it cannot be bound
+  // to a user when created. The server validates it created the challenge
+  // and its age
+  const expanded = {
+    ...startAuth,
+    challenge: optionsJson.challenge,
+  }
+
+  console.log('expanded ', JSON.stringify(expanded));
+
+  const verifyUrl = new URL('https://qcrypt.schicks.net/verifyauth');
+  const verificationResp = await fetch(verifyUrl, {
+    method: 'POST',
+    mode: 'cors',
+    cache: 'no-store',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(expanded),
+  });
+
+  let verificationJson;
+  console.log('verifyResp, ', verificationResp);
+  if (verificationResp.ok) {
+    verificationJson = await verificationResp.json();
+    console.log('verifyJson, ', verificationJson);
+  } else {
+    throw new Error('authentication failed: ' + await verificationResp.text());
+  }
+
+  if (verificationJson && verificationJson.verified) {
+    storeLoginInfo(startAuth.response.userHandle);
+    return Promise.resolve(cs.base64ToBytes(verificationJson.siteKey));
+  } else {
+    throw new Error('authentication failed');
+  }
+}
 
 @Component({
   selector: 'qcrypt-root',
@@ -172,7 +324,7 @@ function setIfBoolean(
   ],
 })
 export class QCryptComponent implements OnInit, AfterViewInit {
-  private pksig = new Uint8Array([101, 246, 72, 149, 67, 228, 149, 35, 60, 124, 81, 187, 157, 96, 208, 217, 123, 147, 228, 60, 84, 214, 198, 116, 192, 162, 178, 147, 50, 119, 97, 251]);
+  private siteKey!: Uint8Array;
   private mouseDown = false;
   private cachedPassword: string = '';
   private cachedHint: string = '';
@@ -311,6 +463,26 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     // ugly hack to make angular not clip the label for dropdown select elements
     this.formatLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.75)";
     this.minStrLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.75)";
+    
+            const userId = localStorage.getItem('userid');
+            const userName = localStorage.getItem('username');
+            if (userId && userName) {
+              siteLogin2(Number(userId)).then((siteKey) => {
+                this.toastMessage('yay! ');
+                this.siteKey = siteKey;
+              }).catch((err) => {
+                // Ignore it and start registration from scratch
+                console.error(err);
+              });
+            }
+    /*
+    if (!this.siteKey) {
+      var dialogRef = this.dialog.open(SetupDialog);
+      dialogRef.afterClosed().subscribe((result) => {
+        console.log(result);
+      });
+    }
+*/
   }
 
   ngOnInit(): void {
@@ -371,55 +543,27 @@ export class QCryptComponent implements OnInit, AfterViewInit {
 
     });
 
-    this.getPKSignature().catch(
-      () => {
-        console.log('fail1')
-        this.createPKSignature().then( () => {
-          // 1pass for example fails if call too quickly
-          setTimeout( () => {
-            this.getPKSignature();
-          }, 2000);
-        })
-      }
-    ).then( () => {
-      console.log('worked')
-    }).catch( (err) => {
-      console.log('fail2')
-    });
-
+    /*    this.getPKSignature().catch(
+          () => {
+            console.log('fail1')
+            this.createPKSignature().then( () => {
+              // 1pass for example fails if call too quickly
+              setTimeout( () => {
+                this.getPKSignature();
+              }, 2000);
+            })
+          }
+        ).then( () => {
+          console.log('worked')
+        }).catch( (err) => {
+          console.log('fail2')
+        });
+    */
   }
 
-  async getPKSignature() : Promise<Credential | null> {
 
-    console.log('enter getPKSignature')
 
-    const publicKey = {
-      challenge: this.challenge,
-      userVerification: "discouraged" as UserVerificationRequirement,
-    }
-    return navigator.credentials.get({ publicKey }).then((publicKeyCredential) => {
-      if( publicKeyCredential && publicKeyCredential instanceof PublicKeyCredential) {
-        const response = publicKeyCredential.response;
-        if (response && response instanceof AuthenticatorAssertionResponse) {
-          console.log(response.clientDataJSON);
-
-          console.log(response.authenticatorData);
-
-          console.log(
-            "Signature: " + response.signature.byteLength + " : " +
-            new Uint8Array(response.signature));
-
-          console.log(response.userHandle);
-
-          return null;
-        }
-      }
-
-      throw new Error("unknown user");
-    });
-  }
-
-  async createPKSignature() : Promise<Credential | null> {
+  async createPKSignature(): Promise<Credential | null> {
     console.log('enter createPKSignature')
 
     const publicKey: PublicKeyCredentialCreationOptions = {
@@ -429,7 +573,8 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       challenge: this.challenge,
       rp: {
         id: "t1.schicks.net",
-        name: "Quick Crypt" }, // For testing, do not include Id directly (comes from browser)
+        name: "Quick Crypt"
+      }, // For testing, do not include Id directly (comes from browser)
       user: {
         id: this.uid,
         name: "user@qcrypt.schicks.net",
@@ -440,7 +585,8 @@ export class QCryptComponent implements OnInit, AfterViewInit {
         { type: "public-key", alg: 24 },
         { type: "public-key", alg: 1 },
         { type: "public-key", alg: 7 },
-        { type: "public-key", alg: -7 },]
+        { type: "public-key", alg: -7 },
+        { type: "public-key", alg: -257 },]
     };
 
     return navigator.credentials.create({ publicKey }).then((publicKeyCredential) => {
@@ -491,7 +637,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     let cipher = new cs.Cipher('AES-GCM', test_size, false);
 
     const start = Date.now();
-    await cipher.genCipherKey('AVeryBogusPwd', this.pksig, new Uint8Array(cs.SLT_BYTES));
+    await cipher.genCipherKey('AVeryBogusPwd', crypto.getRandomValues(new Uint8Array(32)), new Uint8Array(cs.SLT_BYTES));
     const test_millis = Date.now() - start;
 
     // Calculate how many iterations take target_spinner_millis. Above that we'll show spinner
@@ -587,7 +733,11 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     this.pseudoRandom = true;
 
     if (isPlatformBrowser(this.platformId)) {
+      const userid = localStorage.getItem('userid');
       localStorage.clear();
+      if (userid) {
+        localStorage.setItem('userid', userid);
+      }
     }
     this.clearCaches();
   }
@@ -775,7 +925,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
 
       const clearBytes = new TextEncoder().encode(this.clearText);
       const encryptedBytes = await econtext.cipher.encrypt(
-        pwd, hint, this.pksig, clearBytes, this.cipherReadyNotice.bind(this)
+        pwd, hint, this.siteKey, clearBytes, this.cipherReadyNotice.bind(this)
       );
 
       // null means aborted, without an error to report
@@ -847,7 +997,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
           const [pwd, _] = await this.getPassword(-1, hint, dcontext);
           return pwd;
         },
-        this.pksig,
+        this.siteKey,
         dcontext.ct,
         this.cipherReadyNotice.bind(this)
       );
@@ -871,7 +1021,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
       console.error(something);
       if (something instanceof Error) {
         this.showDecryptError(
-          'Could not decrypt cipher armor text. You may be using the wrong password or the cipher armor was changed'
+          'Could not decrypt cipher armor text. You may be using the wrong password or passkey, or the cipher armor was changed'
         );
       }
     } finally {
@@ -1124,7 +1274,7 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     // so that we can have a unified catch hanlder with extra try catch nesting
     const awrap = async () => {
       const dcontext = this.getDecContextFrom(this.cipherArmor);
-      const cparams = await cs.Cipher.getCipherParams(this.pksig, dcontext.ct);
+      const cparams = await cs.Cipher.getCipherParams(this.siteKey, dcontext.ct);
       this.dialog.open(CipherInfoDialog, { data: cparams });
     };
 
@@ -1226,7 +1376,7 @@ export class CipherInfoDialog {
     @Inject(MAT_DIALOG_DATA) public cparams: cs.CParams | null
   ) {
     if (cparams == null) {
-      this.error = 'Invalid cipher armor text';
+      this.error = 'The wrong passkey was selected or the cipher armor was changed';
     } else {
       this.ic = cparams.ic;
       this.alg = cs.AlgInfo[cparams.alg] ? cs.AlgInfo[cparams.alg][0] : 'Invalid';
@@ -1247,9 +1397,126 @@ export class CipherInfoDialog {
 export class HelpDialog {
   constructor(
     public dialogRef: MatDialogRef<HelpDialog>,
-    @Inject(MAT_DIALOG_DATA) public data: PwdDialogData,
     private snackBar: MatSnackBar
   ) { }
 
+}
+
+@Component({
+  selector: 'setup-dialog',
+  standalone: true,
+  templateUrl: './setup-dialog.html',
+  imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
+    MatButtonModule],
+})
+export class SetupDialog {
+  constructor(
+    public dialogRef: MatDialogRef<SetupDialog>,
+    private snackBar: MatSnackBar
+  ) { }
+
+  async onClickNewPasskey(event: any) {
+
+    /* using the same user name and id makes it too easy to overwrite the
+       existing key. What happens if we select a new name? */
+    const userId = undefined;//localStorage.getItem('userid');
+    const userName = undefined;//localStorage.getItem('username');
+
+    let optUrl;
+    if (userId && userName) {
+      optUrl = new URL(`https://qcrypt.schicks.net/regoptions?username=${userName}&userid=${userId}`);
+    } else {
+      optUrl = new URL(`https://qcrypt.schicks.net/regoptions?username=anothername@work.com`);
+    }
+
+    const optionsResp = await fetch(optUrl, {
+      method: 'GET',
+      mode: 'cors',
+      cache: 'no-store'
+    });
+
+    console.log('optionsResp, ', optionsResp);
+    if (!optionsResp.ok) {
+      throw new Error('registration failed: ' + await optionsResp.text());
+    }
+
+    const optionsJson = await optionsResp.json();
+    console.log(optionsJson);
+
+    let startReg;
+    try {
+      startReg = await startRegistration(optionsJson);
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+
+    // Need to return challenge because in some cases it cannot be bound
+    // to a user when created. The server validates it created the challenge
+    // and its age (seems odd the userHandle isn't included automatically)
+    const expanded = {
+      ...startReg,
+      userId: optionsJson.user.id,
+      challenge: optionsJson.challenge,
+    }
+
+    console.log(JSON.stringify(expanded));
+
+    const verifyUrl = new URL('https://qcrypt.schicks.net/verifyreg');
+    const verificationResp = await fetch(verifyUrl, {
+      method: 'POST',
+      mode: 'cors',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(expanded),
+    });
+
+    let verificationJson;
+    console.log('verifyResp, ', verificationResp);
+    if (verificationResp.ok) {
+      verificationJson = await verificationResp.json();
+      console.log('verifyJson, ', verificationJson);
+    } else {
+      throw new Error('registration failed: ' + await verificationResp.text());
+    }
+
+    if (verificationJson && verificationJson.verified) {
+      storeLoginInfo(optionsJson.user.id);
+    } else {
+      //some error stuff
+    }
+  }
+
+
+  async onClickLinkPasskey(event: any) {
+    try {
+      siteLogin2(undefined);
+    } catch (err) {
+      // handle error somehow
+    }
+  }
+
+  async findPasskeyId(): Promise<string> {
+
+    const publicKey = {
+      // not used, but make it look valid incase authenticator is picky
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      userVerification: "preferred" as UserVerificationRequirement,
+    }
+    try {
+      const credential = await navigator.credentials.get({ publicKey });
+      if (credential && credential instanceof PublicKeyCredential) {
+        console.log('credentialId: ' + credential.id);
+        return credential.id;
+      }
+
+      throw new Error("unknown user");
+    } catch (err) {
+      console.error(err);
+      throw new Error("unknown user");
+    }
+  }
 }
 
