@@ -80,6 +80,11 @@ type PwdDialogData = {
   loops: number;
 };
 
+type SigninDialogData = {
+  userName: string;
+};
+
+
 /*type Muteable<T> = { -readonly [P in keyof T]: T[P] };
 type MuteableLps = { -readonly [P in keyof T]: T[P] };
 type mlp = Muteable<EncContext["lps"]>;
@@ -159,93 +164,24 @@ function setIfBoolean(
   }
 }
 
-function storeLoginInfo(userId: any) {
-  //  localStorage.setItem('passkey', pkCred.id);
-  localStorage.setItem('userid', userId.toString());
+function storeLoginInfo(userId: string, userName: string) {
+  localStorage.setItem('userid', userId);
+  localStorage.setItem('username', userName);
 }
 
-async function siteLogin1(userId?: number, userName?: string, credentialId?: string): Promise<Uint8Array> {
-
-  if (credentialId && (userId || userName)) {
-    throw new Error('login excepts credentialId or userId + userName, not both');
-  }
-  if (!credentialId && (!userId || !userName)) {
-    throw new Error('login needs credentialId or userId + userName');
-  }
-
-  let optUrl;
-  if (credentialId) {
-    optUrl = new URL(`https://qcrypt.schicks.net/authoptions?credid=${credentialId}`);
-  } else {
-    optUrl = new URL(`https://qcrypt.schicks.net/authoptions?username=${userName}&userid=${userId}`);
-  }
-
-  const optionsResp = await fetch(optUrl, {
-    method: 'GET',
-    mode: 'cors',
-    cache: 'no-store'
-  });
-
-  console.log('optionsResp, ', optionsResp);
-  if (!optionsResp.ok) {
-    throw new Error('authentication failed: ' + await optionsResp.text());
-  }
-
-  const optionsJson = await optionsResp.json();
-  console.log('optionsJson, ', optionsJson);
-
-  let pkCred;
-  try {
-    pkCred = await startAuthentication(optionsJson);
-  } catch (err) {
-    console.error(err);
-    throw err;
-  }
-
-  const expanded = {
-    ...pkCred,
-    userId: optionsJson.userId,
-    userName: optionsJson.userName
-  }
-
-  console.log(JSON.stringify(expanded));
-
-  const verifyUrl = new URL('https://qcrypt.schicks.net/verifyauth');
-  const verificationResp = await fetch(verifyUrl, {
-    method: 'POST',
-    mode: 'cors',
-    cache: 'no-store',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(expanded),
-  });
-
-  let verificationJson;
-  console.log('verifyResp, ', verificationResp);
-  if (verificationResp.ok) {
-    verificationJson = await verificationResp.json();
-    console.log('verifyJson, ', verificationJson);
-  } else {
-    throw new Error('authentication failed: ' + await verificationResp.text());
-  }
-
-  if (verificationJson && verificationJson.verified) {
-    storeLoginInfo(optionsJson.userId);
-    return Promise.resolve(cs.base64ToBytes(verificationJson.siteKey));
-  } else {
-    throw new Error('authentication failed');
-  }
+function removeLoginInfo() {
+  localStorage.removeItem('userid');
+  localStorage.removeItem('username');
 }
 
-async function siteLogin2(userId?: number): Promise<Uint8Array> {
+async function siteLogin(userId?: string): Promise<Uint8Array> {
 
   let optUrl;
 
   if (!userId) {
-    // Trying to link to an existing passkey but have lost track of user id
-    // start the process without userId doesn't limit authenticator creds to the
-    // user can look for an existing credential
+    // Trying to link to an existing passkey but have lost track of user id.
+    // Start the process without userId just doesn't limit authenticator creds
+    // so the user can look for an existing credential
     optUrl = new URL('https://qcrypt.schicks.net/authoptions');
   } else {
     optUrl = new URL(`https://qcrypt.schicks.net/authoptions?userid=${userId}`);
@@ -295,6 +231,7 @@ async function siteLogin2(userId?: number): Promise<Uint8Array> {
   });
 
   let verificationJson;
+
   console.log('verifyResp, ', verificationResp);
   if (verificationResp.ok) {
     verificationJson = await verificationResp.json();
@@ -304,7 +241,7 @@ async function siteLogin2(userId?: number): Promise<Uint8Array> {
   }
 
   if (verificationJson && verificationJson.verified) {
-    storeLoginInfo(startAuth.response.userHandle);
+    storeLoginInfo(verificationJson.userId, verificationJson.userName);
     return Promise.resolve(cs.base64ToBytes(verificationJson.siteKey));
   } else {
     throw new Error('authentication failed');
@@ -463,26 +400,19 @@ export class QCryptComponent implements OnInit, AfterViewInit {
     // ugly hack to make angular not clip the label for dropdown select elements
     this.formatLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.75)";
     this.minStrLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.75)";
-    
-            const userId = localStorage.getItem('userid');
-            const userName = localStorage.getItem('username');
-            if (userId && userName) {
-              siteLogin2(Number(userId)).then((siteKey) => {
-                this.toastMessage('yay! ');
-                this.siteKey = siteKey;
-              }).catch((err) => {
-                // Ignore it and start registration from scratch
-                console.error(err);
-              });
-            }
-    /*
-    if (!this.siteKey) {
-      var dialogRef = this.dialog.open(SetupDialog);
-      dialogRef.afterClosed().subscribe((result) => {
-        console.log(result);
+
+    const userName = localStorage.getItem('username');
+
+    if (userName) {
+      var dialogRef = this.dialog.open(SigninDialog, {
+        data: { userName: userName }
       });
+      dialogRef.afterClosed().subscribe((result) => {
+        if(result) {
+          this.siteKey = result;
+        }
+       });
     }
-*/
   }
 
   ngOnInit(): void {
@@ -734,9 +664,11 @@ export class QCryptComponent implements OnInit, AfterViewInit {
 
     if (isPlatformBrowser(this.platformId)) {
       const userid = localStorage.getItem('userid');
+      const userName = localStorage.getItem('username');
       localStorage.clear();
-      if (userid) {
+      if (userid && userName) {
         localStorage.setItem('userid', userid);
+        localStorage.setItem('username', userName);
       }
     }
     this.clearCaches();
@@ -1362,6 +1294,7 @@ export class PasswordDialog {
   templateUrl: './cipher-info-dialog.html',
   imports: [MatDialogModule, MatIconModule, CommonModule, MatButtonModule],
 })
+
 export class CipherInfoDialog {
   public error;
   public ic!: number;
@@ -1403,30 +1336,37 @@ export class HelpDialog {
 }
 
 @Component({
-  selector: 'setup-dialog',
+  selector: 'signin-dialog',
   standalone: true,
-  templateUrl: './setup-dialog.html',
-  imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
-    MatButtonModule],
+  templateUrl: './signin-dialog.html',
+  imports: [MatDialogModule, CommonModule, MatProgressSpinnerModule,
+    MatIconModule, MatTooltipModule, MatButtonModule],
 })
-export class SetupDialog {
+export class SigninDialog {
+
+  public userName: string;
+  public error: string = '';
+  public showProgress: boolean = false;
+
   constructor(
-    public dialogRef: MatDialogRef<SetupDialog>,
-    private snackBar: MatSnackBar
-  ) { }
+    public dialogRef: MatDialogRef<SigninDialog>,
+    private snackBar: MatSnackBar,
+    @Inject(MAT_DIALOG_DATA) public data: SigninDialog
+  ) {
+    dialogRef.disableClose = true;
+    this.userName = data.userName;
+  }
 
   async onClickNewPasskey(event: any) {
 
-    /* using the same user name and id makes it too easy to overwrite the
-       existing key. What happens if we select a new name? */
     const userId = undefined;//localStorage.getItem('userid');
-    const userName = undefined;//localStorage.getItem('username');
+    const userName = "brad@schicks.net";//localStorage.getItem('username');
 
     let optUrl;
-    if (userId && userName) {
-      optUrl = new URL(`https://qcrypt.schicks.net/regoptions?username=${userName}&userid=${userId}`);
+    if (userId) {
+      optUrl = new URL(`https://qcrypt.schicks.net/regoptions?userid=${userId}`);
     } else {
-      optUrl = new URL(`https://qcrypt.schicks.net/regoptions?username=anothername@work.com`);
+      optUrl = new URL(`https://qcrypt.schicks.net/regoptions?username=${userName}`);
     }
 
     const optionsResp = await fetch(optUrl, {
@@ -1441,7 +1381,7 @@ export class SetupDialog {
     }
 
     const optionsJson = await optionsResp.json();
-    console.log(optionsJson);
+    console.log('optionsJson ', optionsJson);
 
     let startReg;
     try {
@@ -1453,14 +1393,14 @@ export class SetupDialog {
 
     // Need to return challenge because in some cases it cannot be bound
     // to a user when created. The server validates it created the challenge
-    // and its age (seems odd the userHandle isn't included automatically)
+    // and its age (seems odd the userHandle isn't returned from .create)
     const expanded = {
       ...startReg,
       userId: optionsJson.user.id,
       challenge: optionsJson.challenge,
     }
 
-    console.log(JSON.stringify(expanded));
+    console.log('expanded ', JSON.stringify(expanded));
 
     const verifyUrl = new URL('https://qcrypt.schicks.net/verifyreg');
     const verificationResp = await fetch(verifyUrl, {
@@ -1483,19 +1423,32 @@ export class SetupDialog {
     }
 
     if (verificationJson && verificationJson.verified) {
-      storeLoginInfo(optionsJson.user.id);
+      storeLoginInfo(optionsJson.user.id, optionsJson.user.name);
     } else {
       //some error stuff
     }
   }
 
-
-  async onClickLinkPasskey(event: any) {
+  async onClickSignin(event: any) {
     try {
-      siteLogin2(undefined);
+      this.error = '';
+      this.showProgress = true;
+      const userId = localStorage.getItem('userid');
+      const siteKey = await siteLogin(userId!);
+      this.dialogRef.close(siteKey);
     } catch (err) {
-      // handle error somehow
+      console.error(err);
+      this.error = 'Sign failed try again';
+    } finally {
+      this.showProgress = false;
     }
+  }
+
+  onClickForget(event: any) {
+    this.error = '';
+    removeLoginInfo();
+    this.dialogRef.close(null);
+    // navigate to welcom pages
   }
 
   async findPasskeyId(): Promise<string> {
