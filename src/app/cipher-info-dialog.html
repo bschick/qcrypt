@@ -67,11 +67,11 @@ SOFTWARE. -->
     <div *ngIf="!error" class="dialog-body">
       <ul class="tech-list width160">
         <li *ngIf="hint"><b>Password Hint:</b></li>
-        <li><b>Hash Iterations:</b></li>
+        <li><b>PBKDF2 Iterations:</b></li>
         <li><b>Derived Keys:</b></li>
         <li><b>Cipher and Mode:</b></li>
-        <li><b>Salt (base64):</b></li>
-        <li><b>IV/Nonce (base64):</b></li>
+        <li><b>Salt (b64Url):</b></li>
+        <li><b>IV/Nonce (b64Url):</b></li>
       </ul>
       <ul class="tech-list width230">
         <li *ngIf="hint">{{hint}}</li>
