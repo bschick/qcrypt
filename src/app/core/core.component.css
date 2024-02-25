@@ -20,19 +20,17 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-.router-content {
+.core {
+  padding: 15px;
+}
+
+.header {
+  line-height: 1;
+  font-size: 26px;
+  margin: 0 0 20px 0;
   display: flex;
-  flex-flow: column;
-  height: 100%;
-}
-
-.toolbar-text {
-  color: white;
-  font-size: 15px;
-}
-
-.toolbar-spacer {
-  flex: 1 1 auto;
+  height: 30.5px;
+  min-width: 590px;
 }
 
 .mtop3 {
@@ -74,12 +72,13 @@ SOFTWARE. */
   top: 5px;
 }
 
-.header-newtab {
-  margin-left: auto;
+.newtab {
+  margin-right: auto;
+  margin-left:3px;
   font-size: 16px;
 }
 
-.header-newtab-icon {
+.newtab-icon {
   font-size: 18px;
   position: relative;
   top: 6px;
@@ -138,13 +137,13 @@ SOFTWARE. */
 }
 
 .algorithms {
-/*  width: 476px;*/
+  /*  width: 476px;*/
   position: relative;
   top: -5px;
 }
 
 .algoption {
-  width:189px;
+  width: 189px;
 }
 
 .clear-button {
@@ -223,11 +222,14 @@ SOFTWARE. */
 }
 
 .github a {
-  text-decoration:none;
+  text-decoration: none;
 }
 
 .github button {
-  background-color: #8A8FB2; height: 36px; padding-left: 16px; padding-right: 9px;
+  background-color: #8A8FB2;
+  height: 36px;
+  padding-left: 16px;
+  padding-right: 9px;
 }
 
 .github-label {

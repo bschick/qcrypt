@@ -21,22 +21,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { ApplicationConfig, importProvidersFrom } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { routes } from './qcrypt.routes';
-//import { provideClientHydration } from '@angular/platform-browser';
 import { provideZxvbnServiceForPSM } from 'angular-password-strength-meter/zxcvbn';
 import { HttpClientModule } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
+import { routes } from './qcrypt.routes';
 
-//CSP_NONCE
-//const nonce = 'ew26COJKMG8qrA/bjTcl0w==';
-/*,{
-    provide: CSP_NONCE,
-    useValue: nonce
-  }*/
 export const appConfig: ApplicationConfig = {
   providers: [
     provideRouter(routes),
-//    provideClientHydration(),
     provideZxvbnServiceForPSM(),
     importProvidersFrom(HttpClientModule),
     provideAnimations(),

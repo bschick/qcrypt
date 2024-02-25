@@ -19,219 +19,47 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
-<p class="header">
-  <mat-icon inline="true" class="mtop3">enhanced_encryption</mat-icon>
-  <span class="mtop3">Quick Crypt</span>
-  <a (click)="showHelp()" class="link">
-    <span class="header-msg">
-      ...your sensitive data remains local
-    </span>
-    <mat-icon class="header-help">help_outline</mat-icon></a>
-  <span class="header-newtab">
-    <a (click)="onNewPage()" class="link">
-      open new tab
-      <mat-icon class="header-newtab-icon">open_in_new</mat-icon></a></span>
-</p>
-<div class="input-area flx-container" (mouseup)="onDraggerMouseUp();">
-  <span class="flx-buttons">
-    <button mat-raised-button (click)="onEncryptClicked()" class="top-button" color="primary" matTooltip="Encrypt Text"
-      accesskey="E" [disabled]="showProgress ? 'true' : 'false'">
-      <u>E</u>ncrypt
+
+<mat-toolbar color="primary">
+  <a [routerLink]="'/core'">
+    <button [style.background-color]="focusColor()" mat-button class="toolbar-text">
+      <mat-icon>enhanced_encryption</mat-icon>
+      Quick Crypt
     </button>
-    <button mat-raised-button class="top-button mleft15" color="basic" [matMenuTriggerFor]="clearMenu"
-      matTooltip="Load file containing clear text" [disabled]="showProgress ? 'true' : 'false'">
-      Clear File
-      <mat-icon class="mright2">expand_more</mat-icon>
-    </button>
-    <mat-menu #clearMenu="matMenu" xPosition="before">
-      <button mat-menu-item (click)="onClearFileUpload($event)">
-        <mat-icon>file_upload</mat-icon>Load
+  </a>
+  <button [style.background-color]="focusColor('/help')" mat-button class="toolbar-text mleft15"
+    #menuTrigger="matMenuTrigger" [matMenuTriggerFor]="helpMenu">
+    <!--        (mouseover)="menuTrigger.openMenu()" -->
+    Help
+    <mat-icon iconPositionEnd>expand_more</mat-icon>
+  </button>
+  <mat-menu #helpMenu="matMenu" xPosition="after">
+    <ng-template matMenuContent>
+      <button mat-menu-item [routerLink]="'/help/overview'">
+        Overview
       </button>
-      <button mat-menu-item (click)="onClearFileDownload($event)">
-        <mat-icon>file_download</mat-icon>Save
+      <button mat-menu-item [routerLink]="'/help/faqs'">
+        FAQs
       </button>
-    </mat-menu>
-  </span>
-  <span class="flx-buttons">
-    <button mat-raised-button (click)="clearCaches()" class="top-button mleft15 clear-button" color="basic"
-      matTooltip="Clear decrypted text and cached password" [disabled]="showProgress ? 'true' : 'false'"
-      [style.visibility]="stuffCached ? 'visible' : 'hidden'">
-      {{'Clear&nbsp;Data ('+ secondsRemaining() +')'}}
-    </button>
-  </span>
-  <span class="flx-buttons">
-    <button mat-raised-button class="top-button mleft15" color="basic" [matMenuTriggerFor]="cipherMenu"
-      matTooltip="Load file containing cipher text" [disabled]="showProgress ? 'true' : 'false'">
-      Cipher File
-      <mat-icon class="mright2">expand_more</mat-icon>
-    </button>
-    <mat-menu #cipherMenu="matMenu" xPosition="before">
-      <button mat-menu-item (click)="onCipherFileUpload($event)">
-        <mat-icon>file_upload</mat-icon>Load
+      <button mat-menu-item [routerLink]="'/help/protocol'">
+        Protocol
       </button>
-      <button mat-menu-item (click)="onCipherFileDownload($event)">
-        <mat-icon>file_download</mat-icon>Save
-      </button>
-    </mat-menu>
-    <button mat-raised-button (click)="onDecryptClicked()" class="top-button mleft15" color="primary"
-      matTooltip="Decrypt Text" accesskey="D" [disabled]="showProgress ? 'true' : 'false'">
-      <u>D</u>ecrypt
-    </button>
-  </span>
-</div>
-<div (mouseup)="onDraggerMouseUp();" (mousemove)="onDraggerMouseMove($event);" #inputArea
-  class="input-area flx-container">
-  <mat-progress-spinner class="spinner" color="primary" mode="indeterminate"
-    [style.visibility]="showProgress ? 'visible' : 'hidden'">
-  </mat-progress-spinner>
-  <div #clearField class="flx-item">
-    <mat-form-field [style.width.%]="100" [style.height.%]="100">
-      <mat-label>{{clearLabel}}</mat-label>
-      <textarea matInput id="clearInput" autofocus cdkTextareaAutosize placeholder="" class="txt-area"
-        [(ngModel)]="clearText" [ngModelOptions]="{standalone: true}" [style.color]="errorClear ? 'red' : 'black'"
-        [disabled]="showProgress ? 'true' : 'false'"></textarea>
-      <button class="txt-area-button2" *ngIf="clearText && !showProgress" mat-icon-button aria-label="Clear"
-        matTooltip="Clear text" (click)="onClearClear()">
-        <mat-icon>close</mat-icon>
-      </button>
-      <button class="txt-area-button3" *ngIf="clearText && !showProgress" mat-icon-button aria-label="Copy"
-        matTooltip="Copy clear text to clipboard" (click)="toastMessage('Clear Text Copied to Clipboard')"
-        [cdkCopyToClipboard]="clearText">
-        <mat-icon>content_copy</mat-icon>
-      </button>
-    </mat-form-field>
-  </div>
-  <div class="dragger" (mousedown)="onDraggerMouseDown();">
-    <mat-icon class="dragger-icon">drag_indicator
-    </mat-icon>
-  </div>
-  <div #cipherField class="flx-item">
-    <mat-form-field [style.width.%]="100" [style.height.%]="100">
-      <mat-label>{{cipherLabel}}</mat-label>
-      <textarea matInput id="cipherInput" placeholder="" class="txt-area" cdkTextareaAutosize [(ngModel)]="cipherArmor"
-        [ngModelOptions]="{standalone: true}" [style.color]="errorCipher ? 'red' : 'black'"
-        [disabled]="showProgress ? 'true' : 'false'">
-      </textarea>
-      <button class="txt-area-button1" *ngIf="cipherArmor && !showProgress" mat-icon-button aria-label="Clear"
-        matTooltip="Clear cipher armor" (click)="onClearCipher()">
-        <mat-icon>close</mat-icon>
-      </button>
-      <button class="txt-area-button2" *ngIf="cipherArmor && !showProgress" mat-icon-button aria-label="Copy"
-        matTooltip="Copy cipher armor to clipboard" (click)="toastMessage('Cipher Armor Copied to Clipboard')"
-        [cdkCopyToClipboard]="cipherArmor">
-        <mat-icon>content_copy</mat-icon>
-      </button>
-      <button class="txt-area-button3" *ngIf="cipherArmor && !showProgress" mat-icon-button aria-label="Info"
-        matTooltip="Show decryption parameters" (click)="onCipherTextInfo()">
-        <mat-icon>info_outline</mat-icon>
-      </button>
-    </mat-form-field>
-  </div>
-</div>
-<mat-accordion multi class="input-area" (mouseup)="onDraggerMouseUp();">
-  <mat-expansion-panel matRipple [matRippleDisabled]="true" [expanded]="expandOptions" class="input-area">
-    <mat-expansion-panel-header>
-      <mat-panel-title class="panel-title">Advanced Encryption Options</mat-panel-title>
-    </mat-expansion-panel-header>
+    </ng-template>
+  </mat-menu>
 
-    <p class="mtop0 mbot25"><span class="options-header">
-        &nbsp;Password<br /></span>
-      <mat-form-field class="option-input mtop10">
-        <mat-label>Hash Iterations</mat-label>
-        <input type="number" [min]="icountMin" [max]="icountMax" step="200000" matInput [(ngModel)]="icount"
-          (change)="clearCaches()"
-          [matTooltip]="'Larger values make password guessing slower. Range ['+icountMin/1000+'K,'+icountMax/1000000+'M]'" />
-      </mat-form-field>
-      <mat-form-field class="option-input mleft15">
-        <mat-label>Clear Timer (secs)</mat-label>
-        <input type="number" min="0" step="10" matInput [(ngModel)]="cacheTime" (change)="onClearTimerChange()"
-          matTooltip="Number of seconds until your clear text and cached password are automatically cleared" />
-      </mat-form-field>
-      <mat-form-field class="option-input mleft15">
-        <mat-label #minStrLabel>Minimum Strength</mat-label>
-        <mat-select [(value)]="minPwdStrength" (selectionChange)="clearCaches()"
-          matTooltip="Minimum required password strength used for encryption">
-          <mat-option value="0">Terrible</mat-option>
-          <mat-option value="1">Weak</mat-option>
-          <mat-option value="2">Decent</mat-option>
-          <mat-option value="3">Good</mat-option>
-          <mat-option value="4">Best</mat-option>
-        </mat-select>
-      </mat-form-field>
-      <mat-slide-toggle class="mleft15" [(ngModel)]="hidePwd"
-        matTooltip="Uncheck to default to showing your password while typing">Hide Password
-      </mat-slide-toggle>
-      <mat-slide-toggle class="mleft15" [(ngModel)]="checkPwned" (change)="clearCaches()"
-        matTooltip="Check if your password matches a known stolen password">Check If Stolen
-      </mat-slide-toggle>
-      <br /><span class="options-header">
-        &nbsp;Cipher and Mode</span>
-      <a href="https://soatok.blog/2020/07/12/comparison-of-symmetric-encryption-methods/#contents-list"
-        target="_blank">
-        <mat-icon class="open-new-icon1">open_in_new</mat-icon>
-      </a>
-
-      <br />
-      <mat-button-toggle-group class="mtop10 algorithms" [(ngModel)]="algorithm" aria-label="Algorithm"
-        matTooltip="Block cipher and mode of operation" (change)="onAlgorithmChange($event.value)">
-        <mat-button-toggle class="algoption" value="AES-GCM">{{algName('AES-GCM')}}</mat-button-toggle>
-        <mat-button-toggle class="algoption" value="X20-PLY">{{algName('X20-PLY')}}</mat-button-toggle>
-<!--        <mat-button-toggle value="AES-CBC">{{algName('AES-CBC')}}</mat-button-toggle>
-        <mat-button-toggle value="AES-CTR">{{algName('AES-CTR')}}</mat-button-toggle> -->
-      </mat-button-toggle-group>
-
-    </p><span class="options-header">
-      &nbsp;Other Options<br /></span>
-    <p class="mtop10">
-      <mat-form-field class="option-input">
-        <mat-label>Loop Encrypt</mat-label>
-        <input type="number" min="1" max="10" step="1" matInput [(ngModel)]="loops"
-          matTooltip="Number of times to run encryption in a loop. Enter a different password each loop" />
-      </mat-form-field>
-      <mat-form-field class="option-input mleft15">
-        <mat-label #formatLabel>Cipher Armor Format</mat-label>
-        <mat-select [(value)]="ctFormat"
-          (selectionChange)="onFormatChange($event.value)"
-          matTooltip="Format of resulting cipher armor. Select 'link' to get a url usable in browsers">
-          <mat-option value="link">Link</mat-option>
-          <mat-option value="compact">Compact</mat-option>
-          <mat-option value="indent">Indent</mat-option>
-        </mat-select>
-      </mat-form-field>
-
-
-      <mat-slide-toggle class="mleft15" [(ngModel)]="trueRandom" (change)="onTrueRandomChanged($event.checked)"
-        matTooltip="Random data for encryption securely downloaded from random.org">True Random Data
-      </mat-slide-toggle>
-      <a href="https://random.org" target="_blank">
-        <mat-icon class="open-new-icon2">open_in_new</mat-icon>
-      </a>
-
-      <mat-slide-toggle class="mleft15" [(ngModel)]="pseudoRandom" [disabled]="trueRandom ? 'false' : 'true'"
-        (change)="clearCaches()"
-        matTooltip="Random data for encryption generated by browser native pseudorandom function">Pseudo Random Fallback
-      </mat-slide-toggle>
-      <a href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues" target="_blank">
-        <mat-icon class="open-new-icon2">open_in_new</mat-icon>
-      </a>
+  <span class="toolbar-spacer"></span>
+  <button #pkButton (click)="sideNav.toggle()" mat-icon-button aria-label="Passkey information">
+    <mat-icon>menu</mat-icon>
+  </button>
+</mat-toolbar>
+<mat-sidenav-container class="router-content" hasBackdrop="true">
+  <mat-sidenav #sideNav mode="over" position="end">
+    <p><button mat-button (click)="sideNav.toggle()">Toggle</button></p>
+    <p>
+      <label>Test input for drawer<input /></label>
     </p>
-    <div class="mtop20">
-      <button mat-raised-button (click)="onResetOptions()" color="basic"
-        matTooltip="Reset all options to intial values">
-        Reset All Options
-      </button>
-    </div>
-  </mat-expansion-panel>
-</mat-accordion>
-<p>
-  <span class="github">
-    <a href="https://github.com/bschick/qcrypt?tab=readme-ov-file" target="_blank">
-      <button mat-fab extended color="primary"
-        matTooltip="Quick Crypt is on GitHub: Get the source, report issues, or make improvements">
-        <mat-icon svgIcon="github"></mat-icon><span class="github-label">GitHub</span>
-      </button>
-    </a>
-  </span>
-</p>
-<input type="file" (click)="onClickFileUpload($event)" class="file-input" accept="text/*,application/json"
-  #fileUpload />
+  </mat-sidenav>
+  <mat-sidenav-content>
+    <router-outlet />
+  </mat-sidenav-content>
+</mat-sidenav-container>
