@@ -16,6 +16,7 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angu
 import { Router } from '@angular/router';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { ClipboardModule } from '@angular/cdk/clipboard';
 
 
 export interface ConfirmData {
@@ -29,12 +30,13 @@ export interface ConfirmData {
   styleUrl: './credentials.component.scss',
   imports: [MatDividerModule, MatTableModule,
     MatIconModule, MatButtonModule, MatInputModule, EditableComponent,
-    MatTooltipModule,
+    MatTooltipModule, ClipboardModule,
   ],
 })
 export class CredentialsComponent implements OnInit {
 
   public error = '';
+  public recoveryLink: string;
   public passKeys: AuthenticatorInfo[] = [];
   public showProgress = false;
   public displayedColumns: string[] = ['image', 'description', 'delete'];
@@ -44,7 +46,14 @@ export class CredentialsComponent implements OnInit {
     public authSvc: AuthenticatorService,
     public dialog: MatDialog,
     private router: Router,
-    private snackBar: MatSnackBar) {
+    private snackBar: MatSnackBar
+  ){
+    this.recoveryLink = new URL(
+      window.location.origin + '/recovery' +
+      '?userid=' + this.authSvc.userId +
+      '&sitekey=' + this.authSvc.siteKey
+    ).toString();
+
     effect(() => {
       this.passKeys = this.authSvc.passKeys();
     });

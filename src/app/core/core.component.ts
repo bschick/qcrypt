@@ -615,7 +615,7 @@ export class CoreComponent implements OnInit, AfterViewInit {
         lp: 0,
         alg: this.algorithm,
         ic: this.icount,
-        siteKey: this.authSvc.siteKey!,
+        siteKey: cs.base64ToBytes(this.authSvc.siteKey!),
         trueRand: this.trueRandom,
         fallbackRand: this.pseudoRandom
       };
@@ -727,7 +727,7 @@ export class CoreComponent implements OnInit, AfterViewInit {
         const [pwd, _] = await this.getPassword(-1, hint, dcontext);
         return pwd;
       },
-      this.authSvc.siteKey!,
+      cs.base64ToBytes(this.authSvc.siteKey!),
       dcontext.ct,
       this.cipherReadyNotice.bind(this)
     );
@@ -840,7 +840,7 @@ export class CoreComponent implements OnInit, AfterViewInit {
     return {
       lpEnd: jsonParts.lps,
       lp: 0,
-      siteKey: this.authSvc.siteKey!,
+      siteKey: cs.base64ToBytes(this.authSvc.siteKey!),
       ct: ct,
     };
   }
@@ -991,7 +991,10 @@ export class CoreComponent implements OnInit, AfterViewInit {
       }
   
       const dcontext = this.getDecContextFrom(this.cipherArmor);
-      const cipherData = await this.cipherSvc.getCipherData(this.authSvc.siteKey!, dcontext.ct);
+      const cipherData = await this.cipherSvc.getCipherData(
+        cs.base64ToBytes(this.authSvc.siteKey!),
+        dcontext.ct
+      );
       this.dialog.open(CipherInfoDialog, { data: cipherData });
     } catch (err) {
       console.error(err);

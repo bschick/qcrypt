@@ -42,7 +42,7 @@ export type DeleteInfo = {
 })
 export class AuthenticatorService {
 
-   private _siteKey: Uint8Array | null = new Uint8Array([0x6d, 0x36, 0xa1, 0x75, 0xde, 0x42, 0x35, 0x52, 0xcb, 0x5a, 0x11, 0x12, 0x7c, 0xe8, 0x14, 0xb2, 0x80, 0x27, 0x79, 0x66, 0x0c, 0x00, 0x50, 0x68, 0x5f, 0xa5, 0xcf, 0xf8, 0x56, 0x14, 0xa7, 0xa8]);//null;
+   private _siteKey: string | null = 'bTahdd5CNVLLWhESfOgUsoAneWYMAFBoX6XP-FYUp6g'; //new Uint8Array([0x6d, 0x36, 0xa1, 0x75, 0xde, 0x42, 0x35, 0x52, 0xcb, 0x5a, 0x11, 0x12, 0x7c, 0xe8, 0x14, 0xb2, 0x80, 0x27, 0x79, 0x66, 0x0c, 0x00, 0x50, 0x68, 0x5f, 0xa5, 0xcf, 0xf8, 0x56, 0x14, 0xa7, 0xa8]);//null;
    private _userName: string | null = 'waldo here'; //null;
    private _userId: string | null = '5DzRiAARcI6vXCmfpYOpbA'; //null;
 
@@ -50,7 +50,7 @@ export class AuthenticatorService {
 
    public passKeys = signal<AuthenticatorInfo[]>([]);
 
-   get siteKey(): Uint8Array | null {
+   get siteKey(): string | null {
       return this._siteKey;
    }
 
@@ -107,7 +107,7 @@ export class AuthenticatorService {
          throw new Error('invalid credentialId');
       }
 
-      const putDescUrl = new URL(`description?credid=${credentialId}&userid=${this._userId}&sitekey=${bytesToBase64(this._siteKey!)}`, baseUrl);
+      const putDescUrl = new URL(`description?credid=${credentialId}&userid=${this._userId}&sitekey=${this._siteKey!}`, baseUrl);
       const putDescResp = await fetch(putDescUrl, {
          method: 'PUT',
          mode: 'cors',
@@ -115,13 +115,13 @@ export class AuthenticatorService {
          body: description,
       });
 
-      console.log('putDescResp, ', putDescResp);
+//      console.log('putDescResp, ', putDescResp);
       if (!putDescResp.ok) {
          throw new Error('setting description failed: ' + await putDescResp.text());
       }
 
       const putDescInfo = await putDescResp.json();
-      console.log('putDescInfo, ', putDescInfo);
+//      console.log('putDescInfo, ', putDescInfo);
       return putDescInfo.description;
    }
 
@@ -133,7 +133,7 @@ export class AuthenticatorService {
          throw new Error('user name must more than 5 and less than 32 character');
       }
 
-      const putUserNameUrl = new URL(`username?userid=${this._userId}&sitekey=${bytesToBase64(this._siteKey!)}`, baseUrl);
+      const putUserNameUrl = new URL(`username?userid=${this._userId}&sitekey=${this._siteKey!}`, baseUrl);
       const putUserNameResp = await fetch(putUserNameUrl, {
          method: 'PUT',
          mode: 'cors',
@@ -141,13 +141,13 @@ export class AuthenticatorService {
          body: userName,
       });
 
-      console.log('putUserNameResp, ', putUserNameResp);
+//      console.log('putUserNameResp, ', putUserNameResp);
       if (!putUserNameResp.ok) {
          throw new Error('setting user name failed: ' + await putUserNameResp.text());
       }
 
       const putUserNameInfo = await putUserNameResp.json();
-      console.log('putUserNameInfo, ', putUserNameInfo);
+//      console.log('putUserNameInfo, ', putUserNameInfo);
       this.storeUserInfo(this._userId!, putUserNameInfo.userName);
       return putUserNameInfo.userName;
    }
@@ -157,20 +157,20 @@ export class AuthenticatorService {
          throw new Error('invalid credentialId');
       }
 
-      const delPasskeyUrl = new URL(`authenticator?credid=${credentialId}&userid=${this._userId}&sitekey=${bytesToBase64(this._siteKey!)}`, baseUrl);
+      const delPasskeyUrl = new URL(`authenticator?credid=${credentialId}&userid=${this._userId}&sitekey=${this._siteKey!}`, baseUrl);
       const delPasskeyResp = await fetch(delPasskeyUrl, {
          method: 'DELETE',
          mode: 'cors',
          cache: 'no-store',
       });
 
-      console.log('delPasskeyResp ', delPasskeyResp);
+//      console.log('delPasskeyResp ', delPasskeyResp);
       if (!delPasskeyResp.ok) {
          throw new Error('setting description failed: ' + await delPasskeyResp.text());
       }
 
       const delPasskeyInfo = await delPasskeyResp.json() as DeleteInfo;
-      console.log('delPasskeyInfo ', delPasskeyInfo);
+//      console.log('delPasskeyInfo ', delPasskeyInfo);
 
       // User is gone... so forgeeet about it
       if(delPasskeyInfo.userId) {
@@ -182,13 +182,11 @@ export class AuthenticatorService {
 
    async refreshPasskeys(): Promise<AuthenticatorInfo[]> {
 
-      console.log("tr   acing", Error().stack);
-
       if (!this.isAuthenticated()) {
          throw new Error('must be authenticated to retrieve passkeys');
       }
 
-      const getAuthsUrl = new URL(`authenticators?userid=${this._userId}&sitekey=${bytesToBase64(this._siteKey!)}`, baseUrl);
+      const getAuthsUrl = new URL(`authenticators?userid=${this._userId}&sitekey=${this._siteKey!}`, baseUrl);
 
       const getAuthsResp = await fetch(getAuthsUrl, {
          method: 'GET',
@@ -234,13 +232,13 @@ export class AuthenticatorService {
          cache: 'no-store'
       });
 
-      console.log('optionsResp, ', optionsResp);
+//      console.log('optionsResp, ', optionsResp);
       if (!optionsResp.ok) {
          throw new Error('authentication failed: ' + await optionsResp.text());
       }
 
       const optionsJson = await optionsResp.json() as PublicKeyCredentialRequestOptionsJSON;
-      console.log('optionsJson, ', optionsJson);
+//      console.log('optionsJson, ', optionsJson);
 
       let startAuth;
       try {
@@ -258,7 +256,7 @@ export class AuthenticatorService {
          challenge: optionsJson.challenge,
       }
 
-      console.log('expanded ', JSON.stringify(expanded));
+//      console.log('expanded ', JSON.stringify(expanded));
 
       const verifyUrl = new URL('verifyauth', baseUrl);
       const verificationResp = await fetch(verifyUrl, {
@@ -271,19 +269,19 @@ export class AuthenticatorService {
          body: JSON.stringify(expanded),
       });
 
-      console.log('verificationResp, ', verificationResp);
+//      console.log('verificationResp, ', verificationResp);
       if (!verificationResp.ok) {
          throw new Error('authentication failed: ' + await verificationResp.text());
       }
 
       const authInfo = await verificationResp.json() as AuthenticationInfo;
-      console.log('authInfo, ', authInfo);
+//      console.log('authInfo, ', authInfo);
 
       if (!authInfo || !authInfo.verified) {
          throw new Error('authentication failed');
       }
 
-      this._siteKey = base64ToBytes(authInfo.siteKey);
+      this._siteKey = authInfo.siteKey;
       this.storeUserInfo(authInfo.userId, authInfo.userName);
       return authInfo;
    }
@@ -341,13 +339,13 @@ export class AuthenticatorService {
       optionsResp: Response
    ): Promise<RegistrationInfo> {
 
-      console.log('optionsResp, ', optionsResp);
+//      console.log('optionsResp, ', optionsResp);
       if (!optionsResp.ok) {
          throw new Error('registration failed: ' + await optionsResp.text());
       }
 
       const optionsJson = await optionsResp.json() as PublicKeyCredentialCreationOptionsJSON;
-      console.log('optionsJson ', optionsJson);
+//      console.log('optionsJson ', optionsJson);
 
       let startReg;
       try {
@@ -366,7 +364,7 @@ export class AuthenticatorService {
          challenge: optionsJson.challenge,
       }
 
-      console.log('expanded ', JSON.stringify(expanded));
+//      console.log('expanded ', JSON.stringify(expanded));
 
       const verifyUrl = new URL('verifyreg', baseUrl);
       const verificationResp = await fetch(verifyUrl, {
@@ -379,110 +377,21 @@ export class AuthenticatorService {
          body: JSON.stringify(expanded),
       });
 
-      console.log('verifyResp, ', verificationResp);
+//      console.log('verifyResp, ', verificationResp);
       if (!verificationResp.ok) {
          throw new Error('registration failed: ' + await verificationResp.text());
       }
 
       const registrationInfo = await verificationResp.json() as RegistrationInfo;
-      console.log('registrationInfo, ', registrationInfo);
+//      console.log('registrationInfo, ', registrationInfo);
 
       if (!registrationInfo || !registrationInfo.verified) {
          throw new Error('registration failed');
       }
 
-      this._siteKey = base64ToBytes(registrationInfo.siteKey);
+      this._siteKey = registrationInfo.siteKey;
       this.storeUserInfo(registrationInfo.userId, registrationInfo.userName);
       return registrationInfo;
    }
 
 }
-
-/* OLD
-
-  async createPKSignature(): Promise<Credential | null> {
-    console.log('enter createPKSignature')
-
-    const publicKey: PublicKeyCredentialCreationOptions = {
-      authenticatorSelection: {
-        residentKey: "required"
-      },
-      challenge: this.challenge,
-      rp: {
-        id: "t1.schicks.net",
-        name: "Quick Crypt"
-      }, // For testing, do not include Id directly (comes from browser)
-      user: {
-        id: this.uid,
-        name: "user@qcrypt.schicks.net",
-        displayName: "Quick Crypt User"
-      },
-      pubKeyCredParams: [
-        { type: "public-key", alg: 3 },
-        { type: "public-key", alg: 24 },
-        { type: "public-key", alg: 1 },
-        { type: "public-key", alg: 7 },
-        { type: "public-key", alg: -7 },
-        { type: "public-key", alg: -257 },]
-    };
-
-    return navigator.credentials.create({ publicKey }).then((publicKeyCredential) => {
-      if (publicKeyCredential && publicKeyCredential instanceof PublicKeyCredential) {
-        const response = publicKeyCredential.response;
-        if (response && response instanceof AuthenticatorAttestationResponse) {
-
-          // Access attestationObject ArrayBuffer
-          const attestationObj = response.attestationObject;
-          console.log(attestationObj);
-
-          // Access client JSON
-          const clientJSON = response.clientDataJSON;
-          console.log(clientJSON);
-
-          // Return authenticator data ArrayBuffer
-          const authenticatorData = response.getAuthenticatorData();
-          console.log(authenticatorData);
-
-          // Return public key ArrayBuffer
-          const pk = response.getPublicKey();
-          console.log(pk);
-
-          // Return public key algorithm identifier
-          const pkAlgo = response.getPublicKeyAlgorithm();
-          console.log(pkAlgo);
-
-          // Return permissible transports array
-          const transports = response.getTransports();
-          console.log(transports);
-
-          return null;
-        }
-      }
-      throw new Error("pk creation failed");
-    });
-
-  }
-
-  async findPasskeyId(): Promise<string> {
-
-    const publicKey = {
-      // not used, but make it look valid incase authenticator is picky
-      challenge: crypto.getRandomValues(new Uint8Array(32)),
-      userVerification: "preferred" as UserVerificationRequirement,
-    }
-    try {
-      const credential = await navigator.credentials.get({ publicKey });
-      if (credential && credential instanceof PublicKeyCredential) {
-        console.log('credentialId: ' + credential.id);
-        return credential.id;
-      }
-
-      throw new Error("unknown user");
-    } catch (err) {
-      console.error(err);
-      throw new Error("unknown user");
-    }
-  }
-
-
-  */

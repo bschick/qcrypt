@@ -391,7 +391,7 @@ export class CipherService {
     let encryptedHint = new Uint8Array(0);
     if (eparams.hint) {
       // Since hint encoding could expand beyond 255, truncate the result to ensure fit
-      // TODO: This can cause problems with truncated unicode codepoints or graphemes,
+      // TODO: This can cause � problems with truncated unicode codepoints or graphemes,
       // could truncate hint characters and re-encode (see https://tonsky.me/blog/unicode/)
       const hintEnc = new TextEncoder().encode(eparams.hint).slice(0, ENCRYPTED_HINT_MAX_LEN - MAX_AUTH_TAG_BYTES);
       encryptedHint = await this._doEncrypt(
