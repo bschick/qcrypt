@@ -19,32 +19,26 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
-<style nonce="ew26COJKMG8qrA/bjTcl0w==">
-</style>
-<span class="signin">
-  <h1 mat-dialog-title class="header">Quick Crypt Sign In</h1>
-  <mat-progress-spinner class="spinner" color="primary" mode="indeterminate"
-    [style.visibility]="showProgress ? 'visible' : 'hidden'">
-  </mat-progress-spinner>
+<span class="recovery">
+  <h1 mat-dialog-title class="header">Recovery Steps</h1>
 
   <div mat-dialog-content class="dialog-content">
-    <img src="/assets/passkey.svg" class="pklogo" />
-    <p class="welcome">
-      <b>Welcome Back.</b> Quick Crypt uses passkeys to authenticate you each time
-      you return to this site.
+    <ol class="steps" type="1">
+      <li>Locate the <b>recovery link</b> that was provided to you when you created your user 
+        identity and first passkey or that you copied from the credentials side panel</li>
+      <li>Paste that link into your browser's address bar and hit enter</li>
+    </ol>
+    <p>
+      If you have lost both your Quick Crypt passkeys and recovery link, there is no way to regain
+      access to your existing user identity or decrypt data that you previously encrypted. 
+      To encrypt and decrypt more data, you can create a new Quick Crypt user. If you locate
+      your recovery link leter, you can use it anytime to regain acccess to your original
+      user identity.
     </p>
-    <div class="button-host">
-      <button mat-fab extended (click)="onClickSignin($event)" color="primary" class="button">
-        <!--<mat-icon>login</mat-icon>--><span class="button-label">Sign in as<br />{{userName}}</span>
-      </button>
-      <button mat-fab extended (click)="onClickForget($event)" color="primary" class="button">
-        <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">Sign in as<br />a different user</span>
-      </button>
-      <div class="error-msg">{{error}}</div>
-    </div>
-    <!--last so it doesn't get focus--> <!--
-    <button class="close-button3" matSuffix mat-icon-button matDialogClose aria-label="Close">
+
+    <!--last so it doesn't get focus-->
+    <button class="close-button3" matSuffix mat-icon-button matDialogClose aria-label="close">
       <mat-icon>close</mat-icon>
-    </button>-->
+    </button>
   </div>
 </span>

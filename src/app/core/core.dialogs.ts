@@ -31,7 +31,7 @@ import {
     MatDialogRef,
     MatDialogModule,
 } from '@angular/material/dialog';
-import { CommonModule } from '@angular/common';
+import { CommonModule, NgIf } from '@angular/common';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatMenuModule } from '@angular/material/menu';
@@ -41,15 +41,11 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { Matcher, zxcvbnOptions } from '@zxcvbn-ts/core';
-import * as zxcvbnCommonPackage from '@zxcvbn-ts/language-common';
-import * as zxcvbnEnPackage from '@zxcvbn-ts/language-en';
-import { translations } from '@zxcvbn-ts/language-en';
-import { matcherPwnedFactory } from '@zxcvbn-ts/matcher-pwned';
 import { Router } from '@angular/router';
 import { PasswordStrengthMeterComponent } from 'angular-password-strength-meter';
 import * as cs from '../services/cipher.service';
 import { AuthenticatorService } from '../services/authenticator.service';
+import { ZxcvbnOptionsService } from '../services/zxcvbn-options.service';
 
 
 export type PwdDialogData = {
@@ -69,10 +65,11 @@ export type SigninDialogData = {
 
 @Component({
     selector: 'password-dialog',
-    standalone: true,
     templateUrl: './password-dialog.html',
+    styleUrl: './core.dialogs.scss',
+    standalone: true,
     encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
-    imports: [MatDialogModule, CommonModule, MatFormFieldModule, MatMenuModule, MatInputModule,
+    imports: [MatDialogModule, CommonModule, NgIf, MatFormFieldModule, MatMenuModule, MatInputModule,
         MatIconModule, PasswordStrengthMeterComponent, FormsModule, ReactiveFormsModule,
         MatTooltipModule, MatButtonModule],
 })
@@ -88,10 +85,11 @@ export class PasswordDialog implements OnInit {
     public loops = 0;
     public askHint = false;
     private checkPwned = false;
-    private static matcherPwned: Matcher;
+    public maxHintLen = cs.HINT_MAX_LEN;
 
     constructor(
         private r2: Renderer2,
+        private zxcvbnOptions: ZxcvbnOptionsService,
         public dialogRef: MatDialogRef<PasswordDialog>,
         @Inject(MAT_DIALOG_DATA) public data: PwdDialogData
     ) {
@@ -103,31 +101,10 @@ export class PasswordDialog implements OnInit {
         this.loops = data.loops;
         this.onPasswordStrengthChange(0);
         this.checkPwned = data.checkPwned;
-
-        if (!PasswordDialog.matcherPwned) {
-            const options = {
-                translations,
-                dictionary: {
-                    ...zxcvbnCommonPackage.dictionary,
-                    ...zxcvbnEnPackage.dictionary,
-                },
-                graphs: zxcvbnCommonPackage.adjacencyGraphs,
-                useLevenshteinDistance: true,
-            };
-            zxcvbnOptions.setOptions(options);
-            PasswordDialog.matcherPwned = matcherPwnedFactory(fetch, zxcvbnOptions);
-        }
     }
 
     ngOnInit(): void {
-        if (this.checkPwned) {
-            if (!zxcvbnOptions.matchers['pwned']) {
-                zxcvbnOptions.addMatcher('pwned', PasswordDialog.matcherPwned);
-            }
-        } else {
-            delete zxcvbnOptions.matchers['pwned'];
-        }
-
+        this.zxcvbnOptions.checkPwned(this.checkPwned);
     }
 
     onAcceptClicked() {
@@ -163,9 +140,10 @@ export class PasswordDialog implements OnInit {
 
 @Component({
     selector: 'cipher-info-dialog',
-    standalone: true,
     templateUrl: './cipher-info-dialog.html',
-    imports: [MatDialogModule, MatIconModule, CommonModule, MatButtonModule],
+    styleUrl: './core.dialogs.scss',
+    standalone: true,
+    imports: [MatDialogModule, MatIconModule, CommonModule, NgIf, MatButtonModule],
 })
 
 export class CipherInfoDialog {
@@ -188,16 +166,17 @@ export class CipherInfoDialog {
             this.alg = cs.AlgInfo[cipherData.alg] ? cs.AlgInfo[cipherData.alg][0] : 'Invalid';
             this.iv = cs.bytesToBase64(cipherData.iv as Uint8Array);
             this.slt = cs.bytesToBase64(cipherData.slt as Uint8Array);
-            this.hint = cipherData.hint;
+            this.hint = cipherData.encryptedHint.byteLength ? 'yes' : 'no';
         }
     }
 }
 
 @Component({
     selector: 'help-dialog',
-    standalone: true,
     templateUrl: './help-dialog.html',
-    imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
+    styleUrl: './core.dialogs.scss',
+    standalone: true,
+    imports: [MatDialogModule, CommonModule, NgIf, MatIconModule, MatTooltipModule,
         MatButtonModule],
 })
 export class HelpDialog {
@@ -210,9 +189,10 @@ export class HelpDialog {
 
 @Component({
     selector: 'signin-dialog',
-    standalone: true,
     templateUrl: './signin-dialog.html',
-    imports: [MatDialogModule, CommonModule, MatProgressSpinnerModule,
+    styleUrl: './core.dialogs.scss',
+    standalone: true,
+    imports: [MatDialogModule, CommonModule, NgIf, MatProgressSpinnerModule,
         MatIconModule, MatTooltipModule, MatButtonModule],
 })
 export class SigninDialog {
@@ -241,7 +221,7 @@ export class SigninDialog {
             this.dialogRef.close();
         } catch (err) {
             console.error(err);
-            this.error = 'Sign in failed, try again';
+            this.error = 'Sign in failed, try again or as a different user';
         } finally {
             this.showProgress = false;
         }
@@ -249,7 +229,7 @@ export class SigninDialog {
 
     onClickForget(event: any) {
         this.error = '';
-        this.authSvc.removeUserInfo();
+        this.authSvc.forgetUserInfo();
         this.router.navigateByUrl('/welcome');
         this.dialogRef.close(null);
     }

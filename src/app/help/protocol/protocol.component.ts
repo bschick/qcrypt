@@ -5,7 +5,7 @@ import { Component } from '@angular/core';
   standalone: true,
   imports: [],
   templateUrl: './protocol.component.html',
-  styleUrl: './protocol.component.css'
+  styleUrl: './protocol.component.scss'
 })
 export class ProtocolComponent {
 

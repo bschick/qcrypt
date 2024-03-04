@@ -20,38 +20,56 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import {Component, ViewChild, ElementRef} from '@angular/core';
-import {MatIconModule} from '@angular/material/icon';
-import {MatButtonModule} from '@angular/material/button';
-import {MatToolbarModule} from '@angular/material/toolbar';
+import { Component, OnInit } from '@angular/core';
+import { MatIconModule } from '@angular/material/icon';
+import { MatButtonModule } from '@angular/material/button';
+import { MatToolbarModule } from '@angular/material/toolbar';
 import { Router, RouterOutlet, RouterLink } from '@angular/router';
 import { MatMenuModule } from '@angular/material/menu';
-import { MatSidenavModule} from '@angular/material/sidenav';
+import { MatSidenav, MatSidenavModule } from '@angular/material/sidenav';
+import { CredentialsComponent } from './credentials/credentials.component';
+import { AuthenticatorService, AuthenticatorInfo } from './services/authenticator.service';
 
 
 @Component({
   selector: 'qcrypt-root',
   standalone: true,
   templateUrl: './qcrypt.component.html',
-  styleUrl: './qcrypt.component.css',
+  styleUrl: './qcrypt.component.scss',
   imports: [RouterOutlet, MatToolbarModule, MatIconModule, MatButtonModule,
-    RouterLink, MatMenuModule, MatSidenavModule
+    RouterLink, MatMenuModule, MatSidenavModule, CredentialsComponent
   ],
 })
-export class QCryptComponent  {
+export class QCryptComponent implements OnInit {
 
   public bgColorDefault = '#4351AF';
   public bgColorFocus = '#3B479A';
 
-  constructor(public router: Router) {
+  constructor(
+    public router: Router,
+    public authSvc: AuthenticatorService
+  ) {
+  }
+
+  ngOnInit(): void {
+  }
+
+  toggleNav(nav: MatSidenav) {
+    if (this.authSvc.isAuthenticated()) {
+      nav.toggle();
+    } else {
+      nav.close();
+    }
   }
 
   focusColor(test?: string) {
-    if(test) {
+    if (test) {
       return this.router.url.startsWith(test) ? this.bgColorFocus : this.bgColorDefault;
     } else {
       return ['', '/', undefined].includes(this.router.url) ? this.bgColorFocus : this.bgColorDefault;
     }
   }
 
+  onOpenedCredentials() {
+  }
 }

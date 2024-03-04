@@ -2,10 +2,16 @@ import { Injectable } from '@angular/core';
 import * as sodium from 'libsodium-wrappers';
 import { base64URLStringToBuffer, bufferToBase64URLString } from '@simplewebauthn/browser';
 
+const AES_GCM_TAG_BYTES = 16;
+const X20_PLY_TAG_BYTES = 16; // should load sodium.crypto_aead_xchacha20poly1305_IETF_ABYTES, but it is NaN
+const MAX_AUTH_TAG_BYTES = Math.max(X20_PLY_TAG_BYTES, AES_GCM_TAG_BYTES);
+
 export const ICOUNT_MIN = 400000;
 export const ICOUNT_DEFAULT = 800000;
 export const ICOUNT_MAX = 4294000000; // limited to 4 bytes unsigned rounded to millions
-export const HINT_MAX_LEN = 128;
+export const ENCRYPTED_HINT_MAX_LEN = 255;
+// needs to fit into 255 bytes encypted... this allows for all double byte + max auth tag
+export const HINT_MAX_LEN = Math.trunc(ENCRYPTED_HINT_MAX_LEN / 2 - MAX_AUTH_TAG_BYTES);
 export const CURRENT_VERSION = 1;
 
 export const AlgInfo: { [key: string]: [string, number] } = {
@@ -16,14 +22,14 @@ export const AlgInfo: { [key: string]: [string, number] } = {
 export type Params = {
   readonly alg: string;      // ALG_BYTES 
   readonly ic: number;       // IC_BYTES
-  readonly hint: string;     // limited to 128 characters
 }
 
-// Byte length of all parameter except hint and et are fixed
+// Byte length of all parameter except hint and data are fixed
 export type CipherData = Params & {
   readonly iv: Uint8Array;   // IV_BYTES
   readonly slt: Uint8Array;  // SLT_BYTES
-  readonly et: Uint8Array;
+  readonly encryptedHint: Uint8Array;  // limited to ENCRYPTED_HINT_MAX_LEN bytes
+  readonly encryptedData: Uint8Array;
 };
 
 export type EParams = Params & {
@@ -31,7 +37,8 @@ export type EParams = Params & {
   readonly fallbackRand: boolean;
   readonly pwd: string;
   readonly siteKey: Uint8Array;
-  readonly ct: Uint8Array;
+  readonly clear: Uint8Array;
+  readonly hint?: string;     // limited to HINT_MAX_LEN characters
 }
 
 export const ALG_BYTES = 2;
@@ -43,6 +50,8 @@ export const HMAC_BYTES = 32;
 export const KEY_BYTES = 32;
 export const SITEKEY_BYTES = 32;
 
+const HKDF_INFO_SIGNING = "cipherdata signing key";
+const HKDF_INFO_HINT = "hint encryption key";
 
 /* Javascript converts to signed 32 bit int when using bit shifting 
    and masking, so do this instead. Count is the number of bytes
@@ -184,7 +193,7 @@ export class CipherService {
 
 
   // Public for testing, normal callers should not need this
-  async _genCipherKey(
+  public async _genCipherKey(
     alg: string,
     ic: number,
     pwd: string,
@@ -224,9 +233,9 @@ export class CipherService {
       ['deriveBits', 'deriveKey']
     );
 
-    // A bit of a hack, but subtle doesn't support other algorithms... so lie.
-    // This is safe because the key is exported as bits and used in libsodium
-    // TODO: If more non-browser cipher are added, make this more generic.
+    // A bit of a hack, but subtle doesn't support other algorithms... so lie. This
+    // is safe because the key is exported as bits and used in libsodium when not
+    // AES-GCM. TODO: If more non-browser cipher are added, make this more generic.
     const useAlg = alg != 'X20-PLY' ? alg : 'AES-GCM';
 
     const ek = await window.crypto.subtle.deriveKey(
@@ -255,7 +264,6 @@ export class CipherService {
       throw new Error("Invalid slt size of: " + slt.byteLength);
     }
 
-    // Confirm how  long PassKey signature will be and check for that directly
     if (siteKey.byteLength != SITEKEY_BYTES) {
       throw new Error('Invalid siteKey length of: ' + siteKey.byteLength);
     }
@@ -272,15 +280,58 @@ export class CipherService {
         name: 'HKDF',
         salt: slt,
         hash: 'SHA-512',
-        info: new Uint8Array(0),
+        info: new TextEncoder().encode(HKDF_INFO_SIGNING)
       },
       skMaterial,
       { name: 'HMAC', hash: 'SHA-256', length: 256 },
-      false,
+      true,
       ['sign', 'verify']
     );
 
     return sk;
+  }
+
+  // Public for testing, normal callers should not need this
+  async _genHintCipherKey(
+    alg: string,
+    siteKey: Uint8Array,
+    slt: Uint8Array
+  ): Promise<CryptoKey> {
+
+    if (slt.byteLength != SLT_BYTES) {
+      throw new Error("Invalid slt size of: " + slt.byteLength);
+    }
+
+    if (siteKey.byteLength != SITEKEY_BYTES) {
+      throw new Error('Invalid siteKey length of: ' + siteKey.byteLength);
+    }
+    const skMaterial = await window.crypto.subtle.importKey(
+      'raw',
+      siteKey,
+      'HKDF',
+      false,
+      ['deriveBits', 'deriveKey']
+    );
+
+    // A bit of a hack, but subtle doesn't support other algorithms... so lie. This
+    // is safe because the key is exported as bits and used in libsodium when not
+    // AES-GCM. TODO: If more non-browser cipher are added, make this more generic.
+    const useAlg = alg != 'X20-PLY' ? alg : 'AES-GCM';
+
+    const hk = await window.crypto.subtle.deriveKey(
+      {
+        name: 'HKDF',
+        salt: slt,
+        hash: 'SHA-512',
+        info: new TextEncoder().encode(HKDF_INFO_HINT)
+      },
+      skMaterial,
+      { name: useAlg, length: 256 },
+      true,
+      ['encrypt', 'decrypt']
+    );
+
+    return hk;
   }
 
   // Overall order of operations:
@@ -306,12 +357,15 @@ export class CipherService {
     if (!eparams.trueRand && !eparams.fallbackRand) {
       throw new Error('Either trueRand or fallbackRand must be true');
     }
-    if (!eparams.pwd || eparams.siteKey.byteLength != SITEKEY_BYTES) {
+    if (eparams.hint && eparams.hint.length > HINT_MAX_LEN) {
+      throw new Error('Hint length exceeds ' + HINT_MAX_LEN);
+    }
+    if (!eparams.pwd || !eparams.siteKey || eparams.siteKey.byteLength != SITEKEY_BYTES) {
       throw new Error('Invalid password or siteKey');
     }
 
-    // assume encrypting nothing is a mistake
-    if (eparams.ct.byteLength == 0) {
+    // encrpting nothing not supported
+    if (eparams.clear.byteLength == 0) {
       throw new Error('No data to encrypt');
     }
 
@@ -330,53 +384,45 @@ export class CipherService {
       readyNotice(eparams);
     }
 
+    const ek = await this._genCipherKey(eparams.alg, eparams.ic, eparams.pwd, eparams.siteKey, slt);
+    const sk = await this._genSigningKey(eparams.siteKey, slt);
+    const hk = await this._genHintCipherKey(eparams.alg, eparams.siteKey, slt);
+
+    let encryptedHint = new Uint8Array(0);
+    if (eparams.hint) {
+      // Since hint encoding could expand beyond 255, truncate the result to ensure fit
+      // TODO: This can cause problems with truncated unicode codepoints or graphemes,
+      // could truncate hint characters and re-encode (see https://tonsky.me/blog/unicode/)
+      const hintEnc = new TextEncoder().encode(eparams.hint).slice(0, ENCRYPTED_HINT_MAX_LEN - MAX_AUTH_TAG_BYTES);
+      encryptedHint = await this._doEncrypt(
+        eparams.alg,
+        hk,
+        iv,
+        hintEnc
+      );
+    }
+
     const cipherDataForAD: CipherData = {
       alg: eparams.alg,
       ic: eparams.ic,
       iv: iv,
       slt: slt,
-      hint: eparams.hint,
-      et: new Uint8Array(0)
+      encryptedHint: encryptedHint,
+      encryptedData: new Uint8Array(0)
     };
 
     const additionalData = this._encodeCipherData(cipherDataForAD);
-    const ek = await this._genCipherKey(eparams.alg, eparams.ic, eparams.pwd, eparams.siteKey, slt);
-    const sk = await this._genSigningKey(eparams.siteKey, slt);
+    const encryptedBytes = await this._doEncrypt(
+      eparams.alg,
+      ek,
+      iv,
+      eparams.clear,
+      additionalData,
+    );
 
-    let encryptedBytes: Uint8Array;
-    if (eparams.alg == 'X20-PLY') {
-      const exported = await window.crypto.subtle.exportKey("raw", ek);
-      const keyBytes = new Uint8Array(exported);
-
-      await sodium.ready;
-      try {
-        encryptedBytes = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-          eparams.ct,
-          additionalData,
-          null,
-          iv,
-          keyBytes,
-          "uint8array"
-        );
-      } catch (err) {
-        // Match behavior of Web Crytpo functions that throws limited DOMException
-        throw new DOMException('', 'OperationError');
-      }
-    } else {
-      const cipherBuf = await window.crypto.subtle.encrypt({
-          name: eparams.alg,
-          iv: iv,
-          additionalData: additionalData,
-          tagLength: 128
-        },
-        ek, 
-        eparams.ct
-      );
-      encryptedBytes = new Uint8Array(cipherBuf);
-    }
     const encoded = this._encodeCipherData({
       ...cipherDataForAD,
-      et: encryptedBytes
+      encryptedData: encryptedBytes
     });
 
     const hmac = await this._signCipherBytes(sk, encoded);
@@ -388,12 +434,56 @@ export class CipherService {
     return bytesToBase64(extended);
   }
 
+  async _doEncrypt(
+    alg: string,
+    key: CryptoKey,
+    iv: Uint8Array,
+    clear: Uint8Array,
+    additionalData: Uint8Array = new Uint8Array(0),
+  ): Promise<Uint8Array> {
+
+    let encryptedBytes: Uint8Array;
+    if (alg == 'X20-PLY') {
+      const exported = await window.crypto.subtle.exportKey("raw", key);
+      const keyBytes = new Uint8Array(exported);
+
+      await sodium.ready;
+      try {
+        encryptedBytes = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+          clear,
+          additionalData,
+          null,
+          iv,
+          keyBytes,
+          "uint8array"
+        );
+      } catch (err) {
+        // Match behavior of Web Crytpo functions that throws limited DOMException
+        throw new DOMException('', 'OperationError');
+      }
+    } else {
+      const cipherBuf = await window.crypto.subtle.encrypt(
+        {
+          name: alg,
+          iv: iv.slice(0, 12),
+          additionalData: additionalData,
+          tagLength: AES_GCM_TAG_BYTES * 8
+        },
+        key,
+        clear
+      );
+      encryptedBytes = new Uint8Array(cipherBuf);
+    }
+    return encryptedBytes;
+  }
+
+
   // Password is a callback because we need to extract any hint from ciphertext first.
   // We also don't want the caller (web page) to show anything from extracted from
   // ciphertext until after it has been verified again the siteKey (pass-key). Order
   // of operations is:
   //
-  // 1. Unpack parameters from ct
+  // 1. Unpack parameters from encrypted
   // 1.1.    Unpack validated values and checks siteKey based signature
   // 2. Callback to get the password with the hint unpacked & validated hint
   // 3. Encode cipher parameters as additional data
@@ -404,14 +494,25 @@ export class CipherService {
   async decrypt(
     pwdProvider: (hint: string) => Promise<string>,
     siteKey: Uint8Array,
-    ct: string,
+    cipherText: string,
     readyNotice?: (params: Params) => void
   ): Promise<Uint8Array> {
 
-    // This does HMAC signature verification on CT and throws if invalid
-    const cipherData = await this.getCipherData(siteKey, ct);
+    // getCipherData does HMAC signature verification on CT and throws if invalid
+    const cipherData = await this.getCipherData(siteKey, cipherText);
+    const hk = await this._genHintCipherKey(cipherData.alg, siteKey, cipherData.slt);
 
-    const pwd = await pwdProvider(cipherData.hint);
+    let hintEnc = new Uint8Array(0);
+    if (cipherData.encryptedHint.byteLength != 0) {
+      hintEnc = await this._doDecrypt(
+        cipherData.alg,
+        hk,
+        cipherData.iv,
+        cipherData.encryptedHint
+      );
+    }
+
+    const pwd = await pwdProvider(new TextDecoder().decode(hintEnc));
     if (!pwd) {
       throw new Error('password is empty');
     }
@@ -422,23 +523,42 @@ export class CipherService {
 
     const cipherDataForAD: CipherData = {
       ...cipherData,
-      et: new Uint8Array(0)
+      encryptedData: new Uint8Array(0)
     };
 
     const additionalData = this._encodeCipherData(cipherDataForAD);
     const ek = await this._genCipherKey(cipherData.alg, cipherData.ic, pwd, siteKey, cipherData.slt);
 
+    const decrypted = await this._doDecrypt(
+      cipherData.alg,
+      ek,
+      cipherData.iv,
+      cipherData.encryptedData,
+      additionalData,
+    );
+
+    return decrypted;
+  }
+
+  async _doDecrypt(
+    alg: string,
+    key: CryptoKey,
+    iv: Uint8Array,
+    encrypted: Uint8Array,
+    additionalData: Uint8Array = new Uint8Array(0),
+  ): Promise<Uint8Array> {
+
     let decrypted: Uint8Array;
-    if (cipherData.alg == 'X20-PLY') {
-      const exported = await window.crypto.subtle.exportKey("raw", ek);
+    if (alg == 'X20-PLY') {
+      const exported = await window.crypto.subtle.exportKey("raw", key);
       const keyBytes = new Uint8Array(exported);
 
       try {
         decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
           null,
-          cipherData.et,
+          encrypted,
           additionalData,
-          cipherData.iv,
+          iv,
           keyBytes,
           "uint8array"
         );
@@ -448,13 +568,15 @@ export class CipherService {
       }
 
     } else {
-      const buffer = await window.crypto.subtle.decrypt({
-        name: cipherData.alg,
-        iv: cipherData.iv,
-        additionalData: additionalData,
-        tagLength: 128
-      },
-        ek, cipherData.et
+      const buffer = await window.crypto.subtle.decrypt(
+        {
+          name: alg,
+          iv: iv.slice(0, 12),
+          additionalData: additionalData,
+          tagLength: AES_GCM_TAG_BYTES * 8
+        },
+        key,
+        encrypted
       );
       decrypted = new Uint8Array(buffer);
     }
@@ -464,14 +586,14 @@ export class CipherService {
 
   async getCipherData(
     siteKey: Uint8Array,
-    ct: string
+    cipherText: string
   ): Promise<CipherData> {
 
     if (siteKey.byteLength != SITEKEY_BYTES) {
       throw new Error('Invalid siteKey length of: ' + siteKey.byteLength);
     }
 
-    const extended = base64ToBytes(ct);
+    const extended = base64ToBytes(cipherText);
     const hmac = extended.slice(0, HMAC_BYTES);
 
     if (hmac.byteLength != HMAC_BYTES) {
@@ -482,7 +604,7 @@ export class CipherService {
     // This is not a crypto function, just unpacking. We need to unpack to
     // get the salt used for signing key generation.
     //
-    // IMPORTANT: The returned CParams could be corrupted. Do not return
+    // IMPORTANT: The returned cipherData could be corrupted. Do not return
     //       this to the caller until after signature verified.
     const cipherData = this._decodeCipherData(encoded);
 
@@ -491,8 +613,9 @@ export class CipherService {
     // Avoiding the Doom Principle and verify signature before crypto operations.
     // Aka, check HMAC as soon as possible after we have the signing key.
     // _verifyCipherBytes should throw an exception if invalid, but the boolean
-    // return is a precaution... requires an explicit true result and no exception
+    // return is a precaution... requires an explicit true result && no exception
     const validSig = await this._verifyCipherBytes(sk, hmac, encoded);
+
     if (validSig) {
       return cipherData;
     }
@@ -540,12 +663,7 @@ export class CipherService {
     const icEnc = numToBytes(cipherData.ic, IC_BYTES);
     const verEnc = numToBytes(CURRENT_VERSION, VER_BYTES);
     const algEnc = numToBytes(AlgInfo[cipherData.alg][1], ALG_BYTES);
-
-    // Should have have bee rejected at validateCipherData above, but just in
-    // case  limited to HINT_MAX_LEN characters so all can be double byte and
-    // fit under 255 bytes. Note that this could be zero
-    const hintEnc = new TextEncoder().encode(cipherData.hint.slice(0, HINT_MAX_LEN)).slice(0, 256);
-    const hintLenEnc = numToBytes(hintEnc.byteLength, 1);
+    const hintLenEnc = numToBytes(cipherData.encryptedHint.byteLength, 1);
 
     let encoded = new Uint8Array(
       ALG_BYTES +
@@ -554,8 +672,8 @@ export class CipherService {
       IC_BYTES +
       VER_BYTES +
       1 +
-      hintEnc.byteLength +
-      cipherData.et.byteLength
+      cipherData.encryptedHint.byteLength +
+      cipherData.encryptedData.byteLength
     );
 
     let offset = 0;
@@ -571,9 +689,9 @@ export class CipherService {
     offset += VER_BYTES;
     encoded.set(hintLenEnc, offset);
     offset += 1;
-    encoded.set(hintEnc, offset);
-    offset += hintEnc.byteLength;
-    encoded.set(cipherData.et, offset);
+    encoded.set(cipherData.encryptedHint, offset);
+    offset += cipherData.encryptedHint.byteLength;
+    encoded.set(cipherData.encryptedData, offset);
 
     return encoded;
   }
@@ -646,19 +764,18 @@ export class CipherService {
     // ### hint ###
     const hintLen = bytesToNum(encoded.slice(offset, offset + 1));
     offset += 1;
-    const hintEnc = encoded.slice(offset, offset + hintLen)
+    const encryptedHint = encoded.slice(offset, offset + hintLen)
     offset += hintLen;
     // Can happen if the encode data was clipped and reencoded
-    if (hintLen != hintEnc.byteLength || hintLen > HINT_MAX_LEN) {
+    if (hintLen != encryptedHint.byteLength) {
       throw new Error('Invalid hint length of: ' + hintLen);
     }
-    const hint = new TextDecoder().decode(hintEnc);
 
-    // ### encrypted text ###
-    const et = encoded.slice(offset);
+    // ### encrypted data ###
+    const encryptedData = encoded.slice(offset);
     // Again, can happen if the encode data was clipped and reencoded
-    if (et.byteLength == 0) {
-      throw new Error('Missing et data, found only: ' + et.byteLength);
+    if (encryptedData.byteLength == 0) {
+      throw new Error('Missing et data, found only: ' + encryptedData.byteLength);
     }
 
     return {
@@ -666,8 +783,8 @@ export class CipherService {
       iv: iv,
       slt: slt,
       ic: ic,
-      hint: hint,
-      et: et,
+      encryptedHint: encryptedHint,
+      encryptedData: encryptedData,
     };
   }
 
@@ -687,8 +804,8 @@ export class CipherService {
     if (cipherData.ic < ICOUNT_MIN || cipherData.ic > ICOUNT_MAX) {
       throw new Error('Invalid ic of: ' + cipherData.ic);
     }
-    if (cipherData.hint.length > HINT_MAX_LEN) {
-      throw new Error('Invalid hint length of: ' + cipherData.hint.length);
+    if (cipherData.encryptedHint.length > ENCRYPTED_HINT_MAX_LEN) {
+      throw new Error('Invalid encrypted hint length of: ' + cipherData.encryptedHint.length);
     }
   }
 
