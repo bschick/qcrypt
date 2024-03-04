@@ -22,6 +22,8 @@ SOFTWARE. */
 import { Routes } from '@angular/router';
 import { CoreComponent } from './core/core.component';
 import { WelcomeComponent } from './welcome/welcome.component';
+import { RecoveryComponent } from './recovery/recovery.component';
+import { NewUserComponent } from './newuser/newuser.component';
 import { OverviewComponent } from './help/overview/overview.component';
 import { FaqsComponent } from './help/faqs/faqs.component';
 import { ProtocolComponent } from './help/protocol/protocol.component';
@@ -30,6 +32,8 @@ import { welcomeGuard } from './welcome/welcome.guard';
 
 export const routes: Routes = [
     { path: 'welcome', component: WelcomeComponent, canActivate: [welcomeGuard] },
+    { path: 'recovery', component: RecoveryComponent },
+    { path: 'newuser', component: NewUserComponent },
     { path: 'help/overview', component: OverviewComponent },
     { path: 'help/faqs', component: FaqsComponent },
     { path: 'help/protocol', component: ProtocolComponent },

@@ -3,24 +3,32 @@
     <p class="subheader">your sensitive data remains local</p>
     <p class="descrip">Quick Crypt uses both passkeys and passwords you control to ensure
         only you can decrypt your data and that other websites cannot easily impersonate Quick Crypt.
-        Have you used Quick Crypt previously? 
-       
+        Are you new to Quick Crypt?
+
     </p>
     <mat-progress-spinner class="spinner" color="primary" mode="indeterminate"
-    [style.visibility]="showProgress ? 'visible' : 'hidden'">
-  </mat-progress-spinner>
+        [style.visibility]="showProgress ? 'visible' : 'hidden'">
+    </mat-progress-spinner>
     <div>
         <div class="button-host">
-            <button mat-fab extended (click)="onClickExisting($event)" color="primary" class="button">
-              <!--<mat-icon>login</mat-icon>--><span class="button-label">Yes, I have an existig Passkey</span>
+            <a [routerLink]="'/newuser'">
+                <button mat-fab extended color="primary" class="button">
+                <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">I am starting from scratch</span>
             </button>
-            <button mat-fab extended (click)="onClickNew($event)" color="primary" class="button">
-              <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">No, I need to create a new Passkey </span>
+            </a>
+            <br />
+            <button mat-fab extended (click)="onClickExisting($event)" color="primary" class="button">
+                <!--<mat-icon>login</mat-icon>--><span class="button-label">Load my existing passkey</span>
+            </button>
+            <br />
+            <button mat-fab extended (click)="onClickRecovery($event)" color="primary" class="button">
+                <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">I had a passkey, but it's lost or not
+                    working</span>
             </button>
             <div class="error-msg">{{error}}</div>
-          </div>
-      
-<!--      
+        </div>
+
+        <!--      
      To get started enter a user name that will be included in your passkey. Your user name
         can be anything, and does not need to be an email address.
     <mat-form-field class="">
@@ -28,7 +36,7 @@
             <input matInput>
           </mat-form-field>
           <button mat-flat-button class="" color="primary">Get Started</button>
-  -->  
+  -->
     </div>
 
 </div>

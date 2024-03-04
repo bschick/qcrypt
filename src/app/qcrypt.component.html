@@ -20,8 +20,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
 
+<div class="qcrypt">
 <mat-toolbar color="primary">
-  <a [routerLink]="'/core'">
+  <a [routerLink]="'/'">
     <button [style.background-color]="focusColor()" mat-button class="toolbar-text">
       <mat-icon>enhanced_encryption</mat-icon>
       Quick Crypt
@@ -48,18 +49,16 @@ SOFTWARE. -->
   </mat-menu>
 
   <span class="toolbar-spacer"></span>
-  <button #pkButton (click)="sideNav.toggle()" mat-icon-button aria-label="Passkey information">
+  <button #pkButton (click)="toggleNav(sideNav)" mat-icon-button aria-label="Passkey information">
     <mat-icon>menu</mat-icon>
   </button>
 </mat-toolbar>
 <mat-sidenav-container class="router-content" hasBackdrop="true">
-  <mat-sidenav #sideNav mode="over" position="end">
-    <p><button mat-button (click)="sideNav.toggle()">Toggle</button></p>
-    <p>
-      <label>Test input for drawer<input /></label>
-    </p>
+  <mat-sidenav #sideNav mode="over" position="end" (opened)="onOpenedCredentials()" >
+    <app-credentials (done)="sideNav.close()" class="cred-content"></app-credentials>
   </mat-sidenav>
   <mat-sidenav-content>
     <router-outlet />
   </mat-sidenav-content>
 </mat-sidenav-container>
+</div>

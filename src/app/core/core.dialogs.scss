@@ -1,0 +1,201 @@
+/* MIT License
+
+Copyright (c) 2024 Brad Schick
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. */
+
+.cipher-info {
+  .header {
+    margin: 0 0 1px 0;
+  }
+
+  .dialog-content {
+    width: 555px;
+    padding-top: 5px;
+  }
+
+  .dialog-body {
+    width: 100%;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: center;
+    align-items: flex-start;
+    column-gap: 15px;
+  }
+
+  .tech-list {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    flex: none;
+  }
+
+  .close-button3 {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 999;
+  }
+}
+
+.help {
+  max-width: 1024px;
+
+  .header {
+    margin: 0 0 1px 0;
+  }
+
+  .dialog-content {
+    min-height: 600px;
+    padding-top: 10px;
+  }
+
+  .tech-list {
+    margin-top: 5px;
+  }
+
+  .close-button3 {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 999;
+  }
+}
+
+.password {
+  .header {
+    margin: 0 0 1px 0;
+  }
+
+  .field-group {
+    margin: 0 23px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    column-gap: 15px;
+  }
+
+  .field {
+    width: 250px;
+    margin-bottom: -0.5em;
+    flex: none;
+  }
+
+  .stren-meter {
+    margin: auto;
+    width: 70%;
+    height: 40px;
+  }
+
+  .stren-meter .stren-msg {
+    font-size: 14px;
+  }
+
+  .accept-button {
+    position: absolute;
+    right: 22px;
+    z-index: 999;
+  }
+
+  .close-button3 {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 999;
+  }
+
+  /* The next two selector modify text inside stength meter */
+  div.psm__progress-bar {
+    margin-bottom: 5px !important;
+  }
+
+  small.psm__suggestion.ng-star-inserted,
+  small.psm__feedback.ng-star-inserted {
+    margin-top: 0;
+    font-size: 85%;
+    line-height: 15px;
+  }
+}
+
+.signin {
+  width: 390px;
+
+  .header {
+    margin: 0 0 1px 0;
+    text-align: center;
+    padding-bottom: 15px;
+    background-color: lightgray;
+  }
+
+  .dialog-content {
+    margin-top: 10px;
+    margin-bottom: 0px;
+    padding-top: 10px;
+  }
+
+  .button {
+    width: 275px;
+    margin: 15px auto 0 auto;
+  }
+
+  .button-label {
+    font-size: 16px;
+  }
+
+  .pklogo {
+    float: left;
+    margin: 0 10px 0 0;
+    width: 65px;
+  }
+
+  .welcome {
+    text-align: justify;
+    margin: 0;
+  }
+
+  .spinner {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    top: 32%;
+    left: 50%;
+    margin: -50px 0 0 -50px;
+    z-index: 999;
+  }
+
+  .button-host {
+    margin-top: 10px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .error-msg {
+    margin-top: 12px;
+    height: 24px;
+    color: darkred;
+  }
+
+  .close-button3 {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 999;
+  }
+}

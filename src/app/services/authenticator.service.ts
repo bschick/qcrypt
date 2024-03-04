@@ -1,6 +1,40 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { startRegistration, startAuthentication } from '@simplewebauthn/browser';
-import { base64ToBytes } from './cipher.service';
+import {
+   PublicKeyCredentialCreationOptionsJSON,
+   PublicKeyCredentialRequestOptionsJSON,
+} from '@simplewebauthn/types';
+import { base64ToBytes, bytesToBase64 } from './cipher.service';
+
+const baseUrl = 'https://qcrypt.schicks.net/';
+
+export type RegistrationInfo = {
+   verified: boolean;
+   siteKey: string;
+   userId: string;
+   userName: string;
+   lightIcon: string;
+   description: string;
+};
+
+export type AuthenticationInfo = {
+   verified: boolean;
+   siteKey: string;
+   userId: string;
+   userName: string;
+};
+
+export type AuthenticatorInfo = {
+   credentialId: string;
+   description: string;
+   lightIcon: string;
+   name: string;
+};
+
+export type DeleteInfo = {
+   credentialId: string;
+   userId?: string;
+};
 
 
 @Injectable({
@@ -8,12 +42,28 @@ import { base64ToBytes } from './cipher.service';
 })
 export class AuthenticatorService {
 
-   public siteKey?: Uint8Array;
+   private _siteKey: Uint8Array | null = new Uint8Array([0x6d, 0x36, 0xa1, 0x75, 0xde, 0x42, 0x35, 0x52, 0xcb, 0x5a, 0x11, 0x12, 0x7c, 0xe8, 0x14, 0xb2, 0x80, 0x27, 0x79, 0x66, 0x0c, 0x00, 0x50, 0x68, 0x5f, 0xa5, 0xcf, 0xf8, 0x56, 0x14, 0xa7, 0xa8]);//null;
+   private _userName: string | null = 'waldo here'; //null;
+   private _userId: string | null = '5DzRiAARcI6vXCmfpYOpbA'; //null;
 
    constructor() { }
 
+   public passKeys = signal<AuthenticatorInfo[]>([]);
+
+   get siteKey(): Uint8Array | null {
+      return this._siteKey;
+   }
+
+   get userName(): string | null {
+      return this._userName;
+   }
+
+   get userId(): string | null {
+      return this._userId;
+   }
+
    isAuthenticated(): boolean {
-      return this.siteKey ? true : false;
+      return this._siteKey ? true : false;
    }
 
    isUserKnown(): boolean {
@@ -29,33 +79,153 @@ export class AuthenticatorService {
    }
 
    storeUserInfo(userId: string, userName: string) {
-      if(!userId || !userName) {
+      if (!userId || !userName) {
          throw new Error('missing userId or userName');
       }
-      localStorage.setItem('userid', userId);
-      localStorage.setItem('username', userName);
+      this._userId = userId;
+      this._userName = userName;
+      localStorage.setItem('userid', this._userId);
+      localStorage.setItem('username', this._userName);
    }
 
-   removeUserInfo() {
+   forgetUserInfo() {
+      this._userId = null;
+      this._userName = null;
+      this._siteKey = null;
       localStorage.removeItem('userid');
       localStorage.removeItem('username');
    }
 
-
-   async passkeyLogin(userId: string | null = null): Promise<Uint8Array> {
-
-      if (!userId) {
-         userId = localStorage.getItem('userid');
+   async setPasskeyDescription(credentialId: string, description: string): Promise<string> {
+      if (!description) {
+         throw new Error('missing description');
       }
+      if (description.length < 6 || description.length > 42) {
+         throw new Error('description must more than 5 and less than 43 character');
+      }
+      if (!credentialId) {
+         throw new Error('invalid credentialId');
+      }
+
+      const putDescUrl = new URL(`description?credid=${credentialId}&userid=${this._userId}&sitekey=${bytesToBase64(this._siteKey!)}`, baseUrl);
+      const putDescResp = await fetch(putDescUrl, {
+         method: 'PUT',
+         mode: 'cors',
+         cache: 'no-store',
+         body: description,
+      });
+
+      console.log('putDescResp, ', putDescResp);
+      if (!putDescResp.ok) {
+         throw new Error('setting description failed: ' + await putDescResp.text());
+      }
+
+      const putDescInfo = await putDescResp.json();
+      console.log('putDescInfo, ', putDescInfo);
+      return putDescInfo.description;
+   }
+
+   async setUserName(userName: string): Promise<string> {
+      if (!userName) {
+         throw new Error('missing description');
+      }
+      if (userName.length < 6 || userName.length > 31) {
+         throw new Error('user name must more than 5 and less than 32 character');
+      }
+
+      const putUserNameUrl = new URL(`username?userid=${this._userId}&sitekey=${bytesToBase64(this._siteKey!)}`, baseUrl);
+      const putUserNameResp = await fetch(putUserNameUrl, {
+         method: 'PUT',
+         mode: 'cors',
+         cache: 'no-store',
+         body: userName,
+      });
+
+      console.log('putUserNameResp, ', putUserNameResp);
+      if (!putUserNameResp.ok) {
+         throw new Error('setting user name failed: ' + await putUserNameResp.text());
+      }
+
+      const putUserNameInfo = await putUserNameResp.json();
+      console.log('putUserNameInfo, ', putUserNameInfo);
+      this.storeUserInfo(this._userId!, putUserNameInfo.userName);
+      return putUserNameInfo.userName;
+   }
+
+   async deletePasskey(credentialId: string): Promise<DeleteInfo> {
+      if (!credentialId) {
+         throw new Error('invalid credentialId');
+      }
+
+      const delPasskeyUrl = new URL(`authenticator?credid=${credentialId}&userid=${this._userId}&sitekey=${bytesToBase64(this._siteKey!)}`, baseUrl);
+      const delPasskeyResp = await fetch(delPasskeyUrl, {
+         method: 'DELETE',
+         mode: 'cors',
+         cache: 'no-store',
+      });
+
+      console.log('delPasskeyResp ', delPasskeyResp);
+      if (!delPasskeyResp.ok) {
+         throw new Error('setting description failed: ' + await delPasskeyResp.text());
+      }
+
+      const delPasskeyInfo = await delPasskeyResp.json() as DeleteInfo;
+      console.log('delPasskeyInfo ', delPasskeyInfo);
+
+      // User is gone... so forgeeet about it
+      if(delPasskeyInfo.userId) {
+         this.forgetUserInfo();
+      }
+
+      return delPasskeyInfo;
+   }
+
+   async refreshPasskeys(): Promise<AuthenticatorInfo[]> {
+
+      console.log("tr   acing", Error().stack);
+
+      if (!this.isAuthenticated()) {
+         throw new Error('must be authenticated to retrieve passkeys');
+      }
+
+      const getAuthsUrl = new URL(`authenticators?userid=${this._userId}&sitekey=${bytesToBase64(this._siteKey!)}`, baseUrl);
+
+      const getAuthsResp = await fetch(getAuthsUrl, {
+         method: 'GET',
+         mode: 'cors',
+         cache: 'no-store',
+      });
+
+      console.log('getAuthsResp, ', getAuthsResp);
+      if (!getAuthsResp.ok) {
+         throw new Error('retrieving passkeys failed: ' + await getAuthsResp.text());
+      }
+
+      const authsInfo = await getAuthsResp.json() as AuthenticatorInfo[];
+      console.log('authsInfo, ', authsInfo);
+
+      this.passKeys.set(authsInfo);
+      return authsInfo;
+   }
+
+   async passkeyLogin(): Promise<AuthenticationInfo> {
+      if(!this._userId) {
+         throw new Error('missing local userId, try findLogin');
+      }
+
+      return this.findLogin(this._userId);
+   }
+
+   async findLogin(userId: string | null = null): Promise<AuthenticationInfo> {
 
       let optUrl;
       if (!userId) {
          // Trying to link to an existing passkey but have lost track of user id.
          // Start the process without userId just doesn't limit authenticator creds
          // so the user can look for an existing credential
-         optUrl = new URL('https://qcrypt.schicks.net/authoptions');
+         optUrl = new URL('authoptions', baseUrl);
       } else {
-         optUrl = new URL(`https://qcrypt.schicks.net/authoptions?userid=${userId}`);
+         optUrl = new URL(`authoptions?userid=${userId}`, baseUrl);
       }
 
       const optionsResp = await fetch(optUrl, {
@@ -69,7 +239,7 @@ export class AuthenticatorService {
          throw new Error('authentication failed: ' + await optionsResp.text());
       }
 
-      const optionsJson = await optionsResp.json();
+      const optionsJson = await optionsResp.json() as PublicKeyCredentialRequestOptionsJSON;
       console.log('optionsJson, ', optionsJson);
 
       let startAuth;
@@ -90,7 +260,7 @@ export class AuthenticatorService {
 
       console.log('expanded ', JSON.stringify(expanded));
 
-      const verifyUrl = new URL('https://qcrypt.schicks.net/verifyauth');
+      const verifyUrl = new URL('verifyauth', baseUrl);
       const verificationResp = await fetch(verifyUrl, {
          method: 'POST',
          mode: 'cors',
@@ -101,45 +271,82 @@ export class AuthenticatorService {
          body: JSON.stringify(expanded),
       });
 
-      console.log('verifyResp, ', verificationResp);
+      console.log('verificationResp, ', verificationResp);
       if (!verificationResp.ok) {
          throw new Error('authentication failed: ' + await verificationResp.text());
       }
 
-      const verificationJson = await verificationResp.json();
-      console.log('verifyJson, ', verificationJson);
+      const authInfo = await verificationResp.json() as AuthenticationInfo;
+      console.log('authInfo, ', authInfo);
 
-      if (!verificationJson || !verificationJson.verified) {
+      if (!authInfo || !authInfo.verified) {
          throw new Error('authentication failed');
       }
 
-      this.storeUserInfo(verificationJson.userId, verificationJson.userName);
-      return this.siteKey = base64ToBytes(verificationJson.siteKey);
+      this._siteKey = base64ToBytes(authInfo.siteKey);
+      this.storeUserInfo(authInfo.userId, authInfo.userName);
+      return authInfo;
    }
 
-   async newPasskey(userId?: string, userName?: string): Promise<Uint8Array> {
+   async recover(userId: string, siteKey: string): Promise<RegistrationInfo> {
 
-      let optUrl;
-      if (userId) {
-         optUrl = new URL(`https://qcrypt.schicks.net/regoptions?userid=${userId}`);
-      } else if (userName) {
-         optUrl = new URL(`https://qcrypt.schicks.net/regoptions?username=${userName}`);
-      } else {
-         throw new Error('must provide userId or userName');
+      if (!userId || !siteKey) {
+         throw new Error('missing userid or sitekey');
       }
 
+      const recoverUrl = new URL(`recover?userid=${userId}&sitekey=${siteKey}`, baseUrl);
+      const recoverResp = await fetch(recoverUrl, {
+         method: 'POST',
+         mode: 'cors',
+         cache: 'no-store'
+      });
+
+      return this.finishRegistration(recoverResp);
+   }
+
+   // Creates new user and first passkey
+   async newUser(userName: string): Promise<RegistrationInfo> {
+      if(!userName) {
+         throw new Error('missing require userName');
+      }
+
+      const  optUrl = new URL(`regoptions?username=${userName}`, baseUrl);
       const optionsResp = await fetch(optUrl, {
          method: 'GET',
          mode: 'cors',
          cache: 'no-store'
       });
 
+      return this.finishRegistration(optionsResp);
+   }
+
+   // Adds passkey to current user
+   async addPasskey(): Promise<RegistrationInfo> {
+
+      if(!this._userId) {
+         throw new Error('not active user');
+      }
+
+      const optUrl = new URL(`regoptions?userid=${this._userId}`, baseUrl);
+      const optionsResp = await fetch(optUrl, {
+         method: 'GET',
+         mode: 'cors',
+         cache: 'no-store'
+      });
+
+      return this.finishRegistration(optionsResp);
+   }
+
+   async finishRegistration(
+      optionsResp: Response
+   ): Promise<RegistrationInfo> {
+
       console.log('optionsResp, ', optionsResp);
       if (!optionsResp.ok) {
          throw new Error('registration failed: ' + await optionsResp.text());
       }
 
-      const optionsJson = await optionsResp.json();
+      const optionsJson = await optionsResp.json() as PublicKeyCredentialCreationOptionsJSON;
       console.log('optionsJson ', optionsJson);
 
       let startReg;
@@ -161,7 +368,7 @@ export class AuthenticatorService {
 
       console.log('expanded ', JSON.stringify(expanded));
 
-      const verifyUrl = new URL('https://qcrypt.schicks.net/verifyreg');
+      const verifyUrl = new URL('verifyreg', baseUrl);
       const verificationResp = await fetch(verifyUrl, {
          method: 'POST',
          mode: 'cors',
@@ -177,15 +384,16 @@ export class AuthenticatorService {
          throw new Error('registration failed: ' + await verificationResp.text());
       }
 
-      const verificationJson = await verificationResp.json();
-      console.log('verifyJson, ', verificationJson);
+      const registrationInfo = await verificationResp.json() as RegistrationInfo;
+      console.log('registrationInfo, ', registrationInfo);
 
-      if (!verificationJson || !verificationJson.verified) {
+      if (!registrationInfo || !registrationInfo.verified) {
          throw new Error('registration failed');
       }
 
-      this.storeUserInfo(optionsJson.user.id, optionsJson.user.name);
-      return this.siteKey = base64ToBytes(verificationJson.siteKey);
+      this._siteKey = base64ToBytes(registrationInfo.siteKey);
+      this.storeUserInfo(registrationInfo.userId, registrationInfo.userName);
+      return registrationInfo;
    }
 
 }

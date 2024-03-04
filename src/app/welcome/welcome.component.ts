@@ -1,20 +1,24 @@
 import { Component } from '@angular/core';
-import {MatInputModule} from '@angular/material/input';
-import {MatFormFieldModule} from '@angular/material/form-field';
-import {FormsModule} from '@angular/forms';
+import { MatInputModule } from '@angular/material/input';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthenticatorService } from '../services/authenticator.service';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
+import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatIconModule } from '@angular/material/icon';
+import { CommonModule } from '@angular/common';
+import { MatTooltipModule } from '@angular/material/tooltip';
 
 
 @Component({
   selector: 'app-welcome',
   standalone: true,
   templateUrl: './welcome.component.html',
-  styleUrl: './welcome.component.css',
+  styleUrl: './welcome.component.scss',
   imports: [MatInputModule, MatFormFieldModule, FormsModule, MatButtonModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule, RouterLink
   ],
 
 })
@@ -24,7 +28,8 @@ export class WelcomeComponent {
   public showProgress: boolean = false;
 
   constructor(
-    private auth: AuthenticatorService,
+    private dialog: MatDialog,
+    private authSvc: AuthenticatorService,
     private router: Router) {
   }
 
@@ -32,19 +37,39 @@ export class WelcomeComponent {
     try {
       this.error = '';
       this.showProgress = true;
-      await this.auth.passkeyLogin();
+      await this.authSvc.findLogin();
       this.router.navigateByUrl('/');
-  } catch (err) {
+    } catch (err) {
       console.error(err);
-      this.error = 'Passkey not found. Either try again or create a new passkey.';
-  } finally {
+      this.error = 'Passkey not found. Either try again or select another option.';
+    } finally {
       this.showProgress = false;
-  }
+    }
 
   }
 
   onClickNew(event: any) {
-    
+
   }
+
+  onClickRecovery(event: any) {
+    var dialogRef = this.dialog.open(RecoveryDialog);
+
+  }
+}
+
+
+@Component({
+  selector: 'recovery-dialog',
+  templateUrl: './recovery-dialog.html',
+  styleUrl: './welcome.component.scss',
+  standalone: true,
+  imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
+    MatButtonModule],
+})
+export class RecoveryDialog {
+  constructor(
+    public dialogRef: MatDialogRef<RecoveryDialog>
+  ) { }
 
 }

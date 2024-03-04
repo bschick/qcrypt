@@ -125,7 +125,7 @@ function setIfBoolean(
   selector: 'app-core',
   standalone: true,
   templateUrl: './core.component.html',
-  styleUrl: './core.component.css',
+  styleUrl: './core.component.scss',
   imports: [MatProgressSpinnerModule, MatMenuModule, MatIconModule,
     MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
     ReactiveFormsModule, ClipboardModule, CdkAccordionModule, MatSlideToggleModule,
@@ -171,7 +171,7 @@ export class CoreComponent implements OnInit, AfterViewInit {
   public ctFormat = 'link';
   public loops = 1;
   public checkPwned = false;
-  public trueRandom = true;
+  public trueRandom = false;
   public pseudoRandom = true;
 
   constructor(
@@ -326,12 +326,22 @@ export class CoreComponent implements OnInit, AfterViewInit {
 
     });
 
-    if (this.authSvc.isUserKnown()) {
-      if (!this.authSvc.isAuthenticated()) {
-        this.dialog.open(SigninDialog);
-      }
+    const updatePk = () => this.authSvc.refreshPasskeys().catch((err) => {
+      console.error(err);
+    });
+
+    // core.guard doesn't allow reaching this point if the
+    // user is unknown, so just confirm authenticated status
+    if (!this.authSvc.isAuthenticated()) {
+      // dialog does not close until auth completes or nav to welcome page
+      const dialogRef = this.dialog.open(SigninDialog);
+      dialogRef.afterClosed().subscribe(() => {
+        if(this.authSvc.isAuthenticated()) {
+          updatePk();
+        }
+      });
     } else {
-      // navigate to welcome page
+      updatePk();
     }
   }
 
@@ -438,7 +448,7 @@ export class CoreComponent implements OnInit, AfterViewInit {
     this.checkPwned = false;
     this.loops = 1;
     this.ctFormat = 'link';
-    this.trueRandom = true;
+    this.trueRandom = false;
     this.pseudoRandom = true;
 
     if (isPlatformBrowser(this.platformId)) {
@@ -645,7 +655,7 @@ export class CoreComponent implements OnInit, AfterViewInit {
       ...econtext,
       pwd: pwd,
       hint: hint,
-      ct: clearBytes
+      clear: clearBytes
     }
 
     const encryptedBytes = await this.cipherSvc.encrypt(
@@ -862,7 +872,7 @@ export class CoreComponent implements OnInit, AfterViewInit {
       askHint = false;
     }
 
-    var dialogRef = this.dialog.open(PasswordDialog, {
+    let dialogRef = this.dialog.open(PasswordDialog, {
       data: {
         hint: hint,
         askHint: askHint,

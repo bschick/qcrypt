@@ -1,26 +1,25 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RouterTestingModule } from "@angular/router/testing";
-import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { CoreComponent } from './core.component';
+import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
+import { RecoveryComponent } from './recovery.component';
 
-describe('CoreComponent', () => {
-  let component: CoreComponent;
-  let fixture: ComponentFixture<CoreComponent>;
+describe('RecoveryComponent', () => {
+  let component: RecoveryComponent;
+  let fixture: ComponentFixture<RecoveryComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [CoreComponent, HttpClientTestingModule, NoopAnimationsModule,RouterTestingModule]
+      imports: [RecoveryComponent,RouterTestingModule,NoopAnimationsModule,HttpClientTestingModule]
     })
     .compileComponents();
     
-    fixture = TestBed.createComponent(CoreComponent);
+    fixture = TestBed.createComponent(RecoveryComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
   });
 
   it('should create', () => {
-//    expect(true).toBeTruthy();
     expect(component).toBeTruthy();
   });
 });

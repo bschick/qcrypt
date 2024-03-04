@@ -6,6 +6,7 @@ import { AuthenticatorService } from '../services/authenticator.service';
 export const coreGuard: CanActivateFn = (route, state) => {
   const authSvc = inject(AuthenticatorService);
   const router = inject(Router);
+  
   if (authSvc.isUserKnown()) {
     return true;
   }
