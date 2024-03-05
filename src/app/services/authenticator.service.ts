@@ -42,11 +42,18 @@ export type DeleteInfo = {
 })
 export class AuthenticatorService {
 
-   private _siteKey: string | null = 'bTahdd5CNVLLWhESfOgUsoAneWYMAFBoX6XP-FYUp6g'; //new Uint8Array([0x6d, 0x36, 0xa1, 0x75, 0xde, 0x42, 0x35, 0x52, 0xcb, 0x5a, 0x11, 0x12, 0x7c, 0xe8, 0x14, 0xb2, 0x80, 0x27, 0x79, 0x66, 0x0c, 0x00, 0x50, 0x68, 0x5f, 0xa5, 0xcf, 0xf8, 0x56, 0x14, 0xa7, 0xa8]);//null;
-   private _userName: string | null = 'waldo here'; //null;
-   private _userId: string | null = '5DzRiAARcI6vXCmfpYOpbA'; //null;
+   private _siteKey: string | null = null;
+   private _userName: string | null = null;
+   private _userId: string | null = null;
 
-   constructor() { }
+   constructor() {
+      this._userId = localStorage.getItem('userid');
+      this._userName = localStorage.getItem('username');
+      this._siteKey = sessionStorage.getItem('sitekey');
+      if(this.isAuthenticated()) {
+         this.refreshPasskeys();
+      }
+   }
 
    public passKeys = signal<AuthenticatorInfo[]>([]);
 
@@ -63,7 +70,7 @@ export class AuthenticatorService {
    }
 
    isAuthenticated(): boolean {
-      return this._siteKey ? true : false;
+      return this._siteKey && this._userId ? true : false;
    }
 
    isUserKnown(): boolean {
@@ -78,7 +85,7 @@ export class AuthenticatorService {
       return [userId, userName];
    }
 
-   storeUserInfo(userId: string, userName: string) {
+   private storeUserInfo(userId: string, userName: string) {
       if (!userId || !userName) {
          throw new Error('missing userId or userName');
       }
@@ -88,12 +95,22 @@ export class AuthenticatorService {
       localStorage.setItem('username', this._userName);
    }
 
+   private setActiveUser(userId: string, userName: string, siteKey: string) {
+      if (!siteKey) {
+         throw new Error('missing siteKey');
+      }
+      this.storeUserInfo(userId, userName);
+      this._siteKey = siteKey;
+      sessionStorage.setItem('sitekey', this._siteKey);
+   }
+
    forgetUserInfo() {
       this._userId = null;
       this._userName = null;
       this._siteKey = null;
       localStorage.removeItem('userid');
       localStorage.removeItem('username');
+      sessionStorage.removeItem('sitekey');
    }
 
    async setPasskeyDescription(credentialId: string, description: string): Promise<string> {
@@ -106,6 +123,9 @@ export class AuthenticatorService {
       if (!credentialId) {
          throw new Error('invalid credentialId');
       }
+      if (!this.isAuthenticated()) {
+         throw new Error('not active user');
+      }
 
       const putDescUrl = new URL(`description?credid=${credentialId}&userid=${this._userId}&sitekey=${this._siteKey!}`, baseUrl);
       const putDescResp = await fetch(putDescUrl, {
@@ -115,13 +135,13 @@ export class AuthenticatorService {
          body: description,
       });
 
-//      console.log('putDescResp, ', putDescResp);
+      //      console.log('putDescResp, ', putDescResp);
       if (!putDescResp.ok) {
          throw new Error('setting description failed: ' + await putDescResp.text());
       }
 
       const putDescInfo = await putDescResp.json();
-//      console.log('putDescInfo, ', putDescInfo);
+      //      console.log('putDescInfo, ', putDescInfo);
       return putDescInfo.description;
    }
 
@@ -132,6 +152,9 @@ export class AuthenticatorService {
       if (userName.length < 6 || userName.length > 31) {
          throw new Error('user name must more than 5 and less than 32 character');
       }
+      if (!this.isAuthenticated()) {
+         throw new Error('not active user');
+      }
 
       const putUserNameUrl = new URL(`username?userid=${this._userId}&sitekey=${this._siteKey!}`, baseUrl);
       const putUserNameResp = await fetch(putUserNameUrl, {
@@ -141,13 +164,13 @@ export class AuthenticatorService {
          body: userName,
       });
 
-//      console.log('putUserNameResp, ', putUserNameResp);
+      //      console.log('putUserNameResp, ', putUserNameResp);
       if (!putUserNameResp.ok) {
          throw new Error('setting user name failed: ' + await putUserNameResp.text());
       }
 
       const putUserNameInfo = await putUserNameResp.json();
-//      console.log('putUserNameInfo, ', putUserNameInfo);
+      //      console.log('putUserNameInfo, ', putUserNameInfo);
       this.storeUserInfo(this._userId!, putUserNameInfo.userName);
       return putUserNameInfo.userName;
    }
@@ -155,6 +178,9 @@ export class AuthenticatorService {
    async deletePasskey(credentialId: string): Promise<DeleteInfo> {
       if (!credentialId) {
          throw new Error('invalid credentialId');
+      }
+      if (!this.isAuthenticated()) {
+         throw new Error('not active user');
       }
 
       const delPasskeyUrl = new URL(`authenticator?credid=${credentialId}&userid=${this._userId}&sitekey=${this._siteKey!}`, baseUrl);
@@ -164,16 +190,16 @@ export class AuthenticatorService {
          cache: 'no-store',
       });
 
-//      console.log('delPasskeyResp ', delPasskeyResp);
+      //      console.log('delPasskeyResp ', delPasskeyResp);
       if (!delPasskeyResp.ok) {
          throw new Error('setting description failed: ' + await delPasskeyResp.text());
       }
 
       const delPasskeyInfo = await delPasskeyResp.json() as DeleteInfo;
-//      console.log('delPasskeyInfo ', delPasskeyInfo);
+      //      console.log('delPasskeyInfo ', delPasskeyInfo);
 
       // User is gone... so forgeeet about it
-      if(delPasskeyInfo.userId) {
+      if (delPasskeyInfo.userId) {
          this.forgetUserInfo();
       }
 
@@ -181,13 +207,11 @@ export class AuthenticatorService {
    }
 
    async refreshPasskeys(): Promise<AuthenticatorInfo[]> {
-
       if (!this.isAuthenticated()) {
-         throw new Error('must be authenticated to retrieve passkeys');
+         throw new Error('not active user');
       }
 
       const getAuthsUrl = new URL(`authenticators?userid=${this._userId}&sitekey=${this._siteKey!}`, baseUrl);
-
       const getAuthsResp = await fetch(getAuthsUrl, {
          method: 'GET',
          mode: 'cors',
@@ -206,14 +230,17 @@ export class AuthenticatorService {
       return authsInfo;
    }
 
-   async passkeyLogin(): Promise<AuthenticationInfo> {
-      if(!this._userId) {
+   // Uses the current stored userId
+   async defaultLogin(): Promise<AuthenticationInfo> {
+      const [userId, _] = this.getUserInfo();
+      if (!userId) {
          throw new Error('missing local userId, try findLogin');
       }
 
-      return this.findLogin(this._userId);
+      return this.findLogin(userId);
    }
 
+   // If not userId is provided, will present all Passkeys for this domain
    async findLogin(userId: string | null = null): Promise<AuthenticationInfo> {
 
       let optUrl;
@@ -232,13 +259,13 @@ export class AuthenticatorService {
          cache: 'no-store'
       });
 
-//      console.log('optionsResp, ', optionsResp);
+      //      console.log('optionsResp, ', optionsResp);
       if (!optionsResp.ok) {
          throw new Error('authentication failed: ' + await optionsResp.text());
       }
 
       const optionsJson = await optionsResp.json() as PublicKeyCredentialRequestOptionsJSON;
-//      console.log('optionsJson, ', optionsJson);
+      //      console.log('optionsJson, ', optionsJson);
 
       let startAuth;
       try {
@@ -256,7 +283,7 @@ export class AuthenticatorService {
          challenge: optionsJson.challenge,
       }
 
-//      console.log('expanded ', JSON.stringify(expanded));
+      //      console.log('expanded ', JSON.stringify(expanded));
 
       const verifyUrl = new URL('verifyauth', baseUrl);
       const verificationResp = await fetch(verifyUrl, {
@@ -269,20 +296,19 @@ export class AuthenticatorService {
          body: JSON.stringify(expanded),
       });
 
-//      console.log('verificationResp, ', verificationResp);
+      //      console.log('verificationResp, ', verificationResp);
       if (!verificationResp.ok) {
          throw new Error('authentication failed: ' + await verificationResp.text());
       }
 
       const authInfo = await verificationResp.json() as AuthenticationInfo;
-//      console.log('authInfo, ', authInfo);
+      //      console.log('authInfo, ', authInfo);
 
       if (!authInfo || !authInfo.verified) {
          throw new Error('authentication failed');
       }
 
-      this._siteKey = authInfo.siteKey;
-      this.storeUserInfo(authInfo.userId, authInfo.userName);
+      this.setActiveUser(authInfo.userId, authInfo.userName, authInfo.siteKey);
       return authInfo;
    }
 
@@ -304,11 +330,11 @@ export class AuthenticatorService {
 
    // Creates new user and first passkey
    async newUser(userName: string): Promise<RegistrationInfo> {
-      if(!userName) {
+      if (!userName) {
          throw new Error('missing require userName');
       }
 
-      const  optUrl = new URL(`regoptions?username=${userName}`, baseUrl);
+      const optUrl = new URL(`regoptions?username=${userName}`, baseUrl);
       const optionsResp = await fetch(optUrl, {
          method: 'GET',
          mode: 'cors',
@@ -321,7 +347,7 @@ export class AuthenticatorService {
    // Adds passkey to current user
    async addPasskey(): Promise<RegistrationInfo> {
 
-      if(!this._userId) {
+      if (!this.isAuthenticated()) {
          throw new Error('not active user');
       }
 
@@ -339,13 +365,13 @@ export class AuthenticatorService {
       optionsResp: Response
    ): Promise<RegistrationInfo> {
 
-//      console.log('optionsResp, ', optionsResp);
+      //      console.log('optionsResp, ', optionsResp);
       if (!optionsResp.ok) {
          throw new Error('registration failed: ' + await optionsResp.text());
       }
 
       const optionsJson = await optionsResp.json() as PublicKeyCredentialCreationOptionsJSON;
-//      console.log('optionsJson ', optionsJson);
+      //      console.log('optionsJson ', optionsJson);
 
       let startReg;
       try {
@@ -364,7 +390,7 @@ export class AuthenticatorService {
          challenge: optionsJson.challenge,
       }
 
-//      console.log('expanded ', JSON.stringify(expanded));
+      //      console.log('expanded ', JSON.stringify(expanded));
 
       const verifyUrl = new URL('verifyreg', baseUrl);
       const verificationResp = await fetch(verifyUrl, {
@@ -377,20 +403,19 @@ export class AuthenticatorService {
          body: JSON.stringify(expanded),
       });
 
-//      console.log('verifyResp, ', verificationResp);
+      //      console.log('verifyResp, ', verificationResp);
       if (!verificationResp.ok) {
          throw new Error('registration failed: ' + await verificationResp.text());
       }
 
       const registrationInfo = await verificationResp.json() as RegistrationInfo;
-//      console.log('registrationInfo, ', registrationInfo);
+      //      console.log('registrationInfo, ', registrationInfo);
 
       if (!registrationInfo || !registrationInfo.verified) {
          throw new Error('registration failed');
       }
 
-      this._siteKey = registrationInfo.siteKey;
-      this.storeUserInfo(registrationInfo.userId, registrationInfo.userName);
+      this.setActiveUser(registrationInfo.userId, registrationInfo.userName, registrationInfo.siteKey);
       return registrationInfo;
    }
 

@@ -30,6 +30,7 @@ export class NewUserComponent implements OnInit {
   public currentUserName: string | null = null;
   public completed = false;
   public recoveryLink = '';
+  public authenticated = false;
 
   constructor(
     private authSvc: AuthenticatorService,
@@ -43,6 +44,7 @@ export class NewUserComponent implements OnInit {
     if (userId && userName) {
       this.currentUserName = userName;
     }
+    this.authenticated = this.authSvc.isAuthenticated();
   }
 
   toastMessage(msg: string): void {
@@ -55,7 +57,7 @@ export class NewUserComponent implements OnInit {
     try {
       this.error = '';
       this.showProgress = true;
-      await this.authSvc.passkeyLogin();
+      await this.authSvc.defaultLogin();
       this.router.navigateByUrl('/');
     } catch (err) {
       console.error(err);
@@ -75,6 +77,7 @@ export class NewUserComponent implements OnInit {
 
     try {
       this.showProgress = true;
+      this.authSvc.forgetUserInfo();
       const passkeyInfo = await this.authSvc.newUser(this.newUserName);
       this.recoveryLink = new URL(
         window.location.origin + '/recovery' +
@@ -85,9 +88,7 @@ export class NewUserComponent implements OnInit {
       this.completed = true;
     } catch (err) {
       console.error(err);
-      if (err instanceof Error) {
-        this.error = err.message ?? err.name;
-      }
+      this.error = 'New user was not created, please try again';
     } finally {
       this.showProgress = false;
     }
