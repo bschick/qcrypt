@@ -20,7 +20,11 @@
         dedicated password managers like Bitwarden or 1Password are the easiest to use,
         work consistently across devices, and allow for backup.
     </p>
-    <p *ngIf="currentUserName" class="descrip">
+    <p *ngIf="authenticated" class="descrip">
+        You are currently signed in as <b>"{{currentUserName}}"</b>. Creating a new
+        user will first sign you out and then guided to create a passkey for the new user.
+    </p>
+    <p *ngIf="currentUserName && !authenticated" class="descrip">
         There is an existing Quick Crypt user on this system called "{{currentUserName}}". Instead of creating a
         new user, you can
         <a href="javascript:void(null);" role="button" (click)="onClickSignin()">

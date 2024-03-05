@@ -8,13 +8,25 @@
             passkeys and creates a passkey for you. Once your new passky is created, you will
             be able decrypt information you previously encrypted.
         </p>
-        <p *ngIf="currentUserName" class="descrip">
-            There is an existing Quick Crypt user on this system called "{{currentUserName}}". 
-            Instead of recovering another user, you can 
+        <p *ngIf="currentUserName && !authenticated" class="descrip">
+            There is an existing Quick Crypt user on this system called <b>"{{currentUserName}}"</b>. 
+            Instead of starting the recover process, you may want to try  
             <a href="javascript:void(null);" role="button" (click)="onClickSignin()">
-                sign in as <b>{{currentUserName}}</b>
+                signing in as <b>{{currentUserName}}</b>
             </a>
         </p>
+        <p *ngIf="authenticated && selfRecovery" class="descrip">
+            You are currently signed in as <b>"{{currentUserName}}"</b>, which this recovery link 
+            if for. Recovering this user
+            identity will remove all existing passkeys and then create a new one. If you do not need to
+            recover this user, click "Quick Crypt" in the toolbar.
+        </p>
+        <p *ngIf="authenticated && !selfRecovery" class="descrip">
+            You are currently signed in as <b>"{{currentUserName}}"</b>, and this recovery link
+            is for a different user. If you start the recovery process, you will be signed out
+            and guided to create a new passkey for the recovered user identity.
+        </p>
+
         <button mat-fab extended (click)="onClickStartRecovery($event)" color="primary" class="button">
             <span class="button-label">Start the recovery process</span>
         </button>

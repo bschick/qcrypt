@@ -22,6 +22,8 @@ export class RecoveryComponent implements OnInit {
   public badlink = '';
   public error = '';
   public showProgress = false;
+  public authenticated = false;
+  public selfRecovery = false;
   public currentUserName: string | null = null;
   private userId: string | null = null;
   private siteKey: string | null = null;
@@ -39,7 +41,10 @@ export class RecoveryComponent implements OnInit {
       this.badlink = 'userid or sitekey is missing';
       this.validRecoveryLink = false;
     }
-
+    this.authenticated = this.authSvc.isAuthenticated();
+    if(this.authenticated) {
+      this.selfRecovery = this.siteKey === this.authSvc.siteKey;
+    }
     const [userId, userName] = this.authSvc.getUserInfo();
     if (userId && userName) {
       this.currentUserName = userName;
@@ -50,7 +55,7 @@ export class RecoveryComponent implements OnInit {
     try {
       this.error = '';
       this.showProgress = true;
-      await this.authSvc.passkeyLogin();
+      await this.authSvc.defaultLogin();
       this.router.navigateByUrl('/');
     } catch (err) {
       console.error(err);
@@ -63,6 +68,7 @@ export class RecoveryComponent implements OnInit {
   async onClickStartRecovery(event: any) {
     try {
       this.showProgress = true;
+      this.authSvc.forgetUserInfo();
       await this.authSvc.recover(this.userId!, this.siteKey!);
       this.router.navigateByUrl('/');
     } catch (err) {

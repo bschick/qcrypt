@@ -28,7 +28,7 @@ import {
   OnInit, AfterViewInit,
   PLATFORM_ID,
 } from '@angular/core';
-import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { MatDialog } from '@angular/material/dialog';
 import { MatRippleModule } from '@angular/material/core';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -278,24 +278,22 @@ export class CoreComponent implements OnInit, AfterViewInit {
 
       // First check localStorage, then apply params (which take president)
       // (not that change are not presisted until the encrypt button is used)
-      if (isPlatformBrowser(this.platformId)) {
-        /* debug  
-        for (let i = 0; i < localStorage.length; i++) {
-          let key = localStorage.key(i)!;
-          console.log(`${key}: ${localStorage.getItem(key)}`);
-         } */
+      /* debug  
+      for (let i = 0; i < localStorage.length; i++) {
+        let key = localStorage.key(i)!;
+        console.log(`${key}: ${localStorage.getItem(key)}`);
+       } */
 
-        this.setAlgorithm(localStorage.getItem('algorithm'));
-        this.setIcount(localStorage.getItem('icount'));
-        this.setHidePwd(localStorage.getItem('hidepwd'));
-        this.setCacheTime(localStorage.getItem('cachetime'));
-        this.setCheckPwned(localStorage.getItem('checkpwned'));
-        this.setMinPwdStrength(localStorage.getItem('minpwdstrength'));
-        this.setLoops(localStorage.getItem('loops'));
-        this.setCTFormat(localStorage.getItem('ctformat'));
-        this.setTrueRandom(localStorage.getItem('trand'));
-        this.setPseudoRandom(localStorage.getItem('prand'));
-      }
+      this.setAlgorithm(localStorage.getItem('algorithm'));
+      this.setIcount(localStorage.getItem('icount'));
+      this.setHidePwd(localStorage.getItem('hidepwd'));
+      this.setCacheTime(localStorage.getItem('cachetime'));
+      this.setCheckPwned(localStorage.getItem('checkpwned'));
+      this.setMinPwdStrength(localStorage.getItem('minpwdstrength'));
+      this.setLoops(localStorage.getItem('loops'));
+      this.setCTFormat(localStorage.getItem('ctformat'));
+      this.setTrueRandom(localStorage.getItem('trand'));
+      this.setPseudoRandom(localStorage.getItem('prand'));
 
       let params = new HttpParams({ fromString: window.location.search });
 
@@ -336,12 +334,10 @@ export class CoreComponent implements OnInit, AfterViewInit {
       // dialog does not close until auth completes or nav to welcome page
       const dialogRef = this.dialog.open(SigninDialog);
       dialogRef.afterClosed().subscribe(() => {
-        if(this.authSvc.isAuthenticated()) {
+        if (this.authSvc.isAuthenticated()) {
           updatePk();
         }
       });
-    } else {
-      updatePk();
     }
   }
 
@@ -451,30 +447,22 @@ export class CoreComponent implements OnInit, AfterViewInit {
     this.trueRandom = false;
     this.pseudoRandom = true;
 
-    if (isPlatformBrowser(this.platformId)) {
-      const [userId, userName] = this.authSvc.getUserInfo();
-      localStorage.clear();
-      if (userId && userName) {
-        this.authSvc.storeUserInfo(userId, userName);
-      }
-    }
+    this.saveOptions();
     this.clearCaches();
   }
 
   saveOptions(): void {
     try {
-      if (isPlatformBrowser(this.platformId)) {
-        localStorage.setItem('algorithm', this.algorithm);
-        localStorage.setItem('icount', this.icount.toString());
-        localStorage.setItem('hidepwd', this.hidePwd.toString());
-        localStorage.setItem('cachetime', this.cacheTime.toString());
-        localStorage.setItem('checkpwned', this.checkPwned.toString());
-        localStorage.setItem('minpwdstrength', this.minPwdStrength);
-        localStorage.setItem('loops', this.loops.toString());
-        localStorage.setItem('ctformat', this.ctFormat.toString());
-        localStorage.setItem('trand', this.trueRandom.toString());
-        localStorage.setItem('prand', this.pseudoRandom.toString());
-      }
+      localStorage.setItem('algorithm', this.algorithm);
+      localStorage.setItem('icount', this.icount.toString());
+      localStorage.setItem('hidepwd', this.hidePwd.toString());
+      localStorage.setItem('cachetime', this.cacheTime.toString());
+      localStorage.setItem('checkpwned', this.checkPwned.toString());
+      localStorage.setItem('minpwdstrength', this.minPwdStrength);
+      localStorage.setItem('loops', this.loops.toString());
+      localStorage.setItem('ctformat', this.ctFormat.toString());
+      localStorage.setItem('trand', this.trueRandom.toString());
+      localStorage.setItem('prand', this.pseudoRandom.toString());
     } catch (err) {
       console.error(err);
       //otherwise ignore
@@ -989,7 +977,7 @@ export class CoreComponent implements OnInit, AfterViewInit {
       if (!this.authSvc.isAuthenticated()) {
         throw new Error('User not authenticated, try refreshing this page')
       }
-  
+
       const dcontext = this.getDecContextFrom(this.cipherArmor);
       const cipherData = await this.cipherSvc.getCipherData(
         cs.base64ToBytes(this.authSvc.siteKey!),

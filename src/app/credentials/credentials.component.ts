@@ -36,7 +36,7 @@ export interface ConfirmData {
 export class CredentialsComponent implements OnInit {
 
   public error = '';
-  public recoveryLink: string;
+  public recoveryLink: string = '';
   public passKeys: AuthenticatorInfo[] = [];
   public showProgress = false;
   public displayedColumns: string[] = ['image', 'description', 'delete'];
@@ -48,14 +48,15 @@ export class CredentialsComponent implements OnInit {
     private router: Router,
     private snackBar: MatSnackBar
   ){
-    this.recoveryLink = new URL(
-      window.location.origin + '/recovery' +
-      '?userid=' + this.authSvc.userId +
-      '&sitekey=' + this.authSvc.siteKey
-    ).toString();
-
     effect(() => {
       this.passKeys = this.authSvc.passKeys();
+
+      this.recoveryLink = new URL(
+        window.location.origin + '/recovery' +
+        '?userid=' + this.authSvc.userId +
+        '&sitekey=' + this.authSvc.siteKey
+      ).toString();
+    
     });
   }
 

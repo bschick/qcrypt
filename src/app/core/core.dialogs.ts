@@ -217,7 +217,7 @@ export class SigninDialog {
         try {
             this.error = '';
             this.showProgress = true;
-            await this.authSvc.passkeyLogin();
+            await this.authSvc.defaultLogin();
             this.dialogRef.close();
         } catch (err) {
             console.error(err);
