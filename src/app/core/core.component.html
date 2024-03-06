@@ -146,14 +146,17 @@ SOFTWARE. -->
             <mat-option value="4">Best</mat-option>
           </mat-select>
         </mat-form-field>
-        <mat-slide-toggle class="mleft15" [(ngModel)]="hidePwd"
+        <mat-slide-toggle class="mleft15" [(ngModel)]="hidePwd" (change)="onHidePwdChanged()"
           matTooltip="Uncheck to default to showing your password while typing">Hide Password
         </mat-slide-toggle>
         <mat-slide-toggle class="mleft15" [(ngModel)]="checkPwned" (change)="clearCaches()"
           matTooltip="Check if your password matches a known stolen password">Check If Stolen
         </mat-slide-toggle>
+        <a href="https://haveibeenpwned.com/API/v2#PwnedPasswords" target="_blank">
+          <mat-icon class="open-new-icon2">open_in_new</mat-icon>
+        </a>
         <br /><span class="options-header">
-          &nbsp;Cipher and Mode</span>
+          &nbsp;Cipher and Mode </span>
         <a href="https://soatok.blog/2020/07/12/comparison-of-symmetric-encryption-methods/#contents-list"
           target="_blank">
           <mat-icon class="open-new-icon1">open_in_new</mat-icon>
@@ -173,7 +176,7 @@ SOFTWARE. -->
       <p class="mtop10">
         <mat-form-field class="option-input">
           <mat-label>Loop Encrypt</mat-label>
-          <input type="number" min="1" max="10" step="1" matInput [(ngModel)]="loops"
+          <input type="number" min="1" max="10" step="1" matInput [(ngModel)]="loops" (change)="onLoopsChange()"
             matTooltip="Number of times to run encryption in a loop. Enter a different password each loop" />
         </mat-form-field>
         <mat-form-field class="option-input mleft15">
@@ -205,14 +208,14 @@ SOFTWARE. -->
       </p>
       <div class="mtop20">
         <button mat-raised-button (click)="onResetOptions()" color="basic"
-          matTooltip="Reset all options to intial values">
-          Reset All Options
+          matTooltip="Reset all options to default values">
+          Reset To Defaults
         </button>
       </div>
     </mat-expansion-panel>
   </mat-accordion>
   <p>
-<!--    <span class="newtab">
+    <!--    <span class="newtab">
       <a (click)="onNewPage()" class="link">
         open new tab
         <mat-icon class="newtab-icon">open_in_new</mat-icon>

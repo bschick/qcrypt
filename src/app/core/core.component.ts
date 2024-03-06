@@ -27,9 +27,10 @@ import {
   ElementRef,
   OnInit, AfterViewInit,
   PLATFORM_ID,
+  OnDestroy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatRippleModule } from '@angular/material/core';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
@@ -51,13 +52,14 @@ import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import * as cs from '../services/cipher.service';
-import { AuthenticatorService } from '../services/authenticator.service';
+import { AuthenticatorService, AuthEvent, AuthEventData } from '../services/authenticator.service';
 import {
   PasswordDialog,
   CipherInfoDialog,
   HelpDialog,
   SigninDialog,
 } from './core.dialogs';
+import { Subscription } from 'rxjs';
 
 const MAX_LOOPS = 10;
 
@@ -133,13 +135,15 @@ function setIfBoolean(
     MatTooltipModule, MatRippleModule, CommonModule
   ],
 })
-export class CoreComponent implements OnInit, AfterViewInit {
+export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
+  private signinDialogRef?: MatDialogRef<SigninDialog, any>
   private mouseDown = false;
   private cachedPassword: string = '';
   private cachedHint: string = '';
   private intervalId: number = 0;
   private spinnerAbove: number = 1500000; // Default since benchmark is async
   private actionStart: number = 0;
+  private eventSub!: Subscription;
   public cacheTimeout!: DateTime;
   public icountMin: number = cs.ICOUNT_MIN;
   public icountMax: number = cs.ICOUNT_MAX; // Default since benchmark is async
@@ -178,7 +182,7 @@ export class CoreComponent implements OnInit, AfterViewInit {
     private authSvc: AuthenticatorService,
     private cipherSvc: cs.CipherService,
     private r2: Renderer2,
-    public dialog: MatDialog,
+    private dialog: MatDialog,
     private snackBar: MatSnackBar,
     private matIconRegistry: MatIconRegistry,
     private domSanitizer: DomSanitizer,
@@ -253,6 +257,21 @@ export class CoreComponent implements OnInit, AfterViewInit {
     });
   }
 
+  lsGet(key: string): string | null {
+    const [userId, _] = this.authSvc.getUserInfo();
+    return localStorage.getItem(userId + key);
+  }
+
+  lsSet(key: string, value: string) {
+    const [userId, _] = this.authSvc.getUserInfo();
+    localStorage.setItem(userId + key, value);
+  }
+  /*
+    lsDel(key: string) {
+      const [userId, _] = this.authSvc.getUserInfo();
+      localStorage.removeItem(userId + key);
+    }
+  */
   ngAfterViewInit() {
     // ugly hack to make angular not clip the label for dropdown select elements
     this.formatLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.7)";
@@ -260,11 +279,9 @@ export class CoreComponent implements OnInit, AfterViewInit {
   }
 
   ngOnInit(): void {
-
     // This can be greatly delayed is there is a long running async benchmark or
     // encrpt or decrypt from a previous instance (tab that has not fully closed). 
     // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
-
     this.cipherSvc.benchmark(this.icountMin).then(([icount, icountMax, hashRate]) => {
       this.icount = icount;
       this.icountDefault = this.icount;
@@ -273,167 +290,160 @@ export class CoreComponent implements OnInit, AfterViewInit {
       // progress spinner about 1.25 secs of estimated delay
       const target_spinner_millis = 1250;
       this.spinnerAbove = Math.round(target_spinner_millis * hashRate)
-
     }).finally(() => {
-
-      // First check localStorage, then apply params (which take president)
-      // (not that change are not presisted until the encrypt button is used)
-      /* debug  
-      for (let i = 0; i < localStorage.length; i++) {
-        let key = localStorage.key(i)!;
-        console.log(`${key}: ${localStorage.getItem(key)}`);
-       } */
-
-      this.setAlgorithm(localStorage.getItem('algorithm'));
-      this.setIcount(localStorage.getItem('icount'));
-      this.setHidePwd(localStorage.getItem('hidepwd'));
-      this.setCacheTime(localStorage.getItem('cachetime'));
-      this.setCheckPwned(localStorage.getItem('checkpwned'));
-      this.setMinPwdStrength(localStorage.getItem('minpwdstrength'));
-      this.setLoops(localStorage.getItem('loops'));
-      this.setCTFormat(localStorage.getItem('ctformat'));
-      this.setTrueRandom(localStorage.getItem('trand'));
-      this.setPseudoRandom(localStorage.getItem('prand'));
-
-      let params = new HttpParams({ fromString: window.location.search });
-
-      if (params.get('cipherarmor')) {
-        this.cipherArmor = decodeURIComponent(params.get('cipherarmor')!);
-        params = params.delete('cipherarmor');
+      // load after benchmakr to overwrite icount with saved value
+      if (this.authSvc.isAuthenticated()) {
+        this.loadOptions();
       }
-      if (params.get('cleartext')) {
-        this.clearText = decodeURIComponent(params.get('cleartext')!);
-        params = params.delete('cleartext');
-      }
-
-      // If there are customized options, expand the panel by default
-      if (params.keys().length > 0) {
-        this.expandOptions = true;
-      }
-
-      this.setAlgorithm(params.get('algorithm'));
-      this.setIcount(params.get('icount'));
-      this.setHidePwd(params.get('hidepwd'));
-      this.setCacheTime(params.get('cachetime'));
-      this.setCheckPwned(params.get('checkpwned'));
-      this.setMinPwdStrength(params.get('minpwdstrength'));
-      this.setLoops(params.get('loops'));
-      this.setCTFormat(params.get('ctformat'));
-      this.setTrueRandom(params.get('trand'));
-      this.setPseudoRandom(params.get('prand'));
-
     });
 
-    const updatePk = () => this.authSvc.refreshPasskeys().catch((err) => {
-      console.error(err);
-    });
+    // subscribe to auth events
+    this.eventSub = this.authSvc.on(
+      [AuthEvent.Logout, AuthEvent.Forget, AuthEvent.Login],
+      this.onAuthEvent.bind(this)
+    );
 
     // core.guard doesn't allow reaching this point if the
-    // user is unknown, so just confirm authenticated status
+    // user is unknown, If not authenticated, ask the user
+    // to sign in
     if (!this.authSvc.isAuthenticated()) {
-      // dialog does not close until auth completes or nav to welcome page
+      this.showSigninDialog();
+    }
+  }
+
+  loadOptions() {
+    // First check localStorage, then apply params (which take president)
+    // (not that change are not presisted until the encrypt button is used)
+    /* debug  
+    for (let i = 0; i < localStorage.length; i++) {
+      let key = localStorage.key(i)!;
+      console.log(`${key}: ${this.lsGet(key)}`);
+     } */
+
+    this.setAlgorithm(this.lsGet('algorithm'));
+    this.setIcount(this.lsGet('icount'));
+    this.setHidePwd(this.lsGet('hidepwd'));
+    this.setCacheTime(this.lsGet('cachetime'));
+    this.setCheckPwned(this.lsGet('checkpwned'));
+    this.setMinPwdStrength(this.lsGet('minpwdstrength'));
+    this.setLoops(this.lsGet('loops'));
+    this.setCTFormat(this.lsGet('ctformat'));
+    this.setTrueRandom(this.lsGet('trand'));
+    this.setPseudoRandom(this.lsGet('prand'));
+
+    let params = new HttpParams({ fromString: window.location.search });
+
+    if (params.get('cipherarmor')) {
+      this.cipherArmor = decodeURIComponent(params.get('cipherarmor')!);
+      this.onFormatChange();
+      params = params.delete('cipherarmor');
+    }
+    if (params.get('cleartext')) {
+      this.clearText = decodeURIComponent(params.get('cleartext')!);
+      params = params.delete('cleartext');
+    }
+
+    // If there are customized options, expand the panel by default
+    if (params.keys().length > 0) {
+      this.expandOptions = true;
+    }
+
+    this.setAlgorithm(params.get('algorithm'));
+    this.setIcount(params.get('icount'));
+    this.setHidePwd(params.get('hidepwd'));
+    this.setCacheTime(params.get('cachetime'));
+    this.setCheckPwned(params.get('checkpwned'));
+    this.setMinPwdStrength(params.get('minpwdstrength'));
+    this.setLoops(params.get('loops'));
+    this.setCTFormat(params.get('ctformat'));
+    this.setTrueRandom(params.get('trand'));
+    this.setPseudoRandom(params.get('prand'));
+  }
+
+  ngOnDestroy(): void {
+    this.eventSub.unsubscribe();
+  }
+
+  onAuthEvent(data: AuthEventData) {
+    console.log('authevent ', data);
+    if (data.event === AuthEvent.Logout) {
+      this.onResetOptions();
+      this.showSigninDialog();
+    } else if (data.event === AuthEvent.Forget) {
+      //      this.nukeOptions();
+    } else if (data.event === AuthEvent.Login) {
+      this.loadOptions();
+    }
+  }
+
+  showSigninDialog() {
+    if (!this.signinDialogRef && this.authSvc.isUserKnown() && !this.authSvc.isAuthenticated()) {
       const dialogRef = this.dialog.open(SigninDialog);
       dialogRef.afterClosed().subscribe(() => {
+        this.signinDialogRef = undefined;
         if (this.authSvc.isAuthenticated()) {
-          updatePk();
+          this.authSvc.refreshPasskeys().catch((err) => {
+            console.error(err);
+          });
         }
       });
     }
   }
 
-  /*  async benchmark(): Promise<void> {
-      // Test performance of key generation to determine when to show spinner
-      // load this from advanced options
-      const test_size = this.icountMin;
-      const target_spinner_millis = 1250;
-      const target_hash_millis = 500;
-      const max_hash_millis = 5 * 60 * 1000; //5 minutes
+  /*  onNewPage(): void {
+      var url = window.location.origin;
+      var params = new HttpParams();
   
-      let cipher = new cs.Cipher('AES-GCM', test_size, false);
+      if (this.algorithm != 'AES-GCM') {
+        params = params.append('algorithm', this.algorithm);
+      }
   
-      const start = Date.now();
-      await cipher.genCipherKey('AVeryBogusPwd', crypto.getRandomValues(new Uint8Array(32)), new Uint8Array(cs.SLT_BYTES));
-      const test_millis = Date.now() - start;
+      if (this.icount != this.icountDefault) {
+        params = params.append('icount', this.icount);
+      }
   
-      // Calculate how many iterations take target_spinner_millis. Above that we'll show spinner
-      this.hashRate = test_size / test_millis;
+      if (!this.hidePwd) {
+        params = params.append('hidepwd', false);
+      }
   
-      // Don't allow more then ~5 minutes of pwd hashing (rounded to millions)
-      this.icountMax =
-        Math.min(cs.ICOUNT_MAX,
-          Math.round((max_hash_millis * this.hashRate) / 1000000) * 1000000);
+      if (this.cacheTime > 0) {
+        params = params.append('cachetime', this.cacheTime);
+      }
   
-      let target_icount = Math.round((this.hashRate * target_hash_millis) / 100000) * 100000;
-      target_icount += 200000;
-      const default_icount = Math.max(cs.ICOUNT_DEFAULT, target_icount);
+      if (this.checkPwned) {
+        params = params.append('checkpwned', true);
+      }
   
-      const spinner_icount = Math.round(target_spinner_millis * this.hashRate);
+      if (this.minPwdStrength != '3') {
+        params = params.append('minpwdstrength', this.minPwdStrength);
+      }
   
-      this.icount = default_icount;
-      this.icountDefault = default_icount;
-      this.spinnerAbove = spinner_icount;
+      if (this.cipherArmor.length > 1) {
+        params = params.append('cipherarmor', encodeURIComponent(this.cipherArmor));
+      }
   
-      console.log(
-        `bench: ${test_size}i, in: ${test_millis}ms, rate: ${Math.round(
-          this.hashRate
-        )}i/ms, ic: ${this.icount}i, icm: ${this.icountMax}i, spin: ${this.spinnerAbove
-        }i`
-      );
-    }*/
-
-  onNewPage(): void {
-    var url = window.location.origin;
-    var params = new HttpParams();
-
-    if (this.algorithm != 'AES-GCM') {
-      params = params.append('algorithm', this.algorithm);
+      if (this.loops > 1) {
+        params = params.append('loops', this.loops);
+      }
+  
+      if (this.ctFormat != 'link') {
+        params = params.append('ctformat', this.ctFormat);
+      }
+  
+      if (this.trueRandom) {
+        params = params.append('trand', true);
+      }
+  
+      if (this.pseudoRandom) {
+        params = params.append('prand', true);
+      }
+  
+      if (params.keys().length > 0) {
+        url += `?${params.toString()}`;
+      }
+      window.open(url);
     }
-
-    if (this.icount != this.icountDefault) {
-      params = params.append('icount', this.icount);
-    }
-
-    if (!this.hidePwd) {
-      params = params.append('hidepwd', false);
-    }
-
-    if (this.cacheTime > 0) {
-      params = params.append('cachetime', this.cacheTime);
-    }
-
-    if (this.checkPwned) {
-      params = params.append('checkpwned', true);
-    }
-
-    if (this.minPwdStrength != '3') {
-      params = params.append('minpwdstrength', this.minPwdStrength);
-    }
-
-    if (this.cipherArmor.length > 1) {
-      params = params.append('cipherarmor', encodeURIComponent(this.cipherArmor));
-    }
-
-    if (this.loops > 1) {
-      params = params.append('loops', this.loops);
-    }
-
-    if (this.ctFormat != 'link') {
-      params = params.append('ctformat', this.ctFormat);
-    }
-
-    if (this.trueRandom) {
-      params = params.append('trand', true);
-    }
-
-    if (this.pseudoRandom) {
-      params = params.append('prand', true);
-    }
-
-    if (params.keys().length > 0) {
-      url += `?${params.toString()}`;
-    }
-    window.open(url);
-  }
+  */
 
   onResetOptions(): void {
     this.algorithm = 'AES-GCM';
@@ -447,27 +457,49 @@ export class CoreComponent implements OnInit, AfterViewInit {
     this.trueRandom = false;
     this.pseudoRandom = true;
 
-    this.saveOptions();
+    // clear caches calls saveOptions
     this.clearCaches();
   }
 
   saveOptions(): void {
     try {
-      localStorage.setItem('algorithm', this.algorithm);
-      localStorage.setItem('icount', this.icount.toString());
-      localStorage.setItem('hidepwd', this.hidePwd.toString());
-      localStorage.setItem('cachetime', this.cacheTime.toString());
-      localStorage.setItem('checkpwned', this.checkPwned.toString());
-      localStorage.setItem('minpwdstrength', this.minPwdStrength);
-      localStorage.setItem('loops', this.loops.toString());
-      localStorage.setItem('ctformat', this.ctFormat.toString());
-      localStorage.setItem('trand', this.trueRandom.toString());
-      localStorage.setItem('prand', this.pseudoRandom.toString());
+      if (this.authSvc.isAuthenticated()) {
+        console.log('saving icount ', this.icount);
+        this.lsSet('algorithm', this.algorithm);
+        this.lsSet('icount', this.icount.toString());
+        this.lsSet('hidepwd', this.hidePwd.toString());
+        this.lsSet('cachetime', this.cacheTime.toString());
+        this.lsSet('checkpwned', this.checkPwned.toString());
+        this.lsSet('minpwdstrength', this.minPwdStrength);
+        this.lsSet('loops', this.loops.toString());
+        this.lsSet('ctformat', this.ctFormat.toString());
+        this.lsSet('trand', this.trueRandom.toString());
+        this.lsSet('prand', this.pseudoRandom.toString());
+      }
     } catch (err) {
       console.error(err);
       //otherwise ignore
     }
   }
+
+  /*  nukeOptions(): void {
+      try {
+        this.lsDel('algorithm');
+        this.lsDel('icount');
+        this.lsDel('hidepwd');
+        this.lsDel('cachetime');
+        this.lsDel('checkpwned');
+        this.lsDel('minpwdstrength');
+        this.lsDel('loops');
+        this.lsDel('ctformat');
+        this.lsDel('trand');
+        this.lsDel('prand');
+      } catch (err) {
+        console.error(err);
+        //otherwise ignore
+      }
+    }*/
+
 
   secondsRemaining() {
     let result = 0;
@@ -507,6 +539,7 @@ export class CoreComponent implements OnInit, AfterViewInit {
   clearCaches(): void {
     this.clearPassword();
     this.onClearClear();
+    this.saveOptions();
   }
 
   onDraggerMouseDown(): void {
@@ -535,7 +568,12 @@ export class CoreComponent implements OnInit, AfterViewInit {
     this.mouseDown = false;
   }
 
+  onLoopsChange() {
+    this.lsSet('loops', this.loops.toString());
+  }
+
   onAlgorithmChange(value: string): void {
+    this.lsSet('algorithm', this.algorithm);
   }
 
   toastMessage(msg: string): void {
@@ -610,7 +648,6 @@ export class CoreComponent implements OnInit, AfterViewInit {
 
       await this.makeCipherArmor(econtext);
 
-      this.saveOptions();
       // After > 1 loop, its confusing to leave intermediate stuff
       if (this.stuffCached) {
         this.clearText = savedClearText;
@@ -890,11 +927,12 @@ export class CoreComponent implements OnInit, AfterViewInit {
     });
   }
 
-  onFormatChange(selected: string) {
+  onFormatChange(selected?: string) {
     let dcontext = this.getDecContextFrom(this.cipherArmor);
     // make it the "last loop" so we get the full cipher armor
     dcontext.lp = dcontext.lpEnd;
     this.cipherArmor = this.getCipherArmorFrom(dcontext);
+    this.lsSet('ctformat', this.ctFormat.toString());
   }
 
   onTrueRandomChanged(checked: boolean) {
@@ -902,6 +940,7 @@ export class CoreComponent implements OnInit, AfterViewInit {
       this.pseudoRandom = true;
     }
     this.clearCaches();
+    this.lsSet('trand', this.trueRandom.toString());
   }
 
   onClickFileUpload(event: any) {
@@ -966,10 +1005,15 @@ export class CoreComponent implements OnInit, AfterViewInit {
     });
   }
 
+  onHidePwdChanged(): void {
+    this.lsSet('hidepwd', this.hidePwd.toString());
+  }
+
   onClearTimerChange(): void {
     if (this.stuffCached) {
       this.restartTimer();
     }
+    this.lsSet('cachetime', this.cacheTime.toString());
   }
 
   async onCipherTextInfo(): Promise<void> {

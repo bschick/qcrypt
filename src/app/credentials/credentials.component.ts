@@ -56,11 +56,11 @@ export class CredentialsComponent implements OnInit {
         '?userid=' + this.authSvc.userId +
         '&sitekey=' + this.authSvc.siteKey
       ).toString();
-    
     });
   }
 
   ngOnInit() {
+    this.passKeys = this.authSvc.passKeys();
   }
 
   toastMessage(msg: string): void {
@@ -140,9 +140,8 @@ export class CredentialsComponent implements OnInit {
 
   async onClickSignout(): Promise<void> {
     this.error = '';
-    this.authSvc.forgetUserInfo();
+    this.authSvc.logout();
     this.refresh();
-    this.router.navigateByUrl('/welcome');
   }
 
   async onDescriptionChanged(component: EditableComponent, passkey: AuthenticatorInfo): Promise<void> {

@@ -4,7 +4,7 @@ import {
    PublicKeyCredentialCreationOptionsJSON,
    PublicKeyCredentialRequestOptionsJSON,
 } from '@simplewebauthn/types';
-import { base64ToBytes, bytesToBase64 } from './cipher.service';
+import { Subject, Subscription, filter } from 'rxjs';
 
 const baseUrl = 'https://qcrypt.schicks.net/';
 
@@ -36,6 +36,19 @@ export type DeleteInfo = {
    userId?: string;
 };
 
+export enum AuthEvent {
+   Login,
+   Logout,
+   Forget
+}
+
+export type AuthEventData = {
+   readonly event: AuthEvent,
+   readonly userId: string | null,
+   readonly userName: string | null,
+   readonly siteKey: string | null
+};
+
 
 @Injectable({
    providedIn: 'root'
@@ -45,13 +58,16 @@ export class AuthenticatorService {
    private _siteKey: string | null = null;
    private _userName: string | null = null;
    private _userId: string | null = null;
+   private _subject = new Subject<AuthEventData>();
 
    constructor() {
       this._userId = localStorage.getItem('userid');
       this._userName = localStorage.getItem('username');
-      this._siteKey = sessionStorage.getItem('sitekey');
-      if(this.isAuthenticated()) {
-         this.refreshPasskeys();
+      if(this._userId) {
+         this._siteKey = sessionStorage.getItem(this._userId + 'sitekey');
+         if (this._siteKey) {
+            this.refreshPasskeys();
+         }            
       }
    }
 
@@ -85,6 +101,25 @@ export class AuthenticatorService {
       return [userId, userName];
    }
 
+   on(events: AuthEvent[], action: (data: AuthEventData) => void): Subscription {
+      return this._subject.pipe(
+         filter((ed: AuthEventData) => events.includes(ed.event))
+      ).subscribe(action);
+   }
+
+   private captureEventData(event: AuthEvent): AuthEventData {
+      return {
+         event: event,
+         userId: this._userId,
+         userName: this._userName,
+         siteKey: this._siteKey
+      };
+   }
+
+   private emit(eventData: AuthEventData) {
+      this._subject.next(eventData);
+   }
+
    private storeUserInfo(userId: string, userName: string) {
       if (!userId || !userName) {
          throw new Error('missing userId or userName');
@@ -101,16 +136,36 @@ export class AuthenticatorService {
       }
       this.storeUserInfo(userId, userName);
       this._siteKey = siteKey;
-      sessionStorage.setItem('sitekey', this._siteKey);
+      // Includ userId in key in case there are multiple tabs open to
+      // different users and this one is reloaded. This prevents 
+      // mixing of _userId and _siteKey from different accounts
+      sessionStorage.setItem(this._userId + 'sitekey', this._siteKey);
+      this.refreshPasskeys();
+      this.emit(this.captureEventData(AuthEvent.Login));
    }
 
    forgetUserInfo() {
-      this._userId = null;
-      this._userName = null;
-      this._siteKey = null;
-      localStorage.removeItem('userid');
-      localStorage.removeItem('username');
-      sessionStorage.removeItem('sitekey');
+      if (this._userId) {
+         const eventData = this.captureEventData(AuthEvent.Forget);
+         sessionStorage.removeItem(this._userId + 'sitekey');
+         localStorage.removeItem('username');
+         localStorage.removeItem('userid');
+         this._siteKey = null;
+         this._userId = null;
+         this._userName = null;
+         this.passKeys.set([]);
+         this.emit(eventData);
+      }
+   }
+
+   logout() {
+      if (this._siteKey) {
+         const eventData = this.captureEventData(AuthEvent.Logout);
+         sessionStorage.removeItem(this._userId + 'sitekey');
+         this._siteKey = null;
+         this.passKeys.set([]);
+         this.emit(eventData);
+      }
    }
 
    async setPasskeyDescription(credentialId: string, description: string): Promise<string> {
