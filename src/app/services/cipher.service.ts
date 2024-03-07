@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import * as sodium from 'libsodium-wrappers';
+import sodium from 'libsodium-wrappers';
 import { base64URLStringToBuffer, bufferToBase64URLString } from '@simplewebauthn/browser';
 
 const AES_GCM_TAG_BYTES = 16;
@@ -225,7 +225,7 @@ export class CipherService {
     rawMaterial.set(pwdBytes);
     rawMaterial.set(siteKey, pwdBytes.byteLength);
 
-    const ekMaterial = await window.crypto.subtle.importKey(
+    const ekMaterial = await crypto.subtle.importKey(
       'raw',
       rawMaterial,
       'PBKDF2',
@@ -238,7 +238,7 @@ export class CipherService {
     // AES-GCM. TODO: If more non-browser cipher are added, make this more generic.
     const useAlg = alg != 'X20-PLY' ? alg : 'AES-GCM';
 
-    const ek = await window.crypto.subtle.deriveKey(
+    const ek = await crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
         salt: slt,
@@ -267,7 +267,7 @@ export class CipherService {
     if (siteKey.byteLength != SITEKEY_BYTES) {
       throw new Error('Invalid siteKey length of: ' + siteKey.byteLength);
     }
-    const skMaterial = await window.crypto.subtle.importKey(
+    const skMaterial = await crypto.subtle.importKey(
       'raw',
       siteKey,
       'HKDF',
@@ -275,7 +275,7 @@ export class CipherService {
       ['deriveBits', 'deriveKey']
     );
 
-    const sk = await window.crypto.subtle.deriveKey(
+    const sk = await crypto.subtle.deriveKey(
       {
         name: 'HKDF',
         salt: slt,
@@ -305,7 +305,7 @@ export class CipherService {
     if (siteKey.byteLength != SITEKEY_BYTES) {
       throw new Error('Invalid siteKey length of: ' + siteKey.byteLength);
     }
-    const skMaterial = await window.crypto.subtle.importKey(
+    const skMaterial = await crypto.subtle.importKey(
       'raw',
       siteKey,
       'HKDF',
@@ -318,7 +318,7 @@ export class CipherService {
     // AES-GCM. TODO: If more non-browser cipher are added, make this more generic.
     const useAlg = alg != 'X20-PLY' ? alg : 'AES-GCM';
 
-    const hk = await window.crypto.subtle.deriveKey(
+    const hk = await crypto.subtle.deriveKey(
       {
         name: 'HKDF',
         salt: slt,
@@ -444,7 +444,7 @@ export class CipherService {
 
     let encryptedBytes: Uint8Array;
     if (alg == 'X20-PLY') {
-      const exported = await window.crypto.subtle.exportKey("raw", key);
+      const exported = await crypto.subtle.exportKey("raw", key);
       const keyBytes = new Uint8Array(exported);
 
       await sodium.ready;
@@ -458,11 +458,12 @@ export class CipherService {
           "uint8array"
         );
       } catch (err) {
+        console.log(err)
         // Match behavior of Web Crytpo functions that throws limited DOMException
         throw new DOMException('', 'OperationError');
       }
     } else {
-      const cipherBuf = await window.crypto.subtle.encrypt(
+      const cipherBuf = await crypto.subtle.encrypt(
         {
           name: alg,
           iv: iv.slice(0, 12),
@@ -550,9 +551,10 @@ export class CipherService {
 
     let decrypted: Uint8Array;
     if (alg == 'X20-PLY') {
-      const exported = await window.crypto.subtle.exportKey("raw", key);
+      const exported = await crypto.subtle.exportKey("raw", key);
       const keyBytes = new Uint8Array(exported);
 
+      await sodium.ready;
       try {
         decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
           null,
@@ -563,12 +565,13 @@ export class CipherService {
           "uint8array"
         );
       } catch (err) {
+        console.log(err);
         // Match behavior of Web Crytpo functions that throws limited DOMException
         throw new DOMException('', 'OperationError');
       }
 
     } else {
-      const buffer = await window.crypto.subtle.decrypt(
+      const buffer = await crypto.subtle.decrypt(
         {
           name: alg,
           iv: iv.slice(0, 12),
@@ -630,7 +633,7 @@ export class CipherService {
     encoded: Uint8Array
   ): Promise<Uint8Array> {
 
-    const hmac = await window.crypto.subtle.sign('HMAC', sk, encoded);
+    const hmac = await crypto.subtle.sign('HMAC', sk, encoded);
     if (hmac.byteLength != HMAC_BYTES) {
       throw new Error('Invalid HMAC length of: ' + hmac.byteLength);
     }
@@ -645,7 +648,7 @@ export class CipherService {
     encoded: Uint8Array
   ): Promise<boolean> {
 
-    const valid = await window.crypto.subtle.verify('HMAC', sk, hmac, encoded);
+    const valid = await crypto.subtle.verify('HMAC', sk, hmac, encoded);
     if (valid) {
       return true;
     }
