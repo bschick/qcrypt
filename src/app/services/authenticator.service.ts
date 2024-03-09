@@ -59,15 +59,16 @@ export class AuthenticatorService {
    private _userName: string | null = null;
    private _userId: string | null = null;
    private _subject = new Subject<AuthEventData>();
+   private _timeoutId: number = 0;
 
    constructor() {
       this._userId = localStorage.getItem('userid');
       this._userName = localStorage.getItem('username');
-      if(this._userId) {
+      if (this._userId) {
          this._siteKey = sessionStorage.getItem(this._userId + 'sitekey');
          if (this._siteKey) {
             this.refreshPasskeys();
-         }            
+         }
       }
    }
 
@@ -142,6 +143,20 @@ export class AuthenticatorService {
       sessionStorage.setItem(this._userId + 'sitekey', this._siteKey);
       this.refreshPasskeys();
       this.emit(this.captureEventData(AuthEvent.Login));
+      this.restartTimer();
+   }
+
+   private restartTimer(): void {
+      if (this._timeoutId != 0) {
+         clearTimeout(this._timeoutId);
+         this._timeoutId = 0;
+      }
+      // @ts-ignore
+      this._timeoutId = setTimeout(() => this.logout(), 1000 * 60 * 60 * 12);
+   }
+
+   activity() {
+      this.restartTimer();
    }
 
    forgetUserInfo() {

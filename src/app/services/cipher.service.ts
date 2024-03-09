@@ -50,13 +50,13 @@ export const HMAC_BYTES = 32;
 export const KEY_BYTES = 32;
 export const SITEKEY_BYTES = 32;
 
+// To geenrate matching keys, these must not change 
 const HKDF_INFO_SIGNING = "cipherdata signing key";
 const HKDF_INFO_HINT = "hint encryption key";
 
 /* Javascript converts to signed 32 bit int when using bit shifting 
    and masking, so do this instead. Count is the number of bytes
-   used to pack the number. 
-*/
+   used to pack the number.  */
 export function numToBytes(num: number, count: number): Uint8Array {
   if (count < 1 || num >= Math.pow(256, count)) {
     throw new Error("Invalid arguments");
@@ -177,14 +177,14 @@ export class CipherService {
       // Don't allow more then ~5 minutes of pwd hashing (rounded to millions)
       this.icountMax =
         Math.min(ICOUNT_MAX,
-          Math.round((max_hash_millis * this.hashRate) / 1000000) * 1000000);
+        Math.round((max_hash_millis * this.hashRate) / 1000000) * 1000000);
 
       let target_icount = Math.round((this.hashRate * target_hash_millis) / 100000) * 100000;
       this.icount = Math.max(ICOUNT_DEFAULT, target_icount + 200000);
 
       console.log(
         `bench: ${test_size}i, in: ${test_millis}ms, rate: ${Math.round(this.hashRate)}i/ms, 
-       ic: ${this.icount}i, icm: ${this.icountMax}i`
+        ic: ${this.icount}i, icm: ${this.icountMax}i`
       );
     }
 

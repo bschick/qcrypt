@@ -620,6 +620,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
         throw new Error('User not authenticated, try refreshing this page')
       }
 
+      this.authSvc.activity();
+
       const savedClearText = this.clearText;
 
       this.loops = Math.min(
@@ -716,6 +718,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this.authSvc.isAuthenticated()) {
         throw new Error('User not authenticated, try refreshing this page')
       }
+
+      this.authSvc.activity();
 
       const savedCipherArmor = this.cipherArmor;
 
