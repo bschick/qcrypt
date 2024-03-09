@@ -1,1 +1,48 @@
-<p class="overview">overview works!</p>
+<div class="container">
+    <div class="content">
+    <h1>Quick Crypt Overview</h1>
+
+    <p>Quick Crypt was created to make it safe and convientent for you to encrypt sensitive data
+        for storage in potentially insecure locations. 
+        For example, storing confidential information in note taking applications, planning tools, or other
+        unencrypted locations is convenient but risky. The creator of Quick Crypt wanted
+        to store sensitve information in a note taking application and not be limited
+        to the few tools that provide end-to-end encryption. Even systems that support
+        encryption often do not define their protocols, making them hard to trust.
+        Installable opensource encryptions tools are an option, but they tend to be tedious to use
+        and remember. Good encryption that you don't use isn't all that good in the end.</p>
+
+    <p>Thus Quick Crypt: A small-batch text focused cipher tool designed to be Trustworthy,
+        Convenient, Easy to Use, and Secure. Quick Crypt encrypts and decrypts text with a password
+        you provide, using cryptographic features built into modern browsers to ensure that
+        your password and clear text <b>do not unexpectedly traverse the internet.</b> After
+        loading Quick Crypt,
+        you could disable all network access and continue encrypting and decypting data.
+        In addition to passwords you supply, Quick Crypt uses Passkeys to make it very difficult
+        for an untrusted website to trick you into decrypting and exposing data unintentionally.</p>
+
+    <p>Quick Crypt was designed to protect data that you want to store in a location that is
+        not fully trusted or secure and to make it easy to securely decrypt
+        that data without needing to remember or install complicated tools. Quick Crypt
+        cipher text can link directly to the decryption page, so you only need
+        your Passkey and the password you used for encyption. Fully understanding how Quick Crypt
+        works is not necessary to use it, but if you interested
+        the <a href="/help/protocol">protocol is documented</a> and the
+        <a href="https://github.com/bschick/qcrypt" target="_blank">code is opensource</a> under the
+        MIT license. Bug reports and pull requests are welcome.
+    </p>
+
+    <h2>Design Goals</h2>
+    <ul>
+        <li>Unencrypted data and passwords do not leave your local machine</li>
+        <li>Easy to use and hard to screw up</li>
+        <li>Customizable encryption options constrained to values not known to be weak</li>
+        <li>Implementation follows current cryptographic best practices</li>
+        <li>Convienient to browser based "app" that works across modern devices</li>
+        <li>Use the strongest web-app security practices (csp, strong cert, sri, hsts, xfo, etc..)</li>
+        <li>Opensource for peer review</li>
+        <li>Well specificed protocols</li>
+        <li>No adverts or cookies</li>
+    </ul>
+</div>
+</div>
