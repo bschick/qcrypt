@@ -28,7 +28,6 @@ export class ZxcvbnOptionsService {
   }
 
   checkPwned(check: boolean) {
-    console.log('checkPwned ', check);
     if (check) {
       if (!zxcvbnOptions.matchers['pwned']) {
         zxcvbnOptions.addMatcher('pwned', this.matcherPwned);

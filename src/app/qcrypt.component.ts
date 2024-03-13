@@ -44,6 +44,7 @@ export class QCryptComponent implements OnInit {
 
   public bgColorDefault = '#4351AF';
   public bgColorFocus = '#3B479A';
+  public countdown = 0;
 
   constructor(
     public router: Router,
@@ -52,6 +53,7 @@ export class QCryptComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    setInterval(() => this.countdown = this.authSvc.secondsRemaining(), 5000);
   }
 
   toggleNav(nav: MatSidenav) {

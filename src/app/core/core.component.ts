@@ -137,6 +137,7 @@ function setIfBoolean(
 })
 export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
   private signinDialogRef?: MatDialogRef<SigninDialog, any>
+  private optionsLoaded = false;
   private mouseDown = false;
   private cachedPassword: string = '';
   private cachedHint: string = '';
@@ -319,45 +320,47 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       let key = localStorage.key(i)!;
       console.log(`${key}: ${this.lsGet(key)}`);
      } */
+    if (!this.optionsLoaded) {
+      this.setAlgorithm(this.lsGet('algorithm'));
+      this.setIcount(this.lsGet('icount'));
+      this.setHidePwd(this.lsGet('hidepwd'));
+      this.setCacheTime(this.lsGet('cachetime'));
+      this.setCheckPwned(this.lsGet('checkpwned'));
+      this.setMinPwdStrength(this.lsGet('minpwdstrength'));
+      this.setLoops(this.lsGet('loops'));
+      this.setCTFormat(this.lsGet('ctformat'));
+      this.setTrueRandom(this.lsGet('trand'));
+      this.setPseudoRandom(this.lsGet('prand'));
 
-    this.setAlgorithm(this.lsGet('algorithm'));
-    this.setIcount(this.lsGet('icount'));
-    this.setHidePwd(this.lsGet('hidepwd'));
-    this.setCacheTime(this.lsGet('cachetime'));
-    this.setCheckPwned(this.lsGet('checkpwned'));
-    this.setMinPwdStrength(this.lsGet('minpwdstrength'));
-    this.setLoops(this.lsGet('loops'));
-    this.setCTFormat(this.lsGet('ctformat'));
-    this.setTrueRandom(this.lsGet('trand'));
-    this.setPseudoRandom(this.lsGet('prand'));
+      let params = new HttpParams({ fromString: window.location.search });
 
-    let params = new HttpParams({ fromString: window.location.search });
+      if (params.get('cipherarmor')) {
+        this.cipherArmor = decodeURIComponent(params.get('cipherarmor')!);
+        this.onFormatChange();
+        params = params.delete('cipherarmor');
+      }
+      if (params.get('cleartext')) {
+        this.clearText = decodeURIComponent(params.get('cleartext')!);
+        params = params.delete('cleartext');
+      }
 
-    if (params.get('cipherarmor')) {
-      this.cipherArmor = decodeURIComponent(params.get('cipherarmor')!);
-      this.onFormatChange();
-      params = params.delete('cipherarmor');
+      // If there are customized options, expand the panel by default
+      if (params.keys().length > 0) {
+        this.expandOptions = true;
+      }
+
+      this.setAlgorithm(params.get('algorithm'));
+      this.setIcount(params.get('icount'));
+      this.setHidePwd(params.get('hidepwd'));
+      this.setCacheTime(params.get('cachetime'));
+      this.setCheckPwned(params.get('checkpwned'));
+      this.setMinPwdStrength(params.get('minpwdstrength'));
+      this.setLoops(params.get('loops'));
+      this.setCTFormat(params.get('ctformat'));
+      this.setTrueRandom(params.get('trand'));
+      this.setPseudoRandom(params.get('prand'));
+      this.optionsLoaded = true;
     }
-    if (params.get('cleartext')) {
-      this.clearText = decodeURIComponent(params.get('cleartext')!);
-      params = params.delete('cleartext');
-    }
-
-    // If there are customized options, expand the panel by default
-    if (params.keys().length > 0) {
-      this.expandOptions = true;
-    }
-
-    this.setAlgorithm(params.get('algorithm'));
-    this.setIcount(params.get('icount'));
-    this.setHidePwd(params.get('hidepwd'));
-    this.setCacheTime(params.get('cachetime'));
-    this.setCheckPwned(params.get('checkpwned'));
-    this.setMinPwdStrength(params.get('minpwdstrength'));
-    this.setLoops(params.get('loops'));
-    this.setCTFormat(params.get('ctformat'));
-    this.setTrueRandom(params.get('trand'));
-    this.setPseudoRandom(params.get('prand'));
   }
 
   ngOnDestroy(): void {
@@ -459,12 +462,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // clear caches calls saveOptions
     this.clearCaches();
+    this.optionsLoaded = false;
   }
 
   saveOptions(): void {
     try {
       if (this.authSvc.isAuthenticated()) {
-        console.log('saving icount ', this.icount);
         this.lsSet('algorithm', this.algorithm);
         this.lsSet('icount', this.icount.toString());
         this.lsSet('hidepwd', this.hidePwd.toString());

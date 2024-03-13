@@ -12,20 +12,55 @@
             <li>What should I do if I expose the password I used to someone I don't trust?</li>
             <li>What should I do if I expose my recovery link to someone I don't trust?</li>
             <li>What should I do if I expose my password and recovery link to someone I don't trust?</li>
-            <li>Is my password hint also encrypted?</li>
+            <li>Is my password hint encrypted?</li>
             <li>Can I used Quick Crypt with text or binary files?</li>
             <li>Can I decrypt my data if Quick Crypt goes away?</li>
             <li>Can Quick Crypt decrypt cipher text encypted with other tools?</li>
             <li>Why do I need a passkey to use Quick Crypt?</li>
             <li>Is the 'link' Cipher Armor format secure?</li>
+            <li>What does Quick Crypt know and track about me?</li>
+            <p>Quick Crypt never asks for Personal Identifiable Information (PII). To prevent impersonation
+                by untrusted site that could try to trick you into exposing clear text data, Quick Crypt
+                uses passkeys. To help you track the passkey Quick Crypt asks for a user name, but that can 
+                can be any value you want. Your use name does not need to be an email address and serves
+                only to help you associate that passkey with Quick Crypt.
+            </p>
+            <li>Can I have more than one user account or passkey?</li>
+            <p>Yes to both. Once signed in, you can create additional passkeys from the slide out
+                panel opened with the 3-line button in the toolbar. From the slide out panel you can also
+                sign out in order to create a new user identity with a new passkey. To reduce the load on
+                Quick Crypt, we ask that you only create as many users and passkeys as truly
+                needed. Identities that look like abuse may be purged. 
+            </p>
+            <li>How do I remove passkeys?</li>
+            <p>Once signed in, you can delete passkey references from the slide out
+                panel opened with the 3-line button in the toolbar. This will remove
+                information about the passkey from the Quick Crypt server. To delete the
+                actual passkey, you must use your own passkey managment tool.
+            </p>
+            <li>How do I remove my user identity entirely?</li>
+            <p>Once signed in, delete all passkeys references from the slide out
+                panel opened with the 3-line button in the toolbar. When you delete the
+                last passkey reference, your user identity will also be removed from the
+                Quick Crypt Server. Once removed you will not be able to use Quick Crypt
+                to decrypt previously encypted messages with the removed user identity. 
+                This is not reversable, even with the recovery link. Remember to also delete
+                the actual passkeys using your own passkey managment tool.
+            </p>
+            
+            <li>I have read web applications should not be trusted for encryption</li>
             <li>Does Quick Crypt track my identity or contact information?</li>
             <li>Can I used Quick Crypt to send encrypted information to other people?</li>
             <p>Quick Crypt was design for encytpion, storage, and decryption of your own data rather
                 than for sharing of secure data. Data can only be decrypted by someone
                 who has both the password used for encryption and the same Quick Crypt Passkey. While
                 Passkeys are not designed for sharing, they certainly could be shared. So although
-                not design for secret sharing, you can accomplish that by exporing the Quick Crypt
-                Passkey from your Passkey managment tool and sharing that with an intended recipient.
+                not design for secret sharing, you can accomplish that by exporing a passkey
+                from your passkey managment tool and sharing that with your intended recipient.
+            </p>
+            <li>Can I trust the 3rd party liibraries used by Quick Crypte?</li>
+            <p>Bundled rather than downloaded 
+            All open source, actively developed, widely used packages
             </p>
 
         </ul>
