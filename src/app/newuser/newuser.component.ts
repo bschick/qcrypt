@@ -82,7 +82,7 @@ export class NewUserComponent implements OnInit {
       this.recoveryLink = new URL(
         window.location.origin + '/recovery' +
         '?userid=' + passkeyInfo.userId +
-        '&sitekey=' + passkeyInfo.siteKey
+        '&usercred=' + passkeyInfo.userCred
       ).toString();
 
       this.completed = true;

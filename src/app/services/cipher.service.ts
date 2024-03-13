@@ -36,7 +36,7 @@ export type EParams = Params & {
   readonly trueRand: boolean;
   readonly fallbackRand: boolean;
   readonly pwd: string;
-  readonly siteKey: Uint8Array;
+  readonly userCred: Uint8Array;
   readonly clear: Uint8Array;
   readonly hint?: string;     // limited to HINT_MAX_LEN characters
 }
@@ -48,7 +48,7 @@ export const IC_BYTES = 4;
 export const VER_BYTES = 2;
 export const HMAC_BYTES = 32;
 export const KEY_BYTES = 32;
-export const SITEKEY_BYTES = 32;
+export const USERCRED_BYTES = 32;
 
 // To geenrate matching keys, these must not change 
 const HKDF_INFO_SIGNING = "cipherdata signing key";
@@ -197,7 +197,7 @@ export class CipherService {
     alg: string,
     ic: number,
     pwd: string,
-    siteKey: Uint8Array,
+    userCred: Uint8Array,
     slt: Uint8Array
   ): Promise<CryptoKey> {
 
@@ -210,8 +210,8 @@ export class CipherService {
     if (slt.byteLength != SLT_BYTES) {
       throw new Error("Invalid slt size of: " + slt.byteLength);
     }
-    if (siteKey.byteLength != SITEKEY_BYTES) {
-      throw new Error("Invalid siteKey size of: " + siteKey.byteLength);
+    if (userCred.byteLength != USERCRED_BYTES) {
+      throw new Error("Invalid userCred size of: " + userCred.byteLength);
     }
     if (!pwd) {
       throw new Error('Invalid empty password');
@@ -221,9 +221,9 @@ export class CipherService {
     }
 
     const pwdBytes = new TextEncoder().encode(pwd);
-    let rawMaterial = new Uint8Array(pwdBytes.byteLength + SITEKEY_BYTES)
+    let rawMaterial = new Uint8Array(pwdBytes.byteLength + USERCRED_BYTES)
     rawMaterial.set(pwdBytes);
-    rawMaterial.set(siteKey, pwdBytes.byteLength);
+    rawMaterial.set(userCred, pwdBytes.byteLength);
 
     const ekMaterial = await crypto.subtle.importKey(
       'raw',
@@ -256,7 +256,7 @@ export class CipherService {
 
   // Public for testing, normal callers should not need this
   async _genSigningKey(
-    siteKey: Uint8Array,
+    userCred: Uint8Array,
     slt: Uint8Array
   ): Promise<CryptoKey> {
 
@@ -264,12 +264,12 @@ export class CipherService {
       throw new Error("Invalid slt size of: " + slt.byteLength);
     }
 
-    if (siteKey.byteLength != SITEKEY_BYTES) {
-      throw new Error('Invalid siteKey length of: ' + siteKey.byteLength);
+    if (userCred.byteLength != USERCRED_BYTES) {
+      throw new Error('Invalid userCred length of: ' + userCred.byteLength);
     }
     const skMaterial = await crypto.subtle.importKey(
       'raw',
-      siteKey,
+      userCred,
       'HKDF',
       false,
       ['deriveBits', 'deriveKey']
@@ -294,7 +294,7 @@ export class CipherService {
   // Public for testing, normal callers should not need this
   async _genHintCipherKey(
     alg: string,
-    siteKey: Uint8Array,
+    userCred: Uint8Array,
     slt: Uint8Array
   ): Promise<CryptoKey> {
 
@@ -302,12 +302,12 @@ export class CipherService {
       throw new Error("Invalid slt size of: " + slt.byteLength);
     }
 
-    if (siteKey.byteLength != SITEKEY_BYTES) {
-      throw new Error('Invalid siteKey length of: ' + siteKey.byteLength);
+    if (userCred.byteLength != USERCRED_BYTES) {
+      throw new Error('Invalid userCred length of: ' + userCred.byteLength);
     }
     const skMaterial = await crypto.subtle.importKey(
       'raw',
-      siteKey,
+      userCred,
       'HKDF',
       false,
       ['deriveBits', 'deriveKey']
@@ -338,7 +338,7 @@ export class CipherService {
   //
   // 1. Generate new salt and iv/nonce values
   // 2. Encode cipher parameters as additional data
-  // 3. Generate signing key from siteKey and cipher key from pwd + siteKey
+  // 3. Generate signing key from userCred and cipher key from pwd + userCred
   // 4. Encrypt cleartext using cipher key (with addition data)
   // 5. Sign addtional data + cipher text with signing key
   // 6. Concat and return
@@ -360,8 +360,8 @@ export class CipherService {
     if (eparams.hint && eparams.hint.length > HINT_MAX_LEN) {
       throw new Error('Hint length exceeds ' + HINT_MAX_LEN);
     }
-    if (!eparams.pwd || !eparams.siteKey || eparams.siteKey.byteLength != SITEKEY_BYTES) {
-      throw new Error('Invalid password or siteKey');
+    if (!eparams.pwd || !eparams.userCred || eparams.userCred.byteLength != USERCRED_BYTES) {
+      throw new Error('Invalid password or userCred');
     }
 
     // encrpting nothing not supported
@@ -384,9 +384,9 @@ export class CipherService {
       readyNotice(eparams);
     }
 
-    const ek = await this._genCipherKey(eparams.alg, eparams.ic, eparams.pwd, eparams.siteKey, slt);
-    const sk = await this._genSigningKey(eparams.siteKey, slt);
-    const hk = await this._genHintCipherKey(eparams.alg, eparams.siteKey, slt);
+    const ek = await this._genCipherKey(eparams.alg, eparams.ic, eparams.pwd, eparams.userCred, slt);
+    const sk = await this._genSigningKey(eparams.userCred, slt);
+    const hk = await this._genHintCipherKey(eparams.alg, eparams.userCred, slt);
 
     let encryptedHint = new Uint8Array(0);
     if (eparams.hint) {
@@ -481,27 +481,27 @@ export class CipherService {
 
   // Password is a callback because we need to extract any hint from ciphertext first.
   // We also don't want the caller (web page) to show anything from extracted from
-  // ciphertext until after it has been verified again the siteKey (pass-key). Order
+  // ciphertext until after it has been verified again the userCred (pass-key). Order
   // of operations is:
   //
   // 1. Unpack parameters from encrypted
-  // 1.1.    Unpack validated values and checks siteKey based signature
+  // 1.1.    Unpack validated values and checks userCred based signature
   // 2. Callback to get the password with the hint unpacked & validated hint
   // 3. Encode cipher parameters as additional data
-  // 4. Generate cipher keys using returned pwd + siteKey
+  // 4. Generate cipher keys using returned pwd + userCred
   // 5. Decrypt encrypted text using cipher key and addtional data
   // 6. Return cleat text bytes
   //
   async decrypt(
     pwdProvider: (hint: string) => Promise<string>,
-    siteKey: Uint8Array,
+    userCred: Uint8Array,
     cipherText: string,
     readyNotice?: (params: Params) => void
   ): Promise<Uint8Array> {
 
     // getCipherData does HMAC signature verification on CT and throws if invalid
-    const cipherData = await this.getCipherData(siteKey, cipherText);
-    const hk = await this._genHintCipherKey(cipherData.alg, siteKey, cipherData.slt);
+    const cipherData = await this.getCipherData(userCred, cipherText);
+    const hk = await this._genHintCipherKey(cipherData.alg, userCred, cipherData.slt);
 
     let hintEnc = new Uint8Array(0);
     if (cipherData.encryptedHint.byteLength != 0) {
@@ -521,7 +521,7 @@ export class CipherService {
     if (readyNotice) {
       readyNotice(cipherData);
     }
-    const ek = await this._genCipherKey(cipherData.alg, cipherData.ic, pwd, siteKey, cipherData.slt);
+    const ek = await this._genCipherKey(cipherData.alg, cipherData.ic, pwd, userCred, cipherData.slt);
 
     const cipherDataForAD: CipherData = {
       ...cipherData,
@@ -587,12 +587,12 @@ export class CipherService {
   }
 
   async getCipherData(
-    siteKey: Uint8Array,
+    userCred: Uint8Array,
     cipherText: string
   ): Promise<CipherData> {
 
-    if (siteKey.byteLength != SITEKEY_BYTES) {
-      throw new Error('Invalid siteKey length of: ' + siteKey.byteLength);
+    if (userCred.byteLength != USERCRED_BYTES) {
+      throw new Error('Invalid userCred length of: ' + userCred.byteLength);
     }
 
     const extended = base64ToBytes(cipherText);
@@ -610,7 +610,7 @@ export class CipherService {
     //       this to the caller until after signature verified.
     const cipherData = this._decodeCipherData(encoded);
 
-    const sk = await this._genSigningKey(siteKey, cipherData.slt);
+    const sk = await this._genSigningKey(userCred, cipherData.slt);
 
     // Avoiding the Doom Principle and verify signature before crypto operations.
     // Aka, check HMAC as soon as possible after we have the signing key.

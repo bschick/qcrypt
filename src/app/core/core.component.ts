@@ -66,7 +66,7 @@ const MAX_LOOPS = 10;
 type Context = {
   readonly lpEnd: number;
   lp: number;
-  siteKey: Uint8Array;
+  userCred: Uint8Array;
 }
 
 type EncContext = Context & {
@@ -646,7 +646,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
         lp: 0,
         alg: this.algorithm,
         ic: this.icount,
-        siteKey: cs.base64ToBytes(this.authSvc.siteKey!),
+        userCred: cs.base64ToBytes(this.authSvc.userCred!),
         trueRand: this.trueRandom,
         fallbackRand: this.pseudoRandom
       };
@@ -759,7 +759,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
         const [pwd, _] = await this.getPassword(-1, hint, dcontext);
         return pwd;
       },
-      cs.base64ToBytes(this.authSvc.siteKey!),
+      cs.base64ToBytes(this.authSvc.userCred!),
       dcontext.ct,
       this.cipherReadyNotice.bind(this)
     );
@@ -872,7 +872,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
     return {
       lpEnd: jsonParts.lps,
       lp: 0,
-      siteKey: cs.base64ToBytes(this.authSvc.siteKey!),
+      userCred: cs.base64ToBytes(this.authSvc.userCred!),
       ct: ct,
     };
   }
@@ -1031,7 +1031,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
       const dcontext = this.getDecContextFrom(this.cipherArmor);
       const cipherData = await this.cipherSvc.getCipherData(
-        cs.base64ToBytes(this.authSvc.siteKey!),
+        cs.base64ToBytes(this.authSvc.userCred!),
         dcontext.ct
       );
       this.dialog.open(CipherInfoDialog, { data: cipherData });

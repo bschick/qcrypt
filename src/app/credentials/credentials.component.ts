@@ -54,7 +54,7 @@ export class CredentialsComponent implements OnInit {
       this.recoveryLink = new URL(
         window.location.origin + '/recovery' +
         '?userid=' + this.authSvc.userId +
-        '&sitekey=' + this.authSvc.siteKey
+        '&usercred=' + this.authSvc.userCred
       ).toString();
     });
   }

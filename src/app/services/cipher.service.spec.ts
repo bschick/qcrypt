@@ -67,15 +67,15 @@ describe("Key generation", function () {
     for (let alg in cs.AlgInfo) {
       const pwd = 'a good pwd';
       const ic = cs.ICOUNT_MIN;
-      const siteKey = crypto.getRandomValues(new Uint8Array(cs.SITEKEY_BYTES));
+      const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
       const random40 = new cs.Random40();
       const randomArray = await random40.getRandomArray(false, true);
       const slt = randomArray.slice(0, cs.SLT_BYTES);
   
-      const ek = await cipherSvc._genCipherKey(alg, ic, pwd, siteKey, slt);
-      const sk = await cipherSvc._genSigningKey(siteKey, slt);
-      const hk = await cipherSvc._genHintCipherKey(alg, siteKey, slt);      
+      const ek = await cipherSvc._genCipherKey(alg, ic, pwd, userCred, slt);
+      const sk = await cipherSvc._genSigningKey(userCred, slt);
+      const hk = await cipherSvc._genHintCipherKey(alg, userCred, slt);      
 
       let exported = await window.crypto.subtle.exportKey("raw", ek);
       const ekBytes = new Uint8Array(exported);
@@ -113,13 +113,13 @@ describe("Key generation", function () {
     for (let alg in cs.AlgInfo) {
       const pwd = 'a good pwd';
       const ic = cs.ICOUNT_MIN;
-      const siteKey = new Uint8Array([214, 245, 252, 122, 133, 39, 76, 162, 64, 201, 143, 217, 237, 57, 18, 207, 199, 153, 20, 28, 162, 9, 236, 66, 100, 103, 152, 159, 226, 50, 225, 129]);
+      const userCred = new Uint8Array([214, 245, 252, 122, 133, 39, 76, 162, 64, 201, 143, 217, 237, 57, 18, 207, 199, 153, 20, 28, 162, 9, 236, 66, 100, 103, 152, 159, 226, 50, 225, 129]);
       const baseArray =new Uint8Array([160, 202, 135, 230, 125, 174, 49, 189, 171, 56, 203, 1, 237, 233, 27, 76, 46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]);
       const slt = baseArray.slice(0, cs.SLT_BYTES);
   
-      const ek = await cipherSvc._genCipherKey(alg, ic, pwd, siteKey, slt);
-      const sk = await cipherSvc._genSigningKey(siteKey, slt);
-      const hk = await cipherSvc._genHintCipherKey(alg, siteKey, slt);      
+      const ek = await cipherSvc._genCipherKey(alg, ic, pwd, userCred, slt);
+      const sk = await cipherSvc._genSigningKey(userCred, slt);
+      const hk = await cipherSvc._genHintCipherKey(alg, userCred, slt);      
 
       let exported = await window.crypto.subtle.exportKey("raw", ek);
       const ekBytes = new Uint8Array(exported);
@@ -150,7 +150,7 @@ describe("Encryption and decryption", function () {
 
       const clearText = 'This is a secret 🦆';
       const pwd = 'a good pwd';
-      const siteKey = crypto.getRandomValues(new Uint8Array(cs.SITEKEY_BYTES));
+      const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
       const clearEnc = new TextEncoder().encode(clearText);
       const eparams: cs.EParams = {
@@ -159,7 +159,7 @@ describe("Encryption and decryption", function () {
         trueRand: false,
         fallbackRand: true,
         pwd: pwd,
-        siteKey: siteKey,
+        userCred: userCred,
         clear: clearEnc,
       };
 
@@ -176,7 +176,7 @@ describe("Encryption and decryption", function () {
           expect(decHint).toBe('');
           return pwd;
         },
-        siteKey,
+        userCred,
         cipherText,
         (params) => {
           expect(params.alg).toBe(alg);
@@ -196,13 +196,13 @@ describe("Encryption and decryption", function () {
       const clearText = 'This is a secret 🦆';
       const pwd = 'a good pwd';
       const hint = 'not really';
-      const siteKey = crypto.getRandomValues(new Uint8Array(cs.SITEKEY_BYTES));
+      const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
 /*    Used to generate CTS in: detect corrupt cipher text 
       const clearText = "this 🐞 is encrypted";
       const pwd = 'asdf';
       const hint = 'asdf';
-      const siteKey = new Uint8Array([101, 246, 72, 149, 67, 228, 149, 35, 60, 124, 81, 187, 157, 96, 208, 217, 123, 147, 228, 60, 84, 214, 198, 116, 192, 162, 178, 147, 50, 119, 97, 251]);
+      const userCred = new Uint8Array([101, 246, 72, 149, 67, 228, 149, 35, 60, 124, 81, 187, 157, 96, 208, 217, 123, 147, 228, 60, 84, 214, 198, 116, 192, 162, 178, 147, 50, 119, 97, 251]);
 */
       const clearEnc = new TextEncoder().encode(clearText);
       const eparams: cs.EParams = {
@@ -212,7 +212,7 @@ describe("Encryption and decryption", function () {
         fallbackRand: true,
         pwd: pwd,
         hint: hint,
-        siteKey: siteKey,
+        userCred: userCred,
         clear: clearEnc,
       };
 
@@ -230,7 +230,7 @@ describe("Encryption and decryption", function () {
           expect(decHint).toBe(hint);
           return pwd;
         },
-        siteKey,
+        userCred,
         cipherText,
         (params) => {
           expect(params.alg).toBe(alg);
@@ -256,8 +256,8 @@ describe("Encryption and decryption", function () {
     
     for (let ct of cts) {
       const ctBytes = cs.base64ToBytes(ct);
-      // siteKey used for creation of the CTS above
-      const siteKey = new Uint8Array([101, 246, 72, 149, 67, 228, 149, 35, 60, 124, 81, 187, 157, 96, 208, 217, 123, 147, 228, 60, 84, 214, 198, 116, 192, 162, 178, 147, 50, 119, 97, 251]);
+      // userCred used for creation of the CTS above
+      const userCred = new Uint8Array([101, 246, 72, 149, 67, 228, 149, 35, 60, 124, 81, 187, 157, 96, 208, 217, 123, 147, 228, 60, 84, 214, 198, 116, 192, 162, 178, 147, 50, 119, 97, 251]);
 
       // First ensure we can decrypt with valid inputs
       const clear = await cipherSvc.decrypt(
@@ -265,7 +265,7 @@ describe("Encryption and decryption", function () {
           expect(hint).toBe("asdf");
           return "asdf";
         },
-        siteKey,
+        userCred,
         ct
       );
       expect(new TextDecoder().decode(clear)).toBe("this 🐞 is encrypted");
@@ -292,7 +292,7 @@ describe("Encryption and decryption", function () {
               expect(hint).toBe("asdf");
               return "asdf";
             },
-            siteKey,
+            userCred,
             corruptCt
           )).toBeRejectedWithError(Error);
       }
@@ -304,7 +304,7 @@ describe("Encryption and decryption", function () {
       const clearText = 'This is a secret 🦄';
       const pwd = 'the correct pwd';
       const hint = '';
-      const siteKey = crypto.getRandomValues(new Uint8Array(cs.SITEKEY_BYTES));
+      const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
       const clearEnc = new TextEncoder().encode(clearText);
       const eparams: cs.EParams = {
@@ -314,7 +314,7 @@ describe("Encryption and decryption", function () {
         fallbackRand: true,
         pwd: pwd,
         hint: hint,
-        siteKey: siteKey,
+        userCred: userCred,
         clear: clearEnc,
       };
 
@@ -326,7 +326,7 @@ describe("Encryption and decryption", function () {
             expect(decHint).toBe(hint);
             return 'the wrong pwd';
           },
-          siteKey,
+          userCred,
           cipherText
         )
       ).toBeRejectedWithError(DOMException);
@@ -340,7 +340,7 @@ describe("Encryption and decryption", function () {
       const clearEnc = crypto.getRandomValues(new Uint8Array(16));
       const pwd = 'another good pwd';
       const hint = 'nope';
-      const siteKey = crypto.getRandomValues(new Uint8Array(cs.SITEKEY_BYTES));
+      const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
       const eparams: cs.EParams = {
         alg: alg,
@@ -349,7 +349,7 @@ describe("Encryption and decryption", function () {
         fallbackRand: true,
         pwd: pwd,
         hint: hint,
-        siteKey: siteKey,
+        userCred: userCred,
         clear: clearEnc,
       };
 
@@ -364,7 +364,7 @@ describe("Encryption and decryption", function () {
             expect(decHint).toBe(hint);
             return pwd;
           },
-          siteKey,
+          userCred,
           cipherText
         )
       ).toBeRejectedWithError(Error, new RegExp('.+HMAC.+'));
@@ -377,7 +377,7 @@ describe("Encryption and decryption", function () {
       const clearEnc = crypto.getRandomValues(new Uint8Array(16));
       const pwd = 'another good pwd';
       const hint = 'nope';
-      const siteKey = crypto.getRandomValues(new Uint8Array(cs.SITEKEY_BYTES));
+      const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
       const eparams: cs.EParams = {
         alg: alg,
@@ -386,7 +386,7 @@ describe("Encryption and decryption", function () {
         fallbackRand: true,
         pwd: pwd,
         hint: hint,
-        siteKey: siteKey,
+        userCred: userCred,
         clear: clearEnc,
       };
 
@@ -403,7 +403,7 @@ describe("Encryption and decryption", function () {
             expect(false).toBe(true);
             return pwd;
           },
-          siteKey,
+          userCred,
           problemText
         )
       ).toBeRejectedWithError(Error, new RegExp('.+HMAC.+'));
@@ -419,7 +419,7 @@ describe("Encryption and decryption", function () {
             expect(false).toBe(true);
             return pwd;
           },
-          siteKey,
+          userCred,
           problemText
         )
       ).toBeRejectedWithError(Error, new RegExp('.+HMAC.+'));
@@ -427,12 +427,12 @@ describe("Encryption and decryption", function () {
   });
 
   async function signAndRepack(
-    siteKey: Uint8Array,
+    userCred: Uint8Array,
     slt: Uint8Array,
     encoded: Uint8Array
   ): Promise<[string, CryptoKey, Uint8Array]> {
 
-    const sk = await cipherSvc._genSigningKey(siteKey, slt);
+    const sk = await cipherSvc._genSigningKey(userCred, slt);
     const hmac = await cipherSvc._signCipherBytes(sk, encoded);
     let extended = new Uint8Array(hmac.byteLength + encoded.byteLength);
     extended.set(hmac);
@@ -441,15 +441,15 @@ describe("Encryption and decryption", function () {
     return [cs.bytesToBase64(extended), sk, hmac];
   }
 
-  // More complex test to ensure that having the wrong sitekey causes
+  // More complex test to ensure that having the wrong usercred causes
   // decryption to fail. We test this by extracting and not changing original
   // CipherData (with its encrypted data) from "Alice's" original encryption,
-  // then creating a new valid HMAC signature with "Bob's" siteKeyB signature
+  // then creating a new valid HMAC signature with "Bob's" userCredB signature
   // attached to the front of the Alice's CipherData (and encypted txt).
   //
   // In the wild if the HMAC signature was swapped with someone else's
   // valid signature Quick Crypt would report the error to Alice at signature
-  // validation time because it would use Alice's siteKeyA not Bob's siteKeyB to
+  // validation time because it would use Alice's userCredA not Bob's userCredB to
   // test.
   //
   // But what could happen is that an evil site might closely mimicked
@@ -460,7 +460,7 @@ describe("Encryption and decryption", function () {
   // text can still not be retrived. This test tries to ensures that
   // even having tricked Alice into entering her PWD at the evil website,
   // the ciphertext still cannot be decrypted because the
-  // evil site does not have access to Alice's siteKeyA which is
+  // evil site does not have access to Alice's userCredA which is
   // combined with her password to generate the cipher key.
   //
   it("decryption should fail with replaced valid signature", async function () {
@@ -470,8 +470,8 @@ describe("Encryption and decryption", function () {
       const clearText = 'This is a secret 🐓';
       const pwd = 'a good pwd';
       const hint = 'not really';
-      const siteKeyA = crypto.getRandomValues(new Uint8Array(cs.SITEKEY_BYTES));
-      const siteKeyB = crypto.getRandomValues(new Uint8Array(cs.SITEKEY_BYTES));
+      const userCredA = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
+      const userCredB = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
       const clearEnc = new TextEncoder().encode(clearText);
       const eparamsA: cs.EParams = {
@@ -481,7 +481,7 @@ describe("Encryption and decryption", function () {
         fallbackRand: true,
         pwd: pwd,
         hint: hint,
-        siteKey: siteKeyA,
+        userCred: userCredA,
         clear: clearEnc,
       };
       const cipherTextA = await cipherSvc.encrypt(eparamsA);
@@ -491,10 +491,10 @@ describe("Encryption and decryption", function () {
 
       // First sign and repack with the original (correct) values to help ensure the
       // code for repacking is valid and that the 2nd attempt with a new signature
-      // detects the siteKey change rather than bug in signAndRepack. Then resign
+      // detects the userCred change rather than bug in signAndRepack. Then resign
       // and pack with Bob's sitkey
-      const [cipherTextAA, skA, hmacA] = await signAndRepack(siteKeyA, cipherDataA.slt, encodedA);
-      const [cipherTextBA, skB, hmacB] = await signAndRepack(siteKeyB, cipherDataA.slt, encodedA);
+      const [cipherTextAA, skA, hmacA] = await signAndRepack(userCredA, cipherDataA.slt, encodedA);
+      const [cipherTextBA, skB, hmacB] = await signAndRepack(userCredB, cipherDataA.slt, encodedA);
 
       // both should succeed since the singatures are valid (just cannot decrypt cipherText)
       expect(await cipherSvc._verifyCipherBytes(skA, hmacA, encodedA)).toBeTrue();
@@ -505,7 +505,7 @@ describe("Encryption and decryption", function () {
         async (decHint) => {
           return pwd;
         },
-        siteKeyA,
+        userCredA,
         cipherTextAA
       );
       const clearTest = new TextDecoder().decode(decryptedAA);
@@ -520,7 +520,7 @@ describe("Encryption and decryption", function () {
           async (decHint) => {
             return pwd;
           },
-          siteKeyB,
+          userCredB,
           cipherTextBA
         )
       ).toBeRejectedWithError(DOMException);
@@ -531,7 +531,7 @@ describe("Encryption and decryption", function () {
 
     const hint = 'nope';
     const pwd = 'another good pwd';
-    const siteKey = crypto.getRandomValues(new Uint8Array(cs.SITEKEY_BYTES));
+    const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
     const clearEnc = crypto.getRandomValues(new Uint8Array(16));
 
     const eparams: cs.EParams = {
@@ -541,7 +541,7 @@ describe("Encryption and decryption", function () {
       fallbackRand: true,
       pwd: pwd,
       hint: hint,
-      siteKey: siteKey,
+      userCred: userCred,
       clear: clearEnc,
     };
     // ensure the defaults work
@@ -556,25 +556,25 @@ describe("Encryption and decryption", function () {
     }
     await expectAsync(
       cipherSvc.encrypt(bparams)
-    ).toBeRejectedWithError(Error, new RegExp('.+siteKey.*'));
+    ).toBeRejectedWithError(Error, new RegExp('.+userCred.*'));
 
-    // no siteKey
+    // no userCred
     bparams = {
       ...eparams,
-      siteKey: new Uint8Array(0)
+      userCred: new Uint8Array(0)
     }
     await expectAsync(
       cipherSvc.encrypt(bparams)
-    ).toBeRejectedWithError(Error, new RegExp('.+siteKey.*'));
+    ).toBeRejectedWithError(Error, new RegExp('.+userCred.*'));
 
-    // extra long siteKey
+    // extra long userCred
     bparams = {
       ...eparams,
-      siteKey: crypto.getRandomValues(new Uint8Array(cs.SITEKEY_BYTES + 2))
+      userCred: crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES + 2))
     }
     await expectAsync(
       cipherSvc.encrypt(bparams)
-    ).toBeRejectedWithError(Error, new RegExp('.+siteKey.*'));
+    ).toBeRejectedWithError(Error, new RegExp('.+userCred.*'));
 
     // empty clear data
     bparams = {
@@ -660,7 +660,7 @@ describe("Get cipherdata from cipher text", function () {
       const clearText = 'This is a secret 🦋';
       const pwd = 'not good pwd';
       const hint = 'try a himt';
-      const siteKey = crypto.getRandomValues(new Uint8Array(cs.SITEKEY_BYTES));
+      const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
       const clearEnc = new TextEncoder().encode(clearText);
       const eparams: cs.EParams = {
@@ -670,11 +670,11 @@ describe("Get cipherdata from cipher text", function () {
         fallbackRand: true,
         pwd: pwd,
         hint: hint,
-        siteKey: siteKey,
+        userCred: userCred,
         clear: clearEnc,
       };
       const cipherText = await cipherSvc.encrypt(eparams);
-      const cipherData = await cipherSvc.getCipherData(siteKey, cipherText);
+      const cipherData = await cipherSvc.getCipherData(userCred, cipherText);
 
       expect(cipherData.alg).toBe(alg);
       expect(cipherData.ic).toBe(cs.ICOUNT_MIN);
@@ -697,7 +697,7 @@ describe("Get cipherdata from cipher text", function () {
       const clearEnc = crypto.getRandomValues(new Uint8Array(16));
       const pwd = 'another good pwd';
       const hint = 'nope';
-      const siteKey = crypto.getRandomValues(new Uint8Array(cs.SITEKEY_BYTES));
+      const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
       const eparams: cs.EParams = {
         alg: alg,
@@ -706,7 +706,7 @@ describe("Get cipherdata from cipher text", function () {
         fallbackRand: true,
         pwd: pwd,
         hint: hint,
-        siteKey: siteKey,
+        userCred: userCred,
         clear: clearEnc,
       };
 
@@ -717,19 +717,19 @@ describe("Get cipherdata from cipher text", function () {
 
       await expectAsync(
         cipherSvc.getCipherData(
-          siteKey,
+          userCred,
           cipherText
         )
       ).toBeRejectedWithError(Error, new RegExp('.+HMAC.+'));
     }
   });
 
-  it("detect invalid siteKey", async function () {
+  it("detect invalid userCred", async function () {
 
     const clearEnc = crypto.getRandomValues(new Uint8Array(16));
     const pwd = 'another good pwd';
     const hint = 'nope';
-    const siteKey = crypto.getRandomValues(new Uint8Array(cs.SITEKEY_BYTES));
+    const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
     const eparams: cs.EParams = {
       alg: 'AES-GCM',
@@ -738,36 +738,36 @@ describe("Get cipherdata from cipher text", function () {
       fallbackRand: true,
       pwd: pwd,
       hint: hint,
-      siteKey: siteKey,
+      userCred: userCred,
       clear: clearEnc,
     };
     let cipherText = await cipherSvc.encrypt(eparams);
 
-    // Doesn't match orignal siteKey
-    let problemSiteKey = crypto.getRandomValues(new Uint8Array(cs.SITEKEY_BYTES));
+    // Doesn't match orignal userCred
+    let problemUserCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
     await expectAsync(
       cipherSvc.getCipherData(
-        problemSiteKey,
+        problemUserCred,
         cipherText
       )
     ).toBeRejectedWithError(Error, new RegExp('.+HMAC.+'));
 
-    // Missing one byte of siteKey
-    problemSiteKey = siteKey.slice(0, siteKey.byteLength - 1);
+    // Missing one byte of userCred
+    problemUserCred = userCred.slice(0, userCred.byteLength - 1);
     await expectAsync(
       cipherSvc.getCipherData(
-        problemSiteKey,
+        problemUserCred,
         cipherText
       )
     ).toBeRejectedWithError(Error);
 
     // One bytes extra
-    problemSiteKey = new Uint8Array(cs.SITEKEY_BYTES + 1);
-    problemSiteKey.set(siteKey);
-    problemSiteKey.set([0], siteKey.byteLength);
+    problemUserCred = new Uint8Array(cs.USERCRED_BYTES + 1);
+    problemUserCred.set(userCred);
+    problemUserCred.set([0], userCred.byteLength);
     await expectAsync(
       cipherSvc.getCipherData(
-        problemSiteKey,
+        problemUserCred,
         cipherText
       )
     ).toBeRejectedWithError(Error);
