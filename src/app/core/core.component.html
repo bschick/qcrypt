@@ -139,11 +139,11 @@ SOFTWARE. -->
           <mat-label #minStrLabel>Minimum Strength</mat-label>
           <mat-select [(value)]="minPwdStrength" (selectionChange)="clearCaches()"
             matTooltip="Minimum required password strength used for encryption">
-            <mat-option value="0">Terrible</mat-option>
-            <mat-option value="1">Weak</mat-option>
-            <mat-option value="2">Decent</mat-option>
-            <mat-option value="3">Good</mat-option>
-            <mat-option value="4">Best</mat-option>
+            <mat-option class="red-pwd-strength" value="0">Terrible</mat-option>
+            <mat-option class="red-pwd-strength" value="1">Weak</mat-option>
+            <mat-option class="yellow-pwd-strength" value="2">Decent</mat-option>
+            <mat-option class="green-pwd-strength" value="3">Good</mat-option>
+            <mat-option class="green-pwd-strength" value="4">Best</mat-option>
           </mat-select>
         </mat-form-field>
         <mat-slide-toggle class="mleft15" [(ngModel)]="hidePwd" (change)="onHidePwdChanged()"

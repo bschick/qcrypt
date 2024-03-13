@@ -5,6 +5,7 @@ import {
    PublicKeyCredentialRequestOptionsJSON,
 } from '@simplewebauthn/types';
 import { Subject, Subscription, filter } from 'rxjs';
+import { DateTime } from 'luxon';
 
 const baseUrl = 'https://qcrypt.schicks.net/';
 
@@ -59,7 +60,8 @@ export class AuthenticatorService {
    private _userName: string | null = null;
    private _userId: string | null = null;
    private _subject = new Subject<AuthEventData>();
-   private _timeoutId: number = 0;
+   private _intervalId: number = 0;
+   private _expiration!: DateTime;
 
    constructor() {
       this._userId = localStorage.getItem('userid');
@@ -67,7 +69,14 @@ export class AuthenticatorService {
       if (this._userId) {
          this._siteKey = sessionStorage.getItem(this._userId + 'sitekey');
          if (this._siteKey) {
-            this.refreshPasskeys();
+            const exp = sessionStorage.getItem(this._userId + 'expiration');
+            this.setActiveUser(this._userId, this._userName!, this._siteKey);
+            // replace the default expiration (set indirectly by setActiveUser)
+            // with the save value if present
+            if(exp) {
+               this._expiration = DateTime.fromISO(exp);
+               sessionStorage.setItem(this._userId + 'expiration', this._expiration.toISO()!);
+            }
          }
       }
    }
@@ -143,21 +152,38 @@ export class AuthenticatorService {
       sessionStorage.setItem(this._userId + 'sitekey', this._siteKey);
       this.refreshPasskeys();
       this.emit(this.captureEventData(AuthEvent.Login));
-      this.restartTimer();
-   }
-
-   private restartTimer(): void {
-      if (this._timeoutId != 0) {
-         clearTimeout(this._timeoutId);
-         this._timeoutId = 0;
-      }
-      // @ts-ignore
-      this._timeoutId = setTimeout(() => this.logout(), 1000 * 60 * 60 * 12);
+      this.activity();
    }
 
    activity() {
-      this.restartTimer();
+      if (this._intervalId) {
+         clearInterval(this._intervalId);
+         this._intervalId = 0;
+      }
+
+      // 4 hours expritation
+      this._expiration = DateTime.now().plus({ seconds: 60 * 60 * 1 });
+      sessionStorage.setItem(this._userId + 'expiration', this._expiration.toISO()!);
+
+      // @ts-ignore
+      // Check every 5 minutes
+      this._intervalId = setInterval(() => this.timerTick(), 1000 * 60 * 5);
    }
+
+    private timerTick(): void {
+      if (DateTime.now() > this._expiration) {
+         this.logout();
+      }
+    }
+
+    secondsRemaining() {
+      let result = 0;
+      if ( this._intervalId) {
+        const diff = this._expiration.diff(DateTime.now());
+        result = Math.max(0, Math.round(diff.toMillis() / 1000));
+      }
+      return result;
+    }
 
    forgetUserInfo() {
       if (this._userId) {
@@ -177,8 +203,13 @@ export class AuthenticatorService {
       if (this._siteKey) {
          const eventData = this.captureEventData(AuthEvent.Logout);
          sessionStorage.removeItem(this._userId + 'sitekey');
+         sessionStorage.removeItem(this._userId + 'expiration');
          this._siteKey = null;
          this.passKeys.set([]);
+         if (this._intervalId) {
+            clearInterval(this._intervalId);
+            this._intervalId = 0;
+         }
          this.emit(eventData);
       }
    }
@@ -345,8 +376,8 @@ export class AuthenticatorService {
          throw err;
       }
 
-      // Need to return challenge because in some cases it cannot be bound
-      // to a user when created. The server validates it created the challenge
+      // Need to return challenge because in some cases it is not bound to
+      // a user id when created. The server validates it created the challenge
       // and its age
       const expanded = {
          ...startAuth,
@@ -451,9 +482,10 @@ export class AuthenticatorService {
          throw err;
       }
 
-      // Need to return challenge because in some cases it cannot be bound
+      // Need to return challenge because in some cases it is not bound
       // to a user when created. The server validates it created the challenge
-      // and its age (seems odd the userHandle isn't returned from .create)
+      // and its age.
+      // Also, seems odd the userHandle isn't returned from .create
       const expanded = {
          ...startReg,
          userId: optionsJson.user.id,

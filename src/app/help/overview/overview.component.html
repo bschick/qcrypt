@@ -34,15 +34,34 @@
 
     <h2>Design Goals</h2>
     <ul>
-        <li>Unencrypted data and passwords do not leave your local machine</li>
+        <li>Unencrypted data and passwords do not leave the browser</li>
         <li>Easy to use and hard to screw up</li>
-        <li>Customizable encryption options constrained to values not known to be weak</li>
+        <li>Customizable encryption options constrained to values known to be strong</li>
         <li>Implementation follows current cryptographic best practices</li>
-        <li>Convienient to browser based "app" that works across modern devices</li>
+        <li>Convienient browser based "app" that works across modern devices</li>
+        <li>After sign in, work fully offline</li>
         <li>Use the strongest web-app security practices (csp, strong cert, sri, hsts, xfo, etc..)</li>
         <li>Opensource for peer review</li>
         <li>Well specificed protocols</li>
         <li>No adverts or cookies</li>
+    </ul>
+
+    <h2>Bundled Javascript Libraries</h2>
+    <ul>
+        <li><a href="https://angular.io/">angular 17.1</a></li>
+        <li><a href="https://simplewebauthn.dev/">simplewebauthn</a></li>
+        <li><a href="https://github.com/jedisct1/libsodium.js">libsodium</a></li>
+        <li><a href="https://rxjs.dev/">rxjs</a></li>
+        <li><a href="https://github.com/microsoft/tslib">tslib</a></li>
+        <li><a href="https://moment.github.io/luxon/">luxon</a></li>
+        <li><a href="https://zxcvbn-ts.github.io/zxcvbn/">zxcvbn-ts</a></li>
+        <li><a href="https://github.com/antoantonyk/password-strength-meter">angular-password-strength-meter</a></li>
+    </ul>
+
+    <h2>Optional External Dependencies</h2>
+    <ul>
+        <li><a href="https://www.random.org/bytes/">random.org</a></li>
+        <li><a href="https://haveibeenpwned.com/API/v2">haveibeenpwned.com</a></li>
     </ul>
 </div>
 </div>

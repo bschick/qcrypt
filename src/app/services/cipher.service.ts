@@ -521,14 +521,13 @@ export class CipherService {
     if (readyNotice) {
       readyNotice(cipherData);
     }
+    const ek = await this._genCipherKey(cipherData.alg, cipherData.ic, pwd, siteKey, cipherData.slt);
 
     const cipherDataForAD: CipherData = {
       ...cipherData,
       encryptedData: new Uint8Array(0)
     };
-
     const additionalData = this._encodeCipherData(cipherDataForAD);
-    const ek = await this._genCipherKey(cipherData.alg, cipherData.ic, pwd, siteKey, cipherData.slt);
 
     const decrypted = await this._doDecrypt(
       cipherData.alg,
