@@ -6,35 +6,35 @@ import { translations } from '@zxcvbn-ts/language-en';
 import { matcherPwnedFactory } from '@zxcvbn-ts/matcher-pwned';
 
 @Injectable({
-  providedIn: 'root'
+   providedIn: 'root'
 })
 export class ZxcvbnOptionsService {
 
-  private matcherPwned: Matcher;
+   private matcherPwned: Matcher;
 
-  constructor() {
-    const options = {
-      translations,
-      dictionary: {
-        ...zxcvbnCommonPackage.dictionary,
-        ...zxcvbnEnPackage.dictionary,
-      },
-      graphs: zxcvbnCommonPackage.adjacencyGraphs,
-      useLevenshteinDistance: true,
-    };
-    zxcvbnOptions.setOptions(options);
-    this.matcherPwned = matcherPwnedFactory(fetch, zxcvbnOptions);
+   constructor() {
+      const options = {
+         translations,
+         dictionary: {
+            ...zxcvbnCommonPackage.dictionary,
+            ...zxcvbnEnPackage.dictionary,
+         },
+         graphs: zxcvbnCommonPackage.adjacencyGraphs,
+         useLevenshteinDistance: true,
+      };
+      zxcvbnOptions.setOptions(options);
+      this.matcherPwned = matcherPwnedFactory(fetch, zxcvbnOptions);
 
-  }
+   }
 
-  checkPwned(check: boolean) {
-    if (check) {
-      if (!zxcvbnOptions.matchers['pwned']) {
-        zxcvbnOptions.addMatcher('pwned', this.matcherPwned);
+   checkPwned(check: boolean) {
+      if (check) {
+         if (!zxcvbnOptions.matchers['pwned']) {
+            zxcvbnOptions.addMatcher('pwned', this.matcherPwned);
+         }
+      } else {
+         delete zxcvbnOptions.matchers['pwned'];
       }
-    } else {
-      delete zxcvbnOptions.matchers['pwned'];
-    }
-  }
+   }
 
 }

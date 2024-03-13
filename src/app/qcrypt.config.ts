@@ -27,10 +27,10 @@ import { provideAnimations } from '@angular/platform-browser/animations';
 import { routes } from './qcrypt.routes';
 
 export const appConfig: ApplicationConfig = {
-  providers: [
-    provideRouter(routes),
-    provideZxvbnServiceForPSM(),
-    importProvidersFrom(HttpClientModule),
-    provideAnimations(),
-  ],
+   providers: [
+      provideRouter(routes),
+      provideZxvbnServiceForPSM(),
+      importProvidersFrom(HttpClientModule),
+      provideAnimations(),
+   ],
 };

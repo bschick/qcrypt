@@ -1,15 +1,15 @@
 .container {
-    display: flex;
-    align-items: start;
-    justify-content: center;
+  display: flex;
+  align-items: start;
+  justify-content: center;
 }
 
 .content {
-    padding:30px;
-    max-width: 723px;
+  padding: 30px;
+  max-width: 723px;
 }
 
 @mixin font {
-    font-size: 16px;
-    line-height: 22px;
+  font-size: 16px;
+  line-height: 22px;
 }

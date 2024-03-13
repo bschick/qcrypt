@@ -1,34 +1,34 @@
 <div class="welcome">
-    <p class="header">Easy, Trustworthy Personal Encyption</p>
-    <p class="subheader">your sensitive data remains local</p>
-    <p class="descrip">Quick Crypt uses both passkeys and passwords you control to ensure
-        only you can decrypt your data and that other websites cannot easily impersonate Quick Crypt.
-        Are you new to Quick Crypt?
+  <p class="header">Easy, Trustworthy Personal Encyption</p>
+  <p class="subheader">your sensitive data remains local</p>
+  <p class="descrip">Quick Crypt uses both passkeys and passwords you control to ensure
+    only you can decrypt your data and that other websites cannot easily impersonate Quick Crypt.
+    Are you new to Quick Crypt?
 
-    </p>
-    <mat-progress-spinner class="spinner" color="primary" mode="indeterminate"
-        [style.visibility]="showProgress ? 'visible' : 'hidden'">
-    </mat-progress-spinner>
-    <div>
-        <div class="button-host">
-            <a [routerLink]="'/newuser'">
-                <button mat-fab extended color="primary" class="button">
-                <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">Create a new user</span>
-            </button>
-            </a>
-            <br />
-            <button mat-fab extended (click)="onClickExisting($event)" color="primary" class="button">
-                <!--<mat-icon>login</mat-icon>--><span class="button-label">Sign in using an existing passkey</span>
-            </button>
-            <br />
-            <button mat-fab extended (click)="onClickRecovery($event)" color="primary" class="button">
-                <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">I had a passkey, but it's lost or not
-                    working</span>
-            </button>
-            <div class="error-msg">{{error}}</div>
-        </div>
+  </p>
+  <mat-progress-spinner class="spinner" color="primary" mode="indeterminate"
+    [style.visibility]="showProgress ? 'visible' : 'hidden'">
+  </mat-progress-spinner>
+  <div>
+    <div class="button-host">
+      <a [routerLink]="'/newuser'">
+        <button mat-fab extended color="primary" class="button">
+          <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">Create a new user</span>
+        </button>
+      </a>
+      <br />
+      <button mat-fab extended (click)="onClickExisting($event)" color="primary" class="button">
+        <!--<mat-icon>login</mat-icon>--><span class="button-label">Sign in using an existing passkey</span>
+      </button>
+      <br />
+      <button mat-fab extended (click)="onClickRecovery($event)" color="primary" class="button">
+        <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">I had a passkey, but it's lost or not
+          working</span>
+      </button>
+      <div class="error-msg">{{error}}</div>
+    </div>
 
-        <!--      
+    <!--      
      To get started enter a user name that will be included in your passkey. Your user name
         can be anything, and does not need to be an email address.
     <mat-form-field class="">
@@ -37,6 +37,6 @@
           </mat-form-field>
           <button mat-flat-button class="" color="primary">Get Started</button>
   -->
-    </div>
+  </div>
 
 </div>

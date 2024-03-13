@@ -31,12 +31,12 @@ import { coreGuard } from './core/core.guard';
 import { welcomeGuard } from './welcome/welcome.guard';
 
 export const routes: Routes = [
-    { path: 'welcome', component: WelcomeComponent, canActivate: [welcomeGuard] },
-    { path: 'recovery', component: RecoveryComponent },
-    { path: 'newuser', component: NewUserComponent },
-    { path: 'help/overview', component: OverviewComponent },
-    { path: 'help/faqs', component: FaqsComponent },
-    { path: 'help/protocol', component: ProtocolComponent },
-    { path: '', component: CoreComponent, canActivate: [coreGuard] },
-    { path: '**', redirectTo: '/' },
+   { path: 'welcome', component: WelcomeComponent, canActivate: [welcomeGuard] },
+   { path: 'recovery', component: RecoveryComponent },
+   { path: 'newuser', component: NewUserComponent },
+   { path: 'help/overview', component: OverviewComponent },
+   { path: 'help/faqs', component: FaqsComponent },
+   { path: 'help/protocol', component: ProtocolComponent },
+   { path: '', component: CoreComponent, canActivate: [coreGuard] },
+   { path: '**', redirectTo: '/' },
 ];

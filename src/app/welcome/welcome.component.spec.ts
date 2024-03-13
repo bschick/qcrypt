@@ -5,21 +5,21 @@ import { HttpClientTestingModule, HttpTestingController } from '@angular/common/
 import { WelcomeComponent } from './welcome.component';
 
 describe('WelcomeComponent', () => {
-  let component: WelcomeComponent;
-  let fixture: ComponentFixture<WelcomeComponent>;
+   let component: WelcomeComponent;
+   let fixture: ComponentFixture<WelcomeComponent>;
 
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [WelcomeComponent,RouterTestingModule,NoopAnimationsModule,HttpClientTestingModule]
-    })
-    .compileComponents();
-    
-    fixture = TestBed.createComponent(WelcomeComponent);
-    component = fixture.componentInstance;
-    fixture.detectChanges();
-  });
+   beforeEach(async () => {
+      await TestBed.configureTestingModule({
+         imports: [WelcomeComponent, RouterTestingModule, NoopAnimationsModule, HttpClientTestingModule]
+      })
+         .compileComponents();
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
+      fixture = TestBed.createComponent(WelcomeComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+   });
+
+   it('should create', () => {
+      expect(component).toBeTruthy();
+   });
 });

@@ -13,84 +13,84 @@ import { ClipboardModule } from '@angular/cdk/clipboard';
 
 
 @Component({
-  selector: 'app-newuser',
-  standalone: true,
-  templateUrl: './newuser.component.html',
-  styleUrl: './newuser.component.scss',
-  imports: [MatIconModule, MatButtonModule, RouterLink, CommonModule,
-    MatProgressSpinnerModule, MatInputModule, MatFormFieldModule,
-    FormsModule, ClipboardModule,
-  ],
+   selector: 'app-newuser',
+   standalone: true,
+   templateUrl: './newuser.component.html',
+   styleUrl: './newuser.component.scss',
+   imports: [MatIconModule, MatButtonModule, RouterLink, CommonModule,
+      MatProgressSpinnerModule, MatInputModule, MatFormFieldModule,
+      FormsModule, ClipboardModule,
+   ],
 })
 export class NewUserComponent implements OnInit {
 
-  public showProgress = false;
-  public error = '';
-  public newUserName = '';
-  public currentUserName: string | null = null;
-  public completed = false;
-  public recoveryLink = '';
-  public authenticated = false;
+   public showProgress = false;
+   public error = '';
+   public newUserName = '';
+   public currentUserName: string | null = null;
+   public completed = false;
+   public recoveryLink = '';
+   public authenticated = false;
 
-  constructor(
-    private authSvc: AuthenticatorService,
-    private router: Router,
-    private snackBar: MatSnackBar,
-    private activeRoute: ActivatedRoute) {
-  }
+   constructor(
+      private authSvc: AuthenticatorService,
+      private router: Router,
+      private snackBar: MatSnackBar,
+      private activeRoute: ActivatedRoute) {
+   }
 
-  ngOnInit() {
-    const [userId, userName] = this.authSvc.getUserInfo();
-    if (userId && userName) {
-      this.currentUserName = userName;
-    }
-    this.authenticated = this.authSvc.isAuthenticated();
-  }
+   ngOnInit() {
+      const [userId, userName] = this.authSvc.getUserInfo();
+      if (userId && userName) {
+         this.currentUserName = userName;
+      }
+      this.authenticated = this.authSvc.isAuthenticated();
+   }
 
-  toastMessage(msg: string): void {
-    this.snackBar.open(msg, '', {
-      duration: 2000,
-    });
-  }
+   toastMessage(msg: string): void {
+      this.snackBar.open(msg, '', {
+         duration: 2000,
+      });
+   }
 
-  async onClickSignin(): Promise<void> {
-    try {
+   async onClickSignin(): Promise<void> {
+      try {
+         this.error = '';
+         this.showProgress = true;
+         await this.authSvc.defaultLogin();
+         this.router.navigateByUrl('/');
+      } catch (err) {
+         console.error(err);
+         this.error = 'Sign in failed, try again or create a new user';
+      } finally {
+         this.showProgress = false;
+      }
+   }
+
+   async onClickNewUser(event: any): Promise<void> {
       this.error = '';
-      this.showProgress = true;
-      await this.authSvc.defaultLogin();
-      this.router.navigateByUrl('/');
-    } catch (err) {
-      console.error(err);
-      this.error = 'Sign in failed, try again or create a new user';
-    } finally {
-      this.showProgress = false;
-    }
-  }
 
-  async onClickNewUser(event: any): Promise<void> {
-    this.error = '';
+      if (!this.newUserName || this.newUserName.length < 6 || this.newUserName.length > 31) {
+         this.error = 'User name must be 6 to 31 characters long';
+         return;
+      }
 
-    if (!this.newUserName || this.newUserName.length < 6 || this.newUserName.length > 31) {
-      this.error = 'User name must be 6 to 31 characters long';
-      return;
-    }
+      try {
+         this.showProgress = true;
+         this.authSvc.forgetUserInfo();
+         const passkeyInfo = await this.authSvc.newUser(this.newUserName);
+         this.recoveryLink = new URL(
+            window.location.origin + '/recovery' +
+            '?userid=' + passkeyInfo.userId +
+            '&usercred=' + passkeyInfo.userCred
+         ).toString();
 
-    try {
-      this.showProgress = true;
-      this.authSvc.forgetUserInfo();
-      const passkeyInfo = await this.authSvc.newUser(this.newUserName);
-      this.recoveryLink = new URL(
-        window.location.origin + '/recovery' +
-        '?userid=' + passkeyInfo.userId +
-        '&usercred=' + passkeyInfo.userCred
-      ).toString();
-
-      this.completed = true;
-    } catch (err) {
-      console.error(err);
-      this.error = 'New user was not created, please try again';
-    } finally {
-      this.showProgress = false;
-    }
-  }
+         this.completed = true;
+      } catch (err) {
+         console.error(err);
+         this.error = 'New user was not created, please try again';
+      } finally {
+         this.showProgress = false;
+      }
+   }
 }

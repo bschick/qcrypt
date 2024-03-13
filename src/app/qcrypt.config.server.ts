@@ -29,11 +29,11 @@ import { appConfig } from './qcrypt.config';
       provide: CSP_NONCE,
       useValue: nonce
     }*/
-    
+
 const serverConfig: ApplicationConfig = {
-  providers: [
-    provideServerRendering(),
-  ]
+   providers: [
+      provideServerRendering(),
+   ]
 };
 
 export const config = mergeApplicationConfig(appConfig, serverConfig);

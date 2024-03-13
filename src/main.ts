@@ -24,4 +24,4 @@ import { appConfig } from './app/qcrypt.config';
 import { QCryptComponent } from './app/qcrypt.component';
 
 bootstrapApplication(QCryptComponent, appConfig)
-  .catch((err) => console.error(err));
+   .catch((err) => console.error(err));

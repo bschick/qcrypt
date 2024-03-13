@@ -73,7 +73,7 @@ export class AuthenticatorService {
             this.setActiveUser(this._userId, this._userName!, this._userCred);
             // replace the default expiration (set indirectly by setActiveUser)
             // with the save value if present
-            if(exp) {
+            if (exp) {
                this._expiration = DateTime.fromISO(exp);
                sessionStorage.setItem(this._userId + 'expiration', this._expiration.toISO()!);
             }
@@ -170,20 +170,20 @@ export class AuthenticatorService {
       this._intervalId = setInterval(() => this.timerTick(), 1000 * 60 * 5);
    }
 
-    private timerTick(): void {
+   private timerTick(): void {
       if (DateTime.now() > this._expiration) {
          this.logout();
       }
-    }
+   }
 
-    secondsRemaining() {
+   secondsRemaining() {
       let result = 0;
-      if ( this._intervalId) {
-        const diff = this._expiration.diff(DateTime.now());
-        result = Math.max(0, Math.round(diff.toMillis() / 1000));
+      if (this._intervalId) {
+         const diff = this._expiration.diff(DateTime.now());
+         result = Math.max(0, Math.round(diff.toMillis() / 1000));
       }
       return result;
-    }
+   }
 
    forgetUserInfo() {
       if (this._userId) {

@@ -13,63 +13,63 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 
 
 @Component({
-  selector: 'app-welcome',
-  standalone: true,
-  templateUrl: './welcome.component.html',
-  styleUrl: './welcome.component.scss',
-  imports: [MatInputModule, MatFormFieldModule, FormsModule, MatButtonModule,
-    MatProgressSpinnerModule, RouterLink
-  ],
+   selector: 'app-welcome',
+   standalone: true,
+   templateUrl: './welcome.component.html',
+   styleUrl: './welcome.component.scss',
+   imports: [MatInputModule, MatFormFieldModule, FormsModule, MatButtonModule,
+      MatProgressSpinnerModule, RouterLink
+   ],
 
 })
 export class WelcomeComponent {
 
-  public error: string = '';
-  public showProgress: boolean = false;
+   public error: string = '';
+   public showProgress: boolean = false;
 
-  constructor(
-    private dialog: MatDialog,
-    private authSvc: AuthenticatorService,
-    private router: Router) {
-  }
+   constructor(
+      private dialog: MatDialog,
+      private authSvc: AuthenticatorService,
+      private router: Router) {
+   }
 
-  async onClickExisting(event: any) {
-    try {
-      this.error = '';
-      this.showProgress = true;
-      await this.authSvc.findLogin();
-      this.router.navigateByUrl('/');
-    } catch (err) {
-      console.error(err);
-      this.error = 'Passkey not found. Either try again or select another option.';
-    } finally {
-      this.showProgress = false;
-    }
+   async onClickExisting(event: any) {
+      try {
+         this.error = '';
+         this.showProgress = true;
+         await this.authSvc.findLogin();
+         this.router.navigateByUrl('/');
+      } catch (err) {
+         console.error(err);
+         this.error = 'Passkey not found. Either try again or select another option.';
+      } finally {
+         this.showProgress = false;
+      }
 
-  }
+   }
 
-  onClickNew(event: any) {
+   onClickNew(event: any) {
 
-  }
+   }
 
-  onClickRecovery(event: any) {
-    var dialogRef = this.dialog.open(RecoveryDialog);
+   onClickRecovery(event: any) {
+      var dialogRef = this.dialog.open(RecoveryDialog);
 
-  }
+   }
 }
 
 
 @Component({
-  selector: 'recovery-dialog',
-  templateUrl: './recovery-dialog.html',
-  styleUrl: './welcome.component.scss',
-  standalone: true,
-  imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
-    MatButtonModule],
+   selector: 'recovery-dialog',
+   templateUrl: './recovery-dialog.html',
+   styleUrl: './welcome.component.scss',
+   standalone: true,
+   imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
+      MatButtonModule],
 })
 export class RecoveryDialog {
-  constructor(
-    public dialogRef: MatDialogRef<RecoveryDialog>
-  ) { }
+   constructor(
+      public dialogRef: MatDialogRef<RecoveryDialog>
+   ) { }
 
 }
