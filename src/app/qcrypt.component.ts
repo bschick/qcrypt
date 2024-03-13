@@ -32,46 +32,46 @@ import { AuthenticatorService, AuthenticatorInfo } from './services/authenticato
 
 
 @Component({
-  selector: 'qcrypt-root',
-  standalone: true,
-  templateUrl: './qcrypt.component.html',
-  styleUrl: './qcrypt.component.scss',
-  imports: [RouterOutlet, MatToolbarModule, MatIconModule, MatButtonModule,
-    RouterLink, MatMenuModule, MatSidenavModule, CredentialsComponent
-  ],
+   selector: 'qcrypt-root',
+   standalone: true,
+   templateUrl: './qcrypt.component.html',
+   styleUrl: './qcrypt.component.scss',
+   imports: [RouterOutlet, MatToolbarModule, MatIconModule, MatButtonModule,
+      RouterLink, MatMenuModule, MatSidenavModule, CredentialsComponent
+   ],
 })
 export class QCryptComponent implements OnInit {
 
-  public bgColorDefault = '#4351AF';
-  public bgColorFocus = '#3B479A';
-  public countdown = 0;
+   public bgColorDefault = '#4351AF';
+   public bgColorFocus = '#3B479A';
+   public countdown = 0;
 
-  constructor(
-    public router: Router,
-    public authSvc: AuthenticatorService
-  ) {
-  }
+   constructor(
+      public router: Router,
+      public authSvc: AuthenticatorService
+   ) {
+   }
 
-  ngOnInit(): void {
-    setInterval(() => this.countdown = this.authSvc.secondsRemaining(), 5000);
-  }
+   ngOnInit(): void {
+      setInterval(() => this.countdown = this.authSvc.secondsRemaining(), 5000);
+   }
 
-  toggleNav(nav: MatSidenav) {
-    if (this.authSvc.isAuthenticated()) {
-      nav.toggle();
-    } else {
-      nav.close();
-    }
-  }
+   toggleNav(nav: MatSidenav) {
+      if (this.authSvc.isAuthenticated()) {
+         nav.toggle();
+      } else {
+         nav.close();
+      }
+   }
 
-  focusColor(test?: string) {
-    if (test) {
-      return this.router.url.startsWith(test) ? this.bgColorFocus : this.bgColorDefault;
-    } else {
-      return ['', '/', undefined].includes(this.router.url) ? this.bgColorFocus : this.bgColorDefault;
-    }
-  }
+   focusColor(test?: string) {
+      if (test) {
+         return this.router.url.startsWith(test) ? this.bgColorFocus : this.bgColorDefault;
+      } else {
+         return ['', '/', undefined].includes(this.router.url) ? this.bgColorFocus : this.bgColorDefault;
+      }
+   }
 
-  onOpenedCredentials() {
-  }
+   onOpenedCredentials() {
+   }
 }

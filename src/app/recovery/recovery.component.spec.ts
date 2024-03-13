@@ -5,21 +5,21 @@ import { HttpClientTestingModule, HttpTestingController } from '@angular/common/
 import { RecoveryComponent } from './recovery.component';
 
 describe('RecoveryComponent', () => {
-  let component: RecoveryComponent;
-  let fixture: ComponentFixture<RecoveryComponent>;
+   let component: RecoveryComponent;
+   let fixture: ComponentFixture<RecoveryComponent>;
 
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [RecoveryComponent,RouterTestingModule,NoopAnimationsModule,HttpClientTestingModule]
-    })
-    .compileComponents();
-    
-    fixture = TestBed.createComponent(RecoveryComponent);
-    component = fixture.componentInstance;
-    fixture.detectChanges();
-  });
+   beforeEach(async () => {
+      await TestBed.configureTestingModule({
+         imports: [RecoveryComponent, RouterTestingModule, NoopAnimationsModule, HttpClientTestingModule]
+      })
+         .compileComponents();
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
+      fixture = TestBed.createComponent(RecoveryComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+   });
+
+   it('should create', () => {
+      expect(component).toBeTruthy();
+   });
 });

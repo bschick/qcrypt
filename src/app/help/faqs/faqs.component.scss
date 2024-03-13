@@ -1,6 +1,6 @@
 @use "../help.scss";
 
-
-.content p, li {
-    @include help.font;
+.content p,
+li {
+  @include help.font;
 }
