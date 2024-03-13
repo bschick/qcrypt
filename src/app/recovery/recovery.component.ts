@@ -26,7 +26,7 @@ export class RecoveryComponent implements OnInit {
   public selfRecovery = false;
   public currentUserName: string | null = null;
   private userId: string | null = null;
-  private siteKey: string | null = null;
+  private userCred: string | null = null;
 
   constructor(
     private authSvc: AuthenticatorService,
@@ -36,14 +36,14 @@ export class RecoveryComponent implements OnInit {
 
   ngOnInit() {
     this.userId = this.activeRoute.snapshot.queryParamMap.get('userid');
-    this.siteKey = this.activeRoute.snapshot.queryParamMap.get('sitekey');
-    if (!this.userId || !this.siteKey) {
-      this.badlink = 'userid or sitekey is missing';
+    this.userCred = this.activeRoute.snapshot.queryParamMap.get('usercred');
+    if (!this.userId || !this.userCred) {
+      this.badlink = 'userid or usercred is missing';
       this.validRecoveryLink = false;
     }
     this.authenticated = this.authSvc.isAuthenticated();
     if(this.authenticated) {
-      this.selfRecovery = this.siteKey === this.authSvc.siteKey;
+      this.selfRecovery = this.userCred === this.authSvc.userCred;
     }
     const [userId, userName] = this.authSvc.getUserInfo();
     if (userId && userName) {
@@ -69,7 +69,7 @@ export class RecoveryComponent implements OnInit {
     try {
       this.showProgress = true;
       this.authSvc.forgetUserInfo();
-      await this.authSvc.recover(this.userId!, this.siteKey!);
+      await this.authSvc.recover(this.userId!, this.userCred!);
       this.router.navigateByUrl('/');
     } catch (err) {
       console.error(err);

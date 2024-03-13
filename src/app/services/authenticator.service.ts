@@ -11,7 +11,7 @@ const baseUrl = 'https://qcrypt.schicks.net/';
 
 export type RegistrationInfo = {
    verified: boolean;
-   siteKey: string;
+   userCred: string;
    userId: string;
    userName: string;
    lightIcon: string;
@@ -20,7 +20,7 @@ export type RegistrationInfo = {
 
 export type AuthenticationInfo = {
    verified: boolean;
-   siteKey: string;
+   userCred: string;
    userId: string;
    userName: string;
 };
@@ -47,7 +47,7 @@ export type AuthEventData = {
    readonly event: AuthEvent,
    readonly userId: string | null,
    readonly userName: string | null,
-   readonly siteKey: string | null
+   readonly userCred: string | null
 };
 
 
@@ -56,7 +56,7 @@ export type AuthEventData = {
 })
 export class AuthenticatorService {
 
-   private _siteKey: string | null = null;
+   private _userCred: string | null = null;
    private _userName: string | null = null;
    private _userId: string | null = null;
    private _subject = new Subject<AuthEventData>();
@@ -67,10 +67,10 @@ export class AuthenticatorService {
       this._userId = localStorage.getItem('userid');
       this._userName = localStorage.getItem('username');
       if (this._userId) {
-         this._siteKey = sessionStorage.getItem(this._userId + 'sitekey');
-         if (this._siteKey) {
+         this._userCred = sessionStorage.getItem(this._userId + 'usercred');
+         if (this._userCred) {
             const exp = sessionStorage.getItem(this._userId + 'expiration');
-            this.setActiveUser(this._userId, this._userName!, this._siteKey);
+            this.setActiveUser(this._userId, this._userName!, this._userCred);
             // replace the default expiration (set indirectly by setActiveUser)
             // with the save value if present
             if(exp) {
@@ -83,8 +83,8 @@ export class AuthenticatorService {
 
    public passKeys = signal<AuthenticatorInfo[]>([]);
 
-   get siteKey(): string | null {
-      return this._siteKey;
+   get userCred(): string | null {
+      return this._userCred;
    }
 
    get userName(): string | null {
@@ -96,7 +96,7 @@ export class AuthenticatorService {
    }
 
    isAuthenticated(): boolean {
-      return this._siteKey && this._userId ? true : false;
+      return this._userCred && this._userId ? true : false;
    }
 
    isUserKnown(): boolean {
@@ -122,7 +122,7 @@ export class AuthenticatorService {
          event: event,
          userId: this._userId,
          userName: this._userName,
-         siteKey: this._siteKey
+         userCred: this._userCred
       };
    }
 
@@ -140,16 +140,16 @@ export class AuthenticatorService {
       localStorage.setItem('username', this._userName);
    }
 
-   private setActiveUser(userId: string, userName: string, siteKey: string) {
-      if (!siteKey) {
-         throw new Error('missing siteKey');
+   private setActiveUser(userId: string, userName: string, userCred: string) {
+      if (!userCred) {
+         throw new Error('missing userCred');
       }
       this.storeUserInfo(userId, userName);
-      this._siteKey = siteKey;
+      this._userCred = userCred;
       // Includ userId in key in case there are multiple tabs open to
       // different users and this one is reloaded. This prevents 
-      // mixing of _userId and _siteKey from different accounts
-      sessionStorage.setItem(this._userId + 'sitekey', this._siteKey);
+      // mixing of _userId and _userCred from different accounts
+      sessionStorage.setItem(this._userId + 'usercred', this._userCred);
       this.refreshPasskeys();
       this.emit(this.captureEventData(AuthEvent.Login));
       this.activity();
@@ -188,10 +188,10 @@ export class AuthenticatorService {
    forgetUserInfo() {
       if (this._userId) {
          const eventData = this.captureEventData(AuthEvent.Forget);
-         sessionStorage.removeItem(this._userId + 'sitekey');
+         sessionStorage.removeItem(this._userId + 'usercred');
          localStorage.removeItem('username');
          localStorage.removeItem('userid');
-         this._siteKey = null;
+         this._userCred = null;
          this._userId = null;
          this._userName = null;
          this.passKeys.set([]);
@@ -200,11 +200,11 @@ export class AuthenticatorService {
    }
 
    logout() {
-      if (this._siteKey) {
+      if (this._userCred) {
          const eventData = this.captureEventData(AuthEvent.Logout);
-         sessionStorage.removeItem(this._userId + 'sitekey');
+         sessionStorage.removeItem(this._userId + 'usercred');
          sessionStorage.removeItem(this._userId + 'expiration');
-         this._siteKey = null;
+         this._userCred = null;
          this.passKeys.set([]);
          if (this._intervalId) {
             clearInterval(this._intervalId);
@@ -228,7 +228,7 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const putDescUrl = new URL(`description?credid=${credentialId}&userid=${this._userId}&sitekey=${this._siteKey!}`, baseUrl);
+      const putDescUrl = new URL(`description?credid=${credentialId}&userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
       const putDescResp = await fetch(putDescUrl, {
          method: 'PUT',
          mode: 'cors',
@@ -257,7 +257,7 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const putUserNameUrl = new URL(`username?userid=${this._userId}&sitekey=${this._siteKey!}`, baseUrl);
+      const putUserNameUrl = new URL(`username?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
       const putUserNameResp = await fetch(putUserNameUrl, {
          method: 'PUT',
          mode: 'cors',
@@ -284,7 +284,7 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const delPasskeyUrl = new URL(`authenticator?credid=${credentialId}&userid=${this._userId}&sitekey=${this._siteKey!}`, baseUrl);
+      const delPasskeyUrl = new URL(`authenticator?credid=${credentialId}&userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
       const delPasskeyResp = await fetch(delPasskeyUrl, {
          method: 'DELETE',
          mode: 'cors',
@@ -312,7 +312,7 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const getAuthsUrl = new URL(`authenticators?userid=${this._userId}&sitekey=${this._siteKey!}`, baseUrl);
+      const getAuthsUrl = new URL(`authenticators?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
       const getAuthsResp = await fetch(getAuthsUrl, {
          method: 'GET',
          mode: 'cors',
@@ -409,17 +409,17 @@ export class AuthenticatorService {
          throw new Error('authentication failed');
       }
 
-      this.setActiveUser(authInfo.userId, authInfo.userName, authInfo.siteKey);
+      this.setActiveUser(authInfo.userId, authInfo.userName, authInfo.userCred);
       return authInfo;
    }
 
-   async recover(userId: string, siteKey: string): Promise<RegistrationInfo> {
+   async recover(userId: string, userCred: string): Promise<RegistrationInfo> {
 
-      if (!userId || !siteKey) {
-         throw new Error('missing userid or sitekey');
+      if (!userId || !userCred) {
+         throw new Error('missing userid or usercred');
       }
 
-      const recoverUrl = new URL(`recover?userid=${userId}&sitekey=${siteKey}`, baseUrl);
+      const recoverUrl = new URL(`recover?userid=${userId}&usercred=${userCred}`, baseUrl);
       const recoverResp = await fetch(recoverUrl, {
          method: 'POST',
          mode: 'cors',
@@ -517,7 +517,7 @@ export class AuthenticatorService {
          throw new Error('registration failed');
       }
 
-      this.setActiveUser(registrationInfo.userId, registrationInfo.userName, registrationInfo.siteKey);
+      this.setActiveUser(registrationInfo.userId, registrationInfo.userName, registrationInfo.userCred);
       return registrationInfo;
    }
 

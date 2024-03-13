@@ -6,12 +6,12 @@ const cipherSvc = new cs.CipherService();
 const rl = readline.createInterface({ input, output });
 
 const cipherText = await rl.question('Cipher text (base64): ');
-const siteKey = await rl.question('Site key (base64): ');
+const userCred = await rl.question('Site key (base64): ');
 const clear = await cipherSvc.decrypt(
     async (hint) => {
         return await rl.question(`Password (hint: ${hint}): `);
     },
-    cs.base64ToBytes(siteKey),
+    cs.base64ToBytes(userCred),
     cipherText
 );
 
