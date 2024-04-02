@@ -28,6 +28,7 @@ import {
    OnInit, AfterViewInit,
    PLATFORM_ID,
    OnDestroy,
+   ChangeDetectorRef,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
@@ -144,7 +145,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    private intervalId: number = 0;
    private spinnerAbove: number = 1500000; // Default since benchmark is async
    private actionStart: number = 0;
-   private eventSub!: Subscription;
+   private authSub!: Subscription;
    public cacheTimeout!: DateTime;
    public icountMin: number = cs.ICOUNT_MIN;
    public icountMax: number = cs.ICOUNT_MAX; // Default since benchmark is async
@@ -158,6 +159,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    public errorCipher = false;
    public errorClear = false;
    public expandOptions = false;
+   public secondsRemaining = 0;
 
    //  @ViewChild(MatRipple) ripple: MatRipple;
    @ViewChild('clearField') clearField!: ElementRef;
@@ -187,6 +189,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       private snackBar: MatSnackBar,
       private matIconRegistry: MatIconRegistry,
       private domSanitizer: DomSanitizer,
+      private changeRef: ChangeDetectorRef,
       @Inject(PLATFORM_ID) private platformId: Object
    ) {
       this.matIconRegistry.addSvgIcon(
@@ -281,7 +284,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    ngOnInit(): void {
       // This can be greatly delayed is there is a long running async benchmark or
-      // encrpt or decrypt from a previous instance (tab that has not fully closed). 
+      // encrpt or decrypt from a previous instance (tab that has not fully closed).
       // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
       this.cipherSvc.benchmark(this.icountMin).then(([icount, icountMax, hashRate]) => {
          this.icount = icount;
@@ -299,7 +302,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       });
 
       // subscribe to auth events
-      this.eventSub = this.authSvc.on(
+      this.authSub = this.authSvc.on(
          [AuthEvent.Logout, AuthEvent.Forget, AuthEvent.Login],
          this.onAuthEvent.bind(this)
       );
@@ -315,7 +318,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    loadOptions() {
       // First check localStorage, then apply params (which take president)
       // (not that change are not presisted until the encrypt button is used)
-      /* debug  
+      /* debug
       for (let i = 0; i < localStorage.length; i++) {
         let key = localStorage.key(i)!;
         console.log(`${key}: ${this.lsGet(key)}`);
@@ -364,13 +367,20 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    ngOnDestroy(): void {
-      this.eventSub.unsubscribe();
+      if( this.authSub) {
+         this.authSub.unsubscribe();
+      }
+      if (this.signinDialogRef) {
+         this.signinDialogRef.close();
+         this.signinDialogRef = undefined;
+      }
    }
 
    onAuthEvent(data: AuthEventData) {
-      console.log('authevent ', data);
+//      console.log('authevent ', data);
       if (data.event === AuthEvent.Logout) {
          this.onResetOptions();
+         this.onClearCipher();
          this.showSigninDialog();
       } else if (data.event === AuthEvent.Forget) {
          //      this.nukeOptions();
@@ -381,8 +391,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    showSigninDialog() {
       if (!this.signinDialogRef && this.authSvc.isUserKnown() && !this.authSvc.isAuthenticated()) {
-         const dialogRef = this.dialog.open(SigninDialog);
-         dialogRef.afterClosed().subscribe(() => {
+         this.signinDialogRef = this.dialog.open(SigninDialog, {
+            backdropClass: 'signinBackdrop',
+            closeOnNavigation: true
+         });
+         this.signinDialogRef.afterClosed().subscribe(() => {
             this.signinDialogRef = undefined;
             if (this.authSvc.isAuthenticated()) {
                this.authSvc.refreshPasskeys().catch((err) => {
@@ -396,51 +409,51 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    /*  onNewPage(): void {
        var url = window.location.origin;
        var params = new HttpParams();
-   
+
        if (this.algorithm != 'AES-GCM') {
          params = params.append('algorithm', this.algorithm);
        }
-   
+
        if (this.icount != this.icountDefault) {
          params = params.append('icount', this.icount);
        }
-   
+
        if (!this.hidePwd) {
          params = params.append('hidepwd', false);
        }
-   
+
        if (this.cacheTime > 0) {
          params = params.append('cachetime', this.cacheTime);
        }
-   
+
        if (this.checkPwned) {
          params = params.append('checkpwned', true);
        }
-   
+
        if (this.minPwdStrength != '3') {
          params = params.append('minpwdstrength', this.minPwdStrength);
        }
-   
+
        if (this.cipherArmor.length > 1) {
          params = params.append('cipherarmor', encodeURIComponent(this.cipherArmor));
        }
-   
+
        if (this.loops > 1) {
          params = params.append('loops', this.loops);
        }
-   
+
        if (this.ctFormat != 'link') {
          params = params.append('ctformat', this.ctFormat);
        }
-   
+
        if (this.trueRandom) {
          params = params.append('trand', true);
        }
-   
+
        if (this.pseudoRandom) {
          params = params.append('prand', true);
        }
-   
+
        if (params.keys().length > 0) {
          url += `?${params.toString()}`;
        }
@@ -503,19 +516,20 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
        }
      }*/
 
-
-   secondsRemaining() {
+   timerTick(): void {
+      if (DateTime.now() > this.cacheTimeout) {
+         this.clearCaches();
+      }
       let result = 0;
       if (this.stuffCached) {
          const diff = this.cacheTimeout.diff(DateTime.now());
          result = Math.max(0, Math.round(diff.toMillis() / 1000));
       }
-      return result;
-   }
-
-   timerTick(): void {
-      if (DateTime.now() > this.cacheTimeout) {
-         this.clearCaches();
+      if(result != this.secondsRemaining) {
+         // Do this to avoid setting a template value after it has been checked,
+         // which triggers an ExpressionChangedAfterItHasBeenCheckedError
+         this.secondsRemaining = result;
+         this.changeRef.detectChanges();
       }
    }
 
@@ -525,6 +539,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.intervalId = 0;
       }
       this.cacheTimeout = DateTime.now().plus({ seconds: this.cacheTime });
+      this.secondsRemaining = this.cacheTime;
+
       // @ts-ignore
       this.intervalId = setInterval(() => this.timerTick(), 1000);
    }
@@ -612,7 +628,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async onEncryptClicked(): Promise<void> {
-      if (this.clearText.length < 1) {
+      if (this.clearText.length < 1 || this.errorClear) {
+         this.onClearClear();
          this.showEncryptError('Enter clear text to encrypt');
          this.r2.selectRootElement('#clearInput').focus();
          return;
@@ -651,12 +668,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             fallbackRand: this.pseudoRandom
          };
 
-         await this.makeCipherArmor(econtext);
+         const completed = await this.makeCipherArmor(econtext);
 
          // After > 1 loop, its confusing to leave intermediate stuff
-         if (this.stuffCached) {
-            this.clearText = savedClearText;
-         } else {
+         this.clearText = savedClearText;
+         if (completed && !this.stuffCached) {
             this.onClearClear();
          }
       } catch (something) {
@@ -669,31 +685,25 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   async makeCipherArmor(econtext: EncContext): Promise<void> {
+   // Return value is false if the process was aborted
+   async makeCipherArmor(econtext: EncContext): Promise<boolean> {
       this.onClearCipher();
 
       try {
          var [pwd, hint] = await this.getPassword(+this.minPwdStrength, '', econtext);
-      } catch (err) {
-         // ignore since it was likely a cancel of the password dialog
-         console.log(err);
-         return;
-      }
 
-      const clearBytes = new TextEncoder().encode(this.clearText);
-      const eparams: cs.EParams = {
-         ...econtext,
-         pwd: pwd,
-         hint: hint,
-         clear: clearBytes
-      }
+         const clearBytes = new TextEncoder().encode(this.clearText);
+         const eparams: cs.EParams = {
+            ...econtext,
+            pwd: pwd,
+            hint: hint,
+            clear: clearBytes
+         }
 
-      const encryptedBytes = await this.cipherSvc.encrypt(
-         eparams, this.cipherReadyNotice.bind(this)
-      );
+         const encryptedBytes = await this.cipherSvc.encrypt(
+            eparams, this.cipherReadyNotice.bind(this)
+         );
 
-      // null means aborted, without an error to report
-      if (encryptedBytes != null) {
          econtext.lp += 1;
 
          const dcontext: DecContext = {
@@ -707,11 +717,20 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.clearText = this.cipherArmor;
             return this.makeCipherArmor(econtext);
          }
+         return true;
+
+      } catch (something) {
+         // canceling password throws, but not an Error
+         if (something instanceof Error) {
+            throw something;
+         }
+         return false;
       }
    }
 
    async onDecryptClicked(): Promise<void> {
-      if (this.cipherArmor.length < 1) {
+      if (this.cipherArmor.length < 1 || this.errorCipher) {
+         this.onClearCipher();
          this.showDecryptError('Enter cipher armor text to decrypt');
          this.r2.selectRootElement('#cipherInput').focus();
          return;
@@ -754,18 +773,16 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    async makeClearText(dcontext: DecContext): Promise<void> {
       this.onClearClear();
 
-      const decrypted = await this.cipherSvc.decrypt(
-         async (hint) => {
-            const [pwd, _] = await this.getPassword(-1, hint, dcontext);
-            return pwd;
-         },
-         cs.base64ToBytes(this.authSvc.userCred!),
-         dcontext.ct,
-         this.cipherReadyNotice.bind(this)
-      );
-
-      // null means aborted, without an error to report
-      if (decrypted != null) {
+      try {
+         const decrypted = await this.cipherSvc.decrypt(
+            async (hint) => {
+               const [pwd, _] = await this.getPassword(-1, hint, dcontext);
+               return pwd;
+            },
+            cs.base64ToBytes(this.authSvc.userCred!),
+            dcontext.ct,
+            this.cipherReadyNotice.bind(this)
+         );
          this.showClearTextAndTime(decrypted);
          dcontext.lp += 1;
 
@@ -777,6 +794,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             nextContext.lp = dcontext.lp;
             this.clearCaches();
             return this.makeClearText(nextContext);
+         }
+      } catch (something) {
+         // cancelling password throws, but not an Error. so eat it
+         if (something instanceof Error) {
+            throw something;
          }
       }
    }
@@ -919,6 +941,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       return new Promise((resolve, reject) => {
          dialogRef.afterClosed().subscribe((result) => {
             if (!result) {
+               // intentially do not rejct with "new Error()" so this isn't
+               // caught as an error, just cancelation
                reject('process cancelled');
             } else {
                this.clearPassword();
@@ -1041,8 +1065,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   algName(alg: string): string {
-      return cs.AlgInfo[alg] ? cs.AlgInfo[alg][0] : 'Invalid';
+   algDescription(alg: string): string {
+      return cs.AlgInfo[alg] ? String(cs.AlgInfo[alg]['description']) : 'Invalid';
    }
 }
 
