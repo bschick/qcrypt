@@ -6,7 +6,7 @@
   }
 </style>
 <body>
-  <p>This details below describe the protocol Quick Crypt uses to encrypt, validate,
+  <p>This page describes the protocols Quick Crypt follows to encrypt, validate,
     and decrypt data. It is provided to help you understand how Quick Crypt works and
     allow you to make your own assessment of strength and trustwothiness. If you
     believe the protocol could be improved, please
@@ -20,7 +20,7 @@
     (include the
     <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API">
       mozilla developer network</a>), webauthn is described only at a high level
-      to show how user ids and user site keys are created and retrived.
+      to show how user ids and user credentials are created and retrieved.
   </p>
   <p>
     <h3>Agents</h3>
@@ -29,7 +29,7 @@
       $M$ & \textrm{ - Webauthn authenticator (passkey manager)} \\
       $B$ & \textrm{ - Browser with SubtleCrypto API and libsodium javascript library} \\
       $S$ & \textrm{ - Quick Crypt server} \\
-      $R$ & \textrm{ - https://www.random.org/cgi-bin/randbyte?nbytes=40} \\
+      $R$ & \textrm{ - https://www.random.org/cgi-bin/randbyte?nbytes=48} \\
       $D$ & \textrm{ - Insecure persistent storage system} \\
       \end{tabular}" /><br />
   </p>
@@ -37,10 +37,11 @@
     <h3>Browser and Libsodium Functions</h3>
     <img src="https://latex.codecogs.com/svg.image?\begin{tabular}{p{2mm} l l}
       $E_a$ & \textrm{ - Symmetric cipher using algorithm }$a$\textrm{. One of:}\\
-      & \hspace{23pt}\textrm{AES-256 AEAD cipher in Galois/Counter mode from SubtleCrypto} \\
-      & \hspace{23pt}\textrm{XChaCha20 AEAD cipher with Poly1305 MAC from libsodium} \\
-      $K_H$ & \textrm{ - HKDF 512 bit key derivation function using SHA-512 from SubtleCrypto} \\
-      $K_P$ & \textrm{ - PBKDF2 512 bit key derivation function using SHA-512 from SubtleCrypto} \\
+      & \hspace{23pt}\textrm{1. AES-256 AEAD cipher in Galois/Counter mode from SubtleCrypto} \\
+      & \hspace{23pt}\textrm{2. XChaCha20 AEAD cipher with Poly1305 MAC from libsodium} \\
+      & \hspace{23pt}\textrm{3. AEGIS 256 AEAD cipher from libsodium} \\
+      $D_H$ & \textrm{ - HKDF key derivation function using SHA-512 from SubtleCrypto} \\
+      $D_P$ & \textrm{ - PBKDF2 key derivation function using SHA-512 from SubtleCrypto} \\
       $H$ & \textrm{ - 256 bit FIPS 198-1 HMAC tag generator from SubtleCrypto} \\
       $V$ & \textrm{ - 256 bit FIPS 198-1 HMAC tag validator from SubtleCrypto} \\
       $G$ & \textrm{ - Cryptographic pseudorandom number generator from SubtleCrypto} \\
@@ -52,44 +53,50 @@
 $m$ & \textrm{ - Clear text message}\\
 $p$ & \textrm{ - Password text}\\
 $h$ & \textrm{ - Password hint text}\\
-$a$ & \textrm{ - Symmetric cipher algorithm (``AES-GCM'', ``X20-PLY'')}\\
-$i$ & \textrm{ - PBKDF2 iteration count (minimum 800,000)}\\
-$k_C$ & \textrm{ - 256 bit message cipher key}\\
+$u_c$ & \textrm{ - 256 bit user credential}\\
+$a$ & \textrm{ - Symmetric AEAD cipher and mode: [1, 2, 3]}\\
+$i$ & \textrm{ - PBKDF2 iteration count, minimum 800,000}\\
+$k_M$ & \textrm{ - 256 bit message cipher key}\\
 $k_H$ & \textrm{ - 256 bit hint cipher key}\\
 $k_S$ & \textrm{ - 256 bit signing key}\\
-$k_U$ & \textrm{ - 256 bit user site key}\\
 $kp$ & \textrm{ - Key purpose text}\\
-$r$ & \textrm{ - 256 bits of either true or pseudo random data}\\
-$n_{IV}$ & \textrm{ - 192 bit true or pseudo random initialization vector}\\
+\end{tabular}" /><br />
+<img src="https://latex.codecogs.com/svg.image?\begin{tabular}{p{2mm} l}
+$r$ & \textrm{ - 384 bits of either true or pseudo random data}\\
+$l$ & \textrm{ - }$n_{IV}$\textrm{ bit length: [96, 192, 256]}\\
+$n_{IV}$ & \textrm{ - True or pseudo random initialization vector}\\
 $n_S$ & \textrm{ - 128 bit true or pseudo random salt}\\
 $ad$ & \textrm{ - Additional data}\\
 $v$ & \textrm{ - Cipher text version}\\
 $h_E$ & \textrm{ - Encrypted hint}\\
 $m_E$ & \textrm{ - Encrypted message}\\
 $t$ & \textrm{ - 256 bit HMAC tag}\\
+$cd$ & \textrm{ - Cipher data}\\
 $ct$ & \textrm{ - Cipher text}\\
 $b$ & \textrm{ - Valid or invalid HMAC tag}\\
+$e$ & \textrm{ - Error message}\\
 \end{tabular}" /><br />
   </p>
   <p>
     <h3>Message Encryption by A</h3>
     <img src="https://latex.codecogs.com/svg.image?\begin{tabular}{p{2mm} l}
 \multicolumn{2}{l}{$A\overset{\textrm{webauthn}}{\leftrightarrow} B,M \overset{\textrm{webauthn}}{\leftrightarrow} S$}\\
-\multicolumn{2}{l}{$B\leftarrow S: k_U$}\\
+\multicolumn{2}{l}{$B\leftarrow S: u_c$}\\
 \multicolumn{2}{l}{$A\rightarrow B: m,p,h,i,a$}\\
 \multicolumn{2}{l}{$B\textrm{ compute}: $}\\
 &$v = 1$\\
-&$r = G(320)\lor B\overset{\textrm{https}}{\leftarrow} R: r$\\
+&$r = G(384)\lor B\overset{\textrm{https}}{\leftarrow} R: r$\\
 &$n_S = r[0:128)$\\
-&$n_{IV} = r[128:320)$\\
-&$k_C = K_P(p \mathbin\Vert k_U,n_S,i)$\\
-&$k_S = K_H(k_U,n_S,kp = \textrm{``cipherdata signing key''})$\\
-&$k_H = K_H(k_U,n_S,kp = \textrm{``hint encryption key''})$\\
+&$n_{IV} = r[128:128+l)$\\
+&$k_M = D_P(p \mathbin\Vert u_c,n_S,i)$\\
+&$k_S = D_H(u_c,n_S,kp_S = \textrm{``cipherdata signing key''})$\\
+&$k_H = D_H(u_c,n_S,kp_H = \textrm{``hint encryption key''})$\\
 &$h_E = E_a(h,n_{IV},k_H)$\\
 &$ad = a \mathbin\Vert n_{IV} \mathbin\Vert n_S \mathbin\Vert i \mathbin\Vert v \mathbin\Vert h_E$\\
-&$m_E = E_a(m,n_{IV},ad,k_C)$\\
-&$t = H(a\mathbin\Vert n_{IV}\mathbin\Vert n_S\mathbin\Vert i\mathbin\Vert v\mathbin\Vert h_E\mathbin\Vert m_E,k_S)$\\
-&$ct = t\mathbin\Vert a\mathbin\Vert n_{IV}\mathbin\Vert n_S\mathbin\Vert i\mathbin\Vert v\mathbin\Vert h_E\mathbin\Vert m_E$\\
+&$m_E = E_a(m,n_{IV},ad,k_M)$\\
+&$cd = ad \mathbin\Vert m_E$\\
+&$t = H(cd,k_S)$\\
+&$ct = t\mathbin\Vert cd$\\
 \multicolumn{2}{l}{$A\leftarrow B: ct$}\\
 \end{tabular}" />
     <br />
@@ -105,31 +112,34 @@ $b$ & \textrm{ - Valid or invalid HMAC tag}\\
     <img src="https://latex.codecogs.com/svg.image?\begin{tabular}{p{2mm} l}
 \multicolumn{2}{l}{$A \leftarrow D: ct$}\\
 \multicolumn{2}{l}{$A \overset{\textrm{webauthn}}{\leftrightarrow} B, M \overset{\textrm{webauthn}}{\leftrightarrow} S$}\\
-\multicolumn{2}{l}{$B \leftarrow S: k_U$}\\
+\multicolumn{2}{l}{$B \leftarrow S: u_c$}\\
 \multicolumn{2}{l}{$A \rightarrow B: ct$}\\
 \multicolumn{2}{l}{$B\textrm{ compute}: $}\\
-& $t,a,n_{IV},n_S,i,v,h_E,m_E=ct$\\
-& $k_S = K_H(k_U,n_S,kp=\textrm{``cipherdata signing key''})$\\
-& $b = V( a \mathbin\Vert n_{IV} \mathbin\Vert n_S \mathbin\Vert i \mathbin\Vert v \mathbin\Vert h_E \mathbin\Vert m_E, k_S, t)$\\
-& $\textrm{if }b:$\\
-& \hspace{15pt}$k_H = K_H(k_U,n_S,kp=\textrm{``hint encryption key''})$\\
-& \hspace{15pt}$h = E_a^{-1}(h_E,n_{IV},k_H)$\\
-& \hspace{15pt}$A \rightarrow B: p$\\
-& \hspace{15pt}$k_C = K_P(p \mathbin\Vert k_U,n_S,i)$\\
-& \hspace{15pt}$ad = a \mathbin\Vert n_{IV} \mathbin\Vert n_S \mathbin\Vert i \mathbin\Vert v \mathbin\Vert h_E$\\
-& \hspace{15pt}$m = E_a^{-1}(m_E, n_{IV},ad,k_C)$\\
-\multicolumn{2}{l}{$A \leftarrow B : b, m\textrm{   if }b$}\\
+&$t,cd=ct$\\
+&$ad,m_E=cd$\\
+&$a,n_{IV},n_S,i,v,h_E=ad$\\
+&$k_S = D_H(u_c,n_S,kp_S=\textrm{``cipherdata signing key''})$\\
+&$b = V(cd, k_S, t)$\\
+&$\textrm{if }b:$\\
+&\hspace{15pt}$k_H = D_H(u_c,n_S,kp_H=\textrm{``hint encryption key''})$\\
+&\hspace{15pt}$h = E_a^{-1}(h_E,n_{IV},k_H)$\\
+&\hspace{15pt}$B \rightarrow A: h$\\
+&\hspace{15pt}$B \leftarrow A: p$\\
+&\hspace{15pt}$k_M = D_P(p \mathbin\Vert u_c,n_S,i)$\\
+&\hspace{15pt}$m = E_a^{-1}(m_E, n_{IV},ad,k_M)$\\
+\multicolumn{2}{l}{$A \leftarrow B : m\textrm{ if }b \land m\textrm{ else }e$}\\
 \end{tabular}" />
     <br />
   </p>
   <p>
     <h3>Webauthn variables</h3>
     <img src="https://latex.codecogs.com/svg.image?\begin{tabular}{p{2mm} l}
-      $u_n$ & \textrm{ - A chosen user name} \\
+      $u_n$ & \textrm{ - A's chosen user name} \\
       $u_i$ & \textrm{ - 128 bit user id gaurnteed to be unique} \\
+      $u_c$ & \textrm{ - 256 bit user credential}\\
       $o$ & \textrm{ - Quick Crypt origin ``https://quickcrypt.org''} \\
       $ch$ & \textrm{ - 256 bit challenge value} \\
-      $ro$ & \textrm{ - Registration options, including }$o, ch$\\
+      $ro$ & \textrm{ - Registration options, including }$o, ch, u_i$\\
       $rr$ & \textrm{ - Registration response, including signed }$ch$\\
       $ao$ & \textrm{ - Authentication options, including }$o, ch$\\
       $ar$ & \textrm{ - Authentication response, including signed }$ch$\\
@@ -137,13 +147,13 @@ $b$ & \textrm{ - Valid or invalid HMAC tag}\\
       \end{tabular}" /><br />
   </p>
   <p>
-    <h3>Webauthn A Creation</h3>
+    <h3>Registration by A</h3>
     <img src="https://latex.codecogs.com/svg.image?\begin{tabular}{p{2mm} l}
       \multicolumn{2}{l}{$A\rightarrow B : u_n$} \\
       \multicolumn{2}{l}{$B\rightarrow S : u_n, o$} \\
       \multicolumn{2}{l}{$S\textrm{ create and store}: $} \\
       & $u_i = G(128)$\\
-      & $k_U = G(256)$\\
+      & $u_c = G(256)$\\
       & $ch = G(256)$\\
       \multicolumn{2}{l}{$B\leftarrow S : ro$} \\
       \multicolumn{2}{l}{$B\rightarrow M : ro$} \\
@@ -152,12 +162,12 @@ $b$ & \textrm{ - Valid or invalid HMAC tag}\\
       \multicolumn{2}{l}{$B\leftarrow M : rr$} \\
       \multicolumn{2}{l}{$B\rightarrow S : rr, u_i, ch$} \\
       \multicolumn{2}{l}{$S\textrm{ verify signature, store }rr \textrm{, remove }ch $} \\
-      \multicolumn{2}{l}{$B\leftarrow S : u_i, u_n, k_U$} \\
-      \multicolumn{2}{l}{$A\leftarrow B : u_i, k_U$} \\
+      \multicolumn{2}{l}{$B\leftarrow S : u_i, u_n, u_c$} \\
+      \multicolumn{2}{l}{$A\leftarrow B : u_i, u_c$} \\
       \end{tabular}" /><br />
   </p>
   <p>
-    <h3>Webauthn A Authentication</h3>
+    <h3>Authentication by A</h3>
     <img src="https://latex.codecogs.com/svg.image?\begin{tabular}{p{2mm} l}
       \multicolumn{2}{l}{$B\rightarrow S : o [,u_i]$} \\
       \multicolumn{2}{l}{$S\textrm{ create and store}: $} \\
@@ -169,14 +179,14 @@ $b$ & \textrm{ - Valid or invalid HMAC tag}\\
       \multicolumn{2}{l}{$B\leftarrow M : ar$} \\
       \multicolumn{2}{l}{$B\rightarrow S : ar, ch$} \\
       \multicolumn{2}{l}{$S\textrm{ verify signature} \textrm{, remove }ch $} \\
-      \multicolumn{2}{l}{$B\leftarrow S : u_i, u_n, k_U$} \\
+      \multicolumn{2}{l}{$B\leftarrow S : u_i, u_n, u_c$} \\
       \end{tabular}" /><br />
   </p>
   <p>
-    <h3>Webauthn A Recovery from Lost Passkey</h3>
+    <h3>Recovery from Lost Passkey by A</h3>
     <img src="https://latex.codecogs.com/svg.image?\begin{tabular}{p{2mm} l}
-      \multicolumn{2}{l}{$A\rightarrow B : u_i, k_U$} \\
-      \multicolumn{2}{l}{$B\rightarrow S : u_i, k_U, o$} \\
+      \multicolumn{2}{l}{$A\rightarrow B : u_i, u_c$} \\
+      \multicolumn{2}{l}{$B\rightarrow S : u_i, u_c, o$} \\
       \multicolumn{2}{l}{$S\textrm{ delete existing }rr \textrm{, create and store}: $} \\
       & $ch = G(256)$\\
       \multicolumn{2}{l}{$B\leftarrow S : ro$} \\
@@ -186,7 +196,7 @@ $b$ & \textrm{ - Valid or invalid HMAC tag}\\
       \multicolumn{2}{l}{$B\leftarrow M : rr$} \\
       \multicolumn{2}{l}{$B\rightarrow S : rr, u_i, ch$} \\
       \multicolumn{2}{l}{$S\textrm{ verify signature, store }rr \textrm{, remove }ch $} \\
-      \multicolumn{2}{l}{$B\leftarrow S : u_i, u_n, k_U$} \\
+      \multicolumn{2}{l}{$B\leftarrow S : u_i, u_n, u_c$} \\
       \end{tabular}" /><br />
   </p>
 </body>
