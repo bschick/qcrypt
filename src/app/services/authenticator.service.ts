@@ -175,7 +175,7 @@ export class AuthenticatorService {
       }
 
       // 6 hours inactivity expritation
-      this._expiration = DateTime.now().plus({ seconds: 60 * 60 * 60 });
+      this._expiration = DateTime.now().plus({ seconds: 60 * 60 * 6 });
       sessionStorage.setItem(this._userId + 'expiration', this._expiration.toISO()!);
 
       // @ts-ignore
