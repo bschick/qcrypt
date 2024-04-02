@@ -69,8 +69,8 @@ describe("Key generation", function () {
          const ic = cs.ICOUNT_MIN;
          const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
-         const random40 = new cs.Random40();
-         const randomArray = await random40.getRandomArray(false, true);
+         const random48 = new cs.Random48();
+         const randomArray = await random48.getRandomArray(false, true);
          const slt = randomArray.slice(0, cs.SLT_BYTES);
 
          const ek = await cipherSvc._genCipherKey(alg, ic, pwd, userCred, slt);
@@ -107,6 +107,11 @@ describe("Key generation", function () {
             ek: new Uint8Array([50, 99, 104, 47, 247, 255, 94, 71, 52, 222, 53, 60, 161, 13, 61, 74, 164, 221, 87, 193, 104, 161, 236, 71, 170, 158, 28, 202, 176, 233, 209, 124]),
             sk: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
             hk: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
+         },
+         'AEGIS-256': {
+            ek: new Uint8Array([50, 99, 104, 47, 247, 255, 94, 71, 52, 222, 53, 60, 161, 13, 61, 74, 164, 221, 87, 193, 104, 161, 236, 71, 170, 158, 28, 202, 176, 233, 209, 124]),
+            sk: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
+            hk: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
          }
       };
 
@@ -123,14 +128,17 @@ describe("Key generation", function () {
 
          let exported = await window.crypto.subtle.exportKey("raw", ek);
          const ekBytes = new Uint8Array(exported);
+//         console.log(alg, 'ek: ', ekBytes);
          expect(isEqualArray(ekBytes, expected[alg]['ek'])).toBeTrue();
 
          exported = await window.crypto.subtle.exportKey("raw", sk);
          const skBytes = new Uint8Array(exported);
+//         console.log(alg, 'sk: ', skBytes);
          expect(isEqualArray(skBytes, expected[alg]['sk'])).toBeTrue();
 
          exported = await window.crypto.subtle.exportKey("raw", hk);
          const hkBytes = new Uint8Array(exported);
+//         console.log(alg, 'hk: ', hkBytes);
          expect(isEqualArray(hkBytes, expected[alg]['hk'])).toBeTrue();
       }
    });
@@ -198,12 +206,12 @@ describe("Encryption and decryption", function () {
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
-         /*    Used to generate CTS in: detect corrupt cipher text 
+         /*    Used to generate CTS in: detect corrupt cipher text
                const clearText = "this 🐞 is encrypted";
                const pwd = 'asdf';
                const hint = 'asdf';
                const userCred = new Uint8Array([101, 246, 72, 149, 67, 228, 149, 35, 60, 124, 81, 187, 157, 96, 208, 217, 123, 147, 228, 60, 84, 214, 198, 116, 192, 162, 178, 147, 50, 119, 97, 251]);
-         */
+*/
          const clearEnc = new TextEncoder().encode(clearText);
          const eparams: cs.EParams = {
             alg: alg,
@@ -223,7 +231,7 @@ describe("Encryption and decryption", function () {
                expect(params.ic).toBe(cs.ICOUNT_MIN);
             }
          );
-         //      console.log(alg + ": " + cipherText.length + ": " + cipherText);
+//         console.log(alg + ": " + cipherText.length + ": " + cipherText);
 
          const decrypted = await cipherSvc.decrypt(
             async (decHint) => {
@@ -248,10 +256,11 @@ describe("Encryption and decryption", function () {
    const b64o = 'BCDEFGHIJKLMNOPQRSTUVWXYZAbcdefghijklmnopqrstuvwxyza1234567890_-';
 
    it("detect corrupt cipher text", async function () {
-      //AES-GCM then X20-PLY
+      //AES-GCM, X20-PLY, AEGIS-256
       const cts = [
-         "seRdKoX7rFV3W5r0qEwhK5eEERUQVxsPaHH0RC_yuyUBAG1fsqBocOlC28IE5zpL-X5EKKdpXeMmwM8QceL52fMrnSG8mYghurGAGgYAAQAUxG1GRW5YYpIy2tGFejTWYmbV1hiWYRAB0bm-jOtbR_8eFE2KynZMXX4tPoN-JakS_O_bViGw-Yy9Tw",
-         "-FP1A_1X8Kpr7e1-0uXkSBQE5eYlTHoPNJPfiK1zxVwCAJ2jIJL5Jrm-i9WqgGMnmD8X__n3z2A6O-ZLhyM3J8k9QZ-9v-Vw4oyAGgYAAQAUvA8AxjhwLrl4acJAYsqs2XRQ_euGwGkvwMfYrL6sjufuY3kAZ6Rz6LaxIP6LVEhkYmYC-mTcFovOvw",
+         "ExHzC-I423iEmmIYcEiKUPXuDxs38c7XxYeIH5VserwBAF3A8dWm0OuY2__I0OEGuZQ5a_bNMWm5o638mfKAGgYAAQAUcwbniou1lvVl4JeH_OlRdUtkdfznC-1mRl6oSUVWaH7ZgRz2MLMLr-6F2vCVa6UiXLZt_j_ZGfJoiA",
+         "ualvQTnXR9Qpmc6GpCqq6RcCoOV5An5XXfaNlBkagqcCADMNs_2x3EsdGpYpsoRPYSKGMLUN_wjYbCOy060g4nEU5-ZuTN31SGGAGgYAAQAUWACcspBFLRVnwqCNuJZD4HMu7vxB9nc6qrV5U-Faob2RnUDlTl9g-vbu4y3j8NeHzkU7LvmX6NwNDA",
+         "lr-eRI1od9LvRqeQImYd9ZVd-Mbc9_Z2kjQYCOOJ9PEDAKAcZiMeYGvwmPooMw4R4Qn8ifLQaqitpXjKL2v3BHGraM9YtogMkVNkKmBrhc7GVoAaBgABACRnRmxD29B5d3pP-Bck_Y9CFnL8DTX-imq1opljFiNRc4CvehpKN8VGWxVQxiNBcPzSkV9ZMZ8lMZma_nakSq78T4mh1Y6pS9GRWxnFPIbq4aGaDy5-tJ_0-ww"
       ];
 
       for (let ct of cts) {
@@ -392,7 +401,7 @@ describe("Encryption and decryption", function () {
 
          let cipherText = await cipherSvc.encrypt(eparams);
 
-         // Set character in cipher text (past first HMAC ~32*4/3 characters) 
+         // Set character in cipher text (past first HMAC ~32*4/3 characters)
          // this is in the hint
          let problemText = setCharAt(cipherText, 108, cipherText[108] == 'a' ? 'b' : 'a');
 
@@ -408,7 +417,7 @@ describe("Encryption and decryption", function () {
             )
          ).toBeRejectedWithError(Error, new RegExp('.+HMAC.+'));
 
-         // Set character in cipher text (past first ~32*4/3 characters) 
+         // Set character in cipher text (past first ~32*4/3 characters)
          // this changes the encrypted text
          problemText = setCharAt(cipherText, 118, cipherText[118] == 'c' ? 'e' : 'c');
 
@@ -603,7 +612,7 @@ describe("Encryption and decryption", function () {
          cipherSvc.encrypt(bparams)
       ).toBeRejectedWithError(Error);
 
-      // invalid alg 
+      // invalid alg
       bparams = {
          ...eparams,
          alg: 'ABS-GCM'
@@ -612,7 +621,7 @@ describe("Encryption and decryption", function () {
          cipherSvc.encrypt(bparams)
       ).toBeRejectedWithError(Error);
 
-      // really invalid alg 
+      // really invalid alg
       bparams = {
          ...eparams,
          alg: 'asdfadfsk'
@@ -621,7 +630,7 @@ describe("Encryption and decryption", function () {
          cipherSvc.encrypt(bparams)
       ).toBeRejectedWithError(Error);
 
-      // both rands false 
+      // both rands false
       bparams = {
          ...eparams,
          trueRand: false,
@@ -675,10 +684,11 @@ describe("Get cipherdata from cipher text", function () {
          };
          const cipherText = await cipherSvc.encrypt(eparams);
          const cipherData = await cipherSvc.getCipherData(userCred, cipherText);
+         const expected_iv_bytes = Number(cs.AlgInfo[alg]['iv_bytes']);
 
          expect(cipherData.alg).toBe(alg);
          expect(cipherData.ic).toBe(cs.ICOUNT_MIN);
-         expect(cipherData.iv.byteLength).toBe(cs.IV_BYTES);
+         expect(cipherData.iv.byteLength).toBe(expected_iv_bytes);
          expect(cipherData.slt.byteLength).toBe(cs.SLT_BYTES);
          expect(cipherData.encryptedHint.byteLength).toBeGreaterThanOrEqual(hint.length);
          expect(cipherData.encryptedData.byteLength).toBeGreaterThanOrEqual(clearEnc.byteLength);
@@ -809,11 +819,13 @@ describe("CipherData encode and decode", function () {
       cipherSvc = TestBed.inject(cs.CipherService);
    });
 
+   const iv_bytes = Number(cs.AlgInfo['X20-PLY']['iv_bytes']);
+
    it("valid CipherData", function () {
       const dp: cs.CipherData = {
          alg: 'X20-PLY',
          ic: 2000000,
-         iv: crypto.getRandomValues(new Uint8Array(24)),
+         iv: crypto.getRandomValues(new Uint8Array(iv_bytes)),
          slt: crypto.getRandomValues(new Uint8Array(16)),
          encryptedHint: crypto.getRandomValues(new Uint8Array(14)),
          encryptedData: crypto.getRandomValues(new Uint8Array(42))
@@ -832,11 +844,13 @@ describe("CipherData encode and decode", function () {
 
    it("detect invalid CipherData encode", function () {
 
+      const iv_bytes = Number(cs.AlgInfo['X20-PLY']['iv_bytes']);
+
       //valid
       let dp: cs.CipherData = {
          alg: 'X20-PLY',
          ic: cs.ICOUNT_MIN,
-         iv: new Uint8Array(cs.IV_BYTES),
+         iv: new Uint8Array(iv_bytes),
          slt: new Uint8Array(cs.SLT_BYTES),
          encryptedHint: new Uint8Array(0),
          encryptedData: new Uint8Array(1)
@@ -847,14 +861,14 @@ describe("CipherData encode and decode", function () {
       // iv too short
       let bdp = {
          ...dp,
-         iv: new Uint8Array(cs.IV_BYTES - 1)
+         iv: new Uint8Array(iv_bytes - 1)
       }
       expect(() => cipherSvc._encodeCipherData(bdp)).toThrowError();
 
       // iv too long
       bdp = {
          ...dp,
-         iv: new Uint8Array(cs.IV_BYTES + 1)
+         iv: new Uint8Array(iv_bytes + 1)
       }
       expect(() => cipherSvc._encodeCipherData(bdp)).toThrowError();
 
@@ -916,11 +930,13 @@ describe("CipherData encode and decode", function () {
 
    it("detect invalid CipherData decode", function () {
 
+      const iv_bytes = Number(cs.AlgInfo['X20-PLY']['iv_bytes']);
+
       // initially valid
       let dp: cs.CipherData = {
          alg: 'X20-PLY',
          ic: 2000000,
-         iv: new Uint8Array(24),
+         iv: new Uint8Array(iv_bytes),
          slt: new Uint8Array(16),
          encryptedHint: new Uint8Array(10),
          encryptedData: new Uint8Array(42)
@@ -960,7 +976,7 @@ describe("CipherData encode and decode", function () {
       dp = {
          alg: 'X20-PLY',
          ic: 2000000,
-         iv: new Uint8Array(24),
+         iv: new Uint8Array(iv_bytes),
          slt: new Uint8Array(16),
          encryptedHint: new Uint8Array(0),
          encryptedData: new Uint8Array(1)
@@ -1016,7 +1032,7 @@ describe("Base64 encode decode", function () {
    });
 });
 
-describe("Random40 tests", function () {
+describe("Random48 tests", function () {
 
    let cipherSvc: cs.CipherService;
    beforeEach(() => {
@@ -1026,22 +1042,22 @@ describe("Random40 tests", function () {
 
 
    it("true random", async function () {
-      let rand = new cs.Random40();
+      let rand = new cs.Random48();
       const r1 = await rand.getRandomArray(true, false);
       const r2 = await rand.getRandomArray(true, false);
 
-      expect(r1.byteLength).toBe(40);
-      expect(r2.byteLength).toBe(40);
+      expect(r1.byteLength).toBe(48);
+      expect(r2.byteLength).toBe(48);
       expect(isEqualArray(r1, r2)).toBeFalse();
    });
 
    it("pseudo random", async function () {
-      let rand = new cs.Random40();
+      let rand = new cs.Random48();
       const r1 = await rand.getRandomArray(false, true);
       const r2 = await rand.getRandomArray(false, true);
 
-      expect(r1.byteLength).toBe(40);
-      expect(r2.byteLength).toBe(40);
+      expect(r1.byteLength).toBe(48);
+      expect(r2.byteLength).toBe(48);
       expect(isEqualArray(r1, r2)).toBeFalse();
       await expectAsync(rand.getRandomArray(false, false)).toBeRejectedWithError(Error);
    });
