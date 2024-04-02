@@ -13,6 +13,59 @@
       <li>What should I do if I expose my recovery link to someone I don't trust?</li>
       <li>What should I do if I expose my password and recovery link to someone I don't trust?</li>
       <li>Is my password hint encrypted?</li>
+      <li>Hash thread modeling been done for Quick Crypt?</li>
+      <p>Only informally:
+        Coding Errors
+        Stolen Passkeys
+        Leaked or Stolen user credentials
+        Supply Chain
+        Site Impersination
+      </p>
+      <li>Which Crypto function implementation are used?</li>
+      <p>
+        Quick Crypt uses well established cryptographic functions implementeed by web browsers and libsodium.
+        All cryptographic funcitons are run in the browser, ensuring that you unencrypted data remains local.
+        These are the cryptographic functions used by Quick Crypt and where they are implmented. SubtleCrypte
+        means the function is implented by your browser vendor (Chrome, Safari, Edge, etc).
+        HKDF and PBKDF2 Key Derivation: SubtleCrypto <a
+          href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey" target="_blank">deriveKey()</a>
+        AES 256 GCM Cipher: SubtleCrypto <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt"
+          target="_blank">encrypt()</a> and <a
+          href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/decrypt" target="_blank">decrypt()</a>
+        XChaCha20 Poly1305: libsodium <a
+          href="https://doc.libsodium.org/secret-key_cryptography/aead/chacha20-poly1305/xchacha20-poly1305_construction"
+          target="_blank">crypto_aead_xchacha20poly1305_ietf_encrypt()</a> and <a
+          href="https://doc.libsodium.org/secret-key_cryptography/aead/chacha20-poly1305/xchacha20-poly1305_construction"
+          target="_blank">crypto_aead_xchacha20poly1305_ietf_decrypt()</a>
+        AEGIS 256: libsodium <a href="https://doc.libsodium.org/secret-key_cryptography/aead/aegis-256"
+          target="_blank">crypto_aead_aegis256_encrypt()</a> and <a
+          href="https://doc.libsodium.org/secret-key_cryptography/aead/aegis-256"
+          target="_blank">crypto_aead_aegis256_decrypt()</a>
+        HMAC Signature: SubtleCrypto <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/sign"
+          target="_blank">sign()</a> and <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/verify"
+          target="_blank">verify()</a>
+      </p>
+      <li>How should I chose which cipher mode to use?</li>
+      <p>
+        First, Quick Crypt provides only widely used, well documented, and trusted
+        <a href="https://en.wikipedia.org/wiki/Authenticated_encryption" target="_blank">AEAD authenticated encryption</a>
+          modes.
+          AEAD ciphers provide both privacy and authenticity. None are known to be broken, even by governments, although
+          that is of course hard to
+          know. All are currently safe, and selecting which mode to use depends on your criteria.
+          If you want the "safest" mode, the <a href="https://doc.libsodium.org/secret-key_cryptography/aead"
+            target="_blank">libsodium project recommends</a> first <b>AEGIS 256</b>, then <b>XChaCha20 Poly1305</b>, and
+          <b>AES 256 GCM</b> last
+          If you want a mode implemented by your browser vendor, use <b>AES 256 GCM</b>
+          If you want a mode not implemented by your browser vendor, use <b>XChaCha20 Poly1305</b> or <b>AEGIS 256</b>
+          which are from the well known open source <a href="https://doc.libsodium.org/" target="_blank">libsodium
+            project</a>
+          If you really don't trust your browser vendor, you probably shouldn't use Quick Crypt at all
+          If you want the most recently developed mode, use <b>AEGIS 256</b>
+          If you want the most established (and studied) mode, use <b>AES 256 GCM</b> which is at the core of TLS 1.3
+          If you want the smallest cipher text (by only 16 character), use <b>AES 256 GCM</b>
+      </p>
+
       <li>Can I used Quick Crypt with text or binary files?</li>
       <li>Can I decrypt my data if Quick Crypt goes away?</li>
       <li>Can Quick Crypt decrypt cipher text encypted with other tools?</li>

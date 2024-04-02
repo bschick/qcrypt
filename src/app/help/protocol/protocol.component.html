@@ -1,1 +1,50 @@
-<p>protocol works!</p>
+<div class="container">
+  <div class="content">
+    <h1>Protocol Description</h1>
+    <p>Quick Crypt follows the protocols described below to encrypt, validate,
+      and decrypt data. It is provided to help you understand how Quick Crypt works and
+      allow you to make your own assessment of strength and trustwothiness. If you
+      believe the protocol could be improved, please
+      <a href="https://github.com/bschick/qcrypt/issues">
+        file a ticket.
+      </a>
+    </p>
+    <p>
+      Quick Crypt uses WebAuthn to create and authenticate user
+      identities. Since this is a standard protocol described in detail elsewhere,
+      include the
+      <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API">
+        mozilla developer network</a>, webauthn is described only at a high level
+      to show how user ids and user credentials are created and retrieved for use in
+      cryptographic functions.
+    </p>
+    <h2>Agents</h2>
+    <img src="/assets/agents.svg" />
+    <h2>Browser and Libsodium Functions</h2>
+    <img src="/assets/functions.svg" />
+    <h2>Cipher variables</h2>
+    <img src="/assets/variables1.svg" /><br/>
+    <img src="/assets/variables2.svg" />
+    <h2>Message Encryption by A</h2>
+    <div>
+      <img src="/assets/encrypt.svg" />
+      <img class="flow-img" (click)="openFlowImage('/assets/encrypt_flow.svg')" src="/assets/encrypt_flow_small_a.svg" />
+    </div>
+    <h2>Message Storage by A</h2>
+    <img src="/assets/store.svg" />
+    <h2>Message Decryption by A</h2>
+    <div>
+      <img src="/assets/decrypt.svg" />
+      <img class="flow-img" (click)="openFlowImage('/assets/decrypt_flow.svg')" src="/assets/decrypt_flow_small_a.svg" />
+      </div>
+    <h2>Webauthn Variables</h2>
+    <img src="/assets/webauthn.svg" />
+    <h2>Registration by A</h2>
+    <img src="/assets/registration.svg" />
+    <h2>Authentication by A</h2>
+    <img src="/assets/authentication.svg" />
+    <h2>Recovery from Lost Passkey by A</h2>
+    <img src="/assets/recovery.svg" />
+
+  </div>
+</div>

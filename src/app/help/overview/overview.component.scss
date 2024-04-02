@@ -1,13 +1,6 @@
 @use "../help.scss";
 
-.content p,
-li {
-  @include help.font;
-}
 
-h2 {
-  margin: 16px 0 6px 0;
-}
 
 ul {
   margin-top: 0;
