@@ -3,8 +3,9 @@ import sodium from 'libsodium-wrappers';
 import { base64URLStringToBuffer, bufferToBase64URLString } from '@simplewebauthn/browser';
 
 const AES_GCM_TAG_BYTES = 16;
-const X20_PLY_TAG_BYTES = 16; // should load sodium.crypto_aead_xchacha20poly1305_IETF_ABYTES, but it is NaN
-const MAX_AUTH_TAG_BYTES = Math.max(X20_PLY_TAG_BYTES, AES_GCM_TAG_BYTES);
+const X20_PLY_TAG_BYTES = 16; // sodium.crypto_aead_xchacha20poly1305_IETF_ABYTES, is not ready yet
+const AEGIS_256_TAG_BYTES = 32; // sodium.crypto_aead_aegis256_ABYTES, is not ready yet
+const MAX_AUTH_TAG_BYTES = Math.max(X20_PLY_TAG_BYTES, AES_GCM_TAG_BYTES, AEGIS_256_TAG_BYTES);
 
 export const ICOUNT_MIN = 400000;
 export const ICOUNT_DEFAULT = 800000;
@@ -14,19 +15,20 @@ export const ENCRYPTED_HINT_MAX_LEN = 255;
 export const HINT_MAX_LEN = Math.trunc(ENCRYPTED_HINT_MAX_LEN / 2 - MAX_AUTH_TAG_BYTES);
 export const CURRENT_VERSION = 1;
 
-export const AlgInfo: { [key: string]: [string, number] } = {
-   'AES-GCM': ['AES Galois Counter (GCM)', 1],
-   'X20-PLY': ['XChaCha20 Poly1305', 2],
+export const AlgInfo: { [key: string]: { [key: string]: string | number } } = {
+   'AES-GCM': { 'id': 1, 'description': 'AES 256 GCM', 'iv_bytes': 12 },
+   'X20-PLY': { 'id': 2, 'description': 'XChaCha20 Poly1305', 'iv_bytes': 24 },
+   'AEGIS-256': { 'id': 3, 'description': 'AEGIS 256', 'iv_bytes': 32 },
 };
 
 export type Params = {
-   readonly alg: string;      // ALG_BYTES 
+   readonly alg: string;      // ALG_BYTES
    readonly ic: number;       // IC_BYTES
 }
 
-// Byte length of all parameter except hint and data are fixed
+
 export type CipherData = Params & {
-   readonly iv: Uint8Array;   // IV_BYTES
+   readonly iv: Uint8Array;   // Variable, lookup in AlgInfo
    readonly slt: Uint8Array;  // SLT_BYTES
    readonly encryptedHint: Uint8Array;  // limited to ENCRYPTED_HINT_MAX_LEN bytes
    readonly encryptedData: Uint8Array;
@@ -42,7 +44,7 @@ export type EParams = Params & {
 }
 
 export const ALG_BYTES = 2;
-export const IV_BYTES = 24;
+export const IV_BYTES_MIN = 12;
 export const SLT_BYTES = 16;
 export const IC_BYTES = 4;
 export const VER_BYTES = 2;
@@ -50,11 +52,11 @@ export const HMAC_BYTES = 32;
 export const KEY_BYTES = 32;
 export const USERCRED_BYTES = 32;
 
-// To geenrate matching keys, these must not change 
+// To geenrate matching keys, these must not change
 const HKDF_INFO_SIGNING = "cipherdata signing key";
 const HKDF_INFO_HINT = "hint encryption key";
 
-/* Javascript converts to signed 32 bit int when using bit shifting 
+/* Javascript converts to signed 32 bit int when using bit shifting
    and masking, so do this instead. Count is the number of bytes
    used to pack the number.  */
 export function numToBytes(num: number, count: number): Uint8Array {
@@ -89,7 +91,7 @@ export function base64ToBytes(b64: string): Uint8Array {
    return new Uint8Array(base64URLStringToBuffer(b64));
 }
 
-export class Random40 {
+export class Random48 {
    private trueRandCache: Promise<Response>;
 
    constructor() {
@@ -104,7 +106,7 @@ export class Random40 {
          if (!fallback) {
             throw new Error('both trueRand and fallback disabled');
          }
-         return crypto.getRandomValues(new Uint8Array(40));
+         return crypto.getRandomValues(new Uint8Array(48));
       } else {
          const lastCache = this.trueRandCache;
          this.trueRandCache = this.downloadTrueRand();
@@ -114,7 +116,7 @@ export class Random40 {
             }
             return response.arrayBuffer();
          }).then((array) => {
-            if (array.byteLength != 40) {
+            if (array.byteLength != 48) {
                throw new Error('missing bytes from random.org');
             }
             return new Uint8Array(array!);
@@ -124,13 +126,13 @@ export class Random40 {
             if (!fallback) {
                throw new Error('no connection to random.org and no fallback: ' + err.message);
             }
-            return crypto.getRandomValues(new Uint8Array(40));
+            return crypto.getRandomValues(new Uint8Array(48));
          });
       }
    }
 
    async downloadTrueRand(): Promise<Response> {
-      const url = 'https://www.random.org/cgi-bin/randbyte?nbytes=' + 40;
+      const url = 'https://www.random.org/cgi-bin/randbyte?nbytes=' + 48;
       try {
          const p = fetch(url, {
             cache: 'no-store',
@@ -152,7 +154,7 @@ export class Random40 {
 export class CipherService {
 
    // cache in case any use of true random
-   private random40Cache = new Random40();
+   private random48Cache = new Random48();
    private icount: number = 0;
    private icountMax: number = 0;
    private hashRate: number = 0;
@@ -183,7 +185,7 @@ export class CipherService {
          this.icount = Math.max(ICOUNT_DEFAULT, target_icount + 200000);
 
          console.log(
-            `bench: ${test_size}i, in: ${test_millis}ms, rate: ${Math.round(this.hashRate)}i/ms, 
+            `bench: ${test_size}i, in: ${test_millis}ms, rate: ${Math.round(this.hashRate)}i/ms,
         ic: ${this.icount}i, icm: ${this.icountMax}i`
          );
       }
@@ -236,7 +238,7 @@ export class CipherService {
       // A bit of a hack, but subtle doesn't support other algorithms... so lie. This
       // is safe because the key is exported as bits and used in libsodium when not
       // AES-GCM. TODO: If more non-browser cipher are added, make this more generic.
-      const useAlg = alg != 'X20-PLY' ? alg : 'AES-GCM';
+      const useAlg = 'AES-GCM';
 
       const ek = await crypto.subtle.deriveKey(
          {
@@ -316,7 +318,7 @@ export class CipherService {
       // A bit of a hack, but subtle doesn't support other algorithms... so lie. This
       // is safe because the key is exported as bits and used in libsodium when not
       // AES-GCM. TODO: If more non-browser cipher are added, make this more generic.
-      const useAlg = alg != 'X20-PLY' ? alg : 'AES-GCM';
+      const useAlg = 'AES-GCM';
 
       const hk = await crypto.subtle.deriveKey(
          {
@@ -372,21 +374,22 @@ export class CipherService {
       // Setup EncContext for new key derivation (and encryption)
       // Create a new salt each time a key is derviced from the password.
       // https://crypto.stackexchange.com/questions/53032/salt-for-non-stored-passwords
-      const randomArray = await this.random40Cache.getRandomArray(
+      const randomArray = await this.random48Cache.getRandomArray(
          eparams.trueRand,
          eparams.fallbackRand
       );
 
+      const iv_bytes = Number(AlgInfo[eparams.alg]['iv_bytes']);
       const slt = randomArray.slice(0, SLT_BYTES);
-      const iv = randomArray.slice(SLT_BYTES, SLT_BYTES + IV_BYTES);
+      const iv = randomArray.slice(SLT_BYTES, SLT_BYTES + iv_bytes);
 
       if (readyNotice) {
          readyNotice(eparams);
       }
 
-      const ek = await this._genCipherKey(eparams.alg, eparams.ic, eparams.pwd, eparams.userCred, slt);
-      const sk = await this._genSigningKey(eparams.userCred, slt);
       const hk = await this._genHintCipherKey(eparams.alg, eparams.userCred, slt);
+      const sk = await this._genSigningKey(eparams.userCred, slt);
+      const ek = await this._genCipherKey(eparams.alg, eparams.ic, eparams.pwd, eparams.userCred, slt);
 
       let encryptedHint = new Uint8Array(0);
       if (eparams.hint) {
@@ -442,6 +445,11 @@ export class CipherService {
       additionalData: Uint8Array = new Uint8Array(0),
    ): Promise<Uint8Array> {
 
+      const iv_bytes = Number(AlgInfo[alg]['iv_bytes']);
+      if (iv_bytes != iv.byteLength) {
+         throw new Error('incorrect iv length of: ' + iv.byteLength);
+      }
+
       let encryptedBytes: Uint8Array;
       if (alg == 'X20-PLY') {
          const exported = await crypto.subtle.exportKey("raw", key);
@@ -462,11 +470,30 @@ export class CipherService {
             // Match behavior of Web Crytpo functions that throws limited DOMException
             throw new DOMException('', 'OperationError');
          }
+      } else if (alg == 'AEGIS-256') {
+         const exported = await crypto.subtle.exportKey("raw", key);
+         const keyBytes = new Uint8Array(exported);
+
+         await sodium.ready;
+         try {
+            encryptedBytes = sodium.crypto_aead_aegis256_encrypt(
+               clear,
+               additionalData,
+               null,
+               iv,
+               keyBytes,
+               "uint8array"
+            );
+         } catch (err) {
+            console.log(err)
+            // Match behavior of Web Crytpo functions that throws limited DOMException
+            throw new DOMException('', 'OperationError');
+         }
       } else {
          const cipherBuf = await crypto.subtle.encrypt(
             {
                name: alg,
-               iv: iv.slice(0, 12),
+               iv: iv,
                additionalData: additionalData,
                tagLength: AES_GCM_TAG_BYTES * 8
             },
@@ -569,6 +596,25 @@ export class CipherService {
             throw new DOMException('', 'OperationError');
          }
 
+      } else if (alg == 'AEGIS-256') {
+         const exported = await crypto.subtle.exportKey("raw", key);
+         const keyBytes = new Uint8Array(exported);
+
+         await sodium.ready;
+         try {
+            decrypted = sodium.crypto_aead_aegis256_decrypt(
+               null,
+               encrypted,
+               additionalData,
+               iv,
+               keyBytes,
+               "uint8array"
+            );
+         } catch (err) {
+            console.log(err);
+            // Match behavior of Web Crytpo functions that throws limited DOMException
+            throw new DOMException('', 'OperationError');
+         }
       } else {
          const buffer = await crypto.subtle.decrypt(
             {
@@ -656,20 +702,23 @@ export class CipherService {
    }
 
    // Importers of CipherService should not need this function directly
-   // but it is public for unit testing. Allows encoding with 
+   // but it is public for unit testing. Allows encoding with
    // zero length encrypted text
    _encodeCipherData(cipherData: CipherData): Uint8Array {
 
       this.validateCipherData(cipherData);
 
+      const algInfo = AlgInfo[cipherData.alg];
+
       const icEnc = numToBytes(cipherData.ic, IC_BYTES);
       const verEnc = numToBytes(CURRENT_VERSION, VER_BYTES);
-      const algEnc = numToBytes(AlgInfo[cipherData.alg][1], ALG_BYTES);
+      const algEnc = numToBytes(Number(algInfo['id']), ALG_BYTES);
       const hintLenEnc = numToBytes(cipherData.encryptedHint.byteLength, 1);
+      const iv_bytes = Number(algInfo['iv_bytes']);
 
       let encoded = new Uint8Array(
          ALG_BYTES +
-         IV_BYTES +
+         iv_bytes +
          SLT_BYTES +
          IC_BYTES +
          VER_BYTES +
@@ -682,7 +731,7 @@ export class CipherService {
       encoded.set(algEnc, offset);
       offset += ALG_BYTES;
       encoded.set(cipherData.iv, offset);
-      offset += IV_BYTES;
+      offset += iv_bytes;
       encoded.set(cipherData.slt, offset);
       offset += SLT_BYTES;
       encoded.set(icEnc, offset);
@@ -706,12 +755,12 @@ export class CipherService {
       // Need to treat all values an UNTRUSTED since the signature has not
       // been tested (slt param extracted here is required for HMAC test)
 
-      if (encoded.byteLength < ALG_BYTES + IV_BYTES + SLT_BYTES + IC_BYTES +
+      if (encoded.byteLength < ALG_BYTES + IV_BYTES_MIN + SLT_BYTES + IC_BYTES +
          VER_BYTES + 1 + 1) {
          throw new Error('Invalid cparam lengths');
       }
 
-      // Using validCParams isn't applicable because we're reading fixed lengths, 
+      // Using validCParams isn't applicable because we're reading fixed lengths,
       // and if some data was clipped (like say IV) we cannot tell until we do
       // the signature check (or if the data is clipped so much other values are
       // missing). Also want to check for errors as we unpack
@@ -726,18 +775,20 @@ export class CipherService {
       }
 
       let alg: string;
+      let iv_bytes: number;
       for (alg in AlgInfo) {
-         if (AlgInfo[alg][1] == algNum) {
+         if (AlgInfo[alg]['id'] == algNum) {
+            iv_bytes = Number(AlgInfo[alg]['iv_bytes']);
             break;
          }
       }
 
       // ### iv ###
-      const iv = encoded.slice(offset, offset + IV_BYTES);
-      offset += IV_BYTES;
-      // Should never happen because of overall length check abvoe, 
+      const iv = encoded.slice(offset, offset + iv_bytes!);
+      offset += iv_bytes!;
+      // Should never happen because of overall length check abvoe,
       // but... defense in depth in case of an oversight
-      if (iv.byteLength != IV_BYTES) {
+      if (iv.byteLength != iv_bytes!) {
          throw new Error('Invalid iv length: ' + iv.byteLength);
       }
 
@@ -790,14 +841,16 @@ export class CipherService {
       };
    }
 
-   // Only useful for validatin CParmas before encoding. Decoded values are read with 
+   // Only useful for validatin CParmas before encoding. Decoded values are read with
    // the correct sizes, so it depends on signature validate rather than decoded lengths
    validateCipherData(cipherData: CipherData) {
       //May want to make these message more helpful...
       if (!(cipherData.alg in AlgInfo)) {
          throw new Error('Invalid alg of: ' + cipherData.alg);
       }
-      if (cipherData.iv.byteLength != IV_BYTES) {
+
+      const iv_bytes = Number(AlgInfo[cipherData.alg]['iv_bytes']);
+      if (cipherData.iv.byteLength != iv_bytes) {
          throw new Error('Invalid iv len of: ' + cipherData.iv.byteLength);
       }
       if (cipherData.slt.byteLength != SLT_BYTES) {
