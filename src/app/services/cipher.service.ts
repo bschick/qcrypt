@@ -476,6 +476,7 @@ export class CipherService {
 
          await sodium.ready;
          try {
+            // @ts-ignore
             encryptedBytes = sodium.crypto_aead_aegis256_encrypt(
                clear,
                additionalData,
@@ -602,6 +603,7 @@ export class CipherService {
 
          await sodium.ready;
          try {
+            // @ts-ignore
             decrypted = sodium.crypto_aead_aegis256_decrypt(
                null,
                encrypted,
