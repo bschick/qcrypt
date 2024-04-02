@@ -1,6 +1,6 @@
 import {
    Component, EventEmitter, Inject, OnInit,
-   Output, effect, Renderer2
+   Output, effect, Renderer2, OnDestroy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -9,19 +9,16 @@ import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatInputModule } from '@angular/material/input';
-import { AuthenticatorService, AuthenticatorInfo } from '../services/authenticator.service';
+import { AuthenticatorService, AuthenticatorInfo, AuthEvent, AuthEventData } from '../services/authenticator.service';
 import { EditableComponent } from '../editable/editable.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { Router } from '@angular/router';
+import { Router, NavigationStart } from '@angular/router';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { ClipboardModule } from '@angular/cdk/clipboard';
+import { Subscription } from 'rxjs';
 
-
-export interface ConfirmData {
-   last: boolean;
-}
 
 @Component({
    selector: 'app-credentials',
@@ -33,14 +30,17 @@ export interface ConfirmData {
       MatTooltipModule, ClipboardModule,
    ],
 })
-export class CredentialsComponent implements OnInit {
+export class CredentialsComponent implements OnInit, OnDestroy {
 
+   private authSub!: Subscription;
+   private routeSub!: Subscription;
    public error = '';
    public recoveryLink: string = '';
    public passKeys: AuthenticatorInfo[] = [];
    public showProgress = false;
    public displayedColumns: string[] = ['image', 'description', 'delete'];
    @Output() done = new EventEmitter<boolean>();
+
 
    constructor(
       public authSvc: AuthenticatorService,
@@ -61,6 +61,32 @@ export class CredentialsComponent implements OnInit {
 
    ngOnInit() {
       this.passKeys = this.authSvc.passKeys();
+
+      this.routeSub = this.router.events.subscribe((event) => {
+         if (event instanceof NavigationStart) {
+            this.done.emit(true);
+         }
+      });
+
+      this.authSub = this.authSvc.on(
+         [AuthEvent.Logout],
+         this.onAuthEvent.bind(this)
+      );
+   }
+
+   onAuthEvent(data: AuthEventData) {
+      if (data.event === AuthEvent.Logout) {
+         this.done.emit(true);
+      }
+   }
+
+   ngOnDestroy(): void {
+      if( this.authSub) {
+         this.authSub.unsubscribe();
+      }
+      if(this.routeSub) {
+         this.routeSub.unsubscribe();
+      }
    }
 
    toastMessage(msg: string): void {
@@ -71,10 +97,16 @@ export class CredentialsComponent implements OnInit {
 
    onClickDelete(passkey: AuthenticatorInfo) {
       this.error = '';
-      const lastPasskey = this.authSvc.passKeys().length > 1 ? false : true;
+      let pkState = ConfirmDialog.NONE_PK;
+      if(this.authSvc.passKeys().length == 1) {
+         pkState = ConfirmDialog.LAST_PK;
+      } else if(this.authSvc.pkId == passkey.credentialId) {
+         pkState = ConfirmDialog.ACTIVE_PK;
+      }
+
       var dialogRef = this.dialog.open(ConfirmDialog, {
          data: {
-            last: lastPasskey
+            pkState: pkState
          },
       });
 
@@ -113,6 +145,10 @@ export class CredentialsComponent implements OnInit {
          console.error(err);
          this.error = 'Passkey not found, try again';
       }
+   }
+
+   isCurrentPk(credentialId: string): boolean {
+      return credentialId == this.authSvc.pkId;
    }
 
    async refresh(): Promise<void> {
@@ -160,6 +196,12 @@ export class CredentialsComponent implements OnInit {
    }
 }
 
+
+export interface ConfirmData {
+   pkState: number;
+}
+
+
 @Component({
    selector: 'confirm-dialog',
    templateUrl: 'confirm-dialog.html',
@@ -172,15 +214,29 @@ export class CredentialsComponent implements OnInit {
 })
 export class ConfirmDialog {
 
-   public lastPasskey = false;
+   public pkState = 0;
    public confirmed = '';
+   static readonly NONE_PK = 0;
+   static readonly LAST_PK = 1;
+   static readonly ACTIVE_PK = 2;
+
+   // A bit ugly but needed to access constant from template
+   get NONE_PK() : number {
+      return ConfirmDialog.NONE_PK;
+   }
+   get LAST_PK() : number {
+      return  ConfirmDialog.LAST_PK;
+   }
+   get ACTIVE_PK() : number {
+      return  ConfirmDialog.ACTIVE_PK;
+   }
 
    constructor(
       public dialogRef: MatDialogRef<ConfirmDialog>,
       private r2: Renderer2,
       @Inject(MAT_DIALOG_DATA) public data: ConfirmData
    ) {
-      this.lastPasskey = data.last;
+      this.pkState = data.pkState;
    }
 
    onYesClicked() {

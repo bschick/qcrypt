@@ -59,6 +59,7 @@ export class AuthenticatorService {
    private _userCred: string | null = null;
    private _userName: string | null = null;
    private _userId: string | null = null;
+   private _pkId: string | null = null;
    private _subject = new Subject<AuthEventData>();
    private _intervalId: number = 0;
    private _expiration!: DateTime;
@@ -70,12 +71,15 @@ export class AuthenticatorService {
          this._userCred = sessionStorage.getItem(this._userId + 'usercred');
          if (this._userCred) {
             const exp = sessionStorage.getItem(this._userId + 'expiration');
-            this.setActiveUser(this._userId, this._userName!, this._userCred);
+            const pkId = sessionStorage.getItem(this._userId + 'pkid');
+            this.setActiveUser(this._userId, this._userName!, this._userCred, pkId!);
             // replace the default expiration (set indirectly by setActiveUser)
             // with the save value if present
             if (exp) {
                this._expiration = DateTime.fromISO(exp);
                sessionStorage.setItem(this._userId + 'expiration', this._expiration.toISO()!);
+               // don't wait 5 minutes to check
+               this.timerTick();
             }
          }
       }
@@ -93,6 +97,11 @@ export class AuthenticatorService {
 
    get userId(): string | null {
       return this._userId;
+   }
+
+
+   get pkId(): string | null {
+      return this._pkId;
    }
 
    isAuthenticated(): boolean {
@@ -140,16 +149,20 @@ export class AuthenticatorService {
       localStorage.setItem('username', this._userName);
    }
 
-   private setActiveUser(userId: string, userName: string, userCred: string) {
+   private setActiveUser(userId: string, userName: string, userCred: string, pkId: string) {
       if (!userCred) {
          throw new Error('missing userCred');
       }
       this.storeUserInfo(userId, userName);
+
       this._userCred = userCred;
-      // Includ userId in key in case there are multiple tabs open to
-      // different users and this one is reloaded. This prevents 
+      this._pkId = pkId;
+      // Include userId in key in case there are multiple tabs open to
+      // different users and this one is reloaded. This prevents
       // mixing of _userId and _userCred from different accounts
       sessionStorage.setItem(this._userId + 'usercred', this._userCred);
+      sessionStorage.setItem(this._userId + 'pkid', this._pkId);
+
       this.refreshPasskeys();
       this.emit(this.captureEventData(AuthEvent.Login));
       this.activity();
@@ -161,8 +174,8 @@ export class AuthenticatorService {
          this._intervalId = 0;
       }
 
-      // 4 hours expritation
-      this._expiration = DateTime.now().plus({ seconds: 60 * 60 * 1 });
+      // 6 hours inactivity expritation
+      this._expiration = DateTime.now().plus({ seconds: 60 * 60 * 60 });
       sessionStorage.setItem(this._userId + 'expiration', this._expiration.toISO()!);
 
       // @ts-ignore
@@ -186,30 +199,28 @@ export class AuthenticatorService {
    }
 
    forgetUserInfo() {
+      this.logout();
       if (this._userId) {
          const eventData = this.captureEventData(AuthEvent.Forget);
-         sessionStorage.removeItem(this._userId + 'usercred');
          localStorage.removeItem('username');
          localStorage.removeItem('userid');
-         this._userCred = null;
          this._userId = null;
          this._userName = null;
-         this.passKeys.set([]);
          this.emit(eventData);
       }
    }
 
    logout() {
       if (this._userCred) {
-         const eventData = this.captureEventData(AuthEvent.Logout);
-         sessionStorage.removeItem(this._userId + 'usercred');
-         sessionStorage.removeItem(this._userId + 'expiration');
-         this._userCred = null;
-         this.passKeys.set([]);
          if (this._intervalId) {
             clearInterval(this._intervalId);
             this._intervalId = 0;
          }
+         const eventData = this.captureEventData(AuthEvent.Logout);
+         sessionStorage.clear();
+         this._userCred = null;
+         this._pkId = null;
+         this.passKeys.set([]);
          this.emit(eventData);
       }
    }
@@ -319,13 +330,13 @@ export class AuthenticatorService {
          cache: 'no-store',
       });
 
-      console.log('getAuthsResp, ', getAuthsResp);
+//      console.log('getAuthsResp, ', getAuthsResp);
       if (!getAuthsResp.ok) {
          throw new Error('retrieving passkeys failed: ' + await getAuthsResp.text());
       }
 
       const authsInfo = await getAuthsResp.json() as AuthenticatorInfo[];
-      console.log('authsInfo, ', authsInfo);
+//      console.log('authsInfo, ', authsInfo);
 
       this.passKeys.set(authsInfo);
       return authsInfo;
@@ -409,7 +420,7 @@ export class AuthenticatorService {
          throw new Error('authentication failed');
       }
 
-      this.setActiveUser(authInfo.userId, authInfo.userName, authInfo.userCred);
+      this.setActiveUser(authInfo.userId, authInfo.userName, authInfo.userCred, startAuth.id);
       return authInfo;
    }
 
@@ -517,7 +528,7 @@ export class AuthenticatorService {
          throw new Error('registration failed');
       }
 
-      this.setActiveUser(registrationInfo.userId, registrationInfo.userName, registrationInfo.userCred);
+      this.setActiveUser(registrationInfo.userId, registrationInfo.userName, registrationInfo.userCred, startReg.id);
       return registrationInfo;
    }
 
