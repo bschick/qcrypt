@@ -44,7 +44,7 @@ SOFTWARE. -->
       <button mat-raised-button (click)="clearCaches()" class="top-button mleft15 clear-button" color="basic"
         matTooltip="Clear decrypted text and cached password" [disabled]="showProgress ? 'true' : 'false'"
         [style.visibility]="stuffCached ? 'visible' : 'hidden'">
-        {{'Clear&nbsp;Data ('+ secondsRemaining() +')'}}
+        {{'Forget&nbsp;Pwd ('+ secondsRemaining +')'}}
       </button>
     </span>
     <span class="flx-buttons">
@@ -131,7 +131,7 @@ SOFTWARE. -->
             [matTooltip]="'Larger values make password guessing slower. Range ['+icountMin/1000+'K,'+icountMax/1000000+'M]'" />
         </mat-form-field>
         <mat-form-field class="option-input mleft15">
-          <mat-label>Clear Timer (secs)</mat-label>
+          <mat-label>Cache Time (secs)</mat-label>
           <input type="number" min="0" step="10" matInput [(ngModel)]="cacheTime" (change)="onClearTimerChange()"
             matTooltip="Number of seconds until your clear text and cached password are automatically cleared" />
         </mat-form-field>
@@ -156,8 +156,8 @@ SOFTWARE. -->
           <mat-icon class="open-new-icon2">open_in_new</mat-icon>
         </a>
         <br /><span class="options-header">
-          &nbsp;Cipher and Mode </span>
-        <a href="https://soatok.blog/2020/07/12/comparison-of-symmetric-encryption-methods/#contents-list"
+          &nbsp;AEAD Cipher </span>
+        <a href="https://doc.libsodium.org/secret-key_cryptography/aead"
           target="_blank">
           <mat-icon class="open-new-icon1">open_in_new</mat-icon>
         </a>
@@ -165,10 +165,9 @@ SOFTWARE. -->
         <br />
         <mat-button-toggle-group class="mtop10 algorithms" [(ngModel)]="algorithm" aria-label="Algorithm"
           matTooltip="Block cipher and mode of operation" (change)="onAlgorithmChange($event.value)">
-          <mat-button-toggle class="algoption" value="AES-GCM">{{algName('AES-GCM')}}</mat-button-toggle>
-          <mat-button-toggle class="algoption" value="X20-PLY">{{algName('X20-PLY')}}</mat-button-toggle>
-          <!--        <mat-button-toggle value="AES-CBC">{{algName('AES-CBC')}}</mat-button-toggle>
-          <mat-button-toggle value="AES-CTR">{{algName('AES-CTR')}}</mat-button-toggle> -->
+          <mat-button-toggle class="algoption" value="AES-GCM">{{algDescription('AES-GCM')}}</mat-button-toggle>
+          <mat-button-toggle class="algoption" value="X20-PLY">{{algDescription('X20-PLY')}}</mat-button-toggle>
+          <mat-button-toggle class="algoption" value="AEGIS-256">{{algDescription('AEGIS-256')}}</mat-button-toggle>
         </mat-button-toggle-group>
 
       </p><span class="options-header">
