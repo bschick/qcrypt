@@ -13,3 +13,12 @@
   font-size: 16px;
   line-height: 22px;
 }
+
+.content p,
+li {
+  @include font;
+}
+
+h2 {
+  margin: 16px 0 6px 0;
+}

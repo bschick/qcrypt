@@ -1,0 +1,40 @@
+@use "../help.scss";
+
+.flow-img {
+  width: 350px;
+  cursor: pointer;
+  position: absolute;
+  margin-left: 20px;
+}
+
+.flow-dialog {
+  width: 80vw;
+  //    height: calc((80vw + 68px) / 1.5);
+
+  .zoomed-flow {
+    width: 100%;
+    cursor: zoom-in;
+  }
+
+  a:hover,
+  a:visited,
+  a:active,
+  a:link {
+    text-decoration: none;
+  }
+
+  a:focus {
+    outline: none;
+  }
+
+  .mat-mdc-dialog-content {
+    max-height: unset;
+  }
+
+  .close-button3 {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 999;
+  }
+}
