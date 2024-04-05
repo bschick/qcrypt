@@ -1,32 +1,32 @@
 <!--
-<input #editableInput 
-    type='text' 
+<input #editableInput
+    type='text'
     [readonly]="readOnly"
-    [ngClass]="readOnly ? 'readonly' : 'writeable'" 
+    [ngClass]="readOnly ? 'readonly' : 'writeable'"
     [(ngModel)]='text'
     (focusout)='onFocusOut()'
     (click)='swap()'
     (keydown.enter)='editableInput.blur();'
 />-->
 <div class="editable">
-    <input
-        #editableInput 
-        type='text' 
-        [readonly]="readOnly"
-        [ngClass]="readOnly ? 'readonly' : 'writeable'" 
-        [(ngModel)]='text'
-        (focusout)='onFocusOut()'
-        (click)='makeEditable()'
-        [minlength]='minlength'
-        [maxlength]='maxlength'
-        (keydown.enter)='acceptEdit($event)'
-        (keydown.escape)='cancelEdit($event)'
-    />
-    <mat-icon 
-        aria-label="Accept" 
-        class="check"
-        [style.visibility]="readOnly ? 'hidden' : 'visible'"
-        (click)='editableInput.blur()'>
-            done
-    </mat-icon>
+  <input
+    #editableInput
+    type='text'
+    [readonly]="readOnly"
+    [ngClass]="readOnly ? 'readonly' : 'writeable'"
+    [(ngModel)]='text'
+    (focusout)='onFocusOut()'
+    (click)='makeEditable()'
+    [minlength]='minlength'
+    [maxlength]='maxlength'
+    (keydown.enter)='acceptEdit($event)'
+    (keydown.escape)='cancelEdit($event)'
+  />
+  <mat-icon
+    aria-label="Accept"
+    class="check"
+    [style.visibility]="readOnly ? 'hidden' : 'visible'"
+    (click)='editableInput.blur()'>
+        done
+  </mat-icon>
 </div>
