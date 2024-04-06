@@ -182,7 +182,9 @@ export class CipherService {
                Math.round((max_hash_millis * this.hashRate) / 1000000) * 1000000);
 
          let target_icount = Math.round((this.hashRate * target_hash_millis) / 100000) * 100000;
-         this.icount = Math.max(ICOUNT_DEFAULT, target_icount + 200000);
+         // Add ICOUNT_MIN to calculated target because benchmark is done during
+         // page load and tends to be too low.
+         this.icount = Math.max(ICOUNT_DEFAULT, target_icount + ICOUNT_MIN);
 
          console.log(
             `bench: ${test_size}i, in: ${test_millis}ms, rate: ${Math.round(this.hashRate)}i/ms,

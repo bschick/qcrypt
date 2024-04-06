@@ -34,10 +34,10 @@ SOFTWARE. -->
       you return to this site.
     </p>
     <div class="button-host">
-      <button mat-fab extended (click)="onClickSignin($event)" color="primary" class="button">
+      <button mat-raised-button (click)="onClickSignin($event)" color="primary" class="button">
         <!--<mat-icon>login</mat-icon>--><span class="button-label">Sign in as<br />{{userName}}</span>
       </button>
-      <button mat-fab extended (click)="onClickForget($event)" color="primary" class="button">
+      <button mat-raised-button (click)="onClickForget($event)" color="primary" class="button">
         <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">Sign in as<br />a different user</span>
       </button>
       <div class="error-msg">{{error}}</div>

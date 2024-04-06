@@ -10,13 +10,12 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatInputModule } from '@angular/material/input';
 import { AuthenticatorService, AuthenticatorInfo, AuthEvent, AuthEventData } from '../services/authenticator.service';
-import { EditableComponent } from '../editable/editable.component';
+import { EditableComponent } from '../ui/editable/editable.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { Router, NavigationStart } from '@angular/router';
+import { Router, RouterLink, NavigationStart } from '@angular/router';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { ClipboardModule } from '@angular/cdk/clipboard';
 import { Subscription } from 'rxjs';
 
 
@@ -27,7 +26,7 @@ import { Subscription } from 'rxjs';
    styleUrl: './credentials.component.scss',
    imports: [MatDividerModule, MatTableModule,
       MatIconModule, MatButtonModule, MatInputModule, EditableComponent,
-      MatTooltipModule, ClipboardModule,
+      MatTooltipModule, RouterLink, CommonModule
    ],
 })
 export class CredentialsComponent implements OnInit, OnDestroy {
@@ -35,7 +34,6 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    private authSub!: Subscription;
    private routeSub!: Subscription;
    public error = '';
-   public recoveryLink: string = '';
    public passKeys: AuthenticatorInfo[] = [];
    public showProgress = false;
    public displayedColumns: string[] = ['image', 'description', 'delete'];
@@ -50,12 +48,6 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    ) {
       effect(() => {
          this.passKeys = this.authSvc.passKeys();
-
-         this.recoveryLink = new URL(
-            window.location.origin + '/recovery' +
-            '?userid=' + this.authSvc.userId +
-            '&usercred=' + this.authSvc.userCred
-         ).toString();
       });
    }
 
@@ -70,21 +62,15 @@ export class CredentialsComponent implements OnInit, OnDestroy {
 
       this.authSub = this.authSvc.on(
          [AuthEvent.Logout],
-         this.onAuthEvent.bind(this)
+         () => this.done.emit(true)
       );
    }
 
-   onAuthEvent(data: AuthEventData) {
-      if (data.event === AuthEvent.Logout) {
-         this.done.emit(true);
-      }
-   }
-
    ngOnDestroy(): void {
-      if( this.authSub) {
+      if (this.authSub) {
          this.authSub.unsubscribe();
       }
-      if(this.routeSub) {
+      if (this.routeSub) {
          this.routeSub.unsubscribe();
       }
    }
@@ -98,9 +84,9 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    onClickDelete(passkey: AuthenticatorInfo) {
       this.error = '';
       let pkState = ConfirmDialog.NONE_PK;
-      if(this.authSvc.passKeys().length == 1) {
+      if (this.authSvc.passKeys().length == 1) {
          pkState = ConfirmDialog.LAST_PK;
-      } else if(this.authSvc.pkId == passkey.credentialId) {
+      } else if (this.authSvc.pkId == passkey.credentialId) {
          pkState = ConfirmDialog.ACTIVE_PK;
       }
 
@@ -221,14 +207,14 @@ export class ConfirmDialog {
    static readonly ACTIVE_PK = 2;
 
    // A bit ugly but needed to access constant from template
-   get NONE_PK() : number {
+   get NONE_PK(): number {
       return ConfirmDialog.NONE_PK;
    }
-   get LAST_PK() : number {
-      return  ConfirmDialog.LAST_PK;
+   get LAST_PK(): number {
+      return ConfirmDialog.LAST_PK;
    }
-   get ACTIVE_PK() : number {
-      return  ConfirmDialog.ACTIVE_PK;
+   get ACTIVE_PK(): number {
+      return ConfirmDialog.ACTIVE_PK;
    }
 
    constructor(
@@ -240,10 +226,14 @@ export class ConfirmDialog {
    }
 
    onYesClicked() {
-      if (this.confirmed === 'confirm') {
+      if (this.pkState != this.LAST_PK || this.confirmed === 'confirm') {
          this.dialogRef.close('Yes');
       } else {
-         this.r2.selectRootElement('#confirmInput').focus();
+         try {
+            this.r2.selectRootElement('#confirmInput').focus();
+         } catch (err) {
+            console.error(err);
+         }
       }
    }
 }

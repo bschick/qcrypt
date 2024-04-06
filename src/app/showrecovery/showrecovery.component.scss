@@ -1,18 +1,15 @@
 @use "../common.scss";
 
-.error-msg {
-  color: darkred;
-  margin-top: 12px;
-}
 
-.user-name {
-  width: 280px;
-}
 .control-host {
   margin-top: 50px;
   display: flex;
   align-items: start;
   justify-content: center;
+
+  .recovery {
+    width: 100%;
+  }
 
   button {
     height: 45px;
@@ -20,10 +17,4 @@
     margin-top: 5px;
     margin-left: 50px;
   }
-}
-
-
-.tip {
-  text-decoration-line: underline;
-  text-decoration-style: dotted;
 }

@@ -1,6 +1,6 @@
 <div class="container">
   <div class="content">
-    <h1>Quick Crypt Overview</h1>
+    <h1>Quick Crypt: <i>Easy, Trustworthy Personal Encyption</i></h1>
 
     <p>Quick Crypt was created to make it safe and convientent for you to encrypt sensitive data
       for storage in potentially insecure locations.
@@ -13,21 +13,22 @@
       and remember. Good encryption that you don't use isn't all that good in the end.</p>
 
     <p>Thus Quick Crypt: A small-batch text focused cipher tool designed to be Trustworthy,
-      Convenient, Easy to Use, and Secure. Quick Crypt encrypts and decrypts text with a password
-      you provide, using cryptographic features built into modern browsers to ensure that
-      your password and clear text <b>do not unexpectedly traverse the internet.</b> After
-      loading Quick Crypt,
-      you could disable all network access and continue encrypting and decypting data.
-      In addition to passwords you supply, Quick Crypt uses Passkeys to make it very difficult
-      for an untrusted website to trick you into decrypting and exposing data unintentionally.</p>
+      Convenient, and Easy to Use. Quick Crypt encrypts and decrypts using modern
+      cryptographic features supported by current browsers to ensure that
+      your password and senstive data <b>do not unexpectedly traverse the internet.</b> After
+      loading Quick Crypt, you could disable all network access and continue encrypting
+      and decypting data.
+      Quick Crypted uses AEAD ciphers with a password you supply and a credential secured by
+      passkeys to provide privacy, authenticiy, and man-in-the-middle or site forgery
+      protection.</p>
 
     <p>Quick Crypt was designed to protect data that you want to store in a location that is
-      not fully trusted or secure and to make it easy to securely decrypt
+      not fully trusted or secured, and to make it easy to decrypt
       that data without needing to remember or install complicated tools. Quick Crypt
-      cipher text can link directly to the decryption page, so you only need
+      cipher armor output can link directly to the decryption page, so you only need
       your Passkey and the password you used for encyption. Fully understanding how Quick Crypt
-      works is not necessary to use it, but if you interested
-      the <a href="/help/protocol">protocol is documented</a> and the
+      works is not necessary to use it, but if you are interested
+      the <a [routerLink]="'/help/protocol'">protocol is documented</a> and the
       <a href="https://github.com/bschick/qcrypt" target="_blank">code is opensource</a> under the
       MIT license. Bug reports and pull requests are welcome.
     </p>
@@ -43,12 +44,12 @@
       <li>Use the strongest web-app security practices (csp, strong cert, sri, hsts, xfo, etc..)</li>
       <li>Opensource for peer review</li>
       <li>Well specificed protocols</li>
-      <li>No adverts or cookies</li>
+      <li>No adverts or trackers</li>
     </ul>
 
     <h2>Bundled Javascript Libraries</h2>
     <ul>
-      <li><a href="https://angular.io/">angular 17</a></li>
+      <li><a href="https://angular.io/">angular</a></li>
       <li><a href="https://simplewebauthn.dev/">simplewebauthn</a></li>
       <li><a href="https://github.com/jedisct1/libsodium.js">libsodium.js</a></li>
       <li><a href="https://rxjs.dev/">rxjs</a></li>

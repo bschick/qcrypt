@@ -1,6 +1,46 @@
 @use "../help.scss";
 
-.content p,
-li {
-  @include help.font;
+.tg {
+  border-collapse: collapse;
+  border-color: #ccc;
+  border-spacing: 0;
+
+  td {
+    background-color: #fff;
+    border-color: #ccc;
+    border-style: solid;
+    border-width: 1px;
+    color: #333;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    overflow: hidden;
+    padding: 10px 5px;
+    word-break: normal;
+  }
+  th {
+    background-color: #f0f0f0;
+    border-color: #ccc;
+    border-style: solid;
+    border-width: 1px;
+    color: #333;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    font-weight: normal;
+    overflow: hidden;
+    padding: 10px 5px;
+    word-break: normal;
+  }
+
+  .tg-fymr {
+    border-color: inherit;
+    font-weight: bold;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .tg-0pky {
+    border-color: inherit;
+    text-align: left;
+    vertical-align: top;
+  }
 }

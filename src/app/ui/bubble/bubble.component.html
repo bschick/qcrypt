@@ -1,0 +1,9 @@
+<div class="bubble"
+     [ngClass]="['bubble--'+position, 'bubble--'+theme]"
+     [class.bubble--visible]="visible"
+     [style.width]="width"
+     [style.height]="height"
+     [style.left]="left + 'px'"
+     [style.top]="top + 'px'">
+  {{tip}}
+</div>

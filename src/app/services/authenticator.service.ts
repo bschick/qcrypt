@@ -99,7 +99,6 @@ export class AuthenticatorService {
       return this._userId;
    }
 
-
    get pkId(): string | null {
       return this._pkId;
    }
@@ -118,6 +117,17 @@ export class AuthenticatorService {
       const userId = localStorage.getItem('userid');
       const userName = localStorage.getItem('username');
       return [userId, userName];
+   }
+
+   getRecoveryLink(): string {
+      if(!this.isAuthenticated()) {
+         throw new Error('No active user');
+      }
+      return  new URL(
+         window.location.origin + '/recovery' +
+         '?userid=' + this.userId +
+         '&usercred=' + this.userCred
+      ).toString();
    }
 
    on(events: AuthEvent[], action: (data: AuthEventData) => void): Subscription {

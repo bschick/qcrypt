@@ -33,6 +33,31 @@ SOFTWARE. */
   min-width: 590px;
 }
 
+
+/*::ng-deep .welcome {
+  font-size: 60px;
+  position: relative;
+  top:60px;
+  left:30px;
+
+}
+.mat-tooltip-panel-below {
+  .mat-tooltip.ds-tooltip {
+    overflow: visible;
+
+    &::before {
+      content: '';
+      display: block;
+      position: absolute;
+      bottom: 100%;
+      border-style: solid;
+      border-color: transparent transparent black transparent;
+      border-width: 12px;
+      left: calc(50% - 12px);
+    }
+  }
+}
+*/
 .mtop3 {
   margin-top: 3px;
 }
@@ -209,13 +234,21 @@ SOFTWARE. */
   font-size: 15px;
 }
 
-.txt-area {
+@mixin txt-area {
   min-height: 265px;
   min-width: 195px;
   margin-top: 20px;
   resize: none;
-/*  white-space: pre;
-  overflow-wrap: normal;*/
+}
+
+.txt-area-clear {
+  @include txt-area();
+  word-break: normal;
+}
+
+.txt-area-armor {
+  @include txt-area();
+  word-break: break-all;
 }
 
 .red-pwd-strength {

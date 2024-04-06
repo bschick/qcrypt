@@ -22,7 +22,12 @@ SOFTWARE. -->
 <div class="core">
   <div class="input-area flx-container" (mouseup)="onDraggerMouseUp();">
     <span class="flx-buttons">
-      <button mat-raised-button (click)="onEncryptClicked()" class="top-button" color="primary"
+      <button mat-raised-button (click)="onEncryptClicked()"
+        class="top-button" color="primary"
+        #bubbleTip2="bubbleTip"
+        bubbleTip="When you have finished entering text, click the Encrypt button. You will then be promted for a password."
+        bubblePosition="right"
+        bubbleWidth="250px"
         aria-label="Encrypt Text" accesskey="E" [disabled]="showProgress ? 'true' : 'false'">
         <u>E</u>ncrypt
       </button>
@@ -73,17 +78,22 @@ SOFTWARE. -->
       [style.visibility]="showProgress ? 'visible' : 'hidden'">
     </mat-progress-spinner>
     <div #clearField class="flx-item">
-      <mat-form-field [style.width.%]="100" [style.height.%]="100">
+      <mat-form-field
+      #bubbleTip1="bubbleTip"
+      bubbleTip="To encrypt some data, type or paste text here then click the Encrypt button."
+      bubblePosition="upper"
+      bubbleWidth="250px"
+      [style.width.%]="100" [style.height.%]="100">
         <mat-label>{{clearLabel}}</mat-label>
-        <textarea matInput id="clearInput" autofocus cdkTextareaAutosize placeholder="" class="txt-area"
+        <textarea matInput id="clearInput" autofocus cdkTextareaAutosize placeholder="" class="txt-area-clear"
           [(ngModel)]="clearText" [ngModelOptions]="{standalone: true}" [style.color]="errorClear ? 'red' : 'black'"
-          [disabled]="showProgress ? 'true' : 'false'"></textarea>
+          [disabled]="showProgress ? 'true' : 'false'" (input)="onClearInput()"></textarea>
         <button class="txt-area-button2" *ngIf="clearText && !showProgress" mat-icon-button aria-label="Clear"
           matTooltip="Clear text" (click)="onClearClear()">
           <mat-icon>close</mat-icon>
         </button>
         <button class="txt-area-button3" *ngIf="clearText && !showProgress" mat-icon-button aria-label="Copy"
-          matTooltip="Copy clear text to clipboard" (click)="toastMessage('Clear Text Copied to Clipboard')"
+          matTooltip="Copy clear text to clipboard" (click)="toastMessage('Clear text copied to clipboard')"
           [cdkCopyToClipboard]="clearText">
           <mat-icon>content_copy</mat-icon>
         </button>
@@ -96,7 +106,7 @@ SOFTWARE. -->
     <div #cipherField class="flx-item">
       <mat-form-field [style.width.%]="100" [style.height.%]="100">
         <mat-label>{{cipherLabel}}</mat-label>
-        <textarea matInput id="cipherInput" placeholder="" class="txt-area" cdkTextareaAutosize
+        <textarea matInput id="cipherInput" placeholder="" class="txt-area-armor" cdkTextareaAutosize
           [(ngModel)]="cipherArmor" [ngModelOptions]="{standalone: true}" [style.color]="errorCipher ? 'red' : 'black'"
           [disabled]="showProgress ? 'true' : 'false'">
         </textarea>
@@ -105,7 +115,7 @@ SOFTWARE. -->
           <mat-icon>close</mat-icon>
         </button>
         <button class="txt-area-button2" *ngIf="cipherArmor && !showProgress" mat-icon-button aria-label="Copy"
-          matTooltip="Copy cipher armor to clipboard" (click)="toastMessage('Cipher Armor Copied to Clipboard')"
+          matTooltip="Copy cipher armor to clipboard" (click)="toastMessage('Cipher armor copied to clipboard')"
           [cdkCopyToClipboard]="cipherArmor">
           <mat-icon>content_copy</mat-icon>
         </button>

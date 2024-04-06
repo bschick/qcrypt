@@ -1,13 +1,20 @@
-.spinner {
-  position: absolute;
-  width: 50px;
-  height: 50px;
-  top: 32%;
-  left: 50%;
-  margin: -50px 0 0 -50px;
-  z-index: 999;
+@use "../common.scss";
+
+.button-host {
+  margin-top:50px;
+  width:100%;
+  display: flex;
+  align-items: start;
+  justify-content: center;
+
+  button {
+    height: 45px;
+    width: 280px;
+    margin-top: 5px;
+  }
+
+  .button2 {
+    margin-left: 50px;
+  }
 }
 
-.error-msg {
-  color: darkred;
-}

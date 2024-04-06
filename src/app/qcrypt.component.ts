@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -28,7 +28,8 @@ import { Router, RouterOutlet, RouterLink } from '@angular/router';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSidenav, MatSidenavModule } from '@angular/material/sidenav';
 import { CredentialsComponent } from './credentials/credentials.component';
-import { AuthenticatorService, AuthenticatorInfo } from './services/authenticator.service';
+import { AuthEvent, AuthEventData, AuthenticatorService } from './services/authenticator.service';
+import { Subscription } from 'rxjs';
 
 
 @Component({
@@ -40,11 +41,13 @@ import { AuthenticatorService, AuthenticatorInfo } from './services/authenticato
       RouterLink, MatMenuModule, MatSidenavModule, CredentialsComponent
    ],
 })
-export class QCryptComponent implements OnInit {
+export class QCryptComponent implements OnInit, OnDestroy {
 
+   private authSub!: Subscription;
    public bgColorDefault = '#4351AF';
    public bgColorFocus = '#3B479A';
    public countdown = 0;
+   public showPKButton = false;
 
    constructor(
       public router: Router,
@@ -54,6 +57,21 @@ export class QCryptComponent implements OnInit {
 
    ngOnInit(): void {
       setInterval(() => this.countdown = this.authSvc.secondsRemaining(), 5000);
+      this.showPKButton = this.authSvc.isAuthenticated();
+      this.authSub = this.authSvc.on(
+         [AuthEvent.Logout, AuthEvent.Login],
+         this.onAuthEvent.bind(this)
+      );
+   }
+
+   onAuthEvent(data: AuthEventData) {
+      this.showPKButton = data.event === AuthEvent.Login;
+   }
+
+   ngOnDestroy(): void {
+      if( this.authSub) {
+         this.authSub.unsubscribe();
+      }
    }
 
    toggleNav(nav: MatSidenav) {
@@ -68,7 +86,7 @@ export class QCryptComponent implements OnInit {
       if (test) {
          return this.router.url.startsWith(test) ? this.bgColorFocus : this.bgColorDefault;
       } else {
-         return ['', '/', undefined].includes(this.router.url) ? this.bgColorFocus : this.bgColorDefault;
+         return ['', '/newuser', '/welcome', '/', undefined].includes(this.router.url) ? this.bgColorFocus : this.bgColorDefault;
       }
    }
 
