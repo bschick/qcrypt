@@ -1,42 +1,34 @@
-<div class="welcome">
-  <p class="header">Easy, Trustworthy Personal Encyption</p>
-  <p class="subheader">your sensitive data remains local</p>
-  <p class="descrip">Quick Crypt uses both passkeys and passwords you control to ensure
-    only you can decrypt your data and that other websites cannot easily impersonate Quick Crypt.
-    Are you new to Quick Crypt?
+<div class="container">
+  <div class="content">
+    <h1>Quick Crypt: <i>Easy, Trustworthy Personal Encyption</i></h1>
 
-  </p>
-  <mat-progress-spinner class="spinner" color="primary" mode="indeterminate"
-    [style.visibility]="showProgress ? 'visible' : 'hidden'">
-  </mat-progress-spinner>
-  <div>
-    <div class="button-host">
+    <p> Welcome to Quick Crypt. To get started, select one of the options below.
+      If you'd like to first learn more, open the help menu above
+      or go directly to the <a [routerLink]="'/help/overview'">overview page.</a>
+    </p>
+    <p>
+      If this is your first time using Quick Crypt, select the first button below. If
+      you are a returning user, click the second button. If you are a returning user
+      but cannot sign in or locate your passkey, select the last button for help.
+    </p>
+    <mat-progress-spinner class="spinner" color="primary" mode="indeterminate"
+      [style.visibility]="showProgress ? 'visible' : 'hidden'">
+    </mat-progress-spinner>
+    <div class="button-column">
       <a [routerLink]="'/newuser'">
-        <button mat-fab extended color="primary" class="button">
-          <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">Create a new user</span>
+        <button mat-raised-button color="primary" class="button">
+          <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">I am new to Quick Crypt</span>
         </button>
       </a>
       <br />
-      <button mat-fab extended (click)="onClickExisting($event)" color="primary" class="button">
-        <!--<mat-icon>login</mat-icon>--><span class="button-label">Sign in using an existing passkey</span>
+      <button mat-raised-button (click)="onClickExisting($event)" color="primary" class="button">
+        <!--<mat-icon>login</mat-icon>--><span class="button-label">I have used Quick Crypt previously</span>
       </button>
       <br />
-      <button mat-fab extended (click)="onClickRecovery($event)" color="primary" class="button">
-        <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">I had a passkey, but it's lost or not
-          working</span>
+      <button mat-raised-button (click)="onClickRecovery($event)" color="primary" class="button">
+        <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">I am a returning user, but cannot sign in</span>
       </button>
-      <div class="error-msg">{{error}}</div>
+      <p class="error-msg">{{error}}</p>
     </div>
-
-    <!--      
-     To get started enter a user name that will be included in your passkey. Your user name
-        can be anything, and does not need to be an email address.
-    <mat-form-field class="">
-            <mat-label>User Name</mat-label>
-            <input matInput>
-          </mat-form-field>
-          <button mat-flat-button class="" color="primary">Get Started</button>
-  -->
   </div>
-
 </div>

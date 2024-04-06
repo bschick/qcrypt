@@ -25,6 +25,9 @@ import {
    Inject,
    ViewEncapsulation,
    OnInit,
+   ViewChild,
+   AfterViewInit,
+   OnDestroy,
 } from '@angular/core';
 import {
    MAT_DIALOG_DATA,
@@ -46,6 +49,7 @@ import { PasswordStrengthMeterComponent } from 'angular-password-strength-meter'
 import * as cs from '../services/cipher.service';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { ZxcvbnOptionsService } from '../services/zxcvbn-options.service';
+import { BubbleDirective } from '../ui/bubble/bubble.directive';
 
 
 export type PwdDialogData = {
@@ -57,6 +61,7 @@ export type PwdDialogData = {
    loopCount: number;
    loops: number;
    checkPwned: boolean;
+   welcomed: boolean;
 };
 
 export type SigninDialogData = {
@@ -71,9 +76,10 @@ export type SigninDialogData = {
    encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
    imports: [MatDialogModule, CommonModule, NgIf, MatFormFieldModule, MatMenuModule, MatInputModule,
       MatIconModule, PasswordStrengthMeterComponent, FormsModule, ReactiveFormsModule,
-      MatTooltipModule, MatButtonModule],
+      MatTooltipModule, MatButtonModule, BubbleDirective
+   ],
 })
-export class PasswordDialog implements OnInit {
+export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    public hidePwd = false;
    public passwd = '';
    public hint = '';
@@ -85,7 +91,10 @@ export class PasswordDialog implements OnInit {
    public loops = 0;
    public askHint = false;
    private checkPwned = false;
+   private welcomed = true;
    public maxHintLen = cs.HINT_MAX_LEN;
+
+   @ViewChild('bubbleTip') bubbleTip!: BubbleDirective;
 
    constructor(
       private r2: Renderer2,
@@ -101,10 +110,23 @@ export class PasswordDialog implements OnInit {
       this.loops = data.loops;
       this.onPasswordStrengthChange(0);
       this.checkPwned = data.checkPwned;
+      this.welcomed = data.welcomed;
    }
 
    ngOnInit(): void {
       this.zxcvbnOptions.checkPwned(this.checkPwned);
+   }
+
+   ngAfterViewInit(): void {
+      if(!this.welcomed) {
+         this.bubbleTip.show();
+      }
+   }
+
+   ngOnDestroy(): void {
+      if(!this.welcomed) {
+         this.bubbleTip.hide();
+      }
    }
 
    onAcceptClicked() {

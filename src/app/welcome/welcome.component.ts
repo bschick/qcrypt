@@ -41,7 +41,7 @@ export class WelcomeComponent {
          this.router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
-         this.error = 'Passkey not found. Either try again or select another option.';
+         this.error = 'Passkey not recognized. Either try again or select another option above.';
       } finally {
          this.showProgress = false;
       }

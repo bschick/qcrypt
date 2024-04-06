@@ -1,10 +1,11 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule } from '@angular/forms';
 import { AuthenticatorService } from '../services/authenticator.service';
-import { Router, RouterLink, ActivatedRoute } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -19,7 +20,7 @@ import { ClipboardModule } from '@angular/cdk/clipboard';
    styleUrl: './newuser.component.scss',
    imports: [MatIconModule, MatButtonModule, RouterLink, CommonModule,
       MatProgressSpinnerModule, MatInputModule, MatFormFieldModule,
-      FormsModule, ClipboardModule,
+      FormsModule, ClipboardModule, MatTooltipModule,
    ],
 })
 export class NewUserComponent implements OnInit {
@@ -28,15 +29,13 @@ export class NewUserComponent implements OnInit {
    public error = '';
    public newUserName = '';
    public currentUserName: string | null = null;
-   public completed = false;
    public recoveryLink = '';
    public authenticated = false;
 
    constructor(
       private authSvc: AuthenticatorService,
       private router: Router,
-      private snackBar: MatSnackBar,
-      private activeRoute: ActivatedRoute) {
+      private snackBar: MatSnackBar) {
    }
 
    ngOnInit() {
@@ -78,14 +77,8 @@ export class NewUserComponent implements OnInit {
       try {
          this.showProgress = true;
          this.authSvc.forgetUserInfo();
-         const passkeyInfo = await this.authSvc.newUser(this.newUserName);
-         this.recoveryLink = new URL(
-            window.location.origin + '/recovery' +
-            '?userid=' + passkeyInfo.userId +
-            '&usercred=' + passkeyInfo.userCred
-         ).toString();
-
-         this.completed = true;
+         await this.authSvc.newUser(this.newUserName);
+         this.router.navigateByUrl('/showrecovery');
       } catch (err) {
          console.error(err);
          this.error = 'New user was not created, please try again';

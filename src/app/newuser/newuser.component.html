@@ -1,77 +1,61 @@
-<div *ngIf="!completed" class="newuser">
-  <mat-progress-spinner class="spinner" color="primary" mode="indeterminate"
-    [style.visibility]="showProgress ? 'visible' : 'hidden'">
-  </mat-progress-spinner>
-  <p class="header">Create A New User</p>
-  <p class="descrip">
-    Quick Crypt uses passkeys, along with your own per message password, to encrypt
-    message and help ensure that an untrusted website cannot easily
-    trick you into exposing unencrypted data. Quick Crypt associates your passkey
-    with a user name, which must be 6 to 31 character long. The user name should help
-    you remember what it is used for. An email address acceptable, but not required.
-    If needed, you can create multiple user accounts each with one or more passkeys.
-  </p>
-  <p class="descrip">
-    When you click the <b>Create new user and passkey</b> button below, you should
-    be promoted to
-    create or update a passkey on your system. If prompted, you should choose to create a new
-    passwkey. You can create a passkey using physical FIDO2 device, a mobile device,
-    a browser based password manager, or a dedicated password manager. We find that
-    dedicated password managers like Bitwarden or 1Password are the easiest to use,
-    work consistently across devices, and allow for backup.
-  </p>
-  <p *ngIf="authenticated" class="descrip">
-    You are currently signed in as <b>"{{currentUserName}}"</b>. Creating a new
-    user will first sign you out and then guided to create a passkey for the new user.
-  </p>
-  <p *ngIf="currentUserName && !authenticated" class="descrip">
-    There is an existing Quick Crypt user on this system called "{{currentUserName}}". Instead of creating a
-    new user, you can
-    <a href="javascript:void(null);" role="button" (click)="onClickSignin()">
-      sign in as <b>{{currentUserName}}</b>
-    </a>
-  </p>
-  <div>
-    <mat-form-field class="">
-      <mat-label>User Name</mat-label>
-      <input matInput type="text" [(ngModel)]="newUserName" />
-    </mat-form-field>
-    <button mat-raised-button (click)="onClickNewUser($event)" color="primary">
-      <span>Create new user and passkey</span>
-    </button>
+<div class="container">
+  <div class="content">
+    <div>
+      <mat-progress-spinner class="spinner" color="primary" mode="indeterminate"
+        [style.visibility]="showProgress ? 'visible' : 'hidden'">
+      </mat-progress-spinner>
+      <h1>Create A New User</h1>
+      <p *ngIf="authenticated">
+        You are already signed in as <b>"{{currentUserName}}"</b> and can
+        <a href="javascript:void(null);" role="button" [routerLink]="'/'">
+          encrypt and decrypt data as "{{currentUserName}}"</a>.
+        If you want to create a new user identity instead, continue on.
+      </p>
+      <p *ngIf="currentUserName && !authenticated">
+        You have an existing user called <b>"{{currentUserName}}"</b> and can
+        <a href="javascript:void(null);" role="button" (click)="onClickSignin()">
+          sign in as "{{currentUserName}}"</a>.
+        If you want to create a new user identity instead, continue on.
+      </p>
+      <p>
+        To encrypt and decrypt data, Quick Crypt uses passwords you enter along
+        with a user credential accessible only with passkeys. <span class="tip" matTooltip="You can create a passkey with a physical FIDO2
+        device, a mobile phone, a browser based password manager, or a dedicated password
+        manager. We find that dedicated password managers like Bitwarden or 1Password are
+        the easiest to use, work consistently across devices, and support backup.">
+          Passkeys</span>
+        are a modern way to prove your identity and prevent
+        identity theft without requiring personally identifying information.
+      </p>
+      <p>
+        When you enter a user name and click the <b>Create new user and passkey</b> button,
+        Quick Crypt creates a passkey and assigns it the user name you entered
+        to help you remember the passkey's purpose. You can enter any value
+        you want as long as the length is 6 to 31 characters. An email address
+        is acceptable, but not required.
+      </p>
+      <p>
+        After clicking the button below, you may be given
+        an option to either create or update a passkey on your system. If you see
+        that option, choose to create a new passwkey.
+      </p>
+      <div class="control-host">
+        <mat-form-field class="user-name">
+          <mat-label>User Name</mat-label>
+          <input matInput
+          autofocus type="text"
+          autocomplete="off"
+          data-1p-ignore
+          data-bwignore
+          data-lpignore="true"
+          data-form-type="other"
+          [(ngModel)]="newUserName" />
+        </mat-form-field>
+        <button mat-raised-button (click)="onClickNewUser($event)" color="primary">
+          <span>Create new user and passkey</span>
+        </button>
+      </div>
+      <p class="error-msg">{{error}}</p>
+    </div>
   </div>
-  <p class="error-msg">{{error}}</p>
-</div>
-<div *ngIf="completed" class="newuser">
-  <p>
-    Congratulation, you successfully created a new user and passkey. You can manage
-    credentials in the side-panel by clicking the menu button in the toolbar.
-  </p>
-  <p>
-    Before you start using Quick Crypt, there is one more <b>very important</b> task.
-    Copy the recovery link below and save it in a secure location, seperate from your
-    passkey. Never let anyone else get access to your recovery link.
-
-    If you lose your passkey in the future, this link is the only way to restore
-    access. If you lose both your passkeys and this link, you will not be able to
-    decrypt previously encypted data.
-  </p>
-  <mat-form-field class="recovery">
-    <mat-label>Recovery Link</mat-label>
-    <input matInput type="text" [value]="recoveryLink" readonly="true" name="recovery" />
-    <!--        <button matSuffix mat-icon-button aria-label="Copy" (click)="toastMessage('Link Copied to Clipboard')"
-            [cdkCopyToClipboard]="recoveryLink">-->
-    <mat-icon matSuffix aria-label="Copy" (click)="toastMessage('Link Copied to Clipboard')"
-      [cdkCopyToClipboard]="recoveryLink">
-      content_copy
-    </mat-icon>
-    <!--      </button>-->
-  </mat-form-field>
-  <br />
-  <a [routerLink]="'/'">
-    <button mat-fab extended color="primary" class="button">
-      <span class="button-label">I saved my recovery key securely</span>
-    </button>
-  </a>
-
 </div>

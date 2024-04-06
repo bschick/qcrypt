@@ -50,7 +50,10 @@ SOFTWARE. -->
 
   <span class="toolbar-spacer"></span>
   {{countdown}}
-  <button #pkButton (click)="toggleNav(sideNav)" mat-icon-button aria-label="Passkey information">
+  <button
+    [style.visibility]="showPKButton ? 'visible' : 'hidden'"
+    (click)="toggleNav(sideNav)"
+    mat-icon-button aria-label="Passkey information">
     <mat-icon>menu</mat-icon>
   </button>
 </mat-toolbar>

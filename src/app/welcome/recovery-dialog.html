@@ -23,17 +23,26 @@ SOFTWARE. -->
   <h1 mat-dialog-title class="header">Recovery Steps</h1>
 
   <div mat-dialog-content class="dialog-content">
+    <p>
+      If you have previously used Quick Crypt, locate the passkey created when
+      you first sign in. Your passkey may be derived from a physical key,
+      mobile device, or password manager like Bitwarden or 1Password. To sign in again
+      you need to present that same passkey on this system. If you no longer have your passkey,
+      follow the recovery steps below.
+    </p>
+
     <ol class="steps" type="1">
-      <li>Locate the <b>recovery link</b> that was provided to you when you created your user 
-        identity and first passkey or that you copied from the credentials side panel</li>
+      <li>Locate the <b>recovery link</b> that was provided when you created your user
+        identity and first passkey. You may have also copied the recovery link from
+        the credentials side panel</li>
       <li>Paste that link into your browser's address bar and hit enter</li>
     </ol>
     <p>
-      If you have lost both your Quick Crypt passkeys and recovery link, there is no way to regain
-      access to your existing user identity or decrypt data that you previously encrypted. 
-      To encrypt and decrypt more data, you can create a new Quick Crypt user. If you locate
-      your recovery link leter, you can use it anytime to regain acccess to your original
-      user identity.
+      If you lost both your Quick Crypt passkeys and recovery link, there is no way to regain
+      access to your existing user identity to decrypt data that you previously encrypted.
+      To encrypt and decrypt new data, you can create a new Quick Crypt user. If you find
+      your original recovery link or passkey later, you can use either to regain
+      acccess to your original user identity anytime.
     </p>
 
     <!--last so it doesn't get focus-->

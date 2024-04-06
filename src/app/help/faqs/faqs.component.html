@@ -4,7 +4,74 @@
 
     <ul>
       <li>Who can decrypt the data I encypt with Quick Crypt?</li>
-      <li>Does Quick Crypt save the passwords I used to encrypt data?</li>
+      <li>Does Quick Crypt store or process any Personal Identifiable Information (PII)?</li>
+      <p>
+        Quick Crypt does not collect or request PII. When you enter a user name or a
+        passkey description, you may use whatever values you choice. It is best to not use
+        PII for those values, but even if you decide to use something like an email address
+        as a user name, Quick Crypt treats that as an opaque value and will not contact
+        you. If you change your user name or passkey descriptions, the previous values are
+        not stored.
+      </p>
+      <li>What information does Quick Crypt store and where is it kept?</li>
+      <table class="tg">
+        <thead>
+          <tr>
+            <th class="tg-fymr">What Information</th>
+            <th class="tg-fymr">Stored Where</th>
+            <th class="tg-fymr">Removal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="tg-0pky">Clear text data or encrypted cipher armor</td>
+            <td class="tg-0pky">Not stored</td>
+            <td class="tg-0pky">Only present in browser edit fields.
+              Close your browser tab, navigate away, or clear the fields to remove</td>
+          </tr>
+          <tr>
+            <td class="tg-0pky">Passwords and hint used for encryption and decryption</td>
+            <td class="tg-0pky">Never stored, optionally cached</td>
+            <td class="tg-0pky">When password caching is enabled within "Advanced Encryption Options," the last
+              entered password is cached in browser memory. Click the "Forget Pwd" button to remove.</td>
+          </tr>
+          <tr>
+            <td class="tg-0pky">Encryption and decryption preferences such as the symmetric cipher </td>
+            <td class="tg-0pky">Browser local storage on your system</td>
+            <td class="tg-0pky">Within the "Advanced Encryption Options" section on the encryption page, click the
+              "Reset to Defaults" button<br> </td>
+          </tr>
+          <tr>
+            <td class="tg-0pky">Last user name and user id signed into Quick Crypt</td>
+            <td class="tg-0pky">Browser local storage on your system</td>
+            <td class="tg-0pky">Within the side panel that shows passkeys, click the "Sign Out" button then click the
+              "Sign in as a different user" button</td>
+          </tr>
+          <tr>
+            <td class="tg-0pky">Currently signed in user name and credential</td>
+            <td class="tg-0pky">Browser sessions storage on your system</td>
+            <td class="tg-0pky">Close the Quick Crypt tab in your browser or just navigate to another website</td>
+          </tr>
+          <tr>
+            <td class="tg-0pky">Public key portions of each passkey</td>
+            <td class="tg-0pky">Server side storage in AWS DynamoDB</td>
+            <td class="tg-0pky">Within the side panel that shows passkeys, click the the trash can icon for the passkey
+              you want to remove</td>
+          </tr>
+          <tr>
+            <td class="tg-0pky">User name, id, and credential associated with public key portions of passkeys</td>
+            <td class="tg-0pky">Server side storage in AWS DynamoDB</td>
+            <td class="tg-0pky">Within the side panel that shows passkeys, delete all passkeys. This will cause removal
+              of all server side data (passkeys and user name)</td>
+          </tr>
+        </tbody>
+      </table>
+      <li>Does Quick Crypt store the passwords I used to encrypt data?</li>
+      <p>
+        No. See the question about what information is stored where for
+        more detail.
+      </p>
+
       <li>What should I do if I forget the password I used to encrypt data?</li>
       <li>What should I do if I lose my passkey but have my recovery link?</li>
       <li>What happens if lose recovery link but have one or more passkeys?</li>
@@ -48,22 +115,32 @@
       <li>How should I chose which cipher mode to use?</li>
       <p>
         First, Quick Crypt provides only widely used, well documented, and trusted
-        <a href="https://en.wikipedia.org/wiki/Authenticated_encryption" target="_blank">AEAD authenticated encryption</a>
-          modes.
-          AEAD ciphers provide both privacy and authenticity. None are known to be broken, even by governments, although
-          that is of course hard to
-          know. All are currently safe, and selecting which mode to use depends on your criteria.
-          If you want the "safest" mode, the <a href="https://doc.libsodium.org/secret-key_cryptography/aead"
-            target="_blank">libsodium project recommends</a> first <b>AEGIS 256</b>, then <b>XChaCha20 Poly1305</b>, and
-          <b>AES 256 GCM</b> last
-          If you want a mode implemented by your browser vendor, use <b>AES 256 GCM</b>
-          If you want a mode not implemented by your browser vendor, use <b>XChaCha20 Poly1305</b> or <b>AEGIS 256</b>
-          which are from the well known open source <a href="https://doc.libsodium.org/" target="_blank">libsodium
-            project</a>
-          If you really don't trust your browser vendor, you probably shouldn't use Quick Crypt at all
-          If you want the most recently developed mode, use <b>AEGIS 256</b>
-          If you want the most established (and studied) mode, use <b>AES 256 GCM</b> which is at the core of TLS 1.3
-          If you want the smallest cipher text (by only 16 character), use <b>AES 256 GCM</b>
+        <a href="https://en.wikipedia.org/wiki/Authenticated_encryption" target="_blank">AEAD authenticated
+          encryption</a>
+        modes.
+        AEAD ciphers provide both privacy and authenticity. None are known to be broken, even by governments, although
+        that is of course hard to
+        know. All are currently safe, and selecting which mode to use depends on your criteria.
+        If you want the "safest" mode, the <a href="https://doc.libsodium.org/secret-key_cryptography/aead"
+          target="_blank">libsodium project recommends</a> first <b>AEGIS 256</b>, then <b>XChaCha20 Poly1305</b>, and
+        <b>AES 256 GCM</b> last
+        If you want a mode implemented by your browser vendor, use <b>AES 256 GCM</b>
+        If you want a mode not implemented by your browser vendor, use <b>XChaCha20 Poly1305</b> or <b>AEGIS 256</b>
+        which are from the well known open source <a href="https://doc.libsodium.org/" target="_blank">libsodium
+          project</a>
+        If you really don't trust your browser vendor, you probably shouldn't use Quick Crypt at all
+        If you want the most recently developed mode, use <b>AEGIS 256</b>
+        If you want the most established (and studied) mode, use <b>AES 256 GCM</b> which is at the core of TLS 1.3
+        If you want the smallest cipher text (by only 16 character), use <b>AES 256 GCM</b>
+      </p>
+      <li>Why ise XChaCha20 provided rather than ChaCha20?</li>
+      <p>
+        Quick Crypt uses random nonce values for cipher initialization vectors and XChaCha20 is the safest
+        cipher to use with random nonce values. XChaCha20 also allows for virtually unlimited single messages
+        size, while the IETF ChaCha20 is limited to 256 GiB. Given that Quick Crypt never intentionally
+        reuses cipher keys and that 256 GiB is larger than a browser would handle, however, ChaCha20 would
+        be suitable as well. IETF ChaCha20's one advantage is standadization, but since interoperabilty
+        with other tools was not a Quick Crypt goal, XChaCha20 was selected as a better overall cipher mode.
       </p>
 
       <li>Can I used Quick Crypt with text or binary files?</li>

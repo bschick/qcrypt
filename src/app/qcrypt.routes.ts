@@ -22,18 +22,21 @@ SOFTWARE. */
 import { Routes } from '@angular/router';
 import { CoreComponent } from './core/core.component';
 import { WelcomeComponent } from './welcome/welcome.component';
-import { RecoveryComponent } from './recovery/recovery.component';
 import { NewUserComponent } from './newuser/newuser.component';
+import { ShowRecoveryComponent } from './showrecovery/showrecovery.component';
+import { RecoveryComponent } from './recovery/recovery.component';
 import { OverviewComponent } from './help/overview/overview.component';
 import { FaqsComponent } from './help/faqs/faqs.component';
 import { ProtocolComponent } from './help/protocol/protocol.component';
 import { coreGuard } from './core/core.guard';
 import { welcomeGuard } from './welcome/welcome.guard';
+import { showRecoveryGuard } from './showrecovery/showrecovery.guard';
 
 export const routes: Routes = [
    { path: 'welcome', component: WelcomeComponent, canActivate: [welcomeGuard] },
-   { path: 'recovery', component: RecoveryComponent },
    { path: 'newuser', component: NewUserComponent },
+   { path: 'showrecovery', component: ShowRecoveryComponent, canActivate: [showRecoveryGuard] },
+   { path: 'recovery', component: RecoveryComponent },
    { path: 'help/overview', component: OverviewComponent },
    { path: 'help/faqs', component: FaqsComponent },
    { path: 'help/protocol', component: ProtocolComponent },

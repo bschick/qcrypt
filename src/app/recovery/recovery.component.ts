@@ -19,14 +19,13 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 export class RecoveryComponent implements OnInit {
 
    public validRecoveryLink = true;
-   public badlink = '';
    public error = '';
    public showProgress = false;
    public authenticated = false;
    public selfRecovery = false;
    public currentUserName: string | null = null;
-   private userId: string | null = null;
-   private userCred: string | null = null;
+   private recoveryUserId: string | null = null;
+   private recoverUserCred: string | null = null;
 
    constructor(
       private authSvc: AuthenticatorService,
@@ -35,15 +34,15 @@ export class RecoveryComponent implements OnInit {
    }
 
    ngOnInit() {
-      this.userId = this.activeRoute.snapshot.queryParamMap.get('userid');
-      this.userCred = this.activeRoute.snapshot.queryParamMap.get('usercred');
-      if (!this.userId || !this.userCred) {
-         this.badlink = 'userid or usercred is missing';
+      this.recoveryUserId = this.activeRoute.snapshot.queryParamMap.get('userid');
+      this.recoverUserCred = this.activeRoute.snapshot.queryParamMap.get('usercred');
+      if (!this.recoveryUserId || !this.recoverUserCred) {
+         this.error = 'userid or usercred is missing';
          this.validRecoveryLink = false;
       }
       this.authenticated = this.authSvc.isAuthenticated();
       if (this.authenticated) {
-         this.selfRecovery = this.userCred === this.authSvc.userCred;
+         this.selfRecovery = this.recoverUserCred === this.authSvc.userCred;
       }
       const [userId, userName] = this.authSvc.getUserInfo();
       if (userId && userName) {
@@ -68,16 +67,14 @@ export class RecoveryComponent implements OnInit {
    async onClickStartRecovery(event: any) {
       try {
          this.showProgress = true;
-         this.authSvc.forgetUserInfo();
-         await this.authSvc.recover(this.userId!, this.userCred!);
+         await this.authSvc.recover(this.recoveryUserId!, this.recoverUserCred!);
          this.router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
          if (err instanceof Error) {
-            this.badlink = err.message ?? err.name;
+            this.error = err.message ?? err.name;
          }
-         this.validRecoveryLink = false;
-      } finally {
+     } finally {
          this.showProgress = false;
       }
    }
