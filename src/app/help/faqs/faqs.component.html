@@ -1,8 +1,67 @@
 <div class="container">
-  <div class="content">
+  <div class="content faq">
     <h1>Frequently Asked Questions</h1>
 
+    <div class="control-host">
+    <mat-form-field class="filter">
+      <input matInput autofocus type="text" placeholder="search" (keyup)="applyFilter($event)" #filterInput>
+      <mat-icon matSuffix aria-label="Clear" (click)="filterInput.value = ''; applyFilter($event)">
+        clear
+      </mat-icon>
+    </mat-form-field>
+    <button mat-icon-button aria-label="Expand Answers" (click)="onToggleExpand()">
+      <mat-icon [fontIcon]="allExpanded ? 'unfold_less' : 'unfold_more'"></mat-icon>
+    </button>
+    </div>
+    <table mat-table [dataSource]="dataSource" multiTemplateDataRows class="mat-elevation-z0">
+      <!-- Position Column -->
+      <ng-container matColumnDef="position">
+        <th mat-header-cell *matHeaderCellDef> No. </th>
+        <td mat-cell *matCellDef="let element"> {{element.position}}. </td>
+      </ng-container>
+
+      <!-- Question Column -->
+      <ng-container matColumnDef="question">
+        <th mat-header-cell *matHeaderCellDef> Question </th>
+        <td mat-cell *matCellDef="let element"> {{element.question}} </td>
+      </ng-container>
+
+      <!-- Expanded Content Column - The answer row is made up of this one column that spans across all columns -->
+      <ng-container matColumnDef="expandedDetail">
+        <td mat-cell *matCellDef="let element" colspan="2">
+          <div class="element-detail"
+            [@detailExpand]="expandedPositions.includes(element.position) ? 'expanded' : 'collapsed'">
+            <div class="element-answer" [innerHTML]="element.answer">
+            </div>
+          </div>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let element; columns: displayedColumns;" class="element-row"
+        [class.expanded-row]="expandedPositions.includes(element.position)" (click)="addOrRemove(element.position)">
+      </tr>
+      <tr mat-row *matRowDef="let row; columns: ['expandedDetail']" class="detail-row"></tr>
+
+      <!-- Row shown when there is no matching data. -->
+      <tr class="mat-row" *matNoDataRow>
+        <td class="mat-cell" colspan="2">No data matching the filter "{{filterInput.value}}"</td>
+      </tr>
+    </table>
+
+
     <ul>
+      <!--duplicate or not answering-->
+      <li>What happens if lose recovery link but have one or more passkeys?</li>
+      <li>Why do I need a passkey to use Quick Crypt?</li>
+      <li>What does Quick Crypt know and track about me?</li>
+      <li>Does Quick Crypt track my identity or contact information?</li>
+      <li>Can I trust the 3rd party liibraries used by Quick Crypte?</li>
+      <p>Bundled rather than downloaded
+        All open source, actively developed, widely used packages
+      </p>
+
+
       <li>Who can decrypt the data I encypt with Quick Crypt?</li>
       <li>Does Quick Crypt store or process any Personal Identifiable Information (PII)?</li>
       <p>
@@ -74,13 +133,13 @@
 
       <li>What should I do if I forget the password I used to encrypt data?</li>
       <li>What should I do if I lose my passkey but have my recovery link?</li>
-      <li>What happens if lose recovery link but have one or more passkeys?</li>
       <li>What happens if lose my passkeys and recovery link?</li>
-      <li>What should I do if I expose the password I used to someone I don't trust?</li>
-      <li>What should I do if I expose my recovery link to someone I don't trust?</li>
-      <li>What should I do if I expose my password and recovery link to someone I don't trust?</li>
+      <li>What should I do if someone I don't trust obtains a password I used for encryption?</li>
+      <li>What should I do if someone I don't trust obtains my recovery link or passkey?</li>
+      <li>What should I do if someone I don't trust obtains my recovery link or passkey and password I used for encryption?</li>
+      <li>Can I used Quick Crypt without entering encryption passwords?</li>
       <li>Is my password hint encrypted?</li>
-      <li>Hash thread modeling been done for Quick Crypt?</li>
+      <li>Has thread modeling been done for Quick Crypt?</li>
       <p>Only informally:
         Coding Errors
         Stolen Passkeys
@@ -112,6 +171,7 @@
           target="_blank">sign()</a> and <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/verify"
           target="_blank">verify()</a>
       </p>
+
       <li>How should I chose which cipher mode to use?</li>
       <p>
         First, Quick Crypt provides only widely used, well documented, and trusted
@@ -142,19 +202,17 @@
         be suitable as well. IETF ChaCha20's one advantage is standadization, but since interoperabilty
         with other tools was not a Quick Crypt goal, XChaCha20 was selected as a better overall cipher mode.
       </p>
-
       <li>Can I used Quick Crypt with text or binary files?</li>
       <li>Can I decrypt my data if Quick Crypt goes away?</li>
       <li>Can Quick Crypt decrypt cipher text encypted with other tools?</li>
-      <li>Why do I need a passkey to use Quick Crypt?</li>
       <li>Is the 'link' Cipher Armor format secure?</li>
-      <li>What does Quick Crypt know and track about me?</li>
       <p>Quick Crypt never asks for Personal Identifiable Information (PII). To prevent impersonation
         by untrusted site that could try to trick you into exposing clear text data, Quick Crypt
         uses passkeys. To help you track the passkey Quick Crypt asks for a user name, but that can
         can be any value you want. Your use name does not need to be an email address and serves
         only to help you associate that passkey with Quick Crypt.
       </p>
+
       <li>Can I have more than one user account or passkey?</li>
       <p>Yes to both. Once signed in, you can create additional passkeys from the slide out
         panel opened with the 3-line button in the toolbar. From the slide out panel you can also
@@ -168,7 +226,7 @@
         information about the passkey from the Quick Crypt server. To delete the
         actual passkey, you must use your own passkey managment tool.
       </p>
-      <li>How do I remove my user identity entirely?</li>
+      <li>How do I delete my Quick Crypt user identity entirely?</li>
       <p>Once signed in, delete all passkeys references from the slide out
         panel opened with the 3-line button in the toolbar. When you delete the
         last passkey reference, your user identity will also be removed from the
@@ -177,9 +235,8 @@
         This is not reversable, even with the recovery link. Remember to also delete
         the actual passkeys using your own passkey managment tool.
       </p>
-
       <li>I have read web applications should not be trusted for encryption</li>
-      <li>Does Quick Crypt track my identity or contact information?</li>
+
       <li>Can I used Quick Crypt to send encrypted information to other people?</li>
       <p>Quick Crypt was design for encytpion, storage, and decryption of your own data rather
         than for sharing of secure data. Data can only be decrypted by someone
@@ -187,10 +244,6 @@
         Passkeys are not designed for sharing, they certainly could be shared. So although
         not design for secret sharing, you can accomplish that by exporing a passkey
         from your passkey managment tool and sharing that with your intended recipient.
-      </p>
-      <li>Can I trust the 3rd party liibraries used by Quick Crypte?</li>
-      <p>Bundled rather than downloaded
-        All open source, actively developed, widely used packages
       </p>
 
     </ul>
