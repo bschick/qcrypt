@@ -74,6 +74,8 @@ type Context = {
 type EncContext = Context & {
    alg: string;
    ic: number;
+   ctFormat: string;
+   reminder: boolean;
    trueRand: boolean;
    fallbackRand: boolean;
 };
@@ -148,6 +150,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    private spinnerAbove: number = 1500000; // Default since benchmark is async
    private actionStart: number = 0;
    private authSub!: Subscription;
+   private lastReminder: boolean = true;
    public cacheTimeout!: DateTime;
    public icountMin: number = cs.ICOUNT_MIN;
    public icountMax: number = cs.ICOUNT_MAX; // Default since benchmark is async
@@ -180,11 +183,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    public hidePwd = true;
    public cacheTime = 0;
    public minPwdStrength = '3';
-   public ctFormat = 'link';
+   public ctFormat = 'compact';
    public loops = 1;
    public checkPwned = false;
-   public trueRandom = false;
-   public pseudoRandom = true;
+   public reminder = true;
+   public trueRand = false;
+   public pseudoRand = true;
 
    constructor(
       private authSvc: AuthenticatorService,
@@ -254,15 +258,22 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   setTrueRandom(trand: string | null): void {
-      setIfBoolean(trand, (bool) => {
-         this.trueRandom = bool;
+   setReminder(reminder: string | null): void {
+      setIfBoolean(reminder, (bool) => {
+         this.reminder = bool;
+         this.lastReminder = bool;
       });
    }
 
-   setPseudoRandom(prand: string | null): void {
+   setTrueRand(trand: string | null): void {
+      setIfBoolean(trand, (bool) => {
+         this.trueRand = bool;
+      });
+   }
+
+   setPseudoRand(prand: string | null): void {
       setIfBoolean(prand, (bool) => {
-         this.pseudoRandom = bool;
+         this.pseudoRand = bool;
       });
    }
 
@@ -344,8 +355,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.setMinPwdStrength(this.lsGet('minpwdstrength'));
          this.setLoops(this.lsGet('loops'));
          this.setCTFormat(this.lsGet('ctformat'));
-         this.setTrueRandom(this.lsGet('trand'));
-         this.setPseudoRandom(this.lsGet('prand'));
+         this.setReminder(this.lsGet('reminder'));
+         this.setTrueRand(this.lsGet('trand'));
+         this.setPseudoRand(this.lsGet('prand'));
 
          let params = new HttpParams({ fromString: window.location.search });
 
@@ -372,8 +384,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.setMinPwdStrength(params.get('minpwdstrength'));
          this.setLoops(params.get('loops'));
          this.setCTFormat(params.get('ctformat'));
-         this.setTrueRandom(params.get('trand'));
-         this.setPseudoRandom(params.get('prand'));
+         this.setReminder(params.get('reminder'));
+         this.setTrueRand(params.get('trand'));
+         this.setPseudoRand(params.get('prand'));
          this.optionsLoaded = true;
       }
    }
@@ -426,9 +439,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.minPwdStrength = '3';
       this.checkPwned = false;
       this.loops = 1;
-      this.ctFormat = 'link';
-      this.trueRandom = false;
-      this.pseudoRandom = true;
+      this.ctFormat = 'compact';
+      this.reminder = true;
+      this.lastReminder = true;
+      this.trueRand = false;
+      this.pseudoRand = true;
 
       // clearCaches calls saveOptions, so nuke after
       this.clearCaches();
@@ -447,8 +462,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.lsSet('minpwdstrength', this.minPwdStrength);
             this.lsSet('loops', this.loops.toString());
             this.lsSet('ctformat', this.ctFormat.toString());
-            this.lsSet('trand', this.trueRandom.toString());
-            this.lsSet('prand', this.pseudoRandom.toString());
+            this.lsSet('reminder', this.reminder.toString());
+            this.lsSet('trand', this.trueRand.toString());
+            this.lsSet('prand', this.pseudoRand.toString());
          }
       } catch (err) {
          console.error(err);
@@ -609,14 +625,13 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.bubbleTip2.hide();
       }
 
+      const savedClearText = this.clearText;
       try {
          if (!this.authSvc.isAuthenticated()) {
             throw new Error('User not authenticated, try refreshing this page')
          }
 
          this.authSvc.activity();
-
-         const savedClearText = this.clearText;
 
          this.loops = Math.min(
             Math.max(1, Number(this.loops) ? Number(this.loops) : 0),
@@ -638,8 +653,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             alg: this.algorithm,
             ic: this.icount,
             userCred: cs.base64ToBytes(this.authSvc.userCred!),
-            trueRand: this.trueRandom,
-            fallbackRand: this.pseudoRandom
+            ctFormat: this.ctFormat,
+            reminder: this.reminder,
+            trueRand: this.trueRand,
+            fallbackRand: this.pseudoRand
          };
 
          const completed = await this.makeCipherArmor(econtext);
@@ -654,8 +671,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             }
          }
 
-         // After > 1 loop, its confusing to leave intermediate stuff
-         this.clearText = savedClearText;
          if (completed && !this.stuffCached) {
             this.onClearClear();
          }
@@ -666,6 +681,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          }
       } finally {
          this.showProgress = false;
+         // After > 1 loop, its confusing to leave intermediate stuff
+         this.clearText = savedClearText;
       }
    }
 
@@ -684,17 +701,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             clear: clearBytes
          }
 
-         const encryptedBytes = await this.cipherSvc.encrypt(
+         const encrypted = await this.cipherSvc.encrypt(
             eparams, this.cipherReadyNotice.bind(this)
          );
 
          econtext.lp += 1;
-
-         const dcontext: DecContext = {
-            ct: encryptedBytes,
-            ...econtext,
-         };
-         this.showCipherArmorAndTime(this.getCipherArmorFrom(dcontext));
+         this.showCipherArmorAndTime(this.getCipherArmorFor(encrypted, econtext));
 
          if (econtext.lp < econtext.lpEnd) {
             this.clearCaches();
@@ -720,14 +732,13 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          return;
       }
 
+      const savedCipherArmor = this.cipherArmor;
       try {
          if (!this.authSvc.isAuthenticated()) {
             throw new Error('User not authenticated, try refreshing this page')
          }
 
          this.authSvc.activity();
-
-         const savedCipherArmor = this.cipherArmor;
 
          const dcontext = this.getDecContextFrom(this.cipherArmor);
          if (dcontext.lpEnd! > 1) {
@@ -739,9 +750,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          // This updates Cipher Armor UI field
          await this.makeClearText(dcontext);
 
-         // In case > 1 loops, tbere is intermediate stuff in cipherArmor
-         this.cipherArmor = savedCipherArmor;
-
       } catch (something) {
          console.error(something);
          if (something instanceof Error) {
@@ -751,6 +759,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          }
       } finally {
          this.showProgress = false;
+         // In case > 1 loops, tbere is intermediate stuff in cipherArmor
+         this.cipherArmor = savedCipherArmor;
       }
    }
 
@@ -815,22 +825,25 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.clearLabel = 'Clear Text ' + tookMsg;
    }
 
-   getCipherArmorFrom(dcontext: DecContext): string {
+   getCipherArmorFor(ct: string, econtext: EncContext): string {
       // Rebuild object to control ordering (better way to do this?)
       let result: { [key: string]: string | number } = {};
-      result['ct'] = dcontext.ct;
+      result['ct'] = ct;
 
       // To reduce CT size, only include this extra stuff at the
       // outer most loop
-      if (dcontext.lp == dcontext.lpEnd) {
-         if (dcontext.lp > 1) {
-            result['lps'] = dcontext.lpEnd;
+      if (econtext.lp == econtext.lpEnd) {
+         if (econtext.lp > 1) {
+            result['lps'] = econtext.lpEnd;
          }
 
-         if (this.ctFormat == 'link') {
+         if (econtext.ctFormat == 'link') {
             const ctParam = encodeURIComponent(JSON.stringify(result));
             return 'https://' + location.host + '?cipherarmor=' + ctParam;
          } else {
+            if(econtext.reminder) {
+               result['reminder'] = 'decrypt with quick crypt';
+            }
             const space = this.ctFormat == 'indent' ? 3 : 0;
             return JSON.stringify(result, null, space);
          }
@@ -943,20 +956,53 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       });
    }
 
-   onFormatChange(selected?: string) {
-      let dcontext = this.getDecContextFrom(this.cipherArmor);
-      // make it the "last loop" so we get the full cipher armor
-      dcontext.lp = dcontext.lpEnd;
-      this.cipherArmor = this.getCipherArmorFrom(dcontext);
-      this.lsSet('ctformat', this.ctFormat.toString());
+   onReminderChange() {
+      this.lastReminder = this.reminder;
+      this.lsSet('reminder', this.reminder.toString());
+      this.reformatCipherArmor();
    }
 
-   onTrueRandomChanged(checked: boolean) {
+   onFormatChange(selected?: string) {
+      if(selected == 'link') {
+         this.lastReminder = this.reminder;
+         this.reminder = false;
+      } else {
+         this.reminder = this.lastReminder;
+      }
+      this.lsSet('ctformat', this.ctFormat.toString());
+      this.reformatCipherArmor();
+   }
+
+   reformatCipherArmor() {
+      if(this.cipherArmor) {
+         try {
+            let dcontext = this.getDecContextFrom(this.cipherArmor);
+            // make it the "last loop" so we get the full cipher armor
+            let econtext: EncContext = {
+               ...dcontext,
+               lp: dcontext.lpEnd,
+               ctFormat: this.ctFormat,
+               reminder: this.reminder,
+               // Improve this at some point, the following values are required,
+               // by EncContext not used by getCipherArmorFor
+               alg: this.algorithm,
+               ic: this.icount,
+               trueRand: this.trueRand,
+               fallbackRand: this.pseudoRand
+            };
+
+            this.cipherArmor = this.getCipherArmorFor(dcontext.ct, econtext);
+         } catch(err) {
+         }
+      }
+   }
+
+   onTrueRandChanged(checked: boolean) {
       if (!checked) {
-         this.pseudoRandom = true;
+         this.pseudoRand = true;
       }
       this.clearCaches();
-      this.lsSet('trand', this.trueRandom.toString());
+      this.lsSet('trand', this.trueRand.toString());
    }
 
    onClickFileUpload(event: any) {
