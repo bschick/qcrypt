@@ -1,21 +1,27 @@
 <div class="container">
   <div class="content">
     <h1>Protocol Description</h1>
-    <p>Quick Crypt follows the protocols described below to encrypt, validate,
-      and decrypt data. It is provided to help you understand how Quick Crypt works and
-      allow you to make your own assessment of strength and trustwothiness. If you
-      believe the protocol could be improved, please
+    <p>Quick Crypt follows the protocols below to encrypt, validate, and decrypt data.
+      This information is provided to help you understand how Quick Crypt works and
+      allow you to make your own assessment of its strength and trustworthiness.
+      If you believe the protocols can be improved, please
       <a href="https://github.com/bschick/qcrypt/issues">
         file a ticket.
       </a>
     </p>
     <p>
-      Quick Crypt uses WebAuthn to create and authenticate user
+      Quick Crypt uses WebAuthn (<span class="tip" matTooltip="You can create a
+      passkey from a physical FIDO2
+      device, a mobile phone, a browser based password manager, or a dedicated password
+      manager. Dedicated password managers like Bitwarden and 1Password are
+      the easiest to use, work consistently across devices, and support backup.">Passkeys</span>)
+      to create and authenticate user
       identities. Since this is a standard protocol described in detail elsewhere,
-      include the
+      including the
       <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API">
-        mozilla developer network</a>, webauthn is described only at a high level
-      to show how user ids and user credentials are created and retrieved for use in
+        Mozilla developer network</a>,
+      webauthn is described only at a high level
+      to illustrate how user IDs and credentials are created and retrieved for
       cryptographic functions.
     </p>
     <h2>Agents</h2>

@@ -1,68 +1,67 @@
 <div class="container">
   <div class="content">
-    <h1>Quick Crypt: <i>Easy, Trustworthy Personal Encyption</i></h1>
-
-    <p>Quick Crypt was created to make it safe and convientent for you to encrypt sensitive data
-      for storage in potentially insecure locations.
-      For example, storing confidential information in note taking applications, planning tools, or other
-      unencrypted locations is convenient but risky. The creator of Quick Crypt wanted
-      to store sensitve information in a note taking application and not be limited
-      to the few tools that provide end-to-end encryption. Even systems that support
-      encryption often do not define their protocols, making them hard to trust.
-      Installable opensource encryptions tools are an option, but they tend to be tedious to use
-      and remember. Good encryption that you don't use isn't all that good in the end.</p>
-
-    <p>Thus Quick Crypt: A small-batch text focused cipher tool designed to be Trustworthy,
-      Convenient, and Easy to Use. Quick Crypt encrypts and decrypts using modern
-      cryptographic features supported by current browsers to ensure that
-      your password and senstive data <b>do not unexpectedly traverse the internet.</b> After
-      loading Quick Crypt, you could disable all network access and continue encrypting
-      and decypting data.
-      Quick Crypted uses AEAD ciphers with a password you supply and a credential secured by
-      passkeys to provide privacy, authenticiy, and man-in-the-middle or site forgery
-      protection.</p>
-
-    <p>Quick Crypt was designed to protect data that you want to store in a location that is
-      not fully trusted or secured, and to make it easy to decrypt
-      that data without needing to remember or install complicated tools. Quick Crypt
-      cipher armor output can link directly to the decryption page, so you only need
-      your Passkey and the password you used for encyption. Fully understanding how Quick Crypt
-      works is not necessary to use it, but if you are interested
-      the <a [routerLink]="'/help/protocol'">protocol is documented</a> and the
-      <a href="https://github.com/bschick/qcrypt" target="_blank">code is opensource</a> under the
-      MIT license. Bug reports and pull requests are welcome.
+    <h1>Quick Crypt: <i>Easy, Trustworthy Personal Encryption</i></h1>
+    <p>We created Quick Crypt to make it safe and convenient to encrypt sensitive
+      data you want to store in insecure locations. Storing confidential
+      information in note taking applications, planning services, or similar tools
+      is convenient but risky. Quick Crypt's primary author wanted to store sensitive
+      information in a note taking application and not be limited to the few services
+      that provide end-to-end encryption. Even services that offer limited encryption
+      typically do not define their protocols, making them hard to trust. Installable
+      open-source encryption tools are powerful, but tedious to use and remember.
+      Strong encryption that you don't use isn't all that good in the end..
+    </p>
+    <p>Thus, Quick Crypt is a small-batch text-focused cipher tool designed to be
+      easy to use, trustworthy, and convenient. It encrypts and decrypts data using
+      cryptographic features built into modern browsers to ensure your <b>unencrypted
+      data never leaves your system</b>. After sign-in, Quick Crypt continues to work
+      even with all network access disabled. AEAD ciphers, passwords
+      you supply, and passkey-protected credentials deliver privacy, authenticity,
+      and website forgery protection.
+    </p>
+    <p>We designed Quick Crypt to make it easy to encrypt data and to decrypt that
+      data days or years later without needing to remember or install complicated
+      tools. Quick Crypt's cipher armor format provides an optional reminder or
+      link to the decryption page, so you only need to remember the password you
+      used for encryption and have your passkey. Understanding how Quick Crypt
+      works is optional, but if you are interested, the
+      <a [routerLink]="'/help/protocol'">protocols are documented</a>
+      and the <a href="https://github.com/bschick/qcrypt" target="_blank">code
+      is open-source</a> under the MIT license. Bug reports and pull requests are
+      welcome.
     </p>
 
     <h2>Design Goals</h2>
     <ul>
-      <li>Unencrypted data and passwords do not leave the browser</li>
       <li>Easy to use and hard to screw up</li>
-      <li>Customizable encryption options constrained to values known to be strong</li>
-      <li>Implementation follows current cryptographic best practices</li>
-      <li>Convienient browser based "app" that works across modern devices</li>
-      <li>After sign in, work fully offline</li>
-      <li>Use the strongest web-app security practices (csp, strong cert, sri, hsts, xfo, etc..)</li>
-      <li>Opensource for peer review</li>
-      <li>Well specificed protocols</li>
+      <li>Nothing to install and works on most devices</li>
+      <li>Unencrypted data and passwords never leave your system</li>
+      <li>Encryption options constrained to secure values</li>
+      <li>Follows current cryptographic best practices</li>
+      <li><a [routerLink]="'/help/protocol'">Well defined and documented protocols</a></li>
+      <li>After sign-in, should work fully offline</li>
+      <li>Use the latest web security protocols (csp, cors, sri, hsts, xfo, etc.)</li>
+      <li>Open-source for peer review</li>
       <li>No adverts or trackers</li>
+      <li>No PII intentionally collected</li>
     </ul>
 
     <h2>Bundled Javascript Libraries</h2>
     <ul>
-      <li><a href="https://angular.io/">angular</a></li>
-      <li><a href="https://simplewebauthn.dev/">simplewebauthn</a></li>
-      <li><a href="https://github.com/jedisct1/libsodium.js">libsodium.js</a></li>
-      <li><a href="https://rxjs.dev/">rxjs</a></li>
-      <li><a href="https://github.com/microsoft/tslib">tslib</a></li>
-      <li><a href="https://moment.github.io/luxon/">luxon</a></li>
-      <li><a href="https://zxcvbn-ts.github.io/zxcvbn/">zxcvbn-ts</a></li>
-      <li><a href="https://github.com/antoantonyk/password-strength-meter">angular-password-strength-meter</a></li>
+      <li><a href="https://angular.io/" target="_blank">angular</a></li>
+      <li><a href="https://simplewebauthn.dev/" target="_blank">simplewebauthn</a></li>
+      <li><a href="https://github.com/jedisct1/libsodium.js" target="_blank">libsodium.js</a></li>
+      <li><a href="https://rxjs.dev/" target="_blank">rxjs</a></li>
+      <li><a href="https://github.com/microsoft/tslib" target="_blank">tslib</a></li>
+      <li><a href="https://moment.github.io/luxon/" target="_blank">luxon</a></li>
+      <li><a href="https://zxcvbn-ts.github.io/zxcvbn/" target="_blank">zxcvbn-ts</a></li>
+      <li><a href="https://github.com/antoantonyk/password-strength-meter" target="_blank">angular-password-strength-meter</a></li>
     </ul>
 
     <h2>Optional External Dependencies</h2>
     <ul>
-      <li><a href="https://www.random.org/bytes/">random.org</a></li>
-      <li><a href="https://haveibeenpwned.com/API/v2">haveibeenpwned.com</a></li>
+      <li><a href="https://www.random.org/bytes/" target="_blank">random.org</a></li>
+      <li><a href="https://haveibeenpwned.com/API/v2" target="_blank">haveibeenpwned.com</a></li>
     </ul>
   </div>
 </div>
