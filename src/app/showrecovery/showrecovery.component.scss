@@ -1,20 +1,22 @@
 @use "../common.scss";
+@use '@angular/material' as mat;
 
 
 .control-host {
   margin-top: 50px;
   display: flex;
   align-items: start;
-  justify-content: center;
+  width: 100%;
+  justify-content: space-evenly;
 
   .recovery {
-    width: 100%;
+    width:300px;
+    @include mat.form-field-density(-1);
   }
 
   button {
     height: 45px;
     width: 280px;
-    margin-top: 5px;
-    margin-left: 50px;
+    margin-top: 3px;
   }
 }

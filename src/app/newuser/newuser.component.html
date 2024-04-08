@@ -18,31 +18,31 @@
         If you want to create a new user identity instead, continue on.
       </p>
       <p>
+
         To encrypt and decrypt data, Quick Crypt uses passwords you enter along
-        with a user credential accessible only with passkeys. <span class="tip" matTooltip="You can create a passkey with a physical FIDO2
+        with a user credential accessible only with passkeys.
+        <span class="tip" matTooltip="You can create a
+        passkey from a physical FIDO2
         device, a mobile phone, a browser based password manager, or a dedicated password
-        manager. We find that dedicated password managers like Bitwarden or 1Password are
+        manager. Dedicated password managers like Bitwarden and 1Password are
         the easiest to use, work consistently across devices, and support backup.">
           Passkeys</span>
-        are a modern way to prove your identity and prevent
-        identity theft without requiring personally identifying information.
+        are a modern way to prove your identity and reduce
+        identity theft without requiring personally identifiable information.
       </p>
       <p>
-        When you enter a user name and click the <b>Create new user and passkey</b> button,
-        Quick Crypt creates a passkey and assigns it the user name you entered
-        to help you remember the passkey's purpose. You can enter any value
-        you want as long as the length is 6 to 31 characters. An email address
-        is acceptable, but not required.
-      </p>
-      <p>
-        After clicking the button below, you may be given
-        an option to either create or update a passkey on your system. If you see
-        that option, choose to create a new passwkey.
+        Enter any user name you like that is 6 to
+        31 characters long. An email address is acceptable but not required.
+        Click the <b>Create new user and passkey</b> button, and Quick Crypt will
+        start creating a passkey with the user name you entered. Your browser or
+        password manager should then
+        prompt you to create or update the passkey on your system. When you see
+        that option, choose to create a new passkey.
       </p>
       <div class="control-host">
         <mat-form-field class="user-name">
-          <mat-label>User Name</mat-label>
           <input matInput
+          placeholder="user name"
           autofocus type="text"
           autocomplete="off"
           data-1p-ignore

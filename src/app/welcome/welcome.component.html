@@ -1,15 +1,11 @@
 <div class="container">
   <div class="content">
-    <h1>Quick Crypt: <i>Easy, Trustworthy Personal Encyption</i></h1>
+    <h1>Quick Crypt: <i>Easy, Trustworthy Personal Encryption</i></h1>
 
-    <p> Welcome to Quick Crypt. To get started, select one of the options below.
-      If you'd like to first learn more, open the help menu above
-      or go directly to the <a [routerLink]="'/help/overview'">overview page.</a>
-    </p>
-    <p>
-      If this is your first time using Quick Crypt, select the first button below. If
-      you are a returning user, click the second button. If you are a returning user
-      but cannot sign in or locate your passkey, select the last button for help.
+    <p>Welcome to Quick Crypt. To get started, select an option below.
+      If you'd like to first learn more, see the <a [routerLink]="'/help/overview'">overview page.</a>
+      If you are a returning user
+      but cannot sign-in or locate your passkey, select the last button for help.
     </p>
     <mat-progress-spinner class="spinner" color="primary" mode="indeterminate"
       [style.visibility]="showProgress ? 'visible' : 'hidden'">
@@ -26,7 +22,7 @@
       </button>
       <br />
       <button mat-raised-button (click)="onClickRecovery($event)" color="primary" class="button">
-        <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">I am a returning user, but cannot sign in</span>
+        <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">I am a returning user, but cannot sign-in</span>
       </button>
       <p class="error-msg">{{error}}</p>
     </div>

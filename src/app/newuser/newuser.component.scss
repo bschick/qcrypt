@@ -1,24 +1,26 @@
 @use "../common.scss";
+@use '@angular/material' as mat;
 
 .error-msg {
   color: darkred;
   margin-top: 12px;
 }
 
-.user-name {
-  width: 280px;
-}
 .control-host {
   margin-top: 50px;
   display: flex;
   align-items: start;
-  justify-content: center;
+  justify-content: space-evenly;
+
+  .user-name {
+    width: 280px;
+    margin-top: 1x;
+    @include mat.form-field-density(-3);
+  }
 
   button {
     height: 45px;
     width: 280px;
-    margin-top: 5px;
-    margin-left: 50px;
   }
 }
 
