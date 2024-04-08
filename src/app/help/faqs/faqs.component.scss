@@ -19,6 +19,7 @@
   .mat-column-position,
   .mat-column-question {
     font-size: 16px;
+    background-color: whitesmoke;
   }
 
   .mat-column-position {
@@ -30,7 +31,11 @@
   }
 
   tr.element-row:hover {
-    background: whitesmoke;
+    .mat-column-position,
+    .mat-column-question {
+      background-color: white;
+    }
+//    background-color: white !important ;
   }
 
   .element-row td {

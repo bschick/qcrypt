@@ -8,7 +8,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 @Component({
    selector: 'app-protocol',
    standalone: true,
-   imports: [],
+   imports: [MatTooltipModule],
    templateUrl: './protocol.component.html',
    styleUrl: './protocol.component.scss'
 })
@@ -21,7 +21,7 @@ export class ProtocolComponent {
 
    openFlowImage(flowImage:string) {
       this.dialog.open(FlowDialog, { data: flowImage });
-   }  
+   }
 }
 
 
@@ -41,7 +41,7 @@ export class FlowDialog {
    constructor(
       public dialogRef: MatDialogRef<FlowDialog>,
       @Inject(MAT_DIALOG_DATA) public flowData: string
-   ) { 
+   ) {
       this.flowImage = flowData;
    }
 
