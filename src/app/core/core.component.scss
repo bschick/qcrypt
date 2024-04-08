@@ -24,48 +24,6 @@ SOFTWARE. */
   padding: 15px;
 }
 
-.header {
-  line-height: 1;
-  font-size: 26px;
-  margin: 0 0 20px 0;
-  display: flex;
-  height: 30.5px;
-  min-width: 590px;
-}
-
-
-/*::ng-deep .welcome {
-  font-size: 60px;
-  position: relative;
-  top:60px;
-  left:30px;
-
-}
-.mat-tooltip-panel-below {
-  .mat-tooltip.ds-tooltip {
-    overflow: visible;
-
-    &::before {
-      content: '';
-      display: block;
-      position: absolute;
-      bottom: 100%;
-      border-style: solid;
-      border-color: transparent transparent black transparent;
-      border-width: 12px;
-      left: calc(50% - 12px);
-    }
-  }
-}
-*/
-.mtop3 {
-  margin-top: 3px;
-}
-
-.mright2 {
-  margin-right: 2px;
-}
-
 .mtop0 {
   margin-top: 0px;
 }
@@ -79,39 +37,11 @@ SOFTWARE. */
 }
 
 .mleft15 {
-  margin-left: 15pt;
+  margin-left: 15px;
 }
 
 .mbot25 {
   margin-bottom: 25px;
-}
-
-.header-msg {
-  font-size: 16px;
-  margin: 7px 0 0 15px;
-}
-
-.header-help {
-  font-size: 19px;
-  position: relative;
-  top: 5px;
-}
-
-.newtab {
-  margin-right: auto;
-  margin-left:3px;
-  font-size: 16px;
-}
-
-.newtab-icon {
-  font-size: 18px;
-  position: relative;
-  top: 6px;
-  margin-left: 2px;
-}
-
-.link {
-  cursor: pointer;
 }
 
 .txt-area-button3 {

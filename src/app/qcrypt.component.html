@@ -58,7 +58,7 @@ SOFTWARE. -->
 </mat-toolbar>
 <mat-sidenav-container class="router-content" hasBackdrop="true">
   <mat-sidenav #sideNav mode="over" position="end" (opened)="onOpenedCredentials()" >
-    <app-credentials (done)="sideNav.close()" class="cred-content"></app-credentials>
+    <app-credentials (done)="sideNav.close()"></app-credentials>
   </mat-sidenav>
   <mat-sidenav-content>
     <router-outlet />
