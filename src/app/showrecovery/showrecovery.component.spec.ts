@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-
 import { ShowRecoveryComponent } from './showrecovery.component';
+import { RouterModule } from '@angular/router';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 describe('ShowRecoveryComponent', () => {
    let component: ShowRecoveryComponent;
@@ -8,7 +9,7 @@ describe('ShowRecoveryComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [ShowRecoveryComponent]
+         imports: [ShowRecoveryComponent, NoopAnimationsModule, RouterModule.forRoot([]),]
       })
          .compileComponents();
 

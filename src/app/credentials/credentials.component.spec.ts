@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-
 import { CredentialsComponent } from './credentials.component';
+import { RouterModule } from '@angular/router';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 describe('CredentialsComponent', () => {
    let component: CredentialsComponent;
@@ -8,7 +9,7 @@ describe('CredentialsComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [CredentialsComponent]
+         imports: [CredentialsComponent,RouterModule.forRoot([]),NoopAnimationsModule]
       })
          .compileComponents();
 
