@@ -2,8 +2,6 @@
 
 A client-side browser "app" that encrypts and decrypts text using a password you provide. Quick Crypt uses cryptographic features built into modern browsers, ensuring that your password, clear text, and even encrypted cipher text do not unexpectedly traverse the internet.
 
-Live site: https://qcrypt.schicks.net
-
 [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/bschick/qcrypt)
 
 
