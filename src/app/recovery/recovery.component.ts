@@ -18,7 +18,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 })
 export class RecoveryComponent implements OnInit {
 
-   public validRecoveryLink = true;
+   public validRecoveryLink = false;
    public error = '';
    public showProgress = false;
    public authenticated = false;
@@ -34,12 +34,19 @@ export class RecoveryComponent implements OnInit {
    }
 
    ngOnInit() {
-      this.recoveryUserId = this.activeRoute.snapshot.queryParamMap.get('userid');
-      this.recoverUserCred = this.activeRoute.snapshot.queryParamMap.get('usercred');
-      if (!this.recoveryUserId || !this.recoverUserCred) {
-         this.error = 'userid or usercred is missing';
+      try {
+         this.recoveryUserId = this.activeRoute.snapshot.queryParamMap.get('userid');
+         this.recoverUserCred = this.activeRoute.snapshot.queryParamMap.get('usercred');
+         if (!this.recoveryUserId || !this.recoverUserCred) {
+            throw new Error("recovery link missing userid or usercred: " +  this.activeRoute.snapshot.toString());
+         }
+         this.validRecoveryLink = true;
+      } catch(err) {
+         console.error(err);
+         this.error = 'Recovery link is invalid';
          this.validRecoveryLink = false;
       }
+
       this.authenticated = this.authSvc.isAuthenticated();
       if (this.authenticated) {
          this.selfRecovery = this.recoverUserCred === this.authSvc.userCred;
@@ -71,9 +78,7 @@ export class RecoveryComponent implements OnInit {
          this.router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
-         if (err instanceof Error) {
-            this.error = err.message ?? err.name;
-         }
+         this.error = 'The operation either timed out or was not allowed';
      } finally {
          this.showProgress = false;
       }

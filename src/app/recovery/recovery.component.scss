@@ -5,7 +5,7 @@
   width:100%;
   display: flex;
   align-items: start;
-  justify-content: center;
+  justify-content: space-evenly;
 
   button {
     height: 45px;
@@ -13,8 +13,5 @@
     margin-top: 5px;
   }
 
-  .button2 {
-    margin-left: 50px;
-  }
 }
 

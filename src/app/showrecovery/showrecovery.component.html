@@ -2,35 +2,33 @@
   <div class="content">
     <h1>Save Your Recovery Link</h1>
     <p>
-      It is important that you <b>save this recovery link in a
-      secure location</b>, seperate from your passkeys. If your Quick
-      Crypt passkeys are lost or damaged, this link is the only way to
-      restore your abilty decrypt data you previously encypted
-      (you also need your encryption passwords).
+      You must <b>save this recovery link in a secure location</b>,
+      separately from your passkeys. If your Quick Crypt passkeys are
+      lost or damaged, this link is the only way to restore your ability
+      to decrypt data you previously encrypted.
     </p>
     <p>
-      <b>Do not share this recovery link with anyone</b>. While another person
-      with this link can not decrypt your data without also
-      having your encryption passwords (and the encypted data itself),
-      someone else could use this link to remove <i>your</i> ability to decrypt
-      previously encypted data.
+      <b>Keep this recovery link private from everyone</b>. While another
+      person with this link cannot directly decrypt your data, they are one
+      step close and could temporarily
+      block <i>your</i> ability to use Quick Crypt. So make sure you keep this
+      link private.
     </p>
-    <p>So make sure you keep this link private.</p>
     <div class="control-host">
       <mat-form-field class="recovery">
-      <mat-label>Recovery Link</mat-label>
-      <input #linkInput id="linkInput" matInput autofocus type="text" [value]="recoveryLink"
-        readonly="true" name="recovery" (focus)="linkInput.select(); linkInput.scrollLeft=0;"/>
-      <mat-icon matSuffix aria-label="Copy" (click)="toastMessage('Link Copied to Clipboard')"
-        [cdkCopyToClipboard]="recoveryLink">
-        content_copy
-      </mat-icon>
-    </mat-form-field>
-    <a [routerLink]="'/'">
-      <button mat-raised-button color="primary">
-       I saved my recovery key securely
-      </button>
-    </a>
+        <mat-label>Recovery Link</mat-label>
+        <input #linkInput id="linkInput" matInput autofocus type="text" [value]="recoveryLink" readonly="true"
+          name="recovery" (focus)="linkInput.select(); linkInput.scrollLeft=0;" />
+        <mat-icon matSuffix aria-label="Copy" (click)="toastMessage('Link Copied to Clipboard')"
+          [cdkCopyToClipboard]="recoveryLink">
+          content_copy
+        </mat-icon>
+      </mat-form-field>
+      <a [routerLink]="'/'">
+        <button mat-raised-button color="primary">
+          I saved my recovery key securely
+        </button>
+      </a>
     </div>
   </div>
 </div>
