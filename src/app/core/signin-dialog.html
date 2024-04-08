@@ -35,16 +35,12 @@ SOFTWARE. -->
     </p>
     <div class="button-host">
       <button mat-raised-button (click)="onClickSignin($event)" color="primary" class="button">
-        <!--<mat-icon>login</mat-icon>--><span class="button-label">Sign in as<br />{{userName}}</span>
+        <!--<mat-icon>login</mat-icon>--><span>Sign in as<br />{{userName}}</span>
       </button>
       <button mat-raised-button (click)="onClickForget($event)" color="primary" class="button">
-        <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">Sign in as<br />a different user</span>
+        <!--<mat-icon>vpn_key</mat-icon>--><span>Sign in as a different user</span>
       </button>
       <div class="error-msg">{{error}}</div>
     </div>
-    <!--last so it doesn't get focus--> <!--
-    <button class="close-button3" matSuffix mat-icon-button matDialogClose aria-label="Close">
-      <mat-icon>close</mat-icon>
-    </button>-->
   </div>
 </span>

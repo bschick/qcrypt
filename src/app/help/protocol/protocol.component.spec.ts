@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-
 import { ProtocolComponent } from './protocol.component';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { RouterModule } from '@angular/router';
 
 describe('ProtocolComponent', () => {
    let component: ProtocolComponent;
@@ -8,7 +9,7 @@ describe('ProtocolComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [ProtocolComponent]
+         imports: [ProtocolComponent,NoopAnimationsModule, RouterModule.forRoot([]),]
       })
          .compileComponents();
 

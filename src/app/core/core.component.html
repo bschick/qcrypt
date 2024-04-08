@@ -22,7 +22,7 @@ SOFTWARE. -->
 <div class="core">
   <div class="input-area flx-container" (mouseup)="onDraggerMouseUp();">
     <span class="flx-buttons">
-      <button mat-raised-button (click)="onEncryptClicked()"
+      <button mat-raised-button (click)="onClickEncrypt()"
         class="top-button" color="primary"
         #bubbleTip2="bubbleTip"
         bubbleTip="When you have finished entering text, click the Encrypt button. You will then be promted for a password."
@@ -66,7 +66,7 @@ SOFTWARE. -->
           <mat-icon>file_download</mat-icon>Save
         </button>
       </mat-menu>
-      <button mat-raised-button (click)="onDecryptClicked()" class="top-button mleft15" color="primary"
+      <button mat-raised-button (click)="onClickDecrypt()" class="top-button mleft15" color="primary"
         aria-label="Decrypt Text" accesskey="D" [disabled]="showProgress ? 'true' : 'false'">
         <u>D</u>ecrypt
       </button>
@@ -218,7 +218,7 @@ SOFTWARE. -->
         </a>
       </p>
       <div class="mtop20">
-        <button mat-raised-button (click)="onResetOptions()" color="basic"
+        <button mat-raised-button (click)="onClickResetOptions()" color="basic"
           matTooltip="Reset all options to default values">
           Reset To Defaults
         </button>
@@ -226,13 +226,6 @@ SOFTWARE. -->
     </mat-expansion-panel>
   </mat-accordion>
   <p>
-    <!--    <span class="newtab">
-      <a (click)="onNewPage()" class="link">
-        open new tab
-        <mat-icon class="newtab-icon">open_in_new</mat-icon>
-      </a>
-    </span>
--->
     <span class="github">
       <a href="https://github.com/bschick/qcrypt?tab=readme-ov-file" target="_blank">
         <button mat-fab extended color="primary"

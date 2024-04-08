@@ -404,11 +404,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    onAuthEvent(data: AuthEventData) {
       //      console.log('authevent ', data);
       if (data.event === AuthEvent.Logout) {
-         this.onResetOptions();
+         this.resetOptions();
          this.onClearCipher();
          this.showSigninDialog();
-      } else if (data.event === AuthEvent.Forget) {
-         //      this.nukeOptions();
       } else if (data.event === AuthEvent.Login) {
          this.loadOptions();
       }
@@ -431,7 +429,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   onResetOptions(): void {
+   onClickResetOptions(): void {
+      this.nukeOptions();
+   }
+
+   resetOptions(): void {
       this.algorithm = 'AES-GCM';
       this.icount = this.icountDefault;
       this.hidePwd = true;
@@ -447,8 +449,28 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // clearCaches calls saveOptions, so nuke after
       this.clearCaches();
-      this.nukeOptions();
       this.optionsLoaded = false;
+   }
+
+   nukeOptions(): void {
+      this.resetOptions();
+      try {
+         this.lsDel('welcomed');
+         this.lsDel('algorithm');
+         this.lsDel('icount');
+         this.lsDel('hidepwd');
+         this.lsDel('cachetime');
+         this.lsDel('checkpwned');
+         this.lsDel('minpwdstrength');
+         this.lsDel('loops');
+         this.lsDel('ctformat');
+         this.lsDel('reminder');
+         this.lsDel('trand');
+         this.lsDel('prand');
+      } catch (err) {
+         console.error(err);
+         //otherwise ignore
+      }
    }
 
    saveOptions(): void {
@@ -466,25 +488,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.lsSet('trand', this.trueRand.toString());
             this.lsSet('prand', this.pseudoRand.toString());
          }
-      } catch (err) {
-         console.error(err);
-         //otherwise ignore
-      }
-   }
-
-   nukeOptions(): void {
-      try {
-         this.lsDel('welcomed');
-         this.lsDel('algorithm');
-         this.lsDel('icount');
-         this.lsDel('hidepwd');
-         this.lsDel('cachetime');
-         this.lsDel('checkpwned');
-         this.lsDel('minpwdstrength');
-         this.lsDel('loops');
-         this.lsDel('ctformat');
-         this.lsDel('trand');
-         this.lsDel('prand');
       } catch (err) {
          console.error(err);
          //otherwise ignore
@@ -612,7 +615,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   async onEncryptClicked(): Promise<void> {
+   async onClickEncrypt(): Promise<void> {
       if (this.clearText.length < 1 || this.errorClear) {
          this.onClearClear();
          this.showEncryptError('Enter clear text to encrypt');
@@ -724,7 +727,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   async onDecryptClicked(): Promise<void> {
+   async onClickDecrypt(): Promise<void> {
       if (this.cipherArmor.length < 1 || this.errorCipher) {
          this.onClearCipher();
          this.showDecryptError('Enter cipher armor text to decrypt');

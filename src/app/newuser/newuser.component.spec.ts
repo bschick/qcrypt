@@ -1,8 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { RouterTestingModule } from "@angular/router/testing";
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { NewUserComponent } from './newuser.component';
+import { RouterModule } from '@angular/router';
 
 describe('NewuserComponent', () => {
    let component: NewUserComponent;
@@ -10,7 +10,7 @@ describe('NewuserComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [NewUserComponent, RouterTestingModule, NoopAnimationsModule, HttpClientTestingModule]
+         imports: [NewUserComponent, RouterModule.forRoot([]), NoopAnimationsModule, HttpClientTestingModule]
       })
          .compileComponents();
 

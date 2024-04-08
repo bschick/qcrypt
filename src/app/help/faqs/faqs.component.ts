@@ -5,6 +5,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { animate, state, style, transition, trigger } from '@angular/animations';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
+import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 
 
 export interface FAQElement {
@@ -109,32 +110,37 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'Can I decrypt my data if I forget the password I used for encryption?',
-      answer: `There is no way to decrypt that data if you forget the encryption
-      password. Quick Crypts needs both
+      answer: `There is no way to decrypt data if you forget the
+      password used during encryption of that data. Quick Crypts needs both
       the password you used to encrypt the data and a passkey to access your user
       credential. Your recovery link lets you create a new passkey, but there is
-      no way to recover a lost password. Consider using a password hint next time.`
+      no way to recover a lost encryption password. Consider using a password hint
+      next time.`
    },
 
    {
       position: 0,
       question: 'What should I do if I cannot locate my passkey but have my recovery link?',
-      answer: `Paste your recovery link into your browser's address bar. Quick Crypt
-      will delete all existing passkeys and create a new one for you.`
+      answer: `Paste your recovery link into your browser's address bar and hit enter. Quick
+      Crypt will delete all existing passkeys and create a new one for you.`
    },
 
    {
       position: 0,
       question: 'What happens if I cannot locate my passkey or my recovery link?',
-      answer: `Losing both your passkeys and recovery link is similar to forgetting
-      your encryption password. There is no way to decrypt or encrypt more data. To
-      continue using Quick Crypt you will need to start over with a new user identity.`
+      answer: `If you lost both your Quick Crypt passkeys and recovery link, you cannot
+      access your existing user identity to decrypt or encrypt data. This is similar to
+      forgetting your encryption password for all previous encryptions. To continue using
+      Quick Crypt, you may create a new user identity, but the new user cannot decrypt
+      existing cipher text. If you find your original recovery link or passkey later, you
+      can use either to regain access to your original user identity anytime.`
    },
 
    {
       position: 0,
       question: 'Does Quick Crypt store or process Personal Identifiable Information (PII)?',
-      answer: `Quick Crypt does not collect, request, or process PII. When you enter a user name or a
+      answer: `Quick Crypt does not collect, request, or process PII. When you enter a user
+      name or a
       passkey description, you may use whatever values you choose. It is best not to use PII
       for those values, but even if you use an email address or personal name Quick Crypt
       treats that as an opaque value and will not contact you. If you change your user name
