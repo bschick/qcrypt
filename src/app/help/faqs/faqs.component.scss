@@ -16,6 +16,10 @@
     @include mat.form-field-density(-3);
   }
 
+  .faq-table {
+    min-width: 750px;
+  }
+
   .mat-column-position,
   .mat-column-question {
     font-size: 16px;
@@ -35,7 +39,11 @@
     .mat-column-question {
       background-color: white;
     }
-//    background-color: white !important ;
+  }
+
+  .header-data {
+    color: white;
+    background-color: #8A8FB2;
   }
 
   .element-row td {
@@ -50,6 +58,12 @@
   .element-answer {
     font-size: 16px;
     padding: 9px 0 9px 0;
+  }
+
+  .empty-data {
+    width:100%;
+    font-size: 16px;
+    padding: 12px;
   }
 
   blockquote {
