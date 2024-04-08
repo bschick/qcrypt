@@ -98,11 +98,12 @@ const ELEMENT_DATA: FAQElement[] = [
       to protect secrets with both something you know, which in Quick Crypt is a password
       you enter during encryption, and with something you have, which is the passkey.
       </p>
-      <p><i>Second</i>, Quick Crypt relies on passkeys' binding to specific domain names.
+      <p><i>Second</i>, Quick Crypt relies on a passkey's binding to its specifc domain name.
       A potential risk of online encryption tools is that
-      a rogue website could impersonate another site, trick people into decrypting
+      a rogue website could impersonate another site and trick people into decrypting
       data on the rogue site. Quick Crypt removes that risk by requiring
-      a passkey that is bound to Quick Crypt's domain name. The passkey makes it infeasible
+      passkey authentication that is bound to Quick Crypt's domain name. The passkey makes
+      it infeasible
       for a rogue website decrypt your data even if you provided your encryption password.
       </p>`
    },
@@ -161,44 +162,44 @@ const ELEMENT_DATA: FAQElement[] = [
       </thead>
       <tbody>
         <tr>
-          <td class="tg-0pky">Unencrypted or encrypted data</td>
-          <td class="tg-0pky">Not stored</td>
+          <td class="tg-0pky">Your unencrypted and encrypted data</td>
+          <td class="tg-0pky">Not stored, not transmitted</td>
           <td class="tg-0pky">Only present in browser edit fields.
             Close your browser tab, navigate away, or empty the browser edit fields to remove</td>
         </tr>
         <tr>
           <td class="tg-0pky">Passwords and hints used for encryption and decryption</td>
-          <td class="tg-0pky">Never stored, optionally cached</td>
+          <td class="tg-0pky">Not stored, optionally cached, not transmitted</td>
           <td class="tg-0pky">When password caching is enabled within "Advanced Encryption Options," the last
-            entered password is cached in browser memory. Click the "Forget Pwd" button to remove or disable caching.</td>
+            password entered is cached in browser memory. Click the "Forget Pwd" button to remove or turn off caching.</td>
         </tr>
         <tr>
-          <td class="tg-0pky">Encryption and decryption preferences such as the symmetric cipher </td>
-          <td class="tg-0pky">Browser local storage on your system</td>
+          <td class="tg-0pky">Encryption and decryption preferences such as symmetric cipher choice</td>
+          <td class="tg-0pky">Browser local storage, not transmitted</td>
           <td class="tg-0pky">Within the "Advanced Encryption Options" section on the main page, click the
             "Reset to Defaults" button<br> </td>
         </tr>
         <tr>
           <td class="tg-0pky">Last signed-in user name and user ID</td>
-          <td class="tg-0pky">Browser local storage on your system</td>
+          <td class="tg-0pky">Browser local storage, transmission below</td>
           <td class="tg-0pky">Within the side panel that shows passkeys, click the "Sign Out" button, then click the
             "Sign in as a different user" button</td>
         </tr>
         <tr>
           <td class="tg-0pky">Currently signed-in user name and credential</td>
-          <td class="tg-0pky">Browser sessions storage on your system</td>
+          <td class="tg-0pky">Browser sessions storage, transmission below</td>
           <td class="tg-0pky">Close the Quick Crypt tab in your browser or navigate to another website</td>
         </tr>
         <tr>
-          <td class="tg-0pky">Public-key portions of each passkey</td>
-          <td class="tg-0pky">Server side storage in AWS</td>
+          <td class="tg-0pky">Public-key portions of each passkey and description</td>
+          <td class="tg-0pky">AWS storage service, HTTPS transmission</td>
           <td class="tg-0pky">Within the side panel that shows passkeys, click the trash can icon for the passkey
             you want to remove</td>
         </tr>
         <tr>
           <td class="tg-0pky">User name, ID, and credential associated with public-key portions of passkeys</td>
-          <td class="tg-0pky">Server side storage in AWS</td>
-          <td class="tg-0pky">Within the side panel that shows passkeys, delete all passkeys. This will cause the removal
+          <td class="tg-0pky">AWS storage service, HTTPS transmission</td>
+          <td class="tg-0pky">Within the side panel that shows passkeys, delete all passkeys. That triggers removal
             of all server-side user data</td>
         </tr>
       </tbody>
@@ -234,7 +235,7 @@ const ELEMENT_DATA: FAQElement[] = [
       answer: `<p>Yes, but you should find a better way. Quick Crypt was designed
       to encrypt and decrypt your own data rather than to share data securely
       with others. Decryption with Quick Crypt can be done by someone with both
-      the encryption password and a passkey granting access to your user
+      the encryption password and a passkey authorizing access to your user
       credential. Passwords are easy to share (although doing so security is
       not easy), and passkeys can be shared with a good management
       tool like Bitwarden or 1Password. If the recipient has both,
@@ -456,7 +457,8 @@ const ELEMENT_DATA: FAQElement[] = [
       encrypted (or validated) and still be usable in a browser. If an attacker
       can manipulate your stored cipher text, they could edit the embedded URL
       and send you to an untrusted site. Because the untrusted site cannot
-      access your Quick Crypt passkey, it cannot obtain your user credential or
+      access your Quick Crypt passkey, it cannot obtain authorization to access
+      your user credential or
       decrypt your data (see the 'threat modeling question'). However, an
       untrusted site could prompt you for your encryption password to obtain
       some of the information needed for decryption. It could also try to trick
@@ -515,7 +517,7 @@ const ELEMENT_DATA: FAQElement[] = [
       Quick Crypt does have a password strength option, however, that can be set
       to 'terrible' requiring only one character passwords. Since passwords are
       always combined with a much longer user credential accessed with
-      your passkey, a weak password is not as insecure as it may sound. We
+      passkey authentication, a weak password is not as insecure as it may sound. We
       designed Quick Crypt so that weak passwords or overly descriptive hints
       only reduce security to the strength of passkey authentication, which is
       trusted by many top websites. This design aligns with
@@ -527,9 +529,19 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'Is the password hint encrypted?',
+      question: 'What key lengths does Quick Crypt use?',
+      answer: `Symmetric cipher keys are 256 bits long and derived
+      from the password you enter during encryption combined with your user
+      credential that is accessed with passkey authentication. HMAC keys
+      are 256 bits long and derived from your user credential. For more details,
+      see the <a href="/help/protocol">protocol description</a> help page.`
+   },
+
+   {
+      position: 0,
+      question: 'Are my password hints encrypted?',
       answer: `Yes, password hints are encrypted with a key derived from
-      your user credential that is accessed with your Quick Crypt passkey.
+      your user credential that is accessed with passkey authentication.
       For the most robust protection of your secret information, avoid
       hints that make it easy for others to guess your encryption password.
       The best password hints help only you remember the password.

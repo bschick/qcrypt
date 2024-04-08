@@ -12,16 +12,16 @@
         <mat-icon [fontIcon]="allExpanded ? 'unfold_less' : 'unfold_more'"></mat-icon>
       </button>
     </div>
-    <table mat-table [dataSource]="dataSource" multiTemplateDataRows class="mat-elevation-z0">
+    <table mat-table [dataSource]="dataSource" multiTemplateDataRows class="faq-table mat-elevation-z0">
       <!-- Position Column -->
       <ng-container matColumnDef="position">
-        <th mat-header-cell *matHeaderCellDef> No. </th>
+        <th mat-header-cell class="header-data" *matHeaderCellDef> No. </th>
         <td mat-cell *matCellDef="let element"> {{element.position}}. </td>
       </ng-container>
 
       <!-- Question Column -->
       <ng-container matColumnDef="question">
-        <th mat-header-cell *matHeaderCellDef> Question </th>
+        <th mat-header-cell class="header-data" *matHeaderCellDef> Question </th>
         <td mat-cell *matCellDef="let element"> {{element.question}} </td>
       </ng-container>
 
@@ -36,15 +36,15 @@
         </td>
       </ng-container>
 
-      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-header-row class="header-row" *matHeaderRowDef="displayedColumns"></tr>
       <tr mat-row *matRowDef="let element; columns: displayedColumns;" class="element-row"
         [class.expanded-row]="expandedPositions.includes(element.position)" (click)="addOrRemove(element.position)">
       </tr>
       <tr mat-row *matRowDef="let row; columns: ['expandedDetail']" class="detail-row"></tr>
 
       <!-- Row shown when there is no matching data. -->
-      <tr class="mat-row" *matNoDataRow>
-        <td class="mat-cell" colspan="2">No data matching the filter "{{filterInput.value}}"</td>
+      <tr class="" *matNoDataRow>
+        <td class="empty-data" colspan="2">No data matching the filter "{{filterInput.value}}"</td>
       </tr>
     </table>
   </div>
