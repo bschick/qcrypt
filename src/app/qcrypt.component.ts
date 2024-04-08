@@ -46,7 +46,6 @@ export class QCryptComponent implements OnInit, OnDestroy {
    private authSub!: Subscription;
    public bgColorDefault = '#4351AF';
    public bgColorFocus = '#3B479A';
-   public countdown = 0;
    public showPKButton = false;
 
    constructor(
@@ -56,7 +55,6 @@ export class QCryptComponent implements OnInit, OnDestroy {
    }
 
    ngOnInit(): void {
-      setInterval(() => this.countdown = this.authSvc.secondsRemaining(), 5000);
       this.showPKButton = this.authSvc.isAuthenticated();
       this.authSub = this.authSvc.on(
          [AuthEvent.Logout, AuthEvent.Login],
