@@ -535,7 +535,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    clearCaches(): void {
       this.clearPassword();
-      this.onClearClear();
       this.saveOptions();
    }
 
@@ -674,9 +673,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             }
          }
 
-         if (completed && !this.stuffCached) {
+/*         if (completed && !this.stuffCached) {
             this.onClearClear();
-         }
+         }*/
       } catch (something) {
          console.error(something);
          if (something instanceof Error) {
@@ -1074,7 +1073,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.lsSet('hidepwd', this.hidePwd.toString());
    }
 
-   onClearTimerChange(): void {
+   onCacheTimerChange(): void {
       if (this.stuffCached) {
          this.restartTimer();
       }

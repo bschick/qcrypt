@@ -40,7 +40,7 @@
     <div *ngIf="error">
       <p>
         The recovery link {{validRecoveryLink ? 'did not work' : 'is not valid'}}<span
-          [style.visibility]="error ? 'visible' : 'hidden'">
+          [style.visibility]="validRecoveryLink && error ? 'visible' : 'hidden'">
           because: <b>{{error}}</b></span>.
       </p>
       <p>

@@ -1,3 +1,4 @@
+import { environment } from '../../environments/environment';
 import { Injectable, signal } from '@angular/core';
 import { startRegistration, startAuthentication } from '@simplewebauthn/browser';
 import {
@@ -7,7 +8,7 @@ import {
 import { Subject, Subscription, filter } from 'rxjs';
 import { DateTime } from 'luxon';
 
-const baseUrl = 'https://qcrypt.schicks.net/';
+const baseUrl = environment.domain;
 
 export type RegistrationInfo = {
    verified: boolean;
