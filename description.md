@@ -18,7 +18,7 @@ Is that sound?
 
 ### Other Goals ###
  - Very easy to use and hard to screw up
- - 100% client-side crypto, once the app loads networking could be disabled 
+ - 100% client-side crypto, once the app loads networking could be disabled
  - Open source for peer review and liberal license
  - Follow crypto best practices (this site has been very helpful)
  - Password derived keys with a decent password strength indicator
@@ -30,7 +30,7 @@ Is that sound?
 
 Since the crypto was relatively straightforward, and uses standardized functions, my focus was more on making the browser app as trustworthy as possible. I read various posts describing why web-apps are not as trustworthy as signed installable binaries, and that's probably still true, but the web has come a long way with CSP, SRI, and friends. I used observatory.mozilla.org and other free scanners to secure the app (still a few items to improve). Any suggestions about making web-apps trustworthy for this purpose?
 
-You can try the app: https://qcrypt.schicks.net/<br>
+You can try the app: https://quickcrypt.org/<br>
 Review the source code: https://github.com/bschick/qcrypt<br>
 In particular review: [key derivation][2], [encryption][3], and [decryption][4]<br>
 
@@ -45,7 +45,7 @@ Suggestions and pull requests welcome!
 
   Comment:
   Yes, I think codereview would be more suitable. Note that even if it was on topic, your question is also very open ended (how to make this tool better) and unlikely to be answered satisfactorily here.
-  
+
   Codereview has pretty strickt rules (I do crypto code reviews there, finally hit 5k rep, hard place to get rep). I would never use any protocol that is not fully described, even if this is just password based encryption with an optional authentication tag added to it. Besides that, the site doesn't make clear what it can be used for. Just performing encryption is not a use case.
 
 
@@ -87,7 +87,7 @@ $d$ - 512 bits of derived key material<br>
 $k_C$ - 256 bit cipher key<br>
 $k_S$ - 256 bit signing key<br>
 
- 
+
 **Message Encryption by A**<br>
 $A \rightarrow S : m, p, i, o\\
 S\textrm{ computes}:\\
@@ -150,7 +150,7 @@ S \rightarrow A : b, m\textrm{ if }b$
 <img src="https://math.vercel.app/?inline=t\textrm{ - 256 bit HMAC tag}" /><br/>
 <img src="https://math.vercel.app/?inline=b\textrm{ - Valid or invalid HMAC tag}" /><br/>
 
- 
+
 **Message Encryption by A**<br>
 $A \rightarrow S : m, p, i, o\\
 S\textrm{ computes}:\\

@@ -1,3 +1,4 @@
 export const environment = {
-    production: false
+    production: false,
+    domain: 'https://test.quickcrypt.org'
 };
