@@ -16,6 +16,7 @@ export type RegistrationInfo = {
    userId: string;
    userName: string;
    lightIcon: string;
+   darkIcon: string;
    description: string;
 };
 
@@ -30,6 +31,7 @@ export type AuthenticatorInfo = {
    credentialId: string;
    description: string;
    lightIcon: string;
+   darkIcon: string;
    name: string;
 };
 
