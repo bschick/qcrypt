@@ -193,21 +193,6 @@ export class CipherInfoDialog {
    }
 }
 
-@Component({
-   selector: 'help-dialog',
-   templateUrl: './help-dialog.html',
-   styleUrl: './core.dialogs.scss',
-   standalone: true,
-   imports: [MatDialogModule, CommonModule, NgIf, MatIconModule, MatTooltipModule,
-      MatButtonModule],
-})
-export class HelpDialog {
-   constructor(
-      public dialogRef: MatDialogRef<HelpDialog>,
-      private snackBar: MatSnackBar
-   ) { }
-
-}
 
 @Component({
    selector: 'signin-dialog',
