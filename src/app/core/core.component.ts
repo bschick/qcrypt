@@ -57,7 +57,6 @@ import { AuthenticatorService, AuthEvent, AuthEventData } from '../services/auth
 import {
    PasswordDialog,
    CipherInfoDialog,
-   HelpDialog,
    SigninDialog,
 } from './core.dialogs';
 import { BubbleDirective } from '../ui/bubble/bubble.directive';
@@ -576,10 +575,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.snackBar.open(msg, '', {
          duration: 2000,
       });
-   }
-
-   showHelp(): void {
-      var dialogRef = this.dialog.open(HelpDialog);
    }
 
    onClearCipher(): void {
