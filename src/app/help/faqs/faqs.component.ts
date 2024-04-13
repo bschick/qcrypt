@@ -336,7 +336,7 @@ const ELEMENT_DATA: FAQElement[] = [
          <li><b>Various web-app attacks:</b> Quick Crypt uses the latest web-app security
          protocols (csp, cors, modern cert, sri, referrer-policy, hsts, xfo, etc.)
          and aims to maintain an A+ rating at test sites like
-         <a href="https://observatory.mozilla.org/" target="_blank">Mozilla Observatory</a>.
+         <a href="https://observatory.mozilla.org/analyze/quickcrypt.org" target="_blank">Mozilla Observatory</a>.
          As described above, Quick Crypt bundles all libraries into a
          'single-page' web-app to better ensure integrity.
          </li>

@@ -15,7 +15,7 @@
     width: 0;
     height: 0;
     position: absolute;
-    font-size:24px;
+    font-size:25px;
   }
 
   &--visible {
@@ -61,7 +61,7 @@
 
     &::before {
       left: calc(25% - 5px);
-      bottom: 4px;
+      bottom: 5px;
       transform:rotate(10deg);
     }
   }
@@ -72,7 +72,7 @@
 
     &::before {
       left: calc(25% - 5px);
-      bottom: 4px;
+      bottom: 5px;
       transform:rotate(10deg);
     }
   }
