@@ -29,6 +29,7 @@ import {
    PLATFORM_ID,
    OnDestroy,
    ChangeDetectorRef,
+   HostListener,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
@@ -155,7 +156,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    public icountMax: number = cs.ICOUNT_MAX; // Default since benchmark is async
    public icountDefault: number = cs.ICOUNT_DEFAULT; // Default since benchmark is async
    public clearText = '';
-   public stuffCached = false;
+   public pwdCached = false;
    public cipherLabel = 'Cipher Armor';
    public clearLabel = 'Clear Text';
    public cipherArmor = '';
@@ -185,6 +186,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    public ctFormat = 'compact';
    public loops = 1;
    public checkPwned = false;
+   public visibilityClear = true;
    public reminder = true;
    public trueRand = false;
    public pseudoRand = true;
@@ -261,6 +263,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       setIfBoolean(reminder, (bool) => {
          this.reminder = bool;
          this.lastReminder = bool;
+      });
+   }
+
+   setVisibilityClear(clear: string | null): void {
+      setIfBoolean(clear, (bool) => {
+         this.visibilityClear = bool;
       });
    }
 
@@ -354,6 +362,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.setMinPwdStrength(this.lsGet('minpwdstrength'));
          this.setLoops(this.lsGet('loops'));
          this.setCTFormat(this.lsGet('ctformat'));
+         this.setVisibilityClear(this.lsGet('vclear'));
          this.setReminder(this.lsGet('reminder'));
          this.setTrueRand(this.lsGet('trand'));
          this.setPseudoRand(this.lsGet('prand'));
@@ -383,6 +392,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.setMinPwdStrength(params.get('minpwdstrength'));
          this.setLoops(params.get('loops'));
          this.setCTFormat(params.get('ctformat'));
+         this.setVisibilityClear(params.get('vclear'));
          this.setReminder(params.get('reminder'));
          this.setTrueRand(params.get('trand'));
          this.setPseudoRand(params.get('prand'));
@@ -441,13 +451,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.checkPwned = false;
       this.loops = 1;
       this.ctFormat = 'compact';
+      this.visibilityClear = true;
       this.reminder = true;
       this.lastReminder = true;
       this.trueRand = false;
       this.pseudoRand = true;
 
-      // clearCaches calls saveOptions, so nuke after
-      this.clearCaches();
+      this.clearPassword();
+      this.saveOptions();
       this.optionsLoaded = false;
    }
 
@@ -463,6 +474,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.lsDel('minpwdstrength');
          this.lsDel('loops');
          this.lsDel('ctformat');
+         this.lsDel('vclear');
          this.lsDel('reminder');
          this.lsDel('trand');
          this.lsDel('prand');
@@ -483,6 +495,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.lsSet('minpwdstrength', this.minPwdStrength);
             this.lsSet('loops', this.loops.toString());
             this.lsSet('ctformat', this.ctFormat.toString());
+            this.lsSet('vclear', this.visibilityClear.toString());
             this.lsSet('reminder', this.reminder.toString());
             this.lsSet('trand', this.trueRand.toString());
             this.lsSet('prand', this.pseudoRand.toString());
@@ -495,10 +508,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    timerTick(): void {
       if (DateTime.now() > this.cacheTimeout) {
-         this.clearCaches();
+         this.privacyClear();
       }
       let result = 0;
-      if (this.stuffCached) {
+      if (this.pwdCached) {
          const diff = this.cacheTimeout.diff(DateTime.now());
          result = Math.max(0, Math.round(diff.toMillis() / 1000));
       }
@@ -523,7 +536,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    clearPassword(): void {
-      this.stuffCached = false;
+      this.pwdCached = false;
       this.cachedPassword = '';
       this.cachedHint = '';
       if (this.intervalId != 0) {
@@ -532,9 +545,16 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   clearCaches(): void {
+   privacyClear(): void {
       this.clearPassword();
-      this.saveOptions();
+      this.onClearClear();
+   }
+
+   @HostListener('document:visibilitychange', ['$event'])
+   visibilitychange() {
+      if (document.hidden && this.visibilityClear) {
+         this.privacyClear();
+      }
    }
 
    onDraggerMouseDown(): void {
@@ -569,6 +589,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    onAlgorithmChange(value: string): void {
       this.lsSet('algorithm', this.algorithm);
+   }
+
+   onPasswordOptionChange(): void {
+      this.lsSet('checkpwned', this.checkPwned.toString());
+      this.lsSet('minpwdstrength', this.minPwdStrength);
+      this.clearPassword();
    }
 
    toastMessage(msg: string): void {
@@ -668,7 +694,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             }
          }
 
-/*         if (completed && !this.stuffCached) {
+/*         if (completed && !this.pwdCached) {
             this.onClearClear();
          }*/
       } catch (something) {
@@ -706,7 +732,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.showCipherArmorAndTime(this.getCipherArmorFor(encrypted, econtext));
 
          if (econtext.lp < econtext.lpEnd) {
-            this.clearCaches();
+            this.privacyClear();
             this.clearText = this.cipherArmor;
             return this.makeCipherArmor(econtext);
          }
@@ -783,7 +809,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             // A bit hacky... preserve top level loop information
             (nextContext.lpEnd as number) = dcontext.lpEnd;
             nextContext.lp = dcontext.lp;
-            this.clearCaches();
+            this.privacyClear();
             return this.makeClearText(nextContext);
          }
       } catch (something) {
@@ -899,7 +925,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       hint: string,
       context: Context
    ): Promise<[string, string]> {
-      if (this.stuffCached) {
+      if (this.pwdCached) {
          this.restartTimer();
          return Promise.resolve([this.cachedPassword, this.cachedHint]);
       } else {
@@ -944,7 +970,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                if (this.cacheTime > 0 && result[0]) {
                   this.cachedPassword = result[0];
                   this.cachedHint = result[1];
-                  this.stuffCached = true;
+                  this.pwdCached = true;
                   this.restartTimer();
                }
                resolve([result[0], result[1]]);
@@ -958,6 +984,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.lsSet('reminder', this.reminder.toString());
       this.reformatCipherArmor();
    }
+
+   onVClearChnage() {
+      this.lsSet('vclear', this.visibilityClear.toString());
+   }
+
 
    onFormatChange(selected?: string) {
       if(selected == 'link') {
@@ -998,8 +1029,15 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!checked) {
          this.pseudoRand = true;
       }
-      this.clearCaches();
       this.lsSet('trand', this.trueRand.toString());
+   }
+
+   onPseudoRandChange() {
+      this.lsSet('prand', this.pseudoRand.toString());
+   }
+
+   onICountChange() {
+      this.lsSet('icount', this.icount.toString());
    }
 
    onClickFileUpload(event: any) {
@@ -1069,7 +1107,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onCacheTimerChange(): void {
-      if (this.stuffCached) {
+      if (this.pwdCached) {
          this.restartTimer();
       }
       this.lsSet('cachetime', this.cacheTime.toString());

@@ -372,31 +372,35 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'How should I decide which cipher mode to use?',
+      question: 'How should I decide which cipher mode to choose?',
       answer: `Quick Crypt offers only well-established and trusted
       <a href="https://en.wikipedia.org/wiki/Authenticated_encryption" target="_blank">
-      authenticated cipher</a> modes that provide privacy and authenticity.
-      None are a bad choice, and selecting which mode to use depends
-      on your own criteria.
+      authenticated cipher</a> modes that provide privacy and authenticity: AES 256 GCM,
+      XChaCha20 Poly1305, and AEGIS 256.
+      None are a bad choice, and selecting which mode to choose depends on your own criteria.
       <ul>
-      <li>If you want a mode implemented by your browser vendor, use <b>AES 256 GCM</b>.
+      <li>If you want a mode implemented by your browser vendor, choose <b>AES 256 GCM</b>.
       </li>
       <li>If you want a mode <i>not</i> implemented by your browser vendor,
-      use <b>XChaCha20 Poly1305</b> or <b>AEGIS 256</b>,
-      which are from the open-source
+      choose <b>XChaCha20 Poly1305</b> or <b>AEGIS 256</b>,
+      which are part of the open-source
       <a href="https://doc.libsodium.org/" target="_blank">libsodium library</a>.
       </li>
       <li>If you really don't trust your browser vendor, you probably shouldn't
       use Quick Crypt.
       </li>
-      <li>If you want the most recently created cipher mode, use <b>AEGIS 256</b>.
+      <li>If you want the most recently designed cipher mode, choose <b>AEGIS 256</b>.
       </li>
-      <li>If you want the most established and studied mode, use <b>AES 256 GCM</b>,
-      which is at the core of TLS 1.3 and used more than any other cipher.</li>
-      <li>If you want the smallest resulting cipher text (by only 16 characters),
-      use <b>AES 256 GCM</b>.
+      <li>If you want the most widely used and studied mode, choose <b>AES 256 GCM</b>,
+      which is the most commonly used TLS 1.3 cipher.
+      <li>If you want a mode that many regard as more robust than AES 256 GCM and
+      whose close sibling is in the TLS 1.3 standard, choose <b>XChaCha20 Poly130</b>.
       </li>
-      <li>You will not find universal agreement on the "safest" mode, but the
+      <li>If you want the smallest resulting cipher text (although not by much),
+      choose <b>AES 256 GCM</b> first, then <b>XChaCha20 Poly1305</b>, and <b>AEGIS 256</b>
+      last.
+      </li>
+      <li>While you will not find universal agreement on the "safest" mode, the
       <a href="https://doc.libsodium.org/secret-key_cryptography/aead#tl-dr-which-one-should-i-use" target="_blank">
       libsodium project recommends</a> <b>AEGIS 256</b> first, then <b>XChaCha20 Poly1305</b>,
         and <b>AES 256 GCM</b> last.
@@ -522,9 +526,9 @@ const ELEMENT_DATA: FAQElement[] = [
       only reduce security to the strength of passkey authentication, which is
       trusted by many top websites. This design aligns with
       Quick Crypt's goal of making it hard to screw up.</p>
-      <p>Regardless, remember that strong passwords are always more secure than
-      weak ones. Rather than using weak passwords, it is better to use strong
-      passwords and password hints that help only you remember them.</p>`
+      <p>Regardless, using strong passwords is always more secure than using
+      weak passwords. Rather than use weak passwords, you should use strong
+      passwords along with password hints that help only you remember them.</p>`
    },
 
    {
