@@ -36,12 +36,12 @@ SOFTWARE. */
   margin-top: 20px;
 }
 
-.mleft15 {
-  margin-left: 15px;
+.mtop35 {
+  margin-top: 35px;
 }
 
-.mbot25 {
-  margin-bottom: 25px;
+.mleft15 {
+  margin-left: 15px;
 }
 
 .txt-area-button3 {
@@ -77,24 +77,24 @@ SOFTWARE. */
   width: 146px;
 }
 
-.open-new-icon1 {
-  font-size: 18px;
+.open-new-link {
   position: relative;
-  top: 4px;
+  top: 6px;
+  left: 1px;
+}
+
+#cipherlink {
   left: -2px;
+}
+
+.shiftrand {
+  position: relative;
+  top:-6px;
 }
 
 .open-new-icon2 {
   font-size: 18px;
   position: relative;
-  top: 6px;
-  left: 2px
-}
-
-.algorithms {
-  /*  width: 476px;*/
-  position: relative;
-  top: -5px;
 }
 
 .algoption {
@@ -116,7 +116,24 @@ SOFTWARE. */
 .options-header {
   font-family: Roboto, sans-serif;
   font-size: 14px;
+  text-decoration: underline;
 }
+
+.options-header1 {
+  @extend .options-header;
+  margin-top:10px;
+}
+
+.options-header2 {
+  @extend .options-header;
+  margin-top:28px;
+}
+
+.options-header3 {
+  @extend .options-header;
+  margin-top:34px;
+}
+
 
 .pasword-input {
   width: 230px;
