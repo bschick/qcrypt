@@ -315,7 +315,7 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'Has thread modeling been done for Quick Crypt?',
+      question: 'Has threat modeling been done for Quick Crypt?',
       answer: `Only informally, and we'd welcome contributions. These areas have
       been considered:
       <ol type='i'>
@@ -342,23 +342,27 @@ const ELEMENT_DATA: FAQElement[] = [
          </li>
          <li><b>Server-side data theft or logic injection:</b> Quick Crypt uses AWS
          for server-side logic
-         and data storage with a minimal API. Our AWS account follows best practices
+         and data storage, and has a minimal API. Our AWS account follows best practices
          and uses AWS Config
          and AWS Security Hub to help detect problems. A continuous penetration
-         testing tool may be added in the future.
+         testing tool may be added in the future. Server code is also open-source
+         and <a href="https://github.com/bschick/qcrypt-server" target="_blank">
+         available for review</a> and
+         <a href="https://github.com/bschick/qcrypt-server/issues" target="_blank">
+         bug reports</a>.
          </li>
          <li><b>Website impersonation:</b> Several well-known security breaches
          occurred when an untrusted site impersonated a trusted site.
          Since Quick Crypt is an open-source project, an attacker could create
-         a site that looks identical and has a very similar domain name. Quick Crypt
-         greatly reduced unexpected decryption risk by requiring a user
-         credential stored server-side that is only accessible with a passkey bound to
-         Quick Crypt's domain. User credentials and passkeys make it
-         infeasible for other websites to directly decrypt your data since browsers
-         are not fooled by similar looking sites
-         or domain names and will not use a passkey bound to Quick Crypt with another
+         a site that looks identical and has a similar domain name. Quick Crypt
+         greatly reduced the risk of decrypting data at an untrusted site
+         by requiring a user credential stored server-side that is only accessible
+         with a passkey bound to Quick Crypt's domain. User credentials and passkeys
+         make it infeasible for other websites to decrypt your data since
+         browsers are not fooled by similar looking websites
+         or domain names and will not present a passkey bound to Quick Crypt for another
          website. Quick Crypt cannot prevent you from starting at a similar looking
-         untrusted website and entering clear text or passwords, however. The best way
+         untrusted website and entering clear text and passwords, however. The best way
          to avoid that risk is to navigate directly to
          Quick Crypt, save it as a bookmark, and only follow links from sites you trust.
          </li>
@@ -456,8 +460,8 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'Is the \'link\' Cipher Armor format secure?',
       answer: `<p>It is safer to use the other cipher armor formats and navigate
-      directly to Quick Crypt's website than to use the 'link' format. The risk
-      in following cipher armor links is that the embedded URL cannot be
+      directly to Quick Crypt's website than to use the 'link' format. The small
+      risk in following cipher armor links is that the embedded URL cannot be
       encrypted (or validated) and still be usable in a browser. If an attacker
       can manipulate your stored cipher text, they could edit the embedded URL
       and send you to an untrusted site. Because the untrusted site cannot
@@ -467,9 +471,10 @@ const ELEMENT_DATA: FAQElement[] = [
       untrusted site could prompt you for your encryption password to obtain
       some of the information needed for decryption. It could also try to trick
       you into encrypting new data.</p>
-      <p>The link format is only recommended when you are not concerned about
-      an attacker changing your stored cipher text. The link format does provide
-      strong privacy and authenticity and is very convenient when used
+      <p>The link format is only recommended when you are concerned abou the
+      privacy of your data but not about an attacker changing your stored
+      cipher text. The link format does provide
+      strong privacy and authenticity and is convenient when used
       appropriately.</p>`
    },
 
