@@ -40,11 +40,21 @@ SOFTWARE. */
   margin-top: 35px;
 }
 
-.mleft11 {
-  margin-left: 11px;
+.mleft15 {
+  margin-left: 15px;
 }
 
-.mleft15 {
+.mleft34 {
+//  margin-left: 34px;
+  margin-left: 0px;
+}
+
+.mleft35 {
+  margin-left: 35px;
+}
+
+.mleftX {
+//  margin-left: 58px;
   margin-left: 15px;
 }
 
@@ -87,8 +97,17 @@ SOFTWARE. */
   left: 1px;
 }
 
+.open-new-icon2 {
+  font-size: 18px;
+  position: relative;
+}
+
 #cipherlink {
   left: -2px;
+}
+
+#format-link {
+  top: -26px;
 }
 
 .shiftrand {
@@ -96,10 +115,6 @@ SOFTWARE. */
   top:-6px;
 }
 
-.open-new-icon2 {
-  font-size: 18px;
-  position: relative;
-}
 
 .algoption {
   width: 185px;

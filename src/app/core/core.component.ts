@@ -53,6 +53,7 @@ import { Duration, DateTime } from 'luxon';
 import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { ClipboardModule } from '@angular/cdk/clipboard';
+import { RouterLink } from '@angular/router';
 import * as cs from '../services/cipher.service';
 import { AuthenticatorService, AuthEvent, AuthEventData } from '../services/authenticator.service';
 import {
@@ -136,7 +137,8 @@ function setIfBoolean(
       MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
       ReactiveFormsModule, ClipboardModule, CdkAccordionModule, MatSlideToggleModule,
       MatExpansionModule, MatSelectModule, MatButtonToggleModule,
-      MatTooltipModule, MatRippleModule, CommonModule, BubbleDirective
+      MatTooltipModule, MatRippleModule, CommonModule, BubbleDirective,
+      RouterLink,
    ],
 })
 export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -545,11 +547,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   privacyClear(): void {
-      this.clearPassword();
-      this.onClearClear();
-   }
-
    @HostListener('document:visibilitychange', ['$event'])
    visibilitychange() {
       if (document.hidden && this.visibilityClear) {
@@ -626,6 +623,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
+   privacyClear(): void {
+      this.clearPassword();
+      this.onClearClear();
+   }
 
    cipherReadyNotice(params: cs.Params) {
       this.actionStart = Date.now();
@@ -684,17 +685,16 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
          const completed = await this.makeCipherArmor(econtext);
 
-         if (!this.welcomed) {
-            if (!completed) {
-               this.bubbleTip2.show();
-            } else {
-               this.toastMessage('Congratulations, data encrypted');
-               this.welcomed = true;
-               localStorage.setItem(this.authSvc.userId + "welcomed", "yup");
-            }
+         if (!this.welcomed && !completed) {
+            this.bubbleTip2.show();
          }
 
-/*         if (completed && !this.pwdCached) {
+         if(completed) {
+            this.toastMessage('Congratulations, data encrypted');
+         }
+
+         /* A bit torn about always clearing this when not caching...
+         if (completed && !this.pwdCached) {
             this.onClearClear();
          }*/
       } catch (something) {
@@ -730,6 +730,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
          econtext.lp += 1;
          this.showCipherArmorAndTime(this.getCipherArmorFor(encrypted, econtext));
+
+         // it worked, so stop showing tips (setting this before next loop)
+         this.welcomed = true;
+         localStorage.setItem(this.authSvc.userId + "welcomed", "yup");
 
          if (econtext.lp < econtext.lpEnd) {
             this.privacyClear();
@@ -771,7 +775,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          }
 
          // This updates Cipher Armor UI field
-         await this.makeClearText(dcontext);
+         const completed = await this.makeClearText(dcontext);
+         if (completed) {
+            this.toastMessage('Data decrypted');
+         }
 
       } catch (something) {
          console.error(something);
@@ -787,7 +794,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   async makeClearText(dcontext: DecContext): Promise<void> {
+   async makeClearText(dcontext: DecContext): Promise<boolean> {
       this.onClearClear();
 
       try {
@@ -812,11 +819,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.privacyClear();
             return this.makeClearText(nextContext);
          }
+
+         return true;
       } catch (something) {
          // cancelling password throws, but not an Error. so eat it
          if (something instanceof Error) {
             throw something;
          }
+         return false;
       }
    }
 
@@ -956,6 +966,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             loops: context.lpEnd,
             checkPwned: this.checkPwned,
             welcomed: this.welcomed,
+            userName: this.authSvc.userName,
          },
       });
 

@@ -62,6 +62,7 @@ export type PwdDialogData = {
    loops: number;
    checkPwned: boolean;
    welcomed: boolean;
+   userName: string;
 };
 
 export type SigninDialogData = {
@@ -90,6 +91,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    public loopCount = 0;
    public loops = 0;
    public askHint = false;
+   public userName = '';
    private checkPwned = false;
    private welcomed = true;
    public maxHintLen = cs.HINT_MAX_LEN;
@@ -111,6 +113,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
       this.onPasswordStrengthChange(0);
       this.checkPwned = data.checkPwned;
       this.welcomed = data.welcomed;
+      this.userName = data.userName;
    }
 
    ngOnInit(): void {
