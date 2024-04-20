@@ -3,8 +3,9 @@
     <h1>Frequently Asked Questions</h1>
     <div class="control-host">
       <mat-form-field class="filter">
-        <input matInput autofocus type="text" placeholder="search" (keyup)="applyFilter($event)" #filterInput>
-        <mat-icon matSuffix aria-label="Clear" (click)="filterInput.value = ''; applyFilter($event)">
+        <input matInput autofocus type="text" placeholder="search" [(ngModel)]="searchTerm"
+          (keyup)="applyFilter(filterInput.value)" #filterInput>
+        <mat-icon matSuffix aria-label="Clear" (click)="filterInput.value = ''; applyFilter(null)">
           clear
         </mat-icon>
       </mat-form-field>
