@@ -508,24 +508,31 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'Is the \'link\' Cipher Armor format secure?',
-      answer: `<p>Using the other cipher armor formats and navigating directly
-      to Quick Crypt's website is safer than using the 'link' format. The small
-      risk in following cipher armor links is that the embedded URL cannot be
-      encrypted (or validated) and still be usable in a browser. If an attacker
-      can manipulate your stored cipher armor, they could edit the embedded URL
-      and send you to an untrusted site. Because the untrusted site cannot
-      access your Quick Crypt passkey, however, it cannot obtain authorization
-      to access your user name or credential nor can it
-      decrypt your data (see the 'threat modeling question'). An
-      untrusted site could prompt you for your encryption password to obtain
-      some of the information needed for decryption, but you can protect against
-      that by always confirming your user name is shown at the top of the
-      password input popup.</p>
-      <p>The link format is safe when you are concerned about the
-      privacy of your data but not about an attacker changing your stored
-      cipher armor. It provides strong privacy and authenticity and is
-      convenient when used appropriately.</p>`
+      question: 'What are the different Cipher Armor formats?',
+      answer: `<p>The 'Compact' and 'Indent' formats contain the same elements
+      with only different spacing and line breaks. As the name implies, the
+      'Compact' format is smaller while 'Indent' is easier to read.</p>
+      <p>
+      The 'Link' format is a URL containing cipher text that when entered in
+      a browser, takes you directly to the Quick Crypt website with the cipher
+      text ready for decryption. While this is very convenient, the 'Link'
+      format is less safe. The risk following cipher armor links is that
+      the embedded URL cannot be encrypted or validated and still be usable
+      in a browser. If an attacker can manipulate your stored cipher armor,
+      they could edit the URL and send you to an untrusted site.
+      Because an untrusted site cannot access your Quick Crypt passkey,
+      however, it cannot obtain authorization to access your user name or
+      credential nor can it decrypt your data (see the 'threat modeling
+      question'). An untrusted site could request your encryption
+      password to obtain some of the information needed for decryption, but
+      you can detect that by always confirming your user name is
+      shown at the top of the password prompt.</p>
+
+      <p>Opting for the 'Compact' or 'Indent' cipher armor formats and
+      navigating directly to Quick Crypt's website is the safest choice.
+      The 'Link' format can be used when you are not concerned about anyone
+      changing stored cipher armor. All formats provide strong
+      privacy and authenticity.</p>`
    },
 
    {
