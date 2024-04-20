@@ -4,7 +4,7 @@ We created Quick Crypt to make it safe and convenient to encrypt sensitive data 
 
 Thus, Quick Crypt. A small-batch text-focused cipher tool designed to be easy to use, trustworthy, and convenient. It encrypts and decrypts data using cryptographic features available in modern browsers to ensure your confidential data never leaves your system. After sign-in, Quick Crypt continues to work even with network access disabled. AEAD ciphers, passwords you supply, and passkey-protected credentials deliver privacy, integrity, authenticity, and website forgery protection.
 
-We designed Quick Crypt to make it easy to encrypt data and to decrypt that data days or years later without needing to remember or install complicated tools. Quick Crypt's cipher armor format provides an optional reminder or link to the decryption page, so you only need to remember the password you used for encryption and have your passkey. Understanding how Quick Crypt works is optional, but if you are interested, the protocols are documented and the code is open-source under the MIT license. Bug reports and pull requests are welcome.
+We designed Quick Crypt to make it easy to encrypt data and to decrypt that data days or years later without needing to remember or install complicated tools. Quick Crypt's cipher armor format provides an optional reminder or link to the decryption page, so you only need to remember the password you used for encryption and have your passkey. Understanding how Quick Crypt works is optional, but if you are interested, the [protocols are documented](https://quickcrypt.org/help/protocol) and the code is open-source under the MIT license. Bug reports and pull requests are welcome.
 
 <ins>Design Goals</ins>
 - Easy to use and hard to screw up
@@ -12,7 +12,7 @@ We designed Quick Crypt to make it easy to encrypt data and to decrypt that data
 - Unencrypted data and passwords never leave your system
 - Encryption options constrained to secure values
 - Follows current cryptographic best practices
-- Well defined and documented protocols
+- Well defined and [documented protocols](https://quickcrypt.org/help/protocol)
 - After sign-in, should work fully offline
 - Use the latest web security protocols (csp, cors, sri, hsts, xfo, etc.)
 - Open-source for peer review
