@@ -49,7 +49,10 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy, AfterViewInit {
 
    ngAfterViewInit(): void {
       try {
-         this.r2.selectRootElement('#linkInput').focus();
+         // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
+         setTimeout(
+            () => this.r2.selectRootElement('#linkInput').focus(), 0
+         );
       } catch (err) {
          console.error(err);
       }
