@@ -509,15 +509,17 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'What are the different Cipher Armor formats?',
-      answer: `<p>The 'Compact' and 'Indent' formats contain the same elements
-      with only different spacing and line breaks. As the name implies, the
+      answer: `<p>Cipher Armor is text that includes encrypted
+      data and parameters (cipher text) along with metadata. The 'Compact'
+      and 'Indent' formats are JSON containing the same stelements
+      with different spacing and line breaks. As the name implies, the
       'Compact' format is smaller while 'Indent' is easier to read.</p>
       <p>
       The 'Link' format is a URL containing cipher text that when entered in
       a browser, takes you directly to the Quick Crypt website with the cipher
       text ready for decryption. While this is very convenient, the 'Link'
-      format is less safe. The risk following cipher armor links is that
-      the embedded URL cannot be encrypted or validated and still be usable
+      format is less safe. The risk is that cipher armor URLs cannot be
+      encrypted or validated and still be usable
       in a browser. If an attacker can manipulate your stored cipher armor,
       they could edit the URL and send you to an untrusted site.
       Because an untrusted site cannot access your Quick Crypt passkey,
@@ -525,13 +527,13 @@ const ELEMENT_DATA: FAQElement[] = [
       credential nor can it decrypt your data (see the 'threat modeling
       question'). An untrusted site could request your encryption
       password to obtain some of the information needed for decryption, but
-      you can detect that by always confirming your user name is
+      you can detect that by always confirming that your user name is
       shown at the top of the password prompt.</p>
 
       <p>Opting for the 'Compact' or 'Indent' cipher armor formats and
       navigating directly to Quick Crypt's website is the safest choice.
       The 'Link' format can be used when you are not concerned about anyone
-      changing stored cipher armor. All formats provide strong
+      changing stored cipher armor. All three formats provide strong
       privacy and authenticity.</p>`
    },
 
