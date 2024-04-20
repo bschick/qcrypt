@@ -1,11 +1,12 @@
-import { Component, ViewEncapsulation } from '@angular/core';
+import { AfterViewInit, Component, ViewEncapsulation } from '@angular/core';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { animate, state, style, transition, trigger } from '@angular/animations';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
+import { HttpParams } from '@angular/common/http';
+import { FormsModule } from '@angular/forms';
 
 
 export interface FAQElement {
@@ -29,12 +30,13 @@ export interface FAQElement {
    encapsulation: ViewEncapsulation.None,
    imports: [
       MatTableModule, MatInputModule, MatFormFieldModule, MatIconModule,
-      MatButtonModule,
+      MatButtonModule, FormsModule,
    ],
 })
-export class FaqsComponent {
+export class FaqsComponent implements AfterViewInit {
 
    public allExpanded = false;
+   public searchTerm = '';
    public expandedPositions = new Array();
    public displayedColumns: string[] = ['position', 'question'];
    public dataSource: MatTableDataSource<FAQElement>;
@@ -46,9 +48,19 @@ export class FaqsComponent {
       this.dataSource = new MatTableDataSource(ELEMENT_DATA);
    }
 
-   applyFilter(event: Event) {
-      const filterValue = (event.target as HTMLInputElement).value || '';
-      this.dataSource.filter = filterValue.trim().toLowerCase();
+   ngAfterViewInit(): void {
+      const params = new HttpParams({ fromString: window.location.search });
+      const search = params.get('search');
+      if (search) {
+         this.searchTerm = search;
+         this.applyFilter(search);
+         this.onToggleExpand();
+      }
+   }
+
+   applyFilter(filter: string | null = null) {
+      filter = filter ?? '';
+      this.dataSource.filter = filter.trim().toLowerCase();
    }
 
    addOrRemove(position: number) {
@@ -170,13 +182,13 @@ const ELEMENT_DATA: FAQElement[] = [
         <tr>
           <td class="tg-0pky">Passwords and hints used for encryption and decryption</td>
           <td class="tg-0pky">Not stored, optionally cached, not transmitted</td>
-          <td class="tg-0pky">When password caching is enabled within "Advanced Encryption Options," the last
+          <td class="tg-0pky">When password caching is enabled within "Advanced Options," the last
             password entered is cached in browser memory. Click the "Forget Pwd" button to remove or turn off caching.</td>
         </tr>
         <tr>
           <td class="tg-0pky">Encryption and decryption preferences such as symmetric cipher choice</td>
           <td class="tg-0pky">Browser local storage, not transmitted</td>
-          <td class="tg-0pky">Within the "Advanced Encryption Options" section on the main page, click the
+          <td class="tg-0pky">Within the "Advanced Options" section on the main page, click the
             "Reset to Defaults" button<br> </td>
         </tr>
         <tr>
@@ -355,18 +367,19 @@ const ELEMENT_DATA: FAQElement[] = [
          occurred when an untrusted site impersonated a trusted site.
          Since Quick Crypt is an open-source project, an attacker could create
          a site that looks identical and has a similar domain name. Quick Crypt
-         greatly reduced the risk of decrypting data at an untrusted site
-         by requiring a user credential stored server-side that is only accessible
+         dramatically reduces the risk of decrypting data at an untrusted site
+         by requiring a server-side user credential only accessible
          with a passkey bound to Quick Crypt's domain. User credentials and passkeys
          make it infeasible for other websites to decrypt your data since
          browsers are not fooled by similar looking websites
          or domain names and will not present a passkey bound to Quick Crypt for another
          website. Quick Crypt cannot prevent you from starting at a similar looking
          untrusted website and entering clear text and passwords, however. The best way
-         to avoid that risk is to navigate directly to
-         Quick Crypt, save it as a bookmark, and only follow links from sites you trust.
+         to reduce that risk is to always confirm your user name is shown at the top of the
+         password input popup. You should also navigate directly to https://quickcrypt.org,
+         save it as a bookmark, and only follow links from sites you trust.
          </li>
-         <li><b>Stolen user passkeys, recovery links, or encryption passwords:</b>
+         <li><b>Stolen passkeys, recovery links, or encryption passwords:</b>
          See the related questions about an untrusted user obtaining your
          passkeys, recovery links, or encryption passwords. Those questions describe
          the best response to each type of data exposure.
@@ -409,6 +422,43 @@ const ELEMENT_DATA: FAQElement[] = [
       libsodium project recommends</a> <b>AEGIS 256</b> first, then <b>XChaCha20 Poly1305</b>,
         and <b>AES 256 GCM</b> last.
       </li>`
+   },
+
+   {
+      position: 0,
+      question: "What are the 'True Random' and 'Pseudo Random' options?",
+      answer: `Random values are input to cryptographic functions and must be
+      generated in a manner
+      <a href="https://en.wikipedia.org/wiki/Cryptographically_secure_pseudorandom_number_generator" target="_blank">
+      suitable for use in cryptography</a>. Quick Crypt uses WebCrypto
+      <a href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues" target="_blank">getRandomValues()</a>
+      by default, which generates cryptographically strong pseudo-random (algorithmic) values.
+      Unlike other
+      cryptographic functions implemented by browsers, however, random number generation
+      is not standardized, and quality may vary. You can alternatively configure Quick
+      Crypt to download random data generated from atmospheric noise by
+      <a href="https://www.random.org" target="_blank">https://www.random.org</a>, which
+      should be closer to true random data. This is set within the "Advanced Options"
+      section on the main page. When you enable the 'True Random'
+      option, you can optionally enable your browser's 'Pseudo Random' function
+      as a fallback in case https://www.random.org is unreachable. If
+      https://www.random.org is unreachable and 'Pseudo Random' is disabled,
+      encryption operations result in an error.`
+   },
+
+   {
+      position: 0,
+      question: "What is the 'Check if Stolen' option?",
+      answer: `When you enable the 'Check if Stolen' option, Quick Crypt checks
+      an online database from
+      <a href="https://haveibeenpwned.com/API/v2#PwnedPasswords" target="_blank">haveibeenpwned.com</a>
+      for passwords that have been leaked or stolen, and prevents you from using
+      them for encryption. Attackers compile leaked passwords into lists to speed up
+      password guessing. Quick Crypt uses large variable numbers of PBKDF2 key
+      derivation iterations and combines your encryption password with a
+      passkey-protected user credential to make password guessing extremely difficult,
+      even with leaked passwords. But it is always better to use a strong password
+      for defense-in-depth in case your user credential is ever stolen.`
    },
 
    {
@@ -459,23 +509,23 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'Is the \'link\' Cipher Armor format secure?',
-      answer: `<p>It is safer to use the other cipher armor formats and navigate
-      directly to Quick Crypt's website than to use the 'link' format. The small
+      answer: `<p>Using the other cipher armor formats and navigating directly
+      to Quick Crypt's website is safer than using the 'link' format. The small
       risk in following cipher armor links is that the embedded URL cannot be
       encrypted (or validated) and still be usable in a browser. If an attacker
-      can manipulate your stored cipher text, they could edit the embedded URL
+      can manipulate your stored cipher armor, they could edit the embedded URL
       and send you to an untrusted site. Because the untrusted site cannot
-      access your Quick Crypt passkey, it cannot obtain authorization to access
-      your user credential or
-      decrypt your data (see the 'threat modeling question'). However, an
+      access your Quick Crypt passkey, however, it cannot obtain authorization
+      to access your user name or credential nor can it
+      decrypt your data (see the 'threat modeling question'). An
       untrusted site could prompt you for your encryption password to obtain
-      some of the information needed for decryption. It could also try to trick
-      you into encrypting new data.</p>
-      <p>The link format is only recommended when you are concerned abou the
+      some of the information needed for decryption, but you can protect against
+      that by always confirming your user name is shown at the top of the
+      password input popup.</p>
+      <p>The link format is safe when you are concerned about the
       privacy of your data but not about an attacker changing your stored
-      cipher text. The link format does provide
-      strong privacy and authenticity and is convenient when used
-      appropriately.</p>`
+      cipher armor. It provides strong privacy and authenticity and is
+      convenient when used appropriately.</p>`
    },
 
    {
@@ -494,6 +544,10 @@ const ELEMENT_DATA: FAQElement[] = [
       <a href="https://doc.libsodium.org/" target="_blank">libsodium library</a> bundled into
       the Quick Crypt web-app.</p>
       <ol type='i'>
+         <li><b>Random Values:</b> WebCrypto <a href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues"
+         target="_blank">getRandomValues()</a> or <a href="https://www.random.org"
+         target="_blank">https://www.random.org/cgi-bin/randbyte</a>
+         </li>
          <li><b>HKDF and PBKDF2 Key Derivation:</b> SubtleCrypto
          <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey" target="_blank">deriveKey()</a>
          </li>
