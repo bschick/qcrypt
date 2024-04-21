@@ -390,9 +390,9 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'How should I decide which cipher mode to choose?',
-      answer: `Quick Crypt offers only well-established and trusted
+      answer: `Quick Crypt offers only well-established and tested
       <a href="https://en.wikipedia.org/wiki/Authenticated_encryption" target="_blank">
-      authenticated cipher</a> modes that provide privacy and authenticity: AES 256 GCM,
+      AEAD cipher modes</a> that provide privacy and authenticity: AES 256 GCM,
       XChaCha20 Poly1305, and AEGIS 256.
       None are a bad choice, and selecting which mode to choose depends on your own criteria.
       <ul>
@@ -645,5 +645,19 @@ const ELEMENT_DATA: FAQElement[] = [
       signature test upfront means there would need to be problems with
       both the HMAC and the cipher algorithms for an attack to succeed,
       which is even more unlikely.`
+   },
+
+   {
+      position: 0,
+      question: 'What will Quick Crypt do if one of the current cipher modes is broken?',
+      answer: `If one of the three cipher modes used by Quick Crypt is someday
+      found to be weak, Quick Crypt will stop offering it as an option for encryption.
+      The problematic cipher would still be supported for decryption so that users
+      can access data encrypted in the past. Depending upon the
+      severity of the weakness, Quick Crypt would notify users of the situation when
+      you use the tool (remember we have no contact info) and recommend that you
+      re-encrypt using a different cipher mode. Such a weakenss would be massive news
+      since two modes are part of the TLS 1.3 standard used by all browsers,
+      and the third is proposed for a future TLS version.`
    },
 ];
