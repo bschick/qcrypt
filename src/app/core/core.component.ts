@@ -180,7 +180,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    @ViewChild('bubbleTip2') bubbleTip2!: BubbleDirective;
 
    // options
-   public algorithm = 'AES-GCM';
+   public algorithm = 'X20-PLY';
    public icount: number = cs.ICOUNT_DEFAULT; // Default since benchmark is async
    public hidePwd = true;
    public cacheTime = 0;
@@ -445,7 +445,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    resetOptions(): void {
-      this.algorithm = 'AES-GCM';
+      this.algorithm = 'X20-PLY';
       this.icount = this.icountDefault;
       this.hidePwd = true;
       this.cacheTime = 0;
