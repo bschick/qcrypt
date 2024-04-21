@@ -393,35 +393,40 @@ const ELEMENT_DATA: FAQElement[] = [
       answer: `Quick Crypt offers only well-established and tested
       <a href="https://en.wikipedia.org/wiki/Authenticated_encryption" target="_blank">
       AEAD cipher modes</a> that provide privacy and authenticity: AES 256 GCM,
-      XChaCha20 Poly1305, and AEGIS 256.
-      None are a bad choice, and selecting which mode to choose depends on your own criteria.
+      XChaCha20 Poly1305, and AEGIS 256. No mode is bad, and choosing one depends on
+      your own criteria.
       <ul>
-      <li>If you want a mode implemented by your browser vendor, choose <b>AES 256 GCM</b>.
-      </li>
-      <li>If you want a mode <i>not</i> implemented by your browser vendor,
-      choose <b>XChaCha20 Poly1305</b> or <b>AEGIS 256</b>,
-      which are part of the open-source
-      <a href="https://doc.libsodium.org/" target="_blank">libsodium library</a>.
-      </li>
-      <li>If you really don't trust your browser vendor, you probably shouldn't
-      use Quick Crypt.
-      </li>
-      <li>If you want the most recently designed cipher mode, choose <b>AEGIS 256</b>.
-      </li>
-      <li>If you want the most widely used and studied mode, choose <b>AES 256 GCM</b>,
-      which is the most commonly used TLS 1.3 cipher.
-      <li>If you want a mode that many regard as more robust than AES 256 GCM and
-      whose close sibling is in the TLS 1.3 standard, choose <b>XChaCha20 Poly130</b>.
-      </li>
-      <li>If you want the smallest resulting cipher text (although not by much),
-      choose <b>AES 256 GCM</b> first, then <b>XChaCha20 Poly1305</b>, and <b>AEGIS 256</b>
-      last.
-      </li>
-      <li>While you will not find universal agreement on the "safest" mode, the
-      <a href="https://doc.libsodium.org/secret-key_cryptography/aead#tl-dr-which-one-should-i-use" target="_blank">
-      libsodium project recommends</a> <b>AEGIS 256</b> first, then <b>XChaCha20 Poly1305</b>,
-        and <b>AES 256 GCM</b> last.
-      </li>`
+         <li>If you want a mode implemented by your browser vendor, choose <b>AES 256 GCM</b>.
+         </li>
+         <li>If you want a mode <i>not</i> implemented by your browser vendor,
+         choose <b>XChaCha20 Poly1305</b> or <b>AEGIS 256</b>,
+         which are part of the open-source
+         <a href="https://doc.libsodium.org/" target="_blank">libsodium library</a>.
+         </li>
+         <li>If you really don't trust your browser vendor, you probably shouldn't
+         use Quick Crypt.
+         </li>
+         <li>If you want the most recently designed cipher mode, choose <b>AEGIS 256</b>.
+         </li>
+         <li>If you want the most widely used and studied mode, choose <b>AES 256 GCM</b>,
+         which is the most commonly used TLS 1.3 cipher.
+         <li>If you want a mode that many regard as more robust than AES 256 GCM and
+         whose close sibling is in the TLS 1.3 standard, choose <b>XChaCha20 Poly130</b>.
+         </li>
+         <li>If you want the smallest resulting cipher text (although not by much),
+         choose <b>AES 256 GCM</b> first, then <b>XChaCha20 Poly1305</b>, and <b>AEGIS 256</b>
+         last.
+         </li>
+         <li>While there is no universal agreement on the "safest" mode, the
+         <a href="https://doc.libsodium.org/secret-key_cryptography/aead#tl-dr-which-one-should-i-use" target="_blank">
+         libsodium project recommends</a> <b>AEGIS 256</b> first, then <b>XChaCha20 Poly1305</b>,
+         and <b>AES 256 GCM</b> last.
+         </li>
+      </ul>
+      <p>Quick Cyrpt defaults to <b>XChaCha20 Poly1305</b> because it is very
+      well-established and believed to be more robust than AES 256 GCM. The
+      libsodium implementation is also easy for Quick Crypt to update if needed.
+      </p>`
    },
 
    {
