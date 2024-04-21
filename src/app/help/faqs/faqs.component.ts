@@ -113,10 +113,10 @@ const ELEMENT_DATA: FAQElement[] = [
       <p><i>Second</i>, Quick Crypt relies on a passkey's binding to its specifc domain name.
       A potential risk of online encryption tools is that
       a rogue website could impersonate another site and trick people into decrypting
-      data on the rogue site. Quick Crypt removes that risk by requiring
+      data on the rogue site. Quick Crypt greatly reduces that risk by requiring
       passkey authentication that is bound to Quick Crypt's domain name. The passkey makes
       it infeasible
-      for a rogue website decrypt your data even if you provided your encryption password.
+      for a rogue website decrypt your data even if you exposed your encryption password.
       </p>`
    },
 
@@ -183,13 +183,13 @@ const ELEMENT_DATA: FAQElement[] = [
           <td class="tg-0pky">Passwords and hints used for encryption and decryption</td>
           <td class="tg-0pky">Not stored, optionally cached, not transmitted</td>
           <td class="tg-0pky">When password caching is enabled within "Advanced Options," the last
-            password entered is cached in browser memory. Click the "Forget Pwd" button to remove or turn off caching.</td>
+            password entered is cached in browser memory. Click the "Flush" button to remove or turn off caching.</td>
         </tr>
         <tr>
           <td class="tg-0pky">Encryption and decryption preferences such as symmetric cipher choice</td>
           <td class="tg-0pky">Browser local storage, not transmitted</td>
           <td class="tg-0pky">Within the "Advanced Options" section on the main page, click the
-            "Reset to Defaults" button<br> </td>
+            "Reset To Defaults" button<br> </td>
         </tr>
         <tr>
           <td class="tg-0pky">Last signed-in user name and user ID</td>
@@ -198,21 +198,22 @@ const ELEMENT_DATA: FAQElement[] = [
             "Sign in as a different user" button</td>
         </tr>
         <tr>
-          <td class="tg-0pky">Currently signed-in user name and credential</td>
+          <td class="tg-0pky">Currently signed-in user credential</td>
           <td class="tg-0pky">Browser sessions storage, transmission below</td>
-          <td class="tg-0pky">Close the Quick Crypt tab in your browser or navigate to another website</td>
+          <td class="tg-0pky">Close the Quick Crypt tab in your browser or navigate to another website.
+          Automatically flushed after 6 hours of inactivity</td>
         </tr>
         <tr>
           <td class="tg-0pky">Public-key portions of each passkey and description</td>
-          <td class="tg-0pky">AWS storage service, HTTPS transmission</td>
+          <td class="tg-0pky">AWS storage service, HTTPS transmission from server to browser</td>
           <td class="tg-0pky">Within the side panel that shows passkeys, click the trash can icon for the passkey
             you want to remove</td>
         </tr>
         <tr>
           <td class="tg-0pky">User name, ID, and credential associated with public-key portions of passkeys</td>
-          <td class="tg-0pky">AWS storage service, HTTPS transmission</td>
-          <td class="tg-0pky">Within the side panel that shows passkeys, delete all passkeys. That triggers removal
-            of all server-side user data</td>
+          <td class="tg-0pky">AWS storage service, HTTPS transmission from server to browser</td>
+          <td class="tg-0pky">Within the side panel that shows passkeys, delete all passkeys.
+          That triggers removal of all server-side data</td>
         </tr>
       </tbody>
     </table>`
