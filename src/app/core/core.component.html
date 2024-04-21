@@ -123,6 +123,24 @@ SOFTWARE. -->
   <mat-accordion multi class="input-area" (mouseup)="onDraggerMouseUp();">
     <mat-expansion-panel matRipple [matRippleDisabled]="true" [expanded]="expandOptions" class="input-area">
       <mat-expansion-panel-header>
+        <mat-panel-title class="panel-title">Encryption Cipher Mode</mat-panel-title>
+      </mat-expansion-panel-header>
+      <div class="mode">
+        <mat-button-toggle-group [(ngModel)]="algorithm" aria-label="Cipher Algorithm"
+          (change)="onAlgorithmChange($event.value)">
+          <mat-button-toggle class="algoption" value="AES-GCM">{{algDescription('AES-GCM')}}</mat-button-toggle>
+          <mat-button-toggle class="algoption" value="X20-PLY">{{algDescription('X20-PLY')}}</mat-button-toggle>
+          <mat-button-toggle class="algoption" value="AEGIS-256">{{algDescription('AEGIS-256')}}</mat-button-toggle>
+        </mat-button-toggle-group>
+        <a [routerLink]="'help/faqs'" [queryParams]="{search: 'which cipher'}" id="cipherlink" class="open-new-link"
+          target="_blank">
+          <mat-icon class="open-new-icon2">open_in_new</mat-icon>
+        </a>
+      </div>
+    </mat-expansion-panel>
+
+    <mat-expansion-panel matRipple [matRippleDisabled]="true" [expanded]="expandOptions" class="input-area">
+      <mat-expansion-panel-header>
         <mat-panel-title class="panel-title">Advanced Options</mat-panel-title>
       </mat-expansion-panel-header>
 
@@ -153,21 +171,6 @@ SOFTWARE. -->
         <a [routerLink]="'help/faqs'" [queryParams]="{search: 'check if stolen'}" class="open-new-link" target="_blank">
           <mat-icon class="open-new-icon2">open_in_new</mat-icon>
         </a>
-      </div>
-      <div class="mtop10">
-        <p class="options-header2">
-          AEAD Cipher Algorithm
-          <a [routerLink]="'help/faqs'" [queryParams]="{search: 'which cipher'}" id="cipherlink" class="open-new-link"
-            target="_blank">
-            <mat-icon class="open-new-icon2">open_in_new</mat-icon>
-          </a>
-        </p>
-        <mat-button-toggle-group [(ngModel)]="algorithm" aria-label="Cipher Algorithm"
-          (change)="onAlgorithmChange($event.value)">
-          <mat-button-toggle class="algoption" value="AES-GCM">{{algDescription('AES-GCM')}}</mat-button-toggle>
-          <mat-button-toggle class="algoption" value="X20-PLY">{{algDescription('X20-PLY')}}</mat-button-toggle>
-          <mat-button-toggle class="algoption" value="AEGIS-256">{{algDescription('AEGIS-256')}}</mat-button-toggle>
-        </mat-button-toggle-group>
       </div>
       <div class="mtop10">
         <p class="options-header3">
@@ -220,8 +223,8 @@ SOFTWARE. -->
             <mat-option value="link">Link</mat-option>
           </mat-select>
         </mat-form-field>
-        <a [routerLink]="'help/faqs'" [queryParams]="{search: 'cipher armor formats'}" id="format-link" class="open-new-link"
-          target="_blank">
+        <a [routerLink]="'help/faqs'" [queryParams]="{search: 'cipher armor formats'}" id="format-link"
+          class="open-new-link" target="_blank">
           <mat-icon class="open-new-icon2">open_in_new</mat-icon>
         </a>
         <mat-slide-toggle class="mleft34" [(ngModel)]="reminder" [disabled]="ctFormat == 'link' ? 'true' : 'false'"

@@ -102,8 +102,13 @@ SOFTWARE. */
   position: relative;
 }
 
+.mode {
+  margin: 0 0 12px;
+}
+
 #cipherlink {
-  left: -2px;
+  left: 1px;
+  top: -14px;
 }
 
 #format-link {
