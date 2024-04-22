@@ -3,7 +3,7 @@
 .button-column {
   margin-top: 35px;
   display: flex;
-  height: 234px;
+  height: 260px;
   flex-direction: column;
   flex-wrap: nowrap;
   align-items: center;
@@ -18,6 +18,7 @@
 
 .error-msg {
   color: darkred;
+  height: 22px;
   margin-top: 32px;
   display: block;
 }
