@@ -81,7 +81,7 @@ export class NewUserComponent implements OnInit {
          this.router.navigateByUrl('/showrecovery');
       } catch (err) {
          console.error(err);
-         this.error = 'New user was not created, please try again';
+         this.error = 'Passkey and new user were not created, please try again';
       } finally {
          this.showProgress = false;
       }
