@@ -86,6 +86,12 @@ export class FaqsComponent implements AfterViewInit {
 const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
+      question: 'Who created Quick Crypt and why?',
+      answer: `See the <a href="/help/overview">overview page</a>.`
+   },
+
+   {
+      position: 0,
       question: 'Where should I report problems or get help with Quick Crypt?',
       answer: `Please report problems by <a href="https://github.com/bschick/qcrypt/issues"
       target="_blank">creating an issue on Github</a>. A discussion forum is not yet
@@ -161,7 +167,7 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'Does Quick Crypt store or process Personal Identifiable Information (PII)?',
-      answer: `Quick Crypt does not collect, request, or process PII. When you enter a user
+      answer: `Quick Crypt does not request, collect, or process PII. When you enter a user
       name or a
       passkey description, you may use whatever values you choose. It is best not to use PII
       for those values, but even if you use an email address or personal name Quick Crypt
@@ -258,17 +264,17 @@ const ELEMENT_DATA: FAQElement[] = [
       to encrypt and decrypt your own data rather than to share data securely
       with others. Decryption with Quick Crypt can be done by someone with both
       the encryption password and a passkey authorizing access to your user
-      credential. Passwords are easy to share (although doing so security is
+      credential. Passwords are easy to share (although doing so securely is
       not easy), and passkeys can be shared with a good management
       tool like Bitwarden or 1Password. If the recipient has both,
-      they can decrypt the cipher text you send them with Quick Crypt.
+      they can decrypt cipher armor you copy from Quick Crypt and send them.
       But again, there are better ways to do this.`
    },
 
    {
       position: 0,
       question: 'Can I create more than one passkey or user account?',
-      answer: `Yes, to both. Once signed in, create additional passkeys
+      answer: `Yes to both. Once signed in, create additional passkeys
       from the slide-out panel opened with the 3-line button in the toolbar.
       Sign out from the slide-out panel to create a new user
       identity with a new passkey. To reduce the load on Quick Crypt servers,
@@ -290,11 +296,11 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'How do I delete my Quick Crypt user identity entirely?',
       answer: `Once signed in, delete all passkeys from the slide-out panel opened
-      with the 3-line button in the toolbar. Deleting the last passkey reference
-      will entirely delete your Quick Crypt user identity from Quick Crypt servers.
-      Once removed, you cannot use Quick Crypt to decrypt previously encrypted data
+      with the 3-line button in the toolbar. Deleting your last passkey will also
+      delete your entire Quick Crypt user identity.
+      Once removed, you cannot use Quick Crypt to decrypt data
       with the removed user identity. This is not reversible, even with the recovery
-      link. You could, however, use data in the recovery link with other tools to
+      link. You could use data in the recovery link with other tools to
       decrypt your data (see the related question). Remember to also delete passkeys
       from your system using your local passkey management tool.`
    },
@@ -308,7 +314,7 @@ const ELEMENT_DATA: FAQElement[] = [
       to decrypt it.
       Without a passkey or recovery link to access your user credential,
       an attacker cannot decrypt your data. Regardless, the best response to a stolen password
-      is to re-encrypt your data with a new password and delete any cipher text encrypted with
+      is to re-encrypt your data with a new password and delete any cipher armor created with
       the stolen password.`
    },
 
@@ -319,7 +325,7 @@ const ELEMENT_DATA: FAQElement[] = [
       The potential attacker would also need your encrypted data and the password you used
       during encryption to decrypt it. Without your encryption password, the attacker cannot
       decrypt your data. However, the person with your recovery link could cause you grief
-      by deleting your passkeys or entire Quick Crypt user account. The best response to a
+      by deleting your passkeys or your entire Quick Crypt user account. The best response to a
       stolen recovery link or passkey is to create a totally new Quick Crypt user, re-encrypt
       your data, and then delete the previous cipher armor and original user identity.`
    },
@@ -328,7 +334,7 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'What should I do if someone I don\'t trust obtained my recovery link or passkey and a password I used for encryption?',
       answer: `The potential attacker also needs your encrypted data to decrypt it.
-      If the attacker has your encrypted data, your secret information may be
+      If the attacker has your encrypted data, your confidential information may be
       exposed. The best response to a stolen
       recovery link or passkey and password is to create a totally
       new Quick Crypt user, re-encrypt your data with a new password, and then delete
@@ -413,7 +419,7 @@ const ELEMENT_DATA: FAQElement[] = [
          <li>If you want a mode that many regard as more robust than AES 256 GCM and
          whose close sibling is in the TLS 1.3 standard, choose <b>XChaCha20 Poly130</b>.
          </li>
-         <li>If you want the smallest resulting cipher text (although not by much),
+         <li>If you want the smallest resulting cipher armor (although not by much),
          choose <b>AES 256 GCM</b> first, then <b>XChaCha20 Poly1305</b>, and <b>AEGIS 256</b>
          last.
          </li>
@@ -482,9 +488,9 @@ const ELEMENT_DATA: FAQElement[] = [
       your recovery link and the password used during encryption are the only inputs
       needed to decrypt data encrypted with Quick Crypt. Other tools could be used
       to decrypt Quick Crypt cipher armor in a multi-step process. If you want to
-      be sure someone can recreate Quick Crypt's logic, you can
-      <a href="https://github.com/bschick/qcrypt" target="_blank">
-      fork the code</a> or save the
+      be sure someone can recreate Quick Crypt's logic, the code is open source so
+      you can <a href="https://github.com/bschick/qcrypt" target="_blank">
+      fork away</a> or save the
       <a href="/help/protocol">protocol description</a>. The Quick Crypt source
       repo also contains a
       <a href="https://github.com/bschick/qcrypt/blob/main/qcrypt.ts" target="_blank">
@@ -524,9 +530,10 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'What are the different Cipher Armor formats?',
       answer: `<p>Cipher Armor is text that includes encrypted
-      data and parameters (cipher text) along with metadata. The 'Compact'
-      and 'Indent' formats are JSON containing the same stelements
-      with different spacing and line breaks. As the name implies, the
+      data and parameters (called cipher text) combined with metadata
+      about the cipher text. The 'Compact'
+      and 'Indent' formats are JSON containing the same elements
+      with different spacing and line breaks. As the names imply, the
       'Compact' format is smaller while 'Indent' is easier to read.</p>
       <p>
       The 'Link' format is a URL containing cipher text that when entered in
@@ -539,9 +546,9 @@ const ELEMENT_DATA: FAQElement[] = [
       Because an untrusted site cannot access your Quick Crypt passkey,
       however, it cannot obtain authorization to access your user name or
       credential nor can it decrypt your data (see the 'threat modeling
-      question'). An untrusted site could request your encryption
-      password to obtain some of the information needed for decryption, but
-      you can detect that by always confirming that your user name is
+      question'). An untrusted site could request your encryption password
+      to try obtaining some of the information needed for decryption, but
+      you can detect that by always confirming your user name is
       shown at the top of the password prompt.</p>
 
       <p>Opting for the 'Compact' or 'Indent' cipher armor formats and
@@ -556,8 +563,7 @@ const ELEMENT_DATA: FAQElement[] = [
       question: 'How is data encrypted and decrypted, and which crypto implementations are used?',
       answer: `<p>See the detailed description on the
       <a href="/help/protocol">protocol help page</a>.</p><p>
-      Quick Crypt uses well-established cryptographic functions implemented by
-      web browsers and libsodium.
+      Quick Crypt uses well-established cryptographic functions available in modern browsers.
       All cryptographic functions are run in your browser, ensuring your data remains local.
       The primary cryptographic functions are listed below. <i>SubtleCrypto</i>
       means the function is implemented by your browser's (Chrome, Safari, Edge, etc)

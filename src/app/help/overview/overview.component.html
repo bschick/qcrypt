@@ -6,19 +6,21 @@
       in note taking applications, planning services, online documents, or similar
       tools is convenient but risky. Quick Crypt's primary author wanted to store
       sensitive information in a note taking application and not be limited to the
-      few services that provide end-to-end encryption. Even services that support
-      encryption typically do not define their protocols, making them hard to trust.
+      few services that provide end-to-end encryption. Even online tools that support
+      encryption often do not define their protocols, making them hard to trust.
       Installable encryption tools like OpenSSL are powerful and trustworthy but
       tedious to use, upgrade, and remember. Strong encryption that you don't use
       isn't all that good in the end.
     </p>
     <p>Thus, Quick Crypt. A small-batch text-focused cipher tool designed to be
-      easy to use, trustworthy, and convenient. It encrypts and decrypts data using
-      cryptographic features available in modern browsers to ensure your
-      <b>confidential data never leaves your system</b>. After sign-in, Quick Crypt
-      continues to work even with network access disabled. AEAD ciphers, passwords
-      you supply, and passkey-protected credentials deliver privacy, integrity,
-      authenticity, and website forgery protection.
+      easy to use, trustworthy, and convenient. Just paste or load some text you want
+      to keep confidential and click the Encrypt button. Quick Crypt is built on modern
+      cryptographic technology and best practices. Encryption and
+      decryption are performed by cryptographic functions available in modern browsers,
+      ensuring your <b>confidential data never leaves your system</b>. After sign-in,
+      Quick Crypt works even with network access disabled. AEAD ciphers,
+      passwords you supply, and passkey-protected credentials deliver privacy,
+      integrity, authenticity, and website forgery protection.
     </p>
     <p>We designed Quick Crypt to make it easy to encrypt data and to decrypt that
       data days or years later without needing to remember or install complicated
@@ -28,21 +30,21 @@
       works is optional, but if you are interested, the
       <a [routerLink]="'/help/protocol'">protocols are documented</a>
       and the <a href="https://github.com/bschick/qcrypt" target="_blank">code
-      is open-source</a> under the MIT license. Bug reports and pull requests are
+      is open source</a> under the MIT license. Bug reports and pull requests are
       welcome.
     </p>
 
     <h2>Design Goals</h2>
     <ul>
       <li>Easy to use and hard to screw up</li>
-      <li>Nothing to install and works on most devices</li>
+      <li>Nothing to install, and works on most devices</li>
       <li>Unencrypted data and passwords never leave your system</li>
       <li>Encryption options constrained to secure values</li>
       <li>Follows current cryptographic best practices</li>
       <li>Well defined and <a [routerLink]="'/help/protocol'">documented protocols</a></li>
-      <li>After sign-in, should work fully offline</li>
-      <li>Use the latest web security protocols (csp, cors, sri, hsts, xfo, etc.)</li>
-      <li>Open-source for peer review</li>
+      <li>After sign-in, works fully offline</li>
+      <li>Uses the latest web security protocols (csp, cors, sri, hsts, xfo, etc.)</li>
+      <li>Open source for peer review</li>
       <li>No adverts or trackers</li>
       <li>No personally identifiable information (PII) collected</li>
     </ul>
@@ -64,5 +66,16 @@
       <li><a href="https://www.random.org/bytes/" target="_blank">random.org</a></li>
       <li><a href="https://haveibeenpwned.com/API/v2" target="_blank">haveibeenpwned.com</a></li>
     </ul>
+
+    <h2>Author</h2>
+    <p>
+      Quick Crypt was created by <a href="https://www.linkedin.com/in/schickb/" target="_blank">Brad Schick</a>
+      as a hobby project, initially for personal use and then shared with others. Quick Crypt and its source code
+      are Copyright ©️ 2024 by Brad Schick. Brad's past and current employers have no
+      rights or responsibilities for this site, its code, or its content. The source code for
+      <a href="https://github.com/bschick/qcrypt" target="_blank">this site</a> and
+      <a href="https://github.com/bschick/qcrypt-server" target="_blank">its server</a> are available under
+      the MIT license.
+    </p>
   </div>
 </div>
