@@ -129,9 +129,9 @@ const ELEMENT_DATA: FAQElement[] = [
       A potential risk of online encryption tools is that
       a rogue website could impersonate another site and trick people into decrypting
       data on the rogue site. Quick Crypt greatly reduces that risk by requiring
-      passkey authentication that is bound to Quick Crypt's domain name. The passkey makes
-      it infeasible
-      for a rogue website decrypt your data even if you exposed your encryption password.
+      passkey authentication that is bound to Quick Crypt's domain name. Your passkey makes
+      it infeasible for a rogue website to decrypt your data even if you exposed your
+      encryption password.
       </p>`
    },
 
@@ -670,14 +670,14 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'What will Quick Crypt do if one of the current cipher modes is broken?',
-      answer: `If one of the three cipher modes used by Quick Crypt is someday
-      found to be weak, Quick Crypt will stop offering it as an option for encryption.
-      The problematic cipher would still be supported for decryption so that users
-      can access data encrypted in the past. Depending upon the
-      severity of the weakness, Quick Crypt would notify users of the situation when
-      you use the tool (remember we have no contact info) and recommend that you
-      re-encrypt using a different cipher mode. Such a weakenss would be massive news
-      since two modes are part of the TLS 1.3 standard used by all browsers,
+      answer: `If any of the three cipher modes used by Quick Crypt are someday
+      found to be weak, Quick Crypt will stop offering those modes as an option for
+      encryption. Problematic ciphers would only be available for decryption so
+      users can access already encrypted data. Depending upon the
+      severity of the weakness, Quick Crypt would notify users of the situation on
+      this site (remember we have no contact info) and recommend that you re-encrypt
+      data using a different cipher mode. Such a weakenss would be massive news
+      since two modes are part of the TLS 1.3 standard used by most browsers,
       and the third is proposed for a future TLS version.`
    },
 ];
