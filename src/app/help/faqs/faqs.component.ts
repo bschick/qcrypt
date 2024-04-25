@@ -320,13 +320,29 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'What should I do if someone I don\'t trust obtained my recovery link or passkey?',
+      question: 'What should I do if someone I don\'t trust obtained my passkey?',
+      answer: `Your data is still protected, but your Quick Crypt user account is at risk.
+      The potential attacker would also need your encrypted data and the password you used
+      during encryption to decrypt it. Without your encryption password, the attacker
+      cannot decrypt your data. Since your passkey allows access to your user credential,
+      you should replace the lost passkey. Within Quick Crypt, open the side panel and create
+      a new passkey. After confirming that your new passkey works, delete the passkey you
+      lost from Quick Crypt and from your passkey management tool. There is no need to
+      re-encrypt your data unless someone may have used your
+      passkey to sign in and copy your recovery link. If you believe someone used your
+      passkey to retrieve your recovery link, see the question about an untrusted person
+      obtaining your recovery link.`
+   },
+
+   {
+      position: 0,
+      question: 'What should I do if someone I don\'t trust obtained my recovery link?',
       answer: `Your data is still protected, but your Quick Crypt user account is at risk.
       The potential attacker would also need your encrypted data and the password you used
       during encryption to decrypt it. Without your encryption password, the attacker cannot
       decrypt your data. However, the person with your recovery link could cause you grief
       by deleting your passkeys or your entire Quick Crypt user account. The best response to a
-      stolen recovery link or passkey is to create a totally new Quick Crypt user, re-encrypt
+      stolen recovery link is to create a totally new Quick Crypt user, re-encrypt
       your data, and then delete the previous cipher armor and original user identity.`
    },
 
@@ -501,11 +517,13 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'I have read that web-apps cannot be trusted for encryption.',
-      answer: `That's not a question! Much has changed over the past decade,
-      making web browsers and security protocols more robust and
-      trustworthy. Web standards and tools are imperfect, but so are installed
-      binary applications. A longer write-up is warranted someday.`
+      question: 'I have read that web applications should not be trusted for cryptography.',
+      answer: `That's not a question! Much has changed over the past decade, making web
+      security protocols and browsers more robust and trustworthy. Bundled single-page
+      applications combined with standards like CSP, CORS, HSTS, Referrer Policy, SRI,
+      XFO, and Passkey (webauthn) make web applications trustworthy. Of course, web
+      standards and tools are imperfect, but so are installed binary applications
+      (see Linux xz). Perhaps a longer write-up is warranted someday.`
    },
 
    {
