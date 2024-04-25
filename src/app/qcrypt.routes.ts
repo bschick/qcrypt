@@ -40,6 +40,7 @@ export const routes: Routes = [
    { path: 'help/overview', component: OverviewComponent },
    { path: 'help/faqs', component: FaqsComponent },
    { path: 'help/protocol', component: ProtocolComponent },
+   { path: 'help', redirectTo: 'help/faqs', pathMatch: 'full'},
    { path: '', component: CoreComponent, canActivate: [coreGuard] },
-   { path: '**', redirectTo: '/' },
+   { path: '**', redirectTo: '', pathMatch: 'full' },
 ];
