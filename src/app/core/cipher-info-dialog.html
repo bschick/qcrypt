@@ -21,30 +21,32 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
 <span class="cipher-info">
   <h1 mat-dialog-title class="header">Decryption Parameters</h1>
-  <div mat-dialog-content class="dialog-content">
-    <p *ngIf="error">{{error}}</p>
-    <div *ngIf="!error" class="dialog-body">
-      <ul class="tech-list">
-        <li><b>PBKDF2 Iterations:</b></li>
-        <li><b>Derived Keys:</b></li>
-        <li><b>Cipher and Mode:</b></li>
-        <li><b>Salt (b64Url):</b></li>
-        <li><b>IV/Nonce (b64Url):</b></li>
-        <li><b>Password Hint:</b></li>
-      </ul>
-      <ul class="tech-list">
-        <li>{{ic}}</li>
-        <!-- hard-coded -->
-        <li>256-bit</li>
-        <li>{{alg}}</li>
-        <li>{{slt}}</li>
-        <li>{{iv}}</li>
-        <li>{{hint}}</li>
-      </ul>
+  <div class="scroller">
+    <div mat-dialog-content class="dialog-content">
+      <p *ngIf="error">{{error}}</p>
+      <div *ngIf="!error" class="dialog-body">
+        <ul class="tech-list">
+          <li><b>PBKDF2 Iterations:</b></li>
+          <li><b>Derived Keys:</b></li>
+          <li><b>Cipher and Mode:</b></li>
+          <li><b>Salt (b64Url):</b></li>
+          <li><b>IV/Nonce (b64Url):</b></li>
+          <li><b>Password Hint:</b></li>
+        </ul>
+        <ul class="tech-list">
+          <li>{{ic}}</li>
+          <!-- hard-coded -->
+          <li>256-bit</li>
+          <li>{{alg}}</li>
+          <li>{{slt}}</li>
+          <li>{{iv}}</li>
+          <li>{{hint}}</li>
+        </ul>
+      </div>
     </div>
-    <!--last so it doesn't get focus-->
-    <button class="close-button3" matSuffix mat-icon-button matDialogClose aria-label="Close">
-      <mat-icon>close</mat-icon>
-    </button>
   </div>
+  <!--last so it doesn't get focus-->
+  <button class="close-button3" matSuffix mat-icon-button matDialogClose aria-label="Close">
+    <mat-icon>close</mat-icon>
+  </button>
 </span>
