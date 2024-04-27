@@ -1,7 +1,8 @@
 .container {
   display: flex;
-  align-items: start;
+  align-items: flex-start;
   justify-content: center;
+  min-width: 505px;
 }
 
 .spinner {
@@ -17,6 +18,7 @@
 .content {
   padding: 30px;
   max-width: 750px;
+  flex-basis: content;
 }
 
 @mixin doc-font {
