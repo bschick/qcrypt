@@ -27,7 +27,7 @@
     <img src="https://latex.codecogs.com/svg.image?\begin{tabular}{p{2mm} l}
       $A$ & \textrm{ - Alice} \\
       $M$ & \textrm{ - Webauthn authenticator (passkey manager)} \\
-      $B$ & \textrm{ - Browser with SubtleCrypto API and libsodium javascript library} \\
+      $B$ & \textrm{ - Browser with SubtleCrypto API and libsodium library} \\
       $S$ & \textrm{ - Quick Crypt server} \\
       $R$ & \textrm{ - https://www.random.org/cgi-bin/randbyte?nbytes=48} \\
       $D$ & \textrm{ - Insecure persistent storage system} \\
@@ -36,15 +36,15 @@
   <p>
     <h3>Browser and Libsodium Functions</h3>
     <img src="https://latex.codecogs.com/svg.image?\begin{tabular}{p{2mm} l l}
-      $E_a$ & \textrm{ - Symmetric cipher using algorithm }$a$\textrm{. One of:}\\
-      & \hspace{23pt}\textrm{1. AES-256 AEAD cipher in Galois/Counter mode from SubtleCrypto} \\
-      & \hspace{23pt}\textrm{2. XChaCha20 AEAD cipher with Poly1305 MAC from libsodium} \\
-      & \hspace{23pt}\textrm{3. AEGIS 256 AEAD cipher from libsodium} \\
-      $D_H$ & \textrm{ - HKDF key derivation function using SHA-512 from SubtleCrypto} \\
-      $D_P$ & \textrm{ - PBKDF2 key derivation function using SHA-512 from SubtleCrypto} \\
-      $H$ & \textrm{ - 256 bit FIPS 198-1 HMAC tag generator from SubtleCrypto} \\
-      $V$ & \textrm{ - 256 bit FIPS 198-1 HMAC tag validator from SubtleCrypto} \\
-      $G$ & \textrm{ - Cryptographic pseudorandom number generator from SubtleCrypto} \\
+      $E_a$ & \textrm{ - Symmetric cipher using AEAD algorithm }$a$\textrm{. One of:}\\
+      & \hspace{23pt}\textrm{1. AES-256 in Galois/Counter mode from SubtleCrypto} \\
+      & \hspace{23pt}\textrm{2. XChaCha20 with Poly1305 MAC from libsodium} \\
+      & \hspace{23pt}\textrm{3. AEGIS 256 from libsodium} \\
+      $D_H$ & \textrm{ - HKDF key derivation using SHA-512 from SubtleCrypto} \\
+      $D_P$ & \textrm{ - PBKDF2 key derivation using SHA-512 from SubtleCrypto} \\
+      $H$ & \textrm{ - 256 bit FIPS 198-1 HMAC generator from SubtleCrypto} \\
+      $V$ & \textrm{ - 256 bit FIPS 198-1 HMAC validator from SubtleCrypto} \\
+      $G$ & \textrm{ - Cryptographic pseudorandom generator from SubtleCrypto} \\
       \end{tabular}" /><br />
   </p>
   <p>
