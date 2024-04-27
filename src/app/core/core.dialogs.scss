@@ -120,7 +120,7 @@ SOFTWARE. */
 }
 
 .signin {
-  width: 390px;
+  max-width: 390px;
 
   .header {
     margin: 0 0 1px 0;
@@ -153,7 +153,6 @@ SOFTWARE. */
   }
 
   .welcome {
-    text-align: justify;
     margin: 0;
   }
 
