@@ -165,7 +165,7 @@ SOFTWARE. -->
             <mat-option class="green-pwd-strength" value="4">Best</mat-option>
           </mat-select>
         </mat-form-field>
-        <mat-slide-toggle class="mleftX" [(ngModel)]="checkPwned" (change)="onPasswordOptionChange()"
+        <mat-slide-toggle class="mleft15" [(ngModel)]="checkPwned" (change)="onPasswordOptionChange()"
           matTooltip="Check if your password matches a known stolen password">Check If Stolen
         </mat-slide-toggle>
         <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'check if stolen'}" class="open-new-link" target="_blank">
@@ -227,7 +227,7 @@ SOFTWARE. -->
           class="open-new-link" target="_blank">
           <mat-icon class="open-new-icon2">open_in_new</mat-icon>
         </a>
-        <mat-slide-toggle class="mleft34" [(ngModel)]="reminder" [disabled]="ctFormat == 'link' ? 'true' : 'false'"
+        <mat-slide-toggle [(ngModel)]="reminder" [disabled]="ctFormat == 'link' ? 'true' : 'false'"
           (change)="onReminderChange()" matTooltip="Add a reminder to cipher armor that Quick Crypt was used">Decryption
           Reminder
         </mat-slide-toggle>

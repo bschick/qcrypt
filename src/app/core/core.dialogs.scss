@@ -25,6 +25,10 @@ SOFTWARE. */
     margin: 0 0 1px 0;
   }
 
+  .scroller {
+    overflow-x: scroll;
+  }
+
   .dialog-content {
     width: 655px;
     padding-top: 5px;
@@ -44,30 +48,6 @@ SOFTWARE. */
     margin: 0;
     padding: 0;
     flex: none;
-  }
-
-  .close-button3 {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    z-index: 999;
-  }
-}
-
-.help {
-  max-width: 1024px;
-
-  .header {
-    margin: 0 0 1px 0;
-  }
-
-  .dialog-content {
-    min-height: 600px;
-    padding-top: 10px;
-  }
-
-  .tech-list {
-    margin-top: 5px;
   }
 
   .close-button3 {
