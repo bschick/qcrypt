@@ -26,6 +26,10 @@ SOFTWARE. */
   height: 100%;
 }
 
+.toolbar {
+  flex: 0;
+}
+
 .router-content {
   flex: 1;
   overflow: auto;
