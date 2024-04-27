@@ -450,7 +450,7 @@ export class AuthenticatorService {
          cache: 'no-store'
       });
 
-      return this.finishRegistration(recoverResp);
+      return this.finishRegistration(recoverResp, true);
    }
 
    // Creates new user and first passkey
@@ -466,7 +466,7 @@ export class AuthenticatorService {
          cache: 'no-store'
       });
 
-      return this.finishRegistration(optionsResp);
+      return this.finishRegistration(optionsResp, true);
    }
 
    // Adds passkey to current user
@@ -483,11 +483,14 @@ export class AuthenticatorService {
          cache: 'no-store'
       });
 
-      return this.finishRegistration(optionsResp);
+      const regInfo = this.finishRegistration(optionsResp, false);
+      this.refreshPasskeys();
+      return regInfo;
    }
 
    async finishRegistration(
-      optionsResp: Response
+      optionsResp: Response,
+      setActiveUser: boolean
    ): Promise<RegistrationInfo> {
 
       //      console.log('optionsResp, ', optionsResp);
@@ -541,7 +544,9 @@ export class AuthenticatorService {
          throw new Error('registration failed');
       }
 
-      this.setActiveUser(registrationInfo.userId, registrationInfo.userName, registrationInfo.userCred, startReg.id);
+      if(setActiveUser) {
+         this.setActiveUser(registrationInfo.userId, registrationInfo.userName, registrationInfo.userCred, startReg.id);
+      }
       return registrationInfo;
    }
 
