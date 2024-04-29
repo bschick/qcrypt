@@ -76,7 +76,7 @@ SOFTWARE. */
   }
 
   .field {
-    width: 250px;
+    min-width: 250px;
     margin-bottom: -0.5em;
     flex: none;
   }
@@ -134,7 +134,8 @@ SOFTWARE. */
   }
 
   .button {
-    width: 290px;
+    max-width: 290px;
+    width:100%;
     height:46px;
     line-height: normal;
     margin: 15px auto 0 auto;

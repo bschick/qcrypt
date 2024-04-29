@@ -1,23 +1,26 @@
 @use "../help.scss";
-@use '@angular/material' as mat;
+@use "@angular/material" as mat;
 
 // because we disable view encapsulation for innerHTML in answers
 .faq {
-
   .control-host {
     width: 100%;
     display: flex;
     align-items: start;
     justify-content: space-between;
-    }
+  }
 
   .filter {
-    width: 390px;
+    max-width: 390px;
+    flex: 2;
     @include mat.form-field-density(-3);
+
   }
 
   .faq-table {
-    min-width: 440px;
+    // below smallest if can be w/ou awkward word breaks
+    // (currently limited by table of info storage in faqs)
+    min-width: 340px;
   }
 
   .mat-column-position,
@@ -27,7 +30,7 @@
   }
 
   .mat-column-position {
-    width: 40px;
+    width: 58px;
   }
 
   tr.detail-row {
@@ -43,7 +46,7 @@
 
   .header-data {
     color: white;
-    background-color: #8A8FB2;
+    background-color: #8a8fb2;
   }
 
   .element-row td {
@@ -61,7 +64,7 @@
   }
 
   .empty-data {
-    width:100%;
+    width: 100%;
     font-size: 16px;
     padding: 12px;
   }
@@ -76,7 +79,11 @@
   }
 
   li {
-    margin-top:8px;
+    margin-top: 8px;
+  }
+
+  li.long {
+    word-break: break-all;
   }
 
   .tg {
