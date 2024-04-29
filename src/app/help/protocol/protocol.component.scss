@@ -1,5 +1,9 @@
 @use "../help.scss";
 
+.fat {
+  min-width: 562px;
+}
+
 .tip {
   text-decoration-line: underline;
   text-decoration-style: dotted;
