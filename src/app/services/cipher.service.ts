@@ -154,19 +154,23 @@ export class Random48 {
 export class CipherService {
 
    // cache in case any use of true random
-   private random48Cache = new Random48();
-   private icount: number = 0;
-   private icountMax: number = 0;
-   private hashRate: number = 0;
+   private _random48Cache = new Random48();
+   private _icount: number = 0;
+   private _icountMax: number = 0;
+   private _hashRate: number = 0;
 
    constructor() {
+   }
+
+   get hashRate(): number {
+      return this._hashRate;
    }
 
    async benchmark(
       test_size: number
    ): Promise<[number, number, number]> {
 
-      if (!this.icount || !this.icountMax || !this.hashRate) {
+      if (!this._icount || !this._icountMax || !this._hashRate) {
          const target_hash_millis = 500;
          const max_hash_millis = 5 * 60 * 1000; //5 minutes
 
@@ -174,25 +178,25 @@ export class CipherService {
          await this._genCipherKey('AES-GCM', test_size, 'AVeryBogusPwd', crypto.getRandomValues(new Uint8Array(32)), new Uint8Array(SLT_BYTES));
          const test_millis = Date.now() - start;
 
-         this.hashRate = test_size / test_millis;
+         this._hashRate = test_size / test_millis;
 
          // Don't allow more then ~5 minutes of pwd hashing (rounded to millions)
-         this.icountMax =
+         this._icountMax =
             Math.min(ICOUNT_MAX,
-               Math.round((max_hash_millis * this.hashRate) / 1000000) * 1000000);
+               Math.round((max_hash_millis * this._hashRate) / 1000000) * 1000000);
 
-         let target_icount = Math.round((this.hashRate * target_hash_millis) / 100000) * 100000;
+         let target_icount = Math.round((this._hashRate * target_hash_millis) / 100000) * 100000;
          // Add ICOUNT_MIN to calculated target because benchmark is done during
          // page load and tends to be too low.
-         this.icount = Math.max(ICOUNT_DEFAULT, target_icount + ICOUNT_MIN);
+         this._icount = Math.max(ICOUNT_DEFAULT, target_icount + ICOUNT_MIN);
 
          console.log(
-            `bench: ${test_size}i, in: ${test_millis}ms, rate: ${Math.round(this.hashRate)}i/ms,
-        ic: ${this.icount}i, icm: ${this.icountMax}i`
+            `bench: ${test_size}i, in: ${test_millis}ms, rate: ${Math.round(this._hashRate)}i/ms,
+        ic: ${this._icount}i, icm: ${this._icountMax}i`
          );
       }
 
-      return [this.icount, this.icountMax, this.hashRate];
+      return [this._icount, this._icountMax, this._hashRate];
    }
 
 
@@ -376,7 +380,7 @@ export class CipherService {
       // Setup EncContext for new key derivation (and encryption)
       // Create a new salt each time a key is derviced from the password.
       // https://crypto.stackexchange.com/questions/53032/salt-for-non-stored-passwords
-      const randomArray = await this.random48Cache.getRandomArray(
+      const randomArray = await this._random48Cache.getRandomArray(
          eparams.trueRand,
          eparams.fallbackRand
       );
