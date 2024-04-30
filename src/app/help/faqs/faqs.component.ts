@@ -592,7 +592,7 @@ const ELEMENT_DATA: FAQElement[] = [
       the Quick Crypt web-app.</p>
       <ol type='i'>
          <li class="long"><b>Random Values:</b> WebCrypto <a href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues"
-         target="_blank">getRandomValues()</a> or <a href="https://www.random.org"
+         target="_blank">getRandomValues()</a> or<br/><a href="https://www.random.org"
          target="_blank">https://www.random.org/cgi-bin/randbyte</a>
          </li>
          <li><b>HKDF and PBKDF2 Key Derivation:</b> SubtleCrypto
@@ -604,12 +604,12 @@ const ELEMENT_DATA: FAQElement[] = [
          </li>
          <li class="long"><b>XChaCha20 Poly1305 Cipher:</b> libsodium
          <a href="https://doc.libsodium.org/secret-key_cryptography/aead/chacha20-poly1305/xchacha20-poly1305_construction"
-         target="_blank">crypto_aead_xchacha20poly1305_ietf_encrypt()</a> and
+         target="_blank">crypto_aead_xchacha20poly1305_ietf_encrypt()</a> <br/>and
          <a href="https://doc.libsodium.org/secret-key_cryptography/aead/chacha20-poly1305/xchacha20-poly1305_construction"
          target="_blank">crypto_aead_xchacha20poly1305_ietf_decrypt()</a>
          </li>
          <li class="long"><b>AEGIS 256 Cipher:</b> libsodium <a href="https://doc.libsodium.org/secret-key_cryptography/aead/aegis-256"
-         target="_blank">crypto_aead_aegis256_encrypt()</a> and
+         target="_blank">crypto_aead_aegis256_encrypt()</a> and<br/>
          <a href="https://doc.libsodium.org/secret-key_cryptography/aead/aegis-256"
          target="_blank">crypto_aead_aegis256_decrypt()</a>
          </li>

@@ -18,7 +18,7 @@
 .content {
   padding: 30px;
   max-width: 750px;
-  flex-basis: content;
+  width: 100%;
 }
 
 @mixin doc-font {
