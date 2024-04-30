@@ -21,6 +21,7 @@
     // below smallest if can be w/ou awkward word breaks
     // (currently limited by table of info storage in faqs)
     min-width: 340px;
+    width: 100%;
   }
 
   .mat-column-position,
@@ -64,7 +65,6 @@
   }
 
   .empty-data {
-    width: 100%;
     font-size: 16px;
     padding: 12px;
   }
