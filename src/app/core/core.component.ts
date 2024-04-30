@@ -55,7 +55,7 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import { RouterLink } from '@angular/router';
 import * as cs from '../services/cipher.service';
-import { AuthenticatorService, AuthEvent, AuthEventData } from '../services/authenticator.service';
+import { AuthenticatorService, AuthEvent, AuthEventData, INACTIVITY_TIMEOUT } from '../services/authenticator.service';
 import {
    PasswordDialog,
    CipherInfoDialog,
@@ -153,6 +153,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    private actionStart: number = 0;
    private authSub!: Subscription;
    private lastReminder: boolean = true;
+   public readonly INACTIVITY_TIMEOUT = INACTIVITY_TIMEOUT;
    public cacheTimeout!: DateTime;
    public icountMin: number = cs.ICOUNT_MIN;
    public icountMax: number = cs.ICOUNT_MAX; // Default since benchmark is async
@@ -232,7 +233,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    setCacheTime(tm: string | null): void {
-      setIfBetween(tm, 0, 604800, (num) => {
+      setIfBetween(tm, 0, this.INACTIVITY_TIMEOUT, (num) => {
          this.cacheTime = num;
       });
    }
@@ -1118,6 +1119,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onCacheTimerChange(): void {
+      if(this.cacheTime > this.INACTIVITY_TIMEOUT) {
+         this.cacheTime = this.INACTIVITY_TIMEOUT;
+      }
+
       if (this.pwdCached) {
          this.restartTimer();
       }
