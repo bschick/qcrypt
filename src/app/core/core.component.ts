@@ -104,14 +104,14 @@ function setIfBetween(
    }
 }
 
-function makeTookMsg(start: number, end: number): string {
+function makeTookMsg(start: number, end: number, word: string = 'took'): string {
    const duration = Duration.fromMillis(end - start);
-   if (duration.as('minutes') >= 1) {
-      return `(took ${Math.round(duration.as('minutes') * 100) / 100} minutes)`;
-   } else if (duration.as('seconds') >= 1) {
-      return `(took ${Math.round(duration.as('seconds') * 100) / 100} seconds)`;
+   if (duration.as('minutes') >= 1.1) {
+      return `${word} ${Math.round(duration.as('minutes') * 10) / 10} minutes`;
+   } else if (duration.as('seconds') >= 2) {
+      return `${word} ${Math.round(duration.as('seconds'))} seconds`;
    }
-   return `(took ${duration.toMillis()} millis)`;
+   return `${word} ${duration.toMillis()} millis`;
 }
 
 function setIfBoolean(
@@ -159,6 +159,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    public icountMin: number = cs.ICOUNT_MIN;
    public icountMax: number = cs.ICOUNT_MAX; // Default since benchmark is async
    public icountDefault: number = cs.ICOUNT_DEFAULT; // Default since benchmark is async
+   public hashTimeWarning = '';
    public clearText = '';
    public pwdCached = false;
    public cipherLabel = 'Cipher Armor';
@@ -168,6 +169,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    public errorCipher = false;
    public errorClear = false;
    public expandOptions = false;
+   public cipherPanelExpanded = false;
    public secondsRemaining = 0;
    public welcomed: boolean = true;
 
@@ -252,7 +254,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    setLoops(lpEnd: string | null): void {
-      setIfBetween(lpEnd, 0, this.LOOP_MAX, (num) => {
+      setIfBetween(lpEnd, 1, this.LOOP_MAX, (num) => {
          this.loops = num;
       });
    }
@@ -301,6 +303,17 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    lsDel(key: string) {
       const [userId, _] = this.authSvc.getUserInfo();
       localStorage.removeItem(userId + key);
+   }
+
+   setIcountWarning() {
+      this.hashTimeWarning = '';
+      const hashMillis = this.icount / this.cipherSvc.hashRate;
+
+      // if greater than 15 seconds show message
+      if( hashMillis > 15 * 1000) {
+         const takeMsg = makeTookMsg(0, hashMillis, 'take');
+         this.hashTimeWarning = `*password hash may ${takeMsg}`
+      }
    }
 
    ngAfterViewInit() {
@@ -401,6 +414,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.setTrueRand(params.get('trand'));
          this.setPseudoRand(params.get('prand'));
          this.optionsLoaded = true;
+
+         this.setIcountWarning();
       }
    }
 
@@ -583,9 +598,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onLoopsChange() {
-      if(this.loops > this.LOOP_MAX) {
-         this.loops = this.LOOP_MAX;
-      }
+      this.loops = Math.max(this.loops, 1);
+      this.loops = Math.min(this.loops, this.LOOP_MAX);
       this.lsSet('loops', this.loops.toString());
    }
 
@@ -852,7 +866,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.errorCipher = false;
 
       const tookMsg = makeTookMsg(this.actionStart, Date.now());
-      this.cipherLabel = 'Cipher Armor ' + tookMsg;
+      this.cipherLabel = `Cipher Armor (${tookMsg})`;
    }
 
    showClearTextAndTime(clear: ArrayBuffer): void {
@@ -860,7 +874,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.errorClear = false;
 
       const tookMsg = makeTookMsg(this.actionStart, Date.now());
-      this.clearLabel = 'Clear Text ' + tookMsg;
+      this.cipherLabel = `Clear Text (${tookMsg})`;
    }
 
    getCipherArmorFor(ct: string, econtext: EncContext): string {
@@ -1056,6 +1070,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.icount = Math.max(this.icount, this.icountMin);
       this.icount = Math.min(this.icount, this.icountMax);
       this.lsSet('icount', this.icount.toString());
+      this.setIcountWarning();
    }
 
    onClickFileUpload(event: any) {
@@ -1125,10 +1140,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onCacheTimerChange(): void {
-      if(this.cacheTime > this.INACTIVITY_TIMEOUT) {
-         this.cacheTime = this.INACTIVITY_TIMEOUT;
-      }
-
+      this.cacheTime = Math.max(this.cacheTime, 0);
+      this.cacheTime = Math.min(this.cacheTime, this.INACTIVITY_TIMEOUT);
       if (this.pwdCached) {
          this.restartTimer();
       }
