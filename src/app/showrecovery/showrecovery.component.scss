@@ -11,13 +11,13 @@
   justify-content: space-evenly;
 
   .recovery {
-    width:300px;
+    min-width:280px;
     @include mat.form-field-density(-1);
   }
 
   button {
     height: 45px;
-    width: 280px;
+    min-width: 280px;
     margin-top: 3px;
   }
 }

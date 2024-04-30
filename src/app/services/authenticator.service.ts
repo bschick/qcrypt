@@ -10,6 +10,9 @@ import { DateTime } from 'luxon';
 
 const baseUrl = environment.domain;
 
+// 6 hours in seconds
+export const INACTIVITY_TIMEOUT = 60 * 60 * 6;
+
 export type RegistrationInfo = {
    verified: boolean;
    userCred: string;
@@ -188,7 +191,7 @@ export class AuthenticatorService {
       }
 
       // 6 hours inactivity expritation
-      this._expiration = DateTime.now().plus({ seconds: 60 * 60 * 6 });
+      this._expiration = DateTime.now().plus({ seconds: INACTIVITY_TIMEOUT });
       sessionStorage.setItem(this._userId + 'expiration', this._expiration.toISO()!);
 
       // @ts-ignore
