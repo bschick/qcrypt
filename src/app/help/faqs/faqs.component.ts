@@ -592,7 +592,7 @@ const ELEMENT_DATA: FAQElement[] = [
       the Quick Crypt web-app.</p>
       <ol type='i'>
          <li class="long"><b>Random Values:</b> WebCrypto <a href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues"
-         target="_blank">getRandomValues()</a> or<br/><a href="https://www.random.org"
+         target="_blank">getRandomValues()</a><br/>or <a href="https://www.random.org"
          target="_blank">https://www.random.org/cgi-bin/randbyte</a>
          </li>
          <li><b>HKDF and PBKDF2 Key Derivation:</b> SubtleCrypto
