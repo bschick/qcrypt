@@ -154,6 +154,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    private authSub!: Subscription;
    private lastReminder: boolean = true;
    public readonly INACTIVITY_TIMEOUT = INACTIVITY_TIMEOUT;
+   public readonly LOOP_MAX = 10;
    public cacheTimeout!: DateTime;
    public icountMin: number = cs.ICOUNT_MIN;
    public icountMax: number = cs.ICOUNT_MAX; // Default since benchmark is async
@@ -251,7 +252,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    setLoops(lpEnd: string | null): void {
-      setIfBetween(lpEnd, 0, 10, (num) => {
+      setIfBetween(lpEnd, 0, this.LOOP_MAX, (num) => {
          this.loops = num;
       });
    }
@@ -582,6 +583,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onLoopsChange() {
+      if(this.loops > this.LOOP_MAX) {
+         this.loops = this.LOOP_MAX;
+      }
       this.lsSet('loops', this.loops.toString());
    }
 
@@ -1049,6 +1053,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onICountChange() {
+      this.icount = Math.max(this.icount, this.icountMin);
+      this.icount = Math.min(this.icount, this.icountMax);
       this.lsSet('icount', this.icount.toString());
    }
 
