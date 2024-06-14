@@ -465,10 +465,10 @@ const ELEMENT_DATA: FAQElement[] = [
       <a href="https://en.wikipedia.org/wiki/Cryptographically_secure_pseudorandom_number_generator" target="_blank">
       suitable for use in cryptography</a>. Quick Crypt uses WebCrypto
       <a href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues" target="_blank">getRandomValues()</a>
-      by default, which generates cryptographically strong pseudo-random (algorithmic) values.
+      by default, which generates cryptographically strong pseudo-random algorithmic values.
       Unlike other
       cryptographic functions implemented by browsers, however, random number generation
-      is not standardized, and quality may vary. You can alternatively configure Quick
+      is not standardized and quality may vary. You can alternatively configure Quick
       Crypt to download random data generated from atmospheric noise by
       <a href="https://www.random.org" target="_blank">https://www.random.org</a>, which
       should be closer to true random data. This option is set within the "Advanced
@@ -487,14 +487,14 @@ const ELEMENT_DATA: FAQElement[] = [
       question: "What is the 'Check if Stolen' option?",
       answer: `When you enable the 'Check if Stolen' option, Quick Crypt checks
       an online database from
-      <a href="https://haveibeenpwned.com/API/v2#PwnedPasswords" target="_blank">haveibeenpwned.com</a>
+      <a href="https://haveibeenpwned.com/API/v2#PwnedPasswords" target="_blank">https://haveibeenpwned.com</a>
       for passwords that have been leaked or stolen, and prevents you from using
       them for encryption. Attackers compile leaked passwords into lists to speed up
       password guessing. Quick Crypt uses large variable numbers of PBKDF2 key
       derivation iterations and combines your encryption password with a
       passkey-protected user credential to make password guessing extremely difficult,
       even with leaked passwords. But it is always better to use a strong password
-      for defense-in-depth in case your user credential is ever stolen.`
+      for defense-in-depth.`
    },
 
    {
@@ -530,7 +530,7 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'Can Quick Crypt decrypt cipher text created by other tools?',
       answer: `No, Quick Crypt was not designed to interoperate with cipher text
-      from other tools. Quick Crypt's goal are described on the
+      from other tools. Quick Crypt's goals are described on the
       <a href="/help/overview">overview page</a>`
    },
 
@@ -541,7 +541,7 @@ const ELEMENT_DATA: FAQElement[] = [
       encryption password, and follow
       <a href="/help/protocol">Quick Crypt's protocol</a>, you could use other
       tools to decrypt cipher text created by Quick Crypt in a multi-step process.
-      The steps aren't documented yet.`
+      Those steps aren't documented yet, but are fairly easy to figure out.`
    },
 
    {
@@ -557,15 +557,14 @@ const ELEMENT_DATA: FAQElement[] = [
       The 'Link' format is a URL containing cipher text that when entered in
       a browser, takes you directly to the Quick Crypt website with the cipher
       text ready for decryption. While this is very convenient, the 'Link'
-      format is less safe. The risk is that cipher armor URLs cannot be
-      encrypted or validated and still be usable
-      in a browser. If an attacker can manipulate your stored cipher armor,
-      they could edit the URL and send you to an untrusted site.
-      Because an untrusted site cannot access your Quick Crypt passkey,
-      however, it cannot obtain authorization to access your user name or
-      credential nor can it decrypt your data (see the 'threat modeling
-      question'). An untrusted site could request your encryption password
-      to try obtaining some of the information needed for decryption, but
+      format is less safe. If an attacker can manipulate your stored cipher armor
+      URL, they could edit the domain name and send you to an untrusted website.
+      This is possible because the domain portion of a URL cannot be encrypted or
+      validated and still be usable in a browser. Because an untrusted site cannot
+      access your Quick Crypt passkey, however, it cannot obtain authorization to
+      access your user name or credential nor can it decrypt your data (see the
+      'threat modeling question'). An untrusted site could request your encryption
+      password to try obtaining some of the information needed for decryption, but
       you can detect that by always confirming your user name is
       shown at the top of the password prompt.</p>
 
@@ -663,10 +662,9 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'Why is XChaCha20 offered rather than IETF ChaCha20?',
       answer: `Quick Crypt uses random nonce values for cipher initialization
-      vectors, and XChaCha20 is safer than ChaCha20 with random nonce values.
-      Since Quick Crypt
-      never reuses nonce value or cipher keys, however, ChaCha20
-      would still be suitable. IETF ChaCha20's one advantage is standardization,
+      vectors, and XChaCha20 is safer than ChaCha20 with random nonce values
+      (although since Quick Crypt never reuses nonce values or cipher keys, ChaCha20
+      could still be suitable). IETF ChaCha20's one advantage is standardization,
       but since interoperability with other tools was not a Quick Crypt goal,
       XChaCha20 was selected as a better overall cipher mode.`
    },
@@ -676,12 +674,12 @@ const ELEMENT_DATA: FAQElement[] = [
       question: 'Why does Quick Crypt use both HMACs and AEAD ciphers?',
       answer: `This was done for defense-in-depth and so Quick Crypt
       can safely use and display metadata like password hints before the
-      primary decryption algorithm is run. Imagine an attacker could modify your
+      decryption algorithm runs. Imagine an attacker could modify your
       encrypted data and knows of a bug in Chrome's AES GCM cipher. Although
-      unlikely, that could allow an attacker to craft the cipher text such
-      that "something bad" happened when you decrypted it. The HMAC
+      unlikely, that might allow an attacker to craft the cipher text such
+      that data was leaked when you decrypted it. The HMAC
       signature test upfront means there would need to be problems with
-      both the HMAC and the cipher algorithms for an attack to succeed,
+      both the HMAC and the cipher algorithms for such an attack to succeed,
       which is even more unlikely.`
    },
 
