@@ -5,7 +5,7 @@ import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-
+import {MatCardModule} from '@angular/material/card';
 
 @Component({
    selector: 'app-recovery',
@@ -13,7 +13,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
    templateUrl: './recovery.component.html',
    styleUrl: './recovery.component.scss',
    imports: [MatIconModule, MatButtonModule, RouterLink, CommonModule,
-      MatProgressSpinnerModule,
+      MatProgressSpinnerModule, MatCardModule,
    ],
 })
 export class RecoveryComponent implements OnInit {

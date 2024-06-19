@@ -3,38 +3,64 @@
     <mat-progress-spinner class="spinner" color="primary" mode="indeterminate"
       [style.visibility]="showProgress ? 'visible' : 'hidden'">
     </mat-progress-spinner>
-    <h1>Start Account Recovery</h1>
+    <h1>Account Recovery</h1>
     <div *ngIf="!error">
-      <p>Use recovery to regain access to your user identity when you have lost
+      <p>
+        Use recovery to regain access to your user identity when you have lost
         or damaged your Quick Crypt passkeys. Recovery removes your existing
         passkeys from Quick Crypt and creates a new one. You should also
         delete the old passkeys from your passkey management tool. Once
         your new passkey is created, you can again decrypt cipher text
         using your encryption passwords.
       </p>
-      <p *ngIf="currentUserName && !authenticated">
-        There is an existing Quick Crypt user on this system called <b>"{{currentUserName}}"</b>.
-        Instead of starting the recovery process, you may want to try
-        <a href="javascript:void(null);" role="button" (click)="onClickSignin()">
-          signing in as <b>{{currentUserName}}</b>.
-        </a>
-      </p>
-      <p *ngIf="authenticated && selfRecovery">
-        You are already signed in as <b>"{{currentUserName}}"</b>, which this recovery link
-        is for. Recovering this user will remove existing passkeys and create a new one.
-        If you do not need to recover this user, you can
-        <a routerLink="/">continue to encrypt and decrypt data</a>.
-      </p>
-      <p *ngIf="authenticated && !selfRecovery">
-        You are already signed in as <b>"{{currentUserName}}"</b>, but this recovery link
-        is for a different user. If you start the recovery process, you will be signed
-        out, the passkeys of the other user will be removed, and Quick Crypt will guide
-        you in creating a new passkey for the recovered user identity.
-      </p>
+
+      <mat-card appearance="outlined" *ngIf="currentUserName && !authenticated">
+        <mat-card-header>
+          <mat-card-title>Note:</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p>
+            There is an existing Quick Crypt user on this system called <b>"{{currentUserName}}"</b>.
+            Instead of starting the recovery process, you may want to try
+            <a href="javascript:void(null);" role="button" (click)="onClickSignin()">
+              signing in as <b>{{currentUserName}}</b>.
+            </a>
+          </p>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card appearance="outlined" *ngIf="authenticated && selfRecovery">
+        <mat-card-header>
+          <mat-card-title>Note:</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p>
+            You are already signed in as <b>"{{currentUserName}}"</b>, which this recovery link
+            is for. Recovering this user will remove existing passkeys and create a new one.
+            If you do not need to recover this user, you can
+            <a routerLink="/">continue to encrypt and decrypt data</a>.
+          </p>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card appearance="outlined" *ngIf="authenticated && !selfRecovery">
+        <mat-card-header>
+          <mat-card-title>Note:</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p>
+            You are already signed in as <b>"{{currentUserName}}"</b>, but this recovery link
+            is for a different user. If you start the recovery process, you will be signed
+            out, the passkeys of the other user will be removed, and Quick Crypt will guide
+            you in creating a new passkey for the recovered user identity.
+          </p>
+        </mat-card-content>
+      </mat-card>
+
       <div class="button-host">
-      <button mat-raised-button (click)="onClickStartRecovery($event)" color="primary">
-        Start the recovery process
-      </button>
+        <button mat-raised-button (click)="onClickStartRecovery($event)" color="primary">
+          Start the recovery process
+        </button>
       </div>
     </div>
     <div *ngIf="error">
@@ -52,28 +78,45 @@
         creating a new user, you can use it to regain access to the original user
         credentials later.
       </p>
-      <p *ngIf="currentUserName && !authenticated">
-        There is an existing Quick Crypt user on this system called <b>"{{currentUserName}}"</b>.
-        Instead of starting the recover process, you may want to try
-        <a href="javascript:void(null);" role="button" (click)="onClickSignin()">
-          signing in as <b>{{currentUserName}}</b>
-        </a>
-      </p>
-      <p *ngIf="authenticated">
-        You are already signed in as <b>"{{currentUserName}}"</b>.
-        If you do not need to recover this user, you can
-        <a routerLink="/">continue to encrypt and decrypt data</a>.
-      </p>
+
+      <mat-card appearance="outlined" *ngIf="currentUserName && !authenticated">
+        <mat-card-header>
+          <mat-card-title>Note:</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p>
+            There is an existing Quick Crypt user on this system called <b>"{{currentUserName}}"</b>.
+            Instead of starting the recover process, you may want to try
+            <a href="javascript:void(null);" role="button" (click)="onClickSignin()">
+              signing in as <b>{{currentUserName}}</b>
+            </a>
+          </p>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card appearance="outlined" *ngIf="authenticated">
+        <mat-card-header>
+          <mat-card-title>Note:</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p>
+            You are already signed in as <b>"{{currentUserName}}"</b>.
+            If you do not need to recover this user, you can
+            <a routerLink="/">continue to encrypt and decrypt data</a>.
+          </p>
+        </mat-card-content>
+      </mat-card>
+
       <div class="button-host">
         <a [routerLink]="'/newuser'">
-        <button mat-raised-button color="primary">
-          Create a new user from scratch
+          <button mat-raised-button color="primary">
+            Create a new user from scratch
+          </button>
+        </a>
+        <button mat-raised-button *ngIf="validRecoveryLink" (click)="onClickStartRecovery($event)" color="primary"
+          class="button2">
+          Try the recovery process again
         </button>
-      </a>
-      <button mat-raised-button *ngIf="validRecoveryLink"
-        (click)="onClickStartRecovery($event)" color="primary" class="button2">
-        Try the recovery process again
-      </button>
       </div>
     </div>
   </div>
