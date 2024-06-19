@@ -563,7 +563,7 @@ const ELEMENT_DATA: FAQElement[] = [
       validated and still be usable in a browser. Because an untrusted site cannot
       access your Quick Crypt passkey, however, it cannot obtain authorization to
       access your user name or credential nor can it decrypt your data (see the
-      'threat modeling question'). An untrusted site could request your encryption
+      'threat modeling' question). An untrusted site could request your encryption
       password to try obtaining some of the information needed for decryption, but
       you can detect that by always confirming your user name is
       shown at the top of the password prompt.</p>
