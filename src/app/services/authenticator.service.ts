@@ -479,7 +479,7 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const optUrl = new URL(`regoptions?userid=${this._userId}`, baseUrl);
+      const optUrl = new URL(`regoptions?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
       const optionsResp = await fetch(optUrl, {
          method: 'GET',
          mode: 'cors',
