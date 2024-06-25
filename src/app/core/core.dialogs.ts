@@ -182,7 +182,7 @@ export class CipherInfoDialog {
    constructor(
       private r2: Renderer2,
       public dialogRef: MatDialogRef<CipherInfoDialog>,
-      @Inject(MAT_DIALOG_DATA) public cipherData: cs.CipherData | null
+      @Inject(MAT_DIALOG_DATA) public cipherData: cs.CipherData4Header | null
    ) {
       if (cipherData == null) {
          this.error = 'The wrong passkey was selected or the cipher armor was changed';

@@ -7,7 +7,7 @@ const rl = readline.createInterface({ input, output });
 
 const cipherText = await rl.question('Cipher text (base64): ');
 const userCred = await rl.question('Site key (base64): ');
-const clear = await cipherSvc.decrypt(
+const clear = await cipherSvc.decryptString(
     async (hint) => {
         return await rl.question(`Password (hint: ${hint}): `);
     },
@@ -16,4 +16,4 @@ const clear = await cipherSvc.decrypt(
 );
 
 rl.close();
-console.log(new TextDecoder().decode(clear));
+console.log(clear);

@@ -310,7 +310,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       const hashMillis = this.icount / this.cipherSvc.hashRate;
 
       // if greater than 15 seconds show message
-      if( hashMillis > 15 * 1000) {
+      if (hashMillis > 15 * 1000) {
          const takeMsg = makeTookMsg(0, hashMillis, 'take');
          this.hashTimeWarning = `*password hash may ${takeMsg}`
       }
@@ -708,7 +708,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.bubbleTip2.show();
          }
 
-         if(completed) {
+         if (completed) {
             this.toastMessage('Congratulations, data encrypted');
          }
 
@@ -735,16 +735,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       try {
          var [pwd, hint] = await this.getPassword(+this.minPwdStrength, '', econtext);
 
-         const clearBytes = new TextEncoder().encode(this.clearText);
-         const eparams: cs.EParams = {
+         const eparams2: cs.EParams2 = {
             ...econtext,
             pwd: pwd,
             hint: hint,
-            clear: clearBytes
+            clear: this.clearText
          }
-
-         const encrypted = await this.cipherSvc.encrypt(
-            eparams, this.cipherReadyNotice.bind(this)
+         const encrypted = await this.cipherSvc.encryptString(
+            eparams2, this.cipherReadyNotice.bind(this)
          );
 
          econtext.lp += 1;
@@ -817,7 +815,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.onClearClear();
 
       try {
-         const decrypted = await this.cipherSvc.decrypt(
+         const decrypted = await this.cipherSvc.decryptString(
             async (hint) => {
                const [pwd, _] = await this.getPassword(-1, hint, dcontext);
                return pwd;
@@ -869,8 +867,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cipherLabel = `Cipher Armor (${tookMsg})`;
    }
 
-   showClearTextAndTime(clear: ArrayBuffer): void {
-      this.clearText = new TextDecoder().decode(clear);
+   showClearTextAndTime(clearText: string): void {
+      this.clearText = clearText;
       this.errorClear = false;
 
       const tookMsg = makeTookMsg(this.actionStart, Date.now());
@@ -893,7 +891,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             const ctParam = encodeURIComponent(JSON.stringify(result));
             return 'https://' + location.host + '?cipherarmor=' + ctParam;
          } else {
-            if(econtext.reminder) {
+            if (econtext.reminder) {
                result['reminder'] = 'decrypt with quick crypt';
             }
             const space = this.ctFormat == 'indent' ? 3 : 0;
@@ -1021,7 +1019,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
 
    onFormatChange(selected?: string) {
-      if(selected == 'link') {
+      if (selected == 'link') {
          this.lastReminder = this.reminder;
          this.reminder = false;
       } else {
@@ -1032,7 +1030,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    reformatCipherArmor() {
-      if(this.cipherArmor) {
+      if (this.cipherArmor) {
          try {
             let dcontext = this.getDecContextFrom(this.cipherArmor);
             // make it the "last loop" so we get the full cipher armor
@@ -1050,7 +1048,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             };
 
             this.cipherArmor = this.getCipherArmorFor(dcontext.ct, econtext);
-         } catch(err) {
+         } catch (err) {
          }
       }
    }
@@ -1101,13 +1099,53 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onClearFileUpload(event: any): void {
-      this.fileUpload.nativeElement.onchange = (event: any) => {
-         this.onFileUpload(event, (val) => {
-            this.clearText = val;
-            this.errorClear = false;
-         });
+
+      const file: File = event.target.files[0];
+//      const
+
+/*      const data =  crypto.getRandomValues(new Uint8Array(48));
+      const blob = new Blob([data],{type:'application/octet-stream'} );
+      this.startDownload(blob);
+*/
+
+      /*      this.fileUpload.nativeElement.onchange = (event: any) => {
+               this.onFileUpload(event, (val) => {
+                  this.clearText = val;
+                  this.errorClear = false;
+               });
+            };
+            this.fileUpload.nativeElement.click();*/
+   }
+
+   startDownload(blob: Blob) {
+      // Create an object URL for the blob object
+      const url = URL.createObjectURL(blob);
+
+      // Create a new anchor element
+      const a = document.createElement('a');
+
+      // Set the href and download attributes for the anchor element
+      // You can optionally set other attributes like `title`, etc
+      // Especially, if the anchor element will be attached to the DOM
+      a.href = url;
+//      a.download = 'thefile.dat';
+
+      // Click handler that releases the object URL after the element has been clicked
+      // This is required for one-off downloads of the blob content
+      const clickHandler = () => {
+         setTimeout(() => {
+            URL.revokeObjectURL(url);
+            removeEventListener('click', clickHandler);
+         }, 150);
       };
-      this.fileUpload.nativeElement.click();
+
+      // Add the click event listener on the anchor element
+      // Comment out this line if you don't want a one-off download of the blob content
+      a.addEventListener('click', clickHandler, false);
+
+      // Programmatically trigger a click on the anchor element
+      // Without attaching the anchor element to the DOM
+      a.click();
    }
 
    onFileDownload(filename: string, getter: () => string): void {
@@ -1155,9 +1193,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          }
 
          const dcontext = this.getDecContextFrom(this.cipherArmor);
-         const cipherData = await this.cipherSvc.getCipherData(
+         const encrypted = cs.base64ToBytes(dcontext.ct);
+         const [cipherData] = await this.cipherSvc.getCipherData4Header(
             cs.base64ToBytes(this.authSvc.userCred!),
-            dcontext.ct
+            encrypted
          );
          this.dialog.open(CipherInfoDialog, { data: cipherData });
       } catch (err) {
