@@ -21,12 +21,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
 import * as cs from './cipher.service';
+import * as CipherService from './CipherService';
 
 describe('CipherService', () => {
    let cipherSvc: cs.CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      cipherSvc = TestBed.inject(cs.CipherService);
+      cipherSvc = TestBed.inject(CipherService.CipherService);
    });
 
    it('should be created', () => {
@@ -59,7 +60,7 @@ describe("Key generation", function () {
    let cipherSvc: cs.CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      cipherSvc = TestBed.inject(cs.CipherService);
+      cipherSvc = TestBed.inject(CipherService.CipherService);
    });
 
    it("successful and not equivalent key generation", async function () {
@@ -149,7 +150,7 @@ describe("Encryption and decryption", function () {
    let cipherSvc: cs.CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      cipherSvc = TestBed.inject(cs.CipherService);
+      cipherSvc = TestBed.inject(CipherService.CipherService);
    });
 
    it("successful round trip, all algorithms, no pwd hint", async function () {
@@ -658,7 +659,7 @@ describe("Get cipherdata from cipher text", function () {
    let cipherSvc: cs.CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      cipherSvc = TestBed.inject(cs.CipherService);
+      cipherSvc = TestBed.inject(CipherService.CipherService);
    });
 
 
@@ -790,7 +791,7 @@ describe("Benchmark execution", function () {
    let cipherSvc: cs.CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      cipherSvc = TestBed.inject(cs.CipherService);
+      cipherSvc = TestBed.inject(CipherService.CipherService);
    });
 
    it("reasonable benchmark results", async function () {
@@ -816,7 +817,7 @@ describe("CipherData encode and decode", function () {
    let cipherSvc: cs.CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      cipherSvc = TestBed.inject(cs.CipherService);
+      cipherSvc = TestBed.inject(CipherService.CipherService);
    });
 
    const iv_bytes = Number(cs.AlgInfo['X20-PLY']['iv_bytes']);
@@ -1037,7 +1038,7 @@ describe("Random48 tests", function () {
    let cipherSvc: cs.CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      cipherSvc = TestBed.inject(cs.CipherService);
+      cipherSvc = TestBed.inject(CipherService.CipherService);
    });
 
 
