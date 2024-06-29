@@ -1194,7 +1194,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
          const dcontext = this.getDecContextFrom(this.cipherArmor);
          const encrypted = cs.base64ToBytes(dcontext.ct);
-         const [cipherData] = await this.cipherSvc.getCipherData4Header(
+         const [cipherData] = await this.cipherSvc.getCipherData(
             cs.base64ToBytes(this.authSvc.userCred!),
             encrypted
          );
