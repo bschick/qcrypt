@@ -92,7 +92,7 @@ export type CipherData4Header = CipherData4 & {
 // The following is not just the size of the CipherData4 structs,
 // this is the MAX byte expansion of the output of encryption compared
 // to the byte size of the input
-const OVERHEAD_MAX_BYTES = HMAC_BYTES + VER_BYTES + ALG_BYTES +
+export const OVERHEAD_MAX_BYTES = HMAC_BYTES + VER_BYTES + ALG_BYTES +
    IV_MAX_BYTES + AUTH_TAG_MAX_BYTES + IC_BYTES + SLT_BYTES +
    CHUNK_SIZE_BYTES + HINT_LEN_BYTES + ENCRYPTED_HINT_MAX_BYTES;
 
@@ -251,7 +251,7 @@ async function readStreamBYOB(
 
    let bytesReceived = 0;
    let offset = 0;
-   console.log('readStreamBYOB buffer: ' + output.byteLength);
+//   console.log('readStreamBYOB buffer: ' + output.byteLength);
 
    while (offset < output.byteLength) {
       // read() returns a promise that fulfills when a value has been received
@@ -259,7 +259,7 @@ async function readStreamBYOB(
          new Uint8Array(output.buffer, offset, output.byteLength - offset)
       );
 
-      console.log('readStreamBYOB read: ', value, done);
+//      console.log('readStreamBYOB read: ', value, done);
 
       if (value) {
          // confirm this is really needed (along with return below)
@@ -273,7 +273,7 @@ async function readStreamBYOB(
       }
    }
 
-   console.log('readStreamBYOB returning: ' + bytesReceived);
+//   console.log('readStreamBYOB returning: ' + bytesReceived);
    return [output, bytesReceived];
 }
 
@@ -510,7 +510,7 @@ export class CipherService {
       let totalBytesWritten = 0;
       let chunkSize = CHUNK_SIZE_START;
 
-      console.log('encryptToBytes returning');
+//      console.log('encryptToBytes returning');
 
       return new ReadableStream({
          type: 'bytes',
@@ -649,8 +649,8 @@ export class CipherService {
       readyNotice?: (params: Params) => void
    ): Promise<[written: number, ek: CryptoKey, sk: CryptoKey]> {
 
-      console.log('_encryptHeader input bytes: ' + input.byteLength);
-      console.log('_encryptHeader max output bytes: ' + output.byteLength);
+//      console.log('_encryptHeader input bytes: ' + input.byteLength);
+//      console.log('_encryptHeader max output bytes: ' + output.byteLength);
 
       if (input.byteLength == 0) {
          throw new Error('No data to encrypt');
@@ -738,7 +738,7 @@ export class CipherService {
          input,
          additionalData,
       );
-      console.log('_encryptHeader encrypted bytes: ' + encryptedBytes.byteLength);
+//      console.log('_encryptHeader encrypted bytes: ' + encryptedBytes.byteLength);
 
       const hmacSlot = new Uint8Array(output.buffer, 0, HMAC_BYTES);
       const dataSlot = new Uint8Array(output.buffer, HMAC_BYTES);
@@ -749,7 +749,7 @@ export class CipherService {
          }, dataSlot
       );
 
-      console.log('_encryptHeader encoded bytes: ' + encodedSize);
+//      console.log('_encryptHeader encoded bytes: ' + encodedSize);
 
       // Putting the HMAC first (ahead of version) was a mistake, but as long we the length
       // isn't changed, its not a problem. If we ever want to use a longer HMAC a simple
@@ -757,11 +757,11 @@ export class CipherService {
       // and of encoded cipher data
       await this._signCipherData(sk, new Uint8Array(output.buffer, HMAC_BYTES, encodedSize), hmacSlot);
 
-      console.log(sk);
+/*      console.log(sk);
       console.log(hmacSlot.byteLength, hmacSlot);
       const data = new Uint8Array(dataSlot.buffer, HMAC_BYTES, encodedSize)
       console.log(data.byteLength, data);
-
+*/
       // TODO: remove this if not encoding B64 in place
       /*      const encB64Size = Math.ceil(4 / 3 * (encryptedBytes.byteLength + 2));
             if (encB64Size + sigB64Size > buffer.byteLength) {
@@ -981,7 +981,7 @@ export class CipherService {
       additionalData: Uint8Array = new Uint8Array(0),
    ): Promise<Uint8Array> {
 
-      console.log('doencrpt clear:' + clear.byteLength);
+//      console.log('doencrpt clear:' + clear.byteLength);
 
       const iv_bytes = Number(AlgInfo[alg]['iv_bytes']);
       if (iv_bytes != iv.byteLength) {
@@ -1084,10 +1084,10 @@ export class CipherService {
       readyNotice?: (params: Params) => void
    ): Promise<[written: number, ek: CryptoKey, sk: CryptoKey]> {
 
-      console.log('_decryptHeader input bytes: ' + input.byteLength);
-      console.log('_decryptHeader max output bytes: ' + output.byteLength);
+//      console.log('_decryptHeader input bytes: ' + input.byteLength);
+//      console.log('_decryptHeader max output bytes: ' + output.byteLength);
 
-      const [cipherData, sk, read] = await this.getCipherData4Header(userCred, input);
+      const [cipherData, sk, read] = await this.getCipherData(userCred, input);
 
       let hintEnc = new Uint8Array(0);
       if (cipherData.encryptedHint.byteLength != 0) {
@@ -1120,7 +1120,7 @@ export class CipherService {
          additionalData,
       );
 
-      console.log('_decryptHeader decrypted bytes: ' + decrypted.byteLength);
+//      console.log('_decryptHeader decrypted bytes: ' + decrypted.byteLength);
       output.set(decrypted);
 
       return [decrypted.byteLength, ek, sk];
@@ -1139,11 +1139,11 @@ export class CipherService {
          const exported = await crypto.subtle.exportKey("raw", key);
          const keyBytes = new Uint8Array(exported);
 
-         console.log('dxcha encrypted', encrypted.byteLength, encrypted);
+/*         console.log('dxcha encrypted', encrypted.byteLength, encrypted);
          console.log('dxcha additionalData', additionalData.byteLength, additionalData);
          console.log('dxcha iv', iv.byteLength, iv);
          console.log('dxcha keyBytes', keyBytes.byteLength, keyBytes);
-
+*/
          await sodium.ready;
          try {
             decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
@@ -1194,7 +1194,7 @@ export class CipherService {
       return decrypted;
    }
 
-   async getCipherData4Header(
+   async getCipherData(
       userCred: Uint8Array,
       input: Uint8Array,
    ): Promise<[CipherData4Header, CryptoKey, number]> {
@@ -1210,9 +1210,9 @@ export class CipherService {
       const hmac = new Uint8Array(input.buffer, 0, HMAC_BYTES);
       const data = new Uint8Array(input.buffer, HMAC_BYTES);
 
-      console.log('getCipherData4Header hmac', hmac.byteLength, hmac);
-      console.log('getCipherData4Header data', data.byteLength, data);
-
+/*      console.log('getCipherData hmac', hmac.byteLength, hmac);
+      console.log('getCipherData data', data.byteLength, data);
+*/
       if (hmac.byteLength != HMAC_BYTES) {
          throw new Error('Invalid HMAC length of: ' + hmac.byteLength);
       }
@@ -1222,7 +1222,7 @@ export class CipherService {
       //
       // IMPORTANT: The returned cipherData could be corrupted. Do not return
       //       this to the caller until after signature verified.
-      const [cipherData, read] = this._decodeCipherData4Header(data);
+      const [cipherData, read] = this._decodeCipherHeader(data);
 
       const sk = await this._genSigningKey(userCred, cipherData.slt);
 
@@ -1230,7 +1230,7 @@ export class CipherService {
       // Aka, check HMAC as soon as possible after we have the signing key.
       // _verifyCipherData should throw an exception if invalid, but the boolean
       // return is a precaution... requires an explicit true result && no exception
-      console.log(sk);
+//      console.log(sk);
       const validSig = await this._verifyCipherData(sk, hmac, data);
 
       if (validSig) {
@@ -1297,9 +1297,9 @@ export class CipherService {
          throw new Error('Invalid HMAC length: ' + hmac.byteLength);
       }
 
-      console.log('_signCipherData', hmac.byteLength, hmac);
+/*      console.log('_signCipherData', hmac.byteLength, hmac);
       console.log('_signCipherData', data.byteLength, data);
-
+*/
       hmacDest.set(new Uint8Array(hmac));
    }
 
@@ -1310,9 +1310,9 @@ export class CipherService {
       data: Uint8Array
    ): Promise<boolean> {
 
-      console.log('_verifyCipherData', hmac.byteLength, hmac);
+/*      console.log('_verifyCipherData', hmac.byteLength, hmac);
       console.log('_verifyCipherData', data.byteLength, data);
-
+*/
       const valid = await crypto.subtle.verify('HMAC', sk, hmac, data);
       if (valid) {
          return true;
@@ -1360,7 +1360,7 @@ export class CipherService {
          extend(numToBytes(args.ic, IC_BYTES));
       }
 
-      console.log('ad ver: ' +args.ver );
+//      console.log('ad ver: ' +args.ver );
       extend(numToBytes(args.ver, VER_BYTES));
 
       if (args.encryptedHint) {
@@ -1389,13 +1389,13 @@ export class CipherService {
          offset += data.byteLength;
       }
 
-      set(numToBytes(cipherData4Header.ic, IC_BYTES));
-      set(cipherData4Header.slt);
       set(numToBytes(cipherData4Header.encryptedHint.byteLength, HINT_LEN_BYTES));
-
       if (cipherData4Header.encryptedHint.byteLength > 0) {
          set(cipherData4Header.encryptedHint);
       }
+
+      set(numToBytes(cipherData4Header.ic, IC_BYTES));
+      set(cipherData4Header.slt);
 
       return offset;
    }
@@ -1615,10 +1615,14 @@ export class CipherService {
    // Importers of CipherService should not need this function directly,
    // but it is public for unit testing. Does not allow encoding
    // with zero length encrypted text since that is not needed
-   _decodeCipherData4Header(encoded: Uint8Array): [CipherData4Header, number] {
+   _decodeCipherHeader(encoded: Uint8Array): [CipherData4Header, number] {
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated. Test each value for errors as we unpack
+
+      if(encoded.byteLength < VER_BYTES) {
+         throw new Error('Missing cipher data');
+      }
 
       let offset = 0;
       let extract = (what: string, len: number) => {
@@ -1637,19 +1641,48 @@ export class CipherService {
       // version in the middle of the encoding. Detect old version by the first 2 bytes
       // being < 4 (because encoded start with ALG and v1 max ALG was 3 and beyond v1
       // version is >=4). Fortunately ALG_BYTES and VER_BYTES are equal.
-      const verOrAlg = bytesToNum(extract('verOrAlg', VER_BYTES));
+      const verOrAlg = bytesToNum(encoded.slice(0, VER_BYTES));
       if (verOrAlg < V1_BELOW) {
          // Load old version and convert to CipherData4Header
          const [cipherData1, read] = this._decodeCipherData1(encoded);
          return [{
             ...cipherData1
          }, read];
+      } else if (verOrAlg == CURRENT_VERSION) {
+         return this._decodeCipherData4Header(encoded);
+      } else {
+         throw new Error('Unknown version: ' + verOrAlg);
+      }
+   }
+
+
+   // Importers of CipherService should not need this function directly,
+   // but it is public for unit testing. Does not allow encoding
+   // with zero length encrypted text since that is not needed
+   _decodeCipherData4Header(encoded: Uint8Array): [CipherData4Header, number] {
+
+      // Need to treat all values an UNTRUSTED since the signature has not yet been
+      // validated. Test each value for errors as we unpack
+
+      let offset = 0;
+      let extract = (what: string, len: number) => {
+         const result = encoded.slice(offset, offset + len);
+         // Cloud happen if the encode data was clipped and reencoded
+         // (slice annoyning doesn't throw on slicing beyond the end)
+         if (result.byteLength != len) {
+            throw new Error(`Invalid ${what} length: ${result.byteLength}`);
+         }
+
+         offset += len;
+         return result;
       }
 
-      // Was not an old version, start over and load CipherData4 with is
-      // encoded ahead of the addtional CipherData4Header fields...
       let cipherData4: CipherData4;
       [cipherData4, offset] = this._decodeCipherData4(encoded);
+
+      // ### hint ###
+      const hintLen = bytesToNum(extract('hlen', HINT_LEN_BYTES));
+      const encryptedHint = extract('hint', hintLen);
 
       // ### iter count ###
       const ic = bytesToNum(extract('ic', IC_BYTES));
@@ -1659,10 +1692,6 @@ export class CipherService {
 
       // ### salt ###
       const slt = extract('slt', SLT_BYTES);
-
-      // ### hint ###
-      const hintLen = bytesToNum(extract('hlen', HINT_LEN_BYTES));
-      const encryptedHint = extract('hint', hintLen);
 
       return [{
          ...cipherData4,

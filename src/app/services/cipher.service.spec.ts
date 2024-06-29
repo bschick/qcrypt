@@ -21,13 +21,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
 import * as cs from './cipher.service';
-import * as CipherService from './CipherService';
 
 describe('CipherService', () => {
    let cipherSvc: cs.CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      cipherSvc = TestBed.inject(CipherService.CipherService);
+      cipherSvc = TestBed.inject(cs.CipherService);
    });
 
    it('should be created', () => {
@@ -60,7 +59,7 @@ describe("Key generation", function () {
    let cipherSvc: cs.CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      cipherSvc = TestBed.inject(CipherService.CipherService);
+      cipherSvc = TestBed.inject(cs.CipherService);
    });
 
    it("successful and not equivalent key generation", async function () {
@@ -150,7 +149,7 @@ describe("Encryption and decryption", function () {
    let cipherSvc: cs.CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      cipherSvc = TestBed.inject(CipherService.CipherService);
+      cipherSvc = TestBed.inject(cs.CipherService);
    });
 
    it("successful round trip, all algorithms, no pwd hint", async function () {
@@ -161,18 +160,17 @@ describe("Encryption and decryption", function () {
          const pwd = 'a good pwd';
          const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
-         const clearEnc = new TextEncoder().encode(clearText);
-         const eparams: cs.EParams = {
+         const eparams: cs.EParams2 = {
             alg: alg,
             ic: cs.ICOUNT_MIN,
             trueRand: false,
             fallbackRand: true,
             pwd: pwd,
             userCred: userCred,
-            clear: clearEnc,
+            clear: clearText,
          };
 
-         const cipherText = await cipherSvc.encrypt(
+         const cipherText = await cipherSvc.encryptString(
             eparams,
             (params) => {
                expect(params.alg).toBe(alg);
@@ -180,7 +178,7 @@ describe("Encryption and decryption", function () {
             }
          );
 
-         const decrypted = await cipherSvc.decrypt(
+         const decrypted = await cipherSvc.decryptString(
             async (decHint) => {
                expect(decHint).toBe('');
                return pwd;
@@ -192,8 +190,7 @@ describe("Encryption and decryption", function () {
                expect(params.ic).toBe(cs.ICOUNT_MIN);
             }
          );
-         const clearTest = new TextDecoder().decode(decrypted);
-         expect(clearTest).toBe(clearText);
+         expect(decrypted).toBe(clearText);
       }
    });
 
@@ -213,8 +210,7 @@ describe("Encryption and decryption", function () {
                const hint = 'asdf';
                const userCred = new Uint8Array([101, 246, 72, 149, 67, 228, 149, 35, 60, 124, 81, 187, 157, 96, 208, 217, 123, 147, 228, 60, 84, 214, 198, 116, 192, 162, 178, 147, 50, 119, 97, 251]);
 */
-         const clearEnc = new TextEncoder().encode(clearText);
-         const eparams: cs.EParams = {
+         const eparams: cs.EParams2 = {
             alg: alg,
             ic: cs.ICOUNT_MIN,
             trueRand: false,
@@ -222,10 +218,10 @@ describe("Encryption and decryption", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCred,
-            clear: clearEnc,
+            clear: clearText,
          };
 
-         const cipherText = await cipherSvc.encrypt(
+         const cipherText = await cipherSvc.encryptString(
             eparams,
             (params) => {
                expect(params.alg).toBe(alg);
@@ -234,7 +230,7 @@ describe("Encryption and decryption", function () {
          );
 //         console.log(alg + ": " + cipherText.length + ": " + cipherText);
 
-         const decrypted = await cipherSvc.decrypt(
+         const decrypted = await cipherSvc.decryptString(
             async (decHint) => {
                expect(decHint).toBe(hint);
                return pwd;
@@ -246,9 +242,46 @@ describe("Encryption and decryption", function () {
                expect(params.ic).toBe(cs.ICOUNT_MIN);
             }
          );
-         const clearTest = new TextDecoder().decode(decrypted);
-         //      console.log(alg + ": '" + clearTest + "'");
-         expect(clearTest).toBe(clearText);
+         //      console.log(alg + ": '" + decrypted + "'");
+         expect(decrypted).toBe(clearText);
+      }
+   });
+
+   it("confirm successful version decryption", async function () {
+      // These are generated with running website
+      const cts = [
+         // AEG-GCM: V1, V4
+         '4FhRcUaBCS6rrfj8pmkyclbGORk-nVoo-Epq_0NZ3E0BAEE8XuQyAPODSpDZLh9fCrOSLERyCwWq9rzth9VAdxsAAQAV3pKmSTgTx99M_cAWV51Z2AFzgXyEQk-iZznhBgEsdTvIlwTdet5j7a8FqrlMlZiQRvlvLhOgAvsO0n5Pxkhxhv-lK9mLQ670gilLRTrRR-pKATz4hGMWIDCgC4ojnOMwluTtK0XosZ0dCcSy9nMgIhWP5co-LWwr-NWsY29uXFC9WZI5ZA4Ujt1BAsv-gUe7vhwFcPLkhFGgc6tIeo4ObcSm7oC7z4AjTQ9WtURpvgwoqA9ovHEMum2ViGSifXlemw304KMKGDQgsM3Fn9YacZjJO0YYMyiNi48ywQVCNkw_Fvo',
+         'IIgXQU_yN4JMpVRKmtOpQaBoFdR0gFkufci7oVC1RBMEAAEAEkQZ7_8n_E4XkLqYzgAAABJeCT8SRj1A_yG0Obn8fGv0L6vhFpMZu2ZxVdMYHDfJLkMlbNClyWpo1Z2yE79F2dSgaxDCZFYxVJ49VueIL475vKKLE2lNhMIJOWn8bJ58jvhfk6gyMxil0ur3iaKuMuCOmTN5xuxCDrppAEb68Nl03z3W5Nb3SZJFIe-VQ2m6wcdlmu0SUDDG6v9fR4uFYP5-hTE_qrNn3iygwVIYswBz9L8eFBaTm3IQ2R61NdZ_puiY262h9HmAR6LsnvV9sl0gwZAS2gqJP1Gc73lbFWob_3YmdSlFozZ6AAM6FxAp0uDXh0B3GwCRGCztAlzH5cXqPyqnUQk9',
+
+         // XChaCha: V1, V4
+         'D0WSIi0s18fTxqsg5CGOHV3boHS7yaCo9AGOmWM8G30CAKFIuXF7m1ZxGo4bL6P7SaXqw-IIv8N9ZKR44xaZKIdgys4pysPqkIRAdxsAAQAVSEeOnFNPWdrAli-fyq8dWfUK2aBmXWF7T6vt06Fl5ehzCOh9DtT4W6uckFBh7S_VFBpmeh1_VN1WWAVV-PUB8HvIRtrVAoRiZy6H-BhkOaZflJnIQpu15AkrZC5aY8e4ulwiWIrV_ep88a963_B5mme9TaVZyzeXuBbo6xFOuGsVoPybjU-DWBDKK3i2rGju62NOlthYTn3eP3e2UuT_wIt1IB30XNO3dsxmcKQAW70GwSDvlGH-KnNqoUw3BUf07PlOYaiP0YfwqxZa7Mr4FjZ-sgTZTg2yKB0Xc-LeuuRprvs',
+         'Y0JZvAQ3xu1kvrwhowReqPC7qa9OjfO3cgucwFdEzsgEAAIAxcc9Qm8UxLBsZnYBIYsILv6qqINDwJqBzgAAAOgXI07mG3ant7N8Rir-CBpaRhmhL9pSaL5f4hvP3dTzsp4VLBR1Acdjhp5oKv_o1FTs64JkH0L2CNEgoIJiEfBubjHfjSwpmDxjrHuKGkDzPTJ4UEvaKv0e9VCT8X57S-dN1WLWaczEj6Ji6ygIslpQg0fwTkIaw8Mu-ZHyDqUxOEMrA1wsBMWtQ4wK3WIMgxQQc9N1hVjFz6dhel15pR417sUNgglQDUVXWB5fBuApc9aDMHXFWo8SxZ_l7I1dAhcq5Fd76jIlr71yE3VbFSgB4LvZ_6r2BmRqTjPzYoOuDUYO40B3GwD-dA8Nz44HMtOrV46lKbXp',
+
+         // AEGIS: V1, V4
+         'ZhiPRZ7YOIjWXEMBFmyZsSWwor9WNId6oPXqBgJmCxkDAMCrHZhWSw5s_dZzPc-k9R2TqHmrs-8kYl2YCxT3PblxGLL51besQyoLQsuJHYvKGUB3GwABACXwMpAj4tQpvDM0yLAUJWwWFpSPHMxwMtxvB6xUvbQQDRdzkm1rFPPYm_PfWPXh_vekCrJTjXCp22hvGCr9NhPTCxnhrPu4hpVkIaPawZ77bB6uAoXI8htcZoLrf2CuSx2-F-v7XRCNYtFfOpwLQQx1u_df4xpFZWXwz_pZafMN6dvbYniu3-x4Iwcj1RtzqOajBPrgMO143pTu9n2LlKUkeUVR3VmeJIFeXhdbUaVWo498Jeboltf7XLUGy--Ox5yVFaCcmPiYUZFe0UolFPJLPIAEHB4Smdw83LoHwwjgjedzvuyzi5SHpq03OYME87dUQBVdgIDwaxwIyJDxpbLvXP9P',
+         'rebkYQMN7fS3WW5EQygsjErFc7yVbO1QMEsvZ7sqoYoEAAMADkdix3IscJf7mmiLaqEljlC_RZ9RUrRt7aiGUgw6H03eAAAA3UPdwIDVpceWafuB0mCr55_UOhdZCm6Gc2PtLz_E3t_br-3xD3b83UzEGsMWLWnIUV8qaoKuddk6re-oE2uxJoESuxXquG1EO9eoWvc1GBSbKUddCsQEa8Fesf8mKBr3MeYQaPUOKm-WnmWY7t__xoLKsbeVxvt53EHfBlBr7-fDzepErQK0zPcSwtOOM6svORw0wFj0s6NWfjWyWMPE2LyGKi-BvLTJ_-xCr8Gx2vhGc6rbf9icnJZhPlK_d_6CzFMLfOwb1sh6bEgzw7teUpcazl8_7vh-AI28xsu2JaWzdW_lFBlcWbjSpSqfUGsuhB94tVyDUqMTMsBvD8MLWWe16wRAdxsA5VKM7F7acbQASGJFbMK-lg',
+      ];
+
+      for (let ct of cts) {
+         const ctBytes = cs.base64ToBytes(ct);
+         // userCred used for creation of the CTS above
+         // b64url for browsser injection: xhKm2Q404pGkqfWkTyT3UodUR-99bN0wibH6si9uF8I
+         const userCred = new Uint8Array([198, 18, 166, 217, 14, 52, 226, 145, 164, 169, 245, 164, 79, 36, 247, 82, 135, 84, 71, 239, 125, 108, 221, 48, 137, 177, 250, 178, 47, 110, 23, 194]);
+         const clearCheck = 'physical farm bolt correct bee nonchalant glib high able pinch left quaint strip valuable exultant disgusted curved bless geese snatch zoom fat touch boot abject wink pretty accessible foamy';
+         const hintCheck = 'royal';
+         const pwd = '9j5J4QnKD3D2R7Ks5gAAa';
+
+         const clear = await cipherSvc.decryptString(
+            async (hint) => {
+               expect(hint).toBe(hintCheck);
+               return pwd;
+            },
+            userCred,
+            ct
+         );
+
+         expect(clear).toBe(clearCheck);
       }
    });
 
@@ -270,7 +303,7 @@ describe("Encryption and decryption", function () {
          const userCred = new Uint8Array([101, 246, 72, 149, 67, 228, 149, 35, 60, 124, 81, 187, 157, 96, 208, 217, 123, 147, 228, 60, 84, 214, 198, 116, 192, 162, 178, 147, 50, 119, 97, 251]);
 
          // First ensure we can decrypt with valid inputs
-         const clear = await cipherSvc.decrypt(
+         const clear = await cipherSvc.decryptString(
             async (hint) => {
                expect(hint).toBe("asdf");
                return "asdf";
@@ -278,7 +311,7 @@ describe("Encryption and decryption", function () {
             userCred,
             ct
          );
-         expect(new TextDecoder().decode(clear)).toBe("this 🐞 is encrypted");
+         expect(clear).toBe("this 🐞 is encrypted");
 
          let skipCount = 0;
 
@@ -297,7 +330,7 @@ describe("Encryption and decryption", function () {
             }
 
             await expectAsync(
-               cipherSvc.decrypt(
+               cipherSvc.decryptString(
                   async (hint) => {
                      expect(hint).toBe("asdf");
                      return "asdf";
@@ -316,8 +349,7 @@ describe("Encryption and decryption", function () {
          const hint = '';
          const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
-         const clearEnc = new TextEncoder().encode(clearText);
-         const eparams: cs.EParams = {
+         const eparams: cs.EParams2 = {
             alg: alg,
             ic: cs.ICOUNT_MIN,
             trueRand: false,
@@ -325,13 +357,13 @@ describe("Encryption and decryption", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCred,
-            clear: clearEnc,
+            clear: clearText,
          };
 
-         const cipherText = await cipherSvc.encrypt(eparams);
+         const cipherText = await cipherSvc.encryptString(eparams);
 
          await expectAsync(
-            cipherSvc.decrypt(
+            cipherSvc.decryptString(
                async (decHint) => {
                   expect(decHint).toBe(hint);
                   return 'the wrong pwd';
@@ -347,12 +379,12 @@ describe("Encryption and decryption", function () {
 
       for (let alg in cs.AlgInfo) {
 
-         const clearEnc = crypto.getRandomValues(new Uint8Array(16));
+         const clearText = "asefwlefj4oh09f jw90fu w09fu 9";
          const pwd = 'another good pwd';
          const hint = 'nope';
          const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
-         const eparams: cs.EParams = {
+         const eparams: cs.EParams2 = {
             alg: alg,
             ic: cs.ICOUNT_MIN,
             trueRand: false,
@@ -360,16 +392,16 @@ describe("Encryption and decryption", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCred,
-            clear: clearEnc,
+            clear: clearText,
          };
 
-         let cipherText = await cipherSvc.encrypt(eparams);
+         let cipherText = await cipherSvc.encryptString(eparams);
 
          // Set character in HMAC
          cipherText = setCharAt(cipherText, 3, cipherText[3] == 'a' ? 'b' : 'a');
 
          await expectAsync(
-            cipherSvc.decrypt(
+            cipherSvc.decryptString(
                async (decHint) => {
                   expect(decHint).toBe(hint);
                   return pwd;
@@ -384,12 +416,12 @@ describe("Encryption and decryption", function () {
    it("detect crafted bad cipher text, all algorithms", async function () {
 
       for (let alg in cs.AlgInfo) {
-         const clearEnc = crypto.getRandomValues(new Uint8Array(16));
+         const clearText = "asdfh3roij 02f23kff 8u 3r90";
          const pwd = 'another good pwd';
          const hint = 'nope';
          const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
-         const eparams: cs.EParams = {
+         const eparams: cs.EParams2 = {
             alg: alg,
             ic: cs.ICOUNT_MIN,
             trueRand: false,
@@ -397,17 +429,17 @@ describe("Encryption and decryption", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCred,
-            clear: clearEnc,
+            clear: clearText,
          };
 
-         let cipherText = await cipherSvc.encrypt(eparams);
+         let cipherText = await cipherSvc.encryptString(eparams);
 
-         // Set character in cipher text (past first HMAC ~32*4/3 characters)
-         // this is in the hint
-         let problemText = setCharAt(cipherText, 108, cipherText[108] == 'a' ? 'b' : 'a');
+         // Set character in cipher text
+         // past ~(HMAC + VER + ALG + MAX_IV + CHUCKSZ)*4/3 characters)
+         let problemText = setCharAt(cipherText, 100, cipherText[100] == 'a' ? 'b' : 'a');
 
          await expectAsync(
-            cipherSvc.decrypt(
+            cipherSvc.decryptString(
                async (decHint) => {
                   // Should never execute
                   expect(false).toBe(true);
@@ -418,12 +450,12 @@ describe("Encryption and decryption", function () {
             )
          ).toBeRejectedWithError(Error, new RegExp('.+HMAC.+'));
 
-         // Set character in cipher text (past first ~32*4/3 characters)
-         // this changes the encrypted text
-         problemText = setCharAt(cipherText, 118, cipherText[118] == 'c' ? 'e' : 'c');
+         // Set character in encyrpted hint
+         // back ~(IC + SLT *4/3 characters) from end
+         problemText = setCharAt(cipherText, cipherText.length - 30, cipherText[cipherText.length - 30] == 'c' ? 'e' : 'c');
 
          await expectAsync(
-            cipherSvc.decrypt(
+            cipherSvc.decryptString(
                async (decHint) => {
                   // Should never execute
                   expect(false).toBe(true);
@@ -442,8 +474,9 @@ describe("Encryption and decryption", function () {
       encoded: Uint8Array
    ): Promise<[string, CryptoKey, Uint8Array]> {
 
+      const hmac = new Uint8Array(cs.HMAC_BYTES);
       const sk = await cipherSvc._genSigningKey(userCred, slt);
-      const hmac = await cipherSvc._signCipherBytes(sk, encoded);
+      await cipherSvc._signCipherData(sk, encoded, hmac);
       let extended = new Uint8Array(hmac.byteLength + encoded.byteLength);
       extended.set(hmac);
       extended.set(encoded, hmac.byteLength);
@@ -463,7 +496,7 @@ describe("Encryption and decryption", function () {
    // test.
    //
    // But what could happen is that an evil site might closely mimicked
-   // Quick Crypt, and if Alice was tricked into going there, it could just
+   // Quick Crypt, and if Alice was tricked into going there, it could
    // not tell Alice about the HMAC signature failure. So what this test
    // validates is that even with a replaced HMAC signature
    // (which is equivalent to an ignored HMAC signature), the clear
@@ -483,8 +516,7 @@ describe("Encryption and decryption", function () {
          const userCredA = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
          const userCredB = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
-         const clearEnc = new TextEncoder().encode(clearText);
-         const eparamsA: cs.EParams = {
+         const eparamsA: cs.EParams2 = {
             alg: alg,
             ic: cs.ICOUNT_MIN,
             trueRand: false,
@@ -492,12 +524,12 @@ describe("Encryption and decryption", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCredA,
-            clear: clearEnc,
+            clear: clearText,
          };
-         const cipherTextA = await cipherSvc.encrypt(eparamsA);
+         const cipherTextA = await cipherSvc.encryptString(eparamsA);
          const extendedA = cs.base64ToBytes(cipherTextA);
          const encodedA = extendedA.slice(cs.HMAC_BYTES);
-         const cipherDataA = cipherSvc._decodeCipherData(encodedA);
+         const [cipherDataA] = cipherSvc._decodeCipherHeader(encodedA);
 
          // First sign and repack with the original (correct) values to help ensure the
          // code for repacking is valid and that the 2nd attempt with a new signature
@@ -507,26 +539,25 @@ describe("Encryption and decryption", function () {
          const [cipherTextBA, skB, hmacB] = await signAndRepack(userCredB, cipherDataA.slt, encodedA);
 
          // both should succeed since the singatures are valid (just cannot decrypt cipherText)
-         expect(await cipherSvc._verifyCipherBytes(skA, hmacA, encodedA)).toBeTrue();
-         expect(await cipherSvc._verifyCipherBytes(skB, hmacB, encodedA)).toBeTrue();
+         expect(await cipherSvc._verifyCipherData(skA, hmacA, encodedA)).toBeTrue();
+         expect(await cipherSvc._verifyCipherData(skB, hmacB, encodedA)).toBeTrue();
 
-         // The original should succeed
-         const decryptedAA = await cipherSvc.decrypt(
+         // The original should succeed since we repacked with correct userCred
+         const decryptedAA = await cipherSvc.decryptString(
             async (decHint) => {
                return pwd;
             },
             userCredA,
             cipherTextAA
          );
-         const clearTest = new TextDecoder().decode(decryptedAA);
-         expect(clearTest).toBe(clearText);
+         expect(decryptedAA).toBe(clearText);
 
          // The big moment! Perhaps should have better validation that the decryption
          // failed, but not much else returns DOMException from cipher.service. Note
          // this this is using the correct PWD because we assume the evil site has
          // tricked Alice into provider it
          await expectAsync(
-            cipherSvc.decrypt(
+            cipherSvc.decryptString(
                async (decHint) => {
                   return pwd;
                },
@@ -542,9 +573,9 @@ describe("Encryption and decryption", function () {
       const hint = 'nope';
       const pwd = 'another good pwd';
       const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
-      const clearEnc = crypto.getRandomValues(new Uint8Array(16));
+      const clearText = "()*Hskdfo892hj3f09";
 
-      const eparams: cs.EParams = {
+      const eparams: cs.EParams2 = {
          alg: 'AES-GCM',
          ic: cs.ICOUNT_MIN,
          trueRand: false,
@@ -552,11 +583,11 @@ describe("Encryption and decryption", function () {
          pwd: pwd,
          hint: hint,
          userCred: userCred,
-         clear: clearEnc,
+         clear: clearText,
       };
       // ensure the defaults work
       await expectAsync(
-         cipherSvc.encrypt(eparams)
+         cipherSvc.encryptString(eparams)
       ).not.toBeRejectedWithError();
 
       // empty pwd
@@ -565,7 +596,7 @@ describe("Encryption and decryption", function () {
          pwd: ''
       }
       await expectAsync(
-         cipherSvc.encrypt(bparams)
+         cipherSvc.encryptString(bparams)
       ).toBeRejectedWithError(Error, new RegExp('.+userCred.*'));
 
       // no userCred
@@ -574,7 +605,7 @@ describe("Encryption and decryption", function () {
          userCred: new Uint8Array(0)
       }
       await expectAsync(
-         cipherSvc.encrypt(bparams)
+         cipherSvc.encryptString(bparams)
       ).toBeRejectedWithError(Error, new RegExp('.+userCred.*'));
 
       // extra long userCred
@@ -583,16 +614,16 @@ describe("Encryption and decryption", function () {
          userCred: crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES + 2))
       }
       await expectAsync(
-         cipherSvc.encrypt(bparams)
+         cipherSvc.encryptString(bparams)
       ).toBeRejectedWithError(Error, new RegExp('.+userCred.*'));
 
       // empty clear data
       bparams = {
          ...eparams,
-         clear: new Uint8Array(0)
+         clear: ''
       }
       await expectAsync(
-         cipherSvc.encrypt(bparams)
+         cipherSvc.encryptString(bparams)
       ).toBeRejectedWithError(Error, new RegExp('No data.+'));
 
       // ic too small
@@ -601,7 +632,7 @@ describe("Encryption and decryption", function () {
          ic: cs.ICOUNT_MIN - 1
       }
       await expectAsync(
-         cipherSvc.encrypt(bparams)
+         cipherSvc.encryptString(bparams)
       ).toBeRejectedWithError(Error);
 
       // ic too big
@@ -610,7 +641,7 @@ describe("Encryption and decryption", function () {
          ic: cs.ICOUNT_MAX + 1
       }
       await expectAsync(
-         cipherSvc.encrypt(bparams)
+         cipherSvc.encryptString(bparams)
       ).toBeRejectedWithError(Error);
 
       // invalid alg
@@ -619,7 +650,7 @@ describe("Encryption and decryption", function () {
          alg: 'ABS-GCM'
       }
       await expectAsync(
-         cipherSvc.encrypt(bparams)
+         cipherSvc.encryptString(bparams)
       ).toBeRejectedWithError(Error);
 
       // really invalid alg
@@ -628,7 +659,7 @@ describe("Encryption and decryption", function () {
          alg: 'asdfadfsk'
       }
       await expectAsync(
-         cipherSvc.encrypt(bparams)
+         cipherSvc.encryptString(bparams)
       ).toBeRejectedWithError(Error);
 
       // both rands false
@@ -638,7 +669,7 @@ describe("Encryption and decryption", function () {
          fallbackRand: false
       }
       await expectAsync(
-         cipherSvc.encrypt(bparams)
+         cipherSvc.encryptString(bparams)
       ).toBeRejectedWithError(Error);
 
       // hint too long
@@ -647,7 +678,7 @@ describe("Encryption and decryption", function () {
          hint: 'this is too long'.repeat(8)
       }
       await expectAsync(
-         cipherSvc.encrypt(bparams)
+         cipherSvc.encryptString(bparams)
       ).toBeRejectedWithError(Error);
 
    });
@@ -659,9 +690,8 @@ describe("Get cipherdata from cipher text", function () {
    let cipherSvc: cs.CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      cipherSvc = TestBed.inject(CipherService.CipherService);
+      cipherSvc = TestBed.inject(cs.CipherService);
    });
-
 
    it("expected CipherData, all algorithms", async function () {
 
@@ -672,8 +702,7 @@ describe("Get cipherdata from cipher text", function () {
          const hint = 'try a himt';
          const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
-         const clearEnc = new TextEncoder().encode(clearText);
-         const eparams: cs.EParams = {
+         const eparams: cs.EParams2 = {
             alg: alg,
             ic: cs.ICOUNT_MIN,
             trueRand: false,
@@ -681,11 +710,15 @@ describe("Get cipherdata from cipher text", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCred,
-            clear: clearEnc,
+            clear: clearText,
          };
-         const cipherText = await cipherSvc.encrypt(eparams);
-         const cipherData = await cipherSvc.getCipherData(userCred, cipherText);
+         const cipherText = await cipherSvc.encryptString(eparams);
+         const cipherBytes = cs.base64ToBytes(cipherText);
+         const [cipherData] = await cipherSvc.getCipherData(userCred, cipherBytes);
          const expected_iv_bytes = Number(cs.AlgInfo[alg]['iv_bytes']);
+
+         const hintEnc = new TextEncoder().encode(hint);
+         const clearEnc = new TextEncoder().encode(clearText);
 
          expect(cipherData.alg).toBe(alg);
          expect(cipherData.ic).toBe(cs.ICOUNT_MIN);
@@ -695,7 +728,6 @@ describe("Get cipherdata from cipher text", function () {
          expect(cipherData.encryptedData.byteLength).toBeGreaterThanOrEqual(clearEnc.byteLength);
 
          // confirm that hint and clear output aren't the same as inputs
-         const hintEnc = new TextEncoder().encode(hint);
          expect(isEqualArray(hintEnc, cipherData.encryptedHint)).toBeFalse();
          expect(isEqualArray(clearEnc, cipherData.encryptedData)).toBeFalse();
       }
@@ -705,12 +737,12 @@ describe("Get cipherdata from cipher text", function () {
 
       for (let alg in cs.AlgInfo) {
 
-         const clearEnc = crypto.getRandomValues(new Uint8Array(16));
+         const clearText = "OIH8whfsiodhf s.kd";
          const pwd = 'another good pwd';
          const hint = 'nope';
          const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
-         const eparams: cs.EParams = {
+         const eparams: cs.EParams2 = {
             alg: alg,
             ic: cs.ICOUNT_MIN,
             trueRand: false,
@@ -718,18 +750,19 @@ describe("Get cipherdata from cipher text", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCred,
-            clear: clearEnc,
+            clear: clearText,
          };
 
-         let cipherText = await cipherSvc.encrypt(eparams);
+         let cipherText = await cipherSvc.encryptString(eparams);
 
          // Set character in CipherData
          cipherText = setCharAt(cipherText, 37, cipherText[37] == 'a' ? 'b' : 'a');
+         const cipherBytes = cs.base64ToBytes(cipherText);
 
          await expectAsync(
             cipherSvc.getCipherData(
                userCred,
-               cipherText
+               cipherBytes
             )
          ).toBeRejectedWithError(Error, new RegExp('.+HMAC.+'));
       }
@@ -737,12 +770,12 @@ describe("Get cipherdata from cipher text", function () {
 
    it("detect invalid userCred", async function () {
 
-      const clearEnc = crypto.getRandomValues(new Uint8Array(16));
+      const clearText = "f";
       const pwd = 'another good pwd';
       const hint = 'nope';
       const userCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
 
-      const eparams: cs.EParams = {
+      const eparams: cs.EParams2 = {
          alg: 'AES-GCM',
          ic: cs.ICOUNT_MIN,
          trueRand: false,
@@ -750,16 +783,17 @@ describe("Get cipherdata from cipher text", function () {
          pwd: pwd,
          hint: hint,
          userCred: userCred,
-         clear: clearEnc,
+         clear: clearText,
       };
-      let cipherText = await cipherSvc.encrypt(eparams);
+      let cipherText = await cipherSvc.encryptString(eparams);
+      const cipherBytes = cs.base64ToBytes(cipherText);
 
       // Doesn't match orignal userCred
       let problemUserCred = crypto.getRandomValues(new Uint8Array(cs.USERCRED_BYTES));
       await expectAsync(
          cipherSvc.getCipherData(
             problemUserCred,
-            cipherText
+            cipherBytes
          )
       ).toBeRejectedWithError(Error, new RegExp('.+HMAC.+'));
 
@@ -768,7 +802,7 @@ describe("Get cipherdata from cipher text", function () {
       await expectAsync(
          cipherSvc.getCipherData(
             problemUserCred,
-            cipherText
+            cipherBytes
          )
       ).toBeRejectedWithError(Error);
 
@@ -779,7 +813,7 @@ describe("Get cipherdata from cipher text", function () {
       await expectAsync(
          cipherSvc.getCipherData(
             problemUserCred,
-            cipherText
+            cipherBytes
          )
       ).toBeRejectedWithError(Error);
    });
@@ -791,7 +825,7 @@ describe("Benchmark execution", function () {
    let cipherSvc: cs.CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      cipherSvc = TestBed.inject(CipherService.CipherService);
+      cipherSvc = TestBed.inject(cs.CipherService);
    });
 
    it("reasonable benchmark results", async function () {
@@ -817,13 +851,14 @@ describe("CipherData encode and decode", function () {
    let cipherSvc: cs.CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      cipherSvc = TestBed.inject(CipherService.CipherService);
+      cipherSvc = TestBed.inject(cs.CipherService);
    });
 
    const iv_bytes = Number(cs.AlgInfo['X20-PLY']['iv_bytes']);
 
    it("valid CipherData", function () {
-      const dp: cs.CipherData = {
+      const dp: cs.CipherData4Header = {
+         ver: cs.CURRENT_VERSION,
          alg: 'X20-PLY',
          ic: 2000000,
          iv: crypto.getRandomValues(new Uint8Array(iv_bytes)),
@@ -832,8 +867,12 @@ describe("CipherData encode and decode", function () {
          encryptedData: crypto.getRandomValues(new Uint8Array(42))
       }
 
-      const packed = cipherSvc._encodeCipherData(dp);
-      const rdp = cipherSvc._decodeCipherData(packed);
+      const output = new Uint8Array(
+         cs.ENCRYPTED_HINT_MAX_BYTES + cs.OVERHEAD_MAX_BYTES + dp.encryptedData.byteLength
+      );
+
+      const encodedSize = cipherSvc._encodeCipherData4Header(dp, output);
+      const [rdp] = cipherSvc._decodeCipherData4Header(new Uint8Array(output.buffer, 0, encodedSize));
 
       expect(rdp.alg).toBe(dp.alg);
       expect(rdp.ic).toBe(dp.ic);
@@ -848,7 +887,8 @@ describe("CipherData encode and decode", function () {
       const iv_bytes = Number(cs.AlgInfo['X20-PLY']['iv_bytes']);
 
       //valid
-      let dp: cs.CipherData = {
+      let dp: cs.CipherData4Header = {
+         ver: cs.CURRENT_VERSION,
          alg: 'X20-PLY',
          ic: cs.ICOUNT_MIN,
          iv: new Uint8Array(iv_bytes),
@@ -856,76 +896,81 @@ describe("CipherData encode and decode", function () {
          encryptedHint: new Uint8Array(0),
          encryptedData: new Uint8Array(1)
       }
+
+      const output = new Uint8Array(
+         cs.ENCRYPTED_HINT_MAX_BYTES + cs.OVERHEAD_MAX_BYTES + dp.encryptedData.byteLength
+      );
+
       // exect we start valid
-      expect(() => cipherSvc._encodeCipherData(dp)).not.toThrowError();
+      expect(() => cipherSvc._encodeCipherData4Header(dp, output)).not.toThrowError();
 
       // iv too short
       let bdp = {
          ...dp,
          iv: new Uint8Array(iv_bytes - 1)
       }
-      expect(() => cipherSvc._encodeCipherData(bdp)).toThrowError();
+      expect(() => cipherSvc._encodeCipherData4Header(bdp, output)).toThrowError();
 
       // iv too long
       bdp = {
          ...dp,
          iv: new Uint8Array(iv_bytes + 1)
       }
-      expect(() => cipherSvc._encodeCipherData(bdp)).toThrowError();
+      expect(() => cipherSvc._encodeCipherData4Header(bdp, output)).toThrowError();
 
       // salt too short
       bdp = {
          ...dp,
          slt: new Uint8Array(0)
       }
-      expect(() => cipherSvc._encodeCipherData(bdp)).toThrowError();
+      expect(() => cipherSvc._encodeCipherData4Header(bdp, output)).toThrowError();
 
       // salt too long
       bdp = {
          ...dp,
          slt: new Uint8Array(cs.SLT_BYTES + 1)
       }
-      expect(() => cipherSvc._encodeCipherData(bdp)).toThrowError();
+      expect(() => cipherSvc._encodeCipherData4Header(bdp, output)).toThrowError();
 
       // hint too long
       bdp = {
          ...dp,
          encryptedHint: new Uint8Array(Array(256).fill(0))
       }
-      expect(() => cipherSvc._encodeCipherData(bdp)).toThrowError();
+      expect(() => cipherSvc._encodeCipherData4Header(bdp, output)).toThrowError();
 
       // make sure we're good...
       bdp = {
          ...dp,
       }
-      expect(() => cipherSvc._encodeCipherData(bdp)).not.toThrowError();
+      expect(() => cipherSvc._encodeCipherData4Header(bdp, output)).not.toThrowError();
 
       // ic too large
       bdp = {
          ...dp,
          ic: cs.ICOUNT_MAX + 1
       }
-      expect(() => cipherSvc._encodeCipherData(bdp)).toThrowError();
+      expect(() => cipherSvc._encodeCipherData4Header(bdp, output)).toThrowError();
 
       // ic too small
       bdp = {
          ...dp,
          ic: -1
       }
-      expect(() => cipherSvc._encodeCipherData(bdp)).toThrowError();
+      expect(() => cipherSvc._encodeCipherData4Header(bdp, output)).toThrowError();
 
       // invalid alg
       bdp = {
          ...dp,
          alg: 'AES-XYV'
       }
-      expect(() => cipherSvc._encodeCipherData(bdp)).toThrowError();
+      expect(() => cipherSvc._encodeCipherData4Header(bdp, output)).toThrowError();
 
       bdp = {
          ...dp,
          alg: ''
       }
-      expect(() => cipherSvc._encodeCipherData(bdp)).toThrowError();
+      expect(() => cipherSvc._encodeCipherData4Header(bdp, output)).toThrowError();
 
    });
 
@@ -934,7 +979,8 @@ describe("CipherData encode and decode", function () {
       const iv_bytes = Number(cs.AlgInfo['X20-PLY']['iv_bytes']);
 
       // initially valid
-      let dp: cs.CipherData = {
+      let dp: cs.CipherData4Header = {
+         ver: cs.CURRENT_VERSION,
          alg: 'X20-PLY',
          ic: 2000000,
          iv: new Uint8Array(iv_bytes),
@@ -942,39 +988,44 @@ describe("CipherData encode and decode", function () {
          encryptedHint: new Uint8Array(10),
          encryptedData: new Uint8Array(42)
       };
+
+      const output = new Uint8Array(
+         cs.ENCRYPTED_HINT_MAX_BYTES + cs.OVERHEAD_MAX_BYTES + dp.encryptedData.byteLength
+      );
+
       // Expect we start valid
-      expect(() => cipherSvc.validateCipherData(dp)).not.toThrowError();
-      let packed = cipherSvc._encodeCipherData(dp);
-      expect(() => cipherSvc._decodeCipherData(packed)).not.toThrowError();
+      expect(() => cipherSvc.validateCipherParams(dp)).not.toThrowError();
+      let encodedSize = cipherSvc._encodeCipherData4Header(dp, output);
+      expect(() => cipherSvc._decodeCipherData4Header(
+         new Uint8Array(output, 0, encodedSize)
+      )).not.toThrowError();
 
-      packed = cipherSvc._encodeCipherData(dp);
-      // Invalid alrogirthm id
-      packed.set([7], 0);
-      // So that this should throw an exception
-      expect(() => cipherSvc._decodeCipherData(packed)).toThrowError();
-
-      packed = cipherSvc._encodeCipherData(dp);
+      encodedSize = cipherSvc._encodeCipherData4Header(dp, output);
       // Invalid version number
-      packed.set([5], 46);
-      // So that this should throw an exception
-      expect(() => cipherSvc._decodeCipherData(packed)).toThrowError();
+      output.set([32,77], 0);
+      expect(() => cipherSvc._decodeCipherData4Header(
+         new Uint8Array(output, 0, encodedSize)
+      )).toThrowError();
 
-      packed = cipherSvc._encodeCipherData(dp);
+      encodedSize = cipherSvc._encodeCipherData4Header(dp, output);
+      // Invalid alrogirthm id
+      output.set([32,77], 2);
+      expect(() => cipherSvc._decodeCipherData4Header(
+         new Uint8Array(output, 0, encodedSize)
+      )).toThrowError();
+
+      encodedSize = cipherSvc._encodeCipherData4Header(dp, output);
+      // Invalid IC value
       // This pokes in a zero at the top two bytes of IC, making out of range
-      // 44 = ALG_BYTES+IV_BYTES+SLT_BYTES+IC_BYTES-2
-      packed.set([0, 0], 44);
-      // So that this should throw an exception
-      expect(() => cipherSvc._decodeCipherData(packed)).toThrowError();
+      output.set([0, 0], encodedSize - cs.SLT_BYTES - cs.IC_BYTES + 2);
+      expect(() => cipherSvc._decodeCipherData4Header(
+         new Uint8Array(output, 0, encodedSize)
+      )).toThrowError();
 
-      packed = cipherSvc._encodeCipherData(dp);
-      // Change changes the hint length length
-      // 48 = ALG_BYTES+IV_BYTES+SLT_BYTES+IC_BYTES+VER_BYTES
-      packed.set([75], 48);
-      // So that this should throw an exception
-      expect(() => cipherSvc._decodeCipherData(packed)).toThrowError();
 
       // shortest valid CipherData
       dp = {
+         ver: cs.CURRENT_VERSION,
          alg: 'X20-PLY',
          ic: 2000000,
          iv: new Uint8Array(iv_bytes),
@@ -983,15 +1034,16 @@ describe("CipherData encode and decode", function () {
          encryptedData: new Uint8Array(1)
       }
       // Expect we start valid
-      packed = cipherSvc._encodeCipherData(dp);
-      expect(() => cipherSvc._decodeCipherData(packed)).not.toThrowError();
+      encodedSize = cipherSvc._encodeCipherData4Header(dp, output);
+      expect(() => cipherSvc._decodeCipherData4Header(
+         new Uint8Array(output, 0, encodedSize)
+      )).not.toThrowError();
 
       // should be too short with 1 byte removed
-      let sliced = packed.slice(0, packed.byteLength - 1);
-      expect(() => cipherSvc._decodeCipherData(sliced)).toThrowError();
+      let sliced = output.slice(0, encodedSize - 1);
+      expect(() => cipherSvc._decodeCipherData4Header(sliced)).toThrowError();
 
    });
-
 });
 
 describe("Base64 encode decode", function () {
@@ -1038,7 +1090,7 @@ describe("Random48 tests", function () {
    let cipherSvc: cs.CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      cipherSvc = TestBed.inject(CipherService.CipherService);
+      cipherSvc = TestBed.inject(cs.CipherService);
    });
 
 
