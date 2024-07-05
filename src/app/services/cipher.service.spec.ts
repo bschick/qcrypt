@@ -474,7 +474,7 @@ describe("Encryption and decryption", function () {
       encoded: Uint8Array
    ): Promise<[string, CryptoKey, Uint8Array]> {
 
-      const hmac = new Uint8Array(cs.HMAC_BYTES);
+      const hmac = new Uint8Array(cs.MAC_BYTES);
       const sk = await cipherSvc._genSigningKey(userCred, slt);
       await cipherSvc._signCipherData(sk, encoded, hmac);
       let extended = new Uint8Array(hmac.byteLength + encoded.byteLength);
@@ -528,7 +528,7 @@ describe("Encryption and decryption", function () {
          };
          const cipherTextA = await cipherSvc.encryptString(eparamsA);
          const extendedA = cs.base64ToBytes(cipherTextA);
-         const encodedA = extendedA.slice(cs.HMAC_BYTES);
+         const encodedA = extendedA.slice(cs.MAC_BYTES);
          const [cipherDataA] = cipherSvc._decodeCipherHeader(encodedA);
 
          // First sign and repack with the original (correct) values to help ensure the

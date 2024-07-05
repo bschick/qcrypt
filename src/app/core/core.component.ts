@@ -106,6 +106,7 @@ function setIfBetween(
 
 function makeTookMsg(start: number, end: number, word: string = 'took'): string {
    const duration = Duration.fromMillis(end - start);
+   console.log(duration);
    if (duration.as('minutes') >= 1.1) {
       return `${word} ${Math.round(duration.as('minutes') * 10) / 10} minutes`;
    } else if (duration.as('seconds') >= 2) {
@@ -142,6 +143,9 @@ function setIfBoolean(
    ],
 })
 export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
+
+   private clearFile?: File;
+   private cipherFile?: File;
 
    private signinDialogRef?: MatDialogRef<SigninDialog, any>
    private optionsLoaded = false;
@@ -656,7 +660,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async onClickEncrypt(): Promise<void> {
-      if (this.clearText.length < 1 || this.errorClear) {
+      if ((!this.clearFile && this.clearText.length < 1) || this.errorClear) {
          this.onClearClear();
          this.showEncryptError('Enter clear text to encrypt');
          this.r2.selectRootElement('#clearInput').focus();
@@ -728,6 +732,27 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
+   async getNewFileHandle(file?: File): Promise<File> {
+
+      const base = file ? file.name : '';
+//      let fileHandle: FileSystemFileHandle;
+
+      const options = {
+         id: 'quickcrypt_org',
+//         startIn: file,
+//         multiple: false,
+         suggestedName: `${base}.qq`,
+         types: [{
+           description: 'Encrypted files',
+           accept: {
+             'application/octet-stream': ['.qq'],
+           }
+         }]
+      };
+      //@ts-ignore
+      return await window.showSaveFilePicker(options);
+    }
+
    // Return value is false if the process was aborted
    async makeCipherArmor(econtext: EncContext): Promise<boolean> {
       this.onClearCipher();
@@ -735,15 +760,36 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       try {
          var [pwd, hint] = await this.getPassword(+this.minPwdStrength, '', econtext);
 
-         const eparams2: cs.EParams2 = {
+         const eparams: cs.EParams = {
             ...econtext,
             pwd: pwd,
             hint: hint,
-            clear: this.clearText
+            clear: this.clearFile ? this.clearFile.stream() : this.clearText
          }
-         const encrypted = await this.cipherSvc.encryptString(
-            eparams2, this.cipherReadyNotice.bind(this)
-         );
+
+         let encrypted: string;
+         if(this.clearFile) {
+            const saveFile = await this.getNewFileHandle(this.clearFile);
+
+            encrypted = 'in the file'
+
+            const encryptedStream = this.cipherSvc.encryptStream(
+               eparams, this.cipherReadyNotice.bind(this)
+            );
+
+            //@ts-ignore
+            const writeable = await saveFile.createWritable();
+
+            await encryptedStream.pipeTo(writeable);
+//            await writeable.write(encrypted);
+//            await writeable.close();
+
+            this.clearFile = undefined;
+         } else {
+            encrypted = await this.cipherSvc.encryptString(
+               eparams, this.cipherReadyNotice.bind(this)
+            );
+         }
 
          econtext.lp += 1;
          this.showCipherArmorAndTime(this.getCipherArmorFor(encrypted, econtext));
@@ -769,21 +815,47 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async onClickDecrypt(): Promise<void> {
-      if (this.cipherArmor.length < 1 || this.errorCipher) {
+      if ((!this.cipherFile && this.cipherArmor.length < 1) || this.errorCipher) {
          this.onClearCipher();
          this.showDecryptError('Enter cipher armor text to decrypt');
          this.r2.selectRootElement('#cipherInput').focus();
          return;
       }
 
+      if (!this.authSvc.isAuthenticated()) {
+         throw new Error('User not authenticated, try refreshing this page')
+      }
+
+      this.authSvc.activity();
+
+      if(this.cipherFile) {
+         const saveFile = await this.getNewFileHandle(this.cipherFile);
+
+         const ctx: Context = {
+            lpEnd: 1,
+            lp: 0,
+            userCred: cs.base64ToBytes(this.authSvc.userCred!)
+         }
+         //@ts-ignore
+         const writeable = await saveFile.createWritable();
+
+         const decryptedStream = this.cipherSvc.decryptStream(
+            async (hint) => {
+               const [pwd, _] = await this.getPassword(-1, hint, ctx);
+               return pwd;
+            },
+            ctx.userCred,
+            this.cipherFile.stream(),
+            this.cipherReadyNotice.bind(this)
+         );
+
+         await decryptedStream.pipeTo(writeable);
+         this.cipherFile = undefined;
+         this.clearText = "in file";
+
+      } else {
       const savedCipherArmor = this.cipherArmor;
       try {
-         if (!this.authSvc.isAuthenticated()) {
-            throw new Error('User not authenticated, try refreshing this page')
-         }
-
-         this.authSvc.activity();
-
          const dcontext = this.getDecContextFrom(this.cipherArmor);
          if (dcontext.lpEnd! > 1) {
             // it's confusing to use cached password when looping so
@@ -810,6 +882,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.cipherArmor = savedCipherArmor;
       }
    }
+   }
 
    async makeClearText(dcontext: DecContext): Promise<boolean> {
       this.onClearClear();
@@ -824,6 +897,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             dcontext.ct,
             this.cipherReadyNotice.bind(this)
          );
+
          this.showClearTextAndTime(decrypted);
          dcontext.lp += 1;
 
@@ -872,7 +946,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.errorClear = false;
 
       const tookMsg = makeTookMsg(this.actionStart, Date.now());
-      this.cipherLabel = `Clear Text (${tookMsg})`;
+      this.clearLabel = `Clear Text (${tookMsg})`;
    }
 
    getCipherArmorFor(ct: string, econtext: EncContext): string {
@@ -939,7 +1013,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       );
 
       return {
-         lpEnd: jsonParts.lps,
+         lpEnd: lps,
          lp: 0,
          userCred: cs.base64ToBytes(this.authSvc.userCred!),
          ct: ct,
@@ -1088,20 +1162,31 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       fileReader.readAsText(event.target.files[0]);
    }
 
-   onCipherFileUpload(event: any): void {
-      this.fileUpload.nativeElement.onchange = (event: any) => {
-         this.onFileUpload(event, (val) => {
-            this.cipherArmor = val;
-            this.errorCipher = false;
-         });
-      };
-      this.fileUpload.nativeElement.click();
+   async onCipherFileUpload() {
+
+      let fileHandle: FileSystemFileHandle;
+      //@ts-ignore
+      [fileHandle] = await window.showOpenFilePicker({
+         id: 'quickcrypt_org',
+         multiple: false,
+      });
+
+      this.cipherFile = await fileHandle.getFile();
    }
 
-   onClearFileUpload(event: any): void {
+   async onClearFileUpload() {
 
-      const file: File = event.target.files[0];
-//      const
+      let fileHandle: FileSystemFileHandle;
+      //@ts-ignore
+      [fileHandle] = await window.showOpenFilePicker({
+         id: 'quickcrypt_org',
+         multiple: false
+      });
+
+      this.clearFile = await fileHandle.getFile();
+//      this.clearStream = await file.stream();
+//      this.errorClear = false;
+      //      const
 
 /*      const data =  crypto.getRandomValues(new Uint8Array(48));
       const blob = new Blob([data],{type:'application/octet-stream'} );
@@ -1194,7 +1279,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
          const dcontext = this.getDecContextFrom(this.cipherArmor);
          const encrypted = cs.base64ToBytes(dcontext.ct);
-         const [cipherData] = await this.cipherSvc.getCipherData(
+         const [cipherData] = await this.cipherSvc.getCipherDataHeader(
             cs.base64ToBytes(this.authSvc.userCred!),
             encrypted
          );
