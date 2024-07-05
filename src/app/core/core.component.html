@@ -34,7 +34,7 @@ SOFTWARE. -->
         <mat-icon iconPositionEnd>expand_more</mat-icon>
       </button>
       <mat-menu #clearMenu="matMenu" xPosition="before">
-        <button mat-menu-item (click)="onClearFileUpload($event)">
+        <button mat-menu-item (click)="onClearFileUpload()">
           <mat-icon>file_upload</mat-icon>Load
         </button>
         <button mat-menu-item (click)="onClearFileDownload($event)">
@@ -56,7 +56,7 @@ SOFTWARE. -->
         <mat-icon iconPositionEnd>expand_more</mat-icon>
       </button>
       <mat-menu #cipherMenu="matMenu" xPosition="before">
-        <button mat-menu-item (click)="onCipherFileUpload($event)">
+        <button mat-menu-item (click)="onCipherFileUpload()">
           <mat-icon>file_upload</mat-icon>Load
         </button>
         <button mat-menu-item (click)="onCipherFileDownload($event)">
