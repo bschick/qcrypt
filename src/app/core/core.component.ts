@@ -1279,11 +1279,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
          const dcontext = this.getDecContextFrom(this.cipherArmor);
          const encrypted = cs.base64ToBytes(dcontext.ct);
-         const [cipherData] = await this.cipherSvc.getCipherDataHeader(
+/*         const [cipherData] = await this.cipherSvc.getCipherDataHeader(
             cs.base64ToBytes(this.authSvc.userCred!),
             encrypted
          );
-         this.dialog.open(CipherInfoDialog, { data: cipherData });
+         this.dialog.open(CipherInfoDialog, { data: cipherData });*/
       } catch (err) {
          console.error(err);
          this.dialog.open(CipherInfoDialog, { data: null });
