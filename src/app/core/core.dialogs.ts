@@ -177,21 +177,24 @@ export class CipherInfoDialog {
    public alg!: string;
    public slt!: string;
    public iv!: string;
+   public ver!: string;
    public hint!: string;
 
    constructor(
       private r2: Renderer2,
+      private cipherSvc: cs.CipherService,
       public dialogRef: MatDialogRef<CipherInfoDialog>,
-      @Inject(MAT_DIALOG_DATA) public cipherData: cs.CipherDataBlock0 | null
+      @Inject(MAT_DIALOG_DATA) public cdInfo: cs.CipherDataInfo | null
    ) {
-      if (cipherData == null) {
+      if (cdInfo == null) {
          this.error = 'The wrong passkey was selected or the cipher armor was changed';
       } else {
-         this.ic = cipherData.ic.toLocaleString(); ;
-         this.alg = cs.AlgInfo[cipherData.alg] ? String(cs.AlgInfo[cipherData.alg]['description']) : 'Invalid';
-         this.iv = cs.bytesToBase64(cipherData.iv as Uint8Array);
-         this.slt = cs.bytesToBase64(cipherData.slt as Uint8Array);
-         this.hint = cipherData.encryptedHint.byteLength ? 'yes' : 'no';
+         this.ic = cdInfo.ic.toLocaleString();
+         this.alg = this.cipherSvc.algDescription(cdInfo.alg);
+         this.iv = cs.bytesToBase64(cdInfo.iv as Uint8Array);
+         this.slt = cs.bytesToBase64(cdInfo.slt as Uint8Array);
+         this.hint = cdInfo.hint ? 'yes' : 'no';
+         this.ver = cdInfo.ver.toString();
       }
    }
 }
