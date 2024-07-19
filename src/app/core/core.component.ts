@@ -65,6 +65,8 @@ import { BubbleDirective } from '../ui/bubble/bubble.directive';
 import { Subscription } from 'rxjs';
 
 const MAX_LOOPS = 10;
+const TARGET_HASH_MILLIS = 500;
+const MAX_HASH_MILLIS = 5 * 60 * 1000; //5 minutes
 
 type Context = {
    readonly lpEnd: number;
@@ -221,7 +223,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    setAlgorithm(alg: string | null): void {
-      if (Object.keys(cs.AlgInfo).includes(alg!)) {
+      if (this.cipherSvc.validateAlg(alg!)) {
          this.algorithm = alg!;
       }
    }
@@ -337,7 +339,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       // This can be greatly delayed is there is a long running async benchmark or
       // encrpt or decrypt from a previous instance (tab that has not fully closed).
       // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
-      this.cipherSvc.benchmark(this.icountMin).then(([icount, icountMax, hashRate]) => {
+      this.cipherSvc.benchmark(this.icountMin, TARGET_HASH_MILLIS, MAX_HASH_MILLIS)
+      .then(([icount, icountMax, hashRate]) => {
          this.icount = icount;
          this.icountDefault = this.icount;
          this.icountMax = icountMax;
@@ -651,10 +654,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.onClearClear();
    }
 
-   cipherReadyNotice(params: cs.Params) {
+   cipherReadyNotice(cdInfo: cs.CipherDataInfo) {
       this.actionStart = Date.now();
       // Avoid briefly putting up spinner and disabling buttons
-      if (params.ic > this.spinnerAbove) {
+      if (cdInfo.ic > this.spinnerAbove) {
          this.showProgress = true;
       }
    }
@@ -763,8 +766,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          const eparams: cs.EParams = {
             ...econtext,
             pwd: pwd,
-            hint: hint,
-            clear: this.clearFile ? this.clearFile.stream() : this.clearText
+            hint: hint
          }
 
          let encrypted: string;
@@ -774,7 +776,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             encrypted = 'in the file'
 
             const encryptedStream = this.cipherSvc.encryptStream(
-               eparams, this.cipherReadyNotice.bind(this)
+               eparams, this.clearFile.stream(), this.cipherReadyNotice.bind(this)
             );
 
             //@ts-ignore
@@ -787,7 +789,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.clearFile = undefined;
          } else {
             encrypted = await this.cipherSvc.encryptString(
-               eparams, this.cipherReadyNotice.bind(this)
+               eparams,  this.clearText, this.cipherReadyNotice.bind(this)
             );
          }
 
@@ -1278,12 +1280,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          }
 
          const dcontext = this.getDecContextFrom(this.cipherArmor);
-         const encrypted = cs.base64ToBytes(dcontext.ct);
-/*         const [cipherData] = await this.cipherSvc.getCipherDataHeader(
+         const cdInfo = await this.cipherSvc.getCipherTextInfo(
             cs.base64ToBytes(this.authSvc.userCred!),
-            encrypted
+            dcontext.ct
          );
-         this.dialog.open(CipherInfoDialog, { data: cipherData });*/
+         this.dialog.open(CipherInfoDialog, { data: cdInfo });
       } catch (err) {
          console.error(err);
          this.dialog.open(CipherInfoDialog, { data: null });
@@ -1291,7 +1292,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    algDescription(alg: string): string {
-      return cs.AlgInfo[alg] ? String(cs.AlgInfo[alg]['description']) : 'Invalid';
+      return this.cipherSvc.algDescription(alg);
    }
 }
 
