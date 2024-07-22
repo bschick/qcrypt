@@ -21,45 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import sodium from 'libsodium-wrappers';
 import { Random48, numToBytes, bytesToNum } from './utils';
-
-const AES_GCM_TAG_BYTES = 16;
-const X20_PLY_TAG_BYTES = 16; // sodium.crypto_aead_xchacha20poly1305_IETF_ABYTES, is not ready yet
-const AEGIS_256_TAG_BYTES = 32; // sodium.crypto_aead_aegis256_ABYTES, is not ready yet
-const AUTH_TAG_MAX_BYTES = Math.max(X20_PLY_TAG_BYTES, AES_GCM_TAG_BYTES, AEGIS_256_TAG_BYTES);
-
-export const ENCRYPTED_HINT_MAX_BYTES = 255;
-export const ENCRYPTED_HINT_MIN_BYTES = 0;
-export const HINT_LEN_BYTES = 1;
-export const IV_MIN_BYTES = 12;
-export const IV_MAX_BYTES = 32;
-export const ALG_BYTES = 2;
-export const SLT_BYTES = 16;
-export const IC_BYTES = 4;
-export const VER_BYTES = 2;
-export const MAC_BYTES = 32;
-export const USERCRED_BYTES = 32;
-const PAYLOAD_SIZE_BYTES = 4;      // larger than reequired for future expansion
-
-// Changing this is the future will be messy. Better change version and put
-// length changes into the payload
-export const HEADER_BYTES = MAC_BYTES + VER_BYTES + PAYLOAD_SIZE_BYTES;
-
-export const ICOUNT_MIN = 400000;
-export const ICOUNT_DEFAULT = 800000;
-export const ICOUNT_MAX = 4294000000; // limited to 4 bytes unsigned rounded to millions
-
-// Change version number when the encoding format changes or we add a new
-// cipher algorithm
-export const VERSION1 = 1;
-export const VERSION4 = 4;
-export const CURRENT_VERSION = VERSION4;
-export const V1_BELOW = VERSION4 // leave fixed at 4
-
-export const AlgInfo: { [key: string]: { [key: string]: string | number } } = {
-   'AES-GCM': { 'id': 1, 'description': 'AES 256 GCM', 'iv_bytes': 12 },
-   'X20-PLY': { 'id': 2, 'description': 'XChaCha20 Poly1305', 'iv_bytes': 24 },
-   'AEGIS-256': { 'id': 3, 'description': 'AEGIS 256', 'iv_bytes': 32 },
-};
+import * as cc from './cipher.consts';
 
 
 export type EParams = {
@@ -91,12 +53,14 @@ export type CipherDataInfo = {
 const HKDF_INFO_SIGNING = "cipherdata signing key";
 const HKDF_INFO_HINT = "hint encryption key";
 
-// needs to fit into 255 bytes encypted... this allows for all double byte + max auth tag
-export const HINT_MAX_LEN = Math.trunc(ENCRYPTED_HINT_MAX_BYTES / 2 - AUTH_TAG_MAX_BYTES);
 
 export abstract class Ciphers {
+   // Poke in this value to true to block random
+   // downloads from random.org during testing
+   public static testingFlag = false;
+
    // cache in case any use of true random
-   protected _random48Cache = new Random48();
+   protected _random48Cache: Random48;
    protected _ek?: CryptoKey;
    protected _sk?: CryptoKey;
 
@@ -109,6 +73,9 @@ export abstract class Ciphers {
    protected _encryptedHint?: Uint8Array;
    protected _encryptedData?: Uint8Array;
 
+   protected constructor() {
+      this._random48Cache = new Random48(Ciphers.testingFlag);
+   }
 
    public static latest(): Ciphers {
       return new CiphersV4();
@@ -117,7 +84,7 @@ export abstract class Ciphers {
    // Return appropriate version of Ciphers
    public static fromHeader(encoded: Uint8Array): Ciphers {
       console.log('fromHeader header:', encoded);
-      if (encoded.byteLength < MAC_BYTES + VER_BYTES) {
+      if (encoded.byteLength < cc.MAC_BYTES + cc.VER_BYTES) {
          throw new Error('Invalid header length: ' + encoded.byteLength);
       }
 
@@ -127,10 +94,10 @@ export abstract class Ciphers {
       // version in the middle of the encoding. Detect old version by the first 2 bytes
       // being < 4 (because encoded start with ALG and v1 max ALG was 3 and beyond v1
       // version is >=4). Fortunately ALG_BYTES and VER_BYTES are equal.
-      const verOrAlg = bytesToNum(new Uint8Array(encoded.buffer, MAC_BYTES, VER_BYTES));
-      if (verOrAlg == VERSION4) {
+      const verOrAlg = bytesToNum(new Uint8Array(encoded.buffer, cc.MAC_BYTES, cc.VER_BYTES));
+      if (verOrAlg == cc.VERSION4) {
          ciphers = new CiphersV4();
-      } else if (verOrAlg < V1_BELOW && verOrAlg > 0) {
+      } else if (verOrAlg < cc.V1_BELOW && verOrAlg > 0) {
          ciphers = new CiphersV1();
       } else {
          throw new Error('Unknown version: ' + verOrAlg);
@@ -140,11 +107,7 @@ export abstract class Ciphers {
    }
 
    static validateAlg(alg: string): boolean {
-      return Object.keys(AlgInfo).includes(alg);
-   }
-
-   static algDescription(alg: string): string {
-      return AlgInfo[alg]['description'] as string;
+      return Object.keys(cc.AlgInfo).includes(alg);
    }
 
    public async benchmark(
@@ -154,20 +117,20 @@ export abstract class Ciphers {
    ): Promise<[number, number, number]> {
 
       const start = Date.now();
-      await Ciphers._genCipherKey('AES-GCM', testSize, 'AVeryBogusPwd', crypto.getRandomValues(new Uint8Array(32)), new Uint8Array(SLT_BYTES));
+      await Ciphers._genCipherKey('AES-GCM', testSize, 'AVeryBogusPwd', crypto.getRandomValues(new Uint8Array(32)), new Uint8Array(cc.SLT_BYTES));
       const test_millis = Date.now() - start;
 
       const hashRate = testSize / test_millis;
 
       // Don't allow more then ~5 minutes of pwd hashing (rounded to millions)
       const iCountMax =
-         Math.min(ICOUNT_MAX,
+         Math.min(cc.ICOUNT_MAX,
             Math.round((maxMillis * hashRate) / 1000000) * 1000000);
 
       let targetICount = Math.round((hashRate * targetMillis) / 100000) * 100000;
       // Add ICOUNT_MIN to calculated target because benchmark is done during
       // page load and tends to be too low.
-      const iCount = Math.max(ICOUNT_DEFAULT, targetICount + ICOUNT_MIN);
+      const iCount = Math.max(cc.ICOUNT_DEFAULT, targetICount + cc.ICOUNT_MIN);
 
       console.log(
          `bench: ${testSize}i, in: ${test_millis}ms, rate: ${Math.round(hashRate)}i/ms,
@@ -196,7 +159,7 @@ export abstract class Ciphers {
 
    public abstract get payloadSize(): number;
 
-   protected abstract _decodePayload0(
+   abstract _decodePayload0(
       userCred: Uint8Array,
       payload: Uint8Array
    ): Promise<void>;
@@ -218,24 +181,24 @@ export abstract class Ciphers {
       if (!Ciphers.validateAlg(alg)) {
          throw new Error('Invalid alg type of: ' + alg);
       }
-      if (ic < ICOUNT_MIN || ic > ICOUNT_MAX) {
+      if (ic < cc.ICOUNT_MIN || ic > cc.ICOUNT_MAX) {
          throw new Error('Invalid ic of: ' + ic);
       }
-      if (slt.byteLength != SLT_BYTES) {
+      if (slt.byteLength != cc.SLT_BYTES) {
          throw new Error("Invalid slt size of: " + slt.byteLength);
       }
-      if (userCred.byteLength != USERCRED_BYTES) {
+      if (userCred.byteLength != cc.USERCRED_BYTES) {
          throw new Error("Invalid userCred size of: " + userCred.byteLength);
       }
       if (!pwd) {
          throw new Error('Invalid empty password');
       }
-      if (ic < ICOUNT_MIN || ic > ICOUNT_MAX) {
+      if (ic < cc.ICOUNT_MIN || ic > cc.ICOUNT_MAX) {
          throw new Error('Invalid ic of: ' + ic);
       }
 
       const pwdBytes = new TextEncoder().encode(pwd);
-      let rawMaterial = new Uint8Array(pwdBytes.byteLength + USERCRED_BYTES)
+      let rawMaterial = new Uint8Array(pwdBytes.byteLength + cc.USERCRED_BYTES)
       rawMaterial.set(pwdBytes);
       rawMaterial.set(userCred, pwdBytes.byteLength);
 
@@ -275,11 +238,11 @@ export abstract class Ciphers {
       slt: Uint8Array
    ): Promise<CryptoKey> {
 
-      if (slt.byteLength != SLT_BYTES) {
+      if (slt.byteLength != cc.SLT_BYTES) {
          throw new Error("Invalid slt size of: " + slt.byteLength);
       }
 
-      if (userCred.byteLength != USERCRED_BYTES) {
+      if (userCred.byteLength != cc.USERCRED_BYTES) {
          throw new Error('Invalid userCred length of: ' + userCred.byteLength);
       }
       const skMaterial = await crypto.subtle.importKey(
@@ -313,11 +276,11 @@ export abstract class Ciphers {
       slt: Uint8Array
    ): Promise<CryptoKey> {
 
-      if (slt.byteLength != SLT_BYTES) {
+      if (slt.byteLength != cc.SLT_BYTES) {
          throw new Error("Invalid slt size of: " + slt.byteLength);
       }
 
-      if (userCred.byteLength != USERCRED_BYTES) {
+      if (userCred.byteLength != cc.USERCRED_BYTES) {
          throw new Error('Invalid userCred length of: ' + userCred.byteLength);
       }
       const skMaterial = await crypto.subtle.importKey(
@@ -359,7 +322,7 @@ export abstract class Ciphers {
 
       console.log('doencrpt clear:' + clear.byteLength);
 
-      const ivBytes = Number(AlgInfo[alg]['iv_bytes']);
+      const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
       if (ivBytes != iv.byteLength) {
          throw new Error('incorrect iv length of: ' + iv.byteLength);
       }
@@ -408,7 +371,7 @@ export abstract class Ciphers {
             name: alg,
             iv: iv,
             additionalData: additionalData,
-            tagLength: AES_GCM_TAG_BYTES * 8
+            tagLength: cc.AES_GCM_TAG_BYTES * 8
          },
             key,
             clear
@@ -439,11 +402,8 @@ export abstract class Ciphers {
       readyNotice?: (cdInfo: CipherDataInfo) => void
    ): Promise<Uint8Array> {
 
-      if (userCred.byteLength != USERCRED_BYTES) {
+      if (userCred.byteLength != cc.USERCRED_BYTES) {
          throw new Error('Invalid userCred length of: ' + userCred.byteLength);
-      }
-      if (this._ek) {
-         throw new Error('Chipers should only be used for one block0');
       }
 
       // This does MAC check
@@ -500,7 +460,7 @@ export abstract class Ciphers {
       payload: Uint8Array,
    ): Promise<CipherDataInfo> {
 
-      if (userCred.byteLength != USERCRED_BYTES) {
+      if (userCred.byteLength != cc.USERCRED_BYTES) {
          throw new Error('Invalid userCred length of: ' + userCred.byteLength);
       }
 
@@ -578,7 +538,7 @@ export abstract class Ciphers {
             name: alg,
             iv: iv.slice(0, 12),
             additionalData: additionalData,
-            tagLength: AES_GCM_TAG_BYTES * 8
+            tagLength: cc.AES_GCM_TAG_BYTES * 8
          },
             key,
             encrypted
@@ -589,20 +549,53 @@ export abstract class Ciphers {
       return decrypted;
    }
 
+   // Seperated out and made public for testing, normal callers should not be needed this
+   public static async _createHeader(
+      sk: CryptoKey,
+      encryptedData: Uint8Array,
+      additionalData: Uint8Array,
+   ): Promise<Uint8Array> {
+
+      const payloadBytes = encryptedData.byteLength + additionalData.byteLength;
+      const packer = new Packer(cc.HEADER_BYTES, cc.MAC_BYTES);
+      packer.ver = cc.VERSION4;
+      packer.size = payloadBytes;
+
+      const exportedSk = await crypto.subtle.exportKey("raw", sk);
+      const skData = new Uint8Array(exportedSk);
+      console.log('sign sk: ' + skData);
+
+      const state = sodium.crypto_generichash_init(skData, cc.MAC_BYTES);
+      console.log('sign header: ', new Uint8Array(packer.buffer, cc.MAC_BYTES));
+      sodium.crypto_generichash_update(state, new Uint8Array(packer.buffer, cc.MAC_BYTES));
+      console.log('sign addition: ', additionalData);
+      sodium.crypto_generichash_update(state, additionalData);
+      console.log('sign encdata: ', encryptedData);
+      sodium.crypto_generichash_update(state, encryptedData);
+
+      const mac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
+      console.log('sign mac: ', mac);
+      packer.offset = 0;
+      packer.mac = mac;
+
+      console.log('sign return header: ', packer.buffer);
+      return packer.detach();
+   }
+
    public static validateEparams(eparams: EParams) {
       if (!Ciphers.validateAlg(eparams.alg)) {
          throw new Error('Invalid alg type of: ' + eparams.alg);
       }
-      if (eparams.ic < ICOUNT_MIN || eparams.ic > ICOUNT_MAX) {
+      if (eparams.ic < cc.ICOUNT_MIN || eparams.ic > cc.ICOUNT_MAX) {
          throw new Error('Invalid ic of: ' + eparams.ic);
       }
       if (!eparams.trueRand && !eparams.fallbackRand) {
          throw new Error('Either trueRand or fallbackRand must be true');
       }
-      if (eparams.hint && eparams.hint.length > HINT_MAX_LEN) {
-         throw new Error('Hint length exceeds ' + HINT_MAX_LEN);
+      if (eparams.hint && eparams.hint.length > cc.HINT_MAX_LEN) {
+         throw new Error('Hint length exceeds ' + cc.HINT_MAX_LEN);
       }
-      if (!eparams.pwd || !eparams.userCred || eparams.userCred.byteLength != USERCRED_BYTES) {
+      if (!eparams.pwd || !eparams.userCred || eparams.userCred.byteLength != cc.USERCRED_BYTES) {
          throw new Error('Invalid password or userCred');
       }
    }
@@ -622,13 +615,13 @@ export abstract class Ciphers {
          throw new Error('Invalid alg: ' + args.alg);
       }
 
-      const ivBytes = Number(AlgInfo[args.alg]['iv_bytes']);
+      const ivBytes = Number(cc.AlgInfo[args.alg]['iv_bytes']);
       if (args.iv.byteLength != ivBytes) {
          throw new Error('Invalid iv size: ' + args.iv.byteLength);
       }
 
       if (args.slt) {
-         if (args.slt.byteLength != SLT_BYTES) {
+         if (args.slt.byteLength != cc.SLT_BYTES) {
             throw new Error('Invalid slt len: ' + args.slt.byteLength);
          }
          // If there is a salt, ic must also be present (and valid)
@@ -637,11 +630,11 @@ export abstract class Ciphers {
          }
       }
 
-      if (args.ic && (args.ic < ICOUNT_MIN || args.ic > ICOUNT_MAX)) {
+      if (args.ic && (args.ic < cc.ICOUNT_MIN || args.ic > cc.ICOUNT_MAX)) {
          throw new Error('Invalid ic: ' + args.ic);
       }
 
-      if (args.encryptedHint && (args.encryptedHint.length > ENCRYPTED_HINT_MAX_BYTES)) {
+      if (args.encryptedHint && (args.encryptedHint.length > cc.ENCRYPTED_HINT_MAX_BYTES)) {
          throw new Error('Invalid encrypted hint length: ' + args.encryptedHint.length);
       }
    }
@@ -676,7 +669,7 @@ class CiphersV1 extends Ciphers {
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated. Test each value for errors as we unpack
-      if (header.byteLength < HEADER_BYTES) {
+      if (header.byteLength < cc.HEADER_BYTES) {
          throw new Error('Invalid cipher data length: ' + header.byteLength);
       }
       // Need to treat all values an UNTRUSTED since the signature has not yet been
@@ -698,16 +691,13 @@ class CiphersV1 extends Ciphers {
 
 
    // For V1, this should be the entire CipherData array
-   protected override async _decodePayload0(
+   override async _decodePayload0(
       userCred: Uint8Array,
       payload: Uint8Array
    ): Promise<void> {
 
-      if (userCred.byteLength != USERCRED_BYTES) {
+      if (userCred.byteLength != cc.USERCRED_BYTES) {
          throw new Error('Invalid userCred length of: ' + userCred.byteLength);
-      }
-      if (this._sk) {
-         throw new Error('CiphersV1 instance usable for one block0');
       }
       if (!this._alg || !this._iv) {
          throw new Error('CiphersV1 data not initialized');
@@ -723,7 +713,7 @@ class CiphersV1 extends Ciphers {
       this._slt = extractor.slt;
       this._ic = extractor.ic;
       this._ver = extractor.ver;
-      if (this._ver != VERSION1) {
+      if (this._ver != cc.VERSION1) {
          throw new Error('Invalid version of: ' + this._ver);
       }
       this._encryptedHint = extractor.hint;
@@ -752,7 +742,6 @@ class CiphersV1 extends Ciphers {
       throw new Error('Invalid MAC');
    }
 
-   // public for testing, callers should not need to use this directly
    protected override async _verifyMAC(): Promise<boolean> {
 
       if (!this._additionalData || !this._sk || !this._encryptedData || !this._mac) {
@@ -782,14 +771,15 @@ class CiphersV1 extends Ciphers {
 
       Ciphers.validateAdditionalData(args);
 
-      const maxBytes = VER_BYTES + ALG_BYTES + IV_MAX_BYTES + IC_BYTES + SLT_BYTES + ENCRYPTED_HINT_MAX_BYTES;
+      const maxBytes = cc.VER_BYTES + cc.ALG_BYTES + cc.IV_MAX_BYTES +
+         cc.IC_BYTES + cc.SLT_BYTES + cc.ENCRYPTED_HINT_MAX_BYTES;
       const packer = new Packer(maxBytes);
 
       packer.alg = args.alg;
       packer.iv = args.iv;
       packer.slt = args.slt;
       packer.ic = args.ic;
-      packer.ver = VERSION1;
+      packer.ver = cc.VERSION1;
       packer.hint = args.encryptedHint;
 
       const result = packer.trim();
@@ -880,7 +870,7 @@ class CiphersV4 extends Ciphers {
    protected _payloadSize?: number;
 
    public override get payloadSize(): number {
-      if(!this._payloadSize) {
+      if (!this._payloadSize) {
          throw new Error('V4 payloadsize not set');
       }
       return this._payloadSize;
@@ -923,13 +913,13 @@ class CiphersV4 extends Ciphers {
       this._ic = eparams.ic;
 
       // don't save this stuff... we allow changing alg and ic per block
-      const ivBytes = Number(AlgInfo[this._alg]['iv_bytes']);
-      this._slt = randomArray.slice(0, SLT_BYTES);
-      this._iv = randomArray.slice(SLT_BYTES, SLT_BYTES + ivBytes);
+      const ivBytes = Number(cc.AlgInfo[this._alg]['iv_bytes']);
+      this._slt = randomArray.slice(0, cc.SLT_BYTES);
+      this._iv = randomArray.slice(cc.SLT_BYTES, cc.SLT_BYTES + ivBytes);
 
       if (readyNotice) {
          readyNotice({
-            ver: VERSION4,
+            ver: cc.VERSION4,
             alg: this._alg,
             ic: this._ic,
             slt: this._slt,
@@ -949,7 +939,7 @@ class CiphersV4 extends Ciphers {
          // could truncate hint characters and re-encode (see https://tonsky.me/blog/unicode/)
          const hintEnc = new TextEncoder()
             .encode(eparams.hint)
-            .slice(0, ENCRYPTED_HINT_MAX_BYTES - AUTH_TAG_MAX_BYTES);
+            .slice(0, cc.ENCRYPTED_HINT_MAX_BYTES - cc.AUTH_TAG_MAX_BYTES);
 
          this._encryptedHint = await Ciphers._doEncrypt(
             this._alg,
@@ -990,7 +980,7 @@ class CiphersV4 extends Ciphers {
       );
 
       this._alg = eparams.alg
-      const ivBytes = Number(AlgInfo[this._alg]['iv_bytes']);
+      const ivBytes = Number(cc.AlgInfo[this._alg]['iv_bytes']);
       this._iv = randomArray.slice(0, ivBytes);
 
       this._additionalData = CiphersV4._encodeAdditionalData({
@@ -1001,7 +991,7 @@ class CiphersV4 extends Ciphers {
       return this._encryptAndSign(input);
    }
 
-   async _encryptAndSign(
+   protected async _encryptAndSign(
       clear: Uint8Array
    ): Promise<CipherDataBlock> {
 
@@ -1018,42 +1008,19 @@ class CiphersV4 extends Ciphers {
       );
       console.log('_buildCipherData encrypted bytes: ', this._encryptedData);
 
-      const payloadBytes = this._encryptedData.byteLength + this._additionalData.byteLength;
-
-      const packer = new Packer(HEADER_BYTES, MAC_BYTES);
-      packer.ver = VERSION4;
-      packer.size = payloadBytes;
-
-      const exportedSk = await crypto.subtle.exportKey("raw", this._sk);
-      const skData = new Uint8Array(exportedSk);
-      console.log('sign sk: ' + skData);
-
-      const state = sodium.crypto_generichash_init(skData, MAC_BYTES);
-      console.log('sign header: ', new Uint8Array(packer.buffer, MAC_BYTES));
-      sodium.crypto_generichash_update(state, new Uint8Array(packer.buffer, MAC_BYTES));
-      console.log('sign addition: ', this._additionalData);
-      sodium.crypto_generichash_update(state, this._additionalData);
-      console.log('sign encdata: ', this._encryptedData);
-      sodium.crypto_generichash_update(state, this._encryptedData);
-
-      const mac = sodium.crypto_generichash_final(state, MAC_BYTES);
-      console.log('sign mac: ', mac);
-      packer.offset = 0;
-      packer.mac = mac;
-      console.log('sign return header: ', packer.buffer);
+      const headerData = await CiphersV4._createHeader(
+         this._sk,
+         this._encryptedData,
+         this._additionalData
+      );
 
       return {
-         headerData: packer.detach(),
+         headerData: headerData,
          encryptedData: this._encryptedData,
          additionalData: this._additionalData
       }
    }
 
-   // Importers of CipherService should not need this function directly
-   // but it is public for unit testing. Allows encoding with
-   // zero length encrypted text
-   //
-   // Validates values and packs them into an Uint8Array
    protected static _encodeAdditionalData(
       args: {
          alg: string;
@@ -1065,7 +1032,8 @@ class CiphersV4 extends Ciphers {
 
       Ciphers.validateAdditionalData(args);
 
-      const maxBytes = ALG_BYTES + IV_MAX_BYTES + IC_BYTES + SLT_BYTES + ENCRYPTED_HINT_MAX_BYTES;
+      const maxBytes = cc.ALG_BYTES + cc.IV_MAX_BYTES + cc.IC_BYTES +
+         cc.SLT_BYTES + cc.ENCRYPTED_HINT_MAX_BYTES;
       const packer = new Packer(maxBytes);
 
       packer.alg = args.alg;
@@ -1096,7 +1064,7 @@ class CiphersV4 extends Ciphers {
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated. Test each value for errors as we unpack
-      if (header.byteLength < HEADER_BYTES) {
+      if (header.byteLength < cc.HEADER_BYTES) {
          throw new Error('Invalid cipher data length: ' + header.byteLength);
       }
 
@@ -1105,7 +1073,7 @@ class CiphersV4 extends Ciphers {
       // Order must be invariant
       this._mac = extractor.mac;
       this._ver = extractor.ver;
-      if (this._ver != VERSION4) {
+      if (this._ver != cc.VERSION4) {
          throw new Error('Invalid version of: ' + this._ver);
       }
       this._payloadSize = extractor.size;
@@ -1140,16 +1108,13 @@ class CiphersV4 extends Ciphers {
    // Importers of CipherService should not need this function directly,
    // but it is public for unit testing. Does not allow encoding
    // with zero length encrypted text since that is not needed
-   protected override async _decodePayload0(
+   override async _decodePayload0(
       userCred: Uint8Array,
       payload: Uint8Array
    ): Promise<void> {
 
-      if (userCred.byteLength != USERCRED_BYTES) {
+      if (userCred.byteLength != cc.USERCRED_BYTES) {
          throw new Error('Invalid userCred length of: ' + userCred.byteLength);
-      }
-      if (this._sk || this._alg) {
-         throw new Error('CiphersV4 instance usable for one block0');
       }
 
       console.log('_decodePayload0 decoding:', payload);
@@ -1224,25 +1189,24 @@ class CiphersV4 extends Ciphers {
       throw new Error('Invalid MAC');
    }
 
-   // public for testing, callers should not need to use this directly
    protected override async _verifyMAC(): Promise<boolean> {
 
       if (!this._payloadSize || !this._ver || !this._additionalData ||
          !this._sk || !this._encryptedData || !this._mac) {
-         throw new Error('Invalid MAC data');
+         throw new Error('Data not initialized');
       }
 
-      const encVer = numToBytes(this._ver, VER_BYTES);
-      const encSizeBytes = numToBytes(this._payloadSize, PAYLOAD_SIZE_BYTES);
+      const encVer = numToBytes(this._ver, cc.VER_BYTES);
+      const encSizeBytes = numToBytes(this._payloadSize, cc.PAYLOAD_SIZE_BYTES);
 
-      const headerPortion = new Uint8Array(VER_BYTES + PAYLOAD_SIZE_BYTES);
+      const headerPortion = new Uint8Array(cc.VER_BYTES + cc.PAYLOAD_SIZE_BYTES);
       headerPortion.set(encVer);
-      headerPortion.set(encSizeBytes, VER_BYTES);
+      headerPortion.set(encSizeBytes, cc.VER_BYTES);
 
       const exportedSk = await crypto.subtle.exportKey("raw", this._sk);
       const skData = new Uint8Array(exportedSk);
       console.log('verify sk: ' + skData);
-      const state = sodium.crypto_generichash_init(skData, MAC_BYTES);
+      const state = sodium.crypto_generichash_init(skData, cc.MAC_BYTES);
 
       console.log('verify header: ', headerPortion);
       sodium.crypto_generichash_update(state, headerPortion);
@@ -1251,7 +1215,7 @@ class CiphersV4 extends Ciphers {
       console.log('verify encdata: ', this._encryptedData);
       sodium.crypto_generichash_update(state, this._encryptedData);
 
-      const testMac = sodium.crypto_generichash_final(state, MAC_BYTES);
+      const testMac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
       console.log('verify mac: ', testMac);
       const validMac: boolean = sodium.memcmp(this._mac, testMac);
       console.log('verify result: ', validMac);
@@ -1306,19 +1270,19 @@ class Extractor {
    }
 
    get mac(): Uint8Array {
-      return this.extract('mac', MAC_BYTES);
+      return this.extract('mac', cc.MAC_BYTES);
    }
 
    get alg(): string {
-      const algNum = bytesToNum(this.extract('alg', ALG_BYTES));
-      if (algNum < 1 || algNum > Object.keys(AlgInfo).length) {
+      const algNum = bytesToNum(this.extract('alg', cc.ALG_BYTES));
+      if (algNum < 1 || algNum > Object.keys(cc.AlgInfo).length) {
          throw new Error('Invalid alg id of: ' + algNum);
       }
 
       let alg: string;
-      for (alg in AlgInfo) {
-         if (AlgInfo[alg]['id'] == algNum) {
-            this._ivBytes = Number(AlgInfo[alg]['iv_bytes']);
+      for (alg in cc.AlgInfo) {
+         if (cc.AlgInfo[alg]['id'] == algNum) {
+            this._ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
             break;
          }
       }
@@ -1333,20 +1297,20 @@ class Extractor {
    }
 
    get slt(): Uint8Array {
-      return this.extract('slt', SLT_BYTES);
+      return this.extract('slt', cc.SLT_BYTES);
    }
 
    get ic(): number {
-      const ic = bytesToNum(this.extract('ic', IC_BYTES));
-      if (ic < ICOUNT_MIN || ic > ICOUNT_MAX) {
+      const ic = bytesToNum(this.extract('ic', cc.IC_BYTES));
+      if (ic < cc.ICOUNT_MIN || ic > cc.ICOUNT_MAX) {
          throw new Error('Invalid ic of: ' + ic);
       }
       return ic;
    }
 
    get ver(): number {
-      const ver = bytesToNum(this.extract('ver', VER_BYTES));
-      if (ver != VERSION1 && ver != VERSION4) {
+      const ver = bytesToNum(this.extract('ver', cc.VER_BYTES));
+      if (ver != cc.VERSION1 && ver != cc.VERSION4) {
          throw new Error('Invalid version of: ' + ver);
       }
       return ver;
@@ -1354,13 +1318,13 @@ class Extractor {
 
    // Return zero length Array if no hint
    get hint(): Uint8Array {
-      const hintLen = bytesToNum(this.extract('hlen', HINT_LEN_BYTES));
+      const hintLen = bytesToNum(this.extract('hlen', cc.HINT_LEN_BYTES));
       const encryptedHint = this.extract('hint', hintLen);
       return encryptedHint;
    }
 
    get size(): number {
-      const size = bytesToNum(this.extract('size', PAYLOAD_SIZE_BYTES));
+      const size = bytesToNum(this.extract('size', cc.PAYLOAD_SIZE_BYTES));
       if (size < 1) {
          throw new Error('Invalid payload size: ' + size);
       }
@@ -1380,7 +1344,7 @@ class Packer {
    }
 
    pack(what: string, data: Uint8Array) {
-      if(!this._dest) {
+      if (!this._dest) {
          throw new Error('Packer was detached');
       }
       this._dest.set(data, this._offset);
@@ -1390,7 +1354,7 @@ class Packer {
       if (this._offset > this._dest.byteLength) {
          throw new Error(`Invalid ${what}, length: ${data.byteLength}`);
       }
-      console.log(`packed ${data.byteLength} bytes of ${what} at ${this._offset-data.byteLength}: ${data}`);
+      console.log(`packed ${data.byteLength} bytes of ${what} at ${this._offset - data.byteLength}: ${data}`);
    }
 
    get offset(): number {
@@ -1398,31 +1362,31 @@ class Packer {
    }
 
    set offset(value: number) {
-      if(!this._dest) {
+      if (!this._dest) {
          throw new Error('Packer was detached');
       }
-      if(value > this._dest.byteLength) {
+      if (value > this._dest.byteLength) {
          throw new Error('Invalid offset: ' + value);
       }
       this._offset = value;
    }
 
    get buffer(): ArrayBuffer {
-      if(!this._dest) {
+      if (!this._dest) {
          throw new Error('Packer was detached');
       }
       return this._dest.buffer;
    }
 
    trim(): Uint8Array {
-      if(!this._dest) {
+      if (!this._dest) {
          throw new Error('Packer was detached');
       }
       return new Uint8Array(this._dest.buffer, this._dest.byteOffset, this._offset);
    }
 
    detach(): Uint8Array {
-      if(!this._dest) {
+      if (!this._dest) {
          throw new Error('Packer was detached');
       }
       const result = this._dest;
@@ -1434,23 +1398,23 @@ class Packer {
       this.pack('data', data);
    }
 
-   set mac(sig: Uint8Array)  {
-      if(sig.byteLength != MAC_BYTES) {
+   set mac(sig: Uint8Array) {
+      if (sig.byteLength != cc.MAC_BYTES) {
          throw new Error('MAC length incorrect: ' + sig.byteLength);
       }
       this.pack('mac', sig);
    }
 
    set alg(algName: string) {
-      if( !Ciphers.validateAlg(algName)) {
+      if (!Ciphers.validateAlg(algName)) {
          throw new Error('Invalid alg name: ' + algName);
       }
-      const algInfo = AlgInfo[algName];
+      const algInfo = cc.AlgInfo[algName];
       this._ivBytes = Number(algInfo['iv_bytes']);
-      this.pack('alg', numToBytes(Number(algInfo['id']), ALG_BYTES));
+      this.pack('alg', numToBytes(Number(algInfo['id']), cc.ALG_BYTES));
    }
 
-   set iv(iVect: Uint8Array)  {
+   set iv(iVect: Uint8Array) {
       if (!this._ivBytes) {
          throw new Error('iv length unknown, set packer.alg first');
       }
@@ -1461,38 +1425,38 @@ class Packer {
    }
 
    set slt(salt: Uint8Array) {
-      if(salt.byteLength != SLT_BYTES) {
+      if (salt.byteLength != cc.SLT_BYTES) {
          throw new Error('Salt length incorrect: ' + salt.byteLength);
       }
       this.pack('slt', salt);
    }
 
-   set ic(iCount: number)  {
-      if (iCount < ICOUNT_MIN || iCount > ICOUNT_MAX) {
+   set ic(iCount: number) {
+      if (iCount < cc.ICOUNT_MIN || iCount > cc.ICOUNT_MAX) {
          throw new Error('Invalid ic of: ' + iCount);
       }
-      this.pack('ic', numToBytes(iCount, IC_BYTES));
+      this.pack('ic', numToBytes(iCount, cc.IC_BYTES));
    }
 
    set ver(version: number) {
-      if (version != VERSION1 && version != VERSION4) {
+      if (version != cc.VERSION1 && version != cc.VERSION4) {
          throw new Error('Invalid version of: ' + version);
       }
-      this.pack('ver', numToBytes(version, VER_BYTES));
+      this.pack('ver', numToBytes(version, cc.VER_BYTES));
    }
 
    set hint(encHint: Uint8Array) {
-      if (encHint.byteLength > ENCRYPTED_HINT_MAX_BYTES) {
+      if (encHint.byteLength > cc.ENCRYPTED_HINT_MAX_BYTES) {
          throw new Error('Encrypted hint too long: ' + encHint.byteLength);
       }
-      this.pack('hlen', numToBytes(encHint.byteLength, HINT_LEN_BYTES));
+      this.pack('hlen', numToBytes(encHint.byteLength, cc.HINT_LEN_BYTES));
       this.pack('hint', encHint);
    }
 
-   set size(payloadSize: number)  {
+   set size(payloadSize: number) {
       if (payloadSize < 1) {
          throw new Error('Invalid payload size: ' + payloadSize);
       }
-      this.pack('size', numToBytes(payloadSize, PAYLOAD_SIZE_BYTES));
+      this.pack('size', numToBytes(payloadSize, cc.PAYLOAD_SIZE_BYTES));
    }
 }

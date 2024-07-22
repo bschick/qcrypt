@@ -1,6 +1,6 @@
 {
   "name": "qcrypt",
-  "version": "1.0.0",
+  "version": "4.0.0",
   "type": "module",
   "scripts": {
     "ng": "ng",

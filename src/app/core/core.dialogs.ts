@@ -46,10 +46,12 @@ import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { Router } from '@angular/router';
 import { PasswordStrengthMeterComponent } from 'angular-password-strength-meter';
-import * as cs from '../services/cipher.service';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { ZxcvbnOptionsService } from '../services/zxcvbn-options.service';
 import { BubbleDirective } from '../ui/bubble/bubble.directive';
+import * as cc from '../services/cipher.consts';
+import { bytesToBase64 } from '../services/utils';
+import { CipherService, CipherDataInfo } from '../services/cipher.service';
 
 
 export type PwdDialogData = {
@@ -94,7 +96,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    public userName = '';
    private checkPwned = false;
    private welcomed = true;
-   public maxHintLen = cs.HINT_MAX_LEN;
+   public maxHintLen = cc.HINT_MAX_LEN;
 
    @ViewChild('bubbleTip') bubbleTip!: BubbleDirective;
 
@@ -182,17 +184,17 @@ export class CipherInfoDialog {
 
    constructor(
       private r2: Renderer2,
-      private cipherSvc: cs.CipherService,
+      private cipherSvc: CipherService,
       public dialogRef: MatDialogRef<CipherInfoDialog>,
-      @Inject(MAT_DIALOG_DATA) public cdInfo: cs.CipherDataInfo | null
+      @Inject(MAT_DIALOG_DATA) public cdInfo: CipherDataInfo | null
    ) {
       if (cdInfo == null) {
          this.error = 'The wrong passkey was selected or the cipher armor was changed';
       } else {
          this.ic = cdInfo.ic.toLocaleString();
          this.alg = this.cipherSvc.algDescription(cdInfo.alg);
-         this.iv = cs.bytesToBase64(cdInfo.iv as Uint8Array);
-         this.slt = cs.bytesToBase64(cdInfo.slt as Uint8Array);
+         this.iv = bytesToBase64(cdInfo.iv as Uint8Array);
+         this.slt = bytesToBase64(cdInfo.slt as Uint8Array);
          this.hint = cdInfo.hint ? 'yes' : 'no';
          this.ver = cdInfo.ver.toString();
       }

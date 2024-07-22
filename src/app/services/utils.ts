@@ -175,10 +175,12 @@ async function readStream(
 */
 
 export class Random48 {
-   private trueRandCache: Promise<Response>;
+   private _trueRandCache: Promise<Response>;
+   private _testing: boolean;
 
-   constructor() {
-      this.trueRandCache = this.downloadTrueRand();
+   constructor(testing: boolean) {
+      this._testing = testing;
+      this._trueRandCache = this.downloadTrueRand();
    }
 
    async getRandomArray(
@@ -191,8 +193,8 @@ export class Random48 {
          }
          return crypto.getRandomValues(new Uint8Array(48));
       } else {
-         const lastCache = this.trueRandCache;
-         this.trueRandCache = this.downloadTrueRand();
+         const lastCache = this._trueRandCache;
+         this._trueRandCache = this.downloadTrueRand();
          return lastCache.then((response) => {
             if (!response.ok) {
                throw new Error('random.org response: ' + response.statusText);
@@ -215,10 +217,15 @@ export class Random48 {
    }
 
    async downloadTrueRand(): Promise<Response> {
+      if(this._testing) {
+         return Promise.reject();
+      }
+
       const url = 'https://www.random.org/cgi-bin/randbyte?nbytes=' + 48;
       try {
          const p = fetch(url, {
             cache: 'no-store',
+            mode: 'no-cors'
          });
          return p;
       } catch (err) {
