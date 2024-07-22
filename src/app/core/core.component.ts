@@ -54,7 +54,9 @@ import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import { RouterLink } from '@angular/router';
-import * as cs from '../services/cipher.service';
+import * as cc from '../services/cipher.consts';
+import { CipherService, EParams, CipherDataInfo } from '../services/cipher.service';
+import { base64ToBytes } from '../services/utils';
 import { AuthenticatorService, AuthEvent, AuthEventData, INACTIVITY_TIMEOUT } from '../services/authenticator.service';
 import {
    PasswordDialog,
@@ -162,9 +164,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    public readonly INACTIVITY_TIMEOUT = INACTIVITY_TIMEOUT;
    public readonly LOOP_MAX = 10;
    public cacheTimeout!: DateTime;
-   public icountMin: number = cs.ICOUNT_MIN;
-   public icountMax: number = cs.ICOUNT_MAX; // Default since benchmark is async
-   public icountDefault: number = cs.ICOUNT_DEFAULT; // Default since benchmark is async
+   public icountMin: number = cc.ICOUNT_MIN;
+   public icountMax: number = cc.ICOUNT_MAX; // Default since benchmark is async
+   public icountDefault: number = cc.ICOUNT_DEFAULT; // Default since benchmark is async
    public hashTimeWarning = '';
    public clearText = '';
    public pwdCached = false;
@@ -191,7 +193,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    // options
    public algorithm = 'X20-PLY';
-   public icount: number = cs.ICOUNT_DEFAULT; // Default since benchmark is async
+   public icount: number = cc.ICOUNT_DEFAULT; // Default since benchmark is async
    public hidePwd = true;
    public cacheTime = 0;
    public minPwdStrength = '3';
@@ -205,7 +207,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    constructor(
       private authSvc: AuthenticatorService,
-      private cipherSvc: cs.CipherService,
+      private cipherSvc: CipherService,
       private r2: Renderer2,
       private dialog: MatDialog,
       private snackBar: MatSnackBar,
@@ -654,7 +656,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.onClearClear();
    }
 
-   cipherReadyNotice(cdInfo: cs.CipherDataInfo) {
+   cipherReadyNotice(cdInfo: CipherDataInfo) {
       this.actionStart = Date.now();
       // Avoid briefly putting up spinner and disabling buttons
       if (cdInfo.ic > this.spinnerAbove) {
@@ -702,7 +704,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             lp: 0,
             alg: this.algorithm,
             ic: this.icount,
-            userCred: cs.base64ToBytes(this.authSvc.userCred!),
+            userCred: base64ToBytes(this.authSvc.userCred!),
             ctFormat: this.ctFormat,
             reminder: this.reminder,
             trueRand: this.trueRand,
@@ -763,7 +765,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       try {
          var [pwd, hint] = await this.getPassword(+this.minPwdStrength, '', econtext);
 
-         const eparams: cs.EParams = {
+         const eparams: EParams = {
             ...econtext,
             pwd: pwd,
             hint: hint
@@ -836,7 +838,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          const ctx: Context = {
             lpEnd: 1,
             lp: 0,
-            userCred: cs.base64ToBytes(this.authSvc.userCred!)
+            userCred: base64ToBytes(this.authSvc.userCred!)
          }
          //@ts-ignore
          const writeable = await saveFile.createWritable();
@@ -895,7 +897,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                const [pwd, _] = await this.getPassword(-1, hint, dcontext);
                return pwd;
             },
-            cs.base64ToBytes(this.authSvc.userCred!),
+            base64ToBytes(this.authSvc.userCred!),
             dcontext.ct,
             this.cipherReadyNotice.bind(this)
          );
@@ -1017,7 +1019,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       return {
          lpEnd: lps,
          lp: 0,
-         userCred: cs.base64ToBytes(this.authSvc.userCred!),
+         userCred: base64ToBytes(this.authSvc.userCred!),
          ct: ct,
       };
    }
@@ -1281,7 +1283,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
          const dcontext = this.getDecContextFrom(this.cipherArmor);
          const cdInfo = await this.cipherSvc.getCipherTextInfo(
-            cs.base64ToBytes(this.authSvc.userCred!),
+            base64ToBytes(this.authSvc.userCred!),
             dcontext.ct
          );
          this.dialog.open(CipherInfoDialog, { data: cdInfo });

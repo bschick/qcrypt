@@ -22,12 +22,10 @@ SOFTWARE. */
 
 import { Injectable } from '@angular/core';
 import { readStreamFill, readStreamUntil, base64ToBytes, bytesToBase64 } from './utils';
-import { Ciphers, EParams, CipherDataInfo, HEADER_BYTES, HINT_MAX_LEN,
-   ICOUNT_MIN, ICOUNT_MAX, ICOUNT_DEFAULT } from './ciphers';
+import { Ciphers, EParams, CipherDataInfo } from './ciphers';
+import * as cc from './cipher.consts';
 
-export { EParams, CipherDataInfo, HINT_MAX_LEN, ICOUNT_MIN,
-   ICOUNT_MAX, ICOUNT_DEFAULT, base64ToBytes, bytesToBase64 };
-
+export { EParams, CipherDataInfo };
 
 // Simple perf testing with Chrome 126 on MacOS result in
 // readStreamUntil with READ_SIZE_MAX of 4x to be the fastest
@@ -40,7 +38,7 @@ const READ_SIZE_MAX = READ_SIZE_START * 4;
 export class CipherService {
 
    private _hashRate = 0;
-   private _iCountMax = 0;
+   private _iCountMax = cc.ICOUNT_MAX;
 
    get hashRate(): number {
       return this._hashRate;
@@ -67,7 +65,11 @@ export class CipherService {
    }
 
    algDescription(alg: string): string {
-      return Ciphers.validateAlg(alg) ? Ciphers.algDescription(alg) : 'Invalid';
+      return Ciphers.validateAlg(alg) ? cc.AlgInfo[alg]['description'] as string : 'Invalid';
+   }
+
+   algs(): string[] {
+      return Object.keys(cc.AlgInfo);
    }
 
    async encryptString(
@@ -75,10 +77,10 @@ export class CipherService {
       clearText: string,
       readyNotice?: (cdInfo: CipherDataInfo) => void
    ): Promise<string> {
-      if( eparams.ic > this._iCountMax) {
-         throw new Error('iCount exeeded: ' + this._iCountMax);
+      if (eparams.ic > this._iCountMax) {
+         throw new Error('Invalid ic, exceeded: ' + this._iCountMax);
       }
-      if(clearText.length == 0) {
+      if (clearText.length == 0) {
          throw new Error('Missing clear text');
       }
 
@@ -110,8 +112,8 @@ export class CipherService {
       readyNotice?: (cdInfo: CipherDataInfo) => void
    ): ReadableStream<Uint8Array> {
 
-      if( eparams.ic > this._iCountMax) {
-         throw new Error('iCount exeeded: ' + this._iCountMax);
+      if (eparams.ic > this._iCountMax) {
+         throw new Error('Invalid ic, exceeded: ' + this._iCountMax);
       }
 
       const reader = clearStream.getReader({ mode: "byob" });
@@ -211,9 +213,9 @@ export class CipherService {
    ): Promise<CipherDataInfo> {
 
       const reader = cipherStream.getReader({ mode: "byob" });
-      let headerData = new Uint8Array(HEADER_BYTES);
+      let headerData = new Uint8Array(cc.HEADER_BYTES);
       [headerData] = await readStreamFill(reader, headerData);
-      console.log('info(): HEADER_BYTES, headerData', HEADER_BYTES, headerData);
+      console.log('info(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
 
       const ciphers = Ciphers.fromHeader(headerData);
       ciphers.decodeHeader(headerData);
@@ -284,9 +286,9 @@ export class CipherService {
 
             try {
                let readBytes: number;
-               let headerData = new Uint8Array(HEADER_BYTES);
+               let headerData = new Uint8Array(cc.HEADER_BYTES);
                [headerData] = await readStreamFill(reader, headerData);
-               console.log('start(): HEADER_BYTES, headerData', HEADER_BYTES, headerData);
+               console.log('start(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
 
                ciphers = Ciphers.fromHeader(headerData);
                ciphers.decodeHeader(headerData);
@@ -318,10 +320,10 @@ export class CipherService {
 
             try {
                let readBytes: number;
-               let headerData = new Uint8Array(HEADER_BYTES);
+               let headerData = new Uint8Array(cc.HEADER_BYTES);
                try {
                   [headerData] = await readStreamFill(reader, headerData);
-                  console.log('pull(): HEADER_BYTES, headerData', HEADER_BYTES, headerData);
+                  console.log('pull(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
                } catch (err) {
                   // don't report as an error since if the file being done
                   console.log('pull(): closing');
