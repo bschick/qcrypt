@@ -21,14 +21,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { Injectable } from '@angular/core';
-import { readStreamFill, readStreamUntil, base64ToBytes, bytesToBase64 } from './utils';
+import { readStreamBYODAll, readStreamBYODUntil, base64ToBytes, bytesToBase64 } from './utils';
 import { Ciphers, EParams, CipherDataInfo } from './ciphers';
 import * as cc from './cipher.consts';
 
 export { EParams, CipherDataInfo };
 
 // Simple perf testing with Chrome 126 on MacOS result in
-// readStreamUntil with READ_SIZE_MAX of 4x to be the fastest
+// readStreamBYODUntil with READ_SIZE_MAX of 4x to be the fastest
 const READ_SIZE_START = 1048576; // 1 MiB
 const READ_SIZE_MAX = READ_SIZE_START * 4;
 
@@ -121,20 +121,19 @@ export class CipherService {
       let totalBytesOutput = 0;
       let readTarget = READ_SIZE_START;
 
-      console.log('encryptToBytes returning');
-
+      //      console.log('encryptToBytes returning');
       return new ReadableStream({
          type: 'bytes',
 
          async start(controller) {
-            console.log(`start(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
+            //            console.log(`start(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
 
             try {
                let done = false;
                let clearBuffer = new Uint8Array(readTarget);
 
-               [clearBuffer, done] = await readStreamUntil(reader, clearBuffer);
-               console.log('start(): readTarget, readBytes', readTarget, clearBuffer.byteLength);
+               [clearBuffer, done] = await readStreamBYODUntil(reader, clearBuffer);
+               //               console.log('start(): readTarget, readBytes', readTarget, clearBuffer.byteLength);
 
                if (clearBuffer.byteLength) {
                   const cipherData = await ciphers.encryptBlock0(
@@ -148,24 +147,23 @@ export class CipherService {
                   controller.enqueue(cipherData.headerData);
                   controller.enqueue(cipherData.additionalData);
                   controller.enqueue(cipherData.encryptedData);
-                  console.log('start(): total enqueued: ' + totalBytesOutput);
+                  //                  console.log('start(): total enqueued: ' + totalBytesOutput);
                }
 
                if (done) {
-                  console.log('start(): closing');
+                  //                  console.log('start(): closing');
                   controller.close();
                   reader.releaseLock();
                }
             } catch (err) {
                console.error(err);
-               controller.close();
+               controller.error(err);
                reader.releaseLock();
-               // TODO: Need a way to report error back to parent
             }
          },
 
          async pull(controller) {
-            console.log(`pull(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
+            //            console.log(`pull(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
 
             readTarget = Math.min(readTarget * 2, READ_SIZE_MAX);
 
@@ -173,8 +171,8 @@ export class CipherService {
                let done = false;
                let clearBuffer = new Uint8Array(readTarget);
 
-               [clearBuffer, done] = await readStreamUntil(reader, clearBuffer);
-               console.log('pull(): readTarget, readBytes', readTarget, clearBuffer.byteLength);
+               [clearBuffer, done] = await readStreamBYODUntil(reader, clearBuffer);
+               //               console.log('pull(): readTarget, readBytes', readTarget, clearBuffer.byteLength);
 
                if (clearBuffer.byteLength) {
                   const cipherData = await ciphers.encryptBlockN(
@@ -187,23 +185,20 @@ export class CipherService {
                   controller.enqueue(cipherData.headerData);
                   controller.enqueue(cipherData.additionalData);
                   controller.enqueue(cipherData.encryptedData);
-
-                  console.log('pull(): total enqueued: ' + totalBytesOutput);
+                  //                  console.log('pull(): total enqueued: ' + totalBytesOutput);
                }
 
                if (done) {
-                  console.log('pull(): closing');
+                  //                  console.log('pull(): closing');
                   controller.close();
                   reader.releaseLock();
                }
             } catch (err) {
                console.error(err);
-               controller.close();
+               controller.error(err);
                reader.releaseLock();
-               // TODO: Need a way to report error back to parent
             }
          }
-
       });
    }
 
@@ -214,15 +209,15 @@ export class CipherService {
 
       const reader = cipherStream.getReader({ mode: "byob" });
       let headerData = new Uint8Array(cc.HEADER_BYTES);
-      [headerData] = await readStreamFill(reader, headerData);
-      console.log('info(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
+      [headerData] = await readStreamBYODAll(reader, headerData);
+      //      console.log('info(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
 
       const ciphers = Ciphers.fromHeader(headerData);
       ciphers.decodeHeader(headerData);
 
       let payloadData = new Uint8Array(ciphers.payloadSize);
-      [payloadData] = await readStreamFill(reader, payloadData);
-      console.log('info(): payloadSize, payloadData', ciphers.payloadSize, payloadData);
+      [payloadData] = await readStreamBYODAll(reader, payloadData);
+      //      console.log('info(): payloadSize, payloadData', ciphers.payloadSize, payloadData);
 
       return ciphers.getCipherDataInfo(
          userCred,
@@ -276,27 +271,29 @@ export class CipherService {
       let ciphers: Ciphers;
       let totalBytesOutput = 0;
 
-      console.log('decryptStream returning');
-
+      //      console.log('decryptStream returning');
       return new ReadableStream({
          type: 'bytes',
 
          async start(controller) {
-            console.log(`start(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
+            //            console.log(`start(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
 
             try {
-               let readBytes: number;
                let headerData = new Uint8Array(cc.HEADER_BYTES);
-               [headerData] = await readStreamFill(reader, headerData);
-               console.log('start(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
+               [headerData] = await readStreamBYODAll(reader, headerData);
+               //               console.log('start(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
 
+               // If we don't get enough data, let Ciphers throw and error
                ciphers = Ciphers.fromHeader(headerData);
                ciphers.decodeHeader(headerData);
 
                let payloadData = new Uint8Array(ciphers.payloadSize);
-               [payloadData] = await readStreamFill(reader, payloadData);
-               console.log('start(): payloadSize, payloadData', ciphers.payloadSize, payloadData);
+               [payloadData] = await readStreamBYODAll(reader, payloadData);
+               if (payloadData.byteLength != ciphers.payloadSize) {
+                  throw new Error('Invalid payload size: ' + ciphers.payloadSize);
+               }
 
+               //               console.log('start(): payloadSize', ciphers.payloadSize);
                const decrypted = await ciphers.decryptPayload0(
                   pwdProvider,
                   userCred,
@@ -307,53 +304,54 @@ export class CipherService {
                totalBytesOutput += decrypted.byteLength;
                controller.enqueue(decrypted);
                console.log('start(): total enqueued', totalBytesOutput);
+
             } catch (err) {
-               console.error(err);
-               controller.close();
+               console.error('start() error, closing', err);
+               controller.error(err);
                reader.releaseLock();
-               // TODO: Need a way to report error back to parent
             }
          },
 
          async pull(controller) {
-            console.log(`pull(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
+            //            console.log(`pull(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
 
             try {
-               let readBytes: number;
+               let done = false;
                let headerData = new Uint8Array(cc.HEADER_BYTES);
-               try {
-                  [headerData] = await readStreamFill(reader, headerData);
-                  console.log('pull(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
-               } catch (err) {
-                  // don't report as an error since if the file being done
+               [headerData, done] = await readStreamBYODAll(reader, headerData);
+               //               console.log('pull(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
+
+               if (!done && headerData.byteLength) {
+                  ciphers.decodeHeader(headerData);
+
+                  let payloadData = new Uint8Array(ciphers.payloadSize);
+                  [payloadData] = await readStreamBYODAll(reader, payloadData);
+                  if (payloadData.byteLength != ciphers.payloadSize) {
+                     throw new Error('Invalid payload size: ' + ciphers.payloadSize);
+                  }
+                  //                  console.log('pull(): payloadSize, payloadData', ciphers.payloadSize, payloadData);
+
+                  const decrypted = await ciphers.decryptPayloadN(payloadData);
+
+                  totalBytesOutput += decrypted.byteLength;
+                  controller.enqueue(decrypted);
+                  console.log('pull(): total enqueued', totalBytesOutput);
+               } else {
+                  // Reach the end of the stream peacefully...
                   console.log('pull(): closing');
                   controller.close();
                   reader.releaseLock();
-                  return;
                }
 
-               ciphers.decodeHeader(headerData);
-
-               let payloadData = new Uint8Array(ciphers.payloadSize);
-               [payloadData] = await readStreamFill(reader, payloadData);
-               console.log('pull(): payloadSize, payloadData', ciphers.payloadSize, payloadData);
-
-               const decrypted = await ciphers.decryptPayloadN(payloadData);
-
-               totalBytesOutput += decrypted.byteLength;
-               controller.enqueue(decrypted);
-               console.log('pull(): total enqueued', totalBytesOutput);
             } catch (err) {
                console.error(err);
-               controller.close();
+               controller.error(err);
                reader.releaseLock();
-               // TODO: Need a way to report error back to parent
             }
          }
 
       });
    }
-
 }
 
 

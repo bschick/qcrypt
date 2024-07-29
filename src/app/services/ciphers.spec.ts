@@ -21,9 +21,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
 import * as cc from './cipher.consts';
-import { readStreamFill, readStreamUntil, base64ToBytes, bytesToBase64 } from './utils';
+import { readStreamBYODAll, readStreamBYODUntil, Random48, base64ToBytes, bytesToBase64 } from './utils';
 import { Ciphers, EParams, CipherDataBlock } from './ciphers';
-import { Random48, numToBytes, bytesToNum } from './utils';
 
 
 function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
@@ -917,114 +916,4 @@ describe("Detect changed cipher data", function () {
          ).toBeRejectedWithError(DOMException);
       }
    });
-});
-
-
-describe("Base64 encode decode", function () {
-
-   it("random bytes", function () {
-      const rb = crypto.getRandomValues(new Uint8Array(43))
-      const b64 = bytesToBase64(rb);
-      expect(b64.length).toBeGreaterThanOrEqual(rb.byteLength);
-      expect(isEqualArray(rb, base64ToBytes(b64))).toBeTrue();
-   });
-
-   it("detect bad encodings", function () {
-      // correct values
-      const correctBytes = new Uint8Array([0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x3e, 0x33]);
-      const correctText = 'Hello>3';
-
-      // expect we start valid
-      const good = 'SGVsbG8-Mw';
-      const bytes = base64ToBytes(good);
-      expect(bytes).toEqual(correctBytes);
-      expect(new TextDecoder().decode(bytes)).toBe(correctText);
-
-      // underlying simplewebauthn library converts nonURL base64 to base64URL
-      // so this should work also (goodRfc is standard base64)
-      const goodRfc = 'SGVsbG8+Mw==';
-      const bytes2 = base64ToBytes(goodRfc);
-      expect(bytes2).toEqual(correctBytes);
-
-      // extra padding is stripped (so not an error to be missing some)
-      const extraPadding = 'SGVsbG8-Mw=';
-      const bytes3 = base64ToBytes(extraPadding);
-      expect(bytes3).toEqual(new Uint8Array(correctBytes));
-
-      const badChar = 'SGVsbG8.Mw';
-      expect(() => base64ToBytes(badChar)).toThrowError();
-
-      const badLen = 'SGVsbG8Mw';
-      expect(() => base64ToBytes(badLen)).toThrowError();
-   });
-});
-
-describe("Random48 tests", function () {
-
-   /* Removed by default to avoid spamming random.org
-      it("true random", async function () {
-         let rand = new Random48(false);
-         const r1 = await rand.getRandomArray(true, false);
-         const r2 = await rand.getRandomArray(true, false);
-
-         expect(r1.byteLength).toBe(48);
-         expect(r2.byteLength).toBe(48);
-         expect(isEqualArray(r1, r2)).toBeFalse();
-      });
-   */
-
-   it("pseudo random", async function () {
-      let rand = new Random48(true);
-      const r1 = await rand.getRandomArray(false, true);
-      const r2 = await rand.getRandomArray(false, true);
-
-      expect(r1.byteLength).toBe(48);
-      expect(r2.byteLength).toBe(48);
-      expect(isEqualArray(r1, r2)).toBeFalse();
-      await expectAsync(rand.getRandomArray(false, false)).toBeRejectedWithError(Error);
-   });
-});
-
-describe("Number byte packing", function () {
-
-   it("one byte ok", function () {
-      let a1 = numToBytes(0, 1);
-      expect(bytesToNum(a1)).toBe(0);
-      expect(a1.byteLength).toBe(1);
-
-      a1 = numToBytes(1, 1);
-      expect(bytesToNum(a1)).toBe(1);
-      expect(a1.byteLength).toBe(1);
-
-      a1 = numToBytes(255, 1);
-      expect(bytesToNum(a1)).toBe(255);
-      expect(a1.byteLength).toBe(1);
-   });
-
-   it("detect overflow check", function () {
-      expect(() => numToBytes(256, 1)).toThrowError();
-      expect(() => numToBytes(2456, 1)).toThrowError();
-      expect(() => numToBytes(65536, 2)).toThrowError();
-      expect(() => numToBytes(18777216, 3)).toThrowError();
-      expect(() => numToBytes(187742949672967216, 4)).toThrowError();
-   });
-
-   it("other lengths ok", function () {
-      let a2 = numToBytes(567, 2);
-      expect(bytesToNum(a2)).toBe(567);
-      expect(a2.byteLength).toBe(2);
-
-      a2 = numToBytes(65535, 2);
-      expect(bytesToNum(a2)).toBe(65535);
-      expect(a2.byteLength).toBe(2);
-
-      let a3 = numToBytes(2, 3);
-      expect(bytesToNum(a3)).toBe(2);
-      expect(a3.byteLength).toBe(3);
-
-      let a4 = numToBytes(4294000000, 4);
-      expect(bytesToNum(a4)).toBe(4294000000);
-      expect(a4.byteLength).toBe(4);
-   });
-
 });

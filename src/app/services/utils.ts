@@ -37,7 +37,6 @@ export function base64ToBytes(b64: string): Uint8Array {
 }
 
 
-
 // Sadly, there doesn't seem to be a way to force ReadableStreamBYOBReader.read
 // to write into the provided buffer. To support zero copy it sometime returns
 // internal buffer. That means we have to return the data buffer and its size.
@@ -47,49 +46,134 @@ export async function readStreamBYOB(
    output: Uint8Array
 ): Promise<[Uint8Array, boolean]> {
 
-   console.log('readStreamBYOB buffer: ' + output.byteLength);
-
-   // read() returns a promise that fulfills when a value has been received
+   const targetRead = output.byteLength;
+   console.log('readStreamBYOB reading:' + targetRead);
    let { done, value } = await reader.read(output);
+   console.log('readStreamBYOB read-' + targetRead, value?.byteLength, done);
    value = value ?? new Uint8Array(0);
-
-   console.log('readStreamBYOB read: ', value, done);
    return [value, done];
 }
 
-// Use when the reader cannot accept less then the size of output
-export async function readStreamFill(
+
+// Use when the reader cannot accept less then the size of output (or stream done)
+export async function readStreamBYODAll(
    reader: ReadableStreamBYOBReader,
    output: Uint8Array
 ): Promise<[data: Uint8Array, done: boolean]> {
 
    const targetBytes = output.byteLength;
-   let remainingBytes = targetBytes;
+   let readBytes = 0;
    const blocks: Uint8Array[] = [];
    let streamDone = false;
+   console.log('readStreamFill-' + targetBytes + ' start');
 
-   while(remainingBytes > 0) {
+   while (readBytes < targetBytes) {
       const [data, done] = await readStreamBYOB(reader, output);
+      console.log('readStreamFill-' + targetBytes, ' read', data.byteLength, done);
       blocks.push(data);
       streamDone = done;
-      remainingBytes -= data.byteLength;
+      readBytes += data.byteLength;
 
-      // Keep going until filled or error
-      if(remainingBytes > 0) {
-         if(done) {
-            throw new Error('Missing data from stream: ' + remainingBytes);
-         }
-         output = new Uint8Array(remainingBytes);
+      if (done) {
+         break;
+      }
+      if (readBytes < targetBytes) {
+         output = new Uint8Array(targetBytes - readBytes);
       }
    }
 
-   console.log('readStreamFill blocks, remainingBytes: ', blocks.length, remainingBytes);
+   const result = coalesceBlocks(blocks, readBytes);
+   console.log('readStreamFill-' + targetBytes + ' exit returnedBytes, done:',
+      result.byteLength,
+      streamDone
+   );
 
-   let result: Uint8Array;
-   if(blocks.length > 1) {
-      result = new Uint8Array(targetBytes);
+   return [result, streamDone];
+}
+
+
+// Use when the reader cannot accept less then the size of output (or stream done)
+export async function readStreamBYODUntil(
+   reader: ReadableStreamBYOBReader,
+   output: Uint8Array
+): Promise<[data: Uint8Array, done: boolean]> {
+
+   const targetBytes = output.byteLength;
+   let readBytes = 0;
+   const blocks: Uint8Array[] = [];
+   let streamDone = false;
+   console.log('readStreamUntil-' + targetBytes + ' start');
+
+   while (readBytes < targetBytes) {
+      const [data, done] = await readStreamBYOB(reader, output);
+      console.log('readStreamUntil-' + targetBytes, ' read', data.byteLength, done);
+      blocks.push(data);
+      streamDone = done;
+      readBytes += data.byteLength;
+
+      if (!data.byteLength || done) {
+         break;
+      }
+      if (readBytes < targetBytes) {
+         output = new Uint8Array(targetBytes - readBytes);
+      }
+   }
+
+   const result = coalesceBlocks(blocks, readBytes);
+   console.log('readStreamUntil-' + targetBytes + ' exit returnedBytes, done:',
+      result.byteLength,
+      streamDone
+   );
+
+   return [result, streamDone];
+}
+
+
+// Use when the reader cannot accept less then the size of output (or stream done)
+export async function readStreamAll(
+   reader: ReadableStreamDefaultReader
+): Promise<[data: Uint8Array, done: boolean]> {
+
+   let readBytes = 0;
+   const blocks: Uint8Array[] = [];
+   let streamDone = false;
+   console.log('readStreamAll- start');
+
+   while (true) {
+      const { done, value } = await reader.read();
+      console.log('readStreamAll- read', value?.byteLength, done);
+      streamDone = done;
+      if (value) {
+         blocks.push(value);
+         readBytes += value.byteLength;
+      }
+
+      if (done) {
+         break;
+      }
+   }
+
+   const result = coalesceBlocks(blocks, readBytes);
+   console.log('readStreamAll- exit returnedBytes, done:',
+      result.byteLength,
+      streamDone
+   );
+
+   return [result, streamDone];
+}
+
+
+function coalesceBlocks(
+   blocks: Uint8Array[],
+   byteLen: number
+): Uint8Array {
+   console.log('coalescing blocks:' + blocks.length);
+
+   let result = new Uint8Array(0);
+   if (blocks.length > 1) {
+      result = new Uint8Array(byteLen);
       let offset = 0;
-      for(const block of blocks) {
+      for (const block of blocks) {
          result.set(block, offset);
          offset += block.byteLength;
       }
@@ -97,12 +181,12 @@ export async function readStreamFill(
       result = blocks[0];
    }
 
-   return [result, streamDone];
+   return result;
 }
 
-
-// Use when the reader cannot accept less then the size of output
-export async function readStreamUntil(
+// Use to read as much as possible without stall in data from source stream
+/*
+export async function readStreamUntilOld(
    reader: ReadableStreamBYOBReader,
    output: Uint8Array
 ): Promise<[data: Uint8Array, done: boolean]> {
@@ -111,29 +195,36 @@ export async function readStreamUntil(
    let remainingBytes = targetBytes;
    const blocks: Uint8Array[] = [];
    let streamDone = false;
+   console.time('--readStreamUntil-' + targetBytes);
+   console.log('readStreamUntil target', targetBytes);
 
-   while(remainingBytes > 0) {
+   while (remainingBytes > 0) {
       const [data, done] = await readStreamBYOB(reader, output);
+      console.timeLog('--readStreamUntil-' + targetBytes, ' read', data.byteLength, done);
       blocks.push(data);
       streamDone = done;
       remainingBytes -= data.byteLength;
 
       // Keep going until stall or done
-      if(!data.byteLength || done) {
+      if (!data.byteLength || done) {
          break;
       }
-      if(remainingBytes > 0) {
+      if (remainingBytes > 0) {
          output = new Uint8Array(remainingBytes);
       }
    }
 
    console.log('readStreamUntil blocks, remainingBytes: ', blocks.length, remainingBytes);
 
-   let result: Uint8Array;
-   if(blocks.length > 1) {
-      result = new Uint8Array(targetBytes - remainingBytes);
+   let result = new Uint8Array(0);
+   if (blocks.length > 1) {
+      let byteLen = 0;
+      for (const block of blocks) {
+         byteLen += block.byteLength;
+      }
+      result = new Uint8Array(byteLen);
       let offset = 0;
-      for(const block of blocks) {
+      for (const block of blocks) {
          result.set(block, offset);
          offset += block.byteLength;
       }
@@ -141,9 +232,11 @@ export async function readStreamUntil(
       result = blocks[0];
    }
 
+   console.timeEnd('--readStreamUntil-' + targetBytes);
+   console.log('readStreamUntil-' + targetBytes + ' exit');
    return [result, streamDone];
 }
-
+*/
 
 /*
 async function readStream(
@@ -217,7 +310,7 @@ export class Random48 {
    }
 
    async downloadTrueRand(): Promise<Response> {
-      if(this._testing) {
+      if (this._testing) {
          return Promise.reject();
       }
 
