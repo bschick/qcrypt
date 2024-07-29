@@ -83,7 +83,7 @@ export abstract class Ciphers {
 
    // Return appropriate version of Ciphers
    public static fromHeader(encoded: Uint8Array): Ciphers {
-      console.log('fromHeader header:', encoded);
+//      console.log('fromHeader header:', encoded);
       if (encoded.byteLength < cc.MAC_BYTES + cc.VER_BYTES) {
          throw new Error('Invalid header length: ' + encoded.byteLength);
       }
@@ -320,7 +320,7 @@ export abstract class Ciphers {
       additionalData: Uint8Array = new Uint8Array(0),
    ): Promise<Uint8Array> {
 
-      console.log('doencrpt clear:' + clear.byteLength);
+//      console.log('doencrpt clear:' + clear.byteLength);
 
       const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
       if (ivBytes != iv.byteLength) {
@@ -378,7 +378,7 @@ export abstract class Ciphers {
          );
          encryptedBytes = new Uint8Array(cipherBuf);
       }
-      console.log('_doEncrypt result: ', encryptedBytes);
+//      console.log('_doEncrypt result: ', encryptedBytes);
       return encryptedBytes;
    }
 
@@ -450,7 +450,7 @@ export abstract class Ciphers {
          this._additionalData,
       );
 
-      console.log('_decryptCommon output bytes: ' + decrypted.byteLength);
+//      console.log('_decryptCommon output bytes: ' + decrypted.byteLength);
 
       return decrypted;
    }
@@ -563,22 +563,22 @@ export abstract class Ciphers {
 
       const exportedSk = await crypto.subtle.exportKey("raw", sk);
       const skData = new Uint8Array(exportedSk);
-      console.log('sign sk: ' + skData);
+//      console.log('sign sk: ' + skData);
 
       const state = sodium.crypto_generichash_init(skData, cc.MAC_BYTES);
-      console.log('sign header: ', new Uint8Array(packer.buffer, cc.MAC_BYTES));
+//      console.log('sign header: ', new Uint8Array(packer.buffer, cc.MAC_BYTES));
       sodium.crypto_generichash_update(state, new Uint8Array(packer.buffer, cc.MAC_BYTES));
-      console.log('sign addition: ', additionalData);
+//      console.log('sign addition: ', additionalData);
       sodium.crypto_generichash_update(state, additionalData);
-      console.log('sign encdata: ', encryptedData);
+//      console.log('sign encdata: ', encryptedData);
       sodium.crypto_generichash_update(state, encryptedData);
 
       const mac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
-      console.log('sign mac: ', mac);
+//      console.log('sign mac: ', mac);
       packer.offset = 0;
       packer.mac = mac;
 
-      console.log('sign return header: ', packer.buffer);
+//      console.log('sign return header: ', packer.buffer);
       return packer.detach();
    }
 
@@ -662,7 +662,7 @@ class CiphersV1 extends Ciphers {
       header: Uint8Array
    ): number {
 
-      console.log('decodeHeader v1 decoding:', header);
+//      console.log('decodeHeader v1 decoding:', header);
       if (this._mac) {
          throw new Error('CiphersV1 instance was reused');
       }
@@ -703,7 +703,7 @@ class CiphersV1 extends Ciphers {
          throw new Error('CiphersV1 data not initialized');
       }
 
-      console.log('_decodePayload0 decoding:', payload);
+//      console.log('_decodePayload0 decoding:', payload);
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated. Test each value for errors as we unpack
@@ -783,7 +783,7 @@ class CiphersV1 extends Ciphers {
       packer.hint = args.encryptedHint;
 
       const result = packer.trim();
-      console.log('_encodeAdditionalData V1 returning:', result);
+//      console.log('_encodeAdditionalData V1 returning:', result);
       return result;
    }
 
@@ -892,7 +892,7 @@ class CiphersV4 extends Ciphers {
       input: Uint8Array,
       readyNotice?: (cdInfo: CipherDataInfo) => void
    ): Promise<CipherDataBlock> {
-      console.log('_encryptBlock0 input bytes: ' + input.byteLength);
+//      console.log('_encryptBlock0 input bytes: ' + input.byteLength);
 
       Ciphers.validateEparams(eparams);
       if (this._sk || this._ek) {
@@ -964,7 +964,7 @@ class CiphersV4 extends Ciphers {
       eparams: EParams,
       input: Uint8Array,
    ): Promise<CipherDataBlock> {
-      console.log('_encryptBlockN input bytes: ' + input.byteLength);
+//      console.log('_encryptBlockN input bytes: ' + input.byteLength);
 
       Ciphers.validateEparams(eparams);
       if (!this._sk || !this._ek) {
@@ -1006,7 +1006,7 @@ class CiphersV4 extends Ciphers {
          clear,
          this._additionalData,
       );
-      console.log('_buildCipherData encrypted bytes: ', this._encryptedData);
+//      console.log('_buildCipherData encrypted bytes: ', this._encryptedData);
 
       const headerData = await CiphersV4._createHeader(
          this._sk,
@@ -1052,7 +1052,7 @@ class CiphersV4 extends Ciphers {
       }
 
       const result = packer.trim();
-      console.log('_encodeAdditionalData V4 returning:', result);
+//      console.log('_encodeAdditionalData V4 returning:', result);
       return result;
    }
 
@@ -1060,7 +1060,7 @@ class CiphersV4 extends Ciphers {
       header: Uint8Array
    ): number {
 
-      console.log('decodeHeader v4 decoding:', header);
+//      console.log('decodeHeader v4 decoding:', header);
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated. Test each value for errors as we unpack
@@ -1085,7 +1085,7 @@ class CiphersV4 extends Ciphers {
       payload: Uint8Array,
    ): Promise<Uint8Array> {
 
-      console.log('decryptPayloadN block bytes', payload.byteLength);
+//      console.log('decryptPayloadN block bytes', payload.byteLength);
 
       await this._decodePayloadN(payload);
       if (!this._alg || !this._ek || !this._iv || !this._encryptedData || !this._encryptedHint) {
@@ -1100,7 +1100,7 @@ class CiphersV4 extends Ciphers {
          this._additionalData,
       );
 
-      console.log('__decryptPayloadN output bytes: ' + decrypted.byteLength);
+//      console.log('__decryptPayloadN output bytes: ' + decrypted.byteLength);
 
       return decrypted;
    }
@@ -1117,7 +1117,7 @@ class CiphersV4 extends Ciphers {
          throw new Error('Invalid userCred length of: ' + userCred.byteLength);
       }
 
-      console.log('_decodePayload0 decoding:', payload);
+//      console.log('_decodePayload0 decoding:', payload);
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated. Test each value for errors as we unpack
@@ -1159,7 +1159,7 @@ class CiphersV4 extends Ciphers {
       payload: Uint8Array
    ): Promise<void> {
 
-      console.log('_decodePayloadN decoding:', payload);
+//      console.log('_decodePayloadN decoding:', payload);
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated. Test each value for errors as we unpack
@@ -1205,20 +1205,20 @@ class CiphersV4 extends Ciphers {
 
       const exportedSk = await crypto.subtle.exportKey("raw", this._sk);
       const skData = new Uint8Array(exportedSk);
-      console.log('verify sk: ' + skData);
+//      console.log('verify sk: ' + skData);
       const state = sodium.crypto_generichash_init(skData, cc.MAC_BYTES);
 
-      console.log('verify header: ', headerPortion);
+//      console.log('verify header: ', headerPortion);
       sodium.crypto_generichash_update(state, headerPortion);
-      console.log('verify addition: ', this._additionalData);
+//      console.log('verify addition: ', this._additionalData);
       sodium.crypto_generichash_update(state, this._additionalData);
-      console.log('verify encdata: ', this._encryptedData);
+//      console.log('verify encdata: ', this._encryptedData);
       sodium.crypto_generichash_update(state, this._encryptedData);
 
       const testMac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
-      console.log('verify mac: ', testMac);
+ //     console.log('verify mac: ', testMac);
       const validMac: boolean = sodium.memcmp(this._mac, testMac);
-      console.log('verify result: ', validMac);
+//      console.log('verify result: ', validMac);
       if (validMac) {
          return true;
       }
@@ -1246,7 +1246,7 @@ class Extractor {
       if (result.byteLength != len) {
          throw new Error(`Invalid ${what}, length: ${result.byteLength}`);
       }
-      console.log(`extracted ${len} bytes of ${what} at ${this._offset}: ${result}`);
+//      console.log(`extracted ${len} bytes of ${what} at ${this._offset}: ${result}`);
 
       this._offset += len;
       return result;
@@ -1259,7 +1259,7 @@ class Extractor {
       if (result.byteLength == 0) {
          throw new Error(`Invalid ${what}, length: 0`);
       }
-      console.log(`remainder ${result.byteLength} bytes of ${what} at ${this._offset}: ${result}`);
+//      console.log(`remainder ${result.byteLength} bytes of ${what} at ${this._offset}: ${result}`);
 
       this._offset += result.byteLength;
       return result;
@@ -1354,7 +1354,7 @@ class Packer {
       if (this._offset > this._dest.byteLength) {
          throw new Error(`Invalid ${what}, length: ${data.byteLength}`);
       }
-      console.log(`packed ${data.byteLength} bytes of ${what} at ${this._offset - data.byteLength}: ${data}`);
+//      console.log(`packed ${data.byteLength} bytes of ${what} at ${this._offset - data.byteLength}: ${data}`);
    }
 
    get offset(): number {
