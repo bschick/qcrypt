@@ -24,6 +24,7 @@ export const AES_GCM_TAG_BYTES = 16;
 export const X20_PLY_TAG_BYTES = 16; // sodium.crypto_aead_xchacha20poly1305_IETF_ABYTES, is not ready yet
 export const AEGIS_256_TAG_BYTES = 32; // sodium.crypto_aead_aegis256_ABYTES, is not ready yet
 export const AUTH_TAG_MAX_BYTES = Math.max(X20_PLY_TAG_BYTES, AES_GCM_TAG_BYTES, AEGIS_256_TAG_BYTES);
+export const AUTH_TAG_MIN_BYTES = Math.min(X20_PLY_TAG_BYTES, AES_GCM_TAG_BYTES, AEGIS_256_TAG_BYTES);
 
 export const ENCRYPTED_HINT_MAX_BYTES = 255;
 export const ENCRYPTED_HINT_MIN_BYTES = 0;
@@ -36,11 +37,14 @@ export const IC_BYTES = 4;
 export const VER_BYTES = 2;
 export const MAC_BYTES = 32;
 export const USERCRED_BYTES = 32;
-export const PAYLOAD_SIZE_BYTES = 4;      // larger than reequired for future expansion
+export const PAYLOAD_SIZE_BYTES = 4;    // 1 bytes larger than reequired for future expansion
 
 // Changing this is the future will be messy. Better change version and put
 // length changes into the payload
 export const HEADER_BYTES = MAC_BYTES + VER_BYTES + PAYLOAD_SIZE_BYTES;
+
+export const PAYLOAD_SIZE_MIN = IV_MIN_BYTES + ALG_BYTES + AUTH_TAG_MIN_BYTES + 1;
+export const PAYLOAD_SIZE_MAX = 16777215;  // limit to 3 bytes size (extra byte is reserved)
 
 export const ICOUNT_MIN = 400000;
 export const ICOUNT_DEFAULT = 800000;

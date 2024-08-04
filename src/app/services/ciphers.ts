@@ -100,7 +100,7 @@ export abstract class Ciphers {
       } else if (verOrAlg < cc.V1_BELOW && verOrAlg > 0) {
          ciphers = new CiphersV1();
       } else {
-         throw new Error('Unknown version: ' + verOrAlg);
+         throw new Error('Invalid version: ' + verOrAlg);
       }
 
       return ciphers;
@@ -343,7 +343,7 @@ export abstract class Ciphers {
                "uint8array"
             );
          } catch (err) {
-            console.log(err)
+            console.error(err)
             // Match behavior of Web Crytpo functions that throws limited DOMException
             throw new DOMException('', 'OperationError');
          }
@@ -362,7 +362,7 @@ export abstract class Ciphers {
                "uint8array"
             );
          } catch (err) {
-            console.log(err)
+            console.error(err)
             // Match behavior of Web Crytpo functions that throws limited DOMException
             throw new DOMException('', 'OperationError');
          }
@@ -413,10 +413,10 @@ export abstract class Ciphers {
          throw new Error('Data not initialized');
       }
 
-      let hintEnc = new Uint8Array(0);
+      let hint = new Uint8Array(0);
       if (this._encryptedHint!.byteLength != 0) {
          const hk = await Ciphers._genHintCipherKey(this._alg, userCred, this._slt);
-         hintEnc = await Ciphers._doDecrypt(
+         hint = await Ciphers._doDecrypt(
             this._alg,
             hk,
             this._iv,
@@ -424,7 +424,7 @@ export abstract class Ciphers {
          );
       }
 
-      const pwd = await pwdProvider(new TextDecoder().decode(hintEnc));
+      const pwd = await pwdProvider(new TextDecoder().decode(hint));
       if (!pwd) {
          throw new Error('password is empty');
       }
@@ -436,7 +436,7 @@ export abstract class Ciphers {
             ic: this._ic,
             slt: this._slt,
             iv: this._iv,
-            hint: hintEnc.byteLength > 0
+            hint: hint.byteLength > 0
          });
       }
 
@@ -510,7 +510,7 @@ export abstract class Ciphers {
                "uint8array"
             );
          } catch (err) {
-            console.log(err);
+            console.error(err);
             // Match behavior of Web Crytpo functions that throws limited DOMException
             throw new DOMException('', 'OperationError');
          }
@@ -529,7 +529,7 @@ export abstract class Ciphers {
                "uint8array"
             );
          } catch (err) {
-            console.log(err);
+            console.error(err);
             // Match behavior of Web Crytpo functions that throws limited DOMException
             throw new DOMException('', 'OperationError');
          }
@@ -557,6 +557,7 @@ export abstract class Ciphers {
    ): Promise<Uint8Array> {
 
       const payloadBytes = encryptedData.byteLength + additionalData.byteLength;
+      // Packer validates ranges as values are added
       const packer = new Packer(cc.HEADER_BYTES, cc.MAC_BYTES);
       packer.ver = cc.VERSION4;
       packer.size = payloadBytes;
@@ -668,10 +669,12 @@ class CiphersV1 extends Ciphers {
       }
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
-      // validated. Test each value for errors as we unpack
+      // validated.
+
       if (header.byteLength < cc.HEADER_BYTES) {
          throw new Error('Invalid cipher data length: ' + header.byteLength);
       }
+
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated. Test each value for errors as we unpack
       let extractor = new Extractor(header);
@@ -706,7 +709,7 @@ class CiphersV1 extends Ciphers {
 //      console.log('_decodePayload0 decoding:', payload);
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
-      // validated. Test each value for errors as we unpack
+      // validated, Extractor does test each value for valid ranges as we unpack
       let extractor = new Extractor(payload);
 
       // Order must be invariant
@@ -773,6 +776,7 @@ class CiphersV1 extends Ciphers {
 
       const maxBytes = cc.VER_BYTES + cc.ALG_BYTES + cc.IV_MAX_BYTES +
          cc.IC_BYTES + cc.SLT_BYTES + cc.ENCRYPTED_HINT_MAX_BYTES;
+      // Packer validates ranges as values are added
       const packer = new Packer(maxBytes);
 
       packer.alg = args.alg;
@@ -1016,8 +1020,8 @@ class CiphersV4 extends Ciphers {
 
       return {
          headerData: headerData,
-         encryptedData: this._encryptedData,
-         additionalData: this._additionalData
+         additionalData: this._additionalData,
+         encryptedData: this._encryptedData
       }
    }
 
@@ -1034,6 +1038,7 @@ class CiphersV4 extends Ciphers {
 
       const maxBytes = cc.ALG_BYTES + cc.IV_MAX_BYTES + cc.IC_BYTES +
          cc.SLT_BYTES + cc.ENCRYPTED_HINT_MAX_BYTES;
+      // Packer validates ranges as values are added
       const packer = new Packer(maxBytes);
 
       packer.alg = args.alg;
@@ -1063,11 +1068,14 @@ class CiphersV4 extends Ciphers {
 //      console.log('decodeHeader v4 decoding:', header);
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
-      // validated. Test each value for errors as we unpack
+      // validated.
+
       if (header.byteLength < cc.HEADER_BYTES) {
          throw new Error('Invalid cipher data length: ' + header.byteLength);
       }
 
+      // Need to treat all values an UNTRUSTED since the signature has not yet been
+      // validated, Extractor does test each value for valid ranges as we unpack
       const extractor = new Extractor(header);
 
       // Order must be invariant
@@ -1120,7 +1128,7 @@ class CiphersV4 extends Ciphers {
 //      console.log('_decodePayload0 decoding:', payload);
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
-      // validated. Test each value for errors as we unpack
+      // validated, Extractor does test each value for valid ranges as we unpack
       let extractor = new Extractor(payload);
 
       // Order must be invariant
@@ -1162,7 +1170,7 @@ class CiphersV4 extends Ciphers {
 //      console.log('_decodePayloadN decoding:', payload);
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
-      // validated. Test each value for errors as we unpack
+      // validated, Extractor does test each value for valid ranges as we unpack
       let extractor = new Extractor(payload);
 
       // Order must be invariant
@@ -1291,7 +1299,7 @@ class Extractor {
 
    get iv(): Uint8Array {
       if (!this._ivBytes) {
-         throw new Error('iv length unknown, get extractor.alg first');
+         throw new Error('iv length undefined, get extractor.alg first');
       }
       return this.extract('iv', this._ivBytes);
    }
@@ -1324,11 +1332,11 @@ class Extractor {
    }
 
    get size(): number {
-      const size = bytesToNum(this.extract('size', cc.PAYLOAD_SIZE_BYTES));
-      if (size < 1) {
-         throw new Error('Invalid payload size: ' + size);
+      const payloadSize = bytesToNum(this.extract('size', cc.PAYLOAD_SIZE_BYTES));
+      if (payloadSize < cc.PAYLOAD_SIZE_MIN || payloadSize > cc.PAYLOAD_SIZE_MAX) {
+         throw new Error('Invalid payload size: ' + payloadSize);
       }
-      return size;
+      return payloadSize;
    }
 }
 
@@ -1400,7 +1408,7 @@ class Packer {
 
    set mac(sig: Uint8Array) {
       if (sig.byteLength != cc.MAC_BYTES) {
-         throw new Error('MAC length incorrect: ' + sig.byteLength);
+         throw new Error('Invalid MAC length: ' + sig.byteLength);
       }
       this.pack('mac', sig);
    }
@@ -1416,17 +1424,17 @@ class Packer {
 
    set iv(iVect: Uint8Array) {
       if (!this._ivBytes) {
-         throw new Error('iv length unknown, set packer.alg first');
+         throw new Error('IV length undefined, set packer.alg first');
       }
       if (this._ivBytes != iVect.byteLength) {
-         throw new Error('IV length incorrect: ' + iVect.byteLength);
+         throw new Error('Invalid IV length: ' + iVect.byteLength);
       }
       this.pack('iv', iVect);
    }
 
    set slt(salt: Uint8Array) {
       if (salt.byteLength != cc.SLT_BYTES) {
-         throw new Error('Salt length incorrect: ' + salt.byteLength);
+         throw new Error('Invalid salt length: ' + salt.byteLength);
       }
       this.pack('slt', salt);
    }
@@ -1447,14 +1455,14 @@ class Packer {
 
    set hint(encHint: Uint8Array) {
       if (encHint.byteLength > cc.ENCRYPTED_HINT_MAX_BYTES) {
-         throw new Error('Encrypted hint too long: ' + encHint.byteLength);
+         throw new Error('Invalid hint length: ' + encHint.byteLength);
       }
       this.pack('hlen', numToBytes(encHint.byteLength, cc.HINT_LEN_BYTES));
       this.pack('hint', encHint);
    }
 
    set size(payloadSize: number) {
-      if (payloadSize < 1) {
+      if (payloadSize < cc.PAYLOAD_SIZE_MIN || payloadSize > cc.PAYLOAD_SIZE_MAX) {
          throw new Error('Invalid payload size: ' + payloadSize);
       }
       this.pack('size', numToBytes(payloadSize, cc.PAYLOAD_SIZE_BYTES));
