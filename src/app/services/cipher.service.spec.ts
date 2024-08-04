@@ -23,7 +23,11 @@ import { TestBed } from '@angular/core/testing';
 import * as cc from './cipher.consts';
 import { CipherService, EParams } from './cipher.service';
 import { Ciphers } from './ciphers';
-import { readStreamAll, readStreamBYODFill, readStreamBYODUntil, base64ToBytes, bytesToBase64 } from './utils';
+import {
+   readStreamAll,
+   readStreamBYODFill,
+   base64ToBytes
+} from './utils';
 
 describe('CipherService', () => {
    let cipherSvc: CipherService;
@@ -66,10 +70,10 @@ function randomBlob(byteLength: number): Blob {
    const count = Math.ceil(byteLength / 512);
 
    let arr = new Array<Uint8Array>;
-   for(let i = 0; i < count; ++i) {
+   for (let i = 0; i < count; ++i) {
       arr.push(randData);
    }
-   return new Blob(arr, {type:'application/octet-stream'});
+   return new Blob(arr, { type: 'application/octet-stream' });
 }
 
 
@@ -158,7 +162,7 @@ describe("String encryption and decryption", function () {
                expect(params.ic).toBe(cc.ICOUNT_MIN);
             }
          );
-//         console.log(alg + ": " + cipherText.length + ": " + cipherText);
+         //         console.log(alg + ": " + cipherText.length + ": " + cipherText);
 
          const decrypted = await cipherSvc.decryptString(
             async (decHint) => {
@@ -543,11 +547,15 @@ describe("Stream manipulation", function () {
    // userCred used for creation of the CTS above
    // b64url userCred for browsser injection: xhKm2Q404pGkqfWkTyT3UodUR-99bN0wibH6si9uF8I
    const userCred = new Uint8Array([198, 18, 166, 217, 14, 52, 226, 145, 164, 169, 245, 164, 79, 36, 247, 82, 135, 84, 71, 239, 125, 108, 221, 48, 137, 177, 250, 178, 47, 110, 23, 194]);
+   // Also replace following value in cipher.service.ts to create small block
+   //const READ_SIZE_START = 1048576/1024/4;
+   //const READ_SIZE_MAX = READ_SIZE_START * 41
+
 
    it("detect manipulated cipher stream header", async function () {
 
       // First make sure it decrypts as expected
-      let blob = new Blob([encryptedData], {type:'application/octet-stream'});
+      let blob = new Blob([encryptedData], { type: 'application/octet-stream' });
       let dec = cipherSvc.decryptStream(
          async (decHint) => { expect(decHint).toBe('4321'); return 'asdf'; },
          userCred,
@@ -565,7 +573,7 @@ describe("Stream manipulation", function () {
       // Modified block0 MAC
       const b0Mac = new Uint8Array(encryptedData);
       b0Mac.set([255], block0MACOffset);
-      blob = new Blob([b0Mac], {type:'application/octet-stream'});
+      blob = new Blob([b0Mac], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -580,7 +588,7 @@ describe("Stream manipulation", function () {
       // Test modified block0 version
       const b0Ver = new Uint8Array(encryptedData);
       b0Ver.set([6], block0VerOffset);
-      blob = new Blob([b0Ver], {type:'application/octet-stream'});
+      blob = new Blob([b0Ver], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -595,7 +603,7 @@ describe("Stream manipulation", function () {
       // Test modified block0 size, too small valid
       let b0Size = new Uint8Array(encryptedData);
       b0Size.set([20, 1], block0SizeOffset);
-      blob = new Blob([b0Size], {type:'application/octet-stream'});
+      blob = new Blob([b0Size], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -610,7 +618,7 @@ describe("Stream manipulation", function () {
       // Too small block0 size, too small invalid
       b0Size = new Uint8Array(encryptedData);
       b0Size.set([0, 0], block0SizeOffset);
-      blob = new Blob([b0Size], {type:'application/octet-stream'});
+      blob = new Blob([b0Size], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -624,8 +632,8 @@ describe("Stream manipulation", function () {
 
       // Test too big block0 size, invalid
       b0Size = new Uint8Array(encryptedData);
-      b0Size.set([255,255,255,255], block0SizeOffset);
-      blob = new Blob([b0Size], {type:'application/octet-stream'});
+      b0Size.set([255, 255, 255, 255], block0SizeOffset);
+      blob = new Blob([b0Size], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -639,8 +647,8 @@ describe("Stream manipulation", function () {
 
       // Test too big block0 but valid
       b0Size = new Uint8Array(encryptedData);
-      b0Size.set([255,255,255,0], block0SizeOffset);
-      blob = new Blob([b0Size], {type:'application/octet-stream'});
+      b0Size.set([255, 255, 255, 0], block0SizeOffset);
+      blob = new Blob([b0Size], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -655,7 +663,7 @@ describe("Stream manipulation", function () {
       // Modified blockN MAC
       const bNMac = new Uint8Array(encryptedData);
       bNMac.set([255], block1MACOffset);
-      blob = new Blob([bNMac], {type:'application/octet-stream'});
+      blob = new Blob([bNMac], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -669,8 +677,8 @@ describe("Stream manipulation", function () {
 
       // Modified blockN version
       const bNVer = new Uint8Array(encryptedData);
-      bNVer.set([4,1], block1VerOffset);
-      blob = new Blob([bNVer], {type:'application/octet-stream'});
+      bNVer.set([4, 1], block1VerOffset);
+      blob = new Blob([bNVer], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -685,7 +693,7 @@ describe("Stream manipulation", function () {
       // Test modified blockN size, too small valid
       let bNSize = new Uint8Array(encryptedData);
       bNSize.set([20, 1], block1SizeOffset);
-      blob = new Blob([bNSize], {type:'application/octet-stream'});
+      blob = new Blob([bNSize], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -700,7 +708,7 @@ describe("Stream manipulation", function () {
       // Too small blockN size, too small invalid
       bNSize = new Uint8Array(encryptedData);
       bNSize.set([0, 0], block1SizeOffset);
-      blob = new Blob([bNSize], {type:'application/octet-stream'});
+      blob = new Blob([bNSize], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -714,8 +722,8 @@ describe("Stream manipulation", function () {
 
       // Test too big blockN size, invalid
       bNSize = new Uint8Array(encryptedData);
-      bNSize.set([255,255,255,255], block1SizeOffset);
-      blob = new Blob([bNSize], {type:'application/octet-stream'});
+      bNSize.set([255, 255, 255, 255], block1SizeOffset);
+      blob = new Blob([bNSize], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -729,8 +737,8 @@ describe("Stream manipulation", function () {
 
       // Test too big blockN but valid
       bNSize = new Uint8Array(encryptedData);
-      bNSize.set([255,255,255,0], block1SizeOffset);
-      blob = new Blob([bNSize], {type:'application/octet-stream'});
+      bNSize.set([255, 255, 255, 0], block1SizeOffset);
+      blob = new Blob([bNSize], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -747,11 +755,11 @@ describe("Stream manipulation", function () {
    it("detect manipulated cipher stream additional data", async function () {
 
       // First make sure it decrypts as expected
-      let blob = new Blob([encryptedData], {type:'application/octet-stream'});
+      let blob = new Blob([encryptedData], { type: 'application/octet-stream' });
       let dec = cipherSvc.decryptStream(
-            async (decHint) => { expect(decHint).toBe('4321'); return 'asdf'; },
-            userCred,
-            blob.stream(),
+         async (decHint) => { expect(decHint).toBe('4321'); return 'asdf'; },
+         userCred,
+         blob.stream(),
       );
       let reader = dec.getReader();
 
@@ -765,7 +773,7 @@ describe("Stream manipulation", function () {
       // Modified block0 invalid ALG
       let b0Alg = new Uint8Array(encryptedData);
       b0Alg.set([128], block0AlgOffset);
-      blob = new Blob([b0Alg], {type:'application/octet-stream'});
+      blob = new Blob([b0Alg], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -780,7 +788,7 @@ describe("Stream manipulation", function () {
       // Modified block0 valid but changed ALG
       b0Alg = new Uint8Array(encryptedData);
       b0Alg.set([1], block0AlgOffset);
-      blob = new Blob([b0Alg], {type:'application/octet-stream'});
+      blob = new Blob([b0Alg], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -795,7 +803,7 @@ describe("Stream manipulation", function () {
       // Modified block0 IV
       const b0OIV = new Uint8Array(encryptedData);
       b0OIV.set([0], block0IVOffset);
-      blob = new Blob([b0OIV], {type:'application/octet-stream'});
+      blob = new Blob([b0OIV], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -810,7 +818,7 @@ describe("Stream manipulation", function () {
       // Modified block0 Salt
       const b0Slt = new Uint8Array(encryptedData);
       b0Slt.set([1], block0SltOffset);
-      blob = new Blob([b0Slt], {type:'application/octet-stream'});
+      blob = new Blob([b0Slt], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -824,8 +832,8 @@ describe("Stream manipulation", function () {
 
       // Modified block0 invalid IC
       let b0IC = new Uint8Array(encryptedData);
-      b0IC.set([0,0,0,0], block0ICOffset);
-      blob = new Blob([b0IC], {type:'application/octet-stream'});
+      b0IC.set([0, 0, 0, 0], block0ICOffset);
+      blob = new Blob([b0IC], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -839,8 +847,8 @@ describe("Stream manipulation", function () {
 
       // Modified block0 valid but changed IC
       b0IC = new Uint8Array(encryptedData);
-      b0IC.set([64,119,21,1], block0ICOffset);
-      blob = new Blob([b0IC], {type:'application/octet-stream'});
+      b0IC.set([64, 119, 21, 1], block0ICOffset);
+      blob = new Blob([b0IC], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -855,7 +863,7 @@ describe("Stream manipulation", function () {
       // Modified block0 hint length
       let b0HintLen = new Uint8Array(encryptedData);
       b0HintLen.set([12], block0HintLenOffset);
-      blob = new Blob([b0HintLen], {type:'application/octet-stream'});
+      blob = new Blob([b0HintLen], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -870,7 +878,7 @@ describe("Stream manipulation", function () {
       // Modified block0 hint
       let b0Hint = new Uint8Array(encryptedData);
       b0Hint.set([12], block0HintOffset);
-      blob = new Blob([b0Hint], {type:'application/octet-stream'});
+      blob = new Blob([b0Hint], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -885,7 +893,7 @@ describe("Stream manipulation", function () {
       // Modified blockN invalid ALG
       let bNAlg = new Uint8Array(encryptedData);
       bNAlg.set([128], block1AlgOffset);
-      blob = new Blob([bNAlg], {type:'application/octet-stream'});
+      blob = new Blob([bNAlg], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -900,7 +908,7 @@ describe("Stream manipulation", function () {
       // Modified blockN valid but changed ALG
       bNAlg = new Uint8Array(encryptedData);
       bNAlg.set([1], block1AlgOffset);
-      blob = new Blob([bNAlg], {type:'application/octet-stream'});
+      blob = new Blob([bNAlg], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -915,7 +923,7 @@ describe("Stream manipulation", function () {
       // Modified blockN IV
       const bNOIV = new Uint8Array(encryptedData);
       bNOIV.set([0], block1IVOffset);
-      blob = new Blob([bNOIV], {type:'application/octet-stream'});
+      blob = new Blob([bNOIV], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -933,7 +941,7 @@ describe("Stream manipulation", function () {
    it("detect manipulated cipher stream encrypted data", async function () {
 
       // First make sure it decrypts as expected
-      let blob = new Blob([encryptedData], {type:'application/octet-stream'});
+      let blob = new Blob([encryptedData], { type: 'application/octet-stream' });
       let dec = cipherSvc.decryptStream(
          async (decHint) => { expect(decHint).toBe('4321'); return 'asdf'; },
          userCred,
@@ -951,7 +959,7 @@ describe("Stream manipulation", function () {
       // Modified block0 encrypted data
       let b0Enc = new Uint8Array(encryptedData);
       b0Enc.set([0], block0EncOffset);
-      blob = new Blob([b0Enc], {type:'application/octet-stream'});
+      blob = new Blob([b0Enc], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -966,7 +974,7 @@ describe("Stream manipulation", function () {
       // Modified blockN encrypted data
       let bNEnc = new Uint8Array(encryptedData);
       bNEnc.set([128], block1EncOffset);
-      blob = new Blob([bNEnc], {type:'application/octet-stream'});
+      blob = new Blob([bNEnc], { type: 'application/octet-stream' });
       dec = cipherSvc.decryptStream(
          async (decHint) => { return 'asdf' },
          userCred,
@@ -1064,7 +1072,7 @@ describe("Stream encryption and decryption", function () {
                expect(params.ic).toBe(cc.ICOUNT_MIN);
             }
          );
-//         console.log(alg + ": " + cipherText.length + ": " + cipherText);
+         //         console.log(alg + ": " + cipherText.length + ": " + cipherText);
 
          const decryptedStream = cipherSvc.decryptStream(
             async (decHint) => {
@@ -1107,7 +1115,7 @@ describe("Stream encryption and decryption", function () {
          const clearCheck = 'nord farm bolt correct bee nonchalant flap high able pinch left quaint angle 2055 exultant disgusted curved bless geese snatch zoom fat touch boot abject wink pretty accessible foamy';
          const hintCheck = 'roylalty';
          const pwd = 'lkf3h20osdfid';
-         const blob = new Blob([ctBytes], {type:'application/octet-stream'});
+         const blob = new Blob([ctBytes], { type: 'application/octet-stream' });
 
          const decryptedStream = await cipherSvc.decryptStream(
             async (hint) => {
@@ -1120,9 +1128,9 @@ describe("Stream encryption and decryption", function () {
 
          // use byod mode to also test stream byod support
          const reader = decryptedStream.getReader({ mode: "byob" });
-         let decrypted = new Uint8Array(new TextEncoder().encode(clearCheck).byteLength);
+         let buffer = new ArrayBuffer(new TextEncoder().encode(clearCheck).byteLength);
 
-         [decrypted] = await readStreamBYODFill(reader, decrypted);
+         const [decrypted] = await readStreamBYODFill(reader, buffer);
          const clearText = new TextDecoder().decode(decrypted);
          expect(clearText).toBe(clearCheck);
       }

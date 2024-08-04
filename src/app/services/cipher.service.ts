@@ -33,10 +33,8 @@ export { EParams, CipherDataInfo };
 
 // Simple perf testing with Chrome 126 on MacOS result in
 // readStreamBYODUntil with READ_SIZE_MAX of 4x to be the fastest
-const READ_SIZE_START = 1048576/1024/4; // 1 MiB
-const READ_SIZE_MAX = READ_SIZE_START * 41
-//const READ_SIZE_START = 1048576; // 1 MiB
-//const READ_SIZE_MAX = READ_SIZE_START * 4;
+const READ_SIZE_START = 1048576; // 1 MiB
+const READ_SIZE_MAX = READ_SIZE_START * 4;
 
 @Injectable({
    providedIn: 'root'
@@ -135,10 +133,8 @@ export class CipherService {
             //            console.log(`start(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
 
             try {
-               let done = false;
-               let clearBuffer = new Uint8Array(readTarget);
-
-               [clearBuffer, done] = await readStreamBYODUntil(reader, clearBuffer);
+               const buffer = new ArrayBuffer(readTarget);
+               const [clearBuffer, done] = await readStreamBYODUntil(reader, buffer);
                //               console.log('start(): readTarget, readBytes', readTarget, clearBuffer.byteLength);
 
                if (clearBuffer.byteLength) {
@@ -177,10 +173,8 @@ export class CipherService {
             readTarget = Math.min(readTarget * 2, READ_SIZE_MAX);
 
             try {
-               let done = false;
-               let clearBuffer = new Uint8Array(readTarget);
-
-               [clearBuffer, done] = await readStreamBYODUntil(reader, clearBuffer);
+               const buffer = new ArrayBuffer(readTarget);
+               const [clearBuffer, done] = await readStreamBYODUntil(reader, buffer);
                //               console.log('pull(): readTarget, readBytes', readTarget, clearBuffer.byteLength);
 
                if (clearBuffer.byteLength) {
@@ -221,15 +215,15 @@ export class CipherService {
    ): Promise<CipherDataInfo> {
 
       const reader = cipherStream.getReader({ mode: "byob" });
-      let headerData = new Uint8Array(cc.HEADER_BYTES);
-      [headerData] = await readStreamBYODFill(reader, headerData);
+      let buffer = new ArrayBuffer(cc.HEADER_BYTES);
+      const [headerData] = await readStreamBYODFill(reader, buffer);
       //      console.log('info(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
 
       const ciphers = Ciphers.fromHeader(headerData);
       ciphers.decodeHeader(headerData);
 
-      let payloadData = new Uint8Array(ciphers.payloadSize);
-      [payloadData] = await readStreamBYODFill(reader, payloadData);
+      buffer = new ArrayBuffer(ciphers.payloadSize);
+      const [payloadData] = await readStreamBYODFill(reader, buffer);
       //      console.log('info(): payloadSize, payloadData', ciphers.payloadSize, payloadData);
 
       return ciphers.getCipherDataInfo(
@@ -292,16 +286,16 @@ export class CipherService {
             //            console.log(`start(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
 
             try {
-               let headerData = new Uint8Array(cc.HEADER_BYTES);
-               [headerData] = await readStreamBYODFill(reader, headerData);
+               let buffer = new ArrayBuffer(cc.HEADER_BYTES);
+               const [headerData] = await readStreamBYODFill(reader, buffer);
                //               console.log('start(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
 
                // If we don't get enough data, let Ciphers throw and error
                ciphers = Ciphers.fromHeader(headerData);
                ciphers.decodeHeader(headerData);
 
-               let payloadData = new Uint8Array(ciphers.payloadSize);
-               [payloadData] = await readStreamBYODFill(reader, payloadData);
+               buffer = new ArrayBuffer(ciphers.payloadSize);
+               const [payloadData] = await readStreamBYODFill(reader, buffer);
                if (payloadData.byteLength != ciphers.payloadSize) {
                   throw new Error('Invalid payload size: ' + ciphers.payloadSize);
                }
@@ -329,16 +323,15 @@ export class CipherService {
             //            console.log(`pull(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
 
             try {
-               let done = false;
-               let headerData = new Uint8Array(cc.HEADER_BYTES);
-               [headerData, done] = await readStreamBYODFill(reader, headerData);
+               let buffer = new ArrayBuffer(cc.HEADER_BYTES);
+               const [headerData] = await readStreamBYODFill(reader, buffer);
                //               console.log('pull(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
 
                if (headerData.byteLength) {
                   ciphers.decodeHeader(headerData);
 
-                  let payloadData = new Uint8Array(ciphers.payloadSize);
-                  [payloadData] = await readStreamBYODFill(reader, payloadData);
+                  buffer = new ArrayBuffer(ciphers.payloadSize);
+                  const [payloadData] = await readStreamBYODFill(reader, buffer);
                   if (payloadData.byteLength != ciphers.payloadSize) {
                      throw new Error('Invalid payload size: ' + ciphers.payloadSize);
                   }
