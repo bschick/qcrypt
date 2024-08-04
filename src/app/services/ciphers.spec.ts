@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
 import * as cc from './cipher.consts';
-import { readStreamBYODAll, readStreamBYODUntil, Random48, base64ToBytes, bytesToBase64 } from './utils';
+import { Random48, bytesToBase64 } from './utils';
 import { Ciphers, EParams, CipherDataBlock } from './ciphers';
 
 
@@ -216,9 +216,6 @@ describe("Encryption and decryption", function () {
          // and pack with Bob's userCred
          const blockA = await signAndRepack(ciphers, userCredA, cipherDataA);
          const blockB = await signAndRepack(ciphers, userCredB, cipherDataA);
-
-         console.log(bytesToBase64(blockA));
-         console.log(bytesToBase64(blockB));
 
          const ciphersA = Ciphers.fromHeader(blockA);
          let consumedBytes = ciphersA.decodeHeader(blockA);

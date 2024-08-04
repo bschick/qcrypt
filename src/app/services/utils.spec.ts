@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import {  Random48, numToBytes, bytesToNum, readStreamBYODAll, readStreamBYODUntil, base64ToBytes, bytesToBase64 } from './utils';
+import {  Random48, numToBytes, bytesToNum, readStreamBYODFill, readStreamBYODUntil, base64ToBytes, bytesToBase64 } from './utils';
 
 function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
    if (a.length != b.length) {
@@ -164,7 +164,7 @@ describe("Stream reading", function () {
       let stream1k = blob1k.stream();
       let reader1k = stream1k.getReader({mode:'byob'});
 
-      [buffer1k] = await readStreamBYODAll(reader1k, buffer1k);
+      [buffer1k] = await readStreamBYODFill(reader1k, buffer1k);
       reader1k.releaseLock();
       expect(buffer1k.byteLength).toBe(blob1k.size);
       expect(isEqualArray(
@@ -192,7 +192,7 @@ describe("Stream reading", function () {
       let stream4m = blob4m.stream();
       let reader4m = stream4m.getReader({mode:'byob'});
 
-      [buffer4m] = await readStreamBYODAll(reader4m, buffer4m);
+      [buffer4m] = await readStreamBYODFill(reader4m, buffer4m);
       reader4m.releaseLock();
       expect(buffer4m.byteLength).toBe(blob4m.size);
       expect(isEqualArray(
@@ -220,7 +220,7 @@ describe("Stream reading", function () {
       let stream3m = blob3m.stream();
       let reader3m = stream3m.getReader({mode:'byob'});
 
-      [buffer1m] = await readStreamBYODAll(reader3m, buffer1m);
+      [buffer1m] = await readStreamBYODFill(reader3m, buffer1m);
       reader3m.releaseLock();
       expect(buffer1m.byteLength).toBe(1024*1024);
       expect(isEqualArray(
@@ -248,7 +248,7 @@ describe("Stream reading", function () {
       let stream3m = blob3m.stream();
       let reader3m = stream3m.getReader({mode:'byob'});
 
-      [buffer4m] = await readStreamBYODAll(reader3m, buffer4m);
+      [buffer4m] = await readStreamBYODFill(reader3m, buffer4m);
       reader3m.releaseLock();
       expect(buffer4m.byteLength).toBe(blob3m.size);
       expect(isEqualArray(

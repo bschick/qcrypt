@@ -342,20 +342,20 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       // encrpt or decrypt from a previous instance (tab that has not fully closed).
       // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
       this.cipherSvc.benchmark(this.icountMin, TARGET_HASH_MILLIS, MAX_HASH_MILLIS)
-      .then(([icount, icountMax, hashRate]) => {
-         this.icount = icount;
-         this.icountDefault = this.icount;
-         this.icountMax = icountMax;
+         .then(([icount, icountMax, hashRate]) => {
+            this.icount = icount;
+            this.icountDefault = this.icount;
+            this.icountMax = icountMax;
 
-         // progress spinner about 1.25 secs of estimated delay
-         const target_spinner_millis = 1250;
-         this.spinnerAbove = Math.round(target_spinner_millis * hashRate)
-      }).finally(() => {
-         // load after benchmakr to overwrite icount with saved value
-         if (this.authSvc.isAuthenticated()) {
-            this.loadOptions();
-         }
-      });
+            // progress spinner about 1.25 secs of estimated delay
+            const target_spinner_millis = 1250;
+            this.spinnerAbove = Math.round(target_spinner_millis * hashRate)
+         }).finally(() => {
+            // load after benchmakr to overwrite icount with saved value
+            if (this.authSvc.isAuthenticated()) {
+               this.loadOptions();
+            }
+         });
 
       // subscribe to auth events
       this.authSub = this.authSvc.on(
@@ -740,23 +740,23 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    async getNewFileHandle(file?: File): Promise<File> {
 
       const base = file ? file.name : '';
-//      let fileHandle: FileSystemFileHandle;
+      //      let fileHandle: FileSystemFileHandle;
 
       const options = {
          id: 'quickcrypt_org',
-//         startIn: file,
-//         multiple: false,
+         //         startIn: file,
+         //         multiple: false,
          suggestedName: `${base}.qq`,
          types: [{
-           description: 'Encrypted files',
-           accept: {
-             'application/octet-stream': ['.qq'],
-           }
+            description: 'Encrypted files',
+            accept: {
+               'application/octet-stream': ['.qq'],
+            }
          }]
       };
       //@ts-ignore
       return await window.showSaveFilePicker(options);
-    }
+   }
 
    // Return value is false if the process was aborted
    async makeCipherArmor(econtext: EncContext): Promise<boolean> {
@@ -772,7 +772,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          }
 
          let encrypted: string;
-         if(this.clearFile) {
+         if (this.clearFile) {
             const saveFile = await this.getNewFileHandle(this.clearFile);
 
             encrypted = 'in the file'
@@ -785,13 +785,13 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             const writeable = await saveFile.createWritable();
 
             await encryptedStream.pipeTo(writeable);
-//            await writeable.write(encrypted);
-//            await writeable.close();
+            //            await writeable.write(encrypted);
+            //            await writeable.close();
 
             this.clearFile = undefined;
          } else {
             encrypted = await this.cipherSvc.encryptString(
-               eparams,  this.clearText, this.cipherReadyNotice.bind(this)
+               eparams, this.clearText, this.cipherReadyNotice.bind(this)
             );
          }
 
@@ -831,48 +831,49 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
 
       this.authSvc.activity();
-
-      if(this.cipherFile) {
-         const saveFile = await this.getNewFileHandle(this.cipherFile);
-
-         const ctx: Context = {
-            lpEnd: 1,
-            lp: 0,
-            userCred: base64ToBytes(this.authSvc.userCred!)
-         }
-         //@ts-ignore
-         const writeable = await saveFile.createWritable();
-
-         const decryptedStream = this.cipherSvc.decryptStream(
-            async (hint) => {
-               const [pwd, _] = await this.getPassword(-1, hint, ctx);
-               return pwd;
-            },
-            ctx.userCred,
-            this.cipherFile.stream(),
-            this.cipherReadyNotice.bind(this)
-         );
-
-         await decryptedStream.pipeTo(writeable);
-         this.cipherFile = undefined;
-         this.clearText = "in file";
-
-      } else {
       const savedCipherArmor = this.cipherArmor;
+
       try {
-         const dcontext = this.getDecContextFrom(this.cipherArmor);
-         if (dcontext.lpEnd! > 1) {
-            // it's confusing to use cached password when looping so
-            // start from scratch
-            this.clearPassword();
-         }
 
-         // This updates Cipher Armor UI field
-         const completed = await this.makeClearText(dcontext);
-         if (completed) {
-            this.toastMessage('Data decrypted');
-         }
+         if (this.cipherFile) {
+            const saveFile = await this.getNewFileHandle(this.cipherFile);
 
+            const ctx: Context = {
+               lpEnd: 1,
+               lp: 0,
+               userCred: base64ToBytes(this.authSvc.userCred!)
+            }
+            //@ts-ignore
+            const writeable = await saveFile.createWritable();
+
+            const decryptedStream = this.cipherSvc.decryptStream(
+               async (hint) => {
+                  const [pwd, _] = await this.getPassword(-1, hint, ctx);
+                  return pwd;
+               },
+               ctx.userCred,
+               this.cipherFile.stream(),
+               this.cipherReadyNotice.bind(this)
+            );
+
+            await decryptedStream.pipeTo(writeable);
+            this.cipherFile = undefined;
+            this.clearText = "in file";
+
+         } else {
+            const dcontext = this.getDecContextFrom(this.cipherArmor);
+            if (dcontext.lpEnd! > 1) {
+               // it's confusing to use cached password when looping so
+               // start from scratch
+               this.clearPassword();
+            }
+
+            // This updates Cipher Armor UI field
+            const completed = await this.makeClearText(dcontext);
+            if (completed) {
+               this.toastMessage('Data decrypted');
+            }
+         }
       } catch (something) {
          console.error(something);
          if (something instanceof Error) {
@@ -885,7 +886,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          // In case > 1 loops, tbere is intermediate stuff in cipherArmor
          this.cipherArmor = savedCipherArmor;
       }
-   }
    }
 
    async makeClearText(dcontext: DecContext): Promise<boolean> {
@@ -1188,14 +1188,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       });
 
       this.clearFile = await fileHandle.getFile();
-//      this.clearStream = await file.stream();
-//      this.errorClear = false;
+      //      this.clearStream = await file.stream();
+      //      this.errorClear = false;
       //      const
 
-/*      const data =  crypto.getRandomValues(new Uint8Array(48));
-      const blob = new Blob([data],{type:'application/octet-stream'} );
-      this.startDownload(blob);
-*/
+      /*      const data =  crypto.getRandomValues(new Uint8Array(48));
+            const blob = new Blob([data],{type:'application/octet-stream'} );
+            this.startDownload(blob);
+      */
 
       /*      this.fileUpload.nativeElement.onchange = (event: any) => {
                this.onFileUpload(event, (val) => {
@@ -1217,7 +1217,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       // You can optionally set other attributes like `title`, etc
       // Especially, if the anchor element will be attached to the DOM
       a.href = url;
-//      a.download = 'thefile.dat';
+      //      a.download = 'thefile.dat';
 
       // Click handler that releases the object URL after the element has been clicked
       // This is required for one-off downloads of the blob content
