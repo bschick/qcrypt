@@ -317,7 +317,7 @@ export abstract class Ciphers {
       key: CryptoKey,
       iv: Uint8Array,
       clear: Uint8Array,
-      additionalData: Uint8Array = new Uint8Array(0),
+      additionalData?: Uint8Array,
    ): Promise<Uint8Array> {
 
 //      console.log('doencrpt clear:' + clear.byteLength);
@@ -336,7 +336,7 @@ export abstract class Ciphers {
          try {
             encryptedBytes = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
                clear,
-               additionalData,
+               additionalData ?? null,
                null,
                iv,
                keyBytes,
@@ -355,7 +355,7 @@ export abstract class Ciphers {
          try {
             encryptedBytes = sodium.crypto_aead_aegis256_encrypt(
                clear,
-               additionalData,
+               additionalData ?? null,
                null,
                iv,
                keyBytes,
@@ -370,7 +370,7 @@ export abstract class Ciphers {
          const cipherBuf = await crypto.subtle.encrypt({
             name: alg,
             iv: iv,
-            additionalData: additionalData,
+            additionalData: additionalData ?? new ArrayBuffer(0),
             tagLength: cc.AES_GCM_TAG_BYTES * 8
          },
             key,
@@ -486,7 +486,7 @@ export abstract class Ciphers {
       key: CryptoKey,
       iv: Uint8Array,
       encrypted: Uint8Array,
-      additionalData: Uint8Array = new Uint8Array(0),
+      additionalData?: Uint8Array,
    ): Promise<Uint8Array> {
 
       let decrypted: Uint8Array;
@@ -504,7 +504,7 @@ export abstract class Ciphers {
             decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
                null,
                encrypted,
-               additionalData,
+               additionalData ?? null,
                iv,
                keyBytes,
                "uint8array"
@@ -523,7 +523,7 @@ export abstract class Ciphers {
             decrypted = sodium.crypto_aead_aegis256_decrypt(
                null,
                encrypted,
-               additionalData,
+               additionalData ?? null,
                iv,
                keyBytes,
                "uint8array"
@@ -537,7 +537,7 @@ export abstract class Ciphers {
          const buffer = await crypto.subtle.decrypt({
             name: alg,
             iv: iv.slice(0, 12),
-            additionalData: additionalData,
+            additionalData: additionalData ?? new ArrayBuffer(0),
             tagLength: cc.AES_GCM_TAG_BYTES * 8
          },
             key,

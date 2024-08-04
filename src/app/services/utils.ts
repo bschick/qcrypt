@@ -36,97 +36,71 @@ export function base64ToBytes(b64: string): Uint8Array {
    return new Uint8Array(base64URLStringToBuffer(b64));
 }
 
-
-// Sadly, there doesn't seem to be a way to force ReadableStreamBYOBReader.read
-// to write into the provided buffer. To support zero copy it sometime returns
-// internal buffer. That means we have to return the data buffer and its size.
-// Returns empty Uint8Array rather than null or undefined (make helps below cleaner)
-export async function readStreamBYOB(
-   reader: ReadableStreamBYOBReader,
-   output: Uint8Array
-): Promise<[Uint8Array, boolean]> {
-
-//   console.log('readStreamBYOB reading:', output.byteLength);
-   let { done, value } = await reader.read(output);
-//   console.log('readStreamBYOB read:', value?.byteLength, done);
-   value = value ?? new Uint8Array(0);
-   return [value, done];
-}
-
-
-// Use when the reader cannot accept less then the size of output (or stream done)
 export async function readStreamBYODFill(
    reader: ReadableStreamBYOBReader,
-   output: Uint8Array
+   buffer: ArrayBuffer
 ): Promise<[data: Uint8Array, done: boolean]> {
 
-   const targetBytes = output.byteLength;
+   const targetBytes = buffer.byteLength;
    let readBytes = 0;
-   const blocks: Uint8Array[] = [];
    let streamDone = false;
-//   console.log('readStreamFill-' + targetBytes + ' start');
+//   console.log('readStreamUntil-' + targetBytes + ' start');
 
    while (readBytes < targetBytes) {
-      const [data, done] = await readStreamBYOB(reader, output);
-//      console.log('readStreamFill-' + targetBytes, ' read', data.byteLength, done);
-      blocks.push(data);
+      let { done, value } = await reader.read(
+         new Uint8Array(buffer, readBytes, targetBytes - readBytes)
+      );
+
+//      console.log('readStreamUntil-' + targetBytes, ' read', data.byteLength, done);
+      if(!value) {
+         break
+      }
+
       streamDone = done;
-      readBytes += data.byteLength;
+      readBytes += value.byteLength;
+      buffer = value.buffer;
 
       if (done) {
          break;
       }
-      if (readBytes < targetBytes) {
-         output = new Uint8Array(targetBytes - readBytes);
-      }
    }
 
-   const result = coalesceBlocks(blocks, readBytes);
-//   console.log('readStreamFill-' + targetBytes + ' exit returnedBytes, done:',
-//      result.byteLength,
-//      streamDone
-//   );
-
-   return [result, streamDone];
+   return [new Uint8Array(buffer, 0, readBytes), streamDone];
 }
 
 
 // Use when the reader cannot accept less then the size of output (or stream done)
 export async function readStreamBYODUntil(
    reader: ReadableStreamBYOBReader,
-   output: Uint8Array
+   buffer: ArrayBuffer
 ): Promise<[data: Uint8Array, done: boolean]> {
 
-   const targetBytes = output.byteLength;
+   const targetBytes = buffer.byteLength;
    let readBytes = 0;
-   const blocks: Uint8Array[] = [];
    let streamDone = false;
 //   console.log('readStreamUntil-' + targetBytes + ' start');
 
    while (readBytes < targetBytes) {
-      const [data, done] = await readStreamBYOB(reader, output);
-//      console.log('readStreamUntil-' + targetBytes, ' read', data.byteLength, done);
-      blocks.push(data);
-      streamDone = done;
-      readBytes += data.byteLength;
+      let { done, value } = await reader.read(
+         new Uint8Array(buffer, readBytes, targetBytes - readBytes)
+      );
 
-      if (!data.byteLength || done) {
-         break;
+//      console.log('readStreamUntil-' + targetBytes, ' read', data.byteLength, done);
+      if(!value) {
+         break
       }
-      if (readBytes < targetBytes) {
-         output = new Uint8Array(targetBytes - readBytes);
+
+      streamDone = done;
+      readBytes += value.byteLength;
+      buffer = value.buffer;
+
+      if (!value.byteLength || done) {
+         break;
       }
    }
 
-   const result = coalesceBlocks(blocks, readBytes);
-//   console.log('readStreamUntil-' + targetBytes + ' exit returnedBytes, done:',
-//      result.byteLength,
-//      streamDone
-//   );
-
-   return [result, streamDone];
+   return [new Uint8Array(buffer, 0, readBytes), streamDone];
 }
-
 
 // Use when the reader cannot accept less then the size of output (or stream done)
 export async function readStreamAll(
@@ -161,7 +135,6 @@ export async function readStreamAll(
    return [result, streamDone];
 }
 
-
 function coalesceBlocks(
    blocks: Uint8Array[],
    byteLen: number
@@ -181,6 +154,98 @@ function coalesceBlocks(
    }
 
    return result;
+}
+
+
+
+// Sadly, there doesn't seem to be a way to force ReadableStreamBYOBReader.read
+// to write into the provided buffer. To support zero copy it sometime returns
+// internal buffer. That means we have to return the data buffer and its size.
+// Returns empty Uint8Array rather than null or undefined (make helps below cleaner)
+export async function readStreamBYOBOLD(
+   reader: ReadableStreamBYOBReader,
+   output: Uint8Array
+): Promise<[Uint8Array, boolean]> {
+
+//   console.log('readStreamBYOB reading:', output.byteLength);
+   let { done, value } = await reader.read(output);
+//   console.log('readStreamBYOB read:', value?.byteLength, done);
+   value = value ?? new Uint8Array(0);
+   return [value, done];
+}
+
+
+// Use when the reader cannot accept less then the size of output (or stream done)
+export async function readStreamBYODFillOLD(
+   reader: ReadableStreamBYOBReader,
+   output: Uint8Array
+): Promise<[data: Uint8Array, done: boolean]> {
+
+   const targetBytes = output.byteLength;
+   let readBytes = 0;
+   const blocks: Uint8Array[] = [];
+   let streamDone = false;
+//   console.log('readStreamFill-' + targetBytes + ' start');
+
+   while (readBytes < targetBytes) {
+      const [data, done] = await readStreamBYOBOLD(reader, output);
+//      console.log('readStreamFill-' + targetBytes, ' read', data.byteLength, done);
+      blocks.push(data);
+      streamDone = done;
+      readBytes += data.byteLength;
+
+      if (done) {
+         break;
+      }
+      if (readBytes < targetBytes) {
+         output = new Uint8Array(targetBytes - readBytes);
+      }
+   }
+
+   const result = coalesceBlocks(blocks, readBytes);
+//   console.log('readStreamFill-' + targetBytes + ' exit returnedBytes, done:',
+//      result.byteLength,
+//      streamDone
+//   );
+
+   return [result, streamDone];
+}
+
+
+// Use when the reader cannot accept less then the size of output (or stream done)
+export async function readStreamBYODUntilOLD(
+   reader: ReadableStreamBYOBReader,
+   output: Uint8Array
+): Promise<[data: Uint8Array, done: boolean]> {
+
+   const targetBytes = output.byteLength;
+   let readBytes = 0;
+   const blocks: Uint8Array[] = [];
+   let streamDone = false;
+//   console.log('readStreamUntil-' + targetBytes + ' start');
+
+   while (readBytes < targetBytes) {
+      const [data, done] = await readStreamBYOBOLD(reader, output);
+//      console.log('readStreamUntil-' + targetBytes, ' read', data.byteLength, done);
+      blocks.push(data);
+      streamDone = done;
+      readBytes += data.byteLength;
+
+      if (!data.byteLength || done) {
+         break;
+      }
+      if (readBytes < targetBytes) {
+         output = new Uint8Array(targetBytes - readBytes);
+      }
+   }
+
+   const result = coalesceBlocks(blocks, readBytes);
+//   console.log('readStreamUntil-' + targetBytes + ' exit returnedBytes, done:',
+//      result.byteLength,
+//      streamDone
+//   );
+
+   return [result, streamDone];
 }
 
 

@@ -19,7 +19,15 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import {  Random48, numToBytes, bytesToNum, readStreamBYODFill, readStreamBYODUntil, base64ToBytes, bytesToBase64 } from './utils';
+import {
+   Random48,
+   numToBytes,
+   bytesToNum,
+   readStreamBYODFill,
+   readStreamBYODUntil,
+   base64ToBytes,
+   bytesToBase64
+} from './utils';
 
 function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
    if (a.length != b.length) {
@@ -39,10 +47,10 @@ function randomBlob(byteLength: number): Blob {
    const count = Math.ceil(byteLength / 512);
 
    let arr = new Array<Uint8Array>;
-   for(let i = 0; i < count; ++i) {
+   for (let i = 0; i < count; ++i) {
       arr.push(randData);
    }
-   return new Blob(arr, {type:'application/octet-stream'});
+   return new Blob(arr, { type: 'application/octet-stream' });
 }
 
 
@@ -159,113 +167,117 @@ describe("Number byte packing", function () {
 describe("Stream reading", function () {
    it("buffer matches", async function () {
       let blob1k = randomBlob(1024);
-      let buffer1k = new Uint8Array(blob1k.size);
+      let buffer1k = new ArrayBuffer(blob1k.size);
 
       let stream1k = blob1k.stream();
-      let reader1k = stream1k.getReader({mode:'byob'});
+      let reader1k = stream1k.getReader({ mode: 'byob' });
 
-      [buffer1k] = await readStreamBYODFill(reader1k, buffer1k);
+      let [readData] = await readStreamBYODFill(reader1k, buffer1k);
       reader1k.releaseLock();
-      expect(buffer1k.byteLength).toBe(blob1k.size);
+      expect(readData.byteLength).toBe(blob1k.size);
       expect(isEqualArray(
          new Uint8Array(await blob1k.arrayBuffer()),
-         buffer1k
+         readData
       )).toBeTrue();
 
       blob1k = randomBlob(1024);
+      buffer1k = new ArrayBuffer(blob1k.size);
       stream1k = blob1k.stream();
-      reader1k = stream1k.getReader({mode:'byob'});
+      reader1k = stream1k.getReader({ mode: 'byob' });
 
       // May not read entire stream
-      [buffer1k] = await readStreamBYODUntil(reader1k, buffer1k);
+      [readData] = await readStreamBYODUntil(reader1k, buffer1k);
       reader1k.releaseLock();
       expect(isEqualArray(
-         new Uint8Array(await blob1k.arrayBuffer(), 0, buffer1k.byteLength),
-         buffer1k
+         new Uint8Array(await blob1k.arrayBuffer(), 0, readData.byteLength),
+         readData
       )).toBeTrue();
    });
 
    it("larger stream", async function () {
-      let blob4m = randomBlob(1024*1024*4);
-      let buffer4m = new Uint8Array(blob4m.size);
+      let blob4m = randomBlob(1024 * 1024 * 4);
+      let buffer4m = new ArrayBuffer(blob4m.size);
 
       let stream4m = blob4m.stream();
-      let reader4m = stream4m.getReader({mode:'byob'});
+      let reader4m = stream4m.getReader({ mode: 'byob' });
 
-      [buffer4m] = await readStreamBYODFill(reader4m, buffer4m);
+      let [readData] = await readStreamBYODFill(reader4m, buffer4m);
       reader4m.releaseLock();
-      expect(buffer4m.byteLength).toBe(blob4m.size);
+      expect(readData.byteLength).toBe(blob4m.size);
       expect(isEqualArray(
          new Uint8Array(await blob4m.arrayBuffer()),
-         buffer4m
+         readData
       )).toBeTrue();
 
-      blob4m = randomBlob(1024*1024*4);
+      blob4m = randomBlob(1024 * 1024 * 4);
+      buffer4m = new ArrayBuffer(blob4m.size);
       stream4m = blob4m.stream();
-      reader4m = stream4m.getReader({mode:'byob'});
+      reader4m = stream4m.getReader({ mode: 'byob' });
 
       // May not read entire stream
-      [buffer4m] = await readStreamBYODUntil(reader4m, buffer4m);
+      [readData] = await readStreamBYODUntil(reader4m, buffer4m);
       reader4m.releaseLock();
       expect(isEqualArray(
-         new Uint8Array(await blob4m.arrayBuffer(), 0, buffer4m.byteLength),
-         buffer4m
+         new Uint8Array(await blob4m.arrayBuffer(), 0, readData.byteLength),
+         readData
       )).toBeTrue();
    });
 
    it("under read stream", async function () {
-      let blob3m = randomBlob(1024*1024*3);
-      let buffer1m = new Uint8Array(1024*1024);
+      let blob3m = randomBlob(1024 * 1024 * 3);
+      let buffer1m = new Uint8Array(1024 * 1024);
 
       let stream3m = blob3m.stream();
-      let reader3m = stream3m.getReader({mode:'byob'});
+      let reader3m = stream3m.getReader({ mode: 'byob' });
 
-      [buffer1m] = await readStreamBYODFill(reader3m, buffer1m);
+      let [readData] = await readStreamBYODFill(reader3m, buffer1m);
       reader3m.releaseLock();
-      expect(buffer1m.byteLength).toBe(1024*1024);
+      expect(readData.byteLength).toBe(1024 * 1024);
       expect(isEqualArray(
-         new Uint8Array(await blob3m.arrayBuffer(),0, buffer1m.byteLength),
-         buffer1m
+         new Uint8Array(await blob3m.arrayBuffer(), 0, readData.byteLength),
+         readData
       )).toBeTrue();
 
-      blob3m = randomBlob(1024*1024*3);
+      blob3m = randomBlob(1024 * 1024 * 3);
+      buffer1m = new Uint8Array(1024 * 1024);
       stream3m = blob3m.stream();
-      reader3m = stream3m.getReader({mode:'byob'});
+      reader3m = stream3m.getReader({ mode: 'byob' });
 
       // May not read entire stream
-      [buffer1m] = await readStreamBYODUntil(reader3m, buffer1m);
+      [readData] = await readStreamBYODUntil(reader3m, buffer1m);
       reader3m.releaseLock();
       expect(isEqualArray(
-         new Uint8Array(await blob3m.arrayBuffer(), 0, buffer1m.byteLength),
-         buffer1m
+         new Uint8Array(await blob3m.arrayBuffer(), 0, readData.byteLength),
+         readData
       )).toBeTrue();
    });
 
    it("over read stream", async function () {
-      let blob3m = randomBlob(1024*1024*3);
-      let buffer4m = new Uint8Array(1024*1024*4);
+      let blob3m = randomBlob(1024 * 1024 * 3);
+      let buffer4m = new Uint8Array(1024 * 1024 * 4);
 
       let stream3m = blob3m.stream();
-      let reader3m = stream3m.getReader({mode:'byob'});
+      let reader3m = stream3m.getReader({ mode: 'byob' });
 
-      [buffer4m] = await readStreamBYODFill(reader3m, buffer4m);
+      let [readData] = await readStreamBYODFill(reader3m, buffer4m);
       reader3m.releaseLock();
-      expect(buffer4m.byteLength).toBe(blob3m.size);
+      expect(readData.byteLength).toBe(blob3m.size);
       expect(isEqualArray(
          new Uint8Array(await blob3m.arrayBuffer()),
-         buffer4m
+         readData
       )).toBeTrue();
 
-      blob3m = randomBlob(1024*1024*3);
+      blob3m = randomBlob(1024 * 1024 * 3);
+      buffer4m = new Uint8Array(1024 * 1024 * 4);
       stream3m = blob3m.stream();
-      reader3m = stream3m.getReader({mode:'byob'});
+      reader3m = stream3m.getReader({ mode: 'byob' });
 
       // May not read entire stream
-      [buffer4m] = await readStreamBYODUntil(reader3m, buffer4m);
+      [readData] = await readStreamBYODUntil(reader3m, buffer4m);
       reader3m.releaseLock();
       expect(isEqualArray(
-         new Uint8Array(await blob3m.arrayBuffer(), 0, buffer4m.byteLength),
-         buffer4m
+         new Uint8Array(await blob3m.arrayBuffer(), 0, readData.byteLength),
+         readData
       )).toBeTrue();
    });
 });
