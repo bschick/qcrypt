@@ -56,7 +56,7 @@ import { ClipboardModule } from '@angular/cdk/clipboard';
 import { RouterLink } from '@angular/router';
 import * as cc from '../services/cipher.consts';
 import { CipherService, EParams, CipherDataInfo } from '../services/cipher.service';
-import { base64ToBytes } from '../services/utils';
+import { base64ToBytes, browserSupportsBytesStream, browserSupportsFilePickers, bytesToBase64, readStreamAll, selectWriteableFile, selectWriteableJsonFile, selectWriteableQQFile, selectWriteableTxtFile, selectCipherFile, selectClearFile } from '../services/utils';
 import { AuthenticatorService, AuthEvent, AuthEventData, INACTIVITY_TIMEOUT } from '../services/authenticator.service';
 import {
    PasswordDialog,
@@ -73,7 +73,7 @@ const MAX_HASH_MILLIS = 5 * 60 * 1000; //5 minutes
 type Context = {
    readonly lpEnd: number;
    lp: number;
-   userCred: Uint8Array;
+   //   userCred: Uint8Array;
 }
 
 type EncContext = Context & {
@@ -83,14 +83,15 @@ type EncContext = Context & {
    reminder: boolean;
    trueRand: boolean;
    fallbackRand: boolean;
+   clearData: Uint8Array;
 };
 
 type DecContext = Context & {
-   ct: string;
+   cipherData: Uint8Array;
 };
 
 function isDecContext(context: Context): context is DecContext {
-   return (context as DecContext).ct !== undefined;
+   return (context as DecContext).cipherData !== undefined;
 }
 
 // Set only if num is betwee min and max (inclusive) when min and max are not null
@@ -148,19 +149,21 @@ function setIfBoolean(
 })
 export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
-   private clearFile?: File;
-   private cipherFile?: File;
+   protected clearFile?: File;
+   protected cipherFile?: File;
+   protected readonly useByteStream = browserSupportsBytesStream();
+   protected readonly useFilePicker = browserSupportsFilePickers();
 
    private signinDialogRef?: MatDialogRef<SigninDialog, any>
    private optionsLoaded = false;
    private mouseDown = false;
-   private cachedPassword: string = '';
-   private cachedHint: string = '';
-   private intervalId: number = 0;
-   private spinnerAbove: number = 1500000; // Default since benchmark is async
-   private actionStart: number = 0;
+   private cachedPassword = '';
+   private cachedHint = '';
+   private intervalId = 0;
+   private spinnerAbove = 1500000; // Default since benchmark is async
+   private actionStart = 0;
    private authSub!: Subscription;
-   private lastReminder: boolean = true;
+   private lastReminder = true;
    public readonly INACTIVITY_TIMEOUT = INACTIVITY_TIMEOUT;
    public readonly LOOP_MAX = 10;
    public cacheTimeout!: DateTime;
@@ -174,8 +177,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    public clearLabel = 'Clear Text';
    public cipherArmor = '';
    public showProgress = false;
-   public errorCipher = false;
-   public errorClear = false;
+   public errorCipher = '';
+   public errorClear = '';
    public expandOptions = false;
    public cipherPanelExpanded = false;
    public secondsRemaining = 0;
@@ -329,7 +332,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.formatLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.7)";
       this.minStrLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.7)";
 
-      if (this.authSvc.isAuthenticated() && !localStorage.getItem(this.authSvc.userId + "welcomed")) {
+      if (this.authSvc.isAuthenticated() &&
+         localStorage.getItem(this.authSvc.userId + "welcomed") != 'yup') {
          setTimeout(() => {
             this.welcomed = false;
             this.bubbleTip1.show();
@@ -396,12 +400,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          let params = new HttpParams({ fromString: window.location.search });
 
          if (params.get('cipherarmor')) {
-            this.cipherArmor = decodeURIComponent(params.get('cipherarmor')!);
+            this.showCipherArmor(decodeURIComponent(params.get('cipherarmor')!));
             this.onFormatChange();
             params = params.delete('cipherarmor');
          }
          if (params.get('cleartext')) {
-            this.clearText = decodeURIComponent(params.get('cleartext')!);
+            this.showClearText(decodeURIComponent(params.get('cleartext')!));
             params = params.delete('cleartext');
          }
 
@@ -629,13 +633,15 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onClearCipher(): void {
-      this.errorCipher = false;
+      this.errorCipher = '';
+      this.cipherFile = undefined;
       this.cipherArmor = '';
       this.cipherLabel = 'Cipher Armor';
    }
 
    onClearClear(): void {
-      this.errorClear = false;
+      this.errorClear = '';
+      this.clearFile = undefined;
       this.clearText = '';
       this.clearLabel = 'Clear Text';
       if (!this.welcomed) {
@@ -664,27 +670,57 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   async onClickEncrypt(): Promise<void> {
+   setCipherFile(cipherFile: File) {
+      this.onClearCipher();
+      this.cipherFile = cipherFile;
+      this.cipherLabel = 'Cipher Armor File';
+   }
+
+   setClearFile(clearFile: File) {
+      this.onClearClear();
+      this.clearFile = clearFile;
+      this.clearLabel = 'Clear Text File';
+      if (!this.welcomed) {
+         this.bubbleTip1.hide();
+         this.bubbleTip2.show();
+      }
+   }
+
+   /*
+      ╔═══════════════╦═══════════╦═════════╦════════════╦═══════╦═══════════╗
+      ║ Button        ║ Source    ║ Dest    ║ Size Limit ║ Loops ║ Operation ║
+      ╠═══════════════╬═══════════╬═════════╬════════════╬═══════╬═══════════╣
+      ║ encrypt       ║ screen    ║ screen  ║ yes        ║ yes   ║ encBuffer ║
+      ║               ║ file.*    ║ screen  ║ yes        ║ yes   ║ encBuffer ║
+      ║ encryptToFile ║ screen    ║ file.qq ║ no         ║ no    ║ encStream ║
+      ║               ║ file.*    ║ file.qq ║ no         ║ no    ║ encStream ║
+      ╚═══════════════╩═══════════╩═════════╩════════════╩═══════╩═══════════╝
+   */
+
+   async onEncrypt(): Promise<void> {
       if ((!this.clearFile && this.clearText.length < 1) || this.errorClear) {
          this.onClearClear();
-         this.showEncryptError('Enter clear text to encrypt');
+         this.showEncryptError('Missing clear text. Enter or load clear text, then encrypt');
          this.r2.selectRootElement('#clearInput').focus();
          return;
       }
+
+      if (!this.authSvc.isAuthenticated()) {
+         this.showDecryptError('User not authenticated, try refreshing this page');
+         return;
+      }
+
+      this.authSvc.activity();
+      this.onClearCipher();
 
       if (!this.welcomed) {
          this.bubbleTip1.hide();
          this.bubbleTip2.hide();
       }
 
-      const savedClearText = this.clearText;
+      //      const savedClearText = this.clearText;
+
       try {
-         if (!this.authSvc.isAuthenticated()) {
-            throw new Error('User not authenticated, try refreshing this page')
-         }
-
-         this.authSvc.activity();
-
          this.loops = Math.min(
             Math.max(1, Number(this.loops) ? Number(this.loops) : 0),
             MAX_LOOPS
@@ -699,25 +735,44 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.clearPassword();
          }
 
+         let clearData: Uint8Array;
+         if (this.clearFile) {
+            if (this.clearFile.size > cc.PAYLOAD_SIZE_MAX) {
+               this.showEncryptError(`File must be smaller than ${Math.round(cc.PAYLOAD_SIZE_MAX / 1024 / 1024)}MB`);
+               return;
+            }
+
+            this.showProgress = true;
+            clearData = await readStreamAll(this.clearFile.stream());
+         } else {
+            if (this.clearText.length > cc.PAYLOAD_SIZE_MAX) {
+               this.showEncryptError(`Data must be smaller than ${Math.round(cc.PAYLOAD_SIZE_MAX / 1024 / 1024)}MB`);
+               return;
+            }
+            clearData = new TextEncoder().encode(this.clearText);
+         }
+
          let econtext: EncContext = {
             lpEnd: this.loops,
             lp: 0,
             alg: this.algorithm,
             ic: this.icount,
-            userCred: base64ToBytes(this.authSvc.userCred!),
+            //            userCred: base64ToBytes(this.authSvc.userCred!),
             ctFormat: this.ctFormat,
             reminder: this.reminder,
             trueRand: this.trueRand,
-            fallbackRand: this.pseudoRand
+            fallbackRand: this.pseudoRand,
+            clearData: clearData
          };
 
-         const completed = await this.makeCipherArmor(econtext);
+         const cipherArmor = await this.makeCipherArmor(econtext);
 
-         if (!this.welcomed && !completed) {
+         if (!this.welcomed && !cipherArmor) {
             this.bubbleTip2.show();
          }
 
-         if (completed) {
+         if (cipherArmor) {
+            this.showCipherArmorAndTime(cipherArmor);
             this.toastMessage('Congratulations, data encrypted');
          }
 
@@ -733,146 +788,174 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       } finally {
          this.showProgress = false;
          // After > 1 loop, its confusing to leave intermediate stuff
-         this.clearText = savedClearText;
+         //         this.showClearText(savedClearText);
+      }
+
+   }
+
+   async onEncryptToFile(): Promise<void> {
+      if ((!this.clearFile && this.clearText.length < 1) || this.errorClear) {
+         this.onClearClear();
+         this.showEncryptError('Missing clear text. Enter or load clear text, then encrypt');
+         this.r2.selectRootElement('#clearInput').focus();
+         return;
+      }
+
+      if (!this.authSvc.isAuthenticated()) {
+         this.showDecryptError('User not authenticated, try refreshing this page');
+         return;
+      }
+
+      this.authSvc.activity();
+      this.onClearCipher();
+
+      if (!this.welcomed) {
+         this.bubbleTip1.hide();
+         this.bubbleTip2.hide();
+      }
+
+      try {
+         let baseName: string;
+         let readStream: ReadableStream<Uint8Array>;
+
+         if (this.clearFile) {
+            baseName = this.clearFile.name;
+            readStream = this.clearFile.stream();
+            this.showProgress = true;
+         } else {
+            baseName = 'armor';
+            const clearData = new TextEncoder().encode(this.clearText);
+            const blob = new Blob([clearData], { type: 'application/octet-stream' });
+            readStream = blob.stream();
+         }
+
+         const saveFile = await selectWriteableQQFile(baseName);
+         const [pwd, hint] = await this.getPassword(
+            +this.minPwdStrength,
+            '',
+            { lpEnd: 1, lp: 0 }
+         );
+
+         const eparams: EParams = {
+            alg: this.algorithm,
+            ic: this.icount,
+            trueRand: this.trueRand,
+            fallbackRand: this.pseudoRand,
+            pwd: pwd,
+            userCred: base64ToBytes(this.authSvc.userCred!),
+            hint: hint
+         };
+
+         const encryptedStream = this.cipherSvc.encryptStream(
+            eparams, readStream, this.cipherReadyNotice.bind(this)
+         );
+
+         const writeable = await saveFile.createWritable();
+         await encryptedStream.pipeTo(writeable);
+         this.setCipherFile(await saveFile.getFile());
+      } catch (something) {
+         console.error(something);
+         if (something instanceof Error) {
+            this.showEncryptError('Could not encrypt text');
+         }
+      } finally {
+         this.showProgress = false;
       }
    }
 
-   async getNewFileHandle(file?: File): Promise<File> {
-
-      const base = file ? file.name : '';
-      //      let fileHandle: FileSystemFileHandle;
-
-      const options = {
-         id: 'quickcrypt_org',
-         //         startIn: file,
-         //         multiple: false,
-         suggestedName: `${base}.qq`,
-         types: [{
-            description: 'Encrypted files',
-            accept: {
-               'application/octet-stream': ['.qq'],
-            }
-         }]
-      };
-      //@ts-ignore
-      return await window.showSaveFilePicker(options);
-   }
-
    // Return value is false if the process was aborted
-   async makeCipherArmor(econtext: EncContext): Promise<boolean> {
-      this.onClearCipher();
+   async makeCipherArmor(econtext: EncContext): Promise<string | null> {
 
       try {
-         var [pwd, hint] = await this.getPassword(+this.minPwdStrength, '', econtext);
+         const [pwd, hint] = await this.getPassword(+this.minPwdStrength, '', econtext);
 
          const eparams: EParams = {
             ...econtext,
+            userCred: base64ToBytes(this.authSvc.userCred!),
             pwd: pwd,
             hint: hint
          }
 
-         let encrypted: string;
-         if (this.clearFile) {
-            const saveFile = await this.getNewFileHandle(this.clearFile);
-
-            encrypted = 'in the file'
-
-            const encryptedStream = this.cipherSvc.encryptStream(
-               eparams, this.clearFile.stream(), this.cipherReadyNotice.bind(this)
-            );
-
-            //@ts-ignore
-            const writeable = await saveFile.createWritable();
-
-            await encryptedStream.pipeTo(writeable);
-            //            await writeable.write(encrypted);
-            //            await writeable.close();
-
-            this.clearFile = undefined;
-         } else {
-            encrypted = await this.cipherSvc.encryptString(
-               eparams, this.clearText, this.cipherReadyNotice.bind(this)
-            );
-         }
+         const encrypted = await this.cipherSvc.encryptBuffer(
+            eparams, econtext.clearData, this.cipherReadyNotice.bind(this)
+         );
 
          econtext.lp += 1;
-         this.showCipherArmorAndTime(this.getCipherArmorFor(encrypted, econtext));
+         //         const b64Encrypted = bytesToBase64(encrypted);
+         const cipherArmor = this.getCipherArmorFor(encrypted, econtext);
 
          // it worked, so stop showing tips (setting this before next loop)
          this.welcomed = true;
          localStorage.setItem(this.authSvc.userId + "welcomed", "yup");
 
          if (econtext.lp < econtext.lpEnd) {
-            this.privacyClear();
-            this.clearText = this.cipherArmor;
+            //            this.privacyClear();
+            //            this.showClearText(this.cipherArmor);
+            this.clearPassword();
+            econtext.clearData = new TextEncoder().encode(cipherArmor);
             return this.makeCipherArmor(econtext);
          }
-         return true;
+         return cipherArmor;
 
       } catch (something) {
          // canceling password throws, but not an Error
          if (something instanceof Error) {
             throw something;
          }
-         return false;
+         return null;
       }
    }
-
-   async onClickDecrypt(): Promise<void> {
+   /*
+      ╔═══════════════╦═══════════╦═════════╦════════════╦═══════╦═══════════╗
+      ║ Button        ║ Source    ║ Dest    ║ Size Limit ║ Loops ║ Operation ║
+      ╠═══════════════╬═══════════╬═════════╬════════════╬═══════╬═══════════╣
+      ║ decrypt       ║ screen    ║ screen  ║ yes        ║ yes   ║ decBuffer ║
+      ║               ║ file.json ║ screen  ║ yes        ║ yes   ║ decBuffer ║
+      ║               ║ file.qq   ║ screen  ║ yes        ║ no    ║ decStream ║
+      ║ decryptToFile ║ screen    ║ file.*  ║ yes        ║ yes   ║ decBuffer ║
+      ║               ║ file.json ║ file.*  ║ yes        ║ yes   ║ decBuffer ║
+      ║               ║ file.qq   ║ file.*  ║ no         ║ no    ║ decStream ║
+      ╚═══════════════╩═══════════╩═════════╩════════════╩═══════╩═══════════╝
+   */
+   async onDecrypt(): Promise<void> {
       if ((!this.cipherFile && this.cipherArmor.length < 1) || this.errorCipher) {
          this.onClearCipher();
-         this.showDecryptError('Enter cipher armor text to decrypt');
+         this.showDecryptError('Missing cipher armor. Enter or load cipher armor text, then decrypt');
          this.r2.selectRootElement('#cipherInput').focus();
          return;
       }
 
       if (!this.authSvc.isAuthenticated()) {
-         throw new Error('User not authenticated, try refreshing this page')
+         this.showDecryptError('User not authenticated, try refreshing this page');
+         return;
       }
 
       this.authSvc.activity();
-      const savedCipherArmor = this.cipherArmor;
+      this.onClearClear();
+      //      const savedCipherArmor = this.cipherArmor;
 
       try {
-
          if (this.cipherFile) {
-            const saveFile = await this.getNewFileHandle(this.cipherFile);
-
-            const ctx: Context = {
-               lpEnd: 1,
-               lp: 0,
-               userCred: base64ToBytes(this.authSvc.userCred!)
+            if (this.cipherFile.size > cc.PAYLOAD_SIZE_MAX) {
+               this.showDecryptError(`File must be smaller than ${Math.round(cc.PAYLOAD_SIZE_MAX / 1024 / 1024)}MB`);
+               return;
             }
-            //@ts-ignore
-            const writeable = await saveFile.createWritable();
-
-            const decryptedStream = this.cipherSvc.decryptStream(
-               async (hint) => {
-                  const [pwd, _] = await this.getPassword(-1, hint, ctx);
-                  return pwd;
-               },
-               ctx.userCred,
-               this.cipherFile.stream(),
-               this.cipherReadyNotice.bind(this)
-            );
-
-            await decryptedStream.pipeTo(writeable);
-            this.cipherFile = undefined;
-            this.clearText = "in file";
-
+            this.showProgress = true;
          } else {
-            const dcontext = this.getDecContextFrom(this.cipherArmor);
-            if (dcontext.lpEnd! > 1) {
-               // it's confusing to use cached password when looping so
-               // start from scratch
-               this.clearPassword();
+            if (this.cipherArmor.length > cc.PAYLOAD_SIZE_MAX) {
+               this.showDecryptError(`Data must be smaller than ${Math.round(cc.PAYLOAD_SIZE_MAX / 1024 / 1024)}MB`);
+               return;
             }
+         }
 
-            // This updates Cipher Armor UI field
-            const completed = await this.makeClearText(dcontext);
-            if (completed) {
-               this.toastMessage('Data decrypted');
+         let clearSource = await this.getClearSource();
+
+         if (clearSource) {
+            if (typeof clearSource != 'string') {
+               clearSource = await readStreamAll(clearSource, true);
             }
+            this.showClearTextAndTime(clearSource);
+            this.toastMessage('Data decrypted');
          }
       } catch (something) {
          console.error(something);
@@ -884,30 +967,131 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       } finally {
          this.showProgress = false;
          // In case > 1 loops, tbere is intermediate stuff in cipherArmor
-         this.cipherArmor = savedCipherArmor;
+         //         this.showCipherArmor(savedCipherArmor);
       }
    }
 
-   async makeClearText(dcontext: DecContext): Promise<boolean> {
+   async onDecryptToFile(): Promise<void> {
+      if ((!this.cipherFile && this.cipherArmor.length < 1) || this.errorCipher) {
+         this.onClearCipher();
+         this.showDecryptError('Missing cipher armor. Enter or load cipher armor text, then decrypt');
+         this.r2.selectRootElement('#cipherInput').focus();
+         return;
+      }
+
+      if (!this.authSvc.isAuthenticated()) {
+         this.showDecryptError('User not authenticated, try refreshing this page');
+         return;
+      }
+
+      this.authSvc.activity();
       this.onClearClear();
 
       try {
-         const decrypted = await this.cipherSvc.decryptString(
+         let baseName: string;
+
+         if (this.cipherFile) {
+            if (this.cipherFile.type.includes('json') && this.cipherFile.size > cc.PAYLOAD_SIZE_MAX) {
+               this.showDecryptError(`File must be smaller than ${Math.round(cc.PAYLOAD_SIZE_MAX / 1024 / 1024)}MB`);
+               return;
+            }
+            const re = /^(.*[\\/])?(\.*.*?)(\.[^.]+?|)$/;
+            baseName = re.exec(this.cipherFile.name)![2];
+            this.showProgress = true;
+         } else {
+            if (this.cipherArmor.length > cc.PAYLOAD_SIZE_MAX) {
+               this.showDecryptError(`Data must be smaller than ${Math.round(cc.PAYLOAD_SIZE_MAX / 1024 / 1024)}MB`);
+               return;
+            }
+            baseName = 'clear';
+         }
+
+         const clearSource = await this.getClearSource();
+
+         if (clearSource) {
+            const saveFile = await selectWriteableFile(baseName);
+            const writeable = await saveFile.createWritable();
+
+            if (typeof clearSource === 'string') {
+               writeable.write(clearSource);
+               writeable.close();
+            } else {
+               await clearSource.pipeTo(writeable);
+            }
+            this.setClearFile(await saveFile.getFile());
+            this.toastMessage('Data decrypted');
+         }
+
+      } catch (something) {
+         console.error(something);
+         if (something instanceof Error) {
+            this.showDecryptError(
+               'Could not decrypt cipher armor text. You may be using the wrong password or passkey, or the cipher armor was changed'
+            );
+         }
+      } finally {
+         this.showProgress = false;
+      }
+   }
+
+   async getClearSource(): Promise<ReadableStream<Uint8Array> | string | null> {
+
+      let clearSource: ReadableStream<Uint8Array> | string | null;
+      if (this.cipherFile && !this.cipherFile.type.includes('json')) {
+         clearSource = this.cipherSvc.decryptStream(
+            async (hint) => {
+               const [pwd, _] = await this.getPassword(
+                  -1,
+                  hint,
+                  { lpEnd: 1, lp: 0 }
+               );
+               return pwd;
+            },
+            base64ToBytes(this.authSvc.userCred!),
+            this.cipherFile.stream(),
+            this.cipherReadyNotice.bind(this)
+         );
+
+      } else {
+         let cipherArmor: string;
+         if (this.cipherFile) {
+            cipherArmor = await readStreamAll(this.cipherFile.stream(), true);
+         } else {
+            cipherArmor = this.cipherArmor;
+         }
+
+         const dcontext = this.getDecContextFrom(cipherArmor);
+         if (dcontext.lpEnd! > 1) {
+            // it's confusing to use cached password when looping so
+            // start from scratch
+            this.clearPassword();
+         }
+
+         clearSource = await this.makeClearText(dcontext);
+      }
+
+      return clearSource;
+   }
+
+   async makeClearText(dcontext: DecContext): Promise<string | null> {
+
+      try {
+         const decrypted = await this.cipherSvc.decryptBuffer(
             async (hint) => {
                const [pwd, _] = await this.getPassword(-1, hint, dcontext);
                return pwd;
             },
             base64ToBytes(this.authSvc.userCred!),
-            dcontext.ct,
+            dcontext.cipherData,
             this.cipherReadyNotice.bind(this)
          );
 
-         this.showClearTextAndTime(decrypted);
+         const decryptedText = new TextDecoder().decode(decrypted);
          dcontext.lp += 1;
 
          if (dcontext.lp < dcontext.lpEnd) {
-            this.cipherArmor = this.clearText;
-            const nextContext = this.getDecContextFrom(this.clearText);
+            //            this.cipherArmor = this.clearText;
+            const nextContext = this.getDecContextFrom(decryptedText);
             // A bit hacky... preserve top level loop information
             (nextContext.lpEnd as number) = dcontext.lpEnd;
             nextContext.lp = dcontext.lp;
@@ -915,48 +1099,62 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             return this.makeClearText(nextContext);
          }
 
-         return true;
+         return decryptedText;
       } catch (something) {
          // cancelling password throws, but not an Error. so eat it
          if (something instanceof Error) {
             throw something;
          }
-         return false;
+         return null;
       }
    }
 
    showDecryptError(msg: string): void {
-      this.clearText = msg;
-      this.errorClear = true;
+      this.clearText = '';
+      this.clearFile = undefined;
+      this.errorClear = msg;
       this.clearLabel = 'Error';
    }
 
    showEncryptError(msg: string): void {
-      this.cipherArmor = msg;
-      this.errorCipher = true;
+      this.cipherArmor = '';
+      this.cipherFile = undefined;
+      this.errorCipher = msg;
       this.cipherLabel = 'Error';
+   }
+
+   showCipherArmor(cipherArmor: string): void {
+      this.cipherArmor = cipherArmor;
+      this.errorCipher = '';
+      this.cipherLabel = `Cipher Armor`;
    }
 
    showCipherArmorAndTime(cipherArmor: string): void {
       this.cipherArmor = cipherArmor;
-      this.errorCipher = false;
+      this.errorCipher = '';
 
       const tookMsg = makeTookMsg(this.actionStart, Date.now());
       this.cipherLabel = `Cipher Armor (${tookMsg})`;
    }
 
+   showClearText(clearText: string): void {
+      this.clearText = clearText;
+      this.errorClear = '';
+      this.clearLabel = `Clear Text`;
+   }
+
    showClearTextAndTime(clearText: string): void {
       this.clearText = clearText;
-      this.errorClear = false;
+      this.errorClear = '';
 
       const tookMsg = makeTookMsg(this.actionStart, Date.now());
       this.clearLabel = `Clear Text (${tookMsg})`;
    }
 
-   getCipherArmorFor(ct: string, econtext: EncContext): string {
+   getCipherArmorFor(cipherData: Uint8Array, econtext: EncContext): string {
       // Rebuild object to control ordering (better way to do this?)
       let result: { [key: string]: string | number } = {};
-      result['ct'] = ct;
+      result['ct'] = bytesToBase64(cipherData);
 
       // To reduce CT size, only include this extra stuff at the
       // outer most loop
@@ -1019,8 +1217,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       return {
          lpEnd: lps,
          lp: 0,
-         userCred: base64ToBytes(this.authSvc.userCred!),
-         ct: ct,
+         //         userCred: base64ToBytes(this.authSvc.userCred!),
+         cipherData: base64ToBytes(ct)
       };
    }
 
@@ -1044,8 +1242,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       context: Context
    ): Promise<[string, string]> {
 
-      let loopCount: number = context.lp + 1;
-      let askHint: boolean = true;
+      let loopCount = context.lp + 1;
+      let askHint = true;
       if (isDecContext(context)) {
          loopCount = context.lpEnd - context.lp;
          askHint = false;
@@ -1122,10 +1320,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                alg: this.algorithm,
                ic: this.icount,
                trueRand: this.trueRand,
-               fallbackRand: this.pseudoRand
+               fallbackRand: this.pseudoRand,
+               clearData: new Uint8Array()
             };
 
-            this.cipherArmor = this.getCipherArmorFor(dcontext.ct, econtext);
+            this.showCipherArmor(this.getCipherArmorFor(dcontext.cipherData, econtext));
          } catch (err) {
          }
       }
@@ -1154,87 +1353,54 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       event.target.value = '';
    }
 
-   onFileUpload(event: any, setter: (val: string) => void): void {
-      let fileReader = new FileReader();
-      fileReader.onload = (e) => {
-         if (fileReader.result) {
-            setter(fileReader.result.toString());
-         } else {
-            this.toastMessage('File was empty');
+   async onLoadCipherArmor() {
+      if (this.useFilePicker) {
+         this.cipherFilePicker();
+      } else {
+         this.cipherFileLoader();
+      }
+   }
+
+   async cipherFilePicker() {
+      const fileHandle = await selectCipherFile();
+      if (fileHandle) {
+         this.setCipherFile(await fileHandle.getFile());
+      }
+   }
+
+   async cipherFileLoader() {
+      this.fileUpload.nativeElement.onchange = (event: any) => {
+         const file: File = event.target.files[0];
+         if (file) {
+            this.setCipherFile(file);
          }
       };
-      fileReader.readAsText(event.target.files[0]);
+      this.fileUpload.nativeElement.click();
    }
 
-   async onCipherFileUpload() {
-
-      let fileHandle: FileSystemFileHandle;
-      //@ts-ignore
-      [fileHandle] = await window.showOpenFilePicker({
-         id: 'quickcrypt_org',
-         multiple: false,
-      });
-
-      this.cipherFile = await fileHandle.getFile();
+   async onLoadClearText() {
+      if (this.useFilePicker) {
+         this.clearFilePicker();
+      } else {
+         this.clearFileLoader();
+      }
    }
 
-   async onClearFileUpload() {
-
-      let fileHandle: FileSystemFileHandle;
-      //@ts-ignore
-      [fileHandle] = await window.showOpenFilePicker({
-         id: 'quickcrypt_org',
-         multiple: false
-      });
-
-      this.clearFile = await fileHandle.getFile();
-      //      this.clearStream = await file.stream();
-      //      this.errorClear = false;
-      //      const
-
-      /*      const data =  crypto.getRandomValues(new Uint8Array(48));
-            const blob = new Blob([data],{type:'application/octet-stream'} );
-            this.startDownload(blob);
-      */
-
-      /*      this.fileUpload.nativeElement.onchange = (event: any) => {
-               this.onFileUpload(event, (val) => {
-                  this.clearText = val;
-                  this.errorClear = false;
-               });
-            };
-            this.fileUpload.nativeElement.click();*/
+   async clearFilePicker() {
+      const fileHandle = await selectClearFile();
+      if (fileHandle) {
+         this.setClearFile(await fileHandle.getFile());
+      }
    }
 
-   startDownload(blob: Blob) {
-      // Create an object URL for the blob object
-      const url = URL.createObjectURL(blob);
-
-      // Create a new anchor element
-      const a = document.createElement('a');
-
-      // Set the href and download attributes for the anchor element
-      // You can optionally set other attributes like `title`, etc
-      // Especially, if the anchor element will be attached to the DOM
-      a.href = url;
-      //      a.download = 'thefile.dat';
-
-      // Click handler that releases the object URL after the element has been clicked
-      // This is required for one-off downloads of the blob content
-      const clickHandler = () => {
-         setTimeout(() => {
-            URL.revokeObjectURL(url);
-            removeEventListener('click', clickHandler);
-         }, 150);
+   async clearFileLoader() {
+      this.fileUpload.nativeElement.onchange = (event: any) => {
+         const file: File = event.target.files[0];
+         if (file) {
+            this.setClearFile(file);
+         }
       };
-
-      // Add the click event listener on the anchor element
-      // Comment out this line if you don't want a one-off download of the blob content
-      a.addEventListener('click', clickHandler, false);
-
-      // Programmatically trigger a click on the anchor element
-      // Without attaching the anchor element to the DOM
-      a.click();
+      this.fileUpload.nativeElement.click();
    }
 
    onFileDownload(filename: string, getter: () => string): void {
@@ -1251,15 +1417,31 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       document.body.removeChild(alink);
    }
 
-   onCipherFileDownload(event: any): void {
-      this.onFileDownload('cipher.json', () => {
-         return this.cipherArmor;
-      });
+
+   async onSaveCipherArmor(): Promise<void> {
+      if (this.useFilePicker) {
+         const saveFile = await selectWriteableJsonFile("armor");
+         const writeable = await saveFile.createWritable();
+         await writeable.write(this.cipherArmor);
+         writeable.close();
+      } else {
+         this.onFileDownload('armor.json', () => {
+            return this.cipherArmor;
+         });
+      }
    }
-   onClearFileDownload(event: any): void {
-      this.onFileDownload('clear.txt', () => {
-         return this.clearText;
-      });
+
+   async onSaveClearText(): Promise<void> {
+      if (this.useFilePicker) {
+         const saveFile = await selectWriteableTxtFile("clear");
+         const writeable = await saveFile.createWritable();
+         await writeable.write(this.clearText);
+         writeable.close();
+      } else {
+         this.onFileDownload('clear.txt', () => {
+            return this.clearText;
+         });
+      }
    }
 
    onHidePwdChanged(): void {
@@ -1281,11 +1463,27 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             throw new Error('User not authenticated, try refreshing this page')
          }
 
-         const dcontext = this.getDecContextFrom(this.cipherArmor);
-         const cdInfo = await this.cipherSvc.getCipherTextInfo(
-            base64ToBytes(this.authSvc.userCred!),
-            dcontext.ct
-         );
+         let cdInfo: CipherDataInfo;
+         if (this.cipherFile && !this.cipherFile.type.includes('json')) {
+            cdInfo = await this.cipherSvc.getCipherStreamInfo(
+               base64ToBytes(this.authSvc.userCred!),
+               this.cipherFile.stream()
+            );
+         } else {
+            let cipherArmor: string;
+            if (this.cipherFile) {
+               cipherArmor = await readStreamAll(this.cipherFile.stream(), true);
+            } else {
+               cipherArmor = this.cipherArmor;
+            }
+
+            const dcontext = this.getDecContextFrom(cipherArmor);
+            cdInfo = await this.cipherSvc.getCipherTextInfo(
+               base64ToBytes(this.authSvc.userCred!),
+               dcontext.cipherData
+            );
+         }
+
          this.dialog.open(CipherInfoDialog, { data: cdInfo });
       } catch (err) {
          console.error(err);

@@ -76,24 +76,24 @@ export class CipherService {
       return Object.keys(cc.AlgInfo);
    }
 
-   async encryptString(
+   async encryptBuffer(
       eparams: EParams,
-      clearText: string,
+      clearData: Uint8Array,
       readyNotice?: (cdInfo: CipherDataInfo) => void
-   ): Promise<string> {
+   ): Promise<Uint8Array> {
       if (eparams.ic > this._iCountMax) {
          throw new Error('Invalid ic, exceeded: ' + this._iCountMax);
       }
-      if (clearText.length == 0) {
+      if (clearData.byteLength == 0) {
          throw new Error('Missing clear text');
       }
 
       const ciphers = Ciphers.latest();
 
-      const input = new TextEncoder().encode(clearText);
+//      const input = new TextEncoder().encode(clearText);
       const cipherData = await ciphers.encryptBlock0(
          eparams,
-         input,
+         clearData,
          readyNotice
       );
 
@@ -107,7 +107,7 @@ export class CipherService {
       output.set(cipherData.encryptedData,
          cipherData.headerData.byteLength + cipherData.additionalData.byteLength);
 
-      return bytesToBase64(output);
+      return output;
    }
 
    encryptStream(
@@ -234,10 +234,10 @@ export class CipherService {
 
    async getCipherTextInfo(
       userCred: Uint8Array,
-      cipherText: string,
+      block0: Uint8Array,
    ): Promise<CipherDataInfo> {
 
-      const block0 = base64ToBytes(cipherText);
+//      const block0 = base64ToBytes(cipherText);
       const ciphers = Ciphers.fromHeader(block0);
       const consumedBytes = ciphers.decodeHeader(block0);
       return ciphers.getCipherDataInfo(
@@ -246,14 +246,14 @@ export class CipherService {
       );
    }
 
-   async decryptString(
+   async decryptBuffer(
       pwdProvider: (hint: string) => Promise<string>,
       userCred: Uint8Array,
-      cipherText: string,
+      block0: Uint8Array,
       readyNotice?: (cdInfo: CipherDataInfo) => void
-   ): Promise<string> {
+   ): Promise<Uint8Array> {
 
-      const block0 = base64ToBytes(cipherText);
+//      const block0 = base64ToBytes(cipherText);
       const ciphers = Ciphers.fromHeader(block0);
       const consumedBytes = ciphers.decodeHeader(block0);
 
@@ -264,7 +264,7 @@ export class CipherService {
          readyNotice
       );
 
-      return new TextDecoder().decode(decrypted);
+      return decrypted;
    }
 
    decryptStream(

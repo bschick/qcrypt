@@ -22,25 +22,17 @@ SOFTWARE. -->
 <div class="core">
   <div class="input-area flx-container" (mouseup)="onDraggerMouseUp();">
     <span class="flx-buttons">
-      <button mat-raised-button (click)="onClickEncrypt()" class="top-button" color="primary" #bubbleTip2="bubbleTip"
+      <button mat-raised-button (click)="onEncrypt()" class="top-button" color="primary" #bubbleTip2="bubbleTip"
         bubbleTip="When you have finished entering text, click the Encrypt button. You will then be promted for a password."
         bubblePosition="right" bubbleWidth="250px" aria-label="Encrypt Text" accesskey="E"
         [disabled]="showProgress ? 'true' : 'false'">
         <u>E</u>ncrypt
       </button>
-      <button mat-raised-button class="top-button mleft15" color="basic" [matMenuTriggerFor]="clearMenu"
-        matTooltip="Load file containing clear text" [disabled]="showProgress ? 'true' : 'false'">
-        Clear File
-        <mat-icon iconPositionEnd>expand_more</mat-icon>
+      <button mat-raised-button *ngIf="useByteStream" class="top-button mleft15" color="basic"
+        (click)="onEncryptToFile()" matTooltip="Encrypt and save to a file"
+        [disabled]="showProgress ? 'true' : 'false'">
+        Encrypt to File
       </button>
-      <mat-menu #clearMenu="matMenu" xPosition="before">
-        <button mat-menu-item (click)="onClearFileUpload()">
-          <mat-icon>file_upload</mat-icon>Load
-        </button>
-        <button mat-menu-item (click)="onClearFileDownload($event)">
-          <mat-icon>file_download</mat-icon>Save
-        </button>
-      </mat-menu>
     </span>
     <span class="flx-buttons">
       <button mat-raised-button (click)="privacyClear()" class="top-button mleft15 clear-button" color="basic"
@@ -50,20 +42,12 @@ SOFTWARE. -->
       </button>
     </span>
     <span class="flx-buttons">
-      <button mat-raised-button class="top-button mleft15" color="basic" [matMenuTriggerFor]="cipherMenu"
-        matTooltip="Load file containing cipher text" [disabled]="showProgress ? 'true' : 'false'">
-        Cipher File
-        <mat-icon iconPositionEnd>expand_more</mat-icon>
+      <button mat-raised-button *ngIf="useByteStream" class="top-button mleft15" color="basic"
+        (click)="onDecryptToFile()" matTooltip="Decrypt and save to a file"
+        [disabled]="showProgress ? 'true' : 'false'">
+        Decrypt to File
       </button>
-      <mat-menu #cipherMenu="matMenu" xPosition="before">
-        <button mat-menu-item (click)="onCipherFileUpload()">
-          <mat-icon>file_upload</mat-icon>Load
-        </button>
-        <button mat-menu-item (click)="onCipherFileDownload($event)">
-          <mat-icon>file_download</mat-icon>Save
-        </button>
-      </mat-menu>
-      <button mat-raised-button (click)="onClickDecrypt()" class="top-button mleft15" color="primary"
+      <button mat-raised-button (click)="onDecrypt()" class="top-button mleft15" color="primary"
         aria-label="Decrypt Text" accesskey="D" [disabled]="showProgress ? 'true' : 'false'">
         <u>D</u>ecrypt
       </button>
@@ -77,20 +61,36 @@ SOFTWARE. -->
     <div #clearField class="flx-item">
       <mat-form-field #bubbleTip1="bubbleTip"
         bubbleTip="To encrypt some data, type or paste text here then click the Encrypt button." bubblePosition="upper"
-        bubbleWidth="250px" [style.width.%]="100" [style.height.%]="100">
+        bubbleWidth="250px" [style.width.%]="100" [style.height.%]="100" spellcheck="false">
         <mat-label>{{clearLabel}}</mat-label>
-        <textarea matInput id="clearInput" autofocus cdkTextareaAutosize placeholder="" class="txt-area-clear"
-          [(ngModel)]="clearText" [ngModelOptions]="{standalone: true}" [style.color]="errorClear ? 'red' : 'black'"
-          [disabled]="showProgress ? 'true' : 'false'" (input)="onClearInput()"></textarea>
-        <button class="txt-area-button2" *ngIf="clearText && !showProgress" mat-icon-button aria-label="Clear"
-          matTooltip="Clear text" (click)="onClearClear()">
-          <mat-icon>close</mat-icon>
-        </button>
-        <button class="txt-area-button3" *ngIf="clearText && !showProgress" mat-icon-button aria-label="Copy"
-          matTooltip="Copy clear text to clipboard" (click)="toastMessage('Clear text copied to clipboard')"
-          [cdkCopyToClipboard]="clearText">
-          <mat-icon>content_copy</mat-icon>
-        </button>
+        <div class="toolbar">
+          <button [hidden]="!clearText || showProgress" mat-icon-button aria-label="Copy"
+            matTooltip="Copy clear text to clipboard" (click)="toastMessage('Clear text copied to clipboard')"
+            [cdkCopyToClipboard]="clearText">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+          <button [hidden]="!clearText || showProgress" mat-icon-button aria-label="Load"
+            matTooltip="Save clear text to file" (click)="onSaveClearText()">
+            <mat-icon fontSet="material-icons-outlined">file_download</mat-icon>
+          </button>
+          <button [hidden]="showProgress" mat-icon-button aria-label="Load"
+            matTooltip="Load clear file" (click)="onLoadClearText()">
+            <mat-icon fontSet="material-icons-outlined">file_upload</mat-icon>
+          </button>
+          <button [hidden]="showProgress" mat-icon-button aria-label="Clear"
+            matTooltip="Clear text" (click)="onClearClear()">
+            <mat-icon>close</mat-icon>
+          </button>
+          </div>
+        <div>
+          <div class="errorBox" [hidden]="!errorClear">{{errorClear}}</div>
+          <div class="fileBox" *ngIf="clearFile"><b>{{clearFile.name}}</b><br />selected for encryption</div>
+          <textarea matInput id="clearInput" autofocus cdkTextareaAutosize placeholder="" class="txt-area-clear"
+            [(ngModel)]="clearText" [ngModelOptions]="{standalone: true}"
+            [readonly]="errorClear || clearFile ? 'true' : 'false'" [disabled]="(showProgress) ? 'true' : 'false'"
+            (input)="onClearInput()">
+          </textarea>
+        </div>
       </mat-form-field>
     </div>
     <div class="dragger" (mousedown)="onDraggerMouseDown();">
@@ -98,25 +98,39 @@ SOFTWARE. -->
       </mat-icon>
     </div>
     <div #cipherField class="flx-item">
-      <mat-form-field [style.width.%]="100" [style.height.%]="100">
+      <mat-form-field [style.width.%]="100" [style.height.%]="100" spellcheck="false" >
         <mat-label>{{cipherLabel}}</mat-label>
-        <textarea matInput id="cipherInput" placeholder="" class="txt-area-armor" cdkTextareaAutosize
-          [(ngModel)]="cipherArmor" [ngModelOptions]="{standalone: true}" [style.color]="errorCipher ? 'red' : 'black'"
-          [disabled]="showProgress ? 'true' : 'false'">
-        </textarea>
-        <button class="txt-area-button1" *ngIf="cipherArmor && !showProgress" mat-icon-button aria-label="Clear"
-          matTooltip="Clear cipher armor" (click)="onClearCipher()">
-          <mat-icon>close</mat-icon>
-        </button>
-        <button class="txt-area-button2" *ngIf="cipherArmor && !showProgress" mat-icon-button aria-label="Copy"
-          matTooltip="Copy cipher armor to clipboard" (click)="toastMessage('Cipher armor copied to clipboard')"
-          [cdkCopyToClipboard]="cipherArmor">
-          <mat-icon>content_copy</mat-icon>
-        </button>
-        <button class="txt-area-button3" *ngIf="cipherArmor && !showProgress" mat-icon-button aria-label="Info"
-          matTooltip="Show decryption parameters" (click)="onCipherTextInfo()">
-          <mat-icon>info_outline</mat-icon>
-        </button>
+        <div class="toolbar">
+          <button [hidden]="!cipherArmor || showProgress" mat-icon-button aria-label="Copy"
+            matTooltip="Copy cipher armor to clipboard" (click)="toastMessage('Cipher armor copied to clipboard')"
+            [cdkCopyToClipboard]="cipherArmor">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+          <button [hidden]="(!cipherArmor && !cipherFile) || showProgress" mat-icon-button aria-label="Info"
+            matTooltip="Show decryption parameters" (click)="onCipherTextInfo()">
+            <mat-icon fontSet="material-icons-outlined">info</mat-icon>
+          </button>
+          <button [hidden]="!cipherArmor || showProgress" mat-icon-button aria-label="Load"
+            matTooltip="Save cipher armor to file" (click)="onSaveCipherArmor()">
+            <mat-icon fontSet="material-icons-outlined">file_download</mat-icon>
+          </button>
+          <button [hidden]="showProgress" mat-icon-button aria-label="Load"
+            matTooltip="Load cipher armor file" (click)="onLoadCipherArmor()">
+            <mat-icon fontSet="material-icons-outlined">file_upload</mat-icon>
+          </button>
+          <button [hidden]="showProgress" mat-icon-button aria-label="Clear"
+            matTooltip="Clear cipher armor" (click)="onClearCipher()">
+            <mat-icon>close</mat-icon>
+          </button>
+          </div>
+        <div>
+          <div class="errorBox" [hidden]="!errorCipher">{{errorCipher}}</div>
+          <div class="fileBox" *ngIf="cipherFile"><b>{{cipherFile.name}}</b><br />selected for decryption</div>
+          <textarea matInput id="cipherInput" placeholder="" class="txt-area-armor" cdkTextareaAutosize
+            [(ngModel)]="cipherArmor" [ngModelOptions]="{standalone: true}"
+            [readonly]="errorCipher || cipherFile ? 'true' : 'false'" [disabled]="showProgress ? 'true' : 'false'">
+          </textarea>
+        </div>
       </mat-form-field>
     </div>
   </div>
@@ -257,6 +271,6 @@ SOFTWARE. -->
       </a>
     </span>
   </p>
-  <input type="file" (click)="onClickFileUpload($event)" class="file-input" accept="text/*,application/json"
+  <input type="file" (click)="onClickFileUpload($event)" class="file-input" accept="*"
     #fileUpload />
 </div>

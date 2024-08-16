@@ -1,3 +1,25 @@
+/* MIT License
+
+Copyright (c) 2024 Brad Schick
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. */
+
 import { base64URLStringToBuffer, bufferToBase64URLString } from '@simplewebauthn/browser';
 
 
@@ -28,6 +50,24 @@ export function bytesToNum(arr: Uint8Array): number {
 export function bytesToBase64(bytes: Uint8Array): string {
    // simplewebauthn function return base64Url format
    return (bufferToBase64URLString(bytes));
+}
+
+export function browserSupportsFilePickers() : boolean {
+   //@ts-ignore
+   if(window.showSaveFilePicker) {
+      return true;
+   } else {
+      return false;
+   }
+}
+
+export function browserSupportsBytesStream() : boolean {
+   try {
+      new ReadableStream({ type: "bytes" });
+      return true;
+   } catch(err) {
+      return false;
+   }
 }
 
 // Accepts either base64 or base64Url text
@@ -102,37 +142,51 @@ export async function readStreamBYODUntil(
    return [new Uint8Array(buffer, 0, readBytes), streamDone];
 }
 
-// Use when the reader cannot accept less then the size of output (or stream done)
+type TrueType = true;
+type FalseType = false;
+
+
+export async function readStreamAll(stream: ReadableStream<Uint8Array>): Promise<Uint8Array>
+export async function readStreamAll(stream: ReadableStream<Uint8Array>, decode: FalseType): Promise<Uint8Array>
+export async function readStreamAll(stream: ReadableStream<Uint8Array>, decode: TrueType): Promise<string>
 export async function readStreamAll(
-   reader: ReadableStreamDefaultReader
-): Promise<[data: Uint8Array, done: boolean]> {
+   stream: ReadableStream<Uint8Array>, decode: TrueType | FalseType = false
+): Promise<string | Uint8Array> {
 
-   let readBytes = 0;
-   const blocks: Uint8Array[] = [];
-   let streamDone = false;
-//   console.log('readStreamAll- start');
+   let result: string | Uint8Array;
+   const reader = stream.getReader();
+   try {
+      let readBytes = 0;
+      const blocks: Uint8Array[] = [];
+   //   console.log('readStreamAll- start');
 
-   while (true) {
-      const { done, value } = await reader.read();
-//      console.log('readStreamAll- read', value?.byteLength, done);
-      streamDone = done;
-      if (value) {
-         blocks.push(value);
-         readBytes += value.byteLength;
+      while (true) {
+         const { done, value } = await reader.read();
+   //      console.log('readStreamAll- read', value?.byteLength, done);
+         if (value) {
+            blocks.push(value);
+            readBytes += value.byteLength;
+         }
+
+         if (done) {
+            break;
+         }
       }
 
-      if (done) {
-         break;
+      result = coalesceBlocks(blocks, readBytes);
+      if(decode) {
+         result = new TextDecoder().decode(result);
       }
+   } finally {
+      reader.releaseLock();
    }
 
-   const result = coalesceBlocks(blocks, readBytes);
 //   console.log('readStreamAll- exit returnedBytes, done:',
 //      result.byteLength,
 //      streamDone
 //   );
 
-   return [result, streamDone];
+   return result;
 }
 
 function coalesceBlocks(
@@ -157,10 +211,9 @@ function coalesceBlocks(
 }
 
 
-
-// Sadly, there doesn't seem to be a way to force ReadableStreamBYOBReader.read
-// to write into the provided buffer. To support zero copy it sometime returns
-// internal buffer. That means we have to return the data buffer and its size.
+// There doesn't seem to be a way to force ReadableStreamBYOBReader.read
+// to write into the provided buffer, it sometime returns internal buffer.
+// That means we have to return the data buffer and its size.
 // Returns empty Uint8Array rather than null or undefined (make helps below cleaner)
 export async function readStreamBYOBOLD(
    reader: ReadableStreamBYOBReader,
@@ -279,6 +332,98 @@ export function streamWriteBYOD(
    return written;
 }
 
+export async function selectCipherFile() : Promise<FileSystemFileHandle> {
+   //@ts-ignore
+   const [fileHandle] = await window.showOpenFilePicker({
+      id: 'quickcrypt_org',
+      multiple: false,
+      types: [{
+         description: 'Encrypted files',
+         accept: {
+            'application/octet-stream': ['.qq', '.json'],
+         }}, {
+            description: 'JSON file',
+            accept: {
+               'application/json': ['.json'],
+            }},
+      ]
+   });
+   return fileHandle;
+}
+
+export async function selectClearFile(): Promise<FileSystemFileHandle> {
+   //@ts-ignore
+   const [fileHandle] = await window.showOpenFilePicker({
+      id: 'quickcrypt_org',
+      multiple: false
+   });
+   return fileHandle;
+}
+
+export async function selectWriteableTxtFile(
+   baseName?: string
+): Promise<FileSystemFileHandle> {
+
+   const suggested = baseName ? `${baseName}.txt` : '';
+   const options = {
+      id: 'quickcrypt_org',
+      suggestedName: suggested,
+      types: [{
+         description: 'Text file',
+         accept: {
+            'text/plain': ['.txt'],
+         }
+      }]
+   };
+   //@ts-ignore
+   return await window.showSaveFilePicker(options);
+}
+
+export async function selectWriteableFile(baseName?: string): Promise<FileSystemFileHandle> {
+
+   const suggested = baseName ?? '';
+   const options = {
+      id: 'quickcrypt_org',
+      suggestedName: suggested
+   };
+   //@ts-ignore
+   return await window.showSaveFilePicker(options);
+}
+
+
+export async function selectWriteableJsonFile(baseName?: string): Promise<FileSystemFileHandle> {
+
+   const suggested = baseName ? `${baseName}.json` : '';
+   const options = {
+      id: 'quickcrypt_org',
+      suggestedName: suggested,
+      types: [{
+         description: 'JSON file',
+         accept: {
+            'application/json': ['.json'],
+         }
+      }]
+   };
+   //@ts-ignore
+   return await window.showSaveFilePicker(options);
+}
+
+export async function selectWriteableQQFile(baseName?: string): Promise<FileSystemFileHandle> {
+
+   const suggested = baseName ? `${baseName}.qq` : '';
+   const options = {
+      id: 'quickcrypt_org',
+      suggestedName: suggested,
+      types: [{
+         description: 'Encrypted files',
+         accept: {
+            'application/octet-stream': ['.qq'],
+         }
+      }]
+   };
+   //@ts-ignore
+   return await window.showSaveFilePicker(options);
+}
 
 export class Random48 {
    private _trueRandCache: Promise<Response>;
