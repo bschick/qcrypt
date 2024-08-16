@@ -49,26 +49,30 @@ SOFTWARE. */
   margin-left: 35px;
 }
 
-.txt-area-button3 {
-  position: absolute;
-  top: 2px;
-  right: -14px;
+@mixin messageBox {
+  left:50%;
+  top:50%;
+  padding:15px;
   z-index: 999;
+  min-width:230px;
+  transform: translate(-50%, -50%);
+  position:absolute;
+  border-style: double;
+  border-width: 4px;
+  border-color: darkgray;
+  border-radius: 12px;
 }
 
-.txt-area-button2 {
-  position: absolute;
-  top: 2px;
-  right: 36px;
-  z-index: 999;
+.errorBox {
+  @include messageBox();
+  background-color: #DBC5C5;
 }
 
-.txt-area-button1 {
-  position: absolute;
-  top: 2px;
-  right: 86px;
-  z-index: 999;
+.fileBox {
+  @include messageBox();
+  background-color:#C6DBC6;
 }
+
 
 .spinner {
   position: absolute;
@@ -123,9 +127,22 @@ SOFTWARE. */
 
 .top-button {
   font-size: 15px;
-  width: 120px;
+  width: 140px;
   height: 45px;
   padding: 0;
+}
+
+.toolbar {
+  height: 48px;
+  width: #{5 * 50px};
+  background-color: none;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+  position:absolute;
+  right:-14px;
+  top: 2px;
 }
 
 .options-header {

@@ -62,6 +62,13 @@ function setCharAt(str: string, index: number, chr: string) {
    return str.substring(0, index) + chr + str.substring(index + 1);
 }
 
+// sometime is seems like javascript tried to make things hard
+function pokeValue(src: Uint8Array, index: number, shift: number): Uint8Array {
+   const dst = new Uint8Array(src);
+   dst[index] += shift;
+   return dst;
+}
+
 const READ_SIZE_START = 1048576; // 1 MiB
 
 function randomBlob(byteLength: number): Blob {
@@ -90,7 +97,7 @@ describe("String encryption and decryption", function () {
 
       for (const alg of cipherSvc.algs()) {
 
-         const clearText = 'This is a secret 🦆';
+         const clearData = new TextEncoder().encode('This is a secret 🦆');
          const pwd = 'a good pwd';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
@@ -103,28 +110,28 @@ describe("String encryption and decryption", function () {
             userCred: userCred,
          };
 
-         const cipherText = await cipherSvc.encryptString(
+         const cipherData = await cipherSvc.encryptBuffer(
             eparams,
-            clearText,
+            clearData,
             (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
+               expect(params.alg).toEqual(alg);
+               expect(params.ic).toEqual(cc.ICOUNT_MIN);
             }
          );
 
-         const decrypted = await cipherSvc.decryptString(
+         const decrypted = await cipherSvc.decryptBuffer(
             async (decHint) => {
-               expect(decHint).toBe('');
+               expect(decHint).toEqual('');
                return pwd;
             },
             userCred,
-            cipherText,
+            cipherData,
             (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
+               expect(params.alg).toEqual(alg);
+               expect(params.ic).toEqual(cc.ICOUNT_MIN);
             }
          );
-         expect(decrypted).toBe(clearText);
+         expect(decrypted).toEqual(clearData);
       }
    });
 
@@ -133,13 +140,13 @@ describe("String encryption and decryption", function () {
 
       for (const alg of cipherSvc.algs()) {
 
-         const clearText = 'This is a secret 🦆';
+         const clearData = new TextEncoder().encode('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
          /*    Used to generate CTS in: detect corrupt cipher text
-               const clearText = "this 🐞 is encrypted";
+               const clearData = new TextEncoder().encode("this 🐞 is encrypted");
                const pwd = 'asdf';
                const hint = 'asdf';
                const userCred = new Uint8Array([101, 246, 72, 149, 67, 228, 149, 35, 60, 124, 81, 187, 157, 96, 208, 217, 123, 147, 228, 60, 84, 214, 198, 116, 192, 162, 178, 147, 50, 119, 97, 251]);
@@ -154,30 +161,30 @@ describe("String encryption and decryption", function () {
             userCred: userCred,
          };
 
-         const cipherText = await cipherSvc.encryptString(
+         const cipherData = await cipherSvc.encryptBuffer(
             eparams,
-            clearText,
+            clearData,
             (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
+               expect(params.alg).toEqual(alg);
+               expect(params.ic).toEqual(cc.ICOUNT_MIN);
             }
          );
-         //         console.log(alg + ": " + cipherText.length + ": " + cipherText);
+         //         console.log(alg + ": " + cipherData.length + ": " + cipherData);
 
-         const decrypted = await cipherSvc.decryptString(
+         const decrypted = await cipherSvc.decryptBuffer(
             async (decHint) => {
-               expect(decHint).toBe(hint);
+               expect(decHint).toEqual(hint);
                return pwd;
             },
             userCred,
-            cipherText,
+            cipherData,
             (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
+               expect(params.alg).toEqual(alg);
+               expect(params.ic).toEqual(cc.ICOUNT_MIN);
             }
          );
          //      console.log(alg + ": '" + decrypted + "'");
-         expect(decrypted).toBe(clearText);
+         expect(decrypted).toEqual(clearData);
       }
    });
 
@@ -202,20 +209,20 @@ describe("String encryption and decryption", function () {
          // userCred used for creation of the CTS above
          // b64url userCred for browsser injection: xhKm2Q404pGkqfWkTyT3UodUR-99bN0wibH6si9uF8I
          const userCred = new Uint8Array([198, 18, 166, 217, 14, 52, 226, 145, 164, 169, 245, 164, 79, 36, 247, 82, 135, 84, 71, 239, 125, 108, 221, 48, 137, 177, 250, 178, 47, 110, 23, 194]);
-         const clearCheck = 'physical farm bolt correct bee nonchalant glib high able pinch left quaint strip valuable exultant disgusted curved bless geese snatch zoom fat touch boot abject wink pretty accessible foamy';
+         const clearCheck = new TextEncoder().encode('physical farm bolt correct bee nonchalant glib high able pinch left quaint strip valuable exultant disgusted curved bless geese snatch zoom fat touch boot abject wink pretty accessible foamy');
          const hintCheck = 'royal';
          const pwd = '9j5J4QnKD3D2R7Ks5gAAa';
 
-         const clear = await cipherSvc.decryptString(
+         const clear = await cipherSvc.decryptBuffer(
             async (hint) => {
-               expect(hint).toBe(hintCheck);
+               expect(hint).toEqual(hintCheck);
                return pwd;
             },
             userCred,
-            ct
+            base64ToBytes(ct)
          );
 
-         expect(clear).toBe(clearCheck);
+         expect(clear).toEqual(clearCheck);
       }
    });
 
@@ -230,6 +237,7 @@ describe("String encryption and decryption", function () {
          "ualvQTnXR9Qpmc6GpCqq6RcCoOV5An5XXfaNlBkagqcCADMNs_2x3EsdGpYpsoRPYSKGMLUN_wjYbCOy060g4nEU5-ZuTN31SGGAGgYAAQAUWACcspBFLRVnwqCNuJZD4HMu7vxB9nc6qrV5U-Faob2RnUDlTl9g-vbu4y3j8NeHzkU7LvmX6NwNDA",
          "lr-eRI1od9LvRqeQImYd9ZVd-Mbc9_Z2kjQYCOOJ9PEDAKAcZiMeYGvwmPooMw4R4Qn8ifLQaqitpXjKL2v3BHGraM9YtogMkVNkKmBrhc7GVoAaBgABACRnRmxD29B5d3pP-Bck_Y9CFnL8DTX-imq1opljFiNRc4CvehpKN8VGWxVQxiNBcPzSkV9ZMZ8lMZma_nakSq78T4mh1Y6pS9GRWxnFPIbq4aGaDy5-tJ_0-ww"
       ];
+      const clearCheck = new TextEncoder().encode("this 🐞 is encrypted");
 
       for (let ct of cts) {
          const ctBytes = base64ToBytes(ct);
@@ -237,19 +245,19 @@ describe("String encryption and decryption", function () {
          const userCred = new Uint8Array([101, 246, 72, 149, 67, 228, 149, 35, 60, 124, 81, 187, 157, 96, 208, 217, 123, 147, 228, 60, 84, 214, 198, 116, 192, 162, 178, 147, 50, 119, 97, 251]);
 
          // First ensure we can decrypt with valid inputs
-         const clear = await cipherSvc.decryptString(
+         const clear = await cipherSvc.decryptBuffer(
             async (hint) => {
-               expect(hint).toBe("asdf");
+               expect(hint).toEqual("asdf");
                return "asdf";
             },
             userCred,
-            ct
+            base64ToBytes(ct)
          );
-         expect(clear).toBe("this 🐞 is encrypted");
+         expect(clear).toEqual(clearCheck);
 
          let skipCount = 0;
 
-         // Tweak on character at a time using b64o offsets (will remain a valid b64 string)
+         // Tweak one character at a time using b64o offsets (will remain a valid b64 string)
          for (let i = 0; i < ct.length; ++i) {
             const pos = b64a.indexOf(ct[i]);
             let corruptCt = setCharAt(ct, i, b64o[pos]);
@@ -264,13 +272,13 @@ describe("String encryption and decryption", function () {
             }
 
             await expectAsync(
-               cipherSvc.decryptString(
+               cipherSvc.decryptBuffer(
                   async (hint) => {
-                     expect(hint).toBe("asdf");
+                     expect(hint).toEqual("asdf");
                      return "asdf";
                   },
                   userCred,
-                  corruptCt
+                  base64ToBytes(corruptCt)
                )).toBeRejectedWithError(Error);
          }
       }
@@ -278,7 +286,7 @@ describe("String encryption and decryption", function () {
 
    it("detect valid MAC wrong password, all alogrithms", async function () {
       for (const alg of cipherSvc.algs()) {
-         const clearText = 'This is a secret 🦄';
+         const clearData = new TextEncoder().encode('This is a secret 🦄');
          const pwd = 'the correct pwd';
          const hint = '';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -293,16 +301,16 @@ describe("String encryption and decryption", function () {
             userCred: userCred,
          };
 
-         const cipherText = await cipherSvc.encryptString(eparams, clearText);
+         const cipherData = await cipherSvc.encryptBuffer(eparams, clearData);
 
          await expectAsync(
-            cipherSvc.decryptString(
+            cipherSvc.decryptBuffer(
                async (decHint) => {
-                  expect(decHint).toBe(hint);
+                  expect(decHint).toEqual(hint);
                   return 'the wrong pwd';
                },
                userCred,
-               cipherText
+               cipherData
             )
          ).toBeRejectedWithError(DOMException);
       }
@@ -312,7 +320,7 @@ describe("String encryption and decryption", function () {
 
       for (const alg of cipherSvc.algs()) {
 
-         const clearText = "asefwlefj4oh09f jw90fu w09fu 9";
+         const clearData = new TextEncoder().encode("asefwlefj4oh09f jw90fu w09fu 9");
          const pwd = 'another good pwd';
          const hint = 'nope';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -327,19 +335,19 @@ describe("String encryption and decryption", function () {
             userCred: userCred
          };
 
-         let cipherText = await cipherSvc.encryptString(eparams, clearText);
+         let cipherData = await cipherSvc.encryptBuffer(eparams, clearData);
 
-         // Set character in MAC
-         cipherText = setCharAt(cipherText, 3, cipherText[3] == 'a' ? 'b' : 'a');
+         // change in MAC
+         let problemData = pokeValue(cipherData, 3, -1);
 
          await expectAsync(
-            cipherSvc.decryptString(
+            cipherSvc.decryptBuffer(
                async (decHint) => {
-                  expect(decHint).toBe(hint);
+                  expect(decHint).toEqual(hint);
                   return pwd;
                },
                userCred,
-               cipherText
+               problemData
             )
          ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
       }
@@ -348,7 +356,7 @@ describe("String encryption and decryption", function () {
    it("detect crafted bad cipher text, all algorithms", async function () {
 
       for (const alg of cipherSvc.algs()) {
-         const clearText = "asdfh3roij 02f23kff 8u 3r90";
+         const clearData = new TextEncoder().encode("asdfh3roij 02f23kff 8u 3r90");
          const pwd = 'another good pwd';
          const hint = 'nope';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -363,37 +371,37 @@ describe("String encryption and decryption", function () {
             userCred: userCred,
          };
 
-         let cipherText = await cipherSvc.encryptString(eparams, clearText);
+         let cipherData = await cipherSvc.encryptBuffer(eparams, clearData);
 
          // Set character in cipher text
          // past ~(MAC + VER + ALG + MAX_IV + CHUCKSZ)*4/3 characters)
-         let problemText = setCharAt(cipherText, 100, cipherText[100] == 'a' ? 'b' : 'a');
+         let problemData = pokeValue(cipherData, 100, -1);
 
          await expectAsync(
-            cipherSvc.decryptString(
+            cipherSvc.decryptBuffer(
                async (decHint) => {
                   // Should never execute
-                  expect(false).toBe(true);
+                  expect(false).toBeTrue();
                   return pwd;
                },
                userCred,
-               problemText
+               problemData
             )
          ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
 
          // Set character in encyrpted hint
          // back ~(IC + SLT *4/3 characters) from end
-         problemText = setCharAt(cipherText, cipherText.length - 30, cipherText[cipherText.length - 30] == 'c' ? 'e' : 'c');
+         problemData = pokeValue(cipherData,  cipherData.length - 30, 4);
 
          await expectAsync(
-            cipherSvc.decryptString(
+            cipherSvc.decryptBuffer(
                async (decHint) => {
                   // Should never execute
-                  expect(false).toBe(true);
+                  expect(false).toBeTrue();
                   return pwd;
                },
                userCred,
-               problemText
+               problemData
             )
          ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
       }
@@ -404,7 +412,7 @@ describe("String encryption and decryption", function () {
       const hint = 'nope';
       const pwd = 'another good pwd';
       const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-      const clearText = "()*Hskdfo892hj3f09";
+      const clearData = new TextEncoder().encode("()*Hskdfo892hj3f09");
 
       const eparams: EParams = {
          alg: 'AES-GCM',
@@ -417,7 +425,7 @@ describe("String encryption and decryption", function () {
       };
       // ensure the defaults work
       await expectAsync(
-         cipherSvc.encryptString(eparams, clearText)
+         cipherSvc.encryptBuffer(eparams, clearData)
       ).not.toBeRejectedWithError();
 
       // empty pwd
@@ -426,7 +434,7 @@ describe("String encryption and decryption", function () {
          pwd: ''
       }
       await expectAsync(
-         cipherSvc.encryptString(bparams, clearText)
+         cipherSvc.encryptBuffer(bparams, clearData)
       ).toBeRejectedWithError(Error, new RegExp('.+userCred.*'));
 
       // no userCred
@@ -435,7 +443,7 @@ describe("String encryption and decryption", function () {
          userCred: new Uint8Array(0)
       }
       await expectAsync(
-         cipherSvc.encryptString(bparams, clearText)
+         cipherSvc.encryptBuffer(bparams, clearData)
       ).toBeRejectedWithError(Error, new RegExp('.+userCred.*'));
 
       // extra long userCred
@@ -444,7 +452,7 @@ describe("String encryption and decryption", function () {
          userCred: crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES + 2))
       }
       await expectAsync(
-         cipherSvc.encryptString(bparams, clearText)
+         cipherSvc.encryptBuffer(bparams, clearData)
       ).toBeRejectedWithError(Error, new RegExp('.+userCred.*'));
 
       // empty clear data
@@ -452,7 +460,7 @@ describe("String encryption and decryption", function () {
          ...eparams
       }
       await expectAsync(
-         cipherSvc.encryptString(bparams, '')
+         cipherSvc.encryptBuffer(bparams, new Uint8Array())
       ).toBeRejectedWithError(Error, new RegExp('Missing clear.+'));
 
       // ic too small
@@ -461,7 +469,7 @@ describe("String encryption and decryption", function () {
          ic: cc.ICOUNT_MIN - 1
       }
       await expectAsync(
-         cipherSvc.encryptString(bparams, clearText)
+         cipherSvc.encryptBuffer(bparams, clearData)
       ).toBeRejectedWithError(Error, new RegExp('Invalid ic.+'));
 
       // ic too big
@@ -470,7 +478,7 @@ describe("String encryption and decryption", function () {
          ic: cc.ICOUNT_MAX + 1
       }
       await expectAsync(
-         cipherSvc.encryptString(bparams, clearText)
+         cipherSvc.encryptBuffer(bparams, clearData)
       ).toBeRejectedWithError(Error, new RegExp('Invalid ic.+'));
 
       // invalid alg
@@ -479,7 +487,7 @@ describe("String encryption and decryption", function () {
          alg: 'ABS-GCM'
       }
       await expectAsync(
-         cipherSvc.encryptString(bparams, clearText)
+         cipherSvc.encryptBuffer(bparams, clearData)
       ).toBeRejectedWithError(Error, new RegExp('Invalid alg.+'));
 
       // really invalid alg
@@ -488,7 +496,7 @@ describe("String encryption and decryption", function () {
          alg: 'asdfadfsk'
       }
       await expectAsync(
-         cipherSvc.encryptString(bparams, clearText)
+         cipherSvc.encryptBuffer(bparams, clearData)
       ).toBeRejectedWithError(Error, new RegExp('Invalid alg.+'));
 
       // both rands false
@@ -498,7 +506,7 @@ describe("String encryption and decryption", function () {
          fallbackRand: false
       }
       await expectAsync(
-         cipherSvc.encryptString(bparams, clearText)
+         cipherSvc.encryptBuffer(bparams, clearData)
       ).toBeRejectedWithError(Error, new RegExp('Either trueRand.+'));
 
       // hint too long
@@ -507,7 +515,7 @@ describe("String encryption and decryption", function () {
          hint: 'this is too long'.repeat(8)
       }
       await expectAsync(
-         cipherSvc.encryptString(bparams, clearText)
+         cipherSvc.encryptBuffer(bparams, clearData)
       ).toBeRejectedWithError(Error, new RegExp('Hint length.+'));
 
    });
@@ -557,18 +565,13 @@ describe("Stream manipulation", function () {
       // First make sure it decrypts as expected
       let blob = new Blob([encryptedData], { type: 'application/octet-stream' });
       let dec = cipherSvc.decryptStream(
-         async (decHint) => { expect(decHint).toBe('4321'); return 'asdf'; },
+         async (decHint) => { expect(decHint).toEqual('4321'); return 'asdf'; },
          userCred,
          blob.stream(),
       );
-      let reader = dec.getReader();
 
-      const [value] = await readStreamAll(reader);
-      expect(isEqualArray(
-         value!,
-         new Uint8Array(clearData.buffer, 0, value!.byteLength))
-      ).toBeTrue();
-      reader.releaseLock();
+      const value = await readStreamAll(dec);
+      expect(value).toEqual(new Uint8Array(clearData.buffer, 0, value!.byteLength));
 
       // Modified block0 MAC
       const b0Mac = new Uint8Array(encryptedData);
@@ -579,11 +582,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
-      reader.releaseLock();
 
       // Test modified block0 version
       const b0Ver = new Uint8Array(encryptedData);
@@ -594,11 +595,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid version.+'));
-      reader.releaseLock();
 
       // Test modified block0 size, too small valid
       let b0Size = new Uint8Array(encryptedData);
@@ -609,11 +608,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
-      reader.releaseLock();
 
       // Too small block0 size, too small invalid
       b0Size = new Uint8Array(encryptedData);
@@ -624,11 +621,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid payload.+'));
-      reader.releaseLock();
 
       // Test too big block0 size, invalid
       b0Size = new Uint8Array(encryptedData);
@@ -639,11 +634,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid payload.+'));
-      reader.releaseLock();
 
       // Test too big block0 but valid
       b0Size = new Uint8Array(encryptedData);
@@ -654,11 +647,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid payload.+'));
-      reader.releaseLock();
 
       // Modified blockN MAC
       const bNMac = new Uint8Array(encryptedData);
@@ -669,11 +660,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
-      reader.releaseLock();
 
       // Modified blockN version
       const bNVer = new Uint8Array(encryptedData);
@@ -684,11 +673,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid version.+'));
-      reader.releaseLock();
 
       // Test modified blockN size, too small valid
       let bNSize = new Uint8Array(encryptedData);
@@ -699,11 +686,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
-      reader.releaseLock();
 
       // Too small blockN size, too small invalid
       bNSize = new Uint8Array(encryptedData);
@@ -714,11 +699,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid payload.+'));
-      reader.releaseLock();
 
       // Test too big blockN size, invalid
       bNSize = new Uint8Array(encryptedData);
@@ -729,11 +712,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid payload.+'));
-      reader.releaseLock();
 
       // Test too big blockN but valid
       bNSize = new Uint8Array(encryptedData);
@@ -744,11 +725,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid payload.+'));
-      reader.releaseLock();
 
    });
 
@@ -757,18 +736,13 @@ describe("Stream manipulation", function () {
       // First make sure it decrypts as expected
       let blob = new Blob([encryptedData], { type: 'application/octet-stream' });
       let dec = cipherSvc.decryptStream(
-         async (decHint) => { expect(decHint).toBe('4321'); return 'asdf'; },
+         async (decHint) => { expect(decHint).toEqual('4321'); return 'asdf'; },
          userCred,
          blob.stream(),
       );
-      let reader = dec.getReader();
 
-      const [value] = await readStreamAll(reader);
-      expect(isEqualArray(
-         value!,
-         new Uint8Array(clearData.buffer, 0, value!.byteLength))
-      ).toBeTrue();
-      reader.releaseLock();
+      const value = await readStreamAll(dec);
+      expect(value).toEqual(new Uint8Array(clearData.buffer, 0, value!.byteLength));
 
       // Modified block0 invalid ALG
       let b0Alg = new Uint8Array(encryptedData);
@@ -779,11 +753,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid alg.+'));
-      reader.releaseLock();
 
       // Modified block0 valid but changed ALG
       b0Alg = new Uint8Array(encryptedData);
@@ -794,11 +766,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
-      reader.releaseLock();
 
       // Modified block0 IV
       const b0OIV = new Uint8Array(encryptedData);
@@ -809,11 +779,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
-      reader.releaseLock();
 
       // Modified block0 Salt
       const b0Slt = new Uint8Array(encryptedData);
@@ -824,11 +792,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
-      reader.releaseLock();
 
       // Modified block0 invalid IC
       let b0IC = new Uint8Array(encryptedData);
@@ -839,11 +805,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid ic.+'));
-      reader.releaseLock();
 
       // Modified block0 valid but changed IC
       b0IC = new Uint8Array(encryptedData);
@@ -854,11 +818,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
-      reader.releaseLock();
 
       // Modified block0 hint length
       let b0HintLen = new Uint8Array(encryptedData);
@@ -869,11 +831,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
-      reader.releaseLock();
 
       // Modified block0 hint
       let b0Hint = new Uint8Array(encryptedData);
@@ -884,11 +844,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
-      reader.releaseLock();
 
       // Modified blockN invalid ALG
       let bNAlg = new Uint8Array(encryptedData);
@@ -899,11 +857,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid alg.+'));
-      reader.releaseLock();
 
       // Modified blockN valid but changed ALG
       bNAlg = new Uint8Array(encryptedData);
@@ -914,11 +870,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
-      reader.releaseLock();
 
       // Modified blockN IV
       const bNOIV = new Uint8Array(encryptedData);
@@ -929,11 +883,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
-      reader.releaseLock();
 
    });
 
@@ -943,18 +895,13 @@ describe("Stream manipulation", function () {
       // First make sure it decrypts as expected
       let blob = new Blob([encryptedData], { type: 'application/octet-stream' });
       let dec = cipherSvc.decryptStream(
-         async (decHint) => { expect(decHint).toBe('4321'); return 'asdf'; },
+         async (decHint) => { expect(decHint).toEqual('4321'); return 'asdf'; },
          userCred,
          blob.stream(),
       );
-      let reader = dec.getReader();
 
-      const [value] = await readStreamAll(reader);
-      expect(isEqualArray(
-         value!,
-         new Uint8Array(clearData.buffer, 0, value!.byteLength))
-      ).toBeTrue();
-      reader.releaseLock();
+      const value = await readStreamAll(dec);
+      expect(value).toEqual(new Uint8Array(clearData.buffer, 0, value!.byteLength));
 
       // Modified block0 encrypted data
       let b0Enc = new Uint8Array(encryptedData);
@@ -965,11 +912,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
-      reader.releaseLock();
 
       // Modified blockN encrypted data
       let bNEnc = new Uint8Array(encryptedData);
@@ -980,11 +925,9 @@ describe("Stream manipulation", function () {
          userCred,
          blob.stream(),
       );
-      reader = dec.getReader();
       await expectAsync(
-         readStreamAll(reader)
+         readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
-      reader.releaseLock();
 
    });
 
@@ -1021,26 +964,26 @@ describe("Stream encryption and decryption", function () {
             eparams,
             blob.stream(),
             (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
+               expect(params.alg).toEqual(alg);
+               expect(params.ic).toEqual(cc.ICOUNT_MIN);
             }
          );
 
          const decryptedStream = cipherSvc.decryptStream(
             async (decHint) => {
-               expect(decHint).toBe('');
+               expect(decHint).toEqual('');
                return pwd;
             },
             userCred,
             cipherStream,
             (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
+               expect(params.alg).toEqual(alg);
+               expect(params.ic).toEqual(cc.ICOUNT_MIN);
             }
          );
 
-         let [decrypted] = await readStreamAll(decryptedStream.getReader());
-         expect(isEqualArray(new Uint8Array(await blob.arrayBuffer()), decrypted)).toBeTrue();
+         let decrypted = await readStreamAll(decryptedStream);
+         expect(await blob.arrayBuffer()).toEqual(decrypted.buffer);
       }
    });
 
@@ -1068,27 +1011,27 @@ describe("Stream encryption and decryption", function () {
             eparams,
             blob.stream(),
             (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
+               expect(params.alg).toEqual(alg);
+               expect(params.ic).toEqual(cc.ICOUNT_MIN);
             }
          );
          //         console.log(alg + ": " + cipherText.length + ": " + cipherText);
 
          const decryptedStream = cipherSvc.decryptStream(
             async (decHint) => {
-               expect(decHint).toBe(hint);
+               expect(decHint).toEqual(hint);
                return pwd;
             },
             userCred,
             cipherStream,
             (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
+               expect(params.alg).toEqual(alg);
+               expect(params.ic).toEqual(cc.ICOUNT_MIN);
             }
          );
 
-         let [decrypted] = await readStreamAll(decryptedStream.getReader());
-         expect(isEqualArray(new Uint8Array(await blob.arrayBuffer()), decrypted)).toBeTrue();
+         let decrypted = await readStreamAll(decryptedStream);
+         expect(await blob.arrayBuffer()).toEqual(decrypted.buffer);
 
          //      console.log(alg + ": '" + decrypted + "'");
       }
@@ -1112,14 +1055,14 @@ describe("Stream encryption and decryption", function () {
          // userCred used for creation of the CTS above
          // b64url userCred for browsser injection: xhKm2Q404pGkqfWkTyT3UodUR-99bN0wibH6si9uF8I
          const userCred = new Uint8Array([198, 18, 166, 217, 14, 52, 226, 145, 164, 169, 245, 164, 79, 36, 247, 82, 135, 84, 71, 239, 125, 108, 221, 48, 137, 177, 250, 178, 47, 110, 23, 194]);
-         const clearCheck = 'nord farm bolt correct bee nonchalant flap high able pinch left quaint angle 2055 exultant disgusted curved bless geese snatch zoom fat touch boot abject wink pretty accessible foamy';
+         const clearCheck = new TextEncoder().encode('nord farm bolt correct bee nonchalant flap high able pinch left quaint angle 2055 exultant disgusted curved bless geese snatch zoom fat touch boot abject wink pretty accessible foamy');
          const hintCheck = 'roylalty';
          const pwd = 'lkf3h20osdfid';
          const blob = new Blob([ctBytes], { type: 'application/octet-stream' });
 
          const decryptedStream = await cipherSvc.decryptStream(
             async (hint) => {
-               expect(hint).toBe(hintCheck);
+               expect(hint).toEqual(hintCheck);
                return pwd;
             },
             userCred,
@@ -1128,11 +1071,10 @@ describe("Stream encryption and decryption", function () {
 
          // use byod mode to also test stream byod support
          const reader = decryptedStream.getReader({ mode: "byob" });
-         let buffer = new ArrayBuffer(new TextEncoder().encode(clearCheck).byteLength);
+         let buffer = new ArrayBuffer(clearCheck.byteLength);
 
          const [decrypted] = await readStreamBYODFill(reader, buffer);
-         const clearText = new TextDecoder().decode(decrypted);
-         expect(clearText).toBe(clearCheck);
+         expect(decrypted).toEqual(clearCheck);
       }
    });
 });
@@ -1195,7 +1137,7 @@ describe("Get cipherinfo from cipher text", function () {
 
       for (const alg of cipherSvc.algs()) {
 
-         const clearText = 'This is a secret 🦋';
+         const clearData = new TextEncoder().encode('This is a secret 🦋');
          const pwd = 'not good pwd';
          const hint = 'try a himt';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -1209,15 +1151,15 @@ describe("Get cipherinfo from cipher text", function () {
             hint: hint,
             userCred: userCred,
          };
-         const cipherText = await cipherSvc.encryptString(eparams, clearText);
-         const cipherInfo = await cipherSvc.getCipherTextInfo(userCred, cipherText);
+         const cipherData = await cipherSvc.encryptBuffer(eparams, clearData);
+         const cipherInfo = await cipherSvc.getCipherTextInfo(userCred, cipherData);
 
          const expected_iv_bytes = Number(cc.AlgInfo[alg]['iv_bytes']);
 
-         expect(cipherInfo.alg).toBe(alg);
-         expect(cipherInfo.ic).toBe(cc.ICOUNT_MIN);
-         expect(cipherInfo.iv.byteLength).toBe(expected_iv_bytes);
-         expect(cipherInfo.slt.byteLength).toBe(cc.SLT_BYTES);
+         expect(cipherInfo.alg).toEqual(alg);
+         expect(cipherInfo.ic).toEqual(cc.ICOUNT_MIN);
+         expect(cipherInfo.iv.byteLength).toEqual(expected_iv_bytes);
+         expect(cipherInfo.slt.byteLength).toEqual(cc.SLT_BYTES);
          expect(cipherInfo.hint).toBeTrue();
       }
    });
@@ -1226,7 +1168,7 @@ describe("Get cipherinfo from cipher text", function () {
 
       for (const alg of cipherSvc.algs()) {
 
-         const clearText = "OIH8whfsiodhf s.kd";
+         const clearData = new TextEncoder().encode("OIH8whfsiodhf s.kd");
          const pwd = 'another good pwd';
          const hint = 'nope';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -1241,23 +1183,56 @@ describe("Get cipherinfo from cipher text", function () {
             userCred: userCred,
          };
 
-         let cipherText = await cipherSvc.encryptString(eparams, clearText);
+         let cipherData = await cipherSvc.encryptBuffer(eparams, clearData);
 
-         // Set character in CipherData
-         cipherText = setCharAt(cipherText, 37, cipherText[37] == 'a' ? 'b' : 'a');
+         // Change value in payload
+         let problemData = pokeValue(cipherData, 42, 1);
 
          await expectAsync(
             cipherSvc.getCipherTextInfo(
                userCred,
-               cipherText
+               problemData
             )
          ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
       }
    });
 
+   it("detect corrupted payload Size, all algorithms", async function () {
+
+      for (const alg of cipherSvc.algs()) {
+
+         const clearData = new TextEncoder().encode("OIH8whfsiodhf s.kd");
+         const pwd = 'another good pwd';
+         const hint = 'nope';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+
+         const eparams: EParams = {
+            alg: alg,
+            ic: cc.ICOUNT_MIN,
+            trueRand: false,
+            fallbackRand: true,
+            pwd: pwd,
+            hint: hint,
+            userCred: userCred,
+         };
+
+         let cipherData = await cipherSvc.encryptBuffer(eparams, clearData);
+
+         // Change value in payload size
+         let problemData = pokeValue(cipherData, 37, 3);
+
+         await expectAsync(
+            cipherSvc.getCipherTextInfo(
+               userCred,
+               problemData
+            )
+         ).toBeRejectedWithError(Error, new RegExp('.+payload size.+'));
+      }
+   });
+
    it("detect invalid userCred", async function () {
 
-      const clearText = "f";
+      const clearData = new TextEncoder().encode("f");
       const pwd = 'another good pwd';
       const hint = 'nope';
       const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -1271,14 +1246,14 @@ describe("Get cipherinfo from cipher text", function () {
          hint: hint,
          userCred: userCred,
       };
-      let cipherText = await cipherSvc.encryptString(eparams, clearText);
+      let cipherData = await cipherSvc.encryptBuffer(eparams, clearData);
 
       // Doesn't match orignal userCred
       let problemUserCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
       await expectAsync(
          cipherSvc.getCipherTextInfo(
             problemUserCred,
-            cipherText
+            cipherData
          )
       ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
 
@@ -1287,7 +1262,7 @@ describe("Get cipherinfo from cipher text", function () {
       await expectAsync(
          cipherSvc.getCipherTextInfo(
             problemUserCred,
-            cipherText
+            cipherData
          )
       ).toBeRejectedWithError(Error);
 
@@ -1298,7 +1273,7 @@ describe("Get cipherinfo from cipher text", function () {
       await expectAsync(
          cipherSvc.getCipherTextInfo(
             problemUserCred,
-            cipherText
+            cipherData
          )
       ).toBeRejectedWithError(Error);
    });
