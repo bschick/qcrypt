@@ -52,9 +52,9 @@ SOFTWARE. */
 @mixin messageBox {
   left:50%;
   top:50%;
-  padding:15px;
+  padding:10px 10px;
   z-index: 999;
-  min-width:230px;
+  min-width:266px;
   transform: translate(-50%, -50%);
   position:absolute;
   border-style: double;
@@ -72,7 +72,6 @@ SOFTWARE. */
   @include messageBox();
   background-color:#C6DBC6;
 }
-
 
 .spinner {
   position: absolute;
@@ -127,7 +126,7 @@ SOFTWARE. */
 
 .top-button {
   font-size: 15px;
-  width: 140px;
+  width: 120px;
   height: 45px;
   padding: 0;
 }

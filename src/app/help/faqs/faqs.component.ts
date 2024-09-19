@@ -48,6 +48,20 @@ export class FaqsComponent implements AfterViewInit {
       this.dataSource = new MatTableDataSource(ELEMENT_DATA);
    }
 
+   ngOnInit() {
+      const origFilterPredicate = this.dataSource.filterPredicate;
+      this.dataSource.filterPredicate =
+         (data: FAQElement, filter: string): boolean => {
+            const elements = filter.split(',');
+            for (let element of elements) {
+               if (element && origFilterPredicate(data, element.trim())) {
+                  return true;
+               }
+            }
+            return false;
+         }
+   }
+
    ngAfterViewInit(): void {
       const params = new HttpParams({ fromString: window.location.search });
       const search = params.get('search');
@@ -250,11 +264,13 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'Can I used Quick Crypt on text or binary files?',
-      answer: `Upload text files with the <i>Clear File</i> button
-      and save cipher text as files with the <i>Cipher File</i>
-      button on the main page. Quick Crypt does not yet support binary
-      files, but this may be added in the future.`
+      question: 'Can I used Quick Crypt to encrypt text or binary files?',
+      answer: `Yes, just click the <i>Files</i> button next to the <i>Encrypt</i>
+      button and then chose
+      <i>Select Clear File</i> from the menu. The selected file may contain text
+      or binary data. After a file is selected, click the <i>Encrypt</i>
+      button or if you want to save the encrypted data to a file, open the Files
+      menu again and chose <i>Encrypt to File</i>.`
    },
 
    {
@@ -421,17 +437,17 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'How should I decide which cipher mode to choose?',
+      question: 'How should I decide which cipher mode to use?',
       answer: `Quick Crypt offers only well-established and tested
       <a href="https://en.wikipedia.org/wiki/Authenticated_encryption" target="_blank">
       AEAD cipher modes</a> that provide privacy and authenticity: AES 256 GCM,
       XChaCha20 Poly1305, and AEGIS 256. No mode is bad, and choosing one depends on
-      your own criteria.
+      your criteria.
       <ul>
          <li>If you want the most recently designed cipher mode, choose <b>AEGIS 256</b>.
          </li>
          <li>If you want the most widely used and studied mode, choose <b>AES 256 GCM</b>,
-         which is the most commonly used TLS 1.3 cipher.
+         which is the most commonly used TLS 1.3 cipher used by most browsers.
          <li>If you want a mode that many regard as more robust than AES 256 GCM and
          whose close sibling is in the TLS 1.3 standard, choose <b>XChaCha20 Poly130</b>.
          </li>
@@ -573,6 +589,31 @@ const ELEMENT_DATA: FAQElement[] = [
       The 'Link' format can be used when you are not concerned about anyone
       changing stored cipher armor. All three formats provide strong
       privacy and authenticity.</p>`
+   },
+
+   {
+      position: 0,
+      question: 'What does the Loop Encrypt option do?',
+      answer: `<p>By default, Quick Crypt encrypts your plain text once.
+      If you set Loop Encrypt to be greater than 1, then
+      Quick Crypt encrypts your data that many times. For example, if you
+      set Loop Encrypt to 3, then there are 3 encryption steps:
+      <ol type='1'>
+         <li>Your plain text is encrypted</li>
+         <li>The encrypted data from loop 1 is encrypted</li>
+         <li>The encrypted data from loop 2 is encrypted</li>
+      </ol>
+      The encrypted data resulting from loop 3 is then output in the Cipher
+      Armor, which also contains the number of loops to facilitate decryption.
+      </p>
+      <p>Loop encrypted only provides improved security and privacy when
+      you use a different password for each loop (other encryption options
+      cannot be changed between loops). If you forget any one of the
+      passwords you used while looping, you will not be able decrypt the
+      Cipher Armor. Loop Encrypt is not used when you select a plain text
+      file as input or chose "Encrypt to File". You can encrypt a file multiple
+      times manually by selecting the output of a previous "Encrypt to File"
+      operation as the input file for another encryption.</p>`
    },
 
    {

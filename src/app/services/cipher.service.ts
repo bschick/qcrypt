@@ -21,18 +21,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { Injectable } from '@angular/core';
-import { readStreamBYODFill,
-         readStreamBYODUntil,
-         streamWriteBYOD,
-         base64ToBytes,
-         bytesToBase64 } from './utils';
+import { browserSupportsBytesStream, BYOBStreamReader, streamWriteBYOD, } from './utils';
 import { Ciphers, EParams, CipherDataInfo } from './ciphers';
 import * as cc from './cipher.consts';
 
 export { EParams, CipherDataInfo };
 
 // Simple perf testing with Chrome 126 on MacOS result in
-// readStreamBYODUntil with READ_SIZE_MAX of 4x to be the fastest
+// readAvailable with READ_SIZE_MAX of 4x to be the fastest
 const READ_SIZE_START = 1048576; // 1 MiB
 const READ_SIZE_MAX = READ_SIZE_START * 4;
 
@@ -90,7 +86,6 @@ export class CipherService {
 
       const ciphers = Ciphers.latest();
 
-//      const input = new TextEncoder().encode(clearText);
       const cipherData = await ciphers.encryptBlock0(
          eparams,
          clearData,
@@ -120,21 +115,21 @@ export class CipherService {
          throw new Error('Invalid ic, exceeded: ' + this._iCountMax);
       }
 
-      const reader = clearStream.getReader({ mode: "byob" });
+      const reader = new BYOBStreamReader(clearStream);
       const ciphers = Ciphers.latest();
       let totalBytesOutput = 0;
       let readTarget = READ_SIZE_START;
 
       //      console.log('encryptToBytes returning');
       return new ReadableStream({
-         type: 'bytes',
+         type: (browserSupportsBytesStream() ? 'bytes' : undefined),
 
          async start(controller) {
             //            console.log(`start(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
 
             try {
                const buffer = new ArrayBuffer(readTarget);
-               const [clearBuffer, done] = await readStreamBYODUntil(reader, buffer);
+               const [clearBuffer, done] = await reader.readAvailable(buffer);
                //               console.log('start(): readTarget, readBytes', readTarget, clearBuffer.byteLength);
 
                if (clearBuffer.byteLength) {
@@ -157,13 +152,14 @@ export class CipherService {
                   //                  console.log('start(): closing');
                   controller.close();
                   // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
+                  //@ts-ignore
                   controller.byobRequest?.respond(0);
-                  reader.releaseLock();
+                  reader.cleanup();
                }
             } catch (err) {
                console.error(err);
                controller.error(err);
-               reader.releaseLock();
+               reader.cleanup();
             }
          },
 
@@ -174,7 +170,7 @@ export class CipherService {
 
             try {
                const buffer = new ArrayBuffer(readTarget);
-               const [clearBuffer, done] = await readStreamBYODUntil(reader, buffer);
+               const [clearBuffer, done] = await reader.readAvailable(buffer);
                //               console.log('pull(): readTarget, readBytes', readTarget, clearBuffer.byteLength);
 
                if (clearBuffer.byteLength) {
@@ -189,7 +185,7 @@ export class CipherService {
                   controller.enqueue(cipherData.additionalData);
                   // To simplify, only try to write the potentially large portion to BYOD
                   streamWriteBYOD(controller, cipherData.encryptedData);
-//                  controller.enqueue(cipherData.encryptedData);
+                  //                  controller.enqueue(cipherData.encryptedData);
                   //                  console.log('pull(): total enqueued: ' + totalBytesOutput);
                }
 
@@ -197,13 +193,14 @@ export class CipherService {
                   //                  console.log('pull(): closing');
                   controller.close();
                   // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
+                  //@ts-ignore
                   controller.byobRequest?.respond(0);
-                  reader.releaseLock();
+                  reader.cleanup();
                }
             } catch (err) {
                console.error(err);
                controller.error(err);
-               reader.releaseLock();
+               reader.cleanup();
             }
          }
       });
@@ -214,22 +211,26 @@ export class CipherService {
       cipherStream: ReadableStream<Uint8Array>,
    ): Promise<CipherDataInfo> {
 
-      const reader = cipherStream.getReader({ mode: "byob" });
-      let buffer = new ArrayBuffer(cc.HEADER_BYTES);
-      const [headerData] = await readStreamBYODFill(reader, buffer);
-      //      console.log('info(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
+      const reader = new BYOBStreamReader(cipherStream);
+      try {
+         let buffer = new ArrayBuffer(cc.HEADER_BYTES);
+         const [headerData] = await reader.readFill(buffer);
+         //      console.log('info(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
 
-      const ciphers = Ciphers.fromHeader(headerData);
-      ciphers.decodeHeader(headerData);
+         const ciphers = Ciphers.fromHeader(headerData);
+         ciphers.decodeHeader(headerData);
 
-      buffer = new ArrayBuffer(ciphers.payloadSize);
-      const [payloadData] = await readStreamBYODFill(reader, buffer);
-      //      console.log('info(): payloadSize, payloadData', ciphers.payloadSize, payloadData);
+         buffer = new ArrayBuffer(ciphers.payloadSize);
+         const [payloadData] = await reader.readFill(buffer);
+         //      console.log('info(): payloadSize, payloadData', ciphers.payloadSize, payloadData);
 
-      return ciphers.getCipherDataInfo(
-         userCred,
-         payloadData
-      );
+         return ciphers.getCipherDataInfo(
+            userCred,
+            payloadData
+         );
+      } finally {
+         reader.cleanup();
+      }
    }
 
    async getCipherTextInfo(
@@ -237,7 +238,6 @@ export class CipherService {
       block0: Uint8Array,
    ): Promise<CipherDataInfo> {
 
-//      const block0 = base64ToBytes(cipherText);
       const ciphers = Ciphers.fromHeader(block0);
       const consumedBytes = ciphers.decodeHeader(block0);
       return ciphers.getCipherDataInfo(
@@ -253,7 +253,6 @@ export class CipherService {
       readyNotice?: (cdInfo: CipherDataInfo) => void
    ): Promise<Uint8Array> {
 
-//      const block0 = base64ToBytes(cipherText);
       const ciphers = Ciphers.fromHeader(block0);
       const consumedBytes = ciphers.decodeHeader(block0);
 
@@ -274,20 +273,20 @@ export class CipherService {
       readyNotice?: (cdInfo: CipherDataInfo) => void
    ): ReadableStream<Uint8Array> {
 
-      const reader = cipherStream.getReader({ mode: "byob" });
+      const reader = new BYOBStreamReader(cipherStream);
       let ciphers: Ciphers;
       let totalBytesOutput = 0;
 
       //      console.log('decryptStream returning');
       return new ReadableStream({
-         type: 'bytes',
+         type: (browserSupportsBytesStream() ? 'bytes' : undefined),
 
          async start(controller) {
             //            console.log(`start(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
 
             try {
                let buffer = new ArrayBuffer(cc.HEADER_BYTES);
-               const [headerData] = await readStreamBYODFill(reader, buffer);
+               const [headerData] = await reader.readFill(buffer);
                //               console.log('start(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
 
                // If we don't get enough data, let Ciphers throw and error
@@ -295,7 +294,7 @@ export class CipherService {
                ciphers.decodeHeader(headerData);
 
                buffer = new ArrayBuffer(ciphers.payloadSize);
-               const [payloadData] = await readStreamBYODFill(reader, buffer);
+               const [payloadData] = await reader.readFill(buffer);
                if (payloadData.byteLength != ciphers.payloadSize) {
                   throw new Error('Invalid payload size: ' + ciphers.payloadSize);
                }
@@ -310,12 +309,16 @@ export class CipherService {
 
                totalBytesOutput += decrypted.byteLength;
                streamWriteBYOD(controller, decrypted);
-//               console.log('start(): total enqueued', totalBytesOutput);
+               //               console.log('start(): total enqueued', totalBytesOutput);
 
             } catch (err) {
                console.error('start() error, closing', err);
-               controller.error(err);
-               reader.releaseLock();
+//               if (typeof err == 'string' && err == 'password cancelled') {
+  //                controller.close();
+    //           } else {
+                  controller.error(err);
+      //         }
+               reader.cleanup();
             }
          },
 
@@ -324,14 +327,14 @@ export class CipherService {
 
             try {
                let buffer = new ArrayBuffer(cc.HEADER_BYTES);
-               const [headerData] = await readStreamBYODFill(reader, buffer);
+               const [headerData] = await reader.readFill(buffer);
                //               console.log('pull(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
 
                if (headerData.byteLength) {
                   ciphers.decodeHeader(headerData);
 
                   buffer = new ArrayBuffer(ciphers.payloadSize);
-                  const [payloadData] = await readStreamBYODFill(reader, buffer);
+                  const [payloadData] = await reader.readFill(buffer);
                   if (payloadData.byteLength != ciphers.payloadSize) {
                      throw new Error('Invalid payload size: ' + ciphers.payloadSize);
                   }
@@ -341,19 +344,20 @@ export class CipherService {
 
                   totalBytesOutput += decrypted.byteLength;
                   streamWriteBYOD(controller, decrypted);
-//                  console.log('pull(): total enqueued', totalBytesOutput);
+                  //                  console.log('pull(): total enqueued', totalBytesOutput);
                } else {
                   // Reach the end of the stream peacefully...
                   controller.close();
                   // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
+                  //@ts-ignore
                   controller.byobRequest?.respond(0);
-                  reader.releaseLock();
+                  reader.cleanup();
                }
 
             } catch (err) {
                console.error(err);
                controller.error(err);
-               reader.releaseLock();
+               reader.cleanup();
             }
          }
 

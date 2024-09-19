@@ -52,20 +52,20 @@ export function bytesToBase64(bytes: Uint8Array): string {
    return (bufferToBase64URLString(bytes));
 }
 
-export function browserSupportsFilePickers() : boolean {
+export function browserSupportsFilePickers(): boolean {
    //@ts-ignore
-   if(window.showSaveFilePicker) {
+   if (window.showSaveFilePicker) {
       return true;
    } else {
       return false;
    }
 }
 
-export function browserSupportsBytesStream() : boolean {
+export function browserSupportsBytesStream(): boolean {
    try {
       new ReadableStream({ type: "bytes" });
       return true;
-   } catch(err) {
+   } catch (err) {
       return false;
    }
 }
@@ -76,75 +76,156 @@ export function base64ToBytes(b64: string): Uint8Array {
    return new Uint8Array(base64URLStringToBuffer(b64));
 }
 
-export async function readStreamBYODFill(
-   reader: ReadableStreamBYOBReader,
-   buffer: ArrayBuffer
-): Promise<[data: Uint8Array, done: boolean]> {
-
-   const targetBytes = buffer.byteLength;
-   let readBytes = 0;
-   let streamDone = false;
-//   console.log('readStreamUntil-' + targetBytes + ' start');
-
-   while (readBytes < targetBytes) {
-      let { done, value } = await reader.read(
-         new Uint8Array(buffer, readBytes, targetBytes - readBytes)
-      );
-
-//      console.log('readStreamUntil-' + targetBytes, ' read', data.byteLength, done);
-      if(!value) {
-         break
-      }
-
-      streamDone = done;
-      readBytes += value.byteLength;
-      buffer = value.buffer;
-
-      if (done) {
-         break;
-      }
+export class ProcessCancelled extends Error {
+   constructor() {
+      super('Process Cancelled');
+      this.name = this.constructor.name;
    }
 
-   return [new Uint8Array(buffer, 0, readBytes), streamDone];
+   static isProcessCancelled(err: any): boolean {
+      return (err instanceof ProcessCancelled) ||
+         (err instanceof Error && err.message.indexOf('ProcessCancelled') >= 0);
+   }
 }
 
 
-// Use when the reader cannot accept less then the size of output (or stream done)
-export async function readStreamBYODUntil(
-   reader: ReadableStreamBYOBReader,
-   buffer: ArrayBuffer
-): Promise<[data: Uint8Array, done: boolean]> {
+export class BYOBStreamReader {
 
-   const targetBytes = buffer.byteLength;
-   let readBytes = 0;
-   let streamDone = false;
-//   console.log('readStreamUntil-' + targetBytes + ' start');
+   private _reader: ReadableStreamBYOBReader | ReadableStreamDefaultReader;
+   private _extra?: Uint8Array;
 
-   while (readBytes < targetBytes) {
-      let { done, value } = await reader.read(
-         new Uint8Array(buffer, readBytes, targetBytes - readBytes)
-      );
-
-//      console.log('readStreamUntil-' + targetBytes, ' read', data.byteLength, done);
-      if(!value) {
-         break
-      }
-
-      streamDone = done;
-      readBytes += value.byteLength;
-      buffer = value.buffer;
-
-      if (!value.byteLength || done) {
-         break;
+   constructor(stream: ReadableStream<Uint8Array>) {
+      if (browserSupportsBytesStream()) {
+         this._reader = stream.getReader({ mode: "byob" });
+      } else {
+         this._reader = stream.getReader();
       }
    }
 
-   return [new Uint8Array(buffer, 0, readBytes), streamDone];
+   cleanup() {
+      this._reader.releaseLock();
+   }
+
+   // Use when the reader cannot accept less then the size of output (or stream done)
+   async readFill(buffer: ArrayBuffer)
+      : Promise<[data: Uint8Array, done: boolean]> {
+      if (browserSupportsBytesStream()) {
+         return this._readBYOB(buffer, false);
+      } else {
+         return this._readStupidSafari(buffer, false);
+      }
+   }
+
+   async readAvailable(buffer: ArrayBuffer)
+      : Promise<[data: Uint8Array, done: boolean]> {
+      if (browserSupportsBytesStream()) {
+         return this._readBYOB(buffer, true);
+      } else {
+         return this._readStupidSafari(buffer, true);
+      }
+   }
+
+   async _readBYOB(
+      buffer: ArrayBuffer,
+      breakOnStall: boolean
+   ): Promise<[data: Uint8Array, done: boolean]> {
+
+      const reader = this._reader as ReadableStreamBYOBReader;
+      if (buffer instanceof Uint8Array) {
+         buffer = buffer.buffer;
+      }
+
+      const targetBytes = buffer.byteLength;
+      let readBytes = 0;
+      let streamDone = false;
+      console.log('_readBYOB- start', targetBytes);
+
+      while (readBytes < targetBytes) {
+         let { done, value } = await reader.read(
+            new Uint8Array(buffer, readBytes, targetBytes - readBytes)
+         );
+
+         //      console.log('readStreamUntil-' + targetBytes, ' read', data.byteLength, done);
+         if (value) {
+            readBytes += value.byteLength;
+            buffer = value.buffer;
+         }
+         streamDone = done;
+         if (done || (breakOnStall && !value?.byteLength)) {
+            break;
+         }
+      }
+
+      return [new Uint8Array(buffer, 0, readBytes), streamDone];
+   }
+
+   async _readStupidSafari(
+      buffer: ArrayBuffer,
+      breakOnStall: boolean
+   ): Promise<[data: Uint8Array, done: boolean]> {
+
+      const reader = this._reader as ReadableStreamDefaultReader;
+      if (buffer instanceof Uint8Array) {
+         buffer = buffer.buffer;
+      }
+
+      const targetBytes = buffer.byteLength;
+      const writeable = new Uint8Array(buffer);
+      let wroteBytes = 0;
+      let streamDone = false;
+      console.log('_readStupidSafari- start', targetBytes);
+
+      while (wroteBytes < targetBytes) {
+         let done: boolean;
+         let value: Uint8Array;
+
+         if (this._extra) {
+            //            console.log('_readStupidSafari- using extra', this._extra);
+            done = false;
+            value = this._extra;
+            this._extra = undefined;
+         } else {
+            const results = await reader.read();
+            done = results.done;
+            if (typeof results.value === 'string') {
+               value = new TextEncoder().encode(results.value);
+            } else {
+               value = results.value;
+            }
+            //            console.log('_readStupidSafari- read', value);
+         }
+
+         //      console.log('readStreamUntil-' + targetBytes, ' read', data.byteLength, done);
+         if (value) {
+            const unfilledBytes = targetBytes - wroteBytes;
+            if (value.byteLength > unfilledBytes) {
+               this._extra = new Uint8Array(value.buffer, value.byteOffset + unfilledBytes, value.byteLength - unfilledBytes);
+               value = new Uint8Array(value.buffer, value.byteOffset, unfilledBytes);
+               done = false;
+               //               console.log('_readStupidSafari- have extra', unfilledBytes, value, this._extra);
+            }
+
+            //            console.log('_readStupidSafari- writing at', wroteBytes, value);
+
+            writeable.set(value, wroteBytes);
+            //            console.log('_readStupidSafari- current', new Uint8Array(buffer));
+            wroteBytes += value.byteLength;
+         }
+
+         streamDone = done;
+         if (done || (breakOnStall && !value?.byteLength)) {
+            break;
+         }
+      }
+
+      //      console.log('_readStupidSafari- done', new Uint8Array(buffer, 0, wroteBytes), streamDone);
+      return [new Uint8Array(buffer, 0, wroteBytes), streamDone];
+   }
 }
+
 
 type TrueType = true;
 type FalseType = false;
-
 
 export async function readStreamAll(stream: ReadableStream<Uint8Array>): Promise<Uint8Array>
 export async function readStreamAll(stream: ReadableStream<Uint8Array>, decode: FalseType): Promise<Uint8Array>
@@ -158,11 +239,11 @@ export async function readStreamAll(
    try {
       let readBytes = 0;
       const blocks: Uint8Array[] = [];
-   //   console.log('readStreamAll- start');
+      //   console.log('readStreamAll- start');
 
       while (true) {
          const { done, value } = await reader.read();
-   //      console.log('readStreamAll- read', value?.byteLength, done);
+         //      console.log('readStreamAll- read', value?.byteLength, done);
          if (value) {
             blocks.push(value);
             readBytes += value.byteLength;
@@ -174,17 +255,17 @@ export async function readStreamAll(
       }
 
       result = coalesceBlocks(blocks, readBytes);
-      if(decode) {
+      if (decode) {
          result = new TextDecoder().decode(result);
       }
    } finally {
       reader.releaseLock();
    }
 
-//   console.log('readStreamAll- exit returnedBytes, done:',
-//      result.byteLength,
-//      streamDone
-//   );
+   //   console.log('readStreamAll- exit returnedBytes, done:',
+   //      result.byteLength,
+   //      streamDone
+   //   );
 
    return result;
 }
@@ -193,7 +274,7 @@ function coalesceBlocks(
    blocks: Uint8Array[],
    byteLen: number
 ): Uint8Array {
-//   console.log('coalescing blocks: ' + blocks.length);
+   //   console.log('coalescing blocks: ' + blocks.length);
 
    let result = new Uint8Array(0);
    if (blocks.length > 1) {
@@ -211,191 +292,101 @@ function coalesceBlocks(
 }
 
 
-// There doesn't seem to be a way to force ReadableStreamBYOBReader.read
-// to write into the provided buffer, it sometime returns internal buffer.
-// That means we have to return the data buffer and its size.
-// Returns empty Uint8Array rather than null or undefined (make helps below cleaner)
-export async function readStreamBYOBOLD(
-   reader: ReadableStreamBYOBReader,
-   output: Uint8Array
-): Promise<[Uint8Array, boolean]> {
-
-//   console.log('readStreamBYOB reading:', output.byteLength);
-   let { done, value } = await reader.read(output);
-//   console.log('readStreamBYOB read:', value?.byteLength, done);
-   value = value ?? new Uint8Array(0);
-   return [value, done];
-}
-
-
-// Use when the reader cannot accept less then the size of output (or stream done)
-export async function readStreamBYODFillOLD(
-   reader: ReadableStreamBYOBReader,
-   output: Uint8Array
-): Promise<[data: Uint8Array, done: boolean]> {
-
-   const targetBytes = output.byteLength;
-   let readBytes = 0;
-   const blocks: Uint8Array[] = [];
-   let streamDone = false;
-//   console.log('readStreamFill-' + targetBytes + ' start');
-
-   while (readBytes < targetBytes) {
-      const [data, done] = await readStreamBYOBOLD(reader, output);
-//      console.log('readStreamFill-' + targetBytes, ' read', data.byteLength, done);
-      blocks.push(data);
-      streamDone = done;
-      readBytes += data.byteLength;
-
-      if (done) {
-         break;
-      }
-      if (readBytes < targetBytes) {
-         output = new Uint8Array(targetBytes - readBytes);
-      }
-   }
-
-   const result = coalesceBlocks(blocks, readBytes);
-//   console.log('readStreamFill-' + targetBytes + ' exit returnedBytes, done:',
-//      result.byteLength,
-//      streamDone
-//   );
-
-   return [result, streamDone];
-}
-
-
-// Use when the reader cannot accept less then the size of output (or stream done)
-export async function readStreamBYODUntilOLD(
-   reader: ReadableStreamBYOBReader,
-   output: Uint8Array
-): Promise<[data: Uint8Array, done: boolean]> {
-
-   const targetBytes = output.byteLength;
-   let readBytes = 0;
-   const blocks: Uint8Array[] = [];
-   let streamDone = false;
-//   console.log('readStreamUntil-' + targetBytes + ' start');
-
-   while (readBytes < targetBytes) {
-      const [data, done] = await readStreamBYOBOLD(reader, output);
-//      console.log('readStreamUntil-' + targetBytes, ' read', data.byteLength, done);
-      blocks.push(data);
-      streamDone = done;
-      readBytes += data.byteLength;
-
-      if (!data.byteLength || done) {
-         break;
-      }
-      if (readBytes < targetBytes) {
-         output = new Uint8Array(targetBytes - readBytes);
-      }
-   }
-
-   const result = coalesceBlocks(blocks, readBytes);
-//   console.log('readStreamUntil-' + targetBytes + ' exit returnedBytes, done:',
-//      result.byteLength,
-//      streamDone
-//   );
-
-   return [result, streamDone];
-}
-
-
 export function streamWriteBYOD(
-   controller: ReadableByteStreamController,
+   controller: ReadableByteStreamController | ReadableStreamDefaultController<Uint8Array>,
    data: Uint8Array
 ): number {
    let written = 0;
-   const byodView = controller.byobRequest?.view;
 
-   if(byodView) {
-     const byodBytes = Math.min(data.byteLength, byodView.byteLength);
-//     console.log("stream write- byod:", byodBytes);
-     const writeableView = new Uint8Array(byodView.buffer, byodView.byteOffset, byodView.byteLength);
-     writeableView.set(new Uint8Array(data.buffer, 0, byodBytes));
-     written += byodBytes;
-     controller.byobRequest.respond(byodBytes);
-
-     if(byodBytes < data.byteLength) {
-       const remainder = new Uint8Array(data.buffer, byodBytes)
-//       console.log("stream write- enqueuing:", remainder.byteLength);
-       written += remainder.byteLength;
-       controller.enqueue(remainder);
-     }
+   if (!browserSupportsBytesStream() ||
+      controller instanceof ReadableStreamDefaultController ||
+      !controller.byobRequest?.view) {
+      written += data.byteLength;
+      controller.enqueue(data);
    } else {
-//     console.log("stream write- enqueuing:", data.byteLength);
-     written += data.byteLength;
-     controller.enqueue(data);
+      const byodView = controller.byobRequest.view;
+      const byodBytes = Math.min(data.byteLength, byodView.byteLength);
+      const writeableView = new Uint8Array(byodView.buffer, byodView.byteOffset, byodView.byteLength);
+      writeableView.set(new Uint8Array(data.buffer, 0, byodBytes));
+      written += byodBytes;
+      controller.byobRequest.respond(byodBytes);
+
+      if (byodBytes < data.byteLength) {
+         const remainder = new Uint8Array(data.buffer, byodBytes)
+         written += remainder.byteLength;
+         controller.enqueue(remainder);
+      }
    }
-//   console.log("stream write- total:", written);
+
    return written;
 }
 
-export async function selectCipherFile() : Promise<FileSystemFileHandle> {
-   //@ts-ignore
-   const [fileHandle] = await window.showOpenFilePicker({
-      id: 'quickcrypt_org',
-      multiple: false,
-      types: [{
-         description: 'Encrypted files',
-         accept: {
-            'application/octet-stream': ['.qq', '.json'],
-         }}, {
+export async function selectCipherFile(): Promise<FileSystemFileHandle> {
+   try {
+      //@ts-ignore
+      const [fileHandle] = await window.showOpenFilePicker({
+         id: 'quickcrypt_org',
+         multiple: false,
+         types: [{
+            description: 'Encrypted files',
+            accept: {
+               'application/octet-stream': ['.qq', '.json'],
+            }
+         }, {
             description: 'JSON file',
             accept: {
                'application/json': ['.json'],
-            }},
-      ]
-   });
-   return fileHandle;
+            }
+         },
+         ]
+      });
+      return fileHandle;
+   } catch (err) {
+      console.log(err);
+      throw new ProcessCancelled();
+   }
+
 }
 
 export async function selectClearFile(): Promise<FileSystemFileHandle> {
-   //@ts-ignore
-   const [fileHandle] = await window.showOpenFilePicker({
-      id: 'quickcrypt_org',
-      multiple: false
-   });
-   return fileHandle;
+   try {
+      //@ts-ignore
+      const [fileHandle] = await window.showOpenFilePicker({
+         id: 'quickcrypt_org',
+         multiple: false
+      });
+      return fileHandle;
+   } catch (err) {
+      console.log(err);
+      throw new ProcessCancelled();
+   }
 }
 
-export async function selectWriteableTxtFile(
-   baseName?: string
-): Promise<FileSystemFileHandle> {
-
-   const suggested = baseName ? `${baseName}.txt` : '';
-   const options = {
-      id: 'quickcrypt_org',
-      suggestedName: suggested,
-      types: [{
-         description: 'Text file',
-         accept: {
-            'text/plain': ['.txt'],
-         }
-      }]
-   };
-   //@ts-ignore
-   return await window.showSaveFilePicker(options);
+async function selectWriteableFileImpl(options: { [key: string]: any }): Promise<FileSystemFileHandle> {
+   try {
+      //@ts-ignore
+      return await window.showSaveFilePicker(options);
+   } catch (err) {
+      console.log(err);
+      throw new ProcessCancelled();
+   }
 }
 
 export async function selectWriteableFile(baseName?: string): Promise<FileSystemFileHandle> {
-
    const suggested = baseName ?? '';
    const options = {
       id: 'quickcrypt_org',
       suggestedName: suggested
    };
-   //@ts-ignore
-   return await window.showSaveFilePicker(options);
+
+   return selectWriteableFileImpl(options);
 }
 
 
 export async function selectWriteableJsonFile(baseName?: string): Promise<FileSystemFileHandle> {
-
    const suggested = baseName ? `${baseName}.json` : '';
    const options = {
-      id: 'quickcrypt_org',
+      id: 'quickcrypt_org_json',
       suggestedName: suggested,
       types: [{
          description: 'JSON file',
@@ -404,15 +395,14 @@ export async function selectWriteableJsonFile(baseName?: string): Promise<FileSy
          }
       }]
    };
-   //@ts-ignore
-   return await window.showSaveFilePicker(options);
+
+   return selectWriteableFileImpl(options);
 }
 
 export async function selectWriteableQQFile(baseName?: string): Promise<FileSystemFileHandle> {
-
    const suggested = baseName ? `${baseName}.qq` : '';
    const options = {
-      id: 'quickcrypt_org',
+      id: 'quickcrypt_org_qq',
       suggestedName: suggested,
       types: [{
          description: 'Encrypted files',
@@ -421,8 +411,24 @@ export async function selectWriteableQQFile(baseName?: string): Promise<FileSyst
          }
       }]
    };
-   //@ts-ignore
-   return await window.showSaveFilePicker(options);
+
+   return selectWriteableFileImpl(options);
+}
+
+export async function selectWriteableTxtFile(baseName?: string): Promise<FileSystemFileHandle> {
+   const suggested = baseName ? `${baseName}.txt` : '';
+   const options = {
+      id: 'quickcrypt_org_txt',
+      suggestedName: suggested,
+      types: [{
+         description: 'Text file',
+         accept: {
+            'text/plain': ['.txt'],
+         }
+      }]
+   };
+
+   return selectWriteableFileImpl(options);
 }
 
 export class Random48 {

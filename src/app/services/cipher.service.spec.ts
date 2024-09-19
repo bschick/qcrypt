@@ -25,9 +25,11 @@ import { CipherService, EParams } from './cipher.service';
 import { Ciphers } from './ciphers';
 import {
    readStreamAll,
-   readStreamBYODFill,
-   base64ToBytes
+   base64ToBytes,
+   BYOBStreamReader
 } from './utils';
+
+jasmine.DEFAULT_TIMEOUT_INTERVAL = 10000;
 
 describe('CipherService', () => {
    let cipherSvc: CipherService;
@@ -42,6 +44,7 @@ describe('CipherService', () => {
    });
 });
 
+// Faster than .toEqual, resulting in few timeouts
 function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
    if (a.byteLength != b.byteLength) {
       return false;
@@ -131,7 +134,7 @@ describe("String encryption and decryption", function () {
                expect(params.ic).toEqual(cc.ICOUNT_MIN);
             }
          );
-         expect(decrypted).toEqual(clearData);
+         expect(isEqualArray(decrypted, clearData)).toBeTrue();
       }
    });
 
@@ -184,23 +187,55 @@ describe("String encryption and decryption", function () {
             }
          );
          //      console.log(alg + ": '" + decrypted + "'");
-         expect(decrypted).toEqual(clearData);
+         expect(isEqualArray(decrypted, clearData)).toBeTrue();
       }
    });
 
-   it("confirm successful version decryption", async function () {
+   it("confirm successful version decryption, v1", async function () {
       // These are generated with running website
       const cts = [
-         // AEG-GCM: V1, V4
+         // AEG-GCM: V1
          '4FhRcUaBCS6rrfj8pmkyclbGORk-nVoo-Epq_0NZ3E0BAEE8XuQyAPODSpDZLh9fCrOSLERyCwWq9rzth9VAdxsAAQAV3pKmSTgTx99M_cAWV51Z2AFzgXyEQk-iZznhBgEsdTvIlwTdet5j7a8FqrlMlZiQRvlvLhOgAvsO0n5Pxkhxhv-lK9mLQ670gilLRTrRR-pKATz4hGMWIDCgC4ojnOMwluTtK0XosZ0dCcSy9nMgIhWP5co-LWwr-NWsY29uXFC9WZI5ZA4Ujt1BAsv-gUe7vhwFcPLkhFGgc6tIeo4ObcSm7oC7z4AjTQ9WtURpvgwoqA9ovHEMum2ViGSifXlemw304KMKGDQgsM3Fn9YacZjJO0YYMyiNi48ywQVCNkw_Fvo',
+
+         // XChaCha: V1
+         'D0WSIi0s18fTxqsg5CGOHV3boHS7yaCo9AGOmWM8G30CAKFIuXF7m1ZxGo4bL6P7SaXqw-IIv8N9ZKR44xaZKIdgys4pysPqkIRAdxsAAQAVSEeOnFNPWdrAli-fyq8dWfUK2aBmXWF7T6vt06Fl5ehzCOh9DtT4W6uckFBh7S_VFBpmeh1_VN1WWAVV-PUB8HvIRtrVAoRiZy6H-BhkOaZflJnIQpu15AkrZC5aY8e4ulwiWIrV_ep88a963_B5mme9TaVZyzeXuBbo6xFOuGsVoPybjU-DWBDKK3i2rGju62NOlthYTn3eP3e2UuT_wIt1IB30XNO3dsxmcKQAW70GwSDvlGH-KnNqoUw3BUf07PlOYaiP0YfwqxZa7Mr4FjZ-sgTZTg2yKB0Xc-LeuuRprvs',
+
+         // AEGIS: V1
+         'ZhiPRZ7YOIjWXEMBFmyZsSWwor9WNId6oPXqBgJmCxkDAMCrHZhWSw5s_dZzPc-k9R2TqHmrs-8kYl2YCxT3PblxGLL51besQyoLQsuJHYvKGUB3GwABACXwMpAj4tQpvDM0yLAUJWwWFpSPHMxwMtxvB6xUvbQQDRdzkm1rFPPYm_PfWPXh_vekCrJTjXCp22hvGCr9NhPTCxnhrPu4hpVkIaPawZ77bB6uAoXI8htcZoLrf2CuSx2-F-v7XRCNYtFfOpwLQQx1u_df4xpFZWXwz_pZafMN6dvbYniu3-x4Iwcj1RtzqOajBPrgMO143pTu9n2LlKUkeUVR3VmeJIFeXhdbUaVWo498Jeboltf7XLUGy--Ox5yVFaCcmPiYUZFe0UolFPJLPIAEHB4Smdw83LoHwwjgjedzvuyzi5SHpq03OYME87dUQBVdgIDwaxwIyJDxpbLvXP9P',
+      ];
+
+      for (let ct of cts) {
+         const ctBytes = base64ToBytes(ct);
+         // userCred used for creation of the CTS above
+         // b64url userCred for browsser injection: xhKm2Q404pGkqfWkTyT3UodUR-99bN0wibH6si9uF8I
+         const userCred = new Uint8Array([198, 18, 166, 217, 14, 52, 226, 145, 164, 169, 245, 164, 79, 36, 247, 82, 135, 84, 71, 239, 125, 108, 221, 48, 137, 177, 250, 178, 47, 110, 23, 194]);
+         const clearCheck = new TextEncoder().encode('physical farm bolt correct bee nonchalant glib high able pinch left quaint strip valuable exultant disgusted curved bless geese snatch zoom fat touch boot abject wink pretty accessible foamy');
+         const hintCheck = 'royal';
+         const pwd = '9j5J4QnKD3D2R7Ks5gAAa';
+
+         const clear = await cipherSvc.decryptBuffer(
+            async (hint) => {
+               expect(hint).toEqual(hintCheck);
+               return pwd;
+            },
+            userCred,
+            base64ToBytes(ct)
+         );
+
+         expect(isEqualArray(clear, clearCheck)).toBeTrue();
+      }
+   });
+
+   it("confirm successful version decryption, v4", async function () {
+      // These are generated with running website
+      const cts = [
+         // AEG-GCM: V4
          'y0SaxQp26pd_UopQ0QRXPgI1jkT4FLZvrORdOIBXlzoEAAYBAAABAM9IezkEqREmcKPz7uc1cB92dbdotcUXT7hgaaBAdxsAFaQv7dZzGLwXv0QM6wuIYXIbusLB9ioNmLXY7ZuQ_X8k5ToM1tfNO5Y9QXzJ7QtIKeHmprBILRuk56mVGmec4VfmHVWc5ibavRuq7mYPEONH0P6LESxP3wqE9wkNvrrxEOvAtsrrC1zqlKDsLkJLG8vc5gM_9wLuRrP3mjLKHFlSuw37KGp4MnwovrQMHukTlNFHSYeK4jBBIGu0makpYh6NyM5e9vszbaXxqPe5mTdgV6498oepCmhV-lAh26rjwUZ6cdYuT6Ql-9YodLhxFRSmLC_8CEX8GHZuFoeiCNkicYOc',
 
-         // XChaCha: V1, V4
-         'D0WSIi0s18fTxqsg5CGOHV3boHS7yaCo9AGOmWM8G30CAKFIuXF7m1ZxGo4bL6P7SaXqw-IIv8N9ZKR44xaZKIdgys4pysPqkIRAdxsAAQAVSEeOnFNPWdrAli-fyq8dWfUK2aBmXWF7T6vt06Fl5ehzCOh9DtT4W6uckFBh7S_VFBpmeh1_VN1WWAVV-PUB8HvIRtrVAoRiZy6H-BhkOaZflJnIQpu15AkrZC5aY8e4ulwiWIrV_ep88a963_B5mme9TaVZyzeXuBbo6xFOuGsVoPybjU-DWBDKK3i2rGju62NOlthYTn3eP3e2UuT_wIt1IB30XNO3dsxmcKQAW70GwSDvlGH-KnNqoUw3BUf07PlOYaiP0YfwqxZa7Mr4FjZ-sgTZTg2yKB0Xc-LeuuRprvs',
+         // XChaCha: V4
          'Ul5PloDpBMvn_D6S9RuIaj7Xu5RhQk_CNJv5Ttueg-MEABIBAAACAOg3nkrGoM6kd663ABirC6EVHAdq6mSCNlxSLcwOd8I_YRszMP-YalNAdxsAFbSBMyQ53PFVP1aoUZ7-PW_vNgq3Uv4vRceAWZZtRWiqOPkxtW7nmG0dlCPoVIYdCXi-FxIVyAJRSc6cUUEzITKQqyUDIqgeyErhmURWToVhHItNESwJIC7Vn0zW0MRWIs2msx_Xclz_k7vIzTWVUm_Uu_e4kghWNWTvC9vdmBg3duY6z1_GTyPi2aS7B-awVN6Y9toODSVR5dGKwbR7CQczIXh18X7rNTHizVtekFYhKvyWWgdLTMcuGiA8p6ebAPNFLYCl9eyM2dihIw1FnHrpmAxb0bk9FAEs8FM79YjHvJVU',
 
-         // AEGIS: V1, V4
-         'ZhiPRZ7YOIjWXEMBFmyZsSWwor9WNId6oPXqBgJmCxkDAMCrHZhWSw5s_dZzPc-k9R2TqHmrs-8kYl2YCxT3PblxGLL51besQyoLQsuJHYvKGUB3GwABACXwMpAj4tQpvDM0yLAUJWwWFpSPHMxwMtxvB6xUvbQQDRdzkm1rFPPYm_PfWPXh_vekCrJTjXCp22hvGCr9NhPTCxnhrPu4hpVkIaPawZ77bB6uAoXI8htcZoLrf2CuSx2-F-v7XRCNYtFfOpwLQQx1u_df4xpFZWXwz_pZafMN6dvbYniu3-x4Iwcj1RtzqOajBPrgMO143pTu9n2LlKUkeUVR3VmeJIFeXhdbUaVWo498Jeboltf7XLUGy--Ox5yVFaCcmPiYUZFe0UolFPJLPIAEHB4Smdw83LoHwwjgjedzvuyzi5SHpq03OYME87dUQBVdgIDwaxwIyJDxpbLvXP9P',
+         // AEGIS: V4
          '_ec1F_Gme1ydJHBVEVRz0W-6yXzFG6psnN2ptLTzfm4EADoBAAADAGIQU9XkWCAVWNBX9jthhM2J_7-BaCmDhTIm56hvNHALl89E8t7HZwFd4tWH19mk0kB3GwAlPG0kg10bo2T_07Ent1LaEt0N1579OiJvN8WVth0H9ToYUFLqwYrEuiGesaWlF3GABL3Fpw7k5RACncuNftVy7O59yCzqBxReo8RH8oDO2cyedywojhwy_LwX_RHCf4CtdxaO80JzRDn3UkVTOB7Vurx-DWvzyEXFOeI8REEg43BAHG4I-ed8SyBVk2XHRceo2u8nv19wlnhxjYw0UycA5CHIXF6T7S3P8bOfgxenGOn7xfjEddQqOa-GyNl-2njEcPzrkHnBxDvs4clGK4LjgUAAi_9WqdgmC6m-V3Lv8iP-APSUYb7CXU5JWkk-1JpMorslki63eBU5tHZfd8GsRrGOyA',
       ];
 
@@ -222,7 +257,7 @@ describe("String encryption and decryption", function () {
             base64ToBytes(ct)
          );
 
-         expect(clear).toEqual(clearCheck);
+         expect(isEqualArray(clear, clearCheck)).toBeTrue();
       }
    });
 
@@ -253,7 +288,7 @@ describe("String encryption and decryption", function () {
             userCred,
             base64ToBytes(ct)
          );
-         expect(clear).toEqual(clearCheck);
+         expect(isEqualArray(clear, clearCheck)).toBeTrue();
 
          let skipCount = 0;
 
@@ -560,7 +595,7 @@ describe("Stream manipulation", function () {
    //const READ_SIZE_MAX = READ_SIZE_START * 41
 
 
-   it("detect manipulated cipher stream header", async function () {
+   it("detect manipulated cipher stream header, block0", async function () {
 
       // First make sure it decrypts as expected
       let blob = new Blob([encryptedData], { type: 'application/octet-stream' });
@@ -571,7 +606,7 @@ describe("Stream manipulation", function () {
       );
 
       const value = await readStreamAll(dec);
-      expect(value).toEqual(new Uint8Array(clearData.buffer, 0, value!.byteLength));
+      expect(isEqualArray(value, new Uint8Array(clearData.buffer, 0, value!.byteLength))).toBeTrue();
 
       // Modified block0 MAC
       const b0Mac = new Uint8Array(encryptedData);
@@ -651,6 +686,21 @@ describe("Stream manipulation", function () {
          readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid payload.+'));
 
+      });
+
+   it("detect manipulated cipher stream header, blockN", async function () {
+
+      // First make sure it decrypts as expected
+      let blob = new Blob([encryptedData], { type: 'application/octet-stream' });
+      let dec = cipherSvc.decryptStream(
+         async (decHint) => { expect(decHint).toEqual('4321'); return 'asdf'; },
+         userCred,
+         blob.stream(),
+      );
+
+      const value = await readStreamAll(dec);
+      expect(isEqualArray(value, new Uint8Array(clearData.buffer, 0, value!.byteLength))).toBeTrue();
+
       // Modified blockN MAC
       const bNMac = new Uint8Array(encryptedData);
       bNMac.set([255], block1MACOffset);
@@ -728,10 +778,10 @@ describe("Stream manipulation", function () {
       await expectAsync(
          readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid payload.+'));
-
    });
 
-   it("detect manipulated cipher stream additional data", async function () {
+
+   it("detect manipulated cipher stream additional data, block0", async function () {
 
       // First make sure it decrypts as expected
       let blob = new Blob([encryptedData], { type: 'application/octet-stream' });
@@ -742,7 +792,7 @@ describe("Stream manipulation", function () {
       );
 
       const value = await readStreamAll(dec);
-      expect(value).toEqual(new Uint8Array(clearData.buffer, 0, value!.byteLength));
+      expect(isEqualArray(value, new Uint8Array(clearData.buffer, 0, value!.byteLength))).toBeTrue();
 
       // Modified block0 invalid ALG
       let b0Alg = new Uint8Array(encryptedData);
@@ -848,6 +898,21 @@ describe("Stream manipulation", function () {
          readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
 
+   });
+
+   it("detect manipulated cipher stream additional data, blockN", async function () {
+
+      // First make sure it decrypts as expected
+      let blob = new Blob([encryptedData], { type: 'application/octet-stream' });
+      let dec = cipherSvc.decryptStream(
+         async (decHint) => { expect(decHint).toEqual('4321'); return 'asdf'; },
+         userCred,
+         blob.stream(),
+      );
+
+      const value = await readStreamAll(dec);
+      expect(isEqualArray(value, new Uint8Array(clearData.buffer, 0, value!.byteLength))).toBeTrue();
+
       // Modified blockN invalid ALG
       let bNAlg = new Uint8Array(encryptedData);
       bNAlg.set([128], block1AlgOffset);
@@ -889,7 +954,6 @@ describe("Stream manipulation", function () {
 
    });
 
-
    it("detect manipulated cipher stream encrypted data", async function () {
 
       // First make sure it decrypts as expected
@@ -901,7 +965,8 @@ describe("Stream manipulation", function () {
       );
 
       const value = await readStreamAll(dec);
-      expect(value).toEqual(new Uint8Array(clearData.buffer, 0, value!.byteLength));
+      expect(isEqualArray(value, new Uint8Array(clearData.buffer, 0, value!.byteLength))).toBeTrue();
+
 
       // Modified block0 encrypted data
       let b0Enc = new Uint8Array(encryptedData);
@@ -983,7 +1048,12 @@ describe("Stream encryption and decryption", function () {
          );
 
          let decrypted = await readStreamAll(decryptedStream);
-         expect(await blob.arrayBuffer()).toEqual(decrypted.buffer);
+         expect(isEqualArray(
+            new Uint8Array(await blob.arrayBuffer()),
+            decrypted
+         )).toBeTrue();
+
+
       }
    });
 
@@ -1015,7 +1085,6 @@ describe("Stream encryption and decryption", function () {
                expect(params.ic).toEqual(cc.ICOUNT_MIN);
             }
          );
-         //         console.log(alg + ": " + cipherText.length + ": " + cipherText);
 
          const decryptedStream = cipherSvc.decryptStream(
             async (decHint) => {
@@ -1031,9 +1100,10 @@ describe("Stream encryption and decryption", function () {
          );
 
          let decrypted = await readStreamAll(decryptedStream);
-         expect(await blob.arrayBuffer()).toEqual(decrypted.buffer);
-
-         //      console.log(alg + ": '" + decrypted + "'");
+         expect(isEqualArray(
+            new Uint8Array(await blob.arrayBuffer()),
+            decrypted
+         )).toBeTrue();
       }
    });
 
@@ -1070,11 +1140,12 @@ describe("Stream encryption and decryption", function () {
          );
 
          // use byod mode to also test stream byod support
-         const reader = decryptedStream.getReader({ mode: "byob" });
+         const reader = new BYOBStreamReader(decryptedStream);
          let buffer = new ArrayBuffer(clearCheck.byteLength);
 
-         const [decrypted] = await readStreamBYODFill(reader, buffer);
-         expect(decrypted).toEqual(clearCheck);
+         const [decrypted] = await reader.readFill(buffer);
+         reader.cleanup();
+         expect(isEqualArray(decrypted, clearCheck)).toBeTrue();
       }
    });
 });

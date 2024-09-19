@@ -34,6 +34,7 @@ export const IV_MAX_BYTES = 32;
 export const ALG_BYTES = 2;
 export const SLT_BYTES = 16;
 export const IC_BYTES = 4;
+export const LPS_BYTES = 1;
 export const VER_BYTES = 2;
 export const MAC_BYTES = 32;
 export const USERCRED_BYTES = 32;
@@ -45,6 +46,9 @@ export const HEADER_BYTES = MAC_BYTES + VER_BYTES + PAYLOAD_SIZE_BYTES;
 
 export const PAYLOAD_SIZE_MIN = IV_MIN_BYTES + ALG_BYTES + AUTH_TAG_MIN_BYTES + 1;
 export const PAYLOAD_SIZE_MAX = 16777215;  // limit to 3 bytes size (extra byte is reserved)
+
+export const ADDIONTAL_DATA_MAX_BYTES = ALG_BYTES + IV_MAX_BYTES + IC_BYTES + SLT_BYTES + LPS_BYTES + HINT_LEN_BYTES + ENCRYPTED_HINT_MAX_BYTES;
+export const CLEAR_DATA_MAX_BYTES = PAYLOAD_SIZE_MAX - ADDIONTAL_DATA_MAX_BYTES;
 
 export const ICOUNT_MIN = 400000;
 export const ICOUNT_DEFAULT = 800000;
