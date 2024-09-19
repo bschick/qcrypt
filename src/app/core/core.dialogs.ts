@@ -165,6 +165,11 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    }
 }
 
+export interface CipherInfoDialogData {
+   cdInfo?: CipherDataInfo,
+   lps: number
+};
+
 @Component({
    selector: 'cipher-info-dialog',
    templateUrl: './cipher-info-dialog.html',
@@ -180,23 +185,25 @@ export class CipherInfoDialog {
    public slt!: string;
    public iv!: string;
    public ver!: string;
+   public lps!: number;
    public hint!: string;
 
    constructor(
       private r2: Renderer2,
       private cipherSvc: CipherService,
       public dialogRef: MatDialogRef<CipherInfoDialog>,
-      @Inject(MAT_DIALOG_DATA) public cdInfo: CipherDataInfo | null
+      @Inject(MAT_DIALOG_DATA) public data: CipherInfoDialogData
    ) {
-      if (cdInfo == null) {
-         this.error = 'The wrong passkey was selected or the cipher armor was changed';
+      if (!data.cdInfo) {
+         this.error = 'The wrong passkey was selected or the cipher armor is invalid';
       } else {
-         this.ic = cdInfo.ic.toLocaleString();
-         this.alg = this.cipherSvc.algDescription(cdInfo.alg);
-         this.iv = bytesToBase64(cdInfo.iv as Uint8Array);
-         this.slt = bytesToBase64(cdInfo.slt as Uint8Array);
-         this.hint = cdInfo.hint ? 'yes' : 'no';
-         this.ver = cdInfo.ver.toString();
+         this.ic = data.cdInfo.ic.toLocaleString();
+         this.alg = this.cipherSvc.algDescription(data.cdInfo.alg);
+         this.iv = bytesToBase64(data.cdInfo.iv as Uint8Array);
+         this.slt = bytesToBase64(data.cdInfo.slt as Uint8Array);
+         this.hint = data.cdInfo.hint ? 'yes' : 'no';
+         this.lps = data.lps;
+         this.ver = data.cdInfo.ver.toString();
       }
    }
 }

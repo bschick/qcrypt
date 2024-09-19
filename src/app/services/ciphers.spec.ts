@@ -24,7 +24,7 @@ import * as cc from './cipher.consts';
 import { Random48, bytesToBase64 } from './utils';
 import { Ciphers, EParams, CipherDataBlock } from './ciphers';
 
-
+// Faster than .toEqual, resulting in few timeouts
 function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
    if (a.length != b.length) {
       return false;
@@ -313,6 +313,7 @@ describe("Encryption and decryption", function () {
          const consumedBytes = ciphers.decodeHeader(block0.headerData);
          expect(consumedBytes).toEqual(block0.headerData.byteLength);
 
+
          const decrypted = await ciphers.decryptPayload0(
             async (decHint) => {
                return pwd;
@@ -432,8 +433,8 @@ describe("Encryption and decryption", function () {
 
       expect(cdInfo.alg).toEqual('X20-PLY');
       expect(cdInfo.ic).toEqual(1800000);
-      expect(cdInfo.iv).toEqual(new Uint8Array([196, 214, 166, 50, 166, 132, 209, 32, 217, 123, 195, 177, 134, 142, 73, 117, 85, 242, 50, 93, 93, 143, 154, 136]));
-      expect(cdInfo.slt).toEqual(new Uint8Array([4, 69, 111, 200, 122, 230, 194, 138, 212, 62, 46, 76, 65, 170, 189, 196]));
+      expect(isEqualArray(cdInfo.iv, new Uint8Array([196, 214, 166, 50, 166, 132, 209, 32, 217, 123, 195, 177, 134, 142, 73, 117, 85, 242, 50, 93, 93, 143, 154, 136]))).toBeTrue();
+      expect(isEqualArray(cdInfo.slt, new Uint8Array([4, 69, 111, 200, 122, 230, 194, 138, 212, 62, 46, 76, 65, 170, 189, 196]))).toBeTrue();
       expect(cdInfo.ver).toEqual(cc.CURRENT_VERSION);
       expect(cdInfo.hint).toBeTrue();
 

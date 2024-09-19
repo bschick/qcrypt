@@ -28,11 +28,25 @@ SOFTWARE. -->
         [disabled]="showProgress ? 'true' : 'false'">
         <u>E</u>ncrypt
       </button>
-      <button mat-raised-button *ngIf="useByteStream" class="top-button mleft15" color="basic"
-        (click)="onEncryptToFile()" matTooltip="Encrypt and save to a file"
-        [disabled]="showProgress ? 'true' : 'false'">
-        Encrypt to File
+      <button mat-raised-button class="top-button mleft15" color="basic" [matMenuTriggerFor]="clearMenu"
+        matTooltip="File actions" [disabled]="showProgress ? 'true' : 'false'">
+        Files
+        <mat-icon iconPositionEnd>expand_more</mat-icon>
       </button>
+      <mat-menu #clearMenu="matMenu" xPosition="before">
+        <button mat-menu-item (click)="onEncryptToFile()" matTooltip="Encrypt to cipher armor file"
+          matTooltipPosition="right">
+          <mat-icon svgIcon="encrypted_add"></mat-icon>Encrypt to File
+        </button>
+        <button mat-menu-item (click)="onLoadClearFile()" matTooltip="Select clear text file"
+          matTooltipPosition="right">
+          <mat-icon fontSet="material-icons-outlined">file_upload</mat-icon>Select Clear File
+        </button>
+        <button mat-menu-item (click)="onSaveClearFile()" matTooltip="Save clear text file" matTooltipPosition="right"
+          [disabled]="!clearText ? 'true' : 'false'">
+          <mat-icon fontSet="material-icons-outlined">file_download</mat-icon>Save Clear File
+        </button>
+      </mat-menu>
     </span>
     <span class="flx-buttons">
       <button mat-raised-button (click)="privacyClear()" class="top-button mleft15 clear-button" color="basic"
@@ -42,11 +56,25 @@ SOFTWARE. -->
       </button>
     </span>
     <span class="flx-buttons">
-      <button mat-raised-button *ngIf="useByteStream" class="top-button mleft15" color="basic"
-        (click)="onDecryptToFile()" matTooltip="Decrypt and save to a file"
-        [disabled]="showProgress ? 'true' : 'false'">
-        Decrypt to File
+      <button mat-raised-button class="top-button mleft15" color="basic" [matMenuTriggerFor]="cipherMenu"
+        matTooltip="File Actions" [disabled]="showProgress ? 'true' : 'false'">
+        Files
+        <mat-icon iconPositionEnd>expand_more</mat-icon>
       </button>
+      <mat-menu #cipherMenu="matMenu" xPosition="before">
+        <button mat-menu-item (click)="onDecryptToFile()" matTooltip="Decrypt to cipher armor file"
+          matTooltipPosition="left">
+          <mat-icon svgIcon="encrypted_minus"></mat-icon>Decrypt to File
+        </button>
+        <button mat-menu-item (click)="onLoadCipherFile()" matTooltip="Select cipher armor file"
+          matTooltipPosition="left">
+          <mat-icon fontSet="material-icons-outlined">file_upload</mat-icon>Select Cipher File
+        </button>
+        <button mat-menu-item (click)="onSaveCipherFile()" matTooltip="Save cipher armor file"
+          matTooltipPosition="left" [disabled]="!cipherArmor ? 'true' : 'false'">
+          <mat-icon fontSet="material-icons-outlined">file_download</mat-icon>Save Cipher File
+        </button>
+      </mat-menu>
       <button mat-raised-button (click)="onDecrypt()" class="top-button mleft15" color="primary"
         aria-label="Decrypt Text" accesskey="D" [disabled]="showProgress ? 'true' : 'false'">
         <u>D</u>ecrypt
@@ -69,26 +97,16 @@ SOFTWARE. -->
             [cdkCopyToClipboard]="clearText">
             <mat-icon>content_copy</mat-icon>
           </button>
-          <button [hidden]="!clearText || showProgress" mat-icon-button aria-label="Load"
-            matTooltip="Save clear text to file" (click)="onSaveClearText()">
-            <mat-icon fontSet="material-icons-outlined">file_download</mat-icon>
-          </button>
-          <button [hidden]="showProgress" mat-icon-button aria-label="Load"
-            matTooltip="Load clear file" (click)="onLoadClearText()">
-            <mat-icon fontSet="material-icons-outlined">file_upload</mat-icon>
-          </button>
-          <button [hidden]="showProgress" mat-icon-button aria-label="Clear"
-            matTooltip="Clear text" (click)="onClearClear()">
+          <button [hidden]="showProgress" mat-icon-button aria-label="Clear" matTooltip="Clear text"
+            (click)="onClearClear()">
             <mat-icon>close</mat-icon>
           </button>
-          </div>
+        </div>
         <div>
-          <div class="errorBox" [hidden]="!errorClear">{{errorClear}}</div>
-          <div class="fileBox" *ngIf="clearFile"><b>{{clearFile.name}}</b><br />selected for encryption</div>
+          <div [ngClass]="clearMsgClass" [hidden]="!clearMsg" [innerHTML]="clearMsg"></div>
           <textarea matInput id="clearInput" autofocus cdkTextareaAutosize placeholder="" class="txt-area-clear"
-            [(ngModel)]="clearText" [ngModelOptions]="{standalone: true}"
-            [readonly]="errorClear || clearFile ? 'true' : 'false'" [disabled]="(showProgress) ? 'true' : 'false'"
-            (input)="onClearInput()">
+            [(ngModel)]="clearText" [ngModelOptions]="{standalone: true}" [readonly]="clearMsg ? 'true' : 'false'"
+            [disabled]="(showProgress) ? 'true' : 'false'" (input)="onClearInput()">
           </textarea>
         </div>
       </mat-form-field>
@@ -98,7 +116,7 @@ SOFTWARE. -->
       </mat-icon>
     </div>
     <div #cipherField class="flx-item">
-      <mat-form-field [style.width.%]="100" [style.height.%]="100" spellcheck="false" >
+      <mat-form-field [style.width.%]="100" [style.height.%]="100" spellcheck="false">
         <mat-label>{{cipherLabel}}</mat-label>
         <div class="toolbar">
           <button [hidden]="!cipherArmor || showProgress" mat-icon-button aria-label="Copy"
@@ -110,25 +128,16 @@ SOFTWARE. -->
             matTooltip="Show decryption parameters" (click)="onCipherTextInfo()">
             <mat-icon fontSet="material-icons-outlined">info</mat-icon>
           </button>
-          <button [hidden]="!cipherArmor || showProgress" mat-icon-button aria-label="Load"
-            matTooltip="Save cipher armor to file" (click)="onSaveCipherArmor()">
-            <mat-icon fontSet="material-icons-outlined">file_download</mat-icon>
-          </button>
-          <button [hidden]="showProgress" mat-icon-button aria-label="Load"
-            matTooltip="Load cipher armor file" (click)="onLoadCipherArmor()">
-            <mat-icon fontSet="material-icons-outlined">file_upload</mat-icon>
-          </button>
-          <button [hidden]="showProgress" mat-icon-button aria-label="Clear"
-            matTooltip="Clear cipher armor" (click)="onClearCipher()">
+          <button [hidden]="showProgress" mat-icon-button aria-label="Clear" matTooltip="Clear cipher armor"
+            (click)="onClearCipher()">
             <mat-icon>close</mat-icon>
           </button>
-          </div>
+        </div>
         <div>
-          <div class="errorBox" [hidden]="!errorCipher">{{errorCipher}}</div>
-          <div class="fileBox" *ngIf="cipherFile"><b>{{cipherFile.name}}</b><br />selected for decryption</div>
+          <div [ngClass]="cipherMsgClass" [hidden]="!cipherMsg" [innerHTML]="cipherMsg"></div>
           <textarea matInput id="cipherInput" placeholder="" class="txt-area-armor" cdkTextareaAutosize
-            [(ngModel)]="cipherArmor" [ngModelOptions]="{standalone: true}"
-            [readonly]="errorCipher || cipherFile ? 'true' : 'false'" [disabled]="showProgress ? 'true' : 'false'">
+            [(ngModel)]="cipherArmor" [ngModelOptions]="{standalone: true}" [readonly]="cipherMsg ? 'true' : 'false'"
+            [disabled]="showProgress ? 'true' : 'false'">
           </textarea>
         </div>
       </mat-form-field>
@@ -244,7 +253,7 @@ SOFTWARE. -->
             <mat-option value="link">Link</mat-option>
           </mat-select>
         </mat-form-field>
-        <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'cipher armor formats'}" id="format-link"
+        <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'cipher armor formats, loops'}" id="format-link"
           class="open-new-link" target="_blank">
           <mat-icon class="open-new-icon2">open_in_new</mat-icon>
         </a>
@@ -271,6 +280,5 @@ SOFTWARE. -->
       </a>
     </span>
   </p>
-  <input type="file" (click)="onClickFileUpload($event)" class="file-input" accept="*"
-    #fileUpload />
+  <input type="file" (click)="onClickFileUpload($event)" class="file-input" accept="*" #fileUpload />
 </div>
