@@ -216,12 +216,13 @@ SOFTWARE. -->
         <p class="options-header2">
           Other Options
         </p>
-        <mat-form-field class="option-input" subscriptSizing="dynamic">
+<!--        <mat-form-field class="option-input" subscriptSizing="dynamic">
           <mat-label>Loop Encrypt</mat-label>
           <input type="number" min="1" [max]="LOOP_MAX" step="1" matInput [(ngModel)]="loops" (change)="onLoopsChange()"
             matTooltip="Number of times to run encryption in a loop. Enter a different password each loop" />
         </mat-form-field>
-        <mat-form-field class="option-input mleft15" subscriptSizing="dynamic">
+-->
+        <mat-form-field class="option-input" subscriptSizing="dynamic">
           <mat-label #formatLabel>Cipher Armor Format</mat-label>
           <mat-select [(value)]="ctFormat" (selectionChange)="onFormatChange($event.value)"
             matTooltip="Format of output cipher armor. Only use 'link' when you are not concerned about others changing the cipher armor">
