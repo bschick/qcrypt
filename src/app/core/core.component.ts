@@ -676,10 +676,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
          this.authSvc.activity();
 
-         this.loops = Math.min(
-            Math.max(1, Number(this.loops) ? Number(this.loops) : 0),
-            MAX_LOOPS
-         );
+         this.loops =1;
+
          if (this.icount < this.icountMin) {
             this.icount = this.icountMin;
          }
