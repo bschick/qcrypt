@@ -30,9 +30,13 @@ export type EParams = {
    readonly trueRand: boolean;
    readonly fallbackRand: boolean;
    readonly pwd: string;
+   readonly lp: number;
+   readonly lpEnd: number;
    readonly userCred: Uint8Array;
    readonly hint?: string;     // limited to HINT_MAX_LEN characters
 };
+
+export type PWDProvider = (lp: number, lpEnd:number, hint?: string) => Promise<[string, string | undefined]>;
 
 export type CipherDataBlock = {
    readonly headerData: Uint8Array; // HEADER_BYTES
@@ -44,6 +48,7 @@ export type CipherDataInfo = {
    readonly ver: number;      // VER_BYTES
    readonly alg: string;      // ALG_BYTES
    readonly ic: number;       // IC_BYTES
+   readonly lp: number;       // LP_BYTES
    readonly iv: Uint8Array;   // Variable, lookup in AlgInfo
    readonly slt: Uint8Array;  // SLT_BYTES
    readonly hint: boolean;    // limited to ENCRYPTED_HINT_MAX_BYTES bytes
@@ -69,6 +74,7 @@ export abstract class Ciphers {
    protected _iv?: Uint8Array;
    protected _slt?: Uint8Array;
    protected _ic?: number;
+   protected _lp: number = 1; // Not all version support loop # so provide a default
    protected _additionalData?: Uint8Array;
    protected _encryptedHint?: Uint8Array;
    protected _encryptedData?: Uint8Array;
@@ -83,7 +89,6 @@ export abstract class Ciphers {
 
    // Return appropriate version of Ciphers
    public static fromHeader(encoded: Uint8Array): Ciphers {
-      //      console.log('fromHeader header:', encoded);
       if (encoded.byteLength < cc.MAC_BYTES + cc.VER_BYTES) {
          throw new Error('Invalid header length: ' + encoded.byteLength);
       }
@@ -91,8 +96,8 @@ export abstract class Ciphers {
       let ciphers: Ciphers;
 
       // This is a bit ugly, but the original CiphersV1 encoding stupidly had the
-      // version in the middle of the encoding. Detect old version by the first 2 bytes
-      // being < 4 (because encoded start with ALG and v1 max ALG was 3 and beyond v1
+      // version in the middle of the encoding. So detect old version by the first 2 bytes
+      // being < 4 (since encoded started with ALG and v1 max ALG was 3 and beyond v1
       // version is >=4). Fortunately ALG_BYTES and VER_BYTES are equal.
       const verOrAlg = bytesToNum(new Uint8Array(encoded.buffer, cc.MAC_BYTES, cc.VER_BYTES));
       if (verOrAlg == cc.VERSION4) {
@@ -320,8 +325,6 @@ export abstract class Ciphers {
       additionalData?: Uint8Array,
    ): Promise<Uint8Array> {
 
-      //      console.log('doencrpt clear:' + clear.byteLength);
-
       const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
       if (ivBytes != iv.byteLength) {
          throw new Error('incorrect iv length of: ' + iv.byteLength);
@@ -378,7 +381,7 @@ export abstract class Ciphers {
          );
          encryptedBytes = new Uint8Array(cipherBuf);
       }
-      //      console.log('_doEncrypt result: ', encryptedBytes);
+
       return encryptedBytes;
    }
 
@@ -396,7 +399,8 @@ export abstract class Ciphers {
    // 6. Return cleat text bytes
    //
    public async decryptPayload0(
-      pwdProvider: (hint: string) => Promise<string>,
+      pwdProvider: PWDProvider,
+      lpEnd: number,
       userCred: Uint8Array,
       payload: Uint8Array,
       readyNotice?: (cdInfo: CipherDataInfo) => void
@@ -424,7 +428,7 @@ export abstract class Ciphers {
          );
       }
 
-      const pwd = await pwdProvider(new TextDecoder().decode(hint));
+      const [pwd] = await pwdProvider(this._lp, lpEnd, new TextDecoder().decode(hint));
       if (!pwd) {
          throw new Error('password is empty');
       }
@@ -436,6 +440,7 @@ export abstract class Ciphers {
             ic: this._ic,
             slt: this._slt,
             iv: this._iv,
+            lp: this._lp,
             hint: hint.byteLength > 0
          });
       }
@@ -449,8 +454,6 @@ export abstract class Ciphers {
          this._encryptedData,
          this._additionalData,
       );
-
-      //      console.log('_decryptCommon output bytes: ' + decrypted.byteLength);
 
       return decrypted;
    }
@@ -476,6 +479,7 @@ export abstract class Ciphers {
          alg: this._alg,
          ic: this._ic,
          slt: this._slt,
+         lp: this._lp,
          iv: this._iv,
          hint: this._encryptedHint!.byteLength > 0
       };
@@ -564,22 +568,16 @@ export abstract class Ciphers {
 
       const exportedSk = await crypto.subtle.exportKey("raw", sk);
       const skData = new Uint8Array(exportedSk);
-      //      console.log('sign sk: ' + skData);
 
       const state = sodium.crypto_generichash_init(skData, cc.MAC_BYTES);
-      //      console.log('sign header: ', new Uint8Array(packer.buffer, cc.MAC_BYTES));
       sodium.crypto_generichash_update(state, new Uint8Array(packer.buffer, cc.MAC_BYTES));
-      //      console.log('sign addition: ', additionalData);
       sodium.crypto_generichash_update(state, additionalData);
-      //      console.log('sign encdata: ', encryptedData);
       sodium.crypto_generichash_update(state, encryptedData);
 
       const mac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
-      //      console.log('sign mac: ', mac);
       packer.offset = 0;
       packer.mac = mac;
 
-      //      console.log('sign return header: ', packer.buffer);
       return packer.detach();
    }
 
@@ -663,7 +661,6 @@ class CiphersV1 extends Ciphers {
       header: Uint8Array
    ): number {
 
-      //      console.log('decodeHeader v1 decoding:', header);
       if (this._mac) {
          throw new Error('CiphersV1 instance was reused');
       }
@@ -706,7 +703,6 @@ class CiphersV1 extends Ciphers {
          throw new Error('CiphersV1 data not initialized');
       }
 
-      //      console.log('_decodePayload0 decoding:', payload);
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated, Extractor does test each value for valid ranges as we unpack
@@ -734,8 +730,8 @@ class CiphersV1 extends Ciphers {
       this._sk = await Ciphers._genSigningKey(userCred, this._slt);
 
       // Avoiding the Doom Principle and verify signature before crypto operations.
-      // Aka, check MAC as soon as possible after we can have the signing key and data
-      // Would be cleaner to do this elswhere, but keeping it at the lowest level
+      // Aka, check MAC as soon as possible after we  have the signing key and data.
+      // Might be cleaner to do this elswhere, but keeping it at the lowest level
       // ensures we don't skip the step
       const validMac: boolean = await this._verifyMAC();
       if (validMac) {
@@ -774,7 +770,7 @@ class CiphersV1 extends Ciphers {
 
       Ciphers.validateAdditionalData(args);
 
-      const maxBytes = cc.ADDIONTAL_DATA_MAX_BYTES - cc.LPS_BYTES;
+      const maxBytes = cc.ADDIONTAL_DATA_MAX_BYTES - cc.LP_BYTES;
       // Packer validates ranges as values are added
       const packer = new Packer(maxBytes);
 
@@ -840,7 +836,7 @@ class CiphersV4 extends Ciphers {
                   IV_BYTES (variable)
                   SLT_BYTES
                   IC_BYTES
-                  LPS_BYTES
+                  LP_BYTES
                   EHINT_LEN_BYTES
                   EHINT_BYTES (variable)
                </Additional Data>
@@ -895,7 +891,6 @@ class CiphersV4 extends Ciphers {
       input: Uint8Array,
       readyNotice?: (cdInfo: CipherDataInfo) => void
    ): Promise<CipherDataBlock> {
-      //      console.log('_encryptBlock0 input bytes: ' + input.byteLength);
 
       Ciphers.validateEparams(eparams);
       if (this._sk || this._ek) {
@@ -916,6 +911,7 @@ class CiphersV4 extends Ciphers {
 
       this._alg = eparams.alg;
       this._ic = eparams.ic;
+      this._lp = eparams.lp;
 
       // don't save this stuff... we allow changing alg and ic per block
       const ivBytes = Number(cc.AlgInfo[this._alg]['iv_bytes']);
@@ -928,6 +924,7 @@ class CiphersV4 extends Ciphers {
             alg: this._alg,
             ic: this._ic,
             slt: this._slt,
+            lp: this._lp,
             iv: this._iv,
             hint: Boolean(eparams.hint)
          });
@@ -958,6 +955,7 @@ class CiphersV4 extends Ciphers {
          alg: this._alg,
          iv: this._iv,
          ic: this._ic,
+         lp: this._lp,
          slt: this._slt,
          encryptedHint: this._encryptedHint
       });
@@ -969,7 +967,6 @@ class CiphersV4 extends Ciphers {
       eparams: EParams,
       input: Uint8Array,
    ): Promise<CipherDataBlock> {
-      //      console.log('_encryptBlockN input bytes: ' + input.byteLength);
 
       Ciphers.validateEparams(eparams);
       if (!this._sk || !this._ek) {
@@ -1013,7 +1010,6 @@ class CiphersV4 extends Ciphers {
          clear,
          this._additionalData,
       );
-      //      console.log('_buildCipherData encrypted bytes: ', this._encryptedData);
 
       const headerData = await CiphersV4._createHeader(
          this._sk,
@@ -1034,7 +1030,7 @@ class CiphersV4 extends Ciphers {
          iv: Uint8Array;
          ic?: number;
          slt?: Uint8Array;
-         lps?: number;
+         lp?: number;
          encryptedHint?: Uint8Array
       }): Uint8Array {
 
@@ -1054,11 +1050,11 @@ class CiphersV4 extends Ciphers {
       if (args.ic) {
          packer.ic = args.ic;
       }
-/*
-      if (args.lps) {
-         packer.lps = args.lps;
+
+      if (args.lp) {
+         packer.lp = args.lp;
       }
-*/
+
       if (args.encryptedHint != undefined) {
          packer.hint = args.encryptedHint;
       }
@@ -1070,8 +1066,6 @@ class CiphersV4 extends Ciphers {
    override decodeHeader(
       header: Uint8Array
    ): number {
-
-      //      console.log('decodeHeader v4 decoding:', header);
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated.
@@ -1091,7 +1085,6 @@ class CiphersV4 extends Ciphers {
          throw new Error('Invalid version of: ' + this._ver);
       }
       this._payloadSize = extractor.size;
-      //      console.log('payloadsize ciphers', this._payloadSize);
 
       return extractor.offset;
    }
@@ -1099,8 +1092,6 @@ class CiphersV4 extends Ciphers {
    public async decryptPayloadN(
       payload: Uint8Array,
    ): Promise<Uint8Array> {
-
-      //      console.log('decryptPayloadN block bytes', payload.byteLength);
 
       await this._decodePayloadN(payload);
       if (!this._alg || !this._ek || !this._iv || !this._encryptedData || !this._encryptedHint) {
@@ -1114,8 +1105,6 @@ class CiphersV4 extends Ciphers {
          this._encryptedData,
          this._additionalData,
       );
-
-      //      console.log('__decryptPayloadN output bytes: ' + decrypted.byteLength);
 
       return decrypted;
    }
@@ -1132,8 +1121,6 @@ class CiphersV4 extends Ciphers {
          throw new Error('Invalid userCred length of: ' + userCred.byteLength);
       }
 
-      //      console.log('_decodePayload0 decoding:', payload);
-
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated, Extractor does test each value for valid ranges as we unpack
       let extractor = new Extractor(payload);
@@ -1143,10 +1130,11 @@ class CiphersV4 extends Ciphers {
       this._iv = extractor.iv;
       this._slt = extractor.slt;
       this._ic = extractor.ic;
+      this._lp = extractor.lp;
       this._encryptedHint = extractor.hint;
       this._encryptedData = extractor.remainder('edata');
 
-      // V4 additional data is payload - encrypted data
+      // V4 additional data is the payload minus encrypted data
       this._additionalData = new Uint8Array(
          payload.buffer,
          payload.byteOffset,
@@ -1156,8 +1144,8 @@ class CiphersV4 extends Ciphers {
       this._sk = await Ciphers._genSigningKey(userCred, this._slt);
 
       // Avoiding the Doom Principle and verify signature before crypto operations.
-      // Aka, check MAC as soon as possible after we can have the signing key and data
-      // Would be cleaner to do this elswhere, but keeping it at the lowest level
+      // Aka, check MAC as soon as possible after we  have the signing key and data.
+      // Might be cleaner to do this elswhere, but keeping it at the lowest level
       // ensures we don't skip the step
       const validMac: boolean = await this._verifyMAC();
       if (validMac) {
@@ -1174,8 +1162,6 @@ class CiphersV4 extends Ciphers {
       payload: Uint8Array
    ): Promise<void> {
 
-      //      console.log('_decodePayloadN decoding:', payload);
-
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated, Extractor does test each value for valid ranges as we unpack
       let extractor = new Extractor(payload);
@@ -1193,8 +1179,8 @@ class CiphersV4 extends Ciphers {
       );
 
       // Avoiding the Doom Principle and verify signature before crypto operations.
-      // Aka, check MAC as soon as possible after we can have the signing key and data
-      // Would be cleaner to do this elswhere, but keeping it at the lowest level
+      // Aka, check MAC as soon as possible after we  have the signing key and data.
+      // Might be cleaner to do this elswhere, but keeping it at the lowest level
       // ensures we don't skip the step
       const validMac: boolean = await this._verifyMAC();
       if (validMac) {
@@ -1220,20 +1206,14 @@ class CiphersV4 extends Ciphers {
 
       const exportedSk = await crypto.subtle.exportKey("raw", this._sk);
       const skData = new Uint8Array(exportedSk);
-      //      console.log('verify sk: ' + skData);
       const state = sodium.crypto_generichash_init(skData, cc.MAC_BYTES);
 
-      //      console.log('verify header: ', headerPortion);
       sodium.crypto_generichash_update(state, headerPortion);
-      //      console.log('verify addition: ', this._additionalData);
       sodium.crypto_generichash_update(state, this._additionalData);
-      //      console.log('verify encdata: ', this._encryptedData);
       sodium.crypto_generichash_update(state, this._encryptedData);
 
       const testMac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
-      //     console.log('verify mac: ', testMac);
       const validMac: boolean = sodium.memcmp(this._mac, testMac);
-      //      console.log('verify result: ', validMac);
       if (validMac) {
          return true;
       }
@@ -1261,7 +1241,6 @@ class Extractor {
       if (result.byteLength != len) {
          throw new Error(`Invalid ${what}, length: ${result.byteLength}`);
       }
-      //      console.log(`extracted ${len} bytes of ${what} at ${this._offset}: ${result}`);
 
       this._offset += len;
       return result;
@@ -1274,7 +1253,6 @@ class Extractor {
       if (result.byteLength == 0) {
          throw new Error(`Invalid ${what}, length: 0`);
       }
-      //      console.log(`remainder ${result.byteLength} bytes of ${what} at ${this._offset}: ${result}`);
 
       this._offset += result.byteLength;
       return result;
@@ -1323,6 +1301,14 @@ class Extractor {
       return ic;
    }
 
+   get lp(): number {
+      const lp = bytesToNum(this.extract('lp', cc.LP_BYTES));
+      if (lp < 1 || lp > cc.LP_MAX) {
+         throw new Error('Invalid lp of: ' + lp);
+      }
+      return lp;
+   }
+
    get ver(): number {
       const ver = bytesToNum(this.extract('ver', cc.VER_BYTES));
       if (ver != cc.VERSION1 && ver != cc.VERSION4) {
@@ -1369,7 +1355,6 @@ class Packer {
       if (this._offset > this._dest.byteLength) {
          throw new Error(`Invalid ${what}, length: ${data.byteLength}`);
       }
-      //      console.log(`packed ${data.byteLength} bytes of ${what} at ${this._offset - data.byteLength}: ${data}`);
    }
 
    get offset(): number {
@@ -1453,13 +1438,13 @@ class Packer {
       this.pack('ic', numToBytes(iCount, cc.IC_BYTES));
    }
 
-/*   set lps(lps: number) {
-      if (lps < cc.ICOUNT_MIN || lps > cc.ICOUNT_MAX) {
-         throw new Error('Invalid ic of: ' + iCount);
+   set lp(lp: number) {
+      if (lp < 1 || lp > cc.LP_MAX) {
+         throw new Error('Invalid lp of: ' + lp);
       }
-      this.pack('ic', numToBytes(iCount, cc.IC_BYTES));
+      this.pack('lp', numToBytes(lp, cc.LP_BYTES));
    }
-*/
+
    set ver(version: number) {
       if (version != cc.VERSION1 && version != cc.VERSION4) {
          throw new Error('Invalid version of: ' + version);

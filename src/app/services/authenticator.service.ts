@@ -126,10 +126,10 @@ export class AuthenticatorService {
    }
 
    getRecoveryLink(): string {
-      if(!this.isAuthenticated()) {
+      if (!this.isAuthenticated()) {
          throw new Error('No active user');
       }
-      return  new URL(
+      return new URL(
          window.location.origin + '/recovery' +
          '?userid=' + this.userId +
          '&usercred=' + this.userCred
@@ -256,20 +256,23 @@ export class AuthenticatorService {
       }
 
       const putDescUrl = new URL(`description?credid=${credentialId}&userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
-      const putDescResp = await fetch(putDescUrl, {
-         method: 'PUT',
-         mode: 'cors',
-         cache: 'no-store',
-         body: description,
-      });
+      try {
+         var putDescResp = await fetch(putDescUrl, {
+            method: 'PUT',
+            mode: 'cors',
+            cache: 'no-store',
+            body: description,
+         });
+      } catch (err) {
+         console.error(err);
+         throw new Error('description fetch error');
+      }
 
-      //      console.log('putDescResp, ', putDescResp);
       if (!putDescResp.ok) {
          throw new Error('setting description failed: ' + await putDescResp.text());
       }
 
       const putDescInfo = await putDescResp.json();
-      //      console.log('putDescInfo, ', putDescInfo);
       return putDescInfo.description;
    }
 
@@ -285,20 +288,23 @@ export class AuthenticatorService {
       }
 
       const putUserNameUrl = new URL(`username?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
-      const putUserNameResp = await fetch(putUserNameUrl, {
-         method: 'PUT',
-         mode: 'cors',
-         cache: 'no-store',
-         body: userName,
-      });
+      try {
+         var putUserNameResp = await fetch(putUserNameUrl, {
+            method: 'PUT',
+            mode: 'cors',
+            cache: 'no-store',
+            body: userName,
+         });
+      } catch (err) {
+         console.error(err);
+         throw new Error('username fetch error');
+      }
 
-      //      console.log('putUserNameResp, ', putUserNameResp);
       if (!putUserNameResp.ok) {
          throw new Error('setting user name failed: ' + await putUserNameResp.text());
       }
 
       const putUserNameInfo = await putUserNameResp.json();
-      //      console.log('putUserNameInfo, ', putUserNameInfo);
       this.storeUserInfo(this._userId!, putUserNameInfo.userName);
       return putUserNameInfo.userName;
    }
@@ -312,19 +318,22 @@ export class AuthenticatorService {
       }
 
       const delPasskeyUrl = new URL(`authenticator?credid=${credentialId}&userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
-      const delPasskeyResp = await fetch(delPasskeyUrl, {
-         method: 'DELETE',
-         mode: 'cors',
-         cache: 'no-store',
-      });
+      try {
+         var delPasskeyResp = await fetch(delPasskeyUrl, {
+            method: 'DELETE',
+            mode: 'cors',
+            cache: 'no-store',
+         });
+      } catch (err) {
+         console.error(err);
+         throw new Error('authenticator fetch error');
+      }
 
-      //      console.log('delPasskeyResp ', delPasskeyResp);
       if (!delPasskeyResp.ok) {
          throw new Error('setting description failed: ' + await delPasskeyResp.text());
       }
 
       const delPasskeyInfo = await delPasskeyResp.json() as DeleteInfo;
-      //      console.log('delPasskeyInfo ', delPasskeyInfo);
 
       // User is gone... so forgeeet about it
       if (delPasskeyInfo.userId) {
@@ -340,19 +349,22 @@ export class AuthenticatorService {
       }
 
       const getAuthsUrl = new URL(`authenticators?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
-      const getAuthsResp = await fetch(getAuthsUrl, {
-         method: 'GET',
-         mode: 'cors',
-         cache: 'no-store',
-      });
+      try {
+         var getAuthsResp = await fetch(getAuthsUrl, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-store',
+         });
+      } catch (err) {
+         console.error(err);
+         throw new Error('authenticators fetch error');
+      }
 
-//      console.log('getAuthsResp, ', getAuthsResp);
       if (!getAuthsResp.ok) {
          throw new Error('retrieving passkeys failed: ' + await getAuthsResp.text());
       }
 
       const authsInfo = await getAuthsResp.json() as AuthenticatorInfo[];
-//      console.log('authsInfo, ', authsInfo);
 
       this.passKeys.set(authsInfo);
       return authsInfo;
@@ -381,19 +393,22 @@ export class AuthenticatorService {
          optUrl = new URL(`authoptions?userid=${userId}`, baseUrl);
       }
 
-      const optionsResp = await fetch(optUrl, {
-         method: 'GET',
-         mode: 'cors',
-         cache: 'no-store'
-      });
+      try {
+         var optionsResp = await fetch(optUrl, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-store'
+         });
+      } catch (err) {
+         console.error(err);
+         throw new Error('authoptions fetch error');
+      }
 
-      //      console.log('optionsResp, ', optionsResp);
       if (!optionsResp.ok) {
          throw new Error('authentication failed: ' + await optionsResp.text());
       }
 
       const optionsJson = await optionsResp.json() as PublicKeyCredentialRequestOptionsJSON;
-      //      console.log('optionsJson, ', optionsJson);
 
       let startAuth;
       try {
@@ -411,26 +426,28 @@ export class AuthenticatorService {
          challenge: optionsJson.challenge,
       }
 
-      //      console.log('expanded ', JSON.stringify(expanded));
-
       const verifyUrl = new URL('verifyauth', baseUrl);
-      const verificationResp = await fetch(verifyUrl, {
-         method: 'POST',
-         mode: 'cors',
-         cache: 'no-store',
-         headers: {
-            'Content-Type': 'application/json',
-         },
-         body: JSON.stringify(expanded),
-      });
 
-      //      console.log('verificationResp, ', verificationResp);
+      try {
+         var verificationResp = await fetch(verifyUrl, {
+            method: 'POST',
+            mode: 'cors',
+            cache: 'no-store',
+            headers: {
+               'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(expanded),
+         });
+      } catch (err) {
+         console.error(err);
+         throw new Error('verifyauth fetch error');
+      }
+
       if (!verificationResp.ok) {
          throw new Error('authentication failed: ' + await verificationResp.text());
       }
 
       const authInfo = await verificationResp.json() as AuthenticationInfo;
-      //      console.log('authInfo, ', authInfo);
 
       if (!authInfo || !authInfo.verified) {
          throw new Error('authentication failed');
@@ -447,11 +464,16 @@ export class AuthenticatorService {
       }
 
       const recoverUrl = new URL(`recover?userid=${userId}&usercred=${userCred}`, baseUrl);
-      const recoverResp = await fetch(recoverUrl, {
-         method: 'POST',
-         mode: 'cors',
-         cache: 'no-store'
-      });
+      try {
+         var recoverResp = await fetch(recoverUrl, {
+            method: 'POST',
+            mode: 'cors',
+            cache: 'no-store'
+         });
+      } catch (err) {
+         console.error(err);
+         throw new Error('recover fetch error');
+      }
 
       return this.finishRegistration(recoverResp, true);
    }
@@ -463,11 +485,16 @@ export class AuthenticatorService {
       }
 
       const optUrl = new URL(`regoptions?username=${userName}`, baseUrl);
-      const optionsResp = await fetch(optUrl, {
-         method: 'GET',
-         mode: 'cors',
-         cache: 'no-store'
-      });
+      try {
+         var optionsResp = await fetch(optUrl, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-store'
+         });
+      } catch (err) {
+         console.error(err);
+         throw new Error('regoptions fetch error');
+      }
 
       return this.finishRegistration(optionsResp, true);
    }
@@ -480,11 +507,16 @@ export class AuthenticatorService {
       }
 
       const optUrl = new URL(`regoptions?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
-      const optionsResp = await fetch(optUrl, {
-         method: 'GET',
-         mode: 'cors',
-         cache: 'no-store'
-      });
+      try {
+         var optionsResp = await fetch(optUrl, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-store'
+         });
+      } catch (err) {
+         console.error(err);
+         throw new Error('regoptions fetch error');
+      }
 
       const regInfo = this.finishRegistration(optionsResp, false);
       this.refreshPasskeys();
@@ -496,13 +528,11 @@ export class AuthenticatorService {
       setActiveUser: boolean
    ): Promise<RegistrationInfo> {
 
-      //      console.log('optionsResp, ', optionsResp);
       if (!optionsResp.ok) {
          throw new Error('registration failed: ' + await optionsResp.text());
       }
 
       const optionsJson = await optionsResp.json() as PublicKeyCredentialCreationOptionsJSON;
-      //      console.log('optionsJson ', optionsJson);
 
       let startReg;
       try {
@@ -522,32 +552,33 @@ export class AuthenticatorService {
          challenge: optionsJson.challenge,
       }
 
-      //      console.log('expanded ', JSON.stringify(expanded));
-
       const verifyUrl = new URL('verifyreg', baseUrl);
-      const verificationResp = await fetch(verifyUrl, {
-         method: 'POST',
-         mode: 'cors',
-         cache: 'no-store',
-         headers: {
-            'Content-Type': 'application/json',
-         },
-         body: JSON.stringify(expanded),
-      });
+      try {
+         var verificationResp = await fetch(verifyUrl, {
+            method: 'POST',
+            mode: 'cors',
+            cache: 'no-store',
+            headers: {
+               'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(expanded),
+         });
+      } catch (err) {
+         console.error(err);
+         throw new Error('verifyreg fetch error');
+      }
 
-      //      console.log('verifyResp, ', verificationResp);
       if (!verificationResp.ok) {
          throw new Error('registration failed: ' + await verificationResp.text());
       }
 
       const registrationInfo = await verificationResp.json() as RegistrationInfo;
-      //      console.log('registrationInfo, ', registrationInfo);
 
       if (!registrationInfo || !registrationInfo.verified) {
          throw new Error('registration failed');
       }
 
-      if(setActiveUser) {
+      if (setActiveUser) {
          this.setActiveUser(registrationInfo.userId, registrationInfo.userName, registrationInfo.userCred, startReg.id);
       }
       return registrationInfo;

@@ -22,10 +22,18 @@ SOFTWARE. */
 
 import { Injectable } from '@angular/core';
 import { browserSupportsBytesStream, BYOBStreamReader, streamWriteBYOD, } from './utils';
-import { Ciphers, EParams, CipherDataInfo } from './ciphers';
+import { Ciphers, EParams, CipherDataInfo, PWDProvider } from './ciphers';
 import * as cc from './cipher.consts';
 
-export { EParams, CipherDataInfo };
+export { CipherDataInfo, PWDProvider };
+
+export type EncContext3 = {
+   readonly alg: string;
+   readonly ic: number;
+   readonly trueRand: boolean;
+   readonly fallbackRand: boolean;
+   readonly lpEnd: number;
+};
 
 // Simple perf testing with Chrome 126 on MacOS result in
 // readAvailable with READ_SIZE_MAX of 4x to be the fastest
@@ -72,65 +80,45 @@ export class CipherService {
       return Object.keys(cc.AlgInfo);
    }
 
-   async encryptBuffer(
-      eparams: EParams,
-      clearData: Uint8Array,
-      readyNotice?: (cdInfo: CipherDataInfo) => void
-   ): Promise<Uint8Array> {
-      if (eparams.ic > this._iCountMax) {
-         throw new Error('Invalid ic, exceeded: ' + this._iCountMax);
-      }
-      if (clearData.byteLength == 0) {
-         throw new Error('Missing clear text');
-      }
 
-      const ciphers = Ciphers.latest();
-
-      const cipherData = await ciphers.encryptBlock0(
-         eparams,
-         clearData,
-         readyNotice
-      );
-
-      const output = new Uint8Array(cipherData.headerData.byteLength +
-         cipherData.additionalData.byteLength +
-         cipherData.encryptedData.byteLength
-      );
-
-      output.set(cipherData.headerData);
-      output.set(cipherData.additionalData, cipherData.headerData.byteLength);
-      output.set(cipherData.encryptedData,
-         cipherData.headerData.byteLength + cipherData.additionalData.byteLength);
-
-      return output;
-   }
-
-   encryptStream(
-      eparams: EParams,
+   async encryptStream(
+      econtext: EncContext3,
+      pwdProvider: PWDProvider,
+      userCred: Uint8Array,
       clearStream: ReadableStream<Uint8Array>,
-      readyNotice?: (cdInfo: CipherDataInfo) => void
-   ): ReadableStream<Uint8Array> {
+      readyNotice?: (cdInfo: CipherDataInfo) => void,
+      lp: number = 1
+   ): Promise<ReadableStream<Uint8Array>> {
 
-      if (eparams.ic > this._iCountMax) {
+      if (econtext.ic > this._iCountMax) {
          throw new Error('Invalid ic, exceeded: ' + this._iCountMax);
+      }
+      if (econtext.lpEnd > cc.LP_MAX) {
+         throw new Error('Loop count exceeded: ' + cc.LP_MAX);
       }
 
       const reader = new BYOBStreamReader(clearStream);
       const ciphers = Ciphers.latest();
       let totalBytesOutput = 0;
       let readTarget = READ_SIZE_START;
+      const [pwd, hint] = await pwdProvider(lp, econtext.lpEnd);
 
-      //      console.log('encryptToBytes returning');
-      return new ReadableStream({
+      const eparams: EParams = {
+         ...econtext,
+         pwd,
+         lp,
+         userCred,
+         hint
+      };
+
+      let cipherStream = new ReadableStream({
          type: (browserSupportsBytesStream() ? 'bytes' : undefined),
 
          async start(controller) {
-            //            console.log(`start(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
 
             try {
                const buffer = new ArrayBuffer(readTarget);
                const [clearBuffer, done] = await reader.readAvailable(buffer);
-               //               console.log('start(): readTarget, readBytes', readTarget, clearBuffer.byteLength);
 
                if (clearBuffer.byteLength) {
                   const cipherData = await ciphers.encryptBlock0(
@@ -145,11 +133,9 @@ export class CipherService {
                   controller.enqueue(cipherData.additionalData);
                   // To simplify, only try to write the potentially large portion to BYOD
                   streamWriteBYOD(controller, cipherData.encryptedData);
-                  //                  console.log('start(): total enqueued: ' + totalBytesOutput);
                }
 
                if (done) {
-                  //                  console.log('start(): closing');
                   controller.close();
                   // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
                   //@ts-ignore
@@ -164,14 +150,11 @@ export class CipherService {
          },
 
          async pull(controller) {
-            //            console.log(`pull(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
-
             readTarget = Math.min(readTarget * 2, READ_SIZE_MAX);
 
             try {
                const buffer = new ArrayBuffer(readTarget);
                const [clearBuffer, done] = await reader.readAvailable(buffer);
-               //               console.log('pull(): readTarget, readBytes', readTarget, clearBuffer.byteLength);
 
                if (clearBuffer.byteLength) {
                   const cipherData = await ciphers.encryptBlockN(
@@ -185,12 +168,9 @@ export class CipherService {
                   controller.enqueue(cipherData.additionalData);
                   // To simplify, only try to write the potentially large portion to BYOD
                   streamWriteBYOD(controller, cipherData.encryptedData);
-                  //                  controller.enqueue(cipherData.encryptedData);
-                  //                  console.log('pull(): total enqueued: ' + totalBytesOutput);
                }
 
                if (done) {
-                  //                  console.log('pull(): closing');
                   controller.close();
                   // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
                   //@ts-ignore
@@ -204,6 +184,20 @@ export class CipherService {
             }
          }
       });
+
+
+      if (lp < econtext.lpEnd) {
+         cipherStream = await this.encryptStream(
+            econtext,
+            pwdProvider,
+            userCred,
+            cipherStream,
+            readyNotice,
+            lp + 1
+         );
+      }
+
+      return cipherStream;
    }
 
    async getCipherStreamInfo(
@@ -215,14 +209,15 @@ export class CipherService {
       try {
          let buffer = new ArrayBuffer(cc.HEADER_BYTES);
          const [headerData] = await reader.readFill(buffer);
-         //      console.log('info(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
 
          const ciphers = Ciphers.fromHeader(headerData);
          ciphers.decodeHeader(headerData);
 
          buffer = new ArrayBuffer(ciphers.payloadSize);
          const [payloadData] = await reader.readFill(buffer);
-         //      console.log('info(): payloadSize, payloadData', ciphers.payloadSize, payloadData);
+         if (payloadData.byteLength != ciphers.payloadSize) {
+            throw new Error('Invalid payload size: ' + ciphers.payloadSize);
+         }
 
          return ciphers.getCipherDataInfo(
             userCred,
@@ -233,102 +228,87 @@ export class CipherService {
       }
    }
 
-   async getCipherTextInfo(
-      userCred: Uint8Array,
-      block0: Uint8Array,
-   ): Promise<CipherDataInfo> {
-
-      const ciphers = Ciphers.fromHeader(block0);
-      const consumedBytes = ciphers.decodeHeader(block0);
-      return ciphers.getCipherDataInfo(
-         userCred,
-         new Uint8Array(block0.buffer, consumedBytes),
-      );
-   }
-
-   async decryptBuffer(
-      pwdProvider: (hint: string) => Promise<string>,
-      userCred: Uint8Array,
-      block0: Uint8Array,
-      readyNotice?: (cdInfo: CipherDataInfo) => void
-   ): Promise<Uint8Array> {
-
-      const ciphers = Ciphers.fromHeader(block0);
-      const consumedBytes = ciphers.decodeHeader(block0);
-
-      const decrypted = await ciphers.decryptPayload0(
-         pwdProvider,
-         userCred,
-         new Uint8Array(block0.buffer, consumedBytes),
-         readyNotice
-      );
-
-      return decrypted;
-   }
-
-   decryptStream(
-      pwdProvider: (hint: string) => Promise<string>,
+   async decryptStream(
+      pwdProvider: PWDProvider,
       userCred: Uint8Array,
       cipherStream: ReadableStream<Uint8Array>,
-      readyNotice?: (cdInfo: CipherDataInfo) => void
-   ): ReadableStream<Uint8Array> {
+      readyNotice?: (cdInfo: CipherDataInfo) => void,
+      lpEnd?: number
+   ): Promise<ReadableStream<Uint8Array>> {
 
       const reader = new BYOBStreamReader(cipherStream);
       let ciphers: Ciphers;
       let totalBytesOutput = 0;
+      let payload0Data: Uint8Array | undefined;
+      let cdInfo: CipherDataInfo;
 
-      //      console.log('decryptStream returning');
-      return new ReadableStream({
+      try {
+         // Read Block0 early so we can find the number of loops and nest
+         // decryption. Stream should deference this below to free ASAP
+         let buffer = new ArrayBuffer(cc.HEADER_BYTES);
+         const [headerData] = await reader.readFill(buffer);
+
+         // If we don't get enough data, let Ciphers throw and error
+         ciphers = Ciphers.fromHeader(headerData);
+         ciphers.decodeHeader(headerData);
+
+         buffer = new ArrayBuffer(ciphers.payloadSize);
+         [payload0Data] = await reader.readFill(buffer);
+         if (payload0Data.byteLength != ciphers.payloadSize) {
+            throw new Error('Invalid payload size: ' + ciphers.payloadSize);
+         }
+
+         cdInfo = await ciphers.getCipherDataInfo(
+            userCred,
+            payload0Data
+         );
+
+         if(!lpEnd) {
+            lpEnd = cdInfo.lp;
+         }
+
+      } catch(err) {
+         console.error(err);
+         reader.cleanup();
+         throw err;
+      }
+
+      let readableStream = new ReadableStream({
          type: (browserSupportsBytesStream() ? 'bytes' : undefined),
 
          async start(controller) {
-            //            console.log(`start(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
 
             try {
-               let buffer = new ArrayBuffer(cc.HEADER_BYTES);
-               const [headerData] = await reader.readFill(buffer);
-               //               console.log('start(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
-
-               // If we don't get enough data, let Ciphers throw and error
-               ciphers = Ciphers.fromHeader(headerData);
-               ciphers.decodeHeader(headerData);
-
-               buffer = new ArrayBuffer(ciphers.payloadSize);
-               const [payloadData] = await reader.readFill(buffer);
-               if (payloadData.byteLength != ciphers.payloadSize) {
-                  throw new Error('Invalid payload size: ' + ciphers.payloadSize);
+               if (!payload0Data || payload0Data.byteLength != ciphers.payloadSize) {
+                  throw new Error('Invalid payload0 size: ' + ciphers.payloadSize);
                }
 
-               //               console.log('start(): payloadSize', ciphers.payloadSize);
+               // Only the inner most stread calls ready notice
                const decrypted = await ciphers.decryptPayload0(
                   pwdProvider,
+                  lpEnd,
                   userCred,
-                  payloadData,
+                  payload0Data,
                   readyNotice
                );
 
                totalBytesOutput += decrypted.byteLength;
                streamWriteBYOD(controller, decrypted);
-               //               console.log('start(): total enqueued', totalBytesOutput);
 
             } catch (err) {
                console.error('start() error, closing', err);
-//               if (typeof err == 'string' && err == 'password cancelled') {
-  //                controller.close();
-    //           } else {
-                  controller.error(err);
-      //         }
+               controller.error(err);
                reader.cleanup();
+            } finally {
+               payload0Data = undefined;
             }
          },
 
          async pull(controller) {
-            //            console.log(`pull(): ${controller.constructor.name}.byobRequest = ${controller.byobRequest}`);
 
             try {
                let buffer = new ArrayBuffer(cc.HEADER_BYTES);
                const [headerData] = await reader.readFill(buffer);
-               //               console.log('pull(): HEADER_BYTES, headerData', cc.HEADER_BYTES, headerData);
 
                if (headerData.byteLength) {
                   ciphers.decodeHeader(headerData);
@@ -338,13 +318,11 @@ export class CipherService {
                   if (payloadData.byteLength != ciphers.payloadSize) {
                      throw new Error('Invalid payload size: ' + ciphers.payloadSize);
                   }
-                  //                  console.log('pull(): payloadSize, payloadData', ciphers.payloadSize, payloadData);
 
                   const decrypted = await ciphers.decryptPayloadN(payloadData);
 
                   totalBytesOutput += decrypted.byteLength;
                   streamWriteBYOD(controller, decrypted);
-                  //                  console.log('pull(): total enqueued', totalBytesOutput);
                } else {
                   // Reach the end of the stream peacefully...
                   controller.close();
@@ -362,7 +340,20 @@ export class CipherService {
          }
 
       });
+
+      if(cdInfo.lp > 1) {
+         readableStream = await this.decryptStream(
+            pwdProvider,
+            userCred,
+            readableStream,
+            readyNotice,
+            lpEnd
+         );
+      }
+
+      return readableStream
    }
+
 }
 
 

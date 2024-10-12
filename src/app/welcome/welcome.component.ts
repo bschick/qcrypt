@@ -41,7 +41,11 @@ export class WelcomeComponent {
          this.router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
-         this.error = 'Passkey not recognized. Either try again or select another option above.';
+         if(err instanceof Error && err.message.includes("fetch")) {
+            this.error = 'Sign in failed, check your internet connection';
+         } else {
+            this.error = 'Passkey not recognized. Either try again or select another option above.';
+         }
       } finally {
          this.showProgress = false;
       }
