@@ -65,7 +65,11 @@ export class RecoveryComponent implements OnInit {
          this.router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
-         this.error = 'Sign in failed, try again or continue with recovery';
+         if(err instanceof Error && err.message.includes("fetch")) {
+            this.error = 'Sign in failed, check your connection';
+         } else {
+            this.error = 'Sign in failed, try again or change users';
+         }
       } finally {
          this.showProgress = false;
       }

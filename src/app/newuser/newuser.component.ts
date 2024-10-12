@@ -60,7 +60,11 @@ export class NewUserComponent implements OnInit {
          this.router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
-         this.error = 'Sign in failed, try again or create a new user';
+         if(err instanceof Error && err.message.includes("fetch")) {
+            this.error = 'Sign in failed, check your connection';
+         } else {
+            this.error = 'Sign in failed, try again or change users';
+         }
       } finally {
          this.showProgress = false;
       }
@@ -81,7 +85,11 @@ export class NewUserComponent implements OnInit {
          this.router.navigateByUrl('/showrecovery');
       } catch (err) {
          console.error(err);
-         this.error = 'Passkey and new user were not created, please try again';
+         if(err instanceof Error && err.message.includes("fetch")) {
+            this.error = 'New user creation failed, check your internet connection';
+         } else {
+            this.error = 'New user creation failed, please try again';
+         }
       } finally {
          this.showProgress = false;
       }

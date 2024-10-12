@@ -138,14 +138,12 @@ export class BYOBStreamReader {
       const targetBytes = buffer.byteLength;
       let readBytes = 0;
       let streamDone = false;
-      console.log('_readBYOB- start', targetBytes);
 
       while (readBytes < targetBytes) {
          let { done, value } = await reader.read(
             new Uint8Array(buffer, readBytes, targetBytes - readBytes)
          );
 
-         //      console.log('readStreamUntil-' + targetBytes, ' read', data.byteLength, done);
          if (value) {
             readBytes += value.byteLength;
             buffer = value.buffer;
@@ -173,14 +171,12 @@ export class BYOBStreamReader {
       const writeable = new Uint8Array(buffer);
       let wroteBytes = 0;
       let streamDone = false;
-      console.log('_readStupidSafari- start', targetBytes);
 
       while (wroteBytes < targetBytes) {
          let done: boolean;
          let value: Uint8Array;
 
          if (this._extra) {
-            //            console.log('_readStupidSafari- using extra', this._extra);
             done = false;
             value = this._extra;
             this._extra = undefined;
@@ -192,23 +188,17 @@ export class BYOBStreamReader {
             } else {
                value = results.value;
             }
-            //            console.log('_readStupidSafari- read', value);
          }
 
-         //      console.log('readStreamUntil-' + targetBytes, ' read', data.byteLength, done);
          if (value) {
             const unfilledBytes = targetBytes - wroteBytes;
             if (value.byteLength > unfilledBytes) {
                this._extra = new Uint8Array(value.buffer, value.byteOffset + unfilledBytes, value.byteLength - unfilledBytes);
                value = new Uint8Array(value.buffer, value.byteOffset, unfilledBytes);
                done = false;
-               //               console.log('_readStupidSafari- have extra', unfilledBytes, value, this._extra);
             }
 
-            //            console.log('_readStupidSafari- writing at', wroteBytes, value);
-
             writeable.set(value, wroteBytes);
-            //            console.log('_readStupidSafari- current', new Uint8Array(buffer));
             wroteBytes += value.byteLength;
          }
 
@@ -218,7 +208,6 @@ export class BYOBStreamReader {
          }
       }
 
-      //      console.log('_readStupidSafari- done', new Uint8Array(buffer, 0, wroteBytes), streamDone);
       return [new Uint8Array(buffer, 0, wroteBytes), streamDone];
    }
 }
@@ -239,11 +228,9 @@ export async function readStreamAll(
    try {
       let readBytes = 0;
       const blocks: Uint8Array[] = [];
-      //   console.log('readStreamAll- start');
 
       while (true) {
          const { done, value } = await reader.read();
-         //      console.log('readStreamAll- read', value?.byteLength, done);
          if (value) {
             blocks.push(value);
             readBytes += value.byteLength;
@@ -262,11 +249,6 @@ export async function readStreamAll(
       reader.releaseLock();
    }
 
-   //   console.log('readStreamAll- exit returnedBytes, done:',
-   //      result.byteLength,
-   //      streamDone
-   //   );
-
    return result;
 }
 
@@ -274,7 +256,6 @@ function coalesceBlocks(
    blocks: Uint8Array[],
    byteLen: number
 ): Uint8Array {
-   //   console.log('coalescing blocks: ' + blocks.length);
 
    let result = new Uint8Array(0);
    if (blocks.length > 1) {
@@ -342,7 +323,7 @@ export async function selectCipherFile(): Promise<FileSystemFileHandle> {
       });
       return fileHandle;
    } catch (err) {
-      console.log(err);
+      console.error(err);
       throw new ProcessCancelled();
    }
 
@@ -357,7 +338,7 @@ export async function selectClearFile(): Promise<FileSystemFileHandle> {
       });
       return fileHandle;
    } catch (err) {
-      console.log(err);
+      console.error(err);
       throw new ProcessCancelled();
    }
 }
@@ -367,7 +348,7 @@ async function selectWriteableFileImpl(options: { [key: string]: any }): Promise
       //@ts-ignore
       return await window.showSaveFilePicker(options);
    } catch (err) {
-      console.log(err);
+      console.error(err);
       throw new ProcessCancelled();
    }
 }
@@ -487,7 +468,7 @@ export class Random48 {
          return p;
       } catch (err) {
          // According to the docs, this should not happend but it seems to sometimes
-         // (perfhaps just one nodejs, but not sure)
+         // (perfhaps just on nodejs, but not sure)
          console.error('wtf fetch, ', err);
          return Promise.reject();
       }

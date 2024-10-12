@@ -165,11 +165,6 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    }
 }
 
-export interface CipherInfoDialogData {
-   cdInfo?: CipherDataInfo,
-   lps: number
-};
-
 @Component({
    selector: 'cipher-info-dialog',
    templateUrl: './cipher-info-dialog.html',
@@ -192,18 +187,18 @@ export class CipherInfoDialog {
       private r2: Renderer2,
       private cipherSvc: CipherService,
       public dialogRef: MatDialogRef<CipherInfoDialog>,
-      @Inject(MAT_DIALOG_DATA) public data: CipherInfoDialogData
+      @Inject(MAT_DIALOG_DATA) public data: CipherDataInfo
    ) {
-      if (!data.cdInfo) {
+      if (!data) {
          this.error = 'The wrong passkey was selected or the cipher armor is invalid';
       } else {
-         this.ic = data.cdInfo.ic.toLocaleString();
-         this.alg = this.cipherSvc.algDescription(data.cdInfo.alg);
-         this.iv = bytesToBase64(data.cdInfo.iv as Uint8Array);
-         this.slt = bytesToBase64(data.cdInfo.slt as Uint8Array);
-         this.hint = data.cdInfo.hint ? 'yes' : 'no';
-         this.lps = data.lps;
-         this.ver = data.cdInfo.ver.toString();
+         this.ic = data.ic.toLocaleString();
+         this.alg = this.cipherSvc.algDescription(data.alg);
+         this.iv = bytesToBase64(data.iv as Uint8Array);
+         this.slt = bytesToBase64(data.slt as Uint8Array);
+         this.hint = data.hint ? 'yes' : 'no';
+         this.lps = data.lp;
+         this.ver = data.ver.toString();
       }
    }
 }
@@ -243,7 +238,11 @@ export class SigninDialog {
          this.dialogRef.close();
       } catch (err) {
          console.error(err);
-         this.error = 'Sign in failed, try again or as a different user';
+         if(err instanceof Error && err.message.includes("fetch")) {
+            this.error = 'Sign in failed, check your connection';
+         } else {
+            this.error = 'Sign in failed, try again or change users';
+         }
       } finally {
          this.showProgress = false;
       }
