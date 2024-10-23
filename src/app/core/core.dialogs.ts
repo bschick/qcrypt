@@ -67,9 +67,6 @@ export type PwdDialogData = {
    userName: string;
 };
 
-export type SigninDialogData = {
-};
-
 
 @Component({
    selector: 'password-dialog',
@@ -123,13 +120,13 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    }
 
    ngAfterViewInit(): void {
-      if(!this.welcomed) {
+      if (!this.welcomed) {
          this.bubbleTip.show();
       }
    }
 
    ngOnDestroy(): void {
-      if(!this.welcomed) {
+      if (!this.welcomed) {
          this.bubbleTip.hide();
       }
    }
@@ -238,7 +235,7 @@ export class SigninDialog {
          this.dialogRef.close();
       } catch (err) {
          console.error(err);
-         if(err instanceof Error && err.message.includes("fetch")) {
+         if (err instanceof Error && err.message.includes("fetch")) {
             this.error = 'Sign in failed, check your connection';
          } else {
             this.error = 'Sign in failed, try again or change users';

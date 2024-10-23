@@ -203,6 +203,8 @@ describe("Encryption and decryption", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCredA,
+            lp: 1,
+            lpEnd: 1
          };
 
          const ciphers = Ciphers.latest();
@@ -239,9 +241,10 @@ describe("Encryption and decryption", function () {
          // The original should succeed since we repacked with correct userCred
          await expectAsync(
             ciphersA.decryptPayload0(
-               async (decHint) => {
-                  return pwd;
+               async (lp, lpEnd) => {
+                  return [pwd, undefined];
                },
+               1,
                userCredA,
                payloadA
             )
@@ -253,9 +256,10 @@ describe("Encryption and decryption", function () {
          // tricked Alice into provider it (just not her userCred)
          await expectAsync(
             ciphersB.decryptPayload0(
-               async (decHint) => {
-                  return pwd;
+               async (lp, lpEnd) => {
+                  return [pwd, undefined];
                },
+               1,
                userCredB,
                payloadB
             )
@@ -281,6 +285,8 @@ describe("Encryption and decryption", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCred,
+            lp: 1,
+            lpEnd: 1
          };
 
          const latest = Ciphers.latest();
@@ -302,9 +308,10 @@ describe("Encryption and decryption", function () {
          // header not loaded
          await expectAsync(
             ciphers.decryptPayload0(
-               async (decHint) => {
-                  return pwd;
+               async (lp, lpEnd) => {
+                  return [pwd, undefined];
                },
+               1,
                userCred,
                payload0
             )
@@ -315,9 +322,10 @@ describe("Encryption and decryption", function () {
 
 
          const decrypted = await ciphers.decryptPayload0(
-            async (decHint) => {
-               return pwd;
+            async (lp, lpEnd) => {
+               return [pwd, undefined];
             },
+            1,
             userCred,
             payload0,
             (params) => {
@@ -351,6 +359,8 @@ describe("Encryption and decryption", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCred,
+            lp: 1,
+            lpEnd: 1
          };
 
          const latest = Ciphers.latest();
@@ -379,9 +389,12 @@ describe("Encryption and decryption", function () {
          ciphers.decodeHeader(blockN.headerData);
          await expectAsync(
             ciphers.decryptPayload0(
-               async (decHint) => {
-                  return pwd;
+               async (lp, lpEnd) => {
+                  expect(lp).toEqual(1);
+                  expect(lpEnd).toEqual(1);
+                  return [pwd, undefined];
                },
+               1,
                userCred,
                payload0
             )
@@ -392,10 +405,13 @@ describe("Encryption and decryption", function () {
 
          await expectAsync(
             ciphers.decryptPayload0(
-               async (decHint) => {
-                  return pwd;
+               async (lp, lpEnd) => {
+                  expect(lp).toEqual(1);
+                  expect(lpEnd).toEqual(1);
+                  return [pwd, undefined];
                },
-               userCred,
+               1,
+              userCred,
                payload0
             )
          ).toBeResolved();
@@ -440,10 +456,13 @@ describe("Encryption and decryption", function () {
 
       await expectAsync(
          ciphers.decryptPayload0(
-            async (decHint) => {
+            async (lp, lpEnd, decHint) => {
                expect(decHint).toEqual(hint);
-               return pwd;
+               expect(lp).toEqual(1);
+               expect(lpEnd).toEqual(1);
+               return [pwd, undefined];
             },
+            1,
             userCred,
             new Uint8Array(cipherData.buffer, consumedBytes),
             (params) => {
@@ -468,9 +487,10 @@ describe("Encryption and decryption", function () {
       // First make sure the good values are actually good
       await expectAsync(
          ciphers.decryptPayload0(
-            async (decHint) => {
-               return pwdGood;
+            async (lp, lpEnd) => {
+               return [pwdGood, undefined];
             },
+            1,
             userCredGood,
             new Uint8Array(cipherData.buffer, consumedBytes),
             (params) => {
@@ -491,9 +511,10 @@ describe("Encryption and decryption", function () {
 
       await expectAsync(
          ciphers.decryptPayload0(
-            async (decHint) => {
-               return pwdBad;
+            async (lp, lpEnd) => {
+               return [pwdBad, undefined];
             },
+            1,
             userCredGood,
             new Uint8Array(cipherData.buffer, consumedBytes)
          )
@@ -501,9 +522,10 @@ describe("Encryption and decryption", function () {
 
       await expectAsync(
          ciphers.decryptPayload0(
-            async (decHint) => {
-               return pwdGood;
+            async (lp, lpEnd) => {
+               return [pwdGood, undefined];
             },
+            1,
             userCredBad,
             new Uint8Array(cipherData.buffer, consumedBytes)
          )
@@ -534,6 +556,8 @@ describe("Detect changed cipher data", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCred,
+            lp: 1,
+            lpEnd: 1
          };
 
          const latest = Ciphers.latest();
@@ -560,9 +584,10 @@ describe("Detect changed cipher data", function () {
 
          await expectAsync(
             ciphers.decryptPayload0(
-               async (decHint) => {
-                  return pwd;
+               async (lp, lpEnd) => {
+                  return [pwd, undefined];
                },
+               1,
                userCred,
                payload0
             )
@@ -574,9 +599,10 @@ describe("Detect changed cipher data", function () {
 
          await expectAsync(
             ciphers.decryptPayload0(
-               async (decHint) => {
-                  return pwd;
+               async (lp, lpEnd) => {
+                  return [pwd, undefined];
                },
+               1,
                userCred,
                payload0
             )
@@ -591,9 +617,10 @@ describe("Detect changed cipher data", function () {
 
          await expectAsync(
             ciphers.decryptPayload0(
-               async (decHint) => {
-                  return pwd;
+               async (lp, lpEnd) => {
+                  return [pwd, undefined];
                },
+               1,
                userCred,
                payload0
             )
@@ -619,6 +646,8 @@ describe("Detect changed cipher data", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCred,
+            lp:1,
+            lpEnd: 1
          };
 
          const latest = Ciphers.latest();
@@ -645,9 +674,12 @@ describe("Detect changed cipher data", function () {
 
          await expectAsync(
             ciphers.decryptPayload0(
-               async (decHint) => {
-                  return pwd;
+               async (lp, lpEnd) => {
+                  expect(lp).toEqual(1);
+                  expect(lpEnd).toEqual(1);
+                  return [pwd, undefined];
                },
+               1,
                userCred,
                payload0
             )
@@ -659,9 +691,12 @@ describe("Detect changed cipher data", function () {
 
          await expectAsync(
             ciphers.decryptPayload0(
-               async (decHint) => {
-                  return pwd;
+               async (lp, lpEnd) => {
+                  expect(lp).toEqual(1);
+                  expect(lpEnd).toEqual(1);
+                  return [pwd, undefined];
                },
+               1,
                userCred,
                payload0
             )
@@ -677,9 +712,12 @@ describe("Detect changed cipher data", function () {
 
          await expectAsync(
             ciphers.decryptPayload0(
-               async (decHint) => {
-                  return pwd;
+               async (lp, lpEnd) => {
+                  expect(lp).toEqual(1);
+                  expect(lpEnd).toEqual(1);
+                  return [pwd, undefined];
                },
+               1,
                userCred,
                payload0
             )
@@ -704,6 +742,8 @@ describe("Detect changed cipher data", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCred,
+            lp: 1,
+            lpEnd: 1
          };
 
          const latest = Ciphers.latest();
@@ -728,9 +768,12 @@ describe("Detect changed cipher data", function () {
 
          await expectAsync(
             ciphers.decryptPayload0(
-               async (decHint) => {
-                  return pwd;
+               async (lp, lpEnd) => {
+                  expect(lp).toEqual(1);
+                  expect(lpEnd).toEqual(1);
+                  return [pwd, undefined];
                },
+               1,
                userCred,
                payload0
             )
@@ -755,6 +798,8 @@ describe("Detect changed cipher data", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCred,
+            lp: 1,
+            lpEnd: 1
          };
 
          const latest = Ciphers.latest();
@@ -786,9 +831,12 @@ describe("Detect changed cipher data", function () {
          // was replaced to always return true.
          await expectAsync(
             ciphers.decryptPayload0(
-               async (decHint) => {
-                  return pwd;
+               async (lp, lpEnd) => {
+                  expect(lp).toEqual(1);
+                  expect(lpEnd).toEqual(1);
+                  return [pwd, undefined];
                },
+               1,
                userCred,
                payload0
             )
@@ -813,6 +861,8 @@ describe("Detect changed cipher data", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCred,
+            lp: 1,
+            lpEnd: 1
          };
 
          const latest = Ciphers.latest();
@@ -845,10 +895,13 @@ describe("Detect changed cipher data", function () {
          // should fail with DOMException rather than Error with MAC in message
          await expectAsync(
             ciphers.decryptPayload0(
-               async (decHint) => {
-                  return pwd;
+               async (lp, lpEnd) => {
+                  expect(lp).toEqual(1);
+                  expect(lpEnd).toEqual(1);
+                  return [pwd, undefined];
                },
-               userCred,
+               1,
+              userCred,
                payload0
             )
          ).toBeRejectedWithError(DOMException);
@@ -873,6 +926,8 @@ describe("Detect changed cipher data", function () {
             pwd: pwd,
             hint: hint,
             userCred: userCred,
+            lp: 1,
+            lpEnd: 1
          };
 
          const latest = Ciphers.latest();
@@ -905,9 +960,12 @@ describe("Detect changed cipher data", function () {
          // fail with DOMException rather than Error with MAC in message
          await expectAsync(
             ciphers.decryptPayload0(
-               async (decHint) => {
-                  return pwd;
+               async (lp, lpEnd) => {
+                  expect(lp).toEqual(1);
+                  expect(lpEnd).toEqual(1);
+                  return [pwd, undefined];
                },
+               1,
                userCred,
                payload0
             )
