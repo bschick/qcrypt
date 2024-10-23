@@ -31,6 +31,7 @@ import {
    ChangeDetectorRef,
    HostListener,
    SecurityContext,
+   NgZone,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
@@ -210,6 +211,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       private matIconRegistry: MatIconRegistry,
       private domSanitizer: DomSanitizer,
       private changeRef: ChangeDetectorRef,
+      private ngZone: NgZone,
       @Inject(PLATFORM_ID) private platformId: Object
    ) {
       this.matIconRegistry.addSvgIcon(
@@ -668,25 +670,29 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    cipherReadyNotice(cdInfo: CipherDataInfo) {
       this.actionStart = Date.now();
-      // Avoid briefly putting up spinner and disabling buttons
-      if (cdInfo.ic > this.spinnerAbove || this.usingFile) {
-         this.showProgress = true;
-      }
+      // This can run outside of Angular's zone because the  callback
+      // comes from within streem connections
+      this.ngZone.run(() => {
+         // Avoid briefly putting up spinner and disabling buttons
+         if (cdInfo.ic > this.spinnerAbove || this.usingFile) {
+            this.showProgress = true;
+         }
+      });
    }
 
    setCipherFile(cipherFile: File, saved: boolean = false) {
       this.onClearCipher();
       this.cipherFile = cipherFile;
       let msg = saved ? 'file saved and ' : '';
-      this.showCipherFile(msg + 'selected for decryption', cipherFile.name);
+      this.showCipherFile(msg + 'selected for decryption', saved, cipherFile.name);
    }
 
    setClearFile(clearFile: File, saved: boolean = false) {
       this.onClearClear();
       this.clearFile = clearFile;
       let msg = saved ? 'file saved and ' : '';
+      this.showClearFile(msg + 'selected for encryption', saved, clearFile.name);
 
-      this.showClearFile(msg + 'selected for encryption', clearFile.name);
       if (!this.welcomed) {
          this.bubbleTip1.hide();
          this.bubbleTip2.show();
@@ -754,8 +760,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.onClearClear();
          }*/
       } catch (something) {
-         console.error(something);
          if (!ProcessCancelled.isProcessCancelled(something)) {
+            console.error(something);
             this.showCipherError('Could not encrypt text');
          }
          if (!this.welcomed) {
@@ -825,7 +831,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                const response = new Response(cipherStream);
                const blob = await response.blob();
                this.fileDownload(baseName + '.qq', blob);
-               this.showCipherFile('Encrypted file will be in your downloads folder');
+               this.showCipherFile('Encrypted file will be in your downloads folder', true);
                this.toastMessage('Data encrypted');
             }
          }
@@ -835,8 +841,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          localStorage.setItem(this.authSvc.userId + "welcomed", "yup");
 
       } catch (something) {
-         console.error(something);
          if (!ProcessCancelled.isProcessCancelled(something)) {
+            console.error(something);
             this.showCipherError('Could not encrypt text');
          }
          if (!this.welcomed) {
@@ -852,7 +858,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       let size = 0;
       let clearStream: ReadableStream<Uint8Array>;
 
-      if(this.clearFile) {
+      if (this.clearFile) {
          size = this.clearFile.size;
          clearStream = this.clearFile.stream();
          this.usingFile = true;
@@ -926,8 +932,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.toastMessage('Data decrypted');
          }
       } catch (something) {
-         console.error(something);
          if (!ProcessCancelled.isProcessCancelled(something)) {
+            console.error(something);
             this.clearPassword();
             this.showClearError(
                'Could not decrypt cipher armor text. You may be using the wrong password or passkey, or the cipher armor is invalid'
@@ -998,13 +1004,13 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                const response = new Response(clearStream);
                const blob = await response.blob();
                this.fileDownload(baseName, blob);
-               this.showClearFile('Decrypted file will be in your downloads folder');
+               this.showClearFile('Decrypted file will be in your downloads folder', true);
                this.toastMessage('Data decrypted');
             }
          }
       } catch (something) {
-         console.error(something);
          if (!ProcessCancelled.isProcessCancelled(something)) {
+            console.error(something);
             this.clearPassword();
             this.showClearError(
                'Could not decrypt cipher armor text. You may be using the wrong password or passkey, or the cipher armor is invalid'
@@ -1049,18 +1055,18 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    ): Promise<ReadableStream<Uint8Array>> {
 
       return await this.cipherSvc.decryptStream(
-            async (lp, lpEnd, hint?) => {
-               const [pwd] = await this.getPassword(
-                  -1,
-                  lp,
-                  lpEnd,
-                  hint
-               );
-               return [pwd, undefined];
-            },
-            base64ToBytes(this.authSvc.userCred!),
-            cipherStream,
-            this.cipherReadyNotice.bind(this)
+         async (lp, lpEnd, hint?) => {
+            const [pwd] = await this.getPassword(
+               -1,
+               lp,
+               lpEnd,
+               hint
+            );
+            return [pwd, undefined];
+         },
+         base64ToBytes(this.authSvc.userCred!),
+         cipherStream,
+         this.cipherReadyNotice.bind(this)
       );
    }
 
@@ -1068,8 +1074,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.showClearMsg('errorBox', 'Error', msg, hdr);
    }
 
-   showClearFile(msg: string, hdr: string | null = null): void {
-      this.showClearMsg('fileBox', 'File', msg, hdr);
+   showClearFile(msg: string, took: boolean, hdr: string | null = null): void {
+      const label = took ? `File (${makeTookMsg(this.actionStart, Date.now())})` : 'File';
+      this.showClearMsg('fileBox', label, msg, hdr);
    }
 
    showClearMsg(cls: string, label: string, msg: string, hdr: string | null = null): void {
@@ -1105,8 +1112,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.showCipherMsg('errorBox', 'Error', msg, hdr);
    }
 
-   showCipherFile(msg: string, hdr: string | null = null): void {
-      this.showCipherMsg('fileBox', 'File', msg, hdr);
+   showCipherFile(msg: string, took: boolean, hdr: string | null = null): void {
+      const label = took ? `File (${makeTookMsg(this.actionStart, Date.now())})` : 'File';
+      this.showCipherMsg('fileBox', label, msg, hdr);
    }
 
    showCipherMsg(cls: string, label: string, msg: string, hdr: string | null = null): void {
@@ -1139,7 +1147,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    getCipherArmorFor(
       cipherData: Uint8Array, format: string, reminder: boolean)
-   : string {
+      : string {
       // Rebuild object to control ordering (better way to do this?)
       let result: { [key: string]: string | number } = {};
       result['ct'] = bytesToBase64(cipherData);
@@ -1216,36 +1224,40 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    ): Promise<[string, string]> {
 
       this.clearPassword();
-      let dialogRef = this.dialog.open(PasswordDialog, {
-         data: {
-            hint: hint,
-            askHint: hint === undefined,
-            minStrength: minStrength,
-            hidePwd: this.hidePwd,
-            loopCount: lp,
-            loops: lpEnd,
-            checkPwned: this.checkPwned,
-            welcomed: this.welcomed,
-            userName: this.authSvc.userName,
-         },
-      });
-
       return new Promise((resolve, reject) => {
-         dialogRef.afterClosed().subscribe((result) => {
-            if (!result) {
-               // intentially do not rejct with "new Error()" so this isn't
-               // caught as an error, just cancelation
-               reject(new ProcessCancelled());
-            } else {
-               this.clearPassword();
-               if (this.cacheTime > 0 && result[0] && lpEnd == 1) {
-                  this.cachedPassword = result[0];
-                  this.cachedHint = result[1];
-                  this.pwdCached = true;
-                  this.restartTimer();
+         // This can run outside of Angular's zone because the password callback
+         // comes from within streem connections
+         this.ngZone.run(() => {
+            let dialogRef = this.dialog.open(PasswordDialog, {
+               data: {
+                  hint: hint,
+                  askHint: hint === undefined,
+                  minStrength: minStrength,
+                  hidePwd: this.hidePwd,
+                  loopCount: lp,
+                  loops: lpEnd,
+                  checkPwned: this.checkPwned,
+                  welcomed: this.welcomed,
+                  userName: this.authSvc.userName,
+               },
+            });
+
+            dialogRef.afterClosed().subscribe((result) => {
+               if (!result) {
+                  // intentially do not rejct with "new Error()" so this isn't
+                  // caught as an error, just cancelation
+                  reject(new ProcessCancelled());
+               } else {
+                  this.clearPassword();
+                  if (this.cacheTime > 0 && result[0] && lpEnd == 1) {
+                     this.cachedPassword = result[0];
+                     this.cachedHint = result[1];
+                     this.pwdCached = true;
+                     this.restartTimer();
+                  }
+                  resolve([result[0], result[1]]);
                }
-               resolve([result[0], result[1]]);
-            }
+            });
          });
       });
    }
@@ -1417,7 +1429,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.dialog.open(CipherInfoDialog, { data: cdInfo });
       } catch (err) {
          console.error(err);
-         this.dialog.open(CipherInfoDialog, { data:null } );
+         this.dialog.open(CipherInfoDialog, { data: null });
       }
    }
 
@@ -1430,7 +1442,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
 
       const [cipherStream, size] = await this.getCipherStream();
-      if(size < cc.HEADER_BYTES + cc.PAYLOAD_SIZE_MIN) {
+      if (size < cc.HEADER_BYTES + cc.PAYLOAD_SIZE_MIN) {
          throw new Error('Missing cipher armor');
       }
       return await this.cipherSvc.getCipherStreamInfo(

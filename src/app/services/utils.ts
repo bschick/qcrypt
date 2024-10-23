@@ -109,23 +109,34 @@ export class BYOBStreamReader {
    // Use when the reader cannot accept less then the size of output (or stream done)
    async readFill(buffer: ArrayBuffer)
       : Promise<[data: Uint8Array, done: boolean]> {
-      if (browserSupportsBytesStream()) {
-         return this._readBYOB(buffer, false);
-      } else {
-         return this._readStupidSafari(buffer, false);
+      try {
+         if (browserSupportsBytesStream()) {
+            return this._readBYOB(buffer, false);
+         } else {
+            return this._readStupidSafari(buffer, false);
+         }
+      }
+      catch (err) {
+         this.cleanup();
+         throw err;
       }
    }
 
    async readAvailable(buffer: ArrayBuffer)
       : Promise<[data: Uint8Array, done: boolean]> {
-      if (browserSupportsBytesStream()) {
-         return this._readBYOB(buffer, true);
-      } else {
-         return this._readStupidSafari(buffer, true);
+      try {
+         if (browserSupportsBytesStream()) {
+            return this._readBYOB(buffer, true);
+         } else {
+            return this._readStupidSafari(buffer, true);
+         }
+      } catch (err) {
+         this.cleanup();
+         throw err;
       }
    }
 
-   async _readBYOB(
+   private async _readBYOB(
       buffer: ArrayBuffer,
       breakOnStall: boolean
    ): Promise<[data: Uint8Array, done: boolean]> {
@@ -157,7 +168,7 @@ export class BYOBStreamReader {
       return [new Uint8Array(buffer, 0, readBytes), streamDone];
    }
 
-   async _readStupidSafari(
+   private async _readStupidSafari(
       buffer: ArrayBuffer,
       breakOnStall: boolean
    ): Promise<[data: Uint8Array, done: boolean]> {
