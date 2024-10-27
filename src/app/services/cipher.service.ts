@@ -76,7 +76,6 @@ export class CipherService {
       return Object.keys(cc.AlgInfo);
    }
 
-
    async encryptStream(
       econtext: EncContext3,
       pwdProvider: PWDProvider,
@@ -86,21 +85,32 @@ export class CipherService {
       lp: number = 1
    ): Promise<ReadableStream<Uint8Array>> {
 
-      if (econtext.ic > this._iCountMax) {
-         throw new Error('Invalid ic, exceeded: ' + this._iCountMax);
+      if (!this.validateAlg(econtext.alg)) {
+         throw new Error('Invalid alg of: ' + econtext.alg);
+      }
+      if (econtext.ic < cc.ICOUNT_MIN || econtext.ic > cc.ICOUNT_MAX) {
+         throw new Error('Invalid ic of: ' + econtext.ic);
       }
       if (econtext.lpEnd > cc.LP_MAX) {
-         throw new Error('Loop count exceeded: ' + cc.LP_MAX);
+         throw new Error('Invalid loop end of: ' + econtext.lpEnd);
+      }
+      if (lp < 1 || lp > econtext.lpEnd) {
+         throw new Error('Invalid loop of: ' + lp);
+      }
+      if (!econtext.trueRand && !econtext.fallbackRand) {
+         throw new Error('Either trueRand or fallbackRand must be true');
+      }
+      if (userCred.byteLength != cc.USERCRED_BYTES) {
+         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
       }
 
-      const encipher = Encipher.latest(clearStream);
+      const encipher = Encipher.latest(userCred, clearStream);
       const [pwd, hint] = await pwdProvider(lp, econtext.lpEnd);
 
       const eparams: EParams = {
          ...econtext,
          pwd,
          lp,
-         userCred,
          hint
       };
 
@@ -148,8 +158,12 @@ export class CipherService {
       userCred: Uint8Array,
       cipherStream: ReadableStream<Uint8Array>,
    ): Promise<CipherDataInfo> {
-      const decipher = await Decipher.fromStream(cipherStream);
-      return decipher.getCipherDataInfo(userCred);
+      if (userCred.byteLength != cc.USERCRED_BYTES) {
+         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
+      }
+
+      const decipher = await Decipher.fromStream(userCred, cipherStream);
+      return decipher.getCipherDataInfo();
    }
 
    async decryptStream(
@@ -157,16 +171,14 @@ export class CipherService {
       userCred: Uint8Array,
       cipherStream: ReadableStream<Uint8Array>,
       readyNotice?: (cdInfo: CipherDataInfo) => void,
-      lpEnd?: number
    ): Promise<ReadableStream<Uint8Array>> {
 
-
-      const decipher = await Decipher.fromStream(cipherStream);
-      const cdInfo = await decipher.getCipherDataInfo(userCred);
-
-      if (!lpEnd) {
-         lpEnd = cdInfo.lp;
+      if (userCred.byteLength != cc.USERCRED_BYTES) {
+         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
       }
+
+      const decipher = await Decipher.fromStream(userCred, cipherStream);
+      const cdInfo = await decipher.getCipherDataInfo();
 
       let readableStream = new ReadableStream({
          type: (browserSupportsBytesStream() ? 'bytes' : undefined),
@@ -176,8 +188,6 @@ export class CipherService {
             try {
                const decrypted = await decipher.decryptBlock(
                   pwdProvider,
-                  lpEnd,
-                  userCred,
                   readyNotice
                );
 
@@ -203,14 +213,12 @@ export class CipherService {
             pwdProvider,
             userCred,
             readableStream,
-            readyNotice,
-            lpEnd
+            readyNotice
          );
       }
 
       return readableStream
    }
-
 }
 
 

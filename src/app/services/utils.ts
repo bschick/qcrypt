@@ -444,9 +444,10 @@ export class Random48 {
       } else {
          const lastCache = this._trueRandCache;
          this._trueRandCache = this.downloadTrueRand();
-         return lastCache.then((response) => {
+         return lastCache.then(async (response) => {
             if (!response.ok) {
-               throw new Error('random.org response: ' + response.statusText);
+               const bdy = await response.text();
+               throw new Error('random.org response: ' + response.statusText + ' ' + bdy);
             }
             return response.arrayBuffer();
          }).then((array) => {
@@ -473,8 +474,7 @@ export class Random48 {
       const url = 'https://www.random.org/cgi-bin/randbyte?nbytes=' + 48;
       try {
          const p = fetch(url, {
-            cache: 'no-store',
-            mode: 'no-cors'
+            cache: 'no-store'
          });
          return p;
       } catch (err) {

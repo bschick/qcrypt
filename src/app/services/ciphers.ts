@@ -26,7 +26,11 @@ import * as cc from './cipher.consts';
 // Simple perf testing with Chrome 126 on MacOS result in
 // readAvailable with READ_SIZE_MAX of 4x to be the fastest
 const READ_SIZE_START = 1048576; // 1 MiB
-const READ_SIZE_MAX = READ_SIZE_START * 4;
+const READ_SIZE_MAX =  READ_SIZE_START * 4;
+
+// Used to create hardcoded cipherdata for some tests
+//const READ_SIZE_START = 1048576/1024/4;
+//const READ_SIZE_MAX =  READ_SIZE_START * 41;
 
 
 export type EParams = {
@@ -37,7 +41,6 @@ export type EParams = {
    readonly pwd: string;
    readonly lp: number;
    readonly lpEnd: number;
-   readonly userCred: Uint8Array;
    readonly hint?: string;     // limited to HINT_MAX_LEN characters
 };
 
@@ -49,13 +52,14 @@ export type CipherDataBlock = {
 };
 
 export type CipherDataInfo = {
-   readonly ver: number;      // VER_BYTES
-   readonly alg: string;      // ALG_BYTES
-   readonly ic: number;       // IC_BYTES
-   readonly lp: number;       // LP_BYTES
-   readonly iv: Uint8Array;   // Variable, lookup in AlgInfo
-   readonly slt: Uint8Array;  // SLT_BYTES
-   readonly hint: boolean;    // limited to ENCRYPTED_HINT_MAX_BYTES bytes
+   readonly ver: number;
+   readonly alg: string;
+   readonly ic: number;
+   readonly lp: number;
+   readonly lpEnd: number;
+   readonly iv: Uint8Array;
+   readonly slt: Uint8Array;
+   readonly hint: boolean;
 };
 
 
@@ -78,13 +82,20 @@ export class Ciphers {
    protected _slt?: Uint8Array;
    protected _ic?: number;
    protected _lp: number = 1; // Not all version support loop # so provide a default
+   protected _lpEnd: number = 1; // Not all version support loop # so provide a default
    protected _additionalData?: Uint8Array;
    protected _encryptedHint?: Uint8Array;
+   protected _userCred: Uint8Array;
 
    protected constructor(
+      userCred: Uint8Array,
       reader: BYOBStreamReader,
       ver: number
    ) {
+      if (userCred.byteLength != cc.USERCRED_BYTES) {
+         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
+      }
+      this._userCred = userCred;
       this._reader = reader;
       this._ver = ver;
    }
@@ -252,9 +263,9 @@ export class Ciphers {
       if (slt.byteLength != cc.SLT_BYTES) {
          throw new Error("Invalid slt size of: " + slt.byteLength);
       }
-
       if (userCred.byteLength != cc.USERCRED_BYTES) {
          throw new Error('Invalid userCred length of: ' + userCred.byteLength);
+
       }
       const hkMaterial = await crypto.subtle.importKey(
          'raw',
@@ -295,6 +306,7 @@ export class Ciphers {
          ic?: number;
          slt?: Uint8Array;
          lp?: number;
+         lpEnd?: number;
          ver?: number;
          encryptedHint?: Uint8Array
       }) {
@@ -322,8 +334,18 @@ export class Ciphers {
          }
       }
 
-      if (args.lp && (args.lp < 1 || args.lp > cc.LP_MAX)) {
-         throw new Error('Invalid lp: ' + args.lp);
+      if(args.lpEnd) {
+         if(!args.lp) {
+            throw new Error('Missing lp');
+         }
+         if (args.lpEnd < 1 || args.lpEnd > cc.LP_MAX) {
+            throw new Error('Invalid lpEnd: ' + args.lpEnd);
+         }
+         if (args.lp < 1 || args.lp > args.lpEnd) {
+            throw new Error('Invalid lp: ' + args.lp);
+         }
+      } else if(args.lp) {
+         throw new Error('Missing lpEnd');
       }
 
       // Should move this to subclasses... later...
@@ -348,6 +370,7 @@ export class Ciphers {
          ic?: number;
          slt?: Uint8Array;
          lp?: number;
+         lpEnd?: number;
          ver?: number;
          encryptedHint?: Uint8Array
       }): Uint8Array {
@@ -368,8 +391,8 @@ export class Ciphers {
          packer.ic = args.ic;
       }
 
-      if (args.lp) {
-         packer.lp = args.lp;
+      if (args.lp && args.lpEnd) {
+         packer.lpp(args.lp, args.lpEnd);
       }
 
       if (args.ver) {
@@ -391,13 +414,17 @@ export abstract class Encipher extends Ciphers {
    // downloads from random.org during testing
    public static testingFlag = false;
 
-   public static latest(clearStream: ReadableStream<Uint8Array>): Encipher {
+   public static latest(userCred: Uint8Array, clearStream: ReadableStream<Uint8Array>): Encipher {
       const reader = new BYOBStreamReader(clearStream);
-      return new EncipherV4(reader);
+      return new EncipherV4(userCred, reader);
    }
 
-   protected constructor(reader: BYOBStreamReader, ver: number) {
-      super(reader, ver);
+   protected constructor(
+      userCred: Uint8Array,
+      reader: BYOBStreamReader,
+      ver: number
+   ) {
+      super(userCred, reader, ver);
    }
 
    // The encryptBlock functions return CipherDataBlock instead of
@@ -421,7 +448,8 @@ export abstract class Encipher extends Ciphers {
 
 };
 
-class EncipherV4 extends Encipher {
+// Exported just for testing
+export class EncipherV4 extends Encipher {
    /* V4 CipherData Layout (hopefully less brain dead). Tags are just notations,
     * and are not actually in the data stream. All encodings have one block0 instance
     * followed by zero or more blockN instances
@@ -429,19 +457,19 @@ class EncipherV4 extends Encipher {
       <Document>
          <Block0>
             <Header>
-               MAC_BYTES
-               VER_BYTES
-               PAYLOAD_SIZE_BYTES
+               MAC_BYTES - 32
+               VER_BYTES - 2
+               PAYLOAD_SIZE_BYTES - 4
             </Header>
             <Payload>
                <Additional Data>
-                  ALG_BYTES
-                  IV_BYTES (variable)
-                  SLT_BYTES
-                  IC_BYTES
-                  LP_BYTES
-                  EHINT_LEN_BYTES
-                  EHINT_BYTES (variable)
+                  ALG_BYTES - 2
+                  IV_BYTES (variable) - [12, 24, 32]
+                  SLT_BYTES - 16
+                  IC_BYTES - 4
+                  LPP_BYTES (packed lp and lpEnd) - 1
+                  EHINT_LEN_BYTES - 1
+                  EHINT_BYTES (variable) - [0-128]
                </Additional Data>
                <Encrypted Data>
                   EDATA_BYTES (variable)
@@ -473,8 +501,11 @@ class EncipherV4 extends Encipher {
    private _random48Cache: Random48;
 
 
-   constructor(reader: BYOBStreamReader) {
-      super(reader, cc.VERSION4);
+   constructor(
+      userCred: Uint8Array,
+      reader: BYOBStreamReader
+   ) {
+      super(userCred, reader, cc.VERSION4);
       this._random48Cache = new Random48(Encipher.testingFlag);
    }
 
@@ -507,7 +538,7 @@ class EncipherV4 extends Encipher {
 
       EncipherV4.validateEparams(eparams);
       if (this._sk || this._ek) {
-         throw new Error('CiphersV4 instance encryptBlock0 should only be called once');
+         throw new Error('encryptBlock0 should only be called once');
       }
 
       const [clearBuffer, done] = await this._reader.readAvailable(
@@ -540,6 +571,7 @@ class EncipherV4 extends Encipher {
       this._alg = eparams.alg;
       this._ic = eparams.ic;
       this._lp = eparams.lp;
+      this._lpEnd = eparams.lpEnd;
 
       // don't save ivBytes... so we could allow changing alg and ic per block
       const ivBytes = Number(cc.AlgInfo[this._alg]['iv_bytes']);
@@ -553,14 +585,15 @@ class EncipherV4 extends Encipher {
             ic: this._ic,
             slt: this._slt,
             lp: this._lp,
+            lpEnd: this._lpEnd,
             iv: this._iv,
             hint: Boolean(eparams.hint)
          });
       }
 
-      const hk = await Ciphers._genHintCipherKey(this._alg, eparams.userCred, this._slt);
-      this._sk = await Ciphers._genSigningKey(eparams.userCred, this._slt);
-      this._ek = await Ciphers._genCipherKey(this._alg, this._ic, eparams.pwd, eparams.userCred, this._slt);
+      const hk = await Ciphers._genHintCipherKey(this._alg, this._userCred, this._slt);
+      this._sk = await Ciphers._genSigningKey(this._userCred, this._slt);
+      this._ek = await Ciphers._genCipherKey(this._alg, this._ic, eparams.pwd, this._userCred, this._slt);
 
       this._encryptedHint = new Uint8Array(0);
       if (eparams.hint) {
@@ -584,6 +617,7 @@ class EncipherV4 extends Encipher {
          iv: this._iv,
          ic: this._ic,
          lp: this._lp,
+         lpEnd: this._lpEnd,
          slt: this._slt,
          encryptedHint: this._encryptedHint
       });
@@ -697,9 +731,6 @@ class EncipherV4 extends Encipher {
       if (eparams.lp < 1 || eparams.lp > eparams.lpEnd) {
          throw new Error('Invalid lp: ' + eparams.lp);
       }
-      if (!eparams.userCred || eparams.userCred.byteLength != cc.USERCRED_BYTES) {
-         throw new Error('Invalid userCred');
-      }
    }
 
    // Helper function
@@ -805,7 +836,10 @@ export abstract class Decipher extends Ciphers {
    protected _encryptedData?: Uint8Array;
 
    // Return appropriate version of Ciphers
-   public static async fromStream(cipherStream: ReadableStream<Uint8Array>): Promise<Decipher> {
+   public static async fromStream(
+      userCred: Uint8Array,
+      cipherStream: ReadableStream<Uint8Array>
+   ): Promise<Decipher> {
 
       let decipher: Decipher;
       const reader = new BYOBStreamReader(cipherStream);
@@ -823,9 +857,9 @@ export abstract class Decipher extends Ciphers {
       // version is >=4). Fortunately ALG_BYTES and VER_BYTES are equal.
       const verOrAlg = bytesToNum(new Uint8Array(header.buffer, cc.MAC_BYTES, cc.VER_BYTES));
       if (verOrAlg == cc.VERSION4) {
-         decipher = new DecipherV4(reader, header);
+         decipher = new DecipherV4(userCred, reader, header);
       } else if (verOrAlg < cc.V1_BELOW && verOrAlg > 0) {
-         decipher = new DecipherV1(reader, header);
+         decipher = new DecipherV1(userCred, reader, header);
       } else {
          throw new Error('Invalid version: ' + verOrAlg);
       }
@@ -841,16 +875,12 @@ export abstract class Decipher extends Ciphers {
    // Helper that calls Block0 until ~success then BlockN
    async decryptBlock(
       pwdProvider: PWDProvider,
-      lpEnd: number,
-      userCred: Uint8Array,
       readyNotice?: (cdInfo: CipherDataInfo) => void
    ): Promise<Uint8Array> {
 
       if (!this._ek) {
          return this.decryptBlock0(
             pwdProvider,
-            lpEnd,
-            userCred,
             readyNotice
          );
       } else {
@@ -872,17 +902,15 @@ export abstract class Decipher extends Ciphers {
    //
    public async decryptBlock0(
       pwdProvider: PWDProvider,
-      lpEnd: number,
-      userCred: Uint8Array,
       readyNotice?: (cdInfo: CipherDataInfo) => void
    ): Promise<Uint8Array> {
 
-      if (userCred.byteLength != cc.USERCRED_BYTES) {
-         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
+      if (this._userCred.byteLength != cc.USERCRED_BYTES) {
+         throw new Error('Invalid userCred length of: ' + this._userCred.byteLength);
       }
 
       // This does MAC check
-      await this._decodePayload0(userCred);
+      await this._decodePayload0();
 
       if (!this._alg || !this._slt || !this._iv || !this._ic || !this._encryptedData || !this._encryptedHint) {
          throw new Error('Data not initialized');
@@ -890,7 +918,7 @@ export abstract class Decipher extends Ciphers {
 
       let hint = new Uint8Array(0);
       if (this._encryptedHint!.byteLength != 0) {
-         const hk = await Ciphers._genHintCipherKey(this._alg, userCred, this._slt);
+         const hk = await Ciphers._genHintCipherKey(this._alg, this._userCred, this._slt);
          hint = await Decipher._doDecrypt(
             this._alg,
             hk,
@@ -899,7 +927,7 @@ export abstract class Decipher extends Ciphers {
          );
       }
 
-      const [pwd] = await pwdProvider(this._lp, lpEnd, new TextDecoder().decode(hint));
+      const [pwd] = await pwdProvider(this._lp, this._lpEnd, new TextDecoder().decode(hint));
       if (!pwd) {
          throw new Error('password is empty');
       }
@@ -912,11 +940,12 @@ export abstract class Decipher extends Ciphers {
             slt: this._slt,
             iv: this._iv,
             lp: this._lp,
+            lpEnd: this._lpEnd,
             hint: hint.byteLength > 0
          });
       }
 
-      this._ek = await Ciphers._genCipherKey(this._alg, this._ic, pwd, userCred, this._slt);
+      this._ek = await Ciphers._genCipherKey(this._alg, this._ic, pwd, this._userCred, this._slt);
 
       const decrypted = await Decipher._doDecrypt(
          this._alg,
@@ -930,22 +959,16 @@ export abstract class Decipher extends Ciphers {
    }
 
    abstract _decodePayload0(
-      userCred: Uint8Array
    ): Promise<void>;
 
    public abstract decryptBlockN(
    ): Promise<Uint8Array>;
 
    public async getCipherDataInfo(
-      userCred: Uint8Array
    ): Promise<CipherDataInfo> {
 
-      if (userCred.byteLength != cc.USERCRED_BYTES) {
-         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
-      }
-
       // This does MAC check
-      await this._decodePayload0(userCred);
+      await this._decodePayload0();
 
       if (!this._alg || !this._slt || !this._iv || !this._ic || !this._encryptedHint) {
          throw new Error('Data not initialized');
@@ -957,6 +980,7 @@ export abstract class Decipher extends Ciphers {
          ic: this._ic,
          slt: this._slt,
          lp: this._lp,
+         lpEnd: this._lpEnd,
          iv: this._iv,
          hint: this._encryptedHint!.byteLength > 0
       };
@@ -1051,10 +1075,11 @@ class DecipherV1 extends Decipher {
    private _headerish?: Uint8Array;
 
    constructor(
+      userCred: Uint8Array,
       reader: BYOBStreamReader,
-      headerish?: Uint8Array,
+      headerish?: Uint8Array
    ) {
-      super(reader, cc.VERSION1);
+      super(userCred, reader, cc.VERSION1);
 
       // V1 didn't really have a header, save the data to combine
       // with the rest of the stream for decoding
@@ -1063,21 +1088,16 @@ class DecipherV1 extends Decipher {
 
    // For V1, this should be the entire CipherData array
    override async _decodePayload0(
-      userCred: Uint8Array,
    ): Promise<void> {
 
-      if (userCred.byteLength != cc.USERCRED_BYTES) {
-         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
-      }
-
-      // May be called multiple times calling getCipherDataInfo or others
-      if (this._iv) {
+      // May be called multiple times calling getCipherDataInfo or others.
+      if (this._sk) {
          return;
       }
 
       // This isn't very efficient, but it simplifies object creation and V4 logic
       // (which are more important)
-      let [payload] = await this._reader.readFill( new Uint8Array(cc.PAYLOAD_SIZE_MAX));
+      let [payload] = await this._reader.readFill(new Uint8Array(cc.PAYLOAD_SIZE_MAX));
       this._reader.cleanup();
 
       if (this._headerish) {
@@ -1090,7 +1110,7 @@ class DecipherV1 extends Decipher {
 
       // V1 should test be larger, but this get simple cases
       if (payload.byteLength < cc.PAYLOAD_SIZE_MIN) {
-         throw new Error('Invalid cipher data length: ' + payload.byteLength);
+         throw new Error('Invalid paysload size1: ' + payload.byteLength);
       }
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
@@ -1120,7 +1140,7 @@ class DecipherV1 extends Decipher {
          encryptedHint: this._encryptedHint
       });
 
-      this._sk = await Ciphers._genSigningKey(userCred, this._slt);
+      this._sk = await Ciphers._genSigningKey(this._userCred, this._slt);
 
       // Avoiding the Doom Principle and verify signature before crypto operations.
       // Aka, check MAC as soon as possible after we  have the signing key and data.
@@ -1131,7 +1151,7 @@ class DecipherV1 extends Decipher {
          return;
       }
 
-      throw new Error('Invalid MAC');
+      throw new Error('Invalid MAC Err');
    }
 
    private async _verifyMAC(): Promise<boolean> {
@@ -1169,19 +1189,19 @@ class DecipherV4 extends Decipher {
       <Document>
          <Block0>
             <Header>
-               MAC_BYTES
-               VER_BYTES
-               PAYLOAD_SIZE_BYTES
+               MAC_BYTES - 32
+               VER_BYTES - 2
+               PAYLOAD_SIZE_BYTES - 4
             </Header>
             <Payload>
                <Additional Data>
-                  ALG_BYTES
-                  IV_BYTES (variable)
-                  SLT_BYTES
-                  IC_BYTES
-                  LP_BYTES
-                  EHINT_LEN_BYTES
-                  EHINT_BYTES (variable)
+                  ALG_BYTES - 2
+                  IV_BYTES (variable) - [12, 24, 32]
+                  SLT_BYTES - 16
+                  IC_BYTES - 4
+                  LPP_BYTES (packed lp and lpEnd) - 1
+                  EHINT_LEN_BYTES - 1
+                  EHINT_BYTES (variable) - [0-128]
                </Additional Data>
                <Encrypted Data>
                   EDATA_BYTES (variable)
@@ -1213,10 +1233,11 @@ class DecipherV4 extends Decipher {
    private _payloadSize?: number;
 
    constructor(
+      userCred: Uint8Array,
       reader: BYOBStreamReader,
       header?: Uint8Array
    ) {
-      super(reader, cc.VERSION4);
+      super(userCred, reader, cc.VERSION4);
       this._header = header;
    }
 
@@ -1256,26 +1277,21 @@ class DecipherV4 extends Decipher {
    // but it is public for unit testing. Does not allow encoding
    // with zero length encrypted text since that is not needed
    override async _decodePayload0(
-      userCred: Uint8Array
    ): Promise<void> {
 
-      if (userCred.byteLength != cc.USERCRED_BYTES) {
-         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
-      }
-
-      // May be called multiple times calling getCipherDataInfo or others
-      if (this._iv) {
+      // May be called multiple times calling getCipherDataInfo or others.
+      if (this._sk) {
          return;
       }
 
-      this._decodeHeader(this._header);
+      await this._decodeHeader(this._header);
       this._header = undefined;
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated, Extractor does test each value for valid ranges as we unpack
 
       if (!this._payloadSize) {
-         throw new Error('Invalid cipher data length: ' + this._payloadSize);
+         throw new Error('Invalid payload size1: ' + this._payloadSize);
       }
 
       const [payload, done] = await this._reader.readFill(new Uint8Array(this._payloadSize));
@@ -1284,7 +1300,7 @@ class DecipherV4 extends Decipher {
       }
 
       if (payload.byteLength != this._payloadSize) {
-         throw new Error('Invalid cipher data length: ' + payload.byteLength);
+         throw new Error('Cipher data length mismatch1: ' + payload.byteLength);
       }
 
       let extractor = new Extractor(payload);
@@ -1294,7 +1310,7 @@ class DecipherV4 extends Decipher {
       this._iv = extractor.iv;
       this._slt = extractor.slt;
       this._ic = extractor.ic;
-      this._lp = extractor.lp;
+      [this._lp, this._lpEnd] = extractor.lpp();
       this._encryptedHint = extractor.hint;
       this._encryptedData = extractor.remainder('edata');
 
@@ -1305,7 +1321,7 @@ class DecipherV4 extends Decipher {
          extractor.offset - this._encryptedData.byteLength
       );
 
-      this._sk = await Ciphers._genSigningKey(userCred, this._slt);
+      this._sk = await Ciphers._genSigningKey(this._userCred, this._slt);
 
       // Avoiding the Doom Principle and verify signature before crypto operations.
       // Aka, check MAC as soon as possible after we  have the signing key and data.
@@ -1316,11 +1332,15 @@ class DecipherV4 extends Decipher {
          return;
       }
 
-      throw new Error('Invalid MAC');
+      throw new Error('Invalid MAC Err');
    }
 
    public async decryptBlockN(
    ): Promise<Uint8Array> {
+
+      if (!this._sk || !this._ek) {
+         throw new Error('Data not initialized, decrypt block0 first');
+      }
 
       const done = await this._decodePayloadN();
       if (done) {
@@ -1358,7 +1378,7 @@ class DecipherV4 extends Decipher {
       }
 
       if (!this._payloadSize) {
-         throw new Error('Invalid cipher data length: ' + this._payloadSize);
+         throw new Error('Invalid payload size2: ' + this._payloadSize);
       }
 
       // Don't need to look at done for the fill since there will will be another
@@ -1366,7 +1386,7 @@ class DecipherV4 extends Decipher {
       const [payload] = await this._reader.readFill(new Uint8Array(this._payloadSize));
 
       if (payload.byteLength != this._payloadSize) {
-         throw new Error('Invalid cipher data length: ' + payload.byteLength);
+         throw new Error('Cipher data length mismatch2: ' + payload.byteLength);
       }
 
       let extractor = new Extractor(payload);
@@ -1392,7 +1412,7 @@ class DecipherV4 extends Decipher {
          return false;
       }
 
-      throw new Error('Invalid MAC');
+      throw new Error('Invalid MAC Err');
    }
 
    private async _verifyMAC(): Promise<boolean> {
@@ -1496,12 +1516,19 @@ class Extractor {
       return ic;
    }
 
-   get lp(): number {
-      const lp = bytesToNum(this.extract('lp', cc.LP_BYTES));
-      if (lp < 1 || lp > cc.LP_MAX) {
+   lpp() : [lp: number, lpEnd: number] {
+      let lpp = bytesToNum(this.extract('lpp', cc.LPP_BYTES));
+      const lp = (lpp & 0x0F) + 1;
+      const lpEnd = (lpp >> 4) + 1;
+      // this can't happen... but... just check
+      if (lpEnd < 1 || lpEnd > cc.LP_MAX) {
+         throw new Error('Invalid lpEnd of: ' + lpEnd);
+      }
+      // only lp > lpEnd could happen
+      if (lp < 1 || lp > lpEnd) {
          throw new Error('Invalid lp of: ' + lp);
       }
-      return lp;
+      return [lp, lpEnd];
    }
 
    get ver(): number {
@@ -1522,7 +1549,7 @@ class Extractor {
    get size(): number {
       const payloadSize = bytesToNum(this.extract('size', cc.PAYLOAD_SIZE_BYTES));
       if (payloadSize < cc.PAYLOAD_SIZE_MIN || payloadSize > cc.PAYLOAD_SIZE_MAX) {
-         throw new Error('Invalid payload size: ' + payloadSize);
+         throw new Error('Invalid payload size3: ' + payloadSize);
       }
       return payloadSize;
    }
@@ -1633,11 +1660,16 @@ class Packer {
       this.pack('ic', numToBytes(iCount, cc.IC_BYTES));
    }
 
-   set lp(lp: number) {
-      if (lp < 1 || lp > cc.LP_MAX) {
+   lpp(lp: number, lpEnd: number) {
+      if (lpEnd < 1 || lpEnd > cc.LP_MAX) {
+         throw new Error('Invalid lpEnd of: ' + lpEnd);
+      }
+      if (lp < 1 || lp > lpEnd) {
          throw new Error('Invalid lp of: ' + lp);
       }
-      this.pack('lp', numToBytes(lp, cc.LP_BYTES));
+      let lpp = (lpEnd-1) << 4;
+      lpp += (lp-1);
+      this.pack('lpp', numToBytes(lpp, cc.LPP_BYTES));
    }
 
    set ver(version: number) {
@@ -1657,7 +1689,7 @@ class Packer {
 
    set size(payloadSize: number) {
       if (payloadSize < cc.PAYLOAD_SIZE_MIN || payloadSize > cc.PAYLOAD_SIZE_MAX) {
-         throw new Error('Invalid payload size: ' + payloadSize);
+         throw new Error('Invalid payload size4: ' + payloadSize);
       }
       this.pack('size', numToBytes(payloadSize, cc.PAYLOAD_SIZE_BYTES));
    }

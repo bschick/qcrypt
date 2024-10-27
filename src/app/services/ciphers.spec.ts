@@ -21,8 +21,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
 import * as cc from './cipher.consts';
-import { Random48, bytesToBase64 } from './utils';
-import { Ciphers, EParams, CipherDataBlock } from './ciphers';
+import { Random48, base64ToBytes, BYOBStreamReader, readStreamAll } from './utils';
+import { Ciphers, Encipher, Decipher, EncipherV4, EParams, CipherDataBlock } from './ciphers';
 
 // Faster than .toEqual, resulting in few timeouts
 function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
@@ -45,11 +45,75 @@ function setCharAt(str: string, index: number, chr: string) {
    return str.substring(0, index) + chr + str.substring(index + 1);
 }
 
+// Faster than .toEqual, resulting in few timeouts
+async function areEqual(
+   a: Uint8Array | ReadableStream<Uint8Array>,
+   b: Uint8Array | ReadableStream<Uint8Array>
+): Promise<boolean> {
+
+   if (a instanceof ReadableStream) {
+      a = await readStreamAll(a);
+   }
+   if (b instanceof ReadableStream) {
+      b = await readStreamAll(b);
+   }
+
+   if (a.byteLength != b.byteLength) {
+      return false;
+   }
+
+   for (let i = 0; i < a.byteLength; ++i) {
+      if (a[i] != b[i]) {
+         return false;
+      }
+   }
+   return true;
+}
+
+function streamFromBytes(data: Uint8Array): [ReadableStream<Uint8Array>, Uint8Array] {
+   const blob = new Blob([data], { type: 'application/octet-stream' });
+   return [blob.stream(), data];
+}
+
+function streamFromStr(str: string): [ReadableStream<Uint8Array>, Uint8Array] {
+   const data = new TextEncoder().encode(str);
+   const blob = new Blob([data], { type: 'application/octet-stream' });
+   return [blob.stream(), data];
+}
+
+function streamFromCipherBlock(
+   cdBlocks: CipherDataBlock[]
+): [ReadableStream<Uint8Array>, Uint8Array] {
+
+   let bytes = 0;
+   for (let cdBlock of cdBlocks) {
+      for (let part of cdBlock.parts) {
+         bytes += part.byteLength;
+      }
+   }
+
+   let pos = 0;
+   const cipherData = new Uint8Array(bytes);
+   for (let cdBlock of cdBlocks) {
+      for (let part of cdBlock.parts) {
+         cipherData.set(part, pos);
+         pos += part.byteLength;
+      }
+   }
+
+   return streamFromBytes(cipherData);
+}
+
+function streamFromBase64(b64: string): [ReadableStream<Uint8Array>, Uint8Array] {
+   const data = base64ToBytes(b64);
+   const blob = new Blob([data], { type: 'application/octet-stream' });
+   return [blob.stream(), data];
+}
 
 describe("Key generation", function () {
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      Ciphers.testingFlag = true;
+      Encipher.testingFlag = true;
    });
 
    it("successful and not equivalent key generation", async function () {
@@ -118,17 +182,14 @@ describe("Key generation", function () {
 
          let exported = await window.crypto.subtle.exportKey("raw", ek);
          const ekBytes = new Uint8Array(exported);
-         //         console.log(alg, 'ek: ', ekBytes);
          expect(isEqualArray(ekBytes, expected[alg]['ek'])).toBeTrue();
 
          exported = await window.crypto.subtle.exportKey("raw", sk);
          const skBytes = new Uint8Array(exported);
-         //         console.log(alg, 'sk: ', skBytes);
          expect(isEqualArray(skBytes, expected[alg]['sk'])).toBeTrue();
 
          exported = await window.crypto.subtle.exportKey("raw", hk);
          const hkBytes = new Uint8Array(exported);
-         //         console.log(alg, 'hk: ', hkBytes);
          expect(isEqualArray(hkBytes, expected[alg]['hk'])).toBeTrue();
       }
    });
@@ -137,27 +198,31 @@ describe("Key generation", function () {
 describe("Encryption and decryption", function () {
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      Ciphers.testingFlag = true;
+      Encipher.testingFlag = true;
    });
 
    async function signAndRepack(
-      ciphers: Ciphers,
+      encipher: Encipher,
       userCred: Uint8Array,
       block: CipherDataBlock
    ): Promise<Uint8Array> {
 
-      const sk = await Ciphers._genSigningKey(userCred, ciphers['_slt']!);
-      const headerData = await Ciphers._createHeader(sk, block.encryptedData, block.additionalData);
+      // cheating... parts[1] is _additionalData, parts[2] is encryptedData
+
+      const sk = await EncipherV4._genSigningKey(userCred, encipher['_slt']!);
+      const headerData = await EncipherV4._createHeader(sk, block.parts[2], block.parts[1]);
 
       const output = new Uint8Array(headerData.byteLength +
-         block.additionalData.byteLength +
-         block.encryptedData.byteLength
+         block.parts[1].byteLength +
+         block.parts[2].byteLength
       );
 
       output.set(headerData);
-      output.set(block.additionalData, headerData.byteLength);
-      output.set(block.encryptedData,
-         headerData.byteLength + block.additionalData.byteLength);
+      output.set(block.parts[1], headerData.byteLength);
+      output.set(
+         block.parts[2],
+         headerData.byteLength + block.parts[1].byteLength
+      );
 
       return output;
    }
@@ -188,80 +253,82 @@ describe("Encryption and decryption", function () {
 
       for (let alg in cc.AlgInfo) {
 
-         const clearText = 'This is a secret 🐓';
-         const clearData = new TextEncoder().encode(clearText);
+         const [clearStream, clearData] = streamFromStr('This is a secret 🐓');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCredA = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
          const userCredB = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const eparamsA: EParams = {
+         const eparams: EParams = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
             trueRand: false,
             fallbackRand: true,
             pwd: pwd,
             hint: hint,
-            userCred: userCredA,
             lp: 1,
             lpEnd: 1
          };
 
-         const ciphers = Ciphers.latest();
-         const cipherDataA = await ciphers.encryptBlock0(eparamsA, clearData);
-
-         ciphers.decodeHeader(cipherDataA.headerData);
+         const reader = new BYOBStreamReader(clearStream);
+         const encipher = new EncipherV4(userCredA, reader);
+         const cipherBlock = await encipher.encryptBlock0(eparams);
 
          // First sign and repack with the original (correct) values to help ensure the
          // code for repacking is valid and that the 2nd attempt with a new signature
          // detects the userCred change rather than bug in signAndRepack. Then resign
          // and pack with Bob's userCred
-         const blockA = await signAndRepack(ciphers, userCredA, cipherDataA);
-         const blockB = await signAndRepack(ciphers, userCredB, cipherDataA);
+         let [cipherstreamA, cipherDataA] = streamFromBytes(
+            await signAndRepack(encipher, userCredA, cipherBlock)
+         );
+         let [cipherstreamB, cipherDataB] = streamFromBytes(
+            await signAndRepack(encipher, userCredB, cipherBlock)
+         );
 
-         const ciphersA = Ciphers.fromHeader(blockA);
-         let consumedBytes = ciphersA.decodeHeader(blockA);
-         const payloadA = new Uint8Array(blockA.buffer, consumedBytes);
+         // These should fail  because using the wrong userCred on each
+         let decipherA = await Decipher.fromStream(userCredB, cipherstreamA)
+         let decipherB = await Decipher.fromStream(userCredA, cipherstreamB)
 
-         const ciphersB = Ciphers.fromHeader(blockB);
-         consumedBytes = ciphersB.decodeHeader(blockB);
-         const payloadB = new Uint8Array(blockB.buffer, consumedBytes);
+         await expectAsync(
+            decipherA._decodePayload0()
+         ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
+         await expectAsync(
+            decipherB._decodePayload0()
+         ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
 
-         expect(isEqualArray(payloadA, payloadB)).toBeTrue();
+         // Reload with matching userCreds
+         [cipherstreamA] = streamFromBytes(cipherDataA);
+         [cipherstreamB] = streamFromBytes(cipherDataB);
+         decipherA = await Decipher.fromStream(userCredA, cipherstreamA)
+         decipherB = await Decipher.fromStream(userCredB, cipherstreamB)
 
          // both should succeed since the singatures are valid with the userCreds
          // passed below (just cannot decrypt cipherText)
          await expectAsync(
-            ciphersA._decodePayload0(userCredA, payloadA)
+            decipherA._decodePayload0()
          ).toBeResolved();
          await expectAsync(
-            ciphersB._decodePayload0(userCredB, payloadB)
+            decipherB._decodePayload0()
          ).toBeResolved();
 
-         // The original should succeed since we repacked with correct userCred
+         // should succeed since we repacked with correct userCred
          await expectAsync(
-            ciphersA.decryptPayload0(
+            decipherA.decryptBlock0(
                async (lp, lpEnd) => {
                   return [pwd, undefined];
-               },
-               1,
-               userCredA,
-               payloadA
+               }
             )
          ).toBeResolvedTo(clearData);
 
          // The big moment... perhaps should have better validation that the decryption
-         // failed, but not much else returns DOMException from cipher.service. Note
-         // this this is using the correct PWD because we assume the evil site has
-         // tricked Alice into provider it (just not her userCred)
+         // failed, but not much else returns DOMException from cipher.service. Note that
+         // this is using the correct PWD because we assume the evil site has tricked
+         // Alice into provider it (just not her userCred since site cannot retrieve)
          await expectAsync(
-            ciphersB.decryptPayload0(
+            decipherB.decryptBlock0(
                async (lp, lpEnd) => {
                   return [pwd, undefined];
-               },
-               1,
-               userCredB,
-               payloadB
+               }
             )
          ).toBeRejectedWithError(DOMException);
       }
@@ -271,8 +338,7 @@ describe("Encryption and decryption", function () {
 
       for (let alg in cc.AlgInfo) {
 
-         const clearText = 'This is a secret 🦆';
-         const clearData = new TextEncoder().encode(clearText);
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -284,50 +350,26 @@ describe("Encryption and decryption", function () {
             fallbackRand: true,
             pwd: pwd,
             hint: hint,
-            userCred: userCred,
             lp: 1,
             lpEnd: 1
          };
 
-         const latest = Ciphers.latest();
+         const latest = Encipher.latest(userCred, clearStream);
          const block0 = await latest.encryptBlock0(
             eparams,
-            clearData,
             (params) => {
                expect(params.alg).toBe(alg);
                expect(params.ic).toBe(cc.ICOUNT_MIN);
             }
          );
 
-         const payload0 = new Uint8Array(block0.additionalData.byteLength + block0.encryptedData.byteLength);
-         payload0.set(block0.additionalData);
-         payload0.set(block0.encryptedData, block0.additionalData.byteLength);
+         const [cipherStream] = streamFromCipherBlock([block0]);
+         const decipher = await Decipher.fromStream(userCred, cipherStream);
 
-         const ciphers = Ciphers.fromHeader(block0.headerData);
-
-         // header not loaded
-         await expectAsync(
-            ciphers.decryptPayload0(
-               async (lp, lpEnd) => {
-                  return [pwd, undefined];
-               },
-               1,
-               userCred,
-               payload0
-            )
-         ).toBeRejectedWithError(Error, new RegExp('Data not initialized.*'));
-
-         const consumedBytes = ciphers.decodeHeader(block0.headerData);
-         expect(consumedBytes).toEqual(block0.headerData.byteLength);
-
-
-         const decrypted = await ciphers.decryptPayload0(
+         const decrypted = await decipher.decryptBlock0(
             async (lp, lpEnd) => {
                return [pwd, undefined];
             },
-            1,
-            userCred,
-            payload0,
             (params) => {
                expect(params.alg).toBe(alg);
                expect(params.ic).toBe(cc.ICOUNT_MIN);
@@ -335,18 +377,18 @@ describe("Encryption and decryption", function () {
             }
          );
 
-         const clearTest = new TextDecoder().decode(decrypted);
-         //      console.log(alg + ": '" + decrypted + "'");
-         expect(clearTest).toBe(clearText);
+         await expectAsync(
+            areEqual(decrypted, clearData)
+         ).toBeResolvedTo(true);
       }
    });
+
 
    it("round trip blockN, all algorithms", async function () {
 
       for (let alg in cc.AlgInfo) {
 
-         const clearText = 'This is a secret 🦀';
-         const clearData = new TextEncoder().encode(clearText);
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦀');
          const pwd = 'a not good pwd';
          const hint = 'sorta';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -358,113 +400,99 @@ describe("Encryption and decryption", function () {
             fallbackRand: true,
             pwd: pwd,
             hint: hint,
-            userCred: userCred,
             lp: 1,
             lpEnd: 1
          };
 
-         const latest = Ciphers.latest();
+         const latest = Encipher.latest(userCred, clearStream);
+         const readStart = 12
+         //@ts-ignore force multiple blocks
+         latest['_readTarget'] = readStart;
+
          await expectAsync(
-            latest.encryptBlockN(eparams, clearData)
+            latest.encryptBlockN(eparams)
          ).toBeRejectedWithError(Error, new RegExp('Data not initialized.+'));
 
-         const block0 = await latest.encryptBlock0(eparams, clearData)
-         const blockN = await latest.encryptBlockN(eparams, clearData);
+         const block0 = await latest.encryptBlock0(eparams)
+         const blockN = await latest.encryptBlockN(eparams);
 
-         const payload0 = new Uint8Array(block0.additionalData.byteLength + block0.encryptedData.byteLength);
-         payload0.set(block0.additionalData);
-         payload0.set(block0.encryptedData, block0.additionalData.byteLength);
-
-         const payloadN = new Uint8Array(blockN.additionalData.byteLength + blockN.encryptedData.byteLength);
-         payloadN.set(blockN.additionalData);
-         payloadN.set(blockN.encryptedData, blockN.additionalData.byteLength);
-
-         const ciphers = Ciphers.fromHeader(block0.headerData);
+         let [cipherStream] = streamFromCipherBlock([block0, blockN]);
+         let decipher = await Decipher.fromStream(userCred, cipherStream);
 
          await expectAsync(
-            ciphers.decryptPayloadN(payloadN)
+            decipher.decryptBlockN()
          ).toBeRejectedWithError(Error, new RegExp('Data not initialized.*'));
 
-         // Mixing block N header with block0 payload
-         ciphers.decodeHeader(blockN.headerData);
+         let decb0 = await decipher.decryptBlock0(
+            async (lp, lpEnd) => {
+               expect(lp).toEqual(1);
+               expect(lpEnd).toEqual(1);
+               return [pwd, undefined];
+            }
+         );
          await expectAsync(
-            ciphers.decryptPayload0(
-               async (lp, lpEnd) => {
-                  expect(lp).toEqual(1);
-                  expect(lpEnd).toEqual(1);
-                  return [pwd, undefined];
-               },
-               1,
-               userCred,
-               payload0
-            )
-         ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
+            areEqual(decb0, clearData.slice(0, readStart))
+         ).toBeResolvedTo(true);
 
-         let consumedBytes = ciphers.decodeHeader(block0.headerData);
-         expect(consumedBytes).toEqual(block0.headerData.byteLength);
+         const decb1 = await decipher.decryptBlockN()
+         await expectAsync(
+            areEqual(decb1, clearData.slice(readStart))
+         ).toBeResolvedTo(true);
+
+         // Try again, but copy block0 head to block N
+         const badBlockN = {
+            ...blockN
+         };
+         badBlockN.parts[0] = block0.parts[0];
+
+         [cipherStream] = streamFromCipherBlock([block0, badBlockN]);
+         decipher = await Decipher.fromStream(userCred, cipherStream);
+
+         decb0 = await decipher.decryptBlock0(
+            async (lp, lpEnd) => {
+               expect(lp).toEqual(1);
+               expect(lpEnd).toEqual(1);
+               return [pwd, undefined];
+            }
+         );
+         await expectAsync(
+            areEqual(decb0, clearData.slice(0, readStart))
+         ).toBeResolvedTo(true);
 
          await expectAsync(
-            ciphers.decryptPayload0(
-               async (lp, lpEnd) => {
-                  expect(lp).toEqual(1);
-                  expect(lpEnd).toEqual(1);
-                  return [pwd, undefined];
-               },
-               1,
-              userCred,
-               payload0
-            )
-         ).toBeResolved();
+            decipher.decryptBlockN()
+         ).toBeRejectedWithError(Error, new RegExp('Cipher data length mismatch2.+'));
 
-         // make failure because blockN head has not been loaded
-         await expectAsync(
-            ciphers.decryptPayloadN(payloadN)
-         ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
-
-         // finally, do blockN correctly
-         consumedBytes = ciphers.decodeHeader(blockN.headerData);
-         expect(consumedBytes).toEqual(blockN.headerData.byteLength);
-         const decrypted = await ciphers.decryptPayloadN(payloadN)
-         const clearTest = new TextDecoder().decode(decrypted);
-         expect(clearTest).toBe(clearText);
       }
    });
 
    it("correct cipherdata info and decryption", async function () {
-      const clearText = 'A nice 🦫 came to say hello';
-      const clearData = new TextEncoder().encode(clearText);
+      const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
-      // base64url or userCred for injection into browser for recreation:
+      // base64url userCred for injection into browser for recreation:
       // Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=
       const userCred = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
-      const cipherData = new Uint8Array([162, 122, 176, 92, 17, 118, 3, 21, 200, 50, 240, 31, 67, 146, 170, 244, 74, 73, 120, 177, 213, 15, 102, 200, 221, 19, 194, 255, 12, 129, 94, 33, 4, 0, 115, 0, 0, 0, 2, 0, 196, 214, 166, 50, 166, 132, 209, 32, 217, 123, 195, 177, 134, 142, 73, 117, 85, 242, 50, 93, 93, 143, 154, 136, 4, 69, 111, 200, 122, 230, 194, 138, 212, 62, 46, 76, 65, 170, 189, 196, 64, 119, 27, 0, 23, 143, 125, 198, 210, 206, 171, 238, 185, 78, 164, 19, 126, 92, 108, 0, 68, 100, 203, 121, 133, 125, 79, 40, 207, 93, 99, 46, 146, 185, 230, 118, 67, 182, 98, 116, 118, 191, 38, 83, 170, 147, 225, 62, 242, 47, 37, 132, 90, 30, 244, 230, 120, 88, 32, 79, 178, 33, 164, 140, 197, 21, 67, 38, 20, 212, 117, 244, 25]);
+      const [cipherStream] = streamFromBytes(new Uint8Array([117, 163, 250, 117, 59, 97, 3, 10, 139, 12, 55, 161, 115, 52, 28, 105, 246, 126, 220, 0, 129, 151, 165, 136, 46, 97, 163, 160, 91, 9, 189, 218, 4, 0, 116, 0, 0, 0, 2, 0, 16, 242, 98, 46, 102, 223, 79, 227, 209, 73, 22, 207, 92, 80, 75, 125, 125, 234, 18, 21, 88, 64, 43, 68, 25, 193, 133, 31, 159, 156, 8, 184, 10, 164, 33, 46, 20, 159, 218, 222, 64, 119, 27, 0, 0, 23, 5, 135, 172, 203, 4, 101, 163, 155, 133, 221, 40, 227, 91, 222, 227, 213, 97, 77, 24, 117, 60, 188, 27, 153, 253, 134, 10, 112, 75, 76, 146, 132, 123, 217, 7, 171, 211, 24, 206, 186, 248, 244, 119, 18, 165, 195, 59, 160, 76, 31, 90, 80, 53, 19, 39, 143, 99, 141, 109, 68, 72, 63, 121, 199, 96, 95, 157, 81]));
 
-      const ciphers = Ciphers.fromHeader(cipherData);
-      const consumedBytes = ciphers.decodeHeader(cipherData);
-      const cdInfo = await ciphers.getCipherDataInfo(
-         userCred,
-         new Uint8Array(cipherData.buffer, consumedBytes),
-      );
+      const decipher = await Decipher.fromStream(userCred, cipherStream);
+      const cdInfo = await decipher.getCipherDataInfo();
 
       expect(cdInfo.alg).toEqual('X20-PLY');
       expect(cdInfo.ic).toEqual(1800000);
-      expect(isEqualArray(cdInfo.iv, new Uint8Array([196, 214, 166, 50, 166, 132, 209, 32, 217, 123, 195, 177, 134, 142, 73, 117, 85, 242, 50, 93, 93, 143, 154, 136]))).toBeTrue();
-      expect(isEqualArray(cdInfo.slt, new Uint8Array([4, 69, 111, 200, 122, 230, 194, 138, 212, 62, 46, 76, 65, 170, 189, 196]))).toBeTrue();
-      expect(cdInfo.ver).toEqual(cc.CURRENT_VERSION);
+      expect(isEqualArray(cdInfo.iv, new Uint8Array([16, 242, 98, 46, 102, 223, 79, 227, 209, 73, 22, 207, 92, 80, 75, 125, 125, 234, 18, 21, 88, 64, 43, 68]))).toBeTrue();
+      expect(isEqualArray(cdInfo.slt, new Uint8Array([25, 193, 133, 31, 159, 156, 8, 184, 10, 164, 33, 46, 20, 159, 218, 222]))).toBeTrue();
+      expect(cdInfo.ver).toEqual(cc.VERSION4);
       expect(cdInfo.hint).toBeTrue();
 
       await expectAsync(
-         ciphers.decryptPayload0(
+         decipher.decryptBlock0(
             async (lp, lpEnd, decHint) => {
                expect(decHint).toEqual(hint);
                expect(lp).toEqual(1);
                expect(lpEnd).toEqual(1);
                return [pwd, undefined];
             },
-            1,
-            userCred,
-            new Uint8Array(cipherData.buffer, consumedBytes),
             (params) => {
                expect(params.alg).toBe('X20-PLY');
                expect(params.ic).toBe(1800000);
@@ -475,75 +503,73 @@ describe("Encryption and decryption", function () {
    });
 
    it("bad input to cipherdata info and decrypt", async function () {
+      const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwdGood = 'a 🌲 of course';
       const pwdBad = 'a 🌵 of course';
       const userCredBad = new Uint8Array([0, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
-      const userCredGood = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
-      const cipherData = new Uint8Array([162, 122, 176, 92, 17, 118, 3, 21, 200, 50, 240, 31, 67, 146, 170, 244, 74, 73, 120, 177, 213, 15, 102, 200, 221, 19, 194, 255, 12, 129, 94, 33, 4, 0, 115, 0, 0, 0, 2, 0, 196, 214, 166, 50, 166, 132, 209, 32, 217, 123, 195, 177, 134, 142, 73, 117, 85, 242, 50, 93, 93, 143, 154, 136, 4, 69, 111, 200, 122, 230, 194, 138, 212, 62, 46, 76, 65, 170, 189, 196, 64, 119, 27, 0, 23, 143, 125, 198, 210, 206, 171, 238, 185, 78, 164, 19, 126, 92, 108, 0, 68, 100, 203, 121, 133, 125, 79, 40, 207, 93, 99, 46, 146, 185, 230, 118, 67, 182, 98, 116, 118, 191, 38, 83, 170, 147, 225, 62, 242, 47, 37, 132, 90, 30, 244, 230, 120, 88, 32, 79, 178, 33, 164, 140, 197, 21, 67, 38, 20, 212, 117, 244, 25]);
 
-      const ciphers = Ciphers.fromHeader(cipherData);
-      const consumedBytes = ciphers.decodeHeader(cipherData);
+      // copied from "correct cipherdata info and decryption" spec above
+      const userCredGood = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
+
+      let [cipherStream, cipherData] = streamFromBytes(new Uint8Array([117, 163, 250, 117, 59, 97, 3, 10, 139, 12, 55, 161, 115, 52, 28, 105, 246, 126, 220, 0, 129, 151, 165, 136, 46, 97, 163, 160, 91, 9, 189, 218, 4, 0, 116, 0, 0, 0, 2, 0, 16, 242, 98, 46, 102, 223, 79, 227, 209, 73, 22, 207, 92, 80, 75, 125, 125, 234, 18, 21, 88, 64, 43, 68, 25, 193, 133, 31, 159, 156, 8, 184, 10, 164, 33, 46, 20, 159, 218, 222, 64, 119, 27, 0, 0, 23, 5, 135, 172, 203, 4, 101, 163, 155, 133, 221, 40, 227, 91, 222, 227, 213, 97, 77, 24, 117, 60, 188, 27, 153, 253, 134, 10, 112, 75, 76, 146, 132, 123, 217, 7, 171, 211, 24, 206, 186, 248, 244, 119, 18, 165, 195, 59, 160, 76, 31, 90, 80, 53, 19, 39, 143, 99, 141, 109, 68, 72, 63, 121, 199, 96, 95, 157, 81]));
+      let decipher = await Decipher.fromStream(userCredGood, cipherStream);
 
       // First make sure the good values are actually good
       await expectAsync(
-         ciphers.decryptPayload0(
+         decipher.decryptBlock0(
             async (lp, lpEnd) => {
                return [pwdGood, undefined];
             },
-            1,
-            userCredGood,
-            new Uint8Array(cipherData.buffer, consumedBytes),
             (params) => {
                expect(params.alg).toBe('X20-PLY');
                expect(params.ic).toBe(1800000);
                expect(params.hint).toBeTrue();
             }
          )
-      ).toBeResolved();
+      ).toBeResolvedTo(clearData);
 
-      // Then test bad values
-      await expectAsync(
-         ciphers.getCipherDataInfo(
-            userCredBad,
-            new Uint8Array(cipherData.buffer, consumedBytes),
-         )
-      ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
+      // Ensure bad password fails
+      [cipherStream] = streamFromBytes(cipherData);
+      decipher = await Decipher.fromStream(userCredGood, cipherStream);
 
       await expectAsync(
-         ciphers.decryptPayload0(
+         decipher.decryptBlock0(
             async (lp, lpEnd) => {
                return [pwdBad, undefined];
-            },
-            1,
-            userCredGood,
-            new Uint8Array(cipherData.buffer, consumedBytes)
+            }
          )
       ).toBeRejectedWithError(DOMException);
 
+      // Test wrong userCred
+      [cipherStream] = streamFromBytes(cipherData);
+      decipher = await Decipher.fromStream(userCredBad, cipherStream);
+
       await expectAsync(
-         ciphers.decryptPayload0(
+         decipher.getCipherDataInfo()
+      ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
+
+      // Does not get MAC error because MAC check only happens on the first call
+      // to getCipherDataInfo or decryptBlock0
+      await expectAsync(
+         decipher.decryptBlock0(
             async (lp, lpEnd) => {
                return [pwdGood, undefined];
-            },
-            1,
-            userCredBad,
-            new Uint8Array(cipherData.buffer, consumedBytes)
+            }
          )
-      ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
+      ).toBeRejectedWithError(DOMException);
    });
 });
 
 describe("Detect changed cipher data", function () {
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      Ciphers.testingFlag = true;
+      Encipher.testingFlag = true;
    });
 
    it("detect changed headerData", async function () {
 
       for (let alg in cc.AlgInfo) {
-         const clearText = 'This is a secret 🦆';
-         const clearData = new TextEncoder().encode(clearText);
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -555,85 +581,66 @@ describe("Detect changed cipher data", function () {
             fallbackRand: true,
             pwd: pwd,
             hint: hint,
-            userCred: userCred,
             lp: 1,
             lpEnd: 1
          };
 
-         const latest = Ciphers.latest();
+         const latest = Encipher.latest(userCred, clearStream);
          const block0 = await latest.encryptBlock0(
             eparams,
-            clearData,
             (params) => {
                expect(params.alg).toBe(alg);
                expect(params.ic).toBe(cc.ICOUNT_MIN);
             }
          );
 
-         const payload0 = new Uint8Array(block0.additionalData.byteLength + block0.encryptedData.byteLength);
-         payload0.set(block0.additionalData);
-         payload0.set(block0.encryptedData, block0.additionalData.byteLength);
+         const savedHeader = new Uint8Array(block0.parts[0]);
 
-         const savedHeader = new Uint8Array(block0.headerData);
-
-         let bad = block0.headerData[12] == 123 ? 124 : 123;
-         block0.headerData.set([bad], 12);
-
-         let ciphers = Ciphers.fromHeader(block0.headerData);
-         ciphers.decodeHeader(block0.headerData);
+         // set byte in MAC
+         block0.parts[0][12] = block0.parts[0][12] == 123 ? 124 : 123;
+         let [cipherStream] = streamFromCipherBlock([block0]);
+         let decipher = await Decipher.fromStream(userCred, cipherStream);
 
          await expectAsync(
-            ciphers.decryptPayload0(
+            decipher.decryptBlock0(
                async (lp, lpEnd) => {
                   return [pwd, undefined];
-               },
-               1,
-               userCred,
-               payload0
+               }
             )
          ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
 
-         // Confirm we're back to good state
-         ciphers = Ciphers.fromHeader(savedHeader);
-         ciphers.decodeHeader(savedHeader);
+         block0.parts[0] = new Uint8Array(savedHeader);
+         [cipherStream] = streamFromCipherBlock([block0]);
+         decipher = await Decipher.fromStream(userCred, cipherStream);
 
          await expectAsync(
-            ciphers.decryptPayload0(
+            decipher.decryptBlock0(
                async (lp, lpEnd) => {
                   return [pwd, undefined];
-               },
-               1,
-               userCred,
-               payload0
+               }
             )
-         ).toBeResolved();
+         ).toBeResolvedTo(clearData);
 
          // set byte past MAC
-         const back = savedHeader.byteLength - 4;
-         bad = savedHeader[back] == 43 ? 45 : 43;
-         savedHeader.set([bad], back);
-         ciphers = Ciphers.fromHeader(savedHeader);
-         ciphers.decodeHeader(savedHeader);
+         const back = block0.parts[0].byteLength - 4;
+         block0.parts[0][back] = block0.parts[0][back] == 43 ? 45 : 43;
+         [cipherStream] = streamFromCipherBlock([block0]);
+         decipher = await Decipher.fromStream(userCred, cipherStream);
 
          await expectAsync(
-            ciphers.decryptPayload0(
+            decipher.decryptBlock0(
                async (lp, lpEnd) => {
                   return [pwd, undefined];
-               },
-               1,
-               userCred,
-               payload0
+               }
             )
-         ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
+         ).toBeRejectedWithError(Error);
       }
-
    });
 
    it("detect changed additionalData", async function () {
 
       for (let alg in cc.AlgInfo) {
-         const clearText = 'This is a secret 🦆';
-         const clearData = new TextEncoder().encode(clearText);
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -645,91 +652,73 @@ describe("Detect changed cipher data", function () {
             fallbackRand: true,
             pwd: pwd,
             hint: hint,
-            userCred: userCred,
-            lp:1,
+            lp: 1,
             lpEnd: 1
          };
 
-         const latest = Ciphers.latest();
+         const latest = Encipher.latest(userCred, clearStream);
          const block0 = await latest.encryptBlock0(
             eparams,
-            clearData,
             (params) => {
                expect(params.alg).toBe(alg);
                expect(params.ic).toBe(cc.ICOUNT_MIN);
             }
          );
 
-         const savedAD = new Uint8Array(block0.additionalData);
+         const savedAD = new Uint8Array(block0.parts[1]);
 
-         let bad = block0.additionalData[12] == 123 ? 124 : 123;
-         block0.additionalData.set([bad], 12);
-
-         let payload0 = new Uint8Array(block0.additionalData.byteLength + block0.encryptedData.byteLength);
-         payload0.set(block0.additionalData);
-         payload0.set(block0.encryptedData, block0.additionalData.byteLength);
-
-         let ciphers = Ciphers.fromHeader(block0.headerData);
-         ciphers.decodeHeader(block0.headerData);
+         block0.parts[1][12] = block0.parts[1][12] == 123 ? 124 : 123;
+         let [cipherStream] = streamFromCipherBlock([block0]);
+         let decipher = await Decipher.fromStream(userCred, cipherStream);
 
          await expectAsync(
-            ciphers.decryptPayload0(
+            decipher.decryptBlock0(
                async (lp, lpEnd) => {
                   expect(lp).toEqual(1);
                   expect(lpEnd).toEqual(1);
                   return [pwd, undefined];
-               },
-               1,
-               userCred,
-               payload0
+               }
             )
          ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
 
          // Confirm we're back to good state
-         payload0.set(savedAD);
-         payload0.set(block0.encryptedData,savedAD.byteLength);
+         block0.parts[1] = new Uint8Array(savedAD);
+         [cipherStream] = streamFromCipherBlock([block0]);
+         decipher = await Decipher.fromStream(userCred, cipherStream);
 
          await expectAsync(
-            ciphers.decryptPayload0(
+            decipher.decryptBlock0(
                async (lp, lpEnd) => {
                   expect(lp).toEqual(1);
                   expect(lpEnd).toEqual(1);
                   return [pwd, undefined];
-               },
-               1,
-               userCred,
-               payload0
+               }
             )
-         ).toBeResolved();
+         ).toBeResolvedTo(clearData);
 
          // set byte near end
-         const back = savedAD.byteLength - 4;
-         bad = savedAD[back] == 43 ? 45 : 43;
-         savedAD.set([bad], back);
-
-         payload0.set(savedAD);
-         payload0.set(block0.encryptedData,savedAD.byteLength);
+         const back = block0.parts[1].byteLength - 4;
+         block0.parts[1][back] = block0.parts[1][back] == 43 ? 45 : 43;
+         [cipherStream] = streamFromCipherBlock([block0]);
+         decipher = await Decipher.fromStream(userCred, cipherStream);
 
          await expectAsync(
-            ciphers.decryptPayload0(
+            decipher.decryptBlock0(
                async (lp, lpEnd) => {
                   expect(lp).toEqual(1);
                   expect(lpEnd).toEqual(1);
                   return [pwd, undefined];
-               },
-               1,
-               userCred,
-               payload0
+               }
             )
          ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
       }
    });
 
+
    it("detect changed encryptedData", async function () {
 
       for (let alg in cc.AlgInfo) {
-         const clearText = 'This is a secret 🦆';
-         const clearData = new TextEncoder().encode(clearText);
+         const [clearStream] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -741,41 +730,30 @@ describe("Detect changed cipher data", function () {
             fallbackRand: true,
             pwd: pwd,
             hint: hint,
-            userCred: userCred,
             lp: 1,
             lpEnd: 1
          };
 
-         const latest = Ciphers.latest();
+         const latest = Encipher.latest(userCred, clearStream);
          const block0 = await latest.encryptBlock0(
             eparams,
-            clearData,
             (params) => {
                expect(params.alg).toBe(alg);
                expect(params.ic).toBe(cc.ICOUNT_MIN);
             }
          );
 
-         let bad = block0.encryptedData[12] == 123 ? 124 : 123;
-         block0.encryptedData.set([bad], 12);
-
-         const payload0 = new Uint8Array(block0.additionalData.byteLength + block0.encryptedData.byteLength);
-         payload0.set(block0.additionalData);
-         payload0.set(block0.encryptedData, block0.additionalData.byteLength);
-
-         const ciphers = Ciphers.fromHeader(block0.headerData);
-         ciphers.decodeHeader(block0.headerData);
+         block0.parts[2][12] = block0.parts[2][12] == 123 ? 124 : 123;
+         let [cipherStream] = streamFromCipherBlock([block0]);
+         let decipher = await Decipher.fromStream(userCred, cipherStream);
 
          await expectAsync(
-            ciphers.decryptPayload0(
+            decipher.decryptBlock0(
                async (lp, lpEnd) => {
                   expect(lp).toEqual(1);
                   expect(lpEnd).toEqual(1);
                   return [pwd, undefined];
-               },
-               1,
-               userCred,
-               payload0
+               }
             )
          ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
       }
@@ -784,8 +762,7 @@ describe("Detect changed cipher data", function () {
    it("does not detect changed headerData, skip MAC verify", async function () {
 
       for (let alg in cc.AlgInfo) {
-         const clearText = 'This is a secret 🦆';
-         const clearData = new TextEncoder().encode(clearText);
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -797,58 +774,48 @@ describe("Detect changed cipher data", function () {
             fallbackRand: true,
             pwd: pwd,
             hint: hint,
-            userCred: userCred,
             lp: 1,
             lpEnd: 1
          };
 
-         const latest = Ciphers.latest();
+         const latest = Encipher.latest(userCred, clearStream);
          const block0 = await latest.encryptBlock0(
             eparams,
-            clearData,
             (params) => {
                expect(params.alg).toBe(alg);
                expect(params.ic).toBe(cc.ICOUNT_MIN);
             }
          );
 
-         const payload0 = new Uint8Array(block0.additionalData.byteLength + block0.encryptedData.byteLength);
-         payload0.set(block0.additionalData);
-         payload0.set(block0.encryptedData, block0.additionalData.byteLength);
-
-         let bad = block0.headerData[12] == 123 ? 124 : 123;
-         block0.headerData.set([bad], 12);
-
-         let ciphers = Ciphers.fromHeader(block0.headerData);
-         ciphers.decodeHeader(block0.headerData);
+         // set byte in MAC
+         block0.parts[0][12] = block0.parts[0][12] == 123 ? 124 : 123;
+         let [cipherStream] = streamFromCipherBlock([block0]);
+         let decipher = await Decipher.fromStream(userCred, cipherStream);
 
          // Monkey patch to skip MAV validation
-         ciphers['_verifyMAC'] = (): Promise<boolean> => {
+         //@ts-ignore
+         decipher['_verifyMAC'] = (): Promise<boolean> => {
             return Promise.resolve(true);
          }
 
          // This should even though the MAC has been changed since verifyMAC
          // was replaced to always return true.
          await expectAsync(
-            ciphers.decryptPayload0(
+            decipher.decryptBlock0(
                async (lp, lpEnd) => {
                   expect(lp).toEqual(1);
                   expect(lpEnd).toEqual(1);
                   return [pwd, undefined];
-               },
-               1,
-               userCred,
-               payload0
+               }
             )
-         ).toBeResolved();
+         ).toBeResolvedTo(clearData);
       }
    });
 
    it("detect changed additionalData, skip MAC verify", async function () {
 
       for (let alg in cc.AlgInfo) {
-         const clearText = 'This is a secret 🦆';
-         const clearData = new TextEncoder().encode(clearText);
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -860,33 +827,27 @@ describe("Detect changed cipher data", function () {
             fallbackRand: true,
             pwd: pwd,
             hint: hint,
-            userCred: userCred,
             lp: 1,
             lpEnd: 1
          };
 
-         const latest = Ciphers.latest();
+         const latest = Encipher.latest(userCred, clearStream);
          const block0 = await latest.encryptBlock0(
             eparams,
-            clearData,
             (params) => {
                expect(params.alg).toBe(alg);
                expect(params.ic).toBe(cc.ICOUNT_MIN);
             }
          );
 
-         let bad = block0.additionalData[12] == 123 ? 124 : 123;
-         block0.additionalData.set([bad], 12);
-
-         let payload0 = new Uint8Array(block0.additionalData.byteLength + block0.encryptedData.byteLength);
-         payload0.set(block0.additionalData);
-         payload0.set(block0.encryptedData, block0.additionalData.byteLength);
-
-         let ciphers = Ciphers.fromHeader(block0.headerData);
-         ciphers.decodeHeader(block0.headerData);
+         // set byte in additional data
+         block0.parts[1][12] = block0.parts[1][12] == 123 ? 124 : 123;
+         let [cipherStream] = streamFromCipherBlock([block0]);
+         let decipher = await Decipher.fromStream(userCred, cipherStream);
 
          // Monkey patch to skip MAV validation
-         ciphers['_verifyMAC'] = (): Promise<boolean> => {
+         //@ts-ignore
+         decipher['_verifyMAC'] = (): Promise<boolean> => {
             return Promise.resolve(true);
          }
 
@@ -894,26 +855,21 @@ describe("Detect changed cipher data", function () {
          // AD check is part of all encryption algorithms. Note that this
          // should fail with DOMException rather than Error with MAC in message
          await expectAsync(
-            ciphers.decryptPayload0(
+            decipher.decryptBlock0(
                async (lp, lpEnd) => {
                   expect(lp).toEqual(1);
                   expect(lpEnd).toEqual(1);
                   return [pwd, undefined];
-               },
-               1,
-              userCred,
-               payload0
+               }
             )
          ).toBeRejectedWithError(DOMException);
-
       }
    });
 
    it("detect changed encryptedData, skip MAC verify", async function () {
 
       for (let alg in cc.AlgInfo) {
-         const clearText = 'This is a secret 🦆';
-         const clearData = new TextEncoder().encode(clearText);
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -925,33 +881,27 @@ describe("Detect changed cipher data", function () {
             fallbackRand: true,
             pwd: pwd,
             hint: hint,
-            userCred: userCred,
             lp: 1,
             lpEnd: 1
          };
 
-         const latest = Ciphers.latest();
+         const latest = Encipher.latest(userCred, clearStream);
          const block0 = await latest.encryptBlock0(
             eparams,
-            clearData,
             (params) => {
                expect(params.alg).toBe(alg);
                expect(params.ic).toBe(cc.ICOUNT_MIN);
             }
          );
 
-         let bad = block0.encryptedData[12] == 123 ? 124 : 123;
-         block0.encryptedData.set([bad], 12);
-
-         const payload0 = new Uint8Array(block0.additionalData.byteLength + block0.encryptedData.byteLength);
-         payload0.set(block0.additionalData);
-         payload0.set(block0.encryptedData, block0.additionalData.byteLength);
-
-         const ciphers = Ciphers.fromHeader(block0.headerData);
-         ciphers.decodeHeader(block0.headerData);
+         // set byte in encrypted data
+         block0.parts[2][12] = block0.parts[2][12] == 123 ? 124 : 123;
+         let [cipherStream] = streamFromCipherBlock([block0]);
+         let decipher = await Decipher.fromStream(userCred, cipherStream);
 
          // Monkey patch to skip MAV validation
-         ciphers['_verifyMAC'] = (): Promise<boolean> => {
+         //@ts-ignore
+         decipher['_verifyMAC'] = (): Promise<boolean> => {
             return Promise.resolve(true);
          }
 
@@ -959,15 +909,12 @@ describe("Detect changed cipher data", function () {
          // encrypted data was modified. Note that this should
          // fail with DOMException rather than Error with MAC in message
          await expectAsync(
-            ciphers.decryptPayload0(
+            decipher.decryptBlock0(
                async (lp, lpEnd) => {
                   expect(lp).toEqual(1);
                   expect(lpEnd).toEqual(1);
                   return [pwd, undefined];
-               },
-               1,
-               userCred,
-               payload0
+               }
             )
          ).toBeRejectedWithError(DOMException);
       }
