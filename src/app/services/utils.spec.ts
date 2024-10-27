@@ -94,17 +94,16 @@ describe("Base64 encode decode", function () {
 
 describe("Random48 tests", function () {
 
-   /* Removed by default to avoid spamming random.org
-      it("true random", async function () {
-         let rand = new Random48(false);
-         const r1 = await rand.getRandomArray(true, false);
-         const r2 = await rand.getRandomArray(true, false);
+   // Removed by default to avoid spamming random.org
+/*   it("true random", async function () {
+      let rand = new Random48(false);
+      const r1 = await rand.getRandomArray(true, false);
+      const r2 = await rand.getRandomArray(true, false);
 
-         expect(r1.byteLength).toBe(48);
-         expect(r2.byteLength).toBe(48);
-         expect(isEqualArray(r1, r2)).toBeFalse();
-      });
-   */
+      expect(r1.byteLength).toBe(48);
+      expect(r2.byteLength).toBe(48);
+      expect(isEqualArray(r1, r2)).toBeFalse();
+   });*/
 
    it("pseudo random", async function () {
       let rand = new Random48(true);
@@ -231,11 +230,6 @@ describe("Stream reading", function () {
       let [readData] = await reader.readFill(buffer1m);
       reader.cleanup();
 
-/*      console.log('results',
-         new Uint8Array(await blob3m.arrayBuffer(), 0, readData.byteLength),
-         readData
-      );
-*/
       expect(readData.byteLength).toBe(1024 * 1024);
       expect(isEqualArray(
          new Uint8Array(await blob3m.arrayBuffer(), 0, readData.byteLength),

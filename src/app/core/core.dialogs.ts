@@ -194,7 +194,7 @@ export class CipherInfoDialog {
          this.iv = bytesToBase64(data.iv as Uint8Array);
          this.slt = bytesToBase64(data.slt as Uint8Array);
          this.hint = data.hint ? 'yes' : 'no';
-         this.lps = data.lp;
+         this.lps = data.lpEnd;
          this.ver = data.ver.toString();
       }
    }
