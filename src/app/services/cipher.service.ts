@@ -82,7 +82,24 @@ export class CipherService {
       userCred: Uint8Array,
       clearStream: ReadableStream<Uint8Array>,
       readyNotice?: (cdInfo: CipherDataInfo) => void,
-      lp: number = 1
+   ): Promise<ReadableStream<Uint8Array>> {
+      return this._encryptStreamImpl(
+         econtext,
+         pwdProvider,
+         userCred,
+         clearStream,
+         1,
+         readyNotice
+      );
+   }
+
+   private async _encryptStreamImpl(
+      econtext: EncContext3,
+      pwdProvider: PWDProvider,
+      userCred: Uint8Array,
+      clearStream: ReadableStream<Uint8Array>,
+      lp: number,
+      readyNotice?: (cdInfo: CipherDataInfo) => void,
    ): Promise<ReadableStream<Uint8Array>> {
 
       if (!this.validateAlg(econtext.alg)) {
@@ -141,13 +158,13 @@ export class CipherService {
       });
 
       if (lp < econtext.lpEnd) {
-         cipherStream = await this.encryptStream(
+         cipherStream = await this._encryptStreamImpl(
             econtext,
             pwdProvider,
             userCred,
             cipherStream,
-            readyNotice,
-            lp + 1
+            lp + 1,
+            readyNotice
          );
       }
 
