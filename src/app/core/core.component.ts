@@ -299,12 +299,18 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    setTrueRand(trand: string | null): void {
       setIfBoolean(trand, (bool) => {
          this.trueRand = bool;
+         if(!bool) {
+            this.pseudoRand = true;
+         }
       });
    }
 
    setPseudoRand(prand: string | null): void {
       setIfBoolean(prand, (bool) => {
          this.pseudoRand = bool;
+         if(!bool) {
+            this.trueRand = true;
+         }
       });
    }
 
@@ -401,8 +407,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.setCTFormat(this.lsGet('ctformat'));
          this.setVisibilityClear(this.lsGet('vclear'));
          this.setReminder(this.lsGet('reminder'));
-         this.setTrueRand(this.lsGet('trand'));
          this.setPseudoRand(this.lsGet('prand'));
+         this.setTrueRand(this.lsGet('trand'));
 
          let params = new HttpParams({ fromString: window.location.search });
 
@@ -431,8 +437,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.setCTFormat(params.get('ctformat'));
          this.setVisibilityClear(params.get('vclear'));
          this.setReminder(params.get('reminder'));
-         this.setTrueRand(params.get('trand'));
          this.setPseudoRand(params.get('prand'));
+         this.setTrueRand(params.get('trand'));
          this.optionsLoaded = true;
 
          this.setIcountWarning();
@@ -492,8 +498,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.visibilityClear = true;
       this.reminder = true;
       this.lastReminder = true;
-      this.trueRand = false;
       this.pseudoRand = true;
+      this.trueRand = false;
 
       this.clearPassword();
       this.saveOptions();
@@ -514,8 +520,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.lsDel('ctformat');
          this.lsDel('vclear');
          this.lsDel('reminder');
-         this.lsDel('trand');
          this.lsDel('prand');
+         this.lsDel('trand');
       } catch (err) {
          console.error(err);
          //otherwise ignore
@@ -535,8 +541,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.lsSet('ctformat', this.ctFormat.toString());
             this.lsSet('vclear', this.visibilityClear.toString());
             this.lsSet('reminder', this.reminder.toString());
-            this.lsSet('trand', this.trueRand.toString());
             this.lsSet('prand', this.pseudoRand.toString());
+            this.lsSet('trand', this.trueRand.toString());
          }
       } catch (err) {
          console.error(err);
@@ -1298,6 +1304,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    onTrueRandChanged(checked: boolean) {
       if (!checked) {
          this.pseudoRand = true;
+         this.onPseudoRandChange();
       }
       this.lsSet('trand', this.trueRand.toString());
    }
