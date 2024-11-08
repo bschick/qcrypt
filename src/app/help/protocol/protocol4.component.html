@@ -72,9 +72,9 @@
     </p>
     <p>
       This structure enables support for file encryption in version 4. To be compatible with
-      version 1 data, a fixed 256-bit MAC length is assumed. If future versions create larger
-      MACs, they may need to be split across the header and payload sections to keep the
-      header length consistent across versions.
+      version 1 data, the starting fixed length 256-bit MAC was preserved. If future versions
+      create larger MACs, they may need to be split across the header and payload sections
+      to keep the header length consistent across versions.
     </p>
 
     <table class="bytes">
