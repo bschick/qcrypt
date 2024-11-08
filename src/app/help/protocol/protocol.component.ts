@@ -4,15 +4,36 @@ import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { RouterLink } from '@angular/router';
+
 
 @Component({
    selector: 'app-protocol',
    standalone: true,
-   imports: [MatTooltipModule],
+   imports: [MatTooltipModule, RouterLink],
    templateUrl: './protocol.component.html',
    styleUrl: './protocol.component.scss'
 })
 export class ProtocolComponent {
+
+   constructor(
+      private dialog: MatDialog,
+   ){
+   }
+
+   openFlowImage(flowImage:string) {
+      this.dialog.open(FlowDialog, { data: flowImage });
+   }
+}
+
+@Component({
+   selector: 'app-protocol',
+   standalone: true,
+   imports: [MatTooltipModule, RouterLink],
+   templateUrl: './protocol4.component.html',
+   styleUrl: './protocol.component.scss'
+})
+export class Protocol4Component {
 
    constructor(
       private dialog: MatDialog,

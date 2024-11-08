@@ -600,7 +600,7 @@ export class EncipherV4 extends Encipher {
          // Since hint encoding could expand beyond 255, truncate the result to ensure fit
          // TODO: This can cause � problems with truncated unicode codepoints or graphemes,
          // could truncate hint characters and re-encode (see https://tonsky.me/blog/unicode/)
-         const hintEnc = new TextEncoder()
+         const hintBytes = new TextEncoder()
             .encode(eparams.hint)
             .slice(0, cc.ENCRYPTED_HINT_MAX_BYTES - cc.AUTH_TAG_MAX_BYTES);
 
@@ -608,7 +608,7 @@ export class EncipherV4 extends Encipher {
             this._alg,
             hk,
             this._iv,
-            hintEnc
+            hintBytes
          );
       }
 
@@ -1175,7 +1175,7 @@ class DecipherV1 extends Decipher {
 
    public override async decryptBlockN(
    ): Promise<Uint8Array> {
-      // This is the single decrytion is done. V1 never has more than block0
+      // This is the signal decrytion is done. V1 never has more than block0
       return new Uint8Array();
    }
 }
@@ -1342,6 +1342,7 @@ class DecipherV4 extends Decipher {
          throw new Error('Data not initialized, decrypt block0 first');
       }
 
+      // This does MAC check
       const done = await this._decodePayloadN();
       if (done) {
          // this is the signal that decryption is complete
