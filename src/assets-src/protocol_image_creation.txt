@@ -1,0 +1,21 @@
+Protocol latext text:
+
+* Open overleaf latex project https://www.overleaf.com/project/67205ec95b8198e39816e3b4
+* Set \setlength\parindent{0pt}
+* Make other changes, recompile, download pdf
+* Right click pdf and open in Pixelmator Pro
+* Select page and DPI of 255
+* Select and area, copy, new file from clipboard
+* Export as png with sRGB profile to 'assets' directory (not sure if profile maters)
+* Run optipng with default params on the resulting png
+* Set the image width and height in protocol4.component.html to 50% of image size
+* Set \setlength\parindent{20pt}
+* Recompile, download seachable pdf
+
+
+SVG Download and Resize
+(if needed, see https://www.fullstackfoundations.com/blog/web-developer-svg)
+
+* Make changes in LucidChart
+* Export SVG with transparent background (manually crop)
+* ... testing not creating smaller viewport/viewbox
