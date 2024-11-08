@@ -1168,7 +1168,7 @@ describe("Stream manipulation", function () {
 
       // Modified block0 invalid LPP
       let b0LP = new Uint8Array(cipherData);
-      b0LP[block0LPOffset] = 24; // little-endian lp > lpEnd
+      b0LP[block0LPOffset] = 24; // lp > lpEnd
       [stream] = streamFromBytes(b0LP);
       await expectAsync(
          cipherSvc.decryptStream(
@@ -1180,7 +1180,7 @@ describe("Stream manipulation", function () {
 
       // Modified block0 valid but changed LPP
       b0LP = new Uint8Array(cipherData);
-      b0LP[block0LPOffset] = 48; // little-endian
+      b0LP[block0LPOffset] = 48;
       [stream] = streamFromBytes(b0LP);
       await expectAsync(
          cipherSvc.decryptStream(

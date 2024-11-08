@@ -28,6 +28,7 @@ import { RecoveryComponent } from './recovery/recovery.component';
 import { OverviewComponent } from './help/overview/overview.component';
 import { FaqsComponent } from './help/faqs/faqs.component';
 import { ProtocolComponent } from './help/protocol/protocol.component';
+import { Protocol4Component } from './help/protocol/protocol.component';
 import { coreGuard } from './core/core.guard';
 import { welcomeGuard } from './welcome/welcome.guard';
 import { showRecoveryGuard } from './showrecovery/showrecovery.guard';
@@ -39,7 +40,9 @@ export const routes: Routes = [
    { path: 'recovery', component: RecoveryComponent },
    { path: 'help/overview', component: OverviewComponent },
    { path: 'help/faqs', component: FaqsComponent },
-   { path: 'help/protocol', component: ProtocolComponent },
+   { path: 'help/protocol', component: Protocol4Component },
+   { path: 'help/protocol1', component: ProtocolComponent },
+   { path: 'help/protocol4', component: Protocol4Component },
    { path: 'help', redirectTo: 'help/faqs', pathMatch: 'full'},
    { path: '', component: CoreComponent, canActivate: [coreGuard] },
    { path: '**', redirectTo: '', pathMatch: 'full' },
