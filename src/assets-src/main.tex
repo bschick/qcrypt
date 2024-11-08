@@ -1,0 +1,271 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage[english]{babel}
+\usepackage[letterpaper,top=1cm,bottom=1cm,left=0cm,inner=0cm,right=1cm,marginparwidth=0cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\setlength\parindent{0pt}
+%\setlength\parindent{20pt}
+
+\begin{document}
+\underline{Agents}\\
+
+\begin{tabular}{@{}p{2mm} l}
+$A$ & \textrm{ - Alice} \\
+$M$ & \textrm{ - Webauthn authenticator (passkey manager)} \\
+$B$ & \textrm{ - Browser with SubtleCrypto API and libsodium library} \\
+$S$ & \textrm{ - Quick Crypt server} \\
+$R$ & \textrm{ - https://www.random.org/cgi-bin/randbyte?nbytes=48} \\
+$D$ & \textrm{ - Insecure persistent storage system} \\
+\end{tabular}
+      
+\hfill \break
+
+% Changed: cipher variables, 
+
+\underline{Browser and Libsodium Functions}\\
+
+\begin{tabular}{@{}p{2mm} l}
+$E_a$ & \textrm{ - Symmetric cipher using AEAD algorithm }$a$\textrm{. One of:}\\
+& \hspace{23pt}\textrm{1. AES-256 in Galois/Counter mode from SubtleCrypto} \\
+& \hspace{23pt}\textrm{2. XChaCha20 with Poly1305 MAC from libsodium} \\
+& \hspace{23pt}\textrm{3. AEGIS 256 from libsodium} \\
+$D_H$ & \textrm{ - HKDF key derivation using SHA-512 from SubtleCrypto} \\
+$D_P$ & \textrm{ - PBKDF2 key derivation using SHA-512 from SubtleCrypto} \\
+$H$ & \textrm{ - BLAKE2b MAC generator from libsodium} \\
+$V$ & \textrm{ - BLAKE2b MAC validator from libsodium} \\
+$G$ & \textrm{ - Cryptographic pseudorandom generator from SubtleCrypto} \\
+\end{tabular}
+
+\hfill \break
+
+\underline{Cipher Variables}\\
+
+\begin{tabular}{@{}p{2mm} l}
+$N$ & \textrm{ - Block number}\\
+$m$ & \textrm{ - Clear text message}\\
+$m_0$ & \textrm{ - Clear text block 0}\\
+$m_N$ & \textrm{ - Clear text block N}\\
+$p$ & \textrm{ - Password text}\\
+$h$ & \textrm{ - Password hint text}\\
+$u_c$ & \textrm{ - 256 bit user credential}\\
+$a$ & \textrm{ - Symmetric AEAD cipher and mode: [1, 2, 3]}\\
+$i$ & \textrm{ - PBKDF2 iteration count, minimum 400,000}\\
+$k_M$ & \textrm{ - 256 bit message cipher key}\\
+$k_H$ & \textrm{ - 256 bit hint cipher key}\\
+$k_S$ & \textrm{ - 256 bit MAC key}\\
+$kp$ & \textrm{ - Key purpose text}\\
+$r$ & \textrm{ - 384 bits of either true or pseudo random data}\\
+$l$ & \textrm{ - }$n_{IV}$\textrm{ bit length: [96, 192, 256]}\\
+$n_{IV}$ & \textrm{ - True or pseudo random initialization vector}\\
+$n_S$ & \textrm{ - 128 bit true or pseudo random salt}\\
+$lp$ & \textrm{ - Loop count (0-15)}\\
+$le$ & \textrm{ - Loop end (0-15)}\\
+$ad$ & \textrm{ - Additional data}\\
+$v$ & \textrm{ - Cipher data version}\\
+$h_E$ & \textrm{ - Encrypted hint}\\
+$h_El$ & \textrm{ - Encrypted hint length}\\
+$m_E$ & \textrm{ - Encrypted message}\\
+$t$ & \textrm{ - 256 bit MAC tag}\\
+$pl$ & \textrm{ - Payload length}\\
+$cd_0$ & \textrm{ - Cipher data block 0}\\
+$cd_N$ & \textrm{ - Cipher data block N}\\
+$cd$ & \textrm{ - Cipher data}\\
+$b$ & \textrm{ - Valid or invalid MAC tag}\\
+$err$ & \textrm{ - Error message}\\
+\end{tabular}
+
+\newpage
+
+\underline{Message Encryption by A}\\
+
+\begin{tabular}{@{}p{2mm} l}
+\multicolumn{2}{@{}l}{$A\overset{\textrm{webauthn}}{\leftrightarrow} B,M \overset{\textrm{webauthn}}{\leftrightarrow} S$}\\
+\multicolumn{2}{@{}l}{$B\leftarrow S: u_c$}\\
+\multicolumn{2}{@{}l}{$A\rightarrow B: m,i,a,le$}\\
+\multicolumn{2}{@{}l}{$lp = 0$}\\
+\multicolumn{2}{@{}l}{$LOOP: B\textrm{ compute} $}\\
+&$A\rightarrow B: p,h $\\
+&$v = 4$\\
+&$r = G(384)\lor B\overset{\textrm{https}}{\leftarrow} R: r$\\
+&$n_S = r[0:128)$\\
+&$n_{IV} = r[128:128+l)$\\
+&$k_M = D_P(p \mathbin\Vert u_c,n_S,i)$\\
+&$k_S = D_H(u_c,n_S,kp_S = \textrm{``cipherdata signing key''})$\\
+&$cd = cd_0\mathbin\Vert  cd_N\mathbin\Vert ...$\\
+&$m = cd$\\
+&$lp = lp + 1$\\
+&$\textrm{goto LOOP if lp}<le$\\
+\multicolumn{2}{@{}l}{$A\leftarrow B: cd$}\\
+\end{tabular}
+
+\hfill \break
+
+\underline{Block 0 Encryption by B}\\
+
+\begin{tabular}{@{}p{2mm} l}
+\multicolumn{2}{@{}l}{$k_H = D_H(u_c,n_S,kp_H = \textrm{``hint encryption key''})$}\\
+\multicolumn{2}{@{}l}{$h_E = E_a(h,n_{IV},k_H)$}\\
+\multicolumn{2}{@{}l}{$h_El = len(h_E)$}\\
+\multicolumn{2}{@{}l}{$ad = a \mathbin\Vert n_{IV} \mathbin\Vert n_S \mathbin\Vert i\mathbin\Vert le \mathbin\Vert lp \mathbin\Vert h_El \mathbin\Vert h_E$}\\
+\multicolumn{2}{@{}l}{$m_E = E_a(m_0,n_{IV},ad,k_M)$}\\
+\multicolumn{2}{@{}l}{$pl = len(ad \mathbin\Vert m_E)$}\\
+\multicolumn{2}{@{}l}{$t = H(v, pl, ad, m_E, k_S)$}\\
+\multicolumn{2}{@{}l}{$cd_0 = t\mathbin\Vert v\mathbin\Vert pl\mathbin\Vert ad \mathbin\Vert m_E$}\\
+\end{tabular}
+
+\hfill \break
+
+\underline{Block N Encryption by B}\\
+
+\begin{tabular}{@{}p{2mm} l}
+\multicolumn{2}{@{}l}{$r = G(384)\lor B\overset{\textrm{https}}{\leftarrow} R: r$}\\
+\multicolumn{2}{@{}l}{$n_{IV} = r[0:l)$}\\
+\multicolumn{2}{@{}l}{$ad = a \mathbin\Vert n_{IV}$}\\
+\multicolumn{2}{@{}l}{$m_E = E_a(m_N,n_{IV},ad,k_M)$}\\
+
+\multicolumn{2}{@{}l}{$pl = len(ad \mathbin\Vert m_E)$}\\
+\multicolumn{2}{@{}l}{$t = H(v, pl, ad, m_E, k_S)$}\\
+\multicolumn{2}{@{}l}{$cd_N = t\mathbin\Vert v\mathbin\Vert pl\mathbin\Vert 
+ad \mathbin\Vert m_E$}\\
+\end{tabular}
+
+\hfill \break
+
+\underline{Message Storage by A}\\
+
+\begin{tabular}{@{}p{2mm} l}
+\multicolumn{2}{@{}l}{$A\rightarrow D: cd$}\\
+\end{tabular}
+
+\newpage
+
+\underline{Message Decryption by A}\\
+
+\begin{tabular}{@{}p{2mm} l}
+\multicolumn{2}{@{}l}{$A \leftarrow D: cd$}\\
+\multicolumn{2}{@{}l}{$A \overset{\textrm{webauthn}}{\leftrightarrow} B, M \overset{\textrm{webauthn}}{\leftrightarrow} S$}\\
+\multicolumn{2}{@{}l}{$B \leftarrow S: u_c$}\\
+\multicolumn{2}{@{}l}{$A \rightarrow B: cd$}\\
+\multicolumn{2}{@{}l}{$lp = 0$}\\
+\multicolumn{2}{@{}l}{$LOOP: B\textrm{ compute} $}\\
+&$t,v,pl,ad,m_E=cd_0$\\
+&$a,n_{IV},n_S,i,le,lp,h_El,h_E=ad$\\
+&$k_S = D_H(u_c,n_S,kp_S=\textrm{``cipherdata signing key''})$\\
+&$b = V(v, pl, ad, m_E , k_S, t)$\\
+&$\textrm{if }!b:$\\
+&\hspace{15pt}$A \leftarrow B: err$\\
+&$k_H = D_H(u_c,n_S,kp_H=\textrm{``hint encryption key''})$\\
+&$h = E_a^{-1}(h_E,n_{IV},k_H)$\\
+&$B \rightarrow A: h$\\
+&$B \leftarrow A: p$\\
+&$k_M = D_P(p \mathbin\Vert u_c,n_S,i)$\\
+&$m = m_0\mathbin\Vert  m_N\mathbin\Vert ...$\\
+&$cd = m$\\
+&$lp = lp + 1$\\
+&$\textrm{goto LOOP if lp}<le$\\
+\multicolumn{2}{@{}l}{$A\leftarrow B: m$}\\
+
+\end{tabular}
+
+\hfill \break
+
+
+\underline{Block 0 Decryption by B}\\
+
+\begin{tabular}{@{}p{2mm} l}
+\multicolumn{2}{@{}l}{$m_o = E_a^{-1}(m_E, n_{IV},ad,k_M)$}\\
+\end{tabular}
+
+\hfill \break
+
+\underline{Block N Decryption by B}\\
+
+\begin{tabular}{@{}p{2mm} l}
+\multicolumn{2}{@{}l}{$t,v,pl,ad,m_E=cd_N$}\\
+\multicolumn{2}{@{}l}{$a,n_{IV}=ad$}\\
+\multicolumn{2}{@{}l}{$b = V(v, pl, ad, m_E, k_S, t)$}\\
+\multicolumn{2}{@{}l}{$\textrm{if }!b:$}\\
+\multicolumn{2}{@{}l}{\hspace{15pt}$A \leftarrow B: err$}\\
+\multicolumn{2}{@{}l}{$m_N = E_a^{-1}(m_E, n_{IV},ad,k_M)$}\\
+\end{tabular}
+
+\newpage
+
+\underline{Webauthn Variables}\\
+
+\begin{tabular}{@{}p{2mm} l}
+$u_n$ & \textrm{ - A's chosen user name} \\
+$u_i$ & \textrm{ - 128 bit user id guaranteed to be unique} \\
+$u_c$ & \textrm{ - 256 bit user credential}\\
+$o$ & \textrm{ - Quick Crypt origin ``https://quickcrypt.org''} \\
+$ch$ & \textrm{ - 256 bit challenge value} \\
+$ro$ & \textrm{ - Registration options, including }$o, ch, u_i$\\
+$rr$ & \textrm{ - Registration response, including signed }$ch$\\
+$ao$ & \textrm{ - Authentication options, including }$o, ch$\\
+$ar$ & \textrm{ - Authentication response, including signed }$ch$\\
+$cw$ & \textrm{ - Alice's webauthn authenticator credentials} \\
+\end{tabular}
+
+\hfill \break
+
+\underline{Registration by A}\\
+
+\begin{tabular}{@{}p{2mm} l}
+\multicolumn{2}{@{}l}{$A\rightarrow B : u_n$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : u_n, o$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ create and store}: $} \\
+& $u_i = G(128)$\\
+& $u_c = G(256)$\\
+& $ch = G(256)$\\
+\multicolumn{2}{@{}l}{$B\leftarrow S : ro$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow M : ro$} \\
+\multicolumn{2}{@{}l}{$A\rightarrow M : cw$} \\
+\multicolumn{2}{@{}l}{$M\textrm{ create and store passkey, sign }ch $} \\
+\multicolumn{2}{@{}l}{$B\leftarrow M : rr$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : rr, u_i, ch$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ verify signature, store }rr \textrm{, remove }ch $} \\
+\multicolumn{2}{@{}l}{$B\leftarrow S : u_i, u_n, u_c$} \\
+\multicolumn{2}{@{}l}{$A\leftarrow B : u_i, u_c$} \\
+\end{tabular}
+
+\hfill \break
+
+\underline{Authentication by A}\\
+
+\begin{tabular}{@{}p{2mm} l}
+\multicolumn{2}{@{}l}{$B\rightarrow S : o [,u_i]$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ create and store}: $} \\
+& $ch = G(256)$\\
+\multicolumn{2}{@{}l}{$B\leftarrow S : ao$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow M : ao$} \\
+\multicolumn{2}{@{}l}{$A\rightarrow M : cw$} \\
+\multicolumn{2}{@{}l}{$M\textrm{ sign }ch $} \\
+\multicolumn{2}{@{}l}{$B\leftarrow M : ar$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : ar, ch$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ verify signature} \textrm{, remove }ch $} \\
+\multicolumn{2}{@{}l}{$B\leftarrow S : u_i, u_n, u_c$} \\
+\end{tabular}
+
+\hfill \break
+
+\underline{Recovery from Lost Passkey by A}\\
+
+\begin{tabular}{@{}p{2mm} l}
+\multicolumn{2}{@{}l}{$A\rightarrow B : u_i, u_c$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : u_i, u_c, o$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ delete existing }rr \textrm{, create and store}: $} \\
+& $ch = G(256)$\\
+\multicolumn{2}{@{}l}{$B\leftarrow S : ro$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow M : ro$} \\
+\multicolumn{2}{@{}l}{$A\rightarrow M : cw$} \\
+\multicolumn{2}{@{}l}{$M\textrm{ create and store passkey, sign }ch $} \\
+\multicolumn{2}{@{}l}{$B\leftarrow M : rr$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : rr, u_i, ch$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ verify signature, store }rr \textrm{, remove }ch $} \\
+\multicolumn{2}{@{}l}{$B\leftarrow S : u_i, u_n, u_c$} \\
+\end{tabular}
+
+\end{document}
+s
