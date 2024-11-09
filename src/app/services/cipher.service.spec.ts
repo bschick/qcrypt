@@ -22,11 +22,10 @@ SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
 import * as cc from './cipher.consts';
 import { CipherService, EncContext3 } from './cipher.service';
-import { Ciphers, Encipher, Decipher } from './ciphers';
+import { Encipher } from './ciphers';
 import {
    readStreamAll,
    base64ToBytes,
-   BYOBStreamReader
 } from './utils';
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 10000;
@@ -82,6 +81,9 @@ function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
    return true;
 }
 
+function randomInclusive(lower: number, upper: number): number {
+   return Math.floor(Math.random() * (upper - lower + 1) + lower);
+}
 
 // sometime is seems like javascript tried to make things hard
 function setCharAt(str: string, index: number, chr: string) {
@@ -96,20 +98,6 @@ function pokeValue(src: Uint8Array, index: number, shift: number): Uint8Array {
    const dst = new Uint8Array(src);
    dst[index] += shift;
    return dst;
-}
-
-const READ_SIZE_START = 1048576; // 1 MiB
-
-function randomBlob(byteLength: number): Blob {
-   // Create on max-size array and repeate it
-   const randData = crypto.getRandomValues(new Uint8Array(512));
-   const count = Math.ceil(byteLength / 512);
-
-   let arr = new Array<Uint8Array>;
-   for (let i = 0; i < count; ++i) {
-      arr.push(randData);
-   }
-   return new Blob(arr, { type: 'application/octet-stream' });
 }
 
 function streamFromBytes(data: Uint8Array): [ReadableStream<Uint8Array>, Uint8Array] {
@@ -241,6 +229,7 @@ describe("Stream encryption and decryption", function () {
 
    it("successful round trip, all algorithms, loops", async function () {
 
+      const maxLps = 3;
       for (const alg of cipherSvc.algs()) {
 
          const srcString = 'This is a secret 🦆';
@@ -252,7 +241,7 @@ describe("Stream encryption and decryption", function () {
             ic: cc.ICOUNT_MIN,
             trueRand: false,
             fallbackRand: true,
-            lpEnd: 3
+            lpEnd: maxLps
          };
 
          let expectedLp = 1;
@@ -261,7 +250,7 @@ describe("Stream encryption and decryption", function () {
             econtext,
             async (lp, lpEnd) => {
                expect(lp).toEqual(expectedLp);
-               expect(lpEnd).toEqual(3);
+               expect(lpEnd).toEqual(maxLps);
                expectedLp += 1;
                return [String(lp), String(lp)];
             },
@@ -273,12 +262,12 @@ describe("Stream encryption and decryption", function () {
             }
          );
 
-         expectedLp = 3;
+         expectedLp = maxLps;
 
          const decrypted = await cipherSvc.decryptStream(
             async (lp, lpEnd, decHint) => {
                expect(lp).toEqual(expectedLp);
-               expect(lpEnd).toEqual(3);
+               expect(lpEnd).toEqual(maxLps);
                expect(decHint).toEqual(String(lp));
                expectedLp -= 1;
                return [decHint!, undefined];
@@ -295,6 +284,7 @@ describe("Stream encryption and decryption", function () {
          expect(resString).toEqual(srcString);
       }
    });
+
 
    it("confirm successful version decryption, v1", async function () {
       // These are generated with running website
@@ -506,7 +496,7 @@ describe("Stream encryption and decryption", function () {
             }
          );
 
-         const badStream = await cipherSvc.decryptStream(
+         const decryptedStream = await cipherSvc.decryptStream(
             async (lp, lpEnd, decHint) => {
                expect(decHint).toEqual(hint);
                return ['the wrong pwd', undefined];
@@ -517,8 +507,94 @@ describe("Stream encryption and decryption", function () {
 
          // Password isn't used until stream reading starts
          await expectAsync(
-            readStreamAll(badStream)
+            readStreamAll(decryptedStream)
          ).toBeRejectedWithError(DOMException);
+      }
+   });
+
+   it("detect wrong password, all alogrithms, loops", async function () {
+
+      const maxLps = 3;
+      const positions = [...Array(maxLps)].map((_, i) => i + 1); // javascript is so ugly sometimes
+      for (const badLp of positions) {
+
+         for (const alg of cipherSvc.algs()) {
+
+            const srcString = 'This is a secret 🦆';
+            const [clearStream, clearData] = streamFromStr(srcString);
+            const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+
+            const econtext: EncContext3 = {
+               alg: alg,
+               ic: cc.ICOUNT_MIN,
+               trueRand: false,
+               fallbackRand: true,
+               lpEnd: maxLps
+            };
+
+            let expectedLp = 1;
+
+            const cipherStream = await cipherSvc.encryptStream(
+               econtext,
+               async (lp, lpEnd) => {
+                  expect(lp).toEqual(expectedLp);
+                  expect(lpEnd).toEqual(maxLps);
+                  expectedLp += 1;
+                  return [String(lp), String(lp)];
+               },
+               userCred,
+               clearStream,
+               (params) => {
+                  expect(params.alg).toEqual(alg);
+                  expect(params.ic).toEqual(cc.ICOUNT_MIN);
+               }
+            );
+
+            expectedLp = maxLps;
+
+            // When looping, a bad password (or other wrong decryption params) gets detected at different
+            // points depending on the loop number. Bad values in the outer most loop are not detected until
+            // reading of the decrypted stream since decryption does not start until then. Bad values for any
+            // inner loop are detected at stream creation time. This happens because a decryption stream
+            // reads AdditionalData at creation time to optain values like lpEnd. When the source is itself
+            // another decryption stream, the inner password is required to decrypt the additionaldata. That
+            // at creation of the outer stream when value like pwd are incorrect. With just one loop
+            // (no nesting), additionaldata is not encrypted so the password isn't used until the data stream
+            // is read.
+
+            // In the tests Below we just ensure an exception is thrown and don't worry about which point
+            // detected the bad pwd. Perhaps this is a poor design of the looped (nesting) encryption design...
+            let detected = false;
+            try {
+               const decryptedStream = await cipherSvc.decryptStream(
+                  async (lp, lpEnd, decHint) => {
+                     expect(lp).toEqual(expectedLp);
+                     expect(lpEnd).toEqual(maxLps);
+                     expect(decHint).toEqual(String(lp));
+                     expectedLp -= 1;
+                     if (lp == badLp) {
+                        return ['wrong', undefined];
+                     } else {
+                        return [decHint!, undefined];
+                     }
+                  },
+                  userCred,
+                  cipherStream,
+                  (params) => {
+                     expect(params.alg).toEqual(alg);
+                     expect(params.ic).toEqual(cc.ICOUNT_MIN);
+                  }
+               );
+
+               await readStreamAll(decryptedStream);
+
+            } catch (err) {
+               expect(err).toBeInstanceOf(DOMException);
+               detected = true;
+            }
+
+            expect(detected).toBeTrue();
+         }
       }
    });
 
@@ -559,7 +635,7 @@ describe("Stream encryption and decryption", function () {
             cipherSvc.decryptStream(
                async (lp, lpEnd, decHint) => {
                   // should never execute
-                  expect(false).toBeTrue();
+                  expect(false).withContext('should not execute').toBeTrue();
                   return [pwd, undefined];
                },
                userCred,
@@ -606,7 +682,7 @@ describe("Stream encryption and decryption", function () {
             cipherSvc.decryptStream(
                async (lp, lpEnd, decHint) => {
                   // should never execute
-                  expect(false).toBeTrue();
+                  expect(false).withContext('should not execute').toBeTrue();
                   return [pwd, undefined];
                },
                userCred,
@@ -622,7 +698,7 @@ describe("Stream encryption and decryption", function () {
             cipherSvc.decryptStream(
                async (lp, lpEnd, decHint) => {
                   // should never execute
-                  expect(false).toBeTrue();
+                  expect(false).withContext('should not execute').toBeTrue();
                   return [pwd, undefined];
                },
                userCred,
@@ -1315,6 +1391,132 @@ describe("Stream manipulation", function () {
       await expectAsync(
          readStreamAll(dec)
       ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
+   });
+
+   it("detect removed bytes, all algorithms", async function () {
+
+      for (const alg of cipherSvc.algs()) {
+         const [clearStream, clearData] = streamFromBytes(new Uint8Array(20));
+
+         const pwd = 'another good pwd';
+         const hint = 'nope';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+
+         const econtext: EncContext3 = {
+            alg: alg,
+            ic: cc.ICOUNT_MIN,
+            trueRand: false,
+            fallbackRand: true,
+            lpEnd: 1
+         };
+
+         const cipherStream = await cipherSvc.encryptStream(
+            econtext,
+            async (lp, lpEnd) => {
+               return [pwd, hint];
+            },
+            userCred,
+            clearStream
+         );
+
+         const cipherData = await readStreamAll(cipherStream);
+         const rmLen = randomInclusive(1, 10);
+
+         for (let rmPos of [...Array(cipherData.byteLength - rmLen).keys()]) {
+
+            let corruptData = new Uint8Array(cipherData.byteLength - rmLen);
+            corruptData.set(cipherData.slice(0, rmPos));
+            corruptData.set(cipherData.slice(rmPos + rmLen), rmPos);
+            let [corruptStream] = streamFromBytes(corruptData);
+
+            await expectAsync(
+               cipherSvc.decryptStream(
+                  async (lp, lpEnd, decHint) => {
+                     // should never execute
+                     expect(false).withContext('should not execute').toBeTrue();
+                     return [pwd, undefined];
+                  },
+                  userCred,
+                  corruptStream
+               )
+            ).withContext(`alg ${alg}, cipherLen  ${cipherData.byteLength}, corruptLen  ${corruptData.byteLength}, rmLen ${rmLen}, rmPos ${rmPos}\ncipherData ${cipherData}\ncorruptData ${corruptData}`)
+               .toBeRejectedWithError(Error);
+         }
+      }
+   });
+
+   it("detect added bytes, all algorithms", async function () {
+
+      for (const alg of cipherSvc.algs()) {
+         const [clearStream, clearData] = streamFromBytes(new Uint8Array(20));
+
+         const pwd = 'another good pwd';
+         const hint = 'nope';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+
+         const econtext: EncContext3 = {
+            alg: alg,
+            ic: cc.ICOUNT_MIN,
+            trueRand: false,
+            fallbackRand: true,
+            lpEnd: 1
+         };
+
+         const cipherStream = await cipherSvc.encryptStream(
+            econtext,
+            async (lp, lpEnd) => {
+               return [pwd, hint];
+            },
+            userCred,
+            clearStream
+         );
+
+         const cipherData = await readStreamAll(cipherStream);
+         const addLen = randomInclusive(1, 10);
+         const addData = crypto.getRandomValues(new Uint8Array(addLen));
+
+         for (let addPos of [...Array(cipherData.byteLength).keys()]) {
+
+            let corruptData = new Uint8Array(cipherData.byteLength + addLen);
+            corruptData.set(cipherData.slice(0, addPos));
+            corruptData.set(addData, addPos);
+            corruptData.set(cipherData.slice(addPos), addPos + addLen);
+            let [corruptStream] = streamFromBytes(corruptData);
+
+            await expectAsync(
+               cipherSvc.decryptStream(
+                  async (lp, lpEnd, decHint) => {
+                     // should never execute
+                     expect(false).withContext('should not execute').toBeTrue();
+                     return [pwd, undefined];
+                  },
+                  userCred,
+                  corruptStream
+               )
+            ).withContext(`alg ${alg}, cipherLen  ${cipherData.byteLength}, corruptLen  ${corruptData.byteLength}, addLen ${addLen}, addPos ${addPos}\naddData ${addData}\ncipherData ${cipherData}\ncorruptData ${corruptData}`)
+               .toBeRejectedWithError(Error);
+         }
+
+         // Appending data after block0 throws and error at stream read since
+         // only block0 is validated during stream construction
+         let corruptData = new Uint8Array(cipherData.byteLength + addLen);
+         corruptData.set(cipherData);
+         corruptData.set(addData, cipherData.byteLength);
+         let [corruptStream] = streamFromBytes(corruptData);
+
+         const corrupStream = await cipherSvc.decryptStream(
+            async (lp, lpEnd, decHint) => {
+               return [pwd, undefined];
+            },
+            userCred,
+            corruptStream
+         );
+
+         await expectAsync(
+            readStreamAll(corrupStream)
+         ).withContext(`alg ${alg}, cipherLen  ${cipherData.byteLength}, corruptLen  ${corruptData.byteLength}, addLen ${addLen}, addPos ${cipherData.byteLength}\naddData ${addData}\ncipherData ${cipherData}\ncorruptData ${corruptData}`)
+            .toBeRejectedWithError(Error);
+      }
    });
 });
 
