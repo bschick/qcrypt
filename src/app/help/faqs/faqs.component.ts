@@ -264,18 +264,20 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'Can I used Quick Crypt to encrypt text or binary files?',
-      answer: `Yes, just click the <i>Files</i> button next to the <i>Encrypt</i>
+      question: 'Can I use Quick Crypt to encrypt and decrypt files?',
+      answer: `Yes, to encrypt a file click the <i>Files</i> button next to the <i>Encrypt</i>
       button and then chose
       <i>Select Clear File</i> from the menu. The selected file may contain text
-      or binary data. After a file is selected, click the <i>Encrypt</i>
-      button or if you want to save the encrypted data to a file, open the Files
-      menu again and chose <i>Encrypt to File</i>.`
+      or binary data. After you select a file, click the <i>Encrypt</i>
+      button or to save the encrypted data to a file, open the Files
+      menu again and chose <i>Encrypt to File</i>. To deccrypt a previously encrypted
+      file, click the <i>Files</i> button next to the <i>Decrypt</i>
+      button and then chose <i>Select Cipher File</i> from the menu.`
    },
 
    {
       position: 0,
-      question: 'Can I used Quick Crypt to send secrets to other people?',
+      question: 'Can I use Quick Crypt to send secrets to other people?',
       answer: `<p>Yes, but you should find a better way. Quick Crypt was designed
       to encrypt and decrypt your own data rather than to share data securely
       with others. Decryption with Quick Crypt can be done by someone with both
