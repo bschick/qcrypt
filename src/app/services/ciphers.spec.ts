@@ -37,14 +37,6 @@ function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
    return true;
 }
 
-// sometime is seems like javascript tried to make things hard
-function setCharAt(str: string, index: number, chr: string) {
-   if (index > str.length - 1) {
-      return str;
-   }
-   return str.substring(0, index) + chr + str.substring(index + 1);
-}
-
 // Faster than .toEqual, resulting in few timeouts
 async function areEqual(
    a: Uint8Array | ReadableStream<Uint8Array>,
@@ -104,12 +96,6 @@ function streamFromCipherBlock(
    return streamFromBytes(cipherData);
 }
 
-function streamFromBase64(b64: string): [ReadableStream<Uint8Array>, Uint8Array] {
-   const data = base64ToBytes(b64);
-   const blob = new Blob([data], { type: 'application/octet-stream' });
-   return [blob.stream(), data];
-}
-
 describe("Key generation", function () {
    beforeEach(() => {
       TestBed.configureTestingModule({});
@@ -119,7 +105,7 @@ describe("Key generation", function () {
    it("successful and not equivalent key generation", async function () {
 
       for (let alg in cc.AlgInfo) {
-         const pwd = 'a good pwd';
+         const pwd = 'not a good pwd';
          const ic = cc.ICOUNT_MIN;
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
@@ -792,14 +778,14 @@ describe("Detect changed cipher data", function () {
          let [cipherStream] = streamFromCipherBlock([block0]);
          let decipher = await Decipher.fromStream(userCred, cipherStream);
 
-         // Monkey patch to skip MAV validation
+         // Monkey patch to skip MAC validation
          //@ts-ignore
          decipher['_verifyMAC'] = (): Promise<boolean> => {
             return Promise.resolve(true);
          }
 
-         // This should even though the MAC has been changed since verifyMAC
-         // was replaced to always return true.
+         // This should succeed even though the MAC has been changed (because
+         // MAC was not tested due to monkey patch)
          await expectAsync(
             decipher.decryptBlock0(
                async (lp, lpEnd) => {
@@ -845,13 +831,13 @@ describe("Detect changed cipher data", function () {
          let [cipherStream] = streamFromCipherBlock([block0]);
          let decipher = await Decipher.fromStream(userCred, cipherStream);
 
-         // Monkey patch to skip MAV validation
+         // Monkey patch to skip MAC validation
          //@ts-ignore
          decipher['_verifyMAC'] = (): Promise<boolean> => {
             return Promise.resolve(true);
          }
 
-         // This should fail (even though MAC check is skipped) because
+         // This should fail (even though MAC check wass skipped) because
          // AD check is part of all encryption algorithms. Note that this
          // should fail with DOMException rather than Error with MAC in message
          await expectAsync(
@@ -899,7 +885,7 @@ describe("Detect changed cipher data", function () {
          let [cipherStream] = streamFromCipherBlock([block0]);
          let decipher = await Decipher.fromStream(userCred, cipherStream);
 
-         // Monkey patch to skip MAV validation
+         // Monkey patch to skip MAC validation
          //@ts-ignore
          decipher['_verifyMAC'] = (): Promise<boolean> => {
             return Promise.resolve(true);
