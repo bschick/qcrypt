@@ -29,6 +29,9 @@ const READ_SIZE_START = 1048576; // 1 MiB
 const READ_SIZE_MAX =  READ_SIZE_START * 4;
 
 // Used to create hardcoded cipherdata for some tests
+//    NOTE: should find a better way to generate test data since
+//    its too easy for forget to restore these values (resulting in inefficient
+//    blocks)
 //const READ_SIZE_START = 1048576/1024/4;
 //const READ_SIZE_MAX =  READ_SIZE_START * 41;
 

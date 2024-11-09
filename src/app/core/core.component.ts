@@ -708,7 +708,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    async onEncrypt(): Promise<void> {
       if ((!this.clearFile && this.clearText.length < 1)) {
          this.onClearClear();
-         this.showCipherError('Missing clear text. Enter or load clear text, then encrypt');
+         this.showCipherError('Missing clear text. Enter clear text or select a file, then encrypt');
          this.r2.selectRootElement('#clearInput').focus();
          return;
       }
@@ -782,7 +782,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    async onEncryptToFile(): Promise<void> {
       if ((!this.clearFile && this.clearText.length < 1)) {
          this.onClearClear();
-         this.showCipherError('Missing clear text. Enter or load clear text, then encrypt');
+         this.showCipherError('Missing clear text.  Enter clear text or select a file, then encrypt');
          this.r2.selectRootElement('#clearInput').focus();
          return;
       }
@@ -910,7 +910,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    async onDecrypt(): Promise<void> {
       if ((!this.cipherFile && this.cipherArmor.length < (cc.HEADER_BYTES + cc.PAYLOAD_SIZE_MIN))) {
          this.onClearCipher();
-         this.showClearError('Missing cipher armor. Enter or load cipher armor text, then decrypt');
+         this.showClearError('Missing cipher armor. Enter cipher armor text or select a file, then decrypt');
          this.r2.selectRootElement('#cipherInput').focus();
          return;
       }
@@ -954,7 +954,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    async onDecryptToFile(): Promise<void> {
       if ((!this.cipherFile && this.cipherArmor.length < 1)) {
          this.onClearCipher();
-         this.showClearError('Missing cipher armor. Enter or load cipher armor text, then decrypt');
+         this.showClearError('Missing cipher armor. Enter cipher armor text or select a file, then decrypt');
          this.r2.selectRootElement('#cipherInput').focus();
          return;
       }
