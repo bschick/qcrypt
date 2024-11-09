@@ -22,7 +22,7 @@ $D$ & \textrm{ - Insecure persistent storage system} \\
       
 \hfill \break
 
-% Changed: cipher variables, 
+% Changed: cipher variables, functions, decrypt by a, block n by B
 
 \underline{Browser and Libsodium Functions}\\
 
@@ -31,10 +31,10 @@ $E_a$ & \textrm{ - Symmetric cipher using AEAD algorithm }$a$\textrm{. One of:}\
 & \hspace{23pt}\textrm{1. AES-256 in Galois/Counter mode from SubtleCrypto} \\
 & \hspace{23pt}\textrm{2. XChaCha20 with Poly1305 MAC from libsodium} \\
 & \hspace{23pt}\textrm{3. AEGIS 256 from libsodium} \\
-$D_H$ & \textrm{ - HKDF key derivation using SHA-512 from SubtleCrypto} \\
-$D_P$ & \textrm{ - PBKDF2 key derivation using SHA-512 from SubtleCrypto} \\
-$H$ & \textrm{ - BLAKE2b MAC generator from libsodium} \\
-$V$ & \textrm{ - BLAKE2b MAC validator from libsodium} \\
+$D_H$ & \textrm{ - HKDF key derivation using SHA-512 FIPS-180-4 from SubtleCrypto} \\
+$D_P$ & \textrm{ - PBKDF2 key derivation using SHA-512 FIPS-180-4 from SubtleCrypto} \\
+$H$ & \textrm{ - BLAKE2b keyed hash (MAC) generator from libsodium} \\
+$V$ & \textrm{ - BLAKE2b keyed hash (MAC) validator from libsodium} \\
 $G$ & \textrm{ - Cryptographic pseudorandom generator from SubtleCrypto} \\
 \end{tabular}
 
@@ -47,6 +47,7 @@ $N$ & \textrm{ - Block number}\\
 $m$ & \textrm{ - Clear text message}\\
 $m_0$ & \textrm{ - Clear text block 0}\\
 $m_N$ & \textrm{ - Clear text block N}\\
+$m_{E}$ & \textrm{ - Block of encrypted message}\\
 $p$ & \textrm{ - Password text}\\
 $h$ & \textrm{ - Password hint text}\\
 $u_c$ & \textrm{ - 256 bit user credential}\\
@@ -55,10 +56,11 @@ $i$ & \textrm{ - PBKDF2 iteration count, minimum 400,000}\\
 $k_M$ & \textrm{ - 256 bit message cipher key}\\
 $k_H$ & \textrm{ - 256 bit hint cipher key}\\
 $k_S$ & \textrm{ - 256 bit MAC key}\\
-$kp$ & \textrm{ - Key purpose text}\\
+$kp_S$ & \textrm{ - Key purpose text: ``cipherdata signing key''}\\
+$kp_H$ & \textrm{ - Key purpose text: ``hint encryption key''}\\
 $r$ & \textrm{ - 384 bits of either true or pseudo random data}\\
-$l$ & \textrm{ - }$n_{IV}$\textrm{ bit length: [96, 192, 256]}\\
 $n_{IV}$ & \textrm{ - True or pseudo random initialization vector}\\
+$n_{IV}l$ & \textrm{ - }$n_{IV}$\textrm{ bit length: [96, 192, 256]}\\
 $n_S$ & \textrm{ - 128 bit true or pseudo random salt}\\
 $lp$ & \textrm{ - Loop count (0-15)}\\
 $le$ & \textrm{ - Loop end (0-15)}\\
@@ -66,14 +68,13 @@ $ad$ & \textrm{ - Additional data}\\
 $v$ & \textrm{ - Cipher data version}\\
 $h_E$ & \textrm{ - Encrypted hint}\\
 $h_El$ & \textrm{ - Encrypted hint length}\\
-$m_E$ & \textrm{ - Encrypted message}\\
 $t$ & \textrm{ - 256 bit MAC tag}\\
-$pl$ & \textrm{ - Payload length}\\
+$l$ & \textrm{ - Payload length}\\
+$b$ & \textrm{ - Valid or invalid MAC tag}\\
+$cd$ & \textrm{ - Cipher data}\\
 $cd_0$ & \textrm{ - Cipher data block 0}\\
 $cd_N$ & \textrm{ - Cipher data block N}\\
-$cd$ & \textrm{ - Cipher data}\\
-$b$ & \textrm{ - Valid or invalid MAC tag}\\
-$err$ & \textrm{ - Error message}\\
+$err$ & \textrm{ - Error message and exit}\\
 \end{tabular}
 
 \newpage
@@ -84,15 +85,15 @@ $err$ & \textrm{ - Error message}\\
 \multicolumn{2}{@{}l}{$A\overset{\textrm{webauthn}}{\leftrightarrow} B,M \overset{\textrm{webauthn}}{\leftrightarrow} S$}\\
 \multicolumn{2}{@{}l}{$B\leftarrow S: u_c$}\\
 \multicolumn{2}{@{}l}{$A\rightarrow B: m,i,a,le$}\\
+\multicolumn{2}{@{}l}{$v = 4$}\\
 \multicolumn{2}{@{}l}{$lp = 0$}\\
 \multicolumn{2}{@{}l}{$LOOP: B\textrm{ compute} $}\\
 &$A\rightarrow B: p,h $\\
-&$v = 4$\\
 &$r = G(384)\lor B\overset{\textrm{https}}{\leftarrow} R: r$\\
 &$n_S = r[0:128)$\\
-&$n_{IV} = r[128:128+l)$\\
+&$n_{IV} = r[128:128+n_{IV}l)$\\
 &$k_M = D_P(p \mathbin\Vert u_c,n_S,i)$\\
-&$k_S = D_H(u_c,n_S,kp_S = \textrm{``cipherdata signing key''})$\\
+&$k_S = D_H(u_c,n_S,kp_S)$\\
 &$cd = cd_0\mathbin\Vert  cd_N\mathbin\Vert ...$\\
 &$m = cd$\\
 &$lp = lp + 1$\\
@@ -105,14 +106,14 @@ $err$ & \textrm{ - Error message}\\
 \underline{Block 0 Encryption by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
-\multicolumn{2}{@{}l}{$k_H = D_H(u_c,n_S,kp_H = \textrm{``hint encryption key''})$}\\
+\multicolumn{2}{@{}l}{$k_H = D_H(u_c,n_S,kp_H)$}\\
 \multicolumn{2}{@{}l}{$h_E = E_a(h,n_{IV},k_H)$}\\
 \multicolumn{2}{@{}l}{$h_El = len(h_E)$}\\
 \multicolumn{2}{@{}l}{$ad = a \mathbin\Vert n_{IV} \mathbin\Vert n_S \mathbin\Vert i\mathbin\Vert le \mathbin\Vert lp \mathbin\Vert h_El \mathbin\Vert h_E$}\\
-\multicolumn{2}{@{}l}{$m_E = E_a(m_0,n_{IV},ad,k_M)$}\\
-\multicolumn{2}{@{}l}{$pl = len(ad \mathbin\Vert m_E)$}\\
-\multicolumn{2}{@{}l}{$t = H(v, pl, ad, m_E, k_S)$}\\
-\multicolumn{2}{@{}l}{$cd_0 = t\mathbin\Vert v\mathbin\Vert pl\mathbin\Vert ad \mathbin\Vert m_E$}\\
+\multicolumn{2}{@{}l}{$m_{E} = E_a(m_0,n_{IV},ad,k_M)$}\\
+\multicolumn{2}{@{}l}{$l = len(ad \mathbin\Vert m_{E})$}\\
+\multicolumn{2}{@{}l}{$t = H(v, l, ad, m_{E}, k_S)$}\\
+\multicolumn{2}{@{}l}{$cd_0 = t\mathbin\Vert v\mathbin\Vert l\mathbin\Vert ad \mathbin\Vert m_{E}$}\\
 \end{tabular}
 
 \hfill \break
@@ -121,14 +122,14 @@ $err$ & \textrm{ - Error message}\\
 
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$r = G(384)\lor B\overset{\textrm{https}}{\leftarrow} R: r$}\\
-\multicolumn{2}{@{}l}{$n_{IV} = r[0:l)$}\\
+\multicolumn{2}{@{}l}{$n_{IV} = r[0:n_{IV}l)$}\\
 \multicolumn{2}{@{}l}{$ad = a \mathbin\Vert n_{IV}$}\\
-\multicolumn{2}{@{}l}{$m_E = E_a(m_N,n_{IV},ad,k_M)$}\\
+\multicolumn{2}{@{}l}{$m_{E} = E_a(m_N,n_{IV},ad,k_M)$}\\
 
-\multicolumn{2}{@{}l}{$pl = len(ad \mathbin\Vert m_E)$}\\
-\multicolumn{2}{@{}l}{$t = H(v, pl, ad, m_E, k_S)$}\\
-\multicolumn{2}{@{}l}{$cd_N = t\mathbin\Vert v\mathbin\Vert pl\mathbin\Vert 
-ad \mathbin\Vert m_E$}\\
+\multicolumn{2}{@{}l}{$l = len(ad \mathbin\Vert m_{E})$}\\
+\multicolumn{2}{@{}l}{$t = H(v, l, ad, m_{E}, k_S)$}\\
+\multicolumn{2}{@{}l}{$cd_N = t\mathbin\Vert v\mathbin\Vert l\mathbin\Vert 
+ad \mathbin\Vert m_{E}$}\\
 \end{tabular}
 
 \hfill \break
@@ -150,13 +151,13 @@ ad \mathbin\Vert m_E$}\\
 \multicolumn{2}{@{}l}{$A \rightarrow B: cd$}\\
 \multicolumn{2}{@{}l}{$lp = 0$}\\
 \multicolumn{2}{@{}l}{$LOOP: B\textrm{ compute} $}\\
-&$t,v,pl,ad,m_E=cd_0$\\
+&$t,v,l,ad,m_{E}=cd_0$\\
 &$a,n_{IV},n_S,i,le,lp,h_El,h_E=ad$\\
-&$k_S = D_H(u_c,n_S,kp_S=\textrm{``cipherdata signing key''})$\\
-&$b = V(v, pl, ad, m_E , k_S, t)$\\
+&$k_S = D_H(u_c,n_S,kp_S)$\\
+&$b = V(v, l, ad, m_{E} , k_S, t)$\\
 &$\textrm{if }!b:$\\
 &\hspace{15pt}$A \leftarrow B: err$\\
-&$k_H = D_H(u_c,n_S,kp_H=\textrm{``hint encryption key''})$\\
+&$k_H = D_H(u_c,n_S,kp_H)$\\
 &$h = E_a^{-1}(h_E,n_{IV},k_H)$\\
 &$B \rightarrow A: h$\\
 &$B \leftarrow A: p$\\
@@ -175,7 +176,7 @@ ad \mathbin\Vert m_E$}\\
 \underline{Block 0 Decryption by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
-\multicolumn{2}{@{}l}{$m_o = E_a^{-1}(m_E, n_{IV},ad,k_M)$}\\
+\multicolumn{2}{@{}l}{$m_o = E_a^{-1}(m_{E}, n_{IV},ad,k_M)$}\\
 \end{tabular}
 
 \hfill \break
@@ -183,12 +184,12 @@ ad \mathbin\Vert m_E$}\\
 \underline{Block N Decryption by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
-\multicolumn{2}{@{}l}{$t,v,pl,ad,m_E=cd_N$}\\
+\multicolumn{2}{@{}l}{$t,v,l,ad,m_{E}=cd_N$}\\
 \multicolumn{2}{@{}l}{$a,n_{IV}=ad$}\\
-\multicolumn{2}{@{}l}{$b = V(v, pl, ad, m_E, k_S, t)$}\\
+\multicolumn{2}{@{}l}{$b = V(v, l, ad, m_{E}, k_S, t)$}\\
 \multicolumn{2}{@{}l}{$\textrm{if }!b:$}\\
 \multicolumn{2}{@{}l}{\hspace{15pt}$A \leftarrow B: err$}\\
-\multicolumn{2}{@{}l}{$m_N = E_a^{-1}(m_E, n_{IV},ad,k_M)$}\\
+\multicolumn{2}{@{}l}{$m_N = E_a^{-1}(m_{E}, n_{IV},ad,k_M)$}\\
 \end{tabular}
 
 \newpage
