@@ -368,7 +368,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             const target_spinner_millis = 1250;
             this.spinnerAbove = Math.round(target_spinner_millis * hashRate)
          }).finally(() => {
-            // load after benchmakr to overwrite icount with saved value
+            // load after benchmark to overwrite icount with saved value
             if (this.authSvc.isAuthenticated()) {
                this.loadOptions();
             }
