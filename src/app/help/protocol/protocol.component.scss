@@ -58,11 +58,11 @@
 }
 
 .bytes {
-  width: 683px;
+  width: 100%;
   margin-top: 20px;
   border-collapse: collapse;
+  border: 1px solid black;
   border-spacing: 0;
-  border-width: 1px;
   overflow: hidden;
   word-break: normal;
   font-weight: normal;
