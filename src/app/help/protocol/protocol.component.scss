@@ -63,8 +63,6 @@
   border-collapse: collapse;
   border-spacing: 0;
   border-width: 1px;
-  font-family: Arial, sans-serif;
-  font-size: 14px;
   overflow: hidden;
   word-break: normal;
   font-weight: normal;
@@ -77,6 +75,8 @@
   padding: 5px 5px;
   vertical-align: top;
   white-space: nowrap;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
 }
 .bytes th {
   border-color: black;
@@ -84,6 +84,8 @@
   padding: 5px 5px;
   vertical-align: top;
   white-space: nowrap;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
 }
 
 .bytes .tableheader {
