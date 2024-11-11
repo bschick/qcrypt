@@ -412,7 +412,10 @@ export class AuthenticatorService {
 
       let startAuth;
       try {
-         startAuth = await startAuthentication(optionsJson);
+         startAuth = await startAuthentication({
+            optionsJSON: optionsJson,
+            useBrowserAutofill: false
+         });
       } catch (err) {
          console.error(err);
          throw err;
@@ -425,6 +428,8 @@ export class AuthenticatorService {
          ...startAuth,
          challenge: optionsJson.challenge,
       }
+
+      console.log(expanded);
 
       const verifyUrl = new URL('verifyauth', baseUrl);
 
@@ -536,7 +541,7 @@ export class AuthenticatorService {
 
       let startReg;
       try {
-         startReg = await startRegistration(optionsJson);
+         startReg = await startRegistration({optionsJSON: optionsJson});
       } catch (err) {
          console.error(err);
          throw err;
