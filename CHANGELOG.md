@@ -1,5 +1,12 @@
 # CHANGELOG.md
 
+## 4.0.1 (2024-11-11)
+
+Changes:
+
+  - updated to simplewebauthn v11 on client (and server)
+  - added documentation on cipher date binary structure
+
 ## 4.0.0 (2024-11-10)
 
 Features:
