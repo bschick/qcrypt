@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-## 4.0.1 (not released)
+## 4.0.1 (not yet released)
 
 Changes:
 
