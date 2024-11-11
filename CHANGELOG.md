@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-## 4.0.1 (2024-11-11)
+## 4.0.1 (not released)
 
 Changes:
 
