@@ -7,6 +7,7 @@ import {
 } from '@simplewebauthn/types';
 import { Subject, Subscription, filter } from 'rxjs';
 import { DateTime } from 'luxon';
+import { base64ToBytes, bytesToBase64 } from './utils';
 
 const baseUrl = environment.domain;
 
@@ -421,6 +422,12 @@ export class AuthenticatorService {
          throw err;
       }
 
+      // SimpleWebAuthn v10 caused incompatibility with older versions by
+      // decoding credential user.id to b64 rather than utf as older versions
+      // We therefore need to translate.
+      const handleBytes = base64ToBytes(startAuth.response.userHandle!);
+      startAuth.response.userHandle = new TextDecoder("utf-8").decode(handleBytes);
+
       // Need to return challenge because in some cases it is not bound to
       // a user id when created. The server validates it created the challenge
       // and its age
@@ -428,8 +435,6 @@ export class AuthenticatorService {
          ...startAuth,
          challenge: optionsJson.challenge,
       }
-
-      console.log(expanded);
 
       const verifyUrl = new URL('verifyauth', baseUrl);
 
@@ -539,6 +544,13 @@ export class AuthenticatorService {
 
       const optionsJson = await optionsResp.json() as PublicKeyCredentialCreationOptionsJSON;
 
+      // SimpleWebAuthn v10 caused incompatibility with older versions by
+      // encoding credential user.id as b64 rather than utf as older versions
+      // We therefore need to translate.
+      const actualB64UserId = optionsJson.user.id;
+      const idBytes = new TextEncoder().encode(optionsJson.user.id);
+      optionsJson.user.id = bytesToBase64(idBytes);
+
       let startReg;
       try {
          startReg = await startRegistration({optionsJSON: optionsJson});
@@ -553,7 +565,9 @@ export class AuthenticatorService {
       // Also, seems odd the userHandle isn't returned from .create
       const expanded = {
          ...startReg,
-         userId: optionsJson.user.id,
+         // To maintain compatibility with old clients, need to put this
+         // back to actual b64Url rather than b64ofUT8BytesofBase64... argg
+         userId: actualB64UserId,
          challenge: optionsJson.challenge,
       }
 
