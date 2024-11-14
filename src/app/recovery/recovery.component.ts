@@ -82,7 +82,7 @@ export class RecoveryComponent implements OnInit {
          this.router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
-         this.error = 'The operation either timed out or was not allowed';
+         this.error = 'The operation was not allowed or timed out';
      } finally {
          this.showProgress = false;
       }

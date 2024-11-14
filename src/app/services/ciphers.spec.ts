@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
 import * as cc from './cipher.consts';
-import { Random48, base64ToBytes, BYOBStreamReader, readStreamAll } from './utils';
+import { Random48, BYOBStreamReader, readStreamAll } from './utils';
 import { Ciphers, Encipher, Decipher, EncipherV4, EParams, CipherDataBlock } from './ciphers';
 
 // Faster than .toEqual, resulting in few timeouts
@@ -194,7 +194,6 @@ describe("Encryption and decryption", function () {
    ): Promise<Uint8Array> {
 
       // cheating... parts[1] is _additionalData, parts[2] is encryptedData
-
       const sk = await EncipherV4._genSigningKey(userCred, encipher['_slt']!);
       const headerData = await EncipherV4._createHeader(sk, block.parts[2], block.parts[1]);
 
@@ -241,7 +240,6 @@ describe("Encryption and decryption", function () {
 
          const [clearStream, clearData] = streamFromStr('This is a secret 🐓');
          const pwd = 'a good pwd';
-         const hint = 'not really';
          const userCredA = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
          const userCredB = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
@@ -250,15 +248,20 @@ describe("Encryption and decryption", function () {
             ic: cc.ICOUNT_MIN,
             trueRand: false,
             fallbackRand: true,
-            pwd: pwd,
-            hint: hint,
             lp: 1,
             lpEnd: 1
          };
 
          const reader = new BYOBStreamReader(clearStream);
          const encipher = new EncipherV4(userCredA, reader);
-         const cipherBlock = await encipher.encryptBlock0(eparams);
+         const cipherBlock = await encipher.encryptBlock0(
+            eparams,
+            async (cdinfo) => {
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               return [pwd, undefined];
+            }
+         );
 
          // First sign and repack with the original (correct) values to help ensure the
          // code for repacking is valid and that the 2nd attempt with a new signature
@@ -288,8 +291,9 @@ describe("Encryption and decryption", function () {
          decipherA = await Decipher.fromStream(userCredA, cipherstreamA)
          decipherB = await Decipher.fromStream(userCredB, cipherstreamB)
 
-         // both should succeed since the singatures are valid with the userCreds
-         // passed below (just cannot decrypt cipherText)
+         // Both should succeed since the singatures are valid with the userCreds
+         // passed below. Decryptiong, cipherText would fail on B (checked below).
+         // Also, these would fail if there was an encrypted hint
          await expectAsync(
             decipherA._decodePayload0()
          ).toBeResolved();
@@ -300,7 +304,7 @@ describe("Encryption and decryption", function () {
          // should succeed since we repacked with correct userCred
          await expectAsync(
             decipherA.decryptBlock0(
-               async (lp, lpEnd) => {
+               async (cdinfo) => {
                   return [pwd, undefined];
                }
             )
@@ -312,7 +316,7 @@ describe("Encryption and decryption", function () {
          // Alice into provider it (just not her userCred since site cannot retrieve)
          await expectAsync(
             decipherB.decryptBlock0(
-               async (lp, lpEnd) => {
+               async (cdinfo) => {
                   return [pwd, undefined];
                }
             )
@@ -334,8 +338,6 @@ describe("Encryption and decryption", function () {
             ic: cc.ICOUNT_MIN,
             trueRand: false,
             fallbackRand: true,
-            pwd: pwd,
-            hint: hint,
             lp: 1,
             lpEnd: 1
          };
@@ -343,9 +345,16 @@ describe("Encryption and decryption", function () {
          const latest = Encipher.latest(userCred, clearStream);
          const block0 = await latest.encryptBlock0(
             eparams,
-            (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
+            async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
+               expect(cdinfo.iv.byteLength).toEqual(ivBytes);
+               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+               return [pwd, hint];
             }
          );
 
@@ -353,13 +362,15 @@ describe("Encryption and decryption", function () {
          const decipher = await Decipher.fromStream(userCred, cipherStream);
 
          const decrypted = await decipher.decryptBlock0(
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
+               expect(cdinfo.iv.byteLength).toEqual(ivBytes);
+               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               expect(cdinfo.hint).toEqual(hint);
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, undefined];
-            },
-            (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
-               expect(params.hint).toBeTrue();
             }
          );
 
@@ -384,8 +395,6 @@ describe("Encryption and decryption", function () {
             ic: cc.ICOUNT_MIN,
             trueRand: false,
             fallbackRand: true,
-            pwd: pwd,
-            hint: hint,
             lp: 1,
             lpEnd: 1
          };
@@ -399,7 +408,14 @@ describe("Encryption and decryption", function () {
             latest.encryptBlockN(eparams)
          ).toBeRejectedWithError(Error, new RegExp('Data not initialized.+'));
 
-         const block0 = await latest.encryptBlock0(eparams)
+         const block0 = await latest.encryptBlock0(
+            eparams,
+            async (cdinfo) => {
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               return [pwd, hint];
+            }
+         );
          const blockN = await latest.encryptBlockN(eparams);
 
          let [cipherStream] = streamFromCipherBlock([block0, blockN]);
@@ -410,9 +426,9 @@ describe("Encryption and decryption", function () {
          ).toBeRejectedWithError(Error, new RegExp('Data not initialized.*'));
 
          let decb0 = await decipher.decryptBlock0(
-            async (lp, lpEnd) => {
-               expect(lp).toEqual(1);
-               expect(lpEnd).toEqual(1);
+            async (cdinfo) => {
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
                return [pwd, undefined];
             }
          );
@@ -435,9 +451,9 @@ describe("Encryption and decryption", function () {
          decipher = await Decipher.fromStream(userCred, cipherStream);
 
          decb0 = await decipher.decryptBlock0(
-            async (lp, lpEnd) => {
-               expect(lp).toEqual(1);
-               expect(lpEnd).toEqual(1);
+            async (cdinfo) => {
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
                return [pwd, undefined];
             }
          );
@@ -469,20 +485,21 @@ describe("Encryption and decryption", function () {
       expect(isEqualArray(cdInfo.iv, new Uint8Array([16, 242, 98, 46, 102, 223, 79, 227, 209, 73, 22, 207, 92, 80, 75, 125, 125, 234, 18, 21, 88, 64, 43, 68]))).toBeTrue();
       expect(isEqualArray(cdInfo.slt, new Uint8Array([25, 193, 133, 31, 159, 156, 8, 184, 10, 164, 33, 46, 20, 159, 218, 222]))).toBeTrue();
       expect(cdInfo.ver).toEqual(cc.VERSION4);
-      expect(cdInfo.hint).toBeTrue();
+      expect(cdInfo.hint).toEqual(hint);
 
       await expectAsync(
          decipher.decryptBlock0(
-            async (lp, lpEnd, decHint) => {
-               expect(decHint).toEqual(hint);
-               expect(lp).toEqual(1);
-               expect(lpEnd).toEqual(1);
+            async (cdinfo) => {
+               expect(cdinfo.hint).toEqual(hint);
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.alg).toBe('X20-PLY');
+               expect(cdinfo.ic).toBe(1800000);
+               expect(cdinfo.hint).toEqual(hint);
+               expect(cdinfo.ver).toEqual(cc.VERSION4);
+               expect(isEqualArray(cdInfo.iv, new Uint8Array([16, 242, 98, 46, 102, 223, 79, 227, 209, 73, 22, 207, 92, 80, 75, 125, 125, 234, 18, 21, 88, 64, 43, 68]))).toBeTrue();
+               expect(isEqualArray(cdInfo.slt, new Uint8Array([25, 193, 133, 31, 159, 156, 8, 184, 10, 164, 33, 46, 20, 159, 218, 222]))).toBeTrue();
                return [pwd, undefined];
-            },
-            (params) => {
-               expect(params.alg).toBe('X20-PLY');
-               expect(params.ic).toBe(1800000);
-               expect(params.hint).toBeTrue();
             }
          )
       ).toBeResolvedTo(clearData);
@@ -503,13 +520,12 @@ describe("Encryption and decryption", function () {
       // First make sure the good values are actually good
       await expectAsync(
          decipher.decryptBlock0(
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
+               expect(cdinfo.alg).toBe('X20-PLY');
+               expect(cdinfo.ic).toBe(1800000);
+               expect(cdinfo.hint).toBeTruthy();
+               expect(cdinfo.ver).toEqual(cc.VERSION4);
                return [pwdGood, undefined];
-            },
-            (params) => {
-               expect(params.alg).toBe('X20-PLY');
-               expect(params.ic).toBe(1800000);
-               expect(params.hint).toBeTrue();
             }
          )
       ).toBeResolvedTo(clearData);
@@ -520,7 +536,7 @@ describe("Encryption and decryption", function () {
 
       await expectAsync(
          decipher.decryptBlock0(
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
                return [pwdBad, undefined];
             }
          )
@@ -538,7 +554,7 @@ describe("Encryption and decryption", function () {
       // to getCipherDataInfo or decryptBlock0
       await expectAsync(
          decipher.decryptBlock0(
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
                return [pwdGood, undefined];
             }
          )
@@ -565,8 +581,6 @@ describe("Detect changed cipher data", function () {
             ic: cc.ICOUNT_MIN,
             trueRand: false,
             fallbackRand: true,
-            pwd: pwd,
-            hint: hint,
             lp: 1,
             lpEnd: 1
          };
@@ -574,9 +588,12 @@ describe("Detect changed cipher data", function () {
          const latest = Encipher.latest(userCred, clearStream);
          const block0 = await latest.encryptBlock0(
             eparams,
-            (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
+            async (cdinfo) => {
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.alg).toBe(alg);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               return [pwd, hint];
             }
          );
 
@@ -589,7 +606,7 @@ describe("Detect changed cipher data", function () {
 
          await expectAsync(
             decipher.decryptBlock0(
-               async (lp, lpEnd) => {
+               async (cdinfo) => {
                   return [pwd, undefined];
                }
             )
@@ -601,7 +618,7 @@ describe("Detect changed cipher data", function () {
 
          await expectAsync(
             decipher.decryptBlock0(
-               async (lp, lpEnd) => {
+               async (cdinfo) => {
                   return [pwd, undefined];
                }
             )
@@ -615,7 +632,7 @@ describe("Detect changed cipher data", function () {
 
          await expectAsync(
             decipher.decryptBlock0(
-               async (lp, lpEnd) => {
+               async (cdinfo) => {
                   return [pwd, undefined];
                }
             )
@@ -636,8 +653,6 @@ describe("Detect changed cipher data", function () {
             ic: cc.ICOUNT_MIN,
             trueRand: false,
             fallbackRand: true,
-            pwd: pwd,
-            hint: hint,
             lp: 1,
             lpEnd: 1
          };
@@ -645,9 +660,10 @@ describe("Detect changed cipher data", function () {
          const latest = Encipher.latest(userCred, clearStream);
          const block0 = await latest.encryptBlock0(
             eparams,
-            (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
+            async (cdinfo) => {
+               expect(cdinfo.alg).toBe(alg);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               return [pwd, hint];
             }
          );
 
@@ -659,9 +675,9 @@ describe("Detect changed cipher data", function () {
 
          await expectAsync(
             decipher.decryptBlock0(
-               async (lp, lpEnd) => {
-                  expect(lp).toEqual(1);
-                  expect(lpEnd).toEqual(1);
+               async (cdinfo) => {
+                  expect(cdinfo.lp).toEqual(1);
+                  expect(cdinfo.lpEnd).toEqual(1);
                   return [pwd, undefined];
                }
             )
@@ -674,9 +690,9 @@ describe("Detect changed cipher data", function () {
 
          await expectAsync(
             decipher.decryptBlock0(
-               async (lp, lpEnd) => {
-                  expect(lp).toEqual(1);
-                  expect(lpEnd).toEqual(1);
+               async (cdinfo) => {
+                  expect(cdinfo.lp).toEqual(1);
+                  expect(cdinfo.lpEnd).toEqual(1);
                   return [pwd, undefined];
                }
             )
@@ -690,9 +706,9 @@ describe("Detect changed cipher data", function () {
 
          await expectAsync(
             decipher.decryptBlock0(
-               async (lp, lpEnd) => {
-                  expect(lp).toEqual(1);
-                  expect(lpEnd).toEqual(1);
+               async (cdinfo) => {
+                  expect(cdinfo.lp).toEqual(1);
+                  expect(cdinfo.lpEnd).toEqual(1);
                   return [pwd, undefined];
                }
             )
@@ -714,8 +730,6 @@ describe("Detect changed cipher data", function () {
             ic: cc.ICOUNT_MIN,
             trueRand: false,
             fallbackRand: true,
-            pwd: pwd,
-            hint: hint,
             lp: 1,
             lpEnd: 1
          };
@@ -723,9 +737,10 @@ describe("Detect changed cipher data", function () {
          const latest = Encipher.latest(userCred, clearStream);
          const block0 = await latest.encryptBlock0(
             eparams,
-            (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
+            async (cdinfo) => {
+               expect(cdinfo.alg).toBe(alg);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               return [pwd, hint];
             }
          );
 
@@ -735,9 +750,9 @@ describe("Detect changed cipher data", function () {
 
          await expectAsync(
             decipher.decryptBlock0(
-               async (lp, lpEnd) => {
-                  expect(lp).toEqual(1);
-                  expect(lpEnd).toEqual(1);
+               async (cdinfo) => {
+                  expect(cdinfo.lp).toEqual(1);
+                  expect(cdinfo.lpEnd).toEqual(1);
                   return [pwd, undefined];
                }
             )
@@ -758,8 +773,6 @@ describe("Detect changed cipher data", function () {
             ic: cc.ICOUNT_MIN,
             trueRand: false,
             fallbackRand: true,
-            pwd: pwd,
-            hint: hint,
             lp: 1,
             lpEnd: 1
          };
@@ -767,9 +780,12 @@ describe("Detect changed cipher data", function () {
          const latest = Encipher.latest(userCred, clearStream);
          const block0 = await latest.encryptBlock0(
             eparams,
-            (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
+            async (cdinfo) => {
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.alg).toBe(alg);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               return [pwd, hint];
             }
          );
 
@@ -788,9 +804,9 @@ describe("Detect changed cipher data", function () {
          // MAC was not tested due to monkey patch)
          await expectAsync(
             decipher.decryptBlock0(
-               async (lp, lpEnd) => {
-                  expect(lp).toEqual(1);
-                  expect(lpEnd).toEqual(1);
+               async (cdinfo) => {
+                  expect(cdinfo.lp).toEqual(1);
+                  expect(cdinfo.lpEnd).toEqual(1);
                   return [pwd, undefined];
                }
             )
@@ -811,8 +827,6 @@ describe("Detect changed cipher data", function () {
             ic: cc.ICOUNT_MIN,
             trueRand: false,
             fallbackRand: true,
-            pwd: pwd,
-            hint: hint,
             lp: 1,
             lpEnd: 1
          };
@@ -820,9 +834,10 @@ describe("Detect changed cipher data", function () {
          const latest = Encipher.latest(userCred, clearStream);
          const block0 = await latest.encryptBlock0(
             eparams,
-            (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
+            async (cdinfo) => {
+               expect(cdinfo.alg).toBe(alg);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               return [pwd, hint];
             }
          );
 
@@ -842,9 +857,9 @@ describe("Detect changed cipher data", function () {
          // should fail with DOMException rather than Error with MAC in message
          await expectAsync(
             decipher.decryptBlock0(
-               async (lp, lpEnd) => {
-                  expect(lp).toEqual(1);
-                  expect(lpEnd).toEqual(1);
+               async (cdinfo) => {
+                  expect(cdinfo.lp).toEqual(1);
+                  expect(cdinfo.lpEnd).toEqual(1);
                   return [pwd, undefined];
                }
             )
@@ -865,8 +880,6 @@ describe("Detect changed cipher data", function () {
             ic: cc.ICOUNT_MIN,
             trueRand: false,
             fallbackRand: true,
-            pwd: pwd,
-            hint: hint,
             lp: 1,
             lpEnd: 1
          };
@@ -874,9 +887,10 @@ describe("Detect changed cipher data", function () {
          const latest = Encipher.latest(userCred, clearStream);
          const block0 = await latest.encryptBlock0(
             eparams,
-            (params) => {
-               expect(params.alg).toBe(alg);
-               expect(params.ic).toBe(cc.ICOUNT_MIN);
+            async (cdinfo) => {
+               expect(cdinfo.alg).toBe(alg);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               return [pwd, hint];
             }
          );
 
@@ -896,9 +910,9 @@ describe("Detect changed cipher data", function () {
          // fail with DOMException rather than Error with MAC in message
          await expectAsync(
             decipher.decryptBlock0(
-               async (lp, lpEnd) => {
-                  expect(lp).toEqual(1);
-                  expect(lpEnd).toEqual(1);
+               async (cdinfo) => {
+                  expect(cdinfo.lp).toEqual(1);
+                  expect(cdinfo.lpEnd).toEqual(1);
                   return [pwd, undefined];
                }
             )

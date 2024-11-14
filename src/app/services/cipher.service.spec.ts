@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
 import * as cc from './cipher.consts';
-import { CipherService, EncContext3 } from './cipher.service';
+import { CipherService } from './cipher.service';
 import { Encipher } from './ciphers';
 import {
    readStreamAll,
@@ -135,7 +135,7 @@ describe("Stream encryption and decryption", function () {
          const pwd = 'a good pwd';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext: EncContext3 = {
+         const econtext = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
             trueRand: false,
@@ -145,30 +145,37 @@ describe("Stream encryption and decryption", function () {
 
          const cipherStream = await cipherSvc.encryptStream(
             econtext,
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
+               expect(cdinfo.iv.byteLength).toEqual(ivBytes);
+               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+               expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.hint).toBeFalsy();
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, undefined];
             },
             userCred,
-            clearStream,
-            (params) => {
-               expect(params.alg).toEqual(alg);
-               expect(params.ic).toEqual(cc.ICOUNT_MIN);
-            }
+            clearStream
          );
 
          const decrypted = await cipherSvc.decryptStream(
-            async (lp, lpEnd, decHint) => {
-               expect(lp).toEqual(1);
-               expect(lpEnd).toEqual(1);
-               expect(decHint).toEqual('');
+            async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
+               expect(cdinfo.iv.byteLength).toEqual(ivBytes);
+               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+               expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.hint).toBeFalsy();
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, undefined];
             },
             userCred,
-            cipherStream,
-            (params) => {
-               expect(params.alg).toEqual(alg);
-               expect(params.ic).toEqual(cc.ICOUNT_MIN);
-            }
+            cipherStream
          );
 
          const resString = await readStreamAll(decrypted, true);
@@ -186,7 +193,7 @@ describe("Stream encryption and decryption", function () {
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext: EncContext3 = {
+         const econtext = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
             trueRand: false,
@@ -196,30 +203,37 @@ describe("Stream encryption and decryption", function () {
 
          const cipherStream = await cipherSvc.encryptStream(
             econtext,
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
+               expect(cdinfo.iv.byteLength).toEqual(ivBytes);
+               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+               expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.hint).toBeFalsy();
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, hint];
             },
             userCred,
-            clearStream,
-            (params) => {
-               expect(params.alg).toEqual(alg);
-               expect(params.ic).toEqual(cc.ICOUNT_MIN);
-            }
+            clearStream
          );
 
          const decrypted = await cipherSvc.decryptStream(
-            async (lp, lpEnd, decHint) => {
-               expect(lp).toEqual(1);
-               expect(lpEnd).toEqual(1);
-               expect(decHint).toEqual(hint);
+            async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
+               expect(cdinfo.iv.byteLength).toEqual(ivBytes);
+               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+               expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.hint).toEqual(hint);
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, undefined];
             },
             userCred,
-            cipherStream,
-            (params) => {
-               expect(params.alg).toEqual(alg);
-               expect(params.ic).toEqual(cc.ICOUNT_MIN);
-            }
+            cipherStream
          );
 
          const resString = await readStreamAll(decrypted, true);
@@ -236,7 +250,7 @@ describe("Stream encryption and decryption", function () {
          const [clearStream, clearData] = streamFromStr(srcString);
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext: EncContext3 = {
+         const econtext = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
             trueRand: false,
@@ -244,40 +258,40 @@ describe("Stream encryption and decryption", function () {
             lpEnd: maxLps
          };
 
-         let expectedLp = 1;
+         let expectedEncLp = 1;
 
          const cipherStream = await cipherSvc.encryptStream(
             econtext,
-            async (lp, lpEnd) => {
-               expect(lp).toEqual(expectedLp);
-               expect(lpEnd).toEqual(maxLps);
-               expectedLp += 1;
-               return [String(lp), String(lp)];
+            async (cdinfo) => {
+               console.log(cdinfo.lp, cdinfo.lpEnd, expectedEncLp);
+               expect(cdinfo.lp).toEqual(expectedEncLp);
+               expect(cdinfo.lpEnd).toEqual(maxLps);
+               expect(cdinfo.alg).toEqual(alg);
+               expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+               expect(cdinfo.hint).toBeFalsy();
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+               expectedEncLp += 1;
+               return [String(cdinfo.lp), String(cdinfo.lp)];
             },
             userCred,
-            clearStream,
-            (params) => {
-               expect(params.alg).toEqual(alg);
-               expect(params.ic).toEqual(cc.ICOUNT_MIN);
-            }
+            clearStream
          );
 
-         expectedLp = maxLps;
+         let expectedDecLp = maxLps;
 
          const decrypted = await cipherSvc.decryptStream(
-            async (lp, lpEnd, decHint) => {
-               expect(lp).toEqual(expectedLp);
-               expect(lpEnd).toEqual(maxLps);
-               expect(decHint).toEqual(String(lp));
-               expectedLp -= 1;
-               return [decHint!, undefined];
+            async (cdinfo) => {
+               expect(cdinfo.lp).toEqual(expectedDecLp);
+               expect(cdinfo.lpEnd).toEqual(maxLps);
+               expect(cdinfo.alg).toEqual(alg);
+               expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+               expect(cdinfo.hint).toEqual(String(cdinfo.lp));
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+               expectedDecLp -= 1;
+               return [cdinfo.hint!, undefined];
             },
             userCred,
-            cipherStream,
-            (params) => {
-               expect(params.alg).toEqual(alg);
-               expect(params.ic).toEqual(cc.ICOUNT_MIN);
-            }
+            cipherStream
          );
 
          const resString = await readStreamAll(decrypted, true);
@@ -310,8 +324,9 @@ describe("Stream encryption and decryption", function () {
          const pwd = '9j5J4QnKD3D2R7Ks5gAAa';
 
          const clearStream = await cipherSvc.decryptStream(
-            async (lp, lpEnd, hint) => {
-               expect(hint).toEqual(hintCheck);
+            async (cdinfo) => {
+               expect(cdinfo.hint).toEqual(hintCheck);
+               expect(cdinfo.ver).toEqual(cc.VERSION1);
                return [pwd, undefined];
             },
             userCred,
@@ -348,8 +363,9 @@ describe("Stream encryption and decryption", function () {
          const pwd = '9j5J4QnKD3D2R7Ks5gAAa';
 
          const clearStream = await cipherSvc.decryptStream(
-            async (lp, lpEnd, hint) => {
-               expect(hint).toEqual(hintCheck);
+            async (cdinfo) => {
+               expect(cdinfo.hint).toEqual(hintCheck);
+               expect(cdinfo.ver).toEqual(cc.VERSION4);
                return [pwd, undefined];
             },
             userCred,
@@ -383,15 +399,15 @@ describe("Stream encryption and decryption", function () {
          // b64url userCred for browsser injection: xhKm2Q404pGkqfWkTyT3UodUR-99bN0wibH6si9uF8I
          const userCred = new Uint8Array([198, 18, 166, 217, 14, 52, 226, 145, 164, 169, 245, 164, 79, 36, 247, 82, 135, 84, 71, 239, 125, 108, 221, 48, 137, 177, 250, 178, 47, 110, 23, 194]);
          const [_, clearCheck] = streamFromStr('physical farm bolt correct bee nonchalant glib high able pinch left quaint strip valuable exultant disgusted curved bless geese snatch zoom fat touch boot abject wink pretty accessible foamy');
-         const hintCheck = 'royal';
 
          const clearStream = await cipherSvc.decryptStream(
-            async (lp, lpEnd, hint) => {
-               expect(lp).toEqual(expectedLp);
-               expect(lpEnd).toEqual(3);
-               expect(Number(hint)).toEqual(expectedLp);
+            async (cdinfo) => {
+               expect(cdinfo.lp).toEqual(expectedLp);
+               expect(cdinfo.lpEnd).toEqual(3);
+               expect(Number(cdinfo.hint)).toEqual(expectedLp);
+               expect(cdinfo.ver).toEqual(cc.VERSION4);
                expectedLp -= 1;
-               return [hint!, undefined];
+               return [cdinfo.hint!, undefined];
             },
             userCred,
             cipherStream
@@ -424,8 +440,8 @@ describe("Stream encryption and decryption", function () {
 
          // First ensure we can decrypt with valid inputs
          const clear = await cipherSvc.decryptStream(
-            async (lp, lpEnd, hint) => {
-               expect(hint).toEqual("asdf");
+            async (cdinfo) => {
+               expect(cdinfo.hint).toEqual("asdf");
                return ["asdf", undefined];
             },
             userCred,
@@ -455,8 +471,8 @@ describe("Stream encryption and decryption", function () {
 
             await expectAsync(
                cipherSvc.decryptStream(
-                  async (lp, lpEnd, hint) => {
-                     expect(hint).toEqual("asdf");
+                  async (cdinfo) => {
+                     expect(cdinfo.hint).toEqual("asdf");
                      return ["asdf", undefined];
                   },
                   userCred,
@@ -473,7 +489,7 @@ describe("Stream encryption and decryption", function () {
          const hint = '';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext: EncContext3 = {
+         const econtext = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
             trueRand: false,
@@ -483,22 +499,20 @@ describe("Stream encryption and decryption", function () {
 
          const cipherStream = await cipherSvc.encryptStream(
             econtext,
-            async (lp, lpEnd) => {
-               expect(lp).toEqual(1);
-               expect(lpEnd).toEqual(1);
+            async (cdinfo) => {
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.alg).toEqual(alg);
+               expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
                return [pwd, hint];
             },
             userCred,
-            clearStream,
-            (params) => {
-               expect(params.alg).toEqual(alg);
-               expect(params.ic).toEqual(cc.ICOUNT_MIN);
-            }
+            clearStream
          );
 
          const decryptedStream = await cipherSvc.decryptStream(
-            async (lp, lpEnd, decHint) => {
-               expect(decHint).toEqual(hint);
+            async (cdinfo) => {
+               expect(cdinfo.hint).toEqual(hint);
                return ['the wrong pwd', undefined];
             },
             userCred,
@@ -524,7 +538,7 @@ describe("Stream encryption and decryption", function () {
             const [clearStream, clearData] = streamFromStr(srcString);
             const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-            const econtext: EncContext3 = {
+            const econtext = {
                alg: alg,
                ic: cc.ICOUNT_MIN,
                trueRand: false,
@@ -532,25 +546,23 @@ describe("Stream encryption and decryption", function () {
                lpEnd: maxLps
             };
 
-            let expectedLp = 1;
+            let expectedEncLp = 1;
 
             const cipherStream = await cipherSvc.encryptStream(
                econtext,
-               async (lp, lpEnd) => {
-                  expect(lp).toEqual(expectedLp);
-                  expect(lpEnd).toEqual(maxLps);
-                  expectedLp += 1;
-                  return [String(lp), String(lp)];
+               async (cdinfo) => {
+                  expect(cdinfo.lp).toEqual(expectedEncLp);
+                  expect(cdinfo.lpEnd).toEqual(maxLps);
+                  expect(cdinfo.alg).toEqual(alg);
+                  expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+                  expectedEncLp += 1;
+                  return [String(cdinfo.lp), String(cdinfo.lp)];
                },
                userCred,
-               clearStream,
-               (params) => {
-                  expect(params.alg).toEqual(alg);
-                  expect(params.ic).toEqual(cc.ICOUNT_MIN);
-               }
+               clearStream
             );
 
-            expectedLp = maxLps;
+            let expectedDecLp = maxLps;
 
             // When looping, a bad password (or other wrong decryption params) gets detected at different
             // points depending on the loop number. Bad values in the outer most loop are not detected until
@@ -567,23 +579,21 @@ describe("Stream encryption and decryption", function () {
             let detected = false;
             try {
                const decryptedStream = await cipherSvc.decryptStream(
-                  async (lp, lpEnd, decHint) => {
-                     expect(lp).toEqual(expectedLp);
-                     expect(lpEnd).toEqual(maxLps);
-                     expect(decHint).toEqual(String(lp));
-                     expectedLp -= 1;
-                     if (lp == badLp) {
+                  async (cdinfo) => {
+                     expect(cdinfo.lp).toEqual(expectedDecLp);
+                     expect(cdinfo.lpEnd).toEqual(maxLps);
+                     expect(cdinfo.hint).toEqual(String(cdinfo.lp));
+                     expect(cdinfo.alg).toEqual(alg);
+                     expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+                     expectedDecLp -= 1;
+                     if (cdinfo.lp == badLp) {
                         return ['wrong', undefined];
                      } else {
-                        return [decHint!, undefined];
+                        return [cdinfo.hint!, undefined];
                      }
                   },
                   userCred,
-                  cipherStream,
-                  (params) => {
-                     expect(params.alg).toEqual(alg);
-                     expect(params.ic).toEqual(cc.ICOUNT_MIN);
-                  }
+                  cipherStream
                );
 
                await readStreamAll(decryptedStream);
@@ -608,7 +618,7 @@ describe("Stream encryption and decryption", function () {
          const hint = 'nope';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext: EncContext3 = {
+         const econtext = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
             trueRand: false,
@@ -618,7 +628,7 @@ describe("Stream encryption and decryption", function () {
 
          const cipherStream = await cipherSvc.encryptStream(
             econtext,
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
                return [pwd, hint];
             },
             userCred,
@@ -633,7 +643,7 @@ describe("Stream encryption and decryption", function () {
 
          await expectAsync(
             cipherSvc.decryptStream(
-               async (lp, lpEnd, decHint) => {
+               async (cdinfo) => {
                   // should never execute
                   expect(false).withContext('should not execute').toBeTrue();
                   return [pwd, undefined];
@@ -654,7 +664,7 @@ describe("Stream encryption and decryption", function () {
          const hint = 'nope';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext: EncContext3 = {
+         const econtext = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
             trueRand: false,
@@ -664,7 +674,7 @@ describe("Stream encryption and decryption", function () {
 
          const cipherStream = await cipherSvc.encryptStream(
             econtext,
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
                return [pwd, hint];
             },
             userCred,
@@ -680,7 +690,7 @@ describe("Stream encryption and decryption", function () {
 
          await expectAsync(
             cipherSvc.decryptStream(
-               async (lp, lpEnd, decHint) => {
+               async (cdinfo) => {
                   // should never execute
                   expect(false).withContext('should not execute').toBeTrue();
                   return [pwd, undefined];
@@ -696,7 +706,7 @@ describe("Stream encryption and decryption", function () {
 
          await expectAsync(
             cipherSvc.decryptStream(
-               async (lp, lpEnd, decHint) => {
+               async (cdinfo) => {
                   // should never execute
                   expect(false).withContext('should not execute').toBeTrue();
                   return [pwd, undefined];
@@ -717,7 +727,7 @@ describe("Stream encryption and decryption", function () {
       const pwd = 'another good pwd';
       const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-      const econtext: EncContext3 = {
+      const econtext = {
          alg: 'AES-GCM',
          ic: cc.ICOUNT_MIN,
          trueRand: false,
@@ -727,7 +737,7 @@ describe("Stream encryption and decryption", function () {
 
       let cipherStream = await cipherSvc.encryptStream(
          econtext,
-         async (lp, lpEnd) => {
+         async (cdinfo) => {
             return [pwd, hint];
          },
          userCred,
@@ -743,7 +753,7 @@ describe("Stream encryption and decryption", function () {
 
       cipherStream = await cipherSvc.encryptStream(
          econtext,
-         async (lp, lpEnd) => {
+         async (cdinfo) => {
             return ['', hint];
          },
          userCred,
@@ -760,7 +770,7 @@ describe("Stream encryption and decryption", function () {
 
       cipherStream = await cipherSvc.encryptStream(
          econtext,
-         async (lp, lpEnd) => {
+         async (cdinfo) => {
             return [pwd, 'this is too long'.repeat(8)];
          },
          userCred,
@@ -777,7 +787,7 @@ describe("Stream encryption and decryption", function () {
       await expectAsync(
          cipherSvc.encryptStream(
             econtext,
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
                return [pwd, hint];
             },
             new Uint8Array(0),
@@ -791,7 +801,7 @@ describe("Stream encryption and decryption", function () {
       await expectAsync(
          cipherSvc.encryptStream(
             econtext,
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
                return [pwd, hint];
             },
             crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES + 2)),
@@ -804,7 +814,7 @@ describe("Stream encryption and decryption", function () {
 
       cipherStream = await cipherSvc.encryptStream(
          econtext,
-         async (lp, lpEnd) => {
+         async (cdinfo) => {
             return [pwd, hint];
          },
          userCred,
@@ -826,7 +836,7 @@ describe("Stream encryption and decryption", function () {
       await expectAsync(
          cipherSvc.encryptStream(
             bcontext,
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
                return [pwd, hint];
             },
             userCred,
@@ -845,7 +855,7 @@ describe("Stream encryption and decryption", function () {
       await expectAsync(
          cipherSvc.encryptStream(
             bcontext,
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
                return [pwd, hint];
             },
             userCred,
@@ -865,7 +875,7 @@ describe("Stream encryption and decryption", function () {
       await expectAsync(
          cipherSvc.encryptStream(
             bcontext,
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
                return [pwd, hint];
             },
             userCred,
@@ -884,7 +894,7 @@ describe("Stream encryption and decryption", function () {
       await expectAsync(
          cipherSvc.encryptStream(
             bcontext,
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
                return [pwd, hint];
             },
             userCred,
@@ -904,7 +914,7 @@ describe("Stream encryption and decryption", function () {
       await expectAsync(
          cipherSvc.encryptStream(
             bcontext,
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
                return [pwd, hint];
             },
             userCred,
@@ -961,20 +971,18 @@ describe("Stream manipulation", function () {
       // First make sure it decrypts as expected
       let [cipherStream] = streamFromBase64(ct);
       let dec = await cipherSvc.decryptStream(
-         async (lp, lpEnd, decHint) => {
-            expect(decHint).toEqual('4321');
+         async (cdinfo) => {
+            expect(cdinfo.hint).toEqual('4321');
+            expect(cdinfo.alg).toBe('AES-GCM');
+            expect(cdinfo.ver).toBe(cc.VERSION4);
+            expect(cdinfo.lp).toBe(1);
+            expect(cdinfo.lpEnd).toBe(1);
+            expect(cdinfo.ic).toBe(1100000);
+            expect(Boolean(cdinfo.hint)).toBe(true);
             return ['asdf', undefined];
          },
          userCred,
-         cipherStream,
-         (info) => {
-            expect(info.alg).toBe('AES-GCM');
-            expect(info.ver).toBe(cc.VERSION4);
-            expect(info.lp).toBe(1);
-            expect(info.lpEnd).toBe(1);
-            expect(info.ic).toBe(1100000);
-            expect(info.hint).toBe(true);
-         }
+         cipherStream
       );
       await expectAsync(
          areEqual(dec, clearData)
@@ -987,7 +995,7 @@ describe("Stream manipulation", function () {
       let [stream] = streamFromBytes(b0Mac);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -999,7 +1007,7 @@ describe("Stream manipulation", function () {
       [stream] = streamFromBytes(b0Ver);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1011,7 +1019,7 @@ describe("Stream manipulation", function () {
       [stream] = streamFromBytes(b0Size);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1023,7 +1031,7 @@ describe("Stream manipulation", function () {
       [stream] = streamFromBytes(b0Size);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1035,7 +1043,7 @@ describe("Stream manipulation", function () {
       [stream] = streamFromBytes(b0Size);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1047,7 +1055,7 @@ describe("Stream manipulation", function () {
       [stream] = streamFromBytes(b0Size);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1059,8 +1067,8 @@ describe("Stream manipulation", function () {
       // First make sure it decrypts as expected
       let [cipherStream] = streamFromBase64(ct);
       let dec = await cipherSvc.decryptStream(
-         async (lp, lpEnd, decHint) => {
-            expect(decHint).toEqual('4321');
+         async (cdinfo) => {
+            expect(cdinfo.hint).toEqual('4321');
             return ['asdf', undefined];
          },
          userCred,
@@ -1075,7 +1083,7 @@ describe("Stream manipulation", function () {
       bNMac[block1MACOffset] = 255;
       let [stream] = streamFromBytes(bNMac);
       dec = await cipherSvc.decryptStream(
-         async (lp, lpEnd) => { return ['asdf', undefined] },
+         async (cdinfo) => { return ['asdf', undefined] },
          userCred,
          stream
       );
@@ -1088,7 +1096,7 @@ describe("Stream manipulation", function () {
       bNVer.set([4, 1], block1VerOffset);
       [stream] = streamFromBytes(bNVer);
       dec = await cipherSvc.decryptStream(
-         async (lp, lpEnd) => { return ['asdf', undefined] },
+         async (cdinfo) => { return ['asdf', undefined] },
          userCred,
          stream
       );
@@ -1101,7 +1109,7 @@ describe("Stream manipulation", function () {
       bNSize.set([20, 1], block1SizeOffset);
       [stream] = streamFromBytes(bNSize);
       dec = await cipherSvc.decryptStream(
-         async (lp, lpEnd) => { return ['asdf', undefined] },
+         async (cdinfo) => { return ['asdf', undefined] },
          userCred,
          stream
       );
@@ -1114,7 +1122,7 @@ describe("Stream manipulation", function () {
       bNSize.set([0, 0], block1SizeOffset);
       [stream] = streamFromBytes(bNSize);
       dec = await cipherSvc.decryptStream(
-         async (lp, lpEnd) => { return ['asdf', undefined] },
+         async (cdinfo) => { return ['asdf', undefined] },
          userCred,
          stream
       );
@@ -1127,7 +1135,7 @@ describe("Stream manipulation", function () {
       bNSize.set([255, 255, 255, 255], block1SizeOffset);
       [stream] = streamFromBytes(bNSize);
       dec = await cipherSvc.decryptStream(
-         async (lp, lpEnd) => { return ['asdf', undefined] },
+         async (cdinfo) => { return ['asdf', undefined] },
          userCred,
          stream
       );
@@ -1140,7 +1148,7 @@ describe("Stream manipulation", function () {
       bNSize.set([255, 255, 255, 0], block1SizeOffset);
       [stream] = streamFromBytes(bNSize);
       dec = await cipherSvc.decryptStream(
-         async (lp, lpEnd) => { return ['asdf', undefined] },
+         async (cdinfo) => { return ['asdf', undefined] },
          userCred,
          stream
       );
@@ -1155,8 +1163,8 @@ describe("Stream manipulation", function () {
       // First make sure it decrypts as expected
       let [cipherStream] = streamFromBase64(ct);
       let dec = await cipherSvc.decryptStream(
-         async (lp, lpEnd, decHint) => {
-            expect(decHint).toEqual('4321');
+         async (cdinfo) => {
+            expect(cdinfo.hint).toEqual('4321');
             return ['asdf', undefined];
          },
          userCred,
@@ -1172,7 +1180,7 @@ describe("Stream manipulation", function () {
       let [stream] = streamFromBytes(b0Alg);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1188,7 +1196,7 @@ describe("Stream manipulation", function () {
       // position is read). Maybe change this too not look for specific error txt...
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1200,7 +1208,7 @@ describe("Stream manipulation", function () {
       [stream] = streamFromBytes(b0OIV);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1212,7 +1220,7 @@ describe("Stream manipulation", function () {
       [stream] = streamFromBytes(b0Slt);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1224,7 +1232,7 @@ describe("Stream manipulation", function () {
       [stream] = streamFromBytes(b0IC);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1236,7 +1244,7 @@ describe("Stream manipulation", function () {
       [stream] = streamFromBytes(b0IC);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1248,7 +1256,7 @@ describe("Stream manipulation", function () {
       [stream] = streamFromBytes(b0LP);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1260,7 +1268,7 @@ describe("Stream manipulation", function () {
       [stream] = streamFromBytes(b0LP);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1272,7 +1280,7 @@ describe("Stream manipulation", function () {
       [stream] = streamFromBytes(b0HintLen);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1284,7 +1292,7 @@ describe("Stream manipulation", function () {
       [stream] = streamFromBytes(b0Hint);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1296,8 +1304,8 @@ describe("Stream manipulation", function () {
       // First make sure it decrypts as expected
       let [cipherStream] = streamFromBase64(ct);
       let dec = await cipherSvc.decryptStream(
-         async (lp, lpEnd, decHint) => {
-            expect(decHint).toEqual('4321');
+         async (cdinfo) => {
+            expect(cdinfo.hint).toEqual('4321');
             return ['asdf', undefined];
          },
          userCred,
@@ -1312,7 +1320,7 @@ describe("Stream manipulation", function () {
       bNAlg[block1AlgOffset] = 128;
       let [stream] = streamFromBytes(bNAlg);
       dec = await cipherSvc.decryptStream(
-         async (lp, lpEnd) => { return ['asdf', undefined] },
+         async (cdinfo) => { return ['asdf', undefined] },
          userCred,
          stream
       );
@@ -1325,7 +1333,7 @@ describe("Stream manipulation", function () {
       bNAlg[block1AlgOffset] = 2;
       [stream] = streamFromBytes(bNAlg);
       dec = await cipherSvc.decryptStream(
-         async (lp, lpEnd) => { return ['asdf', undefined] },
+         async (cdinfo) => { return ['asdf', undefined] },
          userCred,
          stream
       );
@@ -1342,7 +1350,7 @@ describe("Stream manipulation", function () {
       bNIV[block1IVOffset] = 0;
       [stream] = streamFromBytes(bNIV);
       dec = await cipherSvc.decryptStream(
-         async (lp, lpEnd) => { return ['asdf', undefined] },
+         async (cdinfo) => { return ['asdf', undefined] },
          userCred,
          stream
       );
@@ -1356,8 +1364,8 @@ describe("Stream manipulation", function () {
       // First make sure it decrypts as expected
       let [cipherStream] = streamFromBase64(ct);
       let dec = await cipherSvc.decryptStream(
-         async (lp, lpEnd, decHint) => {
-            expect(decHint).toEqual('4321');
+         async (cdinfo) => {
+            expect(cdinfo.hint).toEqual('4321');
             return ['asdf', undefined];
          },
          userCred,
@@ -1373,7 +1381,7 @@ describe("Stream manipulation", function () {
       let [stream] = streamFromBytes(b0Enc);
       await expectAsync(
          cipherSvc.decryptStream(
-            async (lp, lpEnd) => { return ['asdf', undefined] },
+            async (cdinfo) => { return ['asdf', undefined] },
             userCred,
             stream
          )
@@ -1384,7 +1392,7 @@ describe("Stream manipulation", function () {
       bNEnc[block1EncOffset] = 0;
       [stream] = streamFromBytes(bNEnc);
       dec = await cipherSvc.decryptStream(
-         async (lp, lpEnd) => { return ['asdf', undefined] },
+         async (cdinfo) => { return ['asdf', undefined] },
          userCred,
          stream
       );
@@ -1402,7 +1410,7 @@ describe("Stream manipulation", function () {
          const hint = 'nope';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext: EncContext3 = {
+         const econtext = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
             trueRand: false,
@@ -1412,7 +1420,7 @@ describe("Stream manipulation", function () {
 
          const cipherStream = await cipherSvc.encryptStream(
             econtext,
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
                return [pwd, hint];
             },
             userCred,
@@ -1431,7 +1439,7 @@ describe("Stream manipulation", function () {
 
             await expectAsync(
                cipherSvc.decryptStream(
-                  async (lp, lpEnd, decHint) => {
+                  async (cdinfo) => {
                      // should never execute
                      expect(false).withContext('should not execute').toBeTrue();
                      return [pwd, undefined];
@@ -1454,7 +1462,7 @@ describe("Stream manipulation", function () {
          const hint = 'nope';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext: EncContext3 = {
+         const econtext = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
             trueRand: false,
@@ -1464,7 +1472,7 @@ describe("Stream manipulation", function () {
 
          const cipherStream = await cipherSvc.encryptStream(
             econtext,
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
                return [pwd, hint];
             },
             userCred,
@@ -1485,7 +1493,7 @@ describe("Stream manipulation", function () {
 
             await expectAsync(
                cipherSvc.decryptStream(
-                  async (lp, lpEnd, decHint) => {
+                  async (cdinfo) => {
                      // should never execute
                      expect(false).withContext('should not execute').toBeTrue();
                      return [pwd, undefined];
@@ -1505,7 +1513,7 @@ describe("Stream manipulation", function () {
          let [corruptStream] = streamFromBytes(corruptData);
 
          const corrupStream = await cipherSvc.decryptStream(
-            async (lp, lpEnd, decHint) => {
+            async (cdinfo) => {
                return [pwd, undefined];
             },
             userCred,
@@ -1587,7 +1595,7 @@ describe("Get cipherinfo from cipher text", function () {
          const hint = 'try a himt';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext: EncContext3 = {
+         const econtext = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
             trueRand: false,
@@ -1597,15 +1605,13 @@ describe("Get cipherinfo from cipher text", function () {
 
          const cipherStream = await cipherSvc.encryptStream(
             econtext,
-            async (lp, lpEnd) => {
+            async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
                return [pwd, hint];
             },
             userCred,
-            clearStream,
-            (params) => {
-               expect(params.alg).toEqual(alg);
-               expect(params.ic).toEqual(cc.ICOUNT_MIN);
-            }
+            clearStream
          );
 
          const cipherInfo = await cipherSvc.getCipherStreamInfo(userCred, cipherStream);
@@ -1618,7 +1624,7 @@ describe("Get cipherinfo from cipher text", function () {
          expect(cipherInfo.lp).toEqual(1);
          expect(cipherInfo.iv.byteLength).toEqual(expectedIVBytes);
          expect(cipherInfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-         expect(cipherInfo.hint).toBeTrue();
+         expect(cipherInfo.hint).toEqual(hint);
       }
    });
 
@@ -1631,7 +1637,7 @@ describe("Get cipherinfo from cipher text", function () {
       const hint = 'nope';
       const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-      const econtext: EncContext3 = {
+      const econtext = {
          alg: 'AEGIS-256',
          ic: cc.ICOUNT_MIN,
          trueRand: false,
@@ -1641,7 +1647,7 @@ describe("Get cipherinfo from cipher text", function () {
 
       const cipherStream = await cipherSvc.encryptStream(
          econtext,
-         async (lp, lpEnd) => {
+         async (cdinfo) => {
             return [pwd, hint];
          },
          userCred,

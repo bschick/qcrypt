@@ -20,8 +20,19 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { base64URLStringToBuffer, bufferToBase64URLString } from '@simplewebauthn/browser';
+import { base64URLStringToBuffer, bufferToBase64URLString } from './base64';
 
+
+
+// Returns base64Url text
+export function bytesToBase64(bytes: Uint8Array): string {
+   return bufferToBase64URLString(bytes);
+}
+
+// Accepts either base64 or base64Url text
+export function base64ToBytes(b64: string): Uint8Array {
+   return new Uint8Array(base64URLStringToBuffer(b64));
+}
 
 /* Javascript converts to signed 32 bit int when using bit shifting
    and masking, so do this instead. Count is the number of bytes
@@ -46,12 +57,6 @@ export function bytesToNum(arr: Uint8Array): number {
    return num;
 }
 
-// Returns base64Url text
-export function bytesToBase64(bytes: Uint8Array): string {
-   // simplewebauthn function return base64Url format
-   return (bufferToBase64URLString(bytes));
-}
-
 export function browserSupportsFilePickers(): boolean {
    //@ts-ignore
    if (window.showSaveFilePicker) {
@@ -68,12 +73,6 @@ export function browserSupportsBytesStream(): boolean {
    } catch (err) {
       return false;
    }
-}
-
-// Accepts either base64 or base64Url text
-export function base64ToBytes(b64: string): Uint8Array {
-   // simplewebauthn function accepts either as input to base64ToBytes
-   return new Uint8Array(base64URLStringToBuffer(b64));
 }
 
 export class ProcessCancelled extends Error {

@@ -113,6 +113,7 @@ const ELEMENT_DATA: FAQElement[] = [
       like Stack Overflow.`
    },
 
+
    {
       position: 0,
       question: 'Who can decrypt the data I encypt with Quick Crypt?',
@@ -147,6 +148,24 @@ const ELEMENT_DATA: FAQElement[] = [
       Your passkey makes it infeasible for a rogue website to decrypt your data even
       if you exposed your encryption password.
       </p>`
+   },
+
+   {
+      position: 0,
+      question: 'Can I decrypt my data if Quick Crypt goes offline or my account is deleted?',
+      answer: `Yes, as long as you have your recovery link. The user credential in
+      your recovery link and the password used during encryption are the only inputs
+      needed to decrypt data encrypted with Quick Crypt. Other tools can be used
+      to decrypt Quick Crypt cipher armor in a multi-step process. If you want to
+      be sure someone can recreate Quick Crypt's logic, the code is open source so
+      you can <a href="https://github.com/bschick/qcrypt" target="_blank">
+      fork away</a> or save the
+      <a href="/help/protocol">protocol description</a>. The Quick Crypt source
+      repo also contains a
+      <a href="https://github.com/bschick/qcrypt/blob/main/qcrypt.ts" target="_blank">
+      simple command-line tool</a> that can decrypt Quick Crypt cipher armor at the
+      command-line if you have the encryption password and user credential. Install
+      dependencies and run:<blockquote>> npx tsx ./qcrypt.ts</blockquote>`
    },
 
    {
@@ -517,24 +536,6 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'Can I decrypt my data if Quick Crypt is discontinued or my account is deleted?',
-      answer: `Yes, as long as you save your recovery link. The user credential in
-      your recovery link and the password used during encryption are the only inputs
-      needed to decrypt data encrypted with Quick Crypt. Other tools could be used
-      to decrypt Quick Crypt cipher armor in a multi-step process. If you want to
-      be sure someone can recreate Quick Crypt's logic, the code is open source so
-      you can <a href="https://github.com/bschick/qcrypt" target="_blank">
-      fork away</a> or save the
-      <a href="/help/protocol">protocol description</a>. The Quick Crypt source
-      repo also contains a
-      <a href="https://github.com/bschick/qcrypt/blob/main/qcrypt.ts" target="_blank">
-      simple command-line tool</a> that can decrypt Quick Crypt cipher armor at the
-      command-line if you have the encryption password and user credential by
-      running:<blockquote>> npx tsx ./qcrypt.ts</blockquote>`
-   },
-
-   {
-      position: 0,
       question: 'I have read that web applications should not be trusted for cryptography.',
       answer: `That's not a question! Much has changed over the past decade, making web
       security protocols and browsers more robust and trustworthy. Bundled single-page
@@ -609,7 +610,7 @@ const ELEMENT_DATA: FAQElement[] = [
       Armor or saved to a file. The saved data contains the number of loops
       to simplify decryption.
       </p>
-      <p>Loop encrypted only provides improved security and privacy when
+      <p>Loop encryption only provides improved security and privacy when
       you enter a different password for each loop (other encryption options
       cannot currently be changed between loops). If you forget any one of the
       passwords you used while looping, you will not be able decrypt the
