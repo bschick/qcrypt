@@ -57,7 +57,7 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import { RouterLink } from '@angular/router';
 import * as cc from '../services/cipher.consts';
-import { CipherService, EncContext3, CipherDataInfo } from '../services/cipher.service';
+import { CipherService, CipherDataInfo } from '../services/cipher.service';
 import {
    base64ToBytes,
    browserSupportsFilePickers,
@@ -674,8 +674,22 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.onClearClear();
    }
 
-   cipherReadyNotice(cdInfo: CipherDataInfo) {
+   passwordProvider(
+      cdInfo: CipherDataInfo,
+      encrypting: boolean
+   ) : Promise<[string, string | undefined]> {
+
       this.actionStart = Date.now();
+
+      let pwdResult: Promise<[string, string | undefined]>;
+      if (this.pwdCached && cdInfo.lpEnd == 1) {
+         this.restartTimer();
+         pwdResult = Promise.resolve([this.cachedPassword, this.cachedHint]);
+      } else {
+         //-1 minStrength means no pwd strength requirments
+         pwdResult = this.askForPassword(cdInfo, encrypting);
+      }
+
       // This can run outside of Angular's zone because the  callback
       // comes from within streem connections
       this.ngZone.run(() => {
@@ -683,6 +697,52 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          if (cdInfo.ic > this.spinnerAbove || this.usingFile) {
             this.showProgress = true;
          }
+      });
+
+      return pwdResult;
+   }
+
+   async askForPassword(
+      cdInfo: CipherDataInfo,
+      encrypting: boolean
+   ): Promise<[string, string]> {
+
+      this.clearPassword();
+      return new Promise((resolve, reject) => {
+         // This can run outside of Angular's zone because the password callback
+         // comes from within streem connections
+         this.ngZone.run(() => {
+            let dialogRef = this.dialog.open(PasswordDialog, {
+               data: {
+                  hint: cdInfo.hint,
+                  encrypting: encrypting,
+                  minStrength: +this.minPwdStrength,
+                  hidePwd: this.hidePwd,
+                  loopCount: cdInfo.lp,
+                  loops: cdInfo.lpEnd,
+                  checkPwned: this.checkPwned,
+                  welcomed: this.welcomed,
+                  userName: this.authSvc.userName,
+               },
+            });
+
+            dialogRef.afterClosed().subscribe((result) => {
+               if (!result) {
+                  // intentially do not rejct with "new Error()" so this isn't
+                  // caught as an error, just cancelation
+                  reject(new ProcessCancelled());
+               } else {
+                  this.clearPassword();
+                  if (this.cacheTime > 0 && result[0] && cdInfo.lpEnd == 1) {
+                     this.cachedPassword = result[0];
+                     this.cachedHint = result[1];
+                     this.pwdCached = true;
+                     this.restartTimer();
+                  }
+                  resolve([result[0], result[1]]);
+               }
+            });
+         });
       });
    }
 
@@ -883,7 +943,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       clearStream: ReadableStream<Uint8Array>
    ): Promise<ReadableStream<Uint8Array>> {
 
-      const econtext: EncContext3 = {
+      const econtext = {
          lpEnd: this.loops,
          alg: this.algorithm,
          ic: this.icount,
@@ -893,17 +953,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
       return this.cipherSvc.encryptStream(
          econtext,
-         async (lp, lpEnd) => {
-            const [pwd, hint] = await this.getPassword(
-               +this.minPwdStrength,
-               lp,
-               lpEnd
-            );
-            return [pwd, hint];
-         },
+         this.passwordProvider.bind(this),
          base64ToBytes(this.authSvc.userCred!),
-         clearStream,
-         this.cipherReadyNotice.bind(this)
+         clearStream
       );
    }
 
@@ -1061,18 +1113,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    ): Promise<ReadableStream<Uint8Array>> {
 
       return await this.cipherSvc.decryptStream(
-         async (lp, lpEnd, hint?) => {
-            const [pwd] = await this.getPassword(
-               -1,
-               lp,
-               lpEnd,
-               hint
-            );
-            return [pwd, undefined];
-         },
+         this.passwordProvider.bind(this),
          base64ToBytes(this.authSvc.userCred!),
-         cipherStream,
-         this.cipherReadyNotice.bind(this)
+         cipherStream
       );
    }
 
@@ -1205,67 +1248,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       // note that we ignore lps in the original V1 cipher armor since it was
       // never used in the wild
       return base64ToBytes(ct);
-   }
-
-   //-1 minStrength means no pwd strength requirments
-   async getPassword(
-      minStrength: number,
-      lp: number,
-      lpEnd: number,
-      hint?: string
-   ): Promise<[string, string]> {
-      if (this.pwdCached && lpEnd == 1) {
-         this.restartTimer();
-         return Promise.resolve([this.cachedPassword, this.cachedHint]);
-      } else {
-         return this.askForPassword(minStrength, lp, lpEnd, hint);
-      }
-   }
-
-   async askForPassword(
-      minStrength: number,
-      lp: number,
-      lpEnd: number,
-      hint?: string
-   ): Promise<[string, string]> {
-
-      this.clearPassword();
-      return new Promise((resolve, reject) => {
-         // This can run outside of Angular's zone because the password callback
-         // comes from within streem connections
-         this.ngZone.run(() => {
-            let dialogRef = this.dialog.open(PasswordDialog, {
-               data: {
-                  hint: hint,
-                  askHint: hint === undefined,
-                  minStrength: minStrength,
-                  hidePwd: this.hidePwd,
-                  loopCount: lp,
-                  loops: lpEnd,
-                  checkPwned: this.checkPwned,
-                  welcomed: this.welcomed,
-                  userName: this.authSvc.userName,
-               },
-            });
-
-            dialogRef.afterClosed().subscribe((result) => {
-               if (!result) {
-                  // intentially do not rejct with "new Error()" so this isn't
-                  // caught as an error, just cancelation
-                  reject(new ProcessCancelled());
-               } else {
-                  this.clearPassword();
-                  if (this.cacheTime > 0 && result[0] && lpEnd == 1) {
-                     this.cachedPassword = result[0];
-                     this.cachedHint = result[1];
-                     this.pwdCached = true;
-                     this.restartTimer();
-                  }
-                  resolve([result[0], result[1]]);
-               }
-            });
-         });
-      });
    }
 
    onReminderChange() {

@@ -21,20 +21,24 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { Injectable } from '@angular/core';
-import { browserSupportsBytesStream, BYOBStreamReader, streamWriteBYOD, } from './utils';
-import { EParams, CipherDataInfo, PWDProvider, Ciphers, Encipher, Decipher, CipherDataBlock } from './ciphers';
 import * as cc from './cipher.consts';
+import { Ciphers } from './ciphers';
+import {
+   EContext,
+   encryptStream,
+   decryptStream,
+   getCipherStreamInfo,
+   CipherDataInfo,
+   PWDProvider
+} from './cipher-streams';
 
-export { CipherDataInfo, PWDProvider };
+export { EContext, CipherDataInfo, PWDProvider };
 
-export type EncContext3 = {
-   readonly alg: string;
-   readonly ic: number;
-   readonly trueRand: boolean;
-   readonly fallbackRand: boolean;
-   readonly lpEnd: number;
-};
 
+/* Thin wrapper around Ciphers and cipher stream functions to create
+an Angular service. Must of that functionality was previously in this
+class directly, and perhaps this class could now be removed, but keeping
+it for now to avoid having to update other code and many tests */
 
 @Injectable({
    providedIn: 'root'
@@ -77,164 +81,36 @@ export class CipherService {
    }
 
    async encryptStream(
-      econtext: EncContext3,
+      econtext: EContext,
       pwdProvider: PWDProvider,
       userCred: Uint8Array,
-      clearStream: ReadableStream<Uint8Array>,
-      readyNotice?: (cdInfo: CipherDataInfo) => void,
+      clearStream: ReadableStream<Uint8Array>
    ): Promise<ReadableStream<Uint8Array>> {
-      return this._encryptStreamImpl(
+      return encryptStream(
          econtext,
          pwdProvider,
          userCred,
-         clearStream,
-         1,
-         readyNotice
+         clearStream
       );
-   }
-
-   private async _encryptStreamImpl(
-      econtext: EncContext3,
-      pwdProvider: PWDProvider,
-      userCred: Uint8Array,
-      clearStream: ReadableStream<Uint8Array>,
-      lp: number,
-      readyNotice?: (cdInfo: CipherDataInfo) => void,
-   ): Promise<ReadableStream<Uint8Array>> {
-
-      if (!this.validateAlg(econtext.alg)) {
-         throw new Error('Invalid alg of: ' + econtext.alg);
-      }
-      if (econtext.ic < cc.ICOUNT_MIN || econtext.ic > cc.ICOUNT_MAX) {
-         throw new Error('Invalid ic of: ' + econtext.ic);
-      }
-      if (econtext.lpEnd > cc.LP_MAX) {
-         throw new Error('Invalid loop end of: ' + econtext.lpEnd);
-      }
-      if (lp < 1 || lp > econtext.lpEnd) {
-         throw new Error('Invalid loop of: ' + lp);
-      }
-      if (!econtext.trueRand && !econtext.fallbackRand) {
-         throw new Error('Either trueRand or fallbackRand must be true');
-      }
-      if (userCred.byteLength != cc.USERCRED_BYTES) {
-         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
-      }
-
-      const encipher = Encipher.latest(userCred, clearStream);
-      const [pwd, hint] = await pwdProvider(lp, econtext.lpEnd);
-
-      const eparams: EParams = {
-         ...econtext,
-         pwd,
-         lp,
-         hint
-      };
-
-      let cipherStream = new ReadableStream({
-         type: (browserSupportsBytesStream() ? 'bytes' : undefined),
-
-         async pull(controller) {
-
-            try {
-               const cipherData = await encipher.encryptBlock(eparams, readyNotice);
-
-               if (cipherData.parts.length) {
-                  for(let data of cipherData.parts) {
-                     streamWriteBYOD(controller, data);
-                  }
-               }
-
-               if (cipherData.done) {
-                  controller.close();
-                  // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
-                  //@ts-ignore
-                  controller.byobRequest?.respond(0);
-               }
-            } catch (err) {
-               controller.error(err);
-            }
-         }
-      });
-
-      if (lp < econtext.lpEnd) {
-         cipherStream = await this._encryptStreamImpl(
-            econtext,
-            pwdProvider,
-            userCred,
-            cipherStream,
-            lp + 1,
-            readyNotice
-         );
-      }
-
-      return cipherStream;
    }
 
    async getCipherStreamInfo(
       userCred: Uint8Array,
       cipherStream: ReadableStream<Uint8Array>,
    ): Promise<CipherDataInfo> {
-      if (userCred.byteLength != cc.USERCRED_BYTES) {
-         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
-      }
-
-      const decipher = await Decipher.fromStream(userCred, cipherStream);
-      return decipher.getCipherDataInfo();
+      return getCipherStreamInfo(userCred, cipherStream);
    }
 
    async decryptStream(
       pwdProvider: PWDProvider,
       userCred: Uint8Array,
-      cipherStream: ReadableStream<Uint8Array>,
-      readyNotice?: (cdInfo: CipherDataInfo) => void,
+      cipherStream: ReadableStream<Uint8Array>
    ): Promise<ReadableStream<Uint8Array>> {
-
-      if (userCred.byteLength != cc.USERCRED_BYTES) {
-         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
-      }
-
-      const decipher = await Decipher.fromStream(userCred, cipherStream);
-      const cdInfo = await decipher.getCipherDataInfo();
-
-      let readableStream = new ReadableStream({
-         type: (browserSupportsBytesStream() ? 'bytes' : undefined),
-
-         async pull(controller) {
-
-            try {
-               const decrypted = await decipher.decryptBlock(
-                  pwdProvider,
-                  readyNotice
-               );
-
-               if (decrypted.byteLength) {
-                  streamWriteBYOD(controller, decrypted);
-               } else {
-                  // Reached the end of the stream peacefully...
-                  controller.close();
-                  // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
-                  //@ts-ignore
-                  controller.byobRequest?.respond(0);
-               }
-
-            } catch (err) {
-               controller.error(err);
-            }
-         }
-
-      });
-
-      if (cdInfo.lp > 1) {
-         readableStream = await this.decryptStream(
-            pwdProvider,
-            userCred,
-            readableStream,
-            readyNotice
-         );
-      }
-
-      return readableStream
+      return decryptStream(
+         pwdProvider,
+         userCred,
+         cipherStream
+      );
    }
 }
 

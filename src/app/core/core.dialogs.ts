@@ -57,7 +57,7 @@ import { CipherService, CipherDataInfo } from '../services/cipher.service';
 export type PwdDialogData = {
    message: string;
    hint: string;
-   askHint: boolean;
+   encrypting: boolean;
    minStrength: number;
    hidePwd: boolean;
    loopCount: number;
@@ -89,7 +89,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    public minStrength = 3;
    public loopCount = 0;
    public loops = 0;
-   public askHint = false;
+   public encrypting = false;
    public userName = '';
    private checkPwned = false;
    private welcomed = true;
@@ -104,7 +104,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
       @Inject(MAT_DIALOG_DATA) public data: PwdDialogData
    ) {
       this.hint = data.hint;
-      this.askHint = data.askHint;
+      this.encrypting = data.encrypting;
       this.minStrength = data.minStrength;
       this.hidePwd = data.hidePwd;
       this.loopCount = data.loopCount;
@@ -116,6 +116,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    }
 
    ngOnInit(): void {
+      // should we show warning during decryptiong? currently, yes
       this.zxcvbnOptions.checkPwned(this.checkPwned);
    }
 
@@ -132,7 +133,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onAcceptClicked() {
-      if (this.passwd && this.strength >= this.minStrength) {
+      if (this.passwd && (!this.encrypting || this.strength >= this.minStrength)) {
          this.dialogRef.close([this.passwd, this.hint]);
       } else {
          this.strengthAlert = true;
@@ -141,7 +142,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onPasswordStrengthChange(strength: number | null) {
-      if (this.minStrength < 0) {
+      if (!this.encrypting) {
          return;
       }
 
@@ -154,10 +155,10 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
       if (!this.passwd) {
          this.strengthPhrase = 'Password is empty';
       } else if (this.strength < this.minStrength) {
-         this.strengthPhrase = 'Password is too weak'; // + this.strength;
+         this.strengthPhrase = 'Password is too weak';
       } else {
          this.strengthAlert = false;
-         this.strengthPhrase = 'Password is acceptable'; // + this.strength;
+         this.strengthPhrase = 'Password is acceptable';
       }
    }
 }
@@ -178,7 +179,7 @@ export class CipherInfoDialog {
    public iv!: string;
    public ver!: string;
    public lps!: number;
-   public hint!: string;
+   public hint?: string;
 
    constructor(
       private r2: Renderer2,
@@ -193,7 +194,7 @@ export class CipherInfoDialog {
          this.alg = this.cipherSvc.algDescription(data.alg);
          this.iv = bytesToBase64(data.iv as Uint8Array);
          this.slt = bytesToBase64(data.slt as Uint8Array);
-         this.hint = data.hint ? 'yes' : 'no';
+         this.hint = data.hint;
          this.lps = data.lpEnd;
          this.ver = data.ver.toString();
       }
@@ -206,7 +207,7 @@ export class CipherInfoDialog {
    templateUrl: './signin-dialog.html',
    styleUrl: './core.dialogs.scss',
    standalone: true,
-   imports: [MatDialogModule, CommonModule, NgIf, MatProgressSpinnerModule,
+   imports: [MatDialogModule, CommonModule, MatProgressSpinnerModule,
       MatIconModule, MatTooltipModule, MatButtonModule],
 })
 export class SigninDialog {
@@ -219,7 +220,6 @@ export class SigninDialog {
       private authSvc: AuthenticatorService,
       private router: Router,
       public dialogRef: MatDialogRef<SigninDialog>,
-      private snackBar: MatSnackBar,
       @Inject(MAT_DIALOG_DATA) public data: SigninDialog
    ) {
       dialogRef.disableClose = true;
