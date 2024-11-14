@@ -1445,6 +1445,8 @@ class DecipherV4 extends Decipher {
 
       const exportedSk = await crypto.subtle.exportKey("raw", this._sk);
       const skData = new Uint8Array(exportedSk);
+
+      await sodium.ready;
       const state = sodium.crypto_generichash_init(skData, cc.MAC_BYTES);
 
       sodium.crypto_generichash_update(state, headerPortion);
