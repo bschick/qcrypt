@@ -92,11 +92,14 @@ export class BYOBStreamReader {
 
    private _reader: ReadableStreamBYOBReader | ReadableStreamDefaultReader;
    private _extra?: Uint8Array;
+   private _byob: boolean;
 
    constructor(stream: ReadableStream<Uint8Array>) {
-      if (browserSupportsBytesStream()) {
+      try {
          this._reader = stream.getReader({ mode: "byob" });
-      } else {
+         this._byob = true;
+      } catch (err) {
+         this._byob = false;
          this._reader = stream.getReader();
       }
    }
@@ -109,7 +112,7 @@ export class BYOBStreamReader {
    async readFill(buffer: ArrayBuffer)
       : Promise<[data: Uint8Array, done: boolean]> {
       try {
-         if (browserSupportsBytesStream()) {
+         if (this._byob) {
             return this._readBYOB(buffer, false);
          } else {
             return this._readStupidSafari(buffer, false);
@@ -124,7 +127,7 @@ export class BYOBStreamReader {
    async readAvailable(buffer: ArrayBuffer)
       : Promise<[data: Uint8Array, done: boolean]> {
       try {
-         if (browserSupportsBytesStream()) {
+         if (this._byob) {
             return this._readBYOB(buffer, true);
          } else {
             return this._readStupidSafari(buffer, true);
