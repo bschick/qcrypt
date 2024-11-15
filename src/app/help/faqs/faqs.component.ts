@@ -158,14 +158,14 @@ const ELEMENT_DATA: FAQElement[] = [
       needed to decrypt Quick Crypt cipher text. The website is not
       required. There is a
       command-line tool that decrypts Quick Crypt cipher armor. Just download the
-      <a href="https://github.com/bschick/qcrypt/tree/main/shell" target="_blank">qdecrypt.cjs</a>
+      <a href="https://github.com/bschick/qcrypt/tree/main/shell" target="_blank">qcrypt.cjs</a>
       file, install <a href="https://nodejs.org/" target="_blank">Node.js</a>,
       , and run the script from the command-line:
       <blockquote>> node qcrypt.cjs</blockquote>.
       <p>Other tools could also be used to decrypt Quick Crypt cipher armor in a
       multi-step process. If you want to be sure someone can recreate Quick Crypt's
       logic, the code is <a href="https://github.com/bschick/qcrypt" target="_blank">
-      open source</a> and you have the
+      open source</a>, and you have the
       <a href="/help/protocol">protocol description</a>.</p>`
    },
 
@@ -173,15 +173,15 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'Is there a command-line version of Quick Crypt?',
       answer: `Yes, there is a command-line tool for decryption and
-      cipher data information. An encryption tool is possible but has
-      yet to be created. To decrypt data,
+      cipher data information. Encryption support is possible but has
+      yet to be added. To decrypt data,
       you need your cipher text, the user credential from your recovery link,
       and the password you used during encryption.
       <a href="https://github.com/bschick/qcrypt/tree/main/shell" target="_blank">
       Download the qcrypt.cjs file</a>, ensure you have
       <a href="https://nodejs.org/" target="_blank">Node.js</a> installed, and
       then run the tool from the command-line:
-      <blockquote>> node qdecrypt.cjs</blockquote>.`
+      <blockquote>> node qcrypt.cjs</blockquote>.`
    },
 
    {

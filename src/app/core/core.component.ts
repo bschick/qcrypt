@@ -33,6 +33,7 @@ import {
    SecurityContext,
    NgZone,
 } from '@angular/core';
+import { makeCipherArmor, parseCipherArmor } from './armor';
 import { CommonModule } from '@angular/common';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatRippleModule } from '@angular/material/core';
@@ -61,7 +62,6 @@ import { CipherService, CipherDataInfo } from '../services/cipher.service';
 import {
    base64ToBytes,
    browserSupportsFilePickers,
-   bytesToBase64,
    readStreamAll,
    selectWriteableFile,
    selectWriteableJsonFile,
@@ -812,7 +812,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          const cipherStream = await this.makeCipherStream(clearStream);
          if (cipherStream) {
             const cipherData = await readStreamAll(cipherStream);
-            const cipherArmor = this.getCipherArmorFor(cipherData, this.ctFormat, this.reminder);
+            const cipherArmor = makeCipherArmor(cipherData, this.ctFormat, this.reminder, this.ctFormat == 'indent' ? 3 : 0);
             this.showCipherArmorAndTime(cipherArmor);
             this.toastMessage('Congratulations, data encrypted');
 
@@ -1099,7 +1099,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             cipherArmor = this.cipherArmor;
          }
 
-         const cipherData = this.parseCipherArmor(cipherArmor);
+         const cipherData = parseCipherArmor(cipherArmor);
          size = cipherData.byteLength;
          const blob = new Blob([cipherData], { type: 'application/octet-stream' });
          cipherStream = blob.stream();
@@ -1194,62 +1194,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.showCipherArmor(cipherArmor, `(${tookMsg})`);
    }
 
-   getCipherArmorFor(
-      cipherData: Uint8Array, format: string, reminder: boolean)
-      : string {
-      // Rebuild object to control ordering (better way to do this?)
-      let result: { [key: string]: string | number } = {};
-      result['ct'] = bytesToBase64(cipherData);
-
-      if (format == 'link') {
-         const ctParam = encodeURIComponent(JSON.stringify(result));
-         return 'https://' + location.host + '?cipherarmor=' + ctParam;
-      } else {
-         if (reminder) {
-            result['reminder'] = 'decrypt with quick crypt';
-         }
-         const space = this.ctFormat == 'indent' ? 3 : 0;
-         return JSON.stringify(result, null, space);
-      }
-   }
-
-   parseCipherArmor(cipherArmor: string): Uint8Array {
-      try {
-         let trimmed = cipherArmor.trim();
-         if (trimmed.startsWith('https://')) {
-            const ct = new URL(trimmed).searchParams.get('cipherarmor');
-            if (ct == null) {
-               let err = Error();
-               err.name = 'Url missing cipherarmor';
-               throw err;
-            }
-            trimmed = ct;
-         } else if (trimmed.startsWith('cipherarmor=')) {
-            trimmed = trimmed.slice('cipherarmor='.length);
-         }
-
-         // %7B is urlencoded '{' character, so decode
-         if (trimmed.startsWith('%7B')) {
-            trimmed = decodeURIComponent(trimmed);
-         }
-
-         var jsonParts = JSON.parse(trimmed);
-      } catch (err) {
-         console.error(err);
-         if (err instanceof Error) {
-            throw new Error('Cipher armor text not formatted correctly. ' + err.name);
-         }
-      }
-      if (!('ct' in jsonParts)) {
-         throw new Error('Missing ct in cipher armor text');
-      }
-      const ct = jsonParts.ct;
-
-      // note that we ignore lps in the original V1 cipher armor since it was
-      // never used in the wild
-      return base64ToBytes(ct);
-   }
-
    onReminderChange() {
       this.lastReminder = this.reminder;
       this.lsSet('reminder', this.reminder.toString());
@@ -1275,8 +1219,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    reformatCipherArmor() {
       if (this.cipherArmor) {
          try {
-            const cipherData = this.parseCipherArmor(this.cipherArmor);
-            this.showCipherArmor(this.getCipherArmorFor(cipherData, this.ctFormat, this.reminder));
+            const cipherData = parseCipherArmor(this.cipherArmor);
+            this.showCipherArmor(makeCipherArmor(cipherData, this.ctFormat, this.reminder, this.ctFormat == 'indent' ? 3 : 0));
          } catch (err) {
             console.error(err);
          }
