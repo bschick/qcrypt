@@ -26,9 +26,9 @@ SOFTWARE. -->
       <p *ngIf="error">{{error}}</p>
       <div *ngIf="!error" class="dialog-body">
         <ul class="tech-list">
+          <li><b>Cipher and Mode:</b></li>
           <li><b>PBKDF2 Iterations:</b></li>
           <li><b>Derived Keys:</b></li>
-          <li><b>Cipher and Mode:</b></li>
           <li><b>Salt (b64Url):</b></li>
           <li><b>IV/Nonce (b64Url):</b></li>
           <li *ngIf="hint"><b>Password Hint:</b></li>
@@ -36,10 +36,10 @@ SOFTWARE. -->
           <li><b>Version:</b></li>
         </ul>
         <ul class="tech-list">
+          <li>{{alg}}</li>
           <li>{{ic}}</li>
           <!-- hard-coded -->
           <li>256-bit</li>
-          <li>{{alg}}</li>
           <li>{{slt}}</li>
           <li>{{iv}}</li>
           <li *ngIf="hint">{{hint}}</li>
