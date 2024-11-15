@@ -1,0 +1,24 @@
+{
+  "name": "qcrypt-shell",
+  "version": "1.0.0",
+  "description": "Local commandline shell application for Quick Crypt",
+  "main": "qdecrypt.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "esbuild --bundle --format=cjs          --platform=node --target=es2022 --outdir=shell src/qdecrypt.ts",
+    "buildmin": "esbuild --bundle --format=cjs --minify --platform=node --target=es2022 --outdir=shell src/qdecrypt.ts"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/libsodium-wrappers": "^0.7.13",
+    "@types/node": "^20.11.16",
+    "@types/yargs": "^17.0.33",
+    "esbuild": "^0.24.0",
+    "typescript": "~5.4.2"
+  },
+  "dependencies": {
+    "libsodium-wrappers": "^0.7.15",
+    "yargs": "^17.7.2"
+  }
+}
