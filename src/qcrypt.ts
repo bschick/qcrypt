@@ -2,6 +2,7 @@ import { alias } from "yargs";
 
 const { createInterface } = require('node:readline/promises');
 const { decryptStream, getCipherStreamInfo } = require('./app/services/cipher-streams');
+const { makeCipherArmor, parseCipherArmor } = require( './app/core/armor');
 const { base64ToBytes, bytesToBase64, readStreamAll } = require('./app/services/utils');
 const fs = require('fs');
 const ws = require('node:stream/web');
@@ -12,6 +13,11 @@ const rl = createInterface({ input: process.stdin, output: process.stdout });
 
 function streamFromBase64(b64: string): ReadableStream<Uint8Array> {
    const data = base64ToBytes(b64);
+   const blob = new Blob([data], { type: 'application/octet-stream' });
+   return blob.stream();
+}
+
+function streamFromBytes(data: Uint8Array): ReadableStream<Uint8Array> {
    const blob = new Blob([data], { type: 'application/octet-stream' });
    return blob.stream();
 }
@@ -42,7 +48,13 @@ async function credAndStream(args: {
    infile: string | undefined,
 }) : Promise<[Uint8Array, ReadableStream<Uint8Array>]> {
 
-   let credText = args.cred ?? await rl.question('User Credential (base64): ');
+   let credText = args.cred ?? await rl.question('User Credential: ');
+
+   try {
+      credText = new URL(credText).searchParams.get('usercred') ?? credText;
+   } catch(err) {
+   }
+
    const userCred = base64ToBytes(credText.trim());
 
    let cipherStream;
@@ -51,10 +63,9 @@ async function credAndStream(args: {
       // This does not produce a byod binary stream... but it still works
       cipherStream = ws.ReadableStream.from(nodeStream);
    } else {
-      let cipherText = args.text ?? await rl.question('Cipher text (base64): ');
+      let cipherText = args.text ?? await rl.question('Cipher armor: ');
       console.log();
-      cipherText = cipherText.trim();
-      cipherStream = streamFromBase64(cipherText);
+      cipherStream = streamFromBytes(parseCipherArmor(cipherText));
    }
 
    return [userCred, cipherStream];
@@ -113,7 +124,8 @@ async function decrypt(args: {
                return [args.pwd[pos], undefined];
             } else {
                const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} or ${cdinfo.lpEnd}` : '';
-               return [await rl.question(`Password${lpMsg} (hint: ${cdinfo.hint}): `), undefined];
+               const hintMsg = cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '';
+               return [await rl.question(`Password${lpMsg}${hintMsg}: `), undefined];
             }
          },
          userCred,
@@ -145,14 +157,14 @@ const args = yargs(hideBin(process.argv))
       aliases: ['dec'],
       desc: 'decrypt cipher data',
       builder: (yargs) => {
-         yargs.positional('text', { desc: 'cipher text to decrypt (or use -i)' });
+         yargs.positional('text', { desc: 'cipher armore to decrypt (or use -i)' });
       }
    })
    .command({
       command: 'info [text]',
       desc: 'show information about cipher data',
       builder: (yargs) => {
-         yargs.positional('text', { desc: 'cipher text to describe (or use -i)' });
+         yargs.positional('text', { desc: 'cipher armor to describe (or use -i)' });
       }
    })
    .options({
