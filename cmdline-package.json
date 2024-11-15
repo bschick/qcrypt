@@ -2,11 +2,11 @@
   "name": "qcrypt-shell",
   "version": "1.0.0",
   "description": "Local commandline shell application for Quick Crypt",
-  "main": "qdecrypt.ts",
+  "main": "qcrypt.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "esbuild --bundle --format=cjs --platform=node --target=es2022 --outfile=shell/qdecrypt.cjs src/qdecrypt.ts",
-    "buildmin": "esbuild --bundle --format=cjs --minify --platform=node --target=es2022 --outfile=shell/qdecrypt.cjs src/qdecrypt.ts"
+    "build": "esbuild --bundle --format=cjs --platform=node --target=es2022 --outfile=shell/qcrypt.cjs src/qcrypt.ts",
+    "buildmin": "esbuild --bundle --format=cjs --minify --platform=node --target=es2022 --outfile=shell/qcrypt.cjs src/qcrypt.ts"
   },
   "author": "",
   "license": "ISC",
