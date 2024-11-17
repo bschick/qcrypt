@@ -771,9 +771,9 @@ export class EncipherV4 extends Encipher {
                "uint8array"
             );
          } catch (err) {
-            console.error(err)
             // Match behavior of Web Crytpo functions that throws limited DOMException
-            throw new DOMException('', 'OperationError');
+            const msg = err instanceof Error ? err.message : '';
+            throw new DOMException(msg, 'OperationError ');
          }
       } else if (alg == 'AEGIS-256') {
          const exported = await crypto.subtle.exportKey("raw", key);
@@ -790,9 +790,9 @@ export class EncipherV4 extends Encipher {
                "uint8array"
             );
          } catch (err) {
-            console.error(err)
             // Match behavior of Web Crytpo functions that throws limited DOMException
-            throw new DOMException('', 'OperationError');
+            const msg = err instanceof Error ? err.message : '';
+            throw new DOMException(msg, 'OperationError ');
          }
       } else {
          const cipherBuf = await crypto.subtle.encrypt({
@@ -1006,9 +1006,9 @@ export abstract class Decipher extends Ciphers {
                "uint8array"
             );
          } catch (err) {
-            console.error(err);
             // Match behavior of Web Crytpo functions that throws limited DOMException
-            throw new DOMException('', 'OperationError');
+            const msg = err instanceof Error ? err.message : '';
+            throw new DOMException(msg, 'OperationError ');
          }
       } else if (alg == 'AEGIS-256') {
          const exported = await crypto.subtle.exportKey("raw", key);
@@ -1025,9 +1025,9 @@ export abstract class Decipher extends Ciphers {
                "uint8array"
             );
          } catch (err) {
-            console.error(err);
             // Match behavior of Web Crytpo functions that throws limited DOMException
-            throw new DOMException('', 'OperationError');
+            const msg = err instanceof Error ? err.message : '';
+            throw new DOMException(msg, 'OperationError ');
          }
       } else {
          const buffer = await crypto.subtle.decrypt({

@@ -27,9 +27,8 @@ import {
 
  export function makeCipherArmor(
     cipherData: Uint8Array,
-    format: string,
-    reminder: boolean,
-    indent: number = 0
+    format: 'compact' | 'indent' | 'link',
+    reminder: boolean = false
 ) : string {
     // Rebuild object to control ordering (better way to do this?)
     let result: { [key: string]: string | number } = {};
@@ -42,7 +41,7 @@ import {
        if (reminder) {
           result['reminder'] = 'decrypt with quick crypt';
        }
-       return JSON.stringify(result, null, indent);
+       return JSON.stringify(result, null, format == 'indent' ? 3 : 0);
     }
  }
 

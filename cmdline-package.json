@@ -18,6 +18,7 @@
     "typescript": "~5.4.2"
   },
   "dependencies": {
+    "@inquirer/prompts": "^7.1.0",
     "libsodium-wrappers": "^0.7.15",
     "yargs": "^17.7.2"
   }
