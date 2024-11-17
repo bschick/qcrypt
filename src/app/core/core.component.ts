@@ -812,7 +812,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          const cipherStream = await this.makeCipherStream(clearStream);
          if (cipherStream) {
             const cipherData = await readStreamAll(cipherStream);
-            const cipherArmor = makeCipherArmor(cipherData, this.ctFormat, this.reminder, this.ctFormat == 'indent' ? 3 : 0);
+            const cipherArmor = makeCipherArmor(cipherData, this.ctFormat, this.reminder);
             this.showCipherArmorAndTime(cipherArmor);
             this.toastMessage('Congratulations, data encrypted');
 
@@ -1024,6 +1024,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
          if (this.cipherFile) {
             if (this.cipherFile.type.includes('json') && this.cipherFile.size > cc.CLEAR_DATA_MAX_BYTES) {
+               // limited because it will all be read into memory at once
                this.showClearError(`File must be smaller than ${Math.round(cc.CLEAR_DATA_MAX_BYTES / 1024 / 1024)} MB`);
                return;
             }
@@ -1034,6 +1035,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             }
          } else {
             if (this.cipherArmor.length > cc.CLEAR_DATA_MAX_BYTES) {
+               // limited because it will all be read into memory at once
                this.showClearError(`Data must be smaller than ${Math.round(cc.CLEAR_DATA_MAX_BYTES / 1024 / 1024)} MB`);
                return;
             }
@@ -1220,7 +1222,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.cipherArmor) {
          try {
             const cipherData = parseCipherArmor(this.cipherArmor);
-            this.showCipherArmor(makeCipherArmor(cipherData, this.ctFormat, this.reminder, this.ctFormat == 'indent' ? 3 : 0));
+            this.showCipherArmor(makeCipherArmor(cipherData, this.ctFormat, this.reminder));
          } catch (err) {
             console.error(err);
          }
