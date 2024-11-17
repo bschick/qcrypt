@@ -173,9 +173,9 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'Is there a command-line version of Quick Crypt?',
       answer: `Yes, there is a command-line tool that can decrypt, encrypt, and
-      show cipher data information. You can run this tool on your system without
+      show cipher data information on your system without
       accessing the Quick Crypt website. To use the command-line tool to decrypt
-      data you need the user credential from your recovery link and the password
+      data, you need the user credential from your recovery link and the password
       you used during encryption. Just
       <a href="https://github.com/bschick/qcrypt/tree/main/shell" target="_blank">
       download the qcrypt.cjs file</a>, ensure you have
