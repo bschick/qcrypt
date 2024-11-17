@@ -52,7 +52,7 @@ export const CLEAR_DATA_MAX_BYTES = PAYLOAD_SIZE_MAX - ADDIONTAL_DATA_MAX_BYTES;
 
 export const LP_MAX = 16;
 export const ICOUNT_MIN = 400000;
-export const ICOUNT_DEFAULT = 800000;
+export const ICOUNT_DEFAULT = 1000000;
 export const ICOUNT_MAX = 4294000000; // limited to 4 bytes unsigned rounded to millions
 
 // Change version number when the encoding format changes or we add a new
