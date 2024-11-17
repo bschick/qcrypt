@@ -69,7 +69,7 @@ import {
 
        // turn baseUrl ecoded CT w/o json into json
        if (!trimmed.startsWith('{')) {
-          trimmed = `{"ct":"${trimmed.replace(/[''""]/g, '')}"}`;
+          trimmed = `{"ct":"${trimmed.replace(/[''""]/g, '').trim()}"}`;
        }
        var jsonParts = JSON.parse(trimmed);
     } catch (err) {
