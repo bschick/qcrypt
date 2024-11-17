@@ -2,6 +2,7 @@ import sodium from 'libsodium-wrappers';
 import { decryptStream, encryptStream, getCipherStreamInfo } from './app/services/cipher-streams';
 import { makeCipherArmor, parseCipherArmor } from './app/core/armor';
 import { base64ToBytes, bytesToBase64, readStreamAll } from './app/services/utils';
+import * as cc from './app/services/cipher.consts';
 import fs from 'fs';
 import ws from 'node:stream/web';
 import yargs from 'yargs/yargs';
@@ -155,23 +156,21 @@ async function encrypt(args: {
 
       let alg = !args.alg ? await select({
          message: 'Select Cipher Mode:',
-         choices: [
-            { name: 'AES 256 GCM ', value: 'AES-GCM' },
-            { name: 'XChaCha20 Poly1305', value: 'X20-PLY' },
-            { name: 'AEGIS 256', value: 'AEGIS-256' },
-         ],
+         choices: Object.keys(cc.AlgInfo).map( (key) => {
+            return {name: cc.AlgInfo[key]['description'] as string, value: key};
+          }),
          default: 'X20-PLY'
-      }) : args.alg.toUpperCase();
+      }) : args.alg;
 
-      let iters = !args.iters || args.iters < 400000 ? await number({
+      let iters = !args.iters || args.iters < cc.ICOUNT_MIN ? await number({
          message: 'Password Hash Iterations:',
-         default: 1100000,
-         min: 400000,
+         default: cc.ICOUNT_DEFAULT,
+         min: cc.ICOUNT_MIN,
          required: true
       }) : args.iters;
 
       const econtext = {
-         lpEnd: args.loops,
+         lpEnd: Math.max(Math.min(args.loops, 10), 1),
          alg: alg,
          ic: iters!,
          trueRand: args.trand,
@@ -187,7 +186,7 @@ async function encrypt(args: {
             } else {
                const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} or ${cdinfo.lpEnd}` : '';
                const pwd = await input({ message: `Password${lpMsg}:`, required: true });
-               const hint = await input({ message: `Password Hint${lpMsg}:`, required: true });
+               const hint = await input({ message: `Password Hint${lpMsg}:`, required: false });
                return [pwd, hint];
             }
          },
@@ -296,13 +295,13 @@ const args = yargs(hideBin(process.argv))
       builder: (yargs) => {
          yargs.positional('text', { desc: 'clear text to encrypt (or use -f)' })
             .options({
-               'iters': { alias: 'i', desc: 'password hash iterations (min 400000)' },
-               'alg': { alias: 'a', desc: 'cipher algorithm and mode', choices: ['aes-gcm', 'x20-ply', 'aegis-256'] },
-               'loops': { alias: 'l', desc: 'nested encryption loops', default: 1 },
+               'iters': { alias: 'i', desc: `password hash iterations (min ${cc.ICOUNT_MIN})` },
+               'alg': { alias: 'a', desc: 'cipher algorithm and mode', choices: Object.keys(cc.AlgInfo) },
+               'loops': { alias: 'l', desc: 'nested encryption loops (max 10)', default: 1 },
                'trand': { alias: 't', desc: 'use true random numbers', boolean: true, default: false },
             })
             .coerce({
-               alg: (alg) => alg.toLowerCase(),
+               alg: (alg) => alg.toUpperCase(),
                iters: CoerceNumber,
                loops: CoerceNumber
              })
