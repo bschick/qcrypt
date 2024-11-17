@@ -2,10 +2,14 @@
 
 ## 4.0.1 (not yet released)
 
+Features:
+
+  - added stand-alone command-line tool that can decrypt, encrypt, and show info
+
 Changes:
 
-  - updated to simplewebauthn v11 on client (and server)
-  - added documentation on cipher date binary structure
+  - updated simplewebauthn to v11 on client (and server)
+  - various documentation improvements
 
 ## 4.0.0 (2024-11-10)
 
