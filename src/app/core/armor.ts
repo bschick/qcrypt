@@ -27,7 +27,7 @@ import {
 
  export function makeCipherArmor(
     cipherData: Uint8Array,
-    format: 'compact' | 'indent' | 'link',
+    format: string,
     reminder: boolean = false
 ) : string {
     // Rebuild object to control ordering (better way to do this?)
@@ -69,7 +69,7 @@ import {
 
        // turn baseUrl ecoded CT w/o json into json
        if (!trimmed.startsWith('{')) {
-          trimmed = `{"ct":"${trimmed.replaceAll('"', '')}"}`;
+          trimmed = `{"ct":"${trimmed.replace(/[''""]/g, '')}"}`;
        }
        var jsonParts = JSON.parse(trimmed);
     } catch (err) {
