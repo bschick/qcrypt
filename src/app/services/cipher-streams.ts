@@ -35,11 +35,10 @@ import { browserSupportsBytesStream, streamWriteBYOD } from './utils';
 export {CipherDataInfo, PWDProvider};
 
 export type EContext = {
-   readonly alg: string;
+   readonly algs: string[];
    readonly ic: number;
    readonly trueRand: boolean;
    readonly fallbackRand: boolean;
-   readonly lpEnd: number;
 };
 
 
@@ -66,17 +65,20 @@ async function _encryptStreamImpl(
    lp: number
 ): Promise<ReadableStream<Uint8Array>> {
 
-   if (!Ciphers.validateAlg(econtext.alg)) {
-      throw new Error('Invalid alg of: ' + econtext.alg);
+   if (lp < 1 || lp > econtext.algs.length) {
+      throw new Error('Invalid loop of: ' + lp);
+   }
+   if (econtext.algs.length > cc.LP_MAX) {
+      throw new Error('Invalid loop end of: ' + econtext.algs.length);
+   }
+
+   const alg = econtext.algs[lp - 1];
+
+   if (!Ciphers.validateAlg(alg)) {
+      throw new Error('Invalid alg of: ' + alg);
    }
    if (econtext.ic < cc.ICOUNT_MIN || econtext.ic > cc.ICOUNT_MAX) {
       throw new Error('Invalid ic of: ' + econtext.ic);
-   }
-   if (econtext.lpEnd > cc.LP_MAX) {
-      throw new Error('Invalid loop end of: ' + econtext.lpEnd);
-   }
-   if (lp < 1 || lp > econtext.lpEnd) {
-      throw new Error('Invalid loop of: ' + lp);
    }
    if (!econtext.trueRand && !econtext.fallbackRand) {
       throw new Error('Either trueRand or fallbackRand must be true');
@@ -89,7 +91,9 @@ async function _encryptStreamImpl(
 
    const eparams: EParams = {
       ...econtext,
-      lp
+      alg: alg,
+      lp,
+      lpEnd: econtext.algs.length
    };
 
    let cipherStream = new ReadableStream({
@@ -118,7 +122,7 @@ async function _encryptStreamImpl(
       }
    });
 
-   if (lp < econtext.lpEnd) {
+   if (lp < econtext.algs.length) {
       cipherStream = await _encryptStreamImpl(
          econtext,
          pwdProvider,

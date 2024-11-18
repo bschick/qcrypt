@@ -5,6 +5,7 @@ import { base64ToBytes, bytesToBase64, readStreamAll } from './app/services/util
 import * as cc from './app/services/cipher.consts';
 import fs from 'fs';
 import ws from 'node:stream/web';
+import { Readable } from 'node:stream';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import { input, select, number } from '@inquirer/prompts';
@@ -143,7 +144,7 @@ async function encrypt(args: {
    infile?: string,
    outfile?: string,
    iters?: number,
-   alg?: string,
+   algs?: string,
    trand: boolean,
    loops: number,
    debug?: boolean
@@ -154,13 +155,38 @@ async function encrypt(args: {
       const userCred = await getUserCred(args);
       const clearStream = await getClearStream(args);
 
-      let alg = !args.alg ? await select({
-         message: 'Select Cipher Mode:',
-         choices: Object.keys(cc.AlgInfo).map( (key) => {
-            return {name: cc.AlgInfo[key]['description'] as string, value: key};
-          }),
-         default: 'X20-PLY'
-      }) : args.alg;
+      let defAlg = 'X20-PLY';
+      let keys = Object.keys(cc.AlgInfo);
+      let choices = keys.map( (key) => {
+         return {name: cc.AlgInfo[key]['description'] as string, value: key};
+       });
+
+       let algs = [];
+
+       for( let l = 1; l <= args.loops; l++) {
+         const lpMsg = args.loops > 1 ? ` for loop ${l} or ${args.loops}` : '';
+         let alg;
+         if(args.algs && args.algs[l-1] ) {
+            alg = args.algs[l-1];
+            // Show pre-supplied values
+            await input(
+               { message: `Select Cipher Mode${lpMsg}:`},
+               { input: Readable.from(cc.AlgInfo[alg]['description'] as string + '\n') }
+            );
+         } else {
+            alg = await select({
+               message: `Select Cipher Mode${lpMsg}:`,
+               choices: choices,
+               default: defAlg
+            });
+         }
+
+         do {
+            defAlg = keys[(Math.random() * keys.length) | 0]
+         } while(defAlg == alg);
+
+         algs.push(alg);
+      }
 
       let iters = !args.iters || args.iters < cc.ICOUNT_MIN ? await number({
          message: 'Password Hash Iterations:',
@@ -171,7 +197,7 @@ async function encrypt(args: {
 
       const econtext = {
          lpEnd: Math.max(Math.min(args.loops, 10), 1),
-         alg: alg,
+         algs: algs,
          ic: iters!,
          trueRand: args.trand,
          fallbackRand: true
@@ -181,10 +207,15 @@ async function encrypt(args: {
          econtext,
          async (cdinfo) => {
             const pos = cdinfo.lp - 1;
+            const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} or ${cdinfo.lpEnd}` : '';
             if (args.pwds && pos < args.pwds.length) {
+               // Show pre-supplied values (no hints for pre-supplied pwds)
+               await input(
+                  { message: `Password${lpMsg}:` },
+                  { input: Readable.from(args.pwds[pos] + '\n') }
+               );
                return [args.pwds[pos], undefined];
             } else {
-               const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} or ${cdinfo.lpEnd}` : '';
                const pwd = await input({ message: `Password${lpMsg}:`, required: true });
                const hint = await input({ message: `Password Hint${lpMsg}:`, required: false });
                return [pwd, hint];
@@ -229,10 +260,15 @@ async function decrypt(args: {
       const clearStream = await decryptStream(
          async (cdinfo) => {
             const pos = cdinfo.lpEnd - cdinfo.lp;
+            const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} or ${cdinfo.lpEnd}` : '';
             if (args.pwds && pos < args.pwds.length) {
+               // Show pre-supplied values (no hints for pre-supplied pwds)
+               await input(
+                  { message: `Password${lpMsg}:` },
+                  { input: Readable.from(args.pwds[pos] + '\n') }
+               );
                return [args.pwds[pos], undefined];
             } else {
-               const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} or ${cdinfo.lpEnd}` : '';
                const hintMsg = cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '';
                return [await input({ message: `Password${lpMsg}${hintMsg}:`, required: true }), undefined];
             }
@@ -296,12 +332,12 @@ const args = yargs(hideBin(process.argv))
          yargs.positional('text', { desc: 'clear text to encrypt (or use -f)' })
             .options({
                'iters': { alias: 'i', desc: `password hash iterations (min ${cc.ICOUNT_MIN})` },
-               'alg': { alias: 'a', desc: 'cipher algorithm and mode', choices: Object.keys(cc.AlgInfo) },
+               'algs': { alias: 'a', desc: 'encryption cipher mode(s)', array: true, choices: Object.keys(cc.AlgInfo) },
                'loops': { alias: 'l', desc: 'nested encryption loops (max 10)', default: 1 },
                'trand': { alias: 't', desc: 'use true random numbers', boolean: true, default: false },
             })
             .coerce({
-               alg: (alg) => alg.toUpperCase(),
+               algs: (algs) => algs.map( (alg:string) => alg.toUpperCase() ),
                iters: CoerceNumber,
                loops: CoerceNumber
              })
@@ -318,6 +354,15 @@ const args = yargs(hideBin(process.argv))
    .conflicts('infile', 'text')
    .version(false)
    .wrap(95)
+   .check((args, options) => {
+      if(args.algs && (args.algs.length > args.loops)) {
+         throw new Error(`${args.algs.length} algs provided for ${args.loops} loops`);
+      }
+      if(args.pwds && (args.pwds.length > args.loops)) {
+         throw new Error(`${args.pwds.length} pwds provided for ${args.loops} loops`);
+      }
+      return true;
+   })
    .demandCommand(1).parse();
 
 if(args.debug) {
