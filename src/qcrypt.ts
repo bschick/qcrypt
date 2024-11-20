@@ -8,7 +8,7 @@ import ws from 'node:stream/web';
 import { Readable } from 'node:stream';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
-import { input, select, number } from '@inquirer/prompts';
+import { input, select, number, password } from '@inquirer/prompts';
 
 let piped: string;
 
@@ -38,7 +38,7 @@ async function writeToFile(
 }
 
 async function getUserCred(args: {
-   cred: string
+   cred?: string
 }): Promise<Uint8Array> {
 
    let credText = args.cred ?? await input({ message: 'User Credential:', required: true });
@@ -96,11 +96,12 @@ async function getClearStream(args: {
 }
 
 async function info(args: {
-   cred: string,
+   cred?: string,
    text?: string,
-   pwds?: string,
+   pwds?: string[],
    infile?: string,
    outfile?: string,
+   silent?: boolean,
    debug?: boolean
 }): Promise<string> {
 
@@ -114,7 +115,7 @@ async function info(args: {
          cipherStream
       );
 
-      returnText =`Cipher and Mode   : ${cdInfo.alg}
+      returnText = `Cipher and Mode   : ${cc.AlgInfo[cdInfo.alg]['description']}
 PBKDF2 Iterations : ${cdInfo.ic}
 Salt (b64Url)     : ${bytesToBase64(cdInfo.slt)}
 IV/Nonce (b64Url) : ${bytesToBase64(cdInfo.iv)}
@@ -129,7 +130,7 @@ Version           : ${cdInfo.ver}\n`;
    }
    catch (err) {
       console.error('\nget info failed: ', err.message);
-      if(args.debug) {
+      if (args.debug) {
          console.error(err);
       }
    }
@@ -137,8 +138,26 @@ Version           : ${cdInfo.ver}\n`;
    return returnText;
 }
 
+async function getPwd(
+   lpMsg: string,
+   args: {
+      silent?: boolean,
+      debug?: boolean
+   }): Promise<string> {
+   const pwd = await input({ message: `Password${lpMsg}:`, required: true },
+      { clearPromptOnDone: true }
+   );
+   if (!args.silent) {
+      await input(
+         { message: `Password${lpMsg}:` },
+         { input: Readable.from('******\n') }
+      );
+   }
+   return pwd;
+}
+
 async function encrypt(args: {
-   cred: string,
+   cred?: string,
    text?: string,
    pwds?: string[],
    infile?: string,
@@ -147,6 +166,7 @@ async function encrypt(args: {
    algs?: string,
    trand: boolean,
    loops: number,
+   silent?: boolean,
    debug?: boolean
 }): Promise<string> {
 
@@ -157,22 +177,24 @@ async function encrypt(args: {
 
       let defAlg = 'X20-PLY';
       let keys = Object.keys(cc.AlgInfo);
-      let choices = keys.map( (key) => {
-         return {name: cc.AlgInfo[key]['description'] as string, value: key};
-       });
+      let choices = keys.map((key) => {
+         return { name: cc.AlgInfo[key]['description'] as string, value: key };
+      });
 
-       let algs = [];
+      let algs = [];
 
-       for( let l = 1; l <= args.loops; l++) {
+      for (let l = 1; l <= args.loops; l++) {
          const lpMsg = args.loops > 1 ? ` for loop ${l} or ${args.loops}` : '';
          let alg;
-         if(args.algs && args.algs[l-1] ) {
-            alg = args.algs[l-1];
-            // Show pre-supplied values
-            await input(
-               { message: `Select Cipher Mode${lpMsg}:`},
-               { input: Readable.from(cc.AlgInfo[alg]['description'] as string + '\n') }
-            );
+         if (args.algs && args.algs[l - 1]) {
+            alg = args.algs[l - 1];
+            // Show pre-supplied values if not silient
+            if (!args.silent) {
+               await input(
+                  { message: `Select Cipher Mode${lpMsg}:` },
+                  { input: Readable.from(cc.AlgInfo[alg]['description'] as string + '\n') }
+               );
+            }
          } else {
             alg = await select({
                message: `Select Cipher Mode${lpMsg}:`,
@@ -183,7 +205,7 @@ async function encrypt(args: {
 
          do {
             defAlg = keys[(Math.random() * keys.length) | 0]
-         } while(defAlg == alg);
+         } while (defAlg == alg);
 
          algs.push(alg);
       }
@@ -209,14 +231,16 @@ async function encrypt(args: {
             const pos = cdinfo.lp - 1;
             const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} or ${cdinfo.lpEnd}` : '';
             if (args.pwds && pos < args.pwds.length) {
-               // Show pre-supplied values (no hints for pre-supplied pwds)
-               await input(
-                  { message: `Password${lpMsg}:` },
-                  { input: Readable.from(args.pwds[pos] + '\n') }
-               );
-               return [args.pwds[pos], undefined];
+               // Show that we pre-supplied values (no hints for pre-supplied pwds)
+               if (!args.silent) {
+                  await input(
+                     { message: `Password${lpMsg}:` },
+                     { input: Readable.from('******\n') }
+                  );
+               }
+               return [args.pwds[pos]!, undefined];
             } else {
-               const pwd = await input({ message: `Password${lpMsg}:`, required: true });
+               const pwd = await getPwd(lpMsg, args);
                const hint = await input({ message: `Password Hint${lpMsg}:`, required: false });
                return [pwd, hint];
             }
@@ -235,7 +259,7 @@ async function encrypt(args: {
    }
    catch (err) {
       console.error('\nencryption failed: ', err.message);
-      if(args.debug) {
+      if (args.debug) {
          console.error(err);
       }
    }
@@ -244,11 +268,12 @@ async function encrypt(args: {
 }
 
 async function decrypt(args: {
-   cred: string,
+   cred?: string,
    text?: string,
    pwds?: string[],
    infile?: string,
    outfile?: string,
+   silent?: boolean,
    debug?: boolean
 }): Promise<string> {
 
@@ -263,14 +288,16 @@ async function decrypt(args: {
             const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} or ${cdinfo.lpEnd}` : '';
             if (args.pwds && pos < args.pwds.length) {
                // Show pre-supplied values (no hints for pre-supplied pwds)
-               await input(
-                  { message: `Password${lpMsg}:` },
-                  { input: Readable.from(args.pwds[pos] + '\n') }
-               );
-               return [args.pwds[pos], undefined];
+               if (!args.silent) {
+                  await input(
+                     { message: `Password${lpMsg}:` },
+                     { input: Readable.from('******\n') }
+                  );
+               } return [args.pwds[pos], undefined];
             } else {
-               const hintMsg = cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '';
-               return [await input({ message: `Password${lpMsg}${hintMsg}:`, required: true }), undefined];
+               const hintMsg = lpMsg + cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '';
+               const pwd = await getPwd(hintMsg, args);
+               return [pwd, undefined];
             }
          },
          userCred,
@@ -286,7 +313,7 @@ async function decrypt(args: {
    }
    catch (err) {
       console.error('\ndecryption failed: ', err.message);
-      if(args.debug) {
+      if (args.debug) {
          console.error(err);
       }
    }
@@ -296,7 +323,7 @@ async function decrypt(args: {
 
 function CoerceNumber(val: any) {
    let num = Number(val);
-   if(isNaN(num)) {
+   if (isNaN(num)) {
       throw new Error(`${val} is not a number`);
    }
    return num;
@@ -331,41 +358,43 @@ const args = yargs(hideBin(process.argv))
       builder: (yargs) => {
          yargs.positional('text', { desc: 'clear text to encrypt (or use -f)' })
             .options({
-               'iters': { alias: 'i', desc: `password hash iterations (min ${cc.ICOUNT_MIN})` },
-               'algs': { alias: 'a', desc: 'encryption cipher mode(s)', array: true, choices: Object.keys(cc.AlgInfo) },
-               'loops': { alias: 'l', desc: 'nested encryption loops (max 10)', default: 1 },
+               'iters': { alias: 'i', desc: `password hash iterations (min ${cc.ICOUNT_MIN})`, type: 'number' },
+               'algs': { alias: 'a', desc: 'encryption cipher mode(s)', type: 'string', array: true, choices: Object.keys(cc.AlgInfo) },
+               'loops': { alias: 'l', desc: 'nested encryption loops (max 10)', type: 'number', default: 1 },
                'trand': { alias: 't', desc: 'use true random numbers', boolean: true, default: false },
             })
             .coerce({
-               algs: (algs) => algs.map( (alg:string) => alg.toUpperCase() ),
+               algs: (algs) => algs.map((alg: string) => alg.toUpperCase()),
                iters: CoerceNumber,
                loops: CoerceNumber
-             })
+            })
             .example('$0 enc -c 97jQeo8N16L4vhKzWy7ys -f doc.txt', ': prints encrypted text of doc.txt');
       }
    })
    .options({
-      'cred': { alias: 'c', desc: 'user credential from recovery url', nargs: 1 },
-      'infile': { alias: 'f', desc: 'read input from file' },
-      'outfile': { alias: 'o', desc: 'save output to file' },
-      'pwds': { alias: 'p', desc: 'password(s)', array: true },
-      'debug': { alias: 'd', desc: 'show debug info', boolean: true}
+      'cred': { alias: 'c', desc: 'user credential from recovery url', type: 'string', nargs: 1 },
+      'infile': { alias: 'f', desc: 'read input from file', type: 'string' },
+      'outfile': { alias: 'o', desc: 'save output to file', type: 'string' },
+      'pwds': { alias: 'p', desc: 'password(s)', type: 'string', array: true },
+      'silent': { alias: 's', desc: 'show fewer message', boolean: true },
+      'debug': { alias: 'd', desc: 'show debug info', boolean: true }
    })
    .conflicts('infile', 'text')
+   .conflicts('debug', 'silent')
    .version(false)
    .wrap(95)
    .check((args, options) => {
-      if(args.algs && (args.algs.length > args.loops)) {
+      if (args.algs && (args.algs.length > args.loops)) {
          throw new Error(`${args.algs.length} algs provided for ${args.loops} loops`);
       }
-      if(args.pwds && (args.pwds.length > args.loops)) {
+      if (args.pwds && (args.pwds.length > args.loops)) {
          throw new Error(`${args.pwds.length} pwds provided for ${args.loops} loops`);
       }
       return true;
    })
    .demandCommand(1).parse();
 
-if(args.debug) {
+if (args.debug) {
    console.log('args ->', args);
 }
 
@@ -377,7 +406,7 @@ async function main() {
    // this part works, but then the prompts error out.
    try {
       piped = fs.readFileSync(process.stdin.fd, 'utf-8');
-   } catch (err) {}
+   } catch (err) { }
 
    if (args._.length && args._[0] === 'info') {
       const infoText = await info(args);

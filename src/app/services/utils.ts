@@ -376,7 +376,6 @@ export async function selectWriteableFile(baseName?: string): Promise<FileSystem
    return selectWriteableFileImpl(options);
 }
 
-
 export async function selectWriteableJsonFile(baseName?: string): Promise<FileSystemFileHandle> {
    const suggested = baseName ? `${baseName}.json` : '';
    const options = {
@@ -446,6 +445,7 @@ export class Random48 {
       } else {
          const lastCache = this._trueRandCache;
          this._trueRandCache = this.downloadTrueRand();
+
          return lastCache.then(async (response) => {
             if (!response.ok) {
                const bdy = await response.text();
@@ -458,7 +458,6 @@ export class Random48 {
             }
             return new Uint8Array(array!);
          }).catch((err) => {
-            console.error(err);
             // If pseudo random fallback is disabled, then throw error
             if (!fallback) {
                throw new Error('no connection to random.org and no fallback: ' + err.message);
@@ -468,22 +467,22 @@ export class Random48 {
       }
    }
 
-   async downloadTrueRand(): Promise<Response> {
+   downloadTrueRand() : Promise<Response> {
+      let p: Promise<Response>;
+
       if (this._testing) {
-         return Promise.reject();
+         p = Promise.reject('testing mode');
+      } else {
+         const url = 'https://www.random.org/cgi-bin/randbyte?nbytes=' + 48;
+         p = fetch(url, {
+               cache: 'no-store'
+         });
       }
 
-      const url = 'https://www.random.org/cgi-bin/randbyte?nbytes=' + 48;
-      try {
-         const p = fetch(url, {
-            cache: 'no-store'
-         });
-         return p;
-      } catch (err) {
-         // According to the docs, this should not happend but it seems to sometimes
-         // (perfhaps just on nodejs, but not sure)
-         console.error('wtf fetch, ', err);
-         return Promise.reject();
-      }
+      // I guess you cannot have dangling promises that might reject
+      // https://stackoverflow.com/questions/59060508/how-to-handle-an-unhandled-promise-rejection-asynchronously
+      // So just ignore it if complete before check in getRandomArray later
+      p.catch(()=> null);
+      return p;
    }
 }
