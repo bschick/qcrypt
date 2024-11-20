@@ -51,6 +51,7 @@ import { BubbleDirective } from '../ui/bubble/bubble.directive';
 import * as cc from '../services/cipher.consts';
 import { bytesToBase64 } from '../services/utils';
 import { CipherService, CipherDataInfo } from '../services/cipher.service';
+import { MatTableModule } from '@angular/material/table';
 
 
 export type PwdDialogData = {
@@ -249,6 +250,38 @@ export class SigninDialog {
       this.authSvc.forgetUserInfo();
       this.router.navigateByUrl('/welcome');
       this.dialogRef.close(null);
+   }
+
+}
+
+@Component({
+   selector: 'loop-algs.dialog',
+   templateUrl: './loop-algs.dialog.html',
+   styleUrl: './core.dialogs.scss',
+   standalone: true,
+   imports: [MatDialogModule, MatIconModule, CommonModule, NgIf,
+      MatButtonModule, MatTableModule],
+})
+
+export class LoopsAlgsDialog {
+
+   public algs;
+   public displayedColumns: string[] = ['loop', 'algorithm'];
+
+   constructor(
+      private r2: Renderer2,
+      private cipherSvc: CipherService,
+      public dialogRef: MatDialogRef<LoopsAlgsDialog>,
+      @Inject(MAT_DIALOG_DATA) public algList: string[]
+   ) {
+      let loop = 1;
+      this.algs = algList.map( (alg) => {
+         return { loop: loop, alg: alg};
+      });
+   }
+
+   onAcceptClicked() {
+      this.dialogRef.close();
    }
 
 }

@@ -943,9 +943,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       clearStream: ReadableStream<Uint8Array>
    ): Promise<ReadableStream<Uint8Array>> {
 
+      // Place holder for dev...
+      const algs = Array(this.loops).fill(this.algorithm);
+
       const econtext = {
-         lpEnd: this.loops,
-         alg: this.algorithm,
+         algs: algs,
          ic: this.icount,
          trueRand: this.trueRand,
          fallbackRand: this.pseudoRand
