@@ -196,11 +196,13 @@ async function encrypt(args: {
                );
             }
          } else {
-            alg = await select({
-               message: `Select Cipher Mode${lpMsg}:`,
-               choices: choices,
-               default: defAlg
-            });
+            alg = defAlg;
+            if (!args.silent) {
+               alg = await select({
+                  message: `Select Cipher Mode${lpMsg}:`,
+                  choices: choices,
+                  default: defAlg
+            });}
          }
 
          do {
@@ -241,7 +243,11 @@ async function encrypt(args: {
                return [args.pwds[pos]!, undefined];
             } else {
                const pwd = await getPwd(lpMsg, args);
-               const hint = await input({ message: `Password Hint${lpMsg}:`, required: false });
+               let hint;
+               // Don't ask for hints in silent mode
+               if(!args.silent) {
+                  hint = await input({ message: `Password Hint${lpMsg}:`, required: false });
+               }
                return [pwd, hint];
             }
          },
@@ -376,7 +382,7 @@ const args = yargs(hideBin(process.argv))
       'infile': { alias: 'f', desc: 'read input from file', type: 'string' },
       'outfile': { alias: 'o', desc: 'save output to file', type: 'string' },
       'pwds': { alias: 'p', desc: 'password(s)', type: 'string', array: true },
-      'silent': { alias: 's', desc: 'show fewer message', boolean: true },
+      'silent': { alias: 's', desc: 'ask for only required input and show fewer messages', boolean: true },
       'debug': { alias: 'd', desc: 'show debug info', boolean: true }
    })
    .conflicts('infile', 'text')
