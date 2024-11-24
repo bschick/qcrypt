@@ -175,7 +175,7 @@ async function encrypt(args: {
       const userCred = await getUserCred(args);
       const clearStream = await getClearStream(args);
 
-      let defAlg = 'X20-PLY';
+      let nextAlg = 'X20-PLY';
       let keys = Object.keys(cc.AlgInfo);
       let choices = keys.map((key) => {
          return { name: cc.AlgInfo[key]['description'] as string, value: key };
@@ -196,18 +196,18 @@ async function encrypt(args: {
                );
             }
          } else {
-            alg = defAlg;
+            alg = nextAlg;
             if (!args.silent) {
                alg = await select({
                   message: `Select Cipher Mode${lpMsg}:`,
                   choices: choices,
-                  default: defAlg
+                  default: nextAlg
             });}
          }
 
          do {
-            defAlg = keys[(Math.random() * keys.length) | 0]
-         } while (defAlg == alg);
+            nextAlg = keys[(Math.random() * keys.length) | 0]
+         } while (nextAlg == alg);
 
          algs.push(alg);
       }
