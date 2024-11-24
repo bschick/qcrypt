@@ -851,7 +851,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       } catch (something) {
          if (!ProcessCancelled.isProcessCancelled(something)) {
             console.error(something);
-            this.showCipherError('Could not encrypt text');
+            let msg = 'Could not encrypt text';
+            if(something instanceof Error) {
+               msg += ` because:</br>${something.message}`;
+            }
+            this.showCipherError(msg);
          }
          if (!this.welcomed) {
             this.bubbleTip2.show();
@@ -932,7 +936,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       } catch (something) {
          if (!ProcessCancelled.isProcessCancelled(something)) {
             console.error(something);
-            this.showCipherError('Could not encrypt text');
+            let msg = 'Could not encrypt text';
+            if(something instanceof Error) {
+               msg += ` because:</br>${something.message}`;
+            }
+            this.showCipherError(msg);
          }
          if (!this.welcomed) {
             this.bubbleTip2.show();

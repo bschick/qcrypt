@@ -425,12 +425,14 @@ export async function selectWriteableTxtFile(baseName?: string): Promise<FileSys
 }
 
 export class Random48 {
-   private _trueRandCache: Promise<Response>;
+   private static _trueRandCache: Promise<Response>;
    private _testing: boolean;
 
    constructor(testing: boolean) {
       this._testing = testing;
-      this._trueRandCache = this.downloadTrueRand();
+      if(!Random48._trueRandCache) {
+         Random48._trueRandCache = this.downloadTrueRand();
+      }
    }
 
    async getRandomArray(
@@ -443,8 +445,8 @@ export class Random48 {
          }
          return crypto.getRandomValues(new Uint8Array(48));
       } else {
-         const lastCache = this._trueRandCache;
-         this._trueRandCache = this.downloadTrueRand();
+         const lastCache = Random48._trueRandCache;
+         Random48._trueRandCache = this.downloadTrueRand();
 
          return lastCache.then(async (response) => {
             if (!response.ok) {
@@ -454,13 +456,13 @@ export class Random48 {
             return response.arrayBuffer();
          }).then((array) => {
             if (array.byteLength != 48) {
-               throw new Error('missing bytes from random.org');
+               throw new Error('Missing bytes from random.org');
             }
             return new Uint8Array(array!);
          }).catch((err) => {
             // If pseudo random fallback is disabled, then throw error
             if (!fallback) {
-               throw new Error('no connection to random.org and no fallback: ' + err.message);
+               throw new Error('No connection to random.org and pseudo random disabled');
             }
             return crypto.getRandomValues(new Uint8Array(48));
          });
