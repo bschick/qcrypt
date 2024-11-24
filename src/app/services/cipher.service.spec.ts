@@ -136,11 +136,10 @@ describe("Stream encryption and decryption", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
          const econtext = {
-            alg: alg,
+            algs: [alg],
             ic: cc.ICOUNT_MIN,
             trueRand: false,
-            fallbackRand: true,
-            lpEnd: 1
+            fallbackRand: true
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -194,11 +193,10 @@ describe("Stream encryption and decryption", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
          const econtext = {
-            alg: alg,
+            algs: [alg],
             ic: cc.ICOUNT_MIN,
             trueRand: false,
-            fallbackRand: true,
-            lpEnd: 1
+            fallbackRand: true
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -251,11 +249,10 @@ describe("Stream encryption and decryption", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
          const econtext = {
-            alg: alg,
+            algs: Array(maxLps).fill(alg),
             ic: cc.ICOUNT_MIN,
             trueRand: false,
-            fallbackRand: true,
-            lpEnd: maxLps
+            fallbackRand: true
          };
 
          let expectedEncLp = 1;
@@ -299,6 +296,61 @@ describe("Stream encryption and decryption", function () {
       }
    });
 
+   it("successful round trip, mixed algorithms, loops", async function () {
+
+      const algKeys = Object.keys(cc.AlgInfo);
+      const maxLps = algKeys.length;
+
+      const srcString = 'This is a secret 🦆';
+      const [clearStream, clearData] = streamFromStr(srcString);
+      const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+
+      const econtext = {
+         algs: algKeys,
+         ic: cc.ICOUNT_MIN,
+         trueRand: false,
+         fallbackRand: true
+      };
+
+      let expectedEncLp = 1;
+
+      const cipherStream = await cipherSvc.encryptStream(
+         econtext,
+         async (cdinfo) => {
+            console.log(cdinfo.lp, cdinfo.lpEnd, expectedEncLp);
+            expect(cdinfo.lp).toEqual(expectedEncLp);
+            expect(cdinfo.lpEnd).toEqual(maxLps);
+            expect(cdinfo.alg).toEqual(algKeys[cdinfo.lp - 1]);
+            expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+            expect(cdinfo.hint).toBeFalsy();
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            expectedEncLp += 1;
+            return [String(cdinfo.lp), String(cdinfo.lp)];
+         },
+         userCred,
+         clearStream
+      );
+
+      let expectedDecLp = maxLps;
+
+      const decrypted = await cipherSvc.decryptStream(
+         async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(expectedDecLp);
+            expect(cdinfo.lpEnd).toEqual(maxLps);
+            expect(cdinfo.alg).toEqual(algKeys[cdinfo.lp - 1]);
+            expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+            expect(cdinfo.hint).toEqual(String(cdinfo.lp));
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            expectedDecLp -= 1;
+            return [cdinfo.hint!, undefined];
+         },
+         userCred,
+         cipherStream
+      );
+
+      const resString = await readStreamAll(decrypted, true);
+      expect(resString).toEqual(srcString);
+   });
 
    it("confirm successful version decryption, v1", async function () {
       // These are generated with running website
@@ -490,11 +542,10 @@ describe("Stream encryption and decryption", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
          const econtext = {
-            alg: alg,
+            algs: [alg],
             ic: cc.ICOUNT_MIN,
             trueRand: false,
-            fallbackRand: true,
-            lpEnd: 1
+            fallbackRand: true
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -539,11 +590,10 @@ describe("Stream encryption and decryption", function () {
             const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
             const econtext = {
-               alg: alg,
+               algs: Array(maxLps).fill(alg),
                ic: cc.ICOUNT_MIN,
                trueRand: false,
-               fallbackRand: true,
-               lpEnd: maxLps
+               fallbackRand: true
             };
 
             let expectedEncLp = 1;
@@ -619,11 +669,10 @@ describe("Stream encryption and decryption", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
          const econtext = {
-            alg: alg,
+            algs: [alg],
             ic: cc.ICOUNT_MIN,
             trueRand: false,
-            fallbackRand: true,
-            lpEnd: 1
+            fallbackRand: true
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -665,11 +714,10 @@ describe("Stream encryption and decryption", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
          const econtext = {
-            alg: alg,
+            algs: [alg],
             ic: cc.ICOUNT_MIN,
             trueRand: false,
-            fallbackRand: true,
-            lpEnd: 1
+            fallbackRand: true
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -728,11 +776,10 @@ describe("Stream encryption and decryption", function () {
       const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
       const econtext = {
-         alg: 'AES-GCM',
+         algs: ['AES-GCM'],
          ic: cc.ICOUNT_MIN,
          trueRand: false,
-         fallbackRand: true,
-         lpEnd: 1
+         fallbackRand: true
       };
 
       let cipherStream = await cipherSvc.encryptStream(
@@ -869,7 +916,7 @@ describe("Stream encryption and decryption", function () {
 
       bcontext = {
          ...econtext,
-         alg: 'ABS-GCM'
+         algs: ['ABS-GCM']
       };
 
       await expectAsync(
@@ -888,7 +935,7 @@ describe("Stream encryption and decryption", function () {
 
       bcontext = {
          ...econtext,
-         alg: 'asdfadfsk'
+         algs: ['asdfadfsk']
       };
 
       await expectAsync(
@@ -1411,11 +1458,10 @@ describe("Stream manipulation", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
          const econtext = {
-            alg: alg,
+            algs: [alg],
             ic: cc.ICOUNT_MIN,
             trueRand: false,
-            fallbackRand: true,
-            lpEnd: 1
+            fallbackRand: true
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -1463,11 +1509,10 @@ describe("Stream manipulation", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
          const econtext = {
-            alg: alg,
+            algs: [alg],
             ic: cc.ICOUNT_MIN,
             trueRand: false,
-            fallbackRand: true,
-            lpEnd: 1
+            fallbackRand: true
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -1596,11 +1641,10 @@ describe("Get cipherinfo from cipher text", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
          const econtext = {
-            alg: alg,
+            algs: [alg],
             ic: cc.ICOUNT_MIN,
             trueRand: false,
-            fallbackRand: true,
-            lpEnd: 1
+            fallbackRand: true
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -1638,11 +1682,10 @@ describe("Get cipherinfo from cipher text", function () {
       const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
       const econtext = {
-         alg: 'AEGIS-256',
+         algs: ['AEGIS-256'],
          ic: cc.ICOUNT_MIN,
          trueRand: false,
-         fallbackRand: true,
-         lpEnd: 1
+         fallbackRand: true
       };
 
       const cipherStream = await cipherSvc.encryptStream(
