@@ -79,6 +79,7 @@ import {
    SigninDialog,
 } from './core.dialogs';
 import { BubbleDirective } from '../ui/bubble/bubble.directive';
+import { AlgorithmsComponent } from '../ui/algorithms/algorithms.component';
 import { Subscription } from 'rxjs';
 
 // up to cc.LP_MAX could be supported but even 16 seems excessive
@@ -135,7 +136,7 @@ function setIfBoolean(
       ReactiveFormsModule, ClipboardModule, CdkAccordionModule, MatSlideToggleModule,
       MatExpansionModule, MatSelectModule, MatButtonToggleModule,
       MatTooltipModule, MatRippleModule, CommonModule, BubbleDirective,
-      RouterLink,
+      RouterLink, AlgorithmsComponent
    ],
 })
 export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -187,9 +188,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    @ViewChild('minStrLabel') minStrLabel!: ElementRef;
    @ViewChild('bubbleTip1') bubbleTip1!: BubbleDirective;
    @ViewChild('bubbleTip2') bubbleTip2!: BubbleDirective;
+   @ViewChild('algorithms') algorithms!: AlgorithmsComponent;
 
    // options
-   public algorithm = 'X20-PLY';
+   public algorithm = ['X20-PLY'];
    public icount: number = cc.ICOUNT_DEFAULT; // Default since benchmark is async
    public hidePwd = true;
    public cacheTime = 0;
@@ -235,8 +237,16 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    setAlgorithm(alg: string | null): void {
-      if (this.cipherSvc.validateAlg(alg!)) {
-         this.algorithm = alg!;
+      try {
+         var algs = JSON.parse(alg!);
+      } catch (err) { }
+
+      if (!algs || typeof algs == 'string') {
+         algs = [algs];
+      }
+
+      if (this.cipherSvc.validateAlgs(algs)) {
+         this.algorithm = algs;
       }
    }
 
@@ -299,7 +309,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    setTrueRand(trand: string | null): void {
       setIfBoolean(trand, (bool) => {
          this.trueRand = bool;
-         if(!bool) {
+         if (!bool) {
             this.pseudoRand = true;
          }
       });
@@ -308,7 +318,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    setPseudoRand(prand: string | null): void {
       setIfBoolean(prand, (bool) => {
          this.pseudoRand = bool;
-         if(!bool) {
+         if (!bool) {
             this.trueRand = true;
          }
       });
@@ -442,6 +452,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.optionsLoaded = true;
 
          this.setIcountWarning();
+         // order is important, set modes first
+         this.algorithms.modes = this.algorithm;
+         this.algorithms.count = this.loops;
       }
    }
 
@@ -487,7 +500,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    resetOptions(): void {
-      this.algorithm = 'X20-PLY';
+      this.algorithm = ['X20-PLY'];
       this.icount = this.icountDefault;
       this.hidePwd = true;
       this.cacheTime = 0;
@@ -504,6 +517,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.clearPassword();
       this.saveOptions();
       this.optionsLoaded = false;
+
+      // order is important, set modes first
+      this.algorithms.modes = this.algorithm;
+      this.algorithms.count = this.loops;
    }
 
    nukeOptions(): void {
@@ -531,7 +548,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    saveOptions(): void {
       try {
          if (this.authSvc.isAuthenticated()) {
-            this.lsSet('algorithm', this.algorithm);
+            this.lsSet('algorithm', JSON.stringify(this.algorithm));
             this.lsSet('icount', this.icount.toString());
             this.lsSet('hidepwd', this.hidePwd.toString());
             this.lsSet('cachetime', this.cacheTime.toString());
@@ -625,11 +642,16 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    onLoopsChange() {
       this.loops = Math.max(this.loops, 1);
       this.loops = Math.min(this.loops, this.LOOP_MAX);
+      this.algorithms.count = this.loops;
       this.lsSet('loops', this.loops.toString());
    }
 
-   onAlgorithmChange(value: string): void {
-      this.lsSet('algorithm', this.algorithm);
+   onModesChanged(modes: string[]): void {
+      // Note that modes length is the max number of modes that have
+      // been set, which may be larger than the current # of loops
+      // This is done to preserve default values
+      this.algorithm = modes;
+      this.lsSet('algorithm', JSON.stringify(modes));
    }
 
    onPasswordOptionChange(): void {
@@ -677,7 +699,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    passwordProvider(
       cdInfo: CipherDataInfo,
       encrypting: boolean
-   ) : Promise<[string, string | undefined]> {
+   ): Promise<[string, string | undefined]> {
 
       this.actionStart = Date.now();
 
@@ -943,11 +965,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       clearStream: ReadableStream<Uint8Array>
    ): Promise<ReadableStream<Uint8Array>> {
 
-      // Place holder for dev...
-      const algs = Array(this.loops).fill(this.algorithm);
-
       const econtext = {
-         algs: algs,
+         // Need to slice because modes length is the max number of modes
+         // that have been set, which may be larger than the current # of loops
+         algs: this.algorithms.modes.slice(0, this.loops),
          ic: this.icount,
          trueRand: this.trueRand,
          fallbackRand: this.pseudoRand

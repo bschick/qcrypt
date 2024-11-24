@@ -91,18 +91,14 @@ SOFTWARE. */
   left: 1px;
 }
 
+.alg-help {
+  position: relative;
+  top: -7px;
+}
+
 .open-new-icon2 {
   font-size: 18px;
   position: relative;
-}
-
-.mode {
-  margin: 0 0 12px;
-}
-
-#cipherlink {
-  left: 1px;
-  top: -14px;
 }
 
 #format-link {
@@ -152,8 +148,7 @@ SOFTWARE. */
 
 .options-header1 {
   @extend .options-header;
-  margin-top: 10px;
-
+  margin-top: 5px;
 }
 
 .hash-warning {
@@ -198,6 +193,10 @@ SOFTWARE. */
 
 .flx-item {
   flex: 1;
+}
+
+.algs-area {
+  display: flex;
 }
 
 .dragger {

@@ -1,14 +1,15 @@
 # CHANGELOG.md
 
-## 4.0.1 (not yet released)
+## 4.1.0 (not yet released)
 
 Features:
 
-  - added stand-alone command-line tool that can decrypt, encrypt, and show info
+  - added the ability to set a different cipher mode for each encryption loop
+  - added a stand-alone command-line tool that can decrypt, encrypt, and show info
 
 Changes:
 
-  - updated simplewebauthn to v11 on client (and server)
+  - updated simplewebauthn to v11 in web app (and server)
   - various documentation improvements
 
 ## 4.0.0 (2024-11-10)

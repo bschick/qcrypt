@@ -68,6 +68,15 @@ export class CipherService {
       return [iCount, this._iCountMax, this._hashRate];
    }
 
+   validateAlgs(algs: string[]): boolean {
+      for(let alg of algs) {
+         if(!Ciphers.validateAlg(alg)) {
+            return false;
+         }
+      }
+      return true;
+   }
+
    validateAlg(alg: string): boolean {
       return Ciphers.validateAlg(alg);
    }
