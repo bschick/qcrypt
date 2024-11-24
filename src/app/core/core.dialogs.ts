@@ -253,35 +253,3 @@ export class SigninDialog {
    }
 
 }
-
-@Component({
-   selector: 'loop-algs.dialog',
-   templateUrl: './loop-algs.dialog.html',
-   styleUrl: './core.dialogs.scss',
-   standalone: true,
-   imports: [MatDialogModule, MatIconModule, CommonModule, NgIf,
-      MatButtonModule, MatTableModule],
-})
-
-export class LoopsAlgsDialog {
-
-   public algs;
-   public displayedColumns: string[] = ['loop', 'algorithm'];
-
-   constructor(
-      private r2: Renderer2,
-      private cipherSvc: CipherService,
-      public dialogRef: MatDialogRef<LoopsAlgsDialog>,
-      @Inject(MAT_DIALOG_DATA) public algList: string[]
-   ) {
-      let loop = 1;
-      this.algs = algList.map( (alg) => {
-         return { loop: loop, alg: alg};
-      });
-   }
-
-   onAcceptClicked() {
-      this.dialogRef.close();
-   }
-
-}
