@@ -701,8 +701,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       encrypting: boolean
    ): Promise<[string, string | undefined]> {
 
-      this.actionStart = Date.now();
-
       let pwdResult: Promise<[string, string | undefined]>;
       if (this.pwdCached && cdInfo.lpEnd == 1) {
          this.restartTimer();
@@ -721,7 +719,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          }
       });
 
-      return pwdResult;
+      return pwdResult.then( (res) => {
+         this.actionStart = Date.now();
+         return res;
+      });
    }
 
    async askForPassword(
