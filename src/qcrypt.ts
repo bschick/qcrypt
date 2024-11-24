@@ -8,9 +8,10 @@ import ws from 'node:stream/web';
 import { Readable } from 'node:stream';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
-import { input, select, number, password } from '@inquirer/prompts';
+import { input, select, number } from '@inquirer/prompts';
+import reopenTTY from 'reopen-tty';
 
-let piped: string;
+let ttyStream: fs.ReadStream;
 
 function streamFromBytes(data: Uint8Array): ReadableStream<Uint8Array> {
    const blob = new Blob([data], { type: 'application/octet-stream' });
@@ -41,7 +42,10 @@ async function getUserCred(args: {
    cred?: string
 }): Promise<Uint8Array> {
 
-   let credText = args.cred ?? await input({ message: 'User Credential:', required: true });
+   let credText = args.cred ?? await input(
+      { message: 'User Credential:', required: true },
+      { input: ttyStream }
+   );
    try {
       credText = new URL(credText).searchParams.get('usercred') ?? credText;
    } catch (err) { }
@@ -49,17 +53,20 @@ async function getUserCred(args: {
    return base64ToBytes(credText.trim());
 }
 
-async function getCipherStream(args: {
-   text?: string,
-   infile?: string,
-}): Promise<ReadableStream<Uint8Array>> {
+async function getCipherStream(
+   args: {
+      text?: string,
+      infile?: string,
+   },
+   piped?: string
+): Promise<ReadableStream<Uint8Array>> {
    let stream;
    if (args.infile && !args.infile.endsWith('.json')) {
       const nodeStream = fs.createReadStream(args.infile);
       // This does not produce a byod binary stream... but it still works
       stream = ws.ReadableStream.from(nodeStream) as ReadableStream<Uint8Array>;
    } else {
-      let text = '';
+      let text;
       if (args.infile) {
          // json file containing... json
          const nodeStream = fs.createReadStream(args.infile);
@@ -69,25 +76,35 @@ async function getCipherStream(args: {
          }
       } else {
          text = args.text ?? piped;
-         text = text ?? await input({ message: 'Cipher Armor:', required: true });
+         text = text ?? await input(
+            { message: 'Cipher Armor:', required: true },
+            { input: ttyStream }
+         );
       }
-      stream = streamFromBytes(parseCipherArmor(text));
+      stream = streamFromBytes(parseCipherArmor(text!));
    }
 
    return stream;
 }
 
-async function getClearStream(args: {
-   text?: string,
-   infile?: string,
-}): Promise<ReadableStream<Uint8Array>> {
+async function getClearStream(
+   args: {
+      text?: string,
+      infile?: string,
+   },
+   piped?: string
+): Promise<ReadableStream<Uint8Array>> {
    let stream;
    if (args.infile) {
       const nodeStream = fs.createReadStream(args.infile);
       // This does not produce a byod binary stream... but it still works
       stream = ws.ReadableStream.from(nodeStream) as ReadableStream<Uint8Array>;
    } else {
-      const text = args.text ?? await input({ message: 'Clear Text:', required: true });
+      let text = args.text ?? piped;
+      text = text ?? await input(
+         { message: 'Clear Text:', required: true },
+         { input: ttyStream }
+      );
       const bytes = new TextEncoder().encode(text);
       stream = streamFromBytes(bytes);
    }
@@ -95,20 +112,23 @@ async function getClearStream(args: {
    return stream;
 }
 
-async function info(args: {
-   cred?: string,
-   text?: string,
-   pwds?: string[],
-   infile?: string,
-   outfile?: string,
-   silent?: boolean,
-   debug?: boolean
-}): Promise<string> {
+async function info(
+   args: {
+      cred?: string,
+      text?: string,
+      pwds?: string[],
+      infile?: string,
+      outfile?: string,
+      silent?: boolean,
+      debug?: boolean
+   },
+   piped: string
+): Promise<string> {
 
    let returnText = '';
    try {
       const userCred = await getUserCred(args);
-      const cipherStream = await getCipherStream(args);
+      const cipherStream = await getCipherStream(args, piped);
 
       const cdInfo = await getCipherStreamInfo(
          userCred,
@@ -144,8 +164,9 @@ async function getPwd(
       silent?: boolean,
       debug?: boolean
    }): Promise<string> {
-   const pwd = await input({ message: `Password${lpMsg}:`, required: true },
-      { clearPromptOnDone: true }
+   const pwd = await input(
+      { message: `Password${lpMsg}:`, required: true },
+      { input: ttyStream, clearPromptOnDone: true }
    );
    if (!args.silent) {
       await input(
@@ -156,24 +177,27 @@ async function getPwd(
    return pwd;
 }
 
-async function encrypt(args: {
-   cred?: string,
-   text?: string,
-   pwds?: string[],
-   infile?: string,
-   outfile?: string,
-   iters?: number,
-   algs?: string,
-   trand: boolean,
-   loops: number,
-   silent?: boolean,
-   debug?: boolean
-}): Promise<string> {
+async function encrypt(
+   args: {
+      cred?: string,
+      text?: string,
+      pwds?: string[],
+      infile?: string,
+      outfile?: string,
+      iters?: number,
+      algs?: string,
+      trand: boolean,
+      loops: number,
+      silent?: boolean,
+      debug?: boolean
+   },
+   piped: string,
+): Promise<string> {
 
    let returnText = '';
    try {
       const userCred = await getUserCred(args);
-      const clearStream = await getClearStream(args);
+      const clearStream = await getClearStream(args, piped);
 
       let nextAlg = 'X20-PLY';
       let keys = Object.keys(cc.AlgInfo);
@@ -199,10 +223,13 @@ async function encrypt(args: {
             alg = nextAlg;
             if (!args.silent) {
                alg = await select({
-                  message: `Select Cipher Mode${lpMsg}:`,
-                  choices: choices,
-                  default: nextAlg
-            });}
+                     message: `Select Cipher Mode${lpMsg}:`,
+                     choices: choices,
+                     default: nextAlg
+                  },
+                  { input: ttyStream }
+               );
+            }
          }
 
          do {
@@ -213,11 +240,13 @@ async function encrypt(args: {
       }
 
       let iters = !args.iters || args.iters < cc.ICOUNT_MIN ? await number({
-         message: 'Password Hash Iterations:',
-         default: cc.ICOUNT_DEFAULT,
-         min: cc.ICOUNT_MIN,
-         required: true
-      }) : args.iters;
+            message: 'Password Hash Iterations:',
+            default: cc.ICOUNT_DEFAULT,
+            min: cc.ICOUNT_MIN,
+            required: true
+         },
+         { input: ttyStream }
+      ) : args.iters;
 
       const econtext = {
          lpEnd: Math.max(Math.min(args.loops, 10), 1),
@@ -245,8 +274,11 @@ async function encrypt(args: {
                const pwd = await getPwd(lpMsg, args);
                let hint;
                // Don't ask for hints in silent mode
-               if(!args.silent) {
-                  hint = await input({ message: `Password Hint${lpMsg}:`, required: false });
+               if (!args.silent) {
+                  hint = await input(
+                     { message: `Password Hint${lpMsg}:`, required: false },
+                     { input: ttyStream }
+                  );
                }
                return [pwd, hint];
             }
@@ -273,20 +305,23 @@ async function encrypt(args: {
    return returnText;
 }
 
-async function decrypt(args: {
-   cred?: string,
-   text?: string,
-   pwds?: string[],
-   infile?: string,
-   outfile?: string,
-   silent?: boolean,
-   debug?: boolean
-}): Promise<string> {
+async function decrypt(
+   args: {
+      cred?: string,
+      text?: string,
+      pwds?: string[],
+      infile?: string,
+      outfile?: string,
+      silent?: boolean,
+      debug?: boolean
+   },
+   piped: string
+): Promise<string> {
 
    let returnText = '';
    try {
       const userCred = await getUserCred(args);
-      const cipherStream = await getCipherStream(args);
+      const cipherStream = await getCipherStream(args, piped);
 
       const clearStream = await decryptStream(
          async (cdinfo) => {
@@ -340,6 +375,7 @@ function CoerceNumber(val: any) {
 // space that will be stripped (also works for [text])
 const args = yargs(hideBin(process.argv))
    .usage('Usage: $0 <command> [text] [options]')
+   .parserConfiguration({ 'nargs-eats-options': true })
    .strict()
    .command({
       command: '$0 [text] [options]',
@@ -407,25 +443,28 @@ if (args.debug) {
 async function main() {
    await sodium.ready;
 
-   // Tried to support reading from piped input, but haven't figured out how to
-   // get node stdin to switch from the pipe to tty. If you pipe something in
-   // this part works, but then the prompts error out.
+   let piped: string;
    try {
       piped = fs.readFileSync(process.stdin.fd, 'utf-8');
    } catch (err) { }
 
-   if (args._.length && args._[0] === 'info') {
-      const infoText = await info(args);
-      console.log(`\n${infoText}`);
-   }
-   else if (args._.length && args._[0] === 'enc') {
-      const cipherText = await encrypt(args);
-      console.log(`\n${cipherText}`);
-   } else {
-      const clearText = await decrypt(args);
-      console.log(`\n${clearText}`);
-   }
+   reopenTTY.stdin(async (err, handle) => {
+      ttyStream = handle;
+
+      if (args._.length && args._[0] === 'info') {
+         const infoText = await info(args, piped);
+         console.log(`\n${infoText}`);
+      }
+      else if (args._.length && args._[0] === 'enc') {
+         const cipherText = await encrypt(args, piped);
+         console.log(`\n${cipherText}`);
+      } else {
+         const clearText = await decrypt(args, piped);
+         console.log(`\n${clearText}`);
+      }
+
+      ttyStream.destroy();
+   });
 }
 
-main().then(() => {
-});
+main();
