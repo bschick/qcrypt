@@ -171,6 +171,24 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
+      question: 'Can I decrypt my data if I have no internet connection?',
+      answer: `<p>Yes, as long as you have already signed into Quick Crypt.
+      After signing in, Quick Crypt runs entirely in your browser and does not
+      require an internet connection to decrypt or encrypt data.  If you are
+      inactive for 6 hours, however, Quick Crypt logs you out and then requires
+      an internet connection to sign in again and decrypt data.</p>
+      <p>The Quick Crypt command-line tool is another option that never
+      requires an internet connection once installed.
+      Just download the
+      <a href="https://github.com/bschick/qcrypt/tree/main/shell" target="_blank">qcrypt.cjs</a>
+      file and install <a href="https://nodejs.org/" target="_blank">Node.js</a>
+      before going offline. Then
+      run the script from the command-line and respond to the prompts:
+      <blockquote>> node qcrypt.cjs</blockquote>.</p>`
+   },
+
+   {
+      position: 0,
       question: 'Is there a command-line version of Quick Crypt?',
       answer: `Yes, there is a command-line tool that can decrypt, encrypt, and
       show cipher data information on your system without
@@ -188,7 +206,7 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'Can I decrypt my data if I forget the password I used for encryption?',
       answer: `There is no way to decrypt data if you forget the
-      password used during encryption of that data. Quick Crypts needs both
+      password used during encryption. Quick Crypt requires both
       the password you used to encrypt the data and a passkey to access your user
       credential. Your recovery link lets you create a new passkey, but there is
       no way to recover a lost password. Consider using a password hint
@@ -582,7 +600,7 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'What are the different Cipher Armor formats?',
-      answer: `<p>Cipher Armor is text that includes encrypted
+      answer: `<p>Cipher armor is text that includes encrypted
       data and parameters (called cipher text) combined with metadata
       about the cipher text. The 'Compact'
       and 'Indent' formats are JSON containing the same elements
@@ -615,22 +633,24 @@ const ELEMENT_DATA: FAQElement[] = [
       question: 'What does the Loop Encrypt option do?',
       answer: `<p>By default, Quick Crypt encrypts your plain text or file once.
       If you set Loop Encrypt to be greater than 1,
-      Quick Crypt encrypts your data that many times. For example, if you
+      Quick Crypt encrypts your data that many times. You specify the cipher mode
+      and password for each loop. For example, if you
       set Loop Encrypt to 3, there will be 3 encryption steps:
       <ol type='1'>
-         <li>Your plain text or file is encrypted</li>
-         <li>The encrypted data from loop 1 is encrypted</li>
-         <li>The encrypted data from loop 2 is encrypted</li>
+         <li>Your plain text or file is encrypted with cipher mode-1 and password-1</li>
+         <li>The encrypted data from loop-1 is encrypted with mode-2 and password-2</li>
+         <li>The encrypted data from loop-2 is encrypted with mode-3 and password-3</li>
       </ol>
-      The encrypted data resulting from loop 3 is then output as Cipher
-      Armor or saved to a file. The saved data contains the number of loops
-      to simplify decryption.
+      The encrypted data from the last loop is
+      then output as cipher armor or saved to a file. The saved data contains the
+      number of loops and cipher modes to simplify decryption.
       </p>
-      <p>Loop encryption only provides improved security and privacy when
-      you enter a different password for each loop (other encryption options
-      cannot currently be changed between loops). If you forget any one of the
-      passwords you used while looping, you will not be able decrypt the
-      Cipher Armor.</p>`
+      <p>Loop encryption provides improved security and privacy when
+      you use a different cipher mode and password for each loop (other encryption
+      options cannot yet be changed between loops). Cipher modes are stored
+      within the cipher armor of each loop, but if you forget any of the
+      passwords you used while looping, you will not be able to retrieve your
+      original data.</p>`
    },
 
    {

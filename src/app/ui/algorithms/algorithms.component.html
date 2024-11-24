@@ -1,0 +1,20 @@
+<table mat-table [dataSource]="loops" class="mat-elevation-z0 algtable">
+  <ng-container matColumnDef="loop">
+    <td mat-cell class="loop" *matCellDef="let element">
+      {{element.loop}}
+    </td>
+  </ng-container>
+  <ng-container matColumnDef="algorithm">
+    <td mat-call class="alg" *matCellDef="let element">
+      <div class="mode">
+      <mat-button-toggle-group [(ngModel)]="element.alg" aria-label="Cipher Algorithm"
+        (change)="onAlgorithmChange($event, element.loop)">
+        <mat-button-toggle class="algoption" value="AES-GCM">{{algDescription('AES-GCM')}}</mat-button-toggle>
+        <mat-button-toggle class="algoption" value="X20-PLY">{{algDescription('X20-PLY')}}</mat-button-toggle>
+        <mat-button-toggle class="algoption" value="AEGIS-256">{{algDescription('AEGIS-256')}}</mat-button-toggle>
+      </mat-button-toggle-group>
+      </div>
+    </td>
+  </ng-container>
+  <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+</table>

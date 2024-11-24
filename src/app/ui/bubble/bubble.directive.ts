@@ -17,7 +17,7 @@ export class BubbleDirective {
 
   private bubbleIndex!: number;
 
-  @Input() bubbleTip = 'this is a HC tip';
+  @Input() bubbleTip = 'this is a QC tip';
   @Input() bubblePosition: BubblePosition = BubblePosition.DEFAULT;
   @Input() bubbleWidth?: string;
   @Input() bubbleHeight?: string;
