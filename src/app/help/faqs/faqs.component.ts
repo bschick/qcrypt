@@ -171,7 +171,7 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'Can I decrypt my data if I have no internet connection?',
+      question: 'Can I decrypt my data without an internet connection?',
       answer: `<p>Yes, as long as you have already signed into Quick Crypt.
       After signing in, Quick Crypt runs entirely in your browser and does not
       require an internet connection to decrypt or encrypt data.  If you are
