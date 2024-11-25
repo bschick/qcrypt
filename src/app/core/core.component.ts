@@ -237,16 +237,19 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    setAlgorithm(alg: string | null): void {
-      try {
-         var algs = JSON.parse(alg!);
-      } catch (err) { }
+      if(alg) {
+         try {
+            var algs = JSON.parse(alg);
+         } catch (err) { }
 
-      if (!algs || typeof algs == 'string') {
-         algs = [algs];
-      }
+         // transition from v4 and earlier
+         if (!algs) {
+            algs = [alg];
+         }
 
-      if (this.cipherSvc.validateAlgs(algs)) {
-         this.algorithm = algs;
+         if (this.cipherSvc.validateAlgs(algs)) {
+            this.algorithm = algs;
+         }
       }
    }
 
