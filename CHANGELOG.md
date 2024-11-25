@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-## 4.1.0 (not yet released)
+## 4.1.0 (2024-11-24)
 
 Features:
 
