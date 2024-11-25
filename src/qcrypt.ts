@@ -382,7 +382,7 @@ const args = yargs(hideBin(process.argv))
       aliases: ['dec'],
       desc: 'decrypt cipher data',
       builder: (yargs) => {
-         yargs.positional('text', { desc: 'cipher armor to decrypt (or use -f)' })
+         yargs.positional('text', { desc: 'cipher armor to decrypt (or use -f or stdin)' })
             .example('$0 -c 97jQeo8N16L4vhKzWy7ys -f doc.qq', ': prints decrypted text of doc.qq');
       }
    })
@@ -390,7 +390,7 @@ const args = yargs(hideBin(process.argv))
       command: 'info [text] [options]',
       desc: 'show information about cipher data',
       builder: (yargs) => {
-         yargs.positional('text', { desc: 'cipher armor to describe (or use -f)' })
+         yargs.positional('text', { desc: 'cipher armor to describe (or use -f or stdin)' })
             .example('$0 info -c 97jQeo8N16L4vhKzWy7ys -f doc.qq', ': prints encryption params for doc.qq');
       }
    })
@@ -398,7 +398,7 @@ const args = yargs(hideBin(process.argv))
       command: 'enc [text] [options]',
       desc: 'encrypt clear text',
       builder: (yargs) => {
-         yargs.positional('text', { desc: 'clear text to encrypt (or use -f)' })
+         yargs.positional('text', { desc: 'clear text to encrypt (or use -f or stdin)' })
             .options({
                'iters': { alias: 'i', desc: `password hash iterations (min ${cc.ICOUNT_MIN})`, type: 'number' },
                'algs': { alias: 'a', desc: 'encryption cipher mode(s)', type: 'string', array: true, choices: Object.keys(cc.AlgInfo) },
