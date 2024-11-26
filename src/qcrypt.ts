@@ -39,13 +39,16 @@ async function writeToFile(
 }
 
 async function getUserCred(args: {
-   cred?: string
+   cred?: string,
+   silent?: boolean,
+   debug?: boolean
 }): Promise<Uint8Array> {
 
-   let credText = args.cred ?? await input(
-      { message: 'User Credential:', required: true },
-      { input: ttyStream }
+   let credText = args.cred ?? await getSensitiveInput(
+      'User Credential:',
+      args
    );
+
    try {
       credText = new URL(credText).searchParams.get('usercred') ?? credText;
    } catch (err) { }
@@ -158,19 +161,19 @@ Version           : ${cdInfo.ver}\n`;
    return returnText;
 }
 
-async function getPwd(
-   lpMsg: string,
+async function getSensitiveInput(
+   msg: string,
    args: {
       silent?: boolean,
       debug?: boolean
    }): Promise<string> {
    const pwd = await input(
-      { message: `Password${lpMsg}:`, required: true },
+      { message: msg, required: true },
       { input: ttyStream, clearPromptOnDone: true }
    );
    if (!args.silent) {
       await input(
-         { message: `Password${lpMsg}:` },
+         { message: msg },
          { input: Readable.from('******\n') }
       );
    }
@@ -260,7 +263,7 @@ async function encrypt(
          econtext,
          async (cdinfo) => {
             const pos = cdinfo.lp - 1;
-            const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} or ${cdinfo.lpEnd}` : '';
+            const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} of ${cdinfo.lpEnd}` : '';
             if (args.pwds && pos < args.pwds.length) {
                // Show that we pre-supplied values (no hints for pre-supplied pwds)
                if (!args.silent) {
@@ -271,7 +274,7 @@ async function encrypt(
                }
                return [args.pwds[pos]!, undefined];
             } else {
-               const pwd = await getPwd(lpMsg, args);
+               const pwd = await getSensitiveInput(`Password${lpMsg}:`, args);
                let hint;
                // Don't ask for hints in silent mode
                if (!args.silent) {
@@ -337,7 +340,7 @@ async function decrypt(
                } return [args.pwds[pos], undefined];
             } else {
                const hintMsg = lpMsg + cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '';
-               const pwd = await getPwd(hintMsg, args);
+               const pwd = await getSensitiveInput(`Password${hintMsg}:`, args);
                return [pwd, undefined];
             }
          },
