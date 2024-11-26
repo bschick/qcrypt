@@ -525,8 +525,8 @@ const ELEMENT_DATA: FAQElement[] = [
       <p>Quick Cyrpt defaults to <b>XChaCha20 Poly1305</b> because it is very
       well-established and believed to be more robust than AES 256 GCM. The
       libsodium implementation is also easy for Quick Crypt to update if needed.
-      </p><p>For increased protection, you can set loop encrypt in the "Advanced
-      Options" section to be greater than 1 to encrypt your data multiple times.
+      </p><p>For increased protection, you can encrypt your data multiple times
+      by setting loop encrypt in the "Advanced Options" section to greater than 1.
       Each loop can have a different cipher mode and password. So rather than
       choosing between your browser's AES 256 GCM implementation and libsodium's
       XChaCha20 Poly1305, for example, you can apply both.</p>`
@@ -634,22 +634,22 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'What does the Loop Encrypt option do?',
-      answer: `<p>By default, Quick Crypt encrypts your plain text or file once.
-      If you set Loop Encrypt to be greater than 1,
-      Quick Crypt encrypts your data that many times. You specify the cipher mode
-      and password for each loop. For example, if you
+      question: 'What does the Loop Encrypt advanced option do?',
+      answer: `<p>Loop encryption can improve privacy and authenticity.
+      By default, Quick Crypt encrypts your data once.
+      If you set Loop Encrypt to be greater than 1, Quick Crypt encrypts your
+      data that many times, allowing you to specify a different cipher
+      mode and password for each loop. For example, if you
       set Loop Encrypt to 3, there will be 3 encryption steps:
       <ol type='1'>
-         <li>Your plain text or file is encrypted with cipher mode-1 and password-1</li>
+         <li>Your data is encrypted with cipher mode-1 and password-1</li>
          <li>The encrypted data from loop-1 is encrypted with mode-2 and password-2</li>
          <li>The encrypted data from loop-2 is encrypted with mode-3 and password-3</li>
       </ol>
-      The encrypted data from the last loop is
-      then output as cipher armor or saved to a file. The saved data contains the
-      number of loops and cipher modes to simplify decryption.
+      The encrypted data from the last loop is output as cipher armor or saved to a file
+      and contains the number of loops and cipher modes to simplify decryption.
       </p>
-      <p>Loop encryption provides improved security and privacy when
+      <p>Loop encryption provides improved security when
       you use a different cipher mode and password for each loop (other encryption
       options cannot yet be changed between loops). Cipher modes are stored
       within the cipher armor of each loop, but if you forget any of the
