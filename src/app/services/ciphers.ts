@@ -182,6 +182,26 @@ export class Ciphers {
       rawMaterial.set(pwdBytes);
       rawMaterial.set(userCred, pwdBytes.byteLength);
 
+/* Maybe someday, but requires SUMO version of libsodium.js
+      await sodium.ready;
+      const rawKey = sodium.crypto_pwhash(
+         32,
+         rawMaterial,
+         slt,
+         sodium.crypto_pwhash_OPSLIMIT_MODERATE,
+         sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE,
+         sodium.crypto_pwhash_ALG_ARGON2I13,
+         "uint8array"
+      );
+
+      const ek = await crypto.subtle.importKey(
+         'raw',
+         rawKey,
+         'AES-GCM',
+         true,
+         ['encrypt', 'decrypt']
+      );
+*/
       const ekMaterial = await crypto.subtle.importKey(
          'raw',
          rawMaterial,
