@@ -525,7 +525,11 @@ const ELEMENT_DATA: FAQElement[] = [
       <p>Quick Cyrpt defaults to <b>XChaCha20 Poly1305</b> because it is very
       well-established and believed to be more robust than AES 256 GCM. The
       libsodium implementation is also easy for Quick Crypt to update if needed.
-      </p>`
+      </p><p>For increased protection, you can set loop encrypt in the "Advanced
+      Options" section to be greater than 1 to encrypt your data multiple times.
+      Each loop can have a different cipher mode and password. So rather than
+      choosing between your browser's AES 256 GCM implementation and libsodium's
+      XChaCha20 Poly1305, for example, you can apply both.</p>`
    },
 
    {
