@@ -16,9 +16,7 @@ import { RouterLink } from '@angular/router';
 })
 export class ProtocolComponent {
 
-   constructor(
-      private dialog: MatDialog,
-   ){
+   constructor(private dialog: MatDialog){
    }
 
    openFlowImage(flowImage:string) {
@@ -27,7 +25,7 @@ export class ProtocolComponent {
 }
 
 @Component({
-   selector: 'app-protocol',
+   selector: 'app-protocol4',
    standalone: true,
    imports: [MatTooltipModule, RouterLink],
    templateUrl: './protocol4.component.html',
@@ -35,9 +33,7 @@ export class ProtocolComponent {
 })
 export class Protocol4Component {
 
-   constructor(
-      private dialog: MatDialog,
-   ){
+   constructor(private dialog: MatDialog){
    }
 
    openFlowImage(flowImage:string) {
