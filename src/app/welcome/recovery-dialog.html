@@ -40,10 +40,10 @@ SOFTWARE. -->
     <p>
       If you lost both your Quick Crypt passkeys and recovery link, you cannot
       access your existing user identity to decrypt or encrypt data. To continue using
-      Quick Crypt, you must create a new user identity. The new user cannot decrypt
-      existing cipher text, however. If you find your original recovery link or passkey
-      later, you can use either to regain access to your original user identity and
-      decrypt and encrypt data.
+      Quick Crypt, you may <a [routerLink]="'/newuser'" (click)="onClickNewUser($event)">
+      create a new user identity</a>.
+      If you find your original recovery link or passkey, you can use either to
+      regain access to your original identity and decrypt and encrypt data.
     </p>
 
     <!--last so it doesn't get focus-->
