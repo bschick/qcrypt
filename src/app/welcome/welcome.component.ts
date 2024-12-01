@@ -69,11 +69,17 @@ export class WelcomeComponent {
    styleUrl: './welcome.component.scss',
    standalone: true,
    imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
-      MatButtonModule],
+      MatButtonModule, RouterLink],
 })
 export class RecoveryDialog {
    constructor(
-      public dialogRef: MatDialogRef<RecoveryDialog>
-   ) { }
+      public dialogRef: MatDialogRef<RecoveryDialog>,
+      private router: Router) {
+    }
 
+   onClickNewUser(event: Event) {
+      event.stopPropagation();
+      this.dialogRef.close();
+      this.router.navigateByUrl('/newuser');
+   }
 }
