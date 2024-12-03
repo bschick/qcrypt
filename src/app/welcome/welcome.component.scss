@@ -24,7 +24,7 @@
 }
 
 .recovery {
-  max-width: 575px;
+  max-width: 568px;
 
   .header {
     margin: 0 0 1px 0;
@@ -32,10 +32,18 @@
 
   .steps {
     padding-left: 18px;
+
+    li {
+      margin-bottom:10px;
+    }
   }
 
-  .steps li {
-    margin-bottom:10px;
+  .inner-steps {
+    padding-left: 18px;
+
+    li {
+      margin-top:4px;
+    }
   }
 
   .dialog-content {
