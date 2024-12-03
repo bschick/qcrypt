@@ -74,7 +74,7 @@ export type PwdDialogData = {
    styleUrl: './core.dialogs.scss',
    standalone: true,
    encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
-   imports: [MatDialogModule, CommonModule, NgIf, MatFormFieldModule, MatMenuModule, MatInputModule,
+   imports: [MatDialogModule, CommonModule, MatFormFieldModule, MatMenuModule, MatInputModule,
       MatIconModule, PasswordStrengthMeterComponent, FormsModule, ReactiveFormsModule,
       MatTooltipModule, MatButtonModule, BubbleDirective
    ],

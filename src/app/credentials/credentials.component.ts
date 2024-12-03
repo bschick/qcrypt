@@ -2,7 +2,7 @@ import {
    Component, EventEmitter, Inject, OnInit,
    Output, effect, Renderer2, OnDestroy
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, NgIf } from '@angular/common';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTableModule } from '@angular/material/table';
@@ -15,9 +15,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { Router, RouterLink, NavigationStart } from '@angular/router';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { Subscription } from 'rxjs';
-
 
 @Component({
    selector: 'app-credentials',
@@ -92,7 +91,8 @@ export class CredentialsComponent implements OnInit, OnDestroy {
 
       var dialogRef = this.dialog.open(ConfirmDialog, {
          data: {
-            pkState: pkState
+            pkState: pkState,
+            userName: this.authSvc.userName
          },
       });
 
@@ -185,23 +185,30 @@ export class CredentialsComponent implements OnInit, OnDestroy {
 
 export interface ConfirmData {
    pkState: number;
+   userName: string;
 }
 
-
+/*
+Starting to expiriment with reactive forms.
+https://angular.dev/guide/forms
+https://angular.dev/guide/forms/reactive-forms
+*/
 @Component({
    selector: 'confirm-dialog',
    templateUrl: 'confirm-dialog.html',
    styleUrl: './credentials.component.scss',
    standalone: true,
    imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
-      MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
+      MatButtonModule, MatFormFieldModule, NgIf, MatInputModule, FormsModule,
       ReactiveFormsModule
    ],
 })
 export class ConfirmDialog {
 
    public pkState = 0;
-   public confirmed = '';
+   public userName = '';
+   public confirmInput = new FormControl('');
+
    static readonly NONE_PK = 0;
    static readonly LAST_PK = 1;
    static readonly ACTIVE_PK = 2;
@@ -223,10 +230,13 @@ export class ConfirmDialog {
       @Inject(MAT_DIALOG_DATA) public data: ConfirmData
    ) {
       this.pkState = data.pkState;
+      this.userName = data.userName;
    }
 
    onYesClicked() {
-      if (this.pkState != this.LAST_PK || this.confirmed === 'confirm') {
+      if (this.pkState != this.LAST_PK ||
+         (this.confirmInput.value && this.confirmInput.value === this.userName)
+      ) {
          this.dialogRef.close('Yes');
       } else {
          try {
