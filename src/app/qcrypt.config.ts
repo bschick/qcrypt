@@ -22,7 +22,7 @@ SOFTWARE. */
 import { ApplicationConfig, importProvidersFrom } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { provideZxvbnServiceForPSM } from 'angular-password-strength-meter/zxcvbn';
-import { HttpClientModule } from '@angular/common/http';
+import {} from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { routes } from './qcrypt.routes';
 
