@@ -104,6 +104,13 @@ SOFTWARE. */
     z-index: 999;
   }
 
+  .cipher {
+    position:absolute;
+    left: 6px;
+    bottom: 2px;
+    color: white;
+  }
+
   /* The next two selector modify text inside stength meter */
   div.psm__progress-bar {
     margin-bottom: 5px !important;

@@ -51,7 +51,6 @@ import { BubbleDirective } from '../ui/bubble/bubble.directive';
 import * as cc from '../services/cipher.consts';
 import { bytesToBase64 } from '../services/utils';
 import { CipherService, CipherDataInfo } from '../services/cipher.service';
-import { MatTableModule } from '@angular/material/table';
 
 
 export type PwdDialogData = {
@@ -65,6 +64,7 @@ export type PwdDialogData = {
    checkPwned: boolean;
    welcomed: boolean;
    userName: string;
+   cipherMode: string;
 };
 
 
@@ -91,6 +91,8 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    public loops = 0;
    public encrypting = false;
    public userName = '';
+   public cipherMode = '';
+   public cipherShow = false;
    private checkPwned = false;
    private welcomed = true;
    public maxHintLen = cc.HINT_MAX_LEN;
@@ -113,6 +115,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
       this.checkPwned = data.checkPwned;
       this.welcomed = data.welcomed;
       this.userName = data.userName;
+      this.cipherMode = data.cipherMode;
    }
 
    ngOnInit(): void {

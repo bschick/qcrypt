@@ -749,6 +749,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                   checkPwned: this.checkPwned,
                   welcomed: this.welcomed,
                   userName: this.authSvc.userName,
+                  cipherMode:cdInfo.alg
                },
             });
 
