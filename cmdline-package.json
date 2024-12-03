@@ -12,10 +12,10 @@
   "license": "ISC",
   "devDependencies": {
     "@types/libsodium-wrappers": "^0.7.13",
-    "@types/node": "^20.11.16",
+    "@types/node": "^22.10.1",
     "@types/yargs": "^17.0.33",
     "esbuild": "^0.24.0",
-    "typescript": "~5.4.2"
+    "typescript": "~5.5.4"
   },
   "dependencies": {
     "@inquirer/prompts": "^7.1.0",
