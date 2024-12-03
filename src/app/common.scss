@@ -34,3 +34,24 @@ li {
 h2 {
   margin: 16px 0 6px 0;
 }
+
+.github {
+  display: block;
+  text-align: right;
+  margin-top: 50px;
+
+  a {
+    text-decoration: none;
+  }
+
+  button {
+    background-color: #8a8fb2;
+    height: 36px;
+    padding-left: 16px;
+    padding-right: 9px;
+  }
+}
+
+.github-label {
+  margin: 0 0 0 -4px;
+}

@@ -23,28 +23,36 @@ SOFTWARE. -->
   <h1 mat-dialog-title class="header">Recovery Steps</h1>
 
   <div mat-dialog-content class="dialog-content">
-    <p>
-      First, make sure your internet connection is working. If you are connected and
-      have previously used Quick Crypt, just select the passkey you used when
-      you first signed in. You may have created a passkey with a
-      physical key, a mobile device, or a password manager like Bitwarden or 1Password.
-      If you lost or damaged your passkey, follow these recovery steps:
-    </p>
-
     <ol class="steps" type="1">
-      <li>Locate the <b>recovery link</b> provided when you created your user
-        identity and first passkey. You may have also accessed your recovery link
-        from the credentials side panel.</li>
-      <li>Paste that link into your browser's address bar and hit enter.</li>
+      <li>
+        First, make sure your internet connection is working. If you are connected and
+        have previously used Quick Crypt, just select the passkey you used when
+        you first signed in. You may have created a passkey with a
+        physical key, a mobile device, or a password manager like Bitwarden or 1Password.
+      </li>
+
+      <li> If you lost or damaged your passkey, follow these steps:
+        <ul class="inner-steps">
+          <li>Locate the <b>recovery link</b> provided when you created your user
+            identity and first passkey. You may have also accessed your recovery link
+            from the credentials side panel.</li>
+          <li>Paste that link into your browser's address bar and hit enter.</li>
+        </ul>
+      </li>
+      <li>
+        If you lost both your Quick Crypt passkeys and recovery link, you cannot
+        access your existing user identity to decrypt or encrypt data. To continue using
+        Quick Crypt, you may <a [routerLink]="'/newuser'" (click)="onClickNewUser($event)">
+          create a new user identity</a>.
+        If you find your original recovery link or passkey, you can use either to
+        regain access to your original identity and decrypt data.
+      </li>
+      <li>
+        If you found a problem with Quick Crypt, please
+        <a href="https://github.com/bschick/qcrypt/issues/new/choose" target="_blank">
+        report the issue</a>.
+      </li>
     </ol>
-    <p>
-      If you lost both your Quick Crypt passkeys and recovery link, you cannot
-      access your existing user identity to decrypt or encrypt data. To continue using
-      Quick Crypt, you may <a [routerLink]="'/newuser'" (click)="onClickNewUser($event)">
-      create a new user identity</a>.
-      If you find your original recovery link or passkey, you can use either to
-      regain access to your original identity and decrypt and encrypt data.
-    </p>
 
     <!--last so it doesn't get focus-->
     <button class="close-button3" matSuffix mat-icon-button matDialogClose aria-label="close">

@@ -30,7 +30,8 @@ export class WelcomeComponent {
    constructor(
       private dialog: MatDialog,
       private authSvc: AuthenticatorService,
-      private router: Router) {
+      private router: Router
+   ) {
    }
 
    async onClickExisting(event: any) {
@@ -41,7 +42,7 @@ export class WelcomeComponent {
          this.router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
-         if(err instanceof Error && err.message.includes("fetch")) {
+         if (err instanceof Error && err.message.includes("fetch")) {
             this.error = 'Sign in failed, check your internet connection';
          } else {
             this.error = 'Passkey not recognized. Either try again or select another option above.';
@@ -53,12 +54,10 @@ export class WelcomeComponent {
    }
 
    onClickNew(event: any) {
-
    }
 
    onClickRecovery(event: any) {
       var dialogRef = this.dialog.open(RecoveryDialog);
-
    }
 }
 
@@ -75,7 +74,7 @@ export class RecoveryDialog {
    constructor(
       public dialogRef: MatDialogRef<RecoveryDialog>,
       private router: Router) {
-    }
+   }
 
    onClickNewUser(event: Event) {
       event.stopPropagation();

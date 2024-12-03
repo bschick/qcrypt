@@ -19,6 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
+@use "../common.scss";
 
 .core {
   padding: 15px;
@@ -247,7 +248,7 @@ SOFTWARE. */
   color: darkgreen;
 }
 
-.github {
+/*.github {
   display: block;
   text-align: right;
   margin-top: 50px;
@@ -266,7 +267,7 @@ SOFTWARE. */
 
 .github-label {
   margin: 0 0 0 -4px;
-}
+}*/
 
 .file-input {
   display: none;
