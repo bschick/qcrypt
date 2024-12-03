@@ -55,6 +55,6 @@
     "karma-jasmine-html-reporter": "~2.1.0",
     "schematics-scss-migrate": "^2.3.17",
     "tsx": "^4.7.1",
-    "typescript": "~5.4.2"
+    "typescript": "~5.5.4"
   }
 }
