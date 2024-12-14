@@ -14,14 +14,13 @@ import { ClipboardModule } from '@angular/cdk/clipboard';
 
 
 @Component({
-   selector: 'app-newuser',
-   standalone: true,
-   templateUrl: './newuser.component.html',
-   styleUrl: './newuser.component.scss',
-   imports: [MatIconModule, MatButtonModule, RouterLink, CommonModule,
-      MatProgressSpinnerModule, MatInputModule, MatFormFieldModule,
-      FormsModule, ClipboardModule, MatTooltipModule,
-   ],
+    selector: 'app-newuser',
+    templateUrl: './newuser.component.html',
+    styleUrl: './newuser.component.scss',
+    imports: [MatIconModule, MatButtonModule, RouterLink, CommonModule,
+        MatProgressSpinnerModule, MatInputModule, MatFormFieldModule,
+        FormsModule, ClipboardModule, MatTooltipModule,
+    ]
 })
 export class NewUserComponent implements OnInit {
 

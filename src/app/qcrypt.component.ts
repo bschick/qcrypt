@@ -33,13 +33,12 @@ import { Subscription } from 'rxjs';
 
 
 @Component({
-   selector: 'qcrypt-root',
-   standalone: true,
-   templateUrl: './qcrypt.component.html',
-   styleUrl: './qcrypt.component.scss',
-   imports: [RouterOutlet, MatToolbarModule, MatIconModule, MatButtonModule,
-      RouterLink, MatMenuModule, MatSidenavModule, CredentialsComponent
-   ],
+    selector: 'qcrypt-root',
+    templateUrl: './qcrypt.component.html',
+    styleUrl: './qcrypt.component.scss',
+    imports: [RouterOutlet, MatToolbarModule, MatIconModule, MatButtonModule,
+        RouterLink, MatMenuModule, MatSidenavModule, CredentialsComponent
+    ]
 })
 export class QCryptComponent implements OnInit, OnDestroy {
 

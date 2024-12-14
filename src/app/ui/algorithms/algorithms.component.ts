@@ -12,11 +12,10 @@ export type LoopInfo = {
 };
 
 @Component({
-  selector: 'app-algorithms',
-  standalone: true,
-  imports: [MatTableModule, MatButtonToggleModule, FormsModule, ReactiveFormsModule],
-  templateUrl: './algorithms.component.html',
-  styleUrl: './algorithms.component.scss'
+    selector: 'app-algorithms',
+    imports: [MatTableModule, MatButtonToggleModule, FormsModule, ReactiveFormsModule],
+    templateUrl: './algorithms.component.html',
+    styleUrl: './algorithms.component.scss'
 })
 export class AlgorithmsComponent {
 

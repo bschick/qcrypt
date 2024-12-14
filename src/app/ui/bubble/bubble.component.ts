@@ -11,11 +11,10 @@ export const BubblePosition = {
 export type BubblePosition = typeof BubblePosition[keyof typeof BubblePosition];
 
 @Component({
-   selector: 'bubble',
-   standalone: true,
-   templateUrl: './bubble.component.html',
-   styleUrl: './bubble.component.scss',
-   imports: [NgClass],
+    selector: 'bubble',
+    templateUrl: './bubble.component.html',
+    styleUrl: './bubble.component.scss',
+    imports: [NgClass]
 })
 export class BubbleComponent implements OnInit {
 

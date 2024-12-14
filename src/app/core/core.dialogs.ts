@@ -69,15 +69,14 @@ export type PwdDialogData = {
 
 
 @Component({
-   selector: 'password.dialog',
-   templateUrl: './password.dialog.html',
-   styleUrl: './core.dialogs.scss',
-   standalone: true,
-   encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
-   imports: [MatDialogModule, CommonModule, MatFormFieldModule, MatMenuModule, MatInputModule,
-      MatIconModule, PasswordStrengthMeterComponent, FormsModule, ReactiveFormsModule,
-      MatTooltipModule, MatButtonModule, BubbleDirective
-   ],
+    selector: 'password.dialog',
+    templateUrl: './password.dialog.html',
+    styleUrl: './core.dialogs.scss',
+    encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
+    imports: [MatDialogModule, CommonModule, MatFormFieldModule, MatMenuModule, MatInputModule,
+        MatIconModule, PasswordStrengthMeterComponent, FormsModule, ReactiveFormsModule,
+        MatTooltipModule, MatButtonModule, BubbleDirective
+    ]
 })
 export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    public hidePwd = false;
@@ -167,11 +166,10 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
 }
 
 @Component({
-   selector: 'cipher-info.dialog',
-   templateUrl: './cipher-info.dialog.html',
-   styleUrl: './core.dialogs.scss',
-   standalone: true,
-   imports: [MatDialogModule, MatIconModule, CommonModule, NgIf, MatButtonModule],
+    selector: 'cipher-info.dialog',
+    templateUrl: './cipher-info.dialog.html',
+    styleUrl: './core.dialogs.scss',
+    imports: [MatDialogModule, MatIconModule, CommonModule, NgIf, MatButtonModule]
 })
 
 export class CipherInfoDialog {
@@ -206,12 +204,11 @@ export class CipherInfoDialog {
 
 
 @Component({
-   selector: 'signin.dialog',
-   templateUrl: './signin.dialog.html',
-   styleUrl: './core.dialogs.scss',
-   standalone: true,
-   imports: [MatDialogModule, CommonModule, MatProgressSpinnerModule,
-      MatIconModule, MatTooltipModule, MatButtonModule],
+    selector: 'signin.dialog',
+    templateUrl: './signin.dialog.html',
+    styleUrl: './core.dialogs.scss',
+    imports: [MatDialogModule, CommonModule, MatProgressSpinnerModule,
+        MatIconModule, MatTooltipModule, MatButtonModule]
 })
 export class SigninDialog {
 
