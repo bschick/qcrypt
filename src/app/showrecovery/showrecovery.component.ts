@@ -17,13 +17,12 @@ import { AuthEvent, AuthenticatorService } from '../services/authenticator.servi
 import { Subscription } from 'rxjs';
 
 @Component({
-   selector: 'app-show-recovery',
-   standalone: true,
-   templateUrl: './showrecovery.component.html',
-   styleUrl: './showrecovery.component.scss',
-   imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink,
-      MatInputModule, MatFormFieldModule, CommonModule,
-   ],
+    selector: 'app-show-recovery',
+    templateUrl: './showrecovery.component.html',
+    styleUrl: './showrecovery.component.scss',
+    imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink,
+        MatInputModule, MatFormFieldModule, CommonModule,
+    ]
 })
 export class ShowRecoveryComponent implements OnInit, OnDestroy, AfterViewInit {
 

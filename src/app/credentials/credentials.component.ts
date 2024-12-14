@@ -19,14 +19,13 @@ import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { Subscription } from 'rxjs';
 
 @Component({
-   selector: 'app-credentials',
-   standalone: true,
-   templateUrl: './credentials.component.html',
-   styleUrl: './credentials.component.scss',
-   imports: [MatDividerModule, MatTableModule,
-      MatIconModule, MatButtonModule, MatInputModule, EditableComponent,
-      MatTooltipModule, RouterLink, CommonModule
-   ],
+    selector: 'app-credentials',
+    templateUrl: './credentials.component.html',
+    styleUrl: './credentials.component.scss',
+    imports: [MatDividerModule, MatTableModule,
+        MatIconModule, MatButtonModule, MatInputModule, EditableComponent,
+        MatTooltipModule, RouterLink, CommonModule
+    ]
 })
 export class CredentialsComponent implements OnInit, OnDestroy {
 
@@ -194,14 +193,13 @@ https://angular.dev/guide/forms
 https://angular.dev/guide/forms/reactive-forms
 */
 @Component({
-   selector: 'confirm-dialog',
-   templateUrl: 'confirm-dialog.html',
-   styleUrl: './credentials.component.scss',
-   standalone: true,
-   imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
-      MatButtonModule, MatFormFieldModule, NgIf, MatInputModule, FormsModule,
-      ReactiveFormsModule
-   ],
+    selector: 'confirm-dialog',
+    templateUrl: 'confirm-dialog.html',
+    styleUrl: './credentials.component.scss',
+    imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
+        MatButtonModule, MatFormFieldModule, NgIf, MatInputModule, FormsModule,
+        ReactiveFormsModule
+    ]
 })
 export class ConfirmDialog {
 

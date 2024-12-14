@@ -127,17 +127,16 @@ function setIfBoolean(
 }
 
 @Component({
-   selector: 'app-core',
-   standalone: true,
-   templateUrl: './core.component.html',
-   styleUrl: './core.component.scss',
-   imports: [MatProgressSpinnerModule, MatMenuModule, MatIconModule,
-      MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
-      ReactiveFormsModule, ClipboardModule, CdkAccordionModule, MatSlideToggleModule,
-      MatExpansionModule, MatSelectModule, MatButtonToggleModule,
-      MatTooltipModule, MatRippleModule, CommonModule, BubbleDirective,
-      RouterLink, AlgorithmsComponent
-   ],
+    selector: 'app-core',
+    templateUrl: './core.component.html',
+    styleUrl: './core.component.scss',
+    imports: [MatProgressSpinnerModule, MatMenuModule, MatIconModule,
+        MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
+        ReactiveFormsModule, ClipboardModule, CdkAccordionModule, MatSlideToggleModule,
+        MatExpansionModule, MatSelectModule, MatButtonToggleModule,
+        MatTooltipModule, MatRippleModule, CommonModule, BubbleDirective,
+        RouterLink, AlgorithmsComponent
+    ]
 })
 export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 

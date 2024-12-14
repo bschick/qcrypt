@@ -13,14 +13,12 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 
 
 @Component({
-   selector: 'app-welcome',
-   standalone: true,
-   templateUrl: './welcome.component.html',
-   styleUrl: './welcome.component.scss',
-   imports: [MatInputModule, MatFormFieldModule, FormsModule, MatButtonModule,
-      MatProgressSpinnerModule, RouterLink
-   ],
-
+    selector: 'app-welcome',
+    templateUrl: './welcome.component.html',
+    styleUrl: './welcome.component.scss',
+    imports: [MatInputModule, MatFormFieldModule, FormsModule, MatButtonModule,
+        MatProgressSpinnerModule, RouterLink
+    ]
 })
 export class WelcomeComponent {
 
@@ -63,12 +61,11 @@ export class WelcomeComponent {
 
 
 @Component({
-   selector: 'recovery-dialog',
-   templateUrl: './recovery-dialog.html',
-   styleUrl: './welcome.component.scss',
-   standalone: true,
-   imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
-      MatButtonModule, RouterLink],
+    selector: 'recovery-dialog',
+    templateUrl: './recovery-dialog.html',
+    styleUrl: './welcome.component.scss',
+    imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
+        MatButtonModule, RouterLink]
 })
 export class RecoveryDialog {
    constructor(

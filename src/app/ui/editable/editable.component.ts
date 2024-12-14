@@ -11,13 +11,12 @@ import { MatButtonModule } from '@angular/material/button';
 
 
 @Component({
-   selector: 'app-editable',
-   standalone: true,
-   imports: [CommonModule, MatInputModule, FormsModule,
-      MatFormFieldModule, MatIconModule, MatButtonModule
-   ],
-   templateUrl: './editable.component.html',
-   styleUrl: './editable.component.scss'
+    selector: 'app-editable',
+    imports: [CommonModule, MatInputModule, FormsModule,
+        MatFormFieldModule, MatIconModule, MatButtonModule
+    ],
+    templateUrl: './editable.component.html',
+    styleUrl: './editable.component.scss'
 })
 export class EditableComponent implements OnInit {
 

@@ -8,11 +8,10 @@ import { RouterLink } from '@angular/router';
 
 
 @Component({
-   selector: 'app-protocol',
-   standalone: true,
-   imports: [MatTooltipModule, RouterLink],
-   templateUrl: './protocol.component.html',
-   styleUrl: './protocol.component.scss'
+    selector: 'app-protocol',
+    imports: [MatTooltipModule, RouterLink],
+    templateUrl: './protocol.component.html',
+    styleUrl: './protocol.component.scss'
 })
 export class ProtocolComponent {
 
@@ -25,11 +24,10 @@ export class ProtocolComponent {
 }
 
 @Component({
-   selector: 'app-protocol4',
-   standalone: true,
-   imports: [MatTooltipModule, RouterLink],
-   templateUrl: './protocol4.component.html',
-   styleUrl: './protocol.component.scss'
+    selector: 'app-protocol4',
+    imports: [MatTooltipModule, RouterLink],
+    templateUrl: './protocol4.component.html',
+    styleUrl: './protocol.component.scss'
 })
 export class Protocol4Component {
 
@@ -43,12 +41,11 @@ export class Protocol4Component {
 
 
 @Component({
-   selector: 'flow-dialog',
-   templateUrl: './flow-dialog.html',
-   styleUrl: './protocol.component.scss',
-   standalone: true,
-   imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
-      MatButtonModule],
+    selector: 'flow-dialog',
+    templateUrl: './flow-dialog.html',
+    styleUrl: './protocol.component.scss',
+    imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
+        MatButtonModule]
 })
 export class FlowDialog {
 
