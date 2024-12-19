@@ -22,7 +22,7 @@ SOFTWARE. -->
 <div class="core">
   <div class="input-area flx-container" (mouseup)="onDraggerMouseUp();">
     <span class="flx-buttons">
-      <button mat-raised-button (click)="onEncrypt()" class="top-button" color="primary" #bubbleTip2="bubbleTip"
+      <button mat-raised-button (click)="onEncrypt()" class="top-button main-button" color="primary" #bubbleTip2="bubbleTip"
         bubbleTip="When you have finished entering text, click the Encrypt button. You will then be promted for a password."
         bubblePosition="right" bubbleWidth="250px" aria-label="Encrypt Text" accesskey="E"
         [disabled]="showProgress ? 'true' : 'false'">
@@ -75,7 +75,7 @@ SOFTWARE. -->
           <mat-icon fontSet="material-icons-outlined">file_download</mat-icon>Save Cipher File
         </button>
       </mat-menu>
-      <button mat-raised-button (click)="onDecrypt()" class="top-button mleft15" color="primary"
+      <button mat-raised-button (click)="onDecrypt()" class="top-button main-button mleft15" color="primary"
         aria-label="Decrypt Text" accesskey="D" [disabled]="showProgress ? 'true' : 'false'">
         <u>D</u>ecrypt
       </button>

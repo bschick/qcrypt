@@ -126,6 +126,12 @@ SOFTWARE. */
   width: 120px;
   height: 45px;
   padding: 0;
+//  letter-spacing: 1.33929px;
+}
+
+.main-button {
+  background-color: var(--mdc-filled-button-container-color, var(--mat-sys-primary));
+  color: var(--mdc-filled-button-label-text-color, var(--mat-sys-on-primary))
 }
 
 .toolbar {
