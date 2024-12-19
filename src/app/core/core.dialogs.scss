@@ -20,6 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
+@use "../common.scss";
+
 .cipher-info {
   .header {
     margin: 0 0 1px 0;
@@ -46,33 +48,33 @@ SOFTWARE. */
     margin: 0;
     padding: 0;
     flex: none;
-  }
-
-  .close-button3 {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    z-index: 999;
+    line-height: 1.5em;
+    letter-spacing: normal;
+    font-size: 16px;
   }
 }
 
 .password {
+
   .header {
     margin: 0 0 1px 0;
   }
 
+  .dialog-content {
+    min-width: 300px;
+  }
+
   .user-msg {
-    padding: 5px 26px 0px;
+    padding-top: 5px;
     font-size: 16px;
   }
 
   .field-group {
-    margin: 0 23px;
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
     align-items: flex-start;
-    column-gap: 15px;
+    column-gap: 10px;  // If this is >= 15px wrapping get funny because material has a dailog max-width of 560px
   }
 
   .field {
@@ -97,18 +99,11 @@ SOFTWARE. */
     z-index: 999;
   }
 
-  .close-button3 {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    z-index: 999;
-  }
-
   .cipher {
     position:absolute;
-    left: 6px;
-    bottom: 2px;
-    color: white;
+    left: 14px;
+    bottom: 4px;
+    color: var(--mdc-dialog-container-color, var(--mat-sys-surface, white));
   }
 
   /* The next two selector modify text inside stength meter */
@@ -184,10 +179,4 @@ SOFTWARE. */
     color: darkred;
   }
 
-  .close-button3 {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    z-index: 999;
-  }
 }

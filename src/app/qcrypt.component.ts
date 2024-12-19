@@ -43,8 +43,8 @@ import { Subscription } from 'rxjs';
 export class QCryptComponent implements OnInit, OnDestroy {
 
    private authSub!: Subscription;
-   public bgColorDefault = '#4351AF';
-   public bgColorFocus = '#3B479A';
+   public bgColorDefault = '';
+   public bgColorFocus = 'color-mix(in srgb,var(--mat-sys-primary) 10%,transparent)';
    public showPKButton = false;
 
    constructor(

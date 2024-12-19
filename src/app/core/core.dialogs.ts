@@ -37,7 +37,7 @@ import {
 import { CommonModule, NgIf } from '@angular/common';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { MatMenuModule } from '@angular/material/menu';
+//import { MatMenuModule } from '@angular/material/menu';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -72,11 +72,11 @@ export type PwdDialogData = {
     selector: 'password.dialog',
     templateUrl: './password.dialog.html',
     styleUrl: './core.dialogs.scss',
-    encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
-    imports: [MatDialogModule, CommonModule, MatFormFieldModule, MatMenuModule, MatInputModule,
-        MatIconModule, PasswordStrengthMeterComponent, FormsModule, ReactiveFormsModule,
-        MatTooltipModule, MatButtonModule, BubbleDirective
-    ]
+//    encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
+    imports: [MatDialogModule, CommonModule, MatFormFieldModule, MatInputModule,
+      MatIconModule, PasswordStrengthMeterComponent, FormsModule, ReactiveFormsModule,
+      MatTooltipModule, MatButtonModule, BubbleDirective
+  ]
 })
 export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    public hidePwd = false;
@@ -171,7 +171,6 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
     styleUrl: './core.dialogs.scss',
     imports: [MatDialogModule, MatIconModule, CommonModule, NgIf, MatButtonModule]
 })
-
 export class CipherInfoDialog {
    public error;
    public ic!: string;
