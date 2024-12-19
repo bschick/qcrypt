@@ -453,6 +453,9 @@ async function main() {
 
    reopenTTY.stdin(async (err, handle) => {
       ttyStream = handle;
+      if(!ttyStream) {
+         throw err;
+      }
 
       if (args._.length && args._[0] === 'info') {
          const infoText = await info(args, piped);
