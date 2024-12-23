@@ -9,7 +9,7 @@
   padding: 4px;
 }
 
-.section {
+.content h1.section {
   margin-top: 35px;
 }
 
@@ -27,10 +27,10 @@
 
 .flow-dialog {
   width: 80vw;
-  //    height: calc((80vw + 68px) / 1.5);
 
   .zoomed-flow {
     width: 100%;
+    max-width: 852px;
     cursor: zoom-in;
   }
 
@@ -57,8 +57,7 @@
   border-spacing: 0;
   overflow: hidden;
   word-break: normal;
-  font-weight: normal;
-  font-size: 14px;
+  font: var(--mat-sys-body-medium);
   text-align: left;
 }
 

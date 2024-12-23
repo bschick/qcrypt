@@ -33,6 +33,7 @@ SOFTWARE. */
 
   .dialog-content {
     padding-top: 5px;
+    @include common.doc-font;
   }
 
   .dialog-body {
@@ -62,6 +63,7 @@ SOFTWARE. */
 
   .dialog-content {
     min-width: 300px;
+    @include common.doc-font;
   }
 
   .user-msg {
@@ -133,6 +135,7 @@ SOFTWARE. */
     margin-top: 10px;
     margin-bottom: 0px;
     padding-top: 10px;
+    @include common.doc-font;
   }
 
   .button {

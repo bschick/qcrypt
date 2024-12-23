@@ -51,13 +51,13 @@ SOFTWARE. */
 }
 
 @mixin messageBox {
-  left:50%;
-  top:50%;
-  padding:10px 10px;
+  left: 50%;
+  top: 50%;
+  padding: 10px 10px;
   z-index: 999;
-  min-width:266px;
+  min-width: 266px;
   transform: translate(-50%, -50%);
-  position:absolute;
+  position: absolute;
   border-style: double;
   border-width: 4px;
   border-color: darkgray;
@@ -66,12 +66,12 @@ SOFTWARE. */
 
 .errorBox {
   @include messageBox();
-  background-color: #DBC5C5;
+  background-color: #dbc5c5;
 }
 
 .fileBox {
   @include messageBox();
-  background-color:#C6DBC6;
+  background-color: #c6dbc6;
 }
 
 .spinner {
@@ -126,12 +126,10 @@ SOFTWARE. */
   width: 120px;
   height: 45px;
   padding: 0;
-//  letter-spacing: 1.33929px;
 }
 
-.main-button {
-  background-color: var(--mdc-filled-button-container-color, var(--mat-sys-primary));
-  color: var(--mdc-filled-button-label-text-color, var(--mat-sys-on-primary))
+.strong-button {
+  @include common.strong-button;
 }
 
 .toolbar {
@@ -142,8 +140,8 @@ SOFTWARE. */
   justify-content: flex-end;
   align-items: center;
   gap: 2px;
-  position:absolute;
-  right:-14px;
+  position: absolute;
+  right: -14px;
   top: 2px;
 }
 
