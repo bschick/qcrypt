@@ -22,7 +22,7 @@ SOFTWARE. -->
 <div class="core">
   <div class="input-area flx-container" (mouseup)="onDraggerMouseUp();">
     <span class="flx-buttons">
-      <button mat-raised-button (click)="onEncrypt()" class="top-button main-button" color="primary" #bubbleTip2="bubbleTip"
+      <button mat-raised-button (click)="onEncrypt()" class="top-button strong-button" #bubbleTip2="bubbleTip"
         bubbleTip="When you have finished entering text, click the Encrypt button. You will then be promted for a password."
         bubblePosition="right" bubbleWidth="250px" aria-label="Encrypt Text" accesskey="E"
         [disabled]="showProgress ? 'true' : 'false'">
@@ -75,7 +75,7 @@ SOFTWARE. -->
           <mat-icon fontSet="material-icons-outlined">file_download</mat-icon>Save Cipher File
         </button>
       </mat-menu>
-      <button mat-raised-button (click)="onDecrypt()" class="top-button main-button mleft15" color="primary"
+      <button mat-raised-button (click)="onDecrypt()" class="top-button strong-button mleft15"
         aria-label="Decrypt Text" accesskey="D" [disabled]="showProgress ? 'true' : 'false'">
         <u>D</u>ecrypt
       </button>
@@ -267,7 +267,7 @@ SOFTWARE. -->
   <p>
     <span class="github">
       <a href="https://github.com/bschick/qcrypt?tab=readme-ov-file" target="_blank">
-        <button mat-fab extended color="primary"
+        <button mat-fab extended
           matTooltip="Quick Crypt is on GitHub: Get the source, report issues, or make improvements">
           <mat-icon svgIcon="github"></mat-icon><span class="github-label">GitHub</span>
         </button>

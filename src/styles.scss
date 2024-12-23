@@ -1,25 +1,26 @@
 /* You can add global styles to this file, and also import other style files */
-@use '@angular/material' as mat;
+@use "@angular/material" as mat;
 
 html {
   height: 100%;
 
-  @include mat.theme((
-    color: (
-      theme-type: light,
-      primary: mat.$azure-palette,
-      tertiary: mat.$blue-palette,
-    ),
-    typography: Roboto,
-    density: 0,
-  ));
+  @include mat.theme(
+    (
+      color: (
+        theme-type: light,
+        primary: mat.$azure-palette,
+        tertiary: mat.$blue-palette,
+      ),
+      typography: Roboto,
+      density: 0,
+    )
+  );
 }
-
 
 body {
   margin: 0;
   padding: 0;
-//  font-family: Roboto, "Helvetica Neue", sans-serif;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
   height: 100%;
 }
 
@@ -29,19 +30,33 @@ body {
 }
 
 :root {
-  @include mat.toolbar-overrides((
-    container-background-color: var(--mat-sys-primary-container),
-    container-text-color: var(--mdc-text-button-label-text-color, var(--mat-sys-primary))
-  ));
+  @include mat.toolbar-overrides(
+    (
+      container-background-color: var(--mat-sys-primary-container),
+      container-text-color:
+        var(--mdc-text-button-label-text-color, var(--mat-sys-primary)),
+    )
+  );
 
   // Material 3 set button label 'letter-spacing' to be too small IMO
-  @include mat.button-overrides((
-    text-label-text-tracking: 0.06em,
-    protected-label-text-tracking: 0.06em
-  ));
+  @include mat.button-overrides(
+    (
+      text-label-text-tracking: 0.06em,
+      protected-label-text-tracking: 0.06em,
+      protected-container-color: rgb(0, 92, 187, 0.08),
+    )
+  );
 
   // Material 3 made font-size small by default
-  @include mat.menu-overrides((
-    item-label-text-size: 0.938rem
-  ));
+  @include mat.menu-overrides(
+    (
+      item-label-text-size: 0.938rem,
+    )
+  );
+
+  @include mat.dialog-overrides(
+    (
+      container-max-width: 900px,
+    )
+  );
 }

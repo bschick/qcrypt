@@ -9,7 +9,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatInputModule } from '@angular/material/input';
-import { AuthenticatorService, AuthenticatorInfo, AuthEvent, AuthEventData } from '../services/authenticator.service';
+import { AuthenticatorService, AuthenticatorInfo, AuthEvent } from '../services/authenticator.service';
 import { EditableComponent } from '../ui/editable/editable.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -19,13 +19,13 @@ import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { Subscription } from 'rxjs';
 
 @Component({
-    selector: 'app-credentials',
-    templateUrl: './credentials.component.html',
-    styleUrl: './credentials.component.scss',
-    imports: [MatDividerModule, MatTableModule,
-        MatIconModule, MatButtonModule, MatInputModule, EditableComponent,
-        MatTooltipModule, RouterLink, CommonModule
-    ]
+   selector: 'app-credentials',
+   templateUrl: './credentials.component.html',
+   styleUrl: './credentials.component.scss',
+   imports: [MatDividerModule, MatTableModule,
+      MatIconModule, MatButtonModule, MatInputModule, EditableComponent,
+      MatTooltipModule, RouterLink, CommonModule
+   ]
 })
 export class CredentialsComponent implements OnInit, OnDestroy {
 
@@ -49,7 +49,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       });
    }
 
-   ngOnInit() {
+   ngOnInit(): void {
       this.passKeys = this.authSvc.passKeys();
 
       this.routeSub = this.router.events.subscribe((event) => {
@@ -62,6 +62,8 @@ export class CredentialsComponent implements OnInit, OnDestroy {
          [AuthEvent.Logout],
          () => this.done.emit(true)
       );
+
+
    }
 
    ngOnDestroy(): void {
@@ -193,13 +195,13 @@ https://angular.dev/guide/forms
 https://angular.dev/guide/forms/reactive-forms
 */
 @Component({
-    selector: 'confirm-dialog',
-    templateUrl: 'confirm-dialog.html',
-    styleUrl: './credentials.component.scss',
-    imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
-        MatButtonModule, MatFormFieldModule, NgIf, MatInputModule, FormsModule,
-        ReactiveFormsModule
-    ]
+   selector: 'confirm-dialog',
+   templateUrl: 'confirm-dialog.html',
+   styleUrl: './credentials.component.scss',
+   imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
+      MatButtonModule, MatFormFieldModule, NgIf, MatInputModule, FormsModule,
+      ReactiveFormsModule
+   ]
 })
 export class ConfirmDialog {
 

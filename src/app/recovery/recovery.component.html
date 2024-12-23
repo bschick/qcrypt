@@ -58,7 +58,7 @@
       </mat-card>
 
       <div class="button-host">
-        <button mat-raised-button (click)="onClickStartRecovery($event)" color="primary">
+        <button mat-raised-button (click)="onClickStartRecovery($event)">
           Start the recovery process
         </button>
       </div>
@@ -109,11 +109,11 @@
 
       <div class="button-host">
         <a [routerLink]="'/newuser'">
-          <button mat-raised-button color="primary">
+          <button mat-raised-button>
             Create a new user from scratch
           </button>
         </a>
-        <button mat-raised-button *ngIf="validRecoveryLink" (click)="onClickStartRecovery($event)" color="primary"
+        <button mat-raised-button *ngIf="validRecoveryLink" (click)="onClickStartRecovery($event)"
           class="button2">
           Try the recovery process again
         </button>

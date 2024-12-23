@@ -1,5 +1,5 @@
 @use "../help.scss";
-@use "@angular/material" as mat;
+@use '@angular/material' as mat;
 
 // because we disable view encapsulation for innerHTML in answers
 .faq {
@@ -14,7 +14,6 @@
     max-width: 390px;
     flex: 2;
     @include mat.form-field-density(-3);
-
   }
 
   .faq-table {

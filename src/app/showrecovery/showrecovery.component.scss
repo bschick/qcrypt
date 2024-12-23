@@ -1,6 +1,5 @@
 @use "../common.scss";
-@use '@angular/material' as mat;
-
+@use "@angular/material" as mat;
 
 .control-host {
   margin-top: 50px;
@@ -11,11 +10,12 @@
   justify-content: space-evenly;
 
   .recovery {
-    min-width:280px;
+    min-width: 280px;
     @include mat.form-field-density(-1);
   }
 
   button {
+    @include common.strong-button;
     height: 45px;
     min-width: 280px;
     margin-top: 3px;

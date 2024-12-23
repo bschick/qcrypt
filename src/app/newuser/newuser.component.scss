@@ -22,11 +22,11 @@
   }
 
   button {
+    @include common.strong-button;
     height: 45px;
     width: 280px;
   }
 }
-
 
 .tip {
   text-decoration-line: underline;

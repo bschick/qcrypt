@@ -10,6 +10,7 @@
 }
 
 .button {
+  @include common.strong-button;
   margin-top: 15px;
   height: 45px;
   width: 330px;
@@ -47,6 +48,7 @@
   }
 
   .dialog-content {
+    @include common.doc-font;
     min-height: 350px;
     padding-top: 10px;
   }

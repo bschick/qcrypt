@@ -1,3 +1,5 @@
+@use "@angular/material" as mat;
+
 .container {
   display: flex;
   align-items: flex-start;
@@ -28,18 +30,35 @@
   z-index: 999;
 }
 
+@mixin strong-button {
+  background-color: var(
+    --mdc-filled-button-container-color,
+    var(--mat-sys-primary)
+  );
+
+  color: var(--mdc-filled-button-label-text-color, var(--mat-sys-on-primary));
+}
+
 @mixin doc-font {
-  font-size: 16px;
-  line-height: 22px;
+  font: var(--mat-sys-body-large);
 }
 
-.content p,
-li {
-  @include doc-font;
-}
+.content {
+  p,
+  li {
+    @include doc-font;
+  }
 
-h2 {
-  margin: 16px 0 6px 0;
+  h2 {
+    font: var(--mat-sys-headline-small);
+    font-size: 1.25rem;
+    margin: 16px 0 6px 0;
+  }
+
+  h1 {
+    font: var(--mat-sys-headline-small);
+    margin-top: 0;
+  }
 }
 
 .github {
@@ -52,8 +71,10 @@ h2 {
   }
 
   button {
-//    background-color: #8a8fb2;
-    background-color: var(--mdc-filled-button-container-color, var(--mat-sys-primary));
+    background-color: var(
+      --mdc-filled-button-container-color,
+      var(--mat-sys-primary)
+    );
     opacity: 0.6;
     height: 36px;
     padding-left: 16px;
