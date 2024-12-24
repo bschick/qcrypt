@@ -1,10 +1,10 @@
 import { environment } from '../../environments/environment';
 import { Injectable, signal } from '@angular/core';
-import { startRegistration, startAuthentication } from '@simplewebauthn/browser';
 import {
    PublicKeyCredentialCreationOptionsJSON,
    PublicKeyCredentialRequestOptionsJSON,
-} from '@simplewebauthn/types';
+   startRegistration, startAuthentication
+} from '@simplewebauthn/browser';
 import { Subject, Subscription, filter } from 'rxjs';
 import { DateTime } from 'luxon';
 import { base64ToBytes, bytesToBase64 } from './utils';
@@ -553,7 +553,7 @@ export class AuthenticatorService {
 
       let startReg;
       try {
-         startReg = await startRegistration({optionsJSON: optionsJson});
+         startReg = await startRegistration({ optionsJSON: optionsJson });
       } catch (err) {
          console.error(err);
          throw err;
