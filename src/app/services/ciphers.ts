@@ -182,26 +182,26 @@ export class Ciphers {
       rawMaterial.set(pwdBytes);
       rawMaterial.set(userCred, pwdBytes.byteLength);
 
-/* Maybe someday, but requires SUMO version of libsodium.js
-      await sodium.ready;
-      const rawKey = sodium.crypto_pwhash(
-         32,
-         rawMaterial,
-         slt,
-         sodium.crypto_pwhash_OPSLIMIT_MODERATE,
-         sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE,
-         sodium.crypto_pwhash_ALG_ARGON2I13,
-         "uint8array"
-      );
-
-      const ek = await crypto.subtle.importKey(
-         'raw',
-         rawKey,
-         'AES-GCM',
-         true,
-         ['encrypt', 'decrypt']
-      );
-*/
+      /* Maybe someday, but requires SUMO version of libsodium.js
+            await sodium.ready;
+            const rawKey = sodium.crypto_pwhash(
+               32,
+               rawMaterial,
+               slt,
+               sodium.crypto_pwhash_OPSLIMIT_MODERATE,
+               sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE,
+               sodium.crypto_pwhash_ALG_ARGON2I13,
+               "uint8array"
+            );
+      
+            const ek = await crypto.subtle.importKey(
+               'raw',
+               rawKey,
+               'AES-GCM',
+               true,
+               ['encrypt', 'decrypt']
+            );
+      */
       const ekMaterial = await crypto.subtle.importKey(
          'raw',
          rawMaterial,
@@ -598,15 +598,15 @@ export class EncipherV4 extends Encipher {
       this._iv = randomArray.slice(cc.SLT_BYTES, cc.SLT_BYTES + ivBytes);
 
       const [pwd, hint] = await pwdProvider({
-            ver: cc.VERSION4,
-            alg: this._alg,
-            ic: this._ic,
-            slt: this._slt,
-            lp: this._lp,
-            lpEnd: this._lpEnd,
-            iv: this._iv,
-            hint: undefined
-         },
+         ver: cc.VERSION4,
+         alg: this._alg,
+         ic: this._ic,
+         slt: this._slt,
+         lp: this._lp,
+         lpEnd: this._lpEnd,
+         iv: this._iv,
+         hint: undefined
+      },
          true
       );
       if (hint && hint.length > cc.HINT_MAX_LEN) {
@@ -816,11 +816,11 @@ export class EncipherV4 extends Encipher {
          }
       } else {
          const cipherBuf = await crypto.subtle.encrypt({
-               name: alg,
-               iv: iv,
-               additionalData: additionalData ?? new ArrayBuffer(0),
-               tagLength: cc.AES_GCM_TAG_BYTES * 8
-            },
+            name: alg,
+            iv: iv,
+            additionalData: additionalData ?? new ArrayBuffer(0),
+            tagLength: cc.AES_GCM_TAG_BYTES * 8
+         },
             key,
             clear
          );
@@ -941,15 +941,15 @@ export abstract class Decipher extends Ciphers {
       }
 
       const [pwd] = await pwdProvider({
-            ver: this._ver!,
-            alg: this._alg,
-            ic: this._ic,
-            slt: this._slt,
-            lp: this._lp,
-            lpEnd: this._lpEnd,
-            iv: this._iv,
-            hint: this._hint
-         },
+         ver: this._ver!,
+         alg: this._alg,
+         ic: this._ic,
+         slt: this._slt,
+         lp: this._lp,
+         lpEnd: this._lpEnd,
+         iv: this._iv,
+         hint: this._hint
+      },
          false
       );
       if (!pwd) {
@@ -1051,11 +1051,11 @@ export abstract class Decipher extends Ciphers {
          }
       } else {
          const buffer = await crypto.subtle.decrypt({
-               name: alg,
-               iv: iv.slice(0, 12),
-               additionalData: additionalData ?? new ArrayBuffer(0),
-               tagLength: cc.AES_GCM_TAG_BYTES * 8
-            },
+            name: alg,
+            iv: iv.slice(0, 12),
+            additionalData: additionalData ?? new ArrayBuffer(0),
+            tagLength: cc.AES_GCM_TAG_BYTES * 8
+         },
             key,
             encrypted
          );

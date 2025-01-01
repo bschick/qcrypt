@@ -60,18 +60,18 @@
 
     &::before {
       left: calc(25% - 5px);
-      bottom: 8px;
+      bottom: 10px;
       transform:rotate(10deg);
     }
   }
 
   &--above {
-    transform:translate(-70%, -120%);
+    transform:translate(-70%, -110%);
     margin-bottom: 7px;
 
     &::before {
       left: calc(25% - 5px);
-      bottom: 8px;
+      bottom: 10px;
       transform:rotate(10deg);
     }
   }
