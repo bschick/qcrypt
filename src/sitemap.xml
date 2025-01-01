@@ -2,37 +2,37 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
         <loc>https://quickcrypt.org</loc>
-        <lastmod>2024-12-1</lastmod>
+        <lastmod>2024-12-31</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://quickcrypt.org/help/faqs</loc>
-        <lastmod>2024-12-1</lastmod>
+        <lastmod>2024-12-31</lastmod>
         <changefreq>weekly</changefreq>
     </url>
     <url>
         <loc>https://quickcrypt.org/help/overview</loc>
-        <lastmod>2024-12-1</lastmod>
+        <lastmod>2024-12-31/lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://quickcrypt.org/help/protocol</loc>
-        <lastmod>2024-12-1</lastmod>
+        <lastmod>2024-12-31/lastmod>
         <changefreq>weekly</changefreq>
     </url>
     <url>
         <loc>https://quickcrypt.org/help/protocol1</loc>
-        <lastmod>2024-12-1</lastmod>
+        <lastmod>2024-12-31</lastmod>
         <changefreq>yearly</changefreq>
     </url>
     <url>
         <loc>https://quickcrypt.org/welcome</loc>
-        <lastmod>2024-12-1</lastmod>
+        <lastmod>2024-12-31</lastmod>
         <changefreq>monthly</changefreq>
     </url>
     <url>
         <loc>https://quickcrypt.org/newuser</loc>
-        <lastmod>2024-12-1</lastmod>
+        <lastmod>2024-12-31</lastmod>
         <changefreq>monthly</changefreq>
     </url>
 </urlset>
