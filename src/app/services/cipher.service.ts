@@ -20,20 +20,19 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Injectable } from '@angular/core';
-import * as cc from './cipher.consts';
-import { Ciphers } from './ciphers';
+import { Injectable } from "@angular/core";
+import * as cc from "./cipher.consts";
+import { Ciphers } from "./ciphers";
 import {
    EContext,
    encryptStream,
    decryptStream,
    getCipherStreamInfo,
    CipherDataInfo,
-   PWDProvider
-} from './cipher-streams';
+   PWDProvider,
+} from "./cipher-streams";
 
 export { EContext, CipherDataInfo, PWDProvider };
-
 
 /* Thin wrapper around Ciphers and cipher stream functions to create
 an Angular service. Must of that functionality was previously in this
@@ -41,10 +40,10 @@ class directly, and perhaps this class could now be removed, but keeping
 it for now to avoid having to update other code and many tests */
 
 @Injectable({
-   providedIn: 'root'
+   providedIn: "root",
 })
 export class CipherService {
-
+   private _iCount = 0;
    private _hashRate = 0;
    private _iCountMax = cc.ICOUNT_MAX;
 
@@ -57,20 +56,20 @@ export class CipherService {
       targetMillis: number,
       maxMillis: number
    ): Promise<[number, number, number]> {
+      if (this._iCount === 0) {
+         [this._iCount, this._iCountMax, this._hashRate] = await Ciphers.benchmark(
+            testSize,
+            targetMillis,
+            maxMillis
+         );
+      }
 
-      let iCount: number;
-      [iCount, this._iCountMax, this._hashRate] = await Ciphers.benchmark(
-         testSize,
-         targetMillis,
-         maxMillis
-      );
-
-      return [iCount, this._iCountMax, this._hashRate];
+      return [this._iCount, this._iCountMax, this._hashRate];
    }
 
    validateAlgs(algs: string[]): boolean {
-      for(let alg of algs) {
-         if(!Ciphers.validateAlg(alg)) {
+      for (let alg of algs) {
+         if (!Ciphers.validateAlg(alg)) {
             return false;
          }
       }
@@ -82,7 +81,9 @@ export class CipherService {
    }
 
    algDescription(alg: string): string {
-      return Ciphers.validateAlg(alg) ? cc.AlgInfo[alg]['description'] as string : 'Invalid';
+      return Ciphers.validateAlg(alg)
+         ? (cc.AlgInfo[alg]["description"] as string)
+         : "Invalid";
    }
 
    algs(): string[] {
@@ -95,17 +96,12 @@ export class CipherService {
       userCred: Uint8Array,
       clearStream: ReadableStream<Uint8Array>
    ): Promise<ReadableStream<Uint8Array>> {
-      return encryptStream(
-         econtext,
-         pwdProvider,
-         userCred,
-         clearStream
-      );
+      return encryptStream(econtext, pwdProvider, userCred, clearStream);
    }
 
    async getCipherStreamInfo(
       userCred: Uint8Array,
-      cipherStream: ReadableStream<Uint8Array>,
+      cipherStream: ReadableStream<Uint8Array>
    ): Promise<CipherDataInfo> {
       return getCipherStreamInfo(userCred, cipherStream);
    }
@@ -115,12 +111,6 @@ export class CipherService {
       userCred: Uint8Array,
       cipherStream: ReadableStream<Uint8Array>
    ): Promise<ReadableStream<Uint8Array>> {
-      return decryptStream(
-         pwdProvider,
-         userCred,
-         cipherStream
-      );
+      return decryptStream(pwdProvider, userCred, cipherStream);
    }
 }
-
-
