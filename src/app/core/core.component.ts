@@ -359,10 +359,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
       if (this.authSvc.isAuthenticated() &&
          localStorage.getItem(this.authSvc.userId + "welcomed") != 'yup') {
-         setTimeout(() => {
-            this.welcomed = false;
-            this.bubbleTip1.show();
-         }, 1200);
+         this.welcomed = false;
+         this.bubbleTip1.show();
       }
    }
 
