@@ -232,6 +232,74 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
+      question: 'What is a sender link and how do I use it?',
+      answer: `<p>A sender link allows other to encrypt text or files that only you can
+      decrypt without exposing your credentials. You specify how many times a each
+      sender link can be used and when the link will expire. Once created, you can give
+      the sender link to others who can use it to encrypt data only you can decrypt.
+      Recipients should follow the link and encypt data with passwords just as they
+      would normally in Quick Crypt. Recipients may then send you the encrypted
+      data by any means they chose (message app, email, file sharing, etc). Neither
+      unencrypted nor encrypted data is processed, sent, or stored by Quick Crypt
+      servers, ensuring you maintain full control over the information provided by
+      the sender. When you
+      receive encypted data, you decrypted it as you would normally in Quick Crypt
+      with the same strong privacy and authenticity characteristics.</p>
+      <p>
+
+      </p>
+
+       To create a sender link, click the "Sender Link" button on the main page.`
+   },
+
+
+   {
+      position: 0,
+      question: 'What should I do if someone I don\'t trust obtains a sender link I created?',
+      answer: `<p>First, it is important to understand that sender links can only encrypt data.
+      When someone has a sender link you created, they cannot use it to decrypt your data nor
+      even the resulting cipher armor they creating themselves using your link.</p>
+      <p>
+      If an untrusted person has a sender link you created they could use it to encrypt data
+      you don't want or trust. There are several ways to handle this situation: 
+      <ol type='i'>
+      <li>Delete the sender link on <a href="/help/overview">Quick Crypt's sender like page</a></li>
+      <li>Quick Crypt helps you detect lost sender links by showing you the
+      user name from the account who encrypted data. If you did not expect data from that
+      sender, you should not trust it</li>
+      <li>Since Quick Crypt never stores or sends encrypted data, you can also confirm you received
+      encrypted data from an expected sender (email address, messaging user, etc.)</li>
+      </ol>
+      
+      </p>
+
+      
+      does not allow
+      other to decrypt your data. Sender links can only be used to encrypt data, and others
+      uho use your sender link cannot even decrypt that data themselves.
+      
+      A sender link allows other to encrypt text or files that only you can
+      decrypt without exposing your credentials. You specify how many times a each
+      sender link can be used and when the link will expire. Once created, you can give
+      the sender link to others who can use it to encrypt data only you can decrypt.
+      Recipients should follow the link and encypt data with passwords just as they
+      would normally in Quick Crypt. Recipients may then send you the encrypted
+      data by any means they chose (message app, email, file sharing, etc). Neither
+      unencrypted nor encrypted data is processed, sent, or stored by Quick Crypt
+      servers, ensuring you maintain full control over the information provided by
+      the sender. When you
+      receive encypted data, you decrypted it as you would normally in Quick Crypt
+      with the same strong privacy and authenticity characteristics.</p>
+      <p>
+
+      </p>
+
+       To create a sender link, click the "Sender Link" button on the main page.`
+   },
+
+
+   {
+      position: 0,
       question: 'Does Quick Crypt store or process Personal Identifiable Information (PII)?',
       answer: `Quick Crypt does not request, collect, or process PII. When you enter a user
       name or a

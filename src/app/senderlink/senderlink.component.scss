@@ -1,0 +1,23 @@
+@use "../common.scss";
+@use "@angular/material" as mat;
+
+.control-host {
+  margin-top: 50px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  width: 100%;
+  justify-content: space-evenly;
+
+  .recovery {
+    min-width: 280px;
+    @include mat.form-field-density(-1);
+  }
+
+  button {
+    @include common.strong-button;
+    height: 45px;
+    min-width: 280px;
+    margin-top: 3px;
+  }
+}
