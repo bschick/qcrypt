@@ -33,6 +33,11 @@ export class BubbleDirective {
 
   public show() {
     this.initializeBubble();
+    setTimeout(() => {
+      if (this.componentRef !== null) {
+        this.componentRef.instance.visible = true;
+      }
+    }, 200);
   }
 
   public hide() {
@@ -41,20 +46,21 @@ export class BubbleDirective {
 
   private initializeBubble() {
     if (this.componentRef === null) {
-      this.componentRef = this.viewContainerRef.createComponent(BubbleComponent,{injector: this.injector});
+      this.componentRef = this.viewContainerRef.createComponent(BubbleComponent, { injector: this.injector });
       this.setComponentProperties();
       this.bubbleIndex = this.viewContainerRef.indexOf(this.componentRef.hostView);
+
     }
   }
 
   private setComponentProperties() {
     if (this.componentRef !== null) {
       this.componentRef.instance.tip = this.bubbleTip;
-      this.componentRef.instance.position =this.bubblePosition;
+      this.componentRef.instance.position = this.bubblePosition;
       this.componentRef.instance.width = this.bubbleWidth;
       this.componentRef.instance.height = this.bubbleHeight;
 
-      const {left, right, top, bottom} = this.elementRef.nativeElement.getBoundingClientRect();
+      const { left, right, top, bottom } = this.elementRef.nativeElement.getBoundingClientRect();
 
       switch (this.bubblePosition) {
         case BubblePosition.UPPER:
@@ -68,24 +74,23 @@ export class BubbleDirective {
           this.componentRef.instance.top = Math.round(top + (bottom - top) / 2);
           break;
         }
-/*        case BubblePosition.BELOW: {
-          this.componentRef.instance.left = Math.round((right - left) / 2 + left);
-          this.componentRef.instance.top = Math.round(bottom);
-          break;
-        }
-
-        case BubblePosition.LEFT: {
-          this.componentRef.instance.left = Math.round(left);
-          this.componentRef.instance.top = Math.round(top + (bottom - top) / 2);
-          break;
-        }
-*/
+        /*        case BubblePosition.BELOW: {
+                  this.componentRef.instance.left = Math.round((right - left) / 2 + left);
+                  this.componentRef.instance.top = Math.round(bottom);
+                  break;
+                }
+        
+                case BubblePosition.LEFT: {
+                  this.componentRef.instance.left = Math.round(left);
+                  this.componentRef.instance.top = Math.round(top + (bottom - top) / 2);
+                  break;
+                }
+        */
         default: {
           console.error('unknown bubble position', this.bubblePosition);
         }
       }
 
-      this.componentRef.instance.visible = true;
       this.componentRef.instance.changeRef.detectChanges();
     }
   }
