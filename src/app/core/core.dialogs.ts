@@ -132,7 +132,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
       const resizeObserver = new ResizeObserver(
          (entries: ResizeObserverEntry[]) => {
             const entry = entries[0];
-            if (entry.contentRect.width < 344) {
+            if (entry.contentRect.width < 357) {
                const suggest = document.getElementsByClassName("psm__suggestion")[0] as HTMLElement;
                if (suggest) {
                   suggest.style['visibility'] = 'hidden';
