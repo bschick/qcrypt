@@ -94,7 +94,9 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    public cipherShow = false;
    private checkPwned = false;
    private welcomed = true;
+   private strenElem?: HTMLElement;
    public maxHintLen = cc.HINT_MAX_LEN;
+
 
    @ViewChild('bubbleTip') bubbleTip!: BubbleDirective;
 
@@ -120,6 +122,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    ngOnInit(): void {
       // should we show warning during decryptiong? currently, yes
       this.zxcvbnOptions.checkPwned(this.checkPwned);
+      this.strenElem = document.getElementsByClassName("stren-meter")[0] as HTMLElement;
    }
 
    ngAfterViewInit(): void {
@@ -131,23 +134,10 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
       // displayed elements, so forced to find it on the fly and hide/show
       const resizeObserver = new ResizeObserver(
          (entries: ResizeObserverEntry[]) => {
-            const entry = entries[0];
-            if (entry.contentRect.width < 357) {
-               const suggest = document.getElementsByClassName("psm__suggestion")[0] as HTMLElement;
-               if (suggest) {
-                  suggest.style['visibility'] = 'hidden';
-               }
-            } else {
-               const suggest = document.getElementsByClassName("psm__suggestion")[0] as HTMLElement;
-               if (suggest) {
-                  suggest.style['visibility'] = 'visible';
-               }
-            }
-         }
-      );
+            this.showHideSuggestion();
+      });
 
-      const strenElem = document.getElementsByClassName("stren-meter")[0] as HTMLElement;
-      resizeObserver.observe(strenElem);
+      resizeObserver.observe(this.strenElem!);
    }
 
    ngOnDestroy(): void {
@@ -163,6 +153,18 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
          this.strengthAlert = true;
          this.r2.selectRootElement('#password').focus();
       }
+   }
+
+   // onPasswordStrengthChange only trigger with stength number changes, but the
+   // length of the suggesitons can without strength change, so we need to check
+   // for every input change
+   onPasswordChange() {
+      // really ugly, but since the elements are added async this is the simplest
+      // solution. Could alterntively edit or monkey-patch password strength meter code
+      setTimeout(
+         () =>  this.showHideSuggestion(),
+         200
+      );
    }
 
    onPasswordStrengthChange(strength: number | null) {
@@ -183,6 +185,20 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
       } else {
          this.strengthAlert = false;
          this.strengthPhrase = 'Password is acceptable';
+      }
+   }
+
+   async showHideSuggestion() {
+      if (this.strenElem && this.strenElem.clientWidth < 357) {
+         const suggest = document.getElementsByClassName("psm__suggestion")[0] as HTMLElement;
+         if (suggest) {
+            suggest.style['visibility'] = 'hidden';
+         }
+      } else {
+         const suggest = document.getElementsByClassName("psm__suggestion")[0] as HTMLElement;
+         if (suggest) {
+            suggest.style['visibility'] = 'visible';
+         }
       }
    }
 }
