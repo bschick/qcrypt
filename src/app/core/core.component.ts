@@ -472,7 +472,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    onAuthEvent(data: AuthEventData) {
       if (data.event === AuthEvent.Logout) {
-         this.resetOptions();
+         this.defaultOptions();
+         this.privacyClear();
          this.onClearCipher();
          this.showSigninDialog();
       } else if (data.event === AuthEvent.Login) {
@@ -501,7 +502,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.nukeOptions();
    }
 
-   resetOptions(): void {
+   defaultOptions(): void {
       this.algorithm = ['X20-PLY'];
       this.icount = this.icountDefault;
       this.hidePwd = true;
@@ -517,7 +518,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.trueRand = false;
 
       this.clearPassword();
-      this.saveOptions();
       this.optionsLoaded = false;
 
       // order is important, set modes first
@@ -526,7 +526,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    nukeOptions(): void {
-      this.resetOptions();
+      this.defaultOptions();
       try {
          this.lsDel('welcomed');
          this.lsDel('algorithm');
@@ -547,7 +547,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   saveOptions(): void {
+/*   saveOptions(): void {
       try {
          if (this.authSvc.isAuthenticated()) {
             this.lsSet('algorithm', JSON.stringify(this.algorithm));
@@ -567,7 +567,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          console.error(err);
          //otherwise ignore
       }
-   }
+   }*/
 
    timerTick(): void {
       if (DateTime.now() > this.cacheTimeout) {
@@ -680,14 +680,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.clearFile = undefined;
       this.clearText = '';
       this.clearLabel = 'Clear Text';
-      if (!this.welcomed) {
+      if (!this.welcomed && this.authSvc.isAuthenticated()) {
          this.bubbleTip1.show();
          this.bubbleTip2.hide();
       }
    }
 
    onClearInput() {
-      if (!this.welcomed) {
+      if (!this.welcomed && this.authSvc.isAuthenticated()) {
          this.bubbleTip1.hide();
          this.bubbleTip2.show();
       }
@@ -698,33 +698,32 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.onClearClear();
    }
 
-   passwordProvider(
+   async passwordProvider(
       cdInfo: CipherDataInfo,
       encrypting: boolean
    ): Promise<[string, string | undefined]> {
 
-      let pwdResult: Promise<[string, string | undefined]>;
+      let pwdResult: [string, string | undefined];
       if (this.pwdCached && cdInfo.lpEnd == 1) {
          this.restartTimer();
-         pwdResult = Promise.resolve([this.cachedPassword, this.cachedHint]);
+         pwdResult = [this.cachedPassword, this.cachedHint];
       } else {
          //-1 minStrength means no pwd strength requirments
-         pwdResult = this.askForPassword(cdInfo, encrypting);
+         pwdResult = await this.askForPassword(cdInfo, encrypting);
       }
 
       // This can run outside of Angular's zone because the  callback
       // comes from within streem connections
       this.ngZone.run(() => {
+         console.log(cdInfo.ic, this.spinnerAbove, this.usingFile);
          // Avoid briefly putting up spinner and disabling buttons
          if (cdInfo.ic > this.spinnerAbove || this.usingFile) {
             this.showProgress = true;
          }
       });
 
-      return pwdResult.then( (res) => {
-         this.actionStart = Date.now();
-         return res;
-      });
+      this.actionStart = Date.now();
+      return pwdResult;
    }
 
    async askForPassword(

@@ -52,6 +52,9 @@ import { bytesToBase64 } from '../services/utils';
 import { CipherService, CipherDataInfo } from '../services/cipher.service';
 
 
+const PWD_CLOSE_TIMEOUT = 1000 * 60 * 5;
+
+
 export type PwdDialogData = {
    message: string;
    hint: string;
@@ -95,6 +98,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    private checkPwned = false;
    private welcomed = true;
    private strenElem?: HTMLElement;
+   private timerId = -1;
    public maxHintLen = cc.HINT_MAX_LEN;
 
 
@@ -159,12 +163,24 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    // length of the suggesitons can without strength change, so we need to check
    // for every input change
    onPasswordChange() {
+      // Don't want to leave an open pwd dialog if, there are characters entered
+      // and not activity for a few minutes minutes, close the dialog
+      if(this.timerId >= 0) {
+         window.clearTimeout(this.timerId);
+      }
+
+      this.timerId = window.setTimeout(
+         () => this.dialogRef.close(),
+         PWD_CLOSE_TIMEOUT
+      );
+
       // really ugly, but since the elements are added async this is the simplest
       // solution. Could alterntively edit or monkey-patch password strength meter code
-      setTimeout(
+      window.setTimeout(
          () =>  this.showHideSuggestion(),
          200
       );
+
    }
 
    onPasswordStrengthChange(strength: number | null) {
