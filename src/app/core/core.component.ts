@@ -715,7 +715,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       // This can run outside of Angular's zone because the  callback
       // comes from within streem connections
       this.ngZone.run(() => {
-         console.log(cdInfo.ic, this.spinnerAbove, this.usingFile);
          // Avoid briefly putting up spinner and disabling buttons
          if (cdInfo.ic > this.spinnerAbove || this.usingFile) {
             this.showProgress = true;
