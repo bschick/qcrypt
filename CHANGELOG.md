@@ -1,5 +1,20 @@
 # CHANGELOG.md
 
+## 4.2.1 (2024-01-12)
+
+Security:
+
+  - automatically close password dialog when inactive
+
+Changes:
+
+  - fixed top nav button highlight problem
+  - fixed some bubble help positioning issues (still not great)
+  - improved password dialog resizing on small screens
+  - various small material 3 layout fixes
+  - minor doc updates
+  - package updates
+
 ## 4.2.0 (2024-12-31)
 
 Changes:

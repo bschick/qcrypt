@@ -80,10 +80,11 @@ export class QCryptComponent implements OnInit, OnDestroy {
    }
 
    focusColor(test?: string) {
+      const location = window.location;
       if (test) {
-         return this.router.url.startsWith(test) ? this.bgColorFocus : this.bgColorDefault;
+         return location.pathname.startsWith(test) ? this.bgColorFocus : this.bgColorDefault;
       } else {
-         return ['', '/newuser', '/welcome', '/', undefined].includes(this.router.url) ? this.bgColorFocus : this.bgColorDefault;
+         return ['', '/newuser', '/welcome', '/', undefined].includes(location.pathname) ? this.bgColorFocus : this.bgColorDefault;
       }
    }
 

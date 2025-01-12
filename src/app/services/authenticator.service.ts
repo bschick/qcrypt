@@ -195,9 +195,8 @@ export class AuthenticatorService {
       this._expiration = DateTime.now().plus({ seconds: INACTIVITY_TIMEOUT });
       sessionStorage.setItem(this._userId + 'expiration', this._expiration.toISO()!);
 
-      // @ts-ignore
       // Check every 5 minutes
-      this._intervalId = setInterval(() => this.timerTick(), 1000 * 60 * 5);
+      this._intervalId = window.setInterval(() => this.timerTick(), 1000 * 60 * 5);
    }
 
    private timerTick(): void {

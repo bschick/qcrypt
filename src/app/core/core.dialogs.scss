@@ -62,7 +62,9 @@ SOFTWARE. */
   }
 
   .dialog-content {
+    padding-top: 0px;
     min-width: 300px;
+    max-width: 558px;
     @include common.doc-font;
   }
 
@@ -97,7 +99,7 @@ SOFTWARE. */
 
   .accept-button {
     position: absolute;
-    right: 22px;
+    right: 0px;
     z-index: 999;
   }
 
@@ -110,13 +112,13 @@ SOFTWARE. */
 
   /* The next two selector modify text inside stength meter */
   div.psm__progress-bar {
-    margin-bottom: 5px !important;
+    margin: 5px 0 !important;
   }
 
   small.psm__suggestion.ng-star-inserted,
   small.psm__feedback.ng-star-inserted {
     margin-top: 0;
-    font-size: 85%;
+    font-size: 75%;
     line-height: 15px;
   }
 }
