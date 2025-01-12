@@ -13,6 +13,7 @@ Changes:
   - improved password dialog resizing on small screens
   - various small material 3 layout fixes
   - minor doc updates
+  - package updates
 
 ## 4.2.0 (2024-12-31)
 
