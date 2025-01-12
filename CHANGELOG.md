@@ -1,12 +1,18 @@
 # CHANGELOG.md
 
-## 4.2.0 (2024-12-31)
+## 4.2.1 (2024-01-12)
+
+Security:
+
+  - automatically close password dialog when inactive
 
 Changes:
 
-  - updated to angular 19 and material 3
-  - changed styling to align with material 3
-  - updated other packages
+  - fixed top nav button highlight problem
+  - fixed some bubble help positioning issues (still not great)
+  - improved password dialog resizing on small screens
+  - various small material 3 layout fixes
+  - minor doc updates
 
 ## 4.2.0 (2024-12-31)
 
