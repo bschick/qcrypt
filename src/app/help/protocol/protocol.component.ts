@@ -5,11 +5,12 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angu
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
+import { CoprightComponent } from "../../ui/copright/copright.component";
 
 
 @Component({
     selector: 'app-protocol',
-    imports: [MatTooltipModule, RouterLink],
+    imports: [MatTooltipModule, RouterLink, CoprightComponent],
     templateUrl: './protocol.component.html',
     styleUrl: './protocol.component.scss'
 })
@@ -25,7 +26,7 @@ export class ProtocolComponent {
 
 @Component({
     selector: 'app-protocol4',
-    imports: [MatTooltipModule, RouterLink],
+    imports: [MatTooltipModule, RouterLink, CoprightComponent],
     templateUrl: './protocol4.component.html',
     styleUrl: './protocol.component.scss'
 })

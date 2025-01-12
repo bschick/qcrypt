@@ -81,6 +81,7 @@ import {
 import { BubbleDirective } from '../ui/bubble/bubble.directive';
 import { AlgorithmsComponent } from '../ui/algorithms/algorithms.component';
 import { Subscription } from 'rxjs';
+import { CoprightComponent } from "../ui/copright/copright.component";
 
 // up to cc.LP_MAX could be supported but even 16 seems excessive
 const MAX_LOOPS = 10;
@@ -131,12 +132,11 @@ function setIfBoolean(
     templateUrl: './core.component.html',
     styleUrl: './core.component.scss',
     imports: [MatProgressSpinnerModule, MatMenuModule, MatIconModule,
-        MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
-        ReactiveFormsModule, ClipboardModule, CdkAccordionModule, MatSlideToggleModule,
-        MatExpansionModule, MatSelectModule, MatButtonToggleModule,
-        MatTooltipModule, MatRippleModule, CommonModule, BubbleDirective,
-        RouterLink, AlgorithmsComponent
-    ]
+    MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
+    ReactiveFormsModule, ClipboardModule, CdkAccordionModule, MatSlideToggleModule,
+    MatExpansionModule, MatSelectModule, MatButtonToggleModule,
+    MatTooltipModule, MatRippleModule, CommonModule, BubbleDirective,
+    RouterLink, AlgorithmsComponent, CoprightComponent]
 })
 export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 

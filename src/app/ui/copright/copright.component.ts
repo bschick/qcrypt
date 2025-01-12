@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2024 Brad Schick
+Copyright (c) 2025 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,38 +19,14 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
-import { NgClass } from '@angular/common';
-
-export const BubblePosition = {
-   ABOVE: 'above',
-   UPPER: 'upper',
-   RIGHT: 'right',
-   DEFAULT: 'upper'
-} as const;
-
-export type BubblePosition = typeof BubblePosition[keyof typeof BubblePosition];
+import { Component } from '@angular/core';
 
 @Component({
-    selector: 'bubble',
-    templateUrl: './bubble.component.html',
-    styleUrl: './bubble.component.scss',
-    imports: [NgClass]
+  selector: 'app-copright',
+  imports: [],
+  templateUrl: './copright.component.html',
+  styleUrl: './copright.component.scss'
 })
-export class BubbleComponent implements OnInit {
+export class CoprightComponent {
 
-   position: BubblePosition = BubblePosition.DEFAULT;
-   theme = 'light';
-   tip = '';
-   left = 0;
-   top = 0;
-   width?: string;
-   height?: string;
-   visible = false;
-
-   constructor(
-      public changeRef: ChangeDetectorRef,
-   ) {}
-
-   ngOnInit(): void {}
 }
