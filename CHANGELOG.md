@@ -8,6 +8,14 @@ Changes:
   - changed styling to align with material 3
   - updated other packages
 
+## 4.2.0 (2024-12-31)
+
+Changes:
+
+  - updated to angular 19 and material 3
+  - changed styling to align with material 3
+  - updated other packages
+
 ## 4.1.0 (2024-11-24)
 
 Features:
