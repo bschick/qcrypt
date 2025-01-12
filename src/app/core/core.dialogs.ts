@@ -37,7 +37,6 @@ import {
 import { CommonModule, NgIf } from '@angular/common';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-//import { MatMenuModule } from '@angular/material/menu';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -51,6 +50,9 @@ import { BubbleDirective } from '../ui/bubble/bubble.directive';
 import * as cc from '../services/cipher.consts';
 import { bytesToBase64 } from '../services/utils';
 import { CipherService, CipherDataInfo } from '../services/cipher.service';
+
+
+const PWD_CLOSE_TIMEOUT = 1000 * 60 * 5;
 
 
 export type PwdDialogData = {
@@ -69,16 +71,17 @@ export type PwdDialogData = {
 
 
 @Component({
-    selector: 'password.dialog',
-    templateUrl: './password.dialog.html',
-    styleUrl: './core.dialogs.scss',
-//    encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
-    imports: [MatDialogModule, CommonModule, MatFormFieldModule, MatInputModule,
+   selector: 'password.dialog',
+   templateUrl: './password.dialog.html',
+   styleUrl: './core.dialogs.scss',
+   encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
+   imports: [MatDialogModule, CommonModule, MatFormFieldModule, MatInputModule,
       MatIconModule, PasswordStrengthMeterComponent, FormsModule, ReactiveFormsModule,
       MatTooltipModule, MatButtonModule, BubbleDirective
-  ]
+   ]
 })
 export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
+
    public hidePwd = false;
    public passwd = '';
    public hint = '';
@@ -94,7 +97,10 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    public cipherShow = false;
    private checkPwned = false;
    private welcomed = true;
+   private strenElem?: HTMLElement;
+   private timerId = -1;
    public maxHintLen = cc.HINT_MAX_LEN;
+
 
    @ViewChild('bubbleTip') bubbleTip!: BubbleDirective;
 
@@ -120,12 +126,22 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    ngOnInit(): void {
       // should we show warning during decryptiong? currently, yes
       this.zxcvbnOptions.checkPwned(this.checkPwned);
+      this.strenElem = document.getElementsByClassName("stren-meter")[0] as HTMLElement;
    }
 
    ngAfterViewInit(): void {
       if (!this.welcomed) {
          this.bubbleTip.show();
       }
+
+      // setting enableFeedback on password strength meter does not add or remove already
+      // displayed elements, so forced to find it on the fly and hide/show
+      const resizeObserver = new ResizeObserver(
+         (entries: ResizeObserverEntry[]) => {
+            this.showHideSuggestion();
+      });
+
+      resizeObserver.observe(this.strenElem!);
    }
 
    ngOnDestroy(): void {
@@ -141,6 +157,30 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
          this.strengthAlert = true;
          this.r2.selectRootElement('#password').focus();
       }
+   }
+
+   // onPasswordStrengthChange only trigger with stength number changes, but the
+   // length of the suggesitons can without strength change, so we need to check
+   // for every input change
+   onPasswordChange() {
+      // Don't want to leave an open pwd dialog if, there are characters entered
+      // and not activity for a few minutes minutes, close the dialog
+      if(this.timerId >= 0) {
+         window.clearTimeout(this.timerId);
+      }
+
+      this.timerId = window.setTimeout(
+         () => this.dialogRef.close(),
+         PWD_CLOSE_TIMEOUT
+      );
+
+      // really ugly, but since the elements are added async this is the simplest
+      // solution. Could alterntively edit or monkey-patch password strength meter code
+      window.setTimeout(
+         () =>  this.showHideSuggestion(),
+         200
+      );
+
    }
 
    onPasswordStrengthChange(strength: number | null) {
@@ -163,13 +203,27 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
          this.strengthPhrase = 'Password is acceptable';
       }
    }
+
+   async showHideSuggestion() {
+      if (this.strenElem && this.strenElem.clientWidth < 357) {
+         const suggest = document.getElementsByClassName("psm__suggestion")[0] as HTMLElement;
+         if (suggest) {
+            suggest.style['visibility'] = 'hidden';
+         }
+      } else {
+         const suggest = document.getElementsByClassName("psm__suggestion")[0] as HTMLElement;
+         if (suggest) {
+            suggest.style['visibility'] = 'visible';
+         }
+      }
+   }
 }
 
 @Component({
-    selector: 'cipher-info.dialog',
-    templateUrl: './cipher-info.dialog.html',
-    styleUrl: './core.dialogs.scss',
-    imports: [MatDialogModule, MatIconModule, CommonModule, NgIf, MatButtonModule]
+   selector: 'cipher-info.dialog',
+   templateUrl: './cipher-info.dialog.html',
+   styleUrl: './core.dialogs.scss',
+   imports: [MatDialogModule, MatIconModule, CommonModule, NgIf, MatButtonModule]
 })
 export class CipherInfoDialog {
    public error;
@@ -203,11 +257,11 @@ export class CipherInfoDialog {
 
 
 @Component({
-    selector: 'signin.dialog',
-    templateUrl: './signin.dialog.html',
-    styleUrl: './core.dialogs.scss',
-    imports: [MatDialogModule, CommonModule, MatProgressSpinnerModule,
-        MatIconModule, MatTooltipModule, MatButtonModule]
+   selector: 'signin.dialog',
+   templateUrl: './signin.dialog.html',
+   styleUrl: './core.dialogs.scss',
+   imports: [MatDialogModule, CommonModule, MatProgressSpinnerModule,
+      MatIconModule, MatTooltipModule, MatButtonModule]
 })
 export class SigninDialog {
 

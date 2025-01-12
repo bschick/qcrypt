@@ -7,6 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { HttpParams } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { CoprightComponent } from "../../ui/copright/copright.component";
 
 
 export interface FAQElement {
@@ -28,9 +29,10 @@ export interface FAQElement {
     ],
     encapsulation: ViewEncapsulation.None,
     imports: [
-        MatTableModule, MatInputModule, MatFormFieldModule, MatIconModule,
-        MatButtonModule, FormsModule,
-    ]
+    MatTableModule, MatInputModule, MatFormFieldModule, MatIconModule,
+    MatButtonModule, FormsModule,
+    CoprightComponent
+]
 })
 export class FaqsComponent implements AfterViewInit {
 
