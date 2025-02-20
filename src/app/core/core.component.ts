@@ -38,7 +38,10 @@ import { CommonModule } from '@angular/common';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatRippleModule } from '@angular/material/core';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { MatInputModule } from '@angular/material/input';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { FormsModule } from '@angular/forms';
+//import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSelectModule } from '@angular/material/select';
 import { MatIconModule } from '@angular/material/icon';
@@ -49,10 +52,8 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatInputModule } from '@angular/material/input';
-import { MatFormFieldModule } from '@angular/material/form-field';
 import { HttpParams } from '@angular/common/http';
-import { Duration, DateTime } from 'luxon';
+import { DateTime } from 'luxon';
 import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { ClipboardModule } from '@angular/cdk/clipboard';
@@ -70,7 +71,8 @@ import {
    selectCipherFile,
    selectClearFile,
    browserSupportsBytesStream,
-   ProcessCancelled
+   ProcessCancelled,
+   makeTookMsg
 } from '../services/utils';
 import { AuthenticatorService, AuthEvent, AuthEventData, INACTIVITY_TIMEOUT } from '../services/authenticator.service';
 import {
@@ -81,12 +83,10 @@ import {
 import { BubbleDirective } from '../ui/bubble/bubble.directive';
 import { AlgorithmsComponent } from '../ui/algorithms/algorithms.component';
 import { Subscription } from 'rxjs';
-import { CoprightComponent } from "../ui/copright/copright.component";
+import { CopyrightComponent } from "../ui/copyright/copyright.component";
 
 // up to cc.LP_MAX could be supported but even 16 seems excessive
 const MAX_LOOPS = 10;
-const TARGET_HASH_MILLIS = 500;
-const MAX_HASH_MILLIS = 5 * 60 * 1000; //5 minutes
 
 
 // Set only if num is betwee min and max (inclusive) when min and max are not null
@@ -102,16 +102,6 @@ function setIfBetween(
          setter(num);
       }
    }
-}
-
-function makeTookMsg(start: number, end: number, word: string = 'took'): string {
-   const duration = Duration.fromMillis(end - start);
-   if (duration.as('minutes') >= 1.1) {
-      return `${word} ${Math.round(duration.as('minutes') * 10) / 10} minutes`;
-   } else if (duration.as('seconds') >= 2) {
-      return `${word} ${Math.round(duration.as('seconds'))} seconds`;
-   }
-   return `${word} ${duration.toMillis()} millis`;
 }
 
 function setIfBoolean(
@@ -133,10 +123,10 @@ function setIfBoolean(
     styleUrl: './core.component.scss',
     imports: [MatProgressSpinnerModule, MatMenuModule, MatIconModule,
     MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
-    ReactiveFormsModule, ClipboardModule, CdkAccordionModule, MatSlideToggleModule,
+    ClipboardModule, CdkAccordionModule, MatSlideToggleModule,
     MatExpansionModule, MatSelectModule, MatButtonToggleModule,
     MatTooltipModule, MatRippleModule, CommonModule, BubbleDirective,
-    RouterLink, AlgorithmsComponent, CoprightComponent]
+    RouterLink, AlgorithmsComponent, CopyrightComponent]
 })
 export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
@@ -326,21 +316,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       });
    }
 
-   lsGet(key: string): string | null {
-      const [userId] = this.authSvc.getUserInfo();
-      return localStorage.getItem(userId + key);
-   }
-
-   lsSet(key: string, value: string) {
-      const [userId] = this.authSvc.getUserInfo();
-      localStorage.setItem(userId + key, value);
-   }
-
-   lsDel(key: string) {
-      const [userId] = this.authSvc.getUserInfo();
-      localStorage.removeItem(userId + key);
-   }
-
    setIcountWarning() {
       this.hashTimeWarning = '';
       const hashMillis = this.icount / this.cipherSvc.hashRate;
@@ -370,7 +345,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       // This can be greatly delayed is there is a long running async benchmark or
       // encrpt or decrypt from a previous instance (tab that has not fully closed).
       // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
-      this.cipherSvc.benchmark(this.icountMin, TARGET_HASH_MILLIS, MAX_HASH_MILLIS)
+      this.cipherSvc.benchmark(this.icountMin)
          .then(([icount, icountMax, hashRate]) => {
             this.icount = icount;
             this.icountDefault = this.icount;
@@ -406,21 +381,21 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       /* debug
       for (let i = 0; i < localStorage.length; i++) {
         let key = localStorage.key(i)!;
-        console.log(`${key}: ${this.lsGet(key)}`);
+        console.log(`${key}: ${this.authSvc.lsGet(key)}`);
        } */
       if (!this.optionsLoaded) {
-         this.setAlgorithm(this.lsGet('algorithm'));
-         this.setIcount(this.lsGet('icount'));
-         this.setHidePwd(this.lsGet('hidepwd'));
-         this.setCacheTime(this.lsGet('cachetime'));
-         this.setCheckPwned(this.lsGet('checkpwned'));
-         this.setMinPwdStrength(this.lsGet('minpwdstrength'));
-         this.setLoops(this.lsGet('loops'));
-         this.setCTFormat(this.lsGet('ctformat'));
-         this.setVisibilityClear(this.lsGet('vclear'));
-         this.setReminder(this.lsGet('reminder'));
-         this.setPseudoRand(this.lsGet('prand'));
-         this.setTrueRand(this.lsGet('trand'));
+         this.setAlgorithm(this.authSvc.lsGet('algorithm'));
+         this.setIcount(this.authSvc.lsGet('icount'));
+         this.setHidePwd(this.authSvc.lsGet('hidepwd'));
+         this.setCacheTime(this.authSvc.lsGet('cachetime'));
+         this.setCheckPwned(this.authSvc.lsGet('checkpwned'));
+         this.setMinPwdStrength(this.authSvc.lsGet('minpwdstrength'));
+         this.setLoops(this.authSvc.lsGet('loops'));
+         this.setCTFormat(this.authSvc.lsGet('ctformat'));
+         this.setVisibilityClear(this.authSvc.lsGet('vclear'));
+         this.setReminder(this.authSvc.lsGet('reminder'));
+         this.setPseudoRand(this.authSvc.lsGet('prand'));
+         this.setTrueRand(this.authSvc.lsGet('trand'));
 
          let params = new HttpParams({ fromString: window.location.search });
 
@@ -528,19 +503,19 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    nukeOptions(): void {
       this.defaultOptions();
       try {
-         this.lsDel('welcomed');
-         this.lsDel('algorithm');
-         this.lsDel('icount');
-         this.lsDel('hidepwd');
-         this.lsDel('cachetime');
-         this.lsDel('checkpwned');
-         this.lsDel('minpwdstrength');
-         this.lsDel('loops');
-         this.lsDel('ctformat');
-         this.lsDel('vclear');
-         this.lsDel('reminder');
-         this.lsDel('prand');
-         this.lsDel('trand');
+         this.authSvc.lsDel('welcomed');
+         this.authSvc.lsDel('algorithm');
+         this.authSvc.lsDel('icount');
+         this.authSvc.lsDel('hidepwd');
+         this.authSvc.lsDel('cachetime');
+         this.authSvc.lsDel('checkpwned');
+         this.authSvc.lsDel('minpwdstrength');
+         this.authSvc.lsDel('loops');
+         this.authSvc.lsDel('ctformat');
+         this.authSvc.lsDel('vclear');
+         this.authSvc.lsDel('reminder');
+         this.authSvc.lsDel('prand');
+         this.authSvc.lsDel('trand');
       } catch (err) {
          console.error(err);
          //otherwise ignore
@@ -550,18 +525,18 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 /*   saveOptions(): void {
       try {
          if (this.authSvc.isAuthenticated()) {
-            this.lsSet('algorithm', JSON.stringify(this.algorithm));
-            this.lsSet('icount', this.icount.toString());
-            this.lsSet('hidepwd', this.hidePwd.toString());
-            this.lsSet('cachetime', this.cacheTime.toString());
-            this.lsSet('checkpwned', this.checkPwned.toString());
-            this.lsSet('minpwdstrength', this.minPwdStrength);
-            this.lsSet('loops', this.loops.toString());
-            this.lsSet('ctformat', this.ctFormat.toString());
-            this.lsSet('vclear', this.visibilityClear.toString());
-            this.lsSet('reminder', this.reminder.toString());
-            this.lsSet('prand', this.pseudoRand.toString());
-            this.lsSet('trand', this.trueRand.toString());
+            this.authSvc.lsSet('algorithm', JSON.stringify(this.algorithm));
+            this.authSvc.lsSet('icount', this.icount.toString());
+            this.authSvc.lsSet('hidepwd', this.hidePwd.toString());
+            this.authSvc.lsSet('cachetime', this.cacheTime.toString());
+            this.authSvc.lsSet('checkpwned', this.checkPwned.toString());
+            this.authSvc.lsSet('minpwdstrength', this.minPwdStrength);
+            this.authSvc.lsSet('loops', this.loops.toString());
+            this.authSvc.lsSet('ctformat', this.ctFormat.toString());
+            this.authSvc.lsSet('vclear', this.visibilityClear.toString());
+            this.authSvc.lsSet('reminder', this.reminder.toString());
+            this.authSvc.lsSet('prand', this.pseudoRand.toString());
+            this.authSvc.lsSet('trand', this.trueRand.toString());
          }
       } catch (err) {
          console.error(err);
@@ -645,7 +620,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.loops = Math.max(this.loops, 1);
       this.loops = Math.min(this.loops, this.LOOP_MAX);
       this.algorithms.count = this.loops;
-      this.lsSet('loops', this.loops.toString());
+      this.authSvc.lsSet('loops', this.loops.toString());
    }
 
    onModesChanged(modes: string[]): void {
@@ -653,12 +628,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       // been set, which may be larger than the current # of loops
       // This is done to preserve default values
       this.algorithm = modes;
-      this.lsSet('algorithm', JSON.stringify(modes));
+      this.authSvc.lsSet('algorithm', JSON.stringify(modes));
    }
 
    onPasswordOptionChange(): void {
-      this.lsSet('checkpwned', this.checkPwned.toString());
-      this.lsSet('minpwdstrength', this.minPwdStrength);
+      this.authSvc.lsSet('checkpwned', this.checkPwned.toString());
+      this.authSvc.lsSet('minpwdstrength', this.minPwdStrength);
       this.clearPassword();
    }
 
@@ -1231,14 +1206,13 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    onReminderChange() {
       this.lastReminder = this.reminder;
-      this.lsSet('reminder', this.reminder.toString());
+      this.authSvc.lsSet('reminder', this.reminder.toString());
       this.reformatCipherArmor();
    }
 
    onVClearChnage() {
-      this.lsSet('vclear', this.visibilityClear.toString());
+      this.authSvc.lsSet('vclear', this.visibilityClear.toString());
    }
-
 
    onFormatChange(selected?: string) {
       if (selected == 'link') {
@@ -1247,7 +1221,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       } else {
          this.reminder = this.lastReminder;
       }
-      this.lsSet('ctformat', this.ctFormat.toString());
+      this.authSvc.lsSet('ctformat', this.ctFormat.toString());
       this.reformatCipherArmor();
    }
 
@@ -1267,17 +1241,17 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.pseudoRand = true;
          this.onPseudoRandChange();
       }
-      this.lsSet('trand', this.trueRand.toString());
+      this.authSvc.lsSet('trand', this.trueRand.toString());
    }
 
    onPseudoRandChange() {
-      this.lsSet('prand', this.pseudoRand.toString());
+      this.authSvc.lsSet('prand', this.pseudoRand.toString());
    }
 
    onICountChange() {
       this.icount = Math.max(this.icount, this.icountMin);
       this.icount = Math.min(this.icount, this.icountMax);
-      this.lsSet('icount', this.icount.toString());
+      this.authSvc.lsSet('icount', this.icount.toString());
       this.setIcountWarning();
    }
 
@@ -1375,7 +1349,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onHidePwdChanged(): void {
-      this.lsSet('hidepwd', this.hidePwd.toString());
+      this.authSvc.lsSet('hidepwd', this.hidePwd.toString());
    }
 
    onCacheTimerChange(): void {
@@ -1384,7 +1358,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.pwdCached) {
          this.restartTimer();
       }
-      this.lsSet('cachetime', this.cacheTime.toString());
+      this.authSvc.lsSet('cachetime', this.cacheTime.toString());
    }
 
    async onCipherTextInfo(): Promise<void> {

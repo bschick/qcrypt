@@ -26,28 +26,9 @@ SOFTWARE. */
   min-width: 632px;
 }
 
-.mtop0 {
-  margin-top: 0px;
-}
-
-.mtop10 {
-  margin-top: 10px;
-}
-
-.mtop20 {
-  margin-top: 20px;
-}
-
-.mtop35 {
-  margin-top: 35px;
-}
-
-.mleft15 {
-  margin-left: 15px;
-}
-
-.mleft35 {
-  margin-left: 35px;
+.input-area {
+  margin: 15px 0 10px 0;
+  width: 100%;
 }
 
 @mixin messageBox {
@@ -82,14 +63,28 @@ SOFTWARE. */
   z-index: 999;
 }
 
-.option-input {
+.options-flex {
+  width: 100%x;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.options-flex > div {
+  width: 165px;
+}
+
+.options-flex mat-form-field {
   width: 146px;
 }
 
-.open-new-link {
-  position: relative;
-  top: 6px;
-  left: 1px;
+.options-flex mat-slide-toggle {
+  width: 165px;
+}
+
+.open-new-icon2 {
+  font-size: 18px;
 }
 
 .alg-help {
@@ -97,10 +92,6 @@ SOFTWARE. */
   top: -7px;
 }
 
-.open-new-icon2 {
-  font-size: 18px;
-  position: relative;
-}
 
 #format-link {
   top: -26px;
@@ -148,20 +139,15 @@ SOFTWARE. */
 .options-header {
   font-family: Roboto, sans-serif;
   font-size: 14px;
-  text-decoration: underline;
+
+  span {
+    text-decoration: underline;
+  }
 }
 
 .options-header1 {
   @extend .options-header;
-  margin-top: 5px;
-}
-
-.hash-warning {
-  color: darkred;
-  position: absolute;
-  top: 162px;
-  left: 25px;
-  font-size: 12px;
+  margin-top: 0px;
 }
 
 .options-header2 {
@@ -174,15 +160,18 @@ SOFTWARE. */
   margin-top: 34px;
 }
 
+.hash-warning {
+  color: darkred;
+  position: absolute;
+  top: 166px;
+  left: 25px;
+  font-size: 12px;
+}
+
 .pasword-input {
   width: 230px;
   margin-bottom: -0.5em;
   flex: none;
-}
-
-.input-area {
-  margin: 15px 0 10px 0;
-  width: 100%;
 }
 
 .flx-container {
@@ -251,27 +240,6 @@ SOFTWARE. */
 .green-pwd-strength {
   color: darkgreen;
 }
-
-/*.github {
-  display: block;
-  text-align: right;
-  margin-top: 50px;
-}
-
-.github a {
-  text-decoration: none;
-}
-
-.github button {
-  background-color: #8a8fb2;
-  height: 36px;
-  padding-left: 16px;
-  padding-right: 9px;
-}
-
-.github-label {
-  margin: 0 0 0 -4px;
-}*/
 
 .file-input {
   display: none;
