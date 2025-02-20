@@ -21,6 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { base64URLStringToBuffer, bufferToBase64URLString } from './base64';
+import { Duration } from 'luxon';
 
 
 
@@ -74,6 +75,17 @@ export function browserSupportsBytesStream(): boolean {
       return false;
    }
 }
+
+export function makeTookMsg(start: number, end: number, word: string = 'took'): string {
+   const duration = Duration.fromMillis(end - start);
+   if (duration.as('minutes') >= 1.1) {
+      return `${word} ${Math.round(duration.as('minutes') * 10) / 10} minutes`;
+   } else if (duration.as('seconds') >= 2) {
+      return `${word} ${Math.round(duration.as('seconds'))} seconds`;
+   }
+   return `${word} ${duration.toMillis()} millis`;
+}
+
 
 export class ProcessCancelled extends Error {
    constructor() {

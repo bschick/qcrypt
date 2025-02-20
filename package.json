@@ -2,6 +2,7 @@
   "name": "qcrypt",
   "version": "4.2.1",
   "type": "module",
+  "copyright": "© 2024–2025 Quick Crypt Contributors",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",

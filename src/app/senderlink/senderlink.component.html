@@ -46,11 +46,13 @@ SOFTWARE. -->
           content_copy
         </mat-icon>
       </mat-form-field>
-      <a [routerLink]="'/'">
-        <button mat-raised-button>
-          I saved my recovery key securely
-        </button>
-      </a>
+      <button mat-raised-button (click)="doit()">
+        Do it
+      </button>
     </div>
+    <div [innerHtml]="message"></div>
   </div>
+</div>
+<div class="core">
+  <enc-options #options></enc-options>
 </div>

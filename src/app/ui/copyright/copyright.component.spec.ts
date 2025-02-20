@@ -1,18 +1,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { CoprightComponent } from './copright.component';
+import { CopyrightComponent } from './copyright.component';
 
-describe('CoprightComponent', () => {
-  let component: CoprightComponent;
-  let fixture: ComponentFixture<CoprightComponent>;
+describe('CopyrightComponent', () => {
+  let component: CopyrightComponent;
+  let fixture: ComponentFixture<CopyrightComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [CoprightComponent]
+      imports: [CopyrightComponent]
     })
     .compileComponents();
 
-    fixture = TestBed.createComponent(CoprightComponent);
+    fixture = TestBed.createComponent(CopyrightComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
   });

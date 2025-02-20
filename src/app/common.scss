@@ -1,5 +1,29 @@
 @use "@angular/material" as mat;
 
+.mtop0 {
+  margin-top: 0px;
+}
+
+.mtop10 {
+  margin-top: 10px;
+}
+
+.mtop20 {
+  margin-top: 20px;
+}
+
+.mtop35 {
+  margin-top: 35px;
+}
+
+.mleft15 {
+  margin-left: 15px;
+}
+
+.mleft35 {
+  margin-left: 35px;
+}
+
 .container {
   display: flex;
   align-items: flex-start;

@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2024 Brad Schick
+Copyright (c) 2025 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,38 +19,17 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
+import { Component } from '@angular/core';
+import { environment } from '../../../environments/environment';
 
-.qcrypt {
-  display: flex;
-  flex-flow: column;
-  height: 100%;
-}
+@Component({
+  selector: 'app-copyright',
+  imports: [],
+  templateUrl: './copyright.component.html',
+  styleUrl: './copyright.component.scss'
+})
+export class CopyrightComponent {
 
-.toolbar {
-  flex: 0;
-  min-height:48px;
-}
+  public copyright = environment.copyright;
 
-.router-content {
-  flex: 1;
-//  overflow: auto;
-}
-
-.toolbar-text {
-  font-size: 15px;
-  border-radius: 16px;
-  height: 55px;
-}
-
-.toolbar-spacer {
-  flex: 1 1 auto;
-}
-
-.mleft15 {
-  margin-left: 15px;
-}
-
-.side-nav {
-  width:100%;
-  max-width:444px;
 }

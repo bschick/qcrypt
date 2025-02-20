@@ -1,6 +1,6 @@
 <!-- MIT License
 
-Copyright (c) 2024 Brad Schick
+Copyright (c) 2025 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -75,8 +75,8 @@ SOFTWARE. -->
           <mat-icon fontSet="material-icons-outlined">file_download</mat-icon>Save Cipher File
         </button>
       </mat-menu>
-      <button mat-raised-button (click)="onDecrypt()" class="top-button strong-button mleft15"
-        aria-label="Decrypt Text" accesskey="D" [disabled]="showProgress ? 'true' : 'false'">
+      <button mat-raised-button (click)="onDecrypt()" class="top-button strong-button mleft15" aria-label="Decrypt Text"
+        accesskey="D" [disabled]="showProgress ? 'true' : 'false'">
         <u>D</u>ecrypt
       </button>
     </span>
@@ -164,97 +164,130 @@ SOFTWARE. -->
 
       <div class="mtop0">
         <p class="options-header1">
-          Password Handling
+          <span>Password Handling</span>
+          <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'check if stolen'}" target="_blank">
+            <mat-icon class="open-new-icon2">open_in_new</mat-icon>
+          </a>
         </p>
-        <mat-form-field class="option-input" subscriptSizing="dynamic">
-          <mat-label>Hash Iterations</mat-label>
-          <input type="number" [min]="icountMin" [max]="icountMax" step="200000" matInput [(ngModel)]="icount"
-            (change)="onICountChange()"
-            [matTooltip]="'Larger values make password guessing slower. Range ['+icountMin/1000+'K,'+icountMax/1000000+'M]'" />
-        </mat-form-field>
-        <mat-form-field class="option-input mleft15" subscriptSizing="dynamic">
-          <mat-label #minStrLabel>Minimum Strength</mat-label>
-          <mat-select [(value)]="minPwdStrength" (selectionChange)="onPasswordOptionChange()"
-            matTooltip="Minimum required password strength used for encryption">
-            <mat-option class="red-pwd-strength" value="0">Terrible</mat-option>
-            <mat-option class="red-pwd-strength" value="1">Weak</mat-option>
-            <mat-option class="yellow-pwd-strength" value="2">Decent</mat-option>
-            <mat-option class="green-pwd-strength" value="3">Good</mat-option>
-            <mat-option class="green-pwd-strength" value="4">Best</mat-option>
-          </mat-select>
-        </mat-form-field>
-        <mat-slide-toggle class="mleft15" [(ngModel)]="checkPwned" (change)="onPasswordOptionChange()"
-          matTooltip="Check if your password matches a known stolen password">Check If Stolen
-        </mat-slide-toggle>
-        <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'check if stolen'}" class="open-new-link"
-          target="_blank">
-          <mat-icon class="open-new-icon2">open_in_new</mat-icon>
-        </a>
+        <div class="options-flex">
+          <div>
+            <mat-form-field subscriptSizing="dynamic">
+              <mat-label>Hash Iterations</mat-label>
+              <input type="number" [min]="icountMin" [max]="icountMax" step="200000" matInput [(ngModel)]="icount"
+                (change)="onICountChange()"
+                [matTooltip]="'Larger values make password guessing slower. Range ['+icountMin/1000+'K,'+icountMax/1000000+'M]'" />
+            </mat-form-field>
+          </div>
+          <div>
+            <mat-form-field subscriptSizing="dynamic">
+              <mat-label #minStrLabel>Minimum Strength</mat-label>
+              <mat-select [(value)]="minPwdStrength" (selectionChange)="onPasswordOptionChange()"
+                matTooltip="Minimum required password strength used for encryption">
+                <mat-option class="red-pwd-strength" value="0">Terrible</mat-option>
+                <mat-option class="red-pwd-strength" value="1">Weak</mat-option>
+                <mat-option class="yellow-pwd-strength" value="2">Decent</mat-option>
+                <mat-option class="green-pwd-strength" value="3">Good</mat-option>
+                <mat-option class="green-pwd-strength" value="4">Best</mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
+          <div>
+            <mat-slide-toggle [(ngModel)]="checkPwned" (change)="onPasswordOptionChange()"
+              matTooltip="Check if your password matches a known stolen password">Check If Stolen
+            </mat-slide-toggle>
+          </div>
+        </div>
         <span class="hash-warning" [style.visibility]="cipherPanelExpanded ? 'visible' : 'hidden'">
           {{hashTimeWarning}}
         </span>
       </div>
       <div class="mtop10">
         <p class="options-header3">
-          Display Privacy
+          <span>Display Privacy</span>
+          <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'display privacy'}" target="_blank">
+            <mat-icon class="open-new-icon2">open_in_new</mat-icon>
+          </a>
         </p>
-        <mat-form-field class="option-input" subscriptSizing="dynamic">
-          <mat-label>Cache Time (secs)</mat-label>
-          <input type="number" min="0" [max]="INACTIVITY_TIMEOUT" step="10" matInput [(ngModel)]="cacheTime"
-            (change)="onCacheTimerChange()"
-            matTooltip="Number of seconds until your clear text and cached password are automatically flushed" />
-        </mat-form-field>
-        <mat-slide-toggle class="mleft15" [(ngModel)]="visibilityClear" (change)="onVClearChnage()"
-          matTooltip="Automatically flush clear text and cached password on focus change">Clear on Focus Change
-        </mat-slide-toggle>
-        <mat-slide-toggle class="mleft15" [(ngModel)]="hidePwd" (change)="onHidePwdChanged()"
-          matTooltip="Hide encryption passwords while typing">Hide Passwords
-        </mat-slide-toggle>
+        <div class="options-flex">
+          <div>
+            <mat-form-field subscriptSizing="dynamic">
+              <mat-label>Cache Time (secs)</mat-label>
+              <input type="number" min="0" [max]="INACTIVITY_TIMEOUT" step="10" matInput [(ngModel)]="cacheTime"
+                (change)="onCacheTimerChange()"
+                matTooltip="Number of seconds until your clear text and cached password are automatically flushed" />
+            </mat-form-field>
+          </div>
+          <div>
+            <mat-slide-toggle [(ngModel)]="visibilityClear" (change)="onVClearChnage()"
+              matTooltip="Automatically flush clear text and cached password on focus change">Clear When Hidden
+            </mat-slide-toggle>
+          </div>
+          <div>
+            <mat-slide-toggle [(ngModel)]="hidePwd" (change)="onHidePwdChanged()"
+              matTooltip="Hide encryption passwords while typing">Hide Passwords<br />
+            </mat-slide-toggle>
+          </div>
+        </div>
       </div>
       <div class="mtop10">
         <p class="options-header3">
-          Random Data Source
-        </p>
-        <div class="shiftrand">
-          <mat-slide-toggle [(ngModel)]="trueRand" (change)="onTrueRandChanged($event.checked)"
-            matTooltip="Random data for encryption securely downloaded from random.org">True Random
-          </mat-slide-toggle>
-          <mat-slide-toggle class="mleft35" [(ngModel)]="pseudoRand" [disabled]="trueRand ? 'false' : 'true'"
-            (change)="onPseudoRandChange()"
-            matTooltip="Random data for encryption generated by browser native pseudo random function">Pseudo Random
-          </mat-slide-toggle>
-          <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'pseudo random'}" class="open-new-link"
+          <span>Random Data Source</span>
+          <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'pseudo random'}"
             target="_blank">
             <mat-icon class="open-new-icon2">open_in_new</mat-icon>
           </a>
+
+        </p>
+        <div class="options-flex">
+          <div>
+            <mat-slide-toggle [(ngModel)]="trueRand" (change)="onTrueRandChanged($event.checked)"
+              matTooltip="Random data for encryption securely downloaded from random.org">True Random
+            </mat-slide-toggle>
+          </div>
+          <div>
+            <mat-slide-toggle [(ngModel)]="pseudoRand" [disabled]="trueRand ? 'false' : 'true'"
+              (change)="onPseudoRandChange()"
+              matTooltip="Random data for encryption generated by browser native pseudo random function">Pseudo Random
+            </mat-slide-toggle>
+          </div>
         </div>
       </div>
       <div class="mtop10">
         <p class="options-header2">
-          Other Options
+          <span>Other Options</span>
+          <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'cipher armor formats, loops, reminder'}" id="format-link"
+           target="_blank">
+            <mat-icon class="open-new-icon2">open_in_new</mat-icon>
+          </a>
         </p>
-        <mat-form-field class="option-input" subscriptSizing="dynamic">
-          <mat-label>Loop Encrypt</mat-label>
-          <input type="number" min="1" [max]="LOOP_MAX" step="1" matInput [(ngModel)]="loops" (change)="onLoopsChange()"
-            matTooltip="Number of times to run encryption in a loop. Enter a different password each loop" />
-        </mat-form-field>
-        <mat-form-field class="option-input mleft15" subscriptSizing="dynamic">
-          <mat-label #formatLabel>Cipher Armor Format</mat-label>
-          <mat-select [(value)]="ctFormat" (selectionChange)="onFormatChange($event.value)"
-            matTooltip="Format of output cipher armor. Only use 'link' when you are not concerned about others changing the cipher armor">
-            <mat-option value="compact">Compact</mat-option>
-            <mat-option value="indent">Indent</mat-option>
-            <mat-option value="link">Link</mat-option>
-          </mat-select>
-        </mat-form-field>
-        <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'cipher armor formats, loops'}" id="format-link"
-          class="open-new-link" target="_blank">
-          <mat-icon class="open-new-icon2">open_in_new</mat-icon>
-        </a>
-        <mat-slide-toggle [(ngModel)]="reminder" [disabled]="ctFormat == 'link' ? 'true' : 'false'"
-          (change)="onReminderChange()" matTooltip="Add a reminder to cipher armor that Quick Crypt was used">Decryption
-          Reminder
-        </mat-slide-toggle>
+        <div class="options-flex">
+          <div>
+            <mat-form-field subscriptSizing="dynamic">
+              <mat-label>Loop Encrypt</mat-label>
+              <input type="number" min="1" [max]="LOOP_MAX" step="1" matInput [(ngModel)]="loops"
+                (change)="onLoopsChange()"
+                matTooltip="Number of times to run encryption in a loop. Enter a different password each loop" />
+            </mat-form-field>
+          </div>
+          <div>
+            <mat-form-field subscriptSizing="dynamic">
+              <mat-label #formatLabel>Cipher Armor Format</mat-label>
+              <mat-select [(value)]="ctFormat" (selectionChange)="onFormatChange($event.value)"
+                matTooltip="Format of output cipher armor. Only use 'link' when you are not concerned about others changing the cipher armor">
+                <mat-option value="compact">Compact</mat-option>
+                <mat-option value="indent">Indent</mat-option>
+                <mat-option value="link">Link</mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
+          <div>
+            <mat-slide-toggle [(ngModel)]="reminder" [disabled]="ctFormat == 'link' ? 'true' : 'false'"
+              (change)="onReminderChange()"
+              matTooltip="Add a reminder to cipher armor that Quick Crypt was used">Decryption
+              Reminder
+            </mat-slide-toggle>
+          </div>
+        </div>
       </div>
       <div class="mtop35">
         <button mat-raised-button (click)="onClickResetOptions()" color="basic"
@@ -276,4 +309,4 @@ SOFTWARE. -->
   </p>
   <input type="file" (click)="onClickFileUpload($event)" class="file-input" accept="*" #fileUpload />
 </div>
-<app-copright />
+<app-copyright />

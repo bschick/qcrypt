@@ -143,6 +143,23 @@ export class AuthenticatorService {
       ).subscribe(action);
    }
 
+   lsGet(key: string): string | null {
+      const [userId] = this.getUserInfo();
+      return localStorage.getItem(this.userId + key);
+   }
+
+   lsSet(key: string, value: string | number | boolean | null) {
+      if(value != null) {
+         const [userId] = this.getUserInfo();
+         localStorage.setItem(userId + key, value.toString());
+      }
+   }
+
+   lsDel(key: string) {
+      const [userId] = this.getUserInfo();
+      localStorage.removeItem(userId + key);
+   }
+
    private captureEventData(event: AuthEvent): AuthEventData {
       return {
          event: event,
@@ -372,7 +389,7 @@ export class AuthenticatorService {
 
    // Uses the current stored userId
    async defaultLogin(): Promise<AuthenticationInfo> {
-      const [userId, _] = this.getUserInfo();
+      const [userId] = this.getUserInfo();
       if (!userId) {
          throw new Error('missing local userId, try findLogin');
       }
