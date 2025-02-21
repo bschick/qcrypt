@@ -63,36 +63,6 @@ SOFTWARE. */
   z-index: 999;
 }
 
-.options-flex {
-  width: 100%x;
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 10px;
-}
-
-.options-flex > div {
-  width: 165px;
-}
-
-.options-flex mat-form-field {
-  width: 146px;
-}
-
-.options-flex mat-slide-toggle {
-  width: 165px;
-}
-
-.open-new-icon2 {
-  font-size: 18px;
-}
-
-.alg-help {
-  position: relative;
-  top: -7px;
-}
-
-
 #format-link {
   top: -26px;
 }
@@ -136,38 +106,6 @@ SOFTWARE. */
   top: 2px;
 }
 
-.options-header {
-  font-family: Roboto, sans-serif;
-  font-size: 14px;
-
-  span {
-    text-decoration: underline;
-  }
-}
-
-.options-header1 {
-  @extend .options-header;
-  margin-top: 0px;
-}
-
-.options-header2 {
-  @extend .options-header;
-  margin-top: 28px;
-}
-
-.options-header3 {
-  @extend .options-header;
-  margin-top: 34px;
-}
-
-.hash-warning {
-  color: darkred;
-  position: absolute;
-  top: 166px;
-  left: 25px;
-  font-size: 12px;
-}
-
 .pasword-input {
   width: 230px;
   margin-bottom: -0.5em;
@@ -189,10 +127,6 @@ SOFTWARE. */
   flex: 1;
 }
 
-.algs-area {
-  display: flex;
-}
-
 .dragger {
   width: 16px;
   cursor: ew-resize;
@@ -206,10 +140,6 @@ SOFTWARE. */
 .dragger-icon {
   font-size: 18px;
   margin-left: 0px;
-}
-
-.panel-title {
-  font-size: 15px;
 }
 
 @mixin txt-area {
@@ -227,18 +157,6 @@ SOFTWARE. */
 .txt-area-armor {
   @include txt-area();
   word-break: break-all;
-}
-
-.red-pwd-strength {
-  color: darkred;
-}
-
-.yellow-pwd-strength {
-  color: darkgoldenrod;
-}
-
-.green-pwd-strength {
-  color: darkgreen;
 }
 
 .file-input {

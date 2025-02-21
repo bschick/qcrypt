@@ -25,7 +25,6 @@ import {
 import * as cc from '../../services/cipher.consts';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
-//import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { FormsModule } from '@angular/forms';
 
 export type LoopInfo = {
@@ -46,7 +45,7 @@ export class AlgorithmsComponent {
    public loops: LoopInfo[] = [];
    private _allowedAlgs = Object.keys(cc.AlgInfo);
    private _defaultModes = ['X20-PLY'];
-   @Output() modesChanged = new EventEmitter<string[]>();
+   @Output() modesChange = new EventEmitter<string[]>();
 
    @Input() set count(count: number) {
 
@@ -91,7 +90,7 @@ export class AlgorithmsComponent {
 
    onAlgorithmChange(event: any, loop: number): void {
       this._defaultModes[loop - 1] = event.value;
-      this.modesChanged.emit(this._defaultModes);
+      this.modesChange.emit(this._defaultModes);
    }
 
    algDescription(alg: string): string {

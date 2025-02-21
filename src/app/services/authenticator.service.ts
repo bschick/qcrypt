@@ -144,20 +144,25 @@ export class AuthenticatorService {
    }
 
    lsGet(key: string): string | null {
-      const [userId] = this.getUserInfo();
-      return localStorage.getItem(this.userId + key);
+      if (this.isAuthenticated()) {
+         const [userId] = this.getUserInfo();
+         return localStorage.getItem(this.userId + key);
+      }
+      return null;
    }
 
    lsSet(key: string, value: string | number | boolean | null) {
-      if(value != null) {
+      if (value != null && this.isAuthenticated()) {
          const [userId] = this.getUserInfo();
          localStorage.setItem(userId + key, value.toString());
       }
    }
 
    lsDel(key: string) {
-      const [userId] = this.getUserInfo();
-      localStorage.removeItem(userId + key);
+      if (this.isAuthenticated()) {
+         const [userId] = this.getUserInfo();
+         localStorage.removeItem(userId + key);
+      }
    }
 
    private captureEventData(event: AuthEvent): AuthEventData {

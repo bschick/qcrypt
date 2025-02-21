@@ -56,13 +56,16 @@ export class CipherService {
    }
 
    async benchmark(testSize: number): Promise<[number, number, number]> {
-      if (this._iCount === 0) {
-         [this._iCount, this._iCountMax, this._hashRate] = await Ciphers.benchmark(
-            testSize,
-            TARGET_HASH_MILLIS,
-            MAX_HASH_MILLIS
-         );
-      }
+
+      await navigator.locks.request('benchmark', async () => {
+         if (this._iCount === 0) {
+            [this._iCount, this._iCountMax, this._hashRate] = await Ciphers.benchmark(
+               testSize,
+               TARGET_HASH_MILLIS,
+               MAX_HASH_MILLIS
+            );
+         }
+      });
 
       return [this._iCount, this._iCountMax, this._hashRate];
    }
