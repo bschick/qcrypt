@@ -25,7 +25,7 @@ SOFTWARE. -->
       <mat-panel-title class="panel-title">{{loopsInput.value || 1 > 1 ? 'Encryption Modes' : 'Encryption Mode'}}</mat-panel-title>
     </mat-expansion-panel-header>
     <div class="algs-area">
-      <app-algorithms (modesChanged)="onModesChanged($event)" #algorithms></app-algorithms>
+      <app-algorithms (modesChange)="onModesChange($event)" #algorithms></app-algorithms>
       <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'which cipher'}" class="alg-help" target="_blank">
         <mat-icon class="open-new-icon2">open_in_new</mat-icon>
       </a>
@@ -89,12 +89,12 @@ SOFTWARE. -->
           <mat-form-field subscriptSizing="dynamic">
             <mat-label>Cache Time (secs)</mat-label>
             <input type="number" min="0" [max]="INACTIVITY_TIMEOUT" step="10" matInput [formControl]="cacheTimeInput"
-              (blur)="onBlurCacheTime()"
-              matTooltip="Number of seconds until your clear text and cached password are automatically flushed" />
+            (blur)="onBlurCacheTime()"
+            matTooltip="Number of seconds until your clear text and cached password are automatically flushed" />
           </mat-form-field>
         </div>
         <div>
-          <mat-slide-toggle [formControl]="clearToggle"
+          <mat-slide-toggle [formControl]="visClearToggle"
             matTooltip="Automatically flush clear text and cached password on focus change">Clear When Hidden
           </mat-slide-toggle>
         </div>

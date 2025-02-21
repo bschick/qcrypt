@@ -24,8 +24,8 @@ import {
    Component,
    ElementRef,
    EventEmitter,
-   Input,
    OnInit,
+   Input,
    Output,
    ViewChild
 } from '@angular/core';
@@ -42,7 +42,7 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { FormsModule, ReactiveFormsModule, FormControl, Validators } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { AuthenticatorService, INACTIVITY_TIMEOUT } from '../../services/authenticator.service';
 import { CipherService } from '../../services/cipher.service';
 import { makeTookMsg } from '../../services/utils';
@@ -97,44 +97,39 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    public readonly LOOPS_MAX = 10;
    public readonly LOOPS_DEFAULT = 1;
    public readonly ICOUNT_MIN = cc.ICOUNT_MIN;
+   public readonly FORMAT_DEFAULT = 'compact';
+   public readonly CACHE_TIME_DEFAULT = 0;
+   public readonly PWD_STRENGTH_DEFAULT = '3';
+   public readonly REMINDER_DEFAULT = true;
+   public readonly CHECK_PWNED_DEFAULT = false;
+   public readonly VIS_CLEAR_DEFAULT = true;
+   public readonly HIDE_PWD_DEFAULT = true;
+   public readonly TRUE_RAND_DEFAULT = false;
+   public readonly PSEUDO_RAND_DEFAULT = true;
+
    public ICOUNT_MAX = cc.ICOUNT_MAX; // Default since benchmark is async
    public ICOUNT_DEFAULT = cc.ICOUNT_DEFAULT; // Default since benchmark is async
 
-   // options
-   public algorithm = ['X20-PLY'];
-
-   //   private _icount: number = cc.ICOUNT_DEFAULT; // Default since benchmark is async
-   //   private _loops = 4;
-   private _lastReminder = true;
-   //   public _cacheTime = 0;
-   //   public _minPwdStrength = '3';
-   //   public _checkPwned = false;
-   //   public visibilityClear = true;
-   //   public hidePwd = true;
-   // public trueRand = false;
-   //public pseudoRand = true;
-   // public ctFormat = 'compact';
-   //   public reminder = true;
-
-
-   public loopsInput = new FormControl(1);
-   public cacheTimeInput = new FormControl(0);
+   public loopsInput = new FormControl(this.LOOPS_DEFAULT);
+   public cacheTimeInput = new FormControl(this.CACHE_TIME_DEFAULT);
    public icountInput = new FormControl(cc.ICOUNT_DEFAULT);
 
-   public strengthSelect = new FormControl('3');
-   public checkPwnedToggle = new FormControl(false);
-   public clearToggle = new FormControl(true);
-   public hidePwdToggle = new FormControl(true);
-   public trueRandToggle = new FormControl(false);
-   public pseudoRandToggle = new FormControl({ value: true, disabled: true });
-   public formatSelect = new FormControl('compact');
-   public reminderToggle = new FormControl(true);
+   public strengthSelect = new FormControl(this.PWD_STRENGTH_DEFAULT);
+   public checkPwnedToggle = new FormControl(this.CHECK_PWNED_DEFAULT);
+   public visClearToggle = new FormControl(this.VIS_CLEAR_DEFAULT);
+   public hidePwdToggle = new FormControl(this.HIDE_PWD_DEFAULT);
+   public trueRandToggle = new FormControl(this.TRUE_RAND_DEFAULT);
+   public pseudoRandToggle = new FormControl({ value: this.PSEUDO_RAND_DEFAULT, disabled: true });
+   public formatSelect = new FormControl(this.FORMAT_DEFAULT);
+   public reminderToggle = new FormControl(this.REMINDER_DEFAULT);
 
    private _optionsLoaded = false;
+   private _lastReminder = this.REMINDER_DEFAULT;
+   private _algorithmList = ['X20-PLY'];
 
    @ViewChild('formatLabel') formatLabel!: ElementRef;
    @ViewChild('minStrLabel') minStrLabel!: ElementRef;
-   @ViewChild('algorithms') algorithms!: AlgorithmsComponent;
+   @ViewChild('algorithms') algorithmsCmp!: AlgorithmsComponent;
 
    constructor(
       private authSvc: AuthenticatorService,
@@ -142,16 +137,24 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    ) {
    }
 
+   @Input() set expand(expandOptions: boolean) {
+      this.expandOptions = expandOptions;
+   }
+
+   @Output() loopsChange = new EventEmitter<number>();
+   @Output() icountChange = new EventEmitter<number>();
+   @Output() cacheTimeChange = new EventEmitter<number>();
+   @Output() pwdOptionsChange = new EventEmitter<boolean>();
+   @Output() formatOptionsChange = new EventEmitter<boolean>();
+
    ngOnInit() {
-      //      this.loopsInput.valueChanges.subscribe(this.onLoopsChange.bind(this));
-      //      this.cacheTimeInput.valueChanges.subscribe(this.onCacheTimerChange.bind(this));
-      //      this.icountInput.valueChanges.subscribe(this.onICountChange.bind(this));
+      this.cacheTimeInput.valueChanges.subscribe(this.onCacheTimeChange.bind(this));
       this.strengthSelect.valueChanges.subscribe(this.onPwdStrengthChange.bind(this));
       this.checkPwnedToggle.valueChanges.subscribe(this.onCheckPwnedChange.bind(this));
 
-      this.clearToggle.valueChanges.subscribe(this.onVClearChnage.bind(this));
-      this.hidePwdToggle.valueChanges.subscribe(this.onHidePwdChanged.bind(this));
-      this.trueRandToggle.valueChanges.subscribe(this.onTrueRandChanged.bind(this));
+      this.visClearToggle.valueChanges.subscribe(this.onVisClearChnage.bind(this));
+      this.hidePwdToggle.valueChanges.subscribe(this.onHidePwdChange.bind(this));
+      this.trueRandToggle.valueChanges.subscribe(this.onTrueRandChange.bind(this));
       this.pseudoRandToggle.valueChanges.subscribe(this.onPseudoRandChange.bind(this));
       this.formatSelect.valueChanges.subscribe(this.onFormatChange.bind(this));
       this.reminderToggle.valueChanges.subscribe(this.onReminderChange.bind(this));
@@ -165,11 +168,19 @@ export class OptionsComponent implements OnInit, AfterViewInit {
             this.ICOUNT_DEFAULT = icount;
             this.ICOUNT_MAX = icountMax;
          }).finally(() => {
-            // load after benchmark to overwrite icount with saved value
+            // load after benchmark to overwrite benchmarks with saved values
             if (this.authSvc.isAuthenticated()) {
                this.loadOptions();
+            } else {
+               this.defaultOptions();
             }
          });
+   }
+
+   ngAfterViewInit() {
+      // ugly hack to make angular not clip the label for dropdown select elements
+      this.formatLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.7)";
+      this.minStrLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.7)";
    }
 
    loadOptions() {
@@ -217,32 +228,31 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
          this.setIcountWarning();
          // order is important, set modes first
-         this.algorithms.modes = this.algorithm;
-         this.algorithms.count = this.loopsInput.value || this.LOOPS_DEFAULT;
+         this.algorithmsCmp.modes = this._algorithmList;
+         this.algorithmsCmp.count = this.loopsInput.value || this.LOOPS_DEFAULT;
       }
    }
 
    defaultOptions(): void {
-      this.algorithm = ['X20-PLY'];
+      this._algorithmList = ['X20-PLY'];
       this.icountInput.setValue(this.ICOUNT_DEFAULT);
-      this.hidePwdToggle.setValue(true);
-      this.cacheTimeInput.setValue(0);
-      this.strengthSelect.setValue('3');
-      this.checkPwnedToggle.setValue(false);
-      this.loopsInput.setValue(1);
-      this.formatSelect.setValue('compact');
-      this.clearToggle.setValue(true);
-      this.reminderToggle.setValue(true);
-      this._lastReminder = true;
-      this.pseudoRandToggle.setValue(true);
-      this.trueRandToggle.setValue(false);
+      this.hidePwdToggle.setValue(this.HIDE_PWD_DEFAULT);
+      this.cacheTimeInput.setValue(this.CACHE_TIME_DEFAULT);
+      this.strengthSelect.setValue(this.PWD_STRENGTH_DEFAULT);
+      this.checkPwnedToggle.setValue(this.CHECK_PWNED_DEFAULT);
+      this.loopsInput.setValue(this.LOOPS_DEFAULT);
+      this.formatSelect.setValue(this.FORMAT_DEFAULT);
+      this.visClearToggle.setValue(this.VIS_CLEAR_DEFAULT);
+      this.reminderToggle.setValue(this.REMINDER_DEFAULT);
+      this._lastReminder = this.REMINDER_DEFAULT;
+      this.pseudoRandToggle.setValue(this.PSEUDO_RAND_DEFAULT);
+      this.trueRandToggle.setValue(this.TRUE_RAND_DEFAULT);
 
-//      this.clearPassword();
       this._optionsLoaded = false;
 
       // order is important, set modes first
-      this.algorithms.modes = this.algorithm;
-      this.algorithms.count = this.loopsInput.value || this.LOOPS_DEFAULT;
+      this.algorithmsCmp.modes = this._algorithmList;
+      this.algorithmsCmp.count = this.loopsInput.value || this.LOOPS_DEFAULT;
    }
 
    nukeOptions(): void {
@@ -267,16 +277,55 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       }
    }
 
-   ngAfterViewInit() {
-      // ugly hack to make angular not clip the label for dropdown select elements
-      this.formatLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.7)";
-      this.minStrLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.7)";
-
-//      this.algorithms.modes = this.algorithm;
-  //    this.algorithms.count = this.loopsInput.value || this.LOOPS_DEFAULT;
+   get loops(): number {
+      return this.loopsInput.value || this.LOOPS_DEFAULT;
    }
 
-   setAlgorithm(alg: string | null): void {
+   get algorithms(): string[] {
+      return this._algorithmList.slice(0, this.loops);
+   }
+
+   get cacheTime(): number {
+      return this.cacheTimeInput.value || this.CACHE_TIME_DEFAULT;
+   }
+
+   get icount(): number {
+      return this.icountInput.value || this.ICOUNT_DEFAULT;
+   }
+
+   get minPwdStrength(): string {
+      return this.strengthSelect.value || this.PWD_STRENGTH_DEFAULT;
+   }
+
+   get checkPwned(): boolean {
+      return this.checkPwnedToggle.value || false;
+   }
+
+   get visClear(): boolean {
+      return this.visClearToggle.value || false;
+   }
+
+   get hidePwd(): boolean {
+      return this.hidePwdToggle.value || false;
+   }
+
+   get trueRand(): boolean {
+      return this.trueRandToggle.value || false;
+   }
+
+   get pseudoRand(): boolean {
+      return this.pseudoRandToggle.value || false;
+   }
+
+   get format(): string {
+      return this.formatSelect.value || this.FORMAT_DEFAULT;
+   }
+
+   get reminder(): boolean {
+      return this.reminderToggle.value || false;
+   }
+
+   private setAlgorithm(alg: string | null): void {
       if (alg) {
          try {
             var algs = JSON.parse(alg);
@@ -288,78 +337,75 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          }
 
          if (this.cipherSvc.validateAlgs(algs)) {
-            this.algorithm = algs;
+            this._algorithmList = algs;
          }
       }
    }
 
-   setIcount(ic: string | null): void {
+   private setIcount(ic: string | null): void {
       // Ignores if out of range or NaN
       setIfBetween(ic, this.ICOUNT_MIN, this.ICOUNT_MAX, (num) => {
          this.icountInput.setValue(num);
       });
    }
 
-   setHidePwd(hide: string | null) {
+   private setHidePwd(hide: string | null) {
       setIfBoolean(hide, (bool) => {
          this.hidePwdToggle.setValue(bool);
       });
    }
 
-   setCacheTime(tm: string | null): void {
+   private setCacheTime(tm: string | null): void {
       setIfBetween(tm, 0, this.INACTIVITY_TIMEOUT, (num) => {
          //         this._cacheTime = num;
          this.cacheTimeInput.setValue(num);
       });
    }
 
-   setCheckPwned(check: string | null): void {
+   private setCheckPwned(check: string | null): void {
       setIfBoolean(check, (bool) => {
          this.checkPwnedToggle.setValue(bool);
       });
    }
 
-   setMinPwdStrength(stren: string | null): void {
+   private setMinPwdStrength(stren: string | null): void {
       if (['0', '1', '2', '3', '4'].includes(stren!)) {
          this.strengthSelect.setValue(stren!);
       }
    }
 
-   setLoops(lpEnd: string | null): void {
+   private setLoops(lpEnd: string | null): void {
       setIfBetween(lpEnd, 1, this.LOOPS_MAX, (num) => {
          this.loopsInput.setValue(num);
       });
    }
 
-   setCTFormat(ctFormat: string | null): void {
+   private setCTFormat(ctFormat: string | null): void {
       if (['link', 'compact', 'indent'].includes(ctFormat!)) {
          this.formatSelect.setValue(ctFormat!);
       }
    }
 
-   setReminder(reminder: string | null): void {
+   private setReminder(reminder: string | null): void {
       setIfBoolean(reminder, (bool) => {
          this.reminderToggle.setValue(bool);
          this._lastReminder = bool;
       });
    }
 
-   setVisibilityClear(clear: string | null): void {
+   private setVisibilityClear(clear: string | null): void {
       setIfBoolean(clear, (bool) => {
-         this.clearToggle.setValue(bool);
+         this.visClearToggle.setValue(bool);
       });
    }
 
-   setTrueRand(trand: string | null): void {
+   private setTrueRand(trand: string | null): void {
       setIfBoolean(trand, (bool) => {
          this.trueRandToggle.setValue(bool);
-//         if (!bool) {
-  //          this.pseudoRand = true;
-    //     }
       });
    }
 
-   setPseudoRand(prand: string | null): void {
+   private setPseudoRand(prand: string | null): void {
       setIfBoolean(prand, (bool) => {
          this.pseudoRandToggle.setValue(bool);
          if (!bool) {
@@ -368,24 +414,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       });
    }
 
-   @Input() set expand(expandOptions: boolean) {
-      this.expandOptions = expandOptions;
-   }
-
-   @Output() loopsChange = new EventEmitter<number>();
-
-   /*   get loops(): number {
-         return this._loops;
-      }
-
-      @Input() set loops(count: number) {
-         this._loops = Math.max(count, 1);
-         this._loops = Math.min(count, this.LOOPS_MAX);
-         this.loopsInput.setValue(this._loops);
-         //      this.algorithms.count = count;
-      }
-   */
-   setIcountWarning() {
+   private setIcountWarning() {
       this.hashTimeWarning = '';
       if (this.icountInput.value) {
          const hashMillis = this.icountInput.value / this.cipherSvc.hashRate;
@@ -398,15 +427,15 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       }
    }
 
-   onHidePwdChanged(hide: boolean | null): void {
+   onHidePwdChange(hide: boolean | null): void {
       this.authSvc.lsSet('hidepwd', hide);
    }
 
-   onModesChanged(modes: string[]): void {
+   onModesChange(modes: string[]): void {
       // Note that modes length is the max number of modes that have
       // been set, which may be larger than the current # of loops
       // This is done to preserve default values
-      this.algorithm = modes;
+      this._algorithmList = modes;
       this.authSvc.lsSet('algorithm', JSON.stringify(modes));
    }
 
@@ -415,7 +444,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       loops = Math.max(loops, 1);
       loops = Math.min(loops, this.LOOPS_MAX);
 
-      this.algorithms.count = loops;
+      this.algorithmsCmp.count = loops;
       this.loopsInput.setValue(loops);
       this.authSvc.lsSet('loops', loops);
 
@@ -431,55 +460,48 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       this.authSvc.lsSet('icount', icount);
       this.setIcountWarning();
 
-//      this.loopsChange.emit(loops);
+      this.icountChange.emit(icount);
    }
 
    onBlurCacheTime() {
-      let cacheTime = this.cacheTimeInput.value || 0;
-      cacheTime = Math.max(cacheTime, 0);
-      cacheTime = Math.min(cacheTime, this.INACTIVITY_TIMEOUT);
+      if (this.cacheTimeInput.value == null) {
+         this.onCacheTimeChange(this.CACHE_TIME_DEFAULT);
+      }
+   }
 
-      this.cacheTimeInput.setValue(cacheTime);
-      this.authSvc.lsSet('cachetime', cacheTime);
+   onCacheTimeChange(cacheTime: number | null) {
+      if (cacheTime != null) {
+         cacheTime = Math.max(cacheTime, 0);
+         cacheTime = Math.min(cacheTime, this.INACTIVITY_TIMEOUT);
 
-      //         this.loopsChange.emit(loops);
-
-      //      if (this.pwdCached) {
-      //         this.restartTimer();
-      //      }
+         if (cacheTime != this.cacheTimeInput.value) {
+            this.cacheTimeInput.setValue(cacheTime);
+         } else {
+            this.authSvc.lsSet('cachetime', cacheTime);
+            this.cacheTimeChange.emit(cacheTime);
+         }
+      }
    }
 
    onPwdStrengthChange(minStrength: string | null): void {
       this.authSvc.lsSet('minpwdstrength', minStrength);
-      //      this.clearPassword();
+      this.pwdOptionsChange.emit(true);
    }
 
    onCheckPwnedChange(check: boolean | null): void {
       this.authSvc.lsSet('checkpwned', check);
-      //      this.clearPassword();
+      this.pwdOptionsChange.emit(true);
    }
-
-   /*   onCacheTimerChange(cacheTime: number | null): void {
-         if (cacheTime != null) {
-            this._cacheTime = Math.max(cacheTime, 0);
-            this._cacheTime = Math.min(this._cacheTime, this.INACTIVITY_TIMEOUT);
-            //      this.authSvc.lsSet('cachetime', this.cacheTime.toString());
-         }
-         //      if (this.pwdCached) {
-         //         this.restartTimer();
-         //      }
-      }*/
 
    onReminderChange(reminder: boolean | null) {
       if (reminder != null) {
          this._lastReminder = reminder;
          this.authSvc.lsSet('reminder', reminder);
-         //     this.reformatCipherArmor();
       }
+      this.formatOptionsChange.emit(true);
    }
 
-
-   onVClearChnage(vclear: boolean | null) {
+   onVisClearChnage(vclear: boolean | null) {
       this.authSvc.lsSet('vclear', vclear);
    }
 
@@ -494,10 +516,10 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          this.reminderToggle.enable();
       }
       this.authSvc.lsSet('ctformat', selected);
-      //      this.reformatCipherArmor();
+      this.formatOptionsChange.emit(true);
    }
 
-   onTrueRandChanged(checked: boolean | null) {
+   onTrueRandChange(checked: boolean | null) {
       if (!checked) {
          this.pseudoRandToggle.disable();
          this.pseudoRandToggle.setValue(true);
@@ -514,5 +536,4 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    onClickResetOptions(): void {
       this.nukeOptions();
    }
-
 }
