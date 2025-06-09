@@ -348,13 +348,13 @@ const ELEMENT_DATA: FAQElement[] = [
         </tr>
         <tr>
           <td class="tg-0pky">Last signed-in user name and user ID</td>
-          <td class="tg-0pky">Browser local storage, transmission below</td>
+          <td class="tg-0pky">Browser local storage, HTTPS transmission from server to browser</td>
           <td class="tg-0pky">Within the side panel that shows passkeys, click the "Sign Out" button, then click the
             "Sign in as a different user" button</td>
         </tr>
         <tr>
           <td class="tg-0pky">Currently signed-in user credential</td>
-          <td class="tg-0pky">Browser sessions storage, transmission below</td>
+          <td class="tg-0pky">Browser session storage, HTTPS transmission from server to browser</td>
           <td class="tg-0pky">Close the Quick Crypt tab in your browser or navigate to another website.
           Automatically flushed after 6 hours of inactivity</td>
         </tr>

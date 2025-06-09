@@ -1,5 +1,14 @@
 # CHANGELOG.md
 
+## 4.2.2 (2025-06-08)
+
+Changes:
+
+  - small corrections to protocol description
+  - minor doc updates
+  - improved layout of encryption options
+  - package updates
+
 ## 4.2.1 (2025-01-12)
 
 Security:

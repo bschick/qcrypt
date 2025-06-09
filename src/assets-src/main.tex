@@ -1,9 +1,8 @@
 \documentclass{article}
 \usepackage{graphicx} % Required for inserting images
 \usepackage[english]{babel}
-\usepackage[letterpaper,top=1cm,bottom=1cm,left=0cm,inner=0cm,right=1cm,marginparwidth=0cm]{geometry}
+\usepackage[letterpaper,top=1cm,bottom=1.5cm,left=0cm,inner=0cm,right=1cm,marginparwidth=0cm]{geometry}
 \usepackage{amsmath}
-\usepackage{graphicx}
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
 \setlength\parindent{0pt}
 %\setlength\parindent{20pt}
@@ -14,7 +13,7 @@
 \begin{tabular}{@{}p{2mm} l}
 $A$ & \textrm{ - Alice} \\
 $M$ & \textrm{ - Webauthn authenticator (passkey manager)} \\
-$B$ & \textrm{ - Browser with SubtleCrypto API and libsodium library} \\
+$B$ & \textrm{ - Browser with Session storage, SubtleCrypto API, and libsodium library} \\
 $S$ & \textrm{ - Quick Crypt server} \\
 $R$ & \textrm{ - https://www.random.org/cgi-bin/randbyte?nbytes=48} \\
 $D$ & \textrm{ - Insecure persistent storage system} \\
@@ -84,17 +83,17 @@ $err$ & \textrm{ - Error message and exit}\\
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$A\overset{\textrm{webauthn}}{\leftrightarrow} B,M \overset{\textrm{webauthn}}{\leftrightarrow} S$}\\
 \multicolumn{2}{@{}l}{$B\leftarrow S: u_c$}\\
-\multicolumn{2}{@{}l}{$A\rightarrow B: m,i,a,le$}\\
+\multicolumn{2}{@{}l}{$A\rightarrow B: m,i,le$}\\
 \multicolumn{2}{@{}l}{$v = 4$}\\
 \multicolumn{2}{@{}l}{$lp = 0$}\\
 \multicolumn{2}{@{}l}{$LOOP: B\textrm{ compute} $}\\
-&$A\rightarrow B: p,h $\\
-&$r = G(384)\lor B\overset{\textrm{https}}{\leftarrow} R: r$\\
+&$A\rightarrow B: p,h,a $\\
+&$r \in \{G(384), B\overset{\textrm{https}}{\leftarrow} R: r$\}\\
 &$n_S = r[0:128)$\\
 &$n_{IV} = r[128:128+n_{IV}l)$\\
 &$k_M = D_P(p \mathbin\Vert u_c,n_S,i)$\\
 &$k_S = D_H(u_c,n_S,kp_S)$\\
-&$cd = cd_0\mathbin\Vert  cd_N\mathbin\Vert ...$\\
+&$cd = cd_0\mathbin\Vert ... \mathbin\Vert cd_N$\\
 &$m = cd$\\
 &$lp = lp + 1$\\
 &$\textrm{goto LOOP if lp}<le$\\
@@ -121,7 +120,8 @@ $err$ & \textrm{ - Error message and exit}\\
 \underline{Block N Encryption by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
-\multicolumn{2}{@{}l}{$r = G(384)\lor B\overset{\textrm{https}}{\leftarrow} R: r$}\\
+
+\multicolumn{2}{@{}l}{$r \in \{G(384), B\overset{\textrm{https}}{\leftarrow} R: r$\}}\\
 \multicolumn{2}{@{}l}{$n_{IV} = r[0:n_{IV}l)$}\\
 \multicolumn{2}{@{}l}{$ad = a \mathbin\Vert n_{IV}$}\\
 \multicolumn{2}{@{}l}{$m_{E} = E_a(m_N,n_{IV},ad,k_M)$}\\
@@ -142,10 +142,17 @@ ad \mathbin\Vert m_{E}$}\\
 
 \newpage
 
-\underline{Message Decryption by A}\\
+\underline{Message Retrieval by A}\\
 
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$A \leftarrow D: cd$}\\
+\end{tabular}
+
+\hfill \break
+
+\underline{Message Decryption by A}\\
+
+\begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$A \overset{\textrm{webauthn}}{\leftrightarrow} B, M \overset{\textrm{webauthn}}{\leftrightarrow} S$}\\
 \multicolumn{2}{@{}l}{$B \leftarrow S: u_c$}\\
 \multicolumn{2}{@{}l}{$A \rightarrow B: cd$}\\
