@@ -25,7 +25,7 @@ import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthenticatorService } from '../services/authenticator.service';
 
-export const senderLinkGuard: CanActivateFn = (route, state) => {
+export const senderLinksGuard: CanActivateFn = (route, state) => {
    const authSvc = inject(AuthenticatorService);
    const router = inject(Router);
 

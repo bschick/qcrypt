@@ -22,6 +22,7 @@ SOFTWARE. */
 import {
    AfterViewInit,
    Component,
+   effect,
    OnDestroy,
    OnInit,
    Renderer2,
@@ -35,28 +36,31 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import { Router, RouterLink } from '@angular/router';
+import { MatTableModule } from '@angular/material/table';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { AuthEvent, AuthenticatorService } from '../services/authenticator.service';
+import { AuthEvent, AuthenticatorService, SenderLinkInfo } from '../services/authenticator.service';
 import { Subscription } from 'rxjs';
 import { base64URLStringToBuffer, bufferToBase64URLString } from '../services/base64';
 import { OptionsComponent } from '../ui/options/options.component'
 
-const seed = 'DcQc3_gNiK9ONmCjTM8xP2HiI0LVm6kwwkX_lrOCeH0=';
+
+//const seed = 'DcQc3_gNiK9ONmCjTM8xP2HiI0LVm6kwwkX_lrOCeH0=';
 
 @Component({
-   selector: 'app-sender-link',
-   templateUrl: './senderlink.component.html',
-   styleUrl: './senderlink.component.scss',
+   selector: 'app-sender-links',
+   templateUrl: './senderlinks.component.html',
+   styleUrl: './senderlinks.component.scss',
    imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink,
-      MatInputModule, MatFormFieldModule, CommonModule, OptionsComponent
+      MatInputModule, MatFormFieldModule, CommonModule, OptionsComponent,
+      MatTableModule
    ]
 
 })
-export class SenderLinkComponent implements OnInit, OnDestroy, AfterViewInit {
+export class SenderLinksComponent implements OnInit, OnDestroy, AfterViewInit {
 
-   public senderLink = '';
-   public message= '';
+   public senderLinks: SenderLinkInfo[] = [];
+   public displayedColumns: string[] = ['description', 'encrypt', 'copy', 'delete'];
    private authSub!: Subscription;
 
    @ViewChild('options') options!: OptionsComponent;
@@ -66,9 +70,14 @@ export class SenderLinkComponent implements OnInit, OnDestroy, AfterViewInit {
       private authSvc: AuthenticatorService,
       private router: Router,
       private snackBar: MatSnackBar) {
+      effect(() => {
+         this.senderLinks = this.authSvc.senderLinks();
+      });
    }
 
    ngOnInit(): void {
+      this.senderLinks = this.authSvc.senderLinks();
+
       this.authSub = this.authSvc.on(
          [AuthEvent.Logout],
          () => this.router.navigateByUrl('/')
@@ -76,14 +85,6 @@ export class SenderLinkComponent implements OnInit, OnDestroy, AfterViewInit {
    }
 
    ngAfterViewInit(): void {
-      try {
-         // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
-         setTimeout(
-            () => this.r2.selectRootElement('#linkInput').focus(), 0
-         );
-      } catch (err) {
-         console.error(err);
-      }
    }
 
    ngOnDestroy(): void {
@@ -92,7 +93,9 @@ export class SenderLinkComponent implements OnInit, OnDestroy, AfterViewInit {
       }
    }
 
-
+   onClickDelete(passkey: SenderLinkInfo) {
+      alert(JSON.stringify(passkey));
+   }
 
    async doit(): Promise<void> {
 

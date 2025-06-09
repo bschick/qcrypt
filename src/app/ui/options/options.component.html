@@ -22,7 +22,7 @@ SOFTWARE. -->
 <mat-accordion multi>
   <mat-expansion-panel matRipple [matRippleDisabled]="true" [expanded]="expandOptions">
     <mat-expansion-panel-header>
-      <mat-panel-title class="panel-title">{{loopsInput.value || 1 > 1 ? 'Encryption Modes' : 'Encryption Mode'}}</mat-panel-title>
+      <mat-panel-title class="panel-title">{{(loopsInput.value || 1) > 1 ? 'Encryption Modes' : 'Encryption Mode'}}</mat-panel-title>
     </mat-expansion-panel-header>
     <div class="algs-area">
       <app-algorithms (modesChange)="onModesChange($event)" #algorithms></app-algorithms>
