@@ -4,6 +4,7 @@
 
 Changes:
 
+  - decrypt links now work through login process
   - small corrections to protocol description
   - minor doc updates
   - improved layout of encryption options
