@@ -117,15 +117,15 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'Who can decrypt the data encypt with Quick Crypt?',
+      question: 'Who can decrypt the data I encypt with Quick Crypt?',
       answer: `To decrypt data encrypted with Quick Crypt, you need both the
       password you used for encryption and a passkey restricting access to your
       Quick Crypt user credential. Unless you share your passkey and encryption
-      password with someone, only you can decrypt data that you have encrypted.
-      This is true for self-encrypted data and data encrypted for you through
-      a sender link. The Quick Crypt web app does not store your passwords and
-      therefore cannot decrypt your data. Do not forget the passwords you use
-      for encryption.`
+      password with someone, only you can decrypt data that you have encrypted.`
+//      This is true for self-encrypted data and data encrypted for you through
+//      a sender link. The Quick Crypt web app does not store your passwords and
+//      therefore cannot decrypt your data. Do not forget the passwords you use
+ //     for encryption.`
    },
 
    {
@@ -235,7 +235,7 @@ const ELEMENT_DATA: FAQElement[] = [
       existing cipher text. If you find your original recovery link or passkey later, you
       can use either to regain access to your original user identity anytime.`
    },
-
+/*
    {
       position: 0,
       question: 'What is a sender link and how do I use it?',
@@ -302,7 +302,7 @@ const ELEMENT_DATA: FAQElement[] = [
 
        To create a sender link, click the "Sender Link" button on the main page.`
    },
-
+*/
 
    {
       position: 0,
