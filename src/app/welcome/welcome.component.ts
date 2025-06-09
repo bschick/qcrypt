@@ -31,7 +31,12 @@ import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dial
 import { MatIconModule } from '@angular/material/icon';
 import { CommonModule } from '@angular/common';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { HttpParams } from '@angular/common/http';
 
+function paramsToQueryString(): string {
+   const params = new HttpParams({ fromString: window.location.search });
+   return params.toString() ? `?${params.toString()}` : '';
+}
 
 @Component({
     selector: 'app-welcome',
@@ -58,7 +63,7 @@ export class WelcomeComponent {
          this.error = '';
          this.showProgress = true;
          await this.authSvc.findLogin();
-         this.router.navigateByUrl('/');
+         this.router.navigateByUrl('/' + paramsToQueryString());
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes("fetch")) {

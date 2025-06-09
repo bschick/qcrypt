@@ -168,20 +168,22 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       );
    }
 
+   async showTextFromParams() {
+      await this.options.optionsLoaded();
+
+      const params = new HttpParams({ fromString: window.location.search });
+      if (params.get('cipherarmor')) {
+         const cipherData = parseCipherArmor(params.get('cipherarmor')!);
+         this.showCipherData(cipherData);
+      }
+      if (params.get('cleartext')) {
+         this.showClearText(decodeURIComponent(params.get('cleartext')!));
+      }
+   }
+
    ngAfterViewInit() {
       if (this.authSvc.isAuthenticated()) {
-         let params = new HttpParams({ fromString: window.location.search });
-
-         if (params.get('cipherarmor')) {
-            this.showCipherArmor(decodeURIComponent(params.get('cipherarmor')!));
-            this.reformatCipherArmor();
-            params = params.delete('cipherarmor');
-         }
-         if (params.get('cleartext')) {
-            this.showClearText(decodeURIComponent(params.get('cleartext')!));
-            params = params.delete('cleartext');
-         }
-
+         this.showTextFromParams();
          if (localStorage.getItem(this.authSvc.userId + "welcomed") != 'yup') {
             setTimeout(() => {
                this.welcomed = false;
@@ -234,6 +236,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.showSigninDialog();
       } else if (data.event === AuthEvent.Login) {
          this.options.loadOptions();
+         this.showTextFromParams();
       }
    }
 
@@ -497,8 +500,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          const cipherStream = await this.makeCipherStream(clearStream);
          if (cipherStream) {
             const cipherData = await readStreamAll(cipherStream);
-            const cipherArmor = makeCipherArmor(cipherData, this.options.format, this.options.reminder);
-            this.showCipherArmorAndTime(cipherArmor);
+            this.showCipherDataAndTime(cipherData);
             this.toastMessage('Congratulations, data encrypted');
 
             // it worked, so stop showing tips (setting this before next loop)
@@ -878,16 +880,17 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cipherLabel = 'Cipher Armor ' + label;
    }
 
-   showCipherArmor(cipherArmor: string, extra: string = ''): void {
+   showCipherData(cipherData: Uint8Array, extra: string = ''): void {
+      const cipherArmor = makeCipherArmor(cipherData, this.options.format, this.options.reminder);
       this.cipherArmor = cipherArmor;
       this.cipherFile = undefined;
       this.cipherMsg = '';
       this.cipherLabel = 'Cipher Armor ' + extra;
    }
 
-   showCipherArmorAndTime(cipherArmor: string): void {
+   showCipherDataAndTime(cipherData: Uint8Array): void {
       const tookMsg = makeTookMsg(this.actionStart, Date.now());
-      this.showCipherArmor(cipherArmor, `(${tookMsg})`);
+      this.showCipherData(cipherData, `(${tookMsg})`);
    }
 
    onFormatOptionsChange() {
@@ -898,7 +901,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.cipherArmor) {
          try {
             const cipherData = parseCipherArmor(this.cipherArmor);
-            this.showCipherArmor(makeCipherArmor(cipherData, this.options.format, this.options.reminder));
+            this.showCipherData(cipherData);
          } catch (err) {
             console.error(err);
          }

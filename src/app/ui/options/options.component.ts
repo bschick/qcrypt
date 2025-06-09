@@ -233,6 +233,12 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       }
    }
 
+   async optionsLoaded() {
+      while(!this._optionsLoaded) {
+         await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+   }
+
    defaultOptions(): void {
       this._algorithmList = ['X20-PLY'];
       this.icountInput.setValue(this.ICOUNT_DEFAULT);
