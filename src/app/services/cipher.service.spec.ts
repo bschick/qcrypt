@@ -1584,7 +1584,7 @@ describe("Benchmark execution", function () {
    });
 
    it("reasonable benchmark results", async function () {
-      const [icount, icountMax, hashRate] = await cipherSvc.benchmark(cc.ICOUNT_MIN, 500, 5 * 60 * 1000);
+      const [icount, icountMax, hashRate] = await cipherSvc.benchmark(cc.ICOUNT_MIN);
       expect(icount).toBeGreaterThanOrEqual(cc.ICOUNT_DEFAULT);
       expect(icount).toBeLessThanOrEqual(cc.ICOUNT_MAX);
       expect(icountMax).toBeGreaterThanOrEqual(icount);

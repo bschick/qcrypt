@@ -1,13 +1,15 @@
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { CoprightComponent } from "../../ui/copright/copright.component";
+import { CopyrightComponent } from "../../ui/copyright/copyright.component";
+import { environment } from '../../../environments/environment';
 
 @Component({
     selector: 'app-overview',
     templateUrl: './overview.component.html',
     styleUrl: './overview.component.scss',
-    imports: [RouterLink, CoprightComponent]
+    imports: [RouterLink, CopyrightComponent]
 })
 export class OverviewComponent {
-
+    public version = environment.version;
+    public copyright = environment.copyright;
 }

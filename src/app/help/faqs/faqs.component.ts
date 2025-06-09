@@ -7,7 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { HttpParams } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { CoprightComponent } from "../../ui/copright/copright.component";
+import { CopyrightComponent } from "../../ui/copyright/copyright.component";
 
 
 export interface FAQElement {
@@ -31,7 +31,7 @@ export interface FAQElement {
     imports: [
     MatTableModule, MatInputModule, MatFormFieldModule, MatIconModule,
     MatButtonModule, FormsModule,
-    CoprightComponent
+    CopyrightComponent
 ]
 })
 export class FaqsComponent implements AfterViewInit {
@@ -119,9 +119,13 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'Who can decrypt the data I encypt with Quick Crypt?',
       answer: `To decrypt data encrypted with Quick Crypt, you need both the
-      password you used during encryption and a passkey restricting access to your
+      password you used for encryption and a passkey restricting access to your
       Quick Crypt user credential. Unless you share your passkey and encryption
       password with someone, only you can decrypt data that you have encrypted.`
+//      This is true for self-encrypted data and data encrypted for you through
+//      a sender link. The Quick Crypt web app does not store your passwords and
+//      therefore cannot decrypt your data. Do not forget the passwords you use
+ //     for encryption.`
    },
 
    {
@@ -231,6 +235,74 @@ const ELEMENT_DATA: FAQElement[] = [
       existing cipher text. If you find your original recovery link or passkey later, you
       can use either to regain access to your original user identity anytime.`
    },
+/*
+   {
+      position: 0,
+      question: 'What is a sender link and how do I use it?',
+      answer: `<p>A sender link allows other to encrypt text or files that only you can
+      decrypt without exposing your credentials. You specify how many times a each
+      sender link can be used and when the link will expire. Once created, you can give
+      the sender link to others who can use it to encrypt data only you can decrypt.
+      Recipients should follow the link and encypt data with passwords just as they
+      would normally in Quick Crypt. Recipients may then send you the encrypted
+      data by any means they chose (message app, email, file sharing, etc). Neither
+      unencrypted nor encrypted data is processed, sent, or stored by Quick Crypt
+      servers, ensuring you maintain full control over the information provided by
+      the sender. When you
+      receive encypted data, you decrypted it as you would normally in Quick Crypt
+      with the same strong privacy and authenticity characteristics.</p>
+      <p>
+
+      </p>
+
+       To create a sender link, click the "Sender Link" button on the main page.`
+   },
+
+
+   {
+      position: 0,
+      question: 'What should I do if someone I don\'t trust obtains a sender link I created?',
+      answer: `<p>First, it is important to understand that sender links can only encrypt data.
+      When someone has a sender link you created, they cannot use it to decrypt your data nor
+      even the resulting cipher armor they creating themselves using your link.</p>
+      <p>
+      If an untrusted person has a sender link you created they could use it to encrypt data
+      you don't want or trust. There are several ways to handle this situation:
+      <ol type='i'>
+      <li>Delete the sender link on <a href="/help/overview">Quick Crypt's sender like page</a></li>
+      <li>Quick Crypt helps you detect lost sender links by showing you the
+      user name from the account who encrypted data. If you did not expect data from that
+      sender, you should not trust it</li>
+      <li>Since Quick Crypt never stores or sends encrypted data, you can also confirm you received
+      encrypted data from an expected sender (email address, messaging user, etc.)</li>
+      </ol>
+
+      </p>
+
+
+      does not allow
+      other to decrypt your data. Sender links can only be used to encrypt data, and others
+      uho use your sender link cannot even decrypt that data themselves.
+
+      A sender link allows other to encrypt text or files that only you can
+      decrypt without exposing your credentials. You specify how many times a each
+      sender link can be used and when the link will expire. Once created, you can give
+      the sender link to others who can use it to encrypt data only you can decrypt.
+      Recipients should follow the link and encypt data with passwords just as they
+      would normally in Quick Crypt. Recipients may then send you the encrypted
+      data by any means they chose (message app, email, file sharing, etc). Neither
+      unencrypted nor encrypted data is processed, sent, or stored by Quick Crypt
+      servers, ensuring you maintain full control over the information provided by
+      the sender. When you
+      receive encypted data, you decrypted it as you would normally in Quick Crypt
+      with the same strong privacy and authenticity characteristics.</p>
+      <p>
+
+      </p>
+
+       To create a sender link, click the "Sender Link" button on the main page.`
+   },
+*/
 
    {
       position: 0,
@@ -541,36 +613,47 @@ const ELEMENT_DATA: FAQElement[] = [
       <a href="https://en.wikipedia.org/wiki/Cryptographically_secure_pseudorandom_number_generator" target="_blank">
       suitable for use in cryptography</a>. Quick Crypt uses WebCrypto
       <a href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues" target="_blank">getRandomValues()</a>
-      by default, which generates cryptographically strong pseudo-random algorithmic values.
+      by default, which produces cryptographically strong pseudo-random algorithmic values.
       Unlike other
       cryptographic functions implemented by browsers, however, random number generation
-      is not standardized and quality may vary. You can alternatively configure Quick
-      Crypt to download random data generated from atmospheric noise by
+      is not standardized, and quality may vary.</p>
+      <p><b>True Random</b> tells Quick Crypt to retrieve random data generated from
+      atmospheric noise by
       <a href="https://www.random.org" target="_blank">https://www.random.org</a>, which
-      should be closer to true random data. This option is set within the "Advanced
-      Options" section on the main page. When you enable the 'True Random'
-      option, you can optionally enable your browser's 'Pseudo Random' function
-      as a fallback if random.org is unreachable. If random.org is unreachable and
+      should be closer to true random data, rather than from your browser's 'Pseudo Random'
+      function.</p>
+      <p><b>Pseudo Random</b> tells Quick Crypt fallback to your browser's 'Pseudo Random'
+      function if random.org is unreachable. If random.org is unreachable and
       'Pseudo Random' is disabled, encryption operations result in an error.</p>
       <p>Quick Crypt generates or downloads new random values for every encryption,
       meaning nonces and salts are never reused, and every encryption key should be
-      unique. For details about how random values are used, refer to Quick
-      Crypt's <a href="/help/protocol">protocol description</a>.</p>`
+      unique. Refer to Quick
+      Crypt's <a href="/help/protocol">protocol description</a> for details about
+      random value usage.</p>`
    },
 
    {
       position: 0,
-      question: "What is the 'Check if Stolen' option?",
-      answer: `When you enable the 'Check if Stolen' option, Quick Crypt checks
-      an online database from
-      <a href="https://haveibeenpwned.com/API/v2#PwnedPasswords" target="_blank">https://haveibeenpwned.com</a>
-      for passwords that have been leaked or stolen, and prevents you from using
-      them for encryption. Attackers compile leaked passwords into lists to speed up
-      password guessing. Quick Crypt uses large variable numbers of PBKDF2 key
-      derivation iterations and combines your encryption password with a
+      question: "What are the 'Hash Iterations', 'Minimum Strength', and 'Check if Stolen' option?",
+      answer: `<p>Quick Crypt uses many PBKDF2 key
+      derivation iterations and combines your password with a
       passkey-protected user credential to make password guessing extremely difficult,
       even with leaked passwords. But it is always better to use a strong password
-      for defense-in-depth.`
+      for defense-in-depth.</p>
+      <p><b>Hash Iterations</b> specifies the number of times the PBKDF2 algorithm will
+      apply a SHA-512 HMAC function to your password and user credential to generate an
+      encryption key. Quick Crypt
+      selects the default iteration count by benchmarking your system to find the largest
+      value that will complete in 500ms. To help ensure strong keys, Quick Crypt accepts a
+      minimum of 400,000 iterations.</p>
+      <p><b>Minimum Strength</b> sets the required strength for encryption passwords you
+      enter. Quick Crypt uses algorithms running in your browser to estimate the strength
+      of your password. Entries that are below the required strength are rejected.</p><p>
+      <b>Check if Stolen</b> causes Quick Crypt to also check an online database from
+      <a href="https://haveibeenpwned.com/API/v2#PwnedPasswords" target="_blank">https://haveibeenpwned.com</a>
+      for passwords that have been leaked or stolen, and prevents you from using
+      them for encryption when detected. Attackers compile leaked passwords into lists to speed up
+      password guessing.</p>`
    },
 
    {
@@ -635,7 +718,7 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'What does the Loop Encrypt advanced option do?',
+      question: 'What does the "Loop Encrypt" Advanced Option do?',
       answer: `<p>Loop encryption can improve privacy and authenticity.
       By default, Quick Crypt encrypts your data once.
       If you set Loop Encrypt to be greater than 1, Quick Crypt encrypts your
@@ -778,4 +861,33 @@ const ELEMENT_DATA: FAQElement[] = [
       since two modes are part of the TLS 1.3 standard used by most browsers,
       and the third is proposed for a future TLS version.`
    },
+
+   {
+      position: 0,
+      question: "What does the 'Decryption Reminder' Advanced Option do?",
+      answer: `When enabled, this option adds text to JSON cipher armor that reminds
+      you where to decrypt the cipher armor. Quick Crypt does not use this text; it
+      is just a reminder for anyone who may forgotten how the cipher armor was created.`
+   },
+
+   {
+      position: 0,
+      question: "What do the various 'Display Privacy' Advanced Options do?",
+      answer: `These options control what information is visible in the Quick Crypt UI
+      by default and when that information is automatically cleared.
+      <p><b>Cache Time</b> is the number of
+      seconds that <i>Passwords</i> and <i>Clear Text</i> are held in memory until
+      automatically cleared. The default is 0, which immediately clears both values
+      after encryption. Setting this to greater than 0 will store the last Password
+      and Clear Text for that many seconds.
+      This is useful when you want to encrypt or decrypt multiple items using the
+      same password.</p><p><b>Clear When Hidden</b> automatically clears cached Password
+      and Clear Text values when the browser tab displaying Quick Crypt is hidden,
+      for example, when a screen lock occurs. Clear occurs even when there is
+      "Cache Time" remaining.</p><p><b>Hide Passwords</b> obscures passwords as you type
+      them. If you turn off this option, passwords are displayed in clear text when you
+      enter them. You can switch password visibility on the fly regardless of this
+      setting.</p>`
+   },
+
 ];

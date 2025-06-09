@@ -26,28 +26,9 @@ SOFTWARE. */
   min-width: 632px;
 }
 
-.mtop0 {
-  margin-top: 0px;
-}
-
-.mtop10 {
-  margin-top: 10px;
-}
-
-.mtop20 {
-  margin-top: 20px;
-}
-
-.mtop35 {
-  margin-top: 35px;
-}
-
-.mleft15 {
-  margin-left: 15px;
-}
-
-.mleft35 {
-  margin-left: 35px;
+.input-area {
+  margin: 15px 0 10px 0;
+  width: 100%;
 }
 
 @mixin messageBox {
@@ -80,26 +61,6 @@ SOFTWARE. */
   left: 50%;
   margin: -50px 0 0 -50px;
   z-index: 999;
-}
-
-.option-input {
-  width: 146px;
-}
-
-.open-new-link {
-  position: relative;
-  top: 6px;
-  left: 1px;
-}
-
-.alg-help {
-  position: relative;
-  top: -7px;
-}
-
-.open-new-icon2 {
-  font-size: 18px;
-  position: relative;
 }
 
 #format-link {
@@ -145,44 +106,10 @@ SOFTWARE. */
   top: 2px;
 }
 
-.options-header {
-  font-family: Roboto, sans-serif;
-  font-size: 14px;
-  text-decoration: underline;
-}
-
-.options-header1 {
-  @extend .options-header;
-  margin-top: 5px;
-}
-
-.hash-warning {
-  color: darkred;
-  position: absolute;
-  top: 162px;
-  left: 25px;
-  font-size: 12px;
-}
-
-.options-header2 {
-  @extend .options-header;
-  margin-top: 28px;
-}
-
-.options-header3 {
-  @extend .options-header;
-  margin-top: 34px;
-}
-
 .pasword-input {
   width: 230px;
   margin-bottom: -0.5em;
   flex: none;
-}
-
-.input-area {
-  margin: 15px 0 10px 0;
-  width: 100%;
 }
 
 .flx-container {
@@ -200,10 +127,6 @@ SOFTWARE. */
   flex: 1;
 }
 
-.algs-area {
-  display: flex;
-}
-
 .dragger {
   width: 16px;
   cursor: ew-resize;
@@ -217,10 +140,6 @@ SOFTWARE. */
 .dragger-icon {
   font-size: 18px;
   margin-left: 0px;
-}
-
-.panel-title {
-  font-size: 15px;
 }
 
 @mixin txt-area {
@@ -239,39 +158,6 @@ SOFTWARE. */
   @include txt-area();
   word-break: break-all;
 }
-
-.red-pwd-strength {
-  color: darkred;
-}
-
-.yellow-pwd-strength {
-  color: darkgoldenrod;
-}
-
-.green-pwd-strength {
-  color: darkgreen;
-}
-
-/*.github {
-  display: block;
-  text-align: right;
-  margin-top: 50px;
-}
-
-.github a {
-  text-decoration: none;
-}
-
-.github button {
-  background-color: #8a8fb2;
-  height: 36px;
-  padding-left: 16px;
-  padding-right: 9px;
-}
-
-.github-label {
-  margin: 0 0 0 -4px;
-}*/
 
 .file-input {
   display: none;

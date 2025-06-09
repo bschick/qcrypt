@@ -19,14 +19,21 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Component } from '@angular/core';
 
-@Component({
-  selector: 'app-copright',
-  imports: [],
-  templateUrl: './copright.component.html',
-  styleUrl: './copright.component.scss'
-})
-export class CoprightComponent {
+import { CanActivateFn } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router } from '@angular/router';
+import { AuthenticatorService } from '../services/authenticator.service';
 
-}
+export const senderLinksGuard: CanActivateFn = (route, state) => {
+   const authSvc = inject(AuthenticatorService);
+   const router = inject(Router);
+
+   if (authSvc.isAuthenticated()) {
+      return true;
+   } else if(authSvc.isUserKnown()) {
+      return router.parseUrl('/');
+   }
+
+   return router.parseUrl('/welcome');
+};
