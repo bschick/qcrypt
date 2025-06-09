@@ -4,7 +4,7 @@ Protocol latext text:
 * Set \setlength\parindent{0pt}
 * Make other changes, recompile, download pdf
 * Right click pdf and open in Pixelmator Pro
-* Select page and DPI of 255
+* Select page and DPI of 255, disable import layers, click import
 * Select and area, copy, new file from clipboard
 * Export as png with sRGB profile to 'assets' directory (not sure if profile maters)
 * Run optipng with default params on the resulting png
