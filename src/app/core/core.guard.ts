@@ -2,6 +2,12 @@ import { CanActivateFn } from '@angular/router';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthenticatorService } from '../services/authenticator.service';
+import { HttpParams } from '@angular/common/http';
+
+function paramsToQueryString(): string {
+   const params = new HttpParams({ fromString: window.location.search });
+   return params.toString() ? `?${params.toString()}` : '';
+}
 
 export const coreGuard: CanActivateFn = (route, state) => {
    const authSvc = inject(AuthenticatorService);
@@ -11,5 +17,5 @@ export const coreGuard: CanActivateFn = (route, state) => {
       return true;
    }
 
-   return router.parseUrl('/welcome');
+   return router.parseUrl('/welcome' + paramsToQueryString());
 };
