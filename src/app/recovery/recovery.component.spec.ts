@@ -11,10 +11,9 @@ describe('RecoveryComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-    imports: [RecoveryComponent, RouterModule.forRoot([]), NoopAnimationsModule],
-    providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
-})
-         .compileComponents();
+         imports: [RecoveryComponent, RouterModule.forRoot([]), NoopAnimationsModule],
+         providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
+      }).compileComponents();
 
       fixture = TestBed.createComponent(RecoveryComponent);
       component = fixture.componentInstance;
