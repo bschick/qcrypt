@@ -1,18 +1,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { SenderLinkComponent } from './senderlink.component';
+import { SenderLinksComponent } from './senderlinks.component';
 
 describe('SenderLinkComponent', () => {
-  let component: SenderLinkComponent;
-  let fixture: ComponentFixture<SenderLinkComponent>;
+  let component: SenderLinksComponent;
+  let fixture: ComponentFixture<SenderLinksComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [SenderLinkComponent]
+      imports: [SenderLinksComponent]
     })
     .compileComponents();
 
-    fixture = TestBed.createComponent(SenderLinkComponent);
+    fixture = TestBed.createComponent(SenderLinksComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
   });

@@ -25,8 +25,8 @@ import { WelcomeComponent } from './welcome/welcome.component';
 import { NewUserComponent } from './newuser/newuser.component';
 import { ShowRecoveryComponent } from './showrecovery/showrecovery.component';
 import { showRecoveryGuard } from './showrecovery/showrecovery.guard';
-import { SenderLinkComponent } from './senderlink/senderlink.component';
-import { senderLinkGuard } from './senderlink/senderlink.guard';
+import { SenderLinksComponent } from './senderlinks/senderlinks.component';
+import { senderLinksGuard } from './senderlinks/senderlinks.guard';
 import { RecoveryComponent } from './recovery/recovery.component';
 import { OverviewComponent } from './help/overview/overview.component';
 import { FaqsComponent } from './help/faqs/faqs.component';
@@ -38,7 +38,7 @@ import { welcomeGuard } from './welcome/welcome.guard';
 export const routes: Routes = [
    { path: 'welcome', component: WelcomeComponent, canActivate: [welcomeGuard] },
    { path: 'newuser', component: NewUserComponent },
-   { path: 'senderlink', component: SenderLinkComponent, canActivate: [senderLinkGuard] },
+   { path: 'senderlinks', component: SenderLinksComponent, canActivate: [senderLinksGuard] },
    { path: 'showrecovery', component: ShowRecoveryComponent, canActivate: [showRecoveryGuard] },
    { path: 'recovery', component: RecoveryComponent },
    { path: 'help/overview', component: OverviewComponent },

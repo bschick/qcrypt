@@ -1,0 +1,38 @@
+@use "../common.scss";
+@use "@angular/material" as mat;
+
+
+.linktable {
+  margin-top: 15px;
+  box-shadow: var(--mat-sys-level1);
+
+  td {
+    border-color: var(--mat-sys-outline-variant);
+  }
+
+  tr:last-child td {
+    border: none;
+  }
+}
+
+.tdcommon {
+  padding: 0 8px;
+}
+
+.tdbutton {
+  width: 75px;
+}
+
+.add-button {
+  @include common.strong-button;
+  margin-top: 15px;
+  height: 45px;
+  width: 230px;
+  padding: 0;
+  font-size: 15px;
+}
+
+.core {
+  padding: 15px;
+  min-width: 632px;
+}
