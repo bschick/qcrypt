@@ -39,6 +39,16 @@ export type AuthenticatorInfo = {
    name: string;
 };
 
+export type SenderLinkInfo = {
+   linkId: string;
+   url: string;
+   description: string;
+   otherId: string;
+   otherName: string;
+   send: boolean;
+   receive: boolean;
+};
+
 export type DeleteInfo = {
    credentialId: string;
    userId?: string;
@@ -93,6 +103,7 @@ export class AuthenticatorService {
    }
 
    public passKeys = signal<AuthenticatorInfo[]>([]);
+   public senderLinks = signal<SenderLinkInfo[]>([]);
 
    get userCred(): string | null {
       return this._userCred;
@@ -143,6 +154,28 @@ export class AuthenticatorService {
       ).subscribe(action);
    }
 
+   lsGet(key: string): string | null {
+      if (this.isAuthenticated()) {
+         const [userId] = this.getUserInfo();
+         return localStorage.getItem(this.userId + key);
+      }
+      return null;
+   }
+
+   lsSet(key: string, value: string | number | boolean | null) {
+      if (value != null && this.isAuthenticated()) {
+         const [userId] = this.getUserInfo();
+         localStorage.setItem(userId + key, value.toString());
+      }
+   }
+
+   lsDel(key: string) {
+      if (this.isAuthenticated()) {
+         const [userId] = this.getUserInfo();
+         localStorage.removeItem(userId + key);
+      }
+   }
+
    private captureEventData(event: AuthEvent): AuthEventData {
       return {
          event: event,
@@ -181,6 +214,8 @@ export class AuthenticatorService {
       sessionStorage.setItem(this._userId + 'pkid', this._pkId);
 
       this.refreshPasskeys();
+      this.refreshSenderLinks();
+
       this.emit(this.captureEventData(AuthEvent.Login));
       this.activity();
    }
@@ -343,6 +378,53 @@ export class AuthenticatorService {
       return delPasskeyInfo;
    }
 
+   async refreshSenderLinks(): Promise<SenderLinkInfo[]> {
+      if (!this.isAuthenticated()) {
+         throw new Error('not active user');
+      }
+/*
+      const getAuthsUrl = new URL(`senderlinks?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
+      try {
+         var getAuthsResp = await fetch(getAuthsUrl, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-store',
+         });
+      } catch (err) {
+         console.error(err);
+         throw new Error('senderlinks fetch error');
+      }
+
+      if (!getAuthsResp.ok) {
+         throw new Error('retrieving senderlinks failed: ' + await getAuthsResp.text());
+      }
+
+      const links = await getAuthsResp.json() as SenderLinkInfo[];
+*/
+      const links = [
+         {
+            linkId: '1l23rks34',
+            url: 'https://quickcrypt.org/send/1l23rks34',
+            description: 'this is for a friend to send stuff',
+            otherId: 'l23rknmfwc923jf9',
+            otherName: 'nedfered t great',
+            send: false,
+            receive: true
+         },
+         {
+            linkId: '3LDKFJ)(3',
+            url: 'https://quickcrypt.org/send/3LDKFJ3d3',
+            description: 'for private comms',
+            otherId: 'asdflinf29',
+            otherName: 'weston schick',
+            send: true,
+            receive: false
+         }
+      ];
+      this.senderLinks.set(links);
+      return links;
+   }
+
    async refreshPasskeys(): Promise<AuthenticatorInfo[]> {
       if (!this.isAuthenticated()) {
          throw new Error('not active user');
@@ -372,7 +454,7 @@ export class AuthenticatorService {
 
    // Uses the current stored userId
    async defaultLogin(): Promise<AuthenticationInfo> {
-      const [userId, _] = this.getUserInfo();
+      const [userId] = this.getUserInfo();
       if (!userId) {
          throw new Error('missing local userId, try findLogin');
       }
@@ -380,7 +462,7 @@ export class AuthenticatorService {
       return this.findLogin(userId);
    }
 
-   // If not userId is provided, will present all Passkeys for this domain
+   // If no userId is provided, will present all Passkeys for this domain
    async findLogin(userId: string | null = null): Promise<AuthenticationInfo> {
 
       let optUrl;

@@ -1,0 +1,82 @@
+<!-- MIT License
+
+Copyright (c) 2025 Brad Schick
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. -->
+<div class="container">
+  <div class="content">
+    <h1>Creat Sender Link</h1>
+    <p>
+      Sender links allow other Quick Crypt users to send data that only you
+      can decrypt. As the creator of a sender link, you control the encryption
+      parameters others must use to encrypt data. <a [routerLink]="'/help/faqs'"
+        [queryParams]="{search: 'who can decrypt'}">Only you can decrypt data
+        created with a sender link.</a> The Quick Crypt web app does not store your
+      passwords and therefore cannot decrypt your data.
+    </p>
+    <a [routerLink]="'/newlink'">
+      <button mat-raised-button class="add-button">
+        <!--<mat-icon>vpn_key</mat-icon>--><span class="">Create Sender Link</span>
+      </button>
+    </a>
+    <table mat-table [dataSource]="senderLinks" class="linktable">
+      <!-- Description Column -->
+      <ng-container matColumnDef="description">
+        <td mat-cell class="tdcommon" *matCellDef="let element"> {{element.description}}. </td>
+      </ng-container>
+
+      <!-- Encrypt Column -->
+      <ng-container matColumnDef="encrypt">
+        <td mat-cell class="tdcommon" *matCellDef="let element">
+          <button class="" matSuffix mat-flat-button aria-label="Encrypt">
+            Encrypt
+          </button>
+        </td>
+      </ng-container>
+
+      <!-- Copy Column -->
+      <ng-container matColumnDef="copy">
+        <td mat-cell class="tdcommon tdbutton" *matCellDef="let element">
+          <button class="" (click)="toastMessage('Link Copied to Clipboard')" matSuffix mat-icon-button
+            aria-label="Copy" matTooltip="Copy Link" [cdkCopyToClipboard]="element.url">
+            <mat-icon> content_copy </mat-icon>
+          </button>
+        </td>
+      </ng-container>
+
+      <!-- Delete Column -->
+      <ng-container matColumnDef="delete">
+        <td mat-cell class="tdcommon tdbutton" *matCellDef="let element">
+          <button class="" (click)="onClickDelete(element)" matSuffix mat-icon-button aria-label="Delete"
+            matTooltip="Delete Link">
+            <mat-icon>delete_outline</mat-icon>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+  </div>
+</div>
+
+
+
+<div class="core">
+  <enc-options #options></enc-options>
+</div>

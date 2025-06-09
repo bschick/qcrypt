@@ -14,14 +14,14 @@
     <div class="button-column">
       <a [routerLink]="'/newuser'">
         <button mat-raised-button class="button">
-          <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">I am new to Quick Crypt</span>
+          <!--<mat-icon>vpn_key</mat-icon>--><span class="">I am new to Quick Crypt</span>
         </button>
       </a>
       <button mat-raised-button (click)="onClickExisting($event)" class="button">
-        <!--<mat-icon>login</mat-icon>--><span class="button-label">I have used Quick Crypt previously</span>
+        <!--<mat-icon>login</mat-icon>--><span class="">I have used Quick Crypt previously</span>
       </button>
       <button mat-raised-button (click)="onClickRecovery($event)" class="button">
-        <!--<mat-icon>vpn_key</mat-icon>--><span class="button-label">I am a returning user, but cannot sign-in</span>
+        <!--<mat-icon>vpn_key</mat-icon>--><span class="">I am a returning user, but cannot sign-in</span>
       </button>
       <p class="error-msg">{{error}}</p>
     </div>

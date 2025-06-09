@@ -19,38 +19,85 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
+@use "../../common.scss";
 
-.qcrypt {
+.algs-area {
   display: flex;
-  flex-flow: column;
-  height: 100%;
 }
 
-.toolbar {
-  flex: 0;
-  min-height:48px;
-}
-
-.router-content {
-  flex: 1;
-//  overflow: auto;
-}
-
-.toolbar-text {
+.panel-title {
   font-size: 15px;
-  border-radius: 16px;
-  height: 55px;
 }
 
-.toolbar-spacer {
-  flex: 1 1 auto;
+.open-new-icon2 {
+  font-size: 18px;
 }
 
-.mleft15 {
-  margin-left: 15px;
+.alg-help {
+  position: relative;
+  top: -7px;
 }
 
-.side-nav {
-  width:100%;
-  max-width:444px;
+.options-header {
+  font-family: Roboto, sans-serif;
+  font-size: 14px;
+
+  span {
+    text-decoration: underline;
+  }
+}
+
+.options-header1 {
+  @extend .options-header;
+  margin-top: 0px;
+}
+
+.options-header2 {
+  @extend .options-header;
+  margin-top: 28px;
+}
+
+.options-header3 {
+  @extend .options-header;
+  margin-top: 34px;
+}
+
+.hash-warning {
+  color: darkred;
+  position: absolute;
+  top: 166px;
+  left: 25px;
+  font-size: 12px;
+}
+
+.options-flex {
+  width: 100%x;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.options-flex > div {
+  width: 165px;
+}
+
+.options-flex mat-form-field {
+  width: 146px;
+}
+
+.options-flex mat-slide-toggle {
+  width: 165px;
+}
+
+.red-pwd-strength {
+  color: darkred;
+}
+
+.yellow-pwd-strength {
+  color: darkgoldenrod;
+}
+
+.green-pwd-strength {
+  color: darkgreen;
 }

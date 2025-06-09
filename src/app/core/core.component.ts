@@ -38,7 +38,9 @@ import { CommonModule } from '@angular/common';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatRippleModule } from '@angular/material/core';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { MatInputModule } from '@angular/material/input';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { FormsModule } from '@angular/forms';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSelectModule } from '@angular/material/select';
 import { MatIconModule } from '@angular/material/icon';
@@ -49,14 +51,11 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatInputModule } from '@angular/material/input';
-import { MatFormFieldModule } from '@angular/material/form-field';
 import { HttpParams } from '@angular/common/http';
-import { Duration, DateTime } from 'luxon';
+import { DateTime } from 'luxon';
 import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { ClipboardModule } from '@angular/cdk/clipboard';
-import { RouterLink } from '@angular/router';
 import * as cc from '../services/cipher.consts';
 import { CipherService, CipherDataInfo } from '../services/cipher.service';
 import {
@@ -70,7 +69,8 @@ import {
    selectCipherFile,
    selectClearFile,
    browserSupportsBytesStream,
-   ProcessCancelled
+   ProcessCancelled,
+   makeTookMsg
 } from '../services/utils';
 import { AuthenticatorService, AuthEvent, AuthEventData, INACTIVITY_TIMEOUT } from '../services/authenticator.service';
 import {
@@ -79,64 +79,21 @@ import {
    SigninDialog,
 } from './core.dialogs';
 import { BubbleDirective } from '../ui/bubble/bubble.directive';
-import { AlgorithmsComponent } from '../ui/algorithms/algorithms.component';
+import { OptionsComponent } from '../ui/options/options.component';
 import { Subscription } from 'rxjs';
-import { CoprightComponent } from "../ui/copright/copright.component";
+import { CopyrightComponent } from "../ui/copyright/copyright.component";
 
-// up to cc.LP_MAX could be supported but even 16 seems excessive
-const MAX_LOOPS = 10;
-const TARGET_HASH_MILLIS = 500;
-const MAX_HASH_MILLIS = 5 * 60 * 1000; //5 minutes
-
-
-// Set only if num is betwee min and max (inclusive) when min and max are not null
-function setIfBetween(
-   check: string | null,
-   min: number | null,
-   max: number | null,
-   setter: (num: number) => void
-): void {
-   const num = Number(check);
-   if (check != null && !Number.isNaN(num)) {
-      if ((min == null || num >= min) && (max == null || num <= max)) {
-         setter(num);
-      }
-   }
-}
-
-function makeTookMsg(start: number, end: number, word: string = 'took'): string {
-   const duration = Duration.fromMillis(end - start);
-   if (duration.as('minutes') >= 1.1) {
-      return `${word} ${Math.round(duration.as('minutes') * 10) / 10} minutes`;
-   } else if (duration.as('seconds') >= 2) {
-      return `${word} ${Math.round(duration.as('seconds'))} seconds`;
-   }
-   return `${word} ${duration.toMillis()} millis`;
-}
-
-function setIfBoolean(
-   check: string | null,
-   setter: (bool: boolean) => void
-): void {
-   if (check != null) {
-      if (['true', '1', 'yes', 'on'].includes(check.toLowerCase())) {
-         setter(true);
-      } else if (['false', '0', 'no', 'off'].includes(check.toLowerCase())) {
-         setter(false);
-      }
-   }
-}
 
 @Component({
-    selector: 'app-core',
-    templateUrl: './core.component.html',
-    styleUrl: './core.component.scss',
-    imports: [MatProgressSpinnerModule, MatMenuModule, MatIconModule,
-    MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
-    ReactiveFormsModule, ClipboardModule, CdkAccordionModule, MatSlideToggleModule,
-    MatExpansionModule, MatSelectModule, MatButtonToggleModule,
-    MatTooltipModule, MatRippleModule, CommonModule, BubbleDirective,
-    RouterLink, AlgorithmsComponent, CoprightComponent]
+   selector: 'app-core',
+   templateUrl: './core.component.html',
+   styleUrl: './core.component.scss',
+   imports: [MatProgressSpinnerModule, MatMenuModule, MatIconModule,
+      MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
+      ClipboardModule, CdkAccordionModule, MatSlideToggleModule,
+      MatExpansionModule, MatSelectModule, MatButtonToggleModule,
+      MatTooltipModule, MatRippleModule, CommonModule, BubbleDirective,
+      OptionsComponent, CopyrightComponent]
 })
 export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
@@ -146,7 +103,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    protected readonly useByteStream = browserSupportsBytesStream();
 
    private signinDialogRef?: MatDialogRef<SigninDialog, any>
-   private optionsLoaded = false;
    private mouseDown = false;
    private cachedPassword = '';
    private cachedHint = '';
@@ -154,14 +110,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    private spinnerAbove = 1500000; // Default since benchmark is async
    private actionStart = 0;
    private authSub!: Subscription;
-   private lastReminder = true;
    public readonly INACTIVITY_TIMEOUT = INACTIVITY_TIMEOUT;
-   public readonly LOOP_MAX = 10;
    public cacheTimeout!: DateTime;
-   public icountMin: number = cc.ICOUNT_MIN;
-   public icountMax: number = cc.ICOUNT_MAX; // Default since benchmark is async
-   public icountDefault: number = cc.ICOUNT_DEFAULT; // Default since benchmark is async
-   public hashTimeWarning = '';
    public clearText = '';
    public pwdCached = false;
    public cipherLabel = 'Cipher Armor';
@@ -173,8 +123,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    public cipherMsgClass = 'errorBox';
    public clearMsg = '';
    public clearMsgClass = 'errorBox';
-   public expandOptions = false;
-   public cipherPanelExpanded = false;
    public secondsRemaining = 0;
    public welcomed: boolean = true;
 
@@ -187,21 +135,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    @ViewChild('minStrLabel') minStrLabel!: ElementRef;
    @ViewChild('bubbleTip1') bubbleTip1!: BubbleDirective;
    @ViewChild('bubbleTip2') bubbleTip2!: BubbleDirective;
-   @ViewChild('algorithms') algorithms!: AlgorithmsComponent;
-
-   // options
-   public algorithm = ['X20-PLY'];
-   public icount: number = cc.ICOUNT_DEFAULT; // Default since benchmark is async
-   public hidePwd = true;
-   public cacheTime = 0;
-   public minPwdStrength = '3';
-   public ctFormat = 'compact';
-   public loops = 1;
-   public checkPwned = false;
-   public visibilityClear = true;
-   public reminder = true;
-   public trueRand = false;
-   public pseudoRand = true;
+   @ViewChild('options') options!: OptionsComponent;
 
    constructor(
       private authSvc: AuthenticatorService,
@@ -212,8 +146,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       private matIconRegistry: MatIconRegistry,
       private domSanitizer: DomSanitizer,
       private changeRef: ChangeDetectorRef,
-      private ngZone: NgZone,
-      @Inject(PLATFORM_ID) private platformId: Object
+      private ngZone: NgZone
    ) {
       this.matIconRegistry.addSvgIcon(
          'github',
@@ -235,155 +168,38 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       );
    }
 
-   setAlgorithm(alg: string | null): void {
-      if(alg) {
-         try {
-            var algs = JSON.parse(alg);
-         } catch (err) { }
-
-         // transition from v4 and earlier
-         if (!algs) {
-            algs = [alg];
-         }
-
-         if (this.cipherSvc.validateAlgs(algs)) {
-            this.algorithm = algs;
-         }
-      }
-   }
-
-   setIcount(ic: string | null): void {
-      // Ignores if out of range or NaN
-      setIfBetween(ic, this.icountMin, this.icountMax, (num) => {
-         this.icount = num;
-      });
-   }
-
-   setHidePwd(hide: string | null) {
-      setIfBoolean(hide, (bool) => {
-         this.hidePwd = bool;
-      });
-   }
-
-   setCacheTime(tm: string | null): void {
-      setIfBetween(tm, 0, this.INACTIVITY_TIMEOUT, (num) => {
-         this.cacheTime = num;
-      });
-   }
-
-   setCheckPwned(check: string | null): void {
-      setIfBoolean(check, (bool) => {
-         this.checkPwned = bool;
-      });
-   }
-
-   setMinPwdStrength(stren: string | null): void {
-      if (['0', '1', '2', '3', '4'].includes(stren!)) {
-         this.minPwdStrength = stren!;
-      }
-   }
-
-   setLoops(lpEnd: string | null): void {
-      setIfBetween(lpEnd, 1, this.LOOP_MAX, (num) => {
-         this.loops = num;
-      });
-   }
-
-   setCTFormat(ctFormat: string | null): void {
-      if (['link', 'compact', 'indent'].includes(ctFormat!)) {
-         this.ctFormat = ctFormat!;
-      }
-   }
-
-   setReminder(reminder: string | null): void {
-      setIfBoolean(reminder, (bool) => {
-         this.reminder = bool;
-         this.lastReminder = bool;
-      });
-   }
-
-   setVisibilityClear(clear: string | null): void {
-      setIfBoolean(clear, (bool) => {
-         this.visibilityClear = bool;
-      });
-   }
-
-   setTrueRand(trand: string | null): void {
-      setIfBoolean(trand, (bool) => {
-         this.trueRand = bool;
-         if (!bool) {
-            this.pseudoRand = true;
-         }
-      });
-   }
-
-   setPseudoRand(prand: string | null): void {
-      setIfBoolean(prand, (bool) => {
-         this.pseudoRand = bool;
-         if (!bool) {
-            this.trueRand = true;
-         }
-      });
-   }
-
-   lsGet(key: string): string | null {
-      const [userId] = this.authSvc.getUserInfo();
-      return localStorage.getItem(userId + key);
-   }
-
-   lsSet(key: string, value: string) {
-      const [userId] = this.authSvc.getUserInfo();
-      localStorage.setItem(userId + key, value);
-   }
-
-   lsDel(key: string) {
-      const [userId] = this.authSvc.getUserInfo();
-      localStorage.removeItem(userId + key);
-   }
-
-   setIcountWarning() {
-      this.hashTimeWarning = '';
-      const hashMillis = this.icount / this.cipherSvc.hashRate;
-
-      // if greater than 15 seconds show message
-      if (hashMillis > 15 * 1000) {
-         const takeMsg = makeTookMsg(0, hashMillis, 'take');
-         this.hashTimeWarning = `*password hash may ${takeMsg}`
-      }
-   }
-
    ngAfterViewInit() {
-      // ugly hack to make angular not clip the label for dropdown select elements
-      this.formatLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.7)";
-      this.minStrLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.7)";
+      if (this.authSvc.isAuthenticated()) {
+         let params = new HttpParams({ fromString: window.location.search });
 
-      if (this.authSvc.isAuthenticated() &&
-         localStorage.getItem(this.authSvc.userId + "welcomed") != 'yup') {
-         setTimeout(() => {
-            this.welcomed = false;
-            this.bubbleTip1.show();
-         }, 1000);
+         if (params.get('cipherarmor')) {
+            this.showCipherArmor(decodeURIComponent(params.get('cipherarmor')!));
+            this.reformatCipherArmor();
+            params = params.delete('cipherarmor');
+         }
+         if (params.get('cleartext')) {
+            this.showClearText(decodeURIComponent(params.get('cleartext')!));
+            params = params.delete('cleartext');
+         }
+
+         if (localStorage.getItem(this.authSvc.userId + "welcomed") != 'yup') {
+            setTimeout(() => {
+               this.welcomed = false;
+               this.bubbleTip1.show();
+            }, 1000);
+         }
       }
    }
 
-   ngOnInit(): void {
+   ngOnInit() {
       // This can be greatly delayed is there is a long running async benchmark or
       // encrpt or decrypt from a previous instance (tab that has not fully closed).
       // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
-      this.cipherSvc.benchmark(this.icountMin, TARGET_HASH_MILLIS, MAX_HASH_MILLIS)
+      this.cipherSvc.benchmark(cc.ICOUNT_MIN)
          .then(([icount, icountMax, hashRate]) => {
-            this.icount = icount;
-            this.icountDefault = this.icount;
-            this.icountMax = icountMax;
-
             // progress spinner about 1.25 secs of estimated delay
             const target_spinner_millis = 1250;
             this.spinnerAbove = Math.round(target_spinner_millis * hashRate)
-         }).finally(() => {
-            // load after benchmark to overwrite icount with saved value
-            if (this.authSvc.isAuthenticated()) {
-               this.loadOptions();
-            }
          });
 
       // subscribe to auth events
@@ -400,67 +216,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   loadOptions() {
-      // First check localStorage, then apply params (which take president)
-      // (not that change are not presisted until the encrypt button is used)
-      /* debug
-      for (let i = 0; i < localStorage.length; i++) {
-        let key = localStorage.key(i)!;
-        console.log(`${key}: ${this.lsGet(key)}`);
-       } */
-      if (!this.optionsLoaded) {
-         this.setAlgorithm(this.lsGet('algorithm'));
-         this.setIcount(this.lsGet('icount'));
-         this.setHidePwd(this.lsGet('hidepwd'));
-         this.setCacheTime(this.lsGet('cachetime'));
-         this.setCheckPwned(this.lsGet('checkpwned'));
-         this.setMinPwdStrength(this.lsGet('minpwdstrength'));
-         this.setLoops(this.lsGet('loops'));
-         this.setCTFormat(this.lsGet('ctformat'));
-         this.setVisibilityClear(this.lsGet('vclear'));
-         this.setReminder(this.lsGet('reminder'));
-         this.setPseudoRand(this.lsGet('prand'));
-         this.setTrueRand(this.lsGet('trand'));
-
-         let params = new HttpParams({ fromString: window.location.search });
-
-         if (params.get('cipherarmor')) {
-            this.showCipherArmor(decodeURIComponent(params.get('cipherarmor')!));
-            this.onFormatChange();
-            params = params.delete('cipherarmor');
-         }
-         if (params.get('cleartext')) {
-            this.showClearText(decodeURIComponent(params.get('cleartext')!));
-            params = params.delete('cleartext');
-         }
-
-         // If there are customized options, expand the panel by default
-         if (params.keys().length > 0) {
-            this.expandOptions = true;
-         }
-
-         this.setAlgorithm(params.get('algorithm'));
-         this.setIcount(params.get('icount'));
-         this.setHidePwd(params.get('hidepwd'));
-         this.setCacheTime(params.get('cachetime'));
-         this.setCheckPwned(params.get('checkpwned'));
-         this.setMinPwdStrength(params.get('minpwdstrength'));
-         this.setLoops(params.get('loops'));
-         this.setCTFormat(params.get('ctformat'));
-         this.setVisibilityClear(params.get('vclear'));
-         this.setReminder(params.get('reminder'));
-         this.setPseudoRand(params.get('prand'));
-         this.setTrueRand(params.get('trand'));
-         this.optionsLoaded = true;
-
-         this.setIcountWarning();
-         // order is important, set modes first
-         this.algorithms.modes = this.algorithm;
-         this.algorithms.count = this.loops;
-      }
-   }
-
-   ngOnDestroy(): void {
+   ngOnDestroy() {
       if (this.authSub) {
          this.authSub.unsubscribe();
       }
@@ -472,12 +228,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    onAuthEvent(data: AuthEventData) {
       if (data.event === AuthEvent.Logout) {
-         this.defaultOptions();
+         this.options.defaultOptions();
          this.privacyClear();
          this.onClearCipher();
          this.showSigninDialog();
       } else if (data.event === AuthEvent.Login) {
-         this.loadOptions();
+         this.options.loadOptions();
       }
    }
 
@@ -498,78 +254,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   onClickResetOptions(): void {
-      this.nukeOptions();
-   }
-
-   defaultOptions(): void {
-      this.algorithm = ['X20-PLY'];
-      this.icount = this.icountDefault;
-      this.hidePwd = true;
-      this.cacheTime = 0;
-      this.minPwdStrength = '3';
-      this.checkPwned = false;
-      this.loops = 1;
-      this.ctFormat = 'compact';
-      this.visibilityClear = true;
-      this.reminder = true;
-      this.lastReminder = true;
-      this.pseudoRand = true;
-      this.trueRand = false;
-
-      this.clearPassword();
-      this.optionsLoaded = false;
-
-      // order is important, set modes first
-      this.algorithms.modes = this.algorithm;
-      this.algorithms.count = this.loops;
-   }
-
-   nukeOptions(): void {
-      this.defaultOptions();
-      try {
-         this.lsDel('welcomed');
-         this.lsDel('algorithm');
-         this.lsDel('icount');
-         this.lsDel('hidepwd');
-         this.lsDel('cachetime');
-         this.lsDel('checkpwned');
-         this.lsDel('minpwdstrength');
-         this.lsDel('loops');
-         this.lsDel('ctformat');
-         this.lsDel('vclear');
-         this.lsDel('reminder');
-         this.lsDel('prand');
-         this.lsDel('trand');
-      } catch (err) {
-         console.error(err);
-         //otherwise ignore
-      }
-   }
-
-/*   saveOptions(): void {
-      try {
-         if (this.authSvc.isAuthenticated()) {
-            this.lsSet('algorithm', JSON.stringify(this.algorithm));
-            this.lsSet('icount', this.icount.toString());
-            this.lsSet('hidepwd', this.hidePwd.toString());
-            this.lsSet('cachetime', this.cacheTime.toString());
-            this.lsSet('checkpwned', this.checkPwned.toString());
-            this.lsSet('minpwdstrength', this.minPwdStrength);
-            this.lsSet('loops', this.loops.toString());
-            this.lsSet('ctformat', this.ctFormat.toString());
-            this.lsSet('vclear', this.visibilityClear.toString());
-            this.lsSet('reminder', this.reminder.toString());
-            this.lsSet('prand', this.pseudoRand.toString());
-            this.lsSet('trand', this.trueRand.toString());
-         }
-      } catch (err) {
-         console.error(err);
-         //otherwise ignore
-      }
-   }*/
-
-   timerTick(): void {
+   timerTick() {
       if (DateTime.now() > this.cacheTimeout) {
          this.privacyClear();
       }
@@ -586,19 +271,20 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   restartTimer(): void {
+   restartTimer() {
       if (this.intervalId != 0) {
          clearInterval(this.intervalId);
          this.intervalId = 0;
       }
-      this.cacheTimeout = DateTime.now().plus({ seconds: this.cacheTime });
-      this.secondsRemaining = this.cacheTime;
+
+      this.cacheTimeout = DateTime.now().plus({ seconds: this.options.cacheTime });
+      this.secondsRemaining = this.options.cacheTime;
 
       // @ts-ignore
       this.intervalId = setInterval(() => this.timerTick(), 1000);
    }
 
-   clearPassword(): void {
+   clearPassword() {
       this.pwdCached = false;
       this.cachedPassword = '';
       this.cachedHint = '';
@@ -610,16 +296,16 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    @HostListener('document:visibilitychange', ['$event'])
    visibilitychange() {
-      if (document.hidden && this.visibilityClear) {
+      if (document.hidden && this.options.visClear) {
          this.privacyClear();
       }
    }
 
-   onDraggerMouseDown(): void {
+   onDraggerMouseDown() {
       this.mouseDown = true;
    }
 
-   onDraggerMouseMove(event: MouseEvent): void {
+   onDraggerMouseMove(event: MouseEvent) {
       if (this.mouseDown) {
          var pointerRelativeXpos =
             event.clientX - this.inputArea.nativeElement.offsetLeft;
@@ -637,45 +323,28 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   onDraggerMouseUp(): void {
+   onDraggerMouseUp() {
       this.mouseDown = false;
    }
 
-   onLoopsChange() {
-      this.loops = Math.max(this.loops, 1);
-      this.loops = Math.min(this.loops, this.LOOP_MAX);
-      this.algorithms.count = this.loops;
-      this.lsSet('loops', this.loops.toString());
-   }
-
-   onModesChanged(modes: string[]): void {
-      // Note that modes length is the max number of modes that have
-      // been set, which may be larger than the current # of loops
-      // This is done to preserve default values
-      this.algorithm = modes;
-      this.lsSet('algorithm', JSON.stringify(modes));
-   }
-
-   onPasswordOptionChange(): void {
-      this.lsSet('checkpwned', this.checkPwned.toString());
-      this.lsSet('minpwdstrength', this.minPwdStrength);
+   onPwdOptionsChange() {
       this.clearPassword();
    }
 
-   toastMessage(msg: string): void {
+   toastMessage(msg: string) {
       this.snackBar.open(msg, '', {
          duration: 2000,
       });
    }
 
-   onClearCipher(): void {
+   onClearCipher() {
       this.cipherMsg = '';
       this.cipherFile = undefined;
       this.cipherArmor = '';
       this.cipherLabel = 'Cipher Armor';
    }
 
-   onClearClear(): void {
+   onClearClear() {
       this.clearMsg = '';
       this.clearFile = undefined;
       this.clearText = '';
@@ -693,7 +362,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   privacyClear(): void {
+   privacyClear() {
       this.clearPassword();
       this.onClearClear();
    }
@@ -739,14 +408,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                data: {
                   hint: cdInfo.hint,
                   encrypting: encrypting,
-                  minStrength: +this.minPwdStrength,
-                  hidePwd: this.hidePwd,
+                  minStrength: +this.options.minPwdStrength,
+                  hidePwd: this.options.hidePwd,
                   loopCount: cdInfo.lp,
                   loops: cdInfo.lpEnd,
-                  checkPwned: this.checkPwned,
+                  checkPwned: this.options.checkPwned,
                   welcomed: this.welcomed,
                   userName: this.authSvc.userName,
-                  cipherMode:cdInfo.alg
+                  cipherMode: cdInfo.alg
                },
             });
 
@@ -757,7 +426,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                   reject(new ProcessCancelled());
                } else {
                   this.clearPassword();
-                  if (this.cacheTime > 0 && result[0] && cdInfo.lpEnd == 1) {
+                  if (this.options.cacheTime > 0 && result[0] && cdInfo.lpEnd == 1) {
                      this.cachedPassword = result[0];
                      this.cachedHint = result[1];
                      this.pwdCached = true;
@@ -811,15 +480,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
 
       try {
-         this.loops = Math.min(
-            Math.max(1, Number(this.loops) ? Number(this.loops) : 0),
-            MAX_LOOPS
-         );
-         if (this.icount < this.icountMin) {
-            this.icount = this.icountMin;
-         }
-
-         if (this.loops > 1) {
+         if (this.options.loops > 1) {
             // it's confusing to use cached password when looping so
             // start from scratch
             this.clearPassword();
@@ -836,7 +497,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          const cipherStream = await this.makeCipherStream(clearStream);
          if (cipherStream) {
             const cipherData = await readStreamAll(cipherStream);
-            const cipherArmor = makeCipherArmor(cipherData, this.ctFormat, this.reminder);
+            const cipherArmor = makeCipherArmor(cipherData, this.options.format, this.options.reminder);
             this.showCipherArmorAndTime(cipherArmor);
             this.toastMessage('Congratulations, data encrypted');
 
@@ -853,7 +514,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          if (!ProcessCancelled.isProcessCancelled(something)) {
             console.error(something);
             let msg = 'Could not encrypt text';
-            if(something instanceof Error) {
+            if (something instanceof Error) {
                msg += ` because:</br>${something.message}`;
             }
             this.showCipherError(msg);
@@ -897,7 +558,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             baseName = 'armor';
          }
 
-         if (this.loops > 1) {
+         if (this.options.loops > 1) {
             // it's confusing to use cached password when looping so
             // start from scratch
             this.clearPassword();
@@ -938,7 +599,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          if (!ProcessCancelled.isProcessCancelled(something)) {
             console.error(something);
             let msg = 'Could not encrypt text';
-            if(something instanceof Error) {
+            if (something instanceof Error) {
                msg += ` because:</br>${something.message}`;
             }
             this.showCipherError(msg);
@@ -978,10 +639,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       const econtext = {
          // Need to slice because modes length is the max number of modes
          // that have been set, which may be larger than the current # of loops
-         algs: this.algorithms.modes.slice(0, this.loops),
-         ic: this.icount,
-         trueRand: this.trueRand,
-         fallbackRand: this.pseudoRand
+         algs: this.options.algorithms,
+         ic: this.options.icount,
+         trueRand: this.options.trueRand,
+         fallbackRand: this.options.pseudoRand
       };
 
       return this.cipherSvc.encryptStream(
@@ -1229,25 +890,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.showCipherArmor(cipherArmor, `(${tookMsg})`);
    }
 
-   onReminderChange() {
-      this.lastReminder = this.reminder;
-      this.lsSet('reminder', this.reminder.toString());
-      this.reformatCipherArmor();
-   }
-
-   onVClearChnage() {
-      this.lsSet('vclear', this.visibilityClear.toString());
-   }
-
-
-   onFormatChange(selected?: string) {
-      if (selected == 'link') {
-         this.lastReminder = this.reminder;
-         this.reminder = false;
-      } else {
-         this.reminder = this.lastReminder;
-      }
-      this.lsSet('ctformat', this.ctFormat.toString());
+   onFormatOptionsChange() {
       this.reformatCipherArmor();
    }
 
@@ -1255,30 +898,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.cipherArmor) {
          try {
             const cipherData = parseCipherArmor(this.cipherArmor);
-            this.showCipherArmor(makeCipherArmor(cipherData, this.ctFormat, this.reminder));
+            this.showCipherArmor(makeCipherArmor(cipherData, this.options.format, this.options.reminder));
          } catch (err) {
             console.error(err);
          }
       }
-   }
-
-   onTrueRandChanged(checked: boolean) {
-      if (!checked) {
-         this.pseudoRand = true;
-         this.onPseudoRandChange();
-      }
-      this.lsSet('trand', this.trueRand.toString());
-   }
-
-   onPseudoRandChange() {
-      this.lsSet('prand', this.pseudoRand.toString());
-   }
-
-   onICountChange() {
-      this.icount = Math.max(this.icount, this.icountMin);
-      this.icount = Math.min(this.icount, this.icountMax);
-      this.lsSet('icount', this.icount.toString());
-      this.setIcountWarning();
    }
 
    onClickFileUpload(event: any) {
@@ -1374,17 +998,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   onHidePwdChanged(): void {
-      this.lsSet('hidepwd', this.hidePwd.toString());
-   }
-
-   onCacheTimerChange(): void {
-      this.cacheTime = Math.max(this.cacheTime, 0);
-      this.cacheTime = Math.min(this.cacheTime, this.INACTIVITY_TIMEOUT);
+   onCacheTimeChange(cacheTime: number): void {
       if (this.pwdCached) {
          this.restartTimer();
       }
-      this.lsSet('cachetime', this.cacheTime.toString());
    }
 
    async onCipherTextInfo(): Promise<void> {

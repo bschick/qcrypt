@@ -62,8 +62,6 @@ export class CredentialsComponent implements OnInit, OnDestroy {
          [AuthEvent.Logout],
          () => this.done.emit(true)
       );
-
-
    }
 
    ngOnDestroy(): void {
