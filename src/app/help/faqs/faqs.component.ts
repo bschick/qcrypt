@@ -166,7 +166,7 @@ const ELEMENT_DATA: FAQElement[] = [
       <a href="https://github.com/bschick/qcrypt/tree/main/shell" target="_blank">qcrypt.cjs</a>
       file, install <a href="https://nodejs.org/" target="_blank">Node.js</a>,
       , run the script from the command-line, and respond to the prompts:
-      <blockquote>> node qcrypt.cjs</blockquote>.
+      <blockquote>> node qcrypt.cjs</blockquote>
       <p>Other tools could also be used to decrypt Quick Crypt cipher armor in a
       multi-step process. If you want to be sure someone can recreate Quick Crypt's
       logic, the code is <a href="https://github.com/bschick/qcrypt" target="_blank">
@@ -215,7 +215,7 @@ const ELEMENT_DATA: FAQElement[] = [
       the password you used to encrypt the data and a passkey to access your user
       credential. Your recovery link lets you create a new passkey, but there is
       no way to recover a lost password. Consider using a password hint
-      next time.`
+      to help remember your password.`
    },
 
    {
@@ -815,10 +815,11 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'Are my password hints encrypted?',
       answer: `Yes, password hints are encrypted with a key derived from
-      your user credential that is accessed with passkey authentication.
-      For the most robust protection of your secret information, avoid
-      hints that make it easy for others to guess your encryption password.
-      The best password hints help only you remember the password.
+      your user credential that is accessed with passkey authentication. Although
+      others cannot see your passowrd hints without your passkey,
+      for the most robust protection of your information avoid
+      hints that make it easy for others to guess your passwords.
+      The best password hints help only you remember your passwords.
       That way, you are protected even if your passkey or recovery link
       is stolen.`
    },
@@ -837,15 +838,15 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'Why does Quick Crypt use both MACs and AEAD ciphers?',
-      answer: `This was done for defense-in-depth and so Quick Crypt
-      can safely load and display metadata like password hints before the
-      decryption algorithm runs. Imagine an attacker could modify your
+      answer: `This was done for defense-in-depth and so that Quick Crypt
+      can safely read and display metadata like version number before the
+      primary decryption algorithm runs. Imagine an attacker could modify your
       encrypted data and knows of a bug in Chrome's AES GCM cipher. Although
       unlikely, that might allow an attacker to craft the cipher text such
       that data was leaked when you decrypted it. The additional MAC (BLAKE2b
       keyed hash) validation means there would need to be problems with
-      both the libsodium generated MAC and the browser or libsodium cipher
-      algorithm for such an attack to succeed, which is even more unlikely.`
+      both the libsodium generated BLAKE2b MAC and Chrome's AES cipher
+      implementation for such an attack to succeed, which is even more unlikely.`
    },
 
    {
@@ -866,7 +867,7 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: "What does the 'Decryption Reminder' Advanced Option do?",
       answer: `When enabled, this option adds text to JSON cipher armor that reminds
-      you where to decrypt the cipher armor. Quick Crypt does not use this text; it
+      you where to decrypt the cipher armor. Quick Crypt does not use this text; It
       is just a reminder for anyone who may forgotten how the cipher armor was created.`
    },
 
