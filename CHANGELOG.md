@@ -1,13 +1,13 @@
 # CHANGELOG.md
 
-## 4.2.2 (2025-06-08)
+## 4.2.2 (2025-06-10)
 
 Changes:
 
-  - decrypt links now work through login process
-  - small corrections to protocol description
-  - minor doc updates
+  - decrypt links now work through login redirects
   - improved layout of encryption options
+  - small corrections to protocol description
+  - other small doc updates
   - package updates
 
 ## 4.2.1 (2025-01-12)
