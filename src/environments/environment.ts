@@ -1,5 +1,4 @@
-import copyright from '../../package.json';
-import version from '../../package.json';
+import { version, copyright } from '../../package.json';
 
 export const environment = {
     production: true,
