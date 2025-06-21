@@ -27,6 +27,7 @@ import {
    Decipher,
    EParams,
    CipherDataInfo,
+   CipherState,
    PWDProvider
 } from './ciphers';
 import { browserSupportsBytesStream, streamWriteBYOD } from './utils';
@@ -102,6 +103,7 @@ async function _encryptStreamImpl(
       async pull(controller) {
 
          try {
+            // Encryption may return zero data and not be Finished
             const cipherData = await encipher.encryptBlock(eparams, pwdProvider);
 
             if (cipherData.parts.length) {
@@ -110,7 +112,7 @@ async function _encryptStreamImpl(
                }
             }
 
-            if (cipherData.done) {
+            if (cipherData.state == CipherState.Finished) {
                controller.close();
                // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
                //@ts-ignore
@@ -168,6 +170,7 @@ export async function decryptStream(
       async pull(controller) {
 
          try {
+            // Decryption always returns data if any remains
             const decrypted = await decipher.decryptBlock(pwdProvider);
 
             if (decrypted.byteLength) {

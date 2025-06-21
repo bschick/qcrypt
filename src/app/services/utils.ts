@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2024 Brad Schick
+Copyright (c) 2025 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,9 +20,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
+import sodium from 'libsodium-wrappers';
 import { base64URLStringToBuffer, bufferToBase64URLString } from './base64';
 import { Duration } from 'luxon';
-
 
 
 // Returns base64Url text
@@ -435,6 +435,28 @@ export async function selectWriteableTxtFile(baseName?: string): Promise<FileSys
 
    return selectWriteableFileImpl(options);
 }
+
+
+// export class Random48 {
+
+//    constructor(testing: boolean) {
+//    }
+
+//    async getRandomArray(
+//       trueRand: boolean = true,
+//       fallback: boolean = true
+//    ): Promise<Uint8Array> {
+//       if (!trueRand) {
+//          if (!fallback) {
+//             throw new Error('both trueRand and fallback disabled');
+//          }
+//          return crypto.getRandomValues(new Uint8Array(48));
+//       } else {
+//          await sodium.ready;
+//          return sodium.randombytes_buf(48);
+//       }
+//    }
+// }
 
 export class Random48 {
    private static _trueRandCache: Promise<Response>;

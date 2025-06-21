@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2024 Brad Schick
+Copyright (c) 2025 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,7 @@ SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
 import * as cc from './cipher.consts';
 import { Random48, BYOBStreamReader, readStreamAll } from './utils';
-import { Ciphers, Encipher, Decipher, EncipherV4, EParams, CipherDataBlock } from './ciphers';
+import { Ciphers, Encipher, Decipher, EncipherV5, EParams, CipherDataBlock } from './ciphers';
 
 // Faster than .toEqual, resulting in few timeouts
 function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
@@ -62,9 +62,31 @@ async function areEqual(
    return true;
 }
 
-function streamFromBytes(data: Uint8Array): [ReadableStream<Uint8Array>, Uint8Array] {
-   const blob = new Blob([data], { type: 'application/octet-stream' });
-   return [blob.stream(), data];
+function streamFromBytes(
+   data: Uint8Array | Uint8Array[]
+): [ReadableStream<Uint8Array>, Uint8Array] {
+
+   let parts: Uint8Array[];
+   if (data instanceof Uint8Array) {
+      parts = [data];
+   } else {
+      parts = data;
+   }
+
+   let length = 0;
+   parts.forEach(part => {
+     length += part.length;
+   });
+
+   let merged = new Uint8Array(length);
+   let offset = 0;
+   parts.forEach(part => {
+      merged.set(part, offset);
+      offset += part.length;
+   });
+
+   const blob = new Blob([merged], { type: 'application/octet-stream' });
+   return [blob.stream(), merged];
 }
 
 function streamFromStr(str: string): [ReadableStream<Uint8Array>, Uint8Array] {
@@ -139,17 +161,17 @@ describe("Key generation", function () {
 
       const expected: { [k1: string]: { [k2: string]: Uint8Array } } = {
          'AES-GCM': {
-            ek: new Uint8Array([50, 99, 104, 47, 247, 255, 94, 71, 52, 222, 53, 60, 161, 13, 61, 74, 164, 221, 87, 193, 104, 161, 236, 71, 170, 158, 28, 202, 176, 233, 209, 124]),
+            ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
             sk: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
             hk: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
          },
          'X20-PLY': {
-            ek: new Uint8Array([50, 99, 104, 47, 247, 255, 94, 71, 52, 222, 53, 60, 161, 13, 61, 74, 164, 221, 87, 193, 104, 161, 236, 71, 170, 158, 28, 202, 176, 233, 209, 124]),
+            ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
             sk: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
             hk: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
          },
          'AEGIS-256': {
-            ek: new Uint8Array([50, 99, 104, 47, 247, 255, 94, 71, 52, 222, 53, 60, 161, 13, 61, 74, 164, 221, 87, 193, 104, 161, 236, 71, 170, 158, 28, 202, 176, 233, 209, 124]),
+            ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
             sk: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
             hk: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
          }
@@ -168,14 +190,17 @@ describe("Key generation", function () {
 
          let exported = await window.crypto.subtle.exportKey("raw", ek);
          const ekBytes = new Uint8Array(exported);
+         console.log(alg, 'ek', ekBytes);
          expect(isEqualArray(ekBytes, expected[alg]['ek'])).toBeTrue();
 
          exported = await window.crypto.subtle.exportKey("raw", sk);
          const skBytes = new Uint8Array(exported);
+         console.log(alg, 'sk', skBytes);
          expect(isEqualArray(skBytes, expected[alg]['sk'])).toBeTrue();
 
          exported = await window.crypto.subtle.exportKey("raw", hk);
          const hkBytes = new Uint8Array(exported);
+         console.log(alg, 'hk', hkBytes);
          expect(isEqualArray(hkBytes, expected[alg]['hk'])).toBeTrue();
       }
    });
@@ -194,8 +219,9 @@ describe("Encryption and decryption", function () {
    ): Promise<Uint8Array> {
 
       // cheating... parts[1] is _additionalData, parts[2] is encryptedData
-      const sk = await EncipherV4._genSigningKey(userCred, encipher['_slt']!);
-      const headerData = await EncipherV4._createHeader(sk, block.parts[2], block.parts[1]);
+      //@ts-ignore
+      const sk = await EncipherV5._genSigningKey(userCred, encipher['_slt']!);
+      const [headerData] = await EncipherV5._createHeader(sk, block.parts[2], block.parts[1], new Uint8Array(0), true);
 
       const output = new Uint8Array(headerData.byteLength +
          block.parts[1].byteLength +
@@ -253,7 +279,7 @@ describe("Encryption and decryption", function () {
          };
 
          const reader = new BYOBStreamReader(clearStream);
-         const encipher = new EncipherV4(userCredA, reader);
+         const encipher = new EncipherV5(userCredA, reader);
          const cipherBlock = await encipher.encryptBlock0(
             eparams,
             async (cdinfo) => {
@@ -385,7 +411,7 @@ describe("Encryption and decryption", function () {
 
       for (let alg in cc.AlgInfo) {
 
-         const [clearStream, clearData] = streamFromStr('This is a secret 🦀');
+         let [clearStream, clearData] = streamFromStr('This is a secret 🦀');
          const pwd = 'a not good pwd';
          const hint = 'sorta';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -399,14 +425,28 @@ describe("Encryption and decryption", function () {
             lpEnd: 1
          };
 
-         const latest = Encipher.latest(userCred, clearStream);
+         let latest = Encipher.latest(userCred, clearStream);
          const readStart = 12
          //@ts-ignore force multiple blocks
          latest['_readTarget'] = readStart;
 
          await expectAsync(
             latest.encryptBlockN(eparams)
-         ).toBeRejectedWithError(Error, new RegExp('Data not initialized.+'));
+         ).toBeRejectedWithError(Error, new RegExp('Encipher invalid state.+'));
+
+         // once invalidated, it stays that way...
+         await expectAsync(
+            latest.encryptBlock0(
+               eparams,
+               async (cdinfo) => {
+                  return [pwd, hint];
+               })
+         ).toBeRejectedWithError(Error, new RegExp('Encipher invalid state.+'));
+
+         [clearStream, clearData] = streamFromStr('This is a secret 🦀');
+         latest = Encipher.latest(userCred, clearStream);
+         //@ts-ignore force multiple blocks
+         latest['_readTarget'] = readStart;
 
          const block0 = await latest.encryptBlock0(
             eparams,
@@ -420,10 +460,6 @@ describe("Encryption and decryption", function () {
 
          let [cipherStream] = streamFromCipherBlock([block0, blockN]);
          let decipher = await Decipher.fromStream(userCred, cipherStream);
-
-         await expectAsync(
-            decipher.decryptBlockN()
-         ).toBeRejectedWithError(Error, new RegExp('Data not initialized.*'));
 
          let decb0 = await decipher.decryptBlock0(
             async (cdinfo) => {
@@ -468,7 +504,7 @@ describe("Encryption and decryption", function () {
       }
    });
 
-   it("correct cipherdata info and decryption", async function () {
+   it("correct cipherdata info and decryption, v4", async function () {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
@@ -505,7 +541,93 @@ describe("Encryption and decryption", function () {
       ).toBeResolvedTo(clearData);
    });
 
-   it("bad input to cipherdata info and decrypt", async function () {
+   it("correct cipherdata info and decryption, v5", async function () {
+      const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
+      const pwd = 'a 🌲 of course';
+      const hint = '🌧️';
+      // base64url userCred for injection into browser for recreation:
+      // Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=
+      const userCred = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
+      const [cipherStream] = streamFromBytes(new Uint8Array([166, 123, 188, 183, 212, 97, 47, 147, 59, 39, 78, 222, 101, 74, 221, 53, 27, 11, 194, 67, 156, 235, 116, 104, 65, 64, 76, 166, 29, 220, 71, 179, 5, 0, 116, 0, 0, 1, 2, 0, 121, 78, 37, 8, 192, 196, 110, 22, 164, 106, 59, 161, 122, 165, 176, 147, 49, 43, 41, 250, 163, 111, 218, 4, 174, 61, 6, 169, 145, 216, 66, 166, 139, 82, 19, 207, 29, 75, 105, 149, 64, 119, 27, 0, 0, 23, 93, 92, 56, 163, 242, 71, 208, 3, 190, 44, 140, 222, 149, 159, 152, 193, 162, 44, 177, 93, 197, 119, 131, 88, 92, 53, 108, 167, 253, 64, 216, 200, 121, 212, 193, 153, 180, 39, 92, 35, 142, 6, 240, 115, 51, 211, 198, 63, 12, 126, 128, 206, 178, 114, 65, 37, 246, 197, 19, 79, 58, 96, 56, 86, 172, 162, 217, 70]));
+
+      const decipher = await Decipher.fromStream(userCred, cipherStream);
+      const cdInfo = await decipher.getCipherDataInfo();
+
+      expect(cdInfo.alg).toEqual('X20-PLY');
+      expect(cdInfo.ic).toEqual(1800000);
+      expect(isEqualArray(cdInfo.iv, new Uint8Array([121, 78, 37, 8, 192, 196, 110, 22, 164, 106, 59, 161, 122, 165, 176, 147, 49, 43, 41, 250, 163, 111, 218, 4]))).toBeTrue();
+      expect(isEqualArray(cdInfo.slt, new Uint8Array([174, 61, 6, 169, 145, 216, 66, 166, 139, 82, 19, 207, 29, 75, 105, 149]))).toBeTrue();
+      expect(cdInfo.ver).toEqual(cc.VERSION5);
+      expect(cdInfo.hint).toEqual(hint);
+
+      await expectAsync(
+         decipher.decryptBlock0(
+            async (cdinfo) => {
+               expect(cdinfo.hint).toEqual(hint);
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.alg).toBe('X20-PLY');
+               expect(cdinfo.ic).toBe(1800000);
+               expect(cdinfo.hint).toEqual(hint);
+               expect(cdinfo.ver).toEqual(cc.VERSION5);
+               expect(isEqualArray(cdInfo.iv, new Uint8Array([121, 78, 37, 8, 192, 196, 110, 22, 164, 106, 59, 161, 122, 165, 176, 147, 49, 43, 41, 250, 163, 111, 218, 4]))).toBeTrue();
+               expect(isEqualArray(cdInfo.slt, new Uint8Array([174, 61, 6, 169, 145, 216, 66, 166, 139, 82, 19, 207, 29, 75, 105, 149]))).toBeTrue();
+               return [pwd, undefined];
+            }
+         )
+      ).toBeResolvedTo(clearData);
+
+      await expectAsync(
+         decipher.decryptBlockN(
+         )
+      ).toBeResolvedTo(new Uint8Array(0));
+   });
+
+   it("missing terminal block indicator, v5", async function () {
+      const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
+      const pwd = 'a 🌲 of course';
+      const hint = '🌧️';
+      // base64url userCred for injection into browser for recreation:
+      // Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=
+      const userCred = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
+      const [cipherStream] = streamFromBytes(new Uint8Array([225, 67, 20, 31, 134, 179, 27, 202, 138, 52, 68, 42, 197, 34, 48, 209, 76, 235, 39, 166, 101, 12, 253, 101, 237, 25, 234, 119, 91, 227, 169, 172, 5, 0, 116, 0, 0, 0, 2, 0, 53, 140, 213, 212, 134, 206, 178, 102, 222, 97, 207, 8, 252, 103, 8, 64, 25, 112, 206, 146, 159, 150, 220, 236, 162, 203, 172, 111, 119, 158, 192, 123, 81, 141, 89, 174, 126, 4, 65, 105, 64, 119, 27, 0, 0, 23, 138, 253, 130, 153, 78, 2, 31, 195, 254, 142, 102, 116, 200, 50, 125, 8, 178, 151, 113, 13, 205, 228, 10, 85, 83, 101, 57, 149, 191, 166, 4, 221, 153, 198, 0, 18, 185, 165, 203, 53, 211, 218, 24, 198, 162, 13, 99, 240, 249, 210, 255, 200, 217, 232, 10, 187, 212, 92, 204, 165, 217, 7, 202, 6, 114, 70, 200, 221]));
+
+      const decipher = await Decipher.fromStream(userCred, cipherStream);
+      const cdInfo = await decipher.getCipherDataInfo();
+
+      expect(cdInfo.alg).toEqual('X20-PLY');
+      expect(cdInfo.ic).toEqual(1800000);
+      expect(isEqualArray(cdInfo.iv, new Uint8Array([53, 140, 213, 212, 134, 206, 178, 102, 222, 97, 207, 8, 252, 103, 8, 64, 25, 112, 206, 146, 159, 150, 220, 236]))).toBeTrue();
+      expect(isEqualArray(cdInfo.slt, new Uint8Array([162, 203, 172, 111, 119, 158, 192, 123, 81, 141, 89, 174, 126, 4, 65, 105]))).toBeTrue();
+      expect(cdInfo.ver).toEqual(cc.VERSION5);
+      expect(cdInfo.hint).toEqual(hint);
+
+      // Although the cipherData for block0 above is missing the "terminal block" indicator,
+      // that isn't detected until we hit the end of the file (below in blockN)
+      await expectAsync(
+         decipher.decryptBlock0(
+            async (cdinfo) => {
+               expect(cdinfo.hint).toEqual(hint);
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.alg).toBe('X20-PLY');
+               expect(cdinfo.ic).toBe(1800000);
+               expect(cdinfo.hint).toEqual(hint);
+               expect(cdinfo.ver).toEqual(cc.VERSION5);
+               expect(isEqualArray(cdInfo.iv, new Uint8Array([53, 140, 213, 212, 134, 206, 178, 102, 222, 97, 207, 8, 252, 103, 8, 64, 25, 112, 206, 146, 159, 150, 220, 236]))).toBeTrue();
+               expect(isEqualArray(cdInfo.slt, new Uint8Array([162, 203, 172, 111, 119, 158, 192, 123, 81, 141, 89, 174, 126, 4, 65, 105]))).toBeTrue();
+               return [pwd, undefined];
+            }
+         )
+      ).toBeResolvedTo(clearData);
+
+      await expectAsync(
+         decipher.decryptBlockN(
+         )
+      ).toBeRejectedWithError(Error, new RegExp('Missing terminal.+'));
+   });
+
+   it("bad input to cipherdata info and decrypt, v4", async function () {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwdGood = 'a 🌲 of course';
       const pwdBad = 'a 🌵 of course';
@@ -548,19 +670,87 @@ describe("Encryption and decryption", function () {
 
       await expectAsync(
          decipher.getCipherDataInfo()
-      ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
+      ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
 
-      // Does not get MAC error because MAC check only happens on the first call
-      // to getCipherDataInfo or decryptBlock0
+      // decipher now in invalid state from prevous getCipherDataInfo call
       await expectAsync(
          decipher.decryptBlock0(
             async (cdinfo) => {
                return [pwdGood, undefined];
             }
          )
+      ).toBeRejectedWithError(Error, new RegExp('Decipher invalid.+'));
+
+      // Test wrong userCred with block decrypt first (error msg is diffeernt)
+      [cipherStream] = streamFromBytes(cipherData);
+      decipher = await Decipher.fromStream(userCredBad, cipherStream);
+
+      await expectAsync(
+         decipher.decryptBlock0(
+            async (cdinfo) => {
+               return [pwdGood, undefined];
+            }
+         )
+      ).toBeRejectedWithError(Error, new RegExp('Invalid MAC.+'));
+   });
+
+   it("bad input to cipherdata info and decrypt, v5", async function () {
+      const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
+      const pwdGood = 'a 🌲 of course';
+      const pwdBad = 'a 🌵 of course';
+      const userCredBad = new Uint8Array([0, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
+
+      // copied from "correct cipherdata info and decryption" spec above
+      const userCredGood = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
+
+      let [cipherStream, cipherData] = streamFromBytes(new Uint8Array([166, 123, 188, 183, 212, 97, 47, 147, 59, 39, 78, 222, 101, 74, 221, 53, 27, 11, 194, 67, 156, 235, 116, 104, 65, 64, 76, 166, 29, 220, 71, 179, 5, 0, 116, 0, 0, 1, 2, 0, 121, 78, 37, 8, 192, 196, 110, 22, 164, 106, 59, 161, 122, 165, 176, 147, 49, 43, 41, 250, 163, 111, 218, 4, 174, 61, 6, 169, 145, 216, 66, 166, 139, 82, 19, 207, 29, 75, 105, 149, 64, 119, 27, 0, 0, 23, 93, 92, 56, 163, 242, 71, 208, 3, 190, 44, 140, 222, 149, 159, 152, 193, 162, 44, 177, 93, 197, 119, 131, 88, 92, 53, 108, 167, 253, 64, 216, 200, 121, 212, 193, 153, 180, 39, 92, 35, 142, 6, 240, 115, 51, 211, 198, 63, 12, 126, 128, 206, 178, 114, 65, 37, 246, 197, 19, 79, 58, 96, 56, 86, 172, 162, 217, 70]));
+      let decipher = await Decipher.fromStream(userCredGood, cipherStream);
+
+      // First make sure the good values are actually good
+      await expectAsync(
+         decipher.decryptBlock0(
+            async (cdinfo) => {
+               expect(cdinfo.alg).toBe('X20-PLY');
+               expect(cdinfo.ic).toBe(1800000);
+               expect(cdinfo.hint).toBeTruthy();
+               expect(cdinfo.ver).toEqual(cc.VERSION5);
+               return [pwdGood, undefined];
+            }
+         )
+      ).toBeResolvedTo(clearData);
+
+      // Ensure bad password fails
+      [cipherStream] = streamFromBytes(cipherData);
+      decipher = await Decipher.fromStream(userCredGood, cipherStream);
+
+      await expectAsync(
+         decipher.decryptBlock0(
+            async (cdinfo) => {
+               return [pwdBad, undefined];
+            }
+         )
       ).toBeRejectedWithError(DOMException);
+
+      // Test wrong userCred
+      [cipherStream] = streamFromBytes(cipherData);
+      decipher = await Decipher.fromStream(userCredBad, cipherStream);
+
+      await expectAsync(
+         decipher.getCipherDataInfo()
+      ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
+
+      // Does not get MAC error because the decipher instance is now if a
+      // bad state and will remain so... forever...
+      await expectAsync(
+         decipher.decryptBlock0(
+            async (cdinfo) => {
+               return [pwdGood, undefined];
+            }
+         )
+      ).toBeRejectedWithError(Error, new RegExp('Decipher invalid state.+'));
    });
 });
+
 
 describe("Detect changed cipher data", function () {
    beforeEach(() => {
@@ -715,7 +905,6 @@ describe("Detect changed cipher data", function () {
          ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
       }
    });
-
 
    it("detect changed encryptedData", async function () {
 
@@ -917,6 +1106,138 @@ describe("Detect changed cipher data", function () {
                }
             )
          ).toBeRejectedWithError(DOMException);
+      }
+   });
+});
+
+describe("Detect block order changes", function () {
+   beforeEach(() => {
+      TestBed.configureTestingModule({});
+      Encipher.testingFlag = true;
+   });
+
+   const pwd = 'a not good pwd';
+   const hint = 'sorta';
+   const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+   const clearStr ='This is a secret 🦀 with extra wording for more blocks';
+
+   async function get_blocks(
+      alg: string
+   ): Promise<[CipherDataBlock, CipherDataBlock, CipherDataBlock]>  {
+         const eparams: EParams = {
+            alg: alg,
+            ic: cc.ICOUNT_MIN,
+            trueRand: false,
+            fallbackRand: true,
+            lp: 1,
+            lpEnd: 1
+         };
+
+         const [clearStream] = streamFromStr(clearStr);
+
+         const latest = Encipher.latest(userCred, clearStream);
+         const readStart = 11
+         //@ts-ignore force multiple blocks
+         latest['_readTarget'] = readStart;
+
+         const block0 = await latest.encryptBlock0(
+            eparams,
+            async (cdinfo) => {
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               return [pwd, hint];
+            }
+         );
+         const block1 = await latest.encryptBlockN(eparams);
+         const block2 = await latest.encryptBlockN(eparams);
+
+         return [block0, block1, block2];
+   }
+
+   it("block order good, all algorithms", async function () {
+
+      const clearData = new TextEncoder().encode(clearStr);
+
+      for (let alg in cc.AlgInfo) {
+
+         const [block0, block1, block2] = await get_blocks(alg);
+
+         // First make sure we can decrypt in the proper order
+         let [cipherStream] = streamFromCipherBlock([block0, block1, block2]);
+         let decipher = await Decipher.fromStream(userCred, cipherStream);
+
+         const decb0 = await decipher.decryptBlock0(
+            async (cdinfo) => {
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               return [pwd, undefined];
+            }
+         );
+         const decb1 = await decipher.decryptBlockN();
+         const decb2 = await decipher.decryptBlockN();
+
+         let [decrypted] = streamFromBytes([decb0, decb1, decb2]);
+
+         await expectAsync(
+            areEqual(decrypted, clearData)
+         ).toBeResolvedTo(true);
+      }
+   });
+
+   it("blockN bad order detected, all algorithms", async function () {
+
+      const clearData = new TextEncoder().encode(clearStr);
+
+      for (let alg in cc.AlgInfo) {
+
+         const [block0, block1, block2] = await get_blocks(alg);
+
+         // Order of block N+ changed
+         let [cipherStream] = streamFromCipherBlock([block0, block2, block1]);
+         let decipher = await Decipher.fromStream(userCred, cipherStream);
+
+         const decb0 = await decipher.decryptBlock0(
+            async (cdinfo) => {
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               return [pwd, undefined];
+            }
+         );
+
+         const partial = new TextDecoder().decode(decb0);
+         expect(clearStr.startsWith(partial)).toBeTrue();
+
+         // In V4 this worked, but should fail in V5
+         await expectAsync(
+            decipher.decryptBlockN()
+         ).toBeRejectedWithError(Error, new RegExp('Invalid MAC+'));
+      }
+   });
+
+   it("block0 bad order detected, all algorithms", async function () {
+
+      const clearData = new TextEncoder().encode(clearStr);
+
+      for (let alg in cc.AlgInfo) {
+
+         const [block0, block1, block2] = await get_blocks(alg);
+
+         let [cipherStream] = streamFromCipherBlock([block1, block0, block2]);
+         let decipher = await Decipher.fromStream(userCred, cipherStream);
+
+         // Will fail in V4 and later because block0 format or MAC is invalid.
+         // Failure detection can happen at different spots while data is unpacked
+         // since random values may look valid. MAC will alsways be
+         // invalid if we get that far.
+         await expectAsync(
+            decipher.decryptBlock0(
+               async (cdinfo) => {
+                  expect(cdinfo.lp).toEqual(1);
+                  expect(cdinfo.lpEnd).toEqual(1);
+                  return [pwd, undefined];
+            })
+         ).toBeRejectedWithError(Error, new RegExp('Invalid.+'));
+
       }
    });
 });

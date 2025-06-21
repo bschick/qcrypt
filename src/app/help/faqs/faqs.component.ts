@@ -341,6 +341,11 @@ const ELEMENT_DATA: FAQElement[] = [
             password entered is cached in browser memory. Click the "Flush" button to remove or turn off caching.</td>
         </tr>
         <tr>
+          <td class="tg-0pky">Cryptographic keys for encryption and decryption</td>
+          <td class="tg-0pky">Not stored, not transmitted</td>
+          <td class="tg-0pky">Cryptographic keys are ephemeral, generated on the fly, and discarded after each use.</td>
+        </tr>
+        <tr>
           <td class="tg-0pky">Encryption and decryption preferences such as symmetric cipher choice</td>
           <td class="tg-0pky">Browser local storage, not transmitted</td>
           <td class="tg-0pky">Within the "Advanced Options" section on the main page, click the
@@ -392,13 +397,13 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'Can I use Quick Crypt to encrypt and decrypt files?',
       answer: `Yes, to encrypt a file click the <i>Files</i> button next to the <i>Encrypt</i>
-      button and then chose
+      button and then choose
       <i>Select Clear File</i> from the menu. The selected file may contain text
       or binary data. After you select a file, click the <i>Encrypt</i>
       button or to save the encrypted data to a file, open the Files
-      menu again and chose <i>Encrypt to File</i>. To deccrypt a previously encrypted
+      menu again and choose <i>Encrypt to File</i>. To deccrypt a previously encrypted
       file, click the <i>Files</i> button next to the <i>Decrypt</i>
-      button and then chose <i>Select Cipher File</i> from the menu.`
+      button and then choose <i>Select Cipher File</i> from the menu.`
    },
 
    {
@@ -589,6 +594,9 @@ const ELEMENT_DATA: FAQElement[] = [
          <a href="https://doc.libsodium.org/" target="_blank">libsodium library</a>,
          choose <b>XChaCha20 Poly1305</b> or <b>AEGIS 256</b>
          </li>
+         <li>If you want an implementation designed to resist side-channel attacks, choose
+         either <b>XChaCha20 Poly1305</b> or <b>AEGIS 256</b>, which are provided by libsodium
+         </li>
          <li>While there is no universal agreement on the "safest" mode, the
          <a href="https://doc.libsodium.org/secret-key_cryptography/aead#tl-dr-which-one-should-i-use" target="_blank">
          libsodium project recommends</a> <b>AEGIS 256</b> first, then <b>XChaCha20 Poly1305</b>,
@@ -596,8 +604,9 @@ const ELEMENT_DATA: FAQElement[] = [
          </li>
       </ul>
       <p>Quick Cyrpt defaults to <b>XChaCha20 Poly1305</b> because it is very
-      well-established and believed to be more robust than AES 256 GCM. The
-      libsodium implementation is also easy for Quick Crypt to update if needed.
+      well-established and generally considered more robust than AES 256 GCM. The
+      libsodium implementation is also designed to be side-channel attack resistant and
+      is easy for Quick Crypt to update if needed.
       </p><p>For increased protection, you can encrypt your data multiple times
       by setting loop encrypt in the "Advanced Options" section to greater than 1.
       Each loop can have a different cipher mode and password. So rather than
@@ -635,17 +644,17 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: "What are the 'Hash Iterations', 'Minimum Strength', and 'Check if Stolen' option?",
-      answer: `<p>Quick Crypt uses many PBKDF2 key
+      answer: `<p>Quick Crypt uses many PBKDF2-HMAC-SHA512 key
       derivation iterations and combines your password with a
       passkey-protected user credential to make password guessing extremely difficult,
       even with leaked passwords. But it is always better to use a strong password
       for defense-in-depth.</p>
-      <p><b>Hash Iterations</b> specifies the number of times the PBKDF2 algorithm will
+      <p><b>Hash Iterations</b> specifies the number of times the PBKDF2-HMAC-SHA512 algorithm will
       apply a SHA-512 HMAC function to your password and user credential to generate an
       encryption key. Quick Crypt
       selects the default iteration count by benchmarking your system to find the largest
       value that will complete in 500ms. To help ensure strong keys, Quick Crypt accepts a
-      minimum of 400,000 iterations.</p>
+      minimum of 420,000 and a maximum of 4,294,000,000 iterations.</p>
       <p><b>Minimum Strength</b> sets the required strength for encryption passwords you
       enter. Quick Crypt uses algorithms running in your browser to estimate the strength
       of your password. Entries that are below the required strength are rejected.</p><p>
@@ -760,7 +769,7 @@ const ELEMENT_DATA: FAQElement[] = [
          target="_blank">getRandomValues()</a><br/>or <a href="https://www.random.org"
          target="_blank">https://www.random.org/cgi-bin/randbyte</a>
          </li>
-         <li><b>HKDF and PBKDF2 Key Derivation:</b> SubtleCrypto
+         <li><b>HKDF-SHA512 and PBKDF2-HMAC-SHA512 Key Derivation:</b> SubtleCrypto
          <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey" target="_blank">deriveKey()</a>
          </li>
          <li><b>AES 256 GCM Cipher:</b> SubtleCrypto <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt"
@@ -804,10 +813,10 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'What key lengths does Quick Crypt use?',
-      answer: `Symmetric cipher keys are 256 bits long and derived
+      answer: `Symmetric cipher keys are ephemeral, 256 bits long, and derived
       from the password you enter during encryption combined with your user
       credential that is accessed with passkey authentication. MAC keys
-      are 256 bits long and derived from your user credential. For more details,
+      are ephemeral, 256 bits long, derived from your user credential. For more details,
       see the <a href="/help/protocol">protocol description</a> help page.`
    },
 
@@ -847,6 +856,20 @@ const ELEMENT_DATA: FAQElement[] = [
       keyed hash) validation means there would need to be problems with
       both the libsodium generated BLAKE2b MAC and Chrome's AES cipher
       implementation for such an attack to succeed, which is even more unlikely.`
+   },
+
+   {
+      position: 0,
+      question: 'Are Quick Crypt\'s algorithms side-channel attack resistant?',
+      answer: `Quick Crypt uses algorithms implemented by the open-source
+      <a href="https://doc.libsodium.org/" target="_blank">libsodium library</a> and
+      your browser's <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto" target="_blank">
+      SubtleCrypto API</a>. Libsodium was designed and reviewed to provide side-channel
+      attack resistant functions, and Quick Crypt uses these whenever possible. For example,
+      constant-time comparison functions test secure values. SubtleCrypto, however, makes
+      no explicit claims about side-channel resistance. If this is a concern, you may
+      choose either the XChaCha20 Poly1305 or AEGIS 256 modes implemented
+      in libsodium rather than the AES 256 GCM mode from SubtleCrypto.`
    },
 
    {

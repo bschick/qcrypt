@@ -18,7 +18,7 @@ $S$ & \textrm{ - Quick Crypt server} \\
 $R$ & \textrm{ - https://www.random.org/cgi-bin/randbyte?nbytes=48} \\
 $D$ & \textrm{ - Insecure persistent storage system} \\
 \end{tabular}
-      
+
 \hfill \break
 
 % Changed: cipher variables, functions, decrypt by a, block n by B
@@ -30,8 +30,8 @@ $E_a$ & \textrm{ - Symmetric cipher using AEAD algorithm }$a$\textrm{. One of:}\
 & \hspace{23pt}\textrm{1. AES-256 in Galois/Counter mode from SubtleCrypto} \\
 & \hspace{23pt}\textrm{2. XChaCha20 with Poly1305 MAC from libsodium} \\
 & \hspace{23pt}\textrm{3. AEGIS 256 from libsodium} \\
-$D_H$ & \textrm{ - HKDF key derivation using SHA-512 FIPS-180-4 from SubtleCrypto} \\
-$D_P$ & \textrm{ - PBKDF2 key derivation using SHA-512 FIPS-180-4 from SubtleCrypto} \\
+$D_H$ & \textrm{ - HKDF-SHA512 key derivation using FIPS-180-4 from SubtleCrypto} \\
+$D_P$ & \textrm{ - PBKDF2-HMAC-SHA512 key derivation FIPS-180-4 from SubtleCrypto} \\
 $H$ & \textrm{ - BLAKE2b keyed hash (MAC) generator from libsodium} \\
 $V$ & \textrm{ - BLAKE2b keyed hash (MAC) validator from libsodium} \\
 $G$ & \textrm{ - Cryptographic pseudorandom generator from SubtleCrypto} \\
@@ -51,10 +51,10 @@ $p$ & \textrm{ - Password text}\\
 $h$ & \textrm{ - Password hint text}\\
 $u_c$ & \textrm{ - 256 bit user credential}\\
 $a$ & \textrm{ - Symmetric AEAD cipher and mode: [1, 2, 3]}\\
-$i$ & \textrm{ - PBKDF2 iteration count, minimum 400,000}\\
-$k_M$ & \textrm{ - 256 bit message cipher key}\\
-$k_H$ & \textrm{ - 256 bit hint cipher key}\\
-$k_S$ & \textrm{ - 256 bit MAC key}\\
+$i$ & \textrm{ - PBKDF2-HMAC-SHA512 iteration count, min 420,000 max 4,294,000,000}\\
+$k_M$ & \textrm{ - 256 bit ephemeral message cipher key}\\
+$k_H$ & \textrm{ - 256 bit ephemeral hint cipher key}\\
+$k_S$ & \textrm{ - 256 bit ephemeral MAC key}\\
 $kp_S$ & \textrm{ - Key purpose text: ``cipherdata signing key''}\\
 $kp_H$ & \textrm{ - Key purpose text: ``hint encryption key''}\\
 $r$ & \textrm{ - 384 bits of either true or pseudo random data}\\
@@ -128,7 +128,7 @@ $err$ & \textrm{ - Error message and exit}\\
 
 \multicolumn{2}{@{}l}{$l = len(ad \mathbin\Vert m_{E})$}\\
 \multicolumn{2}{@{}l}{$t = H(v, l, ad, m_{E}, k_S)$}\\
-\multicolumn{2}{@{}l}{$cd_N = t\mathbin\Vert v\mathbin\Vert l\mathbin\Vert 
+\multicolumn{2}{@{}l}{$cd_N = t\mathbin\Vert v\mathbin\Vert l\mathbin\Vert
 ad \mathbin\Vert m_{E}$}\\
 \end{tabular}
 
