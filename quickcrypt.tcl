@@ -58,9 +58,11 @@ section "block0" {
             move -1
             uint8_bits 3,2,1,0 "loop"
             set hintLen [uint8 "hint len"]
-            bytes $hintLen "hint encrypted"
+            if {$hintLen > 0} {
+                bytes $hintLen "hint encrypted"
+            }
         }
-        bytes [expr $plen - 2 - $ivLen - 16 - 4 - 1 - 1 - $hintLen] "data encrypted"
+        bytes [expr $plen - 2 - $ivLen - 16 - 4 - 1 - 1 - $hintLen] "encrypted data"
     }
 }
 
