@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import sodium from 'libsodium-wrappers';
-import { getRandom48, numToBytes, bytesToNum, BYOBStreamReader } from './utils';
+import { getRandom48, numToBytes, bytesToNum, BYOBStreamReader, bytesFromString } from './utils';
 import * as cc from './cipher.consts';
 
 // Simple perf testing with Chrome 126 on MacOS result in
@@ -630,14 +630,14 @@ export class EncipherV5 extends Encipher {
 
          let encryptedHint = new Uint8Array(0);
          if (hint) {
-            // Since hint encoding could expand beyond 255, truncate the result to ensure fit
-            // TODO: This can cause � problems with truncated unicode codepoints or graphemes,
-            // could truncate hint characters and re-encode (see https://tonsky.me/blog/unicode/)
-            const hintBytes = new TextEncoder()
-               .encode(hint)
-               .slice(0, cc.ENCRYPTED_HINT_MAX_BYTES - cc.AUTH_TAG_MAX_BYTES);
+            const maxHintBytes = cc.ENCRYPTED_HINT_MAX_BYTES - cc.AUTH_TAG_MAX_BYTES;
+            // Use the module-level helper function
+            let hintBytes = bytesFromString(hint, maxHintBytes);
 
-            encryptedHint = await EncipherV5._doEncrypt(
+            // It's possible that even a single character (e.g. emoji) might exceed maxHintBytes after encoding + auth tag.
+            // In such a rare case, or if truncation results in an empty string, we proceed without a hint.
+            if (hintBytes.byteLength > 0) {
+               encryptedHint = await EncipherV5._doEncrypt(
                eparams.alg,
                hk,
                iv,
