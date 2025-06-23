@@ -631,18 +631,18 @@ export class EncipherV5 extends Encipher {
          let encryptedHint = new Uint8Array(0);
          if (hint) {
             const maxHintBytes = cc.ENCRYPTED_HINT_MAX_BYTES - cc.AUTH_TAG_MAX_BYTES;
-            // Use the module-level helper function
             let hintBytes = bytesFromString(hint, maxHintBytes);
 
-            // It's possible that even a single character (e.g. emoji) might exceed maxHintBytes after encoding + auth tag.
-            // In such a rare case, or if truncation results in an empty string, we proceed without a hint.
+            // It's possible that even a single character (e.g. emoji) might exceed maxHintBytes
+            // If so proceed without a hint.
             if (hintBytes.byteLength > 0) {
                encryptedHint = await EncipherV5._doEncrypt(
-               eparams.alg,
-               hk,
-               iv,
-               hintBytes
-            );
+                  eparams.alg,
+                  hk,
+                  iv,
+                  hintBytes
+               );
+            }
          }
 
          const additionalData = Ciphers._encodeAdditionalData({

@@ -25,7 +25,8 @@ import {
    bytesToNum,
    base64ToBytes,
    bytesToBase64,
-   BYOBStreamReader
+   BYOBStreamReader,
+   bytesFromString
 } from './utils';
 
 function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
@@ -148,6 +149,76 @@ describe("Number byte packing", function () {
 
 });
 
+describe("string byte truncation", function () {
+
+   it("ascii characters", function () {
+
+      const src = 'this c its encrypted';
+
+      const underFit = bytesFromString(src, 50);
+      const underFitStr = new TextDecoder().decode(underFit);
+      expect(underFit.byteLength).toEqual(new TextEncoder().encode(src).byteLength);
+      expect(underFitStr).toEqual(src);
+
+      const fit = bytesFromString(src, 20);
+      const fitStr = new TextDecoder().decode(fit);
+      expect(fit.byteLength).toEqual(new TextEncoder().encode(src).byteLength);
+      expect(fitStr).toEqual(src);
+
+      const noFit = bytesFromString(src, 18);
+      const noFitStr = new TextDecoder().decode(noFit);
+      expect(noFit.byteLength).toEqual(18);
+      expect(src.slice(0,-2)).toEqual(noFitStr);
+   });
+
+   it("unicode characters", function () {
+
+      // Oddly 🌧️ results in 7 bytes due to an extra "Zero Width Joiner ZWJ"
+      const src = 'this 🌧️ its encrypted';
+
+      const underFit = bytesFromString(src, 50);
+      const underFitStr = new TextDecoder().decode(underFit);
+      expect(underFit.byteLength).toEqual(new TextEncoder().encode(src).byteLength);
+      expect(underFitStr).toEqual(src);
+
+      const fit = bytesFromString(src, 26);
+      const fitStr = new TextDecoder().decode(fit);
+      expect(fit.byteLength).toEqual(new TextEncoder().encode(src).byteLength);
+      expect(fitStr).toEqual(src);
+
+      const noFit = bytesFromString(src, 24);
+      const noFitStr = new TextDecoder().decode(noFit);
+      expect(noFit.byteLength).toEqual(24);
+      expect(src.slice(0,-2)).toEqual(noFitStr);
+
+   });
+
+   it("don't split unicode", function () {
+
+      // Oddly 🌧️ results in 7 bytes due to an extra "Zero Width Joiner ZWJ"
+      const src = 'this 🌧️ its 🌧️🌧️🌧️🌧️';
+
+      const underFit = bytesFromString(src, 50);
+      const underFitStr = new TextDecoder().decode(underFit);
+      expect(underFit.byteLength).toEqual(new TextEncoder().encode(src).byteLength);
+      expect(underFitStr).toEqual(src);
+
+      const fit = bytesFromString(src, 45);
+      const fitStr = new TextDecoder().decode(fit);
+      expect(fit.byteLength).toEqual(new TextEncoder().encode(src).byteLength);
+      expect(fitStr).toEqual(src);
+
+      // ugh, this is just from experimenting and seems likely to break. Javascript
+      // has the annoying habbit of encode single character different than sequence
+      // of characters because a sequence can have "Zero Width Joiner ZWJ" chars.
+      // Also string slice does not seem to work at the character level (or perhaps)
+      // it is the text editor saving different values than expected
+      const noFit = bytesFromString(src, 41);
+      const noFitStr = new TextDecoder().decode(noFit);
+      expect(noFit.byteLength).toEqual(38);
+      expect(src.slice(0,-3)).toEqual(noFitStr);
+   });
+});
 
 describe("Stream reading", function () {
    it("buffer matches", async function () {
