@@ -440,3 +440,29 @@ export async function getRandom48(): Promise<Uint8Array> {
    await sodium.ready;
    return sodium.randombytes_buf(48);
 }
+
+// Helper function to get bytes from a string, truncated to a maximum byte length, ensuring valid UTF-8
+export function bytesFromString(str: string, maxByteLength: number): Uint8Array {
+   const encoder = new TextEncoder();
+
+   // Attempt to encode the entire string first
+   const fullEncodedBytes = encoder.encode(str);
+   if (fullEncodedBytes.byteLength <= maxByteLength) {
+      return fullEncodedBytes;
+   }
+
+   // If too long, fall back to character-by-character truncation using pre-allocation
+   const preallocatedBuffer = new Uint8Array(maxByteLength);
+   let bytesWritten = 0;
+   for (const char of str) {
+      const charBytes = encoder.encode(char);
+      if (bytesWritten + charBytes.byteLength <= maxByteLength) {
+         preallocatedBuffer.set(charBytes, bytesWritten);
+         bytesWritten += charBytes.byteLength;
+      } else {
+         break;
+      }
+   }
+   // Return a slice of the buffer containing only the bytes written
+   return preallocatedBuffer.slice(0, bytesWritten);
+}
