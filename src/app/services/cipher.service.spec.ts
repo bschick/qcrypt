@@ -34,7 +34,6 @@ describe('CipherService', () => {
    let cipherSvc: CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      Encipher.testingFlag = true;
       cipherSvc = TestBed.inject(CipherService);
    });
 
@@ -122,7 +121,6 @@ describe("Stream encryption and decryption", function () {
    let cipherSvc: CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      Encipher.testingFlag = true;
       cipherSvc = TestBed.inject(CipherService);
    });
 
@@ -137,9 +135,7 @@ describe("Stream encryption and decryption", function () {
 
          const econtext = {
             algs: [alg],
-            ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true
+            ic: cc.ICOUNT_MIN
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -194,9 +190,7 @@ describe("Stream encryption and decryption", function () {
 
          const econtext = {
             algs: [alg],
-            ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true
+            ic: cc.ICOUNT_MIN
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -250,9 +244,7 @@ describe("Stream encryption and decryption", function () {
 
          const econtext = {
             algs: Array(maxLps).fill(alg),
-            ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true
+            ic: cc.ICOUNT_MIN
          };
 
          let expectedEncLp = 1;
@@ -306,9 +298,7 @@ describe("Stream encryption and decryption", function () {
 
       const econtext = {
          algs: algKeys,
-         ic: cc.ICOUNT_MIN,
-         trueRand: false,
-         fallbackRand: true
+         ic: cc.ICOUNT_MIN
       };
 
       let expectedEncLp = 1;
@@ -650,9 +640,7 @@ describe("Stream encryption and decryption", function () {
 
          const econtext = {
             algs: [alg],
-            ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true
+            ic: cc.ICOUNT_MIN
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -698,9 +686,7 @@ describe("Stream encryption and decryption", function () {
 
             const econtext = {
                algs: Array(maxLps).fill(alg),
-               ic: cc.ICOUNT_MIN,
-               trueRand: false,
-               fallbackRand: true
+               ic: cc.ICOUNT_MIN
             };
 
             let expectedEncLp = 1;
@@ -777,9 +763,7 @@ describe("Stream encryption and decryption", function () {
 
          const econtext = {
             algs: [alg],
-            ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true
+            ic: cc.ICOUNT_MIN
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -822,9 +806,7 @@ describe("Stream encryption and decryption", function () {
 
          const econtext = {
             algs: [alg],
-            ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true
+            ic: cc.ICOUNT_MIN
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -884,9 +866,7 @@ describe("Stream encryption and decryption", function () {
 
       const econtext = {
          algs: ['AES-GCM'],
-         ic: cc.ICOUNT_MIN,
-         trueRand: false,
-         fallbackRand: true
+         ic: cc.ICOUNT_MIN
       };
 
       let cipherStream = await cipherSvc.encryptStream(
@@ -1056,25 +1036,6 @@ describe("Stream encryption and decryption", function () {
          )
       ).toBeRejectedWithError(Error, new RegExp('Invalid alg.+'));
 
-      // both rands false
-      [clearStream] = streamFromBytes(clearData);
-
-      bcontext = {
-         ...econtext,
-         trueRand: false,
-         fallbackRand: false
-      };
-
-      await expectAsync(
-         cipherSvc.encryptStream(
-            bcontext,
-            async (cdinfo) => {
-               return [pwd, hint];
-            },
-            userCred,
-            clearStream
-         )
-      ).toBeRejectedWithError(Error, new RegExp('Either trueRand.+'));
    });
 });
 
@@ -1083,7 +1044,6 @@ describe("Stream manipulation", function () {
    let cipherSvc: CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      Encipher.testingFlag = true;
       cipherSvc = TestBed.inject(CipherService);
    });
 
@@ -1601,9 +1561,7 @@ describe("Stream manipulation", function () {
 
          const econtext = {
             algs: [alg],
-            ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true
+            ic: cc.ICOUNT_MIN
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -1683,9 +1641,7 @@ describe("Stream manipulation", function () {
 
          const econtext = {
             algs: [alg],
-            ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true
+            ic: cc.ICOUNT_MIN
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -1734,9 +1690,7 @@ describe("Stream manipulation", function () {
 
          const econtext = {
             algs: [alg],
-            ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true
+            ic: cc.ICOUNT_MIN
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -1801,7 +1755,6 @@ describe("Block order change and deletion detection", function () {
    let cipherSvc: CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      Encipher.testingFlag = true;
       cipherSvc = TestBed.inject(CipherService);
    });
 
@@ -1893,7 +1846,6 @@ describe("Benchmark execution", function () {
    let cipherSvc: CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      Encipher.testingFlag = true;
       cipherSvc = TestBed.inject(CipherService);
    });
 
@@ -1915,7 +1867,6 @@ describe("Cipher alg validate", function () {
    let cipherSvc: CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      Encipher.testingFlag = true;
       cipherSvc = TestBed.inject(CipherService);
    });
 
@@ -1939,7 +1890,6 @@ describe("Get cipherinfo from cipher text", function () {
    let cipherSvc: CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      Encipher.testingFlag = true;
       cipherSvc = TestBed.inject(CipherService);
    });
 
@@ -1956,9 +1906,7 @@ describe("Get cipherinfo from cipher text", function () {
 
          const econtext = {
             algs: [alg],
-            ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true
+            ic: cc.ICOUNT_MIN
          };
 
          const cipherStream = await cipherSvc.encryptStream(
@@ -1997,9 +1945,7 @@ describe("Get cipherinfo from cipher text", function () {
 
       const econtext = {
          algs: ['AEGIS-256'],
-         ic: cc.ICOUNT_MIN,
-         trueRand: false,
-         fallbackRand: true
+         ic: cc.ICOUNT_MIN
       };
 
       const cipherStream = await cipherSvc.encryptStream(

@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import sodium from 'libsodium-wrappers';
-import { Random48, numToBytes, bytesToNum, BYOBStreamReader } from './utils';
+import { getRandom48, numToBytes, bytesToNum, BYOBStreamReader } from './utils';
 import * as cc from './cipher.consts';
 
 // Simple perf testing with Chrome 126 on MacOS result in
@@ -70,8 +70,6 @@ export type CipherDataInfo = {
 export type EParams = {
    readonly alg: string;
    readonly ic: number;
-   readonly trueRand: boolean;
-   readonly fallbackRand: boolean;
    readonly lp: number;
    readonly lpEnd: number;
 };
@@ -84,7 +82,6 @@ const HKDF_INFO_HINT = "hint encryption key";
 
 export abstract class Ciphers {
 
-   // cache in case any use of true random
    protected _ek?: CryptoKey;
    protected _sk?: CryptoKey;
 
@@ -436,10 +433,6 @@ export abstract class Ciphers {
 
 export abstract class Encipher extends Ciphers {
 
-   // Poke in this value to true to block random
-   // downloads from random.org during testing
-   public static testingFlag = false;
-
    public static latest(userCred: Uint8Array, clearStream: ReadableStream<Uint8Array>): Encipher {
       const reader = new BYOBStreamReader(clearStream);
       return new EncipherV5(userCred, reader);
@@ -526,7 +519,6 @@ export class EncipherV5 extends Encipher {
    */
 
    private _readTarget = READ_SIZE_START;
-   private _random48Cache: Random48;
    private _lastMac!: Uint8Array;
    private _slt!: Uint8Array; // stored as class member to help with testings
 
@@ -535,7 +527,6 @@ export class EncipherV5 extends Encipher {
       reader: BYOBStreamReader
    ) {
       super(userCred, reader, cc.VERSION5);
-      this._random48Cache = new Random48(Encipher.testingFlag);
    }
 
    public override protocolVersion(): number {
@@ -608,10 +599,7 @@ export class EncipherV5 extends Encipher {
 
          // Create a new salt and IV each time a key is derviced from the password.
          // https://crypto.stackexchange.com/questions/53032/salt-for-non-stored-passwords
-         const randomArray = await this._random48Cache.getRandomArray(
-            eparams.trueRand,
-            eparams.fallbackRand
-         );
+         const randomArray = await getRandom48();
 
          const ivBytes = Number(cc.AlgInfo[eparams.alg]['iv_bytes']);
          this._slt = randomArray.slice(0, cc.SLT_BYTES);
@@ -732,10 +720,7 @@ export class EncipherV5 extends Encipher {
             };
          }
 
-         const randomArray = await this._random48Cache.getRandomArray(
-            eparams.trueRand,
-            eparams.fallbackRand
-         );
+         const randomArray = await getRandom48();
 
          const ivBytes = Number(cc.AlgInfo[eparams.alg]['iv_bytes']);
          const iv = randomArray.slice(0, ivBytes);
@@ -784,8 +769,6 @@ export class EncipherV5 extends Encipher {
       const {
          alg,
          ic,
-         trueRand,
-         fallbackRand,
          lp,
          lpEnd
       } = eparams;
@@ -795,9 +778,6 @@ export class EncipherV5 extends Encipher {
       }
       if (ic < cc.ICOUNT_MIN || ic > cc.ICOUNT_MAX) {
          throw new Error('Invalid ic of: ' + ic);
-      }
-      if (!trueRand && !fallbackRand) {
-         throw new Error('Either trueRand or fallbackRand must be true');
       }
       if (lpEnd < 1 || lpEnd > cc.LP_MAX) {
          throw new Error('Invalid lpEnd: ' + lpEnd);

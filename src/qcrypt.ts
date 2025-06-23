@@ -189,7 +189,6 @@ async function encrypt(
       outfile?: string,
       iters?: number,
       algs?: string,
-      trand: boolean,
       loops: number,
       silent?: boolean,
       debug?: boolean
@@ -254,9 +253,7 @@ async function encrypt(
       const econtext = {
          lpEnd: Math.max(Math.min(args.loops, 10), 1),
          algs: algs,
-         ic: iters!,
-         trueRand: args.trand,
-         fallbackRand: true
+         ic: iters!
       };
 
       const cipherStream = await encryptStream(
@@ -406,7 +403,6 @@ const args = yargs(hideBin(process.argv))
                'iters': { alias: 'i', desc: `password hash iterations (min ${cc.ICOUNT_MIN})`, type: 'number' },
                'algs': { alias: 'a', desc: 'encryption cipher mode(s)', type: 'string', array: true, choices: Object.keys(cc.AlgInfo) },
                'loops': { alias: 'l', desc: 'nested encryption loops (max 10)', type: 'number', default: 1 },
-               'trand': { alias: 't', desc: 'use true random numbers', boolean: true, default: false },
             })
             .coerce({
                algs: (algs) => algs.map((alg: string) => alg.toUpperCase()),

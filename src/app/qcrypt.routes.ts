@@ -30,8 +30,7 @@ import { senderLinksGuard } from './senderlinks/senderlinks.guard';
 import { RecoveryComponent } from './recovery/recovery.component';
 import { OverviewComponent } from './help/overview/overview.component';
 import { FaqsComponent } from './help/faqs/faqs.component';
-import { ProtocolComponent } from './help/protocol/protocol.component';
-import { Protocol4Component } from './help/protocol/protocol.component';
+import { ProtocolComponent, Protocol4Component, Protocol5Component } from './help/protocol/protocol.component';
 import { coreGuard } from './core/core.guard';
 import { welcomeGuard } from './welcome/welcome.guard';
 
@@ -43,9 +42,10 @@ export const routes: Routes = [
    { path: 'recovery', component: RecoveryComponent },
    { path: 'help/overview', component: OverviewComponent },
    { path: 'help/faqs', component: FaqsComponent },
-   { path: 'help/protocol', component: Protocol4Component },
+   { path: 'help/protocol', component: Protocol5Component },
    { path: 'help/protocol1', component: ProtocolComponent },
    { path: 'help/protocol4', component: Protocol4Component },
+   { path: 'help/protocol5', component: Protocol5Component },
    { path: 'help', redirectTo: 'help/faqs', pathMatch: 'full'},
    { path: '', component: CoreComponent, canActivate: [coreGuard] },
    { path: '**', redirectTo: '', pathMatch: 'full' },

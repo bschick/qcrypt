@@ -104,8 +104,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    public readonly CHECK_PWNED_DEFAULT = false;
    public readonly VIS_CLEAR_DEFAULT = true;
    public readonly HIDE_PWD_DEFAULT = true;
-   public readonly TRUE_RAND_DEFAULT = false;
-   public readonly PSEUDO_RAND_DEFAULT = true;
 
    public ICOUNT_MAX = cc.ICOUNT_MAX; // Default since benchmark is async
    public ICOUNT_DEFAULT = cc.ICOUNT_DEFAULT; // Default since benchmark is async
@@ -118,8 +116,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    public checkPwnedToggle = new FormControl(this.CHECK_PWNED_DEFAULT);
    public visClearToggle = new FormControl(this.VIS_CLEAR_DEFAULT);
    public hidePwdToggle = new FormControl(this.HIDE_PWD_DEFAULT);
-   public trueRandToggle = new FormControl(this.TRUE_RAND_DEFAULT);
-   public pseudoRandToggle = new FormControl({ value: this.PSEUDO_RAND_DEFAULT, disabled: true });
    public formatSelect = new FormControl(this.FORMAT_DEFAULT);
    public reminderToggle = new FormControl(this.REMINDER_DEFAULT);
 
@@ -154,8 +150,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
       this.visClearToggle.valueChanges.subscribe(this.onVisClearChnage.bind(this));
       this.hidePwdToggle.valueChanges.subscribe(this.onHidePwdChange.bind(this));
-      this.trueRandToggle.valueChanges.subscribe(this.onTrueRandChange.bind(this));
-      this.pseudoRandToggle.valueChanges.subscribe(this.onPseudoRandChange.bind(this));
       this.formatSelect.valueChanges.subscribe(this.onFormatChange.bind(this));
       this.reminderToggle.valueChanges.subscribe(this.onReminderChange.bind(this));
 
@@ -202,8 +196,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          this.setCTFormat(this.authSvc.lsGet('ctformat'));
          this.setVisibilityClear(this.authSvc.lsGet('vclear'));
          this.setReminder(this.authSvc.lsGet('reminder'));
-         this.setPseudoRand(this.authSvc.lsGet('prand'));
-         this.setTrueRand(this.authSvc.lsGet('trand'));
 
          let params = new HttpParams({ fromString: window.location.search });
 
@@ -222,8 +214,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          this.setCTFormat(params.get('ctformat'));
          this.setVisibilityClear(params.get('vclear'));
          this.setReminder(params.get('reminder'));
-         this.setPseudoRand(params.get('prand'));
-         this.setTrueRand(params.get('trand'));
          this._optionsLoaded = true;
 
          this.setIcountWarning();
@@ -251,8 +241,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       this.visClearToggle.setValue(this.VIS_CLEAR_DEFAULT);
       this.reminderToggle.setValue(this.REMINDER_DEFAULT);
       this._lastReminder = this.REMINDER_DEFAULT;
-      this.pseudoRandToggle.setValue(this.PSEUDO_RAND_DEFAULT);
-      this.trueRandToggle.setValue(this.TRUE_RAND_DEFAULT);
 
       this._optionsLoaded = false;
 
@@ -275,8 +263,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          this.authSvc.lsDel('ctformat');
          this.authSvc.lsDel('vclear');
          this.authSvc.lsDel('reminder');
-         this.authSvc.lsDel('prand');
-         this.authSvc.lsDel('trand');
       } catch (err) {
          console.error(err);
          //otherwise ignore
@@ -313,14 +299,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
    get hidePwd(): boolean {
       return this.hidePwdToggle.value || false;
-   }
-
-   get trueRand(): boolean {
-      return this.trueRandToggle.value || false;
-   }
-
-   get pseudoRand(): boolean {
-      return this.pseudoRandToggle.value || false;
    }
 
    get format(): string {
@@ -402,21 +380,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    private setVisibilityClear(clear: string | null): void {
       setIfBoolean(clear, (bool) => {
          this.visClearToggle.setValue(bool);
-      });
-   }
-
-   private setTrueRand(trand: string | null): void {
-      setIfBoolean(trand, (bool) => {
-         this.trueRandToggle.setValue(bool);
-      });
-   }
-
-   private setPseudoRand(prand: string | null): void {
-      setIfBoolean(prand, (bool) => {
-         this.pseudoRandToggle.setValue(bool);
-         if (!bool) {
-            this.trueRandToggle.setValue(true);
-         }
       });
    }
 
@@ -523,20 +486,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       }
       this.authSvc.lsSet('ctformat', selected);
       this.formatOptionsChange.emit(true);
-   }
-
-   onTrueRandChange(checked: boolean | null) {
-      if (!checked) {
-         this.pseudoRandToggle.disable();
-         this.pseudoRandToggle.setValue(true);
-      } else {
-         this.pseudoRandToggle.enable();
-      }
-      this.authSvc.lsSet('trand', checked);
-   }
-
-   onPseudoRandChange(checked: boolean | null) {
-      this.authSvc.lsSet('prand', checked);
    }
 
    onClickResetOptions(): void {

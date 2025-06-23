@@ -403,7 +403,11 @@ const ELEMENT_DATA: FAQElement[] = [
       button or to save the encrypted data to a file, open the Files
       menu again and choose <i>Encrypt to File</i>. To deccrypt a previously encrypted
       file, click the <i>Files</i> button next to the <i>Decrypt</i>
-      button and then choose <i>Select Cipher File</i> from the menu.`
+      button and then choose <i>Select Cipher File</i> from the menu.
+      <p>You can inspect the layout of encypted data within a Quick Crypt file by
+      adding this <a href="/assets/quickcrypt.tcl" download>template file</a> to the
+      <a href='https://hexfiend.com/' target="_blank">Hex Fiend</a> macOS application.
+      </p>`
    },
 
    {
@@ -616,26 +620,19 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: "What are the 'True Random' and 'Pseudo Random' options?",
+      question: "How does Quick Crypt generate random values?",
       answer: `<p>Random values are input to cryptographic functions as salts and
       nonces/initialization vectors and must be generated in a manner
       <a href="https://en.wikipedia.org/wiki/Cryptographically_secure_pseudorandom_number_generator" target="_blank">
-      suitable for use in cryptography</a>. Quick Crypt uses WebCrypto
-      <a href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues" target="_blank">getRandomValues()</a>
-      by default, which produces cryptographically strong pseudo-random algorithmic values.
-      Unlike other
-      cryptographic functions implemented by browsers, however, random number generation
-      is not standardized, and quality may vary.</p>
-      <p><b>True Random</b> tells Quick Crypt to retrieve random data generated from
-      atmospheric noise by
-      <a href="https://www.random.org" target="_blank">https://www.random.org</a>, which
-      should be closer to true random data, rather than from your browser's 'Pseudo Random'
-      function.</p>
-      <p><b>Pseudo Random</b> tells Quick Crypt fallback to your browser's 'Pseudo Random'
-      function if random.org is unreachable. If random.org is unreachable and
-      'Pseudo Random' is disabled, encryption operations result in an error.</p>
-      <p>Quick Crypt generates or downloads new random values for every encryption,
-      meaning nonces and salts are never reused, and every encryption key should be
+      suitable for use in cryptography</a>. Quick Crypt uses libsodium's
+      <a href="https://doc.libsodium.org/generating_random_data" target="_blank">randombytes_buf()</a>
+      function, which produces cryptographically strong pseudo-random algorithmic values.
+      Libsodium was selected over WebCrypto's getRandomValues() function because, unlike
+      other WebCrypto functions, random data generation is not standardized, and quality
+      may vary. Libsodium uses documented operating system features to generate random data
+      that are suitable for creating secret keys.</p>
+      <p>Quick Crypt generates new random values for every encryption,
+      meaning nonces and salts are never reused, and every encryption key will be
       unique. Refer to Quick
       Crypt's <a href="/help/protocol">protocol description</a> for details about
       random value usage.</p>`
@@ -643,7 +640,7 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: "What are the 'Hash Iterations', 'Minimum Strength', and 'Check if Stolen' option?",
+      question: "What do the 'Password Handling' Advanced Options do?",
       answer: `<p>Quick Crypt uses many PBKDF2-HMAC-SHA512 key
       derivation iterations and combines your password with a
       passkey-protected user credential to make password guessing extremely difficult,
@@ -661,7 +658,7 @@ const ELEMENT_DATA: FAQElement[] = [
       <b>Check if Stolen</b> causes Quick Crypt to also check an online database from
       <a href="https://haveibeenpwned.com/API/v2#PwnedPasswords" target="_blank">https://haveibeenpwned.com</a>
       for passwords that have been leaked or stolen, and prevents you from using
-      them for encryption when detected. Attackers compile leaked passwords into lists to speed up
+      them for encryption. Attackers compile leaked passwords into lists to speed up
       password guessing.</p>`
    },
 
@@ -765,9 +762,8 @@ const ELEMENT_DATA: FAQElement[] = [
       <a href="https://doc.libsodium.org/" target="_blank">libsodium library</a> bundled into
       the Quick Crypt web-app.</p>
       <ol type='i'>
-         <li class="long"><b>Random Values:</b> WebCrypto <a href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues"
-         target="_blank">getRandomValues()</a><br/>or <a href="https://www.random.org"
-         target="_blank">https://www.random.org/cgi-bin/randbyte</a>
+         <li class="long"><b>Random Values:</b> libsodium
+         <a href="https://doc.libsodium.org/generating_random_data" target="_blank">randombytes_buf()</a>
          </li>
          <li><b>HKDF-SHA512 and PBKDF2-HMAC-SHA512 Key Derivation:</b> SubtleCrypto
          <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey" target="_blank">deriveKey()</a>
