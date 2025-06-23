@@ -14,7 +14,7 @@ Changes:
   - protocol and its description updated to v5
   - various other doc updates
   - improved enchiper and decipher state tracking
-  - added a template for cipherdata parsing using Hex Fiend on macOS
+  - added a template for inspecting cipherdata files using [Hex Fiend](https://hexfiend.com/) on macOS
   - package updates
 
 ## 4.2.2 (2025-06-10)
