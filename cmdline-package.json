@@ -1,6 +1,6 @@
 {
   "name": "qcrypt-shell",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Local commandline shell application for Quick Crypt",
   "main": "qcrypt.ts",
   "scripts": {
@@ -12,14 +12,16 @@
   "license": "ISC",
   "devDependencies": {
     "@types/libsodium-wrappers": "^0.7.13",
+    "@types/luxon": "^3.6.2",
     "@types/node": "^22.10.1",
     "@types/yargs": "^17.0.33",
-    "esbuild": "^0.24.0",
+    "esbuild": "^0.25.0",
     "typescript": "~5.5.4"
   },
   "dependencies": {
     "@inquirer/prompts": "^7.1.0",
     "libsodium-wrappers": "^0.7.15",
+    "luxon": "^3.6.1",
     "reopen-tty": "^1.1.2",
     "yargs": "^17.7.2"
   }
