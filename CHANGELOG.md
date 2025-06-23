@@ -1,5 +1,22 @@
 # CHANGELOG.md
 
+## 5.0.0 (TBD)
+
+Security:
+
+  - prevent block reordering or deletion in large clear text encryption
+  - replaced WebCrypto getRandomValues function with libsodiumrandombytes_buf
+  - increased min PBKDF2-HMAC-SHA512 iterations to 420,000 (max remains 4,294,000,000)
+  - removed option to retrieve random data from https://random.org
+
+Changes:
+
+  - protocol and its description updated to v5
+  - improved enchiper and decipher state tracking
+  - various other doc updates
+  - added a template for cipherdata parsing for macOS hex fiend
+  - package updates
+
 ## 4.2.2 (2025-06-10)
 
 Changes:

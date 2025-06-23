@@ -22,11 +22,9 @@ SOFTWARE. */
 import {
    Component,
    Renderer2,
-   Inject,
    ViewChild,
    ElementRef,
    OnInit, AfterViewInit,
-   PLATFORM_ID,
    OnDestroy,
    ChangeDetectorRef,
    HostListener,
@@ -642,9 +640,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          // Need to slice because modes length is the max number of modes
          // that have been set, which may be larger than the current # of loops
          algs: this.options.algorithms,
-         ic: this.options.icount,
-         trueRand: this.options.trueRand,
-         fallbackRand: this.options.pseudoRand
+         ic: this.options.icount
       };
 
       return this.cipherSvc.encryptStream(

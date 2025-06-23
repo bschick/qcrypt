@@ -12,7 +12,6 @@ I looked for another tool that was convenient, trustworthy, and strong (in that 
  - **Block Encryption:** AES-256 (max for subtle crypto)
  - **Modes of Operation:** GCM, CBC, or CTR with optional HMAC-SHA256
  - **Encrypt-then-MAC:** I convinced myself it doesn't matter in this context, but stayed with the [best practice][1]
- - **Random data:** Perhaps a gimmick, but optionally from random.org or local pseudorandom
 
 Is that sound?
 
@@ -62,7 +61,6 @@ I am working on a tool that uses password derived keys for AES and a selectable 
 **Agents**<br>
 $A$ - Alice<br>
 $S$ - Browser with SubtleCrypto API<br>
-$R$ - https://www.random.org/cgi-bin/randbyte?nbytes=32<br>
 $D$ - Insecure persistent storage system<br>
 
 **Browser Functions**<br>
@@ -81,8 +79,8 @@ $b$ - Valid or invalid HMAC tag<br>
 $i$ - PBKDF2 iteration count (minimum 800,000)<br>
 $o$ - Block cipher mode of operation (GCM, CBC, CTR)<br>
 $r$ - 256 bits of true or pseudo random data<br>
-$n_{IV}$ - 128 bit true or pseudo random initialization vector<br>
-$n_S$ - 128 bit true or pseudo random salt<br>
+$n_{IV}$ - 128 bit pseudo random initialization vector<br>
+$n_S$ - 128 bit pseudo random salt<br>
 $d$ - 512 bits of derived key material<br>
 $k_C$ - 256 bit cipher key<br>
 $k_S$ - 256 bit signing key<br>
@@ -125,7 +123,6 @@ S \rightarrow A : b, m\textrm{ if }b$
 <b>Agents</b><br/>
 <img src="https://math.vercel.app/?inline=A\textrm{ - Alice}" /><br/>
 <img src="https://math.vercel.app/?inline=S\textrm{ - Browser with SubtleCrypto API}" /><br/>
-<img src="https://math.vercel.app/?inline=R\textrm{ - https://www.random.org/cgi-bin/randbyte?nbytes=32}" /><br/>
 <img src="https://math.vercel.app/?inline=D\textrm{ - Insecure persistent storage system}" /><br/>
 
 <b>Browser Functions</b><br/>
@@ -143,9 +140,9 @@ S \rightarrow A : b, m\textrm{ if }b$
 <img src="https://math.vercel.app/?inline=k_C\textrm{ - 256 bit cipher key}" /><br/>
 <img src="https://math.vercel.app/?inline=K_S\textrm{ - 256 bit signing key}" /><br/>
 <img src="https://math.vercel.app/?inline=o\textrm{ - Block cipher mode of operation [GCM, CBC, CTR]}" /><br/>
-<img src="https://math.vercel.app/?inline=r\textrm{ - 256 bits of true or pseudo random data}" /><br/>
-<img src="https://math.vercel.app/?inline=n_{IV}\textrm{ - 128 bit true or pseudo random initialization vector}" /><br/>
-<img src="https://math.vercel.app/?inline=n_S\textrm{ - 128 bit true or pseudo random salt}" /><br/>
+<img src="https://math.vercel.app/?inline=r\textrm{ - 256 bits of pseudo random data}" /><br/>
+<img src="https://math.vercel.app/?inline=n_{IV}\textrm{ - 128 bits of pseudo random initialization vector}" /><br/>
+<img src="https://math.vercel.app/?inline=n_S\textrm{ - 128 bits of pseudo random salt}" /><br/>
 <img src="https://math.vercel.app/?inline=c\textrm{ - Encrypted text}" /><br/>
 <img src="https://math.vercel.app/?inline=t\textrm{ - 256 bit HMAC tag}" /><br/>
 <img src="https://math.vercel.app/?inline=b\textrm{ - Valid or invalid HMAC tag}" /><br/>

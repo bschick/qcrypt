@@ -38,8 +38,6 @@ export {CipherDataInfo, PWDProvider};
 export type EContext = {
    readonly algs: string[];
    readonly ic: number;
-   readonly trueRand: boolean;
-   readonly fallbackRand: boolean;
 };
 
 
@@ -80,9 +78,6 @@ async function _encryptStreamImpl(
    }
    if (econtext.ic < cc.ICOUNT_MIN || econtext.ic > cc.ICOUNT_MAX) {
       throw new Error('Invalid ic of: ' + econtext.ic);
-   }
-   if (!econtext.trueRand && !econtext.fallbackRand) {
-      throw new Error('Either trueRand or fallbackRand must be true');
    }
    if (userCred.byteLength != cc.USERCRED_BYTES) {
       throw new Error('Invalid userCred length of: ' + userCred.byteLength);

@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
 import * as cc from './cipher.consts';
-import { Random48, BYOBStreamReader, readStreamAll } from './utils';
+import { getRandom48, BYOBStreamReader, readStreamAll } from './utils';
 import { Ciphers, Encipher, Decipher, EncipherV5, EParams, CipherDataBlock } from './ciphers';
 
 // Faster than .toEqual, resulting in few timeouts
@@ -121,7 +121,6 @@ function streamFromCipherBlock(
 describe("Key generation", function () {
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      Encipher.testingFlag = true;
    });
 
    it("successful and not equivalent key generation", async function () {
@@ -131,8 +130,7 @@ describe("Key generation", function () {
          const ic = cc.ICOUNT_MIN;
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const random48 = new Random48(true);
-         const randomArray = await random48.getRandomArray(false, true);
+         const randomArray = await getRandom48();
          const slt = randomArray.slice(0, cc.SLT_BYTES);
 
          const ek = await Ciphers._genCipherKey(alg, ic, pwd, userCred, slt);
@@ -209,7 +207,6 @@ describe("Key generation", function () {
 describe("Encryption and decryption", function () {
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      Encipher.testingFlag = true;
    });
 
    async function signAndRepack(
@@ -272,8 +269,6 @@ describe("Encryption and decryption", function () {
          const eparams: EParams = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true,
             lp: 1,
             lpEnd: 1
          };
@@ -362,8 +357,6 @@ describe("Encryption and decryption", function () {
          const eparams: EParams = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true,
             lp: 1,
             lpEnd: 1
          };
@@ -419,8 +412,6 @@ describe("Encryption and decryption", function () {
          const eparams: EParams = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true,
             lp: 1,
             lpEnd: 1
          };
@@ -755,7 +746,6 @@ describe("Encryption and decryption", function () {
 describe("Detect changed cipher data", function () {
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      Encipher.testingFlag = true;
    });
 
    it("detect changed headerData", async function () {
@@ -769,8 +759,6 @@ describe("Detect changed cipher data", function () {
          const eparams: EParams = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true,
             lp: 1,
             lpEnd: 1
          };
@@ -841,8 +829,6 @@ describe("Detect changed cipher data", function () {
          const eparams: EParams = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true,
             lp: 1,
             lpEnd: 1
          };
@@ -917,8 +903,6 @@ describe("Detect changed cipher data", function () {
          const eparams: EParams = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true,
             lp: 1,
             lpEnd: 1
          };
@@ -960,8 +944,6 @@ describe("Detect changed cipher data", function () {
          const eparams: EParams = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true,
             lp: 1,
             lpEnd: 1
          };
@@ -1014,8 +996,6 @@ describe("Detect changed cipher data", function () {
          const eparams: EParams = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true,
             lp: 1,
             lpEnd: 1
          };
@@ -1067,8 +1047,6 @@ describe("Detect changed cipher data", function () {
          const eparams: EParams = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true,
             lp: 1,
             lpEnd: 1
          };
@@ -1113,7 +1091,6 @@ describe("Detect changed cipher data", function () {
 describe("Detect block order changes", function () {
    beforeEach(() => {
       TestBed.configureTestingModule({});
-      Encipher.testingFlag = true;
    });
 
    const pwd = 'a not good pwd';
@@ -1127,8 +1104,6 @@ describe("Detect block order changes", function () {
          const eparams: EParams = {
             alg: alg,
             ic: cc.ICOUNT_MIN,
-            trueRand: false,
-            fallbackRand: true,
             lp: 1,
             lpEnd: 1
          };

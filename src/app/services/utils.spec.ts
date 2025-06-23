@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import {
-   Random48,
+   getRandom48,
    numToBytes,
    bytesToNum,
    base64ToBytes,
@@ -92,28 +92,15 @@ describe("Base64 encode decode", function () {
    });
 });
 
-describe("Random48 tests", function () {
-
-   // Removed by default to avoid spamming random.org
-/*   it("true random", async function () {
-      let rand = new Random48(false);
-      const r1 = await rand.getRandomArray(true, false);
-      const r2 = await rand.getRandomArray(true, false);
-
-      expect(r1.byteLength).toBe(48);
-      expect(r2.byteLength).toBe(48);
-      expect(isEqualArray(r1, r2)).toBeFalse();
-   });*/
+describe("getRandom48 tests", function () {
 
    it("pseudo random", async function () {
-      let rand = new Random48(true);
-      const r1 = await rand.getRandomArray(false, true);
-      const r2 = await rand.getRandomArray(false, true);
+      const r1 = await getRandom48();
+      const r2 = await getRandom48();
 
       expect(r1.byteLength).toBe(48);
       expect(r2.byteLength).toBe(48);
       expect(isEqualArray(r1, r2)).toBeFalse();
-      await expectAsync(rand.getRandomArray(false, false)).toBeRejectedWithError(Error);
    });
 });
 

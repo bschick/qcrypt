@@ -40,6 +40,22 @@ export class Protocol4Component {
    }
 }
 
+@Component({
+    selector: 'app-protocol5',
+    imports: [MatTooltipModule, RouterLink, CopyrightComponent],
+    templateUrl: './protocol5.component.html',
+    styleUrl: './protocol.component.scss'
+})
+export class Protocol5Component {
+
+   constructor(private dialog: MatDialog){
+   }
+
+   openFlowImage(flowImage:string) {
+      this.dialog.open(FlowDialog, { data: flowImage });
+   }
+}
+
 
 @Component({
     selector: 'flow-dialog',
