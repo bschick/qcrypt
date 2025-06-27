@@ -19,16 +19,10 @@ export type RegistrationInfo = {
    userCred: string;
    userId: string;
    userName: string;
+   recoveryId: string;
    lightIcon: string;
    darkIcon: string;
    description: string;
-};
-
-export type AuthenticationInfo = {
-   verified: boolean;
-   userCred: string;
-   userId: string;
-   userName: string;
 };
 
 export type AuthenticatorInfo = {
@@ -37,6 +31,15 @@ export type AuthenticatorInfo = {
    lightIcon: string;
    darkIcon: string;
    name: string;
+};
+
+export type UserInfo = {
+   verified: boolean;
+   userCred: string;
+   userId: string;
+   userName: string;
+   recoveryId: string;
+   authenticators: AuthenticatorInfo[];
 };
 
 export type SenderLinkInfo = {
@@ -77,6 +80,7 @@ export class AuthenticatorService {
    private _userName: string | null = null;
    private _userId: string | null = null;
    private _pkId: string | null = null;
+   private _recoveryId: string = '';
    private _subject = new Subject<AuthEventData>();
    private _intervalId: number = 0;
    private _expiration!: DateTime;
@@ -89,7 +93,14 @@ export class AuthenticatorService {
          if (this._userCred) {
             const exp = sessionStorage.getItem(this._userId + 'expiration');
             const pkId = sessionStorage.getItem(this._userId + 'pkid');
-            this.setActiveUser(this._userId, this._userName!, this._userCred, pkId!);
+            const recoveryId = sessionStorage.getItem(this._userId + 'recoveryid') || '';
+            this.setActiveUser(
+               this._userId,
+               this._userName!,
+               this._userCred,
+               recoveryId,
+               pkId!
+            );
             // replace the default expiration (set indirectly by setActiveUser)
             // with the save value if present
             if (exp) {
@@ -102,7 +113,7 @@ export class AuthenticatorService {
       }
    }
 
-   public passKeys = signal<AuthenticatorInfo[]>([]);
+   public userInfo = signal<UserInfo | undefined>(undefined);
    public senderLinks = signal<SenderLinkInfo[]>([]);
 
    get userCred(): string | null {
@@ -115,6 +126,10 @@ export class AuthenticatorService {
 
    get userId(): string | null {
       return this._userId;
+   }
+
+   get recoveryId(): string {
+      return this._recoveryId;
    }
 
    get pkId(): string | null {
@@ -199,7 +214,13 @@ export class AuthenticatorService {
       localStorage.setItem('username', this._userName);
    }
 
-   private setActiveUser(userId: string, userName: string, userCred: string, pkId: string) {
+   private setActiveUser(
+      userId: string,
+      userName: string,
+      userCred: string,
+      recoveryId: string,
+      pkId: string
+   ) {
       if (!userCred) {
          throw new Error('missing userCred');
       }
@@ -207,17 +228,20 @@ export class AuthenticatorService {
 
       this._userCred = userCred;
       this._pkId = pkId;
+      this._recoveryId = recoveryId;
+
       // Include userId in key in case there are multiple tabs open to
       // different users and this one is reloaded. This prevents
       // mixing of _userId and _userCred from different accounts
       sessionStorage.setItem(this._userId + 'usercred', this._userCred);
       sessionStorage.setItem(this._userId + 'pkid', this._pkId);
+      sessionStorage.setItem(this._userId + 'recoveryid', this._recoveryId);
 
-      this.refreshPasskeys();
-      this.refreshSenderLinks();
-
-      this.emit(this.captureEventData(AuthEvent.Login));
-      this.activity();
+      this.refreshUserInfo().then( () => {
+//      this.refreshSenderLinks();
+         this.emit(this.captureEventData(AuthEvent.Login));
+         this.activity();
+      });
    }
 
    activity() {
@@ -271,7 +295,8 @@ export class AuthenticatorService {
          sessionStorage.clear();
          this._userCred = null;
          this._pkId = null;
-         this.passKeys.set([]);
+         this._recoveryId = '';
+         this.userInfo.set(undefined);
          this.emit(eventData);
       }
    }
@@ -370,7 +395,7 @@ export class AuthenticatorService {
 
       const delPasskeyInfo = await delPasskeyResp.json() as DeleteInfo;
 
-      // User is gone... so forgeeet about it
+      // If user was also deleted... so forgeeet about it
       if (delPasskeyInfo.userId) {
          this.forgetUserInfo();
       }
@@ -425,14 +450,14 @@ export class AuthenticatorService {
       return links;
    }
 
-   async refreshPasskeys(): Promise<AuthenticatorInfo[]> {
+   async refreshUserInfo(): Promise<UserInfo> {
       if (!this.isAuthenticated()) {
          throw new Error('not active user');
       }
 
-      const getAuthsUrl = new URL(`authenticators?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
+      const getAuthUrl = new URL(`userinfo?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
       try {
-         var getAuthsResp = await fetch(getAuthsUrl, {
+         var getAuthResp = await fetch(getAuthUrl, {
             method: 'GET',
             mode: 'cors',
             cache: 'no-store',
@@ -442,18 +467,23 @@ export class AuthenticatorService {
          throw new Error('authenticators fetch error');
       }
 
-      if (!getAuthsResp.ok) {
-         throw new Error('retrieving passkeys failed: ' + await getAuthsResp.text());
+      if (!getAuthResp.ok) {
+         throw new Error('retrieving userinfo failed: ' + await getAuthResp.text());
       }
 
-      const authsInfo = await getAuthsResp.json() as AuthenticatorInfo[];
+      const userInfo = await getAuthResp.json() as UserInfo;
+      this._userName = userInfo.userName;
+      this._recoveryId = userInfo.recoveryId;
 
-      this.passKeys.set(authsInfo);
-      return authsInfo;
+      this.storeUserInfo(userInfo.userId, userInfo.userName);
+      sessionStorage.setItem(userInfo.userId + 'recoveryid', userInfo.recoveryId);
+      this.userInfo.set(userInfo);
+
+      return userInfo;
    }
 
    // Uses the current stored userId
-   async defaultLogin(): Promise<AuthenticationInfo> {
+   async defaultLogin(): Promise<UserInfo> {
       const [userId] = this.getUserInfo();
       if (!userId) {
          throw new Error('missing local userId, try findLogin');
@@ -463,7 +493,7 @@ export class AuthenticatorService {
    }
 
    // If no userId is provided, will present all Passkeys for this domain
-   async findLogin(userId: string | null = null): Promise<AuthenticationInfo> {
+   async findLogin(userId: string | null = null): Promise<UserInfo> {
 
       let optUrl;
       if (!userId) {
@@ -538,14 +568,21 @@ export class AuthenticatorService {
          throw new Error('authentication failed: ' + await verificationResp.text());
       }
 
-      const authInfo = await verificationResp.json() as AuthenticationInfo;
+      const userInfo = await verificationResp.json() as UserInfo;
 
-      if (!authInfo || !authInfo.verified) {
+      if (!userInfo || !userInfo.verified) {
          throw new Error('authentication failed');
       }
 
-      this.setActiveUser(authInfo.userId, authInfo.userName, authInfo.userCred, startAuth.id);
-      return authInfo;
+      this.setActiveUser(
+         userInfo.userId,
+         userInfo.userName,
+         userInfo.userCred,
+         userInfo.recoveryId,
+         startAuth.id
+      );
+
+      return userInfo;
    }
 
    async recover(userId: string, userCred: string): Promise<RegistrationInfo> {
@@ -610,7 +647,7 @@ export class AuthenticatorService {
       }
 
       const regInfo = this.finishRegistration(optionsResp, false);
-      this.refreshPasskeys();
+      this.refreshUserInfo();
       return regInfo;
    }
 
@@ -679,7 +716,13 @@ export class AuthenticatorService {
       }
 
       if (setActiveUser) {
-         this.setActiveUser(registrationInfo.userId, registrationInfo.userName, registrationInfo.userCred, startReg.id);
+         this.setActiveUser(
+            registrationInfo.userId,
+            registrationInfo.userName,
+            registrationInfo.userCred,
+            registrationInfo.recoveryId,
+            startReg.id
+         );
       }
       return registrationInfo;
    }
