@@ -247,7 +247,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.signinDialogRef.afterClosed().subscribe(() => {
             this.signinDialogRef = undefined;
             if (this.authSvc.isAuthenticated()) {
-               this.authSvc.refreshPasskeys().catch((err) => {
+               this.authSvc.refreshUserInfo().catch((err) => {
                   console.error(err);
                });
             }

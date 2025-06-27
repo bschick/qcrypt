@@ -9,7 +9,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatInputModule } from '@angular/material/input';
-import { AuthenticatorService, AuthenticatorInfo, AuthEvent } from '../services/authenticator.service';
+import { AuthenticatorService, AuthenticatorInfo, UserInfo, AuthEvent } from '../services/authenticator.service';
 import { EditableComponent } from '../ui/editable/editable.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -17,6 +17,7 @@ import { Router, RouterLink, NavigationStart } from '@angular/router';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { Subscription } from 'rxjs';
+import { MatCardModule } from '@angular/material/card';
 
 @Component({
    selector: 'app-credentials',
@@ -24,13 +25,14 @@ import { Subscription } from 'rxjs';
    styleUrl: './credentials.component.scss',
    imports: [MatDividerModule, MatTableModule,
       MatIconModule, MatButtonModule, MatInputModule, EditableComponent,
-      MatTooltipModule, RouterLink, CommonModule
+      MatTooltipModule, RouterLink, MatCardModule, CommonModule
    ]
 })
 export class CredentialsComponent implements OnInit, OnDestroy {
 
    private authSub!: Subscription;
    private routeSub!: Subscription;
+   public oldRecovery = true;
    public error = '';
    public passKeys: AuthenticatorInfo[] = [];
    public showProgress = false;
@@ -45,12 +47,16 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       private snackBar: MatSnackBar
    ) {
       effect(() => {
-         this.passKeys = this.authSvc.passKeys();
+         const userInfo = this.authSvc.userInfo();
+         this.passKeys = userInfo ? userInfo.authenticators : [];
+         this.oldRecovery = this.authSvc.recoveryId.length > 0 ? false : true;
       });
    }
 
    ngOnInit(): void {
-      this.passKeys = this.authSvc.passKeys();
+      const userInfo = this.authSvc.userInfo();
+      this.passKeys = userInfo ? userInfo.authenticators : [];
+      this.oldRecovery = this.authSvc.recoveryId.length > 0 ? false : true;
 
       this.routeSub = this.router.events.subscribe((event) => {
          if (event instanceof NavigationStart) {
@@ -82,7 +88,10 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    onClickDelete(passkey: AuthenticatorInfo) {
       this.error = '';
       let pkState = ConfirmDialog.NONE_PK;
-      if (this.authSvc.passKeys().length == 1) {
+      const userInfo = this.authSvc.userInfo();
+      this.passKeys = userInfo ? userInfo.authenticators : [];
+
+      if (this.passKeys.length == 1) {
          pkState = ConfirmDialog.LAST_PK;
       } else if (this.authSvc.pkId == passkey.credentialId) {
          pkState = ConfirmDialog.ACTIVE_PK;
@@ -139,11 +148,14 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    async refresh(): Promise<void> {
       this.error = '';
       if (this.authSvc.isAuthenticated()) {
-         this.authSvc.refreshPasskeys().catch((err) => {
+         // This runs async handle updates in signal
+         this.authSvc.refreshUserInfo().catch((err) => {
             console.error(err);
          });
       } else {
          this.done.emit(true);
+         this.passKeys = [];
+         this.oldRecovery = false;
       }
    }
 
