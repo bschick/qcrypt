@@ -15,18 +15,20 @@ import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { AuthEvent, AuthenticatorService } from '../services/authenticator.service';
 import { Subscription } from 'rxjs';
+import { MatCardModule } from '@angular/material/card';
 
 @Component({
-    selector: 'app-show-recovery',
-    templateUrl: './showrecovery.component.html',
-    styleUrl: './showrecovery.component.scss',
-    imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink,
-        MatInputModule, MatFormFieldModule, CommonModule,
-    ]
+   selector: 'app-show-recovery',
+   templateUrl: './showrecovery.component.html',
+   styleUrl: './showrecovery.component.scss',
+   imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink,
+      MatInputModule, MatFormFieldModule, MatCardModule, CommonModule
+   ]
 })
 export class ShowRecoveryComponent implements OnInit, OnDestroy, AfterViewInit {
 
-   public recoveryLink = '';
+   public recoveryWords = '';
+   public oldRecovery = false;
    private authSub!: Subscription;
 
    constructor(
@@ -38,7 +40,8 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy, AfterViewInit {
 
    ngOnInit(): void {
       if (this.authSvc.isAuthenticated()) {
-         this.recoveryLink = this.authSvc.getRecoveryLink();
+         this.recoveryWords = this.authSvc.getRecoveryWords();
+         this.oldRecovery =  this.authSvc.recoveryId.length > 0 ? false : true;
       }
       this.authSub = this.authSvc.on(
          [AuthEvent.Logout],

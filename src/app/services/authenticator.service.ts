@@ -8,11 +8,14 @@ import {
 import { Subject, Subscription, filter } from 'rxjs';
 import { DateTime } from 'luxon';
 import { base64ToBytes, bytesToBase64 } from './utils';
+import { entropyToMnemonic } from '@scure/bip39';
+import { wordlist } from '@scure/bip39/wordlists/english';
 
 const baseUrl = environment.domain;
 
 // 6 hours in seconds
 export const INACTIVITY_TIMEOUT = 60 * 60 * 6;
+
 
 export type RegistrationInfo = {
    verified: boolean;
@@ -152,15 +155,20 @@ export class AuthenticatorService {
       return [userId, userName];
    }
 
-   getRecoveryLink(): string {
+   getRecoveryWords(): string {
       if (!this.isAuthenticated()) {
          throw new Error('No active user');
       }
-      return new URL(
-         window.location.origin + '/recovery' +
-         '?userid=' + this.userId +
-         '&usercred=' + this.userCred
-      ).toString();
+
+      const recoveryBytes = base64ToBytes(this._recoveryId);
+      const userIdBytes = base64ToBytes(this._userId!);
+
+      let recoveryId = new Uint8Array(recoveryBytes.byteLength + userIdBytes.byteLength);
+      recoveryId.set(recoveryBytes, 0);
+      recoveryId.set(userIdBytes, recoveryBytes.byteLength );
+
+      const recoveryWords = entropyToMnemonic(recoveryId, wordlist);
+      return recoveryWords;
    }
 
    on(events: AuthEvent[], action: (data: AuthEventData) => void): Subscription {
