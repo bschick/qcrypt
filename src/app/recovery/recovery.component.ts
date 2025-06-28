@@ -12,7 +12,7 @@ import {MatCardModule} from '@angular/material/card';
     templateUrl: './recovery.component.html',
     styleUrl: './recovery.component.scss',
     imports: [MatIconModule, MatButtonModule, RouterLink, CommonModule,
-        MatProgressSpinnerModule, MatCardModule,
+        MatProgressSpinnerModule, MatCardModule
     ]
 })
 export class RecoveryComponent implements OnInit {

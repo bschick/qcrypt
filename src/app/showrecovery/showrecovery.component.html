@@ -1,27 +1,40 @@
 <div class="container">
   <div class="content">
-    <h1>Save Your Recovery Link</h1>
+    <h1>Account Backup and Recovery</h1>
     <p>
-      You must <b>save this recovery link securely</b> and
-      separately from your passkeys if possible. If your Quick Crypt passkeys are
-      lost or damaged, this link is the only way to restore your ability
-      to decrypt data. You can also use this link to decrypt data with
-      the Quick Crypt command-line tool.
+      You must <b>save the word pattern below</b> to recovery your account
+      if you lose or damage your Quick Crypt passkeys. All thirty two words must be saved
+      in the order shownn. If you lose both your passkeys and the recovery words below,
+      you will not be able to decrypt your data.
     </p>
     <p>
-      <b>Keep this recovery link private</b>. While another
-      person with this link cannot decrypt your data without the passwords
-      you use during encryption, they could delete your Quick Crypt account
-      making it less convenient to decrypt your data.
-      So be sure to keep this link private.
+      <b>Store the word pattern in a durable secure location</b>. While another
+      person who gained access to you recovery words cannot decrypt your data, they could
+      delete your Quick Crypt account. To prevent online theft of your recovery words, you
+      may want to print a physical copy for offline storage in a lockbox or safe.
     </p>
+    @if(oldRecovery) {
+      <mat-card appearance="outlined">
+        <mat-card-header>
+          <mat-card-title>⚠️ Attention</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p>
+            Your account is using Quick Crypt's old backup and recovery mechanism. Please
+            copy the recovery words below and store them in a durable secure location.
+            Your original recovery link is no longer needed and should be deleted.
+          </p>
+        </mat-card-content>
+      </mat-card>
+    }
     <div class="control-host">
       <mat-form-field class="recovery">
-        <mat-label>Recovery Link</mat-label>
-        <input #linkInput id="linkInput" matInput autofocus type="text" [value]="recoveryLink" readonly="true"
-          name="recovery" (focus)="linkInput.select(); linkInput.scrollLeft=0;" />
+        <mat-label>Recovery Words</mat-label>
+        <textarea #wordsArea id="recoveryWords" matInput autofocus type="text" [value]="recoveryWords" readonly="true"
+          name="recovery" (focus)="wordsArea.select(); wordsArea.scrollLeft=0;" matInput></textarea>
+
         <mat-icon matSuffix aria-label="Copy" (click)="toastMessage('Link Copied to Clipboard')"
-          [cdkCopyToClipboard]="recoveryLink">
+          [cdkCopyToClipboard]="wordsArea.value">
           content_copy
         </mat-icon>
       </mat-form-field>
