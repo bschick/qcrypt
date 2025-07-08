@@ -372,7 +372,7 @@ export class AuthenticatorService {
          throw new Error('missing description');
       }
       if (description.length < 6 || description.length > 42) {
-         throw new Error('description must more than 5 and less than 43 character');
+         throw new Error('description must be 6 to 42 characters');
       }
       if (!credentialId) {
          throw new Error('invalid credentialId');
@@ -411,7 +411,7 @@ export class AuthenticatorService {
          throw new Error('missing description');
       }
       if (userName.length < 6 || userName.length > 31) {
-         throw new Error('user name must more than 5 and less than 32 character');
+         throw new Error('user name must be 6 to 31 characters');
       }
       if (!this.isAuthenticated()) {
          throw new Error('not active user');

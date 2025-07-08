@@ -129,15 +129,15 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       }
    }
 
-   async onClickFind() {
-      try {
-         this.error = '';
-         await this.authSvc.findLogin();
-      } catch (err) {
-         console.error(err);
-         this.error = 'Passkey not found, try again';
-      }
-   }
+   // async onClickFind() {
+   //    try {
+   //       this.error = '';
+   //       await this.authSvc.findLogin();
+   //    } catch (err) {
+   //       console.error(err);
+   //       this.error = 'Passkey not found, try again';
+   //    }
+   // }
 
    isCurrentPk(credentialId: string): boolean {
       return this.authSvc.isCurrentPk(credentialId);
@@ -163,6 +163,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
          this.toastMessage('User name updated');
       } catch (err) {
          console.error(err);
+         this.error = 'Name change failed, must be 6 to 31 characters';
          // failed, put back the old value by setting [value] again...
          component.value = this.userName!;
       }
@@ -181,6 +182,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
          this.toastMessage('Passkey description updated');
       } catch (err) {
          console.error(err);
+         this.error = 'Description change failed, must be 6 to 42 characters';
          //failed, put back the old value by setting [value] again...
          component.value = passkey.description;
       }
