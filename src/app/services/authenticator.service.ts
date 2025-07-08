@@ -15,18 +15,8 @@ const baseUrl = environment.domain;
 
 // 6 hours in seconds
 export const INACTIVITY_TIMEOUT = 60 * 60 * 6;
+export const RECOVERID_BYTES = 16;
 
-
-export type RegistrationInfo = {
-   verified: boolean;
-   userCred: string;
-   userId: string;
-   userName: string;
-   recoveryId: string;
-   lightIcon: string;
-   darkIcon: string;
-   description: string;
-};
 
 export type AuthenticatorInfo = {
    credentialId: string;
@@ -37,12 +27,23 @@ export type AuthenticatorInfo = {
 };
 
 export type UserInfo = {
-   verified: boolean;
-   userCred: string;
    userId: string;
    userName: string;
-   recoveryId: string;
+   hasRecoveryId: boolean;
    authenticators: AuthenticatorInfo[];
+};
+
+type ServerUserInfo = {
+   verified: boolean;
+   userCred?: string;
+   userId?: string;
+   userName?: string;
+   hasRecoveryId?: boolean;
+   authenticators?: AuthenticatorInfo[];
+};
+
+type RecoveryInfo = {
+   recoveryId: string;
 };
 
 export type SenderLinkInfo = {
@@ -55,11 +56,6 @@ export type SenderLinkInfo = {
    receive: boolean;
 };
 
-export type DeleteInfo = {
-   credentialId: string;
-   userId?: string;
-};
-
 export enum AuthEvent {
    Login,
    Logout,
@@ -70,7 +66,6 @@ export type AuthEventData = {
    readonly event: AuthEvent,
    readonly userId: string | null,
    readonly userName: string | null,
-   readonly userCred: string | null
 };
 
 
@@ -79,96 +74,161 @@ export type AuthEventData = {
 })
 export class AuthenticatorService {
 
-   private _userCred: string | null = null;
-   private _userName: string | null = null;
-   private _userId: string | null = null;
-   private _pkId: string | null = null;
-   private _recoveryId: string = '';
-   private _subject = new Subject<AuthEventData>();
-   private _intervalId: number = 0;
-   private _expiration!: DateTime;
-
-   constructor() {
-      this._userId = localStorage.getItem('userid');
-      this._userName = localStorage.getItem('username');
-      if (this._userId) {
-         this._userCred = sessionStorage.getItem(this._userId + 'usercred');
-         if (this._userCred) {
-            const exp = sessionStorage.getItem(this._userId + 'expiration');
-            const pkId = sessionStorage.getItem(this._userId + 'pkid');
-            const recoveryId = sessionStorage.getItem(this._userId + 'recoveryid') || '';
-            this.setActiveUser(
-               this._userId,
-               this._userName!,
-               this._userCred,
-               recoveryId,
-               pkId!
-            );
-            // replace the default expiration (set indirectly by setActiveUser)
-            // with the save value if present
-            if (exp) {
-               this._expiration = DateTime.fromISO(exp);
-               sessionStorage.setItem(this._userId + 'expiration', this._expiration.toISO()!);
-               // don't wait 5 minutes to check
-               this.timerTick();
-            }
-         }
-      }
-   }
-
    public userInfo = signal<UserInfo | undefined>(undefined);
    public senderLinks = signal<SenderLinkInfo[]>([]);
 
-   get userCred(): string | null {
-      return this._userCred;
+   private _subject = new Subject<AuthEventData>();
+   private _intervalId: number = 0;
+   private _expiration = DateTime.fromISO('2017-05-15');
+   public ready: Promise<void>;
+
+   constructor() {
+      const [userId, userName] = this.loadKnownUser();
+
+      this.ready = new Promise<void>( (resolve) => {
+         let refreshing = false;
+         if (userId && userName) {
+            const userCred = sessionStorage.getItem(userId + 'usercred');
+            if (userCred) {
+               const exp = sessionStorage.getItem(userId + 'expiration');
+               if (exp) {
+                  this._expiration = DateTime.fromISO(exp);
+               }
+
+               if (DateTime.now() > this._expiration) {
+                  this.logout();
+               } else {
+                  const pkId = sessionStorage.getItem(userId + 'pkid') ?? '';
+                  // just enough to boostrap, then call refresh
+                  this.updateLoggedInUser({
+                        verified: true,
+                        userId: userId,
+                        userName: userName,
+                        userCred: userCred,
+                     },
+                     pkId
+                  );
+                  refreshing = true;
+                  this.refreshUserInfo().then(
+                     () => this.emit(this.captureEventData(AuthEvent.Login))
+                  ).finally(
+                     () => resolve()
+                  );
+               }
+            }
+         }
+
+         if (!refreshing) {
+            resolve();
+         }
+      });
    }
 
-   get userName(): string | null {
-      return this._userName;
+   public isAuthenticated(): boolean {
+      const userInfo = this.userInfo();
+      if (!userInfo) {
+         return false;
+      }
+      const userCred = sessionStorage.getItem(userInfo.userId + 'usercred');
+      if (!userCred) {
+         return false;
+      }
+      const pkId = sessionStorage.getItem(userInfo.userId + 'pkid');
+      if (!pkId) {
+         return false;
+      }
+      return true;
    }
 
-   get userId(): string | null {
-      return this._userId;
+   public get userName(): string {
+      return this.getUserInfo().userName;
    }
 
-   get recoveryId(): string {
-      return this._recoveryId;
+   public get userId(): string {
+      return this.getUserInfo().userId;
    }
 
-   get pkId(): string | null {
-      return this._pkId;
+   public hasRecoveryId(): boolean {
+      return this.getUserInfo().hasRecoveryId;
    }
 
-   isAuthenticated(): boolean {
-      return this._userCred && this._userId ? true : false;
+   public isCurrentPk(testPK: string): boolean {
+      return testPK === this.pkId;
    }
 
-   isUserKnown(): boolean {
-      const userId = localStorage.getItem('userid');
-      const userName = localStorage.getItem('username');
-      return Boolean(userId && userName);
+   private get pkId(): string {
+      if (!this.isAuthenticated()) {
+         throw new Error('no active user');
+      }
+      return sessionStorage.getItem(this.userId + 'pkid')!;
    }
 
-   getUserInfo(): [string | null, string | null] {
+   public get userCred(): string {
+      if (!this.isAuthenticated()) {
+         throw new Error('no active user');
+      }
+      return sessionStorage.getItem(this.userId + 'usercred')!;
+   }
+
+   public isUserKnown(): boolean {
+      const [userId, userName] = this.loadKnownUser();
+      return userId != null && userName != null;
+   }
+
+   public loadKnownUser(): [string | null, string | null] {
       const userId = localStorage.getItem('userid');
       const userName = localStorage.getItem('username');
       return [userId, userName];
    }
 
-   getRecoveryWords(): string {
+   public getUserInfo(): UserInfo {
       if (!this.isAuthenticated()) {
-         throw new Error('No active user');
+         throw new Error('no active user');
       }
 
-      const recoveryBytes = base64ToBytes(this._recoveryId);
-      const userIdBytes = base64ToBytes(this._userId!);
+      return this.userInfo()!;
+   }
+
+   public async getRecoveryWords(): Promise<string> {
+      await this.ready;
+
+      if (!this.isAuthenticated()) {
+         throw new Error('no active user');
+      }
+
+      const getRecover = new URL(`recovery?userid=${this.userId}&usercred=${this.userCred}`, baseUrl);
+      try {
+         var getRecoverResp = await fetch(getRecover, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-store',
+         });
+      } catch (err) {
+         console.error(err);
+         throw new Error('recover fetch error');
+      }
+
+      if (!getRecoverResp.ok) {
+         throw new Error('retrieving recover id: ' + await getRecoverResp.text());
+      }
+
+      const recoveryInfo = await getRecoverResp.json() as RecoveryInfo;
+      if (!recoveryInfo) {
+         throw new Error('missing recovery info');
+      }
+
+      const recoveryBytes = base64ToBytes(recoveryInfo.recoveryId);
+      if(recoveryBytes.byteLength != RECOVERID_BYTES) {
+         throw new Error('invalid recovery id length');
+      }
+
+      const userIdBytes = base64ToBytes(this.userId);
 
       let recoveryId = new Uint8Array(recoveryBytes.byteLength + userIdBytes.byteLength);
       recoveryId.set(recoveryBytes, 0);
-      recoveryId.set(userIdBytes, recoveryBytes.byteLength );
+      recoveryId.set(userIdBytes, recoveryBytes.byteLength);
 
-      const recoveryWords = entropyToMnemonic(recoveryId, wordlist);
-      return recoveryWords;
+      return entropyToMnemonic(recoveryId, wordlist);
    }
 
    on(events: AuthEvent[], action: (data: AuthEventData) => void): Subscription {
@@ -179,7 +239,6 @@ export class AuthenticatorService {
 
    lsGet(key: string): string | null {
       if (this.isAuthenticated()) {
-         const [userId] = this.getUserInfo();
          return localStorage.getItem(this.userId + key);
       }
       return null;
@@ -187,24 +246,21 @@ export class AuthenticatorService {
 
    lsSet(key: string, value: string | number | boolean | null) {
       if (value != null && this.isAuthenticated()) {
-         const [userId] = this.getUserInfo();
-         localStorage.setItem(userId + key, value.toString());
+         localStorage.setItem(this.userId + key, value.toString());
       }
    }
 
    lsDel(key: string) {
       if (this.isAuthenticated()) {
-         const [userId] = this.getUserInfo();
-         localStorage.removeItem(userId + key);
+         localStorage.removeItem(this.userId + key);
       }
    }
 
    private captureEventData(event: AuthEvent): AuthEventData {
       return {
          event: event,
-         userId: this._userId,
-         userName: this._userName,
-         userCred: this._userCred
+         userId: this.isAuthenticated() ? this.userId : null,
+         userName: this.isAuthenticated() ? this.userName : null
       };
    }
 
@@ -212,44 +268,50 @@ export class AuthenticatorService {
       this._subject.next(eventData);
    }
 
-   private storeUserInfo(userId: string, userName: string) {
-      if (!userId || !userName) {
-         throw new Error('missing userId or userName');
-      }
-      this._userId = userId;
-      this._userName = userName;
-      localStorage.setItem('userid', this._userId);
-      localStorage.setItem('username', this._userName);
-   }
-
-   private setActiveUser(
-      userId: string,
-      userName: string,
-      userCred: string,
-      recoveryId: string,
+   private updateLoggedInUser(
+      serverUser: ServerUserInfo,
       pkId: string
-   ) {
-      if (!userCred) {
+   ): UserInfo {
+
+      if (!serverUser.verified) {
+         throw new Error('unverified user');
+      }
+     if (!serverUser.userCred) {
          throw new Error('missing userCred');
       }
-      this.storeUserInfo(userId, userName);
+      if (!serverUser.userId || !serverUser.userName) {
+         throw new Error('missing userId or userName');
+      }
 
-      this._userCred = userCred;
-      this._pkId = pkId;
-      this._recoveryId = recoveryId;
+      if (!serverUser.userCred || serverUser.userCred.length == 0) {
+         throw new Error('invalid user credential')
+      }
+      if (!pkId || pkId.length == 0) {
+         throw new Error('invalid passkey id')
+      }
+      if (this.isAuthenticated()) {
+         // must logout before assigning new user
+         if(this.userId != serverUser.userId || this.userCred != serverUser.userCred) {
+            throw new Error('invalid user id or credential');
+         }
+      }
 
-      // Include userId in key in case there are multiple tabs open to
-      // different users and this one is reloaded. This prevents
-      // mixing of _userId and _userCred from different accounts
-      sessionStorage.setItem(this._userId + 'usercred', this._userCred);
-      sessionStorage.setItem(this._userId + 'pkid', this._pkId);
-      sessionStorage.setItem(this._userId + 'recoveryid', this._recoveryId);
+      sessionStorage.setItem(serverUser.userId + 'usercred', serverUser.userCred);
+      sessionStorage.setItem(serverUser.userId + 'pkid', pkId);
 
-      this.refreshUserInfo().then( () => {
-//      this.refreshSenderLinks();
-         this.emit(this.captureEventData(AuthEvent.Login));
-         this.activity();
-      });
+      localStorage.setItem('userid', serverUser.userId);
+      localStorage.setItem('username', serverUser.userName);
+
+      const userInfo: UserInfo = {
+         userId: serverUser.userId!,
+         userName: serverUser.userName!,
+         hasRecoveryId: serverUser.hasRecoveryId!,
+         authenticators: serverUser.authenticators!
+      };
+
+      this.userInfo.set(userInfo);
+      this.activity();
+      return userInfo;
    }
 
    activity() {
@@ -260,7 +322,7 @@ export class AuthenticatorService {
 
       // 6 hours inactivity expritation
       this._expiration = DateTime.now().plus({ seconds: INACTIVITY_TIMEOUT });
-      sessionStorage.setItem(this._userId + 'expiration', this._expiration.toISO()!);
+      sessionStorage.setItem(this.userId + 'expiration', this._expiration.toISO()!);
 
       // Check every 5 minutes
       this._intervalId = window.setInterval(() => this.timerTick(), 1000 * 60 * 5);
@@ -283,33 +345,29 @@ export class AuthenticatorService {
 
    forgetUserInfo() {
       this.logout();
-      if (this._userId) {
-         const eventData = this.captureEventData(AuthEvent.Forget);
-         localStorage.removeItem('username');
-         localStorage.removeItem('userid');
-         this._userId = null;
-         this._userName = null;
-         this.emit(eventData);
-      }
+      const eventData = this.captureEventData(AuthEvent.Forget);
+      localStorage.removeItem('username');
+      localStorage.removeItem('userid');
+      this.emit(eventData);
    }
 
    logout() {
-      if (this._userCred) {
+      if (this.isAuthenticated()) {
          if (this._intervalId) {
             clearInterval(this._intervalId);
             this._intervalId = 0;
          }
          const eventData = this.captureEventData(AuthEvent.Logout);
          sessionStorage.clear();
-         this._userCred = null;
-         this._pkId = null;
-         this._recoveryId = '';
          this.userInfo.set(undefined);
          this.emit(eventData);
       }
    }
 
-   async setPasskeyDescription(credentialId: string, description: string): Promise<string> {
+   async setPasskeyDescription(
+      credentialId: string,
+      description: string
+   ): Promise<UserInfo> {
       if (!description) {
          throw new Error('missing description');
       }
@@ -323,7 +381,7 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const putDescUrl = new URL(`description?credid=${credentialId}&userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
+      const putDescUrl = new URL(`description?credid=${credentialId}&userid=${this.userId}&usercred=${this.userCred!}`, baseUrl);
       try {
          var putDescResp = await fetch(putDescUrl, {
             method: 'PUT',
@@ -340,11 +398,15 @@ export class AuthenticatorService {
          throw new Error('setting description failed: ' + await putDescResp.text());
       }
 
-      const putDescInfo = await putDescResp.json();
-      return putDescInfo.description;
+      const serverUserInfo = await putDescResp.json() as ServerUserInfo;
+      if (!serverUserInfo) {
+         throw new Error('authentication failed');
+      }
+
+      return this.updateLoggedInUser(serverUserInfo, this.pkId);
    }
 
-   async setUserName(userName: string): Promise<string> {
+   async setUserName(userName: string): Promise<UserInfo> {
       if (!userName) {
          throw new Error('missing description');
       }
@@ -355,7 +417,7 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const putUserNameUrl = new URL(`username?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
+      const putUserNameUrl = new URL(`username?userid=${this.userId}&usercred=${this.userCred!}`, baseUrl);
       try {
          var putUserNameResp = await fetch(putUserNameUrl, {
             method: 'PUT',
@@ -372,12 +434,15 @@ export class AuthenticatorService {
          throw new Error('setting user name failed: ' + await putUserNameResp.text());
       }
 
-      const putUserNameInfo = await putUserNameResp.json();
-      this.storeUserInfo(this._userId!, putUserNameInfo.userName);
-      return putUserNameInfo.userName;
+      const serverUserInfo = await putUserNameResp.json() as ServerUserInfo;
+      if (!serverUserInfo) {
+         throw new Error('authentication failed');
+      }
+
+      return this.updateLoggedInUser(serverUserInfo, this.pkId);
    }
 
-   async deletePasskey(credentialId: string): Promise<DeleteInfo> {
+   async deletePasskey(credentialId: string): Promise<number> {
       if (!credentialId) {
          throw new Error('invalid credentialId');
       }
@@ -385,7 +450,7 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const delPasskeyUrl = new URL(`authenticator?credid=${credentialId}&userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
+      const delPasskeyUrl = new URL(`authenticator?credid=${credentialId}&userid=${this.userId}&usercred=${this.userCred!}`, baseUrl);
       try {
          var delPasskeyResp = await fetch(delPasskeyUrl, {
             method: 'DELETE',
@@ -401,39 +466,44 @@ export class AuthenticatorService {
          throw new Error('setting description failed: ' + await delPasskeyResp.text());
       }
 
-      const delPasskeyInfo = await delPasskeyResp.json() as DeleteInfo;
-
-      // If user was also deleted... so forgeeet about it
-      if (delPasskeyInfo.userId) {
-         this.forgetUserInfo();
+      const serverUserInfo = await delPasskeyResp.json() as ServerUserInfo;
+      if (!serverUserInfo) {
+         throw new Error('authentication failed');
       }
 
-      return delPasskeyInfo;
+      // If we have an unverified response, that was the last PK and the user was deleted
+      if (!serverUserInfo.verified) {
+         this.forgetUserInfo();
+         return 0;
+      } else {
+         this.updateLoggedInUser(serverUserInfo, this.pkId);
+         return serverUserInfo.authenticators!.length;
+      }
    }
 
    async refreshSenderLinks(): Promise<SenderLinkInfo[]> {
       if (!this.isAuthenticated()) {
          throw new Error('not active user');
       }
-/*
-      const getAuthsUrl = new URL(`senderlinks?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
-      try {
-         var getAuthsResp = await fetch(getAuthsUrl, {
-            method: 'GET',
-            mode: 'cors',
-            cache: 'no-store',
-         });
-      } catch (err) {
-         console.error(err);
-         throw new Error('senderlinks fetch error');
-      }
+      /*
+            const getAuthsUrl = new URL(`senderlinks?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
+            try {
+               var getAuthsResp = await fetch(getAuthsUrl, {
+                  method: 'GET',
+                  mode: 'cors',
+                  cache: 'no-store',
+               });
+            } catch (err) {
+               console.error(err);
+               throw new Error('senderlinks fetch error');
+            }
 
-      if (!getAuthsResp.ok) {
-         throw new Error('retrieving senderlinks failed: ' + await getAuthsResp.text());
-      }
+            if (!getAuthsResp.ok) {
+               throw new Error('retrieving senderlinks failed: ' + await getAuthsResp.text());
+            }
 
-      const links = await getAuthsResp.json() as SenderLinkInfo[];
-*/
+            const links = await getAuthsResp.json() as SenderLinkInfo[];
+      */
       const links = [
          {
             linkId: '1l23rks34',
@@ -458,14 +528,15 @@ export class AuthenticatorService {
       return links;
    }
 
+
    async refreshUserInfo(): Promise<UserInfo> {
       if (!this.isAuthenticated()) {
          throw new Error('not active user');
       }
 
-      const getAuthUrl = new URL(`userinfo?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
+      const getInfoUrl = new URL(`userinfo?userid=${this.userId}&usercred=${this.userCred}`, baseUrl);
       try {
-         var getAuthResp = await fetch(getAuthUrl, {
+         var getInfoResp = await fetch(getInfoUrl, {
             method: 'GET',
             mode: 'cors',
             cache: 'no-store',
@@ -475,24 +546,22 @@ export class AuthenticatorService {
          throw new Error('authenticators fetch error');
       }
 
-      if (!getAuthResp.ok) {
-         throw new Error('retrieving userinfo failed: ' + await getAuthResp.text());
+      if (!getInfoResp.ok) {
+         throw new Error('retrieving userinfo failed: ' + await getInfoResp.text());
       }
 
-      const userInfo = await getAuthResp.json() as UserInfo;
-      this._userName = userInfo.userName;
-      this._recoveryId = userInfo.recoveryId;
+      const serverUserInfo = await getInfoResp.json() as ServerUserInfo;
 
-      this.storeUserInfo(userInfo.userId, userInfo.userName);
-      sessionStorage.setItem(userInfo.userId + 'recoveryid', userInfo.recoveryId);
-      this.userInfo.set(userInfo);
+      if (!serverUserInfo) {
+         throw new Error('authentication failed');
+      }
 
-      return userInfo;
+      return this.updateLoggedInUser(serverUserInfo, this.pkId);
    }
 
    // Uses the current stored userId
    async defaultLogin(): Promise<UserInfo> {
-      const [userId] = this.getUserInfo();
+      const [userId] = this.loadKnownUser();
       if (!userId) {
          throw new Error('missing local userId, try findLogin');
       }
@@ -576,32 +645,26 @@ export class AuthenticatorService {
          throw new Error('authentication failed: ' + await verificationResp.text());
       }
 
-      const userInfo = await verificationResp.json() as UserInfo;
-
-      if (!userInfo || !userInfo.verified) {
+      const serverUserInfo = await verificationResp.json() as ServerUserInfo;
+      if (!serverUserInfo) {
          throw new Error('authentication failed');
       }
 
-      this.setActiveUser(
-         userInfo.userId,
-         userInfo.userName,
-         userInfo.userCred,
-         userInfo.recoveryId,
-         startAuth.id
-      );
+      const userInfo = this.updateLoggedInUser(serverUserInfo, startAuth.id);
+      this.emit(this.captureEventData(AuthEvent.Login));
 
       return userInfo;
    }
 
-   async recover(userId: string, userCred: string): Promise<RegistrationInfo> {
+   async recover(userId: string, userCred: string): Promise<UserInfo> {
 
       if (!userId || !userCred) {
          throw new Error('missing userid or usercred');
       }
 
-      const recoverUrl = new URL(`recover?userid=${userId}&usercred=${userCred}`, baseUrl);
+      const recoveryUrl = new URL(`recovery?userid=${userId}&usercred=${userCred}`, baseUrl);
       try {
-         var recoverResp = await fetch(recoverUrl, {
+         var recoveryResp = await fetch(recoveryUrl, {
             method: 'POST',
             mode: 'cors',
             cache: 'no-store'
@@ -611,11 +674,14 @@ export class AuthenticatorService {
          throw new Error('recover fetch error');
       }
 
-      return this.finishRegistration(recoverResp, true);
+      const userInfo = this.finishRegistration(recoveryResp);
+      this.emit(this.captureEventData(AuthEvent.Login));
+
+      return userInfo;
    }
 
    // Creates new user and first passkey
-   async newUser(userName: string): Promise<RegistrationInfo> {
+   async newUser(userName: string): Promise<UserInfo> {
       if (!userName) {
          throw new Error('missing require userName');
       }
@@ -632,17 +698,20 @@ export class AuthenticatorService {
          throw new Error('regoptions fetch error');
       }
 
-      return this.finishRegistration(optionsResp, true);
+      const userInfo = this.finishRegistration(optionsResp);
+      this.emit(this.captureEventData(AuthEvent.Login));
+
+      return userInfo;
    }
 
    // Adds passkey to current user
-   async addPasskey(): Promise<RegistrationInfo> {
+   async addPasskey(): Promise<UserInfo> {
 
       if (!this.isAuthenticated()) {
          throw new Error('not active user');
       }
 
-      const optUrl = new URL(`regoptions?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
+      const optUrl = new URL(`regoptions?userid=${this.userId}&usercred=${this.userCred}`, baseUrl);
       try {
          var optionsResp = await fetch(optUrl, {
             method: 'GET',
@@ -654,15 +723,12 @@ export class AuthenticatorService {
          throw new Error('regoptions fetch error');
       }
 
-      const regInfo = this.finishRegistration(optionsResp, false);
-      this.refreshUserInfo();
-      return regInfo;
+      return this.finishRegistration(optionsResp);
    }
 
    async finishRegistration(
-      optionsResp: Response,
-      setActiveUser: boolean
-   ): Promise<RegistrationInfo> {
+      optionsResp: Response
+   ): Promise<UserInfo> {
 
       if (!optionsResp.ok) {
          throw new Error('registration failed: ' + await optionsResp.text());
@@ -717,22 +783,12 @@ export class AuthenticatorService {
          throw new Error('registration failed: ' + await verificationResp.text());
       }
 
-      const registrationInfo = await verificationResp.json() as RegistrationInfo;
-
-      if (!registrationInfo || !registrationInfo.verified) {
+      const serverUserInfo = await verificationResp.json() as ServerUserInfo;
+      if (!serverUserInfo) {
          throw new Error('registration failed');
       }
 
-      if (setActiveUser) {
-         this.setActiveUser(
-            registrationInfo.userId,
-            registrationInfo.userName,
-            registrationInfo.userCred,
-            registrationInfo.recoveryId,
-            startReg.id
-         );
-      }
-      return registrationInfo;
+      return this.updateLoggedInUser(serverUserInfo, startReg.id);
    }
 
 }

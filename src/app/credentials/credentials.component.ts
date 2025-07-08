@@ -2,7 +2,7 @@ import {
    Component, EventEmitter, Inject, OnInit,
    Output, effect, Renderer2, OnDestroy
 } from '@angular/core';
-import { CommonModule, NgIf } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTableModule } from '@angular/material/table';
@@ -32,8 +32,8 @@ export class CredentialsComponent implements OnInit, OnDestroy {
 
    private authSub!: Subscription;
    private routeSub!: Subscription;
-   public oldRecovery = true;
    public error = '';
+   public userName = '';
    public passKeys: AuthenticatorInfo[] = [];
    public showProgress = false;
    public displayedColumns: string[] = ['image', 'description', 'delete'];
@@ -49,14 +49,14 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       effect(() => {
          const userInfo = this.authSvc.userInfo();
          this.passKeys = userInfo ? userInfo.authenticators : [];
-         this.oldRecovery = this.authSvc.recoveryId.length > 0 ? false : true;
+         this.userName = userInfo ? userInfo.userName : '';
       });
    }
 
    ngOnInit(): void {
       const userInfo = this.authSvc.userInfo();
       this.passKeys = userInfo ? userInfo.authenticators : [];
-      this.oldRecovery = this.authSvc.recoveryId.length > 0 ? false : true;
+      this.userName = userInfo ? userInfo.userName : '';
 
       this.routeSub = this.router.events.subscribe((event) => {
          if (event instanceof NavigationStart) {
@@ -93,23 +93,22 @@ export class CredentialsComponent implements OnInit, OnDestroy {
 
       if (this.passKeys.length == 1) {
          pkState = ConfirmDialog.LAST_PK;
-      } else if (this.authSvc.pkId == passkey.credentialId) {
+      } else if (this.isCurrentPk(passkey.credentialId)) {
          pkState = ConfirmDialog.ACTIVE_PK;
       }
 
       var dialogRef = this.dialog.open(ConfirmDialog, {
          data: {
             pkState: pkState,
-            userName: this.authSvc.userName
+            userName: this.userName
          },
       });
 
       dialogRef.afterClosed().subscribe(async (result: string) => {
          if (result == 'Yes') {
             try {
-               const deletedInfo = await this.authSvc.deletePasskey(passkey.credentialId);
-               this.refresh();
-               if (deletedInfo.userId) {
+               const remainingAuths = await this.authSvc.deletePasskey(passkey.credentialId);
+               if (remainingAuths == 0) {
                   this.router.navigateByUrl('/welcome');
                }
             } catch (err) {
@@ -123,8 +122,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    async onClickAdd() {
       try {
          this.error = '';
-         const registrationInfo = await this.authSvc.addPasskey();
-         this.refresh();
+         await this.authSvc.addPasskey();
       } catch (err) {
          console.error(err);
          this.error = 'Passkey not created, try again';
@@ -142,7 +140,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    }
 
    isCurrentPk(credentialId: string): boolean {
-      return credentialId == this.authSvc.pkId;
+      return this.authSvc.isCurrentPk(credentialId);
    }
 
    async refresh(): Promise<void> {
@@ -155,7 +153,6 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       } else {
          this.done.emit(true);
          this.passKeys = [];
-         this.oldRecovery = false;
       }
    }
 
@@ -167,7 +164,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       } catch (err) {
          console.error(err);
          // failed, put back the old value by setting [value] again...
-         component.value = this.authSvc.userName!;
+         component.value = this.userName!;
       }
    }
 
@@ -181,10 +178,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       try {
          this.error = '';
          await this.authSvc.setPasskeyDescription(passkey.credentialId, component.value);
-         // worked, update with new value
-         passkey.description = component.value;
          this.toastMessage('Passkey description updated');
-
       } catch (err) {
          console.error(err);
          //failed, put back the old value by setting [value] again...
@@ -209,7 +203,7 @@ https://angular.dev/guide/forms/reactive-forms
    templateUrl: 'confirm-dialog.html',
    styleUrl: './credentials.component.scss',
    imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
-      MatButtonModule, MatFormFieldModule, NgIf, MatInputModule, FormsModule,
+      MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
       ReactiveFormsModule
    ]
 })

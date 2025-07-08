@@ -265,7 +265,7 @@ export class CipherInfoDialog {
 })
 export class SigninDialog {
 
-   public userName: string;
+   public userName: string | null;
    public error: string = '';
    public showProgress: boolean = false;
 
@@ -276,8 +276,8 @@ export class SigninDialog {
       @Inject(MAT_DIALOG_DATA) public data: SigninDialog
    ) {
       dialogRef.disableClose = true;
-      const [_, userName] = this.authSvc.getUserInfo();
-      this.userName = userName!;
+      const [_, userName] = this.authSvc.loadKnownUser();
+      this.userName = userName;
    }
 
    async onClickSignin(event: any) {
