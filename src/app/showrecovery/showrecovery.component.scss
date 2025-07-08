@@ -10,14 +10,46 @@
   justify-content: space-evenly;
 
   .recovery {
-    min-width: 280px;
+    min-width: 380px;
     @include mat.form-field-density(-1);
   }
 
-  button {
+  .copied-button {
     @include common.strong-button;
     height: 45px;
     min-width: 280px;
     margin-top: 3px;
   }
+}
+
+.words-area {
+  resize: none;
+  margin-top: 20px;
+  min-height: 120px;
+}
+
+.error-msg {
+  color: darkred;
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+}
+
+
+.lower-spinner {
+  @extend .spinner;
+  top: 35%;
+}
+
+.toolbar {
+  height: 48px;
+  width: #{5 * 50px};
+  background-color: none;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+  position: absolute;
+  right: -14px;
+  top: 2px;
 }

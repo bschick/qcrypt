@@ -50,7 +50,7 @@ export class RecoveryComponent implements OnInit {
       if (this.authenticated) {
          this.selfRecovery = this.recoverUserCred === this.authSvc.userCred;
       }
-      const [userId, userName] = this.authSvc.getUserInfo();
+      const [userId, userName] = this.authSvc.loadKnownUser();
       if (userId && userName) {
          this.currentUserName = userName;
       }

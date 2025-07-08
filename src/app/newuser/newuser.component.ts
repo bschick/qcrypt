@@ -38,7 +38,7 @@ export class NewUserComponent implements OnInit {
    }
 
    ngOnInit() {
-      const [userId, userName] = this.authSvc.getUserInfo();
+      const [userId, userName] = this.authSvc.loadKnownUser();
       if (userId && userName) {
          this.currentUserName = userName;
       }

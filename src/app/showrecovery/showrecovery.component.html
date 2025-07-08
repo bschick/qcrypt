@@ -1,48 +1,61 @@
 <div class="container">
   <div class="content">
+    <mat-progress-spinner class="lower-spinner" color="primary" mode="indeterminate"
+      [style.visibility]="showProgress ? 'visible' : 'hidden'">
+    </mat-progress-spinner>
     <h1>Account Backup and Recovery</h1>
     <p>
-      You must <b>save the word pattern below</b> to recovery your account
-      if you lose or damage your Quick Crypt passkeys. All thirty two words must be saved
-      in the order shownn. If you lose both your passkeys and the recovery words below,
-      you will not be able to decrypt your data.
+      <b>Save the word pattern below to recover your account if you lose or damage
+      your Quick Crypt passkeys</b>. You must save all of
+      these words in the exact order they appear. If you need to recover your
+      account, go to the welcome page and select the "I cannot sign-in" button.
     </p>
     <p>
-      <b>Store the word pattern in a durable secure location</b>. While another
-      person who gained access to you recovery words cannot decrypt your data, they could
-      delete your Quick Crypt account. To prevent online theft of your recovery words, you
-      may want to print a physical copy for offline storage in a lockbox or safe.
+      <b>Store your recovery words in a durable and secure location, separate
+      from your passkeys</b>. While someone with access to your recovery words
+      cannot decrypt your data, they could delete your Quick Crypt account. We
+      recommend printing a physical copy of your recovery words and storing it
+      in a lockbox or safe. If you lose both your passkeys and these
+      recovery words, you will permanently lose access to your encrypted data.
     </p>
-    @if(oldRecovery) {
-      <mat-card appearance="outlined">
-        <mat-card-header>
-          <mat-card-title>⚠️ Attention</mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
-          <p>
-            Your account is using Quick Crypt's old backup and recovery mechanism. Please
-            copy the recovery words below and store them in a durable secure location.
-            Your original recovery link is no longer needed and should be deleted.
-          </p>
-        </mat-card-content>
-      </mat-card>
-    }
-    <div class="control-host">
-      <mat-form-field class="recovery">
-        <mat-label>Recovery Words</mat-label>
-        <textarea #wordsArea id="recoveryWords" matInput autofocus type="text" [value]="recoveryWords" readonly="true"
-          name="recovery" (focus)="wordsArea.select(); wordsArea.scrollLeft=0;" matInput></textarea>
+    @if(!showProgress) {
+      @if(!authSvc.hasRecoveryId()) {
+        <mat-card appearance="outlined">
+          <mat-card-header>
+            <mat-card-title>⚠️ Attention</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <p>
+              Your account was using Quick Crypt's old recovery URL mechanism.
+              You must copy the recovery words below and store them in a secure and durable
+              location. <b>Then delete your old recovery link, which will no longer work.</b>.
+            </p>
+          </mat-card-content>
+        </mat-card>
+      }
+      <div class="control-host">
+        <mat-form-field class="recovery" [cdkCopyToClipboard]="recoveryWords.value!" (click)="toastMessage('Copied to clipboard')">
+          <div class="toolbar">
+            <button mat-icon-button aria-label="Copy"
+              matTooltip="Copy recovery words to clipboard" (click)="toastMessage('Copied to clipboard')"
+              [cdkCopyToClipboard]="recoveryWords.value!">
+              <mat-icon>content_copy</mat-icon>
+            </button>
+          </div>
 
-        <mat-icon matSuffix aria-label="Copy" (click)="toastMessage('Link Copied to Clipboard')"
-          [cdkCopyToClipboard]="wordsArea.value">
-          content_copy
-        </mat-icon>
-      </mat-form-field>
-      <a [routerLink]="'/'">
-        <button mat-raised-button>
-          I saved my recovery key securely
-        </button>
-      </a>
+          <mat-label>Recovery Words</mat-label>
+          <textarea #wordsArea id="wordsArea" matInput autofocus type="text" [formControl]="recoveryWords"
+            readonly="true" class="words-area" (focus)="wordsArea.select();" matInput></textarea>
+        </mat-form-field>
+        <a [routerLink]="'/'">
+          <button class="copied-button" mat-raised-button (click)="onClickSaved()">
+            I saved my recovery words securely
+          </button>
+        </a>
+      </div>
+    }
+    <div class="error-msg">
+      <p>{{error}}</p>
     </div>
   </div>
 </div>
