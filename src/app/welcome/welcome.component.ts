@@ -104,4 +104,10 @@ export class RecoveryDialog {
       this.dialogRef.close();
       this.router.navigateByUrl('/newuser');
    }
+
+   onClickRecovery2(event: Event) {
+      event.stopPropagation();
+      this.dialogRef.close();
+      this.router.navigateByUrl('/recovery2');
+   }
 }

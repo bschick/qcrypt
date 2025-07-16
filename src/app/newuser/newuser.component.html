@@ -9,7 +9,7 @@
         You are already signed in as <b>"{{currentUserName}}"</b> and can
         <a href="javascript:void(null);" role="button" [routerLink]="'/'">
           encrypt and decrypt data as "{{currentUserName}}"</a>.
-        If you want to create a new user identity instead, continue on.
+        If you still want to create a new user identity, continue below.
       </p>
       <p *ngIf="currentUserName && !authenticated">
         You have an existing user called <b>"{{currentUserName}}"</b> and can
@@ -33,11 +33,10 @@
       <p>
         Enter a user name below that is 6 to
         31 characters long. An email address is acceptable but not required.
-        Then click the <b>Create new user and passkey</b> button, and Quick Crypt will
-        start creating a passkey with the user name you entered. Your browser or
-        password manager should
-        prompt you to create or update the passkey on your system. When you see
-        that option, choose to create a new passkey.
+        Then click <b>Create new user and passkey</b> and Quick Crypt will
+        create a passkey with the name you entered. Your browser or
+        password manager should prompt you to either create or update a passkey
+        on your system. When you see that option, choose to create a new passkey.
       </p>
       <p>
         If you cannot create a new user, please

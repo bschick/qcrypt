@@ -23,7 +23,7 @@ import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
    templateUrl: './showrecovery.component.html',
    styleUrl: './showrecovery.component.scss',
    imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink,
-      MatInputModule, MatFormFieldModule, MatCardModule, MatProgressSpinnerModule,
+      MatInputModule, MatCardModule, MatProgressSpinnerModule, MatFormFieldModule,
       MatTooltipModule, FormsModule, ReactiveFormsModule
    ]
 })
