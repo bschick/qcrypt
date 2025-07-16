@@ -8,7 +8,7 @@ import {
 import { Subject, Subscription, filter } from 'rxjs';
 import { DateTime } from 'luxon';
 import { base64ToBytes, bytesToBase64 } from './utils';
-import { entropyToMnemonic } from '@scure/bip39';
+import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 
 const baseUrl = environment.domain;
@@ -217,18 +217,18 @@ export class AuthenticatorService {
          throw new Error('missing recovery info');
       }
 
-      const recoveryBytes = base64ToBytes(recoveryInfo.recoveryId);
-      if(recoveryBytes.byteLength != RECOVERID_BYTES) {
+      const recoveryIdBytes = base64ToBytes(recoveryInfo.recoveryId);
+      if(recoveryIdBytes.byteLength != RECOVERID_BYTES) {
          throw new Error('invalid recovery id length');
       }
 
       const userIdBytes = base64ToBytes(this.userId);
 
-      let recoveryId = new Uint8Array(recoveryBytes.byteLength + userIdBytes.byteLength);
-      recoveryId.set(recoveryBytes, 0);
-      recoveryId.set(userIdBytes, recoveryBytes.byteLength);
+      let recoveryBytes = new Uint8Array(recoveryIdBytes.byteLength + userIdBytes.byteLength);
+      recoveryBytes.set(recoveryIdBytes, 0);
+      recoveryBytes.set(userIdBytes, recoveryIdBytes.byteLength);
 
-      return entropyToMnemonic(recoveryId, wordlist);
+      return entropyToMnemonic(recoveryBytes, wordlist);
    }
 
    on(events: AuthEvent[], action: (data: AuthEventData) => void): Subscription {
@@ -651,6 +651,48 @@ export class AuthenticatorService {
       }
 
       const userInfo = this.updateLoggedInUser(serverUserInfo, startAuth.id);
+      this.emit(this.captureEventData(AuthEvent.Login));
+
+      return userInfo;
+   }
+
+   async recover2(recoveryWords: string): Promise<UserInfo> {
+
+      if (!recoveryWords || recoveryWords.length == 0) {
+         throw new Error('missing recovery words');
+      }
+
+      if(!validateMnemonic(recoveryWords, wordlist)) {
+         throw new Error('invalid recovery words');
+      }
+
+      const recoveryBytes = mnemonicToEntropy(recoveryWords, wordlist);
+      if (!recoveryBytes || recoveryBytes.byteLength < RECOVERID_BYTES + 1 ) {
+         throw new Error('invalid recovery id');
+      }
+
+      const recoveryIdBytes = new Uint8Array(recoveryBytes.buffer, 0, RECOVERID_BYTES );
+      const userIdBytes = new Uint8Array(recoveryBytes.buffer, RECOVERID_BYTES );
+      if(recoveryIdBytes.byteLength != RECOVERID_BYTES) {
+         throw new Error('invalid recovery id length ' + recoveryIdBytes.byteLength);
+      }
+
+      const recoveryId = bytesToBase64(recoveryIdBytes);
+      const userId = bytesToBase64(userIdBytes);
+
+      const recoveryUrl = new URL(`recovery2?userid=${userId}&recoveryId=${recoveryId}`, baseUrl);
+      try {
+         var recoveryResp = await fetch(recoveryUrl, {
+            method: 'POST',
+            mode: 'cors',
+            cache: 'no-store'
+         });
+      } catch (err) {
+         console.error(err);
+         throw new Error('recover2 fetch error');
+      }
+
+      const userInfo = this.finishRegistration(recoveryResp);
       this.emit(this.captureEventData(AuthEvent.Login));
 
       return userInfo;
