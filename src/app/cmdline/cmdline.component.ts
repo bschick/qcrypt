@@ -23,43 +23,41 @@ SOFTWARE. */
 import {
    Component,
    OnDestroy,
-   OnInit,
-   Renderer2
+   OnInit
 } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ClipboardModule } from '@angular/cdk/clipboard';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { AuthEvent, AuthenticatorService } from '../services/authenticator.service';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Subscription } from 'rxjs';
-import { MatCardModule } from '@angular/material/card';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 
 
 @Component({
-   selector: 'app-show-recovery',
-   templateUrl: './showrecovery.component.html',
-   styleUrl: './showrecovery.component.scss',
-   imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink,
-      MatInputModule, MatCardModule, MatProgressSpinnerModule, MatFormFieldModule,
+   selector: 'app-cmd-line',
+   templateUrl: './cmdline.component.html',
+   styleUrl: './cmdline.component.scss',
+   imports: [MatIconModule, MatButtonModule, ClipboardModule,
+      MatInputModule, MatProgressSpinnerModule, MatFormFieldModule,
       MatTooltipModule, FormsModule, ReactiveFormsModule
    ]
 })
-export class ShowRecoveryComponent implements OnInit, OnDestroy {
+export class CmdLineComponent implements OnInit, OnDestroy {
 
    public showProgress = true;
+   public hideCred = true;
    public error = '';
    private authSub!: Subscription;
-   public recoveryWords = new FormControl<string>('');
+   public userCredential = new FormControl<string>('');
 
    constructor(
       public authSvc: AuthenticatorService,
-      private r2: Renderer2,
       private router: Router,
       private snackBar: MatSnackBar) {
    }
@@ -77,17 +75,10 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
       this.showProgress = true;
       this.error = '';
 
-      this.authSvc.getRecoveryWords().then( (words) => {
-         this.recoveryWords.setValue(words);
-
-         try {
-            // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
-            setTimeout(
-               () => this.r2.selectRootElement('#wordsArea').focus(), 0
-            );
-         } catch (err) {
-            console.error(err);
-         }
+      // Not actually using recovery words, just an existing way
+      // to force reauthentication
+      this.authSvc.getRecoveryWords().then( () => {
+         this.userCredential.setValue(this.authSvc.userCred);
       }).catch( (err) => {
          console.error(err);
          if(err instanceof Error && err.message.includes("fetch")) {
@@ -101,7 +92,7 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
    }
 
    ngOnDestroy() {
-      this.recoveryWords.setValue('');
+      this.userCredential.setValue('');
       if (this.authSub) {
          this.authSub.unsubscribe();
       }
@@ -113,13 +104,4 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
       });
    }
 
-   onClickSaved() {
-      // If the user previous didn't have a recoveryId, refresh the user
-      // so the warning doesn't show. If the user refreshes the page without
-      // clicking, keeping showing to warning to encourage saving
-      if(!this.authSvc.hasRecoveryId()) {
-         // let this happen async
-         this.authSvc.refreshUserInfo();
-      }
-   }
 }
