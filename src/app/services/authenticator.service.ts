@@ -1,8 +1,32 @@
+/* MIT License
+
+Copyright (c) 2024 Brad Schick
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. */
+
 import { environment } from '../../environments/environment';
 import { Injectable, signal } from '@angular/core';
 import {
    PublicKeyCredentialCreationOptionsJSON,
    PublicKeyCredentialRequestOptionsJSON,
+   AuthenticationResponseJSON,
+   RegistrationResponseJSON,
    startRegistration, startAuthentication
 } from '@simplewebauthn/browser';
 import { Subject, Subscription, filter } from 'rxjs';
@@ -29,21 +53,23 @@ export type AuthenticatorInfo = {
 export type UserInfo = {
    userId: string;
    userName: string;
+   pkId: string;
    hasRecoveryId: boolean;
    authenticators: AuthenticatorInfo[];
 };
 
 type ServerUserInfo = {
    verified: boolean;
-   userCred?: string;
    userId?: string;
    userName?: string;
    hasRecoveryId?: boolean;
    authenticators?: AuthenticatorInfo[];
 };
 
-type RecoveryInfo = {
-   recoveryId: string;
+type ServerLoginUserInfo = ServerUserInfo & {
+   pkId?: string;
+   userCred?: string;
+   recoveryId?: string;
 };
 
 export type SenderLinkInfo = {
@@ -80,11 +106,13 @@ export class AuthenticatorService {
    private _subject = new Subject<AuthEventData>();
    private _intervalId: number = 0;
    private _expiration = DateTime.fromISO('2017-05-15');
+   private _userCred? : string = undefined;
    public ready: Promise<void>;
 
    constructor() {
       const [userId, userName] = this.loadKnownUser();
 
+      //TODO... fix this with JWT sessions
       this.ready = new Promise<void>( (resolve) => {
          let refreshing = false;
          if (userId && userName) {
@@ -98,15 +126,12 @@ export class AuthenticatorService {
                if (DateTime.now() > this._expiration) {
                   this.logout();
                } else {
-                  const pkId = sessionStorage.getItem(userId + 'pkid') ?? '';
                   // just enough to boostrap, then call refresh
                   this.updateLoggedInUser({
                         verified: true,
                         userId: userId,
                         userName: userName,
-                        userCred: userCred,
-                     },
-                     pkId
+                     }
                   );
                   refreshing = true;
                   this.refreshUserInfo().then(
@@ -125,19 +150,9 @@ export class AuthenticatorService {
    }
 
    public isAuthenticated(): boolean {
-      const userInfo = this.userInfo();
-      if (!userInfo) {
-         return false;
-      }
-      const userCred = sessionStorage.getItem(userInfo.userId + 'usercred');
-      if (!userCred) {
-         return false;
-      }
-      const pkId = sessionStorage.getItem(userInfo.userId + 'pkid');
-      if (!pkId) {
-         return false;
-      }
-      return true;
+      // pkid is cleared at logout
+      const pkId = localStorage.getItem('pkid');
+      return (this._userCred && pkId) ? true : false;
    }
 
    public get userName(): string {
@@ -152,22 +167,19 @@ export class AuthenticatorService {
       return this.getUserInfo().hasRecoveryId;
    }
 
-   public isCurrentPk(testPK: string): boolean {
-      return testPK === this.pkId;
+   public get pkId(): string {
+      return this.getUserInfo().pkId;
    }
 
-   private get pkId(): string {
-      if (!this.isAuthenticated()) {
-         throw new Error('no active user');
-      }
-      return sessionStorage.getItem(this.userId + 'pkid')!;
+   public isCurrentPk(testPK: string): boolean {
+      return testPK === this.pkId;
    }
 
    public get userCred(): string {
       if (!this.isAuthenticated()) {
          throw new Error('no active user');
       }
-      return sessionStorage.getItem(this.userId + 'usercred')!;
+      return this._userCred!;
    }
 
    public isUserKnown(): boolean {
@@ -189,6 +201,7 @@ export class AuthenticatorService {
       return this.userInfo()!;
    }
 
+   // require re-authentication with passkey
    public async getRecoveryWords(): Promise<string> {
       await this.ready;
 
@@ -196,28 +209,34 @@ export class AuthenticatorService {
          throw new Error('no active user');
       }
 
-      const getRecover = new URL(`recovery?userid=${this.userId}&usercred=${this.userCred}`, baseUrl);
+      const verifyBody = await this._startAuth(this.userId);
+      const verifyUrl = new URL('verifyauth', baseUrl);
+
       try {
-         var getRecoverResp = await fetch(getRecover, {
-            method: 'GET',
+         var verificationResp = await fetch(verifyUrl, {
+            method: 'POST',
             mode: 'cors',
             cache: 'no-store',
+            headers: {
+               'Content-Type': 'application/json',
+            },
+            body: verifyBody,
          });
       } catch (err) {
          console.error(err);
-         throw new Error('recover fetch error');
+         throw new Error('verifyauth fetch error');
       }
 
-      if (!getRecoverResp.ok) {
-         throw new Error('retrieving recover id: ' + await getRecoverResp.text());
+      if (!verificationResp.ok) {
+         throw new Error('authentication failed: ' + await verificationResp.text());
       }
 
-      const recoveryInfo = await getRecoverResp.json() as RecoveryInfo;
-      if (!recoveryInfo) {
-         throw new Error('missing recovery info');
+      const serverLoginUserInfo = await verificationResp.json() as ServerLoginUserInfo;
+      if (!serverLoginUserInfo || !serverLoginUserInfo.recoveryId) {
+         throw new Error('authentication failed');
       }
 
-      const recoveryIdBytes = base64ToBytes(recoveryInfo.recoveryId);
+      const recoveryIdBytes = base64ToBytes(serverLoginUserInfo.recoveryId);
       if(recoveryIdBytes.byteLength != RECOVERID_BYTES) {
          throw new Error('invalid recovery id length');
       }
@@ -268,45 +287,62 @@ export class AuthenticatorService {
       this._subject.next(eventData);
    }
 
+   private loginUser(
+      serverLogin: ServerLoginUserInfo
+   ): UserInfo {
+      if (!serverLogin.userId || serverLogin.userId.length == 0) {
+         throw new Error('invalid user id')
+      }
+      if (!serverLogin.userCred || serverLogin.userCred.length == 0) {
+         throw new Error('invalid user credential')
+      }
+      if (!serverLogin.pkId || serverLogin.pkId.length == 0) {
+         throw new Error('invalid passkey id')
+      }
+
+      this._userCred = serverLogin.userCred;
+      localStorage.setItem('userid', serverLogin.userId);
+      localStorage.setItem('pkid', serverLogin.pkId);
+
+      const userInfo = this.updateLoggedInUser(serverLogin);
+      this.emit(this.captureEventData(AuthEvent.Login));
+
+      return userInfo;
+   }
+
    private updateLoggedInUser(
-      serverUser: ServerUserInfo,
-      pkId: string
+      serverUser: ServerUserInfo
    ): UserInfo {
 
       if (!serverUser.verified) {
          throw new Error('unverified user');
       }
-     if (!serverUser.userCred) {
-         throw new Error('missing userCred');
-      }
       if (!serverUser.userId || !serverUser.userName) {
          throw new Error('missing userId or userName');
       }
-
-      if (!serverUser.userCred || serverUser.userCred.length == 0) {
-         throw new Error('invalid user credential')
+      if (!serverUser.authenticators || serverUser.authenticators.length == 0) {
+         throw new Error('missing authenticators');
       }
-      if (!pkId || pkId.length == 0) {
-         throw new Error('invalid passkey id')
+      if (serverUser.hasRecoveryId === undefined) {
+         throw new Error('missing recovery id info');
       }
-      if (this.isAuthenticated()) {
-         // must logout before assigning new user
-         if(this.userId != serverUser.userId || this.userCred != serverUser.userCred) {
-            throw new Error('invalid user id or credential');
-         }
+      if (!this.isAuthenticated()) {
+         throw new Error('no active user');
       }
 
-      sessionStorage.setItem(serverUser.userId + 'usercred', serverUser.userCred);
-      sessionStorage.setItem(serverUser.userId + 'pkid', pkId);
+      const pkId = localStorage.getItem('pkid');
+      if (!pkId) {
+         throw new Error('missing passkey id');
+      }
 
-      localStorage.setItem('userid', serverUser.userId);
       localStorage.setItem('username', serverUser.userName);
 
       const userInfo: UserInfo = {
-         userId: serverUser.userId!,
-         userName: serverUser.userName!,
-         hasRecoveryId: serverUser.hasRecoveryId!,
-         authenticators: serverUser.authenticators!
+         userId: serverUser.userId,
+         userName: serverUser.userName,
+         pkId: pkId,
+         hasRecoveryId: serverUser.hasRecoveryId,
+         authenticators: serverUser.authenticators
       };
 
       this.userInfo.set(userInfo);
@@ -352,14 +388,18 @@ export class AuthenticatorService {
    }
 
    logout() {
-      if (this.isAuthenticated()) {
-         if (this._intervalId) {
-            clearInterval(this._intervalId);
-            this._intervalId = 0;
-         }
-         const eventData = this.captureEventData(AuthEvent.Logout);
-         sessionStorage.clear();
-         this.userInfo.set(undefined);
+      const wasAuthenticated = this.isAuthenticated();
+      const eventData = this.captureEventData(AuthEvent.Logout);
+      if (this._intervalId) {
+         clearInterval(this._intervalId);
+         this._intervalId = 0;
+      }
+      this._userCred = undefined;
+      localStorage.removeItem('pkid');
+      sessionStorage.clear();
+      this.userInfo.set(undefined);
+
+      if(wasAuthenticated) {
          this.emit(eventData);
       }
    }
@@ -403,7 +443,7 @@ export class AuthenticatorService {
          throw new Error('authentication failed');
       }
 
-      return this.updateLoggedInUser(serverUserInfo, this.pkId);
+      return this.updateLoggedInUser(serverUserInfo);
    }
 
    async setUserName(userName: string): Promise<UserInfo> {
@@ -439,7 +479,7 @@ export class AuthenticatorService {
          throw new Error('authentication failed');
       }
 
-      return this.updateLoggedInUser(serverUserInfo, this.pkId);
+      return this.updateLoggedInUser(serverUserInfo);
    }
 
    async deletePasskey(credentialId: string): Promise<number> {
@@ -476,7 +516,7 @@ export class AuthenticatorService {
          this.forgetUserInfo();
          return 0;
       } else {
-         this.updateLoggedInUser(serverUserInfo, this.pkId);
+         this.updateLoggedInUser(serverUserInfo);
          return serverUserInfo.authenticators!.length;
       }
    }
@@ -556,7 +596,7 @@ export class AuthenticatorService {
          throw new Error('authentication failed');
       }
 
-      return this.updateLoggedInUser(serverUserInfo, this.pkId);
+      return this.updateLoggedInUser(serverUserInfo);
    }
 
    // Uses the current stored userId
@@ -572,7 +612,45 @@ export class AuthenticatorService {
    // If no userId is provided, will present all Passkeys for this domain
    async findLogin(userId: string | null = null): Promise<UserInfo> {
 
-      let optUrl;
+      if( this.isAuthenticated()) {
+         throw new Error('must be logged out to log in');
+      }
+
+      const verifyBody = await this._startAuth(userId);
+      const verifyUrl = new URL('verifyauth', baseUrl);
+
+      try {
+         var verificationResp = await fetch(verifyUrl, {
+            method: 'POST',
+            mode: 'cors',
+            cache: 'no-store',
+            headers: {
+               'Content-Type': 'application/json',
+            },
+            body: verifyBody,
+         });
+      } catch (err) {
+         console.error(err);
+         throw new Error('verifyauth fetch error');
+      }
+
+      if (!verificationResp.ok) {
+         throw new Error('authentication failed: ' + await verificationResp.text());
+      }
+
+      const serverLoginUserInfo = await verificationResp.json() as ServerLoginUserInfo;
+      if (!serverLoginUserInfo) {
+         throw new Error('authentication failed');
+      }
+
+      return this.loginUser(serverLoginUserInfo);
+   }
+
+   private async _startAuth(
+      userId: string | null = null
+   ): Promise<string> {
+
+      let optUrl: URL;
       if (!userId) {
          // Trying to link to an existing passkey but have lost track of user id.
          // Start the process without userId just doesn't limit authenticator creds
@@ -599,7 +677,7 @@ export class AuthenticatorService {
 
       const optionsJson = await optionsResp.json() as PublicKeyCredentialRequestOptionsJSON;
 
-      let startAuth;
+      let startAuth: AuthenticationResponseJSON;
       try {
          startAuth = await startAuthentication({
             optionsJSON: optionsJson,
@@ -617,46 +695,15 @@ export class AuthenticatorService {
       startAuth.response.userHandle = new TextDecoder("utf-8").decode(handleBytes);
 
       // Need to return challenge because in some cases it is not bound to
-      // a user id when created. The server validates it created the challenge
-      // and its age
-      const expanded = {
-         ...startAuth,
-         challenge: optionsJson.challenge,
-      }
-
-      const verifyUrl = new URL('verifyauth', baseUrl);
-
-      try {
-         var verificationResp = await fetch(verifyUrl, {
-            method: 'POST',
-            mode: 'cors',
-            cache: 'no-store',
-            headers: {
-               'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(expanded),
-         });
-      } catch (err) {
-         console.error(err);
-         throw new Error('verifyauth fetch error');
-      }
-
-      if (!verificationResp.ok) {
-         throw new Error('authentication failed: ' + await verificationResp.text());
-      }
-
-      const serverUserInfo = await verificationResp.json() as ServerUserInfo;
-      if (!serverUserInfo) {
-         throw new Error('authentication failed');
-      }
-
-      const userInfo = this.updateLoggedInUser(serverUserInfo, startAuth.id);
-      this.emit(this.captureEventData(AuthEvent.Login));
-
-      return userInfo;
+      // a user id when created. The server validates that it created the challenge
+      // and the challenge's age
+      return JSON.stringify({
+            ...startAuth,
+            challenge: optionsJson.challenge,
+      });
    }
 
-   async recover2(recoveryWords: string): Promise<UserInfo> {
+   getRecoveryValues(recoveryWords: string): [string, string] {
 
       if (!recoveryWords || recoveryWords.length == 0) {
          throw new Error('missing recovery words');
@@ -680,6 +727,12 @@ export class AuthenticatorService {
       const recoveryId = bytesToBase64(recoveryIdBytes);
       const userId = bytesToBase64(userIdBytes);
 
+      return [recoveryId, userId];
+   }
+
+   async recover2(recoveryWords: string): Promise<UserInfo> {
+
+      const [recoveryId, userId] = this.getRecoveryValues(recoveryWords);
       const recoveryUrl = new URL(`recovery2?userid=${userId}&recoveryId=${recoveryId}`, baseUrl);
       try {
          var recoveryResp = await fetch(recoveryUrl, {
@@ -692,10 +745,8 @@ export class AuthenticatorService {
          throw new Error('recover2 fetch error');
       }
 
-      const userInfo = this.finishRegistration(recoveryResp);
-      this.emit(this.captureEventData(AuthEvent.Login));
-
-      return userInfo;
+      const serverLoginUserInfo = await this._finishRegistration(recoveryResp);
+      return this.loginUser(serverLoginUserInfo);
    }
 
    async recover(userId: string, userCred: string): Promise<UserInfo> {
@@ -716,10 +767,8 @@ export class AuthenticatorService {
          throw new Error('recover fetch error');
       }
 
-      const userInfo = this.finishRegistration(recoveryResp);
-      this.emit(this.captureEventData(AuthEvent.Login));
-
-      return userInfo;
+      const serverLoginUserInfo = await this._finishRegistration(recoveryResp);
+      return this.loginUser(serverLoginUserInfo);
    }
 
    // Creates new user and first passkey
@@ -740,10 +789,8 @@ export class AuthenticatorService {
          throw new Error('regoptions fetch error');
       }
 
-      const userInfo = this.finishRegistration(optionsResp);
-      this.emit(this.captureEventData(AuthEvent.Login));
-
-      return userInfo;
+      const serverLoginUserInfo = await this._finishRegistration(optionsResp);
+      return this.loginUser(serverLoginUserInfo);
    }
 
    // Adds passkey to current user
@@ -765,12 +812,13 @@ export class AuthenticatorService {
          throw new Error('regoptions fetch error');
       }
 
-      return this.finishRegistration(optionsResp);
+      const serverLoginUserInfo = await this._finishRegistration(optionsResp);
+      return this.updateLoggedInUser(serverLoginUserInfo);
    }
 
-   async finishRegistration(
+   private async _finishRegistration(
       optionsResp: Response
-   ): Promise<UserInfo> {
+   ): Promise<ServerLoginUserInfo> {
 
       if (!optionsResp.ok) {
          throw new Error('registration failed: ' + await optionsResp.text());
@@ -785,7 +833,7 @@ export class AuthenticatorService {
       const idBytes = new TextEncoder().encode(optionsJson.user.id);
       optionsJson.user.id = bytesToBase64(idBytes);
 
-      let startReg;
+      let startReg: RegistrationResponseJSON;
       try {
          startReg = await startRegistration({ optionsJSON: optionsJson });
       } catch (err) {
@@ -825,12 +873,12 @@ export class AuthenticatorService {
          throw new Error('registration failed: ' + await verificationResp.text());
       }
 
-      const serverUserInfo = await verificationResp.json() as ServerUserInfo;
-      if (!serverUserInfo) {
+      const serverLoginUserInfo = await verificationResp.json() as ServerLoginUserInfo;
+      if (!serverLoginUserInfo) {
          throw new Error('registration failed');
       }
 
-      return this.updateLoggedInUser(serverUserInfo, startReg.id);
+      return serverLoginUserInfo;
    }
 
 }

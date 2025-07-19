@@ -29,6 +29,8 @@ import { SenderLinksComponent } from './senderlinks/senderlinks.component';
 import { senderLinksGuard } from './senderlinks/senderlinks.guard';
 import { RecoveryComponent } from './recovery/recovery.component';
 import { Recovery2Component } from './recovery2/recovery2.component';
+import { CmdLineComponent } from './cmdline/cmdline.component';
+import { cmdlineGuard } from './cmdline/cmdline.guard';
 import { OverviewComponent } from './help/overview/overview.component';
 import { FaqsComponent } from './help/faqs/faqs.component';
 import { ProtocolComponent, Protocol4Component, Protocol5Component } from './help/protocol/protocol.component';
@@ -42,6 +44,7 @@ export const routes: Routes = [
    { path: 'showrecovery', component: ShowRecoveryComponent, canActivate: [showRecoveryGuard] },
    { path: 'recovery', component: RecoveryComponent },
    { path: 'recovery2', component: Recovery2Component },
+   { path: 'cmdline', component: CmdLineComponent, canActivate: [cmdlineGuard] },
    { path: 'help/overview', component: OverviewComponent },
    { path: 'help/faqs', component: FaqsComponent },
    { path: 'help/protocol', component: Protocol5Component },

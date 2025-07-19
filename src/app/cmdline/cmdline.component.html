@@ -1,0 +1,34 @@
+<div class="container">
+  <div class="content">
+    <mat-progress-spinner class="lower-spinner" color="primary" mode="indeterminate"
+      [style.visibility]="showProgress ? 'visible' : 'hidden'">
+    </mat-progress-spinner>
+    <h1>⚠️ Caution</h1>
+    <p>
+      <b>You only need the credential below when using the Quick Crypt command line.</b>
+        For security, return here each time you need this value rather than saving a
+        copy. This credential, along with your encryption passwords, forms part of
+        the security key used to encrypt and decrypt your data.
+    </p>
+    <p><b>Do not share or allow anyone else to access this value.</b></p>
+    @if(!showProgress) {
+      <div class="control-host">
+        @if(!error) {
+            <mat-form-field class="credential">
+                <mat-label>Credential</mat-label>
+                <input id="credential" matInput autocomplete="off" [formControl]="userCredential"
+                  [type]="hideCred ? 'password' : 'text'" readonly />
+                <mat-icon matSuffix (click)="hideCred = !hideCred">{{hideCred ? 'visibility_off' : 'visibility'}}</mat-icon>
+            </mat-form-field>
+        } @else {
+          <button class="task-button" mat-raised-button (click)="reloadData()">
+            Try again
+          </button>
+        }
+      </div>
+    }
+    <div class="error-msg">
+      <p>{{error}}</p>
+    </div>
+  </div>
+</div>
