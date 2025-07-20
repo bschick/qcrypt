@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2024 Brad Schick
+Copyright (c) 2025 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -110,40 +110,55 @@ export class AuthenticatorService {
    public ready: Promise<void>;
 
    constructor() {
-      const [userId, userName] = this.loadKnownUser();
 
-      //TODO... fix this with JWT sessions
       this.ready = new Promise<void>( (resolve) => {
-         let refreshing = false;
-         if (userId && userName) {
-            const userCred = sessionStorage.getItem(userId + 'usercred');
-            if (userCred) {
-               const exp = sessionStorage.getItem(userId + 'expiration');
-               if (exp) {
-                  this._expiration = DateTime.fromISO(exp);
-               }
+         let refreshSession = false;
 
-               if (DateTime.now() > this._expiration) {
-                  this.logout();
-               } else {
-                  // just enough to boostrap, then call refresh
-                  this.updateLoggedInUser({
-                        verified: true,
-                        userId: userId,
-                        userName: userName,
-                     }
-                  );
-                  refreshing = true;
-                  this.refreshUserInfo().then(
-                     () => this.emit(this.captureEventData(AuthEvent.Login))
-                  ).finally(
-                     () => resolve()
-                  );
-               }
+         if (this.maybeSession()) {
+            const [userId, _] = this.loadKnownUser();
+            const exp = sessionStorage.getItem(userId + 'expiration');
+            if (exp) {
+               this._expiration = DateTime.fromISO(exp);
+            }
+
+            if (DateTime.now() > this._expiration) {
+               this.logout();
+            } else {
+               refreshSession = true;
+               // temporary... const verifySessUrl = new URL('verifysess', baseUrl);
+               const verifySessUrl = new URL(`verifysess?userid=${userId}`, baseUrl);
+
+               fetch(verifySessUrl, {
+                     method: 'POST',
+                     mode: 'cors',
+                     cache: 'no-store',
+                     headers: {
+                        'Content-Type': 'application/json',
+                     },
+                     credentials: 'include'
+               }).then( (verificationResp) => {
+                  // This can fail when session is expired. Its not an error just
+                  // don't login unless it was all valid
+                  if (!verificationResp.ok) {
+                     // not really an error, just bail out
+                     throw new Error('not logged in');
+                  }
+                  return verificationResp.json()
+
+               }).then( (serverLoginUserInfo: ServerLoginUserInfo) => {
+                  if (serverLoginUserInfo) {
+                     this.loginUser(serverLoginUserInfo);
+                  }
+               }).catch(
+                  // just for debugging, remove
+                  (err) => console.error(err)
+               ).finally(
+                  () => resolve()
+               );
             }
          }
 
-         if (!refreshing) {
+         if (!refreshSession) {
             resolve();
          }
       });
@@ -153,6 +168,13 @@ export class AuthenticatorService {
       // pkid is cleared at logout
       const pkId = localStorage.getItem('pkid');
       return (this._userCred && pkId) ? true : false;
+   }
+
+   public maybeSession(): boolean {
+      // logout clear pkId, so it is still present, we coudl still
+      // have a valid session (must call server to check)
+      const pkId = localStorage.getItem('pkid');
+      return pkId ? true : false;
    }
 
    public get userName(): string {
@@ -197,7 +219,6 @@ export class AuthenticatorService {
       if (!this.isAuthenticated()) {
          throw new Error('no active user');
       }
-
       return this.userInfo()!;
    }
 
@@ -220,6 +241,7 @@ export class AuthenticatorService {
             headers: {
                'Content-Type': 'application/json',
             },
+            credentials: 'include',
             body: verifyBody,
          });
       } catch (err) {
@@ -427,7 +449,8 @@ export class AuthenticatorService {
             method: 'PUT',
             mode: 'cors',
             cache: 'no-store',
-            body: description,
+            credentials: 'include',
+            body: description
          });
       } catch (err) {
          console.error(err);
@@ -463,7 +486,8 @@ export class AuthenticatorService {
             method: 'PUT',
             mode: 'cors',
             cache: 'no-store',
-            body: userName,
+            credentials: 'include',
+            body: userName
          });
       } catch (err) {
          console.error(err);
@@ -495,7 +519,8 @@ export class AuthenticatorService {
          var delPasskeyResp = await fetch(delPasskeyUrl, {
             method: 'DELETE',
             mode: 'cors',
-            cache: 'no-store',
+            credentials: 'include',
+            cache: 'no-store'
          });
       } catch (err) {
          console.error(err);
@@ -531,7 +556,8 @@ export class AuthenticatorService {
                var getAuthsResp = await fetch(getAuthsUrl, {
                   method: 'GET',
                   mode: 'cors',
-                  cache: 'no-store',
+                  credentials: 'include',
+                  cache: 'no-store'
                });
             } catch (err) {
                console.error(err);
@@ -579,7 +605,8 @@ export class AuthenticatorService {
          var getInfoResp = await fetch(getInfoUrl, {
             method: 'GET',
             mode: 'cors',
-            cache: 'no-store',
+            credentials: 'include',
+            cache: 'no-store'
          });
       } catch (err) {
          console.error(err);
@@ -627,6 +654,7 @@ export class AuthenticatorService {
             headers: {
                'Content-Type': 'application/json',
             },
+            credentials: 'include',
             body: verifyBody,
          });
       } catch (err) {
@@ -664,6 +692,7 @@ export class AuthenticatorService {
          var optionsResp = await fetch(optUrl, {
             method: 'GET',
             mode: 'cors',
+            credentials: 'include',
             cache: 'no-store'
          });
       } catch (err) {
@@ -738,6 +767,7 @@ export class AuthenticatorService {
          var recoveryResp = await fetch(recoveryUrl, {
             method: 'POST',
             mode: 'cors',
+            credentials: 'include',
             cache: 'no-store'
          });
       } catch (err) {
@@ -760,6 +790,7 @@ export class AuthenticatorService {
          var recoveryResp = await fetch(recoveryUrl, {
             method: 'POST',
             mode: 'cors',
+            credentials: 'include',
             cache: 'no-store'
          });
       } catch (err) {
@@ -782,6 +813,7 @@ export class AuthenticatorService {
          var optionsResp = await fetch(optUrl, {
             method: 'GET',
             mode: 'cors',
+            credentials: 'include',
             cache: 'no-store'
          });
       } catch (err) {
@@ -805,6 +837,7 @@ export class AuthenticatorService {
          var optionsResp = await fetch(optUrl, {
             method: 'GET',
             mode: 'cors',
+            credentials: 'include',
             cache: 'no-store'
          });
       } catch (err) {
@@ -862,6 +895,7 @@ export class AuthenticatorService {
             headers: {
                'Content-Type': 'application/json',
             },
+            credentials: 'include',
             body: JSON.stringify(expanded),
          });
       } catch (err) {
