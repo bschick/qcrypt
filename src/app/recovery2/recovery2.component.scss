@@ -42,3 +42,25 @@
   display: flex;
   justify-content: center;
 }
+
+
+.confirm {
+  max-width: 430px;
+
+  div {
+    font-size: 16px;
+  }
+
+  .heading {
+    margin-bottom: 5px;
+  }
+
+  .message {
+    padding-bottom: 0;
+  }
+
+  .actions {
+    padding-left: 20px;
+  }
+
+}

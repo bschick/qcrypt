@@ -211,9 +211,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       // core.guard doesn't allow reaching this point if the
       // user is unknown, If not authenticated, ask the user
       // to sign in
-      if (!this.authSvc.isAuthenticated()) {
-         this.showSigninDialog();
-      }
+      this.trySigninDialog();
    }
 
    ngOnDestroy() {
@@ -231,27 +229,32 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.options.defaultOptions();
          this.privacyClear();
          this.onClearCipher();
-         this.showSigninDialog();
+         this.trySigninDialog();
       } else if (data.event === AuthEvent.Login) {
          this.options.loadOptions();
          this.showTextFromParams();
       }
    }
 
-   showSigninDialog() {
-      if (!this.signinDialogRef && this.authSvc.isUserKnown() && !this.authSvc.isAuthenticated()) {
-         this.signinDialogRef = this.dialog.open(SigninDialog, {
-            backdropClass: 'signinBackdrop',
-            closeOnNavigation: true
-         });
-         this.signinDialogRef.afterClosed().subscribe(() => {
-            this.signinDialogRef = undefined;
-            if (this.authSvc.isAuthenticated()) {
-               this.authSvc.refreshUserInfo().catch((err) => {
-                  console.error(err);
-               });
-            }
-         });
+   async trySigninDialog(): Promise<void> {
+      if (!this.signinDialogRef) {
+         if(this.authSvc.maybeSession()) {
+            // noop if ready is resolved
+            this.showProgress = true;
+            await this.authSvc.ready;
+            this.showProgress = false;
+         }
+
+         if(!this.authSvc.isAuthenticated()) {
+            this.signinDialogRef = this.dialog.open(SigninDialog, {
+               backdropClass: 'signinBackdrop',
+               closeOnNavigation: true
+            });
+
+            this.signinDialogRef.afterClosed().subscribe(() => {
+               this.signinDialogRef = undefined;
+            });
+         }
       }
    }
 
