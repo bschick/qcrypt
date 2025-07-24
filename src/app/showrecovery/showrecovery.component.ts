@@ -29,7 +29,6 @@ import {
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatTooltipModule } from '@angular/material/tooltip';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import { Router, RouterLink } from '@angular/router';
 import { MatInputModule } from '@angular/material/input';
@@ -47,7 +46,7 @@ import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
    styleUrl: './showrecovery.component.scss',
    imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink,
       MatInputModule, MatCardModule, MatProgressSpinnerModule, MatFormFieldModule,
-      MatTooltipModule, FormsModule, ReactiveFormsModule
+      FormsModule, ReactiveFormsModule
    ]
 })
 export class ShowRecoveryComponent implements OnInit, OnDestroy {
@@ -67,7 +66,10 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
    ngOnInit() {
       this.authSub = this.authSvc.on(
          [AuthEvent.Logout],
-         () => this.router.navigateByUrl('/')
+         () => {
+            this.error = '';
+            this.router.navigateByUrl('/');
+         }
       );
 
       this.reloadData();

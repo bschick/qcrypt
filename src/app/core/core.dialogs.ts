@@ -285,7 +285,7 @@ export class SigninDialog {
          this.error = '';
          this.showProgress = true;
          await this.authSvc.defaultLogin();
-         this.dialogRef.close();
+         this.dialogRef.close('Login');
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes("fetch")) {
@@ -300,9 +300,9 @@ export class SigninDialog {
 
    onClickForget(event: any) {
       this.error = '';
-      this.authSvc.forgetUserInfo();
+      this.authSvc.forgetUser();
       this.router.navigateByUrl('/welcome');
-      this.dialogRef.close(null);
+      this.dialogRef.close('Forget');
    }
 
 }

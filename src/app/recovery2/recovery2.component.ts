@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, Inject, OnDestroy, OnInit } from '@angular/core';
+import { AfterViewInit, Component, Inject, OnDestroy, OnInit, Renderer2 } from '@angular/core';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -43,16 +43,18 @@ import { firstValueFrom } from 'rxjs';
       MatProgressSpinnerModule, MatCardModule, MatFormFieldModule, MatInputModule
     ]
 })
-export class Recovery2Component implements OnInit, OnDestroy {
+export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit{
 
    public validRecoveryWords = false;
    public error = '';
+   public ready = false;
    public showProgress = false;
    public authenticated = false;
    public currentUserName: string | null = null;
    public recoveryWords = new FormControl<string>('');
 
    constructor(
+      private r2: Renderer2,
       private authSvc: AuthenticatorService,
       private router: Router,
       private dialog: MatDialog,
@@ -60,10 +62,29 @@ export class Recovery2Component implements OnInit, OnDestroy {
    }
 
    ngOnInit() {
-      this.authenticated = this.authSvc.isAuthenticated();
       const [userId, userName] = this.authSvc.loadKnownUser();
       if(userId && userName) {
          this.currentUserName = userName;
+      }
+
+      this.showProgress = true;
+
+      this.authSvc.ready.then( () => {
+         this.authenticated = this.authSvc.authenticated();
+      }).finally( () => {
+         this.ready = true;
+         this.showProgress = false;
+      });
+   }
+
+   ngAfterViewInit(): void {
+      try {
+         // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
+         setTimeout(
+            () => this.r2.selectRootElement('#wordsArea').focus(), 0
+         );
+      } catch (err) {
+         console.error(err);
       }
    }
 
@@ -126,7 +147,7 @@ export class Recovery2Component implements OnInit, OnDestroy {
    private async _checkProceed(recoveryWords: string): Promise<boolean> {
 
       const [_, userId] = this.authSvc.getRecoveryValues(recoveryWords);
-      if (!this.authSvc.isAuthenticated() || userId === this.authSvc.userId) {
+      if (!this.authSvc.authenticated() || userId === this.authSvc.userId) {
          return true;
       }
 

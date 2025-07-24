@@ -38,7 +38,7 @@
           <mat-form-field class="recovery" [cdkCopyToClipboard]="recoveryWords.value!" (click)="toastMessage('Copied to clipboard')">
             <div class="toolbar">
               <button mat-icon-button aria-label="Copy"
-                matTooltip="Copy recovery words to clipboard" (click)="toastMessage('Copied to clipboard')"
+                (click)="toastMessage('Copied to clipboard')"
                 [cdkCopyToClipboard]="recoveryWords.value!">
                 <mat-icon>content_copy</mat-icon>
               </button>

@@ -70,7 +70,7 @@ import {
    ProcessCancelled,
    makeTookMsg
 } from '../services/utils';
-import { AuthenticatorService, AuthEvent, AuthEventData, INACTIVITY_TIMEOUT } from '../services/authenticator.service';
+import { AuthenticatorService, AuthEvent, AuthEventData } from '../services/authenticator.service';
 import {
    PasswordDialog,
    CipherInfoDialog,
@@ -108,7 +108,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    private spinnerAbove = 1500000; // Default since benchmark is async
    private actionStart = 0;
    private authSub!: Subscription;
-   public readonly INACTIVITY_TIMEOUT = INACTIVITY_TIMEOUT;
    public cacheTimeout!: DateTime;
    public clearText = '';
    public pwdCached = false;
@@ -180,7 +179,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    ngAfterViewInit() {
-      if (this.authSvc.isAuthenticated()) {
+      if (this.authSvc.authenticated()) {
          this.showTextFromParams();
          if (localStorage.getItem(this.authSvc.userId + "welcomed") != 'yup') {
             setTimeout(() => {
@@ -188,6 +187,15 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                this.bubbleTip1.show();
             }, 1000);
          }
+      }
+
+      try {
+         // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
+         setTimeout(
+            () => this.r2.selectRootElement('#clearInput').focus(), 0
+         );
+      } catch (err) {
+         console.error(err);
       }
    }
 
@@ -204,7 +212,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // subscribe to auth events
       this.authSub = this.authSvc.on(
-         [AuthEvent.Logout, AuthEvent.Forget, AuthEvent.Login],
+         [AuthEvent.Logout, AuthEvent.Login, AuthEvent.Delete],
          this.onAuthEvent.bind(this)
       );
 
@@ -225,34 +233,40 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onAuthEvent(data: AuthEventData) {
-      if (data.event === AuthEvent.Logout) {
+      if (data.event === AuthEvent.Login) {
+         this.options.loadOptions();
+         this.showTextFromParams();
+      } else if (data.event === AuthEvent.Logout) {
          this.options.defaultOptions();
          this.privacyClear();
          this.onClearCipher();
          this.trySigninDialog();
-      } else if (data.event === AuthEvent.Login) {
-         this.options.loadOptions();
-         this.showTextFromParams();
+      } else if (data.event === AuthEvent.Delete) {
+         localStorage.removeItem(data.userId + "welcomed");
+         this.options.nukeOptions();
       }
    }
 
    async trySigninDialog(): Promise<void> {
       if (!this.signinDialogRef) {
-         if(this.authSvc.maybeSession()) {
+         if(this.authSvc.validSession()) {
             // noop if ready is resolved
             this.showProgress = true;
             await this.authSvc.ready;
             this.showProgress = false;
          }
 
-         if(!this.authSvc.isAuthenticated()) {
+         if(!this.authSvc.authenticated()) {
             this.signinDialogRef = this.dialog.open(SigninDialog, {
                backdropClass: 'signinBackdrop',
                closeOnNavigation: true
             });
 
-            this.signinDialogRef.afterClosed().subscribe(() => {
+            this.signinDialogRef.afterClosed().subscribe((result:string) => {
                this.signinDialogRef = undefined;
+               if (result === 'Login') {
+                  this.r2.selectRootElement('#clearInput').focus();
+               }
             });
          }
       }
@@ -353,14 +367,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.clearFile = undefined;
       this.clearText = '';
       this.clearLabel = 'Clear Text';
-      if (!this.welcomed && this.authSvc.isAuthenticated()) {
+      if (!this.welcomed && this.authSvc.authenticated()) {
          this.bubbleTip1.show();
          this.bubbleTip2.hide();
       }
    }
 
    onClearInput() {
-      if (!this.welcomed && this.authSvc.isAuthenticated()) {
+      if (!this.welcomed && this.authSvc.authenticated()) {
          this.bubbleTip1.hide();
          this.bubbleTip2.show();
       }
@@ -470,7 +484,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          return;
       }
 
-      if (!this.authSvc.isAuthenticated()) {
+      if (!this.authSvc.authenticated()) {
          this.showClearError('User not authenticated, try refreshing this page');
          return;
       }
@@ -539,7 +553,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          return;
       }
 
-      if (!this.authSvc.isAuthenticated()) {
+      if (!this.authSvc.authenticated()) {
          this.showClearError('User not authenticated, try refreshing this page');
          return;
       }
@@ -662,7 +676,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          return;
       }
 
-      if (!this.authSvc.isAuthenticated()) {
+      if (!this.authSvc.authenticated()) {
          this.showClearError('User not authenticated, try refreshing this page');
          return;
       }
@@ -706,7 +720,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          return;
       }
 
-      if (!this.authSvc.isAuthenticated()) {
+      if (!this.authSvc.authenticated()) {
          this.showClearError('User not authenticated, try refreshing this page');
          return;
       }
@@ -1008,7 +1022,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    async onCipherTextInfo(): Promise<void> {
       try {
-         if (!this.authSvc.isAuthenticated()) {
+         if (!this.authSvc.authenticated()) {
             throw new Error('User not authenticated, try refreshing this page')
          }
 
@@ -1024,7 +1038,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    // the original version of loop decryption is broken (don't think it was
    // ever used in the wild)
    async getCipherDataInfo(): Promise<CipherDataInfo> {
-      if (!this.authSvc.isAuthenticated()) {
+      if (!this.authSvc.authenticated()) {
          throw new Error('User not authenticated, try refreshing this page')
       }
 
