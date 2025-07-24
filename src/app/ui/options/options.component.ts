@@ -43,7 +43,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
-import { AuthenticatorService, INACTIVITY_TIMEOUT } from '../../services/authenticator.service';
+import { AuthenticatorService, ACTIVITY_TIMEOUT } from '../../services/authenticator.service';
 import { CipherService } from '../../services/cipher.service';
 import { makeTookMsg } from '../../services/utils';
 import * as cc from '../../services/cipher.consts';
@@ -93,7 +93,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    public cipherPanelExpanded = false;
    public hashTimeWarning = '';
 
-   public readonly INACTIVITY_TIMEOUT = INACTIVITY_TIMEOUT;
+   public readonly ACTIVITY_TIMEOUT = ACTIVITY_TIMEOUT;
    public readonly LOOPS_MAX = 10;
    public readonly LOOPS_DEFAULT = 1;
    public readonly ICOUNT_MIN = cc.ICOUNT_MIN;
@@ -163,7 +163,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
             this.ICOUNT_MAX = icountMax;
          }).finally(() => {
             // load after benchmark to overwrite benchmarks with saved values
-            if (this.authSvc.isAuthenticated()) {
+            if (this.authSvc.authenticated()) {
                this.loadOptions();
             } else {
                this.defaultOptions();
@@ -252,7 +252,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    nukeOptions(): void {
       this.defaultOptions();
       try {
-         this.authSvc.lsDel('welcomed');
          this.authSvc.lsDel('algorithm');
          this.authSvc.lsDel('icount');
          this.authSvc.lsDel('hidepwd');
@@ -340,7 +339,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    private setCacheTime(tm: string | null): void {
-      setIfBetween(tm, 0, this.INACTIVITY_TIMEOUT, (num) => {
+      setIfBetween(tm, 0, this.ACTIVITY_TIMEOUT, (num) => {
          //         this._cacheTime = num;
          this.cacheTimeInput.setValue(num);
       });
@@ -441,7 +440,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    onCacheTimeChange(cacheTime: number | null) {
       if (cacheTime != null) {
          cacheTime = Math.max(cacheTime, 0);
-         cacheTime = Math.min(cacheTime, this.INACTIVITY_TIMEOUT);
+         cacheTime = Math.min(cacheTime, this.ACTIVITY_TIMEOUT);
 
          if (cacheTime != this.cacheTimeInput.value) {
             this.cacheTimeInput.setValue(cacheTime);

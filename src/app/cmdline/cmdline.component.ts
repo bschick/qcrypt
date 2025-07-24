@@ -65,7 +65,10 @@ export class CmdLineComponent implements OnInit, OnDestroy {
    ngOnInit() {
       this.authSub = this.authSvc.on(
          [AuthEvent.Logout],
-         () => this.router.navigateByUrl('/')
+         () => {
+            this.error = '';
+            this.router.navigateByUrl('/');
+         }
       );
 
       this.reloadData();

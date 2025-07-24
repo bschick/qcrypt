@@ -104,7 +104,7 @@ SOFTWARE. -->
         </div>
         <div>
           <div [ngClass]="clearMsgClass" [hidden]="!clearMsg" [innerHTML]="clearMsg"></div>
-          <textarea matInput id="clearInput" autofocus cdkTextareaAutosize placeholder="" class="txt-area-clear"
+          <textarea matInput #clearInput id="clearInput" autofocus cdkTextareaAutosize placeholder="" class="txt-area-clear"
             [(ngModel)]="clearText" [ngModelOptions]="{standalone: true}" [readonly]="clearMsg ? 'true' : 'false'"
             [disabled]="(showProgress) ? 'true' : 'false'" (input)="onClearInput()">
           </textarea>

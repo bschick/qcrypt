@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, OnInit } from '@angular/core';
+import { AfterViewInit, Component, OnInit, Renderer2 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatInputModule } from '@angular/material/input';
@@ -44,7 +44,7 @@ import { ClipboardModule } from '@angular/cdk/clipboard';
         FormsModule, ClipboardModule, MatTooltipModule,
     ]
 })
-export class NewUserComponent implements OnInit {
+export class NewUserComponent implements OnInit, AfterViewInit {
 
    public showProgress = false;
    public error = '';
@@ -54,6 +54,7 @@ export class NewUserComponent implements OnInit {
    public authenticated = false;
 
    constructor(
+      private r2: Renderer2,
       private authSvc: AuthenticatorService,
       private router: Router,
       private snackBar: MatSnackBar) {
@@ -64,7 +65,18 @@ export class NewUserComponent implements OnInit {
       if (userId && userName) {
          this.currentUserName = userName;
       }
-      this.authenticated = this.authSvc.isAuthenticated();
+      this.authenticated = this.authSvc.authenticated();
+   }
+
+   ngAfterViewInit(): void {
+      try {
+         // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
+         setTimeout(
+            () => this.r2.selectRootElement('#userName').focus(), 0
+         );
+      } catch (err) {
+         console.error(err);
+      }
    }
 
    toastMessage(msg: string): void {
@@ -101,7 +113,7 @@ export class NewUserComponent implements OnInit {
 
       try {
          this.showProgress = true;
-         this.authSvc.forgetUserInfo();
+         this.authSvc.forgetUser();
          await this.authSvc.newUser(this.newUserName);
          this.router.navigateByUrl('/showrecovery');
       } catch (err) {

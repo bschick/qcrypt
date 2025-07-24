@@ -88,7 +88,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
 
       this.authSub = this.authSvc.on(
          [AuthEvent.Logout],
-         () => this.done.emit(true)
+         () => this.refresh()
       );
    }
 
@@ -157,7 +157,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
 
    async refresh(): Promise<void> {
       this.error = '';
-      if (this.authSvc.isAuthenticated()) {
+      if (this.authSvc.authenticated()) {
          // This runs async handle updates in signal
          this.authSvc.refreshUserInfo().catch((err) => {
             console.error(err);
@@ -165,6 +165,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       } else {
          this.done.emit(true);
          this.passKeys = [];
+         this.userName = '';
       }
    }
 

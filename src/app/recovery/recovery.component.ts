@@ -64,7 +64,7 @@ export class RecoveryComponent implements OnInit {
       this.showProgress = true;
 
       this.authSvc.ready.then( () => {
-         this.authenticated = this.authSvc.isAuthenticated();
+         this.authenticated = this.authSvc.authenticated();
          if (this.authenticated) {
             this.selfRecovery = this.recoverUserCred === this.authSvc.userCred;
          }
