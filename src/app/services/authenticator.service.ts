@@ -51,6 +51,7 @@ export type SenderLinkInfo = {
 
 export type DeleteInfo = {
    credentialId: string;
+   verified: boolean;
    userId?: string;
 };
 
@@ -276,7 +277,7 @@ export class AuthenticatorService {
       }
    }
 
-   async setPasskeyDescription(credentialId: string, description: string): Promise<string> {
+   async setPasskeyDescription(credentialId: string, description: string): Promise<void> {
       if (!description) {
          throw new Error('missing description');
       }
@@ -294,6 +295,7 @@ export class AuthenticatorService {
       try {
          var putDescResp = await fetch(putDescUrl, {
             method: 'PUT',
+            credentials: 'include',
             mode: 'cors',
             cache: 'no-store',
             body: description,
@@ -306,12 +308,9 @@ export class AuthenticatorService {
       if (!putDescResp.ok) {
          throw new Error('setting description failed: ' + await putDescResp.text());
       }
-
-      const putDescInfo = await putDescResp.json();
-      return putDescInfo.description;
    }
 
-   async setUserName(userName: string): Promise<string> {
+   async setUserName(userName: string): Promise<void> {
       if (!userName) {
          throw new Error('missing description');
       }
@@ -326,6 +325,7 @@ export class AuthenticatorService {
       try {
          var putUserNameResp = await fetch(putUserNameUrl, {
             method: 'PUT',
+            credentials: 'include',
             mode: 'cors',
             cache: 'no-store',
             body: userName,
@@ -341,7 +341,6 @@ export class AuthenticatorService {
 
       const putUserNameInfo = await putUserNameResp.json();
       this.storeUserInfo(this._userId!, putUserNameInfo.userName);
-      return putUserNameInfo.userName;
    }
 
    async deletePasskey(credentialId: string): Promise<DeleteInfo> {
@@ -356,6 +355,7 @@ export class AuthenticatorService {
       try {
          var delPasskeyResp = await fetch(delPasskeyUrl, {
             method: 'DELETE',
+            credentials: 'include',
             mode: 'cors',
             cache: 'no-store',
          });
@@ -371,7 +371,7 @@ export class AuthenticatorService {
       const delPasskeyInfo = await delPasskeyResp.json() as DeleteInfo;
 
       // User is gone... so forgeeet about it
-      if (delPasskeyInfo.userId) {
+      if (!delPasskeyInfo.verified) {
          this.forgetUserInfo();
       }
 
@@ -387,6 +387,7 @@ export class AuthenticatorService {
       try {
          var getAuthsResp = await fetch(getAuthsUrl, {
             method: 'GET',
+            credentials: 'include',
             mode: 'cors',
             cache: 'no-store',
          });
@@ -434,6 +435,7 @@ export class AuthenticatorService {
       try {
          var getAuthsResp = await fetch(getAuthsUrl, {
             method: 'GET',
+            credentials: 'include',
             mode: 'cors',
             cache: 'no-store',
          });
@@ -478,6 +480,7 @@ export class AuthenticatorService {
       try {
          var optionsResp = await fetch(optUrl, {
             method: 'GET',
+            credentials: 'include',
             mode: 'cors',
             cache: 'no-store'
          });
@@ -522,6 +525,7 @@ export class AuthenticatorService {
       try {
          var verificationResp = await fetch(verifyUrl, {
             method: 'POST',
+            credentials: 'include',
             mode: 'cors',
             cache: 'no-store',
             headers: {
@@ -558,6 +562,7 @@ export class AuthenticatorService {
       try {
          var recoverResp = await fetch(recoverUrl, {
             method: 'POST',
+            credentials: 'include',
             mode: 'cors',
             cache: 'no-store'
          });
@@ -579,6 +584,7 @@ export class AuthenticatorService {
       try {
          var optionsResp = await fetch(optUrl, {
             method: 'GET',
+            credentials: 'include',
             mode: 'cors',
             cache: 'no-store'
          });
@@ -601,6 +607,7 @@ export class AuthenticatorService {
       try {
          var optionsResp = await fetch(optUrl, {
             method: 'GET',
+            credentials: 'include',
             mode: 'cors',
             cache: 'no-store'
          });
@@ -656,6 +663,7 @@ export class AuthenticatorService {
       try {
          var verificationResp = await fetch(verifyUrl, {
             method: 'POST',
+            credentials: 'include',
             mode: 'cors',
             cache: 'no-store',
             headers: {
