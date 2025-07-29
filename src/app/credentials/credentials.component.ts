@@ -100,7 +100,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
             try {
                const deletedInfo = await this.authSvc.deletePasskey(passkey.credentialId);
                this.refresh();
-               if (deletedInfo.userId) {
+               if (!deletedInfo.verified) {
                   this.router.navigateByUrl('/welcome');
                }
             } catch (err) {
@@ -114,7 +114,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    async onClickAdd() {
       try {
          this.error = '';
-         const registrationInfo = await this.authSvc.addPasskey();
+         await this.authSvc.addPasskey();
          this.refresh();
       } catch (err) {
          console.error(err);
