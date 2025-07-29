@@ -1,5 +1,11 @@
 # CHANGELOG.md
 
+## 5.0.1 (2025-06-22)
+
+Changes:
+
+  - compatibility changes to prepare for 5.1.0 release
+
 ## 5.0.0 (2025-06-22)
 
 Security:
