@@ -5,17 +5,20 @@
     </mat-progress-spinner>
     <h1>⚠️ Caution</h1>
     <p>
-      <b>You only need the credential below when using the Quick Crypt command line.</b>
-        For security, return here each time you need this value rather than saving a
-        copy. This credential, along with your encryption passwords, forms part of
-        the security key used to encrypt and decrypt your data.
+      <b>You only need the user credential below if you plan to use the
+        <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'command-line version'}">
+        Quick Crypt command line</a></b> or other cryptographic tools to encrypt and
+        decrypt your data.
+        This credential, along with your encryption passwords, is used to create
+        the key used to encrypt and decrypt your data. For optimal security, return
+        here each time you need this value rather than saving a local copy.
     </p>
     <p><b>Do not share or allow anyone else to access this value.</b></p>
     @if(!showProgress) {
       <div class="control-host">
         @if(!error) {
             <mat-form-field class="credential">
-                <mat-label>Credential</mat-label>
+                <mat-label>User Credential</mat-label>
                 <input id="credential" matInput autocomplete="off" [formControl]="userCredential"
                   [type]="hideCred ? 'password' : 'text'" readonly />
                 <mat-icon matSuffix (click)="hideCred = !hideCred">{{hideCred ? 'visibility_off' : 'visibility'}}</mat-icon>

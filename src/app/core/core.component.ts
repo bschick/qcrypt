@@ -100,7 +100,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    protected readonly useFilePicker = browserSupportsFilePickers();
    protected readonly useByteStream = browserSupportsBytesStream();
 
-   private signinDialogRef?: MatDialogRef<SigninDialog, any>
+   private signinDialogRef?: MatDialogRef<SigninDialog>
    private mouseDown = false;
    private cachedPassword = '';
    private cachedHint = '';
