@@ -109,6 +109,7 @@ export class AuthenticatorService {
    private _subject = new Subject<AuthEventData>();
    private _intervalId: number = 0;
    private _userCred?: string = undefined;
+   private _cachedRecoveryId?: string;
    public ready: Promise<void>;
 
    constructor(
@@ -137,12 +138,14 @@ export class AuthenticatorService {
       const myPKId = sessionStorage.getItem('pkid');
       const sessionExpired = expired(localStorage, 'sessionexpiry');
       const activityExpired = expired(localStorage, 'activityexpiry');
+      const [userId, userName] = this.loadKnownUser();
 
       return !(
          !globalPKId ||
          (myPKId && (globalPKId !== myPKId)) ||
          sessionExpired ||
-         activityExpired
+         activityExpired ||
+         !userId || !userName
       );
    }
 
@@ -254,18 +257,25 @@ export class AuthenticatorService {
          throw new Error('no active user');
       }
 
-      const verifyBody = await this._startAuth(this.userId, true);
-      const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>(
-         'verifyauth',
-         'POST',
-         verifyBody,
-      );
+      // only stored during user creation, clear after 1 use
+      let recoveryId = this._cachedRecoveryId;
+      this._cachedRecoveryId = undefined;
 
-      if (!serverLoginUserInfo || !serverLoginUserInfo.recoveryId) {
-         throw new Error('authentication failed');
+      if (!recoveryId) {
+         const verifyBody = await this._startAuth(this.userId, false, true);
+         const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>(
+            'verifyauth',
+            'POST',
+            verifyBody,
+         );
+
+         if (!serverLoginUserInfo || !serverLoginUserInfo.recoveryId) {
+            throw new Error('authentication failed');
+         }
+         recoveryId = serverLoginUserInfo.recoveryId;
       }
 
-      const recoveryIdBytes = base64ToBytes(serverLoginUserInfo.recoveryId);
+      const recoveryIdBytes = base64ToBytes(recoveryId);
       if (recoveryIdBytes.byteLength != RECOVERID_BYTES) {
          throw new Error('invalid recovery id length');
       }
@@ -597,7 +607,7 @@ export class AuthenticatorService {
          throw new Error('must be logged out to log in');
       }
 
-      const verifyBody = await this._startAuth(userId, false);
+      const verifyBody = await this._startAuth(userId, true, false);
       const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>(
          'verifyauth',
          'POST',
@@ -613,7 +623,8 @@ export class AuthenticatorService {
 
    private async _startAuth(
       userId: string | null,
-      createRecovery: boolean
+      includeUserCred: boolean,
+      includeRecovery: boolean
    ): Promise<string> {
 
       let urlPath: string;
@@ -655,36 +666,37 @@ export class AuthenticatorService {
       return JSON.stringify({
          ...startAuth,
          challenge: optionsJson.challenge,
-         createRecovery: createRecovery
+         includeusercred: includeUserCred,
+         includerecovery: includeRecovery
       });
    }
 
-   // getRecoveryValues(recoveryWords: string): [string, string] {
+   getRecoveryValues(recoveryWords: string): [string, string] {
 
-   //    if (!recoveryWords || recoveryWords.length == 0) {
-   //       throw new Error('missing recovery words');
-   //    }
+      if (!recoveryWords || recoveryWords.length == 0) {
+         throw new Error('missing recovery words');
+      }
 
-   //    if (!validateMnemonic(recoveryWords, wordlist)) {
-   //       throw new Error('invalid recovery words');
-   //    }
+      if (!validateMnemonic(recoveryWords, wordlist)) {
+         throw new Error('invalid recovery words');
+      }
 
-   //    const recoveryBytes = mnemonicToEntropy(recoveryWords, wordlist);
-   //    if (!recoveryBytes || recoveryBytes.byteLength < RECOVERID_BYTES + 1) {
-   //       throw new Error('invalid recovery id');
-   //    }
+      const recoveryBytes = mnemonicToEntropy(recoveryWords, wordlist);
+      if (!recoveryBytes || recoveryBytes.byteLength < RECOVERID_BYTES + 1) {
+         throw new Error('invalid recovery id');
+      }
 
-   //    const recoveryIdBytes = new Uint8Array(recoveryBytes.buffer, 0, RECOVERID_BYTES);
-   //    const userIdBytes = new Uint8Array(recoveryBytes.buffer, RECOVERID_BYTES);
-   //    if (recoveryIdBytes.byteLength != RECOVERID_BYTES) {
-   //       throw new Error('invalid recovery id length ' + recoveryIdBytes.byteLength);
-   //    }
+      const recoveryIdBytes = new Uint8Array(recoveryBytes.buffer, 0, RECOVERID_BYTES);
+      const userIdBytes = new Uint8Array(recoveryBytes.buffer, RECOVERID_BYTES);
+      if (recoveryIdBytes.byteLength != RECOVERID_BYTES) {
+         throw new Error('invalid recovery id length ' + recoveryIdBytes.byteLength);
+      }
 
-   //    const recoveryId = bytesToBase64(recoveryIdBytes);
-   //    const userId = bytesToBase64(userIdBytes);
+      const recoveryId = bytesToBase64(recoveryIdBytes);
+      const userId = bytesToBase64(userIdBytes);
 
-   //    return [recoveryId, userId];
-   // }
+      return [recoveryId, userId];
+   }
 
    async recover2(recoveryWords: string): Promise<UserInfo> {
 
@@ -694,7 +706,7 @@ export class AuthenticatorService {
          'POST'
       );
 
-      const serverLoginUserInfo = await this._finishRegistration(optionsJson);
+      const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, false);
       return this._loginUser(serverLoginUserInfo);
    }
 
@@ -709,7 +721,7 @@ export class AuthenticatorService {
          'POST'
       );
 
-      const serverLoginUserInfo = await this._finishRegistration(optionsJson);
+      const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, false);
       return this._loginUser(serverLoginUserInfo);
    }
 
@@ -724,7 +736,15 @@ export class AuthenticatorService {
          'GET'
       );
 
-      const serverLoginUserInfo = await this._finishRegistration(optionsJson);
+      const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, true);
+
+      // New user creation temporarily caches _recoveryId for use in the recovery word
+      // display page that immediately follows.
+      if( !serverLoginUserInfo || !serverLoginUserInfo.recoveryId ) {
+         throw new Error( 'missing recoveryId');
+      }
+      this._cachedRecoveryId = serverLoginUserInfo.recoveryId;
+
       return this._loginUser(serverLoginUserInfo);
    }
 
@@ -740,12 +760,14 @@ export class AuthenticatorService {
          'GET'
       );
 
-      const serverLoginUserInfo = await this._finishRegistration(optionsJson);
+      const serverLoginUserInfo = await this._finishRegistration(optionsJson, false, false);
       return this._updateLoggedInUser(serverLoginUserInfo);
    }
 
    private async _finishRegistration(
-      optionsJson: PublicKeyCredentialCreationOptionsJSON
+      optionsJson: PublicKeyCredentialCreationOptionsJSON,
+      includeUserCred: boolean,
+      includeRecovery: boolean
    ): Promise<ServerLoginUserInfo> {
 
       // SimpleWebAuthn v10 caused incompatibility with older versions by
@@ -772,6 +794,8 @@ export class AuthenticatorService {
          // To maintain compatibility with old clients, need to put this
          // back to actual b64Url rather than b64ofUT8BytesofBase64... argg
          userId: actualB64UserId,
+         includeusercred: includeUserCred,
+         includerecovery: includeRecovery,
          challenge: optionsJson.challenge,
       }
 

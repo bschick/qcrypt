@@ -37,6 +37,7 @@ import { AuthEvent, AuthenticatorService } from '../services/authenticator.servi
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Subscription } from 'rxjs';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 
 
 @Component({
@@ -45,7 +46,7 @@ import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
    styleUrl: './cmdline.component.scss',
    imports: [MatIconModule, MatButtonModule, ClipboardModule,
       MatInputModule, MatProgressSpinnerModule, MatFormFieldModule,
-      MatTooltipModule, FormsModule, ReactiveFormsModule
+      MatTooltipModule, FormsModule, ReactiveFormsModule, RouterLink
    ]
 })
 export class CmdLineComponent implements OnInit, OnDestroy {

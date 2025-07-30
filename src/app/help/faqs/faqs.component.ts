@@ -158,14 +158,16 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'Can I decrypt my data if the Quick Crypt site goes offline?',
-      answer: `Yes, as long as you have your recovery link. The user credential in
-      your recovery link and the password you used during encryption are the only inputs
-      needed to decrypt Quick Crypt cipher text. The website is not
+      answer: `Yes, as long as you have your user credential and the password
+      you used during encryption. You can get your user credential by
+      navigating to https://quickcrypt.org/cmdline. The user credential and the
+      password you used during encryption are the only inputs
+      needed to decrypt Quick Crypt ciphertext. The website is not
       required. There is a
-      command-line tool that decrypts Quick Crypt cipher armor. Just download the
+      command-line tool that decrypts Quick Crypt cipher armor. Download the
       <a href="https://github.com/bschick/qcrypt/tree/main/shell" target="_blank">qcrypt.cjs</a>
       file, install <a href="https://nodejs.org/" target="_blank">Node.js</a>,
-      , run the script from the command-line, and respond to the prompts:
+      , and run the script from the command-line:
       <blockquote>> node qcrypt.cjs</blockquote>
       <p>Other tools could also be used to decrypt Quick Crypt cipher armor in a
       multi-step process. If you want to be sure someone can recreate Quick Crypt's
@@ -180,11 +182,12 @@ const ELEMENT_DATA: FAQElement[] = [
       answer: `<p>Yes, as long as you have already signed into Quick Crypt.
       After signing in, Quick Crypt runs entirely in your browser and does not
       require an internet connection to decrypt or encrypt data.  If you are
-      inactive for 6 hours, however, Quick Crypt logs you out and then requires
+      inactive for 1.5 hours, however, Quick Crypt logs you out and then requires
       an internet connection to sign in again and decrypt data.</p>
       <p>The Quick Crypt command-line tool is another option that never
-      requires an internet connection once installed.
-      Just download the
+      requires an internet connection once installed. You need your user credential
+      and the password you used during encryption. You can get your user credential
+      by navigating to https://quickcrypt.org/cmdline. Then download the
       <a href="https://github.com/bschick/qcrypt/tree/main/shell" target="_blank">qcrypt.cjs</a>
       file and install <a href="https://nodejs.org/" target="_blank">Node.js</a>
       before going offline. Then
@@ -198,8 +201,9 @@ const ELEMENT_DATA: FAQElement[] = [
       answer: `Yes, there is a command-line tool that can decrypt, encrypt, and
       show cipher data information on your system without
       accessing the Quick Crypt website. To use the command-line tool to decrypt
-      data, you need the user credential from your recovery link and the password
-      you used during encryption. Just
+      data, you need your user credential and the password
+      you used during encryption. You can get your user credential by
+      navigating to https://quickcrypt.org/cmdline. Then
       <a href="https://github.com/bschick/qcrypt/tree/main/shell" target="_blank">
       download the qcrypt.cjs file</a>, ensure you have
       <a href="https://nodejs.org/" target="_blank">Node.js</a> installed, and
@@ -213,27 +217,28 @@ const ELEMENT_DATA: FAQElement[] = [
       answer: `There is no way to decrypt data if you forget the
       password used during encryption. Quick Crypt requires both
       the password you used to encrypt the data and a passkey to access your user
-      credential. Your recovery link lets you create a new passkey, but there is
+      credential. Your recovery word pattern lets you create a new passkey, but there is
       no way to recover a lost password. Consider using a password hint
       to help remember your password.`
    },
 
    {
       position: 0,
-      question: 'What should I do if I cannot locate my passkey but have my recovery link?',
-      answer: `Paste your recovery link into your browser's address bar and hit enter. Quick
+      question: 'What should I do if I cannot locate my passkey but have my recovery word pattern?',
+      answer: `Go to Quick Crypt's <a href="/recovery2">account recovery</a> page and
+      enter your recovery word pattern. Start the recovery process and Quick
       Crypt will delete all existing passkeys and create a new one for you.`
    },
 
    {
       position: 0,
-      question: 'What happens if I cannot locate my passkey or my recovery link?',
-      answer: `If you lost both your Quick Crypt passkeys and recovery link, you cannot
+      question: 'What happens if I cannot locate my passkey or my recovery word pattern?',
+      answer: `If you lost both your Quick Crypt passkeys and recovery word pattern, you cannot
       access your existing user identity to decrypt or encrypt data. This is similar to
       forgetting your encryption password for all previous encryptions. To continue using
       Quick Crypt, you may create a new user identity, but the new user cannot decrypt
-      existing cipher text. If you find your original recovery link or passkey later, you
-      can use either to regain access to your original user identity anytime.`
+      existing ciphertext. If you find your original recovery word pattern or passkey
+      later, you can use either to regain access to your original user identity.`
    },
 /*
    {
@@ -452,10 +457,9 @@ const ELEMENT_DATA: FAQElement[] = [
       with the 3-line button in the toolbar. Deleting your last passkey will also
       delete your entire Quick Crypt user identity.
       Once removed, you cannot use Quick Crypt to decrypt data
-      with the removed user identity. This is not reversible, even with the recovery
-      link. You could use data in the recovery link with other tools to
-      decrypt your data (see the related question). Remember to also delete passkeys
-      from your system using your local passkey management tool.`
+      with the removed user identity. This is not reversible, even with your recovery
+      word pattern. Remember to also delete passkeys
+      from your system using your passkey management tool.`
    },
 
 
@@ -463,9 +467,9 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'What should I do if someone I don\'t trust obtained a password I used for encryption?',
       answer: `Your data is still protected.
-      The potential attacker also needs your encrypted data and your passkey or recovery link
-      to decrypt it.
-      Without a passkey or recovery link to access your user credential,
+      The potential attacker also needs your encrypted data and your passkey or
+      recovery word pattern to decrypt it.
+      Without a passkey or recovery word pattern to access your user credential,
       an attacker cannot decrypt your data. Regardless, the best response to a stolen password
       is to re-encrypt your data with a new password and delete any cipher armor created with
       the stolen password.`
@@ -482,31 +486,32 @@ const ELEMENT_DATA: FAQElement[] = [
       a new passkey. After confirming that your new passkey works, delete the passkey you
       lost from Quick Crypt and from your passkey management tool. There is no need to
       re-encrypt your data unless someone may have used your
-      passkey to sign in and copy your recovery link. If you believe someone used your
-      passkey to retrieve your recovery link, see the question about an untrusted person
-      obtaining your recovery link.`
+      passkey to sign in to Quick Crypt. If you believe someone used your passkey to sign
+      in, see the question about an untrusted person obtaining your recovery word pattern.`
    },
 
    {
       position: 0,
-      question: 'What should I do if someone I don\'t trust obtained my recovery link?',
+      question: 'What should I do if someone I don\'t trust obtained my recovery word pattern?',
       answer: `Your data is still protected, but your Quick Crypt user account is at risk.
       The potential attacker would also need your encrypted data and the password you used
       during encryption to decrypt it. Without your encryption password, the attacker cannot
-      decrypt your data. However, the person with your recovery link could cause you grief
-      by deleting your passkeys or your entire Quick Crypt user account. The best response to a
-      stolen recovery link is to create a totally new Quick Crypt user, re-encrypt
-      your data, and then delete the previous cipher armor and original user identity.`
+      decrypt your data. However, the person with your recovery word pattern could cause you
+      grief by replacing your passkeys or deleting your entire Quick Crypt user account,
+      preventing you from decrypting your own data. The
+      best response to a stolen recovery word pattern is to create a totally new Quick Crypt
+      user, re-encrypt your data, and then delete the previous cipher armor and original user
+      identity.`
    },
 
    {
       position: 0,
-      question: 'What should I do if someone I don\'t trust obtained my recovery link or passkey and a password I used for encryption?',
+      question: 'What should I do if someone I don\'t trust obtained my recovery word pattern or passkey and a password I used for encryption?',
       answer: `The potential attacker also needs your encrypted data to decrypt it.
       If the attacker has your encrypted data, your confidential information may be
-      exposed. The best response to a stolen
-      recovery link or passkey and password is to create a totally
-      new Quick Crypt user, re-encrypt your data with a new password, and then delete
+      exposed. The best response to a stolen recovery word pattern or passkey along
+      with an encryption password is to create a totally new Quick Crypt user, re-encrypt
+      your data with a new password, and then delete
       the previous cipher armor and your previous user identity.`
    },
 
@@ -518,9 +523,14 @@ const ELEMENT_DATA: FAQElement[] = [
       <ol type='i'>
          <li><b>Coding errors:</b> We've done our best, but this is always a possible weakness.
          Please <a href="https://github.com/bschick/qcrypt" target="_blank">review the code</a> and
-         <a href="https://github.com/bschick/qcrypt/issues" target="_blank">report issues</a>
-         you find. Quick Crypt may open a bug bounty program to
-         encourage reporting.</li>
+         <a href="https://github.com/bschick/qcrypt/issues" target="_blank">report issues</a>.
+         Quick Crypt may open a bug bounty program to encourage reporting.</li>
+         <li><b>Protocol design flaws:</b>
+         Much like code reviews, we appreciate reviews of the
+         <a href="/help/protocol">Quick Crypt protocol</a>. Please
+         <a href="https://github.com/bschick/qcrypt/issues" target="_blank">report issues</a>.
+         We are also planning to engage third party auditors to review Quick Crypt's protocol
+         and will publish the results.</li>
          <li><b>Supply chain attacks:</b> This is a growing security issue for all software.
          Quick Crypt tries to limit the surface area of attack by using a small number
          of well-known open-source libraries (and your web browser of choice). See the
@@ -538,10 +548,10 @@ const ELEMENT_DATA: FAQElement[] = [
          'single-page' web-app to better ensure integrity.
          </li>
          <li><b>Server-side data theft or logic injection:</b> Quick Crypt uses AWS
-         for server-side logic
-         and data storage, and has a minimal API. Our AWS account follows best practices
-         and uses AWS Config
-         and AWS Security Hub to help detect problems. A continuous penetration
+         for server-side logic, data storage, encryption at rest, and has a minimal API.
+         Our AWS account follows best practices and uses AWS Config
+         and AWS Security Hub to help detect problems. Sensitive data is encrypted
+         at rest using AWS FIPS 140-3 Level 3 HSMs. A continuous penetration
          testing tool may be added in the future. Server code is also open-source
          and <a href="https://github.com/bschick/qcrypt-server" target="_blank">
          available for review</a> and
@@ -557,16 +567,17 @@ const ELEMENT_DATA: FAQElement[] = [
          with a passkey bound to Quick Crypt's domain. User credentials and passkeys
          make it infeasible for other websites to decrypt your data since
          browsers are not fooled by similar looking websites
-         or domain names and will not present a passkey bound to Quick Crypt for another
-         website. Quick Crypt cannot prevent you from starting at a similar looking
-         untrusted website and entering clear text and passwords, however. The best way
+         or domain names and will not present a passkey bound to https://quickcrypt.org
+         to another
+         website. Quick Crypt cannot prevent you from entering clear text and passwords
+         at a similar looking untrusted website however. The best way
          to reduce that risk is to always confirm your user name is shown at the top of the
          password input popup. You should also navigate directly to https://quickcrypt.org,
          save it as a bookmark, and only follow links from sites you trust.
          </li>
-         <li><b>Stolen passkeys, recovery links, or encryption passwords:</b>
+         <li><b>Stolen passkeys, recovery word pattern, or encryption passwords:</b>
          See the related questions about an untrusted user obtaining your
-         passkeys, recovery links, or encryption passwords. Those questions describe
+         passkeys, recovery word pattern, or encryption passwords. Those questions describe
          the best response to each type of data exposure.
          </li>
       </ol>`
@@ -581,10 +592,11 @@ const ELEMENT_DATA: FAQElement[] = [
       XChaCha20 Poly1305, and AEGIS 256. No mode is bad, and choosing one depends on
       your criteria.
       <ul>
-         <li>If you want the most recently designed cipher mode, choose <b>AEGIS 256</b>.
+         <li>If you want the most recently designed cipher mode, that is key-committing
+         even without Quick Crypt's additional BLAKE2b keyed hash, choose <b>AEGIS 256</b>.
          </li>
          <li>If you want the most widely used and studied mode, choose <b>AES 256 GCM</b>,
-         which is the most commonly used TLS 1.3 cipher used by most browsers.
+         which is the most commonly used TLS 1.3 cipher in browsers.
          <li>If you want a mode that many regard as more robust than AES 256 GCM and
          whose close sibling is in the TLS 1.3 standard, choose <b>XChaCha20 Poly130</b>.
          </li>
@@ -609,11 +621,12 @@ const ELEMENT_DATA: FAQElement[] = [
       </ul>
       <p>Quick Cyrpt defaults to <b>XChaCha20 Poly1305</b> because it is very
       well-established and generally considered more robust than AES 256 GCM. The
-      libsodium implementation is also designed to be side-channel attack resistant and
+      libsodium implementation is also designed to be side-channel attack resistant,
+      is key-committing when paired with Quick Crypt's extra MAC tag, and
       is easy for Quick Crypt to update if needed.
       </p><p>For increased protection, you can encrypt your data multiple times
       by setting loop encrypt in the "Advanced Options" section to greater than 1.
-      Each loop can have a different cipher mode and password. So rather than
+      Each loop shoud use a different cipher mode and password. So rather than
       choosing between your browser's AES 256 GCM implementation and libsodium's
       XChaCha20 Poly1305, for example, you can apply both.</p>`
    },
@@ -675,33 +688,32 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'Can Quick Crypt decrypt cipher text created by other tools?',
-      answer: `No, Quick Crypt was not designed to interoperate with cipher text
+      question: 'Can Quick Crypt decrypt ciphertext created by other tools?',
+      answer: `No, Quick Crypt was not designed to interoperate with ciphertext
       from other tools. Quick Crypt's goals are described on the
       <a href="/help/overview">overview page</a>`
    },
 
    {
       position: 0,
-      question: 'Can other tools decrypt cipher text created by Quick Crypt?',
-      answer: `Yes, as long as you save your recovery link, remember your
-      encryption password, and follow
+      question: 'Can other tools decrypt ciphertext created by Quick Crypt?',
+      answer: `Yes, as long as you copy your user credential from
+      https://quickcrypt.org/cmdline, remember your encryption password, and follow
       <a href="/help/protocol">Quick Crypt's protocol</a>, you could use other
-      tools to decrypt cipher text created by Quick Crypt in a multi-step process.
-      Those steps aren't documented yet, but are fairly easy to figure out.`
+      tools to decrypt ciphertext created by Quick Crypt in a multi-step process.`
    },
 
    {
       position: 0,
       question: 'What are the different Cipher Armor formats?',
       answer: `<p>Cipher armor is text that includes encrypted
-      data and parameters (called cipher text) combined with metadata
-      about the cipher text. The 'Compact'
+      data and parameters (called ciphertext) combined with metadata
+      about the ciphertext. The 'Compact'
       and 'Indent' formats are JSON containing the same elements
       with different spacing and line breaks. As the names imply, the
       'Compact' format is smaller while 'Indent' is easier to read.</p>
       <p>
-      The 'Link' format is a URL containing cipher text that when entered in
+      The 'Link' format is a URL containing ciphertext that when entered in
       a browser, takes you directly to the Quick Crypt website with the cipher
       text ready for decryption. While this is very convenient, the 'Link'
       format is less safe. If an attacker can manipulate your stored cipher armor
@@ -713,7 +725,7 @@ const ELEMENT_DATA: FAQElement[] = [
       'threat modeling' question). An untrusted site could request your encryption
       password to try obtaining some of the information needed for decryption, but
       you can detect that by always confirming your user name is
-      shown at the top of the password prompt.</p>
+      shown at the top of the password popup.</p>
 
       <p>Opting for the 'Compact' or 'Indent' cipher armor formats and
       navigating directly to Quick Crypt's website is the safest choice.
@@ -821,11 +833,11 @@ const ELEMENT_DATA: FAQElement[] = [
       question: 'Are my password hints encrypted?',
       answer: `Yes, password hints are encrypted with a key derived from
       your user credential that is accessed with passkey authentication. Although
-      others cannot see your passowrd hints without your passkey,
-      for the most robust protection of your information avoid
-      hints that make it easy for others to guess your passwords.
-      The best password hints help only you remember your passwords.
-      That way, you are protected even if your passkey or recovery link
+      others cannot see your password hints without your passkey,
+      for the most robust protection avoid hints that make it easy for others to
+      guess your passwords.
+      The best password hints help only you remember your passwords. That way,
+      your data is protected even if your passkey or recovery word pattern
       is stolen.`
    },
 
@@ -843,15 +855,19 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'Why does Quick Crypt use both MACs and AEAD ciphers?',
-      answer: `This was done for defense-in-depth and so that Quick Crypt
-      can safely read and display metadata like version number before the
-      primary decryption algorithm runs. Imagine an attacker could modify your
-      encrypted data and knows of a bug in Chrome's AES GCM cipher. Although
-      unlikely, that might allow an attacker to craft the cipher text such
-      that data was leaked when you decrypted it. The additional MAC (BLAKE2b
-      keyed hash) validation means there would need to be problems with
-      both the libsodium generated BLAKE2b MAC and Chrome's AES cipher
-      implementation for such an attack to succeed, which is even more unlikely.`
+      answer: `First, by adding a distinct BLAKE2b keyed hash/MAC generated with
+      a key derived from the same key material as the primary encryption key,
+      Quick Crypt's protocol is <href="https://en.wikipedia.org/wiki/Authenticated_encryption#Key-committing_AEAD"
+      target="_blank">key-committing</a> for the available underlying AEAD
+      cipher modes. Second, Quick Crypt can safely read and display unencrypted
+      metadata, such as the version number, before the primary decryption algorithm
+      runs. And finally, the additional MAC provides defense-in-depth. Imagine an
+      attacker could modify your encrypted data and knows of a bug in Chrome's
+      AES-GCM cipher. Although unlikely, this might allow an attacker to craft the
+      ciphertext such that data is leaked when you decrypt it. The additional MAC
+      validation means that there would need to be problems with both the libsodium
+      generated BLAKE2b MAC and Chrome's AES cipher implementation for such an attack
+      to succeed, which is even less likely.`
    },
 
    {
