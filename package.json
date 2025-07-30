@@ -1,6 +1,6 @@
 {
   "name": "qcrypt",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "type": "module",
   "copyright": "© 2024–2025 Quick Crypt Contributors",
   "scripts": {
