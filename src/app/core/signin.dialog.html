@@ -28,15 +28,14 @@ SOFTWARE. -->
   <div mat-dialog-content class="dialog-content">
     <img src="/assets/passkey.svg" class="pklogo" />
     <p class="welcome">
-      <b>Welcome Back.</b> Quick Crypt uses a passkey to authenticate you each time
-      you return.
+      <b>Welcome Back.</b> Quick Crypt will request your passkey for sign in.
     </p>
     <div class="button-host">
       <button mat-raised-button (click)="onClickSignin($event)" class="button">
         <!--<mat-icon>login</mat-icon>--><span>Sign in as<br />{{userName}}</span>
       </button>
       <button mat-raised-button (click)="onClickForget($event)" class="button">
-        <!--<mat-icon>vpn_key</mat-icon>--><span>Sign in as a different user<br />or recover an account</span>
+        <!--<mat-icon>vpn_key</mat-icon>--><span>Sign in as a different user</span>
       </button>
       <div class="error-msg">{{error}}</div>
     </div>
