@@ -702,7 +702,7 @@ export class AuthenticatorService {
 
       const [recoveryId, userId] = this.getRecoveryValues(recoveryWords);
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>(
-         `recovery2?userid=${userId}&recoveryId=${recoveryId}`,
+         `recover2?userid=${userId}&recoveryId=${recoveryId}`,
          'POST'
       );
 
@@ -717,7 +717,7 @@ export class AuthenticatorService {
       }
 
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>(
-         `recovery?userid=${userId}&usercred=${userCred}`,
+         `recover?userid=${userId}&usercred=${userCred}`,
          'POST'
       );
 
@@ -732,8 +732,9 @@ export class AuthenticatorService {
       }
 
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>(
-         `regoptions?username=${userName}`,
-         'GET'
+         `regoptions`,
+         'POST',
+         userName
       );
 
       const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, true);
@@ -757,7 +758,7 @@ export class AuthenticatorService {
 
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>(
          `regoptions?userid=${this.userId}`,
-         'GET'
+         'POST'
       );
 
       const serverLoginUserInfo = await this._finishRegistration(optionsJson, false, false);
