@@ -65,9 +65,6 @@ export class RecoveryComponent implements OnInit {
 
       this.authSvc.ready.then( () => {
          this.authenticated = this.authSvc.authenticated();
-         if (this.authenticated) {
-            this.selfRecovery = this.recoverUserCred === this.authSvc.userCred;
-         }
 
          if (this.authenticated && this.authSvc.hasRecoveryId()) {
              this.router.navigateByUrl('/recovery2');
@@ -79,6 +76,9 @@ export class RecoveryComponent implements OnInit {
                   throw new Error("recovery link missing userid or usercred: " + this.activeRoute.snapshot.toString());
                }
                this.validRecoveryLink = true;
+               if (this.authenticated) {
+                  this.selfRecovery = this.recoverUserCred === this.authSvc.userCred;
+               }
             } catch (err) {
                console.error(err);
                this.error = 'Recovery link is invalid';
