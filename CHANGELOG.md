@@ -4,14 +4,15 @@
 
 Security:
 
-  - switched to https only jwt cookies for sessions (reducing transport of credential)
-  - switched to bip39 word patterns for account recovery (removing need to store credentials)
-  - sign out affects all browser quickcrypt tabs and windows
+  - switched to bip39 word patterns for account recovery (removing the need to store user credentials)
+  - switched to httponly JWT cookies for sessions (reducing transport of user credentials)
+  - require reauthentication to retrieve sensitive information like recovery words
+  - sign out affects all open Quick Crypt browser tabs and windows
 
 Changes:
 
   - sessions now persist across browser tabs and windows
-  - reduced inative automatic logout to 1.5 hours
+  - reduced automatic logout time from inactivity to 1.5 hours and max session to 3 hours
   - improved default input focus on a few pages
 
 ## 5.0.1 (2025-07-29)
