@@ -1,7 +1,6 @@
 @use "../common.scss";
 @use "@angular/material" as mat;
 
-
 .control-host {
   margin-top: 50px;
   display: flex;
@@ -32,7 +31,6 @@
     margin-top: 10px;
     min-height: 110px;
   }
-
 }
 
 .error-msg {
@@ -43,9 +41,13 @@
   justify-content: center;
 }
 
-
 .confirm {
-  max-width: 430px;
+  max-width: 500px;
+
+  // want extra margin on at end also
+  li {
+    margin-bottom: 7px;
+  }
 
   div {
     font-size: 16px;
@@ -63,4 +65,7 @@
     padding-left: 20px;
   }
 
+  .action-message {
+    margin-right: auto;
+  }
 }
