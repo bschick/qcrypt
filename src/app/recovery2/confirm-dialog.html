@@ -21,18 +21,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
 
 <div class="confirm">
-  <h1 mat-dialog-title class="heading">Continue Recovery?</h1>
+  <h1 mat-dialog-title class="heading">Account Mismatch</h1>
   <div class="message" mat-dialog-content>
-    You are signed in as <b>"{{currentUserName}}"</b>, but this recovery
-    pattern is for a different user. If you continue the recovery process,
-    "{{currentUserName}}" will be signed out, the passkeys of the other user
-    will be removed, then Quick Crypt will create a new passkey to recover
-    that user identity.
-    <br /><br />
-    Continue with recovery?
+    You are currently signed in as <b>"{{currentUserName}}"</b>, but are
+    trying to recover a different account. If you continue, the following
+    will happen:
+    <ol>
+      <li>You will be signed out of the <b>"{{currentUserName}}"</b> account</li>
+      <li>All passkeys for the other account will be removed</li>
+      <li>A new passkey will be created for the other account</li>
+      <li>You will be signed into the other account</li>
+    </ol>
   </div>
-
   <div class="actions" mat-dialog-actions>
+    <span class="action-message">Proceed with the recovery?</span>
     <button mat-button [mat-dialog-close]="true">Yes</button>
     <button mat-button [mat-dialog-close]="false">No</button>
   </div>
