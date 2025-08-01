@@ -38,7 +38,6 @@ import { wordlist } from '@scure/bip39/wordlists/english';
 const baseUrl = environment.domain;
 
 export const SESSION_TIMEOUT = 60 * 60 * 6;
-//export const ACTIVITY_TIMEOUT = 60 * 10;
 export const ACTIVITY_TIMEOUT = 60 * 60 * 1.5;
 const EXPIRY_INTERVAL = 1000 * 60 * 2;
 
@@ -219,7 +218,9 @@ export class AuthenticatorService {
 
       if (!response.ok) {
          if (response.status == 401) {
-            this.logout();
+            // currently 401 only comes back when auth failed, so logout
+            // make sure to pass false to endSession to avoid doFetch loop
+            this.logout(false);
             throw new Error('logged out');
          } else {
             throw new Error('response error: ' + await response.text());
@@ -235,7 +236,7 @@ export class AuthenticatorService {
       if (!this.validSession()) {
          return false;
       }
-      const [userId, _] = this.loadKnownUser();
+      const [userId] = this.loadKnownUser();
       const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>(
          `verifysess?userid=${userId}`,
          'POST'
@@ -249,7 +250,7 @@ export class AuthenticatorService {
       return true;
    }
 
-   // require re-authentication with passkey
+   // require reauthentication with passkey
    public async getRecoveryWords(): Promise<string> {
       await this.ready;
 
@@ -413,21 +414,21 @@ export class AuthenticatorService {
       // validSession becomes false if either inactivity time happens in this tab
       // or another. also if another tab logs into a differerent passkey
       if (!this.validSession()) {
-         this.logout();
+         this.logout(true);
       }
    }
 
-   private _deleteUser() {
+   private _deletedUser()  {
       const eventData = this._captureEventData(AuthEvent.Delete);
-      this.forgetUser();
+      // no need to end session because user was deleted on server
+      this.forgetUser(false);
       this._emit(eventData);
-
    }
 
    // log out globally, and forget user globally
-   forgetUser() {
+   forgetUser(endSession: boolean) {
       const eventData = this._captureEventData(AuthEvent.Forget);
-      this.logout();
+      this.logout(endSession);
 
       // not yet handled well if multiple tabs are open
       localStorage.removeItem('username');
@@ -436,7 +437,20 @@ export class AuthenticatorService {
    }
 
    // log out globally, and remember user (other tap will logout on timertick)
-   logout() {
+   logout(endSession: boolean) {
+
+      if(endSession) {
+         // let this happen in the background
+         const [userId] = this.loadKnownUser();
+         this._doFetch<string>(
+            `endsess?userid=${userId}`,
+            'POST'
+         ).catch( (err) => {
+            // report, but don't abort logout
+            console.error(err);
+         });
+      }
+
       const eventData = this._captureEventData(AuthEvent.Logout);
       if (this._intervalId) {
          clearInterval(this._intervalId);
@@ -530,7 +544,7 @@ export class AuthenticatorService {
 
       // If we have an unverified response, that was the last PK and the user was deleted
       if (!serverUserInfo.verified) {
-         this._deleteUser();
+         this._deletedUser();
          return 0;
       } else {
          this._updateLoggedInUser(serverUserInfo);

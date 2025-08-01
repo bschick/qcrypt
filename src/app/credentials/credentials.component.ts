@@ -184,7 +184,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
 
    async onClickSignout(): Promise<void> {
       this.error = '';
-      this.authSvc.logout();
+      this.authSvc.logout(true);
       this.refresh();
    }
 
