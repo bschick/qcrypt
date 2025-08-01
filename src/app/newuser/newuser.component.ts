@@ -113,7 +113,8 @@ export class NewUserComponent implements OnInit, AfterViewInit {
 
       try {
          this.showProgress = true;
-         this.authSvc.forgetUser();
+         // Session will be replaced, so don't need to kill direclty
+         this.authSvc.forgetUser(false);
          await this.authSvc.newUser(this.newUserName);
          this.router.navigateByUrl('/showrecovery');
       } catch (err) {

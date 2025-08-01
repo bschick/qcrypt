@@ -300,7 +300,8 @@ export class SigninDialog {
 
    onClickForget(event: any) {
       this.error = '';
-      this.authSvc.forgetUser();
+      // session should already be ended if login dialog is showing
+      this.authSvc.forgetUser(false);
       this.router.navigateByUrl('/welcome');
       this.dialogRef.close('Forget');
    }
