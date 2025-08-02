@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-## 5.1.0 (2025-07-31)
+## 5.1.0 (2025-08-01)
 
 Security:
 
@@ -11,8 +11,8 @@ Security:
 
 Changes:
 
-  - sessions now persist across browser tabs and windows
-  - reduced automatic logout time from inactivity to 1.5 hours and max session to 3 hours
+  - sessions now work across browser tabs and windows
+  - reduced inactivity logout to 1.5 and max elapsed time logout to 3 hours
   - improved default input focus on a few pages
 
 ## 5.0.1 (2025-07-29)
