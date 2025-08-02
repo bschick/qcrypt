@@ -163,11 +163,13 @@ export class OptionsComponent implements OnInit, AfterViewInit {
             this.ICOUNT_MAX = icountMax;
          }).finally(() => {
             // load after benchmark to overwrite benchmarks with saved values
-            if (this.authSvc.authenticated()) {
-               this.loadOptions();
-            } else {
-               this.defaultOptions();
-            }
+            this.authSvc.ready.then( () => {
+               if (this.authSvc.authenticated()) {
+                  this.loadOptions();
+               } else {
+                  this.defaultOptions();
+               }
+            });
          });
    }
 
