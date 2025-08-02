@@ -12,7 +12,7 @@ Security:
 Changes:
 
   - sessions now work across browser tabs and windows
-  - reduced inactivity logout to 1.5 and max elapsed time logout to 3 hours
+  - reduced inactivity logout to 1.5 hours and max elapsed time logout to 3 hours
   - improved default input focus on a few pages
 
 ## 5.0.1 (2025-07-29)
