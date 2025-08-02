@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2024 Brad Schick
+Copyright (c) 2025 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -103,5 +103,11 @@ export class RecoveryDialog {
       event.stopPropagation();
       this.dialogRef.close();
       this.router.navigateByUrl('/newuser');
+   }
+
+   onClickRecovery2(event: Event) {
+      event.stopPropagation();
+      this.dialogRef.close();
+      this.router.navigateByUrl('/recovery2');
    }
 }

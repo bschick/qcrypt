@@ -3,7 +3,7 @@
     <h1>Protocol Description (v5)</h1>
     <p>Quick Crypt implements the protocols below to encrypt, validate, and decrypt data.
       This information is provided to help you understand how Quick Crypt works and
-      allow you to make your own assessment of its strength and trustworthiness. You
+      allow you to assess its strength and trustworthiness. You
       may also download a <a href="/assets/protocol5.pdf" download>pdf version</a> that is searchable.
       If you believe the protocols can be improved, please
       <a href="https://github.com/bschick/qcrypt/issues">
@@ -21,7 +21,7 @@
       including the
       <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API">
         Mozilla developer network</a>,
-      webauthn is described only at a high level
+      WebAuthn is described only at a high level
       to illustrate how user IDs and credentials are created and retrieved for
       cryptographic functions.
     </p>
@@ -53,13 +53,13 @@
     <h2>Block N Decryption by B</h2>
     <img src="/assets/decrypt_bN.png" width="227" height="147" />
     <h2>Webauthn Variables</h2>
-    <img src="/assets/webauthn.png" width="397" height="209" />
+    <img src="/assets/webauthn.png" width="397" height="228" />
     <h2>Registration by A</h2>
-    <img src="/assets/registration.png" width="300" height="316" />
+    <img src="/assets/registration.png" width="299" height="316" />
     <h2>Authentication by A</h2>
     <img src="/assets/authentication.png" width="228" height="233" />
     <h2>Recovery from Lost Passkey by A</h2>
-    <img src="/assets/recovery.png" width="299" height="253" />
+    <img src="/assets/recovery.png" width="298" height="252" />
     <h1 class="section">Cipher Data Structure (v5) </h1>
     <p>
       The table below illustrates the byte-level structure of cipher data created by Quick
@@ -225,11 +225,11 @@
         </tr>
         <tr>
           <td>v5</td>
-          <td>Cascade block MACs to prevent block reordering or deletion in large clear text encryption</td>
+          <td>Cascade block MACs to prevent block reordering or deletion in large plaintext encryption</td>
         </tr>
         <tr>
           <td>v5</td>
-          <td>Added terminal block flag to prevent last block deletion in large clear text encryption</td>
+          <td>Added terminal block flag to prevent last block deletion in large plaintext encryption</td>
         </tr>
         <tr>
           <td>v5</td>
@@ -251,7 +251,7 @@
         </tr>
         <tr>
           <td>v4</td>
-          <td>Changed to block based encryption and data structures to support large clear text encryption</td>
+          <td>Changed to block-based encryption and data structures to support large plaintext encryption</td>
         </tr>
         <tr>
           <td>v4</td>
@@ -263,7 +263,7 @@
         </tr>
         <tr>
           <td>v4</td>
-          <td>Added loop parameters to cipher additional data (and removed them from json output)</td>
+          <td>Added loop parameters to cipher additional data (and removed them from JSON output)</td>
         </tr>
         <tr>
           <td>v2, v3</td>
@@ -271,7 +271,7 @@
         </tr>
         <tr>
           <td>v1</td>
-          <td><a [routerLink]="'/help/protocol1'">Original version released April, 2024</a></td>
+          <td><a [routerLink]="'/help/protocol1'">Original version released April 2024</a></td>
         </tr>
       </tbody>
     </table>

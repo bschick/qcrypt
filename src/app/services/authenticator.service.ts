@@ -1,35 +1,47 @@
+/* MIT License
+
+Copyright (c) 2025 Brad Schick
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. */
+
 import { environment } from '../../environments/environment';
 import { Injectable, signal } from '@angular/core';
 import {
    PublicKeyCredentialCreationOptionsJSON,
    PublicKeyCredentialRequestOptionsJSON,
+   AuthenticationResponseJSON,
+   RegistrationResponseJSON,
    startRegistration, startAuthentication
 } from '@simplewebauthn/browser';
 import { Subject, Subscription, filter } from 'rxjs';
 import { DateTime } from 'luxon';
-import { base64ToBytes, bytesToBase64 } from './utils';
+import { base64ToBytes, bytesToBase64, expired } from './utils';
+import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
+import { wordlist } from '@scure/bip39/wordlists/english';
 
 const baseUrl = environment.domain;
 
-// 6 hours in seconds
-export const INACTIVITY_TIMEOUT = 60 * 60 * 6;
+export const SESSION_TIMEOUT = 60 * 60 * 6;
+export const ACTIVITY_TIMEOUT = 60 * 60 * 1.5;
+const EXPIRY_INTERVAL = 1000 * 60 * 2;
 
-export type RegistrationInfo = {
-   verified: boolean;
-   userCred: string;
-   userId: string;
-   userName: string;
-   lightIcon: string;
-   darkIcon: string;
-   description: string;
-};
-
-export type AuthenticationInfo = {
-   verified: boolean;
-   userCred: string;
-   userId: string;
-   userName: string;
-};
+const RECOVERID_BYTES = 16;
 
 export type AuthenticatorInfo = {
    credentialId: string;
@@ -37,6 +49,28 @@ export type AuthenticatorInfo = {
    lightIcon: string;
    darkIcon: string;
    name: string;
+};
+
+export type UserInfo = {
+   userId: string;
+   userName: string;
+   pkId: string;
+   hasRecoveryId: boolean;
+   authenticators: AuthenticatorInfo[];
+};
+
+type ServerUserInfo = {
+   verified: boolean;
+   userId?: string;
+   userName?: string;
+   hasRecoveryId?: boolean;
+   authenticators?: AuthenticatorInfo[];
+};
+
+type ServerLoginUserInfo = ServerUserInfo & {
+   pkId?: string;
+   userCred?: string;
+   recoveryId?: string;
 };
 
 export type SenderLinkInfo = {
@@ -49,23 +83,17 @@ export type SenderLinkInfo = {
    receive: boolean;
 };
 
-export type DeleteInfo = {
-   credentialId: string;
-   verified: boolean;
-   userId?: string;
-};
-
 export enum AuthEvent {
    Login,
    Logout,
-   Forget
-}
+   Forget,
+   Delete
+};
 
 export type AuthEventData = {
    readonly event: AuthEvent,
    readonly userId: string | null,
    readonly userName: string | null,
-   readonly userCred: string | null
 };
 
 
@@ -74,79 +102,192 @@ export type AuthEventData = {
 })
 export class AuthenticatorService {
 
-   private _userCred: string | null = null;
-   private _userName: string | null = null;
-   private _userId: string | null = null;
-   private _pkId: string | null = null;
-   private _subject = new Subject<AuthEventData>();
-   private _intervalId: number = 0;
-   private _expiration!: DateTime;
-
-   constructor() {
-      this._userId = localStorage.getItem('userid');
-      this._userName = localStorage.getItem('username');
-      if (this._userId) {
-         this._userCred = sessionStorage.getItem(this._userId + 'usercred');
-         if (this._userCred) {
-            const exp = sessionStorage.getItem(this._userId + 'expiration');
-            const pkId = sessionStorage.getItem(this._userId + 'pkid');
-            this.setActiveUser(this._userId, this._userName!, this._userCred, pkId!);
-            // replace the default expiration (set indirectly by setActiveUser)
-            // with the save value if present
-            if (exp) {
-               this._expiration = DateTime.fromISO(exp);
-               sessionStorage.setItem(this._userId + 'expiration', this._expiration.toISO()!);
-               // don't wait 5 minutes to check
-               this.timerTick();
-            }
-         }
-      }
-   }
-
-   public passKeys = signal<AuthenticatorInfo[]>([]);
+   public userInfo = signal<UserInfo | undefined>(undefined);
    public senderLinks = signal<SenderLinkInfo[]>([]);
 
-   get userCred(): string | null {
-      return this._userCred;
+   private _subject = new Subject<AuthEventData>();
+   private _intervalId: number = 0;
+   private _userCred?: string = undefined;
+   private _cachedRecoveryId?: string;
+   public ready: Promise<void>;
+
+   constructor(
+   ) {
+      this.ready = new Promise<void>((resolve) => {
+         this.loadSession().catch(
+            // just for debugging, remove
+            (err) => console.error(err)
+         ).finally(
+            () => resolve()
+         );
+      });
    }
 
-   get userName(): string | null {
-      return this._userName;
+   // it is possible for "authenticated" to be true and "validaSession"
+   // to be false. this happens when another tab logs out or out then in
+   // using a different Pk until this tab detects it
+   public authenticated(): boolean {
+      return !!this._userCred;
    }
 
-   get userId(): string | null {
-      return this._userId;
+   public validSession(): boolean {
+      // Expiry or changed passkey (from another tab) mean invalid sessoin
+      // Cookie may still be valid, but we won't use it.
+      const globalPKId = localStorage.getItem('pkid');
+      const myPKId = sessionStorage.getItem('pkid');
+      const sessionExpired = expired(localStorage, 'sessionexpiry');
+      const activityExpired = expired(localStorage, 'activityexpiry');
+      const [userId, userName] = this.loadKnownUser();
+
+      return !(
+         !globalPKId ||
+         (myPKId && (globalPKId !== myPKId)) ||
+         sessionExpired ||
+         activityExpired ||
+         !userId || !userName
+      );
    }
 
-   get pkId(): string | null {
-      return this._pkId;
+   public get userName(): string {
+      return this.getUserInfo().userName;
    }
 
-   isAuthenticated(): boolean {
-      return this._userCred && this._userId ? true : false;
+   public get userId(): string {
+      return this.getUserInfo().userId;
    }
 
-   isUserKnown(): boolean {
-      const userId = localStorage.getItem('userid');
-      const userName = localStorage.getItem('username');
-      return Boolean(userId && userName);
+   public hasRecoveryId(): boolean {
+      return this.getUserInfo().hasRecoveryId;
    }
 
-   getUserInfo(): [string | null, string | null] {
+   public get pkId(): string {
+      return this.getUserInfo().pkId;
+   }
+
+   public isCurrentPk(testPK: string): boolean {
+      return testPK === this.pkId;
+   }
+
+   public get userCred(): string {
+      if (!this.authenticated()) {
+         throw new Error('no active user');
+      }
+      return this._userCred!;
+   }
+
+   public isUserKnown(): boolean {
+      const [userId, userName] = this.loadKnownUser();
+      return userId != null && userName != null;
+   }
+
+   public loadKnownUser(): [string | null, string | null] {
       const userId = localStorage.getItem('userid');
       const userName = localStorage.getItem('username');
       return [userId, userName];
    }
 
-   getRecoveryLink(): string {
-      if (!this.isAuthenticated()) {
-         throw new Error('No active user');
+   public getUserInfo(): UserInfo {
+      if (!this.authenticated()) {
+         throw new Error('no active user');
       }
-      return new URL(
-         window.location.origin + '/recovery' +
-         '?userid=' + this.userId +
-         '&usercred=' + this.userCred
-      ).toString();
+      return this.userInfo()!;
+   }
+
+   private async _doFetch<T>(
+      urlPath: string,
+      method: string,
+      body?: string,
+   ): Promise<T> {
+
+      const url = new URL(urlPath, baseUrl);
+      try {
+         var response = await fetch(url, {
+            method: method,
+            mode: 'cors',
+            cache: 'no-store',
+            credentials: 'include',
+            body: body,
+            headers: {
+               'Content-Type': 'application/json',
+            },
+         });
+      } catch (err) {
+         console.error(err);
+         throw new Error('fetch error: ' + url);
+      }
+
+      if (!response.ok) {
+         if (response.status == 401) {
+            // currently 401 only comes back when auth failed, so logout
+            // make sure to pass false to endSession to avoid doFetch loop
+            this.logout(false);
+            throw new Error('logged out');
+         } else {
+            throw new Error('response error: ' + await response.text());
+         }
+      }
+
+      return response.json() as T;
+   }
+
+   // does not recieve cookies, downloads user data again
+   public async loadSession(): Promise<boolean> {
+
+      if (!this.validSession()) {
+         return false;
+      }
+      const [userId] = this.loadKnownUser();
+      const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>(
+         `verifysess?userid=${userId}`,
+         'POST'
+      );
+
+      if (!serverLoginUserInfo || !serverLoginUserInfo.verified) {
+         return false;
+      }
+
+      this._loginUser(serverLoginUserInfo);
+      return true;
+   }
+
+   // require reauthentication with passkey
+   public async getRecoveryWords(): Promise<string> {
+      await this.ready;
+
+      if (!this.authenticated()) {
+         throw new Error('no active user');
+      }
+
+      // only stored during user creation, clear after 1 use
+      let recoveryId = this._cachedRecoveryId;
+      this._cachedRecoveryId = undefined;
+
+      if (!recoveryId) {
+         const verifyBody = await this._startAuth(this.userId, false, true);
+         const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>(
+            'verifyauth',
+            'POST',
+            verifyBody,
+         );
+
+         if (!serverLoginUserInfo || !serverLoginUserInfo.recoveryId) {
+            throw new Error('authentication failed');
+         }
+         recoveryId = serverLoginUserInfo.recoveryId;
+      }
+
+      const recoveryIdBytes = base64ToBytes(recoveryId);
+      if (recoveryIdBytes.byteLength != RECOVERID_BYTES) {
+         throw new Error('invalid recovery id length');
+      }
+
+      const userIdBytes = base64ToBytes(this.userId);
+
+      let recoveryBytes = new Uint8Array(recoveryIdBytes.byteLength + userIdBytes.byteLength);
+      recoveryBytes.set(recoveryIdBytes, 0);
+      recoveryBytes.set(userIdBytes, recoveryIdBytes.byteLength);
+
+      return entropyToMnemonic(recoveryBytes, wordlist);
    }
 
    on(events: AuthEvent[], action: (data: AuthEventData) => void): Subscription {
@@ -155,70 +296,104 @@ export class AuthenticatorService {
       ).subscribe(action);
    }
 
+
    lsGet(key: string): string | null {
-      if (this.isAuthenticated()) {
-         const [userId] = this.getUserInfo();
+      if (this.authenticated()) {
          return localStorage.getItem(this.userId + key);
       }
       return null;
    }
 
    lsSet(key: string, value: string | number | boolean | null) {
-      if (value != null && this.isAuthenticated()) {
-         const [userId] = this.getUserInfo();
-         localStorage.setItem(userId + key, value.toString());
+      if (value != null && this.authenticated()) {
+         localStorage.setItem(this.userId + key, value.toString());
       }
    }
 
    lsDel(key: string) {
-      if (this.isAuthenticated()) {
-         const [userId] = this.getUserInfo();
-         localStorage.removeItem(userId + key);
+      if (this.authenticated()) {
+         localStorage.removeItem(this.userId + key);
       }
    }
 
-   private captureEventData(event: AuthEvent): AuthEventData {
+   private _captureEventData(event: AuthEvent): AuthEventData {
       return {
          event: event,
-         userId: this._userId,
-         userName: this._userName,
-         userCred: this._userCred
+         userId: this.authenticated() ? this.userId : null,
+         userName: this.authenticated() ? this.userName : null
       };
    }
 
-   private emit(eventData: AuthEventData) {
+   private _emit(eventData: AuthEventData) {
       this._subject.next(eventData);
    }
 
-   private storeUserInfo(userId: string, userName: string) {
-      if (!userId || !userName) {
-         throw new Error('missing userId or userName');
+   private _loginUser(
+      serverLogin: ServerLoginUserInfo
+   ): UserInfo {
+      if (!serverLogin.userId || serverLogin.userId.length == 0) {
+         throw new Error('invalid user id')
       }
-      this._userId = userId;
-      this._userName = userName;
-      localStorage.setItem('userid', this._userId);
-      localStorage.setItem('username', this._userName);
+      if (!serverLogin.userCred || serverLogin.userCred.length == 0) {
+         throw new Error('invalid user credential')
+      }
+      if (!serverLogin.pkId || serverLogin.pkId.length == 0) {
+         throw new Error('invalid passkey id')
+      }
+
+      const sessExpiry = DateTime.now().plus({ seconds: SESSION_TIMEOUT }).toISO();
+
+      this._userCred = serverLogin.userCred;
+      localStorage.setItem('sessionexpiry', sessExpiry);
+      localStorage.setItem('userid', serverLogin.userId);
+      localStorage.setItem('pkid', serverLogin.pkId);
+      sessionStorage.setItem('pkid', serverLogin.pkId);
+
+      const userInfo = this._updateLoggedInUser(serverLogin);
+      this._emit(this._captureEventData(AuthEvent.Login));
+
+      return userInfo;
    }
 
-   private setActiveUser(userId: string, userName: string, userCred: string, pkId: string) {
-      if (!userCred) {
-         throw new Error('missing userCred');
+   private _updateLoggedInUser(
+      serverUser: ServerUserInfo
+   ): UserInfo {
+
+      if (!serverUser.verified) {
+         throw new Error('unverified user');
       }
-      this.storeUserInfo(userId, userName);
+      if (!serverUser.userId || !serverUser.userName) {
+         throw new Error('missing userId or userName');
+      }
+      if (!serverUser.authenticators || serverUser.authenticators.length == 0) {
+         throw new Error('missing authenticators');
+      }
+      if (serverUser.hasRecoveryId === undefined) {
+         throw new Error('missing recovery id info');
+      }
 
-      this._userCred = userCred;
-      this._pkId = pkId;
-      // Include userId in key in case there are multiple tabs open to
-      // different users and this one is reloaded. This prevents
-      // mixing of _userId and _userCred from different accounts
-      sessionStorage.setItem(this._userId + 'usercred', this._userCred);
-      sessionStorage.setItem(this._userId + 'pkid', this._pkId);
+      if (!this.authenticated()) {
+         throw new Error('no active user');
+      }
 
-      this.refreshPasskeys();
-      this.refreshSenderLinks();
+      const globalPKId = localStorage.getItem('pkid');
+      if (!globalPKId) {
+         throw new Error('missing passkey id');
+      }
 
-      this.emit(this.captureEventData(AuthEvent.Login));
+      localStorage.setItem('username', serverUser.userName);
+
+      const userInfo: UserInfo = {
+         userId: serverUser.userId,
+         userName: serverUser.userName,
+         pkId: globalPKId,
+         hasRecoveryId: serverUser.hasRecoveryId,
+         authenticators: serverUser.authenticators
+      };
+
+      this.userInfo.set(userInfo);
       this.activity();
+      return userInfo;
    }
 
    activity() {
@@ -227,181 +402,166 @@ export class AuthenticatorService {
          this._intervalId = 0;
       }
 
-      // 6 hours inactivity expritation
-      this._expiration = DateTime.now().plus({ seconds: INACTIVITY_TIMEOUT });
-      sessionStorage.setItem(this._userId + 'expiration', this._expiration.toISO()!);
+      // Currently 1.5 hours inactivity expritation
+      const activityExpiry = DateTime.now().plus({ seconds: ACTIVITY_TIMEOUT }).toISO();
+      localStorage.setItem('activityexpiry', activityExpiry);
 
-      // Check every 5 minutes
-      this._intervalId = window.setInterval(() => this.timerTick(), 1000 * 60 * 5);
+      // Currently every 2 minutes
+      this._intervalId = window.setInterval(() => this._timerTick(), EXPIRY_INTERVAL);
    }
 
-   private timerTick(): void {
-      if (DateTime.now() > this._expiration) {
-         this.logout();
+   private _timerTick(): void {
+      // validSession becomes false if either inactivity time happens in this tab
+      // or another. also if another tab logs into a differerent passkey
+      if (!this.validSession()) {
+         this.logout(true);
       }
    }
 
-   secondsRemaining() {
-      let result = 0;
+   private _deletedUser()  {
+      const eventData = this._captureEventData(AuthEvent.Delete);
+      // no need to end session because user was deleted on server
+      this.forgetUser(false);
+      this._emit(eventData);
+   }
+
+   // log out globally, and forget user globally
+   forgetUser(endSession: boolean) {
+      const eventData = this._captureEventData(AuthEvent.Forget);
+      this.logout(endSession);
+
+      // not yet handled well if multiple tabs are open
+      localStorage.removeItem('username');
+      localStorage.removeItem('userid');
+      this._emit(eventData);
+   }
+
+   // log out globally, and remember user (other tap will logout on timertick)
+   logout(endSession: boolean) {
+
+      if(endSession) {
+         // let this happen in the background
+         const [userId] = this.loadKnownUser();
+         this._doFetch<string>(
+            `endsess?userid=${userId}`,
+            'POST'
+         ).catch( (err) => {
+            // report, but don't abort logout
+            console.error(err);
+         });
+      }
+
+      const eventData = this._captureEventData(AuthEvent.Logout);
       if (this._intervalId) {
-         const diff = this._expiration.diff(DateTime.now());
-         result = Math.max(0, Math.round(diff.toMillis() / 1000));
+         clearInterval(this._intervalId);
+         this._intervalId = 0;
       }
-      return result;
+
+      // rather than clear values, which can trigger error in other tabs,
+      // set expirations to the past to trigger clear self-logout
+      const expired = DateTime.now().minus({ seconds: 10 }).toISO();
+      localStorage.setItem('activityexpiry', expired);
+      localStorage.setItem('sessionexpiry', expired);
+
+      // clear this tabs sensitive in-memory values
+      this.userInfo.set(undefined);
+      this._userCred = undefined;
+      sessionStorage.clear();
+
+      this._emit(eventData);
    }
 
-   forgetUserInfo() {
-      this.logout();
-      if (this._userId) {
-         const eventData = this.captureEventData(AuthEvent.Forget);
-         localStorage.removeItem('username');
-         localStorage.removeItem('userid');
-         this._userId = null;
-         this._userName = null;
-         this.emit(eventData);
-      }
-   }
-
-   logout() {
-      if (this._userCred) {
-         if (this._intervalId) {
-            clearInterval(this._intervalId);
-            this._intervalId = 0;
-         }
-         const eventData = this.captureEventData(AuthEvent.Logout);
-         sessionStorage.clear();
-         this._userCred = null;
-         this._pkId = null;
-         this.passKeys.set([]);
-         this.emit(eventData);
-      }
-   }
-
-   async setPasskeyDescription(credentialId: string, description: string): Promise<void> {
+   async setPasskeyDescription(
+      credentialId: string,
+      description: string
+   ): Promise<UserInfo> {
       if (!description) {
          throw new Error('missing description');
       }
       if (description.length < 6 || description.length > 42) {
-         throw new Error('description must more than 5 and less than 43 character');
+         throw new Error('description must be 6 to 42 characters');
       }
       if (!credentialId) {
          throw new Error('invalid credentialId');
       }
-      if (!this.isAuthenticated()) {
+      if (!this.authenticated()) {
          throw new Error('not active user');
       }
 
-      const putDescUrl = new URL(`description?credid=${credentialId}&userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
-      try {
-         var putDescResp = await fetch(putDescUrl, {
-            method: 'PUT',
-            credentials: 'include',
-            mode: 'cors',
-            cache: 'no-store',
-            body: description,
-         });
-      } catch (err) {
-         console.error(err);
-         throw new Error('description fetch error');
+      const serverUserInfo = await this._doFetch<ServerUserInfo>(
+         `description?credid=${credentialId}&userid=${this.userId}`,
+         'PUT',
+         description,
+      );
+
+      if (!serverUserInfo) {
+         throw new Error('authentication failed');
       }
 
-      if (!putDescResp.ok) {
-         throw new Error('setting description failed: ' + await putDescResp.text());
-      }
+      return this._updateLoggedInUser(serverUserInfo);
    }
 
-   async setUserName(userName: string): Promise<void> {
+   async setUserName(userName: string): Promise<UserInfo> {
       if (!userName) {
          throw new Error('missing description');
       }
       if (userName.length < 6 || userName.length > 31) {
-         throw new Error('user name must more than 5 and less than 32 character');
+         throw new Error('user name must be 6 to 31 characters');
       }
-      if (!this.isAuthenticated()) {
+      if (!this.authenticated()) {
          throw new Error('not active user');
       }
 
-      const putUserNameUrl = new URL(`username?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
-      try {
-         var putUserNameResp = await fetch(putUserNameUrl, {
-            method: 'PUT',
-            credentials: 'include',
-            mode: 'cors',
-            cache: 'no-store',
-            body: userName,
-         });
-      } catch (err) {
-         console.error(err);
-         throw new Error('username fetch error');
+      const serverUserInfo = await this._doFetch<ServerUserInfo>(
+         `username?userid=${this.userId}`,
+         'PUT',
+         userName
+      );
+
+      if (!serverUserInfo) {
+         throw new Error('authentication failed');
       }
 
-      if (!putUserNameResp.ok) {
-         throw new Error('setting user name failed: ' + await putUserNameResp.text());
-      }
-
-      const putUserNameInfo = await putUserNameResp.json();
-      this.storeUserInfo(this._userId!, putUserNameInfo.userName);
+      return this._updateLoggedInUser(serverUserInfo);
    }
 
-   async deletePasskey(credentialId: string): Promise<DeleteInfo> {
+   async deletePasskey(credentialId: string): Promise<number> {
       if (!credentialId) {
          throw new Error('invalid credentialId');
       }
-      if (!this.isAuthenticated()) {
+      if (!this.authenticated()) {
          throw new Error('not active user');
       }
 
-      const delPasskeyUrl = new URL(`authenticator?credid=${credentialId}&userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
-      try {
-         var delPasskeyResp = await fetch(delPasskeyUrl, {
-            method: 'DELETE',
-            credentials: 'include',
-            mode: 'cors',
-            cache: 'no-store',
-         });
-      } catch (err) {
-         console.error(err);
-         throw new Error('authenticator fetch error');
+      const serverUserInfo = await this._doFetch<ServerUserInfo>(
+         `authenticator?credid=${credentialId}&userid=${this.userId}`,
+         'DELETE'
+      );
+
+      if (!serverUserInfo) {
+         throw new Error('authentication failed');
       }
 
-      if (!delPasskeyResp.ok) {
-         throw new Error('setting description failed: ' + await delPasskeyResp.text());
+      // If we have an unverified response, that was the last PK and the user was deleted
+      if (!serverUserInfo.verified) {
+         this._deletedUser();
+         return 0;
+      } else {
+         this._updateLoggedInUser(serverUserInfo);
+         return serverUserInfo.authenticators!.length;
       }
-
-      const delPasskeyInfo = await delPasskeyResp.json() as DeleteInfo;
-
-      // User is gone... so forgeeet about it
-      if (!delPasskeyInfo.verified) {
-         this.forgetUserInfo();
-      }
-
-      return delPasskeyInfo;
    }
 
    async refreshSenderLinks(): Promise<SenderLinkInfo[]> {
-      if (!this.isAuthenticated()) {
+      if (!this.authenticated()) {
          throw new Error('not active user');
       }
-/*
-      const getAuthsUrl = new URL(`senderlinks?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
-      try {
-         var getAuthsResp = await fetch(getAuthsUrl, {
-            method: 'GET',
-            credentials: 'include',
-            mode: 'cors',
-            cache: 'no-store',
-         });
-      } catch (err) {
-         console.error(err);
-         throw new Error('senderlinks fetch error');
-      }
-
-      if (!getAuthsResp.ok) {
-         throw new Error('retrieving senderlinks failed: ' + await getAuthsResp.text());
-      }
-
-      const links = await getAuthsResp.json() as SenderLinkInfo[];
-*/
+      /*
+            const links = await this.doFetch<SenderLinkInfo[]>(
+               `senderlinks?userid=${this._userId}`,
+               'GET'
+            );
+      */
       const links = [
          {
             linkId: '1l23rks34',
@@ -426,76 +586,77 @@ export class AuthenticatorService {
       return links;
    }
 
-   async refreshPasskeys(): Promise<AuthenticatorInfo[]> {
-      if (!this.isAuthenticated()) {
+
+   async refreshUserInfo(): Promise<UserInfo> {
+      if (!this.authenticated()) {
          throw new Error('not active user');
       }
 
-      const getAuthsUrl = new URL(`authenticators?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
-      try {
-         var getAuthsResp = await fetch(getAuthsUrl, {
-            method: 'GET',
-            credentials: 'include',
-            mode: 'cors',
-            cache: 'no-store',
-         });
-      } catch (err) {
-         console.error(err);
-         throw new Error('authenticators fetch error');
+      const serverUserInfo = await this._doFetch<ServerUserInfo>(
+         `userinfo?userid=${this.userId}`,
+         'GET'
+      );
+
+      if (!serverUserInfo) {
+         throw new Error('authentication failed');
       }
 
-      if (!getAuthsResp.ok) {
-         throw new Error('retrieving passkeys failed: ' + await getAuthsResp.text());
-      }
-
-      const authsInfo = await getAuthsResp.json() as AuthenticatorInfo[];
-
-      this.passKeys.set(authsInfo);
-      return authsInfo;
+      return this._updateLoggedInUser(serverUserInfo);
    }
 
    // Uses the current stored userId
-   async defaultLogin(): Promise<AuthenticationInfo> {
-      const [userId] = this.getUserInfo();
+   async defaultLogin(): Promise<UserInfo> {
+      const [userId] = this.loadKnownUser();
       if (!userId) {
-         throw new Error('missing local userId, try findLogin');
+         throw new Error('missing local userId, sign in as different user');
       }
 
       return this.findLogin(userId);
    }
 
    // If no userId is provided, will present all Passkeys for this domain
-   async findLogin(userId: string | null = null): Promise<AuthenticationInfo> {
+   async findLogin(userId: string | null = null): Promise<UserInfo> {
 
-      let optUrl;
+      if (this.authenticated()) {
+         throw new Error('must be logged out to log in');
+      }
+
+      const verifyBody = await this._startAuth(userId, true, false);
+      const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>(
+         'verifyauth',
+         'POST',
+         verifyBody
+      );
+
+      if (!serverLoginUserInfo) {
+         throw new Error('authentication failed');
+      }
+
+      return this._loginUser(serverLoginUserInfo);
+   }
+
+   private async _startAuth(
+      userId: string | null,
+      includeUserCred: boolean,
+      includeRecovery: boolean
+   ): Promise<string> {
+
+      let urlPath: string;
       if (!userId) {
          // Trying to link to an existing passkey but have lost track of user id.
          // Start the process without userId just doesn't limit authenticator creds
          // so the user can look for an existing credential
-         optUrl = new URL('authoptions', baseUrl);
+         urlPath = 'authoptions';
       } else {
-         optUrl = new URL(`authoptions?userid=${userId}`, baseUrl);
+         urlPath = `authoptions?userid=${userId}`;
       }
 
-      try {
-         var optionsResp = await fetch(optUrl, {
-            method: 'GET',
-            credentials: 'include',
-            mode: 'cors',
-            cache: 'no-store'
-         });
-      } catch (err) {
-         console.error(err);
-         throw new Error('authoptions fetch error');
-      }
+      const optionsJson = await this._doFetch<PublicKeyCredentialRequestOptionsJSON>(
+         urlPath,
+         'GET'
+      );
 
-      if (!optionsResp.ok) {
-         throw new Error('authentication failed: ' + await optionsResp.text());
-      }
-
-      const optionsJson = await optionsResp.json() as PublicKeyCredentialRequestOptionsJSON;
-
-      let startAuth;
+      let startAuth: AuthenticationResponseJSON;
       try {
          startAuth = await startAuthentication({
             optionsJSON: optionsJson,
@@ -513,124 +674,116 @@ export class AuthenticatorService {
       startAuth.response.userHandle = new TextDecoder("utf-8").decode(handleBytes);
 
       // Need to return challenge because in some cases it is not bound to
-      // a user id when created. The server validates it created the challenge
-      // and its age
-      const expanded = {
+      // a user id when created. The server validates that it created the challenge
+      // and the challenge's age. createRecovery controls creation of reocvery words
+      // on old account until when it is expicit
+      return JSON.stringify({
          ...startAuth,
          challenge: optionsJson.challenge,
-      }
-
-      const verifyUrl = new URL('verifyauth', baseUrl);
-
-      try {
-         var verificationResp = await fetch(verifyUrl, {
-            method: 'POST',
-            credentials: 'include',
-            mode: 'cors',
-            cache: 'no-store',
-            headers: {
-               'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(expanded),
-         });
-      } catch (err) {
-         console.error(err);
-         throw new Error('verifyauth fetch error');
-      }
-
-      if (!verificationResp.ok) {
-         throw new Error('authentication failed: ' + await verificationResp.text());
-      }
-
-      const authInfo = await verificationResp.json() as AuthenticationInfo;
-
-      if (!authInfo || !authInfo.verified) {
-         throw new Error('authentication failed');
-      }
-
-      this.setActiveUser(authInfo.userId, authInfo.userName, authInfo.userCred, startAuth.id);
-      return authInfo;
+         includeusercred: includeUserCred,
+         includerecovery: includeRecovery
+      });
    }
 
-   async recover(userId: string, userCred: string): Promise<RegistrationInfo> {
+   getRecoveryValues(recoveryWords: string): [string, string] {
+
+      if (!recoveryWords || recoveryWords.length == 0) {
+         throw new Error('missing recovery words');
+      }
+
+      if (!validateMnemonic(recoveryWords, wordlist)) {
+         throw new Error('invalid recovery words');
+      }
+
+      const recoveryBytes = mnemonicToEntropy(recoveryWords, wordlist);
+      if (!recoveryBytes || recoveryBytes.byteLength < RECOVERID_BYTES + 1) {
+         throw new Error('invalid recovery id');
+      }
+
+      const recoveryIdBytes = new Uint8Array(recoveryBytes.buffer, 0, RECOVERID_BYTES);
+      const userIdBytes = new Uint8Array(recoveryBytes.buffer, RECOVERID_BYTES);
+      if (recoveryIdBytes.byteLength != RECOVERID_BYTES) {
+         throw new Error('invalid recovery id length ' + recoveryIdBytes.byteLength);
+      }
+
+      const recoveryId = bytesToBase64(recoveryIdBytes);
+      const userId = bytesToBase64(userIdBytes);
+
+      return [recoveryId, userId];
+   }
+
+   async recover2(recoveryWords: string): Promise<UserInfo> {
+
+      const [recoveryId, userId] = this.getRecoveryValues(recoveryWords);
+      const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>(
+         `recover2?userid=${userId}&recoveryId=${recoveryId}`,
+         'POST'
+      );
+
+      const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, false);
+      return this._loginUser(serverLoginUserInfo);
+   }
+
+   async recover(userId: string, userCred: string): Promise<UserInfo> {
 
       if (!userId || !userCred) {
          throw new Error('missing userid or usercred');
       }
 
-      const recoverUrl = new URL(`recover?userid=${userId}&usercred=${userCred}`, baseUrl);
-      try {
-         var recoverResp = await fetch(recoverUrl, {
-            method: 'POST',
-            credentials: 'include',
-            mode: 'cors',
-            cache: 'no-store'
-         });
-      } catch (err) {
-         console.error(err);
-         throw new Error('recover fetch error');
-      }
+      const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>(
+         `recover?userid=${userId}&usercred=${userCred}`,
+         'POST'
+      );
 
-      return this.finishRegistration(recoverResp, true);
+      const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, false);
+      return this._loginUser(serverLoginUserInfo);
    }
 
    // Creates new user and first passkey
-   async newUser(userName: string): Promise<RegistrationInfo> {
+   async newUser(userName: string): Promise<UserInfo> {
       if (!userName) {
          throw new Error('missing require userName');
       }
 
-      const optUrl = new URL(`regoptions?username=${userName}`, baseUrl);
-      try {
-         var optionsResp = await fetch(optUrl, {
-            method: 'GET',
-            credentials: 'include',
-            mode: 'cors',
-            cache: 'no-store'
-         });
-      } catch (err) {
-         console.error(err);
-         throw new Error('regoptions fetch error');
-      }
+      const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>(
+         `regoptions`,
+         'POST',
+         userName
+      );
 
-      return this.finishRegistration(optionsResp, true);
+      const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, true);
+
+      // New user creation temporarily caches _recoveryId for use in the recovery word
+      // display page that immediately follows.
+      if( !serverLoginUserInfo || !serverLoginUserInfo.recoveryId ) {
+         throw new Error( 'missing recoveryId');
+      }
+      this._cachedRecoveryId = serverLoginUserInfo.recoveryId;
+
+      return this._loginUser(serverLoginUserInfo);
    }
 
    // Adds passkey to current user
-   async addPasskey(): Promise<RegistrationInfo> {
+   async addPasskey(): Promise<UserInfo> {
 
-      if (!this.isAuthenticated()) {
+      if (!this.authenticated()) {
          throw new Error('not active user');
       }
 
-      const optUrl = new URL(`regoptions?userid=${this._userId}&usercred=${this._userCred!}`, baseUrl);
-      try {
-         var optionsResp = await fetch(optUrl, {
-            method: 'GET',
-            credentials: 'include',
-            mode: 'cors',
-            cache: 'no-store'
-         });
-      } catch (err) {
-         console.error(err);
-         throw new Error('regoptions fetch error');
-      }
+      const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>(
+         `regoptions?userid=${this.userId}`,
+         'POST'
+      );
 
-      const regInfo = this.finishRegistration(optionsResp, false);
-      this.refreshPasskeys();
-      return regInfo;
+      const serverLoginUserInfo = await this._finishRegistration(optionsJson, false, false);
+      return this._updateLoggedInUser(serverLoginUserInfo);
    }
 
-   async finishRegistration(
-      optionsResp: Response,
-      setActiveUser: boolean
-   ): Promise<RegistrationInfo> {
-
-      if (!optionsResp.ok) {
-         throw new Error('registration failed: ' + await optionsResp.text());
-      }
-
-      const optionsJson = await optionsResp.json() as PublicKeyCredentialCreationOptionsJSON;
+   private async _finishRegistration(
+      optionsJson: PublicKeyCredentialCreationOptionsJSON,
+      includeUserCred: boolean,
+      includeRecovery: boolean
+   ): Promise<ServerLoginUserInfo> {
 
       // SimpleWebAuthn v10 caused incompatibility with older versions by
       // encoding credential user.id as b64 rather than utf as older versions
@@ -639,7 +792,7 @@ export class AuthenticatorService {
       const idBytes = new TextEncoder().encode(optionsJson.user.id);
       optionsJson.user.id = bytesToBase64(idBytes);
 
-      let startReg;
+      let startReg: RegistrationResponseJSON;
       try {
          startReg = await startRegistration({ optionsJSON: optionsJson });
       } catch (err) {
@@ -656,40 +809,22 @@ export class AuthenticatorService {
          // To maintain compatibility with old clients, need to put this
          // back to actual b64Url rather than b64ofUT8BytesofBase64... argg
          userId: actualB64UserId,
+         includeusercred: includeUserCred,
+         includerecovery: includeRecovery,
          challenge: optionsJson.challenge,
       }
 
-      const verifyUrl = new URL('verifyreg', baseUrl);
-      try {
-         var verificationResp = await fetch(verifyUrl, {
-            method: 'POST',
-            credentials: 'include',
-            mode: 'cors',
-            cache: 'no-store',
-            headers: {
-               'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(expanded),
-         });
-      } catch (err) {
-         console.error(err);
-         throw new Error('verifyreg fetch error');
-      }
+      const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>(
+         'verifyreg',
+         'POST',
+         JSON.stringify(expanded),
+      );
 
-      if (!verificationResp.ok) {
-         throw new Error('registration failed: ' + await verificationResp.text());
-      }
-
-      const registrationInfo = await verificationResp.json() as RegistrationInfo;
-
-      if (!registrationInfo || !registrationInfo.verified) {
+      if (!serverLoginUserInfo) {
          throw new Error('registration failed');
       }
 
-      if (setActiveUser) {
-         this.setActiveUser(registrationInfo.userId, registrationInfo.userName, registrationInfo.userCred, startReg.id);
-      }
-      return registrationInfo;
+      return serverLoginUserInfo;
    }
 
 }

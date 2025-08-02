@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2024 Brad Schick
+Copyright (c) 2025 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -265,7 +265,7 @@ export class CipherInfoDialog {
 })
 export class SigninDialog {
 
-   public userName: string;
+   public userName: string | null;
    public error: string = '';
    public showProgress: boolean = false;
 
@@ -276,8 +276,8 @@ export class SigninDialog {
       @Inject(MAT_DIALOG_DATA) public data: SigninDialog
    ) {
       dialogRef.disableClose = true;
-      const [_, userName] = this.authSvc.getUserInfo();
-      this.userName = userName!;
+      const [_, userName] = this.authSvc.loadKnownUser();
+      this.userName = userName;
    }
 
    async onClickSignin(event: any) {
@@ -285,7 +285,7 @@ export class SigninDialog {
          this.error = '';
          this.showProgress = true;
          await this.authSvc.defaultLogin();
-         this.dialogRef.close();
+         this.dialogRef.close('Login');
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes("fetch")) {
@@ -300,9 +300,10 @@ export class SigninDialog {
 
    onClickForget(event: any) {
       this.error = '';
-      this.authSvc.forgetUserInfo();
+      // session should already be ended if login dialog is showing
+      this.authSvc.forgetUser(false);
       this.router.navigateByUrl('/welcome');
-      this.dialogRef.close(null);
+      this.dialogRef.close('Forget');
    }
 
 }

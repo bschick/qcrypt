@@ -1,24 +1,47 @@
+/* MIT License
+
+Copyright (c) 2024 Brad Schick
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. */
+
 import { Component, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import {MatCardModule} from '@angular/material/card';
+import { MatCardModule } from '@angular/material/card';
 
 @Component({
-    selector: 'app-recovery',
-    templateUrl: './recovery.component.html',
-    styleUrl: './recovery.component.scss',
-    imports: [MatIconModule, MatButtonModule, RouterLink, CommonModule,
-        MatProgressSpinnerModule, MatCardModule,
-    ]
+   selector: 'app-recovery',
+   templateUrl: './recovery.component.html',
+   styleUrl: './recovery.component.scss',
+   imports: [MatIconModule, MatButtonModule, RouterLink,
+      MatProgressSpinnerModule, MatCardModule
+   ]
 })
 export class RecoveryComponent implements OnInit {
 
    public validRecoveryLink = false;
    public error = '';
+   public hasRecoveryWords = false;
+   public ready = false;
    public showProgress = false;
    public authenticated = false;
    public selfRecovery = false;
@@ -33,27 +56,40 @@ export class RecoveryComponent implements OnInit {
    }
 
    ngOnInit() {
-      try {
-         this.recoveryUserId = this.activeRoute.snapshot.queryParamMap.get('userid');
-         this.recoverUserCred = this.activeRoute.snapshot.queryParamMap.get('usercred');
-         if (!this.recoveryUserId || !this.recoverUserCred) {
-            throw new Error("recovery link missing userid or usercred: " +  this.activeRoute.snapshot.toString());
-         }
-         this.validRecoveryLink = true;
-      } catch(err) {
-         console.error(err);
-         this.error = 'Recovery link is invalid';
-         this.validRecoveryLink = false;
-      }
-
-      this.authenticated = this.authSvc.isAuthenticated();
-      if (this.authenticated) {
-         this.selfRecovery = this.recoverUserCred === this.authSvc.userCred;
-      }
-      const [userId, userName] = this.authSvc.getUserInfo();
+      const [userId, userName] = this.authSvc.loadKnownUser();
       if (userId && userName) {
          this.currentUserName = userName;
       }
+
+      this.showProgress = true;
+
+      this.authSvc.ready.then( () => {
+         this.authenticated = this.authSvc.authenticated();
+
+         if (this.authenticated && this.authSvc.hasRecoveryId()) {
+             this.router.navigateByUrl('/recovery2');
+         } else {
+            try {
+               this.recoveryUserId = this.activeRoute.snapshot.queryParamMap.get('userid');
+               this.recoverUserCred = this.activeRoute.snapshot.queryParamMap.get('usercred');
+               if (!this.recoveryUserId || !this.recoverUserCred) {
+                  throw new Error("recovery link missing userid or usercred: " + this.activeRoute.snapshot.toString());
+               }
+               this.validRecoveryLink = true;
+               if (this.authenticated) {
+                  this.selfRecovery = this.recoverUserCred === this.authSvc.userCred;
+               }
+            } catch (err) {
+               console.error(err);
+               this.error = 'Recovery link is invalid';
+               this.validRecoveryLink = false;
+            }
+         }
+      }).finally( () => {
+         this.ready = true;
+         this.showProgress = false;
+      });
+
    }
 
    async onClickSignin(): Promise<void> {
@@ -64,7 +100,7 @@ export class RecoveryComponent implements OnInit {
          this.router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
-         if(err instanceof Error && err.message.includes("fetch")) {
+         if (err instanceof Error && err.message.includes("fetch")) {
             this.error = 'Sign in failed, check your connection';
          } else {
             this.error = 'Sign in failed, try again or change users';
@@ -80,9 +116,15 @@ export class RecoveryComponent implements OnInit {
          await this.authSvc.recover(this.recoveryUserId!, this.recoverUserCred!);
          this.router.navigateByUrl('/');
       } catch (err) {
-         console.error(err);
-         this.error = 'The operation was not allowed or timed out';
-     } finally {
+         if (err instanceof Error && err.message.includes('instead')) {
+            this.error = 'You must user recovery words';
+            this.hasRecoveryWords = true;
+         } else {
+            console.error(err);
+            this.error = 'The operation was not allowed or timed out';
+         }
+
+      } finally {
          this.showProgress = false;
       }
    }

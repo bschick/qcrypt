@@ -1,15 +1,37 @@
+/* MIT License
+
+Copyright (c) 2024 Brad Schick
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. */
+
 import {
    Component, EventEmitter, Inject, OnInit,
    Output, effect, Renderer2, OnDestroy
 } from '@angular/core';
-import { CommonModule, NgIf } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatInputModule } from '@angular/material/input';
-import { AuthenticatorService, AuthenticatorInfo, AuthEvent } from '../services/authenticator.service';
+import { AuthenticatorService, AuthenticatorInfo, UserInfo, AuthEvent } from '../services/authenticator.service';
 import { EditableComponent } from '../ui/editable/editable.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -17,6 +39,7 @@ import { Router, RouterLink, NavigationStart } from '@angular/router';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { Subscription } from 'rxjs';
+import { MatCardModule } from '@angular/material/card';
 
 @Component({
    selector: 'app-credentials',
@@ -24,7 +47,7 @@ import { Subscription } from 'rxjs';
    styleUrl: './credentials.component.scss',
    imports: [MatDividerModule, MatTableModule,
       MatIconModule, MatButtonModule, MatInputModule, EditableComponent,
-      MatTooltipModule, RouterLink, CommonModule
+      MatTooltipModule, RouterLink, MatCardModule, CommonModule
    ]
 })
 export class CredentialsComponent implements OnInit, OnDestroy {
@@ -32,6 +55,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    private authSub!: Subscription;
    private routeSub!: Subscription;
    public error = '';
+   public userName = '';
    public passKeys: AuthenticatorInfo[] = [];
    public showProgress = false;
    public displayedColumns: string[] = ['image', 'description', 'delete'];
@@ -45,12 +69,16 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       private snackBar: MatSnackBar
    ) {
       effect(() => {
-         this.passKeys = this.authSvc.passKeys();
+         const userInfo = this.authSvc.userInfo();
+         this.passKeys = userInfo ? userInfo.authenticators : [];
+         this.userName = userInfo ? userInfo.userName : '';
       });
    }
 
    ngOnInit(): void {
-      this.passKeys = this.authSvc.passKeys();
+      const userInfo = this.authSvc.userInfo();
+      this.passKeys = userInfo ? userInfo.authenticators : [];
+      this.userName = userInfo ? userInfo.userName : '';
 
       this.routeSub = this.router.events.subscribe((event) => {
          if (event instanceof NavigationStart) {
@@ -60,7 +88,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
 
       this.authSub = this.authSvc.on(
          [AuthEvent.Logout],
-         () => this.done.emit(true)
+         () => this.refresh()
       );
    }
 
@@ -82,25 +110,27 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    onClickDelete(passkey: AuthenticatorInfo) {
       this.error = '';
       let pkState = ConfirmDialog.NONE_PK;
-      if (this.authSvc.passKeys().length == 1) {
+      const userInfo = this.authSvc.userInfo();
+      this.passKeys = userInfo ? userInfo.authenticators : [];
+
+      if (this.passKeys.length == 1) {
          pkState = ConfirmDialog.LAST_PK;
-      } else if (this.authSvc.pkId == passkey.credentialId) {
+      } else if (this.isCurrentPk(passkey.credentialId)) {
          pkState = ConfirmDialog.ACTIVE_PK;
       }
 
       var dialogRef = this.dialog.open(ConfirmDialog, {
          data: {
             pkState: pkState,
-            userName: this.authSvc.userName
+            userName: this.userName
          },
       });
 
       dialogRef.afterClosed().subscribe(async (result: string) => {
          if (result == 'Yes') {
             try {
-               const deletedInfo = await this.authSvc.deletePasskey(passkey.credentialId);
-               this.refresh();
-               if (!deletedInfo.verified) {
+               const remainingAuths = await this.authSvc.deletePasskey(passkey.credentialId);
+               if (remainingAuths == 0) {
                   this.router.navigateByUrl('/welcome');
                }
             } catch (err) {
@@ -115,35 +145,27 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       try {
          this.error = '';
          await this.authSvc.addPasskey();
-         this.refresh();
       } catch (err) {
          console.error(err);
          this.error = 'Passkey not created, try again';
       }
    }
 
-   async onClickFind() {
-      try {
-         this.error = '';
-         await this.authSvc.findLogin();
-      } catch (err) {
-         console.error(err);
-         this.error = 'Passkey not found, try again';
-      }
-   }
-
    isCurrentPk(credentialId: string): boolean {
-      return credentialId == this.authSvc.pkId;
+      return this.authSvc.isCurrentPk(credentialId);
    }
 
    async refresh(): Promise<void> {
       this.error = '';
-      if (this.authSvc.isAuthenticated()) {
-         this.authSvc.refreshPasskeys().catch((err) => {
+      if (this.authSvc.authenticated()) {
+         // This runs async handle updates in signal
+         this.authSvc.refreshUserInfo().catch((err) => {
             console.error(err);
          });
       } else {
          this.done.emit(true);
+         this.passKeys = [];
+         this.userName = '';
       }
    }
 
@@ -154,14 +176,15 @@ export class CredentialsComponent implements OnInit, OnDestroy {
          this.toastMessage('User name updated');
       } catch (err) {
          console.error(err);
+         this.error = 'Name change failed, must be 6 to 31 characters';
          // failed, put back the old value by setting [value] again...
-         component.value = this.authSvc.userName!;
+         component.value = this.userName!;
       }
    }
 
    async onClickSignout(): Promise<void> {
       this.error = '';
-      this.authSvc.logout();
+      this.authSvc.logout(true);
       this.refresh();
    }
 
@@ -169,12 +192,10 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       try {
          this.error = '';
          await this.authSvc.setPasskeyDescription(passkey.credentialId, component.value);
-         // worked, update with new value
-         passkey.description = component.value;
          this.toastMessage('Passkey description updated');
-
       } catch (err) {
          console.error(err);
+         this.error = 'Description change failed, must be 6 to 42 characters';
          //failed, put back the old value by setting [value] again...
          component.value = passkey.description;
       }
@@ -197,7 +218,7 @@ https://angular.dev/guide/forms/reactive-forms
    templateUrl: 'confirm-dialog.html',
    styleUrl: './credentials.component.scss',
    imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
-      MatButtonModule, MatFormFieldModule, NgIf, MatInputModule, FormsModule,
+      MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
       ReactiveFormsModule
    ]
 })
