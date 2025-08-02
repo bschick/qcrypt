@@ -4,8 +4,8 @@
 \usepackage[letterpaper,top=1cm,bottom=1.5cm,left=0cm,inner=0cm,right=1cm,marginparwidth=0cm]{geometry}
 \usepackage{amsmath}
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
-\setlength\parindent{0pt}
-%\setlength\parindent{20pt}
+%\setlength\parindent{0pt}
+\setlength\parindent{20pt}
 
 \begin{document}
 \underline{Agents}\\
@@ -17,7 +17,7 @@ $B$ & \textrm{ - Browser with Session storage, SubtleCrypto API, and libsodium l
 $S$ & \textrm{ - Quick Crypt server} \\
 %$D$ & \textrm{ - Insecure persistent storage system} \\
 \end{tabular}
-
+      
 \hfill \break
 
 % Changed: cipher variables, functions, decrypt by a, block n by B
@@ -208,11 +208,12 @@ $err$ & \textrm{ - Error message and exit}\\
 
 \newpage
 
-\underline{Webauthn Variables}\\
+\underline{Authentication Variables}\\
 
 \begin{tabular}{@{}p{2mm} l}
 $u_n$ & \textrm{ - A's chosen user name} \\
 $u_i$ & \textrm{ - 128 bit user id guaranteed to be unique} \\
+$u_r$ & \textrm{ - 128 bit recovery id} \\
 $u_c$ & \textrm{ - 256 bit user credential}\\
 $o$ & \textrm{ - Quick Crypt origin ``https://quickcrypt.org''} \\
 $ch$ & \textrm{ - 256 bit challenge value} \\
@@ -241,8 +242,8 @@ $cw$ & \textrm{ - Alice's webauthn authenticator credentials} \\
 \multicolumn{2}{@{}l}{$B\leftarrow M : rr$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow S : rr, u_i, ch$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ verify signature, store }rr \textrm{, remove }ch $} \\
-\multicolumn{2}{@{}l}{$B\leftarrow S : u_i, u_n, u_c$} \\
-\multicolumn{2}{@{}l}{$A\leftarrow B : u_i, u_c$} \\
+\multicolumn{2}{@{}l}{$B\leftarrow S : u_i, u_n, u_r, u_c$} \\
+\multicolumn{2}{@{}l}{$A\leftarrow B : u_r\mathbin\Vert u_i\textrm{ as BIP39}$} \\
 \end{tabular}
 
 \hfill \break
@@ -268,8 +269,8 @@ $cw$ & \textrm{ - Alice's webauthn authenticator credentials} \\
 \underline{Recovery from Lost Passkey by A}\\
 
 \begin{tabular}{@{}p{2mm} l}
-\multicolumn{2}{@{}l}{$A\rightarrow B : u_i, u_c$} \\
-\multicolumn{2}{@{}l}{$B\rightarrow S : u_i, u_c, o$} \\
+\multicolumn{2}{@{}l}{$A\rightarrow B : u_r\mathbin\Vert u_i\textrm{ as BIP39}$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : u_i, u_r, o$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ delete existing }rr \textrm{, create and store}: $} \\
 & $ch = G(256)$\\
 \multicolumn{2}{@{}l}{$B\leftarrow S : ro$} \\

@@ -14,41 +14,58 @@
     @include mat.form-field-density(-1);
   }
 
-  .task-button {
+  .button {
     @include common.strong-button;
     height: 45px;
     min-width: 280px;
     margin-top: 3px;
   }
 
+  .button2 {
+    @extend .button;
+    margin-top: 15px;
+  }
+
   .words-area {
     resize: none;
-    margin-top: 20px;
-    min-height: 120px;
+    margin-top: 10px;
+    min-height: 110px;
   }
 }
 
 .error-msg {
   color: darkred;
   margin-top: 12px;
+  width: 100%;
   display: flex;
   justify-content: center;
 }
 
-.lower-spinner {
-  @extend .spinner;
-  top: 35%;
-}
+.confirm {
+  max-width: 500px;
 
-.toolbar {
-  height: 48px;
-  width: #{5 * 50px};
-  background-color: none;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 2px;
-  position: absolute;
-  right: -14px;
-  top: 2px;
+  // want extra margin on at end also
+  li {
+    margin-bottom: 7px;
+  }
+
+  div {
+    font-size: 16px;
+  }
+
+  .heading {
+    margin-bottom: 5px;
+  }
+
+  .message {
+    padding-bottom: 0;
+  }
+
+  .actions {
+    padding-left: 20px;
+  }
+
+  .action-message {
+    margin-right: auto;
+  }
 }

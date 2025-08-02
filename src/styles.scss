@@ -61,4 +61,9 @@ body {
       container-max-width: 900px,
     )
   );
+
+  .mat-mdc-form-field-focus-overlay {
+    background-color: transparent !important;
+  }
+
 }

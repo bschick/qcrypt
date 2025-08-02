@@ -22,7 +22,7 @@ SOFTWARE. */
 
 import sodium from 'libsodium-wrappers';
 import { base64URLStringToBuffer, bufferToBase64URLString } from './base64';
-import { Duration } from 'luxon';
+import { Duration, DateTime } from 'luxon';
 
 
 // Returns base64Url text
@@ -86,6 +86,14 @@ export function makeTookMsg(start: number, end: number, word: string = 'took'): 
    return `${word} ${duration.toMillis()} millis`;
 }
 
+// important to note that a missing key is considered expired
+export function expired(storage: Storage, key: string) : boolean {
+   const value = storage.getItem(key);
+   if (!value) {
+      return true;
+   }
+   return DateTime.now() > DateTime.fromISO(value);
+}
 
 export class ProcessCancelled extends Error {
    constructor() {

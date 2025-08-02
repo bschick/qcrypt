@@ -24,7 +24,7 @@ Is that sound?
  - Customizable encryption options (constrained to values not known to be insecure)
  - Single page browser "app" that works across all devices with a modern browser
  - Use built-in W3C browser SubtleCrypto (for perf, trust, and x-platform)
- - No adverts, cookies, tracking, etc.
+ - No adverts or tracker cookies, etc.
  - Achieve best web-app security rating (csp, strong cert, sri, hsts, xfo, etc..)
 
 Since the crypto was relatively straightforward, and uses standardized functions, my focus was more on making the browser app as trustworthy as possible. I read various posts describing why web-apps are not as trustworthy as signed installable binaries, and that's probably still true, but the web has come a long way with CSP, SRI, and friends. I used observatory.mozilla.org and other free scanners to secure the app (still a few items to improve). Any suggestions about making web-apps trustworthy for this purpose?

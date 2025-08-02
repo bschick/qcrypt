@@ -1,6 +1,6 @@
 <!-- MIT License
 
-Copyright (c) 2024 Brad Schick
+Copyright (c) 2025 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,32 +20,36 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
 <span class="recovery">
-  <h1 mat-dialog-title class="header">Recovery Steps</h1>
+  <h1 mat-dialog-title class="header">Recovery Actions</h1>
 
   <div mat-dialog-content class="dialog-content">
     <ol class="steps" type="1">
       <li>
-        First, make sure your internet connection is working. If you are connected and
-        have previously used Quick Crypt, just select the passkey you used when
+        First, ensure your internet connection is working. If you have a good connection
+        and have previously used Quick Crypt, select the passkey you used when
         you first signed in. You may have created a passkey with a
         physical key, a mobile device, or a password manager like Bitwarden or 1Password.
       </li>
 
-      <li> If you lost or damaged your passkey, follow these steps:
+      <li>If you lost or damaged your passkeys, take one of these actions:
+
         <ul class="inner-steps">
-          <li>Locate the <b>recovery link</b> provided when you created your user
-            identity and first passkey. You may have also accessed your recovery link
-            from the credentials side panel.</li>
-          <li>Paste that link into your browser's address bar and hit enter.</li>
+          <li><a [routerLink]="'/recovery2'" (click)="onClickRecovery2($event)">Restore access to your account</a>
+            using the recovery words provided when you created your account. Just
+            follow the link above and enter your recovery word pattern.</li>
+          <li>If you created an account before Quick Crypt switched to recovery words,
+            locate the <b>recovery link</b> that was provided
+            when you created your account. Then paste that link into your browser's
+            address bar and press Enter.</li>
         </ul>
       </li>
       <li>
-        If you lost both your Quick Crypt passkeys and recovery link, you cannot
+        If you lost both your Quick Crypt passkeys and recovery information, you cannot
         access your existing user identity to decrypt or encrypt data. To continue using
         Quick Crypt, you may <a [routerLink]="'/newuser'" (click)="onClickNewUser($event)">
-          create a new user identity</a>.
-        If you find your original recovery link or passkey, you can use either to
-        regain access to your original identity and decrypt data.
+        create a new account</a>.
+        If you find your original recovery information or passkey, you can use either to
+        regain access to your account and decrypt data.
       </li>
       <li>
         If you found a problem with Quick Crypt, please

@@ -3,7 +3,7 @@ import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthenticatorService } from '../services/authenticator.service';
 
-export const showRecoveryGuard: CanActivateFn = (route, state) => {
+export const cmdlineGuard: CanActivateFn = (route, state) => {
    const authSvc = inject(AuthenticatorService);
    const router = inject(Router);
 

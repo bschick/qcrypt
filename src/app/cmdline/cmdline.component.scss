@@ -9,8 +9,8 @@
   width: 100%;
   justify-content: space-evenly;
 
-  .recovery {
-    min-width: 380px;
+  .credential {
+    min-width: 500px;
     @include mat.form-field-density(-1);
   }
 
@@ -21,11 +21,6 @@
     margin-top: 3px;
   }
 
-  .words-area {
-    resize: none;
-    margin-top: 20px;
-    min-height: 120px;
-  }
 }
 
 .error-msg {
@@ -35,20 +30,8 @@
   justify-content: center;
 }
 
+
 .lower-spinner {
   @extend .spinner;
   top: 35%;
-}
-
-.toolbar {
-  height: 48px;
-  width: #{5 * 50px};
-  background-color: none;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 2px;
-  position: absolute;
-  right: -14px;
-  top: 2px;
 }

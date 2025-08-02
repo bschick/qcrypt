@@ -1,5 +1,20 @@
 # CHANGELOG.md
 
+## 5.1.0 (2025-07-31)
+
+Security:
+
+  - switched to bip39 word patterns for account recovery (removing the need to store user credentials)
+  - switched to httponly JWT cookies for sessions (reducing transport of user credentials)
+  - require reauthentication to retrieve sensitive information like recovery words
+  - sign out affects all open Quick Crypt browser tabs and windows
+
+Changes:
+
+  - sessions now persist across browser tabs and windows
+  - reduced automatic logout time from inactivity to 1.5 hours and max session to 3 hours
+  - improved default input focus on a few pages
+
 ## 5.0.1 (2025-07-29)
 
 Changes:
