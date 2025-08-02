@@ -409,7 +409,7 @@ const ELEMENT_DATA: FAQElement[] = [
       question: 'Does Quick Crypt use browser cookies?',
       answer: `Quick Crypt uses a single, secure
       cookie to create a session between your browser and our servers. The session
-      allows you to open new tabs or make account changes without reauthenticating for
+      allows you to open new tabs or make account changes without reauthorizing
       each action. Data encryption and decryption are performed locally in your
       browser and do not use cookies, sessions, or exchange data with our servers.
       <ul>
