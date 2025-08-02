@@ -417,17 +417,17 @@ const ELEMENT_DATA: FAQElement[] = [
          Your activity is not tracked and we do not have advertisers.
          </li>
          <li><b>Session Cookie: </b>We use a single, first-party cookie exclusively
-         to keep you logged in.
+         to keep you logged in. Each session has a unique cookie.
          </li>
          <li><b>Cookie Security: </b>Our session cookies are HttpOnly and implemented as
-         server-signed JSON Web Tokens (JWTs) using account-specific keys, protecting
-         you from attacks like cross-site scripting.
+         server-signed JSON Web Tokens (JWTs) using account and session-specific keys,
+         protecting you from attacks like cross-site scripting.
          </li>
-         <li><b>Limited Duration: </b>A session automatically expires after either 1.5 hours
-         of inactivity or 3 hours of usage.
+         <li><b>Limited Duration: </b>A session automatically expires after either 1.5
+         hours of inactivity or 3 hours of elapsed time.
          </li>
-         <li><b>Clean Logout: </b>The session cookie is deleted when you log out or your
-         session expires.
+         <li><b>Clean Logout: </b>The cookie is deleted from your browser and invalidated
+         server-side when you log out or your session expires.
          </li>
       </ul>`
    },
