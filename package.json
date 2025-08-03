@@ -7,7 +7,7 @@
     "ng": "ng",
     "start": "ng serve",
     "serve": "ng serve --hmr false --host $(/sbin/ip -o -4 addr list enp0s1 | awk '{print $4}' | cut -d/ -f1) --watch --poll 1000 --ssl --ssl-cert localssl/localhost.crt --ssl-key localssl/localhost.key",
-    "build": "ng build qcrypt -c production --subresource-integrity",
+    "build": "ng build qcrypt  --configuration production --subresource-integrity",
     "watch": "ng build --watch --configuration development",
     "test": "ng test --watch --poll 1000 ",
     "serve:ssr:qcrypt": "node dist/qcrypt/server/server.mjs"

@@ -304,10 +304,12 @@ export class AuthenticatorService {
       return null;
    }
 
-   lsSet(key: string, value: string | number | boolean | null) {
+   lsSet(key: string, value: string | number | boolean | null): boolean {
       if (value != null && this.authenticated()) {
          localStorage.setItem(this.userId + key, value.toString());
+         return true;
       }
+      return false;
    }
 
    lsDel(key: string) {
