@@ -51,7 +51,7 @@ import { HttpParams } from '@angular/common/http';
 
 // Set only if num is betwee min and max (inclusive) when min and max are not null
 function setIfBetween(
-   check: string | null,
+   check: number | string | null,
    min: number | null,
    max: number | null,
    setter: (num: number) => void
@@ -65,11 +65,13 @@ function setIfBetween(
 }
 
 function setIfBoolean(
-   check: string | null,
+   check: boolean | string | null,
    setter: (bool: boolean) => void
 ): void {
    if (check != null) {
-      if (['true', '1', 'yes', 'on'].includes(check.toLowerCase())) {
+      if (typeof check === 'boolean') {
+         setter(check);
+      } else if (['true', '1', 'yes', 'on'].includes(check.toLowerCase())) {
          setter(true);
       } else if (['false', '0', 'no', 'off'].includes(check.toLowerCase())) {
          setter(false);
@@ -158,7 +160,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
       this.cipherSvc.benchmark(this.ICOUNT_MIN)
          .then(([icount, icountMax, hashRate]) => {
-            this.icountInput.setValue(icount);
+            this.setIcount(icount);
             this.ICOUNT_DEFAULT = icount;
             this.ICOUNT_MAX = icountMax;
          }).finally(() => {
@@ -188,6 +190,11 @@ export class OptionsComponent implements OnInit, AfterViewInit {
         console.log(`${key}: ${this.authSvc.lsGet(key)}`);
        } */
       if (!this._optionsLoaded) {
+         this._optionsLoaded = true;
+         // only want manual changes to be saved, not restoring of all settings
+         // (comes into play if you log out and in)
+         const savedLastReminder = this._lastReminder;
+
          this.setAlgorithm(this.authSvc.lsGet('algorithm'));
          this.setIcount(this.authSvc.lsGet('icount'));
          this.setHidePwd(this.authSvc.lsGet('hidepwd'));
@@ -216,7 +223,8 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          this.setCTFormat(params.get('ctformat'));
          this.setVisibilityClear(params.get('vclear'));
          this.setReminder(params.get('reminder'));
-         this._optionsLoaded = true;
+
+         this._lastReminder = savedLastReminder;
 
          this.setIcountWarning();
          // order is important, set modes first
@@ -232,21 +240,20 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    defaultOptions(): void {
-      this._algorithmList = ['X20-PLY'];
-      this.icountInput.setValue(this.ICOUNT_DEFAULT);
-      this.hidePwdToggle.setValue(this.HIDE_PWD_DEFAULT);
-      this.cacheTimeInput.setValue(this.CACHE_TIME_DEFAULT);
-      this.strengthSelect.setValue(this.PWD_STRENGTH_DEFAULT);
-      this.checkPwnedToggle.setValue(this.CHECK_PWNED_DEFAULT);
-      this.loopsInput.setValue(this.LOOPS_DEFAULT);
-      this.formatSelect.setValue(this.FORMAT_DEFAULT);
-      this.visClearToggle.setValue(this.VIS_CLEAR_DEFAULT);
-      this.reminderToggle.setValue(this.REMINDER_DEFAULT);
-      this._lastReminder = this.REMINDER_DEFAULT;
-
       this._optionsLoaded = false;
 
+      this.setIcount(this.ICOUNT_DEFAULT);
+      this.setHidePwd(this.HIDE_PWD_DEFAULT);
+      this.setCacheTime(this.CACHE_TIME_DEFAULT);
+      this.setCheckPwned(this.CHECK_PWNED_DEFAULT);
+      this.setMinPwdStrength(this.PWD_STRENGTH_DEFAULT);
+      this.setLoops(this.LOOPS_DEFAULT);
+      this.setCTFormat(this.FORMAT_DEFAULT);
+      this.setVisibilityClear(this.VIS_CLEAR_DEFAULT);
+      this.setReminder(this.REMINDER_DEFAULT);
+
       // order is important, set modes first
+      this._algorithmList = ['X20-PLY'];
       this.algorithmsCmp.modes = this._algorithmList;
       this.algorithmsCmp.count = this.loopsInput.value || this.LOOPS_DEFAULT;
    }
@@ -327,27 +334,27 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       }
    }
 
-   private setIcount(ic: string | null): void {
+   private setIcount(ic: number | string | null): void {
       // Ignores if out of range or NaN
       setIfBetween(ic, this.ICOUNT_MIN, this.ICOUNT_MAX, (num) => {
          this.icountInput.setValue(num);
       });
    }
 
-   private setHidePwd(hide: string | null) {
+   private setHidePwd(hide: boolean | string | null) {
       setIfBoolean(hide, (bool) => {
          this.hidePwdToggle.setValue(bool);
       });
    }
 
-   private setCacheTime(tm: string | null): void {
+   private setCacheTime(tm: number | string | null): void {
       setIfBetween(tm, 0, this.ACTIVITY_TIMEOUT, (num) => {
          //         this._cacheTime = num;
          this.cacheTimeInput.setValue(num);
       });
    }
 
-   private setCheckPwned(check: string | null): void {
+   private setCheckPwned(check: boolean | string | null): void {
       setIfBoolean(check, (bool) => {
          this.checkPwnedToggle.setValue(bool);
       });
@@ -359,7 +366,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       }
    }
 
-   private setLoops(lpEnd: string | null): void {
+   private setLoops(lpEnd: number | string | null): void {
       setIfBetween(lpEnd, 1, this.LOOPS_MAX, (num) => {
          this.loopsInput.setValue(num);
       });
@@ -371,14 +378,13 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       }
    }
 
-   private setReminder(reminder: string | null): void {
+   private setReminder(reminder: boolean | string | null): void {
       setIfBoolean(reminder, (bool) => {
          this.reminderToggle.setValue(bool);
-         this._lastReminder = bool;
       });
    }
 
-   private setVisibilityClear(clear: string | null): void {
+   private setVisibilityClear(clear: boolean | string | null): void {
       setIfBoolean(clear, (bool) => {
          this.visClearToggle.setValue(bool);
       });
@@ -405,8 +411,9 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       // Note that modes length is the max number of modes that have
       // been set, which may be larger than the current # of loops
       // This is done to preserve default values
-      this._algorithmList = modes;
-      this.authSvc.lsSet('algorithm', JSON.stringify(modes));
+      if (this.authSvc.lsSet('algorithm', JSON.stringify(modes))){
+         this._algorithmList = modes;
+      }
    }
 
    onBlurLoops() {
@@ -415,7 +422,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       loops = Math.min(loops, this.LOOPS_MAX);
 
       this.algorithmsCmp.count = loops;
-      this.loopsInput.setValue(loops);
+      this.setLoops(loops);
       this.authSvc.lsSet('loops', loops);
 
       this.loopsChange.emit(loops);
@@ -426,7 +433,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       icount = Math.max(icount, this.ICOUNT_MIN);
       icount = Math.min(icount, this.ICOUNT_MAX);
 
-      this.icountInput.setValue(icount);
+      this.setIcount(icount);
       this.authSvc.lsSet('icount', icount);
       this.setIcountWarning();
 
@@ -445,7 +452,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          cacheTime = Math.min(cacheTime, this.ACTIVITY_TIMEOUT);
 
          if (cacheTime != this.cacheTimeInput.value) {
-            this.cacheTimeInput.setValue(cacheTime);
+            this.setCacheTime(cacheTime);
          } else {
             this.authSvc.lsSet('cachetime', cacheTime);
             this.cacheTimeChange.emit(cacheTime);
@@ -464,9 +471,8 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    onReminderChange(reminder: boolean | null) {
-      if (reminder != null) {
-         this._lastReminder = reminder;
-         this.authSvc.lsSet('reminder', reminder);
+      if (this.authSvc.lsSet('reminder', reminder)){
+         this._lastReminder = reminder!;
       }
       this.formatOptionsChange.emit(true);
    }
@@ -478,11 +484,11 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    onFormatChange(selected: string | null) {
       if (selected == 'link') {
          const saved = this.reminderToggle.value || false;
-         this.reminderToggle.setValue(false);
+         this.setReminder(false);
          this.reminderToggle.disable();
          this._lastReminder = saved;
       } else {
-         this.reminderToggle.setValue(this._lastReminder);
+         this.setReminder(this._lastReminder);
          this.reminderToggle.enable();
       }
       this.authSvc.lsSet('ctformat', selected);
