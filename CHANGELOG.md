@@ -1,5 +1,11 @@
 # CHANGELOG.md
 
+## 5.1.1 (2025-08-02)
+
+Changes:
+
+  - fixed reminder toggle state management
+
 ## 5.1.0 (2025-08-01)
 
 Security:
