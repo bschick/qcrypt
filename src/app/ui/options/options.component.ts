@@ -191,10 +191,9 @@ export class OptionsComponent implements OnInit, AfterViewInit {
        } */
       if (!this._optionsLoaded) {
          this._optionsLoaded = true;
-         // only want manual changes to be saved, not restoring of all settings
-         // (comes into play if you log out and in)
-         const savedLastReminder = this._lastReminder;
 
+         // set reminder first to reload _lastReminder, which get used in other settings
+         this.setReminder(this.authSvc.lsGet('reminder'));
          this.setAlgorithm(this.authSvc.lsGet('algorithm'));
          this.setIcount(this.authSvc.lsGet('icount'));
          this.setHidePwd(this.authSvc.lsGet('hidepwd'));
@@ -204,7 +203,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          this.setLoops(this.authSvc.lsGet('loops'));
          this.setCTFormat(this.authSvc.lsGet('ctformat'));
          this.setVisibilityClear(this.authSvc.lsGet('vclear'));
-         this.setReminder(this.authSvc.lsGet('reminder'));
 
          let params = new HttpParams({ fromString: window.location.search });
 
@@ -213,6 +211,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
             this.expandOptions = true;
          }
 
+         this.setReminder(params.get('reminder'));
          this.setAlgorithm(params.get('algorithm'));
          this.setIcount(params.get('icount'));
          this.setHidePwd(params.get('hidepwd'));
@@ -222,9 +221,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          this.setLoops(params.get('loops'));
          this.setCTFormat(params.get('ctformat'));
          this.setVisibilityClear(params.get('vclear'));
-         this.setReminder(params.get('reminder'));
-
-         this._lastReminder = savedLastReminder;
 
          this.setIcountWarning();
          // order is important, set modes first
@@ -250,6 +246,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       this.setLoops(this.LOOPS_DEFAULT);
       this.setCTFormat(this.FORMAT_DEFAULT);
       this.setVisibilityClear(this.VIS_CLEAR_DEFAULT);
+      // set reminder last to override other changes above
       this.setReminder(this.REMINDER_DEFAULT);
 
       // order is important, set modes first
@@ -471,10 +468,13 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    onReminderChange(reminder: boolean | null) {
-      if (this.authSvc.lsSet('reminder', reminder)){
-         this._lastReminder = reminder!;
+      // don't save reminder state if in link format (reminder is always false)
+      if (this.formatSelect.value !== 'link') {
+         if (this.authSvc.lsSet('reminder', reminder)){
+            this._lastReminder = reminder!;
+         }
+         this.formatOptionsChange.emit(true);
       }
-      this.formatOptionsChange.emit(true);
    }
 
    onVisClearChnage(vclear: boolean | null) {
