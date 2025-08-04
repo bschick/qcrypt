@@ -16,7 +16,7 @@ We designed Quick Crypt to make it easy to encrypt data and to decrypt that data
 - After sign-in, works fully offline
 - Uses trusted AEAD cipher modes (AES 256 GCM, XChaCha20 Poly1305, AEGIS 256)
 - Uses the latest web security protocols (csp, cors, sri, hsts, xfo, corp, etc.)
-- Keep an (A+ rating from MDN Observatory)[https://developer.mozilla.org/en-US/observatory/analyze?host=quickcrypt.org]
+- Keep an [A+ rating from MDN Observatory](https://developer.mozilla.org/en-US/observatory/analyze?host=quickcrypt.org)
 - Open-source for peer review
 - No adverts or trackers
 = No personally identifiable information (PII) collected
