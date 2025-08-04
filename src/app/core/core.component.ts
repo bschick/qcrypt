@@ -663,7 +663,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       return this.cipherSvc.encryptStream(
          econtext,
          this.passwordProvider.bind(this),
-         base64ToBytes(this.authSvc.userCred!),
+         this.authSvc.userCred,
          clearStream
       );
    }
@@ -825,7 +825,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
       return await this.cipherSvc.decryptStream(
          this.passwordProvider.bind(this),
-         base64ToBytes(this.authSvc.userCred!),
+         this.authSvc.userCred,
          cipherStream
       );
    }
@@ -1047,7 +1047,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          throw new Error('Missing cipher armor');
       }
       return await this.cipherSvc.getCipherStreamInfo(
-         base64ToBytes(this.authSvc.userCred!),
+         this.authSvc.userCred,
          cipherStream
       );
    }

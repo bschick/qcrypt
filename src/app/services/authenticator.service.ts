@@ -107,7 +107,7 @@ export class AuthenticatorService {
 
    private _subject = new Subject<AuthEventData>();
    private _intervalId: number = 0;
-   private _userCred?: string = undefined;
+   private _userCred?: Uint8Array = undefined;
    private _cachedRecoveryId?: string;
    public ready: Promise<void>;
 
@@ -168,7 +168,7 @@ export class AuthenticatorService {
       return testPK === this.pkId;
    }
 
-   public get userCred(): string {
+   public get userCred(): Uint8Array {
       if (!this.authenticated()) {
          throw new Error('no active user');
       }
@@ -345,7 +345,7 @@ export class AuthenticatorService {
 
       const sessExpiry = DateTime.now().plus({ seconds: SESSION_TIMEOUT }).toISO();
 
-      this._userCred = serverLogin.userCred;
+      this._userCred = base64ToBytes(serverLogin.userCred);
       localStorage.setItem('sessionexpiry', sessExpiry);
       localStorage.setItem('userid', serverLogin.userId);
       localStorage.setItem('pkid', serverLogin.pkId);
@@ -467,7 +467,10 @@ export class AuthenticatorService {
 
       // clear this tabs sensitive in-memory values
       this.userInfo.set(undefined);
-      this._userCred = undefined;
+      if(this._userCred) {
+         crypto.getRandomValues(this._userCred);
+         this._userCred = undefined;
+      }
       sessionStorage.clear();
 
       this._emit(eventData);

@@ -27,6 +27,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCardModule } from '@angular/material/card';
+import { bytesToBase64 } from '../services/utils';
 
 @Component({
    selector: 'app-recovery',
@@ -77,7 +78,7 @@ export class RecoveryComponent implements OnInit {
                }
                this.validRecoveryLink = true;
                if (this.authenticated) {
-                  this.selfRecovery = this.recoverUserCred === this.authSvc.userCred;
+                  this.selfRecovery = this.recoverUserCred === bytesToBase64(this.authSvc.userCred);
                }
             } catch (err) {
                console.error(err);
