@@ -38,6 +38,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Subscription } from 'rxjs';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { bytesToBase64 } from '../services/utils';
 
 
 @Component({
@@ -82,7 +83,7 @@ export class CmdLineComponent implements OnInit, OnDestroy {
       // Not actually using recovery words, just an existing way
       // to force reauthentication
       this.authSvc.getRecoveryWords().then( () => {
-         this.userCredential.setValue(this.authSvc.userCred);
+         this.userCredential.setValue(bytesToBase64(this.authSvc.userCred));
       }).catch( (err) => {
          console.error(err);
          if(err instanceof Error && err.message.includes("fetch")) {
