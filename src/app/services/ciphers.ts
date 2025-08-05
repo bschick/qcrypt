@@ -86,20 +86,40 @@ export abstract class Ciphers {
    protected _sk?: CryptoKey;
 
    protected _reader: BYOBStreamReader;
-   protected _userCred: Uint8Array;
+   protected _userCred?: Uint8Array;
    protected _state: CipherState;
 
    protected constructor(
       userCred: Uint8Array,
       reader: BYOBStreamReader
    ) {
-      if (userCred.byteLength != cc.USERCRED_BYTES) {
-         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
+      if (!userCred || userCred.byteLength != cc.USERCRED_BYTES) {
+         throw new Error('Invalid userCred');
       }
 
       this._state = CipherState.Initialized;
       this._userCred = userCred;
       this._reader = reader;
+   }
+
+   public finishedState() {
+      this._state = CipherState.Finished;
+
+      // Don't overwrite because this is only a reference
+      this._userCred = undefined;
+      this._ek = undefined;
+      this._sk = undefined;
+      this._reader.cleanup();
+   }
+
+   public errorState() {
+      this._state = CipherState.Error;
+
+      // Don't overwrite because this is only a reference
+      this._userCred = undefined;
+      this._ek = undefined;
+      this._sk = undefined;
+      this._reader.cleanup();
    }
 
    public abstract protocolVersion(): number;
@@ -214,6 +234,10 @@ export abstract class Ciphers {
          false,
          ['deriveBits', 'deriveKey']
       );
+
+      // overwrite to clear userCred and pwd
+      crypto.getRandomValues(rawMaterial);
+      crypto.getRandomValues(pwdBytes);
 
       // A bit of a hack, but subtle doesn't support other algorithms... so lie. This
       // is safe because the key is exported as bits and used in libsodium when not
@@ -433,7 +457,10 @@ export abstract class Ciphers {
 
 export abstract class Encipher extends Ciphers {
 
-   public static latest(userCred: Uint8Array, clearStream: ReadableStream<Uint8Array>): Encipher {
+   public static latest(
+      userCred: Uint8Array,
+      clearStream: ReadableStream<Uint8Array>
+   ): Encipher {
       const reader = new BYOBStreamReader(clearStream);
       return new EncipherV5(userCred, reader);
    }
@@ -575,16 +602,10 @@ export class EncipherV5 extends Encipher {
          const [clearBuffer, done] = await this._reader.readAvailable(
             new Uint8Array(this._readTarget)
          );
-         if (done) {
-            this._state = CipherState.Finished;
-            this._reader.cleanup();
-         } else {
-            this._state = CipherState.Block0Done;
-         }
 
          if (clearBuffer.byteLength == 0) {
             if (done) {
-               // must always be a block0
+               // must always have a block0
                throw new Error('Missing clear data');
             }
             // This can happen when the stream isn't done but return no data
@@ -624,9 +645,9 @@ export class EncipherV5 extends Encipher {
             throw new Error('Missing password');
          }
 
-         const hk = await Ciphers._genHintCipherKey(eparams.alg, this._userCred, this._slt);
-         this._sk = await Ciphers._genSigningKey(this._userCred, this._slt);
-         this._ek = await Ciphers._genCipherKey(eparams.alg, eparams.ic, pwd, this._userCred, this._slt);
+         const hk = await Ciphers._genHintCipherKey(eparams.alg, this._userCred!, this._slt);
+         this._sk = await Ciphers._genSigningKey(this._userCred!, this._slt);
+         this._ek = await Ciphers._genCipherKey(eparams.alg, eparams.ic, pwd, this._userCred!, this._slt);
 
          let encryptedHint = new Uint8Array(0);
          if (hint) {
@@ -668,10 +689,16 @@ export class EncipherV5 extends Encipher {
             encryptedData,
             additionalData,
             new Uint8Array(0),
-            this._state == CipherState.Finished
+            done
          );
 
          this._lastMac = mac;
+
+         if (done) {
+            this.finishedState();
+         } else {
+            this._state = CipherState.Block0Done;
+         }
 
          return {
             parts: [
@@ -682,7 +709,7 @@ export class EncipherV5 extends Encipher {
             state: this._state
          };
       } catch (err) {
-         this._state = CipherState.Error;
+         this.errorState();
          console.error(err);
          throw err;
       }
@@ -706,10 +733,6 @@ export class EncipherV5 extends Encipher {
          const [clearBuffer, done] = await this._reader.readAvailable(
             new Uint8Array(this._readTarget)
          );
-         if (done) {
-            this._state = CipherState.Finished;
-            this._reader.cleanup();
-         }
 
          // There can be read stalls, caller must be ready to ignore empty results
          // and call BlockN again when state is not Finished
@@ -744,10 +767,14 @@ export class EncipherV5 extends Encipher {
             encryptedData,
             additionalData,
             this._lastMac,
-            this._state == CipherState.Finished
+            done
          );
 
          this._lastMac = mac;
+
+         if (done) {
+            this.finishedState();
+         }
 
          return {
             parts: [
@@ -758,12 +785,11 @@ export class EncipherV5 extends Encipher {
             state: this._state
          };
       } catch (err) {
-         this._state = CipherState.Error;
+         this.errorState();
          console.error(err);
          throw err;
       }
    }
-
 
    public static validateEParams(eparams: EParams) {
       const {
@@ -988,8 +1014,8 @@ export abstract class Decipher extends Ciphers {
             throw new Error('Decipher unexpected encryption key');
          }
 
-         if (this._userCred.byteLength != cc.USERCRED_BYTES) {
-            throw new Error('Invalid userCred length of: ' + this._userCred.byteLength);
+         if (this._userCred!.byteLength != cc.USERCRED_BYTES) {
+            throw new Error('Invalid userCred length of: ' + this._userCred!.byteLength);
          }
 
          // This does MAC check
@@ -1015,7 +1041,7 @@ export abstract class Decipher extends Ciphers {
             throw new Error('password is empty');
          }
 
-         this._ek = await Ciphers._genCipherKey(this._blockData.alg, this._ic, pwd, this._userCred, this._slt);
+         this._ek = await Ciphers._genCipherKey(this._blockData.alg, this._ic, pwd, this._userCred!, this._slt);
 
          const decrypted = await Decipher._doDecrypt(
             this._blockData.alg,
@@ -1028,7 +1054,7 @@ export abstract class Decipher extends Ciphers {
          this._state = CipherState.Block0Done;
          return decrypted;
       } catch (err) {
-         this._state = CipherState.Error;
+         this.errorState();
          console.error(err);
          throw err;
       } finally {
@@ -1187,10 +1213,6 @@ class DecipherV1 extends Decipher {
          // (which are more important)
          let [payload] = await this._reader.readFill(new Uint8Array(cc.PAYLOAD_SIZE_MAX));
 
-         // V1 only has a single block, so we're finisehd
-         this._state = CipherState.Finished;
-         this._reader.cleanup();
-
          if (this._headerish) {
             const newPayload = new Uint8Array(this._headerish.byteLength + payload.byteLength);
             newPayload.set(this._headerish);
@@ -1242,7 +1264,7 @@ class DecipherV1 extends Decipher {
             additionalData: additionalData
          }
 
-         this._sk = await Ciphers._genSigningKey(this._userCred, this._slt);
+         this._sk = await Ciphers._genSigningKey(this._userCred!, this._slt);
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we  have the signing key and data.
@@ -1255,7 +1277,7 @@ class DecipherV1 extends Decipher {
 
          let hint = new Uint8Array(0);
          if (encryptedHint!.byteLength != 0) {
-            const hk = await Ciphers._genHintCipherKey(this._blockData.alg!, this._userCred, this._slt);
+            const hk = await Ciphers._genHintCipherKey(this._blockData.alg!, this._userCred!, this._slt);
             hint = await Decipher._doDecrypt(
                this._blockData.alg!,
                hk,
@@ -1268,7 +1290,7 @@ class DecipherV1 extends Decipher {
          this._state = CipherState.Block0Decoded;
 
       } catch (err) {
-         this._state = CipherState.Error;
+         this.errorState();
          console.error(err);
          throw err;
       }
@@ -1297,7 +1319,7 @@ class DecipherV1 extends Decipher {
       if (this._state != CipherState.Block0Done) {
          throw new Error('Decipher block0 not complete');
       }
-      this._state = CipherState.Finished;
+      this.finishedState();
 
       // This is the signal decrytion is done. V1 never has more than block0
       return new Uint8Array();
@@ -1468,7 +1490,7 @@ class DecipherV4 extends Decipher {
             extractor.offset - this._blockData.encryptedData.byteLength
          );
 
-         this._sk = await Ciphers._genSigningKey(this._userCred, this._slt);
+         this._sk = await Ciphers._genSigningKey(this._userCred!, this._slt);
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we have the signing key and data.
@@ -1481,7 +1503,7 @@ class DecipherV4 extends Decipher {
 
          let hint = new Uint8Array(0);
          if (encryptedHint!.byteLength != 0) {
-            const hk = await Ciphers._genHintCipherKey(this._blockData.alg, this._userCred, this._slt);
+            const hk = await Ciphers._genHintCipherKey(this._blockData.alg, this._userCred!, this._slt);
             hint = await Decipher._doDecrypt(
                this._blockData.alg,
                hk,
@@ -1493,7 +1515,7 @@ class DecipherV4 extends Decipher {
          this._hint = new TextDecoder().decode(hint)
          this._state = CipherState.Block0Decoded;
       } catch (err) {
-         this._state = CipherState.Error;
+         this.errorState();
          console.error(err);
          throw err;
       }
@@ -1514,7 +1536,7 @@ class DecipherV4 extends Decipher {
          // This does MAC check
          await this._decodePayloadN();
          //@ts-ignore
-         if (this._state == CipherState.Finished) {
+         if (this._state === CipherState.Finished) {
             // this is the signal that decryption is complete
             return new Uint8Array(0);
          }
@@ -1533,7 +1555,7 @@ class DecipherV4 extends Decipher {
 
          return decrypted;
       } catch (err) {
-         this._state = CipherState.Error;
+         this.errorState();
          console.error(err);
          throw err;
       } finally {
@@ -1551,8 +1573,7 @@ class DecipherV4 extends Decipher {
       try {
          const done = await this._decodeHeader();
          if (done) {
-            this._state = CipherState.Finished;
-            this._reader.cleanup();
+            this.finishedState();
             return;
          }
 
@@ -1595,7 +1616,7 @@ class DecipherV4 extends Decipher {
             throw new Error('Invalid MAC error');
          }
       } catch (err) {
-         this._state = CipherState.Error;
+         this.errorState();
          console.error(err);
          throw err;
       }
@@ -1651,7 +1672,7 @@ class DecipherV5 extends DecipherV4 {
       await super._decodePayload0();
 
       // Eventually flags may be a bitfield
-      if (this._state == CipherState.Finished && this._lastFlags != 1) {
+      if (this._state === CipherState.Finished && this._lastFlags !== 1) {
          throw new Error('Missing terminal data block');
       }
 
@@ -1666,12 +1687,12 @@ class DecipherV5 extends DecipherV4 {
 
       // If we loaded more data, and lastFlags was 1 (change to bitfield someday)
       // we have an error
-      if (this._lastFlags == 1 && this._state != CipherState.Finished) {
+      if (this._lastFlags === 1 && this._state !== CipherState.Finished) {
          throw new Error(`Terminal block already read ${this._state}`);
       }
 
       // Eventually flags may be a bitfield
-      if (this._state == CipherState.Finished && this._lastFlags != 1) {
+      if (this._state === CipherState.Finished && this._lastFlags !== 1) {
          throw new Error('Missing terminal data block');
       }
 
