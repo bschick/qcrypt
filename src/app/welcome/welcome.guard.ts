@@ -9,11 +9,12 @@ function paramsToQueryString(): string {
    return params.toString() ? `?${params.toString()}` : '';
 }
 
-export const welcomeGuard: CanActivateFn = (route, state) => {
+export const welcomeGuard: CanActivateFn = async (route, state) => {
    const authSvc = inject(AuthenticatorService);
    const router = inject(Router);
 
-   if (!authSvc.isUserKnown()) {
+   await authSvc.ready;
+   if (!authSvc.validKnownUser()) {
       return true;
    }
 

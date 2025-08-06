@@ -31,7 +31,7 @@ export const senderLinksGuard: CanActivateFn = (route, state) => {
 
    if (authSvc.authenticated()) {
       return true;
-   } else if(authSvc.isUserKnown()) {
+   } else if(authSvc.validKnownUser()) {
       return router.parseUrl('/');
    }
 

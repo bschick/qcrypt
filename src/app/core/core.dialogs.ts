@@ -139,7 +139,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
       const resizeObserver = new ResizeObserver(
          (entries: ResizeObserverEntry[]) => {
             this.showHideSuggestion();
-      });
+         });
 
       resizeObserver.observe(this.strenElem!);
    }
@@ -165,7 +165,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    onPasswordChange() {
       // Don't want to leave an open pwd dialog if, there are characters entered
       // and not activity for a few minutes minutes, close the dialog
-      if(this.timerId >= 0) {
+      if (this.timerId >= 0) {
          window.clearTimeout(this.timerId);
       }
 
@@ -177,7 +177,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
       // really ugly, but since the elements are added async this is the simplest
       // solution. Could alterntively edit or monkey-patch password strength meter code
       window.setTimeout(
-         () =>  this.showHideSuggestion(),
+         () => this.showHideSuggestion(),
          200
       );
 
@@ -266,6 +266,7 @@ export class CipherInfoDialog {
 export class SigninDialog {
 
    public userName: string | null;
+   public userId: string | null;
    public error: string = '';
    public showProgress: boolean = false;
 
@@ -276,16 +277,24 @@ export class SigninDialog {
       @Inject(MAT_DIALOG_DATA) public data: SigninDialog
    ) {
       dialogRef.disableClose = true;
-      const [_, userName] = this.authSvc.loadKnownUser();
-      this.userName = userName;
+      [this.userId, this.userName] = this.authSvc.loadKnownUser();
    }
 
+   // Would be cleaner to move navigation to core.component, but doing
+   // it in the dialog gives us a good place to show errors.
    async onClickSignin(event: any) {
       try {
          this.error = '';
-         this.showProgress = true;
-         await this.authSvc.defaultLogin();
-         this.dialogRef.close('Login');
+
+         if (!this.authSvc.validKnownUser()) {
+            this.authSvc.forgetUser(false);
+            this.router.navigateByUrl('/welcome');
+            this.dialogRef.close('Navigate');
+         } else {
+            this.showProgress = true;
+            await this.authSvc.defaultLogin();
+            this.dialogRef.close('Login');
+         }
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes("fetch")) {
@@ -300,8 +309,7 @@ export class SigninDialog {
 
    onClickForget(event: any) {
       this.error = '';
-      // session should already be ended if login dialog is showing
-      this.authSvc.forgetUser(false);
+      this.authSvc.forgetUser(true);
       this.router.navigateByUrl('/welcome');
       this.dialogRef.close('Forget');
    }

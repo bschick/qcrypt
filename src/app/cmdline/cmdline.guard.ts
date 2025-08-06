@@ -9,7 +9,7 @@ export const cmdlineGuard: CanActivateFn = (route, state) => {
 
    // don't need to be authenticated because the page itself
    // does a passkey check regardless
-   if (authSvc.isUserKnown()) {
+   if (authSvc.validKnownUser()) {
       return true;
    }
 
