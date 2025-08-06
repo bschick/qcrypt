@@ -80,6 +80,7 @@ import { BubbleDirective } from '../ui/bubble/bubble.directive';
 import { OptionsComponent } from '../ui/options/options.component';
 import { Subscription } from 'rxjs';
 import { CopyrightComponent } from "../ui/copyright/copyright.component";
+import { Router } from '@angular/router';
 
 
 @Component({
@@ -143,7 +144,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       private matIconRegistry: MatIconRegistry,
       private domSanitizer: DomSanitizer,
       private changeRef: ChangeDetectorRef,
-      private ngZone: NgZone
+      private ngZone: NgZone,
+      private router: Router,
+
    ) {
       this.matIconRegistry.addSvgIcon(
          'github',
@@ -249,14 +252,19 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    async trySigninDialog(): Promise<void> {
       if (!this.signinDialogRef) {
-         if(this.authSvc.validSession()) {
-            // noop if ready is resolved
+         // This check prevents showing progreess when there is no
+         // valid session, aka nothing to wait for (like when a new tab is opened)
+         if(this.authSvc.potentialSession()) {
+            // no-op if ready is resolved
             this.showProgress = true;
             await this.authSvc.ready;
             this.showProgress = false;
          }
 
-         if(!this.authSvc.authenticated()) {
+         // happens when another tab does forget user
+         if(!this.authSvc.validKnownUser()) {
+            this.router.navigateByUrl('/welcome');
+         } else if(!this.authSvc.authenticated()) {
             this.signinDialogRef = this.dialog.open(SigninDialog, {
                backdropClass: 'signinBackdrop',
                closeOnNavigation: true

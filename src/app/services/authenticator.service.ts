@@ -130,7 +130,7 @@ export class AuthenticatorService {
       return !!this._userCred;
    }
 
-   public validSession(): boolean {
+   public potentialSession(): boolean {
       // Expiry or changed passkey (from another tab) mean invalid sessoin
       // Cookie may still be valid, but we won't use it.
       const globalPKId = localStorage.getItem('pkid');
@@ -139,14 +139,41 @@ export class AuthenticatorService {
       const activityExpired = expired(localStorage, 'activityexpiry');
       const [userId, userName] = this.loadKnownUser();
 
-      return !(
+      const valid = !(
          !globalPKId ||
          (myPKId && (globalPKId !== myPKId)) ||
          sessionExpired ||
          activityExpired ||
          !userId || !userName
       );
+      return valid;
    }
+
+   public validKnownUser(): boolean {
+      let valid = false;
+      const [userId, userName] = this.loadKnownUser();
+      if (userId && userName) {
+         const globalPKId = localStorage.getItem('pkid');
+         const myPKId = sessionStorage.getItem('pkid');
+         if (myPKId && (globalPKId === myPKId)) {
+            valid = true;
+         }
+      }
+      return valid;
+   }
+
+   public loadKnownUser(): [string | null, string | null] {
+      return [
+         localStorage.getItem('userid'),
+         localStorage.getItem('username')
+      ];
+   }
+
+   public isCurrentPk(testPK: string): boolean {
+      return testPK === this.pkId;
+   }
+
+   //*** Start: These methods all get authenticated inforomation */
 
    public get userName(): string {
       return this.getUserInfo().userName;
@@ -164,26 +191,11 @@ export class AuthenticatorService {
       return this.getUserInfo().pkId;
    }
 
-   public isCurrentPk(testPK: string): boolean {
-      return testPK === this.pkId;
-   }
-
    public get userCred(): Uint8Array {
       if (!this.authenticated()) {
          throw new Error('no active user');
       }
       return this._userCred!;
-   }
-
-   public isUserKnown(): boolean {
-      const [userId, userName] = this.loadKnownUser();
-      return userId != null && userName != null;
-   }
-
-   public loadKnownUser(): [string | null, string | null] {
-      const userId = localStorage.getItem('userid');
-      const userName = localStorage.getItem('username');
-      return [userId, userName];
    }
 
    public getUserInfo(): UserInfo {
@@ -192,6 +204,8 @@ export class AuthenticatorService {
       }
       return this.userInfo()!;
    }
+
+   //*** End: These methods all get authenticated inforomation */
 
    private async _doFetch<T>(
       urlPath: string,
@@ -233,7 +247,7 @@ export class AuthenticatorService {
    // does not recieve cookies, downloads user data again
    public async loadSession(): Promise<boolean> {
 
-      if (!this.validSession()) {
+      if (!this.potentialSession()) {
          return false;
       }
       const [userId] = this.loadKnownUser();
@@ -413,65 +427,70 @@ export class AuthenticatorService {
    }
 
    private _timerTick(): void {
-      // validSession becomes false if either inactivity time happens in this tab
-      // or another. also if another tab logs into a differerent passkey
-      if (!this.validSession()) {
+      if (!this.validKnownUser()) {
+         // this happens when another tab or windows forgets the user or changes passkey
+         // don't do a global forget since other tab are onto a new user
+         this.forgetUser(false);
+      } else if (!this.potentialSession()) {
+         // validSession becomes false if either inactivity time happens in this tab
+         // or another. since we are tracking other tabs, this may be a bit annoying
+         // but its more conservative (and common) scenario to just have 1 open
          this.logout(true);
       }
    }
 
-   private _deletedUser()  {
+   private _deletedUser() {
       const eventData = this._captureEventData(AuthEvent.Delete);
       // no need to end session because user was deleted on server
-      this.forgetUser(false);
+      this.forgetUser(true);
       this._emit(eventData);
    }
 
-   // log out globally, and forget user globally
-   forgetUser(endSession: boolean) {
+   forgetUser(global: boolean) {
       const eventData = this._captureEventData(AuthEvent.Forget);
-      this.logout(endSession);
-
-      // not yet handled well if multiple tabs are open
-      localStorage.removeItem('username');
-      localStorage.removeItem('userid');
+      this.logout(global);
+      sessionStorage.clear();
+      if(global) {
+         localStorage.removeItem('username');
+         localStorage.removeItem('userid');
+         localStorage.removeItem('pkid');
+      }
       this._emit(eventData);
    }
 
-   // log out globally, and remember user (other tap will logout on timertick)
-   logout(endSession: boolean) {
+   logout(global: boolean) {
+      const eventData = this._captureEventData(AuthEvent.Logout);
 
-      if(endSession) {
-         // let this happen in the background
+      if (global) {
          const [userId] = this.loadKnownUser();
+
+         // let this happen in the background. creates a race condition with next
+         // login, but highly unlikley to be an issue since login presents passkey auth
          this._doFetch<string>(
             `endsess?userid=${userId}`,
             'POST'
-         ).catch( (err) => {
-            // report, but don't abort logout
-            console.error(err);
+         ).catch((err) => {
+            // ignore
          });
+
+         // rather than clear values, which can trigger error in other tabs,
+         // set expirations to the past to trigger clear self-logout
+         const expired = DateTime.now().minus({ seconds: 10 }).toISO();
+         localStorage.setItem('activityexpiry', expired);
+         localStorage.setItem('sessionexpiry', expired);
       }
 
-      const eventData = this._captureEventData(AuthEvent.Logout);
       if (this._intervalId) {
          clearInterval(this._intervalId);
          this._intervalId = 0;
       }
 
-      // rather than clear values, which can trigger error in other tabs,
-      // set expirations to the past to trigger clear self-logout
-      const expired = DateTime.now().minus({ seconds: 10 }).toISO();
-      localStorage.setItem('activityexpiry', expired);
-      localStorage.setItem('sessionexpiry', expired);
-
       // clear this tabs sensitive in-memory values
       this.userInfo.set(undefined);
-      if(this._userCred) {
+      if (this._userCred) {
          crypto.getRandomValues(this._userCred);
          this._userCred = undefined;
       }
-      sessionStorage.clear();
 
       this._emit(eventData);
    }
@@ -760,8 +779,8 @@ export class AuthenticatorService {
 
       // New user creation temporarily caches _recoveryId for use in the recovery word
       // display page that immediately follows.
-      if( !serverLoginUserInfo || !serverLoginUserInfo.recoveryId ) {
-         throw new Error( 'missing recoveryId');
+      if (!serverLoginUserInfo || !serverLoginUserInfo.recoveryId) {
+         throw new Error('missing recoveryId');
       }
       this._cachedRecoveryId = serverLoginUserInfo.recoveryId;
 
