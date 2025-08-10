@@ -213,7 +213,7 @@ export class AuthenticatorService {
       body?: string,
    ): Promise<T> {
 
-      const url = new URL(urlPath, baseUrl);
+      const url = new URL(`${environment.apiVersion}/${urlPath}`, baseUrl);
       try {
          var response = await fetch(url, {
             method: method,
