@@ -2,7 +2,8 @@ import pkg from '../../package.json';
 
 export const environment = {
     production: false,
-    domain: 'https://qcrypt.schicks.net',
-    version: pkg.version,
+    domain: 'https://test.quickcrypt.org',
+    apiVersion: 'v1',
+    clientVersion: pkg.version,
     copyright: pkg.copyright
 };

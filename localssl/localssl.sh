@@ -20,7 +20,7 @@ subjectAltName = @alt_names
 DNS.1 = localhost
 DNS.2 = 127.0.0.1
 DNS.3 = ::1
-DNS.4 = t1.schicks.net
+DNS.4 = t1.quickcrypt.org
 DNS.5 = $LOCALIP
 EOF
 

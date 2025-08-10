@@ -10,6 +10,6 @@ import { environment } from '../../../environments/environment';
     imports: [RouterLink, CopyrightComponent]
 })
 export class OverviewComponent {
-    public version = environment.version;
+    public version = environment.clientVersion;
     public copyright = environment.copyright;
 }
