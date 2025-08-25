@@ -441,14 +441,13 @@ export class AuthenticatorService {
 
    private _deletedUser() {
       const eventData = this._captureEventData(AuthEvent.Delete);
-      // no need to end session because user was deleted on server
       this.forgetUser(true);
       this._emit(eventData);
    }
 
    forgetUser(global: boolean) {
       const eventData = this._captureEventData(AuthEvent.Forget);
-      this.logout(global);
+      this.logout(global, false);
       sessionStorage.clear();
       if(global) {
          localStorage.removeItem('username');
@@ -458,7 +457,7 @@ export class AuthenticatorService {
       this._emit(eventData);
    }
 
-   logout(global: boolean) {
+   logout(global: boolean, emit: boolean = true) {
       const eventData = this._captureEventData(AuthEvent.Logout);
 
       if (global) {
@@ -485,14 +484,16 @@ export class AuthenticatorService {
          this._intervalId = 0;
       }
 
-      // clear this tabs sensitive in-memory values
+      // clear sensitive in-memory values
       this.userInfo.set(undefined);
       if (this._userCred) {
          crypto.getRandomValues(this._userCred);
          this._userCred = undefined;
       }
 
-      this._emit(eventData);
+      if (emit) {
+         this._emit(eventData);
+      }
    }
 
    async setPasskeyDescription(
