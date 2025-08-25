@@ -53,13 +53,13 @@
           </mat-form-field>
           <div>
             <button class="button" mat-raised-button (click)="onClickStartRecovery($event)">
-              Start recovery
+              Start Recovery
             </button>
             @if(error) {
               <br />
               <a [routerLink]="'/newuser'">
                 <button mat-raised-button class="button2">
-                  Create new user from scratch
+                  Create New User
                 </button>
               </a>
             }

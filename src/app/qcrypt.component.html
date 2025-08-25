@@ -32,20 +32,20 @@ SOFTWARE.
     </button>
   </a>
   <button [style.background-color]="focusColor('/help')" mat-button class="toolbar-text mleft15"
-    #menuTrigger="matMenuTrigger" [matMenuTriggerFor]="helpMenu">
+    #menuTrigger="matMenuTrigger" [matMenuTriggerFor]="helpMenu" name="Help">
     <!--        (mouseover)="menuTrigger.openMenu()" -->
     Help
     <mat-icon iconPositionEnd>expand_more</mat-icon>
   </button>
   <mat-menu #helpMenu="matMenu" xPosition="after">
     <ng-template matMenuContent>
-      <button mat-menu-item [routerLink]="'/help/overview'">
+      <button mat-menu-item [routerLink]="'/help/overview'" name="Overview">
         Overview
       </button>
-      <button mat-menu-item [routerLink]="'/help/faqs'">
+      <button mat-menu-item [routerLink]="'/help/faqs'" name="FAQs">
         FAQs
       </button>
-      <button mat-menu-item [routerLink]="'/help/protocol'">
+      <button mat-menu-item [routerLink]="'/help/protocol'" name="Protocol">
         Protocol
       </button>
     </ng-template>
