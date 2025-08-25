@@ -483,7 +483,7 @@ testWithAuth('full lifecycle', async ({ authFixture }) => {
   await page.locator('textarea#wordsArea').fill(recoveryWords);
 
   await passkeyCreation(session, authId, async () => {
-    await page.getByRole('button', { name: /Start recovery/ }).click();
+    await page.getByRole('button', { name: /Start Recovery/ }).click();
   });
 
   await page.waitForURL(testURL, { waitUntil: 'domcontentloaded' });
