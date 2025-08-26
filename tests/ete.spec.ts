@@ -303,8 +303,122 @@ testWithAuth('log in and out', async ({ authFixture }) => {
 
 });
 
-testWithAuth('2nd tab logout', async ({ authFixture }) => {
+async function fillPwdAndAccept(
+  page: Page,
+  heading: RegExp,
+  pwd: string,
+  hint: string | undefined,
+  encDec: 'enc' | 'dec',
+  ready: () => Promise<void>
+) {
+  await ready();
+  await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+
+  await page.locator('input#password').fill(pwd);
+  if (encDec === 'enc') {
+    await expect(page.getByText('Password is acceptable')).toBeVisible();
+  }
+
+  if(hint) {
+    if (encDec === 'enc') {
+      await page.locator('input#hint').fill(hint);
+    } else {
+      await expect(page.locator('input#hint')).toHaveValue(hint);
+    }
+  }
+
+  await page.getByRole('button', { name: 'Accept' }).click();
+}
+
+testWithAuth('encrypt decrypt', async ({ authFixture }) => {
   const { page, session, authId } = authFixture;
+
+  await addCredential(session, authId, keeper1);
+  await page.goto(testURL);
+
+  await passkeyAuth(session, authId, async () => {
+    await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
+  });
+  await page.waitForURL(testURL, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+  const clearText = 'this is very secret, do not 🦜';
+  const pwd = "you'll never know";
+  const hint = "🚔";
+  await page.locator('textarea#clearInput').fill(clearText);
+  await page.getByRole('button', { name: 'Encrypt Text' }).click();
+
+  await expect(page.getByRole('heading', { name: "KeeperOne" })).toBeVisible();
+  await fillPwdAndAccept(page, /KeeperOne/, pwd, hint, 'enc', async () => {
+    await expect(page.getByText(/KeeperOne/)).toBeVisible();
+  });
+
+  await expect(page.locator('textarea#cipherInput')).not.toBeEmpty();
+  await page.getByRole('button', { name: 'Info', exact: true }).click();
+
+  await expect(page.getByLabel('Decryption Parameters').getByText('XChaCha20 Poly1305')).toBeVisible();
+  await expect(page.getByLabel('Decryption Parameters').getByText(hint)).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  await page.getByRole('button', { name: 'Decrypt Text' }).click();
+  await expect(page.getByRole('heading', { name: "KeeperOne" })).toBeVisible();
+  await fillPwdAndAccept(page, /KeeperOne/, pwd, hint, 'dec', async () => {
+    await expect(page.getByText(/KeeperOne/)).toBeVisible();
+  });
+
+  await expect(page.locator('textarea#clearInput')).not.toBeEmpty();
+  await expect(page.locator('textarea#clearInput')).toHaveValue(clearText);
+
+});
+
+
+testWithAuth('loop encrypt decrypt', async ({ authFixture }) => {
+  const { page, session, authId } = authFixture;
+
+  await addCredential(session, authId, keeper2);
+  await page.goto(testURL);
+
+  const loops = 3
+  const clearText = 'this is another 🚧';
+
+  await passkeyAuth(session, authId, async () => {
+    await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
+  });
+  await page.waitForURL(testURL, { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'Encryption Mode' }).click();
+  await page.getByRole('button', { name: 'Advanced Options' }).click();
+  await page.getByRole('switch', { name: 'Hide Password' }).uncheck();
+
+  await page.locator('input[name="loops"]').fill(`${loops}`);
+  await page.keyboard.press('Tab');
+
+  await page.locator('textarea#clearInput').fill(clearText);
+  await page.getByRole('button', { name: 'Encrypt Text' }).click();
+
+  for (let l = 1; l <= loops; l++) {
+    await fillPwdAndAccept(page, /KeeperTwo/, `${l}+foie F2]43$Rad`, `${l}`, 'enc', async () => {
+      await expect(page.getByText(`loop ${l} of ${loops}`)).toBeVisible();
+    });
+  }
+
+  await expect(page.locator('textarea#cipherInput')).not.toBeEmpty();
+  await page.getByRole('button', { name: 'Decrypt Text' }).click();
+
+  for (let l = loops; l >= 1; l--) {
+    await fillPwdAndAccept(page, /KeeperTwo/, `${l}+foie F2]43$Rad`, `${l}`, 'dec', async () => {
+      await expect(page.getByText(`loop ${l} of ${loops}`)).toBeVisible();
+    });
+  }
+
+  await expect(page.locator('textarea#clearInput')).not.toBeEmpty();
+  await expect(page.locator('textarea#clearInput')).toHaveValue(clearText);
+
+});
+
+testWithAuth('2 tabs logout', async ({ authFixture }) => {
+  const { page, session, authId } = authFixture;
+  test.setTimeout(45000);
+
   const page1 = page;
   await addCredential(session, authId, keeper1);
   await page1.goto(testURL);
@@ -334,10 +448,21 @@ testWithAuth('2nd tab logout', async ({ authFixture }) => {
   await page1.waitForURL(testURL, { waitUntil: 'domcontentloaded' });
   await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
 
+  await page2.getByRole('button', { name: /Sign in as a different user/ }).click();
+  await page2.waitForURL(testURL + '/welcome', { waitUntil: 'domcontentloaded' });
+  await expect(page2.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible();
+
+  // page1 should also go back to welcome page
+  await page1.goto(testURL);
+  await page1.waitForURL(testURL + '/welcome', { waitUntil: 'domcontentloaded' });
+  await expect(page1.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible();
+
 });
 
-testWithAuth('3 tabs switching users', async ({ authFixture }) => {
+testWithAuth('3 tabs switch user', async ({ authFixture }) => {
   const { page, session, authId } = authFixture;
+  test.setTimeout(45000);
+
   const page1 = page;
   await addCredential(session, authId, keeper1);
   await page1.goto(testURL);
@@ -397,7 +522,7 @@ testWithAuth('3 tabs switching users', async ({ authFixture }) => {
   await page3.getByRole('button', { name: /Sign out/ }).click();
   await expect(page3.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
 
-  // page2 should still go to welcome page since it origianl user user logged out
+  // page2 should still go to welcome page since its origianl user was logged out
   await page2.goto(testURL);
   await page2.waitForURL(testURL + '/welcome', { waitUntil: 'domcontentloaded' });
   await expect(page2.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible();
@@ -409,7 +534,6 @@ testWithAuth('3 tabs switching users', async ({ authFixture }) => {
 
   // sign back in as Keeper1
   await page1.getByRole('button', { name: /Sign in as a different user/ }).click();
-
   await page1.waitForURL(testURL + '/welcome', { waitUntil: 'domcontentloaded' });
   await expect(page1.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible();
 
@@ -432,11 +556,17 @@ testWithAuth('3 tabs switching users', async ({ authFixture }) => {
   await page2.getByRole('button', { name: 'Passkey information' }).click();
   await expect(page2.locator('mat-sidenav input').first()).toHaveValue('KeeperOne');
 
+  // page3 should go to welcome page since it its user was logged out
+  await page3.goto(testURL);
+  await page3.waitForURL(testURL + '/welcome', { waitUntil: 'domcontentloaded' });
+  await expect(page3.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible();
+
 });
 
 
 testWithAuth('full lifecycle', async ({ authFixture }) => {
   const { page, session, authId } = authFixture;
+  test.setTimeout(45000);
 
   await page.goto(testURL);
 
@@ -499,3 +629,4 @@ testWithAuth('full lifecycle', async ({ authFixture }) => {
   await expect(page.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible();
 
 });
+

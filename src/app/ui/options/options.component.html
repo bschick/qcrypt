@@ -119,7 +119,7 @@ SOFTWARE. -->
           <mat-form-field subscriptSizing="dynamic">
             <mat-label>Loop Encrypt</mat-label>
             <input type="number" min="1" [max]="LOOPS_MAX" step="1" matInput [formControl]="loopsInput"
-              (blur)="onBlurLoops()"
+              (blur)="onBlurLoops()" name="loops"
               matTooltip="Number of times to run encryption in a loop. Enter a different password each loop" />
           </mat-form-field>
         </div>
