@@ -24,21 +24,41 @@ import sodium from 'libsodium-wrappers';
 import { base64URLStringToBuffer, bufferToBase64URLString } from './base64';
 import { Duration, DateTime } from 'luxon';
 
+export function hasArrayBuffer(value: Uint8Array): value is Uint8Array<ArrayBuffer> {
+  return value.buffer instanceof ArrayBuffer;
+}
+
+export function ensureArrayBuffer(value: Uint8Array): Uint8Array<ArrayBuffer> {
+   if (hasArrayBuffer(value)) {
+      return value;
+   } else {
+      //@ts-ignore (something in angular tool-chain seems to be using old types)
+      return value.slice(0);
+   }
+}
+
+export function getArrayBuffer(value: Uint8Array): ArrayBuffer {
+   if(!hasArrayBuffer(value) || value.byteOffset !== 0 || value.byteLength !== value.buffer.byteLength) {
+      return value.slice(0).buffer;
+   } else {
+      return value.buffer;
+   }
+}
 
 // Returns base64Url text
 export function bytesToBase64(bytes: Uint8Array): string {
-   return bufferToBase64URLString(bytes);
+   return bufferToBase64URLString(getArrayBuffer(bytes));
 }
 
 // Accepts either base64 or base64Url text
-export function base64ToBytes(b64: string): Uint8Array {
+export function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
    return new Uint8Array(base64URLStringToBuffer(b64));
 }
 
 /* Javascript converts to signed 32 bit int when using bit shifting
    and masking, so do this instead. Count is the number of bytes
    used to pack the number.  */
-export function numToBytes(num: number, count: number): Uint8Array {
+export function numToBytes(num: number, count: number): Uint8Array<ArrayBuffer> {
    if (count < 1 || num >= Math.pow(256, count)) {
       throw new Error(`Invalid arguments ${count} for ${num}`);
    }
@@ -111,7 +131,7 @@ export class ProcessCancelled extends Error {
 export class BYOBStreamReader {
 
    private _reader: ReadableStreamBYOBReader | ReadableStreamDefaultReader;
-   private _extra?: Uint8Array;
+   private _extra?: Uint8Array<ArrayBuffer>;
    private _byob: boolean;
 
    constructor(stream: ReadableStream<Uint8Array>) {
@@ -130,7 +150,7 @@ export class BYOBStreamReader {
 
    // Use when the reader cannot accept less then the size of output (or stream done)
    async readFill(buffer: ArrayBuffer)
-      : Promise<[data: Uint8Array, done: boolean]> {
+      : Promise<[data: Uint8Array<ArrayBuffer>, done: boolean]> {
       try {
          if (this._byob) {
             return this._readBYOB(buffer, false);
@@ -145,7 +165,7 @@ export class BYOBStreamReader {
    }
 
    async readAvailable(buffer: ArrayBuffer)
-      : Promise<[data: Uint8Array, done: boolean]> {
+      : Promise<[data: Uint8Array<ArrayBuffer>, done: boolean]> {
       try {
          if (this._byob) {
             return this._readBYOB(buffer, true);
@@ -161,12 +181,9 @@ export class BYOBStreamReader {
    private async _readBYOB(
       buffer: ArrayBuffer,
       breakOnStall: boolean
-   ): Promise<[data: Uint8Array, done: boolean]> {
+   ): Promise<[data: Uint8Array<ArrayBuffer>, done: boolean]> {
 
       const reader = this._reader as ReadableStreamBYOBReader;
-      if (buffer instanceof Uint8Array) {
-         buffer = buffer.buffer;
-      }
 
       const targetBytes = buffer.byteLength;
       let readBytes = 0;
@@ -193,12 +210,9 @@ export class BYOBStreamReader {
    private async _readStupidSafari(
       buffer: ArrayBuffer,
       breakOnStall: boolean
-   ): Promise<[data: Uint8Array, done: boolean]> {
+   ): Promise<[data: Uint8Array<ArrayBuffer>, done: boolean]> {
 
       const reader = this._reader as ReadableStreamDefaultReader;
-      if (buffer instanceof Uint8Array) {
-         buffer = buffer.buffer;
-      }
 
       const targetBytes = buffer.byteLength;
       const writeable = new Uint8Array(buffer);
@@ -207,7 +221,7 @@ export class BYOBStreamReader {
 
       while (wroteBytes < targetBytes) {
          let done: boolean;
-         let value: Uint8Array;
+         let value: Uint8Array<ArrayBuffer>;
 
          if (this._extra) {
             done = false;
@@ -249,14 +263,14 @@ export class BYOBStreamReader {
 type TrueType = true;
 type FalseType = false;
 
-export async function readStreamAll(stream: ReadableStream<Uint8Array>): Promise<Uint8Array>
-export async function readStreamAll(stream: ReadableStream<Uint8Array>, decode: FalseType): Promise<Uint8Array>
+export async function readStreamAll(stream: ReadableStream<Uint8Array>): Promise<Uint8Array<ArrayBuffer>>
+export async function readStreamAll(stream: ReadableStream<Uint8Array>, decode: FalseType): Promise<Uint8Array<ArrayBuffer>>
 export async function readStreamAll(stream: ReadableStream<Uint8Array>, decode: TrueType): Promise<string>
 export async function readStreamAll(
    stream: ReadableStream<Uint8Array>, decode: TrueType | FalseType = false
-): Promise<string | Uint8Array> {
+): Promise<string | Uint8Array<ArrayBuffer>> {
 
-   let result: string | Uint8Array;
+   let result: string | Uint8Array<ArrayBuffer>;
    const reader = stream.getReader();
    try {
       let readBytes = 0;
@@ -288,7 +302,7 @@ export async function readStreamAll(
 function coalesceBlocks(
    blocks: Uint8Array[],
    byteLen: number
-): Uint8Array {
+): Uint8Array<ArrayBuffer> {
 
    let result = new Uint8Array(0);
    if (blocks.length > 1) {
@@ -299,7 +313,7 @@ function coalesceBlocks(
          offset += block.byteLength;
       }
    } else {
-      result = blocks[0];
+      result = ensureArrayBuffer(blocks[0]);
    }
 
    return result;
@@ -316,7 +330,7 @@ export function streamWriteBYOD(
       controller instanceof ReadableStreamDefaultController ||
       !controller.byobRequest?.view) {
       written += data.byteLength;
-      controller.enqueue(data);
+      controller.enqueue(ensureArrayBuffer(data));
    } else {
       const byodView = controller.byobRequest.view;
       const byodBytes = Math.min(data.byteLength, byodView.byteLength);
@@ -328,7 +342,7 @@ export function streamWriteBYOD(
       if (byodBytes < data.byteLength) {
          const remainder = new Uint8Array(data.buffer, byodBytes)
          written += remainder.byteLength;
-         controller.enqueue(remainder);
+         controller.enqueue(ensureArrayBuffer(remainder));
       }
    }
 
@@ -450,7 +464,7 @@ export async function getRandom48(): Promise<Uint8Array> {
 }
 
 // Helper function to get bytes from a string, truncated to a maximum byte length, ensuring valid UTF-8
-export function bytesFromString(str: string, maxByteLength: number): Uint8Array {
+export function bytesFromString(str: string, maxByteLength: number): Uint8Array<ArrayBuffer> {
    const encoder = new TextEncoder();
 
    // Attempt to encode the entire string first

@@ -20,8 +20,16 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import sodium from 'libsodium-wrappers';
-import { getRandom48, numToBytes, bytesToNum, BYOBStreamReader, bytesFromString } from './utils';
 import * as cc from './cipher.consts';
+import {
+   getRandom48,
+   numToBytes,
+   bytesToNum,
+   BYOBStreamReader,
+   bytesFromString,
+   getArrayBuffer,
+   ensureArrayBuffer
+} from './utils';
 
 // Simple perf testing with Chrome 126 on MacOS result in
 // readAvailable with READ_SIZE_MAX of 4x to be the fastest
@@ -247,7 +255,7 @@ export abstract class Ciphers {
       const ek = await crypto.subtle.deriveKey(
          {
             name: 'PBKDF2',
-            salt: slt,
+            salt: getArrayBuffer(slt),
             iterations: ic,
             hash: 'SHA-512',
          },
@@ -276,7 +284,7 @@ export abstract class Ciphers {
 
       const skMaterial = await crypto.subtle.importKey(
          'raw',
-         userCred,
+         getArrayBuffer(userCred),
          'HKDF',
          false,
          ['deriveBits', 'deriveKey']
@@ -285,7 +293,7 @@ export abstract class Ciphers {
       const sk = await crypto.subtle.deriveKey(
          {
             name: 'HKDF',
-            salt: slt,
+            salt: getArrayBuffer(slt),
             hash: 'SHA-512',
             info: new TextEncoder().encode(HKDF_INFO_SIGNING)
          },
@@ -317,7 +325,7 @@ export abstract class Ciphers {
 
       const hkMaterial = await crypto.subtle.importKey(
          'raw',
-         userCred,
+         getArrayBuffer(userCred),
          'HKDF',
          false,
          ['deriveBits', 'deriveKey']
@@ -331,7 +339,7 @@ export abstract class Ciphers {
       const hk = await crypto.subtle.deriveKey(
          {
             name: 'HKDF',
-            salt: slt,
+            salt: getArrayBuffer(slt),
             hash: 'SHA-512',
             info: new TextEncoder().encode(HKDF_INFO_HINT)
          },
@@ -420,7 +428,7 @@ export abstract class Ciphers {
          lpEnd?: number;
          ver?: number;
          encryptedHint?: Uint8Array
-      }): Uint8Array {
+      }): Uint8Array<ArrayBuffer> {
 
       Ciphers.validateAdditionalData(args);
 
@@ -600,7 +608,7 @@ export class EncipherV5 extends Encipher {
          }
 
          const [clearBuffer, done] = await this._reader.readAvailable(
-            new Uint8Array(this._readTarget)
+            new ArrayBuffer(this._readTarget)
          );
 
          if (clearBuffer.byteLength == 0) {
@@ -649,7 +657,7 @@ export class EncipherV5 extends Encipher {
          this._sk = await Ciphers._genSigningKey(this._userCred!, this._slt);
          this._ek = await Ciphers._genCipherKey(eparams.alg, eparams.ic, pwd, this._userCred!, this._slt);
 
-         let encryptedHint = new Uint8Array(0);
+         let encryptedHint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
          if (hint) {
             const maxHintBytes = cc.ENCRYPTED_HINT_MAX_BYTES - cc.AUTH_TAG_MAX_BYTES;
             let hintBytes = bytesFromString(hint, maxHintBytes);
@@ -731,7 +739,7 @@ export class EncipherV5 extends Encipher {
 
          this._readTarget = Math.min(this._readTarget * 2, READ_SIZE_MAX);
          const [clearBuffer, done] = await this._reader.readAvailable(
-            new Uint8Array(this._readTarget)
+            new ArrayBuffer(this._readTarget)
          );
 
          // There can be read stalls, caller must be ready to ignore empty results
@@ -869,12 +877,12 @@ export class EncipherV5 extends Encipher {
       } else {
          const cipherBuf = await crypto.subtle.encrypt({
             name: alg,
-            iv: iv,
-            additionalData: additionalData ?? new ArrayBuffer(0),
+            iv: getArrayBuffer(iv),
+            additionalData: additionalData ? getArrayBuffer(additionalData) : new ArrayBuffer(0),
             tagLength: cc.AES_GCM_TAG_BYTES * 8
          },
             key,
-            clear
+            getArrayBuffer(clear)
          );
          encryptedBytes = new Uint8Array(cipherBuf);
       }
@@ -917,14 +925,14 @@ export class EncipherV5 extends Encipher {
 }
 
 type BlockData = {
-   readonly mac: Uint8Array;
+   readonly mac: Uint8Array<ArrayBuffer>;
    readonly ver: number;
    readonly payloadSize: number;
    readonly flags: number;
    alg?: string;
    iv?: Uint8Array;
-   encryptedData?: Uint8Array;
-   additionalData?: Uint8Array;
+   encryptedData?: Uint8Array<ArrayBuffer>;
+   additionalData?: Uint8Array<ArrayBuffer>;
 };
 
 export abstract class Decipher extends Ciphers {
@@ -945,7 +953,7 @@ export abstract class Decipher extends Ciphers {
       let decipher: Decipher;
       const reader = new BYOBStreamReader(cipherStream);
 
-      const [header, done] = await reader.readFill(new Uint8Array(cc.HEADER_BYTES));
+      const [header, done] = await reader.readFill(new ArrayBuffer(cc.HEADER_BYTES));
 
       if (header.byteLength != cc.HEADER_BYTES || done) {
          reader.cleanup();
@@ -1145,11 +1153,11 @@ export abstract class Decipher extends Ciphers {
          const buffer = await crypto.subtle.decrypt({
             name: alg,
             iv: iv.slice(0, 12),
-            additionalData: additionalData ?? new ArrayBuffer(0),
+            additionalData: additionalData ? getArrayBuffer(additionalData) : new ArrayBuffer(0),
             tagLength: cc.AES_GCM_TAG_BYTES * 8
          },
             key,
-            encrypted
+            getArrayBuffer(encrypted)
          );
          decrypted = new Uint8Array(buffer);
       }
@@ -1211,7 +1219,7 @@ class DecipherV1 extends Decipher {
 
          // This isn't very efficient, but it simplifies object creation and V4 logic
          // (which are more important)
-         let [payload] = await this._reader.readFill(new Uint8Array(cc.PAYLOAD_SIZE_MAX));
+         let [payload] = await this._reader.readFill(new ArrayBuffer(cc.PAYLOAD_SIZE_MAX));
 
          if (this._headerish) {
             const newPayload = new Uint8Array(this._headerish.byteLength + payload.byteLength);
@@ -1275,13 +1283,13 @@ class DecipherV1 extends Decipher {
             throw new Error('Invalid MAC error');
          }
 
-         let hint = new Uint8Array(0);
+         let hint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
          if (encryptedHint!.byteLength != 0) {
-            const hk = await Ciphers._genHintCipherKey(this._blockData.alg!, this._userCred!, this._slt);
+            const hk = await Ciphers._genHintCipherKey(this._blockData!.alg!, this._userCred!, this._slt);
             hint = await Decipher._doDecrypt(
-               this._blockData.alg!,
+               this._blockData!.alg!,
                hk,
-               this._blockData.iv!,
+               this._blockData!.iv!,
                encryptedHint
             );
          }
@@ -1396,7 +1404,7 @@ class DecipherV4 extends Decipher {
       // validated.
       if (!header) {
          let done: boolean;
-         [header, done] = await this._reader.readFill(new Uint8Array(cc.HEADER_BYTES));
+         [header, done] = await this._reader.readFill(new ArrayBuffer(cc.HEADER_BYTES));
          if (header.byteLength > 0 && (done || header.byteLength < cc.HEADER_BYTES)) {
             this._reader.cleanup();
             throw new Error('Missing cipher data header');
@@ -1421,7 +1429,7 @@ class DecipherV4 extends Decipher {
       const flags = extractor.flags;
 
       this._blockData = {
-         mac: mac,
+         mac: ensureArrayBuffer(mac),
          ver: ver,
          payloadSize: payloadSize,
          flags: flags,
@@ -1463,7 +1471,7 @@ class DecipherV4 extends Decipher {
             throw new Error('Invalid payload size1: ' + this._blockData.payloadSize);
          }
 
-         const [payload, done] = await this._reader.readFill(new Uint8Array(this._blockData.payloadSize));
+         const [payload, done] = await this._reader.readFill(new ArrayBuffer(this._blockData.payloadSize));
          if (done) {
             this._reader.cleanup();
          }
@@ -1501,7 +1509,7 @@ class DecipherV4 extends Decipher {
             throw new Error('Invalid MAC error');
          }
 
-         let hint = new Uint8Array(0);
+         let hint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
          if (encryptedHint!.byteLength != 0) {
             const hk = await Ciphers._genHintCipherKey(this._blockData.alg, this._userCred!, this._slt);
             hint = await Decipher._doDecrypt(
@@ -1587,7 +1595,7 @@ class DecipherV4 extends Decipher {
 
          // Don't need to look at done for the fill since there will will be another
          // call and the next header will report done.
-         const [payload] = await this._reader.readFill(new Uint8Array(this._blockData.payloadSize));
+         const [payload] = await this._reader.readFill(new ArrayBuffer(this._blockData.payloadSize));
 
          if (payload.byteLength != this._blockData.payloadSize) {
             throw new Error('Cipher data length mismatch2: ' + payload.byteLength);
@@ -1660,7 +1668,7 @@ class DecipherV4 extends Decipher {
 
 class DecipherV5 extends DecipherV4 {
 
-   private _lastMac = new Uint8Array(0);
+   private _lastMac: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
    private _lastFlags = 0;
 
    public override protocolVersion(): number {
@@ -1741,17 +1749,17 @@ class DecipherV5 extends DecipherV4 {
 }
 
 
-class Extractor {
-   private _encoded: Uint8Array;
+class Extractor<T extends ArrayBufferLike> {
+   private _encoded: Uint8Array<T>;
    private _offset: number;
    private _alg?: string;
 
-   constructor(encoded: Uint8Array, offset: number = 0) {
+   constructor(encoded: Uint8Array<T>, offset: number = 0) {
       this._encoded = encoded;
       this._offset = offset;
    }
 
-   extract(what: string, len: number): Uint8Array {
+   extract(what: string, len: number): Uint8Array<T> {
       // some browsers complain about overruns (FF), while other don't (chrome),
       // so check explicitly
       if (this._encoded.byteOffset + this._offset + len > this._encoded.byteLength) {
@@ -1770,7 +1778,7 @@ class Extractor {
       return result;
    }
 
-   remainder(what: string): Uint8Array {
+   remainder(what: string): Uint8Array<T> {
       const result = new Uint8Array(this._encoded.buffer,
          this._encoded.byteOffset + this._offset);
       // happens if the encode data is not as long as expected
@@ -1786,7 +1794,7 @@ class Extractor {
       return this._offset;
    }
 
-   get mac(): Uint8Array {
+   get mac(): Uint8Array<T> {
       return this.extract('mac', cc.MAC_BYTES);
    }
 
@@ -1796,7 +1804,7 @@ class Extractor {
       return this._alg;
    }
 
-   get iv(): Uint8Array {
+   get iv(): Uint8Array<T> {
       if (!this._alg) {
          throw new Error('iv length unknown, get extractor.alg first');
       }
@@ -1804,7 +1812,7 @@ class Extractor {
       return this.extract('iv', ivBytes);
    }
 
-   get slt(): Uint8Array {
+   get slt(): Uint8Array<T> {
       return this.extract('slt', cc.SLT_BYTES);
    }
 
@@ -1849,7 +1857,7 @@ class Extractor {
    }
 
    // Return zero length Array if no hint
-   get hint(): Uint8Array {
+   get hint(): Uint8Array<T> {
       const hintLen = bytesToNum(this.extract('hlen', cc.HINT_LEN_BYTES));
       const encryptedHint = this.extract('hint', hintLen);
       return encryptedHint;
@@ -1866,7 +1874,7 @@ class Extractor {
 
 
 class Packer {
-   private _dest?: Uint8Array;
+   private _dest?: Uint8Array<ArrayBuffer>;
    private _offset: number;
    private _ivBytes?: number;
 
@@ -1909,14 +1917,14 @@ class Packer {
       return this._dest.buffer;
    }
 
-   trim(): Uint8Array {
+   trim(): Uint8Array<ArrayBuffer> {
       if (!this._dest) {
          throw new Error('Packer was detached');
       }
       return new Uint8Array(this._dest.buffer, this._dest.byteOffset, this._offset);
    }
 
-   detach(): Uint8Array {
+   detach(): Uint8Array<ArrayBuffer> {
       if (!this._dest) {
          throw new Error('Packer was detached');
       }
