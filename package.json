@@ -10,7 +10,7 @@
     "build": "ng build qcrypt  --configuration production --subresource-integrity",
     "watch": "ng build --watch --configuration development",
     "test": "ng test --watch --poll 1000 ",
-    "ete": "npx playwright test --project=chromium",
+    "ete": "npx playwright test --project=chromium --workers=1 tests/sequential && npx playwright test --project=chromium tests/parallel",
     "serve:ssr:qcrypt": "node dist/qcrypt/server/server.mjs"
   },
   "private": true,
