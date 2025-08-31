@@ -46,7 +46,7 @@ function randomBlob(byteLength: number): Blob {
    const randData = crypto.getRandomValues(new Uint8Array(512));
    const count = Math.ceil(byteLength / 512);
 
-   let arr = new Array<Uint8Array>;
+   let arr = new Array<Uint8Array<ArrayBuffer>>;
    for (let i = 0; i < count; ++i) {
       arr.push(randData);
    }

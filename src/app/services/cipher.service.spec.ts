@@ -26,6 +26,7 @@ import { Encipher } from './ciphers';
 import {
    readStreamAll,
    base64ToBytes,
+   getArrayBuffer,
 } from './utils';
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 10000;
@@ -100,7 +101,7 @@ function pokeValue(src: Uint8Array, index: number, shift: number): Uint8Array {
 }
 
 function streamFromBytes(data: Uint8Array): [ReadableStream<Uint8Array>, Uint8Array] {
-   const blob = new Blob([data], { type: 'application/octet-stream' });
+   const blob = new Blob([getArrayBuffer(data)], { type: 'application/octet-stream' });
    return [blob.stream(), data];
 }
 
