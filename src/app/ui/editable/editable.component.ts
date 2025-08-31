@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import {
-   Component, OnInit, Output, Input, EventEmitter, ViewChild, ElementRef
+   Component, Output, Input, EventEmitter, ViewChild, ElementRef
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatInputModule } from '@angular/material/input';
@@ -39,7 +39,7 @@ import { MatButtonModule } from '@angular/material/button';
     templateUrl: './editable.component.html',
     styleUrl: './editable.component.scss'
 })
-export class EditableComponent implements OnInit {
+export class EditableComponent {
 
    @Input() minlength = '0';
    @Input() maxlength = '50';
@@ -56,13 +56,6 @@ export class EditableComponent implements OnInit {
 
    get value(): string {
       return this._value;
-   }
-
-   constructor(
-   ) {
-   }
-
-   ngOnInit() {
    }
 
    onFocusOut() {

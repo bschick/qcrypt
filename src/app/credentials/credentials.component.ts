@@ -172,6 +172,9 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    async onUserNameChanged(component: EditableComponent): Promise<void> {
       try {
          this.error = '';
+         // change detection does work if before and after end up being the same,
+         // so for the pre-server-cleaned version (may be a bug in 'editable')
+         this.userName = component.value;
          await this.authSvc.setUserName(component.value);
          this.toastMessage('User name updated');
       } catch (err) {
