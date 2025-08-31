@@ -59,6 +59,15 @@ export type UserInfo = {
    authenticators: AuthenticatorInfo[];
 };
 
+type FetchArgs = {
+   method: 'GET' | 'POST' | 'DELETE' | 'PUT';
+   resource: string;
+   userId?: string | null;
+   resourceId?: string;
+   params?: string;
+   body?: string;
+}
+
 type ServerUserInfo = {
    verified: boolean;
    userId?: string;
@@ -173,7 +182,7 @@ export class AuthenticatorService {
       return testPK === this.pkId;
    }
 
-   //*** Start: These methods all get authenticated inforomation */
+   //*** Start: These methods all return authenticated inforomation */
 
    public get userName(): string {
       return this.getUserInfo().userName;
@@ -205,15 +214,27 @@ export class AuthenticatorService {
       return this.userInfo()!;
    }
 
-   //*** End: These methods all get authenticated inforomation */
+   //*** End: These methods all return authenticated inforomation */
 
    private async _doFetch<T>(
-      urlPath: string,
-      method: string,
-      body?: string,
+      args: FetchArgs
    ): Promise<T> {
+      const {
+         method,
+         userId,
+         resource,
+         resourceId,
+         params,
+         body
+      } = args;
 
-      const url = new URL(`${environment.apiVersion}/${urlPath}`, baseUrl);
+      let path = `${environment.apiVersion}`;
+      path += (userId ? `/user/${userId}` : '');
+      path += `/${resource}`;
+      path += (resourceId ? `/${resourceId}` : '');
+      path += (params ? `?${params}` : '');
+
+      const url = new URL(path, baseUrl);
       try {
          var response = await fetch(url, {
             method: method,
@@ -251,10 +272,11 @@ export class AuthenticatorService {
          return false;
       }
       const [userId] = this.loadKnownUser();
-      const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>(
-         `verifysess?userid=${userId}`,
-         'POST'
-      );
+      const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
+         method: 'POST',
+         userId: userId,
+         resource: 'verifysess'
+      });
 
       if (!serverLoginUserInfo || !serverLoginUserInfo.verified) {
          return false;
@@ -278,11 +300,11 @@ export class AuthenticatorService {
 
       if (!recoveryId) {
          const verifyBody = await this._startAuth(this.userId, false, true);
-         const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>(
-            'verifyauth',
-            'POST',
-            verifyBody,
-         );
+         const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
+            method: 'POST',
+            resource: 'verifyauth',
+            body: verifyBody
+         });
 
          if (!serverLoginUserInfo || !serverLoginUserInfo.recoveryId) {
             throw new Error('authentication failed');
@@ -465,10 +487,11 @@ export class AuthenticatorService {
 
          // let this happen in the background. creates a race condition with next
          // login, but highly unlikley to be an issue since login presents passkey auth
-         this._doFetch<string>(
-            `endsess?userid=${userId}`,
-            'POST'
-         ).catch((err) => {
+         this._doFetch<string>({
+            method: 'POST',
+            userId: userId,
+            resource: 'endsess'
+         }).catch((err) => {
             // ignore
          });
 
@@ -513,11 +536,13 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const serverUserInfo = await this._doFetch<ServerUserInfo>(
-         `description?credid=${credentialId}&userid=${this.userId}`,
-         'PUT',
-         description,
-      );
+      const serverUserInfo = await this._doFetch<ServerUserInfo>({
+         method: 'PUT',
+         userId: this.userId,
+         resource: 'description',
+         resourceId: credentialId,
+         body: description
+      });
 
       if (!serverUserInfo) {
          throw new Error('authentication failed');
@@ -537,11 +562,12 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const serverUserInfo = await this._doFetch<ServerUserInfo>(
-         `username?userid=${this.userId}`,
-         'PUT',
-         userName
-      );
+      const serverUserInfo = await this._doFetch<ServerUserInfo>({
+         method: 'PUT',
+         userId: this.userId,
+         resource: 'username',
+         body: userName
+      });
 
       if (!serverUserInfo) {
          throw new Error('authentication failed');
@@ -558,10 +584,12 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const serverUserInfo = await this._doFetch<ServerUserInfo>(
-         `authenticator?credid=${credentialId}&userid=${this.userId}`,
-         'DELETE'
-      );
+      const serverUserInfo = await this._doFetch<ServerUserInfo>({
+         method: 'DELETE',
+         userId: this.userId,
+         resource: 'authenticator',
+         resourceId: credentialId
+      });
 
       if (!serverUserInfo) {
          throw new Error('authentication failed');
@@ -617,10 +645,11 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const serverUserInfo = await this._doFetch<ServerUserInfo>(
-         `userinfo?userid=${this.userId}`,
-         'GET'
-      );
+      const serverUserInfo = await this._doFetch<ServerUserInfo>({
+         method: 'GET',
+         userId: this.userId,
+         resource: 'userinfo'
+      });
 
       if (!serverUserInfo) {
          throw new Error('authentication failed');
@@ -647,11 +676,11 @@ export class AuthenticatorService {
       }
 
       const verifyBody = await this._startAuth(userId, true, false);
-      const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>(
-         'verifyauth',
-         'POST',
-         verifyBody
-      );
+      const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
+         method: 'POST',
+         resource: 'verifyauth',
+         body: verifyBody
+      });
 
       if (!serverLoginUserInfo) {
          throw new Error('authentication failed');
@@ -666,20 +695,13 @@ export class AuthenticatorService {
       includeRecovery: boolean
    ): Promise<string> {
 
-      let urlPath: string;
-      if (!userId) {
-         // Trying to link to an existing passkey but have lost track of user id.
-         // Start the process without userId just doesn't limit authenticator creds
-         // so the user can look for an existing credential
-         urlPath = 'authoptions';
-      } else {
-         urlPath = `authoptions?userid=${userId}`;
-      }
-
-      const optionsJson = await this._doFetch<PublicKeyCredentialRequestOptionsJSON>(
-         urlPath,
-         'GET'
-      );
+      // Start the process without userId just doesn't limit authenticator creds
+      // so the user can look for an existing credential
+      const optionsJson = await this._doFetch<PublicKeyCredentialRequestOptionsJSON>({
+         method: 'GET',
+         resource: 'authoptions',
+         params: userId ? `userid=${userId}` : ''
+      });
 
       let startAuth: AuthenticationResponseJSON;
       try {
@@ -740,10 +762,12 @@ export class AuthenticatorService {
    async recover2(recoveryWords: string): Promise<UserInfo> {
 
       const [recoveryId, userId] = this.getRecoveryValues(recoveryWords);
-      const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>(
-         `recover2?userid=${userId}&recoveryId=${recoveryId}`,
-         'POST'
-      );
+      const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
+         method: 'POST',
+         resource: 'recover2',
+         resourceId: recoveryId,
+         params: `userid=${userId}`
+      });
 
       const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, false);
       return this._loginUser(serverLoginUserInfo);
@@ -755,10 +779,12 @@ export class AuthenticatorService {
          throw new Error('missing userid or usercred');
       }
 
-      const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>(
-         `recover?userid=${userId}&usercred=${userCred}`,
-         'POST'
-      );
+      const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
+         method: 'POST',
+         resource: 'recover',
+         resourceId: userCred,
+         params: `userid=${userId}`
+      });
 
       const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, false);
       return this._loginUser(serverLoginUserInfo);
@@ -770,11 +796,11 @@ export class AuthenticatorService {
          throw new Error('missing require userName');
       }
 
-      const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>(
-         `regoptions`,
-         'POST',
-         userName
-      );
+      const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
+         method: 'POST',
+         resource: 'userreg',
+         body: userName
+      });
 
       const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, true);
 
@@ -795,10 +821,11 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>(
-         `regoptions?userid=${this.userId}`,
-         'POST'
-      );
+      const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
+         method: 'POST',
+         resource: 'passkeyreg',
+         userId: this.userId
+      });
 
       const serverLoginUserInfo = await this._finishRegistration(optionsJson, false, false);
       return this._updateLoggedInUser(serverLoginUserInfo);
@@ -839,11 +866,11 @@ export class AuthenticatorService {
          challenge: optionsJson.challenge,
       }
 
-      const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>(
-         'verifyreg',
-         'POST',
-         JSON.stringify(expanded),
-      );
+      const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
+         method: 'POST',
+         resource: 'verifyreg',
+         body: JSON.stringify(expanded)
+      });
 
       if (!serverLoginUserInfo) {
          throw new Error('registration failed');
