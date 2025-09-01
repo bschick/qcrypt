@@ -7,10 +7,10 @@ export const cmdlineGuard: CanActivateFn = (route, state) => {
    const authSvc = inject(AuthenticatorService);
    const router = inject(Router);
 
-   // don't need to be authenticated because the page itself
-   // does a passkey check regardless
-   if (authSvc.validKnownUser()) {
+    if (authSvc.authenticated()) {
       return true;
+   } else if(authSvc.validKnownUser()) {
+      return router.parseUrl('/');
    }
 
    return router.parseUrl('/welcome');
