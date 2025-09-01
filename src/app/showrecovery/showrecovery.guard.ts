@@ -3,11 +3,12 @@ import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthenticatorService } from '../services/authenticator.service';
 
-export const showRecoveryGuard: CanActivateFn = (route, state) => {
+export const showRecoveryGuard: CanActivateFn = async (route, state) => {
    const authSvc = inject(AuthenticatorService);
    const router = inject(Router);
 
-    if (authSvc.authenticated()) {
+   await authSvc.ready;
+   if (authSvc.authenticated()) {
       return true;
    } else if(authSvc.validKnownUser()) {
       return router.parseUrl('/');

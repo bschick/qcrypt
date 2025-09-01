@@ -25,10 +25,11 @@ import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthenticatorService } from '../services/authenticator.service';
 
-export const senderLinksGuard: CanActivateFn = (route, state) => {
+export const senderLinksGuard: CanActivateFn = async (route, state) => {
    const authSvc = inject(AuthenticatorService);
    const router = inject(Router);
 
+   await authSvc.ready;
    if (authSvc.authenticated()) {
       return true;
    } else if(authSvc.validKnownUser()) {
