@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Under Maintenance</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Equivalent to bg-gray-100 */
+            color: #1f2937; /* Equivalent to text-gray-800 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+
+        .container {
+            text-align: center;
+            padding: 2rem;
+            max-width: 32rem; /* Equivalent to max-w-lg */
+            margin: auto;
+        }
+
+        .icon {
+            width: 4rem; /* Equivalent to w-16 */
+            height: 4rem; /* Equivalent to h-16 */
+            color: #3b82f6; /* Equivalent to text-blue-500 */
+            margin: 0 auto 1.5rem; /* Equivalent to mx-auto mb-6 */
+        }
+
+        h1 {
+            font-size: 2.25rem; /* Equivalent to text-4xl */
+            font-weight: 700; /* Equivalent to font-bold */
+            color: #111827; /* Equivalent to text-gray-900 */
+            margin-bottom: 1rem; /* Equivalent to mb-4 */
+        }
+
+        p {
+            font-size: 1.125rem; /* Equivalent to text-lg */
+            color: #4b5563; /* Equivalent to text-gray-600 */
+            margin-bottom: 2rem; /* Equivalent to mb-8 */
+            line-height: 1.6;
+        }
+
+        .status-link-container {
+            margin-top: 1.5rem; /* Equivalent to mt-6 */
+        }
+
+        a {
+            color: #2563eb; /* Equivalent to text-blue-600 */
+            text-decoration: none;
+            transition: color 0.3s ease; /* Equivalent to transition-colors duration-300 */
+        }
+
+        a:hover {
+            color: #3b82f6; /* Equivalent to hover:text-blue-500 */
+        }
+
+        footer {
+            margin-top: 3rem; /* Equivalent to mt-12 */
+            font-size: 0.875rem; /* Equivalent to text-sm */
+            color: #6b7280; /* Equivalent to text-gray-500 */
+        }
+
+        /* Responsive styles */
+        @media (min-width: 768px) {
+            h1 {
+                font-size: 3rem; /* Equivalent to md:text-5xl */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Maintenance Icon SVG -->
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.472-2.472a3.375 3.375 0 0 0-4.773-4.773L6.24 11.163a3.375 3.375 0 0 0 4.774 4.774Z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+        </svg>
+
+        <!-- Main Heading -->
+        <h1>Temporarily Unavailable</h1>
+
+        <!-- Informational Paragraph -->
+        <p>
+            Quick Crypt is performing scheduled maintenance to improve the service. We will be back online shortly. Thanks for your patience!
+        </p>
+
+    </div>
+</body>
+</html>
