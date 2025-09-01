@@ -55,6 +55,17 @@ export function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
    return new Uint8Array(base64URLStringToBuffer(b64));
 }
 
+export function bufferToHexString(buffer: ArrayBuffer): string {
+   const bytes = new Uint8Array(buffer);
+   let str = '';
+
+   for (let i = 0; i < bytes.length; i++) {
+      // Convert the byte to its hexadecimal representation and pad to 2 digits
+      str += bytes[i].toString(16).padStart(2, '0');
+   }
+   return str;
+}
+
 /* Javascript converts to signed 32 bit int when using bit shifting
    and masking, so do this instead. Count is the number of bytes
    used to pack the number.  */

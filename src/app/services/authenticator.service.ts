@@ -31,7 +31,7 @@ import {
 } from '@simplewebauthn/browser';
 import { Subject, Subscription, filter } from 'rxjs';
 import { DateTime } from 'luxon';
-import { base64ToBytes, bytesToBase64, expired } from './utils';
+import { base64ToBytes, bytesToBase64, bufferToHexString, expired } from './utils';
 import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 
@@ -228,6 +228,17 @@ export class AuthenticatorService {
          body
       } = args;
 
+      const headers = new Headers({
+         'Content-Type': 'application/json',
+      });
+
+      // required for AWS OAC (access control to lambda).
+      if (method === 'PUT' || method === 'POST') {
+         const bodyData = new TextEncoder().encode(body ?? '');
+         const hash = await crypto.subtle.digest("SHA-256", bodyData);
+         headers.append('x-amz-content-sha256', bufferToHexString(hash));
+      }
+
       let path = `${environment.apiVersion}`;
       path += (userId ? `/user/${userId}` : '');
       path += `/${resource}`;
@@ -242,9 +253,7 @@ export class AuthenticatorService {
             cache: 'no-store',
             credentials: 'include',
             body: body,
-            headers: {
-               'Content-Type': 'application/json',
-            },
+            headers: headers
          });
       } catch (err) {
          console.error(err);
