@@ -16,7 +16,7 @@ testWithAuth('edit fields', async ({ authFixture }) => {
   await page.goto('/');
 
   const testHost = new URL(page.url()).hostname as hosts;
-  await addCredential(session, authId, credentials[testHost]['keeper1']['id']);
+  await addCredential(session, authId, credentials[testHost]['keeper2']['id']);
 
   await passkeyAuth(session, authId, async () => {
     await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
