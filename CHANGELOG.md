@@ -1,5 +1,16 @@
 # CHANGELOG.md
 
+## 5.2.0 (2025-09-02)
+
+Security:
+  - earlier and more explicit overwriting of variables containing sensitive data
+
+Changes:
+
+  - added playwright e2e testing (and addressed minor issues discovered during testing)
+  - added versioning to server API path
+  - improved handling of identity changes across browser tabs
+
 ## 5.1.1 (2025-08-02)
 
 Changes:
