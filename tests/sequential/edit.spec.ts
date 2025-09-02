@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test';
 import {
-  testURL,
   testWithAuth,
   addCredential,
-  keeper2,
-  passkeyAuth
+  credentials,
+  passkeyAuth,
+  hosts
 } from '.././common';
 
 
@@ -13,13 +13,15 @@ testWithAuth('edit fields', async ({ authFixture }) => {
   test.setTimeout(60000);
   const rand = Math.floor(Math.random() * (99 - 0 + 1)) + 0;
 
-  await addCredential(session, authId, keeper2);
-  await page.goto(testURL);
+  await page.goto('/');
+
+  const testHost = new URL(page.url()).hostname as hosts;
+  await addCredential(session, authId, credentials[testHost]['keeper1']['id']);
 
   await passkeyAuth(session, authId, async () => {
     await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
   });
-  await page.waitForURL(testURL, { waitUntil: 'domcontentloaded' });
+  await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
 
   await page.getByRole('button', { name: 'Passkey information' }).click();
