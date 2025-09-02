@@ -30,31 +30,30 @@ const keeper2_local: Credential = {
 const keeper2Recovery_local = "cave salt anxiety lady chronic quit vapor device useless husband misery region bag island series syrup cargo obey solve paddle fitness huge net couple"
 
 const keeper1_prod: Credential = {
-  credentialId: '39U7Q5yO7ORU+Ph27MOxmEqMuXOvyZEWUICp0iRlXh0=',
+  credentialId: 'Zti4nmkLHo/4rnNimBROJ7CgP0cAJbfCWGgVlXfsiS8=',
   isResidentCredential: true,
   rpId: 'quickcrypt.org',
-  privateKey: 'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgJcpOXPww0jAva9VQ2kps1PKs2SJv+f95C7RPT2/k6tOhRANCAASSH7nRrqxRWUkhR3yE9OxA1YXHbsUJK2qcRiHSMrRazdTyUUYE51qZVeqiIozVSbU2zirGuxP+ggqeUoRjBjlU',
-  userHandle: 'QVhLZERuS09pdDM3bU1RRGctRVRtUQ==',
+  privateKey: 'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgsSWkWH0RtGtqbDw2a2BomwIq/Xv95lt35Sk5iSXvb6ShRANCAAR9n7Ue93B2oXcj5grRlWm0y/KUNrKA7GtITw+XpKWGXWIrrAZD3WOXyeDRtChx2bk+GfBgsZGhDHbSWJkWySS2',
+  userHandle: 'am1GeGplTDg0UmdsUkpEVGtJeG56dw==',
   signCount: 1,
   backupEligibility: false,
   backupState: false,
   userName: 'KeeperOne'
 }
-const keeper1Recovery_prod = 'cereal victory horse brush bread pass bright you convince reward harbor link blame excess degree fade member used tower marine deal vacuum example danger';
-
+const keeper1Recovery_prod = 'captain truly apology rude correct access above index cart save open home toward rhythm daring garbage three scorpion eye canvas decorate economy palace venture';
 
 const keeper2_prod: Credential = {
-  credentialId: 'oXWFvwrX3EToc4ceCMCCnM9bHLUmv5seTYw+4Z+/jXM=',
+  credentialId: 'JerYY/YvBC4SiQtBWx/4NMIvMrBH2S99hIRaXwCI+DA=',
   isResidentCredential: true,
   rpId: 'quickcrypt.org',
-  privateKey: 'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgQ6p+GFnpAqrePJ/wY+6p+NIvQmDP4mkOvVIMkO5kL2uhRANCAATZ2amo6njJY91Oy8uZfx3XIGOXT0XYF8aa06qvl7kv1cciHF9DG0/44V0x6V8Y0CqBYtP7g0PdZ2/OuxKD5HOS',
-  userHandle: 'VmQ2ZWZoNWNRNmpJWFR2VnZPSkNjUQ==',
+  privateKey: 'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgt72ZEvhrD9O+H8hn/0pbBRScVHjPEMI6B3edO0piTaWhRANCAAQbVIDhQXmmMMNMry/G4XfRGdGdKHmbCb6NDNtQpzTKXxqj9GMlGoc709quv0C/t5UxrxefYb1mERc/+Pr1m/ej',
+  userHandle: 'MGxVaDd4SVZxY0tLSDdHcjZTVEFLZw==',
   signCount: 1,
   backupEligibility: false,
   backupState: false,
   userName: 'KeeperTwo'
 }
-const keeper2Recovery_prod = 'flee wash meat island rail poverty emotion victory critic moral coil sport fuel execute wear slide dry edge blanket jeans forward illness antenna detail';
+const keeper2Recovery_prod = 'cable dismiss find crouch legend tourist fork caught gaze fragile opera moral census movie rough dress prefer begin margin globe salon mystery absent dwarf';
 
 export type hosts = 't1.quickcrypt.org' | 'quickcrypt.org';
 export const credentials= {
