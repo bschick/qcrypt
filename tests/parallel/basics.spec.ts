@@ -1,10 +1,7 @@
 import { test, expect, Page, CDPSession } from '@playwright/test';
-import {
-  testURL
-} from '.././common';
 
 test('has title', async ({ page }) => {
-  await page.goto(testURL);
+  await page.goto('/');
 
   // Expect a title "to contain" a substring.
   await expect(page).toHaveTitle(/Quick Crypt/);
@@ -12,7 +9,7 @@ test('has title', async ({ page }) => {
 });
 
 test('new user fill in', async ({ page }) => {
-  await page.goto(testURL);
+  await page.goto('/');
 
   // Click the get started link.
   await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
@@ -26,7 +23,7 @@ test('new user fill in', async ({ page }) => {
 });
 
 test('get overview', async ({ page }) => {
-  await page.goto(testURL);
+  await page.goto('/');
 
   // Click the get started link.
   await page.getByRole('button', { name: 'Help' }).click();

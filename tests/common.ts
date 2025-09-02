@@ -2,9 +2,8 @@ import { test, expect, Page, CDPSession } from '@playwright/test';
 import { Protocol } from 'devtools-protocol';
 
 export type Credential = Protocol.WebAuthn.Credential;
-export const testURL = 'https://t1.quickcrypt.org:4200';
 
-export const keeper1: Credential = {
+const keeper1_local: Credential = {
   credentialId: 'YpKdnBAh/1dsoA6FrdIbmAaGJU408ToZBeljHs9Qx78=',
   isResidentCredential: true,
   rpId: 't1.quickcrypt.org',
@@ -15,9 +14,9 @@ export const keeper1: Credential = {
   backupState: false,
   userName: 'KeeperOne'
 };
-export const keeper1Recovery = "tool uniform squirrel melody lawn okay hazard work web middle desert modify culture cook advance enact soda lucky urge emerge autumn reflect feature six"
+const keeper1Recovery_local = "tool uniform squirrel melody lawn okay hazard work web middle desert modify culture cook advance enact soda lucky urge emerge autumn reflect feature six"
 
-export const keeper2: Credential = {
+const keeper2_local: Credential = {
   credentialId: 'NAoLrbsz01Uj5ZrW7bdbS3MV2vjCanWtTi+4rq/0E6c=',
   isResidentCredential: true,
   rpId: 't1.quickcrypt.org',
@@ -28,7 +27,58 @@ export const keeper2: Credential = {
   backupState: false,
   userName: 'KeeperTwo'
 };
-export const keeper2Recovery = "cave salt anxiety lady chronic quit vapor device useless husband misery region bag island series syrup cargo obey solve paddle fitness huge net couple"
+const keeper2Recovery_local = "cave salt anxiety lady chronic quit vapor device useless husband misery region bag island series syrup cargo obey solve paddle fitness huge net couple"
+
+const keeper1_prod: Credential = {
+  credentialId: '39U7Q5yO7ORU+Ph27MOxmEqMuXOvyZEWUICp0iRlXh0=',
+  isResidentCredential: true,
+  rpId: 'quickcrypt.org',
+  privateKey: 'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgJcpOXPww0jAva9VQ2kps1PKs2SJv+f95C7RPT2/k6tOhRANCAASSH7nRrqxRWUkhR3yE9OxA1YXHbsUJK2qcRiHSMrRazdTyUUYE51qZVeqiIozVSbU2zirGuxP+ggqeUoRjBjlU',
+  userHandle: 'QVhLZERuS09pdDM3bU1RRGctRVRtUQ==',
+  signCount: 1,
+  backupEligibility: false,
+  backupState: false,
+  userName: 'KeeperOne'
+}
+const keeper1Recovery_prod = 'cereal victory horse brush bread pass bright you convince reward harbor link blame excess degree fade member used tower marine deal vacuum example danger';
+
+
+const keeper2_prod: Credential = {
+  credentialId: 'oXWFvwrX3EToc4ceCMCCnM9bHLUmv5seTYw+4Z+/jXM=',
+  isResidentCredential: true,
+  rpId: 'quickcrypt.org',
+  privateKey: 'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgQ6p+GFnpAqrePJ/wY+6p+NIvQmDP4mkOvVIMkO5kL2uhRANCAATZ2amo6njJY91Oy8uZfx3XIGOXT0XYF8aa06qvl7kv1cciHF9DG0/44V0x6V8Y0CqBYtP7g0PdZ2/OuxKD5HOS',
+  userHandle: 'VmQ2ZWZoNWNRNmpJWFR2VnZPSkNjUQ==',
+  signCount: 1,
+  backupEligibility: false,
+  backupState: false,
+  userName: 'KeeperTwo'
+}
+const keeper2Recovery_prod = 'flee wash meat island rail poverty emotion victory critic moral coil sport fuel execute wear slide dry edge blanket jeans forward illness antenna detail';
+
+export type hosts = 't1.quickcrypt.org' | 'quickcrypt.org';
+export const credentials= {
+  't1.quickcrypt.org': {
+    keeper1: {
+      id: keeper1_local,
+      words: keeper1Recovery_local
+    },
+    keeper2: {
+      id: keeper2_local,
+      words: keeper2Recovery_local
+    }
+  },
+  'quickcrypt.org': {
+    keeper1: {
+      id: keeper1_prod,
+      words: keeper1Recovery_prod
+    },
+    keeper2: {
+      id: keeper2_prod,
+      words: keeper2Recovery_prod
+    }
+  },
+};
 
 export type AuthFixture = {
   page: Page;
@@ -37,7 +87,7 @@ export type AuthFixture = {
 };
 
 export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
-  authFixture: async ({ page }, use) => {
+  authFixture: async ({ page }, use, testInfo) => {
     const session = await page.context().newCDPSession(page);
     const authId = await setupAuthenticator(session, page);
 
@@ -46,6 +96,19 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       session,
       authId
     });
+
+    // a bit ugly, but it works.
+    if (testInfo.tags.includes('@nukeall')) {
+      await page.getByRole('button', { name: 'Passkey information' }).click();
+
+      const tableBody = page.locator('table.credtable tbody');
+      let count = await tableBody.locator('tr').count();
+      while (count > 0) {
+        console.log(`cleanup on isle ${count}`);
+        await deleteFirstPasskey(page);
+        count = await tableBody.locator('tr').count();
+      }
+    }
 
     await removeAuthenticator(session, authId);
     await session.detach();
