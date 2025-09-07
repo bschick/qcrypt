@@ -1,5 +1,8 @@
 import { test, expect, Page, CDPSession } from '@playwright/test';
 import { Protocol } from 'devtools-protocol';
+import playwright from 'playwright';
+import { AuthenticationResponseJSON, startAuthentication } from '@simplewebauthn/browser';
+import { base64ToBytes } from '../src/app/services/utils';
 
 export type Credential = Protocol.WebAuthn.Credential;
 
@@ -98,14 +101,30 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
 
     // a bit ugly, but it works.
     if (testInfo.tags.includes('@nukeall')) {
-      await page.getByRole('button', { name: 'Passkey information' }).click();
 
-      const tableBody = page.locator('table.credtable tbody');
-      let count = await tableBody.locator('tr').count();
-      while (count > 0) {
-        console.log(`cleanup on isle ${count}`);
-        await deleteFirstPasskey(page);
-        count = await tableBody.locator('tr').count();
+      const storageState = await page.context().storageState();
+      const loclStorage = storageState.origins[0].localStorage;
+      const userId = loclStorage.find(item => item.name === 'userid')?.value;
+
+      // If the test completd, the user lougout happened because the last PK was deleted
+      // So the existance of userid in localstorage means we didn't finish, so cleanup...
+      if (userId) {
+        //@ts-ignore
+        const apiUrl = testInfo.project.use.apiURL;
+
+        const authsResponse = await page.request.get(
+          `${apiUrl}/user/${userId}/authenticators`
+        );
+
+        const auths = await authsResponse.json();
+        for (const [count, auth] of auths.entries()) {
+          console.log(`cleanup on isle ${count+1}`);
+          const authsResponse = await page.request.delete(
+            //@ts-ignore
+            `${apiUrl}/user/${userId}/authenticator/${auth.credentialId}`
+          );
+          console.log(authsResponse.ok() ? 'done' : await authsResponse.text());
+        }
       }
     }
 

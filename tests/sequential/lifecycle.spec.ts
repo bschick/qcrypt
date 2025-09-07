@@ -67,6 +67,8 @@ test.describe('creation', () => {
 
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+
+    //NOTE: comment out the line below to test leaking passkey & user
     await page.getByRole('button', { name: 'Passkey information' }).click();
 
     tableBody = page.locator('table.credtable tbody');
