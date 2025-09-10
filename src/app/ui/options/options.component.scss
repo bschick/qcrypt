@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-@use "../../common.scss";
+@use "../../common.scss" as common;
 
 .algs-area {
   display: flex;
@@ -36,6 +36,18 @@ SOFTWARE. */
 .alg-help {
   position: relative;
   top: -7px;
+}
+
+.red-pwd-strength {
+  color: var(--red-pwd-color);
+}
+
+.yellow-pwd-strength {
+  color: var(--yellow-pwd-color);
+}
+
+.green-pwd-strength {
+  color: var(--green-pwd-color);
 }
 
 .options-header {
@@ -88,16 +100,4 @@ SOFTWARE. */
 
 .options-flex mat-slide-toggle {
   width: 165px;
-}
-
-.red-pwd-strength {
-  color: darkred;
-}
-
-.yellow-pwd-strength {
-  color: darkgoldenrod;
-}
-
-.green-pwd-strength {
-  color: darkgreen;
 }

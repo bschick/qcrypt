@@ -129,8 +129,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    @ViewChild('cipherField') cipherField!: ElementRef;
    @ViewChild('inputArea') inputArea!: ElementRef;
    @ViewChild('fileUpload') fileUpload!: ElementRef;
-   @ViewChild('formatLabel') formatLabel!: ElementRef;
-   @ViewChild('minStrLabel') minStrLabel!: ElementRef;
+//   @ViewChild('formatLabel') formatLabel!: ElementRef;
+//   @ViewChild('minStrLabel') minStrLabel!: ElementRef;
    @ViewChild('bubbleTip1') bubbleTip1!: BubbleDirective;
    @ViewChild('bubbleTip2') bubbleTip2!: BubbleDirective;
    @ViewChild('options') options!: OptionsComponent;

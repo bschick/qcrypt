@@ -55,9 +55,9 @@ SOFTWARE. -->
         </div>
         <div>
           <mat-form-field subscriptSizing="dynamic">
-            <mat-label #minStrLabel>Minimum Strength</mat-label>
+            <mat-label #minStrLabel>Default Strength</mat-label>
             <mat-select [formControl]="strengthSelect"
-              matTooltip="Minimum required password strength used for encryption">
+              matTooltip="Defaul minimum password strength allowed for encryption">
               <mat-option class="red-pwd-strength" value="0">Terrible</mat-option>
               <mat-option class="red-pwd-strength" value="1">Weak</mat-option>
               <mat-option class="yellow-pwd-strength" value="2">Decent</mat-option>

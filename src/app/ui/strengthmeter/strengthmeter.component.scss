@@ -19,11 +19,61 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-@use "../../common.scss";
+@use "../../common.scss" as common;
+@use '@angular/material' as mat;
 
-.editable {
-  display: flex;
+.meter {
+//  display: flex;
   align-items: center;
+}
+
+.table {
+  width: 100%;
+}
+
+.slider {
+  width: 100%;
+
+  //--mat-sys-surface-variant
+  @include mat.slider-overrides((
+      active-track-color: var(--mat-sys-surface-variant),
+      focus-handle-color: rgb(71, 71, 71),
+      handle-color: rgb(71, 71, 71),
+      handle-height: 15px,
+      handle-width: 5px,
+      handle-shape: 1px,
+      ripple-color: unset,
+  ));
+}
+
+.segment {
+  height: 5px;
+}
+
+.seg1, .seg2{
+  background-color: var(--red-pwd-color);
+  height: 5px;
+//  width: 10px;
+  // &::before {
+  //   content: '\25BC';
+  //   width: 0;
+  //   height: 0;
+  //   position: absolute;
+  //   font-size:25px;
+  // }
+
+}
+
+.seg3{
+  background-color: var(--yellow-pwd-color);
+  height: 5px;
+//  width: 10px;
+}
+
+.seg4, .seg5{
+  background-color: var(--green-pwd-color);
+  height: 5px;
+//  width: 10px;
 }
 
 .readonly {
