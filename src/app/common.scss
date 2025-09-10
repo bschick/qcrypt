@@ -54,6 +54,17 @@
   z-index: 999;
 }
 
+// $red-pwd-color: darkred;
+// $yellow-pwd-color: darkgoldenrod;
+// $green-pwd-color: darkgreen;
+
+:root {
+  --red-pwd-color: darkred;
+  --yellow-pwd-color: darkgoldenrod;
+  --green-pwd-color: darkgreen;
+}
+
+
 @mixin strong-button {
   background-color: var(
     --mdc-filled-button-container-color,

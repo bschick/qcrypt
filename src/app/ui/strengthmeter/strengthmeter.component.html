@@ -1,0 +1,27 @@
+<div class="meter">
+  <mat-slider matTooltip="Required password strength" class="slider" min="0" max="5" step="1" value="1"
+  showTickMarks (change)="onStrengthChange($event)" [disableRipple]="true">
+    <input #sliderElem  matSliderThumb [formControl]="stenghSlider">
+  </mat-slider>
+
+  <table class="table" matTooltip="Current password strength">
+    <thead class="header">
+      <tr>
+        <th class="tg-0lax"></th>
+        <th class="tg-0lax"></th>
+        <th class="tg-0lax"></th>
+        <th class="tg-0lax"></th>
+        <th class="tg-0lax"></th>
+      </tr>
+    </thead>
+    <tbody class="body">
+      <tr>
+        <td class="segment" [style.background-color]="backgroundColor" [hidden]="strength < 1"></td>
+        <td class="segment" [style.background-color]="backgroundColor" [hidden]="strength < 2"></td>
+        <td class="segment" [style.background-color]="backgroundColor" [hidden]="strength < 3"></td>
+        <td class="segment" [style.background-color]="backgroundColor" [hidden]="strength < 4"></td>
+        <td class="segment" [style.background-color]="backgroundColor" [hidden]="strength < 5"></td>
+      </tr>
+    </tbody>
+  </table>
+</div>

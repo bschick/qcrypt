@@ -43,7 +43,8 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { Router } from '@angular/router';
-import { PasswordStrengthMeterComponent } from 'angular-password-strength-meter';
+//import { PasswordStrengthMeterComponent } from 'angular-password-strength-meter';
+import { StrengthMeterComponent } from '../ui/strengthmeter/strengthmeter.component';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { ZxcvbnOptionsService } from '../services/zxcvbn-options.service';
 import { BubbleDirective } from '../ui/bubble/bubble.directive';
@@ -76,7 +77,7 @@ export type PwdDialogData = {
    styleUrl: './core.dialogs.scss',
    encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
    imports: [MatDialogModule, CommonModule, MatFormFieldModule, MatInputModule,
-      MatIconModule, PasswordStrengthMeterComponent, FormsModule, ReactiveFormsModule,
+      MatIconModule, StrengthMeterComponent, FormsModule, ReactiveFormsModule,
       MatTooltipModule, MatButtonModule, BubbleDirective
    ]
 })
