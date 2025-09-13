@@ -86,6 +86,65 @@ test.describe('creation', () => {
 
 test.describe('sign on', () => {
 
+
+  testWithAuth('check show reocvery', async ({ authFixture }) => {
+    const { page, session, authId } = authFixture;
+    test.setTimeout(45000);
+
+    await page.goto('/');
+
+    const testHost = new URL(page.url()).hostname as hosts;
+    await addCredential(session, authId, credentials[testHost]['keeper1']['id']);
+
+    await passkeyAuth(session, authId, async () => {
+      await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
+    });
+    await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+
+    await page.getByRole('button', { name: 'Passkey information' }).click();
+
+    let tableBody = page.locator('table.credtable tbody');
+    await expect(tableBody.locator('tr')).toHaveCount(1);
+
+    await passkeyAuth(session, authId, async () => {
+      await page.getByRole('button', { name: /Show recovery link/ }).click();
+    });
+
+    await page.waitForURL('/showrecovery', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: /I saved my recovery words securely/ })).toBeVisible({timeout:10000});
+
+    await expect(page.locator('textarea#wordsArea')).toHaveValue('tool uniform squirrel melody lawn okay hazard work web middle desert modify culture cook advance enact soda lucky urge emerge autumn reflect feature six');
+
+  });
+
+  testWithAuth('check usercred', async ({ authFixture }) => {
+    const { page, session, authId } = authFixture;
+    test.setTimeout(45000);
+
+    await page.goto('/');
+
+    const testHost = new URL(page.url()).hostname as hosts;
+    await addCredential(session, authId, credentials[testHost]['keeper2']['id']);
+
+    await passkeyAuth(session, authId, async () => {
+      await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
+    });
+    await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+
+    await passkeyAuth(session, authId, async () => {
+      await page.goto('/cmdline');
+    });
+
+    await page.waitForURL('/cmdline', { waitUntil: 'domcontentloaded' });
+
+    await expect(page.locator('input#credential')).toBeVisible();
+    await expect(page.locator('input#credential')).toHaveValue('KKuQbsfkRbebFRRPPsDHC7ZNfdgjbvtjEOtkeSJ7N50');
+
+  });
+
+
   testWithAuth('log in and out', async ({ authFixture }) => {
     const { page, session, authId } = authFixture;
     test.setTimeout(45000);
