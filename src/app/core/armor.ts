@@ -47,7 +47,7 @@ import {
 
  export function parseCipherArmor(
     cipherArmor: string
-) : Uint8Array {
+) : Uint8Array<ArrayBuffer> {
     try {
        let trimmed = cipherArmor.trim();
        if (trimmed.startsWith('https://')) {
