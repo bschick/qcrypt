@@ -27,7 +27,6 @@ test.describe('creation', () => {
     });
 
     await page.waitForURL('/showrecovery', { waitUntil: 'domcontentloaded' });
-
     await expect(page.getByRole('heading', { name: 'Account Backup and Recovery' })).toBeVisible({timeout:10000});
 
     //save recovery pattern

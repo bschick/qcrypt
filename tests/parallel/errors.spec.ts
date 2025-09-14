@@ -45,7 +45,7 @@ test.describe('errors', () => {
     expect(parent).toContainText('User name must be 6 to 31 characters long');
   });
 
-  testWithAuth('no passkey', async ({ authFixture }) => {
+  testWithAuth('no passkey cold', async ({ authFixture }) => {
     const { page, session, authId } = authFixture;
 
     await page.goto('/');
@@ -55,8 +55,34 @@ test.describe('errors', () => {
     });
     const parent = page.locator('p.error-msg');
     expect(parent).toContainText(/Passkey not recognized/);
-
   });
+
+  testWithAuth('no passkey re-signin', async ({ authFixture }) => {
+    const { page, session, authId } = authFixture;
+
+    await page.goto('/');
+
+    const testHost = new URL(page.url()).hostname as hosts;
+    await addCredential(session, authId, credentials[testHost]['keeper1']['id']);
+
+    await passkeyAuth(session, authId, async () => {
+      await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
+    });
+    await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+
+    await page.getByRole('button', { name: 'Passkey information' }).click();
+    await page.getByRole('button', { name: /Sign out/ }).click();
+
+    await clearCredentials(session, authId);
+
+    await passkeyAuth(session, authId, async () => {
+      await page.getByRole('button', { name: /Sign in as Keeper/ }).click();
+    });
+
+    expect(page.locator('div.button-host div.error-msg')).toContainText(/Sign in failed, try again or change users/);
+  });
+
 
   testWithAuth('enc dec errors', async ({ authFixture }) => {
     const { page, session, authId } = authFixture;
@@ -112,7 +138,7 @@ test.describe('errors', () => {
   });
 
 
-  testWithAuth('no recovery', async ({ authFixture }) => {
+  testWithAuth('no recovery access', async ({ authFixture }) => {
     const { page, session, authId } = authFixture;
     test.setTimeout(45000);
 
@@ -142,7 +168,7 @@ test.describe('errors', () => {
 
   });
 
-  testWithAuth('no usercred', async ({ authFixture }) => {
+  testWithAuth('no usercred access', async ({ authFixture }) => {
     const { page, session, authId } = authFixture;
     test.setTimeout(45000);
 
