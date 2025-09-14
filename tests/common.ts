@@ -64,21 +64,25 @@ export const credentials= {
   't1.quickcrypt.org': {
     keeper1: {
       id: keeper1_local,
-      words: keeper1Recovery_local
+      words: keeper1Recovery_local,
+      userCred: "get when used"
     },
     keeper2: {
       id: keeper2_local,
-      words: keeper2Recovery_local
+      words: keeper2Recovery_local,
+      userCred: "KKuQbsfkRbebFRRPPsDHC7ZNfdgjbvtjEOtkeSJ7N50"
     }
   },
   'quickcrypt.org': {
     keeper1: {
       id: keeper1_prod,
-      words: keeper1Recovery_prod
+      words: keeper1Recovery_prod,
+      userCred: "get when used"
     },
     keeper2: {
       id: keeper2_prod,
-      words: keeper2Recovery_prod
+      words: keeper2Recovery_prod,
+      userCred: "pQhdwd-e4LGH5BWi-nWaMalzARJ3bImx0SJgLV4Y9YI"
     }
   },
 };
