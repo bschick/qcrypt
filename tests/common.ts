@@ -3,6 +3,7 @@ import { Protocol } from 'devtools-protocol';
 import playwright from 'playwright';
 import { AuthenticationResponseJSON, startAuthentication } from '@simplewebauthn/browser';
 import { base64ToBytes } from '../src/app/services/utils';
+import { timeout } from 'rxjs';
 
 export type Credential = Protocol.WebAuthn.Credential;
 
@@ -207,7 +208,9 @@ export async function passkeyAuth(
 
   // initialize event listeners to wait for a successful passkey input event
   const operationCompleted = new Promise<void>(resolve => {
+    const timeout = setTimeout(() => resolve(), 5000);
     session.on('WebAuthn.credentialAsserted', (payload) => {
+      clearTimeout(timeout);
       credential = payload.credential;
       resolve();
     });
@@ -251,7 +254,9 @@ export async function passkeyCreation(
 
   // initialize event listeners to wait for a successful passkey input event
   const operationCompleted = new Promise<void>(resolve => {
+    const timeout = setTimeout(() => resolve(), 5000);
     session.on('WebAuthn.credentialAdded', (payload) => {
+      clearTimeout(timeout);
       credential = payload.credential;
       resolve();
     });

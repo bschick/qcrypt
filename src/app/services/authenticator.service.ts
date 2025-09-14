@@ -65,7 +65,7 @@ type FetchArgs = {
    userId?: string | null;
    resourceId?: string;
    params?: string;
-   body?: string;
+   bodyJSON?: string;
 }
 
 type ServerUserInfo = {
@@ -225,7 +225,7 @@ export class AuthenticatorService {
          resource,
          resourceId,
          params,
-         body
+         bodyJSON
       } = args;
 
       const headers = new Headers({
@@ -234,7 +234,7 @@ export class AuthenticatorService {
 
       // required for AWS OAC (access control to lambda).
       if (method === 'PUT' || method === 'POST') {
-         const bodyData = new TextEncoder().encode(body ?? '');
+         const bodyData = new TextEncoder().encode(bodyJSON ?? '');
          const hash = await crypto.subtle.digest("SHA-256", bodyData);
          headers.append('x-amz-content-sha256', bufferToHexString(hash));
       }
@@ -252,7 +252,7 @@ export class AuthenticatorService {
             mode: 'cors',
             cache: 'no-store',
             credentials: 'include',
-            body: body,
+            body: bodyJSON,
             headers: headers
          });
       } catch (err) {
@@ -308,11 +308,12 @@ export class AuthenticatorService {
       this._cachedRecoveryId = undefined;
 
       if (!recoveryId) {
-         const verifyBody = await this._startAuth(this.userId, false, true);
+         const verifyBody = await this._startAuth(this.userId);
          const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
             method: 'POST',
             resource: 'verifyauth',
-            body: verifyBody
+            bodyJSON: verifyBody,
+            params: 'recovery=true'
          });
 
          if (!serverLoginUserInfo || !serverLoginUserInfo.recoveryId) {
@@ -550,7 +551,7 @@ export class AuthenticatorService {
          userId: this.userId,
          resource: 'description',
          resourceId: credentialId,
-         body: description
+         bodyJSON: JSON.stringify({description: description})
       });
 
       if (!serverUserInfo) {
@@ -575,7 +576,7 @@ export class AuthenticatorService {
          method: 'PUT',
          userId: this.userId,
          resource: 'username',
-         body: userName
+         bodyJSON: JSON.stringify({userName: userName})
       });
 
       if (!serverUserInfo) {
@@ -684,11 +685,12 @@ export class AuthenticatorService {
          throw new Error('must be logged out to log in');
       }
 
-      const verifyBody = await this._startAuth(userId, true, false);
+      const verifyBody = await this._startAuth(userId);
       const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
          method: 'POST',
          resource: 'verifyauth',
-         body: verifyBody
+         bodyJSON: verifyBody,
+         params: 'usercred=true'
       });
 
       if (!serverLoginUserInfo) {
@@ -699,9 +701,7 @@ export class AuthenticatorService {
    }
 
    private async _startAuth(
-      userId: string | null,
-      includeUserCred: boolean,
-      includeRecovery: boolean
+      userId: string | null
    ): Promise<string> {
 
       // Start the process without userId just doesn't limit authenticator creds
@@ -735,9 +735,7 @@ export class AuthenticatorService {
       // on old account until when it is expicit
       return JSON.stringify({
          ...startAuth,
-         challenge: optionsJson.challenge,
-         includeusercred: includeUserCred,
-         includerecovery: includeRecovery
+         challenge: optionsJson.challenge
       });
    }
 
@@ -808,7 +806,7 @@ export class AuthenticatorService {
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
          method: 'POST',
          resource: 'userreg',
-         body: userName
+         bodyJSON: JSON.stringify({userName: userName})
       });
 
       const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, true);
@@ -870,15 +868,20 @@ export class AuthenticatorService {
          // To maintain compatibility with old clients, need to put this
          // back to actual b64Url rather than b64ofUT8BytesofBase64... argg
          userId: actualB64UserId,
-         includeusercred: includeUserCred,
-         includerecovery: includeRecovery,
          challenge: optionsJson.challenge,
       }
+
+      let parts = includeUserCred ? ['usercred=true'] : [];
+      if (includeRecovery) {
+         parts.push('recovery=true');
+      }
+      const params = parts.join('&');
 
       const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
          method: 'POST',
          resource: 'verifyreg',
-         body: JSON.stringify(expanded)
+         bodyJSON: JSON.stringify(expanded),
+         params: params
       });
 
       if (!serverLoginUserInfo) {
