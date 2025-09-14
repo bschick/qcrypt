@@ -1,5 +1,13 @@
 # CHANGELOG.md
 
+## 5.2.1 (2025-09-02)
+
+Changes:
+
+  - updated API calls to match server changes
+  - more playwright e2e tests
+  - package updates
+
 ## 5.2.0 (2025-09-02)
 
 Security:
