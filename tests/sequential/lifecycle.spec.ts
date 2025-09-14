@@ -139,7 +139,7 @@ test.describe('sign on', () => {
     await page.waitForURL('/cmdline', { waitUntil: 'domcontentloaded' });
 
     await expect(page.locator('input#credential')).toBeVisible();
-    await expect(page.locator('input#credential')).toHaveValue('KKuQbsfkRbebFRRPPsDHC7ZNfdgjbvtjEOtkeSJ7N50');
+    await expect(page.locator('input#credential')).toHaveValue(credentials[testHost]['keeper2']['userCred']);
 
   });
 
