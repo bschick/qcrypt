@@ -113,7 +113,7 @@ test.describe('sign on', () => {
     await page.waitForURL('/showrecovery', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: /I saved my recovery words securely/ })).toBeVisible({timeout:10000});
 
-    await expect(page.locator('textarea#wordsArea')).toHaveValue('tool uniform squirrel melody lawn okay hazard work web middle desert modify culture cook advance enact soda lucky urge emerge autumn reflect feature six');
+    await expect(page.locator('textarea#wordsArea')).toHaveValue(credentials[testHost]['keeper1']['words']);
 
   });
 
