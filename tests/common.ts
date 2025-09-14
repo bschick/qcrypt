@@ -3,6 +3,7 @@ import { Protocol } from 'devtools-protocol';
 import playwright from 'playwright';
 import { AuthenticationResponseJSON, startAuthentication } from '@simplewebauthn/browser';
 import { base64ToBytes } from '../src/app/services/utils';
+import { timeout } from 'rxjs';
 
 export type Credential = Protocol.WebAuthn.Credential;
 
@@ -63,21 +64,25 @@ export const credentials= {
   't1.quickcrypt.org': {
     keeper1: {
       id: keeper1_local,
-      words: keeper1Recovery_local
+      words: keeper1Recovery_local,
+      userCred: "get when used"
     },
     keeper2: {
       id: keeper2_local,
-      words: keeper2Recovery_local
+      words: keeper2Recovery_local,
+      userCred: "KKuQbsfkRbebFRRPPsDHC7ZNfdgjbvtjEOtkeSJ7N50"
     }
   },
   'quickcrypt.org': {
     keeper1: {
       id: keeper1_prod,
-      words: keeper1Recovery_prod
+      words: keeper1Recovery_prod,
+      userCred: "get when used"
     },
     keeper2: {
       id: keeper2_prod,
-      words: keeper2Recovery_prod
+      words: keeper2Recovery_prod,
+      userCred: "pQhdwd-e4LGH5BWi-nWaMalzARJ3bImx0SJgLV4Y9YI"
     }
   },
 };
@@ -207,7 +212,9 @@ export async function passkeyAuth(
 
   // initialize event listeners to wait for a successful passkey input event
   const operationCompleted = new Promise<void>(resolve => {
+    const timeout = setTimeout(() => resolve(), 5000);
     session.on('WebAuthn.credentialAsserted', (payload) => {
+      clearTimeout(timeout);
       credential = payload.credential;
       resolve();
     });
@@ -251,7 +258,9 @@ export async function passkeyCreation(
 
   // initialize event listeners to wait for a successful passkey input event
   const operationCompleted = new Promise<void>(resolve => {
+    const timeout = setTimeout(() => resolve(), 5000);
     session.on('WebAuthn.credentialAdded', (payload) => {
+      clearTimeout(timeout);
       credential = payload.credential;
       resolve();
     });
