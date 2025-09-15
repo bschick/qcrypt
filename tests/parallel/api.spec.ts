@@ -16,7 +16,7 @@ import { bufferToHexString } from '../../src/app/services/utils';
 
 test.describe('api', () => {
 
-  testWithAuth('create and remove user', { tag: '@nukeall' }, async ({ authFixture }, testInfo) => {
+  testWithAuth('create, edit, remove user', { tag: '@nukeall' }, async ({ authFixture }, testInfo) => {
     const { page, session, authId } = authFixture;
 
     await page.goto('/');
@@ -46,6 +46,42 @@ test.describe('api', () => {
 
     const auths = await authsResponse.json();
     expect(auths.length).toBe(1);
+
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+    };
+
+    // Test good put of description
+    const body1 = {
+      description: "5673455"
+    }
+
+    let bodyData = new TextEncoder().encode(JSON.stringify(body1));
+    let hash = await crypto.subtle.digest("SHA-256", bodyData);
+    headers['x-amz-content-sha256'] = bufferToHexString(hash);
+
+    let descResponse = await page.request.put(
+      //@ts-ignore
+      `${apiUrl}/user/${userId}/description/${auths[0].credentialId}`,
+      { headers: headers, data: body1 }
+    );
+    expect(descResponse.status()).toBe(200);
+
+    // Test bad put of description
+    const body2 = {
+      description: 5673455
+    }
+
+    bodyData = new TextEncoder().encode(JSON.stringify(body2));
+    hash = await crypto.subtle.digest("SHA-256", bodyData);
+    headers['x-amz-content-sha256'] = bufferToHexString(hash);
+
+    descResponse = await page.request.put(
+      //@ts-ignore
+      `${apiUrl}/user/${userId}/description/${auths[0].credentialId}`,
+      { headers: headers, data: body2 }
+    );
+    expect(descResponse.status()).toBe(400);
 
     const delResponse = await page.request.delete(
       //@ts-ignore
