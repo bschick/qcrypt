@@ -56,13 +56,13 @@ SOFTWARE. -->
         <div>
           <mat-form-field subscriptSizing="dynamic">
             <mat-label #minStrLabel>Default Strength</mat-label>
-            <mat-select [formControl]="strengthSelect"
+            <mat-select id="pwdStrength" [formControl]="strengthSelect"
               matTooltip="Defaul minimum password strength allowed for encryption">
               <mat-option class="red-pwd-strength" value="0">Terrible</mat-option>
               <mat-option class="red-pwd-strength" value="1">Weak</mat-option>
               <mat-option class="yellow-pwd-strength" value="2">Decent</mat-option>
               <mat-option class="green-pwd-strength" value="3">Good</mat-option>
-              <mat-option class="green-pwd-strength" value="4">Best</mat-option>
+              <mat-option class="green-pwd-strength" value="4">Strong</mat-option>
             </mat-select>
           </mat-form-field>
         </div>
@@ -126,7 +126,7 @@ SOFTWARE. -->
         <div>
           <mat-form-field subscriptSizing="dynamic">
             <mat-label #formatLabel>Cipher Armor Format</mat-label>
-            <mat-select [formControl]="formatSelect"
+            <mat-select id="format" [formControl]="formatSelect"
               matTooltip="Format of output cipher armor. Only use 'link' when you are not concerned about others changing the cipher armor">
               <mat-option value="compact">Compact</mat-option>
               <mat-option value="indent">Indent</mat-option>

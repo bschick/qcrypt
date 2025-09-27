@@ -2,6 +2,20 @@
 
 ## 5.2.1 (2025-09-14)
 
+Security:
+  - replaced outdated angular-password-strength-meter with custom component
+
+Features:
+  - minimum password strength can now be adjusted on the password entry dialog
+
+Changes:
+
+  - password entry dialog layout improvements
+  - removed password strength meter during decryption password entry
+  - package updates
+
+## 5.2.1 (2025-09-14)
+
 Changes:
 
   - updated API calls to match server changes

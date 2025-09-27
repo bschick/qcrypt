@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Matcher, zxcvbnOptions } from '@zxcvbn-ts/core';
 import * as zxcvbnCommonPackage from '@zxcvbn-ts/language-common';
 import * as zxcvbnEnPackage from '@zxcvbn-ts/language-en';
-import { translations } from '@zxcvbn-ts/language-en';
+import * as zxcvbnSpanishPackage from '@zxcvbn-ts/language-es-es';
 import { matcherPwnedFactory } from '@zxcvbn-ts/matcher-pwned';
 
 @Injectable({
@@ -14,10 +14,11 @@ export class ZxcvbnOptionsService {
 
    constructor() {
       const options = {
-         translations,
+         translations: zxcvbnEnPackage.translations,
          dictionary: {
             ...zxcvbnCommonPackage.dictionary,
             ...zxcvbnEnPackage.dictionary,
+            ...zxcvbnSpanishPackage.dictionary
          },
          graphs: zxcvbnCommonPackage.adjacencyGraphs,
          useLevenshteinDistance: true,

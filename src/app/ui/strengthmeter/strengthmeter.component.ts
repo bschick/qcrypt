@@ -23,7 +23,8 @@ import {
    Component,
    Output, Input, EventEmitter,
    ViewChild, ElementRef,
-   AfterViewInit
+   AfterViewInit,
+   OnInit
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
@@ -31,9 +32,15 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatSliderModule } from '@angular/material/slider';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { ZxcvbnOptionsService } from '../../services/zxcvbn-options.service';
+import { zxcvbnAsync, ZxcvbnResult } from '@zxcvbn-ts/core'
 
-const NAMES = ['terrible', 'weak', 'decent', 'good', 'best'];
 const COLORS = ['var(--red-pwd-color)', 'var(--red-pwd-color)', 'var(--yellow-pwd-color)', 'var(--green-pwd-color)', 'var(--green-pwd-color)'];
+
+export type AcceptableState = {
+   acceptable: boolean;
+   strength: number;
+}
 
 @Component({
    selector: 'app-strengthmeter',
@@ -43,19 +50,74 @@ const COLORS = ['var(--red-pwd-color)', 'var(--red-pwd-color)', 'var(--yellow-pw
    templateUrl: './strengthmeter.component.html',
    styleUrl: './strengthmeter.component.scss'
 })
-export class StrengthMeterComponent implements AfterViewInit {
+export class StrengthMeterComponent implements AfterViewInit, OnInit {
 
-   public strength = 0;
-   public backgroundColor = 'white';
-   public stenghSlider = new FormControl(this.strength);
+   public strength = -1;
+   public strengthMin = 0;
 
-   //   @ViewChild('editableInput', { static: true }) editInput!: ElementRef;
-   @Output() rangeChanged = new EventEmitter<StrengthMeterComponent>();
+   private testQueue: string[] = [];
+   public segmentOnColor = '';
+   public segmentOffColor = '#dcdcdc';
+   public strengthSlider = new FormControl(this.strengthMin + 1);
+   private checkPwned = false;
+   private acceptable = false;
+   private lastStrength = -1;
+   public warning = '';
+   public suggestion = '';
+
    @ViewChild('sliderElem') sliderRef!: ElementRef;
    @ViewChild('matripple') rippleRef!: ElementRef;
 
-   @Input() set stength(strength: number) {
-      this.strength = strength;
+   @Output() acceptableChanged = new EventEmitter<AcceptableState>();
+
+   @Input() set minStrength(strengthMin: number) {
+      this.strengthMin = Math.max(0, Math.min(strengthMin, 4));
+   }
+
+   @Input() set pwned(check: boolean) {
+      this.checkPwned = check;
+   }
+
+   @Input() set password(passwd: string) {
+      this.testQueue.push(passwd);
+
+      if (this.testQueue.length === 1) {
+         (async () => {
+            let results: ZxcvbnResult | undefined = undefined;
+            while (this.testQueue.length > 0) {
+               try {
+                  const testPwd = this.testQueue[0];
+                  let score = -1;
+                  if (testPwd) {
+                     results = await zxcvbnAsync(testPwd);
+                     score = results.score;
+                  }
+                  this.setStrength(score);
+               }
+               catch (err) {
+                  console.error(err);
+               } finally {
+                  this.testQueue.shift()!;
+               }
+            }
+
+            this.updateAcceptable();
+
+            if( results?.feedback ){
+               this.warning = results.feedback.warning ?? '';
+               this.suggestion = results.feedback.suggestions[0] ?? '';
+            }
+         })();
+      }
+   }
+
+   constructor(
+      private zxcvbnOptions: ZxcvbnOptionsService,
+   ) {
+   }
+
+   ngOnInit(): void {
+      this.zxcvbnOptions.checkPwned(this.checkPwned);
    }
 
    ngAfterViewInit(): void {
@@ -65,42 +127,59 @@ export class StrengthMeterComponent implements AfterViewInit {
          const ripple = parent.getElementsByClassName('mat-ripple');
          if (ripple.length) {
             ripple[0].remove();
-            console.log('removed');
          }
+
+         parent.style.setProperty(
+            '--mdc-slider-active-track-color',
+            'transparent'
+         );
+         parent.style.setProperty(
+            '--mdc-slider-inactive-track-color',
+            'transparent'
+         );
       }
+
+      this.setMinStrength(this.strengthMin);
    }
 
+   onStrengthMinChange($event: Event) {
+      this.setMinStrength(this.strengthSlider.value! - 1);
+   }
 
-   onStrengthChange($event: Event) {
-      let color = COLORS[0];
-      let strength = this.stenghSlider.value!;
+   setMinStrength(strengthMin: number) {
+      strengthMin = Math.max(0, Math.min(strengthMin, 4));
+      this.strengthSlider.setValue(strengthMin + 1);
+      this.strengthMin = strengthMin;
 
-      if (strength > 0) {
-         color = COLORS[strength - 1];
-      } else {
-         strength = 1;
-         this.stenghSlider.setValue(1);
+      this.updateAcceptable();
+   }
+
+   setStrength(strength: number) {
+      strength = Math.max(-1, Math.min(strength, 4));
+
+      if( strength >= 0 ) {
+         const color = COLORS[strength];
+         this.segmentOnColor = color;
       }
-
-      console.log('setting ', strength, color);
-      this.sliderRef.nativeElement.parentNode.style.setProperty(
-         '--mdc-slider-active-track-color',
-         color
-      );
-      this.backgroundColor = color;
       this.strength = strength;
    }
 
-   formatLabel(stength: number): string {
-      return NAMES[stength];
+   updateAcceptable() {
+      const acceptable = this.strength >= this.strengthMin;
+
+      if (acceptable !== this.acceptable || this.strength !== this.lastStrength) {
+         this.acceptable = acceptable;
+         this.lastStrength = this.strength;
+
+         this.acceptableChanged.emit({
+            acceptable: !!acceptable,
+            strength: this.strength
+         });
+      }
    }
 
-   get stength(): number {
-      return this.strength;
-   }
-
-   onFocusOut() {
-      this.rangeChanged.emit(this);
+   segmentColor(segment: number): string {
+      return this.strength >= segment ? this.segmentOnColor : this.segmentOffColor;
    }
 
 }

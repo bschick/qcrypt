@@ -19,9 +19,8 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { ApplicationConfig, importProvidersFrom } from '@angular/core';
+import { ApplicationConfig } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { provideZxvbnServiceForPSM } from 'angular-password-strength-meter/zxcvbn';
 import { provideHttpClient } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { routes } from './qcrypt.routes';
@@ -29,7 +28,6 @@ import { routes } from './qcrypt.routes';
 export const appConfig: ApplicationConfig = {
    providers: [
       provideRouter(routes),
-      provideZxvbnServiceForPSM(),
       provideHttpClient(),
       provideAnimations(),
    ],

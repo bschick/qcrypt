@@ -20,89 +20,54 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 @use "../../common.scss" as common;
-@use '@angular/material' as mat;
+@use "@angular/material" as mat;
 
 .meter {
-//  display: flex;
   align-items: center;
+  position: relative;
 }
 
-.table {
+.meter-container {
   width: 100%;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  column-gap: 4px;
+  background-color: var(--mat-sys-surface, white);
+
+}
+
+.meter-item {
+  height: 5px;
+  border-radius: 4px;
 }
 
 .slider {
-  width: 100%;
+  width: 102.75%;
+  padding: 0;
+  margin: 0;
+  position: absolute;
+  top: -21px;
+  left: -5px;
+  z-index: 99;
 
-  //--mat-sys-surface-variant
-  @include mat.slider-overrides((
+  @include mat.slider-overrides(
+    (
       active-track-color: var(--mat-sys-surface-variant),
       focus-handle-color: rgb(71, 71, 71),
       handle-color: rgb(71, 71, 71),
-      handle-height: 15px,
-      handle-width: 5px,
+      handle-height: 17px,
+      handle-width: 6px,
       handle-shape: 1px,
       ripple-color: unset,
-  ));
+    )
+  );
 }
 
-.segment {
-  height: 5px;
-}
-
-.seg1, .seg2{
-  background-color: var(--red-pwd-color);
-  height: 5px;
-//  width: 10px;
-  // &::before {
-  //   content: '\25BC';
-  //   width: 0;
-  //   height: 0;
-  //   position: absolute;
-  //   font-size:25px;
-  // }
-
-}
-
-.seg3{
-  background-color: var(--yellow-pwd-color);
-  height: 5px;
-//  width: 10px;
-}
-
-.seg4, .seg5{
-  background-color: var(--green-pwd-color);
-  height: 5px;
-//  width: 10px;
-}
-
-.readonly {
-  border: 1px solid transparent;
-  outline: none;
-  width: 100%;
-  height: 100%;
-  font-size: inherit;
-  font-family: inherit;
-  background-color: transparent;
-}
-
-.writeable {
-  border: 1px solid transparent;
-  width: 100%;
-  height: 100%;
-  font-size: inherit;
-  font-family: inherit;
-}
-
-.readonly:hover {
-  cursor: pointer;
-  border: 1px dashed lightgray;
-}
-
-.check {
-  cursor: pointer;
-  font-size: 17px;
+.feedback {
+  font-size: 13px;
+  line-height: 1.4em;
   position: relative;
-  top: 3px;
-  z-index: 999;
+  top: 10px;
+  height: 1.4em * 2; //overflow is ok
 }
