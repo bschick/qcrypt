@@ -45,13 +45,13 @@
     "@angular-devkit/build-angular": "^19.2.15",
     "@angular/cli": "^19.0.5",
     "@angular/compiler-cli": "^19.0.4",
-    "@playwright/test": "^1.54.2",
+    "@playwright/test": "^1.55.0",
     "@types/express": "^5.0.0",
     "@types/jasmine": "~5.1.0",
     "@types/libsodium-wrappers": "^0.7.13",
     "@types/luxon": "^3.4.2",
     "@types/node": "^24.0.0",
-    "devtools-protocol": "^0.0.1498597",
+    "devtools-protocol": "^0.0.1521046",
     "jasmine-core": "~5.8.0",
     "karma": "~6.4.0",
     "karma-chrome-launcher": "~3.2.0",
@@ -59,7 +59,7 @@
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "~2.1.0",
     "schematics-scss-migrate": "^2.3.17",
-    "tsx": "^4.7.1",
-    "typescript": "~5.8.0"
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.0"
   }
 }
