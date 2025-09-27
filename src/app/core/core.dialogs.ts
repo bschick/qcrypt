@@ -33,7 +33,7 @@ import {
    MatDialogRef,
    MatDialogModule,
 } from '@angular/material/dialog';
-import { CommonModule, NgIf } from '@angular/common';
+
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -74,10 +74,7 @@ const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
    templateUrl: './password.dialog.html',
    styleUrl: './core.dialogs.scss',
    encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
-   imports: [MatDialogModule, CommonModule, MatFormFieldModule, MatInputModule,
-      MatIconModule, StrengthMeterComponent, FormsModule, ReactiveFormsModule,
-      MatTooltipModule, MatButtonModule, BubbleDirective
-   ]
+   imports: [MatDialogModule, MatFormFieldModule, MatInputModule, MatIconModule, StrengthMeterComponent, FormsModule, ReactiveFormsModule, MatTooltipModule, MatButtonModule, BubbleDirective]
 })
 export class PasswordDialog implements AfterViewInit, OnDestroy {
 
@@ -184,7 +181,7 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    selector: 'cipher-info.dialog',
    templateUrl: './cipher-info.dialog.html',
    styleUrl: './core.dialogs.scss',
-   imports: [MatDialogModule, MatIconModule, CommonModule, NgIf, MatButtonModule]
+   imports: [MatDialogModule, MatIconModule, MatButtonModule]
 })
 export class CipherInfoDialog {
    public error;
@@ -221,8 +218,7 @@ export class CipherInfoDialog {
    selector: 'signin.dialog',
    templateUrl: './signin.dialog.html',
    styleUrl: './core.dialogs.scss',
-   imports: [MatDialogModule, CommonModule, MatProgressSpinnerModule,
-      MatIconModule, MatTooltipModule, MatButtonModule]
+   imports: [MatDialogModule, MatProgressSpinnerModule, MatIconModule, MatTooltipModule, MatButtonModule]
 })
 export class SigninDialog {
 

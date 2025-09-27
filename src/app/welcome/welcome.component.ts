@@ -29,7 +29,7 @@ import { AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink } from '@angular/router';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
-import { CommonModule } from '@angular/common';
+
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { HttpParams } from '@angular/common/http';
 
@@ -90,8 +90,7 @@ export class WelcomeComponent {
     selector: 'recovery-dialog',
     templateUrl: './recovery-dialog.html',
     styleUrl: './welcome.component.scss',
-    imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
-        MatButtonModule, RouterLink]
+    imports: [MatDialogModule, MatIconModule, MatTooltipModule, MatButtonModule, RouterLink]
 })
 export class RecoveryDialog {
    constructor(

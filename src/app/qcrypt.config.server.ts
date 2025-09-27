@@ -1,3 +1,4 @@
+import { provideServerRendering } from '@angular/ssr';
 /* MIT License
 
 Copyright (c) 2025 Brad Schick
@@ -20,8 +21,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { mergeApplicationConfig, ApplicationConfig } from '@angular/core';
-//import { mergeApplicationConfig, ApplicationConfig, CSP_NONCE } from '@angular/core';
-import { provideServerRendering } from '@angular/platform-server';
 import { appConfig } from './qcrypt.config';
 
 //const nonce = crypto.getRandomValues(new Uint8Array(16));

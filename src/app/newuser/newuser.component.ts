@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { AfterViewInit, Component, OnInit, Renderer2 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -39,10 +39,7 @@ import { ClipboardModule } from '@angular/cdk/clipboard';
     selector: 'app-newuser',
     templateUrl: './newuser.component.html',
     styleUrl: './newuser.component.scss',
-    imports: [MatIconModule, MatButtonModule, RouterLink, CommonModule,
-        MatProgressSpinnerModule, MatInputModule, MatFormFieldModule,
-        FormsModule, ClipboardModule, MatTooltipModule,
-    ]
+    imports: [MatIconModule, MatButtonModule, RouterLink, MatProgressSpinnerModule, MatInputModule, MatFormFieldModule, FormsModule, ClipboardModule, MatTooltipModule]
 })
 export class NewUserComponent implements OnInit, AfterViewInit {
 

@@ -5,18 +5,22 @@
         [style.visibility]="showProgress ? 'visible' : 'hidden'">
       </mat-progress-spinner>
       <h1>Create A New User</h1>
-      <p *ngIf="authenticated">
-        You are already signed in as <b>"{{currentUserName}}"</b> and can
-        <a href="javascript:void(null);" role="button" [routerLink]="'/'">
+      @if (authenticated) {
+        <p>
+          You are already signed in as <b>"{{currentUserName}}"</b> and can
+          <a href="javascript:void(null);" role="button" [routerLink]="'/'">
           encrypt and decrypt data as "{{currentUserName}}"</a>.
-        If you still want to create a new user identity, continue below.
-      </p>
-      <p *ngIf="currentUserName && !authenticated">
-        You have an existing user called <b>"{{currentUserName}}"</b> and can
-        <a href="javascript:void(null);" role="button" (click)="onClickSignin()">
+          If you still want to create a new user identity, continue below.
+        </p>
+      }
+      @if (currentUserName && !authenticated) {
+        <p>
+          You have an existing user called <b>"{{currentUserName}}"</b> and can
+          <a href="javascript:void(null);" role="button" (click)="onClickSignin()">
           sign in as "{{currentUserName}}"</a>.
-        If you want to create a new user identity instead, continue on.
-      </p>
+          If you want to create a new user identity instead, continue on.
+        </p>
+      }
       <p>
 
         To encrypt and decrypt data, Quick Crypt uses passwords you enter along
@@ -26,7 +30,7 @@
         device, a mobile phone, a browser based password manager, or a dedicated password
         manager. Dedicated password managers like Bitwarden and 1Password are
         the easiest to use, work consistently across devices, and support backup.">
-          Passkeys</span>
+        Passkeys</span>
         are a modern way to prove your identity and reduce
         identity theft without requiring personally identifiable information.
       </p>
@@ -46,16 +50,16 @@
       <div class="control-host">
         <mat-form-field class="user-name">
           <input matInput
-          id="userName"
-          #userName
-          placeholder="user name"
-          autofocus type="text"
-          autocomplete="off"
-          data-1p-ignore
-          data-bwignore
-          data-lpignore="true"
-          data-form-type="other"
-          [(ngModel)]="newUserName" />
+            id="userName"
+            #userName
+            placeholder="user name"
+            autofocus type="text"
+            autocomplete="off"
+            data-1p-ignore
+            data-bwignore
+            data-lpignore="true"
+            data-form-type="other"
+            [(ngModel)]="newUserName" />
         </mat-form-field>
         <button mat-raised-button (click)="onClickNewUser($event)">
           <span>Create new user and passkey</span>
@@ -64,6 +68,6 @@
       <div class="error-msg">
         <p>{{error}}</p>
       </div>
-      </div>
+    </div>
   </div>
 </div>

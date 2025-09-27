@@ -1,4 +1,4 @@
-import { CommonModule } from '@angular/common';
+
 import { Component, Inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -61,8 +61,7 @@ export class Protocol5Component {
     selector: 'flow-dialog',
     templateUrl: './flow-dialog.html',
     styleUrl: './protocol.component.scss',
-    imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
-        MatButtonModule]
+    imports: [MatDialogModule, MatIconModule, MatTooltipModule, MatButtonModule]
 })
 export class FlowDialog {
 
