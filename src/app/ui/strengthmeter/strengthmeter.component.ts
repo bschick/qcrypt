@@ -128,11 +128,11 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit {
          }
 
          parent.style.setProperty(
-            '--mdc-slider-active-track-color',
+            '--mat-slider-active-track-color',
             'transparent'
          );
          parent.style.setProperty(
-            '--mdc-slider-inactive-track-color',
+            '--mat-slider-inactive-track-color',
             'transparent'
          );
       }
