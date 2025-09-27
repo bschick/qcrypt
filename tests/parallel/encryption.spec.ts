@@ -9,7 +9,6 @@ import {
 } from '.././common';
 
 
-
 testWithAuth('encrypt decrypt', async ({ authFixture }) => {
   const { page, session, authId } = authFixture;
 
@@ -23,6 +22,10 @@ testWithAuth('encrypt decrypt', async ({ authFixture }) => {
   });
   await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+  await page.getByRole('button', { name: 'Advanced Options' }).click();
+  await page.getByRole('switch', { name: 'Hide Password' }).uncheck();
+  await page.locator('mat-select#pwdStrength').click();
+  await page.locator('mat-option').filter({ hasText: 'Terrible' }).click();
 
   const clearText = 'this is very secret, do not 🦜';
   const pwd = "you'll never know";
@@ -72,6 +75,8 @@ testWithAuth('loop encrypt decrypt', async ({ authFixture }) => {
   await page.getByRole('button', { name: 'Encryption Mode' }).click();
   await page.getByRole('button', { name: 'Advanced Options' }).click();
   await page.getByRole('switch', { name: 'Hide Password' }).uncheck();
+  await page.locator('mat-select#pwdStrength').click();
+  await page.locator('mat-option').filter({ hasText: 'Terrible' }).click();
 
   await page.locator('input[name="loops"]').fill(`${loops}`);
   await page.keyboard.press('Tab');
