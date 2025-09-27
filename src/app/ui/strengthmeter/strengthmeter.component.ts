@@ -26,7 +26,7 @@ import {
    AfterViewInit,
    OnInit
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSliderModule } from '@angular/material/slider';
@@ -44,9 +44,7 @@ export type AcceptableState = {
 
 @Component({
    selector: 'app-strengthmeter',
-   imports: [CommonModule, MatIconModule, MatButtonModule, MatSliderModule,
-      ReactiveFormsModule, MatTooltipModule
-   ],
+   imports: [MatIconModule, MatButtonModule, MatSliderModule, ReactiveFormsModule, MatTooltipModule],
    templateUrl: './strengthmeter.component.html',
    styleUrl: './strengthmeter.component.scss'
 })

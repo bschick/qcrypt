@@ -24,7 +24,7 @@ import {
    Component, EventEmitter, Inject, OnInit,
    Output, effect, Renderer2, OnDestroy
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTableModule } from '@angular/material/table';
@@ -45,10 +45,7 @@ import { MatCardModule } from '@angular/material/card';
    selector: 'app-credentials',
    templateUrl: './credentials.component.html',
    styleUrl: './credentials.component.scss',
-   imports: [MatDividerModule, MatTableModule,
-      MatIconModule, MatButtonModule, MatInputModule, EditableComponent,
-      MatTooltipModule, RouterLink, MatCardModule, CommonModule
-   ]
+   imports: [MatDividerModule, MatTableModule, MatIconModule, MatButtonModule, MatInputModule, EditableComponent, MatTooltipModule, RouterLink, MatCardModule]
 })
 export class CredentialsComponent implements OnInit, OnDestroy {
 
@@ -220,10 +217,7 @@ https://angular.dev/guide/forms/reactive-forms
    selector: 'confirm-dialog',
    templateUrl: 'confirm-dialog.html',
    styleUrl: './credentials.component.scss',
-   imports: [MatDialogModule, CommonModule, MatIconModule, MatTooltipModule,
-      MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
-      ReactiveFormsModule
-   ]
+   imports: [MatDialogModule, MatIconModule, MatTooltipModule, MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule, ReactiveFormsModule]
 })
 export class ConfirmDialog {
 

@@ -30,7 +30,7 @@ import {
 } from '@angular/core';
 import sodium from 'libsodium-wrappers';
 
-import { CommonModule } from '@angular/common';
+
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -51,10 +51,7 @@ import { OptionsComponent } from '../ui/options/options.component'
    selector: 'app-sender-links',
    templateUrl: './senderlinks.component.html',
    styleUrl: './senderlinks.component.scss',
-   imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink,
-      MatInputModule, MatFormFieldModule, CommonModule, OptionsComponent,
-      MatTableModule
-   ]
+   imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink, MatInputModule, MatFormFieldModule, OptionsComponent, MatTableModule]
 
 })
 export class SenderLinksComponent implements OnInit, OnDestroy, AfterViewInit {
