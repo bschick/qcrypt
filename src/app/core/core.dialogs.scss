@@ -68,46 +68,46 @@ SOFTWARE. */
   }
 
   .user-msg {
-    padding-top: 5px;
     font-size: 16px;
+    margin-block-end: 0.75em;
   }
 
   .field-group {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
+    flex-wrap: nowrap;
+    justify-content: space-between;
     align-items: flex-start;
-    column-gap: 10px; // If this is >= 15px wrapping get funny because material has a dailog max-width of 560px
+    column-gap: 10px;
   }
 
   .field {
-    min-width: 250px;
     margin-bottom: -0.5em;
-    flex: none;
+    flex: 1;
   }
 
   .stren-meter {
-    margin: auto;
-    width: 70%;
-    height: 40px;
+    width: 352px;
+    max-width: 100%;
   }
 
   .stren-meter .stren-msg {
     font-size: 14px;
+    margin-bottom: 7px;
   }
 
-  .stren-meter .stren-details {
-    line-height: 1em;
-  }
-
-  .stren-meter .stren-details .psm__suggestion {
-    margin-top: 0;
+  .spacer {
+    width: 100%;
+    height: 16px;
   }
 
   .accept-button {
     position: absolute;
     right: 0px;
     z-index: 999;
+  }
+
+  div.mat-mdc-dialog-actions {
+    padding-top: 0;
   }
 
   .cipher {

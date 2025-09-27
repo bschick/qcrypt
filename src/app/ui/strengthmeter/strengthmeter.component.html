@@ -1,27 +1,14 @@
 <div class="meter">
-  <mat-slider matTooltip="Required password strength" class="slider" min="0" max="5" step="1" value="1"
-  showTickMarks (change)="onStrengthChange($event)" [disableRipple]="true">
-    <input #sliderElem  matSliderThumb [formControl]="stenghSlider">
+    <div class="meter-container" matTooltip="Current password strength">
+        <div class="meter-item" [style.background-color]="segmentColor(0)"></div>
+        <div class="meter-item" [style.background-color]="segmentColor(1)"></div>
+        <div class="meter-item" [style.background-color]="segmentColor(2)"></div>
+        <div class="meter-item" [style.background-color]="segmentColor(3)"></div>
+        <div class="meter-item" [style.background-color]="segmentColor(4)"></div>
+    </div>
+  <mat-slider matTooltip="Minimum password strength, drag to change" class="slider" min="0" max="5" step="1" value="1"
+    (change)="onStrengthMinChange($event)" [disableRipple]="true">
+    <input #sliderElem matSliderThumb [formControl]="strengthSlider">
   </mat-slider>
-
-  <table class="table" matTooltip="Current password strength">
-    <thead class="header">
-      <tr>
-        <th class="tg-0lax"></th>
-        <th class="tg-0lax"></th>
-        <th class="tg-0lax"></th>
-        <th class="tg-0lax"></th>
-        <th class="tg-0lax"></th>
-      </tr>
-    </thead>
-    <tbody class="body">
-      <tr>
-        <td class="segment" [style.background-color]="backgroundColor" [hidden]="strength < 1"></td>
-        <td class="segment" [style.background-color]="backgroundColor" [hidden]="strength < 2"></td>
-        <td class="segment" [style.background-color]="backgroundColor" [hidden]="strength < 3"></td>
-        <td class="segment" [style.background-color]="backgroundColor" [hidden]="strength < 4"></td>
-        <td class="segment" [style.background-color]="backgroundColor" [hidden]="strength < 5"></td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="feedback" matTooltip="Minimum password strength, drag to change">{{warning}} {{suggestion}}</div>
 </div>

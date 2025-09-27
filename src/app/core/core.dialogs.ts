@@ -24,7 +24,6 @@ import {
    Renderer2,
    Inject,
    ViewEncapsulation,
-   OnInit,
    ViewChild,
    AfterViewInit,
    OnDestroy,
@@ -43,10 +42,8 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { Router } from '@angular/router';
-//import { PasswordStrengthMeterComponent } from 'angular-password-strength-meter';
-import { StrengthMeterComponent } from '../ui/strengthmeter/strengthmeter.component';
+import { AcceptableState, StrengthMeterComponent } from '../ui/strengthmeter/strengthmeter.component';
 import { AuthenticatorService } from '../services/authenticator.service';
-import { ZxcvbnOptionsService } from '../services/zxcvbn-options.service';
 import { BubbleDirective } from '../ui/bubble/bubble.directive';
 import * as cc from '../services/cipher.consts';
 import { bytesToBase64 } from '../services/utils';
@@ -70,6 +67,7 @@ export type PwdDialogData = {
    cipherMode: string;
 };
 
+const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
 
 @Component({
    selector: 'password.dialog',
@@ -81,14 +79,13 @@ export type PwdDialogData = {
       MatTooltipModule, MatButtonModule, BubbleDirective
    ]
 })
-export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
+export class PasswordDialog implements AfterViewInit, OnDestroy {
 
    public hidePwd = false;
    public passwd = '';
    public hint = '';
-   public strengthPhrase = 'Strength';
+   public strengthPhrase = 'Password is empty';
    public strengthAlert = false;
-   public strength = 0;
    public minStrength = 3;
    public loopCount = 0;
    public loops = 0;
@@ -96,10 +93,10 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    public userName = '';
    public cipherMode = '';
    public cipherShow = false;
-   private checkPwned = false;
+   public checkPwned = false;
    private welcomed = true;
-   private strenElem?: HTMLElement;
    private timerId = -1;
+   private acceptable: boolean;
    public maxHintLen = cc.HINT_MAX_LEN;
 
 
@@ -107,7 +104,6 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
 
    constructor(
       private r2: Renderer2,
-      private zxcvbnOptions: ZxcvbnOptionsService,
       public dialogRef: MatDialogRef<PasswordDialog>,
       @Inject(MAT_DIALOG_DATA) public data: PwdDialogData
    ) {
@@ -117,32 +113,17 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
       this.hidePwd = data.hidePwd;
       this.loopCount = data.loopCount;
       this.loops = data.loops;
-      this.onPasswordStrengthChange(0);
       this.checkPwned = data.checkPwned;
       this.welcomed = data.welcomed;
       this.userName = data.userName;
       this.cipherMode = data.cipherMode;
-   }
-
-   ngOnInit(): void {
-      // should we show warning during decryptiong? currently, yes
-      this.zxcvbnOptions.checkPwned(this.checkPwned);
-      this.strenElem = document.getElementsByClassName("stren-meter")[0] as HTMLElement;
+      this.acceptable = !data.encrypting;
    }
 
    ngAfterViewInit(): void {
       if (!this.welcomed) {
          this.bubbleTip.show();
       }
-
-      // setting enableFeedback on password strength meter does not add or remove already
-      // displayed elements, so forced to find it on the fly and hide/show
-      const resizeObserver = new ResizeObserver(
-         (entries: ResizeObserverEntry[]) => {
-            this.showHideSuggestion();
-         });
-
-      resizeObserver.observe(this.strenElem!);
    }
 
    ngOnDestroy(): void {
@@ -152,7 +133,7 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onAcceptClicked() {
-      if (this.passwd && (!this.encrypting || this.strength >= this.minStrength)) {
+      if (this.passwd && this.acceptable) {
          this.dialogRef.close([this.passwd, this.hint]);
       } else {
          this.strengthAlert = true;
@@ -160,9 +141,6 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   // onPasswordStrengthChange only trigger with stength number changes, but the
-   // length of the suggesitons can without strength change, so we need to check
-   // for every input change
    onPasswordChange() {
       // Don't want to leave an open pwd dialog if, there are characters entered
       // and not activity for a few minutes minutes, close the dialog
@@ -174,49 +152,31 @@ export class PasswordDialog implements OnInit, AfterViewInit, OnDestroy {
          () => this.dialogRef.close(),
          PWD_CLOSE_TIMEOUT
       );
-
-      // really ugly, but since the elements are added async this is the simplest
-      // solution. Could alterntively edit or monkey-patch password strength meter code
-      window.setTimeout(
-         () => this.showHideSuggestion(),
-         200
-      );
-
    }
 
-   onPasswordStrengthChange(strength: number | null) {
+   onAcceptableChanged(state: AcceptableState) {
       if (!this.encrypting) {
          return;
       }
 
-      if (strength == null) {
-         this.strength = 0;
-      } else {
-         this.strength = strength;
-      }
+      this.acceptable = state.acceptable;
 
-      if (!this.passwd) {
-         this.strengthPhrase = 'Password is empty';
-      } else if (this.strength < this.minStrength) {
-         this.strengthPhrase = 'Password is too weak';
-      } else {
-         this.strengthAlert = false;
-         this.strengthPhrase = 'Password is acceptable';
-      }
-   }
-
-   async showHideSuggestion() {
-      if (this.strenElem && this.strenElem.clientWidth < 357) {
-         const suggest = document.getElementsByClassName("psm__suggestion")[0] as HTMLElement;
-         if (suggest) {
-            suggest.style['visibility'] = 'hidden';
+      // Avoids RuntimeError: NG0100 (and seems really hacky)
+      setTimeout(() => {
+         if (!this.passwd) {
+            this.strengthPhrase = 'Password is empty';
+         } else if (!state.acceptable) {
+            this.strengthPhrase = 'Password is too weak';
+         } else {
+            this.strengthAlert = false;
+            this.strengthPhrase = 'Password is acceptable';
+            if (state.strength < 2) {
+               this.strengthPhrase += `... but ${NAMES[state.strength]}`;
+            } else {
+               this.strengthPhrase += `... and ${NAMES[state.strength]}`;
+            }
          }
-      } else {
-         const suggest = document.getElementsByClassName("psm__suggestion")[0] as HTMLElement;
-         if (suggest) {
-            suggest.style['visibility'] = 'visible';
-         }
-      }
+      }, 0);
    }
 }
 
