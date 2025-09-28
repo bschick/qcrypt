@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-## 5.2.1 (2025-09-14)
+## 5.2.2 (2025-09-27)
 
 Security:
   - replaced outdated angular-password-strength-meter with custom component
@@ -11,8 +11,8 @@ Features:
 Changes:
 
   - password entry dialog layout improvements
-  - removed password strength meter during decryption password entry
-  - package updates
+  - removed password strength meter on decryption password dialog
+  - updated to angular@20
 
 ## 5.2.1 (2025-09-14)
 
