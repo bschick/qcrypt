@@ -28,7 +28,7 @@
     "@angular/platform-server": "^20.3.2",
     "@angular/router": "^20.3.2",
     "@angular/ssr": "^20.3.3",
-    "@scure/bip39": "^1.6.0",
+    "@scure/bip39": "^2.0.0",
     "@simplewebauthn/browser": "^13.0.0",
     "@zxcvbn-ts/core": "^3.0.4",
     "@zxcvbn-ts/language-common": "^3.0.4",
