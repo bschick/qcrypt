@@ -307,7 +307,7 @@ export async function fillPwdAndAccept(
 
   await page.locator('input#password').fill(pwd);
   if (encDec === 'enc') {
-    await expect(page.getByText('Password is acceptable')).toBeVisible();
+    await expect(page.getByText('Password is allowed')).toBeVisible();
   }
 
   if(hint) {
