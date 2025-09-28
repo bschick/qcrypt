@@ -6,10 +6,10 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "serve": "ng serve --hmr false --host $(/sbin/ip -o -4 addr list enp0s1 | awk '{print $4}' | cut -d/ -f1) --watch --poll 1000 --ssl --ssl-cert localssl/localhost.crt --ssl-key localssl/localhost.key",
+    "serve": "ng serve --hmr false --host t1.quickcrypt.org --watch --poll 1000 --ssl --ssl-cert localssl/localhost.crt --ssl-key localssl/localhost.key",
     "build": "ng build qcrypt  --configuration production --subresource-integrity",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test --watch --poll 1000 ",
+    "test": "ng test --no-watch",
     "ete": "NODE_EXTRA_CA_CERTS=./localssl/ca.pem npx playwright test --project=local --workers=1 tests/sequential && npx playwright test --project=local tests/parallel",
     "ete:prod": "npx playwright test --project=prod --workers=1 tests/sequential && npx playwright test --project=prod tests/parallel",
     "serve:ssr:qcrypt": "node dist/qcrypt/server/server.mjs"

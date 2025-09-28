@@ -36,10 +36,10 @@ module.exports = function (config) {
       ]
     },
     reporters: ['progress', 'kjhtml'],
-    browsers: [],
+    browsers: ['ChromeHeadless'],
     restartOnFileChange: true,
-    listenAddress: '192.168.64.4',
-    hostname: '192.168.64.4',
+    listenAddress: '127.0.0.1',
+    hostname: 't1.quickcrypt.org',
     protocol: 'https:',
     httpsServerOptions: {
       key: fs.readFileSync('localssl/localhost.key', 'utf8'),
