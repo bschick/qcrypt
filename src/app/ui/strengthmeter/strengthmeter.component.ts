@@ -169,9 +169,12 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit {
          this.acceptable = acceptable;
          this.lastStrength = this.strength;
 
-         this.acceptableChanged.emit({
-            acceptable: !!acceptable,
-            strength: this.strength
+         // Avoids RuntimeError: NG0100 (and seems very hacky)
+         setTimeout(() => {
+            this.acceptableChanged.emit({
+               acceptable: !!acceptable,
+               strength: this.strength
+            });
          });
       }
    }

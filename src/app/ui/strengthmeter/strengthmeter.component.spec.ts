@@ -8,8 +8,7 @@ describe('StrengthMeterComponent', () => {
    beforeEach(async () => {
       await TestBed.configureTestingModule({
          imports: [StrengthMeterComponent]
-      })
-         .compileComponents();
+      }).compileComponents();
 
       fixture = TestBed.createComponent(StrengthMeterComponent);
       component = fixture.componentInstance;

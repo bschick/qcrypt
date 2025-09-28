@@ -158,22 +158,19 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
 
       this.acceptable = state.acceptable;
 
-      // Avoids RuntimeError: NG0100 (and seems really hacky)
-      setTimeout(() => {
-         if (!this.passwd) {
-            this.strengthPhrase = 'Password is empty';
-         } else if (!state.acceptable) {
-            this.strengthPhrase = 'Password is too weak';
+      if (!this.passwd) {
+         this.strengthPhrase = 'Password is empty';
+      } else if (!state.acceptable) {
+         this.strengthPhrase = 'Password is too weak';
+      } else {
+         this.strengthAlert = false;
+         this.strengthPhrase = 'Password is allowed';
+         if (state.strength < 2) {
+            this.strengthPhrase += `... but ${NAMES[state.strength]}`;
          } else {
-            this.strengthAlert = false;
-            this.strengthPhrase = 'Password is acceptable';
-            if (state.strength < 2) {
-               this.strengthPhrase += `... but ${NAMES[state.strength]}`;
-            } else {
-               this.strengthPhrase += `... and ${NAMES[state.strength]}`;
-            }
+            this.strengthPhrase += `... and ${NAMES[state.strength]}`;
          }
-      }, 0);
+      }
    }
 }
 
