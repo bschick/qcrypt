@@ -1,5 +1,8 @@
 @use "@angular/material" as mat;
 
+// This file is scoped, to style must be imported with @use
+// and directly referenced. Put global stuff in styles.scss
+
 .mtop0 {
   margin-top: 0px;
 }
@@ -52,12 +55,6 @@
   top: 6px;
   right: 6px;
   z-index: 999;
-}
-
-:root {
-  --red-pwd-color: darkred;
-  --yellow-pwd-color: darkgoldenrod;
-  --green-pwd-color: darkgreen;
 }
 
 
