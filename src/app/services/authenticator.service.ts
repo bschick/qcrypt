@@ -60,8 +60,8 @@ export type UserInfo = {
 };
 
 type FetchArgs = {
-   method: 'GET' | 'POST' | 'DELETE' | 'PUT';
-   resource: string;
+   method: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH';
+   resource?: string;
    userId?: string | null;
    resourceId?: string;
    params?: string;
@@ -233,17 +233,17 @@ export class AuthenticatorService {
       });
 
       // required for AWS OAC (access control to lambda).
-      if (method === 'PUT' || method === 'POST') {
+      if (method === 'PUT' || method === 'POST' || method === 'PATCH') {
          const bodyData = new TextEncoder().encode(bodyJSON ?? '');
          const hash = await crypto.subtle.digest("SHA-256", bodyData);
          headers.append('x-amz-content-sha256', bufferToHexString(hash));
       }
 
       let path = `${environment.apiVersion}`;
-      path += (userId ? `/user/${userId}` : '');
-      path += `/${resource}`;
-      path += (resourceId ? `/${resourceId}` : '');
-      path += (params ? `?${params}` : '');
+      path += userId ? `/users/${userId}` : '';
+      path += resource ? `/${resource}` : '';
+      path += resourceId ? `/${resourceId}` : '';
+      path += params ? `?${params}` : '';
 
       const url = new URL(path, baseUrl);
       try {
@@ -263,7 +263,7 @@ export class AuthenticatorService {
       if (!response.ok) {
          if (response.status == 401) {
             // currently 401 only comes back when auth failed, so logout
-            // make sure to pass false to endSession to avoid doFetch loop
+            // make sure to pass false to deleteSession to avoid doFetch loop
             this.logout(false);
             throw new Error('logged out');
          } else {
@@ -282,9 +282,9 @@ export class AuthenticatorService {
       }
       const [userId] = this.loadKnownUser();
       const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
-         method: 'POST',
+         method: 'GET',
          userId: userId,
-         resource: 'verifysess'
+         resource: 'session'
       });
 
       if (!serverLoginUserInfo || !serverLoginUserInfo.verified) {
@@ -311,8 +311,9 @@ export class AuthenticatorService {
          const verifyBody = await this._startAuth(this.userId);
          const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
             method: 'POST',
-            resource: 'verifyauth',
-            bodyJSON: verifyBody,
+            userId: verifyBody['response']['userHandle'],
+            resource: 'auth/verify',
+            bodyJSON: JSON.stringify(verifyBody),
             params: 'recovery=true'
          });
 
@@ -498,9 +499,9 @@ export class AuthenticatorService {
          // let this happen in the background. creates a race condition with next
          // login, but highly unlikley to be an issue since login presents passkey auth
          this._doFetch<string>({
-            method: 'POST',
+            method: 'DELETE',
             userId: userId,
-            resource: 'endsess'
+            resource: 'session'
          }).catch((err) => {
             // ignore
          });
@@ -547,9 +548,9 @@ export class AuthenticatorService {
       }
 
       const serverUserInfo = await this._doFetch<ServerUserInfo>({
-         method: 'PUT',
+         method: 'PATCH',
          userId: this.userId,
-         resource: 'description',
+         resource: 'passkeys',
          resourceId: credentialId,
          bodyJSON: JSON.stringify({description: description})
       });
@@ -573,9 +574,8 @@ export class AuthenticatorService {
       }
 
       const serverUserInfo = await this._doFetch<ServerUserInfo>({
-         method: 'PUT',
+         method: 'PATCH',
          userId: this.userId,
-         resource: 'username',
          bodyJSON: JSON.stringify({userName: userName})
       });
 
@@ -597,7 +597,7 @@ export class AuthenticatorService {
       const serverUserInfo = await this._doFetch<ServerUserInfo>({
          method: 'DELETE',
          userId: this.userId,
-         resource: 'authenticator',
+         resource: 'passkeys',
          resourceId: credentialId
       });
 
@@ -657,8 +657,7 @@ export class AuthenticatorService {
 
       const serverUserInfo = await this._doFetch<ServerUserInfo>({
          method: 'GET',
-         userId: this.userId,
-         resource: 'userinfo'
+         userId: this.userId
       });
 
       if (!serverUserInfo) {
@@ -688,8 +687,9 @@ export class AuthenticatorService {
       const verifyBody = await this._startAuth(userId);
       const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
          method: 'POST',
-         resource: 'verifyauth',
-         bodyJSON: verifyBody,
+         userId: verifyBody['response']['userHandle'],
+         resource: 'auth/verify',
+         bodyJSON: JSON.stringify(verifyBody),
          params: 'usercred=true'
       });
 
@@ -702,13 +702,13 @@ export class AuthenticatorService {
 
    private async _startAuth(
       userId: string | null
-   ): Promise<string> {
+   ): Promise<Record<string, any>> {
 
       // Start the process without userId just doesn't limit authenticator creds
       // so the user can look for an existing credential
       const optionsJson = await this._doFetch<PublicKeyCredentialRequestOptionsJSON>({
          method: 'GET',
-         resource: 'authoptions',
+         resource: 'auth/options',
          params: userId ? `userid=${userId}` : ''
       });
 
@@ -719,7 +719,7 @@ export class AuthenticatorService {
             useBrowserAutofill: false
          });
       } catch (err) {
-         console.error(err);
+         console.error('startAuthentication', err);
          throw err;
       }
 
@@ -733,10 +733,10 @@ export class AuthenticatorService {
       // a user id when created. The server validates that it created the challenge
       // and the challenge's age. createRecovery controls creation of reocvery words
       // on old account until when it is expicit
-      return JSON.stringify({
+      return {
          ...startAuth,
          challenge: optionsJson.challenge
-      });
+      };
    }
 
    getRecoveryValues(recoveryWords: string): [string, string] {
@@ -771,12 +771,12 @@ export class AuthenticatorService {
       const [recoveryId, userId] = this.getRecoveryValues(recoveryWords);
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
          method: 'POST',
+         userId: userId,
          resource: 'recover2',
-         resourceId: recoveryId,
-         params: `userid=${userId}`
+         resourceId: recoveryId
       });
 
-      const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, false);
+      const serverLoginUserInfo = await this._passkeyVerify(optionsJson, true, false);
       return this._loginUser(serverLoginUserInfo);
    }
 
@@ -788,12 +788,12 @@ export class AuthenticatorService {
 
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
          method: 'POST',
+         userId: userId,
          resource: 'recover',
-         resourceId: userCred,
-         params: `userid=${userId}`
+         resourceId: userCred
       });
 
-      const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, false);
+      const serverLoginUserInfo = await this._passkeyVerify(optionsJson, true, false);
       return this._loginUser(serverLoginUserInfo);
    }
 
@@ -805,7 +805,7 @@ export class AuthenticatorService {
 
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
          method: 'POST',
-         resource: 'userreg',
+         resource: 'reg/options',
          bodyJSON: JSON.stringify({userName: userName})
       });
 
@@ -829,16 +829,45 @@ export class AuthenticatorService {
       }
 
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
-         method: 'POST',
-         resource: 'passkeyreg',
-         userId: this.userId
+         method: 'GET',
+         userId: this.userId,
+         resource: 'passkeys/options'
       });
 
-      const serverLoginUserInfo = await this._finishRegistration(optionsJson, false, false);
+      const serverLoginUserInfo = await this._passkeyVerify(optionsJson, false, false);
       return this._updateLoggedInUser(serverLoginUserInfo);
    }
 
+   private async _passkeyVerify(
+      optionsJson: PublicKeyCredentialCreationOptionsJSON,
+      includeUserCred: boolean,
+      includeRecovery: boolean
+   ): Promise<ServerLoginUserInfo> {
+
+      return this._doPasskeyVerify(
+         'passkeys',
+         optionsJson,
+         includeUserCred,
+         includeRecovery
+      );
+   }
+
    private async _finishRegistration(
+      optionsJson: PublicKeyCredentialCreationOptionsJSON,
+      includeUserCred: boolean,
+      includeRecovery: boolean
+   ): Promise<ServerLoginUserInfo> {
+
+      return this._doPasskeyVerify(
+         'reg',
+         optionsJson,
+         includeUserCred,
+         includeRecovery
+      );
+   }
+
+   private async _doPasskeyVerify(
+      base: string,
       optionsJson: PublicKeyCredentialCreationOptionsJSON,
       includeUserCred: boolean,
       includeRecovery: boolean
@@ -855,7 +884,7 @@ export class AuthenticatorService {
       try {
          startReg = await startRegistration({ optionsJSON: optionsJson });
       } catch (err) {
-         console.error(err);
+         console.error('startRegistration', err);
          throw err;
       }
 
@@ -879,7 +908,8 @@ export class AuthenticatorService {
 
       const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
          method: 'POST',
-         resource: 'verifyreg',
+         userId: actualB64UserId,
+         resource: base + '/verify',
          bodyJSON: JSON.stringify(expanded),
          params: params
       });
@@ -890,5 +920,4 @@ export class AuthenticatorService {
 
       return serverLoginUserInfo;
    }
-
 }
