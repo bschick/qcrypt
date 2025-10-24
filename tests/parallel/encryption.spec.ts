@@ -10,14 +10,14 @@ import {
 
 
 testWithAuth('encrypt decrypt', async ({ authFixture }) => {
-  const { page, session, authId } = authFixture;
+  const { page, session, authId1, authId2 } = authFixture;
 
   await page.goto('/');
 
   const testHost = new URL(page.url()).hostname as hosts;
-  await addCredential(session, authId, credentials[testHost]['keeper1']['id']);
+  await addCredential(session, authId1, credentials[testHost]['keeper1']['id']);
 
-  await passkeyAuth(session, authId, async () => {
+  await passkeyAuth(session, authId1, async () => {
     await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
   });
   await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
@@ -58,17 +58,17 @@ testWithAuth('encrypt decrypt', async ({ authFixture }) => {
 
 
 testWithAuth('loop encrypt decrypt', async ({ authFixture }) => {
-  const { page, session, authId } = authFixture;
+  const { page, session, authId1, authId2 } = authFixture;
 
   await page.goto('/');
 
   const testHost = new URL(page.url()).hostname as hosts;
-  await addCredential(session, authId, credentials[testHost]['keeper2']['id']);
+  await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
 
   const loops = 3
   const clearText = 'this is another 🚧';
 
-  await passkeyAuth(session, authId, async () => {
+  await passkeyAuth(session, authId1, async () => {
     await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
   });
   await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
