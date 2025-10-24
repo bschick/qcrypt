@@ -144,7 +144,11 @@ export class CredentialsComponent implements OnInit, OnDestroy {
          await this.authSvc.addPasskey();
       } catch (err) {
          console.error(err);
-         this.error = 'Passkey not created, try again';
+         if (err instanceof Error && err.name === 'InvalidStateError') {
+            this.error = 'You passkey manager only allows one credential';
+         } else {
+            this.error = 'Passkey not created, try again';
+         }
       }
    }
 
