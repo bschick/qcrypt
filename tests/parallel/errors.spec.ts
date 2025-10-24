@@ -14,11 +14,11 @@ import {
 test.describe('errors', () => {
 
   testWithAuth('user too short', async ({ authFixture }) => {
-    const { page, session, authId } = authFixture;
+    const { page, session, authId1, authId2 } = authFixture;
 
     await page.goto('/');
 
-    await passkeyCreation(session, authId, async () => {
+    await passkeyCreation(session, authId1, async () => {
       await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
       await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible({timeout:10000});
       await page.locator('input#userName').fill('short');
@@ -30,11 +30,11 @@ test.describe('errors', () => {
   });
 
   testWithAuth('user too long', async ({ authFixture }) => {
-    const { page, session, authId } = authFixture;
+    const { page, session, authId1, authId2 } = authFixture;
 
     await page.goto('/');
 
-    await passkeyCreation(session, authId, async () => {
+    await passkeyCreation(session, authId1, async () => {
       await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
       await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible({timeout:10000});
       await page.locator('input#userName').fill('1234567890123456789012345678901234567890');
@@ -46,11 +46,11 @@ test.describe('errors', () => {
   });
 
   testWithAuth('no passkey cold', async ({ authFixture }) => {
-    const { page, session, authId } = authFixture;
+    const { page, session, authId1, authId2 } = authFixture;
 
     await page.goto('/');
 
-    await passkeyAuth(session, authId, async () => {
+    await passkeyAuth(session, authId1, async () => {
       await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
     });
     const parent = page.locator('p.error-msg');
@@ -58,14 +58,14 @@ test.describe('errors', () => {
   });
 
   testWithAuth('no passkey re-signin', async ({ authFixture }) => {
-    const { page, session, authId } = authFixture;
+    const { page, session, authId1, authId2 } = authFixture;
 
     await page.goto('/');
 
     const testHost = new URL(page.url()).hostname as hosts;
-    await addCredential(session, authId, credentials[testHost]['keeper1']['id']);
+    await addCredential(session, authId1, credentials[testHost]['keeper1']['id']);
 
-    await passkeyAuth(session, authId, async () => {
+    await passkeyAuth(session, authId1, async () => {
       await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
     });
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
@@ -74,9 +74,9 @@ test.describe('errors', () => {
     await page.getByRole('button', { name: 'Passkey information' }).click();
     await page.getByRole('button', { name: /Sign out/ }).click();
 
-    await clearCredentials(session, authId);
+    await clearCredentials(session, authId1);
 
-    await passkeyAuth(session, authId, async () => {
+    await passkeyAuth(session, authId1, async () => {
       await page.getByRole('button', { name: /Sign in as Keeper/ }).click();
     });
 
@@ -85,15 +85,15 @@ test.describe('errors', () => {
 
 
   testWithAuth('enc dec errors', async ({ authFixture }) => {
-    const { page, session, authId } = authFixture;
+    const { page, session, authId1, authId2 } = authFixture;
     test.setTimeout(45000);
 
     await page.goto('/');
 
     const testHost = new URL(page.url()).hostname as hosts;
-    await addCredential(session, authId, credentials[testHost]['keeper2']['id']);
+    await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
 
-    await passkeyAuth(session, authId, async () => {
+    await passkeyAuth(session, authId1, async () => {
       await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
     });
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
@@ -108,15 +108,15 @@ test.describe('errors', () => {
   });
 
   testWithAuth('edit errors', async ({ authFixture }) => {
-    const { page, session, authId } = authFixture;
+    const { page, session, authId1, authId2 } = authFixture;
     test.setTimeout(45000);
 
     await page.goto('/');
 
     const testHost = new URL(page.url()).hostname as hosts;
-    await addCredential(session, authId, credentials[testHost]['keeper2']['id']);
+    await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
 
-    await passkeyAuth(session, authId, async () => {
+    await passkeyAuth(session, authId1, async () => {
       await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
     });
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
@@ -139,15 +139,15 @@ test.describe('errors', () => {
 
 
   testWithAuth('no recovery access', async ({ authFixture }) => {
-    const { page, session, authId } = authFixture;
+    const { page, session, authId1, authId2 } = authFixture;
     test.setTimeout(45000);
 
     await page.goto('/');
 
     const testHost = new URL(page.url()).hostname as hosts;
-    await addCredential(session, authId, credentials[testHost]['keeper2']['id']);
+    await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
 
-    await passkeyAuth(session, authId, async () => {
+    await passkeyAuth(session, authId1, async () => {
       await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
     });
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
@@ -155,9 +155,9 @@ test.describe('errors', () => {
 
     await page.getByRole('button', { name: 'Passkey information' }).click();
 
-    await clearCredentials(session, authId);
+    await clearCredentials(session, authId1);
 
-    await passkeyAuth(session, authId, async () => {
+    await passkeyAuth(session, authId1, async () => {
       await page.getByRole('button', { name: /Show recovery link/ }).click();
     });
 
@@ -169,23 +169,23 @@ test.describe('errors', () => {
   });
 
   testWithAuth('no usercred access', async ({ authFixture }) => {
-    const { page, session, authId } = authFixture;
+    const { page, session, authId1, authId2 } = authFixture;
     test.setTimeout(45000);
 
     await page.goto('/');
 
     const testHost = new URL(page.url()).hostname as hosts;
-    await addCredential(session, authId, credentials[testHost]['keeper2']['id']);
+    await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
 
-    await passkeyAuth(session, authId, async () => {
+    await passkeyAuth(session, authId1, async () => {
       await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
     });
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
 
-    await clearCredentials(session, authId);
+    await clearCredentials(session, authId1);
 
-    await passkeyAuth(session, authId, async () => {
+    await passkeyAuth(session, authId1, async () => {
       await page.goto('/cmdline');
     });
 

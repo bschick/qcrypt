@@ -9,16 +9,16 @@ import {
 
 
 testWithAuth('edit fields', async ({ authFixture }) => {
-  const { page, session, authId } = authFixture;
+  const { page, session, authId1, authId2 } = authFixture;
   test.setTimeout(60000);
   const rand = Math.floor(Math.random() * (99 - 0 + 1)) + 0;
 
   await page.goto('/');
 
   const testHost = new URL(page.url()).hostname as hosts;
-  await addCredential(session, authId, credentials[testHost]['keeper2']['id']);
+  await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
 
-  await passkeyAuth(session, authId, async () => {
+  await passkeyAuth(session, authId1, async () => {
     await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
   });
   await page.waitForURL('/', { waitUntil: 'domcontentloaded' });

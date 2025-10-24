@@ -90,18 +90,21 @@ export const credentials= {
 export type AuthFixture = {
   page: Page;
   session: CDPSession;
-  authId: string;
+  authId1: string;
+  authId2: string;
 };
 
 export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
   authFixture: async ({ page }, use, testInfo) => {
     const session = await page.context().newCDPSession(page);
-    const authId = await setupAuthenticator(session, page);
+    const authId1 = await setupAuthenticator(session, page, 'internal');
+    const authId2 = await setupAuthenticator(session, page, 'usb');
 
     await use({
       page,
       session,
-      authId
+      authId1,
+      authId2
     });
 
     // a bit ugly, but it works.
@@ -117,28 +120,37 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
         //@ts-ignore
         const apiUrl = testInfo.project.use.apiURL;
 
-        const authsResponse = await page.request.get(
-          `${apiUrl}/user/${userId}/authenticators`
+        const usersResponse = await page.request.get(
+          `${apiUrl}/users/${userId}`
         );
 
-        const auths = await authsResponse.json();
-        for (const [count, auth] of auths.entries()) {
-          console.log(`cleanup on isle ${count+1}`);
-          const authsResponse = await page.request.delete(
-            //@ts-ignore
-            `${apiUrl}/user/${userId}/authenticator/${auth.credentialId}`
-          );
-          console.log(authsResponse.ok() ? 'done' : await authsResponse.text());
+        if (usersResponse.ok()) {
+          const user = await usersResponse.json();
+          const auths = user.authenticators;
+
+          for (const [count, auth] of auths.entries()) {
+            console.log(`cleanup on isle ${count+1}`);
+            const authsResponse = await page.request.delete(
+              //@ts-ignore
+              `${apiUrl}/users/${userId}/passkeys/${auth.credentialId}`
+            );
+            console.log(authsResponse.ok() ? 'done' : await authsResponse.text());
+          }
         }
       }
     }
 
-    await removeAuthenticator(session, authId);
+    await removeAuthenticator(session, authId1);
+    await removeAuthenticator(session, authId2);
     await session.detach();
   }
 });
 
-export async function setupAuthenticator(session: CDPSession, page: Page): Promise<string> {
+export async function setupAuthenticator(
+  session: CDPSession, page:
+  Page,
+  transport: Protocol.WebAuthn.AuthenticatorTransport
+): Promise<string> {
   // Enable WebAuthn environment in this session
   await session.send('WebAuthn.enable');
 
@@ -146,7 +158,7 @@ export async function setupAuthenticator(session: CDPSession, page: Page): Promi
   const result = await session.send('WebAuthn.addVirtualAuthenticator', {
     options: {
       protocol: 'ctap2',
-      transport: 'internal',
+      transport: transport,
       hasResidentKey: true,
       hasUserVerification: true,
       isUserVerified: true,
@@ -194,7 +206,7 @@ export async function deleteFirstPasskey(page: Page): Promise<void> {
 
   const [deleteResponse] = await Promise.all([
     page.waitForResponse(response =>
-      response.url().includes('/authenticator') &&
+      response.url().includes('/passkeys') &&
       response.request().method() === 'DELETE'
     ),
     page.getByRole('button', { name: 'Yes' }).click()

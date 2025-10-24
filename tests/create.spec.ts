@@ -6,12 +6,12 @@ import {
 
 
 testWithAuth('account creation', async ({ authFixture }) => {
-  const { page, session, authId } = authFixture;
+  const { page, session, authId1, authId2 } = authFixture;
   test.setTimeout(60000);
 
   await page.goto('/');
 
-  const credential = await passkeyCreation(session, authId, async () => {
+  const credential = await passkeyCreation(session, authId1, async () => {
     await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
     await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible();
     await page.locator('input#userName').fill('');
