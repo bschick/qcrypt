@@ -39,7 +39,8 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         baseURL: 'https://t1.quickcrypt.org:4200',
-        apiURL: 'https://test.quickcrypt.org/v1' // should lookup from project environment
+        apiURL: 'https://test.quickcrypt.org/v1', // should lookup from project environment
+        ignoreHTTPSErrors: true
       }
     },
 
@@ -48,7 +49,8 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         baseURL: 'https://quickcrypt.org',
-        apiURL: 'https://quickcrypt.org/v1' // should lookup from project environment
+        apiURL: 'https://quickcrypt.org/v1', // should lookup from project environment
+        ignoreHTTPSErrors: true
       },
     },
 
@@ -56,7 +58,8 @@ export default defineConfig({
       name: 'unit chrome',
       use: {
         ...devices['Desktop Chrome'],
-        baseURL: 'https://t1.quickcrypt.org:9876'
+        baseURL: 'https://t1.quickcrypt.org:9876',
+        ignoreHTTPSErrors: true
       }
     },
 
