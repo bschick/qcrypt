@@ -52,6 +52,9 @@ SOFTWARE.
   </mat-menu>
 
   <span class="toolbar-spacer"></span>
+  <button mat-icon-button (click)="toggleTheme()" aria-label="Toggle dark mode">
+    <mat-icon>brightness_4</mat-icon>
+  </button>
   <button
     [style.visibility]="showPKButton ? 'visible' : 'hidden'"
     (click)="toggleNav(sideNav)"

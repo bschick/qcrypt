@@ -17,6 +17,20 @@ html {
   );
 }
 
+.dark-mode {
+  @include mat.theme(
+    (
+      color: (
+        theme-type: dark,
+        primary: mat.$azure-palette,
+        tertiary: mat.$blue-palette,
+      ),
+      typography: Roboto,
+      density: 0,
+    )
+  );
+}
+
 body {
   margin: 0;
   padding: 0;

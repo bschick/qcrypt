@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, Renderer2 } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -46,10 +46,12 @@ export class QCryptComponent implements OnInit, OnDestroy {
    public bgColorDefault = '';
    public bgColorFocus = 'color-mix(in srgb,var(--mat-sys-primary) 10%,transparent)';
    public showPKButton = false;
+   private darkMode = false;
 
    constructor(
       public router: Router,
-      public authSvc: AuthenticatorService
+      public authSvc: AuthenticatorService,
+      private renderer: Renderer2
    ) {
    }
 
@@ -59,6 +61,11 @@ export class QCryptComponent implements OnInit, OnDestroy {
          [AuthEvent.Logout, AuthEvent.Login],
          this.onAuthEvent.bind(this)
       );
+      const storedTheme = localStorage.getItem('theme');
+      if (storedTheme === 'dark') {
+         this.darkMode = true;
+         this.renderer.addClass(document.body, 'dark-mode');
+      }
    }
 
    onAuthEvent(data: AuthEventData) {
@@ -76,6 +83,17 @@ export class QCryptComponent implements OnInit, OnDestroy {
          nav.toggle();
       } else {
          nav.close();
+      }
+   }
+
+   toggleTheme() {
+      this.darkMode = !this.darkMode;
+      if (this.darkMode) {
+         this.renderer.addClass(document.body, 'dark-mode');
+         localStorage.setItem('theme', 'dark');
+      } else {
+         this.renderer.removeClass(document.body, 'dark-mode');
+         localStorage.setItem('theme', 'light');
       }
    }
 
