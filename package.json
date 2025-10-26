@@ -5,8 +5,7 @@
   "copyright": "© 2024–2025 Quick Crypt Contributors",
   "scripts": {
     "ng": "ng",
-    "setup": "./localssl/localssl.sh",
-    "serve": "ng serve --hmr false --host localhost --watch --poll 1000 --ssl --ssl-cert localssl/localhost.crt --ssl-key localssl/localhost.key",
+    "serve": "ng serve --hmr false --host 0.0.0.0 --watch --poll 1000 --ssl --ssl-cert localssl/localhost.crt --ssl-key localssl/localhost.key",
     "build": "ng build qcrypt  --configuration production --subresource-integrity",
     "karma": "ng test --watch --poll 1000 ",
     "test": "NODE_EXTRA_CA_CERTS=./localssl/qcrypt.pem npx playwright test --project=\"unit chrome\" tests/unit.spec.ts",
