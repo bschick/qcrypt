@@ -64,7 +64,8 @@ export default defineConfig({
       name: 'unit safari',
       use: {
         ...devices['Desktop Safari'],
-        baseURL: 'https://t1.quickcrypt.org:9876'
+        baseURL: 'https://t1.quickcrypt.org:9876',
+        ignoreHTTPSErrors: true
       }
     },
 
@@ -72,7 +73,8 @@ export default defineConfig({
       name: 'unit firefox',
       use: {
         ...devices['Desktop Firefox'],
-        baseURL: 'https://t1.quickcrypt.org:9876'
+        baseURL: 'https://t1.quickcrypt.org:9876',
+        ignoreHTTPSErrors: true
       }
     },
 
