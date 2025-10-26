@@ -54,7 +54,7 @@ jobs:
       run: |
         # Use a loop with `curl` to wait for the service to respond
         for i in {1..10}; do
-          curl --fail http://t1.quickcrypt.org:9876 && echo "Server is up!" && break || echo "Waiting for server...";
+          curl --fail https://t1.quickcrypt.org:9876 && echo "Server is up!" && break || echo "Waiting for server...";
           sleep 5;
         done
     - name: Run Playwright unit tests
@@ -64,4 +64,10 @@ jobs:
       with:
         name: playwright-report
         path: playwright-report/
+        retention-days: 30
+    - uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      with:
+        name: karma-log
+        path: karma.log
         retention-days: 30
