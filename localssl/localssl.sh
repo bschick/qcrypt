@@ -2,8 +2,11 @@
 
 #https://betterprogramming.pub/how-to-create-trusted-ssl-certificates-for-your-local-development-13fd5aad29c6
 
+sudo apt install -y openssl libnss3-tools
+
 HOSTNAME="t1.quickcrypt.org"
 HOSTS_FILE="/etc/hosts"
+
 
 if grep "^127\.0\.0\.1" "$HOSTS_FILE" | grep -qw "$HOSTNAME"; then
     echo "-> '$HOSTNAME' already exists on 127.0.0.1 line. Skipping."
