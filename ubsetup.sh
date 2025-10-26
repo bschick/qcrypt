@@ -1,6 +1,6 @@
 #!/bin/bash
 
-curl apt install -y curl tmux libnss3-tools
+sudo apt install -y curl tmux libnss3-tools
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs=22.20.0-1nodesource1
 sudo apt-mark hold nodejs
@@ -12,7 +12,7 @@ npm install
 cd localssl
 ./localssl.sh
 
-cp qcrypt.crt /usr/local/share/ca-certificates/.
+sudo cp qcrypt.crt /usr/local/share/ca-certificates/.
 sudo update-ca-certificates
 
 mkdir -p "$HOME/.pki/nssdb"
