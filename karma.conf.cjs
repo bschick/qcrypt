@@ -12,7 +12,7 @@ module.exports = function (config) {
       require('karma-chrome-launcher'),
       require('karma-jasmine-html-reporter'),
       require('karma-coverage'),
-      
+
     ],
     client: {
       jasmine: {
@@ -38,8 +38,8 @@ module.exports = function (config) {
     reporters: ['progress', 'kjhtml'],
     browsers: [],
     restartOnFileChange: true,
-    listenAddress: 'localhost',
-    hostname: 'localhost',
+    listenAddress: '0.0.0.0',
+    hostname: 't1.quickcrypt.org',
     protocol: 'https:',
     httpsServerOptions: {
       key: fs.readFileSync('localssl/localhost.key', 'utf8'),
