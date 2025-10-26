@@ -15,7 +15,7 @@ sudo cp qcrypt.crt /usr/local/share/ca-certificates/.
 sudo update-ca-certificates
 
 mkdir -p "$HOME/.pki/nssdb"
-certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "My Custom CA" -i ./localssl/qcrypt.crt
+certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "My Custom CA" -i qcrypt.crt
 
 cd ..
 
