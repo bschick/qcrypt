@@ -1,12 +1,11 @@
-name: Push and PR Tests
+name: Release Tagged Tests
 permissions:
   contents: read
   pull-requests: write
 on:
   push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+    tags:
+      - 'v*'
 jobs:
 
   unittest:
@@ -34,8 +33,8 @@ jobs:
           curl --insecure --fail https://t1.quickcrypt.org:9876 && echo "Server is up!" && break || echo "Waiting for server...";
           sleep 5;
         done
-    - name: Run Playwright chrome unit tests
-      run: npm run test
+    - name: Run Playwright chrome & ff unit tests
+      run: npm run test:all
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
@@ -61,30 +60,11 @@ jobs:
       run: npm ci
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
-    - name: Qcrypt specific setup
-      run: |
-        cd localssl/
-        ./localssl.sh
-    - name: Start server
-      run: npm run serve > serve.log 2>&1 &
-    - name: Wait for the service to be ready
-      run: |
-        # Use a loop with `curl` to wait for the service to respond
-        for i in {1..10}; do
-          curl --insecure --fail https://t1.quickcrypt.org:4200 && echo "Server is up!" && break || echo "Waiting for server...";
-          sleep 5;
-        done
-    - name: Run Playwright e2e tests
-      run: npm run test:e2e
+    - name: Run Playwright e2e prod tests
+      run: npm run test:e2e:prod
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
         name: playwright-report
         path: playwright-report/
-        retention-days: 30
-    - uses: actions/upload-artifact@v4
-      if: ${{ !cancelled() }}
-      with:
-        name: serve-log
-        path: serve.log
         retention-days: 30
