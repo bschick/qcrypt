@@ -6,7 +6,7 @@ This document provides instructions for AI agents working on the `qcrypt` client
 
 `qcrypt` is a single-page browser application for client-side text encryption and decryption. It is designed to be easy to use, trustworthy, and secure, leveraging the Web Crypto API (SubtleCrypto) and libsodium for all cryptographic operations. The primary use case is to encrypt text for storage on insecure media.
 
-This `qcrypt` client can built, served, and tested locally. It depends on a back-end API server called [qcrypt-server](https://github.com/bschick/qcrypt-server). Currently the API server cannot be deployed locally and must run in AWS. Separate test and production `qcrypt-server` instances are deployed in AWS. The vast majority of dev/test work should be against the test server `https://test.quickcrypt.org`. This is configured automatically.
+This `qcrypt` client can built, served, and tested locally. It depends on a backend API server called [qcrypt-server](https://github.com/bschick/qcrypt-server). Currently the API server cannot be deployed locally and must run in AWS. Separate test and production `qcrypt-server` instances are deployed in AWS. The vast majority of dev/test work should be against the test server `https://test.quickcrypt.org`. This is configured automatically.
 
 
 - **Source Repository:** Project source code, issues tracking, and releases are at [qcrypt github](https://github.com/bschick/qcrypt)
@@ -43,14 +43,16 @@ This `qcrypt` client can built, served, and tested locally. It depends on a back
 ### a. One-time Setup of Dev/Test Environment
 
 - Create an Ubuntu 24.04 (or similar) VM
-- (Optional) Setup an LXC container to make version testing easier by logging into the Ubuntu VM as a user with sudo permission and run the following:
+- (Optional) Setup an LXC container to simplify version testing by logging into the Ubuntu VM as a user with sudo permission and run the following:
 ```bash
-sudo apt install lxc lxc-templates
-sudo lxc-create -t download -n qcrypt -- --dist ubuntu --release noble -a arm64 | arm64
-sudo lxc-start -n qcrypt -d
-sudo lxc-attach -n qcrypt
+sudo sudo snap install lxd
+sudo adduser $USER lxd
+newgrp lxd
+lxd init --auto
+lxc launch ubuntu:24.04 qcrypt
+lxc exec qcrypt -- /bin/bash
 ```
-- Log into either the LXC container or the Ubuntu VM as a user with sudo permission and run the following:
+- Log into either the LXC container (exec above) or the Ubuntu VM as a user with sudo permission and run the following:
 ```bash
 sudo apt update && sudo apt dist-upgrade -y
 sudo apt install -y git ca-certificates
@@ -72,7 +74,7 @@ npm run test
 ctrl-b : kill-session
 ```
 
-**End-to-End Tests with Test AWS hosted API back-end:**
+**End-to-End Tests with Test AWS hosted API backend:**
 ```bash
 tmux
 ctrl-b c
@@ -117,4 +119,4 @@ npm run test:e2e
 - **Immutability:** Follow best practices for immutability, especially when dealing with application state.
 - **Security:** Adhere to the security principles outlined in `src/assets/protocol5.pdf`, including the use of strong cryptographic primitives and secure coding practices.
 - **Github workflow:** All changes must be submitted as a github pull request from a cloned repository.
-- **AWS server resources:** The test API server at `https://test.quickcrypt.org` is intended only for those contributing to the Quick Crypt project. Unnecessary or excesive usage that drives up AWS costs will be blocked.
+- **AWS server resources:** The test API server at `https://test.quickcrypt.org` is intended only for those contributing to the Quick Crypt project. Unnecessary or excessive usage that drives up AWS costs will be blocked.
