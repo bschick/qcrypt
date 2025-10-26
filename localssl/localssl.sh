@@ -2,7 +2,15 @@
 
 #https://betterprogramming.pub/how-to-create-trusted-ssl-certificates-for-your-local-development-13fd5aad29c6
 
-LOCALIP=$(/sbin/ip -o -4 addr list enp0s1 | awk '{print $4}' | cut -d/ -f1)
+HOSTNAME="t1.quickcrypt.org"
+LOCALIP=$(ip route get 1.1.1.1 | awk '{print $7}')
+
+if [ -z "$LOCALIP" ]; then
+    echo "Error: Could not determine primary IP address. Is the network up?"
+    exit 1
+fi
+
+echo "Found primary IP: $LOCALIP"
 
 openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
  -x509 -nodes -days 365 -out ca.pem -keyout ca.key \
@@ -20,7 +28,7 @@ subjectAltName = @alt_names
 DNS.1 = localhost
 DNS.2 = 127.0.0.1
 DNS.3 = ::1
-DNS.4 = t1.quickcrypt.org
+DNS.4 = $HOSTNAME
 DNS.5 = $LOCALIP
 EOF
 
@@ -34,5 +42,28 @@ openssl x509 -req -sha512 -days 365 \
  -in localhost.csr \
  -out localhost.crt
 
+if [ $? -eq 0 ]; then
+    echo "Successfully created localhost.csr and lochost.crt"
+else
+    echo "Error: Failed to create ssl files"
+    exit 1
+fi
 
- # ng serve --host $LOCALIP --ssl --ssl-cert localhost.crt --ssl-key localhost.key
+
+if grep -qw "$HOSTNAME" /etc/hosts; then
+    echo "Entry for '$HOSTNAME' already exists in /etc/hosts. No changes made."
+else
+    LINE_TO_ADD="$LOCALIP $HOSTNAME"
+    echo "Adding '$LINE_TO_ADD' to /etc/hosts..."
+
+    # We must use 'tee' with 'sudo' to append to a root-owned file.
+    # Redirecting tee's stdout to /dev/null keeps the script's output clean.
+    echo "$LINE_TO_ADD" | sudo tee -a /etc/hosts > /dev/null
+
+    if [ $? -eq 0 ]; then
+        echo "Successfully added entry."
+    else
+        echo "Error: Failed to write to /etc/hosts. Do you have sudo permissions?"
+        exit 2
+    fi
+fi
