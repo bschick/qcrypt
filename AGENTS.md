@@ -42,7 +42,7 @@ This `qcrypt` client can built, served, and tested locally. It depends on a back
 
 ### a. One-time Setup of Dev/Test Environment
 
-- Create an Ubuntu 24.04 (or similar) VM
+- Create an up-to-date Ubuntu 24.04 (or similar) VM
 - (Optional) Setup an LXC container to simplify version testing by logging into the Ubuntu VM as a user with sudo permission and run the following:
 ```bash
 sudo sudo snap install lxd
