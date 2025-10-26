@@ -21,6 +21,6 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "My Custom CA" -i qcrypt.crt
 cd ..
 
 sudo npx playwright install-deps
-sudo npx playwright install
+npx playwright install
 
 echo "Done."
