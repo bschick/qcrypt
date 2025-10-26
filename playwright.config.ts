@@ -52,6 +52,30 @@ export default defineConfig({
       },
     },
 
+    {
+      name: 'unit chrome',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'https://t1.quickcrypt.org:9876'
+      }
+    },
+
+    {
+      name: 'unit safari',
+      use: {
+        ...devices['Desktop Safari'],
+        baseURL: 'https://t1.quickcrypt.org:9876'
+      }
+    },
+
+    {
+      name: 'unit firefox',
+      use: {
+        ...devices['Desktop Firefox'],
+        baseURL: 'https://t1.quickcrypt.org:9876'
+      }
+    },
+
     // {
     //   name: 'firefox',
     //   use: { ...devices['Desktop Firefox'] },

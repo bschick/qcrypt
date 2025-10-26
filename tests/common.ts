@@ -1,9 +1,5 @@
 import { test, expect, Page, CDPSession } from '@playwright/test';
 import { Protocol } from 'devtools-protocol';
-import playwright from 'playwright';
-import { AuthenticationResponseJSON, startAuthentication } from '@simplewebauthn/browser';
-import { base64ToBytes } from '../src/app/services/utils';
-import { timeout } from 'rxjs';
 
 export type Credential = Protocol.WebAuthn.Credential;
 
