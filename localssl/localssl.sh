@@ -3,20 +3,12 @@
 #https://betterprogramming.pub/how-to-create-trusted-ssl-certificates-for-your-local-development-13fd5aad29c6
 
 HOSTNAME="t1.quickcrypt.org"
-LOCALIP=$(ip route get 1.1.1.1 | awk '{print $7}')
-
-if [ -z "$LOCALIP" ]; then
-    echo "Error: Could not determine primary IP address. Is the network up?"
-    exit 1
-fi
-
-echo "Found primary IP: $LOCALIP"
 
 openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
- -x509 -nodes -days 365 -out ca.pem -keyout ca.key \
+ -x509 -nodes -days 365 -out qcrypt.pem -keyout qcrypt.key \
  -subj "/C=US/ST=Washington/L=BI/O=Reminder Dog/CN=Brad Schick/emailAddress=schickb@gmail.com"
 
-openssl x509 -outform pem -in ca.pem -out ca.crt
+openssl x509 -outform pem -in qcrypt.pem -out qcrypt.crt
 
 cat > v3.ext <<-EOF
 authorityKeyIdentifier=keyid,issuer
@@ -29,7 +21,6 @@ DNS.1 = localhost
 DNS.2 = 127.0.0.1
 DNS.3 = ::1
 DNS.4 = $HOSTNAME
-DNS.5 = $LOCALIP
 EOF
 
 openssl req -new -nodes -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
@@ -38,7 +29,7 @@ openssl req -new -nodes -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
 
 openssl x509 -req -sha512 -days 365 \
  -extfile v3.ext \
- -CA ca.crt -CAkey ca.key -CAcreateserial \
+ -CA qcrypt.crt -CAkey qcrypt.key -CAcreateserial \
  -in localhost.csr \
  -out localhost.crt
 
@@ -50,20 +41,28 @@ else
 fi
 
 
-if grep -qw "$HOSTNAME" /etc/hosts; then
-    echo "Entry for '$HOSTNAME' already exists in /etc/hosts. No changes made."
+HOSTS_FILE="/etc/hosts"
+
+if grep "^127\.0\.0\.1" "$HOSTS_FILE" | grep -qw "$HOSTNAME"; then
+    echo "-> '$HOSTNAME' already exists on 127.0.0.1 line. Skipping."
 else
-    LINE_TO_ADD="$LOCALIP $HOSTNAME"
-    echo "Adding '$LINE_TO_ADD' to /etc/hosts..."
-
-    # We must use 'tee' with 'sudo' to append to a root-owned file.
-    # Redirecting tee's stdout to /dev/null keeps the script's output clean.
-    echo "$LINE_TO_ADD" | sudo tee -a /etc/hosts > /dev/null
-
-    if [ $? -eq 0 ]; then
-        echo "Successfully added entry."
-    else
-        echo "Error: Failed to write to /etc/hosts. Do you have sudo permissions?"
-        exit 2
+    # If it doesn't, use 'sed' to append it to the end of that specific line
+    echo "-> Appending '$HOSTNAME' to 127.0.0.1 line..."
+    sudo sed -i -E "/^127\.0\.0\.1/ s/$/ $HOSTNAME/" "$HOSTS_FILE"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to update 127.0.0.1 line. Do you have sudo permissions?"
     fi
 fi
+
+if grep "^::1" "$HOSTS_FILE" | grep -qw "$HOSTNAME"; then
+    echo "-> '$HOSTNAME' already exists on ::1 line. Skipping."
+else
+    # If it doesn't, use 'sed' to append it to the end of that specific line
+    echo "-> Appending '$HOSTNAME' to ::1 line..."
+    sudo sed -i -E "/^::1/ s/$/ $HOSTNAME/" "$HOSTS_FILE"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to update ::1 line. (This is non-fatal if you don't use IPv6)."
+    fi
+fi
+
+echo "Done."

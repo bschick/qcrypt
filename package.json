@@ -6,12 +6,12 @@
   "scripts": {
     "ng": "ng",
     "setup": "./localssl/localssl.sh",
-    "serve": "ng serve --hmr false --host $(ip route get 1.1.1.1 | awk '{print $7}') --watch --poll 1000 --ssl --ssl-cert localssl/localhost.crt --ssl-key localssl/localhost.key",
+    "serve": "ng serve --hmr false --host localhost --watch --poll 1000 --ssl --ssl-cert localssl/localhost.crt --ssl-key localssl/localhost.key",
     "build": "ng build qcrypt  --configuration production --subresource-integrity",
     "karma": "ng test --watch --poll 1000 ",
-    "test": "NODE_EXTRA_CA_CERTS=./localssl/ca.pem npx playwright test --project=\"unit chrome\" tests/unit.spec.ts",
-    "test:all": "NODE_EXTRA_CA_CERTS=./localssl/ca.pem npx playwright test --project=\"unit chrome\" --project=\"unit firefox\" tests/unit.spec.ts",
-    "test:e2e": "NODE_EXTRA_CA_CERTS=./localssl/ca.pem npx playwright test --project=local --workers=1 tests/sequential && npx playwright test --project=local tests/parallel",
+    "test": "NODE_EXTRA_CA_CERTS=./localssl/qcrypt.pem npx playwright test --project=\"unit chrome\" tests/unit.spec.ts",
+    "test:all": "NODE_EXTRA_CA_CERTS=./localssl/qcrypt.pem npx playwright test --project=\"unit chrome\" --project=\"unit firefox\" tests/unit.spec.ts",
+    "test:e2e": "NODE_EXTRA_CA_CERTS=./localssl/qcrypt.pem npx playwright test --project=local --workers=1 tests/sequential && npx playwright test --project=local tests/parallel",
     "test:e2e:prod": "npx playwright test --project=prod --workers=1 tests/sequential && npx playwright test --project=prod tests/parallel",
     "serve:ssr:qcrypt": "node dist/qcrypt/server/server.mjs"
   },
