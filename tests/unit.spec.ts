@@ -1,13 +1,11 @@
 import { test, expect, Page } from '@playwright/test';
 
-test('Karam unit tests', async ({ page }) => {
+test('Karam crypto unit tests', async ({ page }) => {
   test.setTimeout(205000);
 
   await page.goto('/');
 
-  // Expect a title "to contain" a substring.
   await expect(page).toHaveTitle(/Karma/);
-
   const frame = page.frameLocator('iframe[src="context.html"]');
 
   const durationSpan = frame.locator('span.jasmine-duration');
