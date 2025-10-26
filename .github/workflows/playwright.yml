@@ -20,34 +20,10 @@ jobs:
       run: npm ci
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
-
-    - name: Update hosts file
+    - name: Update hostfile and certs
       run: |
-        HOSTNAME="t1.quickcrypt.org"
-        HOSTS_FILE="/etc/hosts"
-
-        if grep "^127\.0\.0\.1" "$HOSTS_FILE" | grep -qw "$HOSTNAME"; then
-            echo "-> '$HOSTNAME' already exists on 127.0.0.1 line. Skipping."
-        else
-            # If it doesn't, use 'sed' to append it to the end of that specific line
-            echo "-> Appending '$HOSTNAME' to 127.0.0.1 line..."
-            sudo sed -i -E "/^127\.0\.0\.1/ s/$/ $HOSTNAME/" "$HOSTS_FILE"
-            if [ $? -ne 0 ]; then
-                echo "Error: Failed to update 127.0.0.1 line. Do you have sudo permissions?"
-                exit 1 # Fail the step explicitly
-            fi
-        fi
-        if grep "^::1" "$HOSTS_FILE" | grep -qw "$HOSTNAME"; then
-            echo "-> '$HOSTNAME' already exists on ::1 line. Skipping."
-        else
-            # If it doesn't, use 'sed' to append it to the end of that specific line
-            echo "-> Appending '$HOSTNAME' to ::1 line..."
-            sudo sed -i -E "/^::1/ s/$/ $HOSTNAME/" "$HOSTS_FILE"
-            if [ $? -ne 0 ]; then
-                echo "Error: Failed to update ::1 line. (This is non-fatal if you don't use IPv6)."
-            fi
-        fi
-
+        cd localssl
+        ./localssl.sh
     - name: Start karma server
       run: npm run karma > karma.log 2>&1 &
     - name: Wait for the service to be ready
