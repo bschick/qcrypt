@@ -20,9 +20,10 @@ jobs:
       run: npm ci
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
-    - name: Update hostfile and certs
+    - name: Server setup
       run: |
-        cd localssl
+        sudo apt install -y libnss3-tools
+        cd localssl/
         ./localssl.sh
     - name: Start karma server
       run: npm run karma > karma.log 2>&1 &
@@ -30,7 +31,7 @@ jobs:
       run: |
         # Use a loop with `curl` to wait for the service to respond
         for i in {1..10}; do
-          curl --fail https://t1.quickcrypt.org:9876 && echo "Server is up!" && break || echo "Waiting for server...";
+          curl --insecure --fail https://t1.quickcrypt.org:9876 && echo "Server is up!" && break || echo "Waiting for server...";
           sleep 5;
         done
     - name: Run Playwright unit tests
