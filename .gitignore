@@ -53,3 +53,7 @@ node_modules/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Log files
+karma.log
+serve.log

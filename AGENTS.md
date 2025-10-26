@@ -65,24 +65,22 @@ git clone https://github.com/bschick/qcrypt.git && cd qcrypt
 
 **Unit Tests:**
 ```bash
-tmux
-ctrl-b c
-npm run karma
-ctrl-b n
-sleep 15s
+# The Karma server needs to be running before executing the tests.
+# For interactive use, you can run the server and tests in separate terminals.
+# For automation, the server can be run as a background process.
+npm run karma > karma.log 2>&1 &
+sleep 15 # Allow the server some time to start
 npm run test
-ctrl-b : kill-session
+kill %1 # Stop the Karma server
 ```
 
 **End-to-End Tests with Test AWS hosted API backend:**
 ```bash
-tmux
-ctrl-b c
-npm run serve
-ctrl-b n
-sleep 15s
+# The development server must be running to execute the E2E tests.
+npm run serve > serve.log 2>&1 &
+sleep 15 # Allow the server some time to start
 npm run test:e2e
-ctrl-b : kill-session
+kill %1 # Stop the development server
 ```
 
 ### c. Build project for production deployment
