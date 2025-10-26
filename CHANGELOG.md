@@ -1,5 +1,18 @@
 # CHANGELOG.md
 
+## 5.2.3 (2025-TBD)
+
+Security:
+  - updated packages, including Angular SSR CVEs
+  - added csrf tokens at the suggestion of my vibe buddy Jules (atop using SameSite=Strict cookies already)
+
+Changes:
+
+  - fixed color coding of password strengths
+  - updated to support cleaned up the server API
+  - added more testing, in particular of the server API
+
+
 ## 5.2.2 (2025-09-27)
 
 Security:

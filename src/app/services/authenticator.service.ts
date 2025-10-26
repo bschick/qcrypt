@@ -76,10 +76,11 @@ type ServerUserInfo = {
    authenticators?: AuthenticatorInfo[];
 };
 
-type ServerLoginUserInfo = ServerUserInfo & {
+export type ServerLoginUserInfo = ServerUserInfo & {
    pkId?: string;
    userCred?: string;
    recoveryId?: string;
+   csrf?: string;
 };
 
 export type SenderLinkInfo = {
@@ -117,6 +118,7 @@ export class AuthenticatorService {
    private _subject = new Subject<AuthEventData>();
    private _intervalId: number = 0;
    private _userCred?: Uint8Array = undefined;
+   private _csrf?: string = undefined;
    private _cachedRecoveryId?: string;
    public ready: Promise<void>;
 
@@ -136,7 +138,7 @@ export class AuthenticatorService {
    // to be false. this happens when another tab logs out or out then in
    // using a different Pk until this tab detects it
    public authenticated(): boolean {
-      return !!this._userCred;
+      return !!this._userCred && !!this._csrf;
    }
 
    public potentialSession(): boolean {
@@ -230,6 +232,7 @@ export class AuthenticatorService {
 
       const headers = new Headers({
          'Content-Type': 'application/json',
+         'x-csrf-token': this._csrf!
       });
 
       // required for AWS OAC (access control to lambda).
@@ -389,10 +392,14 @@ export class AuthenticatorService {
       if (!serverLogin.pkId || serverLogin.pkId.length == 0) {
          throw new Error('invalid passkey id')
       }
+      if (!serverLogin.csrf || serverLogin.csrf.length == 0) {
+         throw new Error('invalid csrf token')
+      }
 
       const sessExpiry = DateTime.now().plus({ seconds: SESSION_TIMEOUT }).toISO();
 
       this._userCred = base64ToBytes(serverLogin.userCred);
+      this._csrf = serverLogin.csrf;
       localStorage.setItem('sessionexpiry', sessExpiry);
       localStorage.setItem('userid', serverLogin.userId);
       localStorage.setItem('pkid', serverLogin.pkId);
@@ -524,6 +531,7 @@ export class AuthenticatorService {
          crypto.getRandomValues(this._userCred);
          this._userCred = undefined;
       }
+      this._csrf = undefined;
 
       if (emit) {
          this._emit(eventData);
@@ -776,7 +784,7 @@ export class AuthenticatorService {
          resourceId: recoveryId
       });
 
-      const serverLoginUserInfo = await this._passkeyVerify(optionsJson, true, false);
+      const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, false);
       return this._loginUser(serverLoginUserInfo);
    }
 
@@ -793,7 +801,7 @@ export class AuthenticatorService {
          resourceId: userCred
       });
 
-      const serverLoginUserInfo = await this._passkeyVerify(optionsJson, true, false);
+      const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, false);
       return this._loginUser(serverLoginUserInfo);
    }
 
