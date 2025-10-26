@@ -8,8 +8,8 @@ on:
   pull_request:
     branches: [ main, master ]
 jobs:
-  test:
-    timeout-minutes: 100
+  unittest:
+    timeout-minutes: 180
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -20,8 +20,45 @@ jobs:
       run: npm ci
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
-    - name: Run Playwright tests
-      run: npm run ete:prod
+
+    - name: Update hosts file
+      run: |
+        HOSTNAME="t1.quickcrypt.org"
+        HOSTS_FILE="/etc/hosts"
+
+        if grep "^127\.0\.0\.1" "$HOSTS_FILE" | grep -qw "$HOSTNAME"; then
+            echo "-> '$HOSTNAME' already exists on 127.0.0.1 line. Skipping."
+        else
+            # If it doesn't, use 'sed' to append it to the end of that specific line
+            echo "-> Appending '$HOSTNAME' to 127.0.0.1 line..."
+            sudo sed -i -E "/^127\.0\.0\.1/ s/$/ $HOSTNAME/" "$HOSTS_FILE"
+            if [ $? -ne 0 ]; then
+                echo "Error: Failed to update 127.0.0.1 line. Do you have sudo permissions?"
+                exit 1 # Fail the step explicitly
+            fi
+        fi
+        if grep "^::1" "$HOSTS_FILE" | grep -qw "$HOSTNAME"; then
+            echo "-> '$HOSTNAME' already exists on ::1 line. Skipping."
+        else
+            # If it doesn't, use 'sed' to append it to the end of that specific line
+            echo "-> Appending '$HOSTNAME' to ::1 line..."
+            sudo sed -i -E "/^::1/ s/$/ $HOSTNAME/" "$HOSTS_FILE"
+            if [ $? -ne 0 ]; then
+                echo "Error: Failed to update ::1 line. (This is non-fatal if you don't use IPv6)."
+            fi
+        fi
+
+    - name: Start karma server
+      run: npm run karma > karma.log 2>&1 &
+    - name: Wait for the service to be ready
+      run: |
+        # Use a loop with `curl` to wait for the service to respond
+        for i in {1..10}; do
+          curl --fail http://t1.quickcrypt.org:9876 && echo "Server is up!" && break || echo "Waiting for server...";
+          sleep 5;
+        done
+    - name: Run Playwright unit tests
+      run: npm run test
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
