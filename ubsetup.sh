@@ -1,0 +1,30 @@
+#!/bin/bash
+sudo apt update && apt dist-upgrade -y
+sudo apt-get install -y curl git tmux libnss3-tools ca-certificates
+
+sudo curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs=22.20.0-1nodesource1
+sudo apt-mark hold nodejs
+
+sudo npm install -g npm@latest
+
+cd ~
+git clone https://github.com/bschick/qcrypt.git && cd qcrypt
+
+npm install
+
+cd localssl
+./localssl.sh
+
+sudo cp qcrypt.crt /usr/local/share/ca-certificates/.
+sudo update-ca-certificates
+
+mkdir -p "$HOME/.pki/nssdb"
+certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "My Custom CA" -i ./localssl/qcrypt.crt
+
+cd ..
+
+sudo npx playwright install-deps
+sudo npx playwright install
+
+echo "Done."
