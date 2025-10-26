@@ -2,6 +2,7 @@
 src/assets/aaguid/
 localssl/*
 !localssl/localssl.sh
+!localssl/backup.sh
 *.qq
 
 # Compiled output

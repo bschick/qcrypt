@@ -38,8 +38,8 @@ module.exports = function (config) {
     reporters: ['progress', 'kjhtml'],
     browsers: [],
     restartOnFileChange: true,
-    listenAddress: '192.168.64.4',
-    hostname: '192.168.64.4',
+    listenAddress: 'localhost',
+    hostname: 'localhost',
     protocol: 'https:',
     httpsServerOptions: {
       key: fs.readFileSync('localssl/localhost.key', 'utf8'),
