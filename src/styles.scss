@@ -3,11 +3,29 @@
 
 html {
   height: 100%;
+}
 
+// Light theme (default)
+html.light-theme {
   @include mat.theme(
     (
       color: (
         theme-type: light,
+        primary: mat.$azure-palette,
+        tertiary: mat.$blue-palette,
+      ),
+      typography: Roboto,
+      density: 0,
+    )
+  );
+}
+
+// Dark theme
+html.dark-theme {
+  @include mat.theme(
+    (
+      color: (
+        theme-type: dark,
         primary: mat.$azure-palette,
         tertiary: mat.$blue-palette,
       ),
@@ -29,7 +47,9 @@ body {
   background: rgba(0, 0, 0, 0.32);
 }
 
-:root {
+:root,
+html.light-theme,
+html.dark-theme {
 //  --mat-button-filled-container-color: green;
 
   @include mat.toolbar-overrides(
@@ -69,5 +89,11 @@ body {
   --red-pwd-color: darkred;
   --yellow-pwd-color: darkgoldenrod;
   --green-pwd-color: darkgreen;
+}
 
+// Dark theme specific overrides
+html.dark-theme {
+  .signinBackdrop {
+    background: rgba(255, 255, 255, 0.16);
+  }
 }

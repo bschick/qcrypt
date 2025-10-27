@@ -27,8 +27,10 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { Router, RouterOutlet, RouterLink } from '@angular/router';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSidenav, MatSidenavModule } from '@angular/material/sidenav';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { CredentialsComponent } from './credentials/credentials.component';
 import { AuthEvent, AuthEventData, AuthenticatorService } from './services/authenticator.service';
+import { ThemeService } from './services/theme.service';
 import { Subscription } from 'rxjs';
 
 
@@ -37,7 +39,7 @@ import { Subscription } from 'rxjs';
     templateUrl: './qcrypt.component.html',
     styleUrl: './qcrypt.component.scss',
     imports: [RouterOutlet, MatToolbarModule, MatIconModule, MatButtonModule,
-        RouterLink, MatMenuModule, MatSidenavModule, CredentialsComponent
+        RouterLink, MatMenuModule, MatSidenavModule, CredentialsComponent, MatTooltipModule
     ]
 })
 export class QCryptComponent implements OnInit, OnDestroy {
@@ -49,8 +51,13 @@ export class QCryptComponent implements OnInit, OnDestroy {
 
    constructor(
       public router: Router,
-      public authSvc: AuthenticatorService
+      public authSvc: AuthenticatorService,
+      public themeSvc: ThemeService
    ) {
+   }
+
+   toggleTheme(): void {
+      this.themeSvc.toggleDarkMode();
    }
 
    ngOnInit(): void {

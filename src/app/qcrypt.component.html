@@ -53,6 +53,13 @@ SOFTWARE.
 
   <span class="toolbar-spacer"></span>
   <button
+    (click)="toggleTheme()"
+    mat-icon-button
+    [attr.aria-label]="themeSvc.getLabel() + ' mode'"
+    [matTooltip]="themeSvc.getLabel() + ' mode'">
+    <mat-icon>{{themeSvc.getIcon()}}</mat-icon>
+  </button>
+  <button
     [style.visibility]="showPKButton ? 'visible' : 'hidden'"
     (click)="toggleNav(sideNav)"
     mat-icon-button aria-label="Passkey information">
