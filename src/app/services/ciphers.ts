@@ -876,11 +876,11 @@ export class EncipherV5 extends Encipher {
          }
       } else {
          const cipherBuf = await crypto.subtle.encrypt({
-            name: alg,
-            iv: getArrayBuffer(iv),
-            additionalData: additionalData ? getArrayBuffer(additionalData) : new ArrayBuffer(0),
-            tagLength: cc.AES_GCM_TAG_BYTES * 8
-         },
+               name: alg,
+               iv: getArrayBuffer(iv),
+               additionalData: additionalData ? getArrayBuffer(additionalData) : new ArrayBuffer(0),
+               tagLength: cc.AES_GCM_TAG_BYTES * 8
+            },
             key,
             getArrayBuffer(clear)
          );
@@ -1105,6 +1105,11 @@ export abstract class Decipher extends Ciphers {
       additionalData?: Uint8Array,
    ): Promise<Uint8Array> {
 
+      const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
+      if (ivBytes != iv.byteLength) {
+         throw new Error('incorrect iv length of: ' + iv.byteLength);
+      }
+
       let decrypted: Uint8Array;
       if (alg == 'X20-PLY') {
          const exported = await crypto.subtle.exportKey("raw", key);
@@ -1152,7 +1157,7 @@ export abstract class Decipher extends Ciphers {
       } else {
          const buffer = await crypto.subtle.decrypt({
             name: alg,
-            iv: iv.slice(0, 12),
+            iv: getArrayBuffer(iv),
             additionalData: additionalData ? getArrayBuffer(additionalData) : new ArrayBuffer(0),
             tagLength: cc.AES_GCM_TAG_BYTES * 8
          },
