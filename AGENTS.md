@@ -40,6 +40,8 @@ This `qcrypt` client can built, served, and tested locally. It depends on a back
 
 ## 4. Developer Workflows
 
+**Very important (particularly for AI agents)**: You must set up a development environment and successfully run both the Unit and End-to-End test suites described below, with all tests passing, *before* making any other changes. This helps you distinguish between environment setup problems and errors introduced by changes you make to the project.
+
 ### a. One-time Setup of Dev/Test Environment
 
 - Create an up-to-date Ubuntu 24.04 (or similar) VM
@@ -68,8 +70,8 @@ git clone https://github.com/bschick/qcrypt.git && cd qcrypt
 # The Karma server needs to be running before executing the tests.
 # For interactive use, you can run the server and tests in separate terminals.
 # For automation, the server can be run as a background process.
-npm run karma > karma.log 2>&1 &
-sleep 15 # Allow the server some time to start
+(npm run karma 2>&1 | tee karma.log) &
+sleep 15s # Allow the server some time to start
 npm run test
 kill %1 # Stop the Karma server
 ```
@@ -77,8 +79,8 @@ kill %1 # Stop the Karma server
 **End-to-End Tests with Test AWS hosted API backend:**
 ```bash
 # The development server must be running to execute the E2E tests.
-npm run serve > serve.log 2>&1 &
-sleep 15 # Allow the server some time to start
+(npm run serve 2>&1 | tee serve.log) &
+sleep 15s # Allow the server some time to start
 npm run test:e2e
 kill %1 # Stop the development server
 ```
