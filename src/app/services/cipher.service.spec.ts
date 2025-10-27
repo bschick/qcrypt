@@ -676,8 +676,7 @@ describe("Stream encryption and decryption", function () {
    it("detect wrong password, all alogrithms, loops", async function () {
 
       const maxLps = 3;
-      const positions = [...Array(maxLps)].map((_, i) => i + 1); // javascript is so ugly sometimes
-      for (const badLp of positions) {
+      for (let badLp = 1; badLp <= maxLps; badLp++) {
 
          for (const alg of cipherSvc.algs()) {
 
@@ -1657,7 +1656,7 @@ describe("Stream manipulation", function () {
          const cipherData = await readStreamAll(cipherStream);
          const rmLen = randomInclusive(1, 10);
 
-         for (let rmPos of [...Array(cipherData.byteLength - rmLen).keys()]) {
+         for (let rmPos = 0; rmPos < cipherData.byteLength - rmLen; rmPos++) {
 
             let corruptData = new Uint8Array(cipherData.byteLength - rmLen);
             corruptData.set(cipherData.slice(0, rmPos));
@@ -1707,7 +1706,7 @@ describe("Stream manipulation", function () {
          const addLen = randomInclusive(1, 10);
          const addData = crypto.getRandomValues(new Uint8Array(addLen));
 
-         for (let addPos of [...Array(cipherData.byteLength).keys()]) {
+         for (let addPos = 0; addPos < cipherData.byteLength; addPos++) {
 
             let corruptData = new Uint8Array(cipherData.byteLength + addLen);
             corruptData.set(cipherData.slice(0, addPos));
