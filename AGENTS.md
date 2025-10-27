@@ -60,7 +60,7 @@ sudo apt update && sudo apt dist-upgrade -y
 sudo apt install -y git ca-certificates
 cd ~
 git clone https://github.com/bschick/qcrypt.git && cd qcrypt
-./ubsetup.sh
+./ubsetup.sh 2>&1 | tee ubsetup.log
 ```
 
 ### b. Running Tests
