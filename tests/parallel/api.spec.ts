@@ -1,4 +1,27 @@
 import { test, expect, Page, CDPSession, TestInfo } from '@playwright/test';
+
+async function fuzzEndpoint(page: Page, endpoint: string, method: string, headers: Record<string, string>) {
+   let response = await page.request[method](`${endpoint}/invalid-id`, { headers: headers });
+   expect(response.status()).toBe(400);
+
+   response = await page.request[method](`${endpoint}/123`, { headers: headers });
+   expect(response.status()).toBe(401);
+
+   response = await page.request[method](`${endpoint}/1234567890123456789012345678901234567890`, { headers: headers });
+   expect(response.status()).toBe(401);
+}
+
+async function fuzzQueryEndpoint(page: Page, endpoint: string, method: string, headers: Record<string, string>) {
+   let response = await page.request[method](`${endpoint}?userid=invalid-id`, { headers: headers });
+   expect(response.status()).toBe(400);
+
+   response = await page.request[method](`${endpoint}?userid=123`, { headers: headers });
+   expect(response.status()).toBe(400);
+
+   response = await page.request[method](`${endpoint}?userid=1234567890123456789012345678901234567890`, { headers: headers });
+   expect(response.status()).toBe(200);
+}
+
 import {
    testWithAuth,
    passkeyAuth,
@@ -374,13 +397,27 @@ test.describe('api', () => {
          { headers: headers }
       );
       expect(usersResponse.status()).toBe(401);
+   });
 
-      // user should be gone at this point, but cruft remains in the browser since we
-      // called APIs direclty. Clean up userid so nukeall handler doesn't try
-      await page.evaluate(() => {
-         window.localStorage.removeItem('userid');
-      });
+   testWithAuth('user and session endpoints', { tag: '@nukeall' }, async ({ authFixture }, testInfo) => {
 
+      let userResponse = await page.request.get(
+         `${apiUrl}/users/invalid-id`,
+         { headers: headers }
+      );
+      expect(userResponse.status()).toBe(400);
+
+      let sessionResponse = await page.request.get(
+         `${apiUrl}/users/invalid-id/session`,
+         { headers: headers }
+      );
+      expect(sessionResponse.status()).toBe(400);
+
+      sessionResponse = await page.request.delete(
+         `${apiUrl}/users/invalid-id/session`,
+         { headers: headers }
+      );
+      expect(sessionResponse.status()).toBe(400);
    });
 
    testWithAuth('get session', { tag: '@nukeall' }, async ({ authFixture }, testInfo) => {
@@ -558,6 +595,179 @@ test.describe('api', () => {
 
    });
 
+});
+
+test.describe('unauthenticated fuzzing', () => {
+   let apiUrl: string;
+   test.beforeEach(async ({ page }, testInfo) => {
+      //@ts-ignore
+      apiUrl = testInfo.project.use.apiURL;
+   });
+
+   test('registration options', async ({ page }) => {
+      let regResponse = await page.request.post(
+         `${apiUrl}/reg/options`, {
+         data: {
+            userName: '123'
+         }
+      }
+      );
+      expect(regResponse.status()).toBe(400);
+
+      regResponse = await page.request.post(
+         `${apiUrl}/reg/options`, {
+         data: {
+            userName: '1234567890123456789012345678901234567890'
+         }
+      }
+      );
+      expect(regResponse.status()).toBe(400);
+
+      regResponse = await page.request.post(
+         `${apiUrl}/reg/options`, {
+         data: {
+            userName: 'invalid-id'
+         }
+      }
+      );
+      expect(regResponse.status()).toBe(400);
+
+      regResponse = await page.request.post(
+         `${apiUrl}/reg/options`, {
+         data: {
+            userName: 12345
+         }
+      }
+      );
+      expect(regResponse.status()).toBe(400);
+
+      regResponse = await page.request.post(
+         `${apiUrl}/reg/options`, {
+         data: '{'
+      }
+      );
+      expect(regResponse.status()).toBe(400);
+
+      regResponse = await page.request.post(
+         `${apiUrl}/reg/options`
+      );
+      expect(regResponse.status()).toBe(400);
+   });
+
+   test('registration verify', async ({ page }) => {
+      await fuzzEndpoint(page, `${apiUrl}/users`, 'post', { 'Content-Type': 'application/json' });
+   });
+
+   test('authentication options', async ({ page }) => {
+      await fuzzQueryEndpoint(page, `${apiUrl}/auth/options`, 'get', { 'Content-Type': 'application/json' });
+   });
+
+   test('authentication verify', async ({ page }) => {
+      await fuzzEndpoint(page, `${apiUrl}/users`, 'post', { 'Content-Type': 'application/json' });
+   });
+
+   test('passkey options', async ({ page }) => {
+      await fuzzEndpoint(page, `${apiUrl}/users`, 'get', { 'Content-Type': 'application/json' });
+   });
+
+   test('passkey verify', async ({ page }) => {
+      await fuzzEndpoint(page, `${apiUrl}/users`, 'post', { 'Content-Type': 'application/json' });
+   });
+
+   test('passkey patch', async ({ page }) => {
+      await fuzzEndpoint(page, `${apiUrl}/users`, 'patch', { 'Content-Type': 'application/json' });
+   });
+
+   test('user endpoints', async ({ page }) => {
+      await fuzzEndpoint(page, `${apiUrl}/users`, 'get', { 'Content-Type': 'application/json' });
+   });
+
+   test('session endpoints', async ({ page }) => {
+      await fuzzEndpoint(page, `${apiUrl}/users`, 'get', { 'Content-Type': 'application/json' });
+      await fuzzEndpoint(page, `${apiUrl}/users`, 'delete', { 'Content-Type': 'application/json' });
+   });
+
+   test('passkey delete', async ({ page }) => {
+      await fuzzEndpoint(page, `${apiUrl}/users`, 'delete', { 'Content-Type': 'application/json' });
+   });
+});
+
+test.describe('authenticated fuzzing', () => {
+   let apiUrl: string, apiUser: ServerLoginUserInfo, headers: Record<string, string>;
+
+   async function fuzzPatch(page: Page, url: string, headers: Record<string, string>, key: string, values: any[]) {
+      for (const value of values) {
+         const data = {};
+         data[key] = value;
+         const response = await page.request.patch(url, { headers, data });
+         expect(response.status()).toBe(400);
+      }
+   }
+
+   test.beforeEach(async ({ authFixture }, testInfo) => {
+      const { page, session, authId1, authId2 } = authFixture;
+      [apiUrl, apiUser, headers] = await apiSetup(testInfo, page, session, authId1);
+   });
+
+   test.afterEach(async ({ page }) => {
+      const delResponse = await page.request.delete(
+         //@ts-ignore
+         `${apiUrl}/users/${apiUser.userId}/passkeys/${apiUser.authenticators[0].credentialId}`,
+         { headers: headers }
+      );
+      expect(delResponse).toBeOK();
+
+      await page.evaluate(() => {
+         window.localStorage.removeItem('userid');
+      });
+   });
+
+   testWithAuth('passkey endpoints', { tag: '@nukeall' }, async ({ authFixture }, testInfo) => {
+
+      let passkeyResponse = await page.request.get(
+         `${apiUrl}/users/invalid-id/passkeys/options`,
+         { headers: headers }
+      );
+      expect(passkeyResponse.status()).toBe(400);
+
+      passkeyResponse = await page.request.post(
+         `${apiUrl}/users/invalid-id/passkeys/verify`,
+         { headers: headers }
+      );
+      expect(passkeyResponse.status()).toBe(400);
+
+      passkeyResponse = await page.request.patch(
+         `${apiUrl}/users/invalid-id/passkeys/invalid-id`,
+         { headers: headers }
+      );
+      expect(passkeyResponse.status()).toBe(400);
+
+      passkeyResponse = await page.request.delete(
+         `${apiUrl}/users/invalid-id/passkeys/invalid-id`,
+         { headers: headers }
+      );
+      expect(passkeyResponse.status()).toBe(400);
+
+      passkeyResponse = await page.request.get(
+         `${apiUrl}/users/invalid-id/passkeys`,
+         { headers: headers }
+      );
+      expect(passkeyResponse.status()).toBe(400);
+   });
+
+   testWithAuth('patch endpoints', { tag: '@nukeall' }, async ({ authFixture }, testInfo) => {
+      await fuzzPatch(page, `${apiUrl}/users/${apiUser.userId}`, headers, 'userName', [
+         '123',
+         '1234567890123456789012345678901234567890',
+         12345
+      ]);
+
+      await fuzzPatch(page, `${apiUrl}/users/${apiUser.userId}/passkeys/${apiUser.authenticators[0].credentialId}`, headers, 'description', [
+         '123',
+         '12345678901234567890123456789012345678901234567890',
+         12345
+      ]);
+   });
 });
 
 
