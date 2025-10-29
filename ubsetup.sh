@@ -14,6 +14,6 @@ cd localssl
 cd ..
 
 sudo npx playwright install-deps
-npx playwright install
+npx playwright install chromium firefox
 
 echo "Done."
