@@ -70,10 +70,10 @@ git clone https://github.com/bschick/qcrypt.git && cd qcrypt
 # The Karma server needs to be running before executing the tests.
 # For interactive users, you can run the server and tests in separate terminals.
 # For automation, the server can be run as a background process.
-(npm run karma 2>&1 | tee karma.log) &
+nohup npm run karma > karma.log 2>&1 &
 sleep 30s # Allow the server time to start
 npm run test
-kill %1 # Stop the Karma server
+pkill npm; pkill ng # Stop the Karma server and ng process
 ```
 
 **End-to-End Tests with Test AWS hosted API backend:**
@@ -81,10 +81,10 @@ kill %1 # Stop the Karma server
 # The development server must be running to execute the E2E tests.
 # For interactive users, you can run the server and tests in separate terminals.
 # For automation, the server can be run as a background process.
-(npm run serve 2>&1 | tee serve.log) &
-sleep 35s # Allow the server time to start
+nohup npm run serve > serve.log 2>&1 &
+sleep 30s # Allow the server time to start
 npm run test:e2e
-kill %1 # Stop the development server
+pkill npm; pkill ng # Stop the development server and ng process
 ```
 
 ### c. Build project for production deployment
