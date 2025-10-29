@@ -4,13 +4,15 @@
 
 Security:
   - updated packages, including Angular SSR CVEs
-  - added csrf tokens at the suggestion of my vibe buddy Jules (atop using SameSite=Strict cookies already)
+  - added csrf tokens at the suggestion of my vibe buddy Jules (atop existing SameSite=Strict cookies)
 
 Changes:
 
   - fixed color coding of password strengths
-  - updated to support cleaned up the server API
+  - updates to support refactored server API
   - added more testing, in particular of the server API
+  - made unit tests headless using playwright on karma
+  - significant trial-and-error updating AGENTS.md to enable AI build/test agents
 
 
 ## 5.2.2 (2025-09-27)
