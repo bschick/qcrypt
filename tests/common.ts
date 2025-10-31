@@ -202,7 +202,8 @@ export async function deleteFirstPasskey(page: Page): Promise<void> {
 
   const [deleteResponse] = await Promise.all([
     page.waitForResponse(response =>
-      response.url().includes('/passkeys') &&
+      // /authenticator is for backward compat, remove when clients upgrade
+      (response.url().includes('/passkeys') || response.url().includes('/authenticator')) &&
       response.request().method() === 'DELETE'
     ),
     page.getByRole('button', { name: 'Yes' }).click()
