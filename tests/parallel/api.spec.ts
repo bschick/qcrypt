@@ -46,7 +46,7 @@ test.describe('authenticated api tests', () => {
       }
    });
 
-   testWithAuth('create, edit, remove passkey', { tag: '@nukeall' }, async ({ authFixture }, testInfo) => {
+   testWithAuth('create, edit, remove passkey', { tag: ['@nukeall', '@api'] }, async ({ authFixture }, testInfo) => {
       const { page, session, authId1, authId2 } = authFixture;
 
       // Success case
@@ -111,7 +111,7 @@ test.describe('authenticated api tests', () => {
 
    });
 
-      testWithAuth('edit passkey description', { tag: '@nukeall' }, async ({ authFixture }, testInfo) => {
+   testWithAuth('edit passkey description', { tag: ['@nukeall', '@api'] }, async ({ authFixture }, testInfo) => {
       const { page, session, authId1, authId2 } = authFixture;
 
       // Test good patch of description
@@ -239,7 +239,7 @@ test.describe('authenticated api tests', () => {
 
    });
 
-   testWithAuth('edit user name', { tag: '@nukeall' }, async ({ authFixture }, testInfo) => {
+   testWithAuth('edit user name', { tag: ['@nukeall', '@api'] }, async ({ authFixture }, testInfo) => {
       const { page, session, authId1, authId2 } = authFixture;
 
       // Success case
@@ -363,7 +363,7 @@ test.describe('authenticated api tests', () => {
 
    });
 
-   testWithAuth('get session', { tag: '@nukeall' }, async ({ authFixture }, testInfo) => {
+   testWithAuth('get session', { tag: ['@nukeall', '@api'] }, async ({ authFixture }, testInfo) => {
       const { page, session, authId1, authId2 } = authFixture;
 
       let sessionResponse = await page.request.get(
@@ -395,7 +395,7 @@ test.describe('authenticated api tests', () => {
 
    });
 
-   testWithAuth('delete session', { tag: '@nukeall' }, async ({ authFixture }, testInfo) => {
+   testWithAuth('delete session', { tag: ['@nukeall', '@api'] }, async ({ authFixture }, testInfo) => {
       const { page, session, authId1, authId2 } = authFixture;
 
       let sessionResponse = await page.request.get(
@@ -469,7 +469,55 @@ test.describe('authenticated api tests', () => {
       expect(delResponse).toBeOK();
    });
 
-   testWithAuth('small fuzz', { tag: ['@nukeall'] }, async ({ authFixture }, testInfo) => {
+
+   testWithAuth('test bad csrf', { tag: ['@nukeall', '@api'] }, async ({ authFixture }, testInfo) => {
+      const { page, session, authId1, authId2 } = authFixture;
+
+      let headers = structuredClone(apiHeaders);
+      delete headers['x-csrf-token'];
+
+      // Should fail due to missing csrf
+      let usersResponse = await page.request.get(
+         `${apiUrl}/users/${apiUser.userId}`,
+         { headers }
+      );
+      expect(usersResponse.status()).toBe(401);
+
+      // Should fail due to missing csrf
+      let delResponse = await page.request.delete(
+         //@ts-ignore
+         `${apiUrl}/users/${apiUser.userId}/passkeys/${apiUser.authenticators[0].credentialId}`,
+         { headers }
+      );
+      expect(usersResponse.status()).toBe(401);
+
+      headers['x-csrf-token'] = 'uajbCCy0AeBW5WDEqbR9viY12HaQOiKlJcNSG8yaGT0';
+
+      // Should fail due to bad csrf
+      usersResponse = await page.request.get(
+         `${apiUrl}/users/${apiUser.userId}`,
+         { headers }
+      );
+      expect(usersResponse.status()).toBe(401);
+
+      // Should fail due to bad csrf
+      delResponse = await page.request.delete(
+         //@ts-ignore
+         `${apiUrl}/users/${apiUser.userId}/passkeys/${apiUser.authenticators[0].credentialId}`,
+         { headers }
+      );
+      expect(usersResponse.status()).toBe(401);
+
+      // Correcr csrf, should work
+      delResponse = await page.request.delete(
+         //@ts-ignore
+         `${apiUrl}/users/${apiUser.userId}/passkeys/${apiUser.authenticators[0].credentialId}`,
+         { headers: apiHeaders }
+      );
+      expect(delResponse).toBeOK();
+   });
+
+   testWithAuth('small fuzz', { tag: ['@nukeall', '@api'] }, async ({ authFixture }, testInfo) => {
       const { page, session, authId1, authId2 } = authFixture;
 
       test.setTimeout(60000);
@@ -484,7 +532,7 @@ test.describe('authenticated api tests', () => {
       expect(delResponse).toBeOK();
    });
 
-   testWithAuth('full fuzz', { tag: ['@nukeall', '@fullfuzz'] }, async ({ authFixture }, testInfo) => {
+   testWithAuth('full fuzz', { tag: ['@nukeall', '@api', '@fullfuzz'] }, async ({ authFixture }, testInfo) => {
       const { page, session, authId1, authId2 } = authFixture;
 
       test.setTimeout(180000);
@@ -504,7 +552,7 @@ test.describe('authenticated api tests', () => {
 
 test.describe('unauthenticated api', () => {
 
-   testWithAuth('full fuzz', { tag: '@fullfuzz' }, async ({ authFixture }, testInfo) => {
+   testWithAuth('full fuzz', { tag: ['@api', '@fullfuzz'] }, async ({ authFixture }, testInfo) => {
       const { page, session, authId1, authId2 } = authFixture;
       test.setTimeout(180000);
 
@@ -521,7 +569,7 @@ test.describe('unauthenticated api', () => {
       await fullFuzzCommaon(page, apiUrl, '22eba19cIp4leXyK4a3qNB', headers);
    });
 
-   testWithAuth('small fuzz', async ({ authFixture }, testInfo) => {
+   testWithAuth('small fuzz', { tag: ['@api'] }, async ({ authFixture }, testInfo) => {
       const { page, session, authId1, authId2 } = authFixture;
       test.setTimeout(60000);
 
