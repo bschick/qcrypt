@@ -1,19 +1,18 @@
 # CHANGELOG.md
 
-## 5.2.3 (2025-TBD)
+## 5.2.3 (2025-10-31)
 
 Security:
-  - updated packages, including Angular SSR CVEs
-  - added csrf tokens at the suggestion of my vibe buddy Jules (atop existing SameSite=Strict cookies)
+  - updated packages, fixing Angular SSR and node-tar CVEs
+  - added csrf tokens at the suggestion of vibe buddy Jules (atop existing SameSite=Strict cookies)
 
 Changes:
 
-  - fixed color coding of password strengths
-  - updates to support refactored server API
-  - added more testing, in particular of the server API
-  - made unit tests headless using playwright on karma
-  - significant trial-and-error updating AGENTS.md to enable AI build/test agents
-
+  - fixed text coloring of password strengths
+  - changes to support refactored server API
+  - added more testing, in particular of the server API, including fuzzing
+  - made unit tests headless using playwright over karma
+  - significant trial-and-error updates to AGENTS.md to enable AI coding agents
 
 ## 5.2.2 (2025-09-27)
 
