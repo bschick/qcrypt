@@ -1706,6 +1706,12 @@ describe("Stream manipulation", function () {
          const addLen = randomInclusive(1, 10);
          const addData = crypto.getRandomValues(new Uint8Array(addLen));
 
+         // make sure first byte of addData doesn't match last byte of cipherData or
+         // the extra padding won't be detected until readStreamAll (see below)
+         if (addData[0] === cipherData.at(-1)) {
+            addData[0] = (addData[0] + 1) % 256;
+         }
+
          for (let addPos = 0; addPos < cipherData.byteLength; addPos++) {
 
             let corruptData = new Uint8Array(cipherData.byteLength + addLen);
@@ -1745,10 +1751,11 @@ describe("Stream manipulation", function () {
 
          await expectAsync(
             readStreamAll(corrupStream)
-         ).withContext(`alg ${alg}, cipherLen  ${cipherData.byteLength}, corruptLen  ${corruptData.byteLength}, addLen ${addLen}, addPos ${cipherData.byteLength}\naddData ${addData}\ncipherData ${cipherData}\ncorruptData ${corruptData}`)
+         ).withContext(`alg ${alg}, userCred ${userCred}, cipherLen  ${cipherData.byteLength}, corruptLen  ${corruptData.byteLength}, addLen ${addLen}, addPos ${cipherData.byteLength}\naddData ${addData}\ncipherData ${cipherData}\ncorruptData ${corruptData}`)
             .toBeRejectedWithError(Error);
       }
    });
+
 });
 
 describe("Block order change and deletion detection", function () {
