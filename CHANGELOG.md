@@ -9,7 +9,7 @@ Security:
 Changes:
 
   - fixed text coloring of password strengths
-  - changes to support refactored server API
+  - switch to refactored server API
   - added more testing, in particular of the server API, including fuzzing
   - made unit tests headless using playwright over karma
   - significant trial-and-error updates to AGENTS.md to enable AI coding agents
