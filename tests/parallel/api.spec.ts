@@ -476,32 +476,36 @@ test.describe('authenticated api tests', () => {
       let headers = structuredClone(apiHeaders);
       delete headers['x-csrf-token'];
 
+      // Comment out for backward compat. Add back when support
+      // for absent CSRF is removed (when clients update)
       // Should fail due to missing csrf
+      // let usersResponse = await page.request.get(
+      //    `${apiUrl}/users/${apiUser.userId}`,
+      //    { headers }
+      // );
+      // expect(usersResponse.status()).toBe(401);
+
+      // Comment out for backward compat. Add back when support
+      // for absent CSRF is removed (when clients update)
+      // Should fail due to missing csrf
+      // let delResponse = await page.request.delete(
+      //    //@ts-ignore
+      //    `${apiUrl}/users/${apiUser.userId}/passkeys/${apiUser.authenticators[0].credentialId}`,
+      //    { headers }
+      // );
+      // expect(usersResponse.status()).toBe(401);
+
+      headers['x-csrf-token'] = 'uajbCCy0AeBW5WDEqbR9viY12HaQOiKlJcNSG8yaGT0';
+
+      // Should fail due to bad csrf
       let usersResponse = await page.request.get(
          `${apiUrl}/users/${apiUser.userId}`,
          { headers }
       );
       expect(usersResponse.status()).toBe(401);
 
-      // Should fail due to missing csrf
+      // Should fail due to bad csrf
       let delResponse = await page.request.delete(
-         //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${apiUser.authenticators[0].credentialId}`,
-         { headers }
-      );
-      expect(usersResponse.status()).toBe(401);
-
-      headers['x-csrf-token'] = 'uajbCCy0AeBW5WDEqbR9viY12HaQOiKlJcNSG8yaGT0';
-
-      // Should fail due to bad csrf
-      usersResponse = await page.request.get(
-         `${apiUrl}/users/${apiUser.userId}`,
-         { headers }
-      );
-      expect(usersResponse.status()).toBe(401);
-
-      // Should fail due to bad csrf
-      delResponse = await page.request.delete(
          //@ts-ignore
          `${apiUrl}/users/${apiUser.userId}/passkeys/${apiUser.authenticators[0].credentialId}`,
          { headers }
