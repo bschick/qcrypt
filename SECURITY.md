@@ -1,6 +1,6 @@
 ## Quick Crypt Security
 
-We take security seriously and welcome peer review of our open-source code and reporting of potential vulnerabilities. Quick Crypt maintains a bug bounty program at [Open Bug Bounty](https://www.openbugbounty.org/bugbounty/schickb/)
+[Quick Crypt](https://quickcrypt.org) is designed to protect your private data, so we naturally take security very seriously and welcome peer reviews and vulnerability reporting. Quick Crypt maintains a bug bounty program at [Open Bug Bounty](https://www.openbugbounty.org/bugbounty/schickb/)
 
 ### Reporting
 
