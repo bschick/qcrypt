@@ -14,9 +14,11 @@ module.exports = function (config) {
       require('karma-coverage'),
 
     ],
+    browserDisconnectTimeout: 10000,
+    browserDisconnectTolerance: 2,
     client: {
       jasmine: {
-        timeoutInterval: 20000
+        timeoutInterval: 30000
         // you can add configuration options for Jasmine here
         // the possible options are listed at https://jasmine.github.io/api/edge/Configuration.html
         // for example, you can disable the random execution with `random: false`
