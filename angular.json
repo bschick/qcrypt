@@ -29,7 +29,8 @@
 							"src/assets",
 							"src/robots.txt",
 							"src/maintenance.html",
-							"src/sitemap.xml"
+							"src/sitemap.xml",
+							"src/.well-known"
 						],
 						"styles": [
 							"src/styles.scss"
@@ -99,7 +100,8 @@
 							"src/assets",
 							"src/robots.txt",
 							"src/maintenance.html",
-							"src/sitemap.xml"
+							"src/sitemap.xml",
+							"src/.well-known"
 						],
 						"styles": [
 							"src/styles.scss"
