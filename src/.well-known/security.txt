@@ -1,0 +1,7 @@
+Contact: mailto:security@quickcrypt.org
+Encryption: https://quickcrypt.org/.well-known/openpgpkey/hu/publickey.security@quickcrypt.org.asc
+Acknowledgements: https://github.com/bschick/qcrypt/blob/main/SECURITY.md
+Policy: https://github.com/bschick/qcrypt/blob/main/SECURITY.md
+Signature: https://quickcrypt.org/.well-known/security.txt.sig
+Hiring: 
+OpenBugBounty: https://openbugbounty.org/bugbounty/schickb/
