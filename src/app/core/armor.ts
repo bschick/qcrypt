@@ -19,6 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
+import { environment } from '../../environments/environment';
 import {
     base64ToBytes,
     bytesToBase64
@@ -36,7 +37,7 @@ import {
 
     if (format == 'link') {
        const ctParam = encodeURIComponent(JSON.stringify(result));
-       return 'https://' + location.host + '?cipherarmor=' + ctParam;
+       return environment.host + '?cipherarmor=' + ctParam;
     } else {
        if (reminder) {
           result['reminder'] = 'decrypt with quick crypt';
@@ -67,9 +68,9 @@ import {
           trimmed = decodeURIComponent(trimmed);
        }
 
-       // turn baseUrl ecoded CT w/o json into json
+       // turn baseUrl encoded CT w/o json into json
        if (!trimmed.startsWith('{')) {
-          trimmed = `{"ct":"${trimmed.replace(/[''""]/g, '').trim()}"}`;
+          trimmed = `{"ct":"${trimmed.replace(/[''"'"‚„\n\r\t\\ ]/g, '')}"}`;
        }
        var jsonParts = JSON.parse(trimmed);
     } catch (err) {

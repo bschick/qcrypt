@@ -35,7 +35,7 @@ import { base64ToBytes, bytesToBase64, bufferToHexString, expired } from './util
 import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 
-const baseUrl = environment.domain;
+const baseUrl = environment.apiHost;
 
 export const SESSION_TIMEOUT = 60 * 60 * 6;
 export const ACTIVITY_TIMEOUT = 60 * 60 * 1.5;
