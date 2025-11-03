@@ -5,6 +5,9 @@ const fs = require('fs')
 
 module.exports = function (config) {
   config.set({
+    autoWatch: true,
+    singleRun: false,
+    usePolling: true,
     basePath: '',
     frameworks: ['jasmine', '@angular-devkit/build-angular'],
     plugins: [
