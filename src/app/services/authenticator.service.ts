@@ -20,6 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
+import sodium from 'libsodium-wrappers';
 import { environment } from '../../environments/environment';
 import { Injectable, signal } from '@angular/core';
 import {
@@ -120,11 +121,11 @@ export class AuthenticatorService {
    private _userCred?: Uint8Array = undefined;
    private _csrf?: string = undefined;
    private _cachedRecoveryId?: string;
-   public ready: Promise<void>;
+   public ready: Promise<[void, void]>;
 
    constructor(
    ) {
-      this.ready = new Promise<void>((resolve) => {
+      const loadSess = new Promise<void>((resolve) => {
          this.loadSession().catch(
             // just for debugging, remove
             (err) => console.error(err)
@@ -132,7 +133,10 @@ export class AuthenticatorService {
             () => resolve()
          );
       });
+
+      this.ready = Promise.all([loadSess, sodium.ready]);
    }
+
 
    // it is possible for "authenticated" to be true and "validaSession"
    // to be false. this happens when another tab logs out or out then in

@@ -469,8 +469,7 @@ export async function selectWriteableTxtFile(baseName?: string): Promise<FileSys
    return selectWriteableFileImpl(options);
 }
 
-export async function getRandom48(): Promise<Uint8Array> {
-   await sodium.ready;
+export function getRandom48(): Uint8Array {
    return sodium.randombytes_buf(48);
 }
 

@@ -99,7 +99,6 @@ export class SenderLinksComponent implements OnInit, OnDestroy, AfterViewInit {
 
       /*
       this.message = 'hola';
-      await sodium.ready;
       const seedBuf = base64URLStringToBuffer(seed);
       const keyPair = sodium.crypto_box_seed_keypair(new Uint8Array(seedBuf));
 

@@ -21,6 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import sodium from 'libsodium-wrappers';
 import * as cc from './cipher.consts';
+
 import {
    getRandom48,
    numToBytes,
@@ -30,6 +31,20 @@ import {
    getArrayBuffer,
    ensureArrayBuffer
 } from './utils';
+
+import {
+   DecipherV1,
+   DecipherV4,
+   DecipherV5
+}  from "./deciphers-old"
+
+export type EParams = {
+   readonly alg: string;
+   readonly ic: number;
+   readonly lp: number;
+   readonly lpEnd: number;
+};
+
 
 // Simple perf testing with Chrome 126 on MacOS result in
 // readAvailable with READ_SIZE_MAX of 4x to be the fastest
@@ -44,7 +59,6 @@ const READ_SIZE_MAX = READ_SIZE_START * 4;
 //const READ_SIZE_MAX =  READ_SIZE_START * 41;
 //const READ_SIZE_START = 9;
 //const READ_SIZE_MAX = READ_SIZE_START * 16
-
 
 export type PWDProvider = (
    cdInfo: CipherDataInfo,
@@ -75,23 +89,15 @@ export type CipherDataInfo = {
    readonly hint?: string;
 };
 
-export type EParams = {
-   readonly alg: string;
-   readonly ic: number;
-   readonly lp: number;
-   readonly lpEnd: number;
-};
-
-
 // To geenrate matching keys, these must not change
-const HKDF_INFO_SIGNING = "cipherdata signing key";
-const HKDF_INFO_HINT = "hint encryption key";
+export const HKDF_INFO_SIGNING = "cipherdata signing key";
+export const HKDF_INFO_HINT = "hint encryption key";
 
 
 export abstract class Ciphers {
 
-   protected _ek?: CryptoKey;
-   protected _sk?: CryptoKey;
+   protected _ek?: Uint8Array;
+   protected _sk?: Uint8Array;
 
    protected _reader: BYOBStreamReader;
    protected _userCred?: Uint8Array;
@@ -112,21 +118,27 @@ export abstract class Ciphers {
 
    public finishedState() {
       this._state = CipherState.Finished;
-
-      // Don't overwrite because this is only a reference
-      this._userCred = undefined;
-      this._ek = undefined;
-      this._sk = undefined;
-      this._reader.cleanup();
+      this._purge();
    }
 
    public errorState() {
       this._state = CipherState.Error;
+      this._purge();
+   }
 
+   private _purge() {
       // Don't overwrite because this is only a reference
       this._userCred = undefined;
-      this._ek = undefined;
-      this._sk = undefined;
+
+      // overwrite to clear
+      if (this._ek) {
+         crypto.getRandomValues(this._ek);
+         this._ek = undefined;
+      }
+      if (this._sk) {
+         crypto.getRandomValues(this._sk);
+         this._sk = undefined;
+      }
       this._reader.cleanup();
    }
 
@@ -139,7 +151,7 @@ export abstract class Ciphers {
    ): Promise<[number, number, number]> {
 
       const start = Date.now();
-      await Ciphers._genCipherKey('AES-GCM', testSize, 'AVeryBogusPwd', crypto.getRandomValues(new Uint8Array(32)), new Uint8Array(cc.SLT_BYTES));
+      await _genCipherKey('AES-GCM', testSize, 'AVeryBogusPwd', crypto.getRandomValues(new Uint8Array(32)), new Uint8Array(cc.SLT_BYTES));
       const test_millis = Date.now() - start;
 
       const hashRate = testSize / test_millis;
@@ -185,179 +197,13 @@ export abstract class Ciphers {
       return alg!;
    }
 
-
-   static async _genCipherKey(
-      alg: string,
-      ic: number,
-      pwd: string,
-      userCred: Uint8Array,
-      slt: Uint8Array
-   ): Promise<CryptoKey> {
-
-      if (!Ciphers.validateAlg(alg)) {
-         throw new Error('Invalid alg type of: ' + alg);
-      }
-      if (ic < cc.ICOUNT_MIN || ic > cc.ICOUNT_MAX) {
-         throw new Error('Invalid ic of: ' + ic);
-      }
-      if (!pwd) {
-         throw new Error('Invalid empty password');
-      }
-      if (userCred.byteLength != cc.USERCRED_BYTES) {
-         throw new Error("Invalid userCred length of: " + userCred.byteLength);
-      }
-      if (slt.byteLength != cc.SLT_BYTES) {
-         throw new Error("Invalid slt length of: " + slt.byteLength);
-      }
-
-      const pwdBytes = new TextEncoder().encode(pwd);
-      let rawMaterial = new Uint8Array(pwdBytes.byteLength + cc.USERCRED_BYTES)
-      rawMaterial.set(pwdBytes);
-      rawMaterial.set(userCred, pwdBytes.byteLength);
-
-      /* Maybe someday, but requires SUMO version of libsodium.js
-            await sodium.ready;
-            const rawKey = sodium.crypto_pwhash(
-               32,
-               rawMaterial,
-               slt,
-               sodium.crypto_pwhash_OPSLIMIT_MODERATE,
-               sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE,
-               sodium.crypto_pwhash_ALG_ARGON2I13,
-               "uint8array"
-            );
-
-            const ek = await crypto.subtle.importKey(
-               'raw',
-               rawKey,
-               'AES-GCM',
-               true,
-               ['encrypt', 'decrypt']
-            );
-      */
-      const ekMaterial = await crypto.subtle.importKey(
-         'raw',
-         rawMaterial,
-         'PBKDF2',
-         false,
-         ['deriveBits', 'deriveKey']
-      );
-
-      // overwrite to clear userCred and pwd
-      crypto.getRandomValues(rawMaterial);
-      crypto.getRandomValues(pwdBytes);
-
-      // A bit of a hack, but subtle doesn't support other algorithms... so lie. This
-      // is safe because the key is exported as bits and used in libsodium when not
-      // AES-GCM. TODO: If more non-browser cipher are added, make this more generic.
-      const useAlg = 'AES-GCM';
-
-      const ek = await crypto.subtle.deriveKey(
-         {
-            name: 'PBKDF2',
-            salt: getArrayBuffer(slt),
-            iterations: ic,
-            hash: 'SHA-512',
-         },
-         ekMaterial,
-         { name: useAlg, length: 256 },
-         true,
-         ['encrypt', 'decrypt']
-      );
-
-      return ek;
-   }
-
-
-   // Public for testing, normal callers should not need this
-   static async _genSigningKey(
-      userCred: Uint8Array,
-      slt: Uint8Array
-   ): Promise<CryptoKey> {
-
-      if (userCred.byteLength != cc.USERCRED_BYTES) {
-         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
-      }
-      if (slt.byteLength != cc.SLT_BYTES) {
-         throw new Error("Invalid slt length of: " + slt.byteLength);
-      }
-
-      const skMaterial = await crypto.subtle.importKey(
-         'raw',
-         getArrayBuffer(userCred),
-         'HKDF',
-         false,
-         ['deriveBits', 'deriveKey']
-      );
-
-      const sk = await crypto.subtle.deriveKey(
-         {
-            name: 'HKDF',
-            salt: getArrayBuffer(slt),
-            hash: 'SHA-512',
-            info: new TextEncoder().encode(HKDF_INFO_SIGNING)
-         },
-         skMaterial,
-         { name: 'HMAC', hash: 'SHA-256', length: 256 },
-         true,
-         ['sign', 'verify']
-      );
-
-      return sk;
-   }
-
-   // Public for testing, normal callers should not need this
-   static async _genHintCipherKey(
-      alg: string,
-      userCred: Uint8Array,
-      slt: Uint8Array
-   ): Promise<CryptoKey> {
-
-      if (!Ciphers.validateAlg(alg)) {
-         throw new Error('Invalid alg: ' + alg);
-      }
-      if (userCred.byteLength != cc.USERCRED_BYTES) {
-         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
-      }
-      if (slt.byteLength != cc.SLT_BYTES) {
-         throw new Error("Invalid slt length of: " + slt.byteLength);
-      }
-
-      const hkMaterial = await crypto.subtle.importKey(
-         'raw',
-         getArrayBuffer(userCred),
-         'HKDF',
-         false,
-         ['deriveBits', 'deriveKey']
-      );
-
-      // A bit of a hack, but subtle doesn't support other algorithms... so lie. This
-      // is safe because the key is exported as bits and used in libsodium when not
-      // AES-GCM. TODO: If more non-browser cipher are added, make this more generic.
-      const dkAlg = 'AES-GCM';
-
-      const hk = await crypto.subtle.deriveKey(
-         {
-            name: 'HKDF',
-            salt: getArrayBuffer(slt),
-            hash: 'SHA-512',
-            info: new TextEncoder().encode(HKDF_INFO_HINT)
-         },
-         hkMaterial,
-         { name: dkAlg, length: 256 },
-         true,
-         ['encrypt', 'decrypt']
-      );
-
-      return hk;
-   }
-
    // Only useful for validating params before encoding. Decoded values are read with
    // expected sizes, so validity depends on signature validate rather than decoded lengths
    public static validateAdditionalData(
       args: {
          alg: string;
          iv: Uint8Array;
+         term?: boolean;
          ic?: number;
          slt?: Uint8Array;
          lp?: number;
@@ -403,10 +249,14 @@ export abstract class Ciphers {
          throw new Error('Missing lpEnd');
       }
 
-      // Should move this to subclasses... later...
+      // Could move this to subclasses...
       if (args.ver && args.ver != cc.VERSION1) {
          // Only V1 put version in additional data
          throw new Error('Unexpected version: ' + args.ver);
+      }
+      if (args.term != undefined && args.ver && args.ver < cc.VERSION6) {
+         // Only V6+ put term in additional data
+         throw new Error('Unexpected term flag');
       }
 
       if (args.ver && args.lp) {
@@ -422,6 +272,7 @@ export abstract class Ciphers {
       args: {
          alg: string;
          iv: Uint8Array;
+         term?: boolean;
          ic?: number;
          slt?: Uint8Array;
          lp?: number;
@@ -435,6 +286,10 @@ export abstract class Ciphers {
       // Packer validates ranges as values are added
       const packer = new Packer(cc.ADDIONTAL_DATA_MAX_BYTES);
 
+      // Will be a bitfield when more flags are needed
+      if (args.term !== undefined) {
+         packer.flags = args.term ? 1 : 0;
+      }
       packer.alg = args.alg;
       packer.iv = args.iv;
 
@@ -462,34 +317,39 @@ export abstract class Ciphers {
    }
 }
 
-
 export abstract class Encipher extends Ciphers {
+
+   protected constructor(
+      userCred: Uint8Array,
+      reader: BYOBStreamReader
+   ) {
+      super(userCred, reader);
+   }
 
    public static latest(
       userCred: Uint8Array,
       clearStream: ReadableStream<Uint8Array>
    ): Encipher {
       const reader = new BYOBStreamReader(clearStream);
-      return new EncipherV5(userCred, reader);
-   }
-
-   protected constructor(
-      userCred: Uint8Array,
-      reader: BYOBStreamReader,
-      ver: number
-   ) {
-      super(userCred, reader);
+      return new EncipherV6(userCred, reader);
    }
 
    // The encryptBlock functions return CipherDataBlock instead of
    // an opaque byte array to reduce copying (the caller must write
    // all the blocks in order)
-
-   // Helper that calls Block0 until ~success then BlockN
-   public abstract encryptBlock(
+   async encryptBlock(
       eparams: EParams,
       pwdProvider: PWDProvider
-   ): Promise<CipherDataBlock>;
+   ): Promise<CipherDataBlock> {
+
+      if (this._state == CipherState.Initialized) {
+         return this.encryptBlock0(eparams, pwdProvider);
+      } else if (this._state == CipherState.Block0Done) {
+         return this.encryptBlockN(eparams);
+      } else {
+         throw new Error(`Encipher invalid state ${this._state}`);
+      }
+   }
 
    public abstract encryptBlock0(
       eparams: EParams,
@@ -502,12 +362,11 @@ export abstract class Encipher extends Ciphers {
 
 };
 
-
 // Exported just for testing
-export class EncipherV5 extends Encipher {
-   /* V5 CipherData Layout. Tags are just notations,
-    * and are not actually in the data stream. All encodings have one block0 instance
-    * followed by zero or more blockN instances
+export class EncipherV6 extends Encipher {
+   /* V6 CipherData Layout. Tags are just notation, and are not actually in the
+    * data stream. All encodings have one block0 instance followed by zero or
+    * more blockN instances
 
       <Document>
          <Block0>
@@ -515,10 +374,10 @@ export class EncipherV5 extends Encipher {
                MAC_BYTES - 32
                VER_BYTES - 2
                PAYLOAD_SIZE_BYTES - 3
-               FLAGS_BYTES - 1
             </Header>
             <Payload>
                <Additional Data>
+                  FLAGS_BYTES - 1
                   ALG_BYTES - 2
                   IV_BYTES (variable) - [12, 24, 32]
                   SLT_BYTES - 16
@@ -554,32 +413,18 @@ export class EncipherV5 extends Encipher {
    */
 
    private _readTarget = READ_SIZE_START;
-   private _lastMac!: Uint8Array;
-   private _slt!: Uint8Array; // stored as class member to help with testings
+   private _lastMac: Uint8Array<ArrayBuffer> = new Uint8Array([0]);
+   private _slt!: Uint8Array<ArrayBuffer>; // stored as class member to help with testings
 
    constructor(
       userCred: Uint8Array,
       reader: BYOBStreamReader
    ) {
-      super(userCred, reader, cc.VERSION5);
+      super(userCred, reader);
    }
 
    public override protocolVersion(): number {
-      return cc.VERSION5;
-   }
-
-   override async encryptBlock(
-      eparams: EParams,
-      pwdProvider: PWDProvider
-   ): Promise<CipherDataBlock> {
-
-      if (this._state == CipherState.Initialized) {
-         return this.encryptBlock0(eparams, pwdProvider);
-      } else if (this._state == CipherState.Block0Done) {
-         return this.encryptBlockN(eparams);
-      } else {
-         throw new Error(`Encipher invalid state ${this._state}`);
-      }
+      return cc.VERSION6;
    }
 
    // Overall order of operations for encryption
@@ -598,7 +443,7 @@ export class EncipherV5 extends Encipher {
    ): Promise<CipherDataBlock> {
 
       try {
-         EncipherV5.validateEParams(eparams);
+         EncipherV6.validateEParams(eparams);
          if (this._state != CipherState.Initialized) {
             throw new Error(`Encipher invalid state ${this._state}`);
          }
@@ -628,14 +473,14 @@ export class EncipherV5 extends Encipher {
 
          // Create a new salt and IV each time a key is derviced from the password.
          // https://crypto.stackexchange.com/questions/53032/salt-for-non-stored-passwords
-         const randomArray = await getRandom48();
+         const randomArray = getRandom48();
 
          const ivBytes = Number(cc.AlgInfo[eparams.alg]['iv_bytes']);
          this._slt = randomArray.slice(0, cc.SLT_BYTES);
          const iv = randomArray.slice(cc.SLT_BYTES, cc.SLT_BYTES + ivBytes);
 
          const [pwd, hint] = await pwdProvider({
-               ver: cc.VERSION5,
+               ver: cc.VERSION6,
                alg: eparams.alg,
                ic: eparams.ic,
                slt: this._slt,
@@ -653,9 +498,9 @@ export class EncipherV5 extends Encipher {
             throw new Error('Missing password');
          }
 
-         const hk = await Ciphers._genHintCipherKey(eparams.alg, this._userCred!, this._slt);
-         this._sk = await Ciphers._genSigningKey(this._userCred!, this._slt);
-         this._ek = await Ciphers._genCipherKey(eparams.alg, eparams.ic, pwd, this._userCred!, this._slt);
+         let hk: Uint8Array | undefined = await _genHintCipherKey(eparams.alg, this._userCred!, this._slt);
+         this._sk = await _genSigningKey(this._userCred!, this._slt);
+         this._ek = await _genCipherKey(eparams.alg, eparams.ic, pwd, this._userCred!, this._slt);
 
          let encryptedHint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
          if (hint) {
@@ -665,7 +510,7 @@ export class EncipherV5 extends Encipher {
             // It's possible that even a single character (e.g. emoji) might exceed maxHintBytes
             // If so proceed without a hint.
             if (hintBytes.byteLength > 0) {
-               encryptedHint = await EncipherV5._doEncrypt(
+               encryptedHint = await EncipherV6._doEncrypt(
                   eparams.alg,
                   hk,
                   iv,
@@ -673,18 +518,21 @@ export class EncipherV5 extends Encipher {
                );
             }
          }
+         crypto.getRandomValues(hk);
+         hk = undefined;
 
          const additionalData = Ciphers._encodeAdditionalData({
             alg: eparams.alg,
-            iv: iv,
+            iv,
+            term: done,
             ic: eparams.ic,
             lp: eparams.lp,
             lpEnd: eparams.lpEnd,
             slt: this._slt,
-            encryptedHint: encryptedHint
+            encryptedHint
          });
 
-         const encryptedData = await EncipherV5._doEncrypt(
+         const encryptedData = await EncipherV6._doEncrypt(
             eparams.alg,
             this._ek,
             iv,
@@ -692,12 +540,11 @@ export class EncipherV5 extends Encipher {
             additionalData,
          );
 
-         const [headerData, mac] = await EncipherV5._createHeader(
+         const [headerData, mac] = await EncipherV6._createHeader(
             this._sk,
             encryptedData,
             additionalData,
-            new Uint8Array(0),
-            done
+            this._lastMac
          );
 
          this._lastMac = mac;
@@ -728,7 +575,7 @@ export class EncipherV5 extends Encipher {
    ): Promise<CipherDataBlock> {
 
       try {
-         EncipherV5.validateEParams(eparams);
+         EncipherV6.validateEParams(eparams);
          if (this._state != CipherState.Block0Done) {
             throw new Error(`Encipher invalid state ${this._state}`);
          }
@@ -751,17 +598,18 @@ export class EncipherV5 extends Encipher {
             };
          }
 
-         const randomArray = await getRandom48();
+         const randomArray = getRandom48();
 
          const ivBytes = Number(cc.AlgInfo[eparams.alg]['iv_bytes']);
          const iv = randomArray.slice(0, ivBytes);
 
          const additionalData = Ciphers._encodeAdditionalData({
             alg: eparams.alg,
-            iv: iv
+            iv: iv,
+            term: done,
          });
 
-         const encryptedData = await EncipherV5._doEncrypt(
+         const encryptedData = await EncipherV6._doEncrypt(
             eparams.alg,
             this._ek,
             iv,
@@ -770,12 +618,11 @@ export class EncipherV5 extends Encipher {
          );
 
          // chain mac value from last block so that order changes will cause failure
-         const [headerData, mac] = await EncipherV5._createHeader(
+         const [headerData, mac] = await EncipherV6._createHeader(
             this._sk,
             encryptedData,
             additionalData,
-            this._lastMac,
-            done
+            this._lastMac
          );
 
          this._lastMac = mac;
@@ -824,7 +671,7 @@ export class EncipherV5 extends Encipher {
    // Helper function
    protected static async _doEncrypt(
       alg: string,
-      key: CryptoKey,
+      key: Uint8Array,
       iv: Uint8Array,
       clear: Uint8Array,
       additionalData?: Uint8Array,
@@ -837,18 +684,13 @@ export class EncipherV5 extends Encipher {
 
       let encryptedBytes: Uint8Array;
       if (alg == 'X20-PLY') {
-         const exported = await crypto.subtle.exportKey("raw", key);
-         const keyBytes = new Uint8Array(exported);
-
-         await sodium.ready;
          try {
             encryptedBytes = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
                clear,
                additionalData ?? null,
                null,
                iv,
-               keyBytes,
-               "uint8array"
+               key
             );
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
@@ -856,18 +698,13 @@ export class EncipherV5 extends Encipher {
             throw new DOMException(msg, 'OperationError ');
          }
       } else if (alg == 'AEGIS-256') {
-         const exported = await crypto.subtle.exportKey("raw", key);
-         const keyBytes = new Uint8Array(exported);
-
-         await sodium.ready;
          try {
             encryptedBytes = sodium.crypto_aead_aegis256_encrypt(
                clear,
                additionalData ?? null,
                null,
                iv,
-               keyBytes,
-               "uint8array"
+               key
             );
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
@@ -875,48 +712,53 @@ export class EncipherV5 extends Encipher {
             throw new DOMException(msg, 'OperationError ');
          }
       } else {
-         const cipherBuf = await crypto.subtle.encrypt({
+         let ek: CryptoKey | undefined = await crypto.subtle.importKey(
+            'raw',
+            getArrayBuffer(key),
+            'AES-GCM',
+            false,
+            ['encrypt']
+         );
+
+         const buffer = await crypto.subtle.encrypt({
                name: alg,
                iv: getArrayBuffer(iv),
                additionalData: additionalData ? getArrayBuffer(additionalData) : new ArrayBuffer(0),
                tagLength: cc.AES_GCM_TAG_BYTES * 8
             },
-            key,
+            ek,
             getArrayBuffer(clear)
          );
-         encryptedBytes = new Uint8Array(cipherBuf);
+
+         ek = undefined;
+         encryptedBytes = new Uint8Array(buffer);
       }
 
       return encryptedBytes;
    }
 
+
    // Seperated out and made public for testing, normal callers should not be needed this
    public static async _createHeader(
-      sk: CryptoKey,
+      sk: Uint8Array,
       encryptedData: Uint8Array,
       additionalData: Uint8Array,
-      lastMac: Uint8Array,
-      terminalBlock: boolean
-   ): Promise<[Uint8Array, Uint8Array]> {
+      lastMac: Uint8Array
+   ): Promise<[Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>]> {
 
       const payloadBytes = encryptedData.byteLength + additionalData.byteLength;
       // Packer validates ranges as values are added
-      const packer = new Packer(cc.HEADER_BYTES, cc.MAC_BYTES);
-      packer.ver = cc.VERSION5;
+      const packer = new Packer(cc.HEADER_BYTES_6P, cc.MAC_BYTES);
+      packer.ver = cc.VERSION6;
       packer.size = payloadBytes;
-      // Will be a bitfield when more flags are needed
-      packer.flags = terminalBlock ? 1 : 0;
 
-      const exportedSk = await crypto.subtle.exportKey("raw", sk);
-      const skData = new Uint8Array(exportedSk);
-
-      const state = sodium.crypto_generichash_init(skData, cc.MAC_BYTES);
+      const state = sodium.crypto_generichash_init(sk, cc.MAC_BYTES);
       sodium.crypto_generichash_update(state, new Uint8Array(packer.buffer, cc.MAC_BYTES));
       sodium.crypto_generichash_update(state, additionalData);
       sodium.crypto_generichash_update(state, encryptedData);
       sodium.crypto_generichash_update(state, lastMac);
 
-      const mac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
+      const mac = ensureArrayBuffer(sodium.crypto_generichash_final(state, cc.MAC_BYTES));
       packer.offset = 0;
       packer.mac = mac;
 
@@ -928,7 +770,7 @@ type BlockData = {
    readonly mac: Uint8Array<ArrayBuffer>;
    readonly ver: number;
    readonly payloadSize: number;
-   readonly flags: number;
+   flags?: number;
    alg?: string;
    iv?: Uint8Array;
    encryptedData?: Uint8Array<ArrayBuffer>;
@@ -938,7 +780,7 @@ type BlockData = {
 export abstract class Decipher extends Ciphers {
 
    protected _blockData?: BlockData; // keep block specific data together to make clear less error prone
-   protected _slt?: Uint8Array;
+   protected _slt?: Uint8Array<ArrayBuffer>;
    protected _ic?: number;
    protected _lp: number = 1; // Not all version support loop # so provide a default
    protected _lpEnd: number = 1; // Not all version support loop # so provide a default
@@ -953,9 +795,9 @@ export abstract class Decipher extends Ciphers {
       let decipher: Decipher;
       const reader = new BYOBStreamReader(cipherStream);
 
-      const [header, done] = await reader.readFill(new ArrayBuffer(cc.HEADER_BYTES));
+      const [header, done] = await reader.readFill(new ArrayBuffer(cc.HEADER_BYTES_6P));
 
-      if (header.byteLength != cc.HEADER_BYTES || done) {
+      if (header.byteLength != cc.HEADER_BYTES_6P || done) {
          reader.cleanup();
          throw new Error('Invalid cipher stream length: ' + header.byteLength);
       }
@@ -965,7 +807,11 @@ export abstract class Decipher extends Ciphers {
       // after MAC being < 4 (since encoded started with ALG and v1 max ALG was 3 and beyond v1
       // version is >=4). Fortunately ALG_BYTES and VER_BYTES are equal.
       const verOrAlg = bytesToNum(new Uint8Array(header.buffer, cc.MAC_BYTES, cc.VER_BYTES));
-      if (verOrAlg == cc.VERSION5) {
+
+      if (verOrAlg == cc.VERSION6) {
+         decipher = new DecipherV6(userCred, reader, header);
+      }
+      else if (verOrAlg == cc.VERSION5) {
          decipher = new DecipherV5(userCred, reader, header);
       } else if (verOrAlg == cc.VERSION4) {
          decipher = new DecipherV4(userCred, reader, header);
@@ -1049,7 +895,7 @@ export abstract class Decipher extends Ciphers {
             throw new Error('password is empty');
          }
 
-         this._ek = await Ciphers._genCipherKey(this._blockData.alg, this._ic, pwd, this._userCred!, this._slt);
+         this._ek = await _genCipherKey(this._blockData.alg, this._ic, pwd, this._userCred!, this._slt);
 
          const decrypted = await Decipher._doDecrypt(
             this._blockData.alg,
@@ -1099,7 +945,7 @@ export abstract class Decipher extends Ciphers {
 
    protected static async _doDecrypt(
       alg: string,
-      key: CryptoKey,
+      key: Uint8Array,
       iv: Uint8Array,
       encrypted: Uint8Array,
       additionalData?: Uint8Array,
@@ -1112,23 +958,19 @@ export abstract class Decipher extends Ciphers {
 
       let decrypted: Uint8Array;
       if (alg == 'X20-PLY') {
-         const exported = await crypto.subtle.exportKey("raw", key);
-         const keyBytes = new Uint8Array(exported);
 
          /*         console.log('dxcha encrypted', encrypted.byteLength, encrypted);
                   console.log('dxcha additionalData', additionalData.byteLength, additionalData);
                   console.log('dxcha iv', iv.byteLength, iv);
                   console.log('dxcha keyBytes', keyBytes.byteLength, keyBytes);
          */
-         await sodium.ready;
          try {
             decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
                null,
                encrypted,
                additionalData ?? null,
                iv,
-               keyBytes,
-               "uint8array"
+               key
             );
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
@@ -1136,18 +978,13 @@ export abstract class Decipher extends Ciphers {
             throw new DOMException(msg, 'OperationError ');
          }
       } else if (alg == 'AEGIS-256') {
-         const exported = await crypto.subtle.exportKey("raw", key);
-         const keyBytes = new Uint8Array(exported);
-
-         await sodium.ready;
          try {
             decrypted = sodium.crypto_aead_aegis256_decrypt(
                null,
                encrypted,
                additionalData ?? null,
                iv,
-               keyBytes,
-               "uint8array"
+               key
             );
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
@@ -1155,15 +992,25 @@ export abstract class Decipher extends Ciphers {
             throw new DOMException(msg, 'OperationError ');
          }
       } else {
+         let dk: CryptoKey | undefined = await crypto.subtle.importKey(
+            'raw',
+            getArrayBuffer(key),
+            'AES-GCM',
+            false,
+            ['decrypt']
+         );
+
          const buffer = await crypto.subtle.decrypt({
-            name: alg,
-            iv: getArrayBuffer(iv),
-            additionalData: additionalData ? getArrayBuffer(additionalData) : new ArrayBuffer(0),
-            tagLength: cc.AES_GCM_TAG_BYTES * 8
-         },
-            key,
+               name: alg,
+               iv: getArrayBuffer(iv),
+               additionalData: additionalData ? getArrayBuffer(additionalData) : new ArrayBuffer(0),
+               tagLength: cc.AES_GCM_TAG_BYTES * 8
+            },
+            dk,
             getArrayBuffer(encrypted)
          );
+
+         dk = undefined;
          decrypted = new Uint8Array(buffer);
       }
 
@@ -1172,189 +1019,21 @@ export abstract class Decipher extends Ciphers {
 };
 
 
-class DecipherV1 extends Decipher {
-   /* V1 CipherData Layout (it was a bit brain-dead, but it wasn't written to files)
-      <Document>
-         MAC_BYTES
-         ALG_BYTES
-         IV_BYTES (variable)
-         SLT_BYTES
-         IC_BYTES
-         VER_BYTES
-         HINT_SIZE_BYTES
-         HINT_BYTES (variable)
-         ENC_DATA_BYTES (variable)
-      </Document>
-   */
-
-   private _headerish?: Uint8Array;
-
-   constructor(
-      userCred: Uint8Array,
-      reader: BYOBStreamReader,
-      headerish?: Uint8Array
-   ) {
-      super(userCred, reader);
-
-      // V1 didn't really have a header, save the data to combine
-      // with the rest of the stream for decoding
-      this._headerish = headerish;
-   }
-
-   public override protocolVersion(): number {
-      return cc.VERSION1;
-   }
-
-   // For V1, this should be the entire CipherData array
-   override async _decodePayload0(): Promise<void> {
-
-      try {
-         if (![CipherState.Initialized, CipherState.Block0Decoded].includes(this._state)) {
-            throw new Error(`Decipher invalid state ${this._state}`);
-         }
-
-         // May be called multiple times calling getCipherDataInfo or others.
-         if (this._state == CipherState.Block0Decoded) {
-            return;
-         }
-
-         if (this._sk) {
-            throw new Error('Decipher unexpected signing key');
-         }
-
-         // This isn't very efficient, but it simplifies object creation and V4 logic
-         // (which are more important)
-         let [payload] = await this._reader.readFill(new ArrayBuffer(cc.PAYLOAD_SIZE_MAX));
-
-         if (this._headerish) {
-            const newPayload = new Uint8Array(this._headerish.byteLength + payload.byteLength);
-            newPayload.set(this._headerish);
-            newPayload.set(payload, this._headerish.byteLength);
-            this._headerish = undefined;
-            payload = newPayload;
-         }
-
-         // V1 should test be larger, but this get simple cases
-         if (payload.byteLength < cc.PAYLOAD_SIZE_MIN) {
-            throw new Error('Invalid paysload size1: ' + payload.byteLength);
-         }
-
-         // Need to treat all values an UNTRUSTED since the signature has not yet been
-         // validated, Extractor does test each value for valid ranges as we unpack
-         let extractor = new Extractor(payload);
-
-         // Order must be invariant (as oringally laid out in v1)
-         const mac = extractor.mac;
-         const alg = extractor.alg;
-         const iv = extractor.iv;
-         this._slt = extractor.slt;
-         this._ic = extractor.ic;
-         const ver = extractor.ver;
-         if (ver != cc.VERSION1) {
-            throw new Error('Invalid version of: ' + ver);
-         }
-         const encryptedHint = extractor.hint;
-         const encryptedData = extractor.remainder('edata');
-
-         // Repack because we don't have the contiguous data any longer
-         const additionalData = Ciphers._encodeAdditionalData({
-            alg: alg,
-            iv: iv,
-            ver: ver,
-            ic: this._ic,
-            slt: this._slt,
-            encryptedHint: encryptedHint
-         });
-
-         this._blockData = {
-            mac: mac,
-            ver: ver,
-            payloadSize: payload.byteLength,
-            flags: 0,
-            alg: alg,
-            iv: iv,
-            encryptedData: encryptedData,
-            additionalData: additionalData
-         }
-
-         this._sk = await Ciphers._genSigningKey(this._userCred!, this._slt);
-
-         // Avoiding the Doom Principle and verify signature before crypto operations.
-         // Aka, check MAC as soon as possible after we  have the signing key and data.
-         // Might be cleaner to do this elswhere, but keeping it at the lowest level
-         // ensures we don't skip the step
-         const validMac: boolean = await this._verifyMAC();
-         if (!validMac) {
-            throw new Error('Invalid MAC error');
-         }
-
-         let hint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
-         if (encryptedHint!.byteLength != 0) {
-            const hk = await Ciphers._genHintCipherKey(this._blockData!.alg!, this._userCred!, this._slt);
-            hint = await Decipher._doDecrypt(
-               this._blockData!.alg!,
-               hk,
-               this._blockData!.iv!,
-               encryptedHint
-            );
-         }
-
-         this._hint = new TextDecoder().decode(hint)
-         this._state = CipherState.Block0Decoded;
-
-      } catch (err) {
-         this.errorState();
-         console.error(err);
-         throw err;
-      }
-   }
-
-   private async _verifyMAC(): Promise<boolean> {
-
-      if (!this._blockData || !this._blockData.additionalData || !this._blockData.encryptedData || !this._sk || !this._blockData) {
-         throw new Error('Invalid MAC data');
-      }
-
-      const data = new Uint8Array(this._blockData.additionalData.byteLength + this._blockData.encryptedData.byteLength);
-      data.set(this._blockData.additionalData);
-      data.set(this._blockData.encryptedData, this._blockData.additionalData.byteLength);
-
-      // V1 uses HMAC from webcrypto
-      const valid: boolean = await crypto.subtle.verify('HMAC', this._sk, this._blockData.mac, data);
-      if (valid) {
-         return true;
-      }
-
-      throw new Error('Invalid HMAC signature');
-   }
-
-   public override async decryptBlockN(): Promise<Uint8Array> {
-      if (this._state != CipherState.Block0Done) {
-         throw new Error('Decipher block0 not complete');
-      }
-      this.finishedState();
-
-      // This is the signal decrytion is done. V1 never has more than block0
-      return new Uint8Array();
-   }
-
-}
-
-
-class DecipherV4 extends Decipher {
-   /* V4 CipherData Layout (hopefully less brain dead). Tags are just notation...
-    * and are not actually in the data stream. All encodings have one block0 instance
-    * followed by zero or more blockN instances
+class DecipherV6 extends Decipher {
+   /* V6 CipherData Layout. Tags are just notation, and are not actually in the
+    * data stream. All encodings have one block0 instance followed by zero or
+    * more blockN instances
 
       <Document>
          <Block0>
             <Header>
                MAC_BYTES - 32
                VER_BYTES - 2
-               PAYLOAD_SIZE_BYTES - 4
+               PAYLOAD_SIZE_BYTES - 3
             </Header>
             <Payload>
                <Additional Data>
+                  FLAGS_BYTES - 1
                   ALG_BYTES - 2
                   IV_BYTES (variable) - [12, 24, 32]
                   SLT_BYTES - 16
@@ -1389,6 +1068,8 @@ class DecipherV4 extends Decipher {
    */
 
    private _header?: Uint8Array;
+   private _lastMac: Uint8Array<ArrayBuffer> = new Uint8Array([0]);
+   private _lastFlags = 0;
 
    constructor(
       userCred: Uint8Array,
@@ -1400,7 +1081,7 @@ class DecipherV4 extends Decipher {
    }
 
    public override protocolVersion(): number {
-      return cc.VERSION4;
+      return cc.VERSION6;
    }
 
    private async _decodeHeader(header?: Uint8Array): Promise<boolean> {
@@ -1409,8 +1090,8 @@ class DecipherV4 extends Decipher {
       // validated.
       if (!header) {
          let done: boolean;
-         [header, done] = await this._reader.readFill(new ArrayBuffer(cc.HEADER_BYTES));
-         if (header.byteLength > 0 && (done || header.byteLength < cc.HEADER_BYTES)) {
+         [header, done] = await this._reader.readFill(new ArrayBuffer(cc.HEADER_BYTES_6P));
+         if (header.byteLength > 0 && (done || header.byteLength < cc.HEADER_BYTES_6P)) {
             this._reader.cleanup();
             throw new Error('Missing cipher data header');
          }
@@ -1430,14 +1111,14 @@ class DecipherV4 extends Decipher {
          throw new Error('Invalid version of: ' + ver);
       }
       const payloadSize = extractor.size;
-      // V4 did not use flags, but had extra byte in payloadSize. Extract to move offset
-      const flags = extractor.flags;
+      if (payloadSize < cc.PAYLOAD_SIZE_MIN || payloadSize > cc.PAYLOAD_SIZE_MAX) {
+         throw new Error('Invalid payload size1: ' + payloadSize);
+      }
 
       this._blockData = {
          mac: ensureArrayBuffer(mac),
          ver: ver,
          payloadSize: payloadSize,
-         flags: flags,
       }
 
       return false;
@@ -1472,10 +1153,6 @@ class DecipherV4 extends Decipher {
          // Need to treat all values an UNTRUSTED since the signature has not yet been
          // validated, Extractor does test each value for valid ranges as we unpack
 
-         if (!this._blockData.payloadSize) {
-            throw new Error('Invalid payload size1: ' + this._blockData.payloadSize);
-         }
-
          const [payload, done] = await this._reader.readFill(new ArrayBuffer(this._blockData.payloadSize));
          if (done) {
             this._reader.cleanup();
@@ -1488,6 +1165,7 @@ class DecipherV4 extends Decipher {
          let extractor = new Extractor(payload);
 
          // Order must be invariant
+         this._blockData.flags = extractor.flags;
          this._blockData.alg = extractor.alg;
          this._blockData.iv = extractor.iv;
          this._slt = extractor.slt;
@@ -1503,7 +1181,7 @@ class DecipherV4 extends Decipher {
             extractor.offset - this._blockData.encryptedData.byteLength
          );
 
-         this._sk = await Ciphers._genSigningKey(this._userCred!, this._slt);
+         this._sk = await _genSigningKey(this._userCred!, this._slt);
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we have the signing key and data.
@@ -1516,17 +1194,22 @@ class DecipherV4 extends Decipher {
 
          let hint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
          if (encryptedHint!.byteLength != 0) {
-            const hk = await Ciphers._genHintCipherKey(this._blockData.alg, this._userCred!, this._slt);
+            let hk: Uint8Array | undefined = await _genHintCipherKey(this._blockData.alg, this._userCred!, this._slt);
             hint = await Decipher._doDecrypt(
                this._blockData.alg,
                hk,
                this._blockData.iv,
                encryptedHint
             );
+
+            crypto.getRandomValues(hk);
+            hk = undefined;
          }
 
          this._hint = new TextDecoder().decode(hint)
          this._state = CipherState.Block0Decoded;
+         this._lastFlags = this._blockData.flags;
+
       } catch (err) {
          this.errorState();
          console.error(err);
@@ -1586,16 +1269,21 @@ class DecipherV4 extends Decipher {
       try {
          const done = await this._decodeHeader();
          if (done) {
+            if (this._lastFlags !== 1) {
+               throw new Error('Missing terminal data block');
+            }
             this.finishedState();
             return;
          }
 
-         if (!this._blockData) {
-            throw new Error('Data not initialized');
+         // If we loaded more data, and lastFlags was 1 (change to bitfield someday)
+         // we have an error
+         if (this._lastFlags === 1) {
+            throw new Error(`Terminal block already read ${this._state}`);
          }
 
-         if (!this._blockData.payloadSize) {
-            throw new Error('Invalid payload size2: ' + this._blockData.payloadSize);
+         if (!this._blockData) {
+            throw new Error('Data not initialized');
          }
 
          // Don't need to look at done for the fill since there will will be another
@@ -1609,6 +1297,7 @@ class DecipherV4 extends Decipher {
          let extractor = new Extractor(payload);
 
          // Order must be invariant
+         this._blockData.flags = extractor.flags;
          this._blockData.alg = extractor.alg;
          this._blockData.iv = extractor.iv;
          this._blockData.encryptedData = extractor.remainder('edata');
@@ -1628,6 +1317,9 @@ class DecipherV4 extends Decipher {
          if (!validMac) {
             throw new Error('Invalid MAC error');
          }
+
+         this._lastFlags = this._blockData.flags;
+
       } catch (err) {
          this.errorState();
          console.error(err);
@@ -1635,106 +1327,21 @@ class DecipherV4 extends Decipher {
       }
    }
 
-   protected async _verifyMAC(): Promise<boolean> {
+   private async _verifyMAC(): Promise<boolean> {
 
       if (!this._blockData || !this._blockData.payloadSize || !this._blockData.ver || !this._blockData.additionalData ||
          !this._sk || !this._blockData.encryptedData || !this._blockData.mac) {
          throw new Error('Data not initialized');
       }
 
-      const encVer = numToBytes(this._blockData.ver, cc.VER_BYTES);
-      const encSizeBytes = numToBytes(this._blockData.payloadSize, cc.PAYLOAD_SIZE_BYTES + cc.FLAGS_BYTES);
-
-      const headerPortion = new Uint8Array(cc.VER_BYTES + cc.PAYLOAD_SIZE_BYTES + cc.FLAGS_BYTES);
-      headerPortion.set(encVer);
-      headerPortion.set(encSizeBytes, cc.VER_BYTES);
-
-      const exportedSk = await crypto.subtle.exportKey("raw", this._sk);
-      const skData = new Uint8Array(exportedSk);
-
-      await sodium.ready;
-      const state = sodium.crypto_generichash_init(skData, cc.MAC_BYTES);
-
-
-      sodium.crypto_generichash_update(state, headerPortion);
-      sodium.crypto_generichash_update(state, this._blockData.additionalData);
-      sodium.crypto_generichash_update(state, this._blockData.encryptedData);
-
-      const testMac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
-      const validMac: boolean = sodium.memcmp(this._blockData.mac, testMac);
-
-      if (validMac) {
-         return true;
-      }
-
-      throw new Error('Invalid MAC signature');
-   }
-}
-
-class DecipherV5 extends DecipherV4 {
-
-   private _lastMac: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
-   private _lastFlags = 0;
-
-   public override protocolVersion(): number {
-      return cc.VERSION5;
-   }
-
-   override async _decodePayload0(): Promise<void> {
-
-      await super._decodePayload0();
-
-      // Eventually flags may be a bitfield
-      if (this._state === CipherState.Finished && this._lastFlags !== 1) {
-         throw new Error('Missing terminal data block');
-      }
-
-      if (this._blockData) {
-         this._lastFlags = this._blockData!.flags;
-      }
-   }
-
-   protected override async _decodePayloadN(): Promise<void> {
-
-      await super._decodePayloadN();
-
-      // If we loaded more data, and lastFlags was 1 (change to bitfield someday)
-      // we have an error
-      if (this._lastFlags === 1 && this._state !== CipherState.Finished) {
-         throw new Error(`Terminal block already read ${this._state}`);
-      }
-
-      // Eventually flags may be a bitfield
-      if (this._state === CipherState.Finished && this._lastFlags !== 1) {
-         throw new Error('Missing terminal data block');
-      }
-
-      if (this._blockData) {
-         this._lastFlags = this._blockData!.flags;
-      }
-   }
-
-   protected override async _verifyMAC(): Promise<boolean> {
-
-      if (!this._blockData || !this._blockData.payloadSize || !this._blockData.ver || !this._blockData.additionalData ||
-         !this._sk || !this._blockData.encryptedData || !this._blockData.mac) {
-         throw new Error('Data not initialized');
-      }
-
-      const encVer = numToBytes(this._blockData.ver, cc.VER_BYTES);
+      const encVerBytes = numToBytes(this._blockData.ver, cc.VER_BYTES);
       const encSizeBytes = numToBytes(this._blockData.payloadSize, cc.PAYLOAD_SIZE_BYTES);
-      const encFlags = numToBytes(this._blockData.flags!, cc.FLAGS_BYTES);
 
-      const headerPortion = new Uint8Array(cc.VER_BYTES + cc.PAYLOAD_SIZE_BYTES + cc.FLAGS_BYTES);
-      headerPortion.set(encVer);
+      const headerPortion = new Uint8Array(cc.VER_BYTES + cc.PAYLOAD_SIZE_BYTES);
+      headerPortion.set(encVerBytes);
       headerPortion.set(encSizeBytes, cc.VER_BYTES);
-      headerPortion.set(encFlags, cc.VER_BYTES + cc.PAYLOAD_SIZE_BYTES);
 
-      const exportedSk = await crypto.subtle.exportKey("raw", this._sk);
-      const skData = new Uint8Array(exportedSk);
-
-      await sodium.ready;
-      const state = sodium.crypto_generichash_init(skData, cc.MAC_BYTES);
+      const state = sodium.crypto_generichash_init(this._sk, cc.MAC_BYTES);
 
       sodium.crypto_generichash_update(state, headerPortion);
       sodium.crypto_generichash_update(state, this._blockData.additionalData);
@@ -1743,7 +1350,7 @@ class DecipherV5 extends DecipherV4 {
 
       const testMac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
       const validMac: boolean = sodium.memcmp(this._blockData.mac, testMac);
-      this._lastMac = testMac;
+      this._lastMac = ensureArrayBuffer(testMac);
 
       if (validMac) {
          return true;
@@ -1751,10 +1358,11 @@ class DecipherV5 extends DecipherV4 {
 
       throw new Error('Invalid MAC signature');
    }
+
 }
 
 
-class Extractor<T extends ArrayBufferLike> {
+export class Extractor<T extends ArrayBufferLike> {
    private _encoded: Uint8Array<T>;
    private _offset: number;
    private _alg?: string;
@@ -1846,7 +1454,7 @@ class Extractor<T extends ArrayBufferLike> {
 
    get ver(): number {
       const ver = bytesToNum(this.extract('ver', cc.VER_BYTES));
-      if (ver != cc.VERSION1 && ver != cc.VERSION4 && ver != cc.VERSION5) {
+      if (ver != cc.VERSION1 && ver != cc.VERSION4 && ver != cc.VERSION5 && ver != cc.VERSION6) {
          throw new Error('Invalid version of: ' + ver);
       }
       return ver;
@@ -1878,7 +1486,7 @@ class Extractor<T extends ArrayBufferLike> {
 }
 
 
-class Packer {
+export class Packer {
    private _dest?: Uint8Array<ArrayBuffer>;
    private _offset: number;
    private _ivBytes?: number;
@@ -1995,7 +1603,7 @@ class Packer {
    }
 
    set ver(version: number) {
-      if (version != cc.VERSION1 && version != cc.VERSION4 && version != cc.VERSION5) {
+      if (version != cc.VERSION1 && version != cc.VERSION4 && version != cc.VERSION5 && version != cc.VERSION6) {
          throw new Error('Invalid version of: ' + version);
       }
       this.pack('ver', numToBytes(version, cc.VER_BYTES));
@@ -2023,4 +1631,138 @@ class Packer {
       }
       this.pack('size', numToBytes(payloadSize, cc.PAYLOAD_SIZE_BYTES));
    }
+}
+
+// Exported for testing, normal callers should not need this
+export async function _genCipherKey(
+   alg: string,
+   ic: number,
+   pwd: string,
+   userCred: Uint8Array,
+   slt: Uint8Array
+): Promise<Uint8Array<ArrayBuffer>> {
+
+   if (!Ciphers.validateAlg(alg)) {
+      throw new Error('Invalid alg type of: ' + alg);
+   }
+   if (ic < cc.ICOUNT_MIN || ic > cc.ICOUNT_MAX) {
+      throw new Error('Invalid ic of: ' + ic);
+   }
+   if (!pwd) {
+      throw new Error('Invalid empty password');
+   }
+   if (userCred.byteLength != cc.USERCRED_BYTES) {
+      throw new Error("Invalid userCred length of: " + userCred.byteLength);
+   }
+   if (slt.byteLength != cc.SLT_BYTES) {
+      throw new Error("Invalid slt length of: " + slt.byteLength);
+   }
+
+   const pwdBytes = new TextEncoder().encode(pwd);
+   let rawMaterial = new Uint8Array(pwdBytes.byteLength + cc.USERCRED_BYTES)
+   rawMaterial.set(pwdBytes);
+   rawMaterial.set(userCred, pwdBytes.byteLength);
+
+   const ekMaterial = await crypto.subtle.importKey(
+      'raw',
+      rawMaterial,
+      'PBKDF2',
+      false,
+      ['deriveBits', 'deriveKey']
+   );
+
+   // overwrite to clear userCred and pwd
+   crypto.getRandomValues(rawMaterial);
+   crypto.getRandomValues(pwdBytes);
+
+   // A bit of a hack, but subtle doesn't support other algorithms... so lie. This
+   // is safe because the key is exported as bits and used in libsodium when not
+   // AES-GCM. TODO: If more non-browser cipher are added, make this more generic.
+   const useAlg = 'AES-GCM';
+
+   let subtleKey: CryptoKey | undefined = await crypto.subtle.deriveKey(
+      {
+         name: 'PBKDF2',
+         salt: getArrayBuffer(slt),
+         iterations: ic,
+         hash: 'SHA-512',
+      },
+      ekMaterial,
+      { name: useAlg, length: 256 },
+      true,
+      ['encrypt', 'decrypt']
+   );
+
+   const exported = await crypto.subtle.exportKey("raw", subtleKey);
+   subtleKey = undefined;
+   return new Uint8Array(exported);
+}
+
+// Exported for testing and old deciphers, normal callers should not need this
+export async function _genHintCipherKey(
+   alg: string,
+   userCred: Uint8Array,
+   slt: Uint8Array
+): Promise<Uint8Array<ArrayBuffer>> {
+
+   if (!Ciphers.validateAlg(alg)) {
+      throw new Error('Invalid alg: ' + alg);
+   }
+   if (userCred.byteLength != cc.USERCRED_BYTES) {
+      throw new Error('Invalid userCred length of: ' + userCred.byteLength);
+   }
+   if (slt.byteLength != cc.SLT_BYTES) {
+      throw new Error("Invalid slt length of: " + slt.byteLength);
+   }
+
+   const hkMaterial = await crypto.subtle.importKey(
+      'raw',
+      getArrayBuffer(userCred),
+      'HKDF',
+      false,
+      ['deriveBits', 'deriveKey']
+   );
+
+   // A bit of a hack, but subtle doesn't support other algorithms... so lie. This
+   // is safe because the key is exported as bits and used in libsodium when not
+   // AES-GCM. TODO: If more non-browser cipher are added, make this more generic.
+   const dkAlg = 'AES-GCM';
+
+   let subtleKey: CryptoKey | undefined = await crypto.subtle.deriveKey(
+      {
+         name: 'HKDF',
+         salt: getArrayBuffer(slt),
+         hash: 'SHA-512',
+         info: new TextEncoder().encode(HKDF_INFO_HINT)
+      },
+      hkMaterial,
+      { name: dkAlg, length: 256 },
+      true,
+      ['encrypt', 'decrypt']
+   );
+
+   const exported = await crypto.subtle.exportKey("raw", subtleKey);
+   subtleKey = undefined;
+   return new Uint8Array(exported);
+}
+
+// Exported for testing, normal callers should not need this
+export async function _genSigningKey(
+   userCred: Uint8Array,
+   slt: Uint8Array
+): Promise<Uint8Array<ArrayBuffer>> {
+
+   if (userCred.byteLength != cc.USERCRED_BYTES) {
+      throw new Error('Invalid userCred length of: ' + userCred.byteLength);
+   }
+   if (slt.byteLength != cc.SLT_BYTES) {
+      throw new Error("Invalid slt length of: " + slt.byteLength);
+   }
+
+   return ensureArrayBuffer(sodium.crypto_kdf_derive_from_key(
+      cc.SK_BYTES,
+      1,
+      HKDF_INFO_SIGNING,
+      userCred
+   ));
 }
