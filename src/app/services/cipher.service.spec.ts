@@ -22,7 +22,6 @@ SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
 import * as cc from './cipher.consts';
 import { CipherService } from './cipher.service';
-import { Encipher } from './ciphers';
 import {
    readStreamAll,
    base64ToBytes,
@@ -1039,7 +1038,7 @@ describe("Stream encryption and decryption", function () {
    });
 });
 
-describe("Stream manipulation", function () {
+describe("Stream manipulation, v5", function () {
 
    let cipherSvc: CipherService;
    beforeEach(() => {
@@ -1122,7 +1121,7 @@ describe("Stream manipulation", function () {
 
       // Test modified block0 version
       const b0Ver = new Uint8Array(cipherData);
-      b0Ver[block0VerOffset] = 6;
+      b0Ver[block0VerOffset] = 22;
       [stream] = streamFromBytes(b0Ver);
       await expectAsync(
          cipherSvc.decryptStream(
@@ -1599,7 +1598,7 @@ describe("Stream manipulation", function () {
    it("detect fuzz cipher data decryption, all algorithms", async function () {
 
       // Test both small invalid and normal size "cipher data"
-      const minValid = cc.HEADER_BYTES + cc.PAYLOAD_SIZE_MIN;
+      const minValid = cc.HEADER_BYTES_6P + cc.PAYLOAD_SIZE_MIN;
       const ranges = [
          [0, minValid - 1],
          [minValid, minValid + 51]
@@ -1758,7 +1757,7 @@ describe("Stream manipulation", function () {
 
 });
 
-describe("Block order change and deletion detection", function () {
+describe("Block order change and deletion detection, v5", function () {
    let cipherSvc: CipherService;
    beforeEach(() => {
       TestBed.configureTestingModule({});

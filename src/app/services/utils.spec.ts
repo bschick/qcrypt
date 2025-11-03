@@ -96,8 +96,8 @@ describe("Base64 encode decode", function () {
 describe("getRandom48 tests", function () {
 
    it("pseudo random", async function () {
-      const r1 = await getRandom48();
-      const r2 = await getRandom48();
+      const r1 = getRandom48();
+      const r2 = getRandom48();
 
       expect(r1.byteLength).toBe(48);
       expect(r2.byteLength).toBe(48);

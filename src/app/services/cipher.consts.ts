@@ -37,18 +37,20 @@ export const IC_BYTES = 4;
 export const LPP_BYTES = 1;
 export const VER_BYTES = 2;
 export const MAC_BYTES = 32;
+export const SK_BYTES = 32;
 export const USERCRED_BYTES = 32;
 export const PAYLOAD_SIZE_BYTES = 3;
 export const FLAGS_BYTES = 1;
 
 // Changing this is the future will be messy. Better change version and put
 // length changes into the payload
-export const HEADER_BYTES = MAC_BYTES + VER_BYTES + PAYLOAD_SIZE_BYTES + FLAGS_BYTES;
+export const HEADER_BYTES_OLD = MAC_BYTES + VER_BYTES + PAYLOAD_SIZE_BYTES + FLAGS_BYTES;
+export const HEADER_BYTES_6P = MAC_BYTES + VER_BYTES + PAYLOAD_SIZE_BYTES;
 
 export const PAYLOAD_SIZE_MIN = IV_MIN_BYTES + ALG_BYTES + AUTH_TAG_MIN_BYTES + 1;
 export const PAYLOAD_SIZE_MAX = 16777215;  // limit to 3 bytes size (extra byte is reserved)
 
-export const ADDIONTAL_DATA_MAX_BYTES = ALG_BYTES + IV_MAX_BYTES + IC_BYTES + SLT_BYTES + LPP_BYTES + HINT_LEN_BYTES + ENCRYPTED_HINT_MAX_BYTES;
+export const ADDIONTAL_DATA_MAX_BYTES = FLAGS_BYTES + ALG_BYTES + IV_MAX_BYTES + IC_BYTES + SLT_BYTES + LPP_BYTES + HINT_LEN_BYTES + ENCRYPTED_HINT_MAX_BYTES;
 export const CLEAR_DATA_MAX_BYTES = PAYLOAD_SIZE_MAX - ADDIONTAL_DATA_MAX_BYTES;
 
 export const LP_MAX = 16;
@@ -61,7 +63,8 @@ export const ICOUNT_MAX = 4294000000; // limited to 4 bytes unsigned rounded to 
 export const VERSION1 = 1;
 export const VERSION4 = 4;
 export const VERSION5 = 5;
-export const CURRENT_VERSION = VERSION5;
+export const VERSION6 = 6;
+export const CURRENT_VERSION = VERSION6;
 export const V1_BELOW = VERSION4 // leave fixed at 4
 
 // needs to fit into 255 bytes encypted... this allows for all double byte + max auth tag

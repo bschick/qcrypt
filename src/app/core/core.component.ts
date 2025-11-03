@@ -677,7 +677,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async onDecrypt(): Promise<void> {
-      if ((!this.cipherFile && this.cipherArmor.length < (cc.HEADER_BYTES + cc.PAYLOAD_SIZE_MIN))) {
+      if ((!this.cipherFile && this.cipherArmor.length < (cc.HEADER_BYTES_6P + cc.PAYLOAD_SIZE_MIN))) {
          this.onClearCipher();
          this.showClearError('Missing cipher armor. Enter cipher armor text or select a file, then decrypt');
          this.r2.selectRootElement('#cipherInput').focus();
@@ -1043,15 +1043,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    // note that we aren't checking plain text cipher armor for loops because
-   // the original version of loop decryption is broken (don't think it was
-   // ever used in the wild)
+   // it was never used in the wild
    async getCipherDataInfo(): Promise<CipherDataInfo> {
       if (!this.authSvc.authenticated()) {
          throw new Error('User not authenticated, try refreshing this page')
       }
 
       const [cipherStream, size] = await this.getCipherStream();
-      if (size < cc.HEADER_BYTES + cc.PAYLOAD_SIZE_MIN) {
+      if (size < cc.HEADER_BYTES_6P + cc.PAYLOAD_SIZE_MIN) {
          throw new Error('Missing cipher armor');
       }
       return await this.cipherSvc.getCipherStreamInfo(
