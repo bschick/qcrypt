@@ -23,12 +23,12 @@ SOFTWARE. */
 import * as cc from './cipher.consts';
 import {
    Ciphers,
-   Encipher,
-   Decipher,
    EParams,
    CipherDataInfo,
    CipherState,
-   PWDProvider
+   PWDProvider,
+   streamDecipher,
+   latestEncipher
 } from './ciphers';
 import { browserSupportsBytesStream, streamWriteBYOD } from './utils';
 
@@ -83,7 +83,7 @@ async function _encryptStreamImpl(
       throw new Error('Invalid userCred length of: ' + userCred.byteLength);
    }
 
-   const encipher = Encipher.latest(userCred, clearStream);
+   const encipher = latestEncipher(userCred, clearStream);
 
    const eparams: EParams = {
       ...econtext,
@@ -141,7 +141,7 @@ export async function getCipherStreamInfo(
       throw new Error('Invalid userCred length of: ' + userCred.byteLength);
    }
 
-   const decipher = await Decipher.fromStream(userCred, cipherStream);
+   const decipher = await streamDecipher(userCred, cipherStream);
    return decipher.getCipherDataInfo();
 }
 
@@ -156,7 +156,7 @@ export async function decryptStream(
       throw new Error('Invalid userCred length of: ' + userCred.byteLength);
    }
 
-   const decipher = await Decipher.fromStream(userCred, cipherStream);
+   const decipher = await streamDecipher(userCred, cipherStream);
    const cdInfo = await decipher.getCipherDataInfo();
 
    let readableStream = new ReadableStream({
