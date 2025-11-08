@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2024 Brad Schick
+Copyright (c) 2025 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -103,8 +103,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    private signinDialogRef?: MatDialogRef<SigninDialog>
    private mouseDown = false;
-   private cachedPassword = '';
-   private cachedHint = '';
+   private cachedPassword?: Uint8Array;
+   private cachedHint?: Uint8Array;
    private intervalId = 0;
    private spinnerAbove = 1500000; // Default since benchmark is async
    private actionStart = 0;
@@ -312,8 +312,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    clearPassword() {
       this.pwdCached = false;
-      this.cachedPassword = '';
-      this.cachedHint = '';
+      if (this.cachedPassword) {
+         crypto.getRandomValues(this.cachedPassword);
+         this.cachedPassword = undefined;
+      }
+      if (this.cachedHint) {
+         crypto.getRandomValues(this.cachedHint);
+         this.cachedHint = undefined;
+      }
       if (this.intervalId != 0) {
          clearInterval(this.intervalId);
          this.intervalId = 0;
@@ -401,7 +407,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       let pwdResult: [string, string | undefined];
       if (this.pwdCached && cdInfo.lpEnd == 1) {
          this.restartTimer();
-         pwdResult = [this.cachedPassword, this.cachedHint];
+         const decoder = new TextDecoder();
+         pwdResult = [decoder.decode(this.cachedPassword), decoder.decode(this.cachedHint)];
       } else {
          //-1 minStrength means no pwd strength requirments
          pwdResult = await this.askForPassword(cdInfo, encrypting);
@@ -453,8 +460,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                } else {
                   this.clearPassword();
                   if (this.options.cacheTime > 0 && result[0] && cdInfo.lpEnd == 1) {
-                     this.cachedPassword = result[0];
-                     this.cachedHint = result[1];
+                     const encoder = new TextEncoder();
+                     this.cachedPassword = encoder.encode(result[0]);
+                     this.cachedHint = encoder.encode(result[1]);
                      this.pwdCached = true;
                      this.restartTimer();
                   }
