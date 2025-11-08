@@ -33,4 +33,6 @@ See the live Quick Crypt website for a [detailed description of Quick Crypt's en
 
 ### Acknowledgments
 
-Be the first to be acknowledged!
+Thanks to the following security researchers:
+
+**destro4evr**: The first to report potential issues and recommend improvements, particularly for GET /users/{userid}/session
