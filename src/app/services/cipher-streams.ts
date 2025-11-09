@@ -107,7 +107,7 @@ async function _encryptStreamImpl(
                }
             }
 
-            if (cipherData.state == CipherState.Finished) {
+            if (cipherData.state === CipherState.Finished) {
                controller.close();
                // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
                //@ts-ignore
