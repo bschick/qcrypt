@@ -606,20 +606,21 @@ export class EncipherV6 extends Encipher {
          }
 
          this._readTarget = Math.min(this._readTarget * 2, Encipher.READ_SIZE_MAX);
-         const [clearBuffer, done] = await this._reader.readAvailable(
-            new ArrayBuffer(this._readTarget)
-         );
+         let clearBuffer: Uint8Array;
+         let done: boolean;
 
-         // There can be read stalls, caller must be ready to ignore empty results
-         // and call BlockN again when state is not Finished
-         if (clearBuffer.byteLength == 0) {
-            if (done) {
-               this.finishedState();
+         while (true) {
+            [clearBuffer, done] = await this._reader.readAvailable(
+               new ArrayBuffer(this._readTarget)
+            );
+
+            // There can be read stalls, if so we keep trying. If we received data or
+            // are done, exist loop. Note that we can be done and get zero data due to
+            // the previous read matching exactly remaining data. In that case, we append
+            // another block that won't produce clearText (but is a valid term)
+            if (clearBuffer.byteLength !== 0 || done) {
+               break;
             }
-            return {
-               parts: [],
-               state: this._state
-            };
          }
 
          const randomArray = getRandom48();
