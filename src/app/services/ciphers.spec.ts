@@ -25,12 +25,12 @@ import { getRandom48, BYOBStreamReader, readStreamAll } from './utils';
 import {
    Encipher,
    EParams,
-   EncipherV6,
    streamDecipher,
    latestEncipher
 } from './ciphers';
 
 import {
+   EncipherV6,
    _genCipherKey,
    _genHintCipherKey,
    _genSigningKey,

@@ -815,12 +815,12 @@ type BlockData = {
 
 export abstract class Decipher extends Ciphers {
 
-   protected _blockNum = 1;
+   protected _blockNum;
    protected _blockData?: BlockData; // keep block specific data together to make clear less error prone
    protected _slt?: Uint8Array<ArrayBuffer>;
    protected _ic?: number;
-   protected _lp: number = 1; // Not all version support loop # so provide a default
-   protected _lpEnd: number = 1; // Not all version support loop # so provide a default
+   protected _lp: number;
+   protected _lpEnd: number;
    protected _hint?: Uint8Array;
 
    protected constructor(
@@ -828,6 +828,10 @@ export abstract class Decipher extends Ciphers {
       reader: BYOBStreamReader
    ) {
       super(userCred, reader);
+
+      this._blockNum = 1;
+      this._lp = 1; // Not all version support loop # so provide a default
+      this._lpEnd = 1; // Not all version support loop # so provide a default
    }
 
    protected override _purge() {
@@ -1095,8 +1099,8 @@ export class DecipherV6 extends Decipher {
    */
 
    private _header?: Uint8Array;
-   private _lastMac?: Uint8Array<ArrayBuffer> = new Uint8Array([0]);
-   private _lastFlags = 0;
+   private _lastMac?: Uint8Array<ArrayBuffer>;
+   private _lastFlags: number;
 
    constructor(
       userCred: Uint8Array,
@@ -1105,6 +1109,9 @@ export class DecipherV6 extends Decipher {
    ) {
       super(userCred, reader);
       this._header = header;
+
+      this._lastMac = new Uint8Array([0]);
+      this._lastFlags = 0;
    }
 
    protected override _purge() {
