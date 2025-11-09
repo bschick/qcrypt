@@ -1059,7 +1059,7 @@ describe("Stream encryption and decryption", function () {
    });
 });
 
-describe("Read-stall bug check", function () {
+describe("Read block size bugs check", function () {
    let cipherSvc: CipherService;
    let savedReadSize: number;
 
@@ -1074,43 +1074,101 @@ describe("Read-stall bug check", function () {
       Encipher['READ_SIZE_START'] = savedReadSize;
    });
 
-   it("read block size tests", async function () {
+   it("block size read stall test", async function () {
 
       const hint = 'nope';
       const pwd = 'another good pwd';
       const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+      const clearData = crypto.getRandomValues(new Uint8Array(100));
 
-      const clearData = new Uint8Array([97, 99, 97, 103, 218, 144, 5, 250, 136, 235, 57, 34, 87, 89, 66, 120, 27, 226, 46, 239, 217, 134, 227, 123, 33, 250, 122, 209, 161, 20, 82, 186, 78, 201, 246, 134, 250, 153, 8, 236, 156, 107, 49, 107, 255, 208, 86, 238, 32, 125, 185, 232, 77, 104, 160, 146, 77, 67, 245, 74, 207, 147, 208, 252, 70, 242, 152, 243, 239, 210, 58, 244, 92, 61, 172, 195, 161, 47, 108, 139, 246, 66, 95, 89, 169, 92, 119, 211, 36, 138, 43, 99, 157, 86, 21, 38, 194, 74, 87, 103]);
-      for (const adjust of [-1, 1, 0]) {
+      for (const alg of cipherSvc.algs()) {
+         for (const adjust of [-1, 0, 1]) {
 
-         let [clearStream] = streamFromBytes(clearData);
+            let [clearStream] = streamFromBytes(clearData);
 
-         // Monkey patch to force read size to match data
-         //@ts-ignore
-         Encipher['READ_SIZE_START'] = clearData.byteLength + adjust;
+            // Monkey patch to force read size to match data
+            //@ts-ignore
+            Encipher['READ_SIZE_START'] = clearData.byteLength + adjust;
 
-         //@ts-ignore
-         expect(clearData.byteLength + adjust).toEqual(Encipher['READ_SIZE_START']);
+            //@ts-ignore
+            expect(clearData.byteLength + adjust).toEqual(Encipher['READ_SIZE_START']);
 
-         const econtext = {
-            algs: ['X20-PLY'],
-            ic: cc.ICOUNT_MIN
-         };
+            const econtext = {
+               algs: [alg],
+               ic: cc.ICOUNT_MIN
+            };
 
-         let cipherStream = await cipherSvc.encryptStream(
-            econtext,
-            async (cdinfo) => {
-               return [pwd, hint];
-            },
-            userCred,
-            clearStream
-         );
+            let cipherStream = await cipherSvc.encryptStream(
+               econtext,
+               async (cdinfo) => {
+                  expect(cdinfo.alg).toEqual(alg);
+                  return [pwd, hint];
+               },
+               userCred,
+               clearStream
+            );
 
-         await expectAsync(
-            readStreamAll(cipherStream)
-         ).toBeResolved();
+            // This previously stalled
+            await expectAsync(
+               readStreamAll(cipherStream)
+            ).toBeResolved();
+         }
       }
    });
+
+
+   it("block size terminator test", async function () {
+
+      const hint = 'nope';
+      const pwd = 'another good pwd';
+      const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+      const clearData = crypto.getRandomValues(new Uint8Array(100));
+
+      for (const alg of cipherSvc.algs()) {
+         for (const adjust of [-1, 0, 1]) {
+
+            let [clearStream] = streamFromBytes(clearData);
+
+            // Monkey patch to force read size to match data
+            //@ts-ignore
+            Encipher['READ_SIZE_START'] = clearData.byteLength + adjust;
+
+            //@ts-ignore
+            expect(clearData.byteLength + adjust).toEqual(Encipher['READ_SIZE_START']);
+
+            const econtext = {
+               algs: [alg],
+               ic: cc.ICOUNT_MIN
+            };
+
+            let cipherStream = await cipherSvc.encryptStream(
+               econtext,
+               async (cdinfo) => {
+                  expect(cdinfo.alg).toEqual(alg);
+                  return [pwd, hint];
+               },
+               userCred,
+               clearStream
+            );
+
+            let dec = await cipherSvc.decryptStream(
+               async (cdinfo) => {
+                  expect(cdinfo.hint).toEqual(hint);
+                  expect(cdinfo.alg).toEqual(alg);
+                  return [pwd, undefined];
+               },
+               userCred,
+               cipherStream
+            );
+
+            // This previously failed due to missing term block
+            await expectAsync(
+               areEqual(dec, clearData)
+            ).toBeResolvedTo(true);
+         }
+      }
+   });
+
 });
 
 
