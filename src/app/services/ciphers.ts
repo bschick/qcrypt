@@ -46,8 +46,6 @@ export {
    Ciphers,
    Encipher,
    Decipher,
-   EncipherV6,
-   DecipherV6,
    EParams,
    PWDProvider,
    CipherState,
@@ -63,7 +61,7 @@ export function latestEncipher(
 }
 
 
-// Return appropriate version of Ciphers
+// Return appropriate version of Decipher
 export async function streamDecipher(
    userCred: Uint8Array,
    cipherStream: ReadableStream<Uint8Array>
