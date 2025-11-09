@@ -413,7 +413,7 @@ const args = yargs(hideBin(process.argv))
       }
    })
    .options({
-      'cred': { alias: 'c', desc: 'user credential from recovery url', type: 'string', nargs: 1 },
+      'cred': { alias: 'c', desc: 'user credential from https://quickcrypt.org/cmdline', type: 'string', nargs: 1 },
       'infile': { alias: 'f', desc: 'read input from file', type: 'string' },
       'outfile': { alias: 'o', desc: 'save output to file', type: 'string' },
       'pwds': { alias: 'p', desc: 'password(s)', type: 'string', array: true },
