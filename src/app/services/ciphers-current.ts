@@ -41,20 +41,6 @@ export type EParams = {
 };
 
 
-// Simple perf testing with Chrome 126 on MacOS result in
-// readAvailable with READ_SIZE_MAX of 4x to be the fastest
-const READ_SIZE_START = 1048576; // 1 MiB
-const READ_SIZE_MAX = READ_SIZE_START * 4;
-
-// Used to create hardcoded cipherdata for some tests
-//    NOTE: should find a better way to generate test data since
-//    its too easy for forget to restore these values (resulting in inefficient
-//    blocks)
-//const READ_SIZE_START = 1048576/1024/4;
-//const READ_SIZE_MAX =  READ_SIZE_START * 41;
-//const READ_SIZE_START = 9;
-//const READ_SIZE_MAX = READ_SIZE_START * 16
-
 export type PWDProvider = (
    cdInfo: CipherDataInfo,
    encrypting: boolean
@@ -315,6 +301,21 @@ export abstract class Ciphers {
 
 export abstract class Encipher extends Ciphers {
 
+   // Simple perf testing with Chrome 126 on MacOS result in
+   // readAvailable with READ_SIZE_MAX of 4x to be the fastest
+   protected static readonly READ_SIZE_START = 1048576; // 1 MiB
+   protected static readonly READ_SIZE_MAX = Encipher.READ_SIZE_START * 4;
+
+   // Used to create hardcoded cipherdata for some tests
+   //    NOTE: should find a better way to generate test data since
+   //    its too easy for forget to restore these values (resulting in inefficient
+   //    blocks)
+   //protected static readonly READ_SIZE_START = 1048576/1024/4;
+   //protected static readonly READ_SIZE_MAX =  READ_SIZE_START * 41;
+   //protected static readonly READ_SIZE_START = 9;
+   //protected static readonly READ_SIZE_MAX = READ_SIZE_START * 16
+
+
    protected constructor(
       userCred: Uint8Array,
       reader: BYOBStreamReader
@@ -401,9 +402,9 @@ export class EncipherV6 extends Encipher {
       </Document>
    */
 
-   private _blockNum = 1;
-   private _readTarget = READ_SIZE_START;
-   private _lastMac?: Uint8Array<ArrayBuffer> = new Uint8Array([0]);
+   private _blockNum;
+   private _readTarget;
+   private _lastMac?: Uint8Array<ArrayBuffer>;
    private _slt?: Uint8Array<ArrayBuffer>; // stored as class member to help with testings
 
    constructor(
@@ -411,6 +412,11 @@ export class EncipherV6 extends Encipher {
       reader: BYOBStreamReader
    ) {
       super(userCred, reader);
+
+      // Assign in ctor to allow for monkey patching in tests
+      this._readTarget = Encipher.READ_SIZE_START;
+      this._blockNum = 1;
+      this._lastMac= new Uint8Array([0]);
    }
 
    protected override _purge() {
@@ -599,7 +605,7 @@ export class EncipherV6 extends Encipher {
             throw new Error('Data not initialized, encrypt block0 first');
          }
 
-         this._readTarget = Math.min(this._readTarget * 2, READ_SIZE_MAX);
+         this._readTarget = Math.min(this._readTarget * 2, Encipher.READ_SIZE_MAX);
          const [clearBuffer, done] = await this._reader.readAvailable(
             new ArrayBuffer(this._readTarget)
          );
@@ -607,6 +613,9 @@ export class EncipherV6 extends Encipher {
          // There can be read stalls, caller must be ready to ignore empty results
          // and call BlockN again when state is not Finished
          if (clearBuffer.byteLength == 0) {
+            if (done) {
+               this.finishedState();
+            }
             return {
                parts: [],
                state: this._state
@@ -1317,7 +1326,7 @@ export class DecipherV6 extends Decipher {
          // If we loaded more data, and lastFlags was 1 (change to bitfield someday)
          // we have an error
          if (this._lastFlags === 1) {
-            throw new Error(`Terminal block already read ${this._state}`);
+            throw new Error(`Extra data block ${this._state}`);
          }
 
          if (!this._blockData) {
