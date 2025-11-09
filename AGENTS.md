@@ -28,7 +28,8 @@ This `qcrypt` client can built, served, and tested locally. It depends on a back
 ## 3. Important Files & Directories
 
 - `src/app/qcrypt.component.ts`: The main Angular component containing the core application logic.
-- `src/app/services/ciphers.ts`: Contains the implementation of the different encryption and decryption ciphers.
+- `src/app/services/ciphers-current.ts`: Contains the implementation of the most recent encryption and decryption ciphers.
+- `src/app/services/deciphers-old.ts`: Contains the implementation of previous decryption ciphers versions.
 - `src/app/services/authenticator.service.ts`: Handles WebAuthn authenticator logic.
 - `src/assets/protocol5.pdf`: Detailed documentation of the cryptographic protocol.
 - `package.json`: Lists project dependencies and npm scripts for building, serving, and testing the application.
@@ -67,22 +68,24 @@ git clone https://github.com/bschick/qcrypt.git && cd qcrypt
 
 **Unit Tests:**
 ```bash
+# Before starting the Karma server, you must first run the One-time setup steps above
 # The Karma server needs to be running before executing the tests.
 # For interactive users, you can run the server and tests in separate terminals.
 # For automation, the server can be run as a background process.
 nohup npm run karma > karma.log 2>&1 &
-sleep 30s # Allow the server time to start
+sleep 35s # Allow the server time to start
 npm run test
 pkill npm; pkill ng # Stop the Karma server and ng process
 ```
 
 **End-to-End Tests with Test AWS hosted API backend:**
 ```bash
+# Before starting the development server, you must first run the One-time setup steps above
 # The development server must be running to execute the E2E tests.
 # For interactive users, you can run the server and tests in separate terminals.
 # For automation, the server can be run as a background process.
 nohup npm run serve > serve.log 2>&1 &
-sleep 30s # Allow the server time to start
+sleep 35s # Allow the server time to start
 npm run test:e2e
 pkill npm; pkill ng # Stop the development server and ng process
 ```
