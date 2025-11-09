@@ -310,16 +310,13 @@ export class DecipherV4 extends Decipher {
 
       const extractor = new Extractor(header);
 
-      // Order must be invariant
+      // Order must be invariant (extractor validates sizes and ranges)
       const mac = extractor.mac;
       const ver = extractor.ver;
       if (ver != this.protocolVersion()) {
          throw new Error('Invalid version of: ' + ver);
       }
       const payloadSize = extractor.size;
-      if (payloadSize < cc.PAYLOAD_SIZE_MIN || payloadSize > cc.PAYLOAD_SIZE_MAX) {
-         throw new Error('Invalid payload size: ' + payloadSize);
-      }
 
       // V4 did not use flags, but had extra byte in payloadSize. Extract to move offset
       const flags = extractor.flags;
