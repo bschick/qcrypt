@@ -1,5 +1,23 @@
 # CHANGELOG.md
 
+## 6.0.0 (2025-11-??)
+
+Security:
+  - protocol version 6 released
+    - replaced WebCrypto HKDF-SHA-512 with libsodium KDF-BLAKE2b-512
+    - block number bound KDF derived keys used for encryption over one block
+  - storage optional password and hint cache as TypedArray to allow overwrite
+  - purge more sensitive values from JavaScript memory sooner
+  - added MTA-STS and WKD OpenPGP support for domain email (thanks to: vaibhav jain)
+  - [Quick Crypt bug bounty program](https://www.openbugbounty.org/bugbounty/schickb/) is live and offering rewards
+
+Changes:
+
+  - fixed read buffer size bug causing read stall and missing term blocks (not a security issue)
+  - clarified responsibilities for handling recovery words in docs
+  - added more testing of block order manipulation detection
+  - package updates
+
 ## 5.2.3 (2025-10-31)
 
 Security:
