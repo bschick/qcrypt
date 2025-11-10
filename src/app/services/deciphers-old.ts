@@ -33,8 +33,8 @@ import {
    Decipher,
    CipherState,
    Extractor,
-   HKDF_INFO_SIGNING,
-   HKDF_INFO_HINT
+   KDF_INFO_SIGNING,
+   KDF_INFO_HINT
 } from './ciphers-current';
 
 
@@ -673,7 +673,7 @@ export async function _genSigningKeyOld(
          name: 'HKDF',
          salt: getArrayBuffer(slt),
          hash: 'SHA-512',
-         info: new TextEncoder().encode(HKDF_INFO_SIGNING)
+         info: new TextEncoder().encode(KDF_INFO_SIGNING)
       },
       skMaterial,
       { name: 'HMAC', hash: 'SHA-256', length: 256 },
@@ -723,7 +723,7 @@ export async function _genHintCipherKeyOld(
          name: 'HKDF',
          salt: getArrayBuffer(slt),
          hash: 'SHA-512',
-         info: new TextEncoder().encode(HKDF_INFO_HINT)
+         info: new TextEncoder().encode(KDF_INFO_HINT)
       },
       hkMaterial,
       { name: dkAlg, length: 256 },

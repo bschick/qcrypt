@@ -71,9 +71,9 @@ export type CipherDataInfo = {
 };
 
 // To geenrate matching keys, these must not change
-export const HKDF_INFO_SIGNING = "cipherdata signing key";
-export const HKDF_INFO_HINT = "hint encryption key";
-export const HKDF_INFO_BLOCK = "block encryption key";
+export const KDF_INFO_SIGNING = "cipherdata signing key";
+export const KDF_INFO_HINT = "hint encryption key";
+export const KDF_INFO_BLOCK = "block encryption key";
 
 
 export abstract class Ciphers {
@@ -634,7 +634,7 @@ export class EncipherV6 extends Encipher {
             term: done,
          });
 
-         bk = _genDerivedKey(this._ek, HKDF_INFO_BLOCK, this._blockNum);
+         bk = _genDerivedKey(this._ek, KDF_INFO_BLOCK, this._blockNum);
          this._blockNum += 1;
 
          const encryptedData = await EncipherV6._doEncrypt(
@@ -1286,7 +1286,7 @@ export class DecipherV6 extends Decipher {
             throw new Error('Data not initialized');
          }
 
-         bk = _genDerivedKey(this._ek, HKDF_INFO_BLOCK, this._blockNum);
+         bk = _genDerivedKey(this._ek, KDF_INFO_BLOCK, this._blockNum);
          this._blockNum += 1;
 
          const decrypted = await Decipher._doDecrypt(
@@ -1773,7 +1773,7 @@ export function _genDerivedKey(
 export function _genHintCipherKey(
    userCred: Uint8Array
 ): Uint8Array<ArrayBuffer> {
-   return _genDerivedKey(userCred, HKDF_INFO_HINT, 1);
+   return _genDerivedKey(userCred, KDF_INFO_HINT, 1);
 }
 
 
@@ -1781,7 +1781,7 @@ export function _genHintCipherKey(
 export function _genSigningKey(
    userCred: Uint8Array,
 ): Uint8Array<ArrayBuffer> {
-   return _genDerivedKey(userCred, HKDF_INFO_SIGNING, 1);
+   return _genDerivedKey(userCred, KDF_INFO_SIGNING, 1);
 }
 
 
