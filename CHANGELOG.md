@@ -4,7 +4,7 @@
 
 Security:
   - protocol version 6 released
-    - replaced WebCrypto HKDF-SHA-512 with libsodium KDF-BLAKE2b-512
+    - replaced WebCrypto HKDF-SHA512 with libsodium BLAKE2b-512 KDF
     - use KDF block number bound encryption keys for all blocks after the first
     - moved block termination flag from headers to additionalData added protection from AEAD cipher
   - store optional client-side password and hint cache as TypedArray to allow overwrite
