@@ -66,7 +66,7 @@ git clone https://github.com/bschick/qcrypt.git && cd qcrypt
 
 ### b. Running Tests
 
-**Unit Tests:**
+**Unit Tests locally:**
 ```bash
 # Before starting the Karma server, you must first run the One-time setup steps above
 # The Karma server needs to be running before executing the tests.
@@ -78,7 +78,7 @@ npm run test
 pkill npm; pkill ng # Stop the Karma server and ng process
 ```
 
-**End-to-End Tests with Test AWS hosted API backend:**
+**End-to-End Tests using AWS hosted test API backend:**
 ```bash
 # Before starting the development server, you must first run the One-time setup steps above
 # The development server must be running to execute the E2E tests.
