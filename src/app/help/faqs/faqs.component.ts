@@ -811,7 +811,7 @@ const ELEMENT_DATA: FAQElement[] = [
          <li class="long"><b>Random Values:</b> libsodium
          <a href="https://doc.libsodium.org/generating_random_data" target="_blank">randombytes_buf()</a>
          </li>
-         <li><b>HKDF-SHA512 and PBKDF2-HMAC-SHA512 Key Derivation:</b> SubtleCrypto
+         <li><b>BLAKE2b-512 KDF and PBKDF2-HMAC-SHA512 Key Derivation:</b> SubtleCrypto
          <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey" target="_blank">deriveKey()</a>
          </li>
          <li><b>AES 256 GCM Cipher:</b> SubtleCrypto <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt"
