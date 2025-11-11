@@ -67,7 +67,7 @@ section "block0" {
 }
 
 set N 1
-while {![end]} {
+while {![end] && $N <= 350} {
     puts [BlockN $N]
     incr N 1
 }
