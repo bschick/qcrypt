@@ -1,0 +1,297 @@
+<div class="container fat">
+  <div class="content">
+    <h1>Protocol Description (v6)</h1>
+    <p>Quick Crypt implements the protocols below to encrypt, validate, and decrypt data.
+      This information is provided to help you understand how Quick Crypt works and
+      allow you to assess its strength and trustworthiness. You
+      may also download a <a href="/assets/protocol6.pdf" download>pdf version</a> that is searchable.
+      If you believe the protocols can be improved, please
+      <a href="https://github.com/bschick/qcrypt/issues">
+        file a ticket.
+      </a>
+    </p>
+    <p>
+      Quick Crypt uses WebAuthn (<span class="tip" matTooltip="You can create a
+      passkey from a physical FIDO2
+      device, a mobile phone, a browser based password manager, or a dedicated password
+      manager. Dedicated password managers like Bitwarden and 1Password are
+      the easiest to use, work consistently across devices, and support backup.">Passkeys</span>)
+      to create and authenticate user
+      identities. Since this is a standard protocol described in detail elsewhere,
+      including the
+      <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API">
+        Mozilla developer network</a>,
+      WebAuthn is described only at a high level
+      to illustrate how user IDs and credentials are created and retrieved for
+      cryptographic functions.
+    </p>
+
+    <h2>Agents</h2>
+    <img src="/assets/agents6.png" width="603" height="83" />
+    <h2>Browser and Libsodium Functions</h2>
+    <img src="/assets/functions6.png" width="609" height="188" />
+    <h2>Cipher Variables</h2>
+    <img src="/assets/variables6.png" width="624" height="717" />
+    <h2>Message Encryption by A</h2>
+    <div>
+      <img src="/assets/encrypt6.png" width="230" height="382" />
+      <img class="flow-img" (click)="openFlowImage('/assets/encrypt_flow6.svg')"
+        src="/assets/encrypt_flow6.svg" />
+    </div>
+    <h2>Block 0 Encryption by B</h2>
+    <img src="/assets/encrypt_b06.png" width="303" height="214" />
+    <h2>Block N Encryption by B</h2>
+    <img src="/assets/encrypt_bN6.png" width="215" height="193" />
+    <h2>Message Decryption by A</h2>
+    <div>
+      <img src="/assets/decrypt6.png" width="274" height="487" />
+      <img class="flow-img" (click)="openFlowImage('/assets/decrypt_flow6.svg')"
+        src="/assets/decrypt_flow6.svg" />
+    </div>
+    <h2>Block 0 Decryption by B</h2>
+    <img src="/assets/decrypt_b06.png" width="218" height="22" />
+    <h2>Block N Decryption by B</h2>
+    <img src="/assets/decrypt_bN6.png" width="227" height="147" />
+    <h2>Webauthn Variables</h2>
+    <img src="/assets/webauthn6.png" width="397" height="228" />
+    <h2>Registration by A</h2>
+    <img src="/assets/registration6.png" width="299" height="316" />
+    <h2>Authentication by A</h2>
+    <img src="/assets/authentication6.png" width="228" height="233" />
+    <h2>Recovery from Lost Passkey by A</h2>
+    <img src="/assets/recovery6.png" width="298" height="252" />
+    <h1 class="section">Cipher Data Structure (v6) </h1>
+    <p>
+      The table below illustrates the byte-level structure of cipher data created by Quick
+      Crypt's version 6 protocol. When output to the browser UI, this data is base64url
+      encoded and displayed as JSON or a URL. When saved to a file, the binary structure is
+      streamed directly to the file. The subscript values below indicate which fields are
+      used to generate and validate the MAC tags.
+    </p>
+    <p>
+      This structure enables support for file encryption in version 4+. To be compatible with
+      version 1 data, the starting fixed length 256-bit MAC was preserved. If future versions
+      create larger MACs, they may need to be split across the header and payload sections
+      to keep the header length consistent across versions.
+    </p>
+
+    <table class="bytes">
+      <thead>
+        <tr>
+          <th class="tableheader" colspan="4">Description</th>
+          <th class="tableheader">Variable<br>Length</th>
+          <th class="tableheader">Format</th>
+          <th class="tableheader">Byte<br>Length</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="block" rowspan="12">Block0 <br>(one always)</td>
+          <td class="header" colspan="2" rowspan="3">Header</td>
+          <td class="header">MAC 0</td>
+          <td class="header">no</td>
+          <td class="header">bytes</td>
+          <td class="header">32</td>
+        </tr>
+        <tr>
+          <td class="header">Version<sub> 0</sub></td>
+          <td class="header">no</td>
+          <td class="header">bytes</td>
+          <td class="header">2</td>
+        </tr>
+        <tr>
+          <td class="header">Payload Length<sub> 0</sub></td>
+          <td class="header">no</td>
+          <td class="header">uint le</td>
+          <td class="header">3</td>
+        </tr>
+        <tr>
+          <td class="payload" rowspan="9">Payload</td>
+          <td class="adata" rowspan="8">Additional<br>Data</td>
+          <td class="adata">Flags<sub> 0</sub></td>
+          <td class="adata">no</td>
+          <td class="adata">bitfield</td>
+          <td class="adata">1</td>
+        </tr>
+        <tr>
+          <td class="adata">AEAD Cipher Id<sub> 0</sub></td>
+          <td class="adata">no</td>
+          <td class="adata">uint le</td>
+          <td class="adata">2</td>
+        </tr>
+        <tr>
+          <td class="adata">Init Vector or Nonce<sub> 0</sub></td>
+          <td class="adata">yes</td>
+          <td class="adata">bytes</td>
+          <td class="adata">12, 24, 32</td>
+        </tr>
+        <tr>
+          <td class="adata">Salt<sub> 0</sub></td>
+          <td class="adata">no</td>
+          <td class="adata">bytes</td>
+          <td class="adata">16</td>
+        </tr>
+        <tr>
+          <td class="adata">PBKDF2 Iterations<sub> 0</sub></td>
+          <td class="adata">no</td>
+          <td class="adata">uint le</td>
+          <td class="adata">4</td>
+        </tr>
+        <tr>
+          <td class="adata">Loop End | Loop<sub> 0</sub></td>
+          <td class="adata">no</td>
+          <td class="adata">packed nibbles</td>
+          <td class="adata">1</td>
+        </tr>
+        <tr>
+          <td class="adata">Enc Hint Length<sub> 0</sub></td>
+          <td class="adata">no</td>
+          <td class="adata">uint</td>
+          <td class="adata">1</td>
+        </tr>
+        <tr>
+          <td class="adata">Encrypted Hint<sub> 0</sub></td>
+          <td class="adata">yes</td>
+          <td class="adata">bytes</td>
+          <td class="adata">0 - 255</td>
+        </tr>
+        <tr>
+          <td class="message">Data</td>
+          <td class="message">Encrypted Message<sub> 0</sub></td>
+          <td class="message">yes</td>
+          <td class="message">bytes</td>
+          <td class="message">31 - 16777215</td>
+        </tr>
+        <tr>
+          <td class="block" rowspan="7">BlockN<br>(zero or more)</td>
+          <td class="header" colspan="2" rowspan="3">Header</td>
+          <td class="header">MAC N</td>
+          <td class="header">no</td>
+          <td class="header">bytes</td>
+          <td class="header">32</td>
+        </tr>
+        <tr>
+          <td class="header">Version<sub> N</sub></td>
+          <td class="header">no</td>
+          <td class="header">bytes</td>
+          <td class="header">2</td>
+        </tr>
+        <tr>
+          <td class="header">Payload Length<sub> N</sub></td>
+          <td class="header">no</td>
+          <td class="header">uint le</td>
+          <td class="header">3</td>
+        </tr>
+        <tr>
+          <td class="payload" rowspan="4">Payload</td>
+          <td class="adata" rowspan="3">Additional<br>Data</td>
+          <td class="adata">Flags<sub> N</sub></td>
+          <td class="adata">no</td>
+          <td class="adata">bitfield</td>
+          <td class="adata">1</td>
+        </tr>
+        <tr>
+          <td class="adata">AEAD Cipher Id<sub> N</sub></td>
+          <td class="adata">no</td>
+          <td class="adata">uint le</td>
+          <td class="adata">2</td>
+        </tr>
+        <tr>
+          <td class="adata">Init Vector or Nonce<sub> N</sub></td>
+          <td class="adata">yes</td>
+          <td class="adata">bytes</td>
+          <td class="adata">12, 24, 32</td>
+        </tr>
+        <tr>
+          <td class="message">Data</td>
+          <td class="message">Encrypted Message<sub> N</sub></td>
+          <td class="message">yes</td>
+          <td class="message">bytes</td>
+          <td class="message">31 - 16777215</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h1 class="section">Protocol Version History</h1>
+    <table class="bytes">
+      <tbody>
+        <tr>
+          <td>v6</td>
+          <td><a [routerLink]="'/help/protocol6'">Version 6 released November, 2025</a></td>
+        </tr>
+        <tr>
+          <td>v6</td>
+          <td>Replaced WebCrypto HKDF-SHA512 with <a href="https://libsodium.gitbook.io/doc/key_derivation#deriving-keys-from-a-single-high-entropy-key" target="_blank">libsodium BLAKE2b-512 KDF</a></td>
+        </tr>
+        <tr>
+          <td>v6</td>
+          <td>Use KDF for block number specific encryption keys for all blocks after the first</td>
+        </tr>
+        <tr>
+          <td>v6</td>
+          <td>Moved block termination flag from Header to AdditionalData to include in AEAD ciphers</td>
+        </tr>
+        <tr>
+          <td>v5</td>
+          <td><a [routerLink]="'/help/protocol5'">Version 5 released June, 2025</a></td>
+        </tr>
+        <tr>
+          <td>v5</td>
+          <td>Increased minimum PBKDF2-HMAC-SHA512 iterations to 420,000 to be 2x OWASP recommendation</td>
+        </tr>
+        <tr>
+          <td>v5</td>
+          <td>Cascade block MACs to prevent block reordering or deletion in large plaintext encryption</td>
+        </tr>
+        <tr>
+          <td>v5</td>
+          <td>Added terminal block flag to prevent last block deletion in large plaintext encryption</td>
+        </tr>
+        <tr>
+          <td>v5</td>
+          <td>Replaced WebCrypto getRandomValues function with
+          <a href="https://libsodium.gitbook.io/doc/generating_random_data" target="_blank">randombytes_buf from libsodium</a></td>
+        </tr>
+        <tr>
+          <td>v5</td>
+          <td>Removed option to retrieve random data from https://random.org</td>
+        </tr>
+        <tr>
+          <td>v4</td>
+          <td><a [routerLink]="'/help/protocol4'">Version 4 released November, 2024</a></td>
+        </tr>
+        <tr>
+          <td>v4</td>
+          <td>Replaced SubtleCrypto HMAC algorithm with <a href="https://doc.libsodium.org/hashing/generic_hashing"
+            target="_blank">BLAKE2b keyed hash from libsodium</a></td>
+        </tr>
+        <tr>
+          <td>v4</td>
+          <td>Changed to block-based encryption and data structures to support large plaintext encryption</td>
+        </tr>
+        <tr>
+          <td>v4</td>
+          <td>Blocks start with a fixed size header containing payload size to simplify block reads</td>
+        </tr>
+        <tr>
+          <td>v4</td>
+          <td>Moved version out of additional data into the header section at a known block offset</td>
+        </tr>
+        <tr>
+          <td>v4</td>
+          <td>Added loop parameters to cipher additional data (and removed them from JSON output)</td>
+        </tr>
+        <tr>
+          <td>v2, v3</td>
+          <td>Skipped versions</td>
+        </tr>
+        <tr>
+          <td>v1</td>
+          <td><a [routerLink]="'/help/protocol1'">Original version released April 2024</a></td>
+        </tr>
+      </tbody>
+    </table>
+
+  </div>
+</div>
+<app-copyright />
