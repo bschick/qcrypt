@@ -226,16 +226,17 @@ describe("Encryption and decryption", function () {
       TestBed.configureTestingModule({});
    });
 
-   async function signAndRepack(
-      encipher: Encipher,
+   function signAndRepack(
+      encipher: EncipherV6,
       userCred: Uint8Array,
       block: CipherDataBlock
-   ): Promise<Uint8Array> {
+   ): Uint8Array {
 
-      // cheating... parts[0] is header parts[1] is _additionalData, parts[2] is encryptedData
-      //@ts-ignore
-      const sk = _genSigningKey(userCred);
-      const [headerData] = await EncipherV6._createHeader(sk, block.parts[2], block.parts[1], new Uint8Array([0]));
+      // cheating... parts[1] is _additionalData, parts[2] is encryptedData
+      // and reset _lastMac and recreate _sk with specified (potentially forged) userCred
+      encipher['_sk'] = _genSigningKey(userCred);
+      encipher['_lastMac'] = new Uint8Array([0]);
+      const headerData = encipher._createHeader(block.parts[2], block.parts[1]);
 
       const output = new Uint8Array(headerData.byteLength +
          block.parts[1].byteLength +
@@ -306,10 +307,10 @@ describe("Encryption and decryption", function () {
          // code for repacking is valid and then with a new signature. Ensure the correct
          // one works (to ensure that signAndRepack works) and the replacment is detected.
          let [cipherstreamA, cipherDataA] = streamFromBytes(
-            await signAndRepack(encipher, userCredA, cipherBlock)
+            signAndRepack(encipher, userCredA, cipherBlock)
          );
          let [cipherstreamB, cipherDataB] = streamFromBytes(
-            await signAndRepack(encipher, userCredB, cipherBlock)
+            signAndRepack(encipher, userCredB, cipherBlock)
          );
 
          // These should fail because using the wrong userCred for each
@@ -317,10 +318,10 @@ describe("Encryption and decryption", function () {
          let decipherB = await streamDecipher(userCredA, cipherstreamB)
 
          await expectAsync(
-            decipherA._decodePayload0()
+            decipherA._decodeBlock0()
          ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
          await expectAsync(
-            decipherB._decodePayload0()
+            decipherB._decodeBlock0()
          ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
 
 
@@ -334,10 +335,10 @@ describe("Encryption and decryption", function () {
          // passed below. Decrypting, cipherText should fail on B (checked below).
          // Also, these would fail if there was an encrypted hint
          await expectAsync(
-            decipherA._decodePayload0()
+            decipherA._decodeBlock0()
          ).toBeResolved();
          await expectAsync(
-            decipherB._decodePayload0()
+            decipherB._decodeBlock0()
          ).toBeResolved();
 
          // should succeed since we repacked with correct userCred

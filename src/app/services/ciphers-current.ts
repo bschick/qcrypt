@@ -299,6 +299,7 @@ export abstract class Ciphers {
    }
 }
 
+
 export abstract class Encipher extends Ciphers {
 
    // Simple perf testing with Chrome 126 on MacOS result in
@@ -404,8 +405,8 @@ export class EncipherV6 extends Encipher {
 
    private _blockNum;
    private _readTarget;
-   private _lastMac?: Uint8Array<ArrayBuffer>;
-   private _slt?: Uint8Array<ArrayBuffer>; // stored as class member to help with testings
+   private _lastMac?: Uint8Array;
+   private _slt?: Uint8Array; // stored as class member to help with testings
 
    constructor(
       userCred: Uint8Array,
@@ -416,7 +417,7 @@ export class EncipherV6 extends Encipher {
       // Assign in ctor to allow for monkey patching in tests
       this._readTarget = Encipher.READ_SIZE_START;
       this._blockNum = 1;
-      this._lastMac= new Uint8Array([0]);
+      this._lastMac = new Uint8Array([0]);
    }
 
    protected override _purge() {
@@ -451,7 +452,6 @@ export class EncipherV6 extends Encipher {
    ): Promise<CipherDataBlock> {
 
       let hk: Uint8Array | undefined;
-      let bk: Uint8Array | undefined;
 
       try {
          EncipherV6.validateEParams(eparams);
@@ -550,14 +550,10 @@ export class EncipherV6 extends Encipher {
             additionalData,
          );
 
-         const [headerData, mac] = await EncipherV6._createHeader(
-            this._sk,
+         const headerData = this._createHeader(
             encryptedData,
-            additionalData,
-            this._lastMac!
+            additionalData
          );
-
-         this._lastMac = mac;
 
          if (done) {
             this.finishedState();
@@ -581,10 +577,6 @@ export class EncipherV6 extends Encipher {
          if (hk) {
             crypto.getRandomValues(hk);
             hk = undefined;
-         }
-         if (bk) {
-            crypto.getRandomValues(bk);
-            bk = undefined;
          }
       }
    }
@@ -645,15 +637,10 @@ export class EncipherV6 extends Encipher {
             additionalData,
          );
 
-         // chain mac value from last block so that order changes will cause failure
-         const [headerData, mac] = await EncipherV6._createHeader(
-            this._sk,
+         const headerData = this._createHeader(
             encryptedData,
-            additionalData,
-            this._lastMac!
+            additionalData
          );
-
-         this._lastMac = mac;
 
          if (done) {
             this.finishedState();
@@ -771,16 +758,14 @@ export class EncipherV6 extends Encipher {
    }
 
 
-   // Seperated out and made public for testing, normal callers should not be needed this
-   public static async _createHeader(
-      sk: Uint8Array,
+   // Seperated out and made public for testing, normal callers should not use this function
+   public _createHeader(
       encryptedData: Uint8Array,
-      additionalData: Uint8Array,
-      lastMac: Uint8Array
-   ): Promise<[Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>]> {
+      additionalData: Uint8Array
+   ): Uint8Array {
 
-      if (!lastMac) {
-         throw new Error('missing lastMac');
+      if (!this._lastMac || !this._sk || !encryptedData || !additionalData) {
+         throw new Error('Data not initialized');
       }
 
       const payloadBytes = encryptedData.byteLength + additionalData.byteLength;
@@ -789,19 +774,21 @@ export class EncipherV6 extends Encipher {
       packer.ver = cc.VERSION6;
       packer.size = payloadBytes;
 
-      const state = sodium.crypto_generichash_init(sk, cc.MAC_BYTES);
+      const state = sodium.crypto_generichash_init(this._sk, cc.MAC_BYTES);
       sodium.crypto_generichash_update(state, new Uint8Array(packer.buffer, cc.MAC_BYTES));
       sodium.crypto_generichash_update(state, additionalData);
       sodium.crypto_generichash_update(state, encryptedData);
-      sodium.crypto_generichash_update(state, lastMac);
+      sodium.crypto_generichash_update(state, this._lastMac);
 
-      const mac = ensureArrayBuffer(sodium.crypto_generichash_final(state, cc.MAC_BYTES));
+      const mac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
+      this._lastMac = mac;
       packer.offset = 0;
       packer.mac = mac;
 
-      return [packer.detach(), mac];
+      return packer.detach();
    }
 }
+
 
 type BlockData = {
    readonly mac: Uint8Array<ArrayBuffer>;
@@ -817,7 +804,7 @@ type BlockData = {
 export abstract class Decipher extends Ciphers {
 
    protected _blockNum;
-   protected _blockData?: BlockData; // keep block specific data together to make clear less error prone
+   protected _blockData?: BlockData;
    protected _slt?: Uint8Array<ArrayBuffer>;
    protected _ic?: number;
    protected _lp: number;
@@ -883,8 +870,6 @@ export abstract class Decipher extends Ciphers {
       pwdProvider: PWDProvider
    ): Promise<Uint8Array> {
 
-      let bk: Uint8Array | undefined;
-
       try {
          if (![CipherState.Initialized, CipherState.Block0Decoded].includes(this._state)) {
             throw new Error(`Decipher invalid state ${this._state}`);
@@ -941,10 +926,6 @@ export abstract class Decipher extends Ciphers {
          throw err;
       } finally {
          this._blockData = undefined;
-         if (bk) {
-            crypto.getRandomValues(bk);
-            bk = undefined;
-         }
       }
    }
 
@@ -1100,7 +1081,7 @@ export class DecipherV6 extends Decipher {
    */
 
    private _header?: Uint8Array;
-   private _lastMac?: Uint8Array<ArrayBuffer>;
+   private _lastMac?: Uint8Array;
    private _lastFlags: number;
 
    constructor(
@@ -1228,7 +1209,7 @@ export class DecipherV6 extends Decipher {
          // Aka, check MAC as soon as possible after we have the signing key and data.
          // Might be cleaner to do this elsewhere, but keeping it at the lowest level
          // ensures we don't skip the step
-         const validMac: boolean = await this._verifyMAC();
+         const validMac: boolean = this._verifyMAC();
          if (!validMac) {
             throw new Error('Invalid MAC error');
          }
@@ -1365,7 +1346,7 @@ export class DecipherV6 extends Decipher {
          // Aka, check MAC as soon as possible after we  have the signing key and data.
          // Might be cleaner to do this elswhere, but keeping it at the lowest level
          // ensures we don't skip the step
-         const validMac: boolean = await this._verifyMAC();
+         const validMac: boolean = this._verifyMAC();
          if (!validMac) {
             throw new Error('Invalid MAC error');
          }
@@ -1379,7 +1360,7 @@ export class DecipherV6 extends Decipher {
       }
    }
 
-   private async _verifyMAC(): Promise<boolean> {
+   private _verifyMAC(): boolean {
 
       if (!this._blockData || !this._blockData.payloadSize || !this._blockData.ver || !this._blockData.additionalData ||
          !this._sk || !this._blockData.encryptedData || !this._blockData.mac || !this._lastMac) {
@@ -1402,7 +1383,7 @@ export class DecipherV6 extends Decipher {
 
       const testMac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
       const validMac: boolean = sodium.memcmp(this._blockData.mac, testMac);
-      this._lastMac = ensureArrayBuffer(testMac);
+      this._lastMac = this._blockData.mac;
 
       if (validMac) {
          return true;
