@@ -5,17 +5,17 @@
 Security:
   - protocol version 6 released
     - replaced WebCrypto HKDF-SHA512 with libsodium BLAKE2b-512 KDF
-    - use KDF block number bound encryption keys for all blocks after the first
-    - moved block termination flag from headers to additionalData added protection from AEAD cipher
+    - use KDF for block number specific encryption keys for all blocks after the first
+    - moved block termination flag from headers to additional data input to AEAD ciphers
   - store optional client-side password and hint cache as TypedArray to allow overwrite
   - purge more sensitive variables from JavaScript memory sooner
-  - added MTA-STS and WKD OpenPGP support for domain email (thanks to: vaibhav jain)
   - [Quick Crypt bug bounty program](https://www.openbugbounty.org/bugbounty/schickb/) is live and offering rewards
+  - added MTA-STS and WKD OpenPGP support for domain email (thanks to: [Vaibhav jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/))
 
 Changes:
 
-  - fixed read buffer size bug causing read stalls and missing term blocks (not a security issue)
-  - clarified responsibilities for handling recovery words in docs
+  - fixed read buffer size bug causing read stalls and missing term blocks (functional only issue)
+  - improve site docs to stress the importance of keeping recovery words private
   - added more testing of block order manipulation detection
   - package updates
 
