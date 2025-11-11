@@ -11,7 +11,7 @@ Please use our [vulnerability disclosure program at Open Bug Bounty](https://www
 - $100 for high severity findings
 - $200 for critical findings
 - determination of severity will be a discussion, but quickcrypt.org is the final decision-maker
-- paid via Venmo or USDC
+- paid via Paypal, Venmo, or USDC
 - if desired, your information and finding will be added to Acknowledgments in this file
 
 ### Requirements for submission
