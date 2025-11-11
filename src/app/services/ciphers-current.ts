@@ -899,7 +899,7 @@ export abstract class Decipher extends Ciphers {
          }
 
          // This does MAC check
-         await this._decodePayload0();
+         await this._decodeBlock0();
 
          if (!this._blockData || !this._blockData.alg || !this._blockData.iv || !this._blockData.encryptedData || !this._slt || !this._ic) {
             throw new Error('Data not initialized');
@@ -949,7 +949,7 @@ export abstract class Decipher extends Ciphers {
    }
 
    //public only for testing
-   abstract _decodePayload0(): Promise<void>;
+   abstract _decodeBlock0(): Promise<void>;
 
    public abstract decryptBlockN(): Promise<Uint8Array>;
 
@@ -957,7 +957,7 @@ export abstract class Decipher extends Ciphers {
    ): Promise<CipherDataInfo> {
 
       // This does MAC check
-      await this._decodePayload0();
+      await this._decodeBlock0();
 
       if (!this._blockData || !this._blockData.alg || !this._blockData.iv || !this._slt || !this._ic) {
          throw new Error('Data not initialized');
@@ -1167,7 +1167,7 @@ export class DecipherV6 extends Decipher {
    // Importers of CipherService should not need this function directly,
    // but it is public for unit testing. Does not allow encoding
    // with zero length encrypted text since that is not needed
-   override async _decodePayload0(): Promise<void> {
+   override async _decodeBlock0(): Promise<void> {
 
       let hk: Uint8Array | undefined;
 
@@ -1275,7 +1275,7 @@ export class DecipherV6 extends Decipher {
          }
 
          // This does MAC check
-         await this._decodePayloadN();
+         await this._decodeBlockN();
          //@ts-ignore
          if (this._state === CipherState.Finished) {
             // this is the signal that decryption is complete
@@ -1314,7 +1314,7 @@ export class DecipherV6 extends Decipher {
    // Importers of CipherService should not need this function directly,
    // but it is public for unit testing. Does not allow encoding
    // with zero length encrypted text since that is not needed
-   protected async _decodePayloadN(): Promise<void> {
+   protected async _decodeBlockN(): Promise<void> {
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated, Extractor does test each value for valid ranges as we unpack
@@ -1338,7 +1338,7 @@ export class DecipherV6 extends Decipher {
             throw new Error('Data not initialized');
          }
 
-         // Don't need to look at done for the fill since there will will be another
+         // Don't need to look at done for the fill since there will be another
          // call and the next header will report done.
          const [payload] = await this._reader.readFill(new ArrayBuffer(this._blockData.payloadSize));
 
@@ -1354,7 +1354,7 @@ export class DecipherV6 extends Decipher {
          this._blockData.iv = extractor.iv;
          this._blockData.encryptedData = extractor.remainder('edata');
 
-         // V4 additional data is payload - encrypted data
+         // V6 additional data is payload - encrypted data
          this._blockData.additionalData = new Uint8Array(
             payload.buffer,
             payload.byteOffset,

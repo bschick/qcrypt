@@ -72,7 +72,7 @@ export class DecipherV1 extends Decipher {
    }
 
    // For V1, this should be the entire CipherData array
-   override async _decodePayload0(): Promise<void> {
+   override async _decodeBlock0(): Promise<void> {
 
       try {
          if (![CipherState.Initialized, CipherState.Block0Decoded].includes(this._state)) {
@@ -334,7 +334,7 @@ export class DecipherV4 extends Decipher {
    // Importers of CipherService should not need this function directly,
    // but it is public for unit testing. Does not allow encoding
    // with zero length encrypted text since that is not needed
-   override async _decodePayload0(): Promise<void> {
+   override async _decodeBlock0(): Promise<void> {
 
       try {
          if (![CipherState.Initialized, CipherState.Block0Decoded].includes(this._state)) {
@@ -433,7 +433,7 @@ export class DecipherV4 extends Decipher {
          }
 
          // This does MAC check
-         await this._decodePayloadN();
+         await this._decodeBlockN();
          //@ts-ignore
          if (this._state === CipherState.Finished) {
             // this is the signal that decryption is complete
@@ -465,7 +465,7 @@ export class DecipherV4 extends Decipher {
    // Importers of CipherService should not need this function directly,
    // but it is public for unit testing. Does not allow encoding
    // with zero length encrypted text since that is not needed
-   protected async _decodePayloadN(): Promise<void> {
+   protected async _decodeBlockN(): Promise<void> {
 
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated, Extractor does test each value for valid ranges as we unpack
@@ -547,20 +547,6 @@ export class DecipherV4 extends Decipher {
    }
 }
 
-function findPropertyOwner(obj: any, propName: string): object | null {
-    let currentObj = obj;
-    // Iterate up the prototype chain
-    while (currentObj !== null) {
-        // Check if the property is an "own" property of the current object
-        if (Object.getOwnPropertyDescriptor(currentObj, propName) !== undefined) {
-            return currentObj;
-        }
-        // Move up to the next prototype in the chain
-        currentObj = Object.getPrototypeOf(currentObj);
-    }
-    return null; // Property not found in the chain
-}
-
 export class DecipherV5 extends DecipherV4 {
 
    private _lastMac?: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
@@ -578,9 +564,9 @@ export class DecipherV5 extends DecipherV4 {
       super._purge();
    }
 
-   override async _decodePayload0(): Promise<void> {
+   override async _decodeBlock0(): Promise<void> {
 
-      await super._decodePayload0();
+      await super._decodeBlock0();
 
       // Eventually flags may be a bitfield
       if (this._state === CipherState.Finished && this._lastFlags !== 1) {
@@ -592,9 +578,9 @@ export class DecipherV5 extends DecipherV4 {
       }
    }
 
-   protected override async _decodePayloadN(): Promise<void> {
+   protected override async _decodeBlockN(): Promise<void> {
 
-      await super._decodePayloadN();
+      await super._decodeBlockN();
 
       // If we loaded more data, and lastFlags was 1 (change to bitfield someday)
       // we have an error
