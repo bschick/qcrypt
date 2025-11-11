@@ -36,3 +36,4 @@ See the live Quick Crypt website for a [detailed description of Quick Crypt's en
 Thanks to the following security researchers:
 
 **destro4evr**: The first to report potential issues and recommend improvements, particularly for GET /users/{userid}/session
+[Vaibhav jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/): For reporting missing MTA-STS domain email support
