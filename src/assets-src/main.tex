@@ -29,7 +29,7 @@ $E_a$ & \textrm{ - Symmetric cipher using AEAD algorithm }$a$\textrm{. One of:}\
 & \hspace{23pt}\textrm{1. AES-256 in Galois/Counter mode from SubtleCrypto} \\
 & \hspace{23pt}\textrm{2. XChaCha20 with Poly1305 MAC from libsodium} \\
 & \hspace{23pt}\textrm{3. AEGIS 256 from libsodium} \\
-$D_H$ & \textrm{ - HKDF-SHA512 key derivation using FIPS-180-4 from SubtleCrypto} \\
+$D_H$ & \textrm{ - BLAKE2b-512 KDF from libsodium} \\
 $D_P$ & \textrm{ - PBKDF2-HMAC-SHA512 key derivation FIPS-180-4 from SubtleCrypto} \\
 $H$ & \textrm{ - BLAKE2b keyed hash (MAC) generator from libsodium} \\
 $V$ & \textrm{ - Constant-time hash (MAC) validator from libsodium} \\
@@ -51,9 +51,11 @@ $h$ & \textrm{ - Password hint text}\\
 $u_c$ & \textrm{ - 256 bit user credential}\\
 $a$ & \textrm{ - Symmetric AEAD cipher and mode: [1, 2, 3]}\\
 $i$ & \textrm{ - PBKDF2-HMAC-SHA512 iteration count: min 420,000 max 4,294,000,000}\\
-$k_M$ & \textrm{ - 256 bit ephemeral message cipher key}\\
+$k_M$ & \textrm{ - 256 bit ephemeral master message cipher key}\\
+$k_{BN}$ & \textrm{ - 256 bit ephemeral block message cipher key}\\
 $k_H$ & \textrm{ - 256 bit ephemeral hint cipher key}\\
 $k_S$ & \textrm{ - 256 bit ephemeral MAC key}\\
+$kp_B$ & \textrm{ - Key purpose text: ``block encryption key''}\\
 $kp_S$ & \textrm{ - Key purpose text: ``cipherdata signing key''}\\
 $kp_H$ & \textrm{ - Key purpose text: ``hint encryption key''}\\
 $r$ & \textrm{ - 384 bits of pseudo random data}\\
@@ -94,7 +96,7 @@ $err$ & \textrm{ - Error message and exit}\\
 &$n_S = r[0:128)$\\
 &$n_{IV} = r[128:128+n_{IV}l)$\\
 &$k_M = D_P(p \mathbin\Vert u_c,n_S,i)$\\
-&$k_S = D_H(u_c,n_S,kp_S)$\\
+&$k_S = D_H(u_c,kp_S)$\\
 &$cd = cd_0\mathbin\Vert ... \mathbin\Vert cd_N$\\
 &$m = cd$\\
 &$lp = lp + 1$\\
@@ -107,16 +109,16 @@ $err$ & \textrm{ - Error message and exit}\\
 \underline{Block 0 Encryption by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
-\multicolumn{2}{@{}l}{$k_H = D_H(u_c,n_S,kp_H)$}\\
+\multicolumn{2}{@{}l}{$k_H = D_H(u_c,kp_H)$}\\
 \multicolumn{2}{@{}l}{$h_E = E_a(h,n_{IV},k_H)$}\\
 \multicolumn{2}{@{}l}{$h_El = len(h_E)$}\\
-\multicolumn{2}{@{}l}{$ad = a \mathbin\Vert n_{IV} \mathbin\Vert n_S \mathbin\Vert i\mathbin\Vert le \mathbin\Vert lp \mathbin\Vert h_El \mathbin\Vert h_E$}\\
+\multicolumn{2}{@{}l}{$f = \textrm{1 if \boxed{\text{TERM}} else 0}$}\\
+\multicolumn{2}{@{}l}{$ad = f \mathbin\Vert a \mathbin\Vert n_{IV} \mathbin\Vert n_S \mathbin\Vert i\mathbin\Vert le \mathbin\Vert lp \mathbin\Vert h_El \mathbin\Vert h_E$}\\
 \multicolumn{2}{@{}l}{$m_{E} = E_a(m_0,n_{IV},ad,k_M)$}\\
 \multicolumn{2}{@{}l}{$l = len(ad \mathbin\Vert m_{E})$}\\
-\multicolumn{2}{@{}l}{$f = \textrm{1 if \boxed{\text{TERM}} else 0}$}\\
-\multicolumn{2}{@{}l}{$t = H(v, l, f, ad, m_{E}, t_L, k_S)$}\\
+\multicolumn{2}{@{}l}{$t = H(v, l, ad, m_{E}, t_L, k_S)$}\\
 \multicolumn{2}{@{}l}{$t_L = t$}\\
-\multicolumn{2}{@{}l}{$cd_0 = t\mathbin\Vert v\mathbin\Vert l\mathbin\Vert f\mathbin\Vert ad \mathbin\Vert m_{E}$}\\
+\multicolumn{2}{@{}l}{$cd_0 = t\mathbin\Vert v\mathbin\Vert l\mathbin\Vert ad \mathbin\Vert m_{E}$}\\
 \end{tabular}
 
 \hfill \break
@@ -127,13 +129,14 @@ $err$ & \textrm{ - Error message and exit}\\
 
 \multicolumn{2}{@{}l}{$r = G(384)$}\\
 \multicolumn{2}{@{}l}{$n_{IV} = r[0:n_{IV}l)$}\\
-\multicolumn{2}{@{}l}{$ad = a \mathbin\Vert n_{IV}$}\\
-\multicolumn{2}{@{}l}{$m_{E} = E_a(m_N,n_{IV},ad,k_M)$}\\
-\multicolumn{2}{@{}l}{$l = len(ad \mathbin\Vert m_{E})$}\\
 \multicolumn{2}{@{}l}{$f = \textrm{1 if \boxed{\text{TERM}} else 0}$}\\
-\multicolumn{2}{@{}l}{$t = H(v, l, f, ad, m_{E}, t_L, k_S)$}\\
+\multicolumn{2}{@{}l}{$ad = f \mathbin\Vert a \mathbin\Vert n_{IV}$}\\
+\multicolumn{2}{@{}l}{$k_{BN} = D_H(k_M,kp_B,N)$}\\
+\multicolumn{2}{@{}l}{$m_{E} = E_a(m_N,n_{IV},ad,k_{BN})$}\\
+\multicolumn{2}{@{}l}{$l = len(ad \mathbin\Vert m_{E})$}\\
+\multicolumn{2}{@{}l}{$t = H(v, l, ad, m_{E}, t_L, k_S)$}\\
 \multicolumn{2}{@{}l}{$t_L = t$}\\
-\multicolumn{2}{@{}l}{$cd_N = t\mathbin\Vert v\mathbin\Vert l\mathbin\Vert f\mathbin\Vert ad\mathbin\Vert m_{E}$}\\
+\multicolumn{2}{@{}l}{$cd_N = t\mathbin\Vert v\mathbin\Vert l\mathbin\Vert ad\mathbin\Vert m_{E}$}\\
 \end{tabular}
 
 %\hfill \break
@@ -163,14 +166,14 @@ $err$ & \textrm{ - Error message and exit}\\
 \multicolumn{2}{@{}l}{$lp = 0$}\\
 \multicolumn{2}{@{}l}{$t_L = \emptyset$}\\
 \multicolumn{2}{@{}l}{$LOOP: B\textrm{ compute} $}\\
-&$t,v,l,f, ad,m_{E}=cd_0$\\
-&$a,n_{IV},n_S,i,le,lp,h_El,h_E=ad$\\
-&$k_S = D_H(u_c,n_S,kp_S)$\\
-&$b = V(v, l, f, ad, m_{E}, t_L, k_S, t)$\\
+&$t,v,l,ad,m_{E}=cd_0$\\
+&$f,a,n_{IV},n_S,i,le,lp,h_El,h_E=ad$\\
+&$k_S = D_H(u_c,kp_S)$\\
+&$b = V(v, l, ad, m_{E}, t_L, k_S, t)$\\
 &$t_L = t$\\
 &$\textrm{if }!b:$\\
 &\hspace{15pt}$A \leftarrow B: err$\\
-&$k_H = D_H(u_c,n_S,kp_H)$\\
+&$k_H = D_H(u_c,kp_H)$\\
 &$h = E_a^{-1}(h_E,n_{IV},k_H)$\\
 &$B \rightarrow A: h$\\
 &$B \leftarrow A: p$\\
@@ -197,13 +200,14 @@ $err$ & \textrm{ - Error message and exit}\\
 \underline{Block N Decryption by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
-\multicolumn{2}{@{}l}{$t,v,l,f,ad,m_{E}=cd_N$}\\
-\multicolumn{2}{@{}l}{$a,n_{IV}=ad$}\\
-\multicolumn{2}{@{}l}{$b = V(v, l, f, ad, m_{E}, t_L, k_S, t)$}\\
+\multicolumn{2}{@{}l}{$t,v,l,ad,m_{E}=cd_N$}\\
+\multicolumn{2}{@{}l}{$f,a,n_{IV}=ad$}\\
+\multicolumn{2}{@{}l}{$b = V(v, l, ad, m_{E}, t_L, k_S, t)$}\\
 \multicolumn{2}{@{}l}{$t_L = t$}\\
 \multicolumn{2}{@{}l}{$\textrm{if }!b:$}\\
 \multicolumn{2}{@{}l}{\hspace{15pt}$A \leftarrow B: err$}\\
-\multicolumn{2}{@{}l}{$m_N = E_a^{-1}(m_{E}, n_{IV},ad,k_M)$}\\
+\multicolumn{2}{@{}l}{$k_{BN} = D_H(k_M,kp_B,N)$}\\
+\multicolumn{2}{@{}l}{$m_N = E_a^{-1}(m_{E}, n_{IV},ad,k_{BN})$}\\
 \end{tabular}
 
 \newpage

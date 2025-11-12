@@ -18,4 +18,3 @@ SVG Download and Resize
 
 * Make changes in LucidChart
 * Export SVG with transparent background (manually crop)
-* ... testing not creating smaller viewport/viewbox
