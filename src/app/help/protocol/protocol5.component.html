@@ -1,6 +1,9 @@
 <div class="container fat">
   <div class="content">
     <h1>Protocol Description (v5)</h1>
+    <p class="notice">
+      This version is no longer created. <a [routerLink]="'/help/protocol'">See the current version</a>
+    </p>
     <p>Quick Crypt implements the protocols below to encrypt, validate, and decrypt data.
       This information is provided to help you understand how Quick Crypt works and
       allow you to assess its strength and trustworthiness. You
@@ -33,7 +36,7 @@
     <h2>Cipher Variables</h2>
     <img src="/assets/variables5.png" width="624" height="717" />
     <h2>Message Encryption by A</h2>
-    <div>
+    <div class="flow">
       <img src="/assets/encrypt5.png" width="230" height="382" />
       <img class="flow-img" (click)="openFlowImage('/assets/encrypt_flow5.svg')"
         src="/assets/encrypt_flow5.svg" />
@@ -43,7 +46,7 @@
     <h2>Block N Encryption by B</h2>
     <img src="/assets/encrypt_bN5.png" width="215" height="193" />
     <h2>Message Decryption by A</h2>
-    <div>
+    <div class="flow">
       <img src="/assets/decrypt5.png" width="274" height="487" />
       <img class="flow-img" (click)="openFlowImage('/assets/decrypt_flow5.svg')"
         src="/assets/decrypt_flow5.svg" />
@@ -211,71 +214,7 @@
         </tr>
       </tbody>
     </table>
-
-    <h1 class="section">Protocol Version History</h1>
-    <table class="bytes">
-      <tbody>
-        <tr>
-          <td>v5</td>
-          <td><a [routerLink]="'/help/protocol5'">Version 5 released June, 2025</a></td>
-        </tr>
-        <tr>
-          <td>v5</td>
-          <td>Increased minimum PBKDF2-HMAC-SHA512 iterations to 420,000 to be 2x OWASP recommendation</td>
-        </tr>
-        <tr>
-          <td>v5</td>
-          <td>Cascade block MACs to prevent block reordering or deletion in large plaintext encryption</td>
-        </tr>
-        <tr>
-          <td>v5</td>
-          <td>Added terminal block flag to prevent last block deletion in large plaintext encryption</td>
-        </tr>
-        <tr>
-          <td>v5</td>
-          <td>Replaced WebCrypto getRandomValues function with
-          <a href="https://doc.libsodium.org/generating_random_data" target="_blank">randombytes_buf from libsodium</a></td>
-        </tr>
-        <tr>
-          <td>v5</td>
-          <td>Removed option to retrieve random data from https://random.org</td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td><a [routerLink]="'/help/protocol4'">Version 4 released November, 2024</a></td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td>Replaced SubtleCrypto HMAC algorithm with <a href="https://doc.libsodium.org/hashing/generic_hashing"
-            target="_blank">BLAKE2b keyed hash from libsodium</a></td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td>Changed to block-based encryption and data structures to support large plaintext encryption</td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td>Blocks start with a fixed size header containing payload size to simplify block reads</td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td>Moved version out of additional data into the header section at a known block offset</td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td>Added loop parameters to cipher additional data (and removed them from JSON output)</td>
-        </tr>
-        <tr>
-          <td>v2, v3</td>
-          <td>Skipped versions</td>
-        </tr>
-        <tr>
-          <td>v1</td>
-          <td><a [routerLink]="'/help/protocol1'">Original version released April 2024</a></td>
-        </tr>
-      </tbody>
-    </table>
-
+    <app-proto-versions></app-proto-versions>
   </div>
 </div>
 <app-copyright />

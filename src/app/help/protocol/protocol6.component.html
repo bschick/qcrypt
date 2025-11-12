@@ -27,39 +27,43 @@
     </p>
 
     <h2>Agents</h2>
-    <img src="/assets/agents6.png" width="603" height="83" />
+    <img src="/assets/agents5.png" width="603" height="83" />
     <h2>Browser and Libsodium Functions</h2>
-    <img src="/assets/functions6.png" width="609" height="188" />
+    <img src="/assets/functions6.png" width="610" height="190" />
     <h2>Cipher Variables</h2>
-    <img src="/assets/variables6.png" width="624" height="717" />
+    <img src="/assets/variables6.png" width="624" height="761" />
     <h2>Message Encryption by A</h2>
-    <div>
-      <img src="/assets/encrypt6.png" width="230" height="382" />
-      <img class="flow-img" (click)="openFlowImage('/assets/encrypt_flow6.svg')"
-        src="/assets/encrypt_flow6.svg" />
+    <div class="flow">
+      <img src="/assets/encrypt6.png" width="232" height="384" />
+      <img class="flow-img" (click)="openFlowImage('/assets/encrypt_flowb06.svg')"
+        src="/assets/encrypt_flowb06.svg" />
+      <img class="flow-img2" (click)="openFlowImage('/assets/encrypt_flowbN6.svg')"
+        src="/assets/encrypt_flowbN6.svg" />
     </div>
     <h2>Block 0 Encryption by B</h2>
-    <img src="/assets/encrypt_b06.png" width="303" height="214" />
+    <img src="/assets/encrypt_b06.png" width="332" height="214" />
     <h2>Block N Encryption by B</h2>
-    <img src="/assets/encrypt_bN6.png" width="215" height="193" />
+    <img src="/assets/encrypt_bN6.png" width="221" height="215" />
     <h2>Message Decryption by A</h2>
-    <div>
-      <img src="/assets/decrypt6.png" width="274" height="487" />
-      <img class="flow-img" (click)="openFlowImage('/assets/decrypt_flow6.svg')"
-        src="/assets/decrypt_flow6.svg" />
+    <div class="flow">
+      <img src="/assets/decrypt6.png" width="292" height="490" />
+      <img class="flow-img" (click)="openFlowImage('/assets/decrypt_flowb06.svg')"
+        src="/assets/decrypt_flowb06.svg" />
+      <img class="flow-img2" (click)="openFlowImage('/assets/decrypt_flowbN6.svg')"
+        src="/assets/decrypt_flowbN6.svg" />
     </div>
     <h2>Block 0 Decryption by B</h2>
-    <img src="/assets/decrypt_b06.png" width="218" height="22" />
+    <img src="/assets/decrypt_b05.png" width="218" height="22" />
     <h2>Block N Decryption by B</h2>
-    <img src="/assets/decrypt_bN6.png" width="227" height="147" />
+    <img src="/assets/decrypt_bN6.png" width="233" height="170" />
     <h2>Webauthn Variables</h2>
-    <img src="/assets/webauthn6.png" width="397" height="228" />
+    <img src="/assets/webauthn5.png" width="397" height="228" />
     <h2>Registration by A</h2>
-    <img src="/assets/registration6.png" width="299" height="316" />
+    <img src="/assets/registration5.png" width="299" height="316" />
     <h2>Authentication by A</h2>
-    <img src="/assets/authentication6.png" width="228" height="233" />
+    <img src="/assets/authentication5.png" width="228" height="233" />
     <h2>Recovery from Lost Passkey by A</h2>
-    <img src="/assets/recovery6.png" width="298" height="252" />
+    <img src="/assets/recovery5.png" width="298" height="252" />
     <h1 class="section">Cipher Data Structure (v6) </h1>
     <p>
       The table below illustrates the byte-level structure of cipher data created by Quick
@@ -211,87 +215,7 @@
         </tr>
       </tbody>
     </table>
-
-    <h1 class="section">Protocol Version History</h1>
-    <table class="bytes">
-      <tbody>
-        <tr>
-          <td>v6</td>
-          <td><a [routerLink]="'/help/protocol6'">Version 6 released November, 2025</a></td>
-        </tr>
-        <tr>
-          <td>v6</td>
-          <td>Replaced WebCrypto HKDF-SHA512 with <a href="https://libsodium.gitbook.io/doc/key_derivation#deriving-keys-from-a-single-high-entropy-key" target="_blank">libsodium BLAKE2b-512 KDF</a></td>
-        </tr>
-        <tr>
-          <td>v6</td>
-          <td>Use KDF for block number specific encryption keys for all blocks after the first</td>
-        </tr>
-        <tr>
-          <td>v6</td>
-          <td>Moved block termination flag from Header to AdditionalData to include in AEAD ciphers</td>
-        </tr>
-        <tr>
-          <td>v5</td>
-          <td><a [routerLink]="'/help/protocol5'">Version 5 released June, 2025</a></td>
-        </tr>
-        <tr>
-          <td>v5</td>
-          <td>Increased minimum PBKDF2-HMAC-SHA512 iterations to 420,000 to be 2x OWASP recommendation</td>
-        </tr>
-        <tr>
-          <td>v5</td>
-          <td>Cascade block MACs to prevent block reordering or deletion in large plaintext encryption</td>
-        </tr>
-        <tr>
-          <td>v5</td>
-          <td>Added terminal block flag to prevent last block deletion in large plaintext encryption</td>
-        </tr>
-        <tr>
-          <td>v5</td>
-          <td>Replaced WebCrypto getRandomValues function with
-          <a href="https://libsodium.gitbook.io/doc/generating_random_data" target="_blank">randombytes_buf from libsodium</a></td>
-        </tr>
-        <tr>
-          <td>v5</td>
-          <td>Removed option to retrieve random data from https://random.org</td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td><a [routerLink]="'/help/protocol4'">Version 4 released November, 2024</a></td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td>Replaced SubtleCrypto HMAC algorithm with <a href="https://doc.libsodium.org/hashing/generic_hashing"
-            target="_blank">BLAKE2b keyed hash from libsodium</a></td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td>Changed to block-based encryption and data structures to support large plaintext encryption</td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td>Blocks start with a fixed size header containing payload size to simplify block reads</td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td>Moved version out of additional data into the header section at a known block offset</td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td>Added loop parameters to cipher additional data (and removed them from JSON output)</td>
-        </tr>
-        <tr>
-          <td>v2, v3</td>
-          <td>Skipped versions</td>
-        </tr>
-        <tr>
-          <td>v1</td>
-          <td><a [routerLink]="'/help/protocol1'">Original version released April 2024</a></td>
-        </tr>
-      </tbody>
-    </table>
-
+    <app-proto-versions></app-proto-versions>
   </div>
 </div>
 <app-copyright />

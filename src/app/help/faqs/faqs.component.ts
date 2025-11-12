@@ -801,7 +801,7 @@ const ELEMENT_DATA: FAQElement[] = [
       Quick Crypt uses well-established cryptographic functions available in modern browsers.
       All cryptographic functions are run in your browser, ensuring your data remains local.
       The primary cryptographic functions are listed below. <i>SubtleCrypto</i>
-      means the function is implemented by your browser's (Chrome, Safari, Edge, etc)
+      means the function is implemented by your browser's
       <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto" target="_blank">
       SubtleCrypto API</a>. <i>Libsodium</i> means
       the function is implemented by the open-source
@@ -811,7 +811,10 @@ const ELEMENT_DATA: FAQElement[] = [
          <li class="long"><b>Random Values:</b> libsodium
          <a href="https://doc.libsodium.org/generating_random_data" target="_blank">randombytes_buf()</a>
          </li>
-         <li><b>BLAKE2b-512 KDF and PBKDF2-HMAC-SHA512 Key Derivation:</b> SubtleCrypto
+         <li><b>BLAKE2b-512 Key Derivation Function:</b> libsodium
+         <a href="https://libsodium.gitbook.io/doc/key_derivation#deriving-keys-from-a-single-high-entropy-key" target="_blank">crypto_kdf_derive_from_key()</a>
+         </li>
+         <li><b>PBKDF2-HMAC-SHA512 Password Key Derivation:</b> SubtleCrypto
          <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey" target="_blank">deriveKey()</a>
          </li>
          <li><b>AES 256 GCM Cipher:</b> SubtleCrypto <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt"
