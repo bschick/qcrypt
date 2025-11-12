@@ -26,10 +26,7 @@ Please use our [vulnerability disclosure program at Open Bug Bounty](https://www
 - sending a remediation is appreciated but not required
 - highlight the problem in source code whenever possible
 - private submissions preferred, but public and private are accepted
-
-### Protocol documentation
-
-See the live Quick Crypt website for a [detailed description of Quick Crypt's encryption and decryption protocol](https://quickcrypt.org/help/protocol)
+- review the [detailed description of Quick Crypt's encryption and decryption protocol](https://quickcrypt.org/help/protocol)
 
 ### Acknowledgments
 
