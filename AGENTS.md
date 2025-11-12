@@ -12,7 +12,7 @@ This `qcrypt` client can built, served, and tested locally. It depends on a back
 - **Source Repository:** Project source code, issues tracking, and releases are at [qcrypt github](https://github.com/bschick/qcrypt)
 - **Core Logic:** The main application logic, including key derivation, encryption, and decryption, is located in `src/`.
 - **Technology Stack:** The application is built with Angular. It uses `libsodium-wrappers` and `@simplewebauthn/browser` for cryptographic and WebAuthn functionalities.
-- **Crypto Details:** The cryptographic protocol is detailed in `src/assets/protocol5.pdf` and online at [https://quickcrypt.org/help/protocol](https://quickcrypt.org/help/protocol).
+- **Crypto Details:** The cryptographic protocol is detailed in `src/assets/protocol6.pdf` and online at [https://quickcrypt.org/help/protocol](https://quickcrypt.org/help/protocol).
 - **API Interaction:** The client communicates with the `qcrypt-server` for user management and passkey operations. Server code is at [qcrypt-server github](https://github.com/bschick/qcrypt-server) and deployed at `https://test.quickcrypt.org`
 
 ---
@@ -31,7 +31,7 @@ This `qcrypt` client can built, served, and tested locally. It depends on a back
 - `src/app/services/ciphers-current.ts`: Contains the implementation of the most recent encryption and decryption ciphers.
 - `src/app/services/deciphers-old.ts`: Contains the implementation of previous decryption ciphers versions.
 - `src/app/services/authenticator.service.ts`: Handles WebAuthn authenticator logic.
-- `src/assets/protocol5.pdf`: Detailed documentation of the cryptographic protocol.
+- `src/assets/protocol6.pdf`: Detailed documentation of the cryptographic protocol.
 - `package.json`: Lists project dependencies and npm scripts for building, serving, and testing the application.
 - `karma.conf.cjs`: Configuration for the Karma test runner (used for unit tests).
 - `playwright.config.ts`: Configuration for Playwright (used for end-to-end and unit tests).
@@ -122,6 +122,6 @@ npm run test:e2e
 - **Client-Side Logic:** All sensitive operations, especially cryptography, must remain strictly on the client-side. No sensitive data should be sent to any server.
 - **Testing:** Any new feature or bug fix should be accompanied by corresponding unit or e2e tests to prevent regressions.
 - **Immutability:** Follow best practices for immutability, especially when dealing with application state.
-- **Security:** Adhere to the security principles outlined in `src/assets/protocol5.pdf`, including the use of strong cryptographic primitives and secure coding practices.
+- **Security:** Adhere to the security principles outlined in `src/assets/protocol6.pdf`, including the use of strong cryptographic primitives and secure coding practices.
 - **Github workflow:** All changes must be submitted as a github pull request from a cloned repository.
 - **AWS server resources:** The test API server at `https://test.quickcrypt.org` is intended only for those contributing to the Quick Crypt project. Unnecessary or excessive usage that drives up AWS costs will be blocked.

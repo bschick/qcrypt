@@ -8,7 +8,7 @@ Protocol latext text:
 * Select and area (excluding title), copy, new file from clipboard
 * Export as png with sRGB profile to 'assets' directory (not sure if profile matters)
 * Run optipng with default params on the resulting png ("optipng *.png" works fine and is safe)
-* Set the image width and height in protocol5.component.html to 50% of actual image size
+* Set the image width and height in protocol6.component.html to 50% of actual image size
 * Set \setlength\parindent{20pt}
 * Recompile, download seachable pdf
 

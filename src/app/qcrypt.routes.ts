@@ -33,7 +33,7 @@ import { CmdLineComponent } from './cmdline/cmdline.component';
 import { cmdlineGuard } from './cmdline/cmdline.guard';
 import { OverviewComponent } from './help/overview/overview.component';
 import { FaqsComponent } from './help/faqs/faqs.component';
-import { ProtocolComponent, Protocol4Component, Protocol5Component } from './help/protocol/protocol.component';
+import { ProtocolComponent, Protocol4Component, Protocol5Component, Protocol6Component } from './help/protocol/protocol.component';
 import { coreGuard } from './core/core.guard';
 import { welcomeGuard } from './welcome/welcome.guard';
 
@@ -47,10 +47,11 @@ export const routes: Routes = [
    { path: 'cmdline', component: CmdLineComponent, canActivate: [cmdlineGuard] },
    { path: 'help/overview', component: OverviewComponent },
    { path: 'help/faqs', component: FaqsComponent },
-   { path: 'help/protocol', component: Protocol5Component },
+   { path: 'help/protocol', component: Protocol6Component },
    { path: 'help/protocol1', component: ProtocolComponent },
    { path: 'help/protocol4', component: Protocol4Component },
    { path: 'help/protocol5', component: Protocol5Component },
+   { path: 'help/protocol6', component: Protocol6Component },
    { path: 'help', redirectTo: 'help/faqs', pathMatch: 'full'},
    { path: '', component: CoreComponent, canActivate: [coreGuard] },
    { path: '**', redirectTo: '', pathMatch: 'full' },

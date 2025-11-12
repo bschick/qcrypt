@@ -1,0 +1,83 @@
+<h1 class="section">Protocol Version History</h1>
+<table class="bytes">
+  <tbody>
+    <tr>
+      <td>v6</td>
+      <td><a [routerLink]="'/help/protocol6'">Version 6 released November, 2025</a></td>
+    </tr>
+    <tr>
+      <td>v6</td>
+      <td>Replaced WebCrypto HKDF-SHA512 with <a
+          href="https://libsodium.gitbook.io/doc/key_derivation#deriving-keys-from-a-single-high-entropy-key"
+          target="_blank">libsodium BLAKE2b-512 KDF</a></td>
+    </tr>
+    <tr>
+      <td>v6</td>
+      <td>Use KDF to generate block number specific encryption keys for all blocks after the first</td>
+    </tr>
+    <tr>
+      <td>v6</td>
+      <td>Moved block flags from Header to AdditionalData to be included in AEAD ciphers</td>
+    </tr>
+    <tr>
+      <td>v5</td>
+      <td><a [routerLink]="'/help/protocol5'">Version 5 released June, 2025</a></td>
+    </tr>
+    <tr>
+      <td>v5</td>
+      <td>Increased minimum PBKDF2-HMAC-SHA512 iterations to 420,000 to be 2x OWASP recommendation</td>
+    </tr>
+    <tr>
+      <td>v5</td>
+      <td>Cascade block MACs to prevent block reordering or deletion in large plaintext encryption</td>
+    </tr>
+    <tr>
+      <td>v5</td>
+      <td>Added terminal block flag to prevent last block deletion in large plaintext encryption</td>
+    </tr>
+    <tr>
+      <td>v5</td>
+      <td>Replaced WebCrypto getRandomValues function with
+        <a href="https://libsodium.gitbook.io/doc/generating_random_data" target="_blank">randombytes_buf from
+          libsodium</a>
+      </td>
+    </tr>
+    <tr>
+      <td>v5</td>
+      <td>Removed option to retrieve random data from https://random.org</td>
+    </tr>
+    <tr>
+      <td>v4</td>
+      <td><a [routerLink]="'/help/protocol4'">Version 4 released November, 2024</a></td>
+    </tr>
+    <tr>
+      <td>v4</td>
+      <td>Replaced SubtleCrypto HMAC algorithm with <a href="https://doc.libsodium.org/hashing/generic_hashing"
+          target="_blank">BLAKE2b keyed hash from libsodium</a></td>
+    </tr>
+    <tr>
+      <td>v4</td>
+      <td>Changed to block-based encryption and data structures to support large plaintext encryption</td>
+    </tr>
+    <tr>
+      <td>v4</td>
+      <td>Blocks start with a fixed size header containing payload size to simplify block reads</td>
+    </tr>
+    <tr>
+      <td>v4</td>
+      <td>Moved version out of additional data into the header section at a known block offset</td>
+    </tr>
+    <tr>
+      <td>v4</td>
+      <td>Added loop parameters to cipher additional data (and removed them from JSON output)</td>
+    </tr>
+    <tr>
+      <td>v2, v3</td>
+      <td>Skipped versions</td>
+    </tr>
+    <tr>
+      <td>v1</td>
+      <td><a [routerLink]="'/help/protocol1'">Original version released April 2024</a></td>
+    </tr>
+  </tbody>
+</table>

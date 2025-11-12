@@ -1,0 +1,61 @@
+
+@mixin section-heading {
+  font: var(--mat-sys-headline-small);
+  margin-top: 35px;
+}
+
+.content h1.section {
+  @include section-heading;
+}
+
+:host-context(.content) h1.section {
+  @include section-heading;
+}
+
+.bytes {
+  width: 100%;
+  margin-top: 20px;
+  border-collapse: collapse;
+  border-spacing: 0;
+  overflow: hidden;
+  word-break: normal;
+  font: var(--mat-sys-body-medium);
+  text-align: left;
+}
+
+.bytes td {
+  border: 1px solid black;
+  padding: 5px 5px;
+  vertical-align: top;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.bytes th {
+  border: 1px solid black;
+  padding: 5px 5px;
+  vertical-align: top;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.bytes .tableheader {
+  background-color: #efefef;
+  font-weight: bold;
+  text-align: center;
+}
+.bytes .block {
+  background-color: #ffffff;
+  font-weight: bold;
+}
+.bytes .payload {
+  background-color: #c2e8c4;
+}
+.bytes .adata {
+  background-color: #dae8fc;
+}
+.bytes .message {
+  background-color: #ffce93;
+}
+.bytes .header {
+  background-color: #ffffc7;
+}

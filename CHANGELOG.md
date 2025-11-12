@@ -5,8 +5,8 @@
 Security:
   - protocol version 6 released
     - replaced WebCrypto HKDF-SHA512 with libsodium BLAKE2b-512 KDF
-    - use KDF for block number specific encryption keys for all blocks after the first
-    - moved block termination flag from headers to additional data input to AEAD ciphers
+    - use KDF to generate block number specific encryption keys for all blocks after the first
+    - moved block flags from header to additional data to be incluced in AEAD ciphers
   - store optional client-side password and hint cache as TypedArray to allow overwrite
   - purge more sensitive variables from JavaScript memory sooner
   - [Quick Crypt bug bounty program](https://www.openbugbounty.org/bugbounty/schickb/) is live and offering rewards

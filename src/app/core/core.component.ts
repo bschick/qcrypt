@@ -326,7 +326,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   @HostListener('document:visibilitychange', ['$event'])
+   @HostListener('document:visibilitychange')
    visibilitychange() {
       if (document.hidden && this.options.visClear) {
          this.privacyClear();

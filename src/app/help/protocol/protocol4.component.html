@@ -36,7 +36,7 @@
     <h2>Cipher Variables</h2>
     <img src="/assets/variables4.png" width="404" height="678" />
     <h2>Message Encryption by A</h2>
-    <div>
+    <div class="flow">
       <img src="/assets/encrypt4.png" width="231" height="367" />
       <img class="flow-img" (click)="openFlowImage('/assets/encrypt_flow4.svg')"
         src="/assets/encrypt_flow4.svg" />
@@ -50,7 +50,7 @@
     <h2>Message Retrieval by A</h2>
     <img src="/assets/retrieve4.png" width="89" height="16" />
     <h2>Message Decryption by A</h2>
-    <div>
+    <div class="flow">
       <img src="/assets/decrypt4.png" width="274" height="446" />
       <img class="flow-img" (click)="openFlowImage('/assets/decrypt_flow4.svg')"
         src="/assets/decrypt_flow4.svg" />
@@ -206,46 +206,7 @@
         </tr>
       </tbody>
     </table>
-
-    <h1 class="section">Protocol Version History</h1>
-    <table class="bytes">
-      <tbody>
-        <tr>
-          <td>v4</td>
-          <td><a [routerLink]="'/help/protocol4'">Version 4 released November, 2024</a></td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td>Replaced SubtleCrypto HMAC algorithm with <a href="https://doc.libsodium.org/hashing/generic_hashing"
-            target="_blank">BLAKE2b keyed hash from libsodium</a></td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td>Changed to block based encryption and data structures to support large files</td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td>Blocks start with a fixed size header containing payload size to simplify block read</td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td>Moved version out of additional data into the header section at a known block offset</td>
-        </tr>
-        <tr>
-          <td>v4</td>
-          <td>Added loop parameters to cipher additional data (and removed them from json output)</td>
-        </tr>
-        <tr>
-          <td>v2, v3</td>
-          <td>Skipped versions</td>
-        </tr>
-        <tr>
-          <td>v1</td>
-          <td><a [routerLink]="'/help/protocol1'">Original version released April, 2024</a></td>
-        </tr>
-      </tbody>
-    </table>
-
+    <app-proto-versions></app-proto-versions>
   </div>
 </div>
 <app-copyright />
