@@ -1,6 +1,6 @@
 # Agent Instructions for qcrypt client
 
-This document provides instructions for AI agents working on the `qcrypt` client codebase.
+This document provides instructions for Humand or AI agents working on the `qcrypt` client codebase.
 
 ## 1. Project Overview
 
