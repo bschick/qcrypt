@@ -64,7 +64,7 @@ git clone https://github.com/bschick/qcrypt.git && cd qcrypt
 ./ubsetup.sh 2>&1 | tee ubsetup.log
 ```
 
-### b. Running Tests
+### b. Running Automated Tests
 
 **Unit Tests locally:**
 ```bash
@@ -90,7 +90,14 @@ npm run test:e2e
 pkill npm; pkill ng # Stop the development server and ng process
 ```
 
-### c. Build project for production deployment
+### c. Running Manual Tests
+
+- Start the development server as described above with `npm run serve`. The server will listen on all IP addresses on that system.
+- If you plan to run a web browser on a different system than the development server, you must edit that system's `hosts` file to set the name of the primary IP address where the development server is running to `t1.quickcrypt.org`. Ensure you can `ping t1.quickcrypt.org`.
+- To avoid security warnings, you must also import the project's local CA certificate on the system running your browser. You can find the CA certificate in the `./localssl` directory relative to where you ran the `npm run serve` command. Import this certificate into your system's or browser's trusted certificate store. This process is dependent on your operating system.
+- Finally, start a web browser and navigate to `https://t1.quickcrypt.org:4200`. The test front-end uses a test back-end API server running in AWS with a URL of `https://test.quickcrypt.org`. The test API server is intended **only for those contributing to the Quick Crypt project**. Unnecessary or excessive usage that drives up AWS costs will be blocked. Do not run invasive tests against the production API server.
+
+### d. Build project for production deployment
 
 ```bash
 npm run build
