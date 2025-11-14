@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-## 6.0.0 (2025-11-??)
+## 6.0.0 (2025-11-13)
 
 Security:
   - protocol version 6 released
