@@ -15,7 +15,7 @@ Security:
 Changes:
 
   - fixed read buffer size bug causing read stalls and missing term blocks (functional only issue)
-  - improve site docs to stress the importance of keeping recovery words private
+  - improved site docs to stress the importance of keeping recovery words private
   - added more testing of block order manipulation detection
   - package updates
 
