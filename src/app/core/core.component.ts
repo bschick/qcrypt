@@ -410,12 +410,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          const decoder = new TextDecoder();
          pwdResult = [decoder.decode(this.cachedPassword), decoder.decode(this.cachedHint)];
       } else {
-         //-1 minStrength means no pwd strength requirments
          pwdResult = await this.askForPassword(cdInfo, encrypting);
       }
 
       // This can run outside of Angular's zone because the  callback
-      // comes from within streem connections
+      // comes from within stream connections
       this.ngZone.run(() => {
          // Avoid briefly putting up spinner and disabling buttons
          if (cdInfo.ic > this.spinnerAbove || this.usingFile) {
