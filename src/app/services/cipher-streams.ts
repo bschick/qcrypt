@@ -114,7 +114,10 @@ async function _encryptStreamImpl(
                controller.byobRequest?.respond(0);
             }
          } catch (err) {
-            controller.error(err);
+            console.log(err);
+            // On chrome this is an odd "network err", so replace with a consistent error
+            const newError = new Error('error reading stream');
+            controller.error(newError);
          }
       }
    });
@@ -179,7 +182,10 @@ export async function decryptStream(
             }
 
          } catch (err) {
-            controller.error(err);
+            console.log(err);
+            // On chrome this is an odd "network err", so replace with a consistent error
+            const newError = new Error('error reading stream');
+            controller.error(newError);
          }
       }
 
