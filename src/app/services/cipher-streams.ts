@@ -114,10 +114,11 @@ async function _encryptStreamImpl(
                controller.byobRequest?.respond(0);
             }
          } catch (err) {
-            console.log(err);
-            // On chrome this is an odd "network err", so replace with a consistent error
-            const newError = new Error('error reading stream');
-            controller.error(newError);
+            // Chrome throws an odd "network err" when files have errors, so replace with a consistent error
+            if(err instanceof Error && err.message.toLowerCase().includes("network")) {
+               err = new Error('Error reading stream');
+            }
+            controller.error(err);
          }
       }
    });
@@ -182,10 +183,11 @@ export async function decryptStream(
             }
 
          } catch (err) {
-            console.log(err);
-            // On chrome this is an odd "network err", so replace with a consistent error
-            const newError = new Error('error reading stream');
-            controller.error(newError);
+            // Chrome throws an odd "network err" when files have errors, so replace with a consistent error
+            if(err instanceof Error && err.message.toLowerCase().includes("network")) {
+               err = new Error('Error reading stream');
+            }
+            controller.error(err);
          }
       }
 
