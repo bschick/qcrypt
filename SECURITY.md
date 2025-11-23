@@ -32,5 +32,5 @@ Please use our [vulnerability disclosure program at Open Bug Bounty](https://www
 
 Thanks to the following security researchers:
 
-- **destro4evr**: The first to report potential issues and recommend improvements, particularly for GET /users/{userid}/session
+- **destro4evr**: The first to report potential issues and recommend improvements, and for developing server API unittests that support Webauthn
 - [Vaibhav jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/): For reporting missing MTA-STS domain email support
