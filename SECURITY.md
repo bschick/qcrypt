@@ -6,7 +6,7 @@
 
 Please use our [vulnerability disclosure program at Open Bug Bounty](https://www.openbugbounty.org/bugbounty/schickb/) to provide details and repro steps. We will respond ASAP. If you cannot use Open Bug Bounty, you may [open a ticket on github](https://github.com/bschick/qcrypt/issues/new/choose) with details and repro steps.
 
-### Rewards
+### Rewards (sorry but fees, taxes, etc reduce these amounts)
 - up to $50 for low to medium severity findings
 - $100 for high severity findings
 - $200 for critical findings
