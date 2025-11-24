@@ -5,6 +5,7 @@ export const environment = {
     host: 'https://t1.quickcrypt.org:4200',
     apiHost: 'https://test.quickcrypt.org',
     apiVersion: 'v1',
+    appPublicKey: 'public-key2',
     clientVersion: pkg.version,
     copyright: pkg.copyright
 };
