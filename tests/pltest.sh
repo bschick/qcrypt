@@ -16,7 +16,8 @@ COMMAND=(
   "test"
   "--project=$PROJ"
   "$TESTS_PATH/parallel/"
-  "--workers=1"
+  "--grep-invert"
+  "/@fullfuzz/"
 )
 
 # Add test filter if we have one

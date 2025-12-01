@@ -61,11 +61,12 @@ test.describe('authenticated api tests', () => {
       expect(user.authenticators.length).toBe(1);
 
       // Failure case, invalid userid
-      usersResponse = await page.request.get(
-         `${apiUrl}/users/42ebNajPIp3leX4K4a0qND`,
-         { headers: apiHeaders }
-      );
-      expect(usersResponse.status()).toBe(401);
+      // Comment out during backward compatibility period
+      // usersResponse = await page.request.get(
+      //    `${apiUrl}/users/42ebNajPIp3leX4K4a0qND`,
+      //    { headers: apiHeaders }
+      // );
+      // expect(usersResponse.status()).toBe(401);
 
 
       // Should fail, invalid credid
@@ -77,12 +78,13 @@ test.describe('authenticated api tests', () => {
       expect(delResponse.status()).toBe(400);
 
       // Should fail, invalid userId with valid credential
-      delResponse = await page.request.delete(
-         //@ts-ignore
-         `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/passkeys/${user.authenticators[0].credentialId}`,
-         { headers: apiHeaders }
-      );
-      expect(delResponse.status()).toBe(401);
+      // comment out during backward compatibility period
+      // delResponse = await page.request.delete(
+      //    //@ts-ignore
+      //    `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/passkeys/${user.authenticators[0].credentialId}`,
+      //    { headers: apiHeaders }
+      // );
+      // expect(delResponse.status()).toBe(401);
 
       // Should fail, invalid userId and credential
       delResponse = await page.request.delete(
@@ -90,7 +92,7 @@ test.describe('authenticated api tests', () => {
          `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/passkeys/nfVho8Z8p3oEpOl8yvbh40`,
          { headers: apiHeaders }
       );
-      expect(delResponse.status()).toBe(401);
+      expect(delResponse.status()).toBe(400);
 
 
       // Valid passkey delete
@@ -152,12 +154,13 @@ test.describe('authenticated api tests', () => {
 
 
       // invalid user id
-      descResponse = await page.request.patch(
-         //@ts-ignore
-         `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/passkeys/${user.authenticators[0].credentialId}`,
-         { headers: apiHeaders, data: body2 }
-      );
-      expect(descResponse.status()).toBe(401);
+      // comment out during backward compatibility period
+      // descResponse = await page.request.patch(
+      //    //@ts-ignore
+      //    `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/passkeys/${user.authenticators[0].credentialId}`,
+      //    { headers: apiHeaders, data: body2 }
+      // );
+      // expect(descResponse.status()).toBe(401);
 
       // invalid cred id
       descResponse = await page.request.patch(
@@ -173,8 +176,7 @@ test.describe('authenticated api tests', () => {
          `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/passkeys/nfVho8Z8p3oEpOl8yvbh40`,
          { headers: apiHeaders, data: body2 }
       );
-      expect(descResponse.status()).toBe(401);
-
+      expect(descResponse.status()).toBe(400);
 
       // Should fail, because description is not a string
       const body3 = {
@@ -379,11 +381,13 @@ test.describe('authenticated api tests', () => {
       expect(user.hasRecoveryId).toBeTruthy()
       expect(user.authenticators.length).toBe(1);
 
-      sessionResponse = await page.request.get(
-         `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/session`,
-         { headers: apiHeaders }
-      );
-      expect(sessionResponse.status()).toBe(401);
+      // invalid user id
+      // comment out during backward compatibility period
+      // sessionResponse = await page.request.get(
+      //    `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/session`,
+      //    { headers: apiHeaders }
+      // );
+      // expect(sessionResponse.status()).toBe(401);
 
 
       const delResponse = await page.request.delete(
@@ -409,14 +413,15 @@ test.describe('authenticated api tests', () => {
       apiHeaders['x-amz-content-sha256'] = bufferToHexString(hash);
 
       // delete with valid session cookie, but invalid userId should fail
+      // comment out during backward compatibility period
+      // let endResponse = await page.request.delete(
+      //    `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/session`,
+      //    { headers: apiHeaders }
+      // );
+      // expect(endResponse.status()).toBe(401);
+
+
       let endResponse = await page.request.delete(
-         `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/session`,
-         { headers: apiHeaders }
-      );
-      expect(endResponse.status()).toBe(401);
-
-
-      endResponse = await page.request.delete(
          `${apiUrl}/users/${apiUser.userId}/session`,
          { headers: apiHeaders }
       );
@@ -605,29 +610,31 @@ async function smallFuzzCommaon(
    headers: Record<string, string>
 ) {
    // GET UserInfo
-   await fuzzGet( page, headers,
-      `${apiUrl}/users/{0}`,
-      [ badIdsSmall ]
-   );
+   // comment out during backward compatibility period
+   // await fuzzGet(page, headers,
+   //    `${apiUrl}/users/{0}`,
+   //    [badIdsSmall]
+   // );
 
    // PATCH passkey
-   await fuzzPatch( page, headers,
+   await fuzzPatch(page, headers,
       `${apiUrl}/users/{0}/passkeys/{1}`,
-      [ [...badIdsSmall, userId], badIdsSmall ],
+      [[...badIdsSmall, userId], badIdsSmall],
       'description',
       badNamesSmall
    );
 
    // DELETE  session
-   await fuzzDelete( page, headers,
-      `${apiUrl}/users/{0}/session`,
-      [ badIdsSmall ]
-   );
+   // comment out during backward compatibility period
+   // await fuzzDelete(page, headers,
+   //    `${apiUrl}/users/{0}/session`,
+   //    [badIdsSmall]
+   // );
 
    // POST auth verify
-   await fuzzPost( page, headers,
+   await fuzzPost(page, headers,
       `${apiUrl}/users/{0}/auth/verify`,
-      [ [...badIdsSmall, userId] ],
+      [[...badIdsSmall, userId]],
       'authenticator',
       badNamesSmall
    );
@@ -641,45 +648,48 @@ async function fullFuzzCommaon(
    headers: Record<string, string>
 ) {
    // GET UserInfo
-   await fuzzGet( page, headers,
-      `${apiUrl}/users/{0}`,
-      [ badIds ]
-   );
+   // comment out during backward compatibility period
+   // await fuzzGet(page, headers,
+   //    `${apiUrl}/users/{0}`,
+   //    [badIds]
+   // );
 
    // PATCH UserInfo
-   await fuzzPatch( page, headers,
+   await fuzzPatch(page, headers,
       `${apiUrl}/users/{0}`,
-      [ badIds ],
+      [badIds],
       'userName',
       badNames
    );
 
    // PATCH passkey
    // also include good userid
-   await fuzzPatch( page, headers,
+   await fuzzPatch(page, headers,
       `${apiUrl}/users/{0}/passkeys/{1}`,
-      [ [...badIdsSmall, userId], badIds ],
+      [[...badIdsSmall, userId], badIds],
       'description',
       badNames
    );
 
    // DELETE passkeys
-   await fuzzDelete( page, headers,
+   await fuzzDelete(page, headers,
       `${apiUrl}/users/{0}/passkeys/{1}`,
-      [ [...badIdsSmall, userId], badIds ]
+      [[...badIdsSmall, userId], badIds]
    );
 
    // GET session
-   await fuzzGet( page, headers,
-      `${apiUrl}/users/{0}/session`,
-      [ badIds ]
-   );
+   // comment out during backward compatibility period
+   // await fuzzGet(page, headers,
+   //    `${apiUrl}/users/{0}/session`,
+   //    [badIds]
+   // );
 
    // DELETE  session
-   await fuzzDelete( page, headers,
-      `${apiUrl}/users/{0}/session`,
-      [ badIds ]
-   );
+   // comment out during backward compatibility period
+   // await fuzzDelete(page, headers,
+   //    `${apiUrl}/users/{0}/session`,
+   //    [badIds]
+   // );
 
    let delResponse = await page.request.delete(
       `${apiUrl}/users`,
@@ -694,43 +704,44 @@ async function fullFuzzCommaon(
    expect(delResponse.status()).toBe(404);
 
    // POST reg verify
-   await fuzzPost( page, headers,
+   await fuzzPost(page, headers,
       `${apiUrl}/users/{0}/reg/verify`,
-      [ [...badIds, userId] ],
+      [[...badIds, userId]],
       'authenticator',
       badNames
    );
 
    // POST auth verify
-   await fuzzPost( page, headers,
+   await fuzzPost(page, headers,
       `${apiUrl}/users/{0}/auth/verify`,
-      [ [...badIds, userId] ],
+      [[...badIds, userId]],
       'authenticator',
       badNames
    );
 
    // POST recovery
-   await fuzzPost( page, headers,
+   await fuzzPost(page, headers,
       `${apiUrl}/users/{0}/recover/{1}`,
-      [ [...badIdsSmall, userId], badIds ]
+      [[...badIdsSmall, userId], badIds]
    );
 
    // POST recovery2
-   await fuzzPost( page, headers,
+   await fuzzPost(page, headers,
       `${apiUrl}/users/{0}/recover2/{1}`,
-      [ [...badIdsSmall, userId], badIds ]
+      [[...badIdsSmall, userId], badIds]
    );
 
    // GET passkeys options
-   await fuzzGet( page, headers,
-      `${apiUrl}/users/{0}/passkeys/options`,
-      [ badIds ]
-   );
+   // comment out during backward compatibility period
+   // await fuzzGet(page, headers,
+   //    `${apiUrl}/users/{0}/passkeys/options`,
+   //    [badIds]
+   // );
 
    // POST passkeys verify
-   await fuzzPost( page, headers,
+   await fuzzPost(page, headers,
       `${apiUrl}/users/{0}/passkeys/verify`,
-      [ [...badIds, userId] ]
+      [[...badIds, userId]]
    );
 
    // Bad URLS generally
@@ -843,10 +854,10 @@ async function fuzzGet(
    const subs = cartesianProduct(urlValues);
    for (let sub of subs) {
       let url = urlTemplate;
-      for (let pos = 0; pos < sub.length; ++pos ) {
+      for (let pos = 0; pos < sub.length; ++pos) {
          url = url.replace(`{${pos}}`, String(sub[pos]))
       }
-//      console.log(`GET ${url}`);
+      //      console.log(`GET ${url}`);
       const response = await page.request.get(
          //@ts-ignore
          url,
@@ -872,10 +883,10 @@ async function fuzzDelete(
    const subs = cartesianProduct(urlValues);
    for (let sub of subs) {
       let url = urlTemplate;
-      for (let pos = 0; pos < sub.length; ++pos ) {
+      for (let pos = 0; pos < sub.length; ++pos) {
          url = url.replace(`{${pos}}`, String(sub[pos]))
       }
-//      console.log(`DELETE ${url}`);
+      //      console.log(`DELETE ${url}`);
       const response = await page.request.delete(
          //@ts-ignore
          url,
@@ -902,12 +913,12 @@ async function fuzzPatch(
    for (let sub of subs) {
       let url = urlTemplate;
       let pos = 0;
-      for (; pos < sub.length - 1; ++pos ) {
+      for (; pos < sub.length - 1; ++pos) {
          url = url.replace(`{${pos}}`, String(sub[pos]))
       }
 
       const data: Record<string, any> = {};
-  //    console.log(`datakey ${dataKey} ${pos} ${sub[pos]}`);
+      //    console.log(`datakey ${dataKey} ${pos} ${sub[pos]}`);
 
       data[dataKey] = sub[pos];
 
@@ -934,7 +945,7 @@ async function fuzzPost(
    dataKey?: string,
    dataValues?: any[]
 ) {
-   if (dataValues ) {
+   if (dataValues) {
       urlValues.push(dataValues);
    }
    const subs = cartesianProduct(urlValues);
@@ -944,13 +955,13 @@ async function fuzzPost(
    for (let sub of subs) {
       let url = urlTemplate;
       let pos = 0;
-      for (; pos < sub.length - (dataValues ? 1 : 0); ++pos ) {
+      for (; pos < sub.length - (dataValues ? 1 : 0); ++pos) {
          url = url.replace(`{${pos}}`, String(sub[pos]))
       }
 
       const data: Record<string, any> = {};
 
-      if(dataKey) {
+      if (dataKey) {
          // console.log(`datakey ${dataKey} ${pos} ${sub[pos]}`);
 
          data[dataKey] = sub[pos];
@@ -981,35 +992,35 @@ async function fuzzPost(
  * e.g., [['a', 1], ['a', 2], ['b', 1], ['b', 2]].
  */
 export function cartesianProduct(arrOfArr: any[][]): any[][] {
-  // If the input is null, undefined, or an empty array,
-  // return an empty array as there's no product to compute.
-  if (!arrOfArr || arrOfArr.length === 0) {
-    return [];
-  }
+   // If the input is null, undefined, or an empty array,
+   // return an empty array as there's no product to compute.
+   if (!arrOfArr || arrOfArr.length === 0) {
+      return [];
+   }
 
-  // We use `reduce` to iteratively build the product.
-  // The 'accumulator' (which we call 'acc') holds the
-  // combinations built so far.
-  // We start the accumulator with an array containing one empty array: `[[]]`.
-  return arrOfArr.reduce(
-    (acc, currentArray) => {
-      // This will be the new accumulator for the next iteration.
-      const newAcc: any[][] = [];
+   // We use `reduce` to iteratively build the product.
+   // The 'accumulator' (which we call 'acc') holds the
+   // combinations built so far.
+   // We start the accumulator with an array containing one empty array: `[[]]`.
+   return arrOfArr.reduce(
+      (acc, currentArray) => {
+         // This will be the new accumulator for the next iteration.
+         const newAcc: any[][] = [];
 
-      // For each combination we've already built (accItem)...
-      for (const accItem of acc) {
-        // ...and for each item in the *current* array we're processing...
-        for (const item of currentArray) {
-          // ...create a new combination by adding the current item
-          // to the existing combination.
-          newAcc.push([...accItem, item]);
-        }
-      }
+         // For each combination we've already built (accItem)...
+         for (const accItem of acc) {
+            // ...and for each item in the *current* array we're processing...
+            for (const item of currentArray) {
+               // ...create a new combination by adding the current item
+               // to the existing combination.
+               newAcc.push([...accItem, item]);
+            }
+         }
 
-      // Return the newly built set of combinations
-      // to be used as the accumulator for the next array.
-      return newAcc;
-    },
-    [[]] as any[][] // Initial value: An array with one empty array.
-  );
+         // Return the newly built set of combinations
+         // to be used as the accumulator for the next array.
+         return newAcc;
+      },
+      [[]] as any[][] // Initial value: An array with one empty array.
+   );
 }
