@@ -46,9 +46,12 @@ export {
    Ciphers,
    Encipher,
    Decipher,
+   CipherState,
+};
+
+export type {
    EParams,
    PWDProvider,
-   CipherState,
    CipherDataInfo
 };
 
