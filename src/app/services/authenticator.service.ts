@@ -287,10 +287,8 @@ export class AuthenticatorService {
       if (!this.potentialSession()) {
          return false;
       }
-      const [userId] = this.loadKnownUser();
       const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
          method: 'GET',
-         userId: userId,
          resource: 'session'
       });
 
@@ -318,7 +316,6 @@ export class AuthenticatorService {
          const verifyBody = await this._startAuth(this.userId);
          const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
             method: 'POST',
-            userId: verifyBody['response']['userHandle'],
             resource: 'auth/verify',
             bodyJSON: JSON.stringify(verifyBody),
             params: 'recovery=true'
@@ -493,7 +490,7 @@ export class AuthenticatorService {
       const eventData = this._captureEventData(AuthEvent.Forget);
       this.logout(global, false);
       sessionStorage.clear();
-      if(global) {
+      if (global) {
          localStorage.removeItem('username');
          localStorage.removeItem('userid');
          localStorage.removeItem('pkid');
@@ -505,13 +502,10 @@ export class AuthenticatorService {
       const eventData = this._captureEventData(AuthEvent.Logout);
 
       if (global) {
-         const [userId] = this.loadKnownUser();
-
          // let this happen in the background. creates a race condition with next
          // login, but highly unlikley to be an issue since login presents passkey auth
          this._doFetch<string>({
             method: 'DELETE',
-            userId: userId,
             resource: 'session'
          }).catch((err) => {
             // ignore
@@ -561,10 +555,9 @@ export class AuthenticatorService {
 
       const serverUserInfo = await this._doFetch<ServerUserInfo>({
          method: 'PATCH',
-         userId: this.userId,
          resource: 'passkeys',
          resourceId: credentialId,
-         bodyJSON: JSON.stringify({description: description})
+         bodyJSON: JSON.stringify({ description: description })
       });
 
       if (!serverUserInfo) {
@@ -587,8 +580,8 @@ export class AuthenticatorService {
 
       const serverUserInfo = await this._doFetch<ServerUserInfo>({
          method: 'PATCH',
-         userId: this.userId,
-         bodyJSON: JSON.stringify({userName: userName})
+         resource: 'user',
+         bodyJSON: JSON.stringify({ userName: userName })
       });
 
       if (!serverUserInfo) {
@@ -608,7 +601,6 @@ export class AuthenticatorService {
 
       const serverUserInfo = await this._doFetch<ServerUserInfo>({
          method: 'DELETE',
-         userId: this.userId,
          resource: 'passkeys',
          resourceId: credentialId
       });
@@ -669,7 +661,7 @@ export class AuthenticatorService {
 
       const serverUserInfo = await this._doFetch<ServerUserInfo>({
          method: 'GET',
-         userId: this.userId
+         resource: 'user',
       });
 
       if (!serverUserInfo) {
@@ -699,7 +691,6 @@ export class AuthenticatorService {
       const verifyBody = await this._startAuth(userId);
       const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
          method: 'POST',
-         userId: verifyBody['response']['userHandle'],
          resource: 'auth/verify',
          bodyJSON: JSON.stringify(verifyBody),
          params: 'usercred=true'
@@ -818,7 +809,7 @@ export class AuthenticatorService {
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
          method: 'POST',
          resource: 'reg/options',
-         bodyJSON: JSON.stringify({userName: userName})
+         bodyJSON: JSON.stringify({ userName: userName })
       });
 
       const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, true);
@@ -842,7 +833,6 @@ export class AuthenticatorService {
 
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
          method: 'GET',
-         userId: this.userId,
          resource: 'passkeys/options'
       });
 
@@ -920,7 +910,6 @@ export class AuthenticatorService {
 
       const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
          method: 'POST',
-         userId: actualB64UserId,
          resource: base + '/verify',
          bodyJSON: JSON.stringify(expanded),
          params: params

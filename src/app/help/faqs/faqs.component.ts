@@ -785,7 +785,7 @@ const ELEMENT_DATA: FAQElement[] = [
       The encrypted data from the last loop is output as cipher armor or saved to a file
       and contains the number of loops and cipher modes to simplify decryption.
       </p>
-      <p>Loop encryption provides improved security when
+      <p>Loop encryption provides improved security only when
       you use a different cipher mode and password for each loop (other encryption
       options cannot yet be changed between loops). Cipher modes are stored
       within the cipher armor of each loop, but if you forget any of the

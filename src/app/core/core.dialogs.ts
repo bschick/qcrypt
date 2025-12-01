@@ -65,6 +65,7 @@ export type PwdDialogData = {
    welcomed: boolean;
    userName: string;
    cipherMode: string;
+   usedPasswords: string[];
 };
 
 const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
@@ -74,7 +75,9 @@ const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
    templateUrl: './password.dialog.html',
    styleUrl: './core.dialogs.scss',
    encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
-   imports: [MatDialogModule, MatFormFieldModule, MatInputModule, MatIconModule, StrengthMeterComponent, FormsModule, ReactiveFormsModule, MatTooltipModule, MatButtonModule, BubbleDirective]
+   imports: [MatDialogModule, MatFormFieldModule, MatInputModule, MatIconModule,
+      StrengthMeterComponent, FormsModule, ReactiveFormsModule, MatTooltipModule,
+      MatButtonModule, BubbleDirective]
 })
 export class PasswordDialog implements AfterViewInit, OnDestroy {
 
@@ -94,6 +97,7 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    private welcomed = true;
    private timerId = -1;
    private acceptable: boolean;
+   public usedPasswords: string[];
    public maxHintLen = cc.HINT_MAX_LEN;
 
 
@@ -115,6 +119,7 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
       this.userName = data.userName;
       this.cipherMode = data.cipherMode;
       this.acceptable = !data.encrypting;
+      this.usedPasswords = data.usedPasswords;
    }
 
    ngAfterViewInit(): void {

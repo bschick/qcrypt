@@ -109,6 +109,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    private spinnerAbove = 1500000; // Default since benchmark is async
    private actionStart = 0;
    private authSub!: Subscription;
+   private usedPasswords: string[] = [];
    public cacheTimeout!: DateTime;
    public clearText = '';
    public pwdCached = false;
@@ -404,13 +405,19 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       encrypting: boolean
    ): Promise<[string, string | undefined]> {
 
-      let pwdResult: [string, string | undefined];
-      if (this.pwdCached && cdInfo.lpEnd == 1) {
+      let pwd: string;
+      let hint: string | undefined;
+
+      if (cdInfo.lp === 1)  {
+         this.usedPasswords = [];
+      }
+
+      if (this.pwdCached && cdInfo.lpEnd === 1) {
          this.restartTimer();
          const decoder = new TextDecoder();
-         pwdResult = [decoder.decode(this.cachedPassword), decoder.decode(this.cachedHint)];
+         [pwd, hint] = [decoder.decode(this.cachedPassword), decoder.decode(this.cachedHint)];
       } else {
-         pwdResult = await this.askForPassword(cdInfo, encrypting);
+         [pwd, hint] = await this.askForPassword(cdInfo, encrypting);
       }
 
       // This can run outside of Angular's zone because the  callback
@@ -422,8 +429,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          }
       });
 
+      if (cdInfo.lp === cdInfo.lpEnd)  {
+         this.usedPasswords = [];
+      } else {
+         this.usedPasswords.push(pwd);
+      }
+
       this.actionStart = Date.now();
-      return pwdResult;
+      return [pwd, hint];
    }
 
    async askForPassword(
@@ -447,7 +460,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                   checkPwned: this.options.checkPwned,
                   welcomed: this.welcomed,
                   userName: this.authSvc.userName,
-                  cipherMode: cdInfo.alg
+                  cipherMode: cdInfo.alg,
+                  usedPasswords: [...this.usedPasswords]
                },
             });
 
@@ -543,6 +557,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.onClearClear();
          }*/
       } catch (something) {
+         this.usedPasswords = [];
          if (!ProcessCancelled.isProcessCancelled(something)) {
             console.error(something);
             let msg = 'Could not encrypt text';
@@ -669,8 +684,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    ): Promise<ReadableStream<Uint8Array>> {
 
       const econtext = {
-         // Need to slice because modes length is the max number of modes
-         // that have been set, which may be larger than the current # of loops
          algs: this.options.algorithms,
          ic: this.options.icount
       };
