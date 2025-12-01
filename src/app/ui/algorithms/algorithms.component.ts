@@ -71,9 +71,8 @@ export class AlgorithmsComponent {
          // Use a default for next alg if we have one, else randomly pick
          nextAlg = this._defaultModes[l + 1]
          if (!nextAlg) {
-            do {
-               nextAlg = this._allowedAlgs[(Math.random() * this._allowedAlgs.length) | 0]
-            } while (nextAlg == alg);
+            const idx = this._allowedAlgs.indexOf(alg);
+            nextAlg = this._allowedAlgs[(idx + 1) % this._allowedAlgs.length];
          }
       }
    }

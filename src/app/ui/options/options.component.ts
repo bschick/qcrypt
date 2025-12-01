@@ -96,7 +96,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    public hashTimeWarning = '';
 
    public readonly ACTIVITY_TIMEOUT = ACTIVITY_TIMEOUT;
-   public readonly LOOPS_MAX = 10;
+   public readonly LOOPS_MAX = 6;
    public readonly LOOPS_DEFAULT = 1;
    public readonly ICOUNT_MIN = cc.ICOUNT_MIN;
    public readonly FORMAT_DEFAULT = 'compact';
