@@ -24,7 +24,8 @@ import {
    Output, Input, EventEmitter,
    ViewChild, ElementRef,
    AfterViewInit,
-   OnInit
+   OnInit,
+   OnDestroy
 } from '@angular/core';
 
 import { MatIconModule } from '@angular/material/icon';
@@ -34,6 +35,14 @@ import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ZxcvbnOptionsService } from '../../services/zxcvbn-options.service';
 import { zxcvbnAsync, ZxcvbnResult } from '@zxcvbn-ts/core'
+import * as lev from '../../services/levenshtein';
+import {
+   MatchEstimated,
+   MatchExtended,
+   Match,
+   MatchOptions,
+   Matcher,
+} from '@zxcvbn-ts/core/dist/types'
 
 const COLORS = ['var(--red-pwd-color)', 'var(--red-pwd-color)', 'var(--yellow-pwd-color)', 'var(--green-pwd-color)', 'var(--green-pwd-color)'];
 
@@ -48,20 +57,25 @@ export type AcceptableState = {
    templateUrl: './strengthmeter.component.html',
    styleUrl: './strengthmeter.component.scss'
 })
-export class StrengthMeterComponent implements AfterViewInit, OnInit {
+export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy {
 
    public strength = -1;
    public strengthMin = 0;
 
-   private testQueue: string[] = [];
    public segmentOnColor = '';
    public segmentOffColor = '#dcdcdc';
    public strengthSlider = new FormControl(this.strengthMin + 1);
-   private checkPwned = false;
-   private acceptable = false;
-   private lastStrength = -1;
    public warning = '';
    public suggestion = '';
+   private _checkPwned = false;
+   private _acceptable = false;
+   private _lastStrength = -1;
+   private _usedPasswords: string[] = [];
+   private _testQueue: string[] = [];
+   private _processing = false;
+   private _processTimerId: any = undefined;
+   private _currentPassword = '';
+   private _currentHint = '';
 
    @ViewChild('sliderElem') sliderRef!: ElementRef;
    @ViewChild('matripple') rippleRef!: ElementRef;
@@ -73,37 +87,82 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit {
    }
 
    @Input() set pwned(check: boolean) {
-      this.checkPwned = check;
+      this._checkPwned = check;
+   }
+
+   @Input() set usedPasswords(usedPasswords: string[]) {
+      this._usedPasswords = usedPasswords;
+      if (this._currentPassword) {
+         this.startedProcessing();
+      }
+   }
+
+   @Input() set hint(hint: string) {
+      this._currentHint = hint;
+      if (this._currentPassword) {
+         this.startedProcessing();
+      }
    }
 
    @Input() set password(passwd: string) {
-      this.testQueue.push(passwd);
+      this._currentPassword = passwd;
+      if (!this._currentPassword) {
+         this.setStrength(-1);
+         this.warning = '';
+         this.suggestion = '';
+         this.updateAcceptable();
+      } else {
+         this.startedProcessing();
+      }
+   }
 
-      if (this.testQueue.length === 1) {
+   private startedProcessing() {
+      // "debounce" a bit to improve performance (lag at the end is acceptable)
+      if (!this._processTimerId && this._currentPassword) {
+         this._processTimerId = setTimeout(() => {
+            this._testQueue.push(this._currentPassword);
+            this.processZxcvbn();
+            this._processTimerId = undefined;
+         }, 175);
+      }
+   }
+
+
+   private processZxcvbn() {
+
+      if (!this._processing) {
+         this._processing = true;
          (async () => {
             let results: ZxcvbnResult | undefined = undefined;
-            while (this.testQueue.length > 0) {
+            while (this._testQueue.length > 0) {
                try {
-                  const testPwd = this.testQueue[0];
-                  let score = -1;
-                  if (testPwd) {
-                     results = await zxcvbnAsync(testPwd);
-                     score = results.score;
-                  }
-                  this.setStrength(score);
+                  // Use the last password in the queue and drop everything else before it
+                  const testPwd = this._testQueue.at(-1)!;
+                  this._testQueue.length = 0;
+
+                  // Loop because new items could be added while we await zxcvbnAsync
+                  results = await zxcvbnAsync(testPwd);
+                  this.setStrength(results.score);
                }
                catch (err) {
                   console.error(err);
-               } finally {
-                  this.testQueue.shift()!;
                }
             }
-
+            this._processing = false;
             this.updateAcceptable();
 
-            if( results?.feedback ){
+            if (results?.feedback) {
                this.warning = results.feedback.warning ?? '';
-               this.suggestion = results.feedback.suggestions[0] ?? '';
+
+               // Ugly, but zxcvbn puts its own suggestion first so detect our match and pick #2
+               let suggestionIndex = 0;
+               const qqMatch = results.sequence.find(
+                  match => 'qqMatcher' === match.pattern
+               );
+               if (qqMatch) {
+                  suggestionIndex = 1;
+               }
+               this.suggestion = results.feedback.suggestions[suggestionIndex] ?? '';
             }
          })();
       }
@@ -115,7 +174,72 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit {
    }
 
    ngOnInit(): void {
-      this.zxcvbnOptions.checkPwned(this.checkPwned);
+      this.zxcvbnOptions.checkPwned(this._checkPwned);
+
+      const parent = this;
+
+      // cloned from https://zxcvbn-ts.github.io/zxcvbn/guide/matcher/#creating-a-custom-matcher
+      const qqMatcher: Matcher = {
+         Matching: class QQPasswordChecker {
+            match({ password }: MatchOptions) {
+               const matches: Match[] = [];
+
+               if (parent._usedPasswords.length > 0) {
+                  const result = lev.closest(password, parent._usedPasswords);
+                  if (result.dist < 3) {
+                     matches.push({
+                        pattern: 'qqMatcher',
+                        token: password,
+                        i: 0,
+                        j: password.length - 1,
+                        exact: result.dist === 0,
+                        isHint: false
+                     });
+                  }
+               }
+
+               if (matches.length === 0 && parent._currentHint) {
+                  const result = lev.match(password, parent._currentHint);
+                  if (result.norm >= 0.70) {
+                     matches.push({
+                        pattern: 'qqMatcher',
+                        token: password,
+                        i: 0,
+                        j: password.length - 1,
+                        exact: result.dist === 0,
+                        isHint: true
+                     });
+                  }
+               }
+
+               return matches;
+            }
+         },
+
+         feedback(match: MatchEstimated, isSoleMatch?: boolean) {
+            if (match['isHint']) {
+               return {
+                  warning: `Your hint is ${match['exact'] ? 'the same as' : 'similar to'} your password.`,
+                  suggestions: ['Use a hint that helps only you remember the password.'],
+               }
+            } else {
+               return {
+                  warning: `You already used ${match['exact'] ? 'the same' : 'a similar'} password in a previous loop.`,
+                  suggestions: ['For better security, choose a unique password for each loop.'],
+               }
+            }
+         },
+
+         scoring(match: MatchExtended) {
+            return 0;
+         }
+      }
+
+      this.zxcvbnOptions.addMatcher('qqMatcher', qqMatcher);
+   }
+
+   ngOnDestroy(): void {
+      this.zxcvbnOptions.removeMatcher('qqMatcher');
    }
 
    ngAfterViewInit(): void {
@@ -155,7 +279,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit {
    setStrength(strength: number) {
       strength = Math.max(-1, Math.min(strength, 4));
 
-      if( strength >= 0 ) {
+      if (strength >= 0) {
          const color = COLORS[strength];
          this.segmentOnColor = color;
       }
@@ -165,9 +289,9 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit {
    updateAcceptable() {
       const acceptable = this.strength >= this.strengthMin;
 
-      if (acceptable !== this.acceptable || this.strength !== this.lastStrength) {
-         this.acceptable = acceptable;
-         this.lastStrength = this.strength;
+      if (acceptable !== this._acceptable || this.strength !== this._lastStrength) {
+         this._acceptable = acceptable;
+         this._lastStrength = this.strength;
 
          // Avoids RuntimeError: NG0100 (and seems very hacky)
          setTimeout(() => {
