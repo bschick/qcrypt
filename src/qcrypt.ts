@@ -152,7 +152,7 @@ Version           : ${cdInfo.ver}\n`;
       }
    }
    catch (err) {
-      console.error('\nget info failed: ', err.message);
+      console.error('\nget info failed: ', (err as any).message);
       if (args.debug) {
          console.error(err);
       }
@@ -234,9 +234,8 @@ async function encrypt(
             }
          }
 
-         do {
-            nextAlg = keys[(Math.random() * keys.length) | 0]
-         } while (nextAlg == alg);
+         const idx = keys.indexOf(alg);
+         nextAlg = keys[(idx + 1) % keys.length];
 
          algs.push(alg);
       }
@@ -251,7 +250,7 @@ async function encrypt(
       ) : args.iters;
 
       const econtext = {
-         lpEnd: Math.max(Math.min(args.loops, 10), 1),
+         lpEnd: Math.max(Math.min(args.loops, 6), 1),
          algs: algs,
          ic: iters!
       };
@@ -296,7 +295,7 @@ async function encrypt(
       }
    }
    catch (err) {
-      console.error('\nencryption failed: ', err.message);
+      console.error('\nencryption failed: ', (err as any).message);
       if (args.debug) {
          console.error(err);
       }
@@ -353,7 +352,7 @@ async function decrypt(
       }
    }
    catch (err) {
-      console.error('\ndecryption failed: ', err.message);
+      console.error('\ndecryption failed: ', (err as any).message);
       if (args.debug) {
          console.error(err);
       }
@@ -402,7 +401,7 @@ const args = yargs(hideBin(process.argv))
             .options({
                'iters': { alias: 'i', desc: `password hash iterations (min ${cc.ICOUNT_MIN})`, type: 'number' },
                'algs': { alias: 'a', desc: 'encryption cipher mode(s)', type: 'string', array: true, choices: Object.keys(cc.AlgInfo) },
-               'loops': { alias: 'l', desc: 'nested encryption loops (max 10)', type: 'number', default: 1 },
+               'loops': { alias: 'l', desc: 'nested encryption loops (max 6)', type: 'number', default: 1 },
             })
             .coerce({
                algs: (algs) => algs.map((alg: string) => alg.toUpperCase()),
