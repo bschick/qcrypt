@@ -23,17 +23,19 @@ SOFTWARE. */
 import * as cc from './cipher.consts';
 import {
    Ciphers,
-   EParams,
-   CipherDataInfo,
    CipherState,
-   PWDProvider,
    streamDecipher,
    latestEncipher
 } from './ciphers';
+
+import type {
+   EParams,
+   CipherDataInfo,
+   PWDProvider
+} from './ciphers';
 import { browserSupportsBytesStream, streamWriteBYOD } from './utils';
 
-
-export {CipherDataInfo, PWDProvider};
+export type {CipherDataInfo, PWDProvider};
 
 export type EContext = {
    readonly algs: string[];
