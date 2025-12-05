@@ -1,7 +1,7 @@
 {
   "name": "qcrypt-shell",
-  "version": "6.0.0",
-  "description": "Local commandline shell application for Quick Crypt",
+  "version": "6.1.0",
+  "description": "Command-line shell application for Quick Crypt",
   "main": "qcrypt.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
