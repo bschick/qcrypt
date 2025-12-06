@@ -199,7 +199,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
                }
 
                if (matches.length === 0 && parent._currentHint) {
-                  const result = lev.match(password, parent._currentHint);
+                  const result = lev.match(password.toLowerCase(), parent._currentHint.toLowerCase());
                   if (result.norm >= 0.70) {
                      matches.push({
                         pattern: 'qqMatcher',
@@ -219,7 +219,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
          feedback(match: MatchEstimated, isSoleMatch?: boolean) {
             if (match['isHint']) {
                return {
-                  warning: `Your hint is ${match['exact'] ? 'the same as' : 'similar to'} your password.`,
+                  warning: `Your hint is similar to your password.`,
                   suggestions: ['Use a hint that helps only you remember the password.'],
                }
             } else {
