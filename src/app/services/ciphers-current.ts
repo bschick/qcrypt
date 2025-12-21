@@ -1408,7 +1408,7 @@ export class Extractor<T extends ArrayBufferLike> {
    extract(what: string, len: number): Uint8Array<T> {
       // some browsers complain about overruns (FF), while other don't (chrome),
       // so check explicitly
-      if (this._encoded.byteOffset + this._offset + len > this._encoded.byteLength) {
+      if (this._offset + len > this._encoded.byteLength) {
          throw new Error(`Invalid ${what}, length: ${len}`);
       }
 
