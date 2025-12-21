@@ -30,12 +30,13 @@ import {
    bytesFromString,
    getArrayBuffer,
    ensureArrayBuffer,
+   bytesToBase64,
 } from './utils';
 
 
 export type EParams = {
    readonly alg: string;
-   readonly ic: number;
+//   readonly ic: number;
    readonly lp: number;
    readonly lpEnd: number;
 };
@@ -65,8 +66,8 @@ export type CipherDataInfo = {
    readonly ic: number;
    readonly lp: number;
    readonly lpEnd: number;
-   readonly iv: Uint8Array;
    readonly slt: Uint8Array;
+   readonly iv?: Uint8Array;
    readonly hint?: string;
 };
 
@@ -75,26 +76,157 @@ export const KDF_INFO_SIGNING = "cipherdata signing key";
 export const KDF_INFO_HINT = "hint encryption key";
 export const KDF_INFO_BLOCK = "block encryption key";
 
+interface KeyDerivation {
+   purge(): void;
+   ic(): number;
+   slt(): Uint8Array;
+   hint(): string | undefined;
+   hintKey(): Promise<Uint8Array>;
+   signingKey(): Promise<Uint8Array>;
+   blockKey(block: number, eparams: EParams, encrypting: boolean): Promise<Uint8Array>;
+};
 
-export abstract class Ciphers {
 
-   protected _ek?: Uint8Array;
-   protected _sk?: Uint8Array;
+export class LocalKeyDerivation implements KeyDerivation {
 
-   protected _reader: BYOBStreamReader;
-   protected _userCred?: Uint8Array;
-   protected _state: CipherState;
+   private _userCred?: Uint8Array;
+   private _slt?: Uint8Array;
+   private _ic: number;
+   private _hk?: Uint8Array;
+   private _ek?: Uint8Array;
+   private _sk?: Uint8Array;
+   private _pwdProvider: PWDProvider;
+   private _hint?: string;
+   private _ver: number;
 
-   protected constructor(
+   constructor(
       userCred: Uint8Array,
-      reader: BYOBStreamReader
+      pwdProvider: PWDProvider,
+      ic: number,
+      ver: number
    ) {
       if (!userCred || userCred.byteLength != cc.USERCRED_BYTES) {
          throw new Error('Invalid userCred');
       }
+      if (ic < cc.ICOUNT_MIN || ic > cc.ICOUNT_MAX) {
+         throw new Error('Invalid ic: ' + ic);
+      }
+      if (ver != cc.VERSION1 && ver != cc.VERSION4 && ver != cc.VERSION5 && ver != cc.VERSION6) {
+         throw new Error('Invalid version of: ' + ver);
+      }
 
-      this._state = CipherState.Initialized;
       this._userCred = userCred;
+      this._ic = ic;
+      this._pwdProvider = pwdProvider;
+      this._ver = ver;
+      this._slt = sodium.randombytes_buf(cc.SLT_BYTES);
+   }
+
+   purge() {
+      // Don't overwrite because this is only a reference
+      this._userCred = undefined;
+      this._ic = 0;
+
+      if (this._slt) {
+         crypto.getRandomValues(this._slt);
+         this._slt = undefined;
+      }
+      if (this._hk) {
+         crypto.getRandomValues(this._hk);
+         this._hk = undefined;
+      }
+      if (this._ek) {
+         crypto.getRandomValues(this._ek);
+         this._ek = undefined;
+      }
+
+      if (this._sk) {
+         crypto.getRandomValues(this._sk);
+         this._sk = undefined;
+      }
+   }
+
+   slt(): Uint8Array {
+      return this._slt!;
+   }
+
+   ic(): number {
+      return this._ic;
+   }
+
+   hint(): string | undefined {
+      return this._hint;
+   }
+
+   async hintKey(): Promise<Uint8Array> {
+      if (!this._hk) {
+         this._hk = _genHintCipherKey(this._userCred!, this._slt!);
+      }
+      return this._hk;
+   }
+
+   async signingKey(): Promise<Uint8Array> {
+      if (!this._sk) {
+         this._sk = _genSigningKey(this._userCred!, this._slt!);
+      }
+      return this._sk;
+   }
+
+   async blockKey(
+      block: number,
+      eparams: EParams,
+      encrypting: boolean
+   ): Promise<Uint8Array> {
+
+      if (block === 0) {
+         if (!this._ek) {
+            const [pwd, hint] = await this._pwdProvider({
+                  ver: this._ver,
+                  alg: eparams.alg,
+                  ic: this._ic,
+                  slt: this._slt!,
+                  lp: eparams.lp,
+                  lpEnd: eparams.lpEnd
+               },
+               encrypting
+            );
+            if (hint && hint.length > cc.HINT_MAX_LEN) {
+               throw new Error('Hint length exceeds: ' + cc.HINT_MAX_LEN);
+            }
+            if (!pwd) {
+               throw new Error('Missing password');
+            }
+            this._hint = hint;
+            this._ek = await _genCipherKey(eparams.alg, this._ic, pwd, this._userCred!, this._slt!);
+         }
+
+         return this._ek;
+      } else {
+         if (!this._ek) {
+            throw new Error('Invalid state, missing master key');
+         }
+         return _genDerivedKey(this._ek!, this._slt!, KDF_INFO_BLOCK, block);
+      }
+   }
+}
+
+
+
+export abstract class Ciphers {
+
+//   protected _ek?: Uint8Array;
+  // protected _sk?: Uint8Array;
+
+   protected _reader: BYOBStreamReader;
+   protected _keys: KeyDerivation;
+   protected _state: CipherState;
+
+   protected constructor(
+      keys: KeyDerivation,
+      reader: BYOBStreamReader
+   ) {
+      this._state = CipherState.Initialized;
+      this._keys = keys;
       this._reader = reader;
    }
 
@@ -109,18 +241,17 @@ export abstract class Ciphers {
    }
 
    protected _purge() {
-      // Don't overwrite because this is only a reference
-      this._userCred = undefined;
+      this._keys.purge();
 
-      // overwrite to clear
-      if (this._ek) {
-         crypto.getRandomValues(this._ek);
-         this._ek = undefined;
-      }
-      if (this._sk) {
-         crypto.getRandomValues(this._sk);
-         this._sk = undefined;
-      }
+      // // overwrite to clear
+      // if (this._ek) {
+      //    crypto.getRandomValues(this._ek);
+      //    this._ek = undefined;
+      // }
+      // if (this._sk) {
+      //    crypto.getRandomValues(this._sk);
+      //    this._sk = undefined;
+      // }
       this._reader.cleanup();
    }
 
@@ -250,6 +381,7 @@ export abstract class Ciphers {
       }
    }
 
+   //TODO: add timestamp is UTC
    protected static _encodeAdditionalData(
       args: {
          alg: string;
@@ -318,22 +450,21 @@ export abstract class Encipher extends Ciphers {
 
 
    protected constructor(
-      userCred: Uint8Array,
+      keys: KeyDerivation,
       reader: BYOBStreamReader
    ) {
-      super(userCred, reader);
+      super(keys, reader);
    }
 
    // The encryptBlock functions return CipherDataBlock instead of
    // an opaque byte array to reduce copying (the caller must write
    // all the blocks in order)
    async encryptBlock(
-      eparams: EParams,
-      pwdProvider: PWDProvider
+      eparams: EParams
    ): Promise<CipherDataBlock> {
 
       if (this._state == CipherState.Initialized) {
-         return this.encryptBlock0(eparams, pwdProvider);
+         return this.encryptBlock0(eparams);
       } else if (this._state == CipherState.Block0Done) {
          return this.encryptBlockN(eparams);
       } else {
@@ -342,8 +473,7 @@ export abstract class Encipher extends Ciphers {
    }
 
    public abstract encryptBlock0(
-      eparams: EParams,
-      pwdProvider: PWDProvider
+      eparams: EParams
    ): Promise<CipherDataBlock>;
 
    public abstract encryptBlockN(
@@ -406,13 +536,13 @@ export class EncipherV6 extends Encipher {
    private _blockNum;
    private _readTarget;
    private _lastMac?: Uint8Array;
-   private _slt?: Uint8Array; // stored as class member to help with testings
+//   private _slt?: Uint8Array; // stored as class member to help with testings
 
    constructor(
-      userCred: Uint8Array,
+      keys: KeyDerivation,
       reader: BYOBStreamReader
    ) {
-      super(userCred, reader);
+      super(keys, reader);
 
       // Assign in ctor to allow for monkey patching in tests
       this._readTarget = Encipher.READ_SIZE_START;
@@ -421,10 +551,10 @@ export class EncipherV6 extends Encipher {
    }
 
    protected override _purge() {
-      if (this._slt) {
-         crypto.getRandomValues(this._slt);
-         this._slt = undefined;
-      }
+      // if (this._slt) {
+      //    crypto.getRandomValues(this._slt);
+      //    this._slt = undefined;
+      // }
       if (this._lastMac) {
          crypto.getRandomValues(this._lastMac);
          this._lastMac = undefined;
@@ -436,31 +566,14 @@ export class EncipherV6 extends Encipher {
       return cc.VERSION6;
    }
 
-   // Overall order of operations for encryption
-   //
-   // 1. Generate new salt and iv/nonce values
-   // 2. Generate keys
-   // 3. Encrypt hint if it exists
-   // 2. Encode cipher parameters as additional data
-   // 4. Encrypt cleartext using cipher key (with addition data)
-   // 5. Sign addtional data + cipher text with signing key
-   // 6. Return all the parts of the cipherdata
-   //
    override async encryptBlock0(
-      eparams: EParams,
-      pwdProvider: PWDProvider
+      eparams: EParams
    ): Promise<CipherDataBlock> {
-
-      let hk: Uint8Array | undefined;
 
       try {
          EncipherV6.validateEParams(eparams);
          if (this._state != CipherState.Initialized) {
             throw new Error(`Encipher invalid state ${this._state}`);
-         }
-
-         if (this._sk || this._ek) {
-            throw new Error('encryptBlock0 should only be called once');
          }
 
          const [clearBuffer, done] = await this._reader.readAvailable(
@@ -482,36 +595,13 @@ export class EncipherV6 extends Encipher {
             };
          }
 
-         // Create a new salt and IV each time a key is derviced from the password.
+         // Create IV each time a key is derived from the password.
          // https://crypto.stackexchange.com/questions/53032/salt-for-non-stored-passwords
-         const randomArray = getRandom48();
-
          const ivBytes = Number(cc.AlgInfo[eparams.alg]['iv_bytes']);
-         this._slt = randomArray.slice(0, cc.SLT_BYTES);
-         const iv = randomArray.slice(cc.SLT_BYTES, cc.SLT_BYTES + ivBytes);
+         const iv = sodium.randombytes_buf(ivBytes);
 
-         const [pwd, hint] = await pwdProvider({
-               ver: cc.VERSION6,
-               alg: eparams.alg,
-               ic: eparams.ic,
-               slt: this._slt,
-               lp: eparams.lp,
-               lpEnd: eparams.lpEnd,
-               iv: iv,
-               hint: undefined
-            },
-            true
-         );
-         if (hint && hint.length > cc.HINT_MAX_LEN) {
-            throw new Error('Hint length exceeds: ' + cc.HINT_MAX_LEN);
-         }
-         if (!pwd) {
-            throw new Error('Missing password');
-         }
-
-         hk = _genHintCipherKey(this._userCred!);
-         this._sk = _genSigningKey(this._userCred!);
-         this._ek = await _genCipherKey(eparams.alg, eparams.ic, pwd, this._userCred!, this._slt);
+         const ek = await this._keys.blockKey(0, eparams, true);
+         const hint = this._keys.hint();
 
          let encryptedHint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
          if (hint) {
@@ -519,8 +609,9 @@ export class EncipherV6 extends Encipher {
             let hintBytes = bytesFromString(hint, maxHintBytes);
 
             // It's possible that even a single character (e.g. emoji) might exceed maxHintBytes
-            // If so proceed without a hint.
+            // If so, hintBytes will be empty and we proceed without a hint.
             if (hintBytes.byteLength > 0) {
+               const hk = await this._keys.hintKey();
                encryptedHint = await EncipherV6._doEncrypt(
                   eparams.alg,
                   hk,
@@ -534,23 +625,23 @@ export class EncipherV6 extends Encipher {
             alg: eparams.alg,
             iv,
             term: done,
-            ic: eparams.ic,
+            ic: this._keys.ic(),
             lp: eparams.lp,
             lpEnd: eparams.lpEnd,
-            slt: this._slt,
+            slt: this._keys.slt(),
             encryptedHint
          });
 
          // Only block0 uses the root cipher key. Simplifies backward compat and is no less secure
          const encryptedData = await EncipherV6._doEncrypt(
             eparams.alg,
-            this._ek,
+            ek,
             iv,
             clearBuffer,
             additionalData,
          );
 
-         const headerData = this._createHeader(
+         const headerData = await this._createHeader(
             encryptedData,
             additionalData
          );
@@ -573,11 +664,6 @@ export class EncipherV6 extends Encipher {
          this.errorState();
          console.error(err);
          throw err;
-      } finally {
-         if (hk) {
-            crypto.getRandomValues(hk);
-            hk = undefined;
-         }
       }
    }
 
@@ -591,10 +677,6 @@ export class EncipherV6 extends Encipher {
          EncipherV6.validateEParams(eparams);
          if (this._state != CipherState.Block0Done) {
             throw new Error(`Encipher invalid state ${this._state}`);
-         }
-
-         if (!this._sk || !this._ek) {
-            throw new Error('Data not initialized, encrypt block0 first');
          }
 
          this._readTarget = Math.min(this._readTarget * 2, Encipher.READ_SIZE_MAX);
@@ -615,10 +697,9 @@ export class EncipherV6 extends Encipher {
             }
          }
 
-         const randomArray = getRandom48();
 
          const ivBytes = Number(cc.AlgInfo[eparams.alg]['iv_bytes']);
-         const iv = randomArray.slice(0, ivBytes);
+         const iv = sodium.randombytes_buf(ivBytes);
 
          const additionalData = Ciphers._encodeAdditionalData({
             alg: eparams.alg,
@@ -626,7 +707,7 @@ export class EncipherV6 extends Encipher {
             term: done,
          });
 
-         bk = _genDerivedKey(this._ek, KDF_INFO_BLOCK, this._blockNum);
+         bk = await this._keys.blockKey(this._blockNum, eparams, true);
          this._blockNum += 1;
 
          const encryptedData = await EncipherV6._doEncrypt(
@@ -637,7 +718,7 @@ export class EncipherV6 extends Encipher {
             additionalData,
          );
 
-         const headerData = this._createHeader(
+         const headerData = await this._createHeader(
             encryptedData,
             additionalData
          );
@@ -669,16 +750,12 @@ export class EncipherV6 extends Encipher {
    public static validateEParams(eparams: EParams) {
       const {
          alg,
-         ic,
          lp,
          lpEnd
       } = eparams;
 
       if (!Ciphers.validateAlg(alg)) {
          throw new Error('Invalid alg type of: ' + alg);
-      }
-      if (ic < cc.ICOUNT_MIN || ic > cc.ICOUNT_MAX) {
-         throw new Error('Invalid ic of: ' + ic);
       }
       if (lpEnd < 1 || lpEnd > cc.LP_MAX) {
          throw new Error('Invalid lpEnd: ' + lpEnd);
@@ -759,12 +836,12 @@ export class EncipherV6 extends Encipher {
 
 
    // Seperated out and made public for testing, normal callers should not use this function
-   public _createHeader(
+   public async _createHeader(
       encryptedData: Uint8Array,
       additionalData: Uint8Array
-   ): Uint8Array {
+   ): Promise<Uint8Array> {
 
-      if (!this._lastMac || !this._sk || !encryptedData || !additionalData) {
+      if (!this._lastMac || !encryptedData || !additionalData) {
          throw new Error('Data not initialized');
       }
 
@@ -774,7 +851,8 @@ export class EncipherV6 extends Encipher {
       packer.ver = cc.VERSION6;
       packer.size = payloadBytes;
 
-      const state = sodium.crypto_generichash_init(this._sk, cc.MAC_BYTES);
+      const sk = await this._keys.signingKey();
+      const state = sodium.crypto_generichash_init(sk, cc.MAC_BYTES);
       sodium.crypto_generichash_update(state, new Uint8Array(packer.buffer, cc.MAC_BYTES));
       sodium.crypto_generichash_update(state, additionalData);
       sodium.crypto_generichash_update(state, encryptedData);
@@ -805,17 +883,17 @@ export abstract class Decipher extends Ciphers {
 
    protected _blockNum;
    protected _blockData?: BlockData;
-   protected _slt?: Uint8Array<ArrayBuffer>;
-   protected _ic?: number;
+   // protected _slt?: Uint8Array<ArrayBuffer>;
+//   protected _ic?: number;
    protected _lp: number;
    protected _lpEnd: number;
    protected _hint?: Uint8Array;
 
    protected constructor(
-      userCred: Uint8Array,
+      key: KeyDerivation,
       reader: BYOBStreamReader
    ) {
-      super(userCred, reader);
+      super(key, reader);
 
       this._blockNum = 1;
       this._lp = 1; // Not all version support loop # so provide a default
@@ -823,10 +901,10 @@ export abstract class Decipher extends Ciphers {
    }
 
    protected override _purge() {
-      if (this._slt) {
-         crypto.getRandomValues(this._slt);
-         this._slt = undefined;
-      }
+      // if (this._slt) {
+      //    crypto.getRandomValues(this._slt);
+      //    this._slt = undefined;
+      // }
       if (this._hint) {
          crypto.getRandomValues(this._hint);
          this._hint = undefined;
@@ -846,7 +924,7 @@ export abstract class Decipher extends Ciphers {
    ): Promise<Uint8Array> {
 
       if ([CipherState.Initialized, CipherState.Block0Decoded].includes(this._state)) {
-         return this.decryptBlock0(pwdProvider);
+         return this.decryptBlock0();
       } else if (this._state == CipherState.Block0Done) {
          return this.decryptBlockN();
       } else {
@@ -855,9 +933,8 @@ export abstract class Decipher extends Ciphers {
    }
 
    // Password is a callback because we need to extract any hint from ciphertext first.
-   // We also don't want the caller (web page) to show anything  extracted from
-   // ciphertext until after it has been verified with the MAC. Order
-   // of operations is:
+   // We also don't want the caller (web page) to show anything extracted from ciphertext
+   // until after it has been verified with the MAC. Order of operations is:
    //
    // 1. Unpack values and checks userCred based MAC
    // 2. Decrypt hint if it exists
@@ -866,21 +943,11 @@ export abstract class Decipher extends Ciphers {
    // 5. Decrypt encrypted text using cipher key and addtional data
    // 6. Return cleat text bytes
    //
-   public async decryptBlock0(
-      pwdProvider: PWDProvider
-   ): Promise<Uint8Array> {
+   public async decryptBlock0(): Promise<Uint8Array> {
 
       try {
          if (![CipherState.Initialized, CipherState.Block0Decoded].includes(this._state)) {
             throw new Error(`Decipher invalid state ${this._state}`);
-         }
-
-         if (this._ek) {
-            throw new Error('Decipher unexpected encryption key');
-         }
-
-         if (this._userCred!.byteLength != cc.USERCRED_BYTES) {
-            throw new Error('Invalid userCred length of: ' + this._userCred!.byteLength);
          }
 
          // This does MAC check
@@ -889,6 +956,14 @@ export abstract class Decipher extends Ciphers {
          if (!this._blockData || !this._blockData.alg || !this._blockData.iv || !this._blockData.encryptedData || !this._slt || !this._ic) {
             throw new Error('Data not initialized');
          }
+
+         const ek = await this._keys.blockKey(
+            0, {
+            alg: this._blockData.alg,
+            lp: this._lp,
+            lpEnd: this._lpEnd },
+            false
+         );
 
          const [pwd] = await pwdProvider({
                ver: this._blockData.ver,
@@ -1085,11 +1160,11 @@ export class DecipherV6 extends Decipher {
    private _lastFlags: number;
 
    constructor(
-      userCred: Uint8Array,
+      keys: KeyDerivation,
       reader: BYOBStreamReader,
       header?: Uint8Array
    ) {
-      super(userCred, reader);
+      super(keys, reader);
       this._header = header;
 
       this._lastMac = new Uint8Array([0]);
@@ -1733,6 +1808,7 @@ export async function _genCipherKey(
 
 export function _genDerivedKey(
    master: Uint8Array,
+   slt: Uint8Array,
    purpose: string,
    instance: number
 ): Uint8Array<ArrayBuffer> {
@@ -1744,7 +1820,7 @@ export function _genDerivedKey(
    return ensureArrayBuffer(sodium.crypto_kdf_derive_from_key(
       cc.KEY_BYTES,
       instance,
-      purpose,
+      purpose + bytesToBase64(slt),
       master
    ));
 }
@@ -1752,17 +1828,17 @@ export function _genDerivedKey(
 
 // Exported for testing and old deciphers, normal callers should not need this
 export function _genHintCipherKey(
-   userCred: Uint8Array
+   userCred: Uint8Array,
+   slt: Uint8Array
 ): Uint8Array<ArrayBuffer> {
-   return _genDerivedKey(userCred, KDF_INFO_HINT, 1);
+   return _genDerivedKey(userCred, slt, KDF_INFO_HINT, 1);
 }
 
 
 // Exported for testing, normal callers should not need this
 export function _genSigningKey(
    userCred: Uint8Array,
+   slt: Uint8Array
 ): Uint8Array<ArrayBuffer> {
-   return _genDerivedKey(userCred, KDF_INFO_SIGNING, 1);
+   return _genDerivedKey(userCred, slt, KDF_INFO_SIGNING, 1);
 }
-
-

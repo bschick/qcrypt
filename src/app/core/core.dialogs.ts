@@ -206,8 +206,8 @@ export class CipherInfoDialog {
       } else {
          this.ic = data.ic.toLocaleString();
          this.alg = this.cipherSvc.algDescription(data.alg);
-         this.iv = bytesToBase64(data.iv as Uint8Array);
-         this.slt = bytesToBase64(data.slt as Uint8Array);
+         this.iv = bytesToBase64(data.iv);
+         this.slt = bytesToBase64(data.slt);
          this.hint = data.hint;
          this.lps = data.lpEnd;
          this.ver = data.ver.toString();

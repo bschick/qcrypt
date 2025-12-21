@@ -484,7 +484,7 @@ export function bytesFromString(str: string, maxByteLength: number): Uint8Array<
    }
 
    // If too long, fall back to character-by-character truncation using pre-allocation
-   // POTENTIAL BUG: Javascript has the annoying habbit of encode single character
+   // POTENTIAL BUG: Javascript has the annoying habbit of encode single characters
    // different than sequence of characters because a sequence can have
    // "Zero Width Joiner ZWJ" chars added while a single unicode point will not
    const preallocatedBuffer = new Uint8Array(maxByteLength);
