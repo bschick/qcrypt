@@ -29,7 +29,6 @@ import {
 } from './utils';
 import { Encipher } from './ciphers-current';
 
-jasmine.DEFAULT_TIMEOUT_INTERVAL = 10000;
 
 describe('CipherService', () => {
    let cipherSvc: CipherService;

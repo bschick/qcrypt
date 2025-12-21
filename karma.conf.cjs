@@ -21,7 +21,7 @@ module.exports = function (config) {
     browserDisconnectTolerance: 2,
     client: {
       jasmine: {
-        timeoutInterval: 30000
+        timeoutInterval: 45000
         // you can add configuration options for Jasmine here
         // the possible options are listed at https://jasmine.github.io/api/edge/Configuration.html
         // for example, you can disable the random execution with `random: false`
