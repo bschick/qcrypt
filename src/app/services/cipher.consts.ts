@@ -66,6 +66,10 @@ export const VERSION5 = 5;
 export const VERSION6 = 6;
 export const CURRENT_VERSION = VERSION6;
 export const V1_BELOW = VERSION4 // leave fixed at 4
+export const SENDER_MASK = 0x8000;
+export const VERORALG_MASK = 0x7FFF;
+
+export const NOUSER_ID = "AAAAAAAAAAAAAAAAAAAAAA";
 
 // needs to fit into 255 bytes encypted... this allows for all double byte + max auth tag
 export const HINT_MAX_LEN = Math.trunc(ENCRYPTED_HINT_MAX_BYTES / 2 - AUTH_TAG_MAX_BYTES);

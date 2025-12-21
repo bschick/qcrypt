@@ -43,26 +43,6 @@ export type EContext = {
 };
 
 
-export async function senderEncryptStream(
-   eep: Uint8Array<ArrayBuffer>,
-   sigma: Uint8Array,
-   senderCert: Uint8Array,
-   clearStream: ReadableStream<Uint8Array>
-): Promise<ReadableStream<Uint8Array>> {
-
-   const blob = new Blob([eep], { type: 'application/octet-stream' });
-   const eepStream = blob.stream();
-   const eepInfo = await getCipherStreamInfo(sigma, eepStream);
-   return _encryptStreamImpl(
-      econtext,
-      pwdProvider,
-      userCred,
-      clearStream,
-      1
-   );
-}
-
-
 export async function encryptStream(
    econtext: EContext,
    pwdProvider: PWDProvider,

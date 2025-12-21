@@ -33,6 +33,7 @@ import {
    PWDProvider,
    CipherState,
    CipherDataInfo,
+   LocalKeyDerivation
 }  from "./ciphers-current"
 
 import {
@@ -55,13 +56,23 @@ export type {
    CipherDataInfo
 };
 
-export function latestEncipher(
+export function localEncipher(
+   userCred: Uint8Array,
+   clearStream: ReadableStream<Uint8Array>
+): Encipher {
+   const reader = new BYOBStreamReader(clearStream);
+   const keys = new LocalKeyDerivation();
+   return new EncipherV6(keys, reader);
+}
+
+export function senderEncipher(
    userCred: Uint8Array,
    clearStream: ReadableStream<Uint8Array>
 ): Encipher {
    const reader = new BYOBStreamReader(clearStream);
    return new EncipherV6(userCred, reader);
 }
+
 
 
 // Return appropriate version of Decipher
@@ -84,7 +95,9 @@ export async function streamDecipher(
    // version in the middle of the encoding. So detect old version by the first 2 bytes
    // after MAC being < 4 (since encoded started with ALG and v1 max ALG was 3 and beyond v1
    // version is >=4). Fortunately ALG_BYTES and VER_BYTES are equal.
-   const verOrAlg = bytesToNum(new Uint8Array(header.buffer, cc.MAC_BYTES, cc.VER_BYTES));
+   let verOrAlgBase = bytesToNum(new Uint8Array(header.buffer, cc.MAC_BYTES, cc.VER_BYTES));
+   const isSender = verOrAlgBase & cc.SENDER_MASK;
+   const verOrAlg = verOrAlgBase & cc.VERORALG_MASK;
 
    if (verOrAlg == cc.VERSION6) {
       decipher = new DecipherV6(userCred, reader, header);

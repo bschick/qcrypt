@@ -132,3 +132,4 @@ npm run test:e2e
 - **Security:** Adhere to the security principles outlined in `src/assets/protocol6.pdf`, including the use of strong cryptographic primitives and secure coding practices.
 - **Github workflow:** All changes must be submitted as a github pull request from a cloned repository.
 - **AWS server resources:** The test API server at `https://test.quickcrypt.org` is intended only for those contributing to the Quick Crypt project. Unnecessary or excessive usage that drives up AWS costs will be blocked.
+- **Async Returns:** When returning values in `async` functions, return the value directly instead of wrapping it in `Promise.resolve()`. Let the language handle the wrapping.
