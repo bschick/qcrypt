@@ -1,5 +1,11 @@
 # CHANGELOG.md
 
+## 6.1.1 (2025-12-20)
+
+#### Changes
+  - ignore case when checking hint and password Levenshtein distance
+  - fixed rare incorrect error when unpacking additional data
+
 ## 6.1.0 (2025-12-04)
 
 #### Security
