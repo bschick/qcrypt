@@ -626,7 +626,7 @@ const ELEMENT_DATA: FAQElement[] = [
       XChaCha20 Poly1305, and AEGIS 256. No mode is bad, and choosing one depends on
       your criteria.
       <ul>
-         <li>If you want the most recently designed cipher mode, that is key-committing
+         <li>If you want the most recently designed symmetric cipher mode, that is key-committing
          even without Quick Crypt's additional BLAKE2b keyed hash, choose <b>AEGIS 256</b>.
          </li>
          <li>If you want the most widely used and studied mode, choose <b>AES 256 GCM</b>,
@@ -916,7 +916,7 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'Are Quick Crypt\'s algorithms quantum-resistant?',
-      answer: `Quick Crypt's core cipher modes XChaCha20 Poly1305, AEGIS 256, and AES GCM 256
+      answer: `Quick Crypt's symmetric cipher modes XChaCha20 Poly1305, AEGIS 256, and AES GCM 256
       use 256-bit keys that are considered quantum-resistant, even if usable quantum computers
       are built in the future. If a quantum computer capable of running Grover's algorithm were
       built, it would reduce brute-force attacks by halving effective key strength, but breaking
@@ -928,8 +928,8 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'What will Quick Crypt do if one of the current cipher modes is broken?',
-      answer: `If any of the three cipher modes used by Quick Crypt are someday
+      question: 'What will Quick Crypt do if one of the symmetric cipher modes is broken?',
+      answer: `If any of the three symmetric ciphers used by Quick Crypt are someday
       found to be weak, Quick Crypt will stop offering those modes as an option for
       encryption. Problematic ciphers would only be available for decryption so
       users can access already encrypted data. Depending upon the
