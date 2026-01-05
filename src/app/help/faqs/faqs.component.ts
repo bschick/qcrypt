@@ -787,8 +787,7 @@ const ELEMENT_DATA: FAQElement[] = [
       </p>
       <p>Loop encryption provides improved security only when
       you use a different cipher mode and password for each loop (other encryption
-      options cannot yet be changed between loops). Cipher modes are stored
-      within the cipher armor of each loop, but if you forget any of the
+      options cannot yet be changed between loops). If you forget any of the
       passwords you used while looping, you will not be able to retrieve your
       original data.</p>`
    },
@@ -912,6 +911,19 @@ const ELEMENT_DATA: FAQElement[] = [
       no explicit claims about side-channel resistance. If this is a concern, you may
       choose either the XChaCha20 Poly1305 or AEGIS 256 modes implemented
       in libsodium rather than the AES 256 GCM mode from SubtleCrypto.`
+   },
+
+   {
+      position: 0,
+      question: 'Are Quick Crypt\'s algorithms quantum-resistant?',
+      answer: `Quick Crypt's core cipher modes XChaCha20 Poly1305, AEGIS 256, and AES GCM 256
+      use 256-bit keys that are considered quantum-resistant, even if usable quantum computers
+      are built in the future. If a quantum computer capable of running Grover's algorithm were
+      built, it would reduce brute-force attacks by halving effective key strength, but breaking
+      256-bit keys would still require billions of years. Quick Crypt does not use public-key
+      algorithms like Diffie-Hellman that would be highly vulnerable to a future quantum computer
+      capable of running Shor's algorithm. Quantum cryptographic theory continues to evolve,
+      however, and Quick Crypt will evolve with it.`
    },
 
    {
