@@ -33,7 +33,7 @@ test.describe('authenticated api tests', () => {
          // Expect the main function to have deleted user, so this should fail
          const infoResponse = await page.request.get(
             //@ts-ignore
-            `${apiUrl}/users/${apiUser.userId}`,
+            `${apiUrl}/user`,
             { headers: apiHeaders }
          );
          expect(infoResponse.status()).toBe(401);
@@ -51,7 +51,7 @@ test.describe('authenticated api tests', () => {
 
       // Success case
       let usersResponse = await page.request.get(
-         `${apiUrl}/users/${apiUser.userId}`,
+         `${apiUrl}/user`,
          { headers: apiHeaders }
       );
       expect(usersResponse).toBeOK();
@@ -62,17 +62,17 @@ test.describe('authenticated api tests', () => {
 
       // Failure case, invalid userid
       // Comment out during backward compatibility period
-      // usersResponse = await page.request.get(
-      //    `${apiUrl}/users/42ebNajPIp3leX4K4a0qND`,
-      //    { headers: apiHeaders }
-      // );
-      // expect(usersResponse.status()).toBe(401);
+      usersResponse = await page.request.get(
+         `${apiUrl}/users/42ebNajPIp3leX4K4a0qND`,
+         { headers: apiHeaders }
+      );
+      expect(usersResponse.status()).toBe(404);
 
 
       // Should fail, invalid credid
       let delResponse = await page.request.delete(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/nfVho8Z8p3oEpOl8yvbh40`,
+         `${apiUrl}/passkeys/nfVho8Z8p3oEpOl8yvbh40`,
          { headers: apiHeaders }
       );
       expect(delResponse.status()).toBe(400);
@@ -89,7 +89,7 @@ test.describe('authenticated api tests', () => {
       // Should fail, invalid userId and credential
       delResponse = await page.request.delete(
          //@ts-ignore
-         `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/passkeys/nfVho8Z8p3oEpOl8yvbh40`,
+         `${apiUrl}/passkeys/nfVho8Z8p3oEpOl8yvbh40`,
          { headers: apiHeaders }
       );
       expect(delResponse.status()).toBe(400);
@@ -98,7 +98,7 @@ test.describe('authenticated api tests', () => {
       // Valid passkey delete
       delResponse = await page.request.delete(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${user.authenticators[0].credentialId}`,
+         `${apiUrl}/passkeys/${user.authenticators[0].credentialId}`,
          { headers: apiHeaders }
       );
       expect(delResponse).toBeOK();
@@ -106,7 +106,7 @@ test.describe('authenticated api tests', () => {
       // should confirm this fails when another PK still exists (error should be 400 in that case)
       delResponse = await page.request.delete(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${user.authenticators[0].credentialId}`,
+         `${apiUrl}/passkeys/${user.authenticators[0].credentialId}`,
          { headers: apiHeaders }
       );
       expect(delResponse.status()).toBe(401);
@@ -127,7 +127,7 @@ test.describe('authenticated api tests', () => {
 
       let descResponse = await page.request.patch(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${apiUser.authenticators[0].credentialId}`,
+         `${apiUrl}/passkeys/${apiUser.authenticators[0].credentialId}`,
          { headers: apiHeaders, data: body1 }
       );
       expect(descResponse.status()).toBe(200);
@@ -145,7 +145,7 @@ test.describe('authenticated api tests', () => {
 
       descResponse = await page.request.patch(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${user.authenticators[0].credentialId}`,
+         `${apiUrl}/passkeys/${user.authenticators[0].credentialId}`,
          { headers: apiHeaders, data: body2 }
       );
       expect(descResponse.status()).toBe(200);
@@ -165,15 +165,7 @@ test.describe('authenticated api tests', () => {
       // invalid cred id
       descResponse = await page.request.patch(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/nfVho8Z8p3oEpOl8yvbh40`,
-         { headers: apiHeaders, data: body2 }
-      );
-      expect(descResponse.status()).toBe(400);
-
-      // invalid cred id and userid
-      descResponse = await page.request.patch(
-         //@ts-ignore
-         `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/passkeys/nfVho8Z8p3oEpOl8yvbh40`,
+         `${apiUrl}/passkeys/nfVho8Z8p3oEpOl8yvbh40`,
          { headers: apiHeaders, data: body2 }
       );
       expect(descResponse.status()).toBe(400);
@@ -189,7 +181,7 @@ test.describe('authenticated api tests', () => {
 
       descResponse = await page.request.patch(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${user.authenticators[0].credentialId}`,
+         `${apiUrl}/passkeys/${user.authenticators[0].credentialId}`,
          { headers: apiHeaders, data: body3 }
       );
       expect(descResponse.status()).toBe(400);
@@ -206,7 +198,7 @@ test.describe('authenticated api tests', () => {
       // should fail due to session being deleted
       descResponse = await page.request.patch(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${user.authenticators[0].credentialId}`,
+         `${apiUrl}/passkeys/${user.authenticators[0].credentialId}`,
          { headers: apiHeaders, data: body4 }
       );
       expect(descResponse.status()).toBe(200);
@@ -216,14 +208,14 @@ test.describe('authenticated api tests', () => {
 
       // Delete session and confirm further edits don't work
       const endResponse = await page.request.delete(
-         `${apiUrl}/users/${apiUser.userId}/session`,
+         `${apiUrl}/session`,
          { headers: apiHeaders }
       );
       expect(endResponse).toBeOK();
 
       descResponse = await page.request.patch(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${user.authenticators[0].credentialId}`,
+         `${apiUrl}/passkeys/${user.authenticators[0].credentialId}`,
          { headers: apiHeaders, data: body4 }
       );
       expect(descResponse.status()).toBe(401);
@@ -234,7 +226,7 @@ test.describe('authenticated api tests', () => {
       // Valid passkey delete
       let delResponse = await page.request.delete(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${user.authenticators[0].credentialId}`,
+         `${apiUrl}/passkeys/${user.authenticators[0].credentialId}`,
          { headers: apiHeaders }
       );
       expect(delResponse).toBeOK();
@@ -246,7 +238,7 @@ test.describe('authenticated api tests', () => {
 
       // Success case
       let usersResponse = await page.request.get(
-         `${apiUrl}/users/${apiUser.userId}`,
+         `${apiUrl}/user`,
          { headers: apiHeaders }
       );
       expect(usersResponse).toBeOK();
@@ -267,7 +259,7 @@ test.describe('authenticated api tests', () => {
 
       let patchResponse = await page.request.patch(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}`,
+         `${apiUrl}/user`,
          { headers: apiHeaders, data: body1 }
       );
 
@@ -288,7 +280,7 @@ test.describe('authenticated api tests', () => {
 
       patchResponse = await page.request.patch(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}`,
+         `${apiUrl}/user`,
          { headers: apiHeaders, data: body2 }
       );
       expect(patchResponse.status()).toBe(200);
@@ -306,7 +298,7 @@ test.describe('authenticated api tests', () => {
 
       patchResponse = await page.request.patch(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}`,
+         `${apiUrl}/user`,
          { headers: apiHeaders, data: body3 }
       );
       expect(patchResponse.status()).toBe(400);
@@ -314,7 +306,7 @@ test.describe('authenticated api tests', () => {
 
       // confirm still at previous value
       usersResponse = await page.request.get(
-         `${apiUrl}/users/${apiUser.userId}`,
+         `${apiUrl}/user`,
          { headers: apiHeaders }
       );
       expect(usersResponse).toBeOK();
@@ -329,7 +321,7 @@ test.describe('authenticated api tests', () => {
 
       // Delete session and confirm further edits don't work
       const endResponse = await page.request.delete(
-         `${apiUrl}/users/${apiUser.userId}/session`,
+         `${apiUrl}/session`,
          { headers: apiHeaders }
       );
       expect(endResponse).toBeOK();
@@ -348,7 +340,7 @@ test.describe('authenticated api tests', () => {
       // should fail due to session being deleted
       patchResponse = await page.request.patch(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}`,
+         `${apiUrl}/user`,
          { headers: apiHeaders, data: body4 }
       );
       expect(patchResponse.status()).toBe(401);
@@ -358,7 +350,7 @@ test.describe('authenticated api tests', () => {
 
       const delResponse = await page.request.delete(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${apiUser.authenticators[0].credentialId}`,
+         `${apiUrl}/passkeys/${apiUser.authenticators[0].credentialId}`,
          { headers: apiHeaders }
       );
       expect(delResponse).toBeOK();
@@ -369,7 +361,7 @@ test.describe('authenticated api tests', () => {
       const { page, session, authId1, authId2 } = authFixture;
 
       let sessionResponse = await page.request.get(
-         `${apiUrl}/users/${apiUser.userId}/session`,
+         `${apiUrl}/session`,
          { headers: apiHeaders }
       );
       expect(sessionResponse).toBeOK();
@@ -382,17 +374,15 @@ test.describe('authenticated api tests', () => {
       expect(user.authenticators.length).toBe(1);
 
       // invalid user id
-      // comment out during backward compatibility period
-      // sessionResponse = await page.request.get(
-      //    `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/session`,
-      //    { headers: apiHeaders }
-      // );
-      // expect(sessionResponse.status()).toBe(401);
-
+      sessionResponse = await page.request.get(
+         `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/session`,
+         { headers: apiHeaders }
+      );
+      expect(sessionResponse.status()).toBe(404);
 
       const delResponse = await page.request.delete(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${user.authenticators[0].credentialId}`,
+         `${apiUrl}/passkeys/${user.authenticators[0].credentialId}`,
          { headers: apiHeaders }
       );
       expect(delResponse).toBeOK();
@@ -403,7 +393,7 @@ test.describe('authenticated api tests', () => {
       const { page, session, authId1, authId2 } = authFixture;
 
       let sessionResponse = await page.request.get(
-         `${apiUrl}/users/${apiUser.userId}/session`,
+         `${apiUrl}/session`,
          { headers: apiHeaders }
       );
       expect(sessionResponse).toBeOK();
@@ -413,16 +403,15 @@ test.describe('authenticated api tests', () => {
       apiHeaders['x-amz-content-sha256'] = bufferToHexString(hash);
 
       // delete with valid session cookie, but invalid userId should fail
-      // comment out during backward compatibility period
-      // let endResponse = await page.request.delete(
-      //    `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/session`,
-      //    { headers: apiHeaders }
-      // );
-      // expect(endResponse.status()).toBe(401);
-
-
       let endResponse = await page.request.delete(
-         `${apiUrl}/users/${apiUser.userId}/session`,
+         `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/session`,
+         { headers: apiHeaders }
+      );
+      expect(endResponse.status()).toBe(404);
+
+
+      endResponse = await page.request.delete(
+         `${apiUrl}/session`,
          { headers: apiHeaders }
       );
       expect(endResponse).toBeOK();
@@ -431,20 +420,20 @@ test.describe('authenticated api tests', () => {
       // between this comment and passkeyAuth success
 
       endResponse = await page.request.delete(
-         `${apiUrl}/users/${apiUser.userId}/session`,
+         `${apiUrl}/session`,
          { headers: apiHeaders }
       );
       expect(endResponse.status()).toBe(401);
 
       sessionResponse = await page.request.get(
-         `${apiUrl}/users/${apiUser.userId}/session`,
+         `${apiUrl}/session`,
          { headers: apiHeaders }
       );
       expect(sessionResponse.status()).toBe(401);
 
       let infoResponse = await page.request.get(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}`,
+         `${apiUrl}/user`,
          { headers: apiHeaders }
       );
       expect(infoResponse.status()).toBe(401);
@@ -455,7 +444,7 @@ test.describe('authenticated api tests', () => {
 
       infoResponse = await page.request.get(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}`,
+         `${apiUrl}/user`,
          { headers: apiHeaders }
       );
       expect(infoResponse).toBeOK();
@@ -468,7 +457,7 @@ test.describe('authenticated api tests', () => {
 
       const delResponse = await page.request.delete(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${user.authenticators[0].credentialId}`,
+         `${apiUrl}/passkeys/${user.authenticators[0].credentialId}`,
          { headers: apiHeaders }
       );
       expect(delResponse).toBeOK();
@@ -481,46 +470,44 @@ test.describe('authenticated api tests', () => {
       let headers = structuredClone(apiHeaders);
       delete headers['x-csrf-token'];
 
-      // Comment out for backward compat. Add back when support
       // for absent CSRF is removed (when clients update)
       // Should fail due to missing csrf
-      // let usersResponse = await page.request.get(
-      //    `${apiUrl}/users/${apiUser.userId}`,
-      //    { headers }
-      // );
-      // expect(usersResponse.status()).toBe(401);
+      let usersResponse = await page.request.get(
+         `${apiUrl}/user`,
+         { headers }
+      );
+      expect(usersResponse.status()).toBe(401);
 
-      // Comment out for backward compat. Add back when support
       // for absent CSRF is removed (when clients update)
       // Should fail due to missing csrf
-      // let delResponse = await page.request.delete(
-      //    //@ts-ignore
-      //    `${apiUrl}/users/${apiUser.userId}/passkeys/${apiUser.authenticators[0].credentialId}`,
-      //    { headers }
-      // );
-      // expect(usersResponse.status()).toBe(401);
+      let delResponse = await page.request.delete(
+         //@ts-ignore
+         `${apiUrl}/passkeys/${apiUser.authenticators[0].credentialId}`,
+         { headers }
+      );
+      expect(delResponse.status()).toBe(401);
 
       headers['x-csrf-token'] = 'uajbCCy0AeBW5WDEqbR9viY12HaQOiKlJcNSG8yaGT0';
 
       // Should fail due to bad csrf
-      let usersResponse = await page.request.get(
-         `${apiUrl}/users/${apiUser.userId}`,
+      usersResponse = await page.request.get(
+         `${apiUrl}/user`,
          { headers }
       );
       expect(usersResponse.status()).toBe(401);
 
       // Should fail due to bad csrf
-      let delResponse = await page.request.delete(
+      delResponse = await page.request.delete(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${apiUser.authenticators[0].credentialId}`,
+         `${apiUrl}/passkeys/${apiUser.authenticators[0].credentialId}`,
          { headers }
       );
-      expect(usersResponse.status()).toBe(401);
+      expect(delResponse.status()).toBe(401);
 
       // Correcr csrf, should work
       delResponse = await page.request.delete(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${apiUser.authenticators[0].credentialId}`,
+         `${apiUrl}/passkeys/${apiUser.authenticators[0].credentialId}`,
          { headers: apiHeaders }
       );
       expect(delResponse).toBeOK();
@@ -535,7 +522,7 @@ test.describe('authenticated api tests', () => {
 
       const delResponse = await page.request.delete(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${apiUser.authenticators[0].credentialId}`,
+         `${apiUrl}/passkeys/${apiUser.authenticators[0].credentialId}`,
          { headers: apiHeaders }
       );
       expect(delResponse).toBeOK();
@@ -550,7 +537,7 @@ test.describe('authenticated api tests', () => {
 
       const delResponse = await page.request.delete(
          //@ts-ignore
-         `${apiUrl}/users/${apiUser.userId}/passkeys/${apiUser.authenticators[0].credentialId}`,
+         `${apiUrl}/passkeys/${apiUser.authenticators[0].credentialId}`,
          { headers: apiHeaders }
       );
       expect(delResponse).toBeOK();
@@ -618,7 +605,7 @@ async function smallFuzzCommaon(
 
    // PATCH passkey
    await fuzzPatch(page, headers,
-      `${apiUrl}/users/{0}/passkeys/{1}`,
+      `${apiUrl}/passkeys/{1}`,
       [[...badIdsSmall, userId], badIdsSmall],
       'description',
       badNamesSmall
@@ -633,7 +620,7 @@ async function smallFuzzCommaon(
 
    // POST auth verify
    await fuzzPost(page, headers,
-      `${apiUrl}/users/{0}/auth/verify`,
+      `${apiUrl}/auth/verify`,
       [[...badIdsSmall, userId]],
       'authenticator',
       badNamesSmall
@@ -656,7 +643,7 @@ async function fullFuzzCommaon(
 
    // PATCH UserInfo
    await fuzzPatch(page, headers,
-      `${apiUrl}/users/{0}`,
+      `${apiUrl}/user`,
       [badIds],
       'userName',
       badNames
@@ -665,7 +652,7 @@ async function fullFuzzCommaon(
    // PATCH passkey
    // also include good userid
    await fuzzPatch(page, headers,
-      `${apiUrl}/users/{0}/passkeys/{1}`,
+      `${apiUrl}/passkeys/{1}`,
       [[...badIdsSmall, userId], badIds],
       'description',
       badNames
@@ -673,7 +660,7 @@ async function fullFuzzCommaon(
 
    // DELETE passkeys
    await fuzzDelete(page, headers,
-      `${apiUrl}/users/{0}/passkeys/{1}`,
+      `${apiUrl}/passkeys/{1}`,
       [[...badIdsSmall, userId], badIds]
    );
 
@@ -692,20 +679,20 @@ async function fullFuzzCommaon(
    // );
 
    let delResponse = await page.request.delete(
-      `${apiUrl}/users`,
+      `${apiUrl}/user`,
       { headers: headers }
    );
    expect(delResponse).not.toBeOK();
 
    delResponse = await page.request.delete(
-      `${apiUrl}/users/${userId}`,
+      `${apiUrl}/user`,
       { headers: headers }
    );
    expect(delResponse.status()).toBe(404);
 
    // POST reg verify
    await fuzzPost(page, headers,
-      `${apiUrl}/users/{0}/reg/verify`,
+      `${apiUrl}/reg/verify`,
       [[...badIds, userId]],
       'authenticator',
       badNames
@@ -713,7 +700,7 @@ async function fullFuzzCommaon(
 
    // POST auth verify
    await fuzzPost(page, headers,
-      `${apiUrl}/users/{0}/auth/verify`,
+      `${apiUrl}/auth/verify`,
       [[...badIds, userId]],
       'authenticator',
       badNames
@@ -740,7 +727,7 @@ async function fullFuzzCommaon(
 
    // POST passkeys verify
    await fuzzPost(page, headers,
-      `${apiUrl}/users/{0}/passkeys/verify`,
+      `${apiUrl}/passkeys/verify`,
       [[...badIds, userId]]
    );
 
@@ -791,7 +778,7 @@ async function apiSetup(
    const apiUrl = testInfo.project.use.apiURL;
 
    let sessResp = await page.request.get(
-      `${apiUrl}/users/${userId}/session`
+      `${apiUrl}/session`
    );
    expect(sessResp).toBeOK();
    const apiUser: ServerLoginUserInfo = await sessResp.json();
@@ -828,7 +815,7 @@ async function reSetup(
    const apiUrl = testInfo.project.use.apiURL;
 
    let sessResp = await page.request.get(
-      `${apiUrl}/users/${userId}/session`
+      `${apiUrl}/session`
    );
    expect(sessResp).toBeOK();
    const apiUser: ServerLoginUserInfo = await sessResp.json();
