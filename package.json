@@ -37,7 +37,7 @@
     "@zxcvbn-ts/language-en": "^3.0.2",
     "@zxcvbn-ts/language-es-es": "^3.0.2",
     "@zxcvbn-ts/matcher-pwned": "^3.0.4",
-    "libsodium-wrappers": "^0.7.15",
+    "libsodium-wrappers": "0.7.15",
     "luxon": "^3.6.2",
     "rxjs": "~7.8.0",
     "tar": "^7.5.2",
