@@ -71,10 +71,11 @@ export type CipherDataInfo = {
    readonly hint?: string;
 };
 
-// To geenrate matching keys, these must not change
-export const KDF_INFO_SIGNING = "cipherdata signing key";
-export const KDF_INFO_HINT = "hint encryption key";
-export const KDF_INFO_BLOCK = "block encryption key";
+
+// V6 Contexts (must be 8 bytes)
+export const KDF_CTX_SIGNING = "Sign_Key";
+export const KDF_CTX_HINT =    "Hint_Key";
+export const KDF_CTX_BLOCK =   "Blck_Key";
 
 interface KeyDerivation {
    purge(): void;
@@ -205,7 +206,7 @@ export class LocalKeyDerivation implements KeyDerivation {
          if (!this._ek) {
             throw new Error('Invalid state, missing master key');
          }
-         return _genDerivedKey(this._ek!, this._slt!, KDF_INFO_BLOCK, block);
+         return _genDerivedKey(this._ek!, this._slt!, KDF_CTX_BLOCK, block);
       }
    }
 }
@@ -1342,7 +1343,7 @@ export class DecipherV6 extends Decipher {
             throw new Error('Data not initialized');
          }
 
-         bk = _genDerivedKey(this._ek, KDF_INFO_BLOCK, this._blockNum);
+         bk = _genDerivedKey(this._ek, this._slt, KDF_CTX_BLOCK, this._blockNum);
          this._blockNum += 1;
 
          const decrypted = await Decipher._doDecrypt(
@@ -1814,14 +1815,22 @@ export function _genDerivedKey(
 ): Uint8Array<ArrayBuffer> {
 
    if (master.byteLength != cc.KEY_BYTES) {
-      throw new Error('Invalid maseter key length of: ' + master.byteLength);
+      throw new Error('Invalid master key length of: ' + master.byteLength);
    }
 
+   if (purpose.length != 8) {
+      throw new Error('Invalid purpose length: ' + purpose.length);
+   }
+
+   // because crypto_kdf_derive_from_key does not take a salt, we first merge salt and
+   // master into a single key. We use the master key as the key for generichash to ensure
+   // the result is secret.
+   const mixedKey = sodium.crypto_generichash(cc.KEY_BYTES, slt, master);
    return ensureArrayBuffer(sodium.crypto_kdf_derive_from_key(
       cc.KEY_BYTES,
       instance,
-      purpose + bytesToBase64(slt),
-      master
+      purpose,
+      mixedKey
    ));
 }
 
@@ -1831,7 +1840,7 @@ export function _genHintCipherKey(
    userCred: Uint8Array,
    slt: Uint8Array
 ): Uint8Array<ArrayBuffer> {
-   return _genDerivedKey(userCred, slt, KDF_INFO_HINT, 1);
+   return _genDerivedKey(userCred, slt, KDF_CTX_HINT, 1);
 }
 
 
@@ -1840,5 +1849,5 @@ export function _genSigningKey(
    userCred: Uint8Array,
    slt: Uint8Array
 ): Uint8Array<ArrayBuffer> {
-   return _genDerivedKey(userCred, slt, KDF_INFO_SIGNING, 1);
+   return _genDerivedKey(userCred, slt, KDF_CTX_SIGNING, 1);
 }
