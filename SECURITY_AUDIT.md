@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Quick Crypt is a well-designed, security-conscious browser-based encryption application. The V6 encryption protocol follows cryptographic best practices including MAC-before-decrypt (Doom Principle avoidance), AEAD ciphers with authenticated additional data, fresh random salt/IV per encryption, block-key derivation, MAC chaining, constant-time comparisons, and memory wiping of sensitive material. No high or critical severity issues were identified. Several low and informational findings are documented below.
+Quick Crypt is a well-designed, security-conscious browser-based encryption application. The V6 encryption protocol follows cryptographic best practices including MAC-before-decrypt (Doom Principle avoidance), AEAD ciphers with authenticated additional data, fresh random salt/IV per encryption, block-key derivation, MAC chaining, constant-time comparisons, and memory wiping of sensitive material. No high or critical severity issues were identified. Four low-severity and six informational findings are documented below.
 
 ---
 
@@ -78,26 +78,7 @@ const encryptedData = await EncipherV6._doEncrypt(eparams.alg, this._ek, iv, cle
 
 ---
 
-### LOW-4: Standard Double-Quote Not Stripped in Cipher Armor Fallback Parser
-
-**File:** `src/app/core/armor.ts:73`
-```typescript
-if (!trimmed.startsWith('{')) {
-    trimmed = `{"ct":"${trimmed.replace(/[''"'"‚„\n\r\t\\ ]/g, '')}"}`;
-}
-```
-
-**Description:** When `parseCipherArmor` receives bare (non-JSON) cipher text, it wraps it in a JSON object by string interpolation. The regex strips various Unicode quotation marks, whitespace, and backslashes, but does **not** strip the standard ASCII double-quote character (U+0022 `"`). An input containing `"` could break out of the JSON string value.
-
-For example, input `AAAA","x":"y` would produce `{"ct":"AAAA","x":"y"}`, which parses as valid JSON with `ct = "AAAA"` and an extra property `x`.
-
-**Impact:** Minimal in practice. The code only accesses `jsonParts.ct` and ignores other properties. Any injected or truncated `ct` value would fail during base64 decoding or AEAD decryption (authentication tag verification). There is no code path where injected JSON properties could cause harm.
-
-**Recommendation:** Add `"` (U+0022) to the character stripping regex for defense in depth, or use a more robust approach such as encoding the raw input as base64 before JSON wrapping.
-
----
-
-### LOW-5: Legacy V4 Protocol Weaknesses (Read-Only, Backward Compatibility)
+### LOW-4: Legacy V4 Protocol Weaknesses (Read-Only, Backward Compatibility)
 
 **File:** `src/app/services/deciphers-old.ts`
 
@@ -242,5 +223,4 @@ The Quick Crypt encryption protocol and implementation demonstrate strong securi
 The findings documented above are low severity or informational. The most actionable items are:
 1. **LOW-1:** Generate CSP nonces server-side per request
 2. **LOW-3:** Use a separate IV for hint encryption
-3. **LOW-4:** Strip standard double-quotes in the armor fallback parser
-4. **INFO-1:** Clarify KDF context string truncation behavior
+3. **INFO-1:** Clarify KDF context string truncation behavior
