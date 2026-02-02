@@ -33,9 +33,11 @@ import {
    Decipher,
    CipherState,
    Extractor,
-   KDF_INFO_SIGNING,
-   KDF_INFO_HINT
 } from './ciphers-current';
+
+// To geenrate matching keys, these must not change
+const KDF_INFO_SIGNING = "cipherdata signing key";
+const KDF_INFO_HINT = "hint encryption key";
 
 
 export class DecipherV1 extends Decipher {
