@@ -70,11 +70,14 @@ export type CipherDataInfo = {
    readonly hint?: string;
 };
 
-// To geenrate matching keys, these must not change
-export const KDF_INFO_SIGNING = "cipherdata signing key";
-export const KDF_INFO_HINT = "hint encryption key";
-export const KDF_INFO_BLOCK = "block encryption key";
 
+// V7 Contexts must be 8 bytes
+const KDF_CTX_SIGNING_V6 = "cipherdata signing key";
+const KDF_CTX_SIGNING_V7 = "Sign_Key";
+const KDF_CTX_HINT_V6 = "hint encryption key";
+const KDF_CTX_HINT_V7 = "Hint_Key";
+const KDF_CTX_BLOCK_V6 = "block encryption key";
+const KDF_CTX_BLOCK_V7 = "Blck_Key";
 
 export abstract class Ciphers {
 
@@ -148,7 +151,7 @@ export abstract class Ciphers {
       // page load and tends to be too low.
       const iCount = Math.max(cc.ICOUNT_DEFAULT, targetICount + cc.ICOUNT_MIN);
 
-      console.log(
+      console.debug(
          `bench: ${testSize}i, in: ${test_millis}ms, rate: ${Math.round(hashRate)}i/ms,
         ic: ${iCount}i, icm: ${iCountMax}i`
       );
@@ -354,8 +357,8 @@ export abstract class Encipher extends Ciphers {
 
 
 // Exported just for testing
-export class EncipherV6 extends Encipher {
-   /* V6 CipherData Layout. Tags are just notation, and are not actually in the
+export class EncipherV7 extends Encipher {
+   /* V6/V7 CipherData Layout. Tags are just notation, and are not actually in the
     * data stream. All encodings have one block0 instance followed by zero or
     * more blockN instances
 
@@ -433,7 +436,7 @@ export class EncipherV6 extends Encipher {
    }
 
    public override protocolVersion(): number {
-      return cc.VERSION6;
+      return cc.VERSION7;
    }
 
    // Overall order of operations for encryption
@@ -452,9 +455,10 @@ export class EncipherV6 extends Encipher {
    ): Promise<CipherDataBlock> {
 
       let hk: Uint8Array | undefined;
+      let hIV: Uint8Array | undefined;
 
       try {
-         EncipherV6.validateEParams(eparams);
+         EncipherV7.validateEParams(eparams);
          if (this._state != CipherState.Initialized) {
             throw new Error(`Encipher invalid state ${this._state}`);
          }
@@ -491,7 +495,7 @@ export class EncipherV6 extends Encipher {
          const iv = randomArray.slice(cc.SLT_BYTES, cc.SLT_BYTES + ivBytes);
 
          const [pwd, hint] = await pwdProvider({
-               ver: cc.VERSION6,
+               ver: cc.VERSION7,
                alg: eparams.alg,
                ic: eparams.ic,
                slt: this._slt,
@@ -509,8 +513,7 @@ export class EncipherV6 extends Encipher {
             throw new Error('Missing password');
          }
 
-         hk = _genHintCipherKey(this._userCred!);
-         this._sk = _genSigningKey(this._userCred!);
+         this._sk = _genSigningKey(this._userCred!, this._slt);
          this._ek = await _genCipherKey(eparams.alg, eparams.ic, pwd, this._userCred!, this._slt);
 
          let encryptedHint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
@@ -521,10 +524,11 @@ export class EncipherV6 extends Encipher {
             // It's possible that even a single character (e.g. emoji) might exceed maxHintBytes
             // If so proceed without a hint.
             if (hintBytes.byteLength > 0) {
-               encryptedHint = await EncipherV6._doEncrypt(
+               [hk, hIV] = _genHintCipherKeyAndIV(this._userCred!, iv, this._slt);
+               encryptedHint = await EncipherV7._doEncrypt(
                   eparams.alg,
                   hk,
-                  iv,
+                  hIV,
                   hintBytes
                );
             }
@@ -542,7 +546,7 @@ export class EncipherV6 extends Encipher {
          });
 
          // Only block0 uses the root cipher key. Simplifies backward compat and is no less secure
-         const encryptedData = await EncipherV6._doEncrypt(
+         const encryptedData = await EncipherV7._doEncrypt(
             eparams.alg,
             this._ek,
             iv,
@@ -578,6 +582,10 @@ export class EncipherV6 extends Encipher {
             crypto.getRandomValues(hk);
             hk = undefined;
          }
+         if (hIV) {
+            crypto.getRandomValues(hIV);
+            hIV = undefined;
+         }
       }
    }
 
@@ -588,7 +596,7 @@ export class EncipherV6 extends Encipher {
       let bk: Uint8Array | undefined;
 
       try {
-         EncipherV6.validateEParams(eparams);
+         EncipherV7.validateEParams(eparams);
          if (this._state != CipherState.Block0Done) {
             throw new Error(`Encipher invalid state ${this._state}`);
          }
@@ -626,10 +634,10 @@ export class EncipherV6 extends Encipher {
             term: done,
          });
 
-         bk = _genDerivedKey(this._ek, KDF_INFO_BLOCK, this._blockNum);
+         bk = _genBlockCipherKey(this._ek, this._slt!, this._blockNum);
          this._blockNum += 1;
 
-         const encryptedData = await EncipherV6._doEncrypt(
+         const encryptedData = await EncipherV7._doEncrypt(
             eparams.alg,
             bk,
             iv,
@@ -771,7 +779,7 @@ export class EncipherV6 extends Encipher {
       const payloadBytes = encryptedData.byteLength + additionalData.byteLength;
       // Packer validates ranges as values are added
       const packer = new Packer(cc.HEADER_BYTES_6P, cc.MAC_BYTES);
-      packer.ver = cc.VERSION6;
+      packer.ver = cc.VERSION7;
       packer.size = payloadBytes;
 
       const state = sodium.crypto_generichash_init(this._sk, cc.MAC_BYTES);
@@ -796,7 +804,7 @@ type BlockData = {
    readonly payloadSize: number;
    flags?: number;
    alg?: string;
-   iv?: Uint8Array;
+   iv?: Uint8Array<ArrayBuffer>;
    encryptedData?: Uint8Array<ArrayBuffer>;
    additionalData?: Uint8Array<ArrayBuffer>;
 };
@@ -1031,9 +1039,9 @@ export abstract class Decipher extends Ciphers {
    }
 };
 
-
-export class DecipherV6 extends Decipher {
-   /* V6 CipherData Layout. Tags are just notation, and are not actually in the
+// Can handle version 6 and 7 (because the code is very similar)
+export class DecipherV67 extends Decipher {
+   /* V6/V7 CipherData Layout. Tags are just notation, and are not actually in the
     * data stream. All encodings have one block0 instance followed by zero or
     * more blockN instances
 
@@ -1105,7 +1113,7 @@ export class DecipherV6 extends Decipher {
    }
 
    public override protocolVersion(): number {
-      return cc.VERSION6;
+      return cc.VERSION7;
    }
 
    private async _decodeHeader(header?: Uint8Array): Promise<boolean> {
@@ -1131,7 +1139,7 @@ export class DecipherV6 extends Decipher {
       // Order must be invariant (extractor validates sizes and ranges)
       const mac = extractor.mac;
       const ver = extractor.ver;
-      if (ver != this.protocolVersion()) {
+      if (ver != cc.VERSION6 && ver != cc.VERSION7) {
          throw new Error('Invalid version of: ' + ver);
       }
       const payloadSize = extractor.size;
@@ -1151,6 +1159,7 @@ export class DecipherV6 extends Decipher {
    override async _decodeBlock0(): Promise<void> {
 
       let hk: Uint8Array | undefined;
+      let hIV: Uint8Array | undefined;
 
       try {
          if (![CipherState.Initialized, CipherState.Block0Decoded].includes(this._state)) {
@@ -1203,7 +1212,7 @@ export class DecipherV6 extends Decipher {
             extractor.offset - this._blockData.encryptedData.byteLength
          );
 
-         this._sk = _genSigningKey(this._userCred!);
+         this._sk = _genSigningKey(this._userCred!, this._slt, this._blockData.ver);
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we have the signing key and data.
@@ -1216,11 +1225,11 @@ export class DecipherV6 extends Decipher {
 
          let hint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
          if (encryptedHint!.byteLength != 0) {
-            hk = _genHintCipherKey(this._userCred!);
+            [hk, hIV] = _genHintCipherKeyAndIV(this._userCred!, this._blockData.iv, this._slt, this._blockData.ver);
             this._hint = await Decipher._doDecrypt(
                this._blockData.alg,
                hk,
-               this._blockData.iv,
+               hIV,
                encryptedHint
             );
          }
@@ -1237,6 +1246,10 @@ export class DecipherV6 extends Decipher {
          if (hk) {
             crypto.getRandomValues(hk);
             hk = undefined;
+         }
+         if (hIV) {
+            crypto.getRandomValues(hIV);
+            hIV = undefined;
          }
       }
    }
@@ -1267,7 +1280,7 @@ export class DecipherV6 extends Decipher {
             throw new Error('Data not initialized');
          }
 
-         bk = _genDerivedKey(this._ek, KDF_INFO_BLOCK, this._blockNum);
+         bk = _genBlockCipherKey(this._ek, this._slt!, this._blockNum, this._blockData.ver);
          this._blockNum += 1;
 
          const decrypted = await Decipher._doDecrypt(
@@ -1335,7 +1348,7 @@ export class DecipherV6 extends Decipher {
          this._blockData.iv = extractor.iv;
          this._blockData.encryptedData = extractor.remainder('edata');
 
-         // V6 additional data is payload - encrypted data
+         // V6/V7 additional data is payload - encrypted data
          this._blockData.additionalData = new Uint8Array(
             payload.buffer,
             payload.byteOffset,
@@ -1487,7 +1500,7 @@ export class Extractor<T extends ArrayBufferLike> {
 
    get ver(): number {
       const ver = bytesToNum(this.extract('ver', cc.VER_BYTES));
-      if (ver != cc.VERSION1 && ver != cc.VERSION4 && ver != cc.VERSION5 && ver != cc.VERSION6) {
+      if (ver != cc.VERSION1 && ver != cc.VERSION4 && ver != cc.VERSION5 && ver != cc.VERSION6 && ver != cc.VERSION7) {
          throw new Error('Invalid version of: ' + ver);
       }
       return ver;
@@ -1636,7 +1649,7 @@ export class Packer {
    }
 
    set ver(version: number) {
-      if (version != cc.VERSION1 && version != cc.VERSION4 && version != cc.VERSION5 && version != cc.VERSION6) {
+      if (version != cc.VERSION7) {
          throw new Error('Invalid version of: ' + version);
       }
       this.pack('ver', numToBytes(version, cc.VER_BYTES));
@@ -1665,6 +1678,7 @@ export class Packer {
       this.pack('size', numToBytes(payloadSize, cc.PAYLOAD_SIZE_BYTES));
    }
 }
+
 
 // Exported for testing, normal callers should not need this
 export async function _genCipherKey(
@@ -1731,38 +1745,72 @@ export async function _genCipherKey(
    return new Uint8Array(exported);
 }
 
+// Exported for testing, normal callers should not need this
+export function _genBlockCipherKey(
+   cipherKey: Uint8Array,
+   slt: Uint8Array,
+   blockNum: number,
+   ver: number = cc.CURRENT_VERSION
+): Uint8Array<ArrayBuffer> {
+   const ctx = ver === cc.VERSION6 ? KDF_CTX_BLOCK_V6 : KDF_CTX_BLOCK_V7;
+   return _genDerivedKey(cipherKey, slt, ctx, blockNum, ver);
+}
+
+
 export function _genDerivedKey(
    master: Uint8Array,
+   slt: Uint8Array,
    purpose: string,
-   instance: number
+   instance: number,
+   ver: number
 ): Uint8Array<ArrayBuffer> {
 
-   if (master.byteLength != cc.KEY_BYTES) {
-      throw new Error('Invalid maseter key length of: ' + master.byteLength);
+   let mixedKey: Uint8Array;
+
+   // VERSION7 adds a salt to key derivations
+   if (ver === cc.VERSION7) {
+      if (purpose.length != 8) {
+         throw new Error('Invalid purpose length: ' + purpose.length);
+      }
+
+      // because crypto_kdf_derive_from_key does not take a salt, we first merge salt and
+      // master into a single key.
+      mixedKey = sodium.crypto_generichash(cc.KEY_BYTES, slt, master);
+   } else {
+      mixedKey = master;
    }
 
    return ensureArrayBuffer(sodium.crypto_kdf_derive_from_key(
-      cc.KEY_BYTES,
+      master.byteLength,
       instance,
-      purpose,
-      master
+      purpose.slice(0, 8),
+      mixedKey
    ));
 }
 
 
 // Exported for testing and old deciphers, normal callers should not need this
-export function _genHintCipherKey(
-   userCred: Uint8Array
-): Uint8Array<ArrayBuffer> {
-   return _genDerivedKey(userCred, KDF_INFO_HINT, 1);
+export function _genHintCipherKeyAndIV(
+   userCred: Uint8Array,
+   iv: Uint8Array<ArrayBuffer>,
+   slt: Uint8Array,
+   ver: number = cc.CURRENT_VERSION
+): [Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>] {
+   const ctx = ver === cc.VERSION6 ? KDF_CTX_HINT_V6 : KDF_CTX_HINT_V7;
+   return [
+      _genDerivedKey(userCred, slt, ctx, 1, ver),
+      ver === cc.VERSION6 ? iv : _genDerivedKey(iv, slt, ctx, 2, ver)
+   ];
 }
 
 
 // Exported for testing, normal callers should not need this
 export function _genSigningKey(
    userCred: Uint8Array,
+   slt: Uint8Array,
+   ver: number = cc.CURRENT_VERSION
 ): Uint8Array<ArrayBuffer> {
-   return _genDerivedKey(userCred, KDF_INFO_SIGNING, 1);
+   const ctx = ver === cc.VERSION6 ? KDF_CTX_SIGNING_V6 : KDF_CTX_SIGNING_V7;
+   return _genDerivedKey(userCred, slt, ctx, 1, ver);
 }
-
 

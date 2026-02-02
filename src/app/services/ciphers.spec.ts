@@ -30,9 +30,9 @@ import {
 } from './ciphers';
 
 import {
-   EncipherV6,
+   EncipherV7,
    _genCipherKey,
-   _genHintCipherKey,
+   _genHintCipherKeyAndIV,
    _genSigningKey,
    CipherDataBlock
 } from './ciphers-current';
@@ -147,10 +147,11 @@ describe("Key generation", function () {
 
          const randomArray = getRandom48();
          const slt = randomArray.slice(0, cc.SLT_BYTES);
+         const iv = randomArray.slice(cc.SLT_BYTES, cc.SLT_BYTES+12);
 
          const ek = await _genCipherKey(alg, ic, pwd, userCred, slt);
-         const sk = _genSigningKey(userCred);
-         const hk = _genHintCipherKey(userCred);
+         const sk = _genSigningKey(userCred, slt);
+         const [hk, hIV] = _genHintCipherKeyAndIV(userCred, iv, slt);
 
          expect(ek.byteLength).toBe(32);
          expect(sk.byteLength).toBe(32);
@@ -198,10 +199,11 @@ describe("Key generation", function () {
          const userCred = new Uint8Array([214, 245, 252, 122, 133, 39, 76, 162, 64, 201, 143, 217, 237, 57, 18, 207, 199, 153, 20, 28, 162, 9, 236, 66, 100, 103, 152, 159, 226, 50, 225, 129]);
          const baseArray = new Uint8Array([160, 202, 135, 230, 125, 174, 49, 189, 171, 56, 203, 1, 237, 233, 27, 76, 46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]);
          const slt = baseArray.slice(0, cc.SLT_BYTES);
+         const iv = baseArray.slice(cc.SLT_BYTES, cc.SLT_BYTES + 12);
 
          const ek = await _genCipherKey(alg, ic, pwd, userCred, slt);
-         const sk = _genSigningKey(userCred);
-         const hk = _genHintCipherKey(userCred);
+         const sk = _genSigningKey(userCred, slt);
+         const [hk, hIV] = _genHintCipherKeyAndIV(userCred, iv, slt);
          const skOld = await _genSigningKeyOld(userCred, slt);
          const hkOld = await _genHintCipherKeyOld(alg, userCred, slt);
 
@@ -227,14 +229,14 @@ describe("Encryption and decryption", function () {
    });
 
    function signAndRepack(
-      encipher: EncipherV6,
+      encipher: EncipherV7,
       userCred: Uint8Array,
       block: CipherDataBlock
    ): Uint8Array {
 
       // cheating... parts[1] is _additionalData, parts[2] is encryptedData
       // and reset _lastMac and recreate _sk with specified (potentially forged) userCred
-      encipher['_sk'] = _genSigningKey(userCred);
+      encipher['_sk'] = _genSigningKey(userCred, encipher['_slt']!);
       encipher['_lastMac'] = new Uint8Array([0]);
       const headerData = encipher._createHeader(block.parts[2], block.parts[1]);
 
@@ -293,7 +295,7 @@ describe("Encryption and decryption", function () {
          };
 
          const reader = new BYOBStreamReader(clearStream);
-         const encipher = new EncipherV6(userCredA, reader);
+         const encipher = new EncipherV7(userCredA, reader);
          const cipherBlock = await encipher.encryptBlock0(
             eparams,
             async (cdinfo) => {
