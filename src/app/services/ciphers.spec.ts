@@ -169,55 +169,89 @@ describe("Key generation", function () {
 
    it("keys should match expected values", async function () {
 
-      const expected: { [k1: string]: { [k2: string]: Uint8Array } } = {
-         'AES-GCM': {
-            ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
-            sk: new Uint8Array([172, 133, 166, 39, 233, 237, 204, 73, 234, 53, 191, 16, 169, 71, 164, 71, 36, 51, 18, 87, 19, 33, 25, 50, 224, 33, 120, 21, 233, 20, 154, 79]),
-            hk: new Uint8Array([34, 121, 121, 4, 207, 55, 202, 73, 83, 4, 58, 102, 135, 111, 186, 242, 3, 187, 239, 108, 251, 245, 3, 245, 3, 77, 228, 197, 101, 4, 16, 94]),
-            skOld: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
-            hkOld: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
+      const expected:{[kv: number]: { [k1: string]: { [k2: string]: Uint8Array } }}  = {
+         [cc.VERSION6] : {
+            'AES-GCM': {
+               ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
+               sk: new Uint8Array([172, 133, 166, 39, 233, 237, 204, 73, 234, 53, 191, 16, 169, 71, 164, 71, 36, 51, 18, 87, 19, 33, 25, 50, 224, 33, 120, 21, 233, 20, 154, 79]),
+               hk: new Uint8Array([34, 121, 121, 4, 207, 55, 202, 73, 83, 4, 58, 102, 135, 111, 186, 242, 3, 187, 239, 108, 251, 245, 3, 245, 3, 77, 228, 197, 101, 4, 16, 94]),
+               hIV: new Uint8Array([46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]),
+               skOld: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
+               hkOld: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
+            },
+            'X20-PLY': {
+               ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
+               sk: new Uint8Array([172, 133, 166, 39, 233, 237, 204, 73, 234, 53, 191, 16, 169, 71, 164, 71, 36, 51, 18, 87, 19, 33, 25, 50, 224, 33, 120, 21, 233, 20, 154, 79]),
+               hk: new Uint8Array([34, 121, 121, 4, 207, 55, 202, 73, 83, 4, 58, 102, 135, 111, 186, 242, 3, 187, 239, 108, 251, 245, 3, 245, 3, 77, 228, 197, 101, 4, 16, 94]),
+               hIV: new Uint8Array([46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]),
+               skOld: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
+               hkOld: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
+            },
+            'AEGIS-256': {
+               ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
+               sk: new Uint8Array([172, 133, 166, 39, 233, 237, 204, 73, 234, 53, 191, 16, 169, 71, 164, 71, 36, 51, 18, 87, 19, 33, 25, 50, 224, 33, 120, 21, 233, 20, 154, 79]),
+               hk: new Uint8Array([34, 121, 121, 4, 207, 55, 202, 73, 83, 4, 58, 102, 135, 111, 186, 242, 3, 187, 239, 108, 251, 245, 3, 245, 3, 77, 228, 197, 101, 4, 16, 94]),
+               hIV: new Uint8Array([46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]),
+               skOld: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
+               hkOld: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
+            }
          },
-         'X20-PLY': {
-            ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
-            sk: new Uint8Array([172, 133, 166, 39, 233, 237, 204, 73, 234, 53, 191, 16, 169, 71, 164, 71, 36, 51, 18, 87, 19, 33, 25, 50, 224, 33, 120, 21, 233, 20, 154, 79]),
-            hk: new Uint8Array([34, 121, 121, 4, 207, 55, 202, 73, 83, 4, 58, 102, 135, 111, 186, 242, 3, 187, 239, 108, 251, 245, 3, 245, 3, 77, 228, 197, 101, 4, 16, 94]),
-            skOld: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
-            hkOld: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
-         },
-         'AEGIS-256': {
-            ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
-            sk: new Uint8Array([172, 133, 166, 39, 233, 237, 204, 73, 234, 53, 191, 16, 169, 71, 164, 71, 36, 51, 18, 87, 19, 33, 25, 50, 224, 33, 120, 21, 233, 20, 154, 79]),
-            hk: new Uint8Array([34, 121, 121, 4, 207, 55, 202, 73, 83, 4, 58, 102, 135, 111, 186, 242, 3, 187, 239, 108, 251, 245, 3, 245, 3, 77, 228, 197, 101, 4, 16, 94]),
-            skOld: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
-            hkOld: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
+         [cc.CURRENT_VERSION] : {
+            'AES-GCM': {
+               ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
+               sk: new Uint8Array([12, 11, 234, 82, 207, 215, 131, 80, 38, 32, 132, 108, 3, 142, 171, 167, 122, 64, 206, 141, 38, 119, 244, 14, 84, 157, 79, 143, 230, 193, 123, 152]),
+               hk: new Uint8Array([186, 23, 116, 170, 237, 110, 92, 251, 20, 233, 24, 0, 10, 15, 167, 201, 128, 120, 73, 71, 132, 103, 171, 49, 154, 150, 49, 100, 201, 201, 137, 45]),
+               hIV: new Uint8Array([209, 157, 68, 198, 140, 129, 200, 180, 195, 7, 203, 152, 159, 48, 27, 169, 238, 3, 71, 245, 252, 45, 165, 23]),
+               skOld: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
+               hkOld: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
+            },
+            'X20-PLY': {
+               ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
+               sk: new Uint8Array([12, 11, 234, 82, 207, 215, 131, 80, 38, 32, 132, 108, 3, 142, 171, 167, 122, 64, 206, 141, 38, 119, 244, 14, 84, 157, 79, 143, 230, 193, 123, 152]),
+               hk: new Uint8Array([186, 23, 116, 170, 237, 110, 92, 251, 20, 233, 24, 0, 10, 15, 167, 201, 128, 120, 73, 71, 132, 103, 171, 49, 154, 150, 49, 100, 201, 201, 137, 45]),
+               hIV: new Uint8Array([209, 157, 68, 198, 140, 129, 200, 180, 195, 7, 203, 152, 159, 48, 27, 169, 238, 3, 71, 245, 252, 45, 165, 23]),
+               skOld: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
+               hkOld: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
+            },
+            'AEGIS-256': {
+               ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
+               sk: new Uint8Array([12, 11, 234, 82, 207, 215, 131, 80, 38, 32, 132, 108, 3, 142, 171, 167, 122, 64, 206, 141, 38, 119, 244, 14, 84, 157, 79, 143, 230, 193, 123, 152]),
+               hk: new Uint8Array([186, 23, 116, 170, 237, 110, 92, 251, 20, 233, 24, 0, 10, 15, 167, 201, 128, 120, 73, 71, 132, 103, 171, 49, 154, 150, 49, 100, 201, 201, 137, 45]),
+               hIV: new Uint8Array([209, 157, 68, 198, 140, 129, 200, 180, 195, 7, 203, 152, 159, 48, 27, 169, 238, 3, 71, 245, 252, 45, 165, 23]),
+               skOld: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
+               hkOld: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
+            }
          }
       };
 
       for (let alg in cc.AlgInfo) {
-         const pwd = 'a good pwd';
-         const ic = cc.ICOUNT_MIN;
-         const userCred = new Uint8Array([214, 245, 252, 122, 133, 39, 76, 162, 64, 201, 143, 217, 237, 57, 18, 207, 199, 153, 20, 28, 162, 9, 236, 66, 100, 103, 152, 159, 226, 50, 225, 129]);
-         const baseArray = new Uint8Array([160, 202, 135, 230, 125, 174, 49, 189, 171, 56, 203, 1, 237, 233, 27, 76, 46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]);
-         const slt = baseArray.slice(0, cc.SLT_BYTES);
-         const iv = baseArray.slice(cc.SLT_BYTES, cc.SLT_BYTES + 12);
+         for (let ver of [cc.VERSION6, cc.CURRENT_VERSION]) {
+            const pwd = 'a good pwd';
+            const ic = cc.ICOUNT_MIN;
+            const userCred = new Uint8Array([214, 245, 252, 122, 133, 39, 76, 162, 64, 201, 143, 217, 237, 57, 18, 207, 199, 153, 20, 28, 162, 9, 236, 66, 100, 103, 152, 159, 226, 50, 225, 129]);
+            const slt = new Uint8Array([160, 202, 135, 230, 125, 174, 49, 189, 171, 56, 203, 1, 237, 233, 27, 76]);
+            const iv = new Uint8Array([46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]);
 
-         const ek = await _genCipherKey(alg, ic, pwd, userCred, slt);
-         const sk = _genSigningKey(userCred, slt);
-         const [hk, hIV] = _genHintCipherKeyAndIV(userCred, iv, slt);
-         const skOld = await _genSigningKeyOld(userCred, slt);
-         const hkOld = await _genHintCipherKeyOld(alg, userCred, slt);
+            const ek = await _genCipherKey(alg, ic, pwd, userCred, slt);
+            const sk = _genSigningKey(userCred, slt, ver);
+            const [hk, hIV] = _genHintCipherKeyAndIV(userCred, iv, slt, ver);
+            const skOld = await _genSigningKeyOld(userCred, slt);
+            const hkOld = await _genHintCipherKeyOld(alg, userCred, slt);
 
-         expect(isEqualArray(ek, expected[alg]['ek'])).toBeTrue();
-         expect(isEqualArray(sk, expected[alg]['sk'])).toBeTrue();
-         expect(isEqualArray(hk, expected[alg]['hk'])).toBeTrue();
-         expect(isEqualArray(skOld, expected[alg]['skOld'])).toBeTrue();
-         expect(isEqualArray(hkOld, expected[alg]['hkOld'])).toBeTrue();
+            expect(isEqualArray(ek, expected[ver][alg]['ek'])).toBeTrue();
+            expect(isEqualArray(sk, expected[ver][alg]['sk'])).toBeTrue();
+            expect(isEqualArray(hk, expected[ver][alg]['hk'])).toBeTrue();
+            expect(isEqualArray(hIV, expected[ver][alg]['hIV'])).toBeTrue();
+            expect(isEqualArray(skOld, expected[ver][alg]['skOld'])).toBeTrue();
+            expect(isEqualArray(hkOld, expected[ver][alg]['hkOld'])).toBeTrue();
 
-         expect(isEqualArray(ek, userCred)).toBeFalse();
-         expect(isEqualArray(sk, userCred)).toBeFalse();
-         expect(isEqualArray(hk, userCred)).toBeFalse();
-         expect(isEqualArray(skOld, userCred)).toBeFalse();
-         expect(isEqualArray(hkOld, userCred)).toBeFalse();
+            expect(isEqualArray(ek, userCred)).toBeFalse();
+            expect(isEqualArray(sk, userCred)).toBeFalse();
+            expect(isEqualArray(hk, userCred)).toBeFalse();
+            expect(isEqualArray(hIV, userCred)).toBeFalse();
+            expect(isEqualArray(skOld, userCred)).toBeFalse();
+            expect(isEqualArray(hkOld, userCred)).toBeFalse();
+         }
       }
    });
 });
@@ -231,12 +265,13 @@ describe("Encryption and decryption", function () {
    function signAndRepack(
       encipher: EncipherV7,
       userCred: Uint8Array,
-      block: CipherDataBlock
+      block: CipherDataBlock,
+      savedSlt: Uint8Array
    ): Uint8Array {
 
       // cheating... parts[1] is _additionalData, parts[2] is encryptedData
       // and reset _lastMac and recreate _sk with specified (potentially forged) userCred
-      encipher['_sk'] = _genSigningKey(userCred, encipher['_slt']!);
+      encipher['_sk'] = _genSigningKey(userCred, savedSlt);
       encipher['_lastMac'] = new Uint8Array([0]);
       const headerData = encipher._createHeader(block.parts[2], block.parts[1]);
 
@@ -296,11 +331,13 @@ describe("Encryption and decryption", function () {
 
          const reader = new BYOBStreamReader(clearStream);
          const encipher = new EncipherV7(userCredA, reader);
+         let savedSlt: Uint8Array;
          const cipherBlock = await encipher.encryptBlock0(
             eparams,
             async (cdinfo) => {
                expect(cdinfo.lp).toEqual(1);
                expect(cdinfo.lpEnd).toEqual(1);
+               savedSlt = new Uint8Array(cdinfo.slt);
                return [pwd, undefined];
             }
          );
@@ -309,10 +346,10 @@ describe("Encryption and decryption", function () {
          // code for repacking is valid and then with a new signature. Ensure the correct
          // one works (to ensure that signAndRepack works) and the replacment is detected.
          let [cipherstreamA, cipherDataA] = streamFromBytes(
-            signAndRepack(encipher, userCredA, cipherBlock)
+            signAndRepack(encipher, userCredA, cipherBlock, savedSlt!)
          );
          let [cipherstreamB, cipherDataB] = streamFromBytes(
-            signAndRepack(encipher, userCredB, cipherBlock)
+            signAndRepack(encipher, userCredB, cipherBlock, savedSlt!)
          );
 
          // These should fail because using the wrong userCred for each
@@ -325,7 +362,6 @@ describe("Encryption and decryption", function () {
          await expectAsync(
             decipherB._decodeBlock0()
          ).toBeRejectedWithError(Error, new RegExp('.+MAC.+'));
-
 
          // Reaload streams, then test with correct matching userCreds
          [cipherstreamA] = streamFromBytes(cipherDataA);

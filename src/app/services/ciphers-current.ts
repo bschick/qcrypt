@@ -582,10 +582,6 @@ export class EncipherV7 extends Encipher {
             crypto.getRandomValues(hk);
             hk = undefined;
          }
-         if (hIV) {
-            crypto.getRandomValues(hIV);
-            hIV = undefined;
-         }
       }
    }
 
@@ -980,10 +976,10 @@ export abstract class Decipher extends Ciphers {
       let decrypted: Uint8Array;
       if (alg == 'X20-PLY') {
 
-         /*         console.log('dxcha encrypted', encrypted.byteLength, encrypted);
-                  console.log('dxcha additionalData', additionalData.byteLength, additionalData);
-                  console.log('dxcha iv', iv.byteLength, iv);
-                  console.log('dxcha keyBytes', keyBytes.byteLength, keyBytes);
+         /* console.log('dxcha encrypted', encrypted.byteLength, encrypted);
+            console.log('dxcha additionalData', additionalData.byteLength, additionalData);
+            console.log('dxcha iv', iv.byteLength, iv);
+            console.log('dxcha keyBytes', keyBytes.byteLength, keyBytes);
          */
          try {
             decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
@@ -1246,10 +1242,6 @@ export class DecipherV67 extends Decipher {
          if (hk) {
             crypto.getRandomValues(hk);
             hk = undefined;
-         }
-         if (hIV) {
-            crypto.getRandomValues(hIV);
-            hIV = undefined;
          }
       }
    }
@@ -1649,7 +1641,7 @@ export class Packer {
    }
 
    set ver(version: number) {
-      if (version != cc.VERSION7) {
+      if (version != cc.VERSION1 && version != cc.VERSION4 && version != cc.VERSION5 && version != cc.VERSION6 && version != cc.VERSION7) {
          throw new Error('Invalid version of: ' + version);
       }
       this.pack('ver', numToBytes(version, cc.VER_BYTES));
