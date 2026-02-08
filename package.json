@@ -1,6 +1,6 @@
 {
   "name": "@qcrypt/qcrypt-client",
-  "version": "6.1.1",
+  "version": "7.0.0",
   "type": "module",
   "copyright": "© 2024–2026 Quick Crypt Contributors",
   "scripts": {
@@ -64,5 +64,8 @@
     "schematics-scss-migrate": "^2.3.17",
     "tsx": "^4.20.0",
     "typescript": "~5.9.0"
+  },
+  "overrides": {
+    "@modelcontextprotocol/sdk": "1.25.3"
   }
 }
