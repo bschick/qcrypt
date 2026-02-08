@@ -1,8 +1,8 @@
 {
   "name": "@qcrypt/qcrypt-client",
-  "version": "6.1.1",
+  "version": "6.1.2",
   "type": "module",
-  "copyright": "© 2024–2025 Quick Crypt Contributors",
+  "copyright": "© 2024–2026 Quick Crypt Contributors",
   "scripts": {
     "ng": "ng",
     "serve": "ng serve --hmr false --host 0.0.0.0 --watch --poll 1000 --ssl --ssl-cert localssl/localhost.crt --ssl-key localssl/localhost.key",
@@ -40,7 +40,6 @@
     "libsodium-wrappers": "0.7.15",
     "luxon": "^3.6.2",
     "rxjs": "~7.8.0",
-    "tar": "^7.5.2",
     "tslib": "^2.3.0",
     "zone.js": "~0.15.0"
   },
@@ -64,5 +63,9 @@
     "schematics-scss-migrate": "^2.3.17",
     "tsx": "^4.20.0",
     "typescript": "~5.9.0"
+  },
+  "overrides": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "tar": "^7.5.2"
   }
 }
