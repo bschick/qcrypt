@@ -1,3 +1,4 @@
+import { provideZoneChangeDetection } from "@angular/core";
 /* MIT License
 
 Copyright (c) 2025 Brad Schick
@@ -23,6 +24,6 @@ import { bootstrapApplication, BootstrapContext } from '@angular/platform-browse
 import { QCryptComponent } from './app/qcrypt.component';
 import { config } from './app/qcrypt.config.server';
 
-const bootstrap = (context: BootstrapContext) => bootstrapApplication(QCryptComponent, config, context);
+const bootstrap = (context: BootstrapContext) => bootstrapApplication(QCryptComponent, {...config, providers: [provideZoneChangeDetection(), ...config.providers]}, context);
 
 export default bootstrap;
