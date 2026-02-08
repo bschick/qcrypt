@@ -47,6 +47,9 @@ testem.log
 .DS_Store
 Thumbs.db
 
+# Vitest
+__screenshots__/
+
 # Playwright
 node_modules/
 /test-results/

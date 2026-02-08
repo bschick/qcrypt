@@ -24,15 +24,18 @@ import { Injectable } from "@angular/core";
 import * as cc from "./cipher.consts";
 import { Ciphers } from "./ciphers";
 import {
-   EContext,
    encryptStream,
    decryptStream,
    getCipherStreamInfo,
+} from "./cipher-streams";
+
+import type {
+   EContext,
    CipherDataInfo,
    PWDProvider,
 } from "./cipher-streams";
 
-export { EContext, CipherDataInfo, PWDProvider };
+export type { EContext, CipherDataInfo, PWDProvider };
 
 const TARGET_HASH_MILLIS = 500;
 const MAX_HASH_MILLIS = 5 * 60 * 1000; //5 minutes
@@ -52,68 +55,68 @@ export class CipherService {
    private _iCountMax = cc.ICOUNT_MAX;
 
    get hashRate(): number {
-      return this._hashRate;
+     return this._hashRate;
    }
 
    async benchmark(testSize: number): Promise<[number, number, number]> {
 
-      await navigator.locks.request('benchmark', async () => {
-         if (this._iCount === 0) {
-            [this._iCount, this._iCountMax, this._hashRate] = await Ciphers.benchmark(
-               testSize,
-               TARGET_HASH_MILLIS,
-               MAX_HASH_MILLIS
-            );
-         }
-      });
+     await navigator.locks.request('benchmark', async () => {
+       if (this._iCount === 0) {
+         [this._iCount, this._iCountMax, this._hashRate] = await Ciphers.benchmark(
+            testSize,
+            TARGET_HASH_MILLIS,
+            MAX_HASH_MILLIS
+         );
+       }
+     });
 
-      return [this._iCount, this._iCountMax, this._hashRate];
+     return [this._iCount, this._iCountMax, this._hashRate];
    }
 
    validateAlgs(algs: string[]): boolean {
-      for (let alg of algs) {
-         if (!Ciphers.validateAlg(alg)) {
-            return false;
-         }
-      }
-      return true;
+     for (let alg of algs) {
+       if (!Ciphers.validateAlg(alg)) {
+         return false;
+       }
+     }
+     return true;
    }
 
    validateAlg(alg: string): boolean {
-      return Ciphers.validateAlg(alg);
+     return Ciphers.validateAlg(alg);
    }
 
    algDescription(alg: string): string {
-      return Ciphers.validateAlg(alg)
-         ? (cc.AlgInfo[alg]["description"] as string)
-         : "Invalid";
+     return Ciphers.validateAlg(alg)
+       ? (cc.AlgInfo[alg]["description"] as string)
+       : "Invalid";
    }
 
    algs(): string[] {
-      return Object.keys(cc.AlgInfo);
+     return Object.keys(cc.AlgInfo);
    }
 
    async encryptStream(
-      econtext: EContext,
-      pwdProvider: PWDProvider,
-      userCred: Uint8Array,
-      clearStream: ReadableStream<Uint8Array>
+     econtext: EContext,
+     pwdProvider: PWDProvider,
+     userCred: Uint8Array,
+     clearStream: ReadableStream<Uint8Array>
    ): Promise<ReadableStream<Uint8Array>> {
-      return encryptStream(econtext, pwdProvider, userCred, clearStream);
+     return encryptStream(econtext, pwdProvider, userCred, clearStream);
    }
 
    async getCipherStreamInfo(
-      userCred: Uint8Array,
-      cipherStream: ReadableStream<Uint8Array>
+     userCred: Uint8Array,
+     cipherStream: ReadableStream<Uint8Array>
    ): Promise<CipherDataInfo> {
-      return getCipherStreamInfo(userCred, cipherStream);
+     return getCipherStreamInfo(userCred, cipherStream);
    }
 
    async decryptStream(
-      pwdProvider: PWDProvider,
-      userCred: Uint8Array,
-      cipherStream: ReadableStream<Uint8Array>
+     pwdProvider: PWDProvider,
+     userCred: Uint8Array,
+     cipherStream: ReadableStream<Uint8Array>
    ): Promise<ReadableStream<Uint8Array>> {
-      return decryptStream(pwdProvider, userCred, cipherStream);
+     return decryptStream(pwdProvider, userCred, cipherStream);
    }
 }
