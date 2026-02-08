@@ -19,15 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import {
-   getRandom48,
-   numToBytes,
-   bytesToNum,
-   base64ToBytes,
-   bytesToBase64,
-   BYOBStreamReader,
-   bytesFromString
-} from './utils';
+import { getRandom48, numToBytes, bytesToNum, base64ToBytes, bytesToBase64, BYOBStreamReader, bytesFromString } from './utils';
 
 function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
    if (a.length != b.length) {
@@ -57,10 +49,10 @@ function randomBlob(byteLength: number): Blob {
 describe("Base64 encode decode", function () {
 
    it("random bytes", function () {
-      const rb = crypto.getRandomValues(new Uint8Array(43))
+      const rb = crypto.getRandomValues(new Uint8Array(43));
       const b64 = bytesToBase64(rb);
       expect(b64.length).toBeGreaterThanOrEqual(rb.byteLength);
-      expect(isEqualArray(rb, base64ToBytes(b64))).toBeTrue();
+      expect(isEqualArray(rb, base64ToBytes(b64))).toBe(true);
    });
 
    it("detect bad encodings", function () {
@@ -71,25 +63,25 @@ describe("Base64 encode decode", function () {
       // expect we start valid
       const good = 'SGVsbG8-Mw';
       const bytes = base64ToBytes(good);
-      expect(isEqualArray(bytes, correctBytes)).toBeTrue();
+      expect(isEqualArray(bytes, correctBytes)).toBe(true);
       expect(new TextDecoder().decode(bytes)).toBe(correctText);
 
       // underlying simplewebauthn library converts nonURL base64 to base64URL
       // so this should work also (goodRfc is standard base64)
       const goodRfc = 'SGVsbG8+Mw==';
       const bytes2 = base64ToBytes(goodRfc);
-      expect(isEqualArray(bytes2, correctBytes)).toBeTrue();
+      expect(isEqualArray(bytes2, correctBytes)).toBe(true);
 
       // extra padding is stripped (so not an error to be missing some)
       const extraPadding = 'SGVsbG8-Mw=';
       const bytes3 = base64ToBytes(extraPadding);
-      expect(isEqualArray(bytes3, correctBytes)).toBeTrue();
+      expect(isEqualArray(bytes3, correctBytes)).toBe(true);
 
       const badChar = 'SGVsbG8.Mw';
-      expect(() => base64ToBytes(badChar)).toThrowError();
+      expect(() => base64ToBytes(badChar)).toThrow();
 
       const badLen = 'SGVsbG8Mw';
-      expect(() => base64ToBytes(badLen)).toThrowError();
+      expect(() => base64ToBytes(badLen)).toThrow();
    });
 });
 
@@ -101,7 +93,7 @@ describe("getRandom48 tests", function () {
 
       expect(r1.byteLength).toBe(48);
       expect(r2.byteLength).toBe(48);
-      expect(isEqualArray(r1, r2)).toBeFalse();
+      expect(isEqualArray(r1, r2)).toBe(false);
    });
 });
 
@@ -122,11 +114,11 @@ describe("Number byte packing", function () {
    });
 
    it("detect overflow check", function () {
-      expect(() => numToBytes(256, 1)).toThrowError();
-      expect(() => numToBytes(2456, 1)).toThrowError();
-      expect(() => numToBytes(65536, 2)).toThrowError();
-      expect(() => numToBytes(18777216, 3)).toThrowError();
-      expect(() => numToBytes(187742949672967216, 4)).toThrowError();
+      expect(() => numToBytes(256, 1)).toThrow();
+      expect(() => numToBytes(2456, 1)).toThrow();
+      expect(() => numToBytes(65536, 2)).toThrow();
+      expect(() => numToBytes(18777216, 3)).toThrow();
+      expect(() => numToBytes(187742949672967216, 4)).toThrow();
    });
 
    it("other lengths ok", function () {
@@ -168,7 +160,7 @@ describe("string byte truncation", function () {
       const noFit = bytesFromString(src, 18);
       const noFitStr = new TextDecoder().decode(noFit);
       expect(noFit.byteLength).toEqual(18);
-      expect(src.slice(0,-2)).toEqual(noFitStr);
+      expect(src.slice(0, -2)).toEqual(noFitStr);
    });
 
    it("unicode characters", function () {
@@ -189,7 +181,7 @@ describe("string byte truncation", function () {
       const noFit = bytesFromString(src, 24);
       const noFitStr = new TextDecoder().decode(noFit);
       expect(noFit.byteLength).toEqual(24);
-      expect(src.slice(0,-2)).toEqual(noFitStr);
+      expect(src.slice(0, -2)).toEqual(noFitStr);
 
    });
 
@@ -216,7 +208,7 @@ describe("string byte truncation", function () {
       const noFit = bytesFromString(src, 41);
       const noFitStr = new TextDecoder().decode(noFit);
       expect(noFit.byteLength).toEqual(38);
-      expect(src.slice(0,-3)).toEqual(noFitStr);
+      expect(src.slice(0, -3)).toEqual(noFitStr);
    });
 });
 
@@ -231,10 +223,7 @@ describe("Stream reading", function () {
       let [readData] = await reader.readFill(buffer1k);
       reader.cleanup();
       expect(readData.byteLength).toBe(blob1k.size);
-      expect(isEqualArray(
-         new Uint8Array(await blob1k.arrayBuffer()),
-         readData
-      )).toBeTrue();
+      expect(isEqualArray(new Uint8Array(await blob1k.arrayBuffer()), readData)).toBe(true);
 
       blob1k = randomBlob(1024);
       buffer1k = new ArrayBuffer(blob1k.size);
@@ -244,10 +233,7 @@ describe("Stream reading", function () {
       reader = new BYOBStreamReader(stream1k);
       [readData] = await reader.readAvailable(buffer1k);
       reader.cleanup();
-      expect(isEqualArray(
-         new Uint8Array(await blob1k.arrayBuffer(), 0, readData.byteLength),
-         readData
-      )).toBeTrue();
+      expect(isEqualArray(new Uint8Array(await blob1k.arrayBuffer(), 0, readData.byteLength), readData)).toBe(true);
    });
 
    it("larger stream", async function () {
@@ -259,10 +245,7 @@ describe("Stream reading", function () {
       let [readData] = await reader.readFill(buffer4m);
       reader.cleanup();
       expect(readData.byteLength).toBe(blob4m.size);
-      expect(isEqualArray(
-         new Uint8Array(await blob4m.arrayBuffer()),
-         readData
-      )).toBeTrue();
+      expect(isEqualArray(new Uint8Array(await blob4m.arrayBuffer()), readData)).toBe(true);
 
       blob4m = randomBlob(1024 * 1024 * 4);
       buffer4m = new ArrayBuffer(blob4m.size);
@@ -272,10 +255,7 @@ describe("Stream reading", function () {
       reader = new BYOBStreamReader(stream4m);
       [readData] = await reader.readAvailable(buffer4m);
       reader.cleanup();
-      expect(isEqualArray(
-         new Uint8Array(await blob4m.arrayBuffer(), 0, readData.byteLength),
-         readData
-      )).toBeTrue();
+      expect(isEqualArray(new Uint8Array(await blob4m.arrayBuffer(), 0, readData.byteLength), readData)).toBe(true);
    });
 
    it("under read stream", async function () {
@@ -289,10 +269,7 @@ describe("Stream reading", function () {
       reader.cleanup();
 
       expect(readData.byteLength).toBe(1024 * 1024);
-      expect(isEqualArray(
-         new Uint8Array(await blob3m.arrayBuffer(), 0, readData.byteLength),
-         readData
-      )).toBeTrue();
+      expect(isEqualArray(new Uint8Array(await blob3m.arrayBuffer(), 0, readData.byteLength), readData)).toBe(true);
 
       blob3m = randomBlob(1024 * 1024 * 3);
       buffer1m = new ArrayBuffer(1024 * 1024);
@@ -302,10 +279,7 @@ describe("Stream reading", function () {
       reader = new BYOBStreamReader(stream3m);
       [readData] = await reader.readAvailable(buffer1m);
       reader.cleanup();
-      expect(isEqualArray(
-         new Uint8Array(await blob3m.arrayBuffer(), 0, readData.byteLength),
-         readData
-      )).toBeTrue();
+      expect(isEqualArray(new Uint8Array(await blob3m.arrayBuffer(), 0, readData.byteLength), readData)).toBe(true);
    });
 
    it("over read stream", async function () {
@@ -317,10 +291,7 @@ describe("Stream reading", function () {
       let [readData] = await reader.readFill(buffer4m);
       reader.cleanup();
       expect(readData.byteLength).toBe(blob3m.size);
-      expect(isEqualArray(
-         new Uint8Array(await blob3m.arrayBuffer()),
-         readData
-      )).toBeTrue();
+      expect(isEqualArray(new Uint8Array(await blob3m.arrayBuffer()), readData)).toBe(true);
 
       blob3m = randomBlob(1024 * 1024 * 3);
       buffer4m = new ArrayBuffer(1024 * 1024 * 4);
@@ -330,9 +301,6 @@ describe("Stream reading", function () {
       reader = new BYOBStreamReader(stream3m);
       [readData] = await reader.readAvailable(buffer4m);
       reader.cleanup();
-      expect(isEqualArray(
-         new Uint8Array(await blob3m.arrayBuffer(), 0, readData.byteLength),
-         readData
-      )).toBeTrue();
+      expect(isEqualArray(new Uint8Array(await blob3m.arrayBuffer(), 0, readData.byteLength), readData)).toBe(true);
    });
 });
