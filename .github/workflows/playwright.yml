@@ -44,7 +44,7 @@ jobs:
       run: pnpm exec playwright install --with-deps
     - name: Qcrypt specific setup
       run: |
-        cd localssl/
+        cd apps/qcrypt/localssl/
         ./localssl.sh
     - name: Start server
       run: pnpm serve > serve.log 2>&1 &

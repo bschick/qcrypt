@@ -1,35 +1,35 @@
 {
-  "$schema": "node_modules/nx/schemas/project-schema.json",
   "name": "qcrypt",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
+  "sourceRoot": "apps/qcrypt/src",
+  "prefix": "app",
   "generators": {
     "@schematics/angular:component": {
       "style": "scss"
     }
   },
-  "sourceRoot": "src",
-  "prefix": "app",
   "targets": {
     "build": {
       "executor": "@angular/build:application",
       "options": {
         "outputPath": "dist/qcrypt",
-        "index": "src/index.html",
-        "browser": "src/main.ts",
+        "index": "apps/qcrypt/src/index.html",
+        "browser": "apps/qcrypt/src/main.ts",
         "polyfills": [
           "zone.js"
         ],
-        "tsConfig": "tsconfig.app.json",
+        "tsConfig": "apps/qcrypt/tsconfig.app.json",
         "assets": [
-          "src/favicon.ico",
-          "src/assets",
-          "src/robots.txt",
-          "src/maintenance.html",
-          "src/sitemap.xml",
-          "src/.well-known"
+          "apps/qcrypt/src/favicon.ico",
+          "apps/qcrypt/src/assets",
+          "apps/qcrypt/src/robots.txt",
+          "apps/qcrypt/src/maintenance.html",
+          "apps/qcrypt/src/sitemap.xml",
+          "apps/qcrypt/src/.well-known"
         ],
         "styles": [
-          "src/styles.scss"
+          "apps/qcrypt/src/styles.scss"
         ],
         "scripts": [],
         "prerender": false,
@@ -57,8 +57,8 @@
           "sourceMap": true,
           "fileReplacements": [
             {
-              "replace": "src/environments/environment.ts",
-              "with": "src/environments/environment.development.ts"
+              "replace": "apps/qcrypt/src/environments/environment.ts",
+              "with": "apps/qcrypt/src/environments/environment.development.ts"
             }
           ]
         }
@@ -89,7 +89,7 @@
     "test": {
       "executor": "@angular/build:unit-test",
       "options": {
-        "tsConfig": "tsconfig.spec.json",
+        "tsConfig": "apps/qcrypt/tsconfig.spec.json",
         "runnerConfig": true
       }
     }

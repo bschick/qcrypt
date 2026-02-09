@@ -1,14 +1,14 @@
 # See http://help.github.com/ignore-files/ for more about ignoring files.
-src/assets/aaguid/
-localssl/*
-!localssl/localssl.sh
-!localssl/backup.sh
+**/src/assets/aaguid/
+**/localssl/*
+!**/localssl/localssl.sh
+!**/localssl/backup.sh
 *.qq
 
 # Compiled output
 /dist
-/tmp
-/out-tsc
+**/tmp
+**/out-tsc
 /bazel-out
 
 # Node
@@ -34,7 +34,7 @@ pnpm-debug.log
 *.code-workspace
 
 # Miscellaneous
-/.angular/cache
+.angular/cache
 .sass-cache/
 /connect.lock
 /coverage
