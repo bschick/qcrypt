@@ -62,7 +62,15 @@
     "typescript": "~5.9.0",
     "vitest": "^4.0.18"
   },
-  "overrides": {
-    "@modelcontextprotocol/sdk": "1.26.0"
+  "pnpm": {
+    "overrides": {
+      "@modelcontextprotocol/sdk": "1.26.0"
+    },
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "esbuild",
+      "lmdb",
+      "msgpackr-extract"
+    ]
   }
 }

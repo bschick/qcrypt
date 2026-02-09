@@ -13,55 +13,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10
     - uses: actions/setup-node@v4
       with:
         node-version: lts/*
     - name: Install dependencies
-      run: npm ci
+      run: pnpm install --frozen-lockfile
     - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
-    - name: Qcrypt specific setup
-      run: |
-        cd localssl/
-        ./localssl.sh
-    - name: Start karma server
-      run: npm run karma > karma.log 2>&1 &
-    - name: Wait for the service to be ready
-      run: |
-        # Use a loop with `curl` to wait for the service to respond
-        for i in {1..10}; do
-          curl --insecure --fail https://t1.quickcrypt.org:9876 && echo "Server is up!" && break || echo "Waiting for server...";
-          sleep 5;
-        done
-    - name: Run Playwright chrome & ff unit tests
-      run: npm run test:all
-    - uses: actions/upload-artifact@v4
-      if: ${{ !cancelled() }}
-      with:
-        name: playwright-unit-report
-        path: playwright-report/
-        retention-days: 30
-    - uses: actions/upload-artifact@v4
-      if: ${{ !cancelled() }}
-      with:
-        name: karma-log
-        path: karma.log
-        retention-days: 30
+      run: pnpm exec playwright install --with-deps
+    - name: Run vitest chrome & firefox unit tests
+      run: pnpm test:all
 
   e2etest:
     timeout-minutes: 180
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10
     - uses: actions/setup-node@v4
       with:
         node-version: lts/*
     - name: Install dependencies
-      run: npm ci
+      run: pnpm install --frozen-lockfile
     - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
+      run: pnpm exec playwright install --with-deps
     - name: Run Playwright e2e prod tests
-      run: npm run test:e2e:prod
+      run: pnpm test:e2e:prod
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
@@ -74,15 +55,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10
     - uses: actions/setup-node@v4
       with:
         node-version: lts/*
     - name: Install dependencies
-      run: npm ci
+      run: pnpm install --frozen-lockfile
     - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
+      run: pnpm exec playwright install --with-deps
     - name: Run Playwright e2e prod tests
-      run: npm run test:fuzz:prod
+      run: pnpm test:fuzz:prod
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
