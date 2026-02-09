@@ -59,3 +59,7 @@ node_modules/
 # Log files
 karma.log
 serve.log
+
+# Nx
+.nx/cache
+.nx/workspace-data
