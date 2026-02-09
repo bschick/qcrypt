@@ -41,7 +41,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { AuthEvent, AuthenticatorService, SenderLinkInfo } from '../services/authenticator.service';
 import { Subscription } from 'rxjs';
-import { base64URLStringToBuffer, bufferToBase64URLString } from '../services/base64';
+import { base64URLStringToBuffer, bufferToBase64URLString } from '@qcrypt/crypto';
 import { OptionsComponent } from '../ui/options/options.component'
 
 

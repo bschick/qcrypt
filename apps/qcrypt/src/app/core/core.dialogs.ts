@@ -45,8 +45,8 @@ import { Router } from '@angular/router';
 import { AcceptableState, StrengthMeterComponent } from '../ui/strengthmeter/strengthmeter.component';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { BubbleDirective } from '../ui/bubble/bubble.directive';
-import * as cc from '../services/cipher.consts';
-import { bytesToBase64 } from '../services/utils';
+import * as cc from '@qcrypt/crypto';
+import { bytesToBase64 } from '@qcrypt/crypto';
 import { CipherService, CipherDataInfo } from '../services/cipher.service';
 
 

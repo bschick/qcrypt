@@ -19,15 +19,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { TestBed } from '@angular/core/testing';
 import sodium from 'libsodium-wrappers';
-import * as cc from './cipher.consts';
-import { getRandom48, BYOBStreamReader, readStreamAll } from './utils';
-import { Encipher, EParams, streamDecipher, latestEncipher } from './ciphers';
+import * as cc from '@qcrypt/crypto';
+import {
+   getRandom48, BYOBStreamReader, readStreamAll,
+   Encipher, streamDecipher, latestEncipher,
+   EncipherV7, _genCipherKey, _genHintCipherKeyAndIV, _genSigningKey,
+   _genSigningKeyOld, _genHintCipherKeyOld,
+} from '@qcrypt/crypto';
 
-import { EncipherV7, _genCipherKey, _genHintCipherKeyAndIV, _genSigningKey, CipherDataBlock } from './ciphers-current';
-
-import { _genSigningKeyOld, _genHintCipherKeyOld } from './deciphers-old';
+import type { EParams, CipherDataBlock } from '@qcrypt/crypto';
 
 // Faster than .toEqual, resulting in few timeouts
 function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
@@ -129,7 +130,6 @@ function streamFromCipherBlock(cdBlocks: CipherDataBlock[]): [
 describe("Key generation", function () {
    beforeEach(async () => {
       await sodium.ready;
-      TestBed.configureTestingModule({});
    });
 
    it("successful and not equivalent key generation", async function () {
@@ -260,7 +260,6 @@ describe("Key generation", function () {
 describe("Encryption and decryption", function () {
    beforeEach(async () => {
       await sodium.ready;
-      TestBed.configureTestingModule({});
    });
 
    function signAndRepack(encipher: EncipherV7, userCred: Uint8Array, block: CipherDataBlock, savedSlt: Uint8Array): Uint8Array {
@@ -887,7 +886,6 @@ describe("Encryption and decryption", function () {
 describe("Detect changed cipher data", function () {
    beforeEach(async () => {
       await sodium.ready;
-      TestBed.configureTestingModule({});
    });
 
    it("detect changed headerData", async function () {
@@ -1181,7 +1179,6 @@ describe("Detect changed cipher data", function () {
 describe("Detect block order changes", function () {
    beforeEach(async () => {
       await sodium.ready;
-      TestBed.configureTestingModule({});
    });
 
    const pwd = 'a not good pwd';

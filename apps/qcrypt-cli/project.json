@@ -1,0 +1,24 @@
+{
+  "name": "qcrypt-cli",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/qcrypt-cli/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec esbuild --bundle --format=cjs --platform=node --target=es2022 --tsconfig=tsconfig.base.json --outfile=apps/qcrypt-cli/shell/qcrypt.cjs apps/qcrypt-cli/src/main.ts",
+        "cwd": "{workspaceRoot}"
+      },
+      "outputs": ["{projectRoot}/shell/qcrypt.cjs"]
+    },
+    "build-min": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec esbuild --bundle --format=cjs --minify --platform=node --target=es2022 --tsconfig=tsconfig.base.json --outfile=apps/qcrypt-cli/shell/qcrypt.cjs apps/qcrypt-cli/src/main.ts",
+        "cwd": "{workspaceRoot}"
+      },
+      "outputs": ["{projectRoot}/shell/qcrypt.cjs"]
+    }
+  }
+}

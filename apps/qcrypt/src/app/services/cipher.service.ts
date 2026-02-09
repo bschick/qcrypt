@@ -21,19 +21,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { Injectable } from "@angular/core";
-import * as cc from "./cipher.consts";
-import { Ciphers } from "./ciphers";
+import * as cc from '@qcrypt/crypto';
 import {
+   Ciphers,
    encryptStream,
    decryptStream,
    getCipherStreamInfo,
-} from "./cipher-streams";
+} from '@qcrypt/crypto';
 
 import type {
    EContext,
    CipherDataInfo,
    PWDProvider,
-} from "./cipher-streams";
+} from '@qcrypt/crypto';
 
 export type { EContext, CipherDataInfo, PWDProvider };
 

@@ -11,6 +11,8 @@ This is an Nx monorepo. The app source lives in `apps/qcrypt/`, with shared libr
 | Unit tests (all browsers) | `pnpm test:all` | `pnpm nx test qcrypt --runnerConfig=apps/qcrypt/vitest-all.config.ts` |
 | E2E tests | `pnpm test:e2e` | *(no Nx equivalent — Playwright runs directly)* |
 | Fuzz tests | `pnpm test:fuzz` | *(no Nx equivalent — Playwright runs directly)* |
+| Build CLI | `pnpm build:cli` | `pnpm nx build qcrypt-cli` |
+| Build CLI (minified) | `pnpm build:cli:min` | `pnpm nx build-min qcrypt-cli` |
 
 The `pnpm nx` form is useful when you want to pass extra flags (like `--skip-nx-cache` or `--configuration development`) or when you have multiple projects later.
 

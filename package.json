@@ -14,7 +14,9 @@
     "test:fuzz": "NODE_EXTRA_CA_CERTS=./apps/qcrypt/localssl/qcrypt.pem pnpm exec playwright test --config apps/qcrypt/playwright.config.ts --project=local apps/qcrypt/tests/parallel --grep \"/@fullfuzz/\"",
     "test:e2e:prod": "pnpm exec playwright test --config apps/qcrypt/playwright.config.ts --project=prod --workers=1 apps/qcrypt/tests/sequential && pnpm exec playwright test --config apps/qcrypt/playwright.config.ts --project=prod apps/qcrypt/tests/parallel --grep-invert \"/@fullfuzz/\"",
     "test:fuzz:prod": "pnpm exec playwright test --config apps/qcrypt/playwright.config.ts --project=prod apps/qcrypt/tests/parallel --grep \"/@fullfuzz/\"",
-    "serve:ssr:qcrypt": "node dist/qcrypt/server/server.mjs"
+    "serve:ssr:qcrypt": "node dist/qcrypt/server/server.mjs",
+    "build:cli": "nx build qcrypt-cli",
+    "build:cli:min": "nx build-min qcrypt-cli"
   },
   "private": true,
   "dependencies": {
@@ -37,11 +39,14 @@
     "@zxcvbn-ts/language-en": "^3.0.2",
     "@zxcvbn-ts/language-es-es": "^3.0.2",
     "@zxcvbn-ts/matcher-pwned": "^3.0.4",
+    "@inquirer/prompts": "^7.10.0",
     "libsodium-wrappers": "^0.8.0",
     "luxon": "^3.6.2",
+    "reopen-tty": "^1.1.2",
     "rxjs": "~7.8.0",
     "tar": "^7.5.2",
     "tslib": "^2.3.0",
+    "yargs": "^17.7.2",
     "zone.js": "~0.15.0"
   },
   "devDependencies": {
@@ -58,6 +63,8 @@
     "@types/libsodium-wrappers": "^0.7.14",
     "@types/luxon": "^3.6.2",
     "@types/node": "^24.10.7",
+    "@types/yargs": "^17.0.34",
+    "esbuild": "^0.27.0",
     "@vitest/browser-playwright": "^4.0.18",
     "chromium-bidi": "^13.1.1",
     "devtools-protocol": "^0.0.1551306",

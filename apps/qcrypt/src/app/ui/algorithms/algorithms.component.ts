@@ -22,7 +22,7 @@ SOFTWARE. */
 import {
    Component, Output, Input, EventEmitter
 } from '@angular/core';
-import * as cc from '../../services/cipher.consts';
+import * as cc from '@qcrypt/crypto';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { FormsModule } from '@angular/forms';

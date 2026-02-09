@@ -60,6 +60,9 @@ node_modules/
 karma.log
 serve.log
 
+# CLI build output
+apps/qcrypt-cli/shell/
+
 # Nx
 .nx/cache
 .nx/workspace-data

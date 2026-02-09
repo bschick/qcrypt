@@ -31,7 +31,7 @@ import {
    SecurityContext,
    NgZone,
 } from '@angular/core';
-import { makeCipherArmor, parseCipherArmor } from './armor';
+import { makeCipherArmor, parseCipherArmor } from '@qcrypt/crypto';
 import { CommonModule } from '@angular/common';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatRippleModule } from '@angular/material/core';
@@ -54,7 +54,8 @@ import { DateTime } from 'luxon';
 import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { ClipboardModule } from '@angular/cdk/clipboard';
-import * as cc from '../services/cipher.consts';
+import { environment } from '../../environments/environment';
+import * as cc from '@qcrypt/crypto';
 import { CipherService, CipherDataInfo } from '../services/cipher.service';
 import {
    base64ToBytes,
@@ -69,7 +70,7 @@ import {
    browserSupportsBytesStream,
    ProcessCancelled,
    makeTookMsg
-} from '../services/utils';
+} from '@qcrypt/crypto';
 import { AuthenticatorService, AuthEvent, AuthEventData } from '../services/authenticator.service';
 import {
    PasswordDialog,
@@ -922,7 +923,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    showCipherData(cipherData: Uint8Array, extra: string = ''): void {
-      const cipherArmor = makeCipherArmor(cipherData, this.options.format, this.options.reminder);
+      const cipherArmor = makeCipherArmor(cipherData, this.options.format, this.options.reminder, environment.host);
       this.cipherArmor = cipherArmor;
       this.cipherFile = undefined;
       this.cipherMsg = '';

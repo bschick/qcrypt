@@ -38,7 +38,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Subscription } from 'rxjs';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { bytesToBase64 } from '../services/utils';
+import { bytesToBase64 } from '@qcrypt/crypto';
 
 
 @Component({
