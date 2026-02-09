@@ -1,8 +1,10 @@
 import sodium from 'libsodium-wrappers';
-import { decryptStream, encryptStream, getCipherStreamInfo } from './app/services/cipher-streams';
-import { makeCipherArmor, parseCipherArmor } from './app/core/armor';
-import { base64ToBytes, bytesToBase64, readStreamAll } from './app/services/utils';
-import * as cc from './app/services/cipher.consts';
+import {
+   decryptStream, encryptStream, getCipherStreamInfo,
+   makeCipherArmor, parseCipherArmor,
+   base64ToBytes, bytesToBase64, readStreamAll,
+} from '@qcrypt/crypto';
+import * as cc from '@qcrypt/crypto';
 import fs from 'fs';
 import ws from 'node:stream/web';
 import { Readable } from 'node:stream';

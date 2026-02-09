@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { getRandom48, numToBytes, bytesToNum, base64ToBytes, bytesToBase64, BYOBStreamReader, bytesFromString } from './utils';
+import { getRandom48, numToBytes, bytesToNum, base64ToBytes, bytesToBase64, BYOBStreamReader, bytesFromString } from '@qcrypt/crypto';
 
 function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
    if (a.length != b.length) {

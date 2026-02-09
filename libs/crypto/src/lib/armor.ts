@@ -19,25 +19,28 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { environment } from '../../environments/environment';
 import {
     base64ToBytes,
     bytesToBase64
- } from '../services/utils';
+ } from './utils';
 
 
  export function makeCipherArmor(
     cipherData: Uint8Array,
     format: string,
-    reminder: boolean = false
+    reminder: boolean = false,
+    host?: string,
 ) : string {
     // Rebuild object to control ordering (better way to do this?)
     let result: { [key: string]: string | number } = {};
     result['ct'] = bytesToBase64(cipherData);
 
     if (format == 'link') {
+       if (!host) {
+          throw new Error('host is required for link format');
+       }
        const ctParam = encodeURIComponent(JSON.stringify(result));
-       return environment.host + '?cipherarmor=' + ctParam;
+       return host + '?cipherarmor=' + ctParam;
     } else {
        if (reminder) {
           result['reminder'] = 'decrypt with quick crypt';

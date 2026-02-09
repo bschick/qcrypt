@@ -32,7 +32,7 @@ import {
 } from '@simplewebauthn/browser';
 import { Subject, Subscription, filter } from 'rxjs';
 import { DateTime } from 'luxon';
-import { base64ToBytes, bytesToBase64, bufferToHexString, expired } from './utils';
+import { base64ToBytes, bytesToBase64, bufferToHexString, expired } from '@qcrypt/crypto';
 import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 
