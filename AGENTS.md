@@ -11,7 +11,7 @@ This `qcrypt` client can built, served, and tested locally. It depends on a back
 
 - **Source Repository:** Project source code, issues tracking, and releases are at [qcrypt github](https://github.com/bschick/qcrypt)
 - **Core Logic:** The main application logic, including key derivation, encryption, and decryption, is located in `src/`.
-- **Technology Stack:** The application is built with Angular. It uses `libsodium-wrappers` and `@simplewebauthn/browser` for cryptographic and WebAuthn functionalities.
+- **Technology Stack:** The application is built with Angular using pnpm as its package manager. It uses `libsodium-wrappers` and `@simplewebauthn/browser` for cryptographic and WebAuthn functionalities.
 - **Crypto Details:** The cryptographic protocol is detailed in `src/assets/protocol6.pdf` and online at [https://quickcrypt.org/help/protocol](https://quickcrypt.org/help/protocol).
 - **API Interaction:** The client communicates with the `qcrypt-server` for user management and passkey operations. Server code is at [qcrypt-server github](https://github.com/bschick/qcrypt-server) and deployed at `https://test.quickcrypt.org`
 
@@ -32,10 +32,11 @@ This `qcrypt` client can built, served, and tested locally. It depends on a back
 - `src/app/services/deciphers-old.ts`: Contains the implementation of previous decryption ciphers versions.
 - `src/app/services/authenticator.service.ts`: Handles WebAuthn authenticator logic.
 - `src/assets/protocol6.pdf`: Detailed documentation of the cryptographic protocol.
-- `package.json`: Lists project dependencies and npm scripts for building, serving, and testing the application.
-- `karma.conf.cjs`: Configuration for the Karma test runner (used for unit tests).
-- `playwright.config.ts`: Configuration for Playwright (used for end-to-end and unit tests).
-- `tests/`: Contains Playwright test specifications, including `unit.spec.ts`, `sequential.spec.ts`, and `parallel.spec.ts`.
+- `package.json`: Lists project dependencies and pnpm scripts for building, serving, and testing the application.
+- `vitest-base.config.ts`: Vitest configuration for chromium-only unit tests.
+- `vitest-all.config.ts`: Vitest configuration for chromium + firefox unit tests.
+- `playwright.config.ts`: Configuration for Playwright (used for end-to-end tests).
+- `tests/`: Contains Playwright e2e test specifications.
 
 ---
 
@@ -68,14 +69,8 @@ git clone https://github.com/bschick/qcrypt.git && cd qcrypt
 
 **Unit Tests locally:**
 ```bash
-# Before starting the Karma server, you must first run the One-time setup steps above
-# The Karma server needs to be running before executing the tests.
-# For interactive users, you can run the server and tests in separate terminals.
-# For automation, the server can be run as a background process.
-nohup npm run karma > karma.log 2>&1 &
-sleep 35s # Allow the server time to start
-npm run test
-pkill npm; pkill ng # Stop the Karma server and ng process
+# You must first run the One-time setup steps above
+pnpm test
 ```
 
 **End-to-End Tests using AWS hosted test API backend:**
@@ -84,23 +79,23 @@ pkill npm; pkill ng # Stop the Karma server and ng process
 # The development server must be running to execute the E2E tests.
 # For interactive users, you can run the server and tests in separate terminals.
 # For automation, the server can be run as a background process.
-nohup npm run serve > serve.log 2>&1 &
+nohup pnpm serve > serve.log 2>&1 &
 sleep 35s # Allow the server time to start
-npm run test:e2e
-pkill npm; pkill ng # Stop the development server and ng process
+pnpm test:e2e
+pkill pnpm; pkill ng # Stop the development server and ng process
 ```
 
 ### c. Running Manual Tests
 
-- Start the development server as described above with `npm run serve`. The server will listen on all IP addresses on that system.
+- Start the development server as described above with `pnpm serve`. The server will listen on all IP addresses on that system.
 - If you plan to run a web browser on a different system than the development server, you must edit that system's `hosts` file to set the name of the primary IP address where the development server is running to `t1.quickcrypt.org`. Ensure you can `ping t1.quickcrypt.org`.
-- To avoid security warnings, you must also import the project's local CA certificate on the system running your browser. You can find the CA certificate in the `./localssl` directory relative to where you ran the `npm run serve` command. Import this certificate into your system's or browser's trusted certificate store. This process is dependent on your operating system.
+- To avoid security warnings, you must also import the project's local CA certificate on the system running your browser. You can find the CA certificate in the `./localssl` directory relative to where you ran the `pnpm serve` command. Import this certificate into your system's or browser's trusted certificate store. This process is dependent on your operating system.
 - Finally, start a web browser and navigate to `https://t1.quickcrypt.org:4200`. The test front-end uses a test back-end API server running in AWS with a URL of `https://test.quickcrypt.org`. The test API server is intended **only for those contributing to the Quick Crypt project**. Unnecessary or excessive usage that drives up AWS costs will be blocked. Do not run invasive tests against the production API server.
 
 ### d. Build project for production deployment
 
 ```bash
-npm run build
+pnpm build
 ```
 The output will be placed in the `dist/` directory.
 
@@ -111,14 +106,14 @@ The output will be placed in the `dist/` directory.
 
 Before submitting any changes, run the following test suites to ensure that the application is working correctly.
 
-### a. Unit Tests (requires start of Karma server, see 4.b)
+### a. Unit Tests
 ```bash
-npm run test
+pnpm test
 ```
 
 ### b. End-to-End Tests (requires start of Local server, see 4.b)
 ```bash
-npm run test:e2e
+pnpm test:e2e
 ```
 
 ---
