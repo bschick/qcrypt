@@ -13,6 +13,10 @@ This is an Nx monorepo. The app source lives in `apps/qcrypt/`, with shared libr
 | Fuzz tests | `pnpm test:fuzz` | *(no Nx equivalent — Playwright runs directly)* |
 | Build CLI | `pnpm build:cli` | `pnpm nx build qcrypt-cli` |
 | Build CLI (minified) | `pnpm build:cli:min` | `pnpm nx build-min qcrypt-cli` |
+| Build server | `pnpm build:server` | `pnpm nx build qcrypt-server` |
+| Build server (minified) | `pnpm build:server:min` | `pnpm nx build-min qcrypt-server` |
+| Server tests | `pnpm test:server` | `pnpm nx test qcrypt-server` |
+| Server tests (prod) | `pnpm test:server:prod` | `pnpm nx test-prod qcrypt-server` |
 
 The `pnpm nx` form is useful when you want to pass extra flags (like `--skip-nx-cache` or `--configuration development`) or when you have multiple projects later.
 

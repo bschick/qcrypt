@@ -63,6 +63,9 @@ serve.log
 # CLI build output
 apps/qcrypt-cli/shell/
 
+# Server build output
+apps/qcrypt-server/build/
+
 # Nx
 .nx/cache
 .nx/workspace-data
