@@ -1,0 +1,46 @@
+{
+  "name": "server",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/server/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "pnpm exec esbuild --bundle --platform=node --target=es2022 --outdir=apps/server/build apps/server/src/index.ts",
+          "rm -f apps/server/build/index.zip && zip -j apps/server/build/index.zip apps/server/build/index.js apps/server/assets/combined_aaguid.json"
+        ],
+        "cwd": "{workspaceRoot}",
+        "parallel": false
+      },
+      "outputs": ["{projectRoot}/build"]
+    },
+    "build-min": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "pnpm exec esbuild --bundle --minify --platform=node --target=es2022 --outdir=apps/server/build apps/server/src/index.ts",
+          "rm -f apps/server/build/index.zip && zip -j apps/server/build/index.zip apps/server/build/index.js apps/server/assets/combined_aaguid.json"
+        ],
+        "cwd": "{workspaceRoot}",
+        "parallel": false
+      },
+      "outputs": ["{projectRoot}/build"]
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec vitest run --config apps/server/vitest.config.ts",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "test-prod": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "QC_ENV=prod pnpm exec vitest run --config apps/server/vitest.config.ts",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

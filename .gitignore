@@ -61,10 +61,10 @@ karma.log
 serve.log
 
 # CLI build output
-apps/qcrypt-cli/shell/
+apps/cli/shell/
 
 # Server build output
-apps/qcrypt-server/build/
+apps/server/build/
 
 # Nx
 .nx/cache
