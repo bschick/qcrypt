@@ -31,7 +31,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatInputModule } from '@angular/material/input';
-import { AuthenticatorService, AuthenticatorInfo, UserInfo, AuthEvent } from '../services/authenticator.service';
+import { AuthenticatorService, AuthenticatorInfo, AuthEvent } from '../services/authenticator.service';
 import { EditableComponent } from '../ui/editable/editable.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';

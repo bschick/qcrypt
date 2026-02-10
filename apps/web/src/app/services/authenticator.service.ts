@@ -44,15 +44,10 @@ const EXPIRY_INTERVAL = 1000 * 60 * 2;
 
 const RECOVERID_BYTES = 16;
 
-export type AuthenticatorInfo = {
-   credentialId: string;
-   description: string;
-   lightIcon: string;
-   darkIcon: string;
-   name: string;
-};
+export type { AuthenticatorInfo, UserInfo, LoginUserInfo } from '@qcrypt/api';
+import type { AuthenticatorInfo, UserInfo, LoginUserInfo } from '@qcrypt/api';
 
-export type UserInfo = {
+export type VerifiedUserInfo = {
    userId: string;
    userName: string;
    pkId: string;
@@ -69,20 +64,6 @@ type FetchArgs = {
    bodyJSON?: string;
 }
 
-type ServerUserInfo = {
-   verified: boolean;
-   userId?: string;
-   userName?: string;
-   hasRecoveryId?: boolean;
-   authenticators?: AuthenticatorInfo[];
-};
-
-export type ServerLoginUserInfo = ServerUserInfo & {
-   pkId?: string;
-   userCred?: string;
-   recoveryId?: string;
-   csrf?: string;
-};
 
 export type SenderLinkInfo = {
    linkId: string;
@@ -113,7 +94,7 @@ export type AuthEventData = {
 })
 export class AuthenticatorService {
 
-   public userInfo = signal<UserInfo | undefined>(undefined);
+   public userInfo = signal<VerifiedUserInfo | undefined>(undefined);
    public senderLinks = signal<SenderLinkInfo[]>([]);
 
    private _subject = new Subject<AuthEventData>();
@@ -213,7 +194,7 @@ export class AuthenticatorService {
       return this._userCred!;
    }
 
-   public getUserInfo(): UserInfo {
+   public getUserInfo(): VerifiedUserInfo {
       if (!this.authenticated()) {
          throw new Error('no active user');
       }
@@ -287,7 +268,7 @@ export class AuthenticatorService {
       if (!this.potentialSession()) {
          return false;
       }
-      const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
+      const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
          method: 'GET',
          resource: 'session'
       });
@@ -314,7 +295,7 @@ export class AuthenticatorService {
 
       if (!recoveryId) {
          const verifyBody = await this._startAuth(this.userId);
-         const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
+         const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
             method: 'POST',
             resource: 'auth/verify',
             bodyJSON: JSON.stringify(verifyBody),
@@ -382,8 +363,8 @@ export class AuthenticatorService {
    }
 
    private _loginUser(
-      serverLogin: ServerLoginUserInfo
-   ): UserInfo {
+      serverLogin: LoginUserInfo
+   ): VerifiedUserInfo {
       if (!serverLogin.userId || serverLogin.userId.length == 0) {
          throw new Error('invalid user id')
       }
@@ -413,8 +394,8 @@ export class AuthenticatorService {
    }
 
    private _updateLoggedInUser(
-      serverUser: ServerUserInfo
-   ): UserInfo {
+      serverUser: UserInfo
+   ): VerifiedUserInfo {
 
       if (!serverUser.verified) {
          throw new Error('unverified user');
@@ -440,12 +421,12 @@ export class AuthenticatorService {
 
       localStorage.setItem('username', serverUser.userName);
 
-      const userInfo: UserInfo = {
-         userId: serverUser.userId,
-         userName: serverUser.userName,
+      const userInfo: VerifiedUserInfo = {
+         userId: serverUser.userId!,
+         userName: serverUser.userName!,
          pkId: globalPKId,
-         hasRecoveryId: serverUser.hasRecoveryId,
-         authenticators: serverUser.authenticators
+         hasRecoveryId: serverUser.hasRecoveryId!,
+         authenticators: serverUser.authenticators!
       };
 
       this.userInfo.set(userInfo);
@@ -539,7 +520,7 @@ export class AuthenticatorService {
    async setPasskeyDescription(
       credentialId: string,
       description: string
-   ): Promise<UserInfo> {
+   ): Promise<VerifiedUserInfo> {
       if (!description) {
          throw new Error('missing description');
       }
@@ -553,7 +534,7 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const serverUserInfo = await this._doFetch<ServerUserInfo>({
+      const serverUserInfo = await this._doFetch<UserInfo>({
          method: 'PATCH',
          resource: 'passkeys',
          resourceId: credentialId,
@@ -567,7 +548,7 @@ export class AuthenticatorService {
       return this._updateLoggedInUser(serverUserInfo);
    }
 
-   async setUserName(userName: string): Promise<UserInfo> {
+   async setUserName(userName: string): Promise<VerifiedUserInfo> {
       if (!userName) {
          throw new Error('missing description');
       }
@@ -578,7 +559,7 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const serverUserInfo = await this._doFetch<ServerUserInfo>({
+      const serverUserInfo = await this._doFetch<UserInfo>({
          method: 'PATCH',
          resource: 'user',
          bodyJSON: JSON.stringify({ userName: userName })
@@ -599,7 +580,7 @@ export class AuthenticatorService {
          throw new Error('not active user');
       }
 
-      const serverUserInfo = await this._doFetch<ServerUserInfo>({
+      const serverUserInfo = await this._doFetch<UserInfo>({
          method: 'DELETE',
          resource: 'passkeys',
          resourceId: credentialId
@@ -654,12 +635,12 @@ export class AuthenticatorService {
    }
 
 
-   async refreshUserInfo(): Promise<UserInfo> {
+   async refreshUserInfo(): Promise<VerifiedUserInfo> {
       if (!this.authenticated()) {
          throw new Error('not active user');
       }
 
-      const serverUserInfo = await this._doFetch<ServerUserInfo>({
+      const serverUserInfo = await this._doFetch<UserInfo>({
          method: 'GET',
          resource: 'user',
       });
@@ -672,7 +653,7 @@ export class AuthenticatorService {
    }
 
    // Uses the current stored userId
-   async defaultLogin(): Promise<UserInfo> {
+   async defaultLogin(): Promise<VerifiedUserInfo> {
       const [userId] = this.loadKnownUser();
       if (!userId) {
          throw new Error('missing local userId, sign in as different user');
@@ -682,14 +663,14 @@ export class AuthenticatorService {
    }
 
    // If no userId is provided, will present all Passkeys for this domain
-   async findLogin(userId: string | null = null): Promise<UserInfo> {
+   async findLogin(userId: string | null = null): Promise<VerifiedUserInfo> {
 
       if (this.authenticated()) {
          throw new Error('must be logged out to log in');
       }
 
       const verifyBody = await this._startAuth(userId);
-      const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
+      const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
          method: 'POST',
          resource: 'auth/verify',
          bodyJSON: JSON.stringify(verifyBody),
@@ -769,7 +750,7 @@ export class AuthenticatorService {
       return [recoveryId, userId];
    }
 
-   async recover2(recoveryWords: string): Promise<UserInfo> {
+   async recover2(recoveryWords: string): Promise<VerifiedUserInfo> {
 
       const [recoveryId, userId] = this.getRecoveryValues(recoveryWords);
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
@@ -783,7 +764,7 @@ export class AuthenticatorService {
       return this._loginUser(serverLoginUserInfo);
    }
 
-   async recover(userId: string, userCred: string): Promise<UserInfo> {
+   async recover(userId: string, userCred: string): Promise<VerifiedUserInfo> {
 
       if (!userId || !userCred) {
          throw new Error('missing userid or usercred');
@@ -801,7 +782,7 @@ export class AuthenticatorService {
    }
 
    // Creates new user and first passkey
-   async newUser(userName: string): Promise<UserInfo> {
+   async newUser(userName: string): Promise<VerifiedUserInfo> {
       if (!userName) {
          throw new Error('missing require userName');
       }
@@ -825,7 +806,7 @@ export class AuthenticatorService {
    }
 
    // Adds passkey to current user
-   async addPasskey(): Promise<UserInfo> {
+   async addPasskey(): Promise<VerifiedUserInfo> {
 
       if (!this.authenticated()) {
          throw new Error('not active user');
@@ -844,7 +825,7 @@ export class AuthenticatorService {
       optionsJson: PublicKeyCredentialCreationOptionsJSON,
       includeUserCred: boolean,
       includeRecovery: boolean
-   ): Promise<ServerLoginUserInfo> {
+   ): Promise<LoginUserInfo> {
 
       return this._doPasskeyVerify(
          'passkeys',
@@ -858,7 +839,7 @@ export class AuthenticatorService {
       optionsJson: PublicKeyCredentialCreationOptionsJSON,
       includeUserCred: boolean,
       includeRecovery: boolean
-   ): Promise<ServerLoginUserInfo> {
+   ): Promise<LoginUserInfo> {
 
       return this._doPasskeyVerify(
          'reg',
@@ -873,7 +854,7 @@ export class AuthenticatorService {
       optionsJson: PublicKeyCredentialCreationOptionsJSON,
       includeUserCred: boolean,
       includeRecovery: boolean
-   ): Promise<ServerLoginUserInfo> {
+   ): Promise<LoginUserInfo> {
 
       // SimpleWebAuthn v10 caused incompatibility with older versions by
       // encoding credential user.id as b64 rather than utf as older versions
@@ -908,7 +889,7 @@ export class AuthenticatorService {
       }
       const params = parts.join('&');
 
-      const serverLoginUserInfo = await this._doFetch<ServerLoginUserInfo>({
+      const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
          method: 'POST',
          resource: base + '/verify',
          bodyJSON: JSON.stringify(expanded),

@@ -98,21 +98,7 @@ export type Response = {
    returnCsrf?: boolean;
 };
 
-type AuthenticatorInfo = {
-   credentialId: string;
-   description: string;
-   lightIcon: string;
-   darkIcon: string;
-   name: string;
-};
-
-type UserInfo = {
-   verified: boolean;
-   userId?: string;
-   userName?: string;
-   hasRecoveryId?: boolean;
-   authenticators?: AuthenticatorInfo[];
-};
+import type { AuthenticatorInfo, UserInfo, LoginUserInfo } from '@qcrypt/api';
 
 type SenderLink = {
    receiverCert: string;
@@ -126,12 +112,6 @@ type SenderLinkBind = SenderLink & {
    senderCert: string;
    eep: string;
 };
-
-type LoginUserInfo = UserInfo & {
-   pkId?: string;
-   userCred?: string;
-   recoveryId?: string;
-}
 
 type AAGUIDInfo = {
    data: {

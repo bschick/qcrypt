@@ -12,7 +12,8 @@
     "baseUrl": ".",
     "paths": {
       "@qcrypt/crypto": ["libs/crypto/src/index.ts"],
-      "@qcrypt/crypto/consts": ["libs/crypto/src/lib/cipher.consts.ts"]
+      "@qcrypt/crypto/consts": ["libs/crypto/src/lib/cipher.consts.ts"],
+      "@qcrypt/api": ["libs/api/src/index.ts"]
     }
   }
 }
