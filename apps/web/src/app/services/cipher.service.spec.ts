@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
-import * as cc from '@qcrypt/crypto';
+import * as cc from '@qcrypt/crypto/consts';
 import { CipherService } from './cipher.service';
 import { readStreamAll, base64ToBytes, getArrayBuffer, Encipher } from '@qcrypt/crypto';
 

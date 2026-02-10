@@ -4,7 +4,7 @@ import {
    makeCipherArmor, parseCipherArmor,
    base64ToBytes, bytesToBase64, readStreamAll,
 } from '@qcrypt/crypto';
-import * as cc from '@qcrypt/crypto';
+import * as cc from '@qcrypt/crypto/consts';
 import fs from 'fs';
 import ws from 'node:stream/web';
 import { Readable } from 'node:stream';
