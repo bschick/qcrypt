@@ -55,7 +55,7 @@ import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import { environment } from '../../environments/environment';
-import * as cc from '@qcrypt/crypto';
+import * as cc from '@qcrypt/crypto/consts';
 import { CipherService, CipherDataInfo } from '../services/cipher.service';
 import {
    base64ToBytes,

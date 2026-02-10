@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import sodium from 'libsodium-wrappers';
-import * as cc from '@qcrypt/crypto';
+import * as cc from '@qcrypt/crypto/consts';
 import {
    getRandom48, BYOBStreamReader, readStreamAll,
    Encipher, streamDecipher, latestEncipher,

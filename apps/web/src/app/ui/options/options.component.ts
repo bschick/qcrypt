@@ -46,7 +46,7 @@ import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { AuthenticatorService, ACTIVITY_TIMEOUT } from '../../services/authenticator.service';
 import { CipherService } from '../../services/cipher.service';
 import { makeTookMsg } from '@qcrypt/crypto';
-import * as cc from '@qcrypt/crypto';
+import * as cc from '@qcrypt/crypto/consts';
 import { HttpParams } from '@angular/common/http';
 
 // Set only if num is betwee min and max (inclusive) when min and max are not null

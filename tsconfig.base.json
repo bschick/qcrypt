@@ -11,7 +11,8 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@qcrypt/crypto": ["libs/crypto/src/index.ts"]
+      "@qcrypt/crypto": ["libs/crypto/src/index.ts"],
+      "@qcrypt/crypto/consts": ["libs/crypto/src/lib/cipher.consts.ts"]
     }
   }
 }
