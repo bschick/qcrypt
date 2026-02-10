@@ -9,7 +9,7 @@ import {
    hosts,
    credentials
 } from '.././common';
-import { bufferToHexString } from '../../src/app/services/utils';
+import { bufferToHexString } from '../../../../libs/crypto/src/lib/utils';
 import { ServerLoginUserInfo } from '../../src/app/services/authenticator.service';
 
 // Currently not direclty testing API that does authentication and registion of

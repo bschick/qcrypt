@@ -1,19 +1,19 @@
-# Agent Instructions for qcrypt client
+# Agent Instructions for web client
 
-This document provides instructions for Human or AI agents working on the `qcrypt` client codebase.
+This document provides instructions for Human or AI agents working on the `web` client codebase.
 
 ## 1. Project Overview
 
-`qcrypt` is a single-page browser application for client-side text encryption and decryption. It is designed to be easy to use, trustworthy, and secure, leveraging the Web Crypto API (SubtleCrypto) and libsodium for all cryptographic operations. The primary use case is to encrypt text for storage on insecure media.
+`web` is a single-page browser application for client-side text encryption and decryption. It is designed to be easy to use, trustworthy, and secure, leveraging the Web Crypto API (SubtleCrypto) and libsodium for all cryptographic operations. The primary use case is to encrypt text for storage on insecure media.
 
-This `qcrypt` client can built, served, and tested locally. It depends on a backend API server called [qcrypt-server](https://github.com/bschick/qcrypt-server). Currently the API server cannot be deployed locally and must run in AWS. Separate test and production `qcrypt-server` instances are deployed in AWS. The vast majority of dev/test work should be against the test server `https://test.quickcrypt.org`. This is configured automatically.
+This `web` client can built, served, and tested locally. It depends on a backend API server called [qcrypt-server](https://github.com/bschick/qcrypt-server). Currently the API server cannot be deployed locally and must run in AWS. Separate test and production `server` instances are deployed in AWS. The vast majority of dev/test work should be against the test server `https://test.quickcrypt.org`. This is configured automatically.
 
 
 - **Source Repository:** Project source code, issues tracking, and releases are at [qcrypt github](https://github.com/bschick/qcrypt)
 - **Core Logic:** The main application logic, including key derivation, encryption, and decryption, is located in `src/`.
 - **Technology Stack:** The application is built with Angular using pnpm as its package manager. It uses `libsodium-wrappers` and `@simplewebauthn/browser` for cryptographic and WebAuthn functionalities.
 - **Crypto Details:** The cryptographic protocol is detailed in `src/assets/protocol6.pdf` and online at [https://quickcrypt.org/help/protocol](https://quickcrypt.org/help/protocol).
-- **API Interaction:** The client communicates with the `qcrypt-server` for user management and passkey operations. Server code is at [qcrypt-server github](https://github.com/bschick/qcrypt-server) and deployed at `https://test.quickcrypt.org`
+- **API Interaction:** The client communicates with the `server` for user management and passkey operations. Server code is at [qcrypt-server github](https://github.com/bschick/qcrypt-server) and deployed at `https://test.quickcrypt.org`
 
 ---
 

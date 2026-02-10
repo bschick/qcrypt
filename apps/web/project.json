@@ -1,8 +1,8 @@
 {
-  "name": "qcrypt",
+  "name": "web",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
-  "sourceRoot": "apps/qcrypt/src",
+  "sourceRoot": "apps/web/src",
   "prefix": "app",
   "generators": {
     "@schematics/angular:component": {
@@ -13,23 +13,23 @@
     "build": {
       "executor": "@angular/build:application",
       "options": {
-        "outputPath": "dist/qcrypt",
-        "index": "apps/qcrypt/src/index.html",
-        "browser": "apps/qcrypt/src/main.ts",
+        "outputPath": "dist/web",
+        "index": "apps/web/src/index.html",
+        "browser": "apps/web/src/main.ts",
         "polyfills": [
           "zone.js"
         ],
-        "tsConfig": "apps/qcrypt/tsconfig.app.json",
+        "tsConfig": "apps/web/tsconfig.app.json",
         "assets": [
-          "apps/qcrypt/src/favicon.ico",
-          "apps/qcrypt/src/assets",
-          "apps/qcrypt/src/robots.txt",
-          "apps/qcrypt/src/maintenance.html",
-          "apps/qcrypt/src/sitemap.xml",
-          "apps/qcrypt/src/.well-known"
+          "apps/web/src/favicon.ico",
+          "apps/web/src/assets",
+          "apps/web/src/robots.txt",
+          "apps/web/src/maintenance.html",
+          "apps/web/src/sitemap.xml",
+          "apps/web/src/.well-known"
         ],
         "styles": [
-          "apps/qcrypt/src/styles.scss"
+          "apps/web/src/styles.scss"
         ],
         "scripts": [],
         "prerender": false,
@@ -57,8 +57,8 @@
           "sourceMap": true,
           "fileReplacements": [
             {
-              "replace": "apps/qcrypt/src/environments/environment.ts",
-              "with": "apps/qcrypt/src/environments/environment.development.ts"
+              "replace": "apps/web/src/environments/environment.ts",
+              "with": "apps/web/src/environments/environment.development.ts"
             }
           ]
         }
@@ -72,10 +72,10 @@
       "executor": "@angular/build:dev-server",
       "configurations": {
         "production": {
-          "buildTarget": "qcrypt:build:production"
+          "buildTarget": "web:build:production"
         },
         "development": {
-          "buildTarget": "qcrypt:build:development"
+          "buildTarget": "web:build:development"
         }
       },
       "defaultConfiguration": "development"
@@ -83,13 +83,13 @@
     "extract-i18n": {
       "executor": "@angular/build:extract-i18n",
       "options": {
-        "buildTarget": "qcrypt:build"
+        "buildTarget": "web:build"
       }
     },
     "test": {
       "executor": "@angular/build:unit-test",
       "options": {
-        "tsConfig": "apps/qcrypt/tsconfig.spec.json",
+        "tsConfig": "apps/web/tsconfig.spec.json",
         "runnerConfig": true
       }
     }

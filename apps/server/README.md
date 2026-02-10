@@ -1,4 +1,4 @@
-# qcrypt-server
+# server
 Server side logic for Quick Crypt web application.
 [API Documentation](https://github.com/bschick/qcrypt-server/blob/main/API.md)
 <br />
