@@ -10,6 +10,8 @@
 **/tmp
 **/out-tsc
 /bazel-out
+apps/server/assets/aaguid
+apps/web/src/assets/aaguid
 
 # Node
 /node_modules
