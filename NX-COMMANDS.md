@@ -21,3 +21,18 @@ This is an Nx monorepo. The app source lives in `apps/web/`, with shared library
 The `pnpm nx` form is useful when you want to pass extra flags (like `--skip-nx-cache` or `--configuration development`) or when you have multiple projects later.
 
 One thing to note: `--runner-config` (kebab-case) doesn't work with `nx` — you must use `--runnerConfig=` (camelCase). The `pnpm test:all` script already has this fixed.
+
+## Upgrading Packages
+
+| What | Command |
+|------|---------|
+| Check outdated | `pnpm outdated` |
+| Upgrade interactively (pick & choose) | `pnpm update --interactive --latest` |
+| Upgrade all to latest | `pnpm update --latest` |
+| Upgrade a specific package | `pnpm update <package> --latest` |
+| **Upgrade Nx** (use Nx migrate tool) | `pnpm nx migrate latest && pnpm install && pnpm nx migrate --run-migrations --if-exists` |
+
+Notes:
+- `--latest` allows major version bumps; without it, pnpm stays within existing semver ranges in `package.json`.
+- Always upgrade Nx via `nx migrate` rather than `pnpm update` — it runs code migrations (schematics) that update config files and source code for breaking changes.
+- After any upgrade, run `pnpm test` and `pnpm build` to verify nothing broke.
