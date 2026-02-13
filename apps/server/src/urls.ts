@@ -23,11 +23,6 @@ SOFTWARE. */
 import { base64Decode, NotFoundError, ParamError } from "./utils";
 import type { VerifiedUserItem } from "./models";
 
-// Once we upgrade to node 24, this can be changed to import Urlpattern
-if (!globalThis.URLPattern) {
-   require("urlpattern-polyfill");
-}
-
 export type QParams = Record<string, string>;
 export const INTERNAL_VERSION = 0;
 export type Method = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';

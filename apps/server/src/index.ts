@@ -21,11 +21,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 
-// Conditional CJS module loading (Node.js)
-if (!globalThis.URLPattern) {
-   require("urlpattern-polyfill");
-}
-
 import * as cc from './consts';
 import {
    INTERNAL_VERSION,
