@@ -5,7 +5,8 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@modelcontextprotocol/sdk': 1.26.0
+  '@modelcontextprotocol/sdk': '>=1.26.0'
+  tar: '>=7.5.7'
 
 importers:
 
@@ -95,15 +96,9 @@ importers:
       rxjs:
         specifier: ~7.8.2
         version: 7.8.2
-      tar:
-        specifier: ^7.5.7
-        version: 7.5.7
       tslib:
         specifier: ^2.8.1
         version: 2.8.1
-      urlpattern-polyfill:
-        specifier: ^10.1.0
-        version: 10.1.0
       xss:
         specifier: ^1.0.15
         version: 1.0.15
@@ -6890,9 +6885,6 @@ packages:
 
   url-join@4.0.1:
     resolution: {integrity: sha512-jk1+QP6ZJqyOiuEI9AEWQfju/nB2Pw466kbA0LEZljHwKeMgd9WrAEgEGxjPDD2+TNbbb37rTyhEfrCXfuKXnA==}
-
-  urlpattern-polyfill@10.1.0:
-    resolution: {integrity: sha512-IGjKp/o0NL3Bso1PymYURCJxMPNAf/ILOpendP9f5B6e1rTJgdgiOvgfoT8VxCAdY+Wisb9uhGaJJf3yZ2V9nw==}
 
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
@@ -15239,8 +15231,6 @@ snapshots:
       punycode: 2.3.1
 
   url-join@4.0.1: {}
-
-  urlpattern-polyfill@10.1.0: {}
 
   util-deprecate@1.0.2: {}
 
