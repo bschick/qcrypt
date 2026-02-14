@@ -20,12 +20,21 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { ApplicationConfig } from '@angular/core';
+import { OVERLAY_DEFAULT_CONFIG } from '@angular/cdk/overlay';
 import { provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { routes } from './qcrypt.routes';
 
 export const appConfig: ApplicationConfig = {
    providers: [
+      {
+         provide: OVERLAY_DEFAULT_CONFIG,
+         useValue: {
+            // This forces CDK to use standard DOM elements instead of the Top Layer,
+            // TODO: Remove this once 1Password/extensions support browser Top Layer API
+            usePopover: false
+         }
+    },
       provideRouter(routes),
       provideHttpClient(),
    ],
