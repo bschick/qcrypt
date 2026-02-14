@@ -30,7 +30,7 @@
       <ng-container matColumnDef="expandedDetail">
         <td mat-cell *matCellDef="let element" colspan="2">
           <div class="element-detail"
-            [@detailExpand]="expandedPositions.includes(element.position) ? 'expanded' : 'collapsed'">
+            [class.expanded]="expandedPositions.includes(element.position)">
             <div class="element-answer" [innerHTML]="element.answer">
             </div>
           </div>
