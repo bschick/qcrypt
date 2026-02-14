@@ -429,6 +429,7 @@ export class AuthenticatorService {
          authenticators: serverUser.authenticators!
       };
 
+      this.refreshSenderLinks();
       this.userInfo.set(userInfo);
       this.activity();
       return userInfo;
