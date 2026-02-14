@@ -2,7 +2,6 @@ import { AfterViewInit, Component, ViewEncapsulation } from '@angular/core';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { animate, state, style, transition, trigger } from '@angular/animations';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { HttpParams } from '@angular/common/http';
@@ -20,13 +19,6 @@ export interface FAQElement {
     selector: 'app-faqs',
     templateUrl: './faqs.component.html',
     styleUrl: './faqs.component.scss',
-    animations: [
-        trigger('detailExpand', [
-            state('collapsed,void', style({ height: '0px', minHeight: '0' })),
-            state('expanded', style({ height: '*' })),
-            transition('expanded <=> collapsed', animate('225ms cubic-bezier(0.4, 0.0, 0.2, 1)')),
-        ]),
-    ],
     encapsulation: ViewEncapsulation.None,
     imports: [
     MatTableModule, MatInputModule, MatFormFieldModule, MatIconModule,
@@ -179,11 +171,11 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'Can I decrypt my data without an internet connection?',
-      answer: `<p>Yes, as long as you have already signed into Quick Crypt.
+      answer: `Yes, as long as you have already signed into Quick Crypt.
       After signing in, Quick Crypt runs entirely in your browser and does not
       require an internet connection to decrypt or encrypt data.  If you are
       inactive for 1.5 hours, however, Quick Crypt logs you out and then requires
-      an internet connection to sign in again and decrypt data.</p>
+      an internet connection to sign in again and decrypt data.
       <p>The Quick Crypt command-line tool is another option that never
       requires an internet connection once installed. You need your user credential
       and the password you used during encryption. You can get your user credential

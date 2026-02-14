@@ -1,6 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FaqsComponent } from './faqs.component';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { RouterModule } from '@angular/router';
 
 describe('FaqsComponent', () => {
@@ -9,7 +8,7 @@ describe('FaqsComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [FaqsComponent, NoopAnimationsModule, RouterModule.forRoot([]),]
+         imports: [FaqsComponent, RouterModule.forRoot([]),]
       })
          .compileComponents();
 

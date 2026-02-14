@@ -54,13 +54,23 @@
   }
 
   .element-detail {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 225ms cubic-bezier(0.4, 0, 0.2, 1);
     border-top: 1px dotted lightsteelblue;
-    overflow: hidden;
+  }
+
+  .element-detail.expanded {
+    grid-template-rows: 1fr;
+
+    .element-answer {
+      padding: 9px 0 9px 0;
+    }
   }
 
   .element-answer {
+    overflow: hidden;
     font-size: 16px;
-    padding: 9px 0 9px 0;
   }
 
   .empty-data {
