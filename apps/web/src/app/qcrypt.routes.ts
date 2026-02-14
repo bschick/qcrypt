@@ -27,6 +27,8 @@ import { ShowRecoveryComponent } from './showrecovery/showrecovery.component';
 import { showRecoveryGuard } from './showrecovery/showrecovery.guard';
 import { SenderLinksComponent } from './senderlinks/senderlinks.component';
 import { senderLinksGuard } from './senderlinks/senderlinks.guard';
+import { NewTopicComponent } from './newtopic/newtopic.component';
+import { NewTopicGuard } from './newtopic/newtopic.guard';
 import { RecoveryComponent } from './recovery/recovery.component';
 import { Recovery2Component } from './recovery2/recovery2.component';
 import { CmdLineComponent } from './cmdline/cmdline.component';
@@ -41,6 +43,7 @@ export const routes: Routes = [
    { path: 'welcome', component: WelcomeComponent, canActivate: [welcomeGuard] },
    { path: 'newuser', component: NewUserComponent },
    { path: 'senderlinks', component: SenderLinksComponent, canActivate: [senderLinksGuard] },
+   { path: 'newtopic', component: NewTopicComponent, canActivate: [NewTopicGuard] },
    { path: 'showrecovery', component: ShowRecoveryComponent, canActivate: [showRecoveryGuard] },
    { path: 'recovery', component: RecoveryComponent },
    { path: 'recovery2', component: Recovery2Component },
