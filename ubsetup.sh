@@ -13,6 +13,10 @@ cd localssl
 ./localssl.sh
 cd ..
 
+# Setup VM mounts for isolated node_modules
+./setup-vm-mounts.sh
+
+
 sudo npx playwright install-deps
 npx playwright install chromium firefox
 
