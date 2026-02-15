@@ -29,6 +29,7 @@ import { AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink } from '@angular/router';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDividerModule } from '@angular/material/divider';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { HttpParams } from '@angular/common/http';
@@ -43,7 +44,7 @@ function paramsToQueryString(): string {
     templateUrl: './welcome.component.html',
     styleUrl: './welcome.component.scss',
     imports: [MatInputModule, MatFormFieldModule, FormsModule, MatButtonModule,
-        MatProgressSpinnerModule, RouterLink
+        MatProgressSpinnerModule, MatIconModule, MatDividerModule, RouterLink
     ]
 })
 export class WelcomeComponent {

@@ -1,28 +1,175 @@
 @use "../common.scss";
 
-.button-column {
-  margin-top: 35px;
-  display: flex;
-  height: 260px;
+.welcome {
   flex-direction: column;
-  flex-wrap: nowrap;
   align-items: center;
+  min-height: 100vh;
+  text-align: center;
+  position: relative;
 }
 
-.button {
+// Hero section
+
+.hero {
+  margin-top: 32px;
+  margin-bottom: 20px;
+}
+
+.hero-icon {
+  font-size: 56px;
+  height: 56px;
+  width: 56px;
+  color: var(--mat-sys-primary);
+  margin-bottom: 16px;
+}
+
+.title {
+  font: var(--mat-sys-display-medium);
+  color: var(--mat-sys-on-surface);
+  margin: 0 0 8px 0;
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  font: var(--mat-sys-title-large);
+  color: var(--mat-sys-on-surface-variant);
+  margin: 0;
+  font-weight: 300;
+}
+
+// Features
+
+.features {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.feature {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+
+  span {
+    font: var(--mat-sys-body-large);
+    color: var(--mat-sys-on-surface-variant);
+    line-height: 1.5;
+  }
+}
+
+.feature-icon {
+  font-size: 22px;
+  height: 22px;
+  width: 22px;
+  color: var(--mat-sys-primary);
+  flex-shrink: 0;
+}
+
+// Divider
+
+.section-divider {
+  width: 64px;
+  margin-bottom: 24px;
+}
+
+// Actions
+
+.actions {
+  margin-bottom: 0;
+}
+
+.button-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.action-button {
   @include common.strong-button;
-  margin-top: 15px;
-  height: 45px;
-  width: 330px;
+  height: 48px;
+  width: 340px;
   padding: 0;
   font-size: 15px;
+  border-radius: 24px;
+
+  mat-icon {
+    margin-right: 10px;
+    font-size: 20px;
+    height: 20px;
+    width: 20px;
+  }
+}
+
+.primary-action {
+  height: 52px;
+  font-size: 16px;
+}
+
+.recovery-button {
+  height: 44px;
+  width: 340px;
+  padding: 0;
+  font-size: 14px;
+  border-radius: 24px;
+  background-color: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface);
+  margin-top: 4px;
+
+  mat-icon {
+    margin-right: 8px;
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+  }
 }
 
 .error-msg {
   color: darkred;
-  height: 22px;
-  margin-top: 32px;
-  display: block;
+  margin: 12px 0 0 0;
+  font: var(--mat-sys-body-medium);
+}
+
+// Footer links
+
+.footer-links {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: auto;
+  padding: 16px 0;
+
+  a {
+    font: var(--mat-sys-label-large);
+    color: var(--mat-sys-on-surface-variant);
+    text-decoration: none;
+    letter-spacing: 0.02em;
+
+    &:hover {
+      color: var(--mat-sys-primary);
+    }
+  }
+
+  .dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background-color: var(--mat-sys-outline-variant);
+  }
+}
+
+// Spinner — overlaid between hero and features
+
+.spinner {
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  top: 28%;
+  left: 50%;
+  margin: -50px 0 0 -50px;
+  z-index: 999;
 }
 
 .recovery {
@@ -36,7 +183,7 @@
     padding-left: 18px;
 
     li {
-      margin-bottom:10px;
+      margin-bottom: 10px;
     }
   }
 
@@ -44,7 +191,7 @@
     padding-left: 18px;
 
     li {
-      margin-top:4px;
+      margin-top: 4px;
     }
   }
 

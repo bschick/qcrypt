@@ -1,29 +1,56 @@
-<div class="container">
-  <div class="content">
-    <h1>Quick Crypt: <i>Easy, Trustworthy Personal Encryption</i></h1>
+<div class="container welcome">
+  <mat-progress-spinner class="spinner" color="primary" mode="indeterminate"
+    [style.visibility]="showProgress ? 'visible' : 'hidden'">
+  </mat-progress-spinner>
 
-    <p>Welcome to Quick Crypt. To get started, select an option below.
-      If you'd like to learn more first, see the <a [routerLink]="'/help/overview'">
-        overview page</a> or <a [routerLink]="'/help/faqs'">frequently asked
-        questions</a>. If you are a returning user but cannot sign in or locate
-      your passkey, select the last button for help.
-    </p>
-    <mat-progress-spinner class="spinner" color="primary" mode="indeterminate"
-      [style.visibility]="showProgress ? 'visible' : 'hidden'">
-    </mat-progress-spinner>
-    <div class="button-column">
-      <a [routerLink]="'/newuser'">
-        <button mat-raised-button class="button">
-          <!--<mat-icon>vpn_key</mat-icon>--><span class="">I am new to Quick Crypt</span>
-        </button>
-      </a>
-      <button mat-raised-button (click)="onClickExisting($event)" class="button">
-        <!--<mat-icon>login</mat-icon>--><span class="">I have used Quick Crypt previously</span>
-      </button>
-      <button mat-raised-button (click)="onClickRecovery($event)" class="button">
-        <!--<mat-icon>vpn_key</mat-icon>--><span class="">I am returning but cannot sign in</span>
-      </button>
-      <p class="error-msg">{{error}}</p>
+  <div class="hero">
+    <mat-icon class="hero-icon">enhanced_encryption</mat-icon>
+    <h1 class="title">Quick Crypt</h1>
+    <p class="tagline">Easy, Trustworthy Personal Encryption</p>
+  </div>
+
+  <div class="features">
+    <div class="feature">
+      <mat-icon class="feature-icon">lock</mat-icon>
+      <span>Encrypt files and notes with strong,&nbsp;modern&nbsp;cryptography.</span>
+    </div>
+    <div class="feature">
+      <mat-icon class="feature-icon">fingerprint</mat-icon>
+      <span>No accounts to manage, just passkeys you control.</span>
+    </div>
+    <div class="feature">
+      <mat-icon class="feature-icon">code</mat-icon>
+      <span>End-to-end encrypted, open source, and free to use.</span>
     </div>
   </div>
+
+  <mat-divider class="section-divider"></mat-divider>
+
+  <div class="actions">
+    <div class="button-column">
+      <a [routerLink]="'/newuser'">
+        <button mat-raised-button class="action-button primary-action">
+          <mat-icon>vpn_key</mat-icon><span>I am new to Quick Crypt</span>
+        </button>
+      </a>
+      <button mat-raised-button (click)="onClickExisting($event)" class="action-button">
+        <mat-icon>login</mat-icon><span>I have used Quick Crypt previously</span>
+      </button>
+      <button mat-flat-button (click)="onClickRecovery($event)" class="recovery-button">
+        <mat-icon>help_outline</mat-icon><span>I am returning but cannot sign in</span>
+      </button>
+    </div>
+  </div>
+
+  @if (error) {
+    <p class="error-msg">{{error}}</p>
+  }
+
+  <nav class="footer-links">
+    <a [routerLink]="'/help/overview'">Overview</a>
+    <span class="dot"></span>
+    <a [routerLink]="'/help/faqs'">FAQs</a>
+    <span class="dot"></span>
+    <a [routerLink]="'/help/protocol'">Protocol</a>
+  </nav>
 </div>
