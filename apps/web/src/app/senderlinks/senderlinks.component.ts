@@ -25,7 +25,6 @@ import {
    effect,
    OnDestroy,
    OnInit,
-   Renderer2,
    ViewChild
 } from '@angular/core';
 import sodium from 'libsodium-wrappers';
@@ -63,7 +62,6 @@ export class SenderLinksComponent implements OnInit, OnDestroy, AfterViewInit {
    @ViewChild('options') options!: OptionsComponent;
 
    constructor(
-      private r2: Renderer2,
       private authSvc: AuthenticatorService,
       private router: Router,
       private snackBar: MatSnackBar) {
