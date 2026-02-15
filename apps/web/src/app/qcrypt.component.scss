@@ -31,6 +31,10 @@ SOFTWARE. */
   min-height:48px;
 }
 
+.toolbar-hidden {
+  display: none;
+}
+
 .router-content {
   flex: 1;
 //  overflow: auto;

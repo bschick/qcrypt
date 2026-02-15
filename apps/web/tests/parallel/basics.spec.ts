@@ -5,7 +5,7 @@ test('has title', async ({ page }) => {
 
   // Expect a title "to contain" a substring.
   await expect(page).toHaveTitle(/Quick Crypt/);
-  await expect(page.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible();
+  await expect(page.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible();
 });
 
 test('new user fill in', async ({ page }) => {
@@ -25,11 +25,8 @@ test('new user fill in', async ({ page }) => {
 test('get overview', async ({ page }) => {
   await page.goto('/');
 
-  // Click the get started link.
-  await page.getByRole('button', { name: 'Help' }).click();
-
-  // Click the get started link.
-  await page.getByRole('menuitem', { name: 'Overview' }).click();
+  // Click the Overview link in the footer.
+  await page.getByRole('link', { name: 'Overview' }).click();
 
   // Expects page to have a heading with the name of Installation.
   await expect(page.getByRole('heading', { name: 'Quick Crypt: Easy, Trustworthy Personal Encryption' })).toBeVisible();

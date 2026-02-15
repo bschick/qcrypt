@@ -24,7 +24,7 @@ SOFTWARE.
 -->
 
 <div class="qcrypt">
-<mat-toolbar color="primary" class="toolbar">
+<mat-toolbar color="primary" class="toolbar" [class.toolbar-hidden]="isWelcomePage()">
   <a [routerLink]="'/'">
     <button [style.background-color]="focusColor()" mat-button class="toolbar-text">
       <mat-icon>enhanced_encryption</mat-icon>
