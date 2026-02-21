@@ -1766,7 +1766,7 @@ export function _genDerivedKey(
       }
 
       // because crypto_kdf_derive_from_key does not take a salt, we first merge salt and
-      // master into a single key.
+      // master into a single hash.
       mixedKey = sodium.crypto_generichash(cc.KEY_BYTES, slt, master);
    } else {
       mixedKey = master;
