@@ -89,7 +89,7 @@ test.describe('creation', () => {
     await deleteFirstPasskey(page);
 
     await page.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible({timeout:10000});
+    await expect(page.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
 
   });
 
@@ -195,7 +195,7 @@ test.describe('sign on', () => {
     await page.getByRole('button', { name: /Sign in as a different user/ }).click();
 
     await page.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible({timeout:10000});
+    await expect(page.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
 
   });
 
@@ -236,12 +236,12 @@ test.describe('sign on', () => {
 
     await page2.getByRole('button', { name: /Sign in as a different user/ }).click();
     await page2.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
-    await expect(page2.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible({timeout:10000});
+    await expect(page2.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
 
     // page1 should also go back to welcome page
     await page1.goto('/');
     await page1.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
-    await expect(page1.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible({timeout:10000});
+    await expect(page1.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
   });
 
   testWithAuth('3 tabs switch user', async ({ authFixture }) => {
@@ -277,7 +277,7 @@ test.describe('sign on', () => {
     await page1.getByRole('button', { name: /Sign in as a different user/ }).click();
 
     await page1.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
-    await expect(page1.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible({timeout:10000});
+    await expect(page1.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
 
     await clearCredentials(session, authId1);
     await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
@@ -293,7 +293,7 @@ test.describe('sign on', () => {
     // page2 should go to welcome its user context is keeper2 and we don't directly transition
     await page2.goto('/');
     await page2.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
-    await expect(page2.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible({timeout:10000});
+    await expect(page2.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
 
     // page3 should open to core page because it didn't have preivous user context
     const page3 = await page1.context().newPage();
@@ -311,7 +311,7 @@ test.describe('sign on', () => {
     // page2 should still go to welcome page since its origianl user was logged out
     await page2.goto('/');
     await page2.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
-    await expect(page2.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible({timeout:10000});
+    await expect(page2.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
 
     // page1 should go to sign in dialog
     await page1.goto('/');
@@ -321,7 +321,7 @@ test.describe('sign on', () => {
     // sign back in as Keeper1
     await page1.getByRole('button', { name: /Sign in as a different user/ }).click();
     await page1.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
-    await expect(page1.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible({timeout:10000});
+    await expect(page1.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
 
     await clearCredentials(session, authId1);
     await addCredential(session, authId1, credentials[testHost]['keeper1']['id']);
@@ -345,7 +345,7 @@ test.describe('sign on', () => {
     // page3 should go to welcome page since it its user was logged out
     await page3.goto('/');
     await page3.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
-    await expect(page3.getByRole('heading', { name: /Quick Crypt: Easy, Trustworthy/ })).toBeVisible({timeout:10000});
+    await expect(page3.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
 
   });
 
