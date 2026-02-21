@@ -1,5 +1,13 @@
 # CHANGELOG.md
 
+## 6.1.3 (2026-02-21)
+
+#### Changes
+  - better looking welcome page with help from claude code
+
+#### Security
+  - updated packages, fixing dependabot detected CVEs
+
 ## 6.1.2 (2026-02-08)
 
 #### Security
