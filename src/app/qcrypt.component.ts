@@ -88,6 +88,10 @@ export class QCryptComponent implements OnInit, OnDestroy {
       }
    }
 
+   isWelcomePage(): boolean {
+      return this.router.url.startsWith('/welcome');
+   }
+
    onOpenedCredentials() {
    }
 }
