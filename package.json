@@ -1,6 +1,6 @@
 {
   "name": "@qcrypt/qcrypt-client",
-  "version": "6.1.2",
+  "version": "6.1.3",
   "type": "module",
   "copyright": "© 2024–2026 Quick Crypt Contributors",
   "scripts": {
