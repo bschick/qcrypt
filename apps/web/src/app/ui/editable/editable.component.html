@@ -5,6 +5,8 @@
     [id]="id"
     [readonly]="readonly"
     [ngClass]="writing ? 'writing' : (readonly ? 'readonly' : 'writable')"
+    [style.color]="color || null"
+    [style.background-color]="backgroundColor || null"
     [(ngModel)]='text'
     (focusout)='onFocusOut()'
     (focus)='tryMakeEditable()'
