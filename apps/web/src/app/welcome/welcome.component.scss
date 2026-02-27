@@ -127,7 +127,7 @@
 }
 
 .error-msg {
-  color: darkred;
+  color: var(--mat-sys-error);
   margin: 12px 0 0 0;
   font: var(--mat-sys-body-medium);
 }

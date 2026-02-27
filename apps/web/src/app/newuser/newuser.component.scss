@@ -2,7 +2,7 @@
 @use '@angular/material' as mat;
 
 .error-msg {
-  color: darkred;
+  color: var(--mat-sys-error);
   margin-top: 12px;
   display: flex;
   justify-content: center;

@@ -122,6 +122,8 @@ This document provides documentation for the passkey-based authentication server
 - **Path:** `/v1/user`
 - **Authorization:** Required (cookie and x-csrf-token)
 - **Description:** Retrieves information about the currently authenticated user.
+- **Query Parameters:**
+  - `userid` (optional): Return the user name specified user rather than the calling user.
 - **Responses:**
   - `200 OK`: A `UserInfo` JSON object.
   - `400 Bad Request`: The request was malformed.

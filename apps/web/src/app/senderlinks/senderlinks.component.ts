@@ -48,7 +48,7 @@ import { OptionsComponent } from '../ui/options/options.component'
 
 @Component({
    selector: 'app-sender-links',
-   templateUrl: './senderlinks.component.html',
+   templateUrl: './senderLinks.component.html',
    styleUrl: './senderlinks.component.scss',
    imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink, MatInputModule, MatFormFieldModule, OptionsComponent, MatTableModule]
 

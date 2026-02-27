@@ -41,12 +41,14 @@ import { MatButtonModule } from '@angular/material/button';
 })
 export class EditableComponent {
 
+   @Input() id = '';
    @Input() minlength = '0';
    @Input() maxlength = '50';
+   @Input() readonly = false;
+   @Input() writing = false;
    @Output() valueChanged = new EventEmitter<EditableComponent>();
    @ViewChild('editableInput', { static: true }) editInput!: ElementRef;
    public text = '';
-   public readOnly = true;
    private _value = '';
 
    @Input() set value(value: string) {
@@ -59,29 +61,35 @@ export class EditableComponent {
    }
 
    onFocusOut() {
-      if (this._value != this.text) {
+      if (!this.readonly && this._value != this.text) {
          this._value = this.text;
          this.valueChanged.emit(this);
       }
-      this.readOnly = true;
+      this.writing = false;
    }
 
-   makeEditable() {
-      this.readOnly = false;
+   tryMakeEditable() {
+      if (!this.readonly) {
+         this.writing = true;
+      }
    }
 
    cancelEdit(event: any) {
-      if (!this.readOnly) {
+      event.stopPropagation();
+      if (this.writing) {
          this.text = this._value;
-         event.stopPropagation();
          this.editInput.nativeElement.blur();
       }
    }
 
    acceptEdit(event: any) {
-      if (!this.readOnly) {
-         event.stopPropagation();
+      event.stopPropagation();
+      if (this.writing) {
          this.editInput.nativeElement.blur();
       }
+   }
+
+   focus() {
+      this.editInput?.nativeElement?.focus();
    }
 }

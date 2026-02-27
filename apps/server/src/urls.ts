@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2025 Brad Schick
+Copyright (c) 2026 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -104,20 +104,23 @@ export const Patterns = {
    }),
 
    // Sender Link patterns
-   senderLinks: new URLPattern({
-      pathname: `/v:ver/senderlinks`
+   invitables: new URLPattern({
+      pathname: `/v:ver/invitables/:invid`
    }),
-   senderLinkVerify: new URLPattern({
-      pathname: `/v:ver/senderlinks/:linkid/verify`
+   topics: new URLPattern({
+      pathname: `/v:ver/topics`
    }),
-   senderLinkBind: new URLPattern({
-      pathname: `/v:ver/senderlinks/:linkid/bind`
+   topicVerify: new URLPattern({
+      pathname: `/v:ver/topics/:topicid/verify`
    }),
-   senderLink: new URLPattern({
-      pathname: `/v:ver/senderlinks/:linkid`
+   topicBind: new URLPattern({
+      pathname: `/v:ver/topics/:topicid/bind`
    }),
-   senderLinksDelete: new URLPattern({
-      pathname: `/v:ver/senderlinks/delete`
+   topic: new URLPattern({
+      pathname: `/v:ver/topics/:topicid`
+   }),
+   topicsDelete: new URLPattern({
+      pathname: `/v:ver/topics/delete`
    }),
 
    // Internal only URLS (not allowed through Cloudfront)

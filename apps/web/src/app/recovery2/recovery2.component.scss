@@ -34,7 +34,7 @@
 }
 
 .error-msg {
-  color: darkred;
+  color: var(--mat-sys-error);
   margin-top: 12px;
   width: 100%;
   display: flex;

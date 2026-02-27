@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2025 Brad Schick
+Copyright (c) 2026 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -28,12 +28,18 @@ export type AuthenticatorInfo = {
    name: string;
 };
 
+export type InvitableInfo = {
+   invitableId: string;
+   description?: string;
+};
+
 export type UserInfo = {
    verified: boolean;
    userId?: string;
    userName?: string;
    hasRecoveryId?: boolean;
    authenticators?: AuthenticatorInfo[];
+   invitables?: InvitableInfo[];
 };
 
 export type LoginUserInfo = UserInfo & {
@@ -42,3 +48,5 @@ export type LoginUserInfo = UserInfo & {
    recoveryId?: string;
    csrf?: string;
 };
+
+export const TOPIC_USERS_MAX = 255;

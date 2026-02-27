@@ -45,7 +45,7 @@ const EXPIRY_INTERVAL = 1000 * 60 * 2;
 const RECOVERID_BYTES = 16;
 
 export type { AuthenticatorInfo, UserInfo, LoginUserInfo } from '@qcrypt/api';
-import type { AuthenticatorInfo, UserInfo, LoginUserInfo } from '@qcrypt/api';
+import type { AuthenticatorInfo, UserInfo, LoginUserInfo, InvitableInfo } from '@qcrypt/api';
 
 export type VerifiedUserInfo = {
    userId: string;
@@ -532,7 +532,7 @@ export class AuthenticatorService {
          throw new Error('invalid credentialId');
       }
       if (!this.authenticated()) {
-         throw new Error('not active user');
+         throw new Error('no active user');
       }
 
       const serverUserInfo = await this._doFetch<UserInfo>({
@@ -557,7 +557,7 @@ export class AuthenticatorService {
          throw new Error('user name must be 6 to 31 characters');
       }
       if (!this.authenticated()) {
-         throw new Error('not active user');
+         throw new Error('no active user');
       }
 
       const serverUserInfo = await this._doFetch<UserInfo>({
@@ -578,7 +578,7 @@ export class AuthenticatorService {
          throw new Error('invalid credentialId');
       }
       if (!this.authenticated()) {
-         throw new Error('not active user');
+         throw new Error('no active user');
       }
 
       const serverUserInfo = await this._doFetch<UserInfo>({
@@ -603,7 +603,7 @@ export class AuthenticatorService {
 
    async refreshSenderLinks(): Promise<SenderLinkInfo[]> {
       if (!this.authenticated()) {
-         throw new Error('not active user');
+         throw new Error('no active user');
       }
       /*
             const links = await this.doFetch<SenderLinkInfo[]>(
@@ -635,10 +635,9 @@ export class AuthenticatorService {
       return links;
    }
 
-
    async refreshUserInfo(): Promise<VerifiedUserInfo> {
       if (!this.authenticated()) {
-         throw new Error('not active user');
+         throw new Error('no active user');
       }
 
       const serverUserInfo = await this._doFetch<UserInfo>({
@@ -651,6 +650,25 @@ export class AuthenticatorService {
       }
 
       return this._updateLoggedInUser(serverUserInfo);
+   }
+
+   async getInvitableInfo(invitableId: string): Promise<InvitableInfo> {
+      if (!this.authenticated()) {
+         throw new Error('no active user');
+      }
+
+      const invitableInfo = await this._doFetch<InvitableInfo>({
+         method: 'GET',
+         resource: 'invitables',
+         resourceId: invitableId
+      });
+
+      if (!invitableInfo) {
+         throw new Error('missing invitable');
+      }
+      console.log(invitableInfo);
+
+      return invitableInfo;
    }
 
    // Uses the current stored userId
@@ -810,7 +828,7 @@ export class AuthenticatorService {
    async addPasskey(): Promise<VerifiedUserInfo> {
 
       if (!this.authenticated()) {
-         throw new Error('not active user');
+         throw new Error('no active user');
       }
 
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({

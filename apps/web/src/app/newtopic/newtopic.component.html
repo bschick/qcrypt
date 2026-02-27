@@ -21,52 +21,113 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
 <div class="container">
   <div class="content">
-    <h1>Creat Sender Link</h1>
+    <h1>Create Topic</h1>
     <p>
-      Sender links allow other Quick Crypt users to send data that only you
-      can decrypt. As the creator of a sender link, you control the encryption
-      parameters others must use to encrypt data. <a [routerLink]="'/help/faqs'"
-        [queryParams]="{search: 'who can decrypt'}">Only you can decrypt data
-        created with a sender link.</a> The Quick Crypt web app does not store your
-      passwords and therefore cannot decrypt your data.
+      Topics allow other Quick Crypt users to send messages and filese to each other that
+      only you the participants can access. Data is <a [routerLink]="'/help/faqs'"
+        [queryParams]="{search: 'who can decrypt'}">encrypted end-to-end</a> so not even
+      the Quick Crypt server can decrypt shared data.
     </p>
-    <table mat-table [dataSource]="senderLinks" class="linktable">
-      <!-- Description Column -->
-      <ng-container matColumnDef="description">
-        <td mat-cell class="tdcommon" *matCellDef="let element"> {{element.description}}. </td>
-      </ng-container>
+    <mat-form-field subscriptSizing="dynamic" class="description">
+      <mat-label>Optional Description</mat-label>
+      <input type="string" matInput [formControl]="descriptionInput"
+        matTooltip="Optional description of the topic. Visible to participants and the server" />
+    </mat-form-field>
 
-      <!-- Encrypt Column -->
-      <ng-container matColumnDef="encrypt">
-        <td mat-cell class="tdcommon" *matCellDef="let element">
-          <button class="" matSuffix mat-flat-button aria-label="Encrypt">
-            Encrypt
-          </button>
-        </td>
-      </ng-container>
+    <mat-stepper linear=true #stepper (selectionChange)="onStepChange($event)">
+      <mat-step label="Participant Type">
+        <p>Do you know the Quick Crypt IDs of the participants?</p>
+        <mat-button-toggle-group name="participants" [formControl]="participantsControl">
+          <mat-button-toggle value="all">All of them</mat-button-toggle>
+          <mat-button-toggle value="some">Some of them</mat-button-toggle>
+          <mat-button-toggle value="none">None of them</mat-button-toggle>
+        </mat-button-toggle-group>
+        <!--          <mat-form-field>
+            <mat-label>Name</mat-label>
+            <input matInput placeholder="Last name, First name" formControlName="firstCtrl" required>
+          </mat-form-field>-->
+        <div class="step-control">
+          <button matButton matStepperNext>Next</button>
+        </div>
+      </mat-step>
+      <mat-step [stepControl]="participantsGroup" label="Participant Information">
+        <form [formGroup]="participantsGroup">
+          @if (participantsControl.value != 'all') {
+          <mat-form-field subscriptSizing="dynamic" class="participants" hideRequiredMarker>
+            <mat-label>Participants</mat-label>
+            <input type="number" min="1" [max]="TOPIC_USERS_MAX" step="1" matInput formControlName="topicUsers" />
+            <mat-error>{{ participantsError() }}</mat-error>
+          </mat-form-field>
+          }
+          @if (participantsControl.value != 'none') {
+          <p>Enter the Quick Crypt IDs of the participants</p>
+          <table mat-table [dataSource]="participants" class="participant-table">
+            <!-- Invitable ID Column -->
+            <ng-container matColumnDef="invitableId">
+              <th mat-header-cell *matHeaderCellDef class="tdcommon">Participant ID</th>
+              <td mat-cell class="tdcommon invitable" [class.error-text]="element.error" *matCellDef="let element; let i = index">
+                <app-editable [id]="'invitableid-' + i" class="editable" minlength=22 maxlength=24 [value]="element.invitableId"
+                  (valueChanged)="onInvitableIdChanged($event, element)" [writing]="true">
+                </app-editable>
+              </td>
+            </ng-container>
 
-      <!-- Copy Column -->
-      <ng-container matColumnDef="copy">
-        <td mat-cell class="tdcommon tdbutton" *matCellDef="let element">
-          <button class="" (click)="toastMessage('Link Copied to Clipboard')" matSuffix mat-icon-button
-            aria-label="Copy" matTooltip="Copy Link" [cdkCopyToClipboard]="element.url">
-            <mat-icon> content_copy </mat-icon>
-          </button>
-        </td>
-      </ng-container>
+            <!-- Description Column -->
+            <ng-container matColumnDef="description">
+              <th mat-header-cell *matHeaderCellDef class="tdcommon">Description</th>
+              <td mat-cell class="tdcommon" [class.error-text]="element.error" *matCellDef="let element">
+                {{element.description}}
+              </td>
+            </ng-container>
 
-      <!-- Delete Column -->
-      <ng-container matColumnDef="delete">
-        <td mat-cell class="tdcommon tdbutton" *matCellDef="let element">
-          <button class="" (click)="onClickDelete(element)" matSuffix mat-icon-button aria-label="Delete"
-            matTooltip="Delete Link">
-            <mat-icon>delete_outline</mat-icon>
-          </button>
-        </td>
-      </ng-container>
+            <!-- Delete Column -->
+            <ng-container matColumnDef="delete">
+              <th mat-header-cell *matHeaderCellDef class="tdcommon tdbutton"></th>
+              <td mat-cell class="tdcommon tdbutton" *matCellDef="let element; let i = index">
+                <button class="" (click)="onClickDelete(i)" matSuffix mat-icon-button aria-label="Delete"
+                  matTooltip="Delete Link">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </td>
+            </ng-container>
 
-      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-    </table>
+            <ng-container matColumnDef="addParticipant">
+              <td mat-footer-cell *matFooterCellDef colspan="3" class="add-participant-footer">
+                <button mat-button color="primary" (click)="onClickAdd()" type="button" class="add-participant-btn">
+                  <mat-icon>add</mat-icon>
+                  Add Participant
+                </button>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+            <tr mat-footer-row *matFooterRowDef="['addParticipant']" class="footer-row"></tr>
+          </table>
+          }
+          <div>
+            <button matButton matStepperPrevious>Back</button>
+            <button matButton matStepperNext>Next</button>
+          </div>
+        </form>
+      </mat-step>
+      <mat-step>
+        <ng-template matStepLabel>Done</ng-template>
+        <p>You are now done.</p>
+        <div>
+          <button matButton matStepperPrevious>Back</button>
+          <button matButton (click)="stepper.reset()">Reset</button>
+        </div>
+      </mat-step>
+    </mat-stepper>
+
+
+    <!-- <mat-tab-group animationDuration="0ms" dynamicHeight>
+      <mat-tab label="Known Recipients">Content 1</mat-tab>
+      <mat-tab label="Mixed Recipients">Content 2</mat-tab>
+      <mat-tab label="Invite ">Content 3</mat-tab>
+    </mat-tab-group> -->
+
   </div>
 </div>
 

@@ -2,7 +2,7 @@
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "targetDefaults": {
     "build": {
-      "cache": true,
+      "cache": false,
       "dependsOn": [
         "^build"
       ],
@@ -12,7 +12,7 @@
       ]
     },
     "test": {
-      "cache": true,
+      "cache": false,
       "inputs": [
         "default",
         "^production"
