@@ -55,11 +55,13 @@ import {
    Challenges,
    AuthEvents,
    AAGUIDs,
+   Invitables,
    SenderLinks,
    type SenderLinkItem,
    type VerifiedUserItem,
    type UnverifiedUserItem,
    type AuthItem,
+   type InvitableItem,
 } from "./models";
 
 import { ElectroError, type EntityItem, type EntityRecord } from 'electrodb';
@@ -93,7 +95,7 @@ export type Response = {
    returnCsrf?: boolean;
 };
 
-import type { AuthenticatorInfo, UserInfo, LoginUserInfo } from '@qcrypt/api';
+import type { AuthenticatorInfo, UserInfo, LoginUserInfo, InvitableInfo } from '@qcrypt/api';
 
 type SenderLink = {
    receiverCert: string;
@@ -139,7 +141,7 @@ enum EventNames {
 }
 
 
-const kmsClient = new KMSClient({ region: "us-east-1" });
+export const kmsClient = new KMSClient({ region: "us-east-1" });
 let jwtMaterial: Uint8Array | undefined;
 const INTERNAL_PHRASE = "Yup, I'm internal";
 
@@ -1158,11 +1160,12 @@ async function postRegOptions(
    }
 
    let uId: string | undefined;
+   let invId: string | undefined;
 
    // Reduce round-trips by getting enough data for 3 x 16 bytes ID tries
    // and 1 x 32 bytes userCred
    const rparams = {
-      NumberOfBytes: cc.RETRIES * cc.USERID_BYTES
+      NumberOfBytes: cc.RETRIES * (cc.USERID_BYTES + cc.INVITABLEID_BYTES)
    };
    const rand = new GenerateRandomCommand(rparams);
    const result = await kmsClient.send(rand);
@@ -1172,10 +1175,14 @@ async function postRegOptions(
       throw new Error("GenerateRandomCommand failure");
    }
 
+   let byteOffset = 0;
+
    // Loop in the very unlikley event that we randomly pick
    // a duplicate (out of 3.4e38 possible)
    for (let i = 0; i < cc.RETRIES; ++i) {
-      const uIdBytes = randData.slice(i * cc.USERID_BYTES, (i + 1) * cc.USERID_BYTES);
+      const uIdBytes = randData.slice(byteOffset, byteOffset + cc.USERID_BYTES);
+      byteOffset += cc.USERID_BYTES;
+      
       uId = base64UrlEncode(uIdBytes)!;
 
       const users = await Users.query.byUserId({
@@ -1193,11 +1200,32 @@ async function postRegOptions(
       throw new Error('could not allocate userId');
    }
 
+   for(let i = 0; i < cc.RETRIES; ++i) {
+      const invIdBytes = randData.slice(byteOffset, byteOffset + cc.INVITABLEID_BYTES);
+      byteOffset += cc.INVITABLEID_BYTES;
+      
+      invId = base64UrlEncode(invIdBytes)!;
+
+      const invitable = await Invitables.query.byInvitableId({
+         invitableId: invId
+      }).go();
+
+      if (!invitable || invitable.data.length == 0) {
+         break;
+      } else {
+         invId = undefined;
+      }
+   }
+
+   if (!invId) {
+      throw new Error('could not allocate invitableId');
+   }
+
    // TTL value that DynamoDB references to delete recrod 1 day from now if
    // the registration is not verified (verify removes expiresAt attribute)
    const expires = Math.floor(Date.now() / 1000) + 86400;
 
-   const created = await Users.create({
+   const user = await Users.create({
       userId: uId,
       userName: userName,
       expiresAt: expires,
@@ -1205,11 +1233,21 @@ async function postRegOptions(
       recoveryIdEnc: undefined
    }).go();
 
-   if (!created || !created.data) {
+   if (!user || !user.data) {
       throw new ParamError('user not created or found');
    }
 
-   return registrationOptions(rpID, rpOrigin, created.data);
+   const invitable = await Invitables.create({
+      userId: uId,
+      invitableId: invId,
+      description: userName
+   }).go();
+
+   if (!invitable || !invitable.data) {
+      throw new ParamError('invitable not created or found');
+   }
+
+   return registrationOptions(rpID, rpOrigin, user.data);
 }
 
 async function registrationOptions(
@@ -1307,22 +1345,24 @@ async function makeLoginUserInfoResponse(
    }
 }
 
-
 async function makeUserInfoResponse(
    verifiedUser: VerifiedUserItem,
-   auths?: AuthenticatorInfo[]
+   auths?: AuthenticatorInfo[],
+   invitables?: InvitableInfo[]
 ): Promise<UserInfo> {
 
    auths = auths ?? await loadAuthenticators(verifiedUser);
+   invitables = invitables ?? await loadInvitables(verifiedUser);
 
-   // user explicit assignment rather than spread operator to prevent leading information
+   // user explicit assignment rather than spread operator to prevent leaking information
    // in UserItem table that is internal only or provided separatly (like recoveryId)
    const userInfo: UserInfo = {
       verified: verifiedUser.verified,
       userId: verifiedUser.userId,
       userName: verifiedUser.userName,
       hasRecoveryId: !!verifiedUser.recoveryIdEnc && verifiedUser.recoveryIdEnc.length > 0,
-      authenticators: auths
+      authenticators: auths,
+      invitables: invitables
    };
 
    return userInfo;
@@ -1351,6 +1391,17 @@ function makeSenderLinkBindResponse(
    };
 }
 
+function makeInvitableResponse(
+   invitable: InvitableItem
+): InvitableInfo {
+
+   const invitableInfo: InvitableInfo = {
+      invitableId: invitable.invitableId,
+      description: invitable.description
+   };
+
+   return invitableInfo;
+}
 
 async function patchPasskey(
    httpDetails: HttpDetails,
@@ -1453,6 +1504,37 @@ async function patchUser(
    return { content: response };
 }
 
+// Not tracking events for this method since they are frequent and not particlyarly
+// interesting
+async function getInvitables(
+   httpDetails: HttpDetails,
+   verifiedUser?: VerifiedUserItem
+): Promise<Response> {
+   const {
+      resources
+   } = httpDetails;
+
+   if (!verifiedUser) {
+      throw new AuthError();
+   }
+
+   const invitableId = resources['invid'];
+   if (!validB64(invitableId)) {
+      throw new ParamError('invalid invitable id');
+   }
+
+   // May not want to bring back all parameter (like recoveryIdEnc)
+   const invitables = await Invitables.query.byInvitableId({
+      invitableId
+   }).go();
+
+   if (!invitables || invitables.data.length === 0) {
+      throw new ParamError('invalid invitable id');
+   }
+
+   const response = makeInvitableResponse(invitables.data[0]);
+   return { content: response };
+}
 
 // Not tracking events for this method since they are frequent and not particlyarly
 // interesting
@@ -1546,6 +1628,35 @@ async function loadAuthenticators(
    return authenticators;
 }
 
+async function loadInvitables(
+   verifiedUser: VerifiedUserItem,
+   consistent: boolean = false
+): Promise<InvitableInfo[]> {
+
+   const invitableItems = await Invitables.query.byUserId({
+      userId: verifiedUser.userId
+   }).go({
+      consistent: consistent
+   });
+
+   if (!invitableItems || invitableItems.data.length == 0) {
+      return [];
+   }
+
+   // sort ascending (oldest to newest)
+   invitableItems.data.sort((left: any, right: any) => {
+      return left.createdAt - right.createdAt;
+   });
+
+   const invitables: InvitableInfo[] = invitableItems.data.map((item) => {
+      return {
+         invitableId: item.invitableId,
+         description: item.description || '',
+      }
+   });
+
+   return invitables;
+}
 
 async function deletePasskey(
    httpDetails: HttpDetails,
@@ -1773,7 +1884,7 @@ async function getUnverifiedUser(
    }).go();
 
    if (!unverifiedUser || !unverifiedUser.data) {
-      // Autho error are usually generic to attackers cannot use response to
+      // Auth error are usually generic to attackers cannot use response to
       // tell the difference between bad creds, incorrect userid, or no permission
       throw new AuthError();
    }
@@ -1994,8 +2105,9 @@ const METHODMAP: MethodMap = {
       // Special case of an authenticated method that does not require csrf. Needed so GET session works in a fresh
       // tab/window, and should be safe since csrf isn't technically needed for GET calls due to Same-Origin
       { name: 'getSession', pattern: Patterns.session, version: 1, authorize: true, checkCsrf: false, handler: getSession },
+      { name: 'getInvitables', pattern: Patterns.invitables, version: 1, authorize: true, handler: getInvitables },
 
-      { name: 'getSenderLinks', pattern: Patterns.senderLinks, version: 1, authorize: true, handler: getSenderLinks },
+      // { name: 'getSenderLinks', pattern: Patterns.senderLinks, version: 1, authorize: true, handler: getSenderLinks },
    ],
    POST: [
       { name: 'postAuthVerify', pattern: Patterns.authVerify, version: 1, authorize: false, handler: postAuthVerify },
@@ -2006,10 +2118,10 @@ const METHODMAP: MethodMap = {
       { name: 'postRecover2', pattern: Patterns.recover2, version: 1, authorize: false, handler: postRecover2 },
 
       // Sender links
-      { name: 'postSenderLinks', pattern: Patterns.senderLinks, version: 1, authorize: true, handler: postSenderLinks },
-      { name: 'postSenderLinkVerify', pattern: Patterns.senderLinkVerify, version: 1, authorize: true, handler: postSenderLinkVerify },
-      { name: 'postSenderLinkBind', pattern: Patterns.senderLinkBind, version: 1, authorize: true, handler: postSenderLinkBind },
-      { name: 'postSenderLinksDelete', pattern: Patterns.senderLinksDelete, version: 1, authorize: true, handler: postSenderLinksDelete },
+      // { name: 'postSenderLinks', pattern: Patterns.senderLinks, version: 1, authorize: true, handler: postSenderLinks },
+      // { name: 'postSenderLinkVerify', pattern: Patterns.senderLinkVerify, version: 1, authorize: true, handler: postSenderLinkVerify },
+      // { name: 'postSenderLinkBind', pattern: Patterns.senderLinkBind, version: 1, authorize: true, handler: postSenderLinkBind },
+      // { name: 'postSenderLinksDelete', pattern: Patterns.senderLinksDelete, version: 1, authorize: true, handler: postSenderLinksDelete },
 
       // Internal only endpoints that are not exposed in cloudfront and require special auth
       { name: 'postMunge', pattern: Patterns.munge, version: INTERNAL_VERSION, authorize: false, handler: postMunge },
@@ -2022,7 +2134,7 @@ const METHODMAP: MethodMap = {
       { name: 'patchPasskey', pattern: Patterns.passkey, version: 1, authorize: true, handler: patchPasskey },
       { name: 'patchUser', pattern: Patterns.user, version: 1, authorize: true, handler: patchUser },
 
-      { name: 'patchSenderLink', pattern: Patterns.senderLink, version: 1, authorize: true, handler: patchSenderLink },
+      // { name: 'patchSenderLink', pattern: Patterns.senderLink, version: 1, authorize: true, handler: patchSenderLink },
    ],
    DELETE: [
       { name: 'deletePasskey', pattern: Patterns.passkey, version: 1, authorize: true, handler: deletePasskey },

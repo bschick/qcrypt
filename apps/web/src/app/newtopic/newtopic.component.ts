@@ -25,10 +25,11 @@ import {
    effect,
    OnDestroy,
    OnInit,
-   ViewChild
+   ViewChild,
+   ViewChildren,
+   QueryList,
+   inject
 } from '@angular/core';
-import sodium from 'libsodium-wrappers';
-
 
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -41,37 +42,81 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { AuthEvent, AuthenticatorService, SenderLinkInfo } from '../services/authenticator.service';
 import { Subscription } from 'rxjs';
 import { base64URLStringToBuffer, bufferToBase64URLString } from '@qcrypt/crypto';
-import { OptionsComponent } from '../ui/options/options.component'
+import { OptionsComponent } from '../ui/options/options.component';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { FormControl, ReactiveFormsModule, FormBuilder, Validators, FormsModule } from '@angular/forms';
+import {MatTabsModule} from '@angular/material/tabs';
+import {MatStepperModule} from '@angular/material/stepper';
+import { MatButtonToggle } from "@angular/material/button-toggle";
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { EditableComponent } from '../ui/editable/editable.component';
+import { StepperSelectionEvent } from '@angular/cdk/stepper';
+import * as api from '@qcrypt/api';
 
-
-//const seed = 'DcQc3_gNiK9ONmCjTM8xP2HiI0LVm6kwwkX_lrOCeH0=';
+export type ParticipantInfo = {
+   invitableId: string;
+   description?: string;
+   error?: boolean;
+};
 
 @Component({
    selector: 'app-new-topic',
    templateUrl: './newtopic.component.html',
    styleUrl: './newtopic.component.scss',
-   imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink, MatInputModule, MatFormFieldModule, OptionsComponent, MatTableModule]
+   imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink, MatInputModule,
+    MatFormFieldModule, OptionsComponent, MatTableModule, ReactiveFormsModule,
+    MatTooltipModule, MatTabsModule, MatStepperModule, MatButtonToggleModule,
+    MatButtonToggle, EditableComponent]
 
 })
 export class NewTopicComponent implements OnInit, OnDestroy, AfterViewInit {
 
-   public senderLinks: SenderLinkInfo[] = [];
-   public displayedColumns: string[] = ['description', 'encrypt', 'copy', 'delete'];
+   public participants: ParticipantInfo[] = [];
+   public displayedColumns: string[] = ['invitableId', 'description', 'delete'];
    private authSub!: Subscription;
+   public descriptionInput = new FormControl('');
+   public participantsControl = new FormControl('all');
+
+   private _formBuilder = inject(FormBuilder);
+   public readonly TOPIC_USERS_MAX = api.TOPIC_USERS_MAX;
+
+   // firstFormGroup = this._formBuilder.group({
+   //    firstCtrl: ['', Validators.required],
+   // });
+   participantsGroup = this._formBuilder.group({
+      topicUsers: [1, [Validators.required, Validators.min(1), Validators.max(this.TOPIC_USERS_MAX)]],
+   });
+
+   participantsError(): string {
+      const ctrl = this.participantsGroup.get('topicUsers');
+      if (ctrl?.hasError('min')) {
+         return 'Must be at least 1';
+      } else if (ctrl?.hasError('max')) {
+         return `Must be less than ${this.TOPIC_USERS_MAX + 1}`;
+      } else { 
+         return '';
+      }
+   }
 
    @ViewChild('options') options!: OptionsComponent;
+   @ViewChildren(EditableComponent) editables!: QueryList<EditableComponent>;
 
    constructor(
       private authSvc: AuthenticatorService,
       private router: Router,
       private snackBar: MatSnackBar) {
-      effect(() => {
-         this.senderLinks = this.authSvc.senderLinks();
-      });
+      // effect(() => {
+      //    this.senderLinks = this.authSvc.senderLinks();
+      // });
    }
 
    ngOnInit(): void {
-      this.senderLinks = this.authSvc.senderLinks();
+//      this.senderLinks = this.authSvc.senderLinks();
+
+      // this.participants.push({
+      //    invitableId: "",
+      //    description: ''
+      // });
 
       this.authSub = this.authSvc.on(
          [AuthEvent.Logout],
@@ -82,14 +127,61 @@ export class NewTopicComponent implements OnInit, OnDestroy, AfterViewInit {
    ngAfterViewInit(): void {
    }
 
+   onStepChange(event: StepperSelectionEvent): void {
+      if (event.selectedIndex === 1) {
+         if (this.participants.length === 0) {
+            this.onClickAdd();
+         } else {
+            // Wait for the step animation and DOM render to finish before focusing
+            setTimeout(() => {
+               if (!this.editables.last?.value) {
+                  this.editables.last?.focus();
+               }
+            }, 0);
+         }
+      }
+   }
+
    ngOnDestroy(): void {
       if (this.authSub) {
          this.authSub.unsubscribe();
       }
    }
 
-   onClickDelete(passkey: SenderLinkInfo) {
-      alert(JSON.stringify(passkey));
+   onClickDelete(index: number) {
+      this.participants = this.participants.filter((_, i) => i !== index);
+   }
+
+   onClickAdd() {
+      this.participants = [...this.participants, {
+         invitableId: '',
+         description: ''
+      }];
+      
+      setTimeout(() => {
+         this.editables.last.focus();
+      }, 0);
+   }
+
+   async onInvitableIdChanged(
+      component: EditableComponent, 
+      participant: ParticipantInfo
+   ): Promise<void> {
+      try {
+         participant.error = false;
+         participant.invitableId = component.value.trim();
+         if( participant.invitableId ) {
+            const invitableInfo = await this.authSvc.getInvitableInfo(participant.invitableId);
+            participant.description = invitableInfo.description!
+            this.toastMessage('Passkey description updated');
+         } else {
+            participant.description = '';
+         }
+      } catch (err) {
+         console.error(err);
+         participant.description = 'Invalid Participant Id';
+         participant.error = true;
+      }
    }
 
    async doit(): Promise<void> {

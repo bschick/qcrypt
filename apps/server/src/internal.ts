@@ -20,15 +20,18 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
+import * as cc from './consts';
 import type { HttpDetails } from "./urls";
 import {
    Users,
    Authenticators,
-   AAGUIDs
+   AAGUIDs,
+   Invitables
 } from "./models";
 
 import {
    darkFileDefault,
+   kmsClient,
    lightFileDefault,
    type Response
 } from "./index";
@@ -38,6 +41,7 @@ import { resolve } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import sodium from 'libsodium-wrappers';
 import { base64UrlEncode } from "./utils";
+import { GenerateRandomCommand } from '@aws-sdk/client-kms';
 
 export async function postLoadAAGUIDs(
    httpDetails: HttpDetails
@@ -236,82 +240,88 @@ export async function postMunge(
    httpDetails: HttpDetails
 ): Promise<Response> {
 
-   await sodium.ready;
+   const batchSize = 14;
 
-   const { publicKey, privateKey } = sodium.crypto_sign_keypair();
+   const userAttrs = ["userId", "userName"] as const;
+   let users = await Users.scan.go({
+      attributes: userAttrs,
+      limit: batchSize
+   });
 
-   console.log(`publicKey: ${base64UrlEncode(publicKey)}`);
-   console.log(`privateKey: ${base64UrlEncode(privateKey)}`);
+   let total = 0;
 
-   // https://gist.githubusercontent.com/quickcrypt-security/b5ad7deadcaf9aec23acebd0d17c6739/raw/43107c6d8f9285cee18193136b07abe52df1d1f8/keys.json
+   while (users && users.data && users.data.length > 0) {
+      total += users.data.length
 
-   // public-key1 -- prod
-   // 2025-11-23T21:40:10.139Z	21ab5f95-21a7-4054-90a0-16b7c7e2e291	INFO	publicKey: kVyD3JMfbqWSEe4XIzwxudJIyHMmID6lg69BQCGTcZk
-   // 2025-11-23T21:40:10.140Z	21ab5f95-21a7-4054-90a0-16b7c7e2e291	INFO	privateKey: H4S7djHVYhtUPG9e2gUOSIvqPCW4xBcHKb9lT1Djlb6RXIPckx9upZIR7hcjPDG50kjIcyYgPqWDr0FAIZNxmQ
+      // Reduce round-trips by getting enough data for 3 retries for each user in batch
+      const rparams = {
+         NumberOfBytes: users.data.length * cc.RETRIES * cc.INVITABLEID_BYTES
+      };
+      const rand = new GenerateRandomCommand(rparams);
+      const result = await kmsClient.send(rand);
+      let byteOffset = 0;
 
-   // public-key2 -- dev
-   // 2025-11-23T21:42:19.136Z	b29c2810-b30a-4f70-9d85-a59c58378b9f	INFO	publicKey: 0pbIB1B3k-oOTnMkq-41srsyiF18jms5HQKGiqS3f3c
-   // 2025-11-23T21:42:19.136Z	b29c2810-b30a-4f70-9d85-a59c58378b9f	INFO	privateKey: ig890QSJChMRLdz0jTDHLdsJ4OUgE_kpmsy33grFBO3SlsgHUHeT6g5OcySr7jWyuzKIXXyOazkdAoaKpLd_dw
+      for (let user of users.data) {
+         // fake user to prevent Id use
+         if (user.userId === 'AAAAAAAAAAAAAAAAAAAAAA') {
+            continue;
+         }
 
+         try {
+            let invId: string | undefined;
 
-   // const batchSize = 14;
+            const randData = result.Plaintext;
+            if (!randData || randData.byteLength != rparams.NumberOfBytes) {
+               throw new Error("GenerateRandomCommand failure");
+            }
 
-   // const userAttrs = ["userId", "userCredEnc", "userCredEncOld", "verified"] as const;
-   // let users = await Users.scan.go({
-   //    attributes: userAttrs,
-   //    limit: batchSize
-   // });
+            for(let i = 0; i < cc.RETRIES; ++i) {
+               const invIdBytes = randData.slice(byteOffset, byteOffset + cc.INVITABLEID_BYTES);
+               byteOffset += cc.INVITABLEID_BYTES;
+               
+               invId = base64UrlEncode(invIdBytes)!;
+         
+               const invitable = await Invitables.query.byInvitableId({
+                  invitableId: invId
+               }).go();
+         
+               if (!invitable || invitable.data.length == 0) {
+                  break;
+               } else {
+                  invId = undefined;
+               }
+            }
+         
+            if (!invId) {
+               throw new Error('could not allocate invitableId');
+            }
+            
+            const invitable = await Invitables.create({
+               userId: user.userId,
+               invitableId: invId,
+               description: user.userName
+            }).go();
+         
+            if (!invitable || !invitable.data) {
+               throw new Error('invitable not created or found');
+            }
 
-   // let total = 0;
+         } catch (error) {
+            console.error(`Error for ${user.userId}`, error);
+         }
+      }
 
-   // while (users && users.data && users.data.length > 0) {
-   //    total += users.data.length
+      if (!users.cursor) { 
+         console.log('breaking');
+         break;
+      }
+      users = await Users.scan.go({
+         attributes: userAttrs,
+         limit: batchSize,
+         cursor: users.cursor
+      });
+   }
 
-   //    for (let user of users.data) {
-   //       // fake user to prevent Id use
-   //       if (user.userId === 'AAAAAAAAAAAAAAAAAAAAAA') {
-   //          continue;
-   //       }
-
-   //       try {
-   //          if(user.userCredEncOld && user.userCredEnc) {
-   //             const credDecBytes = await decryptField(
-   //                user.userCredEnc,
-   //                { userId: user.userId },
-   //                USERCRED_BYTES
-   //             );
-
-   //             const credDecOldBytes = await decryptField(
-   //                user.userCredEncOld,
-   //                { userId: user.userId },
-   //                USERCRED_BYTES,
-   //                KMS_KEYID_OLD
-   //             );
-
-   //             if (base64UrlEncode(credDecBytes) === base64UrlEncode(credDecOldBytes)) {
-   //                console.log(`all good for ${user.userId} `);
-   //             } else {
-   //                console.error(`mismatched for ${user.userId} of ${base64UrlEncode(credDecBytes)} and ${base64UrlEncode(credDecOldBytes)}`);
-   //            }
-   //          } else {
-   //             console.log(`skipping ${user.userId}, ok? ${!user.verified} `);
-   //          }
-   //       } catch (error) {
-   //          console.error(`Error for ${user.userId}`, error);
-   //       }
-   //    }
-
-   //    if (!users.cursor) {
-   //       console.log('breaking');
-   //       break;
-   //    }
-   //    users = await Users.scan.go({
-   //       attributes: userAttrs,
-   //       limit: batchSize,
-   //       cursor: users.cursor
-   //    });
-   // }
-
-   // console.log(`${total} users total`);
+   console.log(`${total} users total`);
    return { content: { message: "done" } };
 }

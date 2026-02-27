@@ -184,6 +184,6 @@ SOFTWARE. */
   .error-msg {
     margin-top: 12px;
     height: 24px;
-    color: darkred;
+    color: var(--mat-sys-error);
   }
 }

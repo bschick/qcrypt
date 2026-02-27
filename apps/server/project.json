@@ -5,11 +5,12 @@
   "sourceRoot": "apps/server/src",
   "targets": {
     "build": {
+      "cache": false,
       "executor": "nx:run-commands",
       "options": {
         "commands": [
-          "pnpm exec esbuild --bundle --platform=node --target=es2022 --outdir=apps/server/build apps/server/src/index.ts",
-          "rm -f apps/server/build/index.zip && zip -j apps/server/build/index.zip apps/server/build/index.js apps/server/assets/combined_aaguid.json"
+          "pnpm exec esbuild --bundle --platform=node --target=es2022 --format=esm --outfile=apps/server/build/index.mjs --banner:js=\"import { createRequire } from 'module';const require = createRequire(import.meta.url);\" apps/server/src/index.ts",
+          "rm -f apps/server/build/index.zip && zip -j apps/server/build/index.zip apps/server/build/index.mjs apps/server/assets/combined_aaguid.json"
         ],
         "cwd": "{workspaceRoot}",
         "parallel": false
@@ -17,11 +18,12 @@
       "outputs": ["{projectRoot}/build"]
     },
     "build-min": {
+      "cache": false,
       "executor": "nx:run-commands",
       "options": {
         "commands": [
-          "pnpm exec esbuild --bundle --minify --platform=node --target=es2022 --outdir=apps/server/build apps/server/src/index.ts",
-          "rm -f apps/server/build/index.zip && zip -j apps/server/build/index.zip apps/server/build/index.js apps/server/assets/combined_aaguid.json"
+          "pnpm exec esbuild --bundle --minify --platform=node --target=es2022 --format=esm --outfile=apps/server/build/index.mjs --banner:js=\"import { createRequire } from 'module';const require = createRequire(import.meta.url);\" apps/server/src/index.ts",
+          "rm -f apps/server/build/index.zip && zip -j apps/server/build/index.zip apps/server/build/index.mjs apps/server/assets/combined_aaguid.json"
         ],
         "cwd": "{workspaceRoot}",
         "parallel": false

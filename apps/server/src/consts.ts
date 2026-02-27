@@ -27,6 +27,7 @@ export const RPNAME = 'Quick Crypt';
 export const ALGIDS = [24, 7, 3, 1, -7, -257];
 
 export const USERID_BYTES = 16;
+export const INVITABLEID_BYTES = 16;
 export const USERCRED_BYTES = 32;
 export const JWTMATERIAL_BYTES = 32;
 export const RECOVERYID_BYTES = 16;

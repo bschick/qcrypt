@@ -199,6 +199,66 @@ export const Authenticators = new Entity(
    }
 );
 
+
+export const Invitables = new Entity(
+   {
+      model: {
+         entity: "invitable",
+         version: "1",
+         service: "quickcrypt"
+      },
+      attributes: {
+         invitableId: {
+            type: "string",
+            required: true
+         },
+         userId: {
+            type: "string",
+            required: true
+         },
+         description: {
+            type: "string",
+            required: false
+         },
+         createdAt: {
+            type: "number",
+            default: () => Date.now(),
+            // should not be modified after created
+            readOnly: true
+         }
+      },
+      indexes: {
+         byUserId: {
+            pk: {
+               field: "pk",
+               cast: "string",
+               composite: ["userId"],
+               casing: 'none'
+            },
+            sk: {
+               field: "sk",
+               cast: "string",
+               composite: ["invitableId"],
+               casing: 'none'
+            },
+         },
+         byInvitableId: {
+            index: "invitableid-index",
+            pk: {
+               field: "invitableId",
+               composite: ["invitableId"],
+               cast: "string",
+               casing: 'none'
+            },
+         }
+      }
+   },
+   {
+      table: "Invitables",
+      client: client
+   }
+);
+
 export const SenderLinks = new Entity(
    {
       model: {
@@ -416,6 +476,7 @@ export const AAGUIDs = new Entity(
 export type UnverifiedUserItem = EntityItem<typeof Users>;
 export type AuthItem = EntityItem<typeof Authenticators>;
 export type SenderLinkItem = EntityItem<typeof SenderLinks>;
+export type InvitableItem = EntityItem<typeof Invitables>;
 export type VerifiedUserItem = EntityRecord<typeof Users> & {
    lastCredentialId?: string;
    recoveryIdEnc?: string;
