@@ -65,8 +65,9 @@ SOFTWARE. -->
             <!-- Invitable ID Column -->
             <ng-container matColumnDef="invitableId">
               <th mat-header-cell *matHeaderCellDef class="tdcommon">Participant ID</th>
-              <td mat-cell class="tdcommon invitable" [class.error-text]="element.error" *matCellDef="let element; let i = index">
+              <td mat-cell class="tdcommon invitable" *matCellDef="let element; let i = index">
                 <app-editable [id]="'invitableid-' + i" class="editable" minlength=22 maxlength=24 [value]="element.invitableId"
+                  [color]="element.error ? 'var(--mat-sys-error)' : ''"
                   (valueChanged)="onInvitableIdChanged($event, element)" [writing]="true">
                 </app-editable>
               </td>

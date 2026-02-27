@@ -46,6 +46,8 @@ export class EditableComponent {
    @Input() maxlength = '50';
    @Input() readonly = false;
    @Input() writing = false;
+   @Input() color = '';
+   @Input() backgroundColor = '';
    @Output() valueChanged = new EventEmitter<EditableComponent>();
    @ViewChild('editableInput', { static: true }) editInput!: ElementRef;
    public text = '';
