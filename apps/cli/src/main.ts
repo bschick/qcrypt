@@ -476,11 +476,7 @@ async function main() {
       } catch (err) { }
    }
 
-   reopenTTY.stdin(async (err: any, handle: fs.ReadStream) => {
-      ttyStream = handle;
-      if(!ttyStream) {
-         throw err;
-      }
+   reopenTTY.stdin(async (err: any, ttyStream: fs.ReadStream) => {
 
       if (args._.length && args._[0] === 'info') {
          const infoText = await info(args, piped);
@@ -494,7 +490,9 @@ async function main() {
          console.log(`\n${clearText}`);
       }
 
-      ttyStream.destroy();
+      if (ttyStream) {
+         ttyStream.destroy();
+      }
    });
 }
 
