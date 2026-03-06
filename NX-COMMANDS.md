@@ -13,6 +13,7 @@ This is an Nx monorepo. The app source lives in `apps/web/`, with shared library
 | Fuzz tests | `pnpm test:fuzz` | *(no Nx equivalent — Playwright runs directly)* |
 | Build CLI | `pnpm build:cli` | `pnpm nx build cli` |
 | Build CLI (minified) | `pnpm build:cli:min` | `pnpm nx build-min cli` |
+| Test CLI | `pnpm test:cli` | `pnpm nx test cli` |
 | Build server | `pnpm build:server` | `pnpm nx build server` |
 | Build server (minified) | `pnpm build:server:min` | `pnpm nx build-min server` |
 | Server tests | `pnpm test:server` | `pnpm nx test server` |
