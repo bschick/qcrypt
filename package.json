@@ -17,6 +17,7 @@
     "serve:ssr:web": "node dist/web/server/server.mjs",
     "build:cli": "nx build cli",
     "build:cli:min": "nx build-min cli",
+    "test:cli": "nx test cli",
     "build:server": "nx build server",
     "build:server:min": "nx build-min server",
     "test:server": "nx test server",

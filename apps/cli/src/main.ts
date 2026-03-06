@@ -372,12 +372,25 @@ async function decrypt(
    return returnText;
 }
 
-function CoerceNumber(val: any) {
-   let num = Number(val);
-   if (isNaN(num)) {
-      throw new Error(`${val} is not a number`);
+function CoerceNumber(argName: string) {
+   return (val: any) => {
+      let num = Number(val);
+      if (isNaN(num)) {
+         throw new Error(`${argName} is not a valid number`);
+      }
+      return num;
+   };
+}
+
+function CoerceAlgs(algs: string[]) {
+   const upperAlgs = algs.map((alg: string) => alg.toUpperCase());
+   const validChoices = Object.keys(cc.AlgInfo);
+   for (const alg of upperAlgs) {
+      if (!validChoices.includes(alg)) {
+         throw new Error(`Unsupported cipher mode: ${alg}. Valid choices are: ${validChoices.join(', ')}`);
+      }
    }
-   return num;
+   return upperAlgs;
 }
 
 //yargs seems to have a bug with nargs not working as described... if the credential starts with
@@ -417,9 +430,9 @@ const args = yargs(hideBin(process.argv))
                'loops': { alias: 'l', desc: 'nested encryption loops (max 6)', type: 'number', default: 1 },
             })
             .coerce({
-               algs: (algs) => algs.map((alg: string) => alg.toUpperCase()),
-               iters: CoerceNumber,
-               loops: CoerceNumber
+               algs: CoerceAlgs,
+               iters: CoerceNumber('iters'),
+               loops: CoerceNumber('loops')
             })
             .example('$0 enc -c 97jQeo8N16L4vhKzWy7ys -f doc.txt', ': prints encrypted text of doc.txt');
       },
