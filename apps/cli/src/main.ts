@@ -11,11 +11,12 @@ import { Readable } from 'node:stream';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import { input, select, number } from '@inquirer/prompts';
+// @ts-expect-error package does not ship with types
 import reopenTTY from 'reopen-tty';
 
 let ttyStream: fs.ReadStream;
 
-function streamFromBytes(data: Uint8Array): ReadableStream<Uint8Array> {
+function streamFromBytes(data: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Array> {
    const blob = new Blob([data], { type: 'application/octet-stream' });
    return blob.stream();
 }
@@ -381,25 +382,27 @@ const args = yargs(hideBin(process.argv))
    .command({
       command: '$0 [text] [options]',
       aliases: ['dec'],
-      desc: 'decrypt cipher data',
+      describe: 'decrypt cipher data',
       builder: (yargs) => {
-         yargs.positional('text', { desc: 'cipher armor to decrypt (or use -f or stdin)' })
+         return yargs.positional('text', { desc: 'cipher armor to decrypt (or use -f or stdin)' })
             .example('$0 -c 97jQeo8N16L4vhKzWy7ys -f doc.qq', ': prints decrypted text of doc.qq');
-      }
+      },
+      handler: () => {}
    })
    .command({
       command: 'info [text] [options]',
-      desc: 'show information about cipher data',
+      describe: 'show information about cipher data',
       builder: (yargs) => {
-         yargs.positional('text', { desc: 'cipher armor to describe (or use -f or stdin)' })
+         return yargs.positional('text', { desc: 'cipher armor to describe (or use -f or stdin)' })
             .example('$0 info -c 97jQeo8N16L4vhKzWy7ys -f doc.qq', ': prints encryption params for doc.qq');
-      }
+      },
+      handler: () => {}
    })
    .command({
       command: 'enc [text] [options]',
-      desc: 'encrypt clear text',
+      describe: 'encrypt clear text',
       builder: (yargs) => {
-         yargs.positional('text', { desc: 'clear text to encrypt (or use -f or stdin)' })
+         return yargs.positional('text', { desc: 'clear text to encrypt (or use -f or stdin)' })
             .options({
                'iters': { alias: 'i', desc: `password hash iterations (min ${cc.ICOUNT_MIN})`, type: 'number' },
                'algs': { alias: 'a', desc: 'encryption cipher mode(s)', type: 'string', array: true, choices: Object.keys(cc.AlgInfo) },
@@ -411,7 +414,8 @@ const args = yargs(hideBin(process.argv))
                loops: CoerceNumber
             })
             .example('$0 enc -c 97jQeo8N16L4vhKzWy7ys -f doc.txt', ': prints encrypted text of doc.txt');
-      }
+      },
+      handler: () => {}
    })
    .options({
       'cred': { alias: 'c', desc: 'user credential from https://quickcrypt.org/cmdline', type: 'string', nargs: 1 },
@@ -425,7 +429,8 @@ const args = yargs(hideBin(process.argv))
    .conflicts('debug', 'silent')
    .version(false)
    .wrap(95)
-   .check((args, options) => {
+   .check((argv, options) => {
+      const args = argv as any;
       if (args.algs && (args.algs.length > args.loops)) {
          throw new Error(`${args.algs.length} algs provided for ${args.loops} loops`);
       }
@@ -434,7 +439,7 @@ const args = yargs(hideBin(process.argv))
       }
       return true;
    })
-   .demandCommand(1).parse();
+   .demandCommand(1).parseSync() as any;
 
 if (args.debug) {
    console.log('args ->', args);
@@ -448,7 +453,7 @@ async function main() {
       piped = fs.readFileSync(process.stdin.fd, 'utf-8');
    } catch (err) { }
 
-   reopenTTY.stdin(async (err, handle) => {
+   reopenTTY.stdin(async (err: any, handle: fs.ReadStream) => {
       ttyStream = handle;
       if(!ttyStream) {
          throw err;
