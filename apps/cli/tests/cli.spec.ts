@@ -6,11 +6,13 @@ import * as fs from 'fs';
 describe('CLI App', () => {
     const cliPath = path.resolve(__dirname, '../shell/qcrypt.cjs');
     const userCred = '_sHEi_YNTLC-YUSxfyIWXtMttNVWkkB9WGfyyZr0ZEc';
+    const wrongCred = 'AAAAAYNTLC-YUSxfyIWXtMttNVWkkB9WGfyyZr0ZEc';
     const clearText = 'This is a secret message to test the CLI.';
 
     const inFilePath = path.resolve(__dirname, '../shell/test-in.txt');
     const encryptedFilePath = path.resolve(__dirname, '../shell/test-enc.txt');
     const decryptedFilePath = path.resolve(__dirname, '../shell/test-dec.txt');
+    const infoFilePath = path.resolve(__dirname, '../shell/test-info.txt');
 
     const execCli = (command: string, input?: string) => {
         let cmd = `node ${cliPath} ${command}`;
@@ -29,7 +31,7 @@ describe('CLI App', () => {
     });
 
     afterAll(() => {
-        [inFilePath, encryptedFilePath, decryptedFilePath].forEach(file => {
+        [inFilePath, encryptedFilePath, decryptedFilePath, infoFilePath].forEach(file => {
             if (fs.existsSync(file)) {
                 try {
                     fs.unlinkSync(file);
@@ -85,6 +87,27 @@ describe('CLI App', () => {
             expect(result.stderr).toContain('Unsupported cipher mode: FAKE-CIPHER.');
         });
 
+        it('should reject --debug and --silent together', () => {
+            const result = execCli(`enc --cred ${userCred} --debug --silent --iters 1000000 --pwds pass`, clearText);
+            expect(result).toBeInstanceOf(Error);
+            expect(result.status).toBe(1);
+            expect(result.stderr).toContain('debug');
+            expect(result.stderr).toContain('silent');
+        });
+
+        it('should reject --infile and text together', () => {
+            const result = execCli(`enc "${clearText}" --cred ${userCred} --silent --iters 1000000 --infile ${inFilePath} --pwds pass`);
+            expect(result).toBeInstanceOf(Error);
+            expect(result.status).toBe(1);
+            expect(result.stderr).toContain('infile');
+        });
+
+        it('should accept lowercase algorithm names', () => {
+            const result = execCli(`enc --cred ${userCred} --silent --iters 1000000 --algs aes-gcm --pwds pass`, clearText);
+            expect(typeof result).toBe('string');
+            expect(result).toContain('{"ct":');
+        });
+
         it('should encrypt successfully with piped clear text', () => {
              const result = execCli(`enc --cred ${userCred} --silent --iters 1000000 --pwds pass`, clearText);
              expect(typeof result).toBe('string');
@@ -109,6 +132,17 @@ describe('CLI App', () => {
             const result = execCli(`enc --cred ${userCred} --silent --iters 1000000 --loops 2 --algs AES-GCM X20-PLY --pwds pass1 pass2`, clearText);
             expect(typeof result).toBe('string');
             expect(result).toContain('{"ct":');
+        });
+
+        it.each([
+            ['AES-GCM'],
+            ['X20-PLY'],
+            ['AEGIS-256'],
+        ])('should roundtrip encrypt/decrypt with %s', (alg) => {
+            const enc = execCli(`enc --cred ${userCred} --silent --iters 1000000 --algs ${alg} --pwds pass`, clearText) as string;
+            expect(enc).toContain('{"ct":');
+            const dec = execCli(`dec --cred ${userCred} --silent --pwds pass`, enc.trim()) as string;
+            expect(dec).toContain(clearText);
         });
     });
 
@@ -145,6 +179,19 @@ describe('CLI App', () => {
             const dec = execCli(`dec --cred ${userCred} --silent --pwds B A`, enc.trim()) as string;
             expect(dec).toContain(clearText);
         });
+
+        it('should decrypt using default command without dec keyword', () => {
+            const result = execCli(`--cred ${userCred} --silent --pwds pass`, encryptedText);
+            expect(typeof result).toBe('string');
+            expect(result).toContain(clearText);
+        });
+
+        it('should fail with wrong credential of valid length', () => {
+            const result = execCli(`dec --cred ${wrongCred} --silent --pwds pass`, encryptedText);
+            expect(result).toBeInstanceOf(Error);
+            expect(result.status).toBe(1);
+            expect(result.stderr).toContain('decryption failed');
+        });
     });
 
     describe('info command', () => {
@@ -171,6 +218,24 @@ describe('CLI App', () => {
              const result = execCli(`info --cred ${userCred} --silent --infile ${encryptedFilePath}`);
              expect(typeof result).toBe('string');
              expect(result).toContain('Cipher and Mode');
+        });
+
+        it('should show correct values for known encryption params', () => {
+            const enc = execCli(`enc --cred ${userCred} --silent --iters 1000000 --algs AES-GCM --pwds p1`, clearText) as string;
+            const result = execCli(`info --cred ${userCred} --silent`, enc.trim());
+            expect(typeof result).toBe('string');
+            expect(result).toContain('AES 256 GCM');
+            expect(result).toContain('1000000');
+            expect(result).toContain('Loops             : 1');
+        });
+
+        it('should save info output to file with --outfile', () => {
+            const result = execCli(`info --cred ${userCred} --silent --outfile ${infoFilePath}`, encryptedText);
+            expect(typeof result).toBe('string');
+            expect(result).toContain('saved to');
+            const output = fs.readFileSync(infoFilePath, 'utf-8');
+            expect(output).toContain('Cipher and Mode');
+            expect(output).toContain('Loops');
         });
     });
 });
