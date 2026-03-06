@@ -479,6 +479,10 @@ async function main() {
    reopenTTY.stdin(async (err: any, stream: fs.ReadStream) => {
       ttyStream = stream;
 
+      if (!ttyStream) {
+         console.warn('Warning: no TTY available. All values must be passed via command-line options.');
+      }
+
       if (args._.length && args._[0] === 'info') {
          const infoText = await info(args, piped);
          console.log(`\n${infoText}`);
