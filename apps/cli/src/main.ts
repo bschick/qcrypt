@@ -476,7 +476,8 @@ async function main() {
       } catch (err) { }
    }
 
-   reopenTTY.stdin(async (err: any, ttyStream: fs.ReadStream) => {
+   reopenTTY.stdin(async (err: any, stream: fs.ReadStream) => {
+      ttyStream = stream;
 
       if (args._.length && args._[0] === 'info') {
          const infoText = await info(args, piped);
