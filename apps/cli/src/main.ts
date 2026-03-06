@@ -10,7 +10,7 @@ import ws from 'node:stream/web';
 import { Readable } from 'node:stream';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
-import { input, select, number } from '@inquirer/prompts';
+import { input, select, number, password } from '@inquirer/prompts';
 // @ts-expect-error package does not ship with types
 import reopenTTY from 'reopen-tty';
 
@@ -72,7 +72,7 @@ async function getCipherStream(
       // This does not produce a byod binary stream... but it still works
       stream = ws.ReadableStream.from(nodeStream) as ReadableStream<Uint8Array>;
    } else {
-      let text;
+      let text: string | undefined = '';
       if (args.infile) {
          // json file containing... json
          const nodeStream = fs.createReadStream(args.infile);
@@ -87,7 +87,10 @@ async function getCipherStream(
             { input: ttyStream }
          );
       }
-      stream = streamFromBytes(parseCipherArmor(text!));
+      if (!text) {
+         throw new Error('Input text is empty');
+      }
+      stream = streamFromBytes(parseCipherArmor(text));
    }
 
    return stream;
@@ -128,7 +131,7 @@ async function info(
       silent?: boolean,
       debug?: boolean
    },
-   piped: string
+   piped?: string
 ): Promise<string> {
 
    let returnText = '';
@@ -159,6 +162,7 @@ Version           : ${cdInfo.ver}\n`;
       if (args.debug) {
          console.error(err);
       }
+      process.exitCode = 1;
    }
 
    return returnText;
@@ -170,8 +174,8 @@ async function getSensitiveInput(
       silent?: boolean,
       debug?: boolean
    }): Promise<string> {
-   const pwd = await input(
-      { message: msg, required: true },
+   const pwd = await password(
+      { message: msg, mask: '*' },
       { input: ttyStream, clearPromptOnDone: true }
    );
    if (!args.silent) {
@@ -196,7 +200,7 @@ async function encrypt(
       silent?: boolean,
       debug?: boolean
    },
-   piped: string,
+   piped?: string,
 ): Promise<string> {
 
    let returnText = '';
@@ -204,6 +208,8 @@ async function encrypt(
       const userCred = await getUserCred(args);
       const clearStream = await getClearStream(args, piped);
 
+      args.loops = Math.max(Math.min(args.loops, 6), 1);
+      
       let nextAlg = 'X20-PLY';
       let keys = Object.keys(cc.AlgInfo);
       let choices = keys.map((key) => {
@@ -213,7 +219,7 @@ async function encrypt(
       let algs = [];
 
       for (let l = 1; l <= args.loops; l++) {
-         const lpMsg = args.loops > 1 ? ` for loop ${l} or ${args.loops}` : '';
+         const lpMsg = args.loops > 1 ? ` for loop ${l} of ${args.loops}` : '';
          let alg;
          if (args.algs && args.algs[l - 1]) {
             alg = args.algs[l - 1];
@@ -253,7 +259,7 @@ async function encrypt(
       ) : args.iters;
 
       const econtext = {
-         lpEnd: Math.max(Math.min(args.loops, 6), 1),
+         lpEnd: args.loops,
          algs: algs,
          ic: iters!
       };
@@ -302,6 +308,7 @@ async function encrypt(
       if (args.debug) {
          console.error(err);
       }
+      process.exitCode = 1;
    }
 
    return returnText;
@@ -317,7 +324,7 @@ async function decrypt(
       silent?: boolean,
       debug?: boolean
    },
-   piped: string
+   piped?: string
 ): Promise<string> {
 
    let returnText = '';
@@ -328,7 +335,7 @@ async function decrypt(
       const clearStream = await decryptStream(
          async (cdinfo) => {
             const pos = cdinfo.lpEnd - cdinfo.lp;
-            const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} or ${cdinfo.lpEnd}` : '';
+            const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} of ${cdinfo.lpEnd}` : '';
             if (args.pwds && pos < args.pwds.length) {
                // Show pre-supplied values (no hints for pre-supplied pwds)
                if (!args.silent) {
@@ -359,6 +366,7 @@ async function decrypt(
       if (args.debug) {
          console.error(err);
       }
+      process.exitCode = 1;
    }
 
    return returnText;
@@ -448,10 +456,12 @@ if (args.debug) {
 async function main() {
    await sodium.ready;
 
-   let piped: string;
-   try {
-      piped = fs.readFileSync(process.stdin.fd, 'utf-8');
-   } catch (err) { }
+   let piped: string | undefined;
+   if (!process.stdin.isTTY) {
+      try {
+         piped = fs.readFileSync(process.stdin.fd, 'utf-8');
+      } catch (err) { }
+   }
 
    reopenTTY.stdin(async (err: any, handle: fs.ReadStream) => {
       ttyStream = handle;
