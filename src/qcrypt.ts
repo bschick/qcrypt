@@ -8,12 +8,13 @@ import ws from 'node:stream/web';
 import { Readable } from 'node:stream';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
-import { input, select, number } from '@inquirer/prompts';
+import { input, select, number, password } from '@inquirer/prompts';
+// @ts-expect-error package does not ship with types
 import reopenTTY from 'reopen-tty';
 
 let ttyStream: fs.ReadStream;
 
-function streamFromBytes(data: Uint8Array): ReadableStream<Uint8Array> {
+function streamFromBytes(data: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Array> {
    const blob = new Blob([data], { type: 'application/octet-stream' });
    return blob.stream();
 }
@@ -69,7 +70,7 @@ async function getCipherStream(
       // This does not produce a byod binary stream... but it still works
       stream = ws.ReadableStream.from(nodeStream) as ReadableStream<Uint8Array>;
    } else {
-      let text;
+      let text: string | undefined = '';
       if (args.infile) {
          // json file containing... json
          const nodeStream = fs.createReadStream(args.infile);
@@ -84,7 +85,10 @@ async function getCipherStream(
             { input: ttyStream }
          );
       }
-      stream = streamFromBytes(parseCipherArmor(text!));
+      if (!text) {
+         throw new Error('Input text is empty');
+      }
+      stream = streamFromBytes(parseCipherArmor(text));
    }
 
    return stream;
@@ -125,7 +129,7 @@ async function info(
       silent?: boolean,
       debug?: boolean
    },
-   piped: string
+   piped?: string
 ): Promise<string> {
 
    let returnText = '';
@@ -156,6 +160,7 @@ Version           : ${cdInfo.ver}\n`;
       if (args.debug) {
          console.error(err);
       }
+      process.exitCode = 1;
    }
 
    return returnText;
@@ -167,8 +172,8 @@ async function getSensitiveInput(
       silent?: boolean,
       debug?: boolean
    }): Promise<string> {
-   const pwd = await input(
-      { message: msg, required: true },
+   const pwd = await password(
+      { message: msg, mask: '*' },
       { input: ttyStream, clearPromptOnDone: true }
    );
    if (!args.silent) {
@@ -193,13 +198,15 @@ async function encrypt(
       silent?: boolean,
       debug?: boolean
    },
-   piped: string,
+   piped?: string,
 ): Promise<string> {
 
    let returnText = '';
    try {
       const userCred = await getUserCred(args);
       const clearStream = await getClearStream(args, piped);
+
+      args.loops = Math.max(Math.min(args.loops, 6), 1);
 
       let nextAlg = 'X20-PLY';
       let keys = Object.keys(cc.AlgInfo);
@@ -210,7 +217,7 @@ async function encrypt(
       let algs = [];
 
       for (let l = 1; l <= args.loops; l++) {
-         const lpMsg = args.loops > 1 ? ` for loop ${l} or ${args.loops}` : '';
+         const lpMsg = args.loops > 1 ? ` for loop ${l} of ${args.loops}` : '';
          let alg;
          if (args.algs && args.algs[l - 1]) {
             alg = args.algs[l - 1];
@@ -250,7 +257,7 @@ async function encrypt(
       ) : args.iters;
 
       const econtext = {
-         lpEnd: Math.max(Math.min(args.loops, 6), 1),
+         lpEnd: args.loops,
          algs: algs,
          ic: iters!
       };
@@ -299,6 +306,7 @@ async function encrypt(
       if (args.debug) {
          console.error(err);
       }
+      process.exitCode = 1;
    }
 
    return returnText;
@@ -314,7 +322,7 @@ async function decrypt(
       silent?: boolean,
       debug?: boolean
    },
-   piped: string
+   piped?: string
 ): Promise<string> {
 
    let returnText = '';
@@ -325,7 +333,7 @@ async function decrypt(
       const clearStream = await decryptStream(
          async (cdinfo) => {
             const pos = cdinfo.lpEnd - cdinfo.lp;
-            const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} or ${cdinfo.lpEnd}` : '';
+            const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} of ${cdinfo.lpEnd}` : '';
             if (args.pwds && pos < args.pwds.length) {
                // Show pre-supplied values (no hints for pre-supplied pwds)
                if (!args.silent) {
@@ -356,17 +364,31 @@ async function decrypt(
       if (args.debug) {
          console.error(err);
       }
+      process.exitCode = 1;
    }
 
    return returnText;
 }
 
-function CoerceNumber(val: any) {
-   let num = Number(val);
-   if (isNaN(num)) {
-      throw new Error(`${val} is not a number`);
+function CoerceNumber(argName: string) {
+   return (val: any) => {
+      let num = Number(val);
+      if (isNaN(num)) {
+         throw new Error(`${argName} is not a valid number`);
+      }
+      return num;
+   };
+}
+
+function CoerceAlgs(algs: string[]) {
+   const upperAlgs = algs.map((alg: string) => alg.toUpperCase());
+   const validChoices = Object.keys(cc.AlgInfo);
+   for (const alg of upperAlgs) {
+      if (!validChoices.includes(alg)) {
+         throw new Error(`Unsupported cipher mode: ${alg}. Valid choices are: ${validChoices.join(', ')}`);
+      }
    }
-   return num;
+   return upperAlgs;
 }
 
 //yargs seems to have a bug with nargs not working as described... if the credential starts with
@@ -379,37 +401,40 @@ const args = yargs(hideBin(process.argv))
    .command({
       command: '$0 [text] [options]',
       aliases: ['dec'],
-      desc: 'decrypt cipher data',
+      describe: 'decrypt cipher data',
       builder: (yargs) => {
-         yargs.positional('text', { desc: 'cipher armor to decrypt (or use -f or stdin)' })
+         return yargs.positional('text', { desc: 'cipher armor to decrypt (or use -f or stdin)' })
             .example('$0 -c 97jQeo8N16L4vhKzWy7ys -f doc.qq', ': prints decrypted text of doc.qq');
-      }
+      },
+      handler: () => {}
    })
    .command({
       command: 'info [text] [options]',
-      desc: 'show information about cipher data',
+      describe: 'show information about cipher data',
       builder: (yargs) => {
-         yargs.positional('text', { desc: 'cipher armor to describe (or use -f or stdin)' })
+         return yargs.positional('text', { desc: 'cipher armor to describe (or use -f or stdin)' })
             .example('$0 info -c 97jQeo8N16L4vhKzWy7ys -f doc.qq', ': prints encryption params for doc.qq');
-      }
+      },
+      handler: () => {}
    })
    .command({
       command: 'enc [text] [options]',
-      desc: 'encrypt clear text',
+      describe: 'encrypt clear text',
       builder: (yargs) => {
-         yargs.positional('text', { desc: 'clear text to encrypt (or use -f or stdin)' })
+         return yargs.positional('text', { desc: 'clear text to encrypt (or use -f or stdin)' })
             .options({
                'iters': { alias: 'i', desc: `password hash iterations (min ${cc.ICOUNT_MIN})`, type: 'number' },
                'algs': { alias: 'a', desc: 'encryption cipher mode(s)', type: 'string', array: true, choices: Object.keys(cc.AlgInfo) },
                'loops': { alias: 'l', desc: 'nested encryption loops (max 6)', type: 'number', default: 1 },
             })
             .coerce({
-               algs: (algs) => algs.map((alg: string) => alg.toUpperCase()),
-               iters: CoerceNumber,
-               loops: CoerceNumber
+               algs: CoerceAlgs,
+               iters: CoerceNumber('iters'),
+               loops: CoerceNumber('loops')
             })
             .example('$0 enc -c 97jQeo8N16L4vhKzWy7ys -f doc.txt', ': prints encrypted text of doc.txt');
-      }
+      },
+      handler: () => {}
    })
    .options({
       'cred': { alias: 'c', desc: 'user credential from https://quickcrypt.org/cmdline', type: 'string', nargs: 1 },
@@ -423,7 +448,8 @@ const args = yargs(hideBin(process.argv))
    .conflicts('debug', 'silent')
    .version(false)
    .wrap(95)
-   .check((args, options) => {
+   .check((argv, options) => {
+      const args = argv as any;
       if (args.algs && (args.algs.length > args.loops)) {
          throw new Error(`${args.algs.length} algs provided for ${args.loops} loops`);
       }
@@ -432,7 +458,7 @@ const args = yargs(hideBin(process.argv))
       }
       return true;
    })
-   .demandCommand(1).parse();
+   .demandCommand(1).parseSync() as any;
 
 if (args.debug) {
    console.log('args ->', args);
@@ -441,15 +467,18 @@ if (args.debug) {
 async function main() {
    await sodium.ready;
 
-   let piped: string;
-   try {
-      piped = fs.readFileSync(process.stdin.fd, 'utf-8');
-   } catch (err) { }
+   let piped: string | undefined;
+   if (!process.stdin.isTTY) {
+      try {
+         piped = fs.readFileSync(process.stdin.fd, 'utf-8');
+      } catch (err) { }
+   }
 
-   reopenTTY.stdin(async (err, handle) => {
-      ttyStream = handle;
-      if(!ttyStream) {
-         throw err;
+   reopenTTY.stdin(async (err: any, stream: fs.ReadStream) => {
+      ttyStream = stream;
+
+      if (!ttyStream) {
+         console.warn('Warning: no TTY available. All values must be passed via command-line options.');
       }
 
       if (args._.length && args._[0] === 'info') {
@@ -464,7 +493,9 @@ async function main() {
          console.log(`\n${clearText}`);
       }
 
-      ttyStream.destroy();
+      if (ttyStream) {
+         ttyStream.destroy();
+      }
    });
 }
 
