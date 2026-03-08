@@ -335,7 +335,7 @@ async function decrypt(
                   );
                } return [args.pwds[pos], undefined];
             } else {
-               const hintMsg = lpMsg + cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '';
+               const hintMsg = lpMsg + (cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '');
                const pwd = await getSensitiveInput(`Password${hintMsg}:`, args);
                return [pwd, undefined];
             }
