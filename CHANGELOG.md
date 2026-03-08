@@ -1,5 +1,10 @@
 # CHANGELOG.md
 
+## 6.1.2 (2026-02-08)
+
+#### Security
+  - updated packages, fixing dependabot detected CVE
+
 ## 6.1.1 (2025-12-20)
 
 #### Changes
