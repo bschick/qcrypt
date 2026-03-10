@@ -712,7 +712,7 @@ async function fullFuzzCommaon(
       [[...badIdsSmall, userId], badIds]
    );
 
-   // POST recovery2
+   // POST recovery2... TODO: move params to body
    await fuzzPost(page, headers,
       `${apiUrl}/users/{0}/recover2/{1}`,
       [[...badIdsSmall, userId], badIds]
