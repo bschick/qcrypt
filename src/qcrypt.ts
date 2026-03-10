@@ -46,7 +46,7 @@ async function getUserCred(args: {
 }): Promise<Uint8Array> {
 
    let credText = args.cred ?? await getSensitiveInput(
-      'User Credential:',
+      'User Credential',
       args
    );
 
@@ -172,17 +172,11 @@ async function getSensitiveInput(
       silent?: boolean,
       debug?: boolean
    }): Promise<string> {
-   const pwd = await password(
-      { message: msg, mask: '*' },
-      { input: ttyStream, clearPromptOnDone: true }
+   const val = await password(
+      { message: msg + ':', mask: '*', validate: (v) => !v ? `${msg} is required` : true },
+      { input: ttyStream }
    );
-   if (!args.silent) {
-      await input(
-         { message: msg },
-         { input: Readable.from('******\n') }
-      );
-   }
-   return pwd;
+   return val;
 }
 
 async function encrypt(
@@ -277,7 +271,7 @@ async function encrypt(
                }
                return [args.pwds[pos]!, undefined];
             } else {
-               const pwd = await getSensitiveInput(`Password${lpMsg}:`, args);
+               const pwd = await getSensitiveInput(`Password${lpMsg}`, args);
                let hint;
                // Don't ask for hints in silent mode
                if (!args.silent) {
@@ -344,7 +338,7 @@ async function decrypt(
                } return [args.pwds[pos], undefined];
             } else {
                const hintMsg = lpMsg + (cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '');
-               const pwd = await getSensitiveInput(`Password${hintMsg}:`, args);
+               const pwd = await getSensitiveInput(`Password${hintMsg}`, args);
                return [pwd, undefined];
             }
          },
