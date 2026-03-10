@@ -7,7 +7,7 @@
 
 #### Security
   - changed recover2 to post values in request body and return generic errors [thanks to Rajat Shukla (@rajat4722)]
-  - updated packages, fixing dependabot detected CVEs
+  - updated packages, fixing dependabot detected vulnerabilities
 
 ## 6.1.3 (2026-02-21)
 
