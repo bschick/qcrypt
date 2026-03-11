@@ -20,9 +20,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { Component } from '@angular/core';
-import { MatInputModule } from '@angular/material/input';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthenticatorService } from '../services/authenticator.service';
@@ -43,7 +40,7 @@ function paramsToQueryString(): string {
     selector: 'app-welcome',
     templateUrl: './welcome.component.html',
     styleUrl: './welcome.component.scss',
-    imports: [MatInputModule, MatFormFieldModule, FormsModule, MatButtonModule,
+    imports: [MatButtonModule,
         MatProgressSpinnerModule, MatIconModule, MatDividerModule, RouterLink
     ]
 })
