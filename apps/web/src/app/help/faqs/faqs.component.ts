@@ -99,13 +99,32 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
+      question: 'Why is user creation failing?',
+      answer: `<p>To create a Quick Crypt user account, you must complete the
+      creation of a new passkey when prompted by your browser or password manager.
+      Your browser or password manager should display a prompt asking you to save
+      the passkey. You must follow those prompts to completion. If you cancel or dismiss
+      the prompt, user creation will not complete.</p>
+      <p>Common reasons for failure include:</p>
+      <ul>
+         <li>Canceling or dismissing the passkey creation prompt</li>
+         <li>Your browser or device does not support passkeys</li>
+         <li>A browser extension is interfering with the passkey prompt</li>
+         <li>Network connectivity issues preventing server communication</li>
+      </ul>
+      <p>If you continue to have trouble creating a user, please
+      <a href="https://github.com/bschick/qcrypt/issues/new/choose" target="_blank">
+      report the issue on GitHub</a>.</p>`
+   },
+
+   {
+      position: 0,
       question: 'Where should I report problems or get help with Quick Crypt?',
-      answer: `Please report problems by <a href="https://github.com/bschick/qcrypt/issues"
-      target="_blank">creating an issue on Github</a>. A discussion forum is not yet
+      answer: `Please report problems by <a href="https://github.com/bschick/qcrypt/issues/new/choose" target="_blank">
+      creating an issue on Github</a>. A discussion forum is not yet
       available, but we may create one in the future. You can also try common sites
       like Stack Overflow.`
    },
-
 
    {
       position: 0,
