@@ -1297,6 +1297,8 @@ async function registrationOptions(
 
       // Let this happen async
       recordEvent(EventNames.RegOptions, unverifiedUser.userId);
+//?      //@ts-ignore
+//      options.rp['origin'] = rpOrigin;
       return { content: options };
    } catch (err) {
       console.error(err);
@@ -1736,7 +1738,9 @@ async function postRecover(
    const verifiedUser = checkVerified(unverifiedUser, resources.userid);
 
    if (verifiedUser.recoveryIdEnc && verifiedUser.recoveryIdEnc.length > 1) {
-      throw new ParamError('must use recovery words instead');
+      // vague error to make guessing harder
+      console.error(`user account ${verifiedUser.userId} must use recovery words`);
+      throw new AuthError();
    }
 
    const userCredDecBytes = await decryptField(
@@ -1748,6 +1752,7 @@ async function postRecover(
    // Critical check to ensure we do not recover the wrong user
    if (base64UrlEncode(userCredDecBytes) !== userCred) {
       // vague error to make guessing harder
+      console.error(`user account ${verifiedUser.userId} invalid user credential`);
       throw new AuthError();
    }
 
@@ -1797,21 +1802,34 @@ async function postRecover2(
    const {
       rpID,
       rpOrigin,
-      resources
+      resources,
+      body
    } = httpDetails;
 
-   const recoveryId = resources['recoveryid'];
+   let recoveryId = body?.recoveryId;
+   let userId = body?.userId;
+
+   // For backward compatibility accept userid and recoveryid in url until clients update
+   if (!recoveryId) {
+      recoveryId = resources['recoveryid'];
+   }
+   if (!userId) {
+      userId = resources['userid'];
+   }
+
    if (!validB64(recoveryId)) {
       throw new ParamError('invalid recovery id');
    }
    // Require an existing verified user for recovery
-   const unverifiedUser = await getUnverifiedUser(resources.userid);
-   const verifiedUser = checkVerified(unverifiedUser, resources.userid);
+   const unverifiedUser = await getUnverifiedUser(userId);
+   const verifiedUser = checkVerified(unverifiedUser, userId);
 
    // due to switch from recover to recover2, not all verified users have recoveryIdEnc
    if (!verifiedUser.recoveryIdEnc ||
       verifiedUser.recoveryIdEnc.length < 10) {
-      throw new ParamError('account not upgraded');
+      // vague error on purpose to make guessing harder
+      console.error(`user account ${verifiedUser.userId} not using recovery words`);
+      throw new AuthError();
    }
 
    const recoveryIdDecBytes = await decryptField(
@@ -1822,7 +1840,9 @@ async function postRecover2(
 
    // Critical check to ensure we do not recover the wrong user
    if (base64UrlEncode(recoveryIdDecBytes) !== recoveryId) {
-      throw new ParamError('invalid recovery id');
+      // vague error on purpose to make guessing harder
+      console.error(`user account ${verifiedUser.userId} invalid recovery id`);
+      throw new AuthError();
    }
 
    const auths = await Authenticators.query.byUserId({
@@ -2116,6 +2136,7 @@ const METHODMAP: MethodMap = {
       { name: 'postRegVerify', pattern: Patterns.regVerify, version: 1, authorize: false, handler: postRegVerify },
       { name: 'postRecover', pattern: Patterns.recover, version: 1, authorize: false, handler: postRecover },
       { name: 'postRecover2', pattern: Patterns.recover2, version: 1, authorize: false, handler: postRecover2 },
+      { name: 'postRecover2Old', pattern: Patterns.recover2Old, version: 1, authorize: false, handler: postRecover2 },
 
       // Sender links
       // { name: 'postSenderLinks', pattern: Patterns.senderLinks, version: 1, authorize: true, handler: postSenderLinks },
