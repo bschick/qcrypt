@@ -1,5 +1,22 @@
 # CHANGELOG.md
 
+## 6.1.4 (2026-03-08)
+
+#### Changes
+  - fixed cli password prompt error [thanks to Rajat Shukla (@rajat4722)]
+
+#### Security
+  - changed recover2 to post values in request body and return generic errors [thanks to Rajat Shukla (@rajat4722)]
+  - updated packages, fixing dependabot detected vulnerabilities
+
+## 6.1.3 (2026-02-21)
+
+#### Changes
+  - better looking welcome page with help from claude code
+
+#### Security
+  - updated packages, fixing dependabot detected CVEs
+
 ## 6.1.2 (2026-02-08)
 
 #### Security
