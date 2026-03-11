@@ -59,14 +59,7 @@ node_modules/
 /playwright/.cache/
 
 # Log files
-karma.log
 serve.log
-
-# CLI build output
-apps/cli/shell/
-
-# Server build output
-apps/server/build/
 
 # Nx
 .nx/cache

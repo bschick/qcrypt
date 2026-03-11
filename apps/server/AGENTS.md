@@ -58,11 +58,11 @@ For production builds, use the following command to create a minimized version:
 pnpm build:server:min
 ```
 
-The output will be placed in the `apps/server/build/` directory.
+The output will be placed in the `dist/server/` directory.
 
 ### c. Deployment
 
-The `apps/server/build/` directory will contain `index.js` and `index.zip`. To deploy, upload `index.zip` to the appropriate AWS Lambda function. This may be documented in detail later.
+The `dist/server/` directory will contain `index.mjs` and `index.zip`. To deploy, upload `index.zip` to the appropriate AWS Lambda function. This may be documented in detail later.
 
 ### d. Testing
 

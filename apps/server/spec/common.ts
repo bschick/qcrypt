@@ -10,7 +10,7 @@ export const sha256Hex = (buf: Buffer): string => crypto.createHash("sha256").up
 
 
 export function getWebAuthnEmulator(persistent: boolean = false): WebAuthnEmulator {
-   const repo = new PasskeysCredentialsFileRepository("spec/credentials");
+   const repo = new PasskeysCredentialsFileRepository("apps/server/spec/credentials");
    const auth = new AuthenticatorEmulator({ credentialsRepository: repo });
    return persistent ? new WebAuthnEmulator(auth) : new WebAuthnEmulator();
 }

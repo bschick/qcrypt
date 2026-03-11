@@ -4,15 +4,16 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 describe('CLI App', () => {
-    const cliPath = path.resolve(__dirname, '../shell/qcrypt.cjs');
+    const cliPath = path.resolve(__dirname, '../../../dist/cli/qcrypt.cjs');
+    const tmpDir = path.resolve(__dirname, '../tmp');
     const userCred = '_sHEi_YNTLC-YUSxfyIWXtMttNVWkkB9WGfyyZr0ZEc';
     const wrongCred = 'AAAAAYNTLC-YUSxfyIWXtMttNVWkkB9WGfyyZr0ZEc';
     const clearText = 'This is a secret message to test the CLI.';
 
-    const inFilePath = path.resolve(__dirname, '../shell/test-in.txt');
-    const encryptedFilePath = path.resolve(__dirname, '../shell/test-enc.txt');
-    const decryptedFilePath = path.resolve(__dirname, '../shell/test-dec.txt');
-    const infoFilePath = path.resolve(__dirname, '../shell/test-info.txt');
+    const inFilePath = path.resolve(tmpDir, 'test-in.txt');
+    const encryptedFilePath = path.resolve(tmpDir, 'test-enc.txt');
+    const decryptedFilePath = path.resolve(tmpDir, 'test-dec.txt');
+    const infoFilePath = path.resolve(tmpDir, 'test-info.txt');
 
     const execCli = (command: string, input?: string) => {
         let cmd = `node ${cliPath} ${command}`;
@@ -27,6 +28,7 @@ describe('CLI App', () => {
     beforeAll(() => {
         console.log('Building CLI before running tests...');
         execSync('pnpm nx build cli', { stdio: 'inherit' });
+        fs.mkdirSync(tmpDir, { recursive: true });
         fs.writeFileSync(inFilePath, clearText, 'utf-8');
     });
 

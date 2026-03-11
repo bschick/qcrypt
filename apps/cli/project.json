@@ -7,18 +7,18 @@
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm exec esbuild --bundle --format=cjs --platform=node --target=es2022 --tsconfig=tsconfig.base.json --outfile=apps/cli/shell/qcrypt.cjs apps/cli/src/main.ts",
+        "command": "pnpm exec esbuild --bundle --format=cjs --platform=node --target=es2022 --tsconfig=tsconfig.base.json --outfile=dist/cli/qcrypt.cjs apps/cli/src/main.ts",
         "cwd": "{workspaceRoot}"
       },
-      "outputs": ["{projectRoot}/shell/qcrypt.cjs"]
+      "outputs": ["{workspaceRoot}/dist/cli/qcrypt.cjs"]
     },
     "build-min": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm exec esbuild --bundle --format=cjs --minify --platform=node --target=es2022 --tsconfig=tsconfig.base.json --outfile=apps/cli/shell/qcrypt.cjs apps/cli/src/main.ts",
+        "command": "pnpm exec esbuild --bundle --format=cjs --minify --platform=node --target=es2022 --tsconfig=tsconfig.base.json --outfile=dist/cli/qcrypt.cjs apps/cli/src/main.ts",
         "cwd": "{workspaceRoot}"
       },
-      "outputs": ["{projectRoot}/shell/qcrypt.cjs"]
+      "outputs": ["{workspaceRoot}/dist/cli/qcrypt.cjs"]
     },
     "test": {
       "executor": "nx:run-commands",
