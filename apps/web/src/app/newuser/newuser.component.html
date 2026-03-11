@@ -30,11 +30,10 @@
         manager. Dedicated password managers like Bitwarden and 1Password are
         the easiest to use, work consistently across devices, and support backup.">
         passkey</span>. Just follow the prompts to complete the process.
-      </p>
-      <p>
-        If you cannot create a new user, please
-        <a href="https://github.com/bschick/qcrypt/issues/new/choose" target="_blank">
-        report the issue</a>.
+        <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'user creation failing'}"
+          class="help-link" matTooltip="Help with user creation">
+          <mat-icon class="help-icon">help_outline</mat-icon>
+        </a>
       </p>
       <div class="control-host">
         <mat-form-field class="user-name">
