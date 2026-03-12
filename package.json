@@ -1,8 +1,6 @@
 {
   "name": "@qcrypt/monorepo",
-  "version": "7.0.0",
   "type": "module",
-  "copyright": "© 2024–2026 Quick Crypt Contributors",
   "scripts": {
     "ng": "ng",
     "serve": "nx serve web --hmr false --host 0.0.0.0 --watch --poll 1000 --ssl --ssl-cert apps/web/localssl/localhost.crt --ssl-key apps/web/localssl/localhost.key",
