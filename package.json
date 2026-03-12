@@ -1,8 +1,6 @@
 {
   "name": "@qcrypt/qcrypt-client",
-  "version": "6.1.4",
   "type": "module",
-  "copyright": "© 2024–2026 Quick Crypt Contributors",
   "scripts": {
     "ng": "ng",
     "serve": "ng serve --hmr false --host 0.0.0.0 --watch --poll 1000 --ssl --ssl-cert localssl/localhost.crt --ssl-key localssl/localhost.key",
