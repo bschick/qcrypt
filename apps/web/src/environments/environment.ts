@@ -1,11 +1,9 @@
-import pkg from '../../../../package.json';
+import { shared } from './shared';
 
 export const environment = {
     production: true,
     host: 'https://quickcrypt.org',
     apiHost: 'https://quickcrypt.org',
-    apiVersion: 'v1',
     appPublicKey: 'public-key1',
-    clientVersion: pkg.version,
-    copyright: pkg.copyright
+    ...shared
 };
