@@ -7,14 +7,28 @@ import {
 import * as cc from '@qcrypt/crypto/consts';
 import fs from 'fs';
 import ws from 'node:stream/web';
-import { Readable } from 'node:stream';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import { input, select, number, password } from '@inquirer/prompts';
+import { makeTheme } from '@inquirer/core';
 // @ts-expect-error package does not ship with types
 import reopenTTY from 'reopen-tty';
 
 let ttyStream: fs.ReadStream;
+
+class ParamError extends Error {
+   constructor(message: string) {
+      super(message);
+      this.name = 'ParamError';
+   }
+}
+
+// Display a pre-supplied answer using inquirer's own theme so it looks
+// identical to an interactively answered prompt.
+const iqTheme = makeTheme();
+function showAnswered(message: string, answer: string): void {
+   console.log(`${iqTheme.prefix.done} ${iqTheme.style.message(message)} ${iqTheme.style.answer(answer)}`);
+}
 
 function streamFromBytes(data: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Array> {
    const blob = new Blob([data], { type: 'application/octet-stream' });
@@ -47,10 +61,17 @@ async function getUserCred(args: {
    debug?: boolean
 }): Promise<Uint8Array> {
 
-   let credText = args.cred ?? await getSensitiveInput(
-      'User Credential',
-      args
-   );
+   let credText: string;
+   if (args.cred) {
+      credText = args.cred;
+      if (!args.silent) {
+         showAnswered('User Credential:', '******');
+      }
+   } else if (args.silent) {
+      throw new ParamError('User Credential is required in silent mode (use --cred)');
+   } else {
+      credText = await getSensitiveInput('User Credential', args);
+   }
 
    try {
       credText = new URL(credText).searchParams.get('usercred') ?? credText;
@@ -63,6 +84,7 @@ async function getCipherStream(
    args: {
       text?: string,
       infile?: string,
+      silent?: boolean,
    },
    piped?: string
 ): Promise<ReadableStream<Uint8Array>> {
@@ -82,13 +104,18 @@ async function getCipherStream(
          }
       } else {
          text = args.text ?? piped;
+         if (text && !args.silent) {
+            showAnswered('Cipher Armor:', piped ? '(from stdin)' : '(from options)');
+         } else if (!text && args.silent) {
+            throw new ParamError('Cipher text is required in silent mode (use positional arg, --infile, or stdin)');
+         }
          text = text ?? await input(
             { message: 'Cipher Armor:', required: true },
             { input: ttyStream }
          );
       }
       if (!text) {
-         throw new Error('Input text is empty');
+         throw new Error('Cipher text is empty (use positional arg, --infile, or stdin)');
       }
       stream = streamFromBytes(parseCipherArmor(text));
    }
@@ -100,6 +127,7 @@ async function getClearStream(
    args: {
       text?: string,
       infile?: string,
+      silent?: boolean,
    },
    piped?: string
 ): Promise<ReadableStream<Uint8Array>> {
@@ -110,10 +138,18 @@ async function getClearStream(
       stream = ws.ReadableStream.from(nodeStream) as ReadableStream<Uint8Array>;
    } else {
       let text = args.text ?? piped;
+      if (text && !args.silent) {
+         showAnswered('Clear Text:', piped ? '(from stdin)' : '(from options)');
+      } else if (!text && args.silent) {
+         throw new ParamError('Clear text is required in silent mode (use positional arg, --infile, or stdin)');
+      }
       text = text ?? await input(
          { message: 'Clear Text:', required: true },
          { input: ttyStream }
       );
+      if (!text) {
+         throw new Error('Clear text is empty (use positional arg, --infile, or stdin)');
+      }
       const bytes = new TextEncoder().encode(text);
       stream = streamFromBytes(bytes);
    }
@@ -136,8 +172,8 @@ async function info(
 
    let returnText = '';
    try {
-      const userCred = await getUserCred(args);
       const cipherStream = await getCipherStream(args, piped);
+      const userCred = await getUserCred(args);
 
       const cdInfo = await getCipherStreamInfo(
          userCred,
@@ -153,14 +189,17 @@ Loops             : ${cdInfo.lpEnd}
 Version           : ${cdInfo.ver}\n`;
 
       if (args.outfile) {
-         await writeToFile(await getClearStream({ text: returnText }), args.outfile);
+         await writeToFile(await getClearStream({ text: returnText, silent: args.silent }), args.outfile);
          returnText = `saved to '${args.outfile}'`;
       }
    }
    catch (err) {
-      console.error('\nget info failed: ', (err as any).message);
       if (args.debug) {
          console.error(err);
+      } else if (err instanceof ParamError) {
+         console.error(`\n${err.message}`);
+      } else {
+         console.error('\nget info failed: ', (err as any).message);
       }
       process.exitCode = 1;
    }
@@ -199,8 +238,8 @@ async function encrypt(
 
    let returnText = '';
    try {
-      const userCred = await getUserCred(args);
       const clearStream = await getClearStream(args, piped);
+      const userCred = await getUserCred(args);
 
       args.loops = Math.max(Math.min(args.loops, 6), 1);
 
@@ -217,12 +256,9 @@ async function encrypt(
          let alg;
          if (args.algs && args.algs[l - 1]) {
             alg = args.algs[l - 1];
-            // Show pre-supplied values if not silient
+            // Show pre-supplied values if not silent
             if (!args.silent) {
-               await input(
-                  { message: `Select Cipher Mode${lpMsg}:` },
-                  { input: Readable.from(cc.AlgInfo[alg]['description'] as string + '\n') }
-               );
+               showAnswered(`Select Cipher Mode${lpMsg}:`, cc.AlgInfo[alg]['description'] as string);
             }
          } else {
             alg = nextAlg;
@@ -243,14 +279,28 @@ async function encrypt(
          algs.push(alg);
       }
 
-      let iters = !args.iters || args.iters < cc.ICOUNT_MIN ? await number({
-            message: 'Password Hash Iterations:',
-            default: cc.ICOUNT_DEFAULT,
-            min: cc.ICOUNT_MIN,
-            required: true
-         },
-         { input: ttyStream }
-      ) : args.iters;
+      let iters: number | undefined;
+      if (args.iters && args.iters >= cc.ICOUNT_MIN) {
+         iters = args.iters;
+         if (!args.silent) {
+            showAnswered('Password Hash Iterations:', String(iters));
+         }
+      } else {
+         iters = await number({
+               message: 'Password Hash Iterations:',
+               default: cc.ICOUNT_DEFAULT,
+               min: cc.ICOUNT_MIN,
+               required: true
+            },
+            { input: ttyStream }
+         );
+      }
+
+      if (args.silent && (!args.pwds || args.pwds.length < args.loops)) {
+         throw new ParamError(
+            `${args.loops} password(s) required in silent mode but ${args.pwds?.length ?? 0} provided (use --pwds)`
+         );
+      }
 
       const econtext = {
          lpEnd: args.loops,
@@ -264,24 +314,16 @@ async function encrypt(
             const pos = cdinfo.lp - 1;
             const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} of ${cdinfo.lpEnd}` : '';
             if (args.pwds && pos < args.pwds.length) {
-               // Show that we pre-supplied values (no hints for pre-supplied pwds)
                if (!args.silent) {
-                  await input(
-                     { message: `Password${lpMsg}:` },
-                     { input: Readable.from('******\n') }
-                  );
+                  showAnswered(`Password${lpMsg}:`, '******');
                }
                return [args.pwds[pos]!, undefined];
             } else {
                const pwd = await getSensitiveInput(`Password${lpMsg}`, args);
-               let hint;
-               // Don't ask for hints in silent mode
-               if (!args.silent) {
-                  hint = await input(
-                     { message: `Password Hint${lpMsg}:`, required: false },
-                     { input: ttyStream }
-                  );
-               }
+               const hint = await input(
+                  { message: `Password Hint${lpMsg}:`, required: false },
+                  { input: ttyStream }
+               );
                return [pwd, hint];
             }
          },
@@ -298,9 +340,12 @@ async function encrypt(
       }
    }
    catch (err) {
-      console.error('\nencryption failed: ', (err as any).message);
       if (args.debug) {
          console.error(err);
+      } else if (err instanceof ParamError) {
+         console.error(`\n${err.message}`);
+      } else {
+         console.error('\nencryption failed: ', (err as any).message);
       }
       process.exitCode = 1;
    }
@@ -324,20 +369,27 @@ async function decrypt(
    let returnText = '';
    try {
       const userCred = await getUserCred(args);
-      const cipherStream = await getCipherStream(args, piped);
 
+      if (args.silent) {
+         const infoStream = await getCipherStream(args, piped);
+         const cdInfo = await getCipherStreamInfo(userCred, infoStream);
+         if (!args.pwds || args.pwds.length < cdInfo.lpEnd) {
+            throw new ParamError(
+               `${cdInfo.lpEnd} password(s) required in silent mode but ${args.pwds?.length ?? 0} provided (use --pwds)`
+            );
+         }
+      }
+
+      const cipherStream = await getCipherStream(args, piped);
       const clearStream = await decryptStream(
          async (cdinfo) => {
             const pos = cdinfo.lpEnd - cdinfo.lp;
             const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} of ${cdinfo.lpEnd}` : '';
             if (args.pwds && pos < args.pwds.length) {
-               // Show pre-supplied values (no hints for pre-supplied pwds)
                if (!args.silent) {
-                  await input(
-                     { message: `Password${lpMsg}:` },
-                     { input: Readable.from('******\n') }
-                  );
-               } return [args.pwds[pos], undefined];
+                  showAnswered(`Password${lpMsg}:`, '******');
+               }
+               return [args.pwds[pos]!, undefined];
             } else {
                const hintMsg = lpMsg + (cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '');
                const pwd = await getSensitiveInput(`Password${hintMsg}`, args);
@@ -356,9 +408,12 @@ async function decrypt(
       }
    }
    catch (err) {
-      console.error('\ndecryption failed: ', (err as any).message);
       if (args.debug) {
          console.error(err);
+      } else if (err instanceof ParamError) {
+         console.error(`\n${err.message}`);
+      } else {
+         console.error('\ndecryption failed: ', (err as any).message);
       }
       process.exitCode = 1;
    }
@@ -441,7 +496,6 @@ const args = yargs(hideBin(process.argv))
       'debug': { alias: 'd', desc: 'show debug info', boolean: true }
    })
    .conflicts('infile', 'text')
-   .conflicts('debug', 'silent')
    .version(false)
    .wrap(95)
    .check((argv, options) => {
