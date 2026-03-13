@@ -53,6 +53,9 @@ importers:
       '@aws-sdk/client-kms':
         specifier: ^3.1007.0
         version: 3.1007.0
+      '@inquirer/core':
+        specifier: ^11.1.5
+        version: 11.1.5(@types/node@25.4.0)
       '@inquirer/prompts':
         specifier: ^8.3.0
         version: 8.3.0(@types/node@25.4.0)
