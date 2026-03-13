@@ -47,8 +47,9 @@ class ParamError extends Error {
 // identical to an interactively answered prompt.
 const iqTheme = makeTheme();
 function showAnswered(message: string, answer: string, io: IO): void {
+   const prefixDone = typeof iqTheme.prefix === 'string' ? iqTheme.prefix : iqTheme.prefix.done;
    io.ttyOut.write(
-      `${iqTheme.prefix.done} ${iqTheme.style.message(message)} ${iqTheme.style.answer(answer)}\n`
+      `${prefixDone} ${iqTheme.style.message(message, 'done')} ${iqTheme.style.answer(answer)}\n`
    );
 }
 
@@ -59,7 +60,7 @@ function peekBinary(fd: number): { stream: ReadableStream<Uint8Array>, binary: b
       n = fs.readSync(fd, peek, 0, 16, null);
    } catch {
       // EAGAIN when stdin pipe has no data yet; assume binary and stream directly
-      return { stream: ReadableStream.from(process.stdin), binary: true };
+      return { stream: (ReadableStream as any).from(process.stdin), binary: true };
    }
    const binary = n === 0 || !/^\s*\{/.test(peek.subarray(0, n).toString('utf-8'));
 
@@ -70,7 +71,7 @@ function peekBinary(fd: number): { stream: ReadableStream<Uint8Array>, binary: b
       }
    }
 
-   return { stream: ReadableStream.from(prependedStream()), binary };
+   return { stream: (ReadableStream as any).from(prependedStream()), binary };
 }
 
 function streamFromBytes(data: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Array> {
