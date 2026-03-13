@@ -148,7 +148,9 @@ export async function getCipherStreamInfo(
    }
 
    const decipher = await streamDecipher(userCred, cipherStream);
-   return decipher.getCipherDataInfo();
+   const info = await decipher.getCipherDataInfo();
+   decipher.finishedState();
+   return info;
 }
 
 
