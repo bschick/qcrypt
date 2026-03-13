@@ -1,3 +1,4 @@
+import './setup-color';
 import sodium from 'libsodium-wrappers';
 import {
    decryptStream, encryptStream, getCipherStreamInfo,
@@ -6,7 +7,7 @@ import {
 } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import fs from 'fs';
-import ws from 'node:stream/web';
+import { Writable } from 'node:stream';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import { input, select, number, password } from '@inquirer/prompts';
@@ -14,7 +15,26 @@ import { makeTheme } from '@inquirer/core';
 // @ts-expect-error package does not ship with types
 import reopenTTY from 'reopen-tty';
 
-let ttyStream: fs.ReadStream;
+interface IO {
+   ttyIn?: NodeJS.ReadableStream;
+   ttyOut: NodeJS.WritableStream;
+   pipedIn?: ReadableStream<Uint8Array>;
+   binaryIn: boolean;
+   pipedOut: NodeJS.WritableStream;
+   binaryOut: boolean;
+}
+
+// Returns a disposable Writable that delegates to io.ttyOut.
+// Inquirer's cleanup ends the output stream it receives via pipe;
+// by giving it a throwaway proxy, ttyOut itself stays open for
+// subsequent prompts and showAnswered calls.
+function iqOutput(io: IO): Writable {
+   return new Writable({
+      write(chunk: any, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
+         io.ttyOut.write(chunk, encoding, callback);
+      }
+   });
+}
 
 class ParamError extends Error {
    constructor(message: string) {
@@ -26,20 +46,46 @@ class ParamError extends Error {
 // Display a pre-supplied answer using inquirer's own theme so it looks
 // identical to an interactively answered prompt.
 const iqTheme = makeTheme();
-function showAnswered(message: string, answer: string): void {
-   console.log(`${iqTheme.prefix.done} ${iqTheme.style.message(message)} ${iqTheme.style.answer(answer)}`);
+function showAnswered(message: string, answer: string, io: IO): void {
+   io.ttyOut.write(
+      `${iqTheme.prefix.done} ${iqTheme.style.message(message)} ${iqTheme.style.answer(answer)}\n`
+   );
+}
+
+function peekBinary(fd: number): { stream: ReadableStream<Uint8Array>, binary: boolean } {
+   const peek = Buffer.alloc(16);
+   let n: number;
+   try {
+      n = fs.readSync(fd, peek, 0, 16, null);
+   } catch {
+      // EAGAIN when stdin pipe has no data yet; assume binary and stream directly
+      return { stream: ReadableStream.from(process.stdin), binary: true };
+   }
+   const binary = n === 0 || !/^\s*\{/.test(peek.subarray(0, n).toString('utf-8'));
+
+   async function* prependedStream() {
+      yield new Uint8Array(peek.buffer, 0, n);
+      for await (const chunk of fs.createReadStream('', { fd })) {
+         yield chunk;
+      }
+   }
+
+   return { stream: ReadableStream.from(prependedStream()), binary };
 }
 
 function streamFromBytes(data: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Array> {
-   const blob = new Blob([data], { type: 'application/octet-stream' });
-   return blob.stream();
+   return new ReadableStream({
+      start(controller) {
+         controller.enqueue(data);
+         controller.close();
+      }
+   });
 }
 
-async function writeToFile(
+async function writeAndCloseStream(
    readableStream: ReadableStream<Uint8Array>,
-   outFile: string
+   writeableStream: NodeJS.WritableStream
 ) {
-   const writeableStream = fs.createWriteStream(outFile);
    const reader = readableStream.getReader();
 
    while (true) {
@@ -59,18 +105,18 @@ async function getUserCred(args: {
    cred?: string,
    silent?: boolean,
    debug?: boolean
-}): Promise<Uint8Array> {
+}, io: IO): Promise<Uint8Array> {
 
    let credText: string;
    if (args.cred) {
       credText = args.cred;
       if (!args.silent) {
-         showAnswered('User Credential:', '******');
+         showAnswered('User Credential:', '******', io);
       }
    } else if (args.silent) {
       throw new ParamError('User Credential is required in silent mode (use --cred)');
    } else {
-      credText = await getSensitiveInput('User Credential', args);
+      credText = await getSensitiveInput('User Credential', io);
    }
 
    try {
@@ -81,141 +127,95 @@ async function getUserCred(args: {
 }
 
 async function getCipherStream(
-   args: {
-      text?: string,
-      infile?: string,
-      silent?: boolean,
-   },
-   piped?: string
+   io: IO,
+   silent?: boolean
 ): Promise<ReadableStream<Uint8Array>> {
    let stream;
-   if (args.infile && !args.infile.endsWith('.json')) {
-      const nodeStream = fs.createReadStream(args.infile);
-      // This does not produce a byod binary stream... but it still works
-      stream = ws.ReadableStream.from(nodeStream) as ReadableStream<Uint8Array>;
-   } else {
-      let text: string | undefined = '';
-      if (args.infile) {
-         // json file containing... json
-         const nodeStream = fs.createReadStream(args.infile);
-         nodeStream.setEncoding('utf8');
-         for await (const chunk of nodeStream) {
-            text += chunk;
-         }
-      } else {
-         text = args.text ?? piped;
-         if (text && !args.silent) {
-            showAnswered('Cipher Armor:', piped ? '(from stdin)' : '(from options)');
-         } else if (!text && args.silent) {
-            throw new ParamError('Cipher text is required in silent mode (use positional arg, --infile, or stdin)');
-         }
-         text = text ?? await input(
-            { message: 'Cipher Armor:', required: true },
-            { input: ttyStream }
-         );
+   if (io.pipedIn && io.binaryIn) {
+      stream = io.pipedIn;
+   } else if (io.pipedIn) {
+      const text = await readStreamAll(io.pipedIn, true);
+      if (!text) {
+         throw new Error('Cipher text is empty (use positional arg, --infile, or stdin)');
       }
+      stream = streamFromBytes(parseCipherArmor(text));
+   } else if (silent) {
+      throw new ParamError('Cipher text is required in silent mode (use positional arg, --infile, or stdin)');
+   } else {
+      const text = await input(
+         { message: 'Cipher Armor:', required: true },
+         { input: io.ttyIn, output: iqOutput(io) }
+      );
       if (!text) {
          throw new Error('Cipher text is empty (use positional arg, --infile, or stdin)');
       }
       stream = streamFromBytes(parseCipherArmor(text));
    }
-
    return stream;
 }
 
 async function getClearStream(
-   args: {
-      text?: string,
-      infile?: string,
-      silent?: boolean,
-   },
-   piped?: string
+   io: IO,
+   silent?: boolean
 ): Promise<ReadableStream<Uint8Array>> {
    let stream;
-   if (args.infile) {
-      const nodeStream = fs.createReadStream(args.infile);
-      // This does not produce a byod binary stream... but it still works
-      stream = ws.ReadableStream.from(nodeStream) as ReadableStream<Uint8Array>;
+   if (io.pipedIn) {
+      stream = io.pipedIn;
+   } else if (silent) {
+      throw new ParamError('Clear text is required in silent mode (use positional arg, --infile, or stdin)');
    } else {
-      let text = args.text ?? piped;
-      if (text && !args.silent) {
-         showAnswered('Clear Text:', piped ? '(from stdin)' : '(from options)');
-      } else if (!text && args.silent) {
-         throw new ParamError('Clear text is required in silent mode (use positional arg, --infile, or stdin)');
-      }
-      text = text ?? await input(
+      const text = await input(
          { message: 'Clear Text:', required: true },
-         { input: ttyStream }
+         { input: io.ttyIn, output: iqOutput(io) }
       );
       if (!text) {
          throw new Error('Clear text is empty (use positional arg, --infile, or stdin)');
       }
-      const bytes = new TextEncoder().encode(text);
-      stream = streamFromBytes(bytes);
+      stream = streamFromBytes(new TextEncoder().encode(text));
    }
-
    return stream;
 }
 
 async function info(
    args: {
       cred?: string,
-      text?: string,
-      pwds?: string[],
-      infile?: string,
-      outfile?: string,
       silent?: boolean,
       debug?: boolean
    },
-   piped?: string
-): Promise<string> {
+   io: IO
+): Promise<void> {
 
-   let returnText = '';
    try {
-      const cipherStream = await getCipherStream(args, piped);
-      const userCred = await getUserCred(args);
+      const cipherStream = await getCipherStream(io, args.silent);
+      const userCred = await getUserCred(args, io);
 
       const cdInfo = await getCipherStreamInfo(
          userCred,
          cipherStream
       );
 
-      returnText = `Cipher and Mode   : ${cc.AlgInfo[cdInfo.alg]['description']}
+      io.pipedOut.write(`Cipher and Mode   : ${cc.AlgInfo[cdInfo.alg]['description']}
 PBKDF2 Iterations : ${cdInfo.ic}
 Salt (b64Url)     : ${bytesToBase64(cdInfo.slt)}
 IV/Nonce (b64Url) : ${bytesToBase64(cdInfo.iv)}
 Password Hint     : ${cdInfo.hint}
 Loops             : ${cdInfo.lpEnd}
-Version           : ${cdInfo.ver}\n`;
-
-      if (args.outfile) {
-         await writeToFile(await getClearStream({ text: returnText, silent: args.silent }), args.outfile);
-         returnText = `saved to '${args.outfile}'`;
-      }
+Version           : ${cdInfo.ver}\n`);
    }
    catch (err) {
       if (args.debug) {
          console.error(err);
-      } else if (err instanceof ParamError) {
-         console.error(`\n${err.message}`);
       } else {
          console.error('\nget info failed: ', (err as any).message);
       }
       process.exitCode = 1;
    }
-
-   return returnText;
 }
 
-async function getSensitiveInput(
-   msg: string,
-   args: {
-      silent?: boolean,
-      debug?: boolean
-   }): Promise<string> {
+async function getSensitiveInput(msg: string, io: IO): Promise<string> {
    const val = await password(
       { message: msg + ':', mask: '*', validate: (v) => !v ? `${msg} is required` : true },
-      { input: ttyStream }
+      { input: io.ttyIn, output: iqOutput(io) }
    );
    return val;
 }
@@ -223,23 +223,19 @@ async function getSensitiveInput(
 async function encrypt(
    args: {
       cred?: string,
-      text?: string,
       pwds?: string[],
-      infile?: string,
-      outfile?: string,
       iters?: number,
       algs?: string,
       loops: number,
       silent?: boolean,
       debug?: boolean
    },
-   piped?: string,
-): Promise<string> {
+   io: IO
+): Promise<void> {
 
-   let returnText = '';
    try {
-      const clearStream = await getClearStream(args, piped);
-      const userCred = await getUserCred(args);
+      const clearStream = await getClearStream(io, args.silent);
+      const userCred = await getUserCred(args, io);
 
       args.loops = Math.max(Math.min(args.loops, 6), 1);
 
@@ -256,9 +252,8 @@ async function encrypt(
          let alg;
          if (args.algs && args.algs[l - 1]) {
             alg = args.algs[l - 1];
-            // Show pre-supplied values if not silent
             if (!args.silent) {
-               showAnswered(`Select Cipher Mode${lpMsg}:`, cc.AlgInfo[alg]['description'] as string);
+               showAnswered(`Select Cipher Mode${lpMsg}:`, cc.AlgInfo[alg]['description'] as string, io);
             }
          } else {
             alg = nextAlg;
@@ -268,7 +263,7 @@ async function encrypt(
                      choices: choices,
                      default: nextAlg
                   },
-                  { input: ttyStream }
+                  { input: io.ttyIn, output: iqOutput(io) }
                );
             }
          }
@@ -283,8 +278,10 @@ async function encrypt(
       if (args.iters && args.iters >= cc.ICOUNT_MIN) {
          iters = args.iters;
          if (!args.silent) {
-            showAnswered('Password Hash Iterations:', String(iters));
+            showAnswered('Password Hash Iterations:', String(iters), io);
          }
+      } else if (args.silent) {
+         iters = cc.ICOUNT_DEFAULT;
       } else {
          iters = await number({
                message: 'Password Hash Iterations:',
@@ -292,7 +289,7 @@ async function encrypt(
                min: cc.ICOUNT_MIN,
                required: true
             },
-            { input: ttyStream }
+            { input: io.ttyIn, output: iqOutput(io) }
          );
       }
 
@@ -315,14 +312,14 @@ async function encrypt(
             const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} of ${cdinfo.lpEnd}` : '';
             if (args.pwds && pos < args.pwds.length) {
                if (!args.silent) {
-                  showAnswered(`Password${lpMsg}:`, '******');
+                  showAnswered(`Password${lpMsg}:`, '******', io);
                }
                return [args.pwds[pos]!, undefined];
             } else {
-               const pwd = await getSensitiveInput(`Password${lpMsg}`, args);
+               const pwd = await getSensitiveInput(`Password${lpMsg}`, io);
                const hint = await input(
                   { message: `Password Hint${lpMsg}:`, required: false },
-                  { input: ttyStream }
+                  { input: io.ttyIn, output: iqOutput(io) }
                );
                return [pwd, hint];
             }
@@ -331,68 +328,65 @@ async function encrypt(
          clearStream
       );
 
-      if (args.outfile) {
-         await writeToFile(cipherStream, args.outfile);
-         returnText = `saved to '${args.outfile}'`;
+      if (io.binaryOut) {
+         await writeAndCloseStream(cipherStream, io.pipedOut);
       } else {
-         const clearData = await readStreamAll(cipherStream);
-         returnText = makeCipherArmor(clearData, 'compact');
+         const cipherData = await readStreamAll(cipherStream);
+         io.pipedOut.write(makeCipherArmor(cipherData, 'compact') + '\n');
       }
    }
    catch (err) {
       if (args.debug) {
          console.error(err);
-      } else if (err instanceof ParamError) {
-         console.error(`\n${err.message}`);
       } else {
          console.error('\nencryption failed: ', (err as any).message);
       }
       process.exitCode = 1;
    }
-
-   return returnText;
 }
 
 async function decrypt(
    args: {
       cred?: string,
-      text?: string,
       pwds?: string[],
-      infile?: string,
-      outfile?: string,
       silent?: boolean,
       debug?: boolean
    },
-   piped?: string
-): Promise<string> {
+   io: IO
+): Promise<void> {
 
-   let returnText = '';
    try {
-      const userCred = await getUserCred(args);
+      const userCred = await getUserCred(args, io);
+      const rawStream = await getCipherStream(io, args.silent);
 
+      let cipherStream: ReadableStream<Uint8Array>;
       if (args.silent) {
-         const infoStream = await getCipherStream(args, piped);
+         const [infoStream, mainStream] = rawStream.tee();
          const cdInfo = await getCipherStreamInfo(userCred, infoStream);
+         await infoStream.cancel();
          if (!args.pwds || args.pwds.length < cdInfo.lpEnd) {
+            await mainStream.cancel();
             throw new ParamError(
                `${cdInfo.lpEnd} password(s) required in silent mode but ${args.pwds?.length ?? 0} provided (use --pwds)`
             );
          }
+         cipherStream = mainStream;
+      } else {
+         cipherStream = rawStream;
       }
 
-      const cipherStream = await getCipherStream(args, piped);
       const clearStream = await decryptStream(
          async (cdinfo) => {
             const pos = cdinfo.lpEnd - cdinfo.lp;
             const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} of ${cdinfo.lpEnd}` : '';
             if (args.pwds && pos < args.pwds.length) {
                if (!args.silent) {
-                  showAnswered(`Password${lpMsg}:`, '******');
+                  showAnswered(`Password${lpMsg}:`, '******', io);
                }
                return [args.pwds[pos]!, undefined];
             } else {
                const hintMsg = lpMsg + (cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '');
-               const pwd = await getSensitiveInput(`Password${hintMsg}`, args);
+               const pwd = await getSensitiveInput(`Password${hintMsg}`, io);
                return [pwd, undefined];
             }
          },
@@ -400,25 +394,21 @@ async function decrypt(
          cipherStream
       );
 
-      if (args.outfile) {
-         await writeToFile(clearStream, args.outfile);
-         returnText = `saved to '${args.outfile}'`;
+      if (io.binaryOut) {
+         await writeAndCloseStream(clearStream, io.pipedOut);
       } else {
-         returnText = await readStreamAll(clearStream, true);
+         const clearText = await readStreamAll(clearStream, true);
+         io.pipedOut.write(clearText + '\n');
       }
    }
    catch (err) {
       if (args.debug) {
          console.error(err);
-      } else if (err instanceof ParamError) {
-         console.error(`\n${err.message}`);
       } else {
          console.error('\ndecryption failed: ', (err as any).message);
       }
       process.exitCode = 1;
    }
-
-   return returnText;
 }
 
 function CoerceNumber(argName: string) {
@@ -511,42 +501,68 @@ const args = yargs(hideBin(process.argv))
    .demandCommand(1).parseSync() as any;
 
 if (args.debug) {
-   console.log('args ->', args);
+   console.error('args ->', args);
+}
+
+function openTTY(kind: 'stdin' | 'stdout'): Promise<any> {
+   return new Promise(resolve => {
+      reopenTTY[kind]((err: any, stream: any) => {
+         resolve(err ? undefined : stream);
+      });
+   });
 }
 
 async function main() {
    await sodium.ready;
 
-   let piped: string | undefined;
-   if (!process.stdin.isTTY) {
-      try {
-         piped = fs.readFileSync(process.stdin.fd, 'utf-8');
-      } catch (err) { }
+   let pipedIn: ReadableStream<Uint8Array> | undefined;
+   let binaryIn = false;
+   if (args.infile) {
+      const fd = fs.openSync(args.infile, 'r');
+      const result = peekBinary(fd);
+      pipedIn = result.stream;
+      binaryIn = result.binary;
+   } else if (!process.stdin.isTTY) {
+      const result = peekBinary(process.stdin.fd);
+      pipedIn = result.stream;
+      binaryIn = result.binary;
+   } else if (args.text) {
+      pipedIn = streamFromBytes(new TextEncoder().encode(args.text));
    }
 
-   reopenTTY.stdin(async (err: any, stream: fs.ReadStream) => {
-      ttyStream = stream;
+   const reopenedIn: fs.ReadStream | undefined = await openTTY('stdin');
+   const reopenedOut: fs.WriteStream | undefined = !process.stdout.isTTY
+      ? await openTTY('stdout') : undefined;
 
-      if (!ttyStream) {
-         console.warn('Warning: no TTY available. All values must be passed via command-line options.');
-      }
+   if (!reopenedIn) {
+      console.warn('Warning: no TTY available. All values must be passed via command-line options.');
+   }
 
-      if (args._.length && args._[0] === 'info') {
-         const infoText = await info(args, piped);
-         console.log(`\n${infoText}`);
-      }
-      else if (args._.length && args._[0] === 'enc') {
-         const cipherText = await encrypt(args, piped);
-         console.log(`\n${cipherText}`);
-      } else {
-         const clearText = await decrypt(args, piped);
-         console.log(`\n${clearText}`);
-      }
+   let outfileStream: fs.WriteStream | undefined;
+   if (args.outfile) {
+      outfileStream = fs.createWriteStream(args.outfile);
+   }
 
-      if (ttyStream) {
-         ttyStream.destroy();
-      }
-   });
+   const io: IO = {
+      ttyIn: reopenedIn,
+      ttyOut: reopenedOut ?? process.stdout,
+      pipedIn,
+      binaryIn,
+      pipedOut: outfileStream ?? process.stdout,
+      binaryOut: !!outfileStream || !process.stdout.isTTY,
+   };
+
+   if (args._.length && args._[0] === 'info') {
+      await info(args, io);
+   } else if (args._.length && args._[0] === 'enc') {
+      await encrypt(args, io);
+   } else {
+      await decrypt(args, io);
+   }
+
+   outfileStream?.end();
+   reopenedIn?.destroy();
+   reopenedOut?.destroy();
 }
 
 main();
