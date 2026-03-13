@@ -36,6 +36,7 @@
     "@angular/ssr": "^21.2.2",
     "@aws-sdk/client-dynamodb": "^3.1007.0",
     "@aws-sdk/client-kms": "^3.1007.0",
+    "@inquirer/core": "^11.1.5",
     "@inquirer/prompts": "^8.3.0",
     "@scure/bip39": "^2.0.1",
     "@simplewebauthn/browser": "^13.3.0",
