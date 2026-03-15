@@ -53,7 +53,7 @@ function showAnswered(message: string, answer: string, io: IO): void {
    );
 }
 
-async function peekBinary(source: Readable): Promise<{ stream: ReadableStream<Uint8Array>, binary: boolean }> {
+async function peekBinary(source: Readable): Promise<{ pipedIn: ReadableStream<Uint8Array>, binaryIn: boolean }> {
    const firstChunk: Buffer = await new Promise(resolve => {
       const tryRead = () => {
          const chunk = source.read(16);
@@ -74,7 +74,7 @@ async function peekBinary(source: Readable): Promise<{ stream: ReadableStream<Ui
       }
    }
 
-   return { stream: (ReadableStream as any).from(prependedStream()), binary };
+   return { pipedIn: (ReadableStream as any).from(prependedStream()), binaryIn: binary };
 }
 
 function streamFromBytes(data: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Array> {
@@ -523,13 +523,9 @@ async function main() {
    let pipedIn: ReadableStream<Uint8Array> | undefined;
    let binaryIn = false;
    if (args.infile) {
-      const result = await peekBinary(fs.createReadStream(args.infile));
-      pipedIn = result.stream;
-      binaryIn = result.binary;
+      ({ pipedIn, binaryIn } = await peekBinary(fs.createReadStream(args.infile)));
    } else if (!process.stdin.isTTY) {
-      const result = await peekBinary(process.stdin);
-      pipedIn = result.stream;
-      binaryIn = result.binary;
+      ({ pipedIn, binaryIn } = await peekBinary(process.stdin));
    } else if (args.text) {
       pipedIn = streamFromBytes(new TextEncoder().encode(args.text));
    }
