@@ -7,7 +7,7 @@ import {
 } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import fs from 'fs';
-import { Writable } from 'node:stream';
+import { Readable, Writable } from 'node:stream';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import { input, select, number, password } from '@inquirer/prompts';
@@ -53,20 +53,23 @@ function showAnswered(message: string, answer: string, io: IO): void {
    );
 }
 
-function peekBinary(fd: number): { stream: ReadableStream<Uint8Array>, binary: boolean } {
-   const peek = Buffer.alloc(16);
-   let n: number;
-   try {
-      n = fs.readSync(fd, peek, 0, 16, null);
-   } catch {
-      // EAGAIN when stdin pipe has no data yet; assume binary and stream directly
-      return { stream: (ReadableStream as any).from(process.stdin), binary: true };
-   }
-   const binary = n === 0 || !/^\s*\{/.test(peek.subarray(0, n).toString('utf-8'));
+async function peekBinary(source: Readable): Promise<{ stream: ReadableStream<Uint8Array>, binary: boolean }> {
+   const firstChunk: Buffer = await new Promise(resolve => {
+      const tryRead = () => {
+         const chunk = source.read(16);
+         if (chunk) {
+            resolve(chunk);
+         } else {
+            source.once('readable', tryRead);
+         }
+      };
+      tryRead();
+   });
+   const binary = firstChunk.length === 0 || !/^\s*\{/.test(firstChunk.subarray(0, 16).toString('utf-8'));
 
    async function* prependedStream() {
-      yield new Uint8Array(peek.buffer, 0, n);
-      for await (const chunk of fs.createReadStream('', { fd })) {
+      yield new Uint8Array(firstChunk.buffer, firstChunk.byteOffset, firstChunk.byteLength);
+      for await (const chunk of source) {
          yield chunk;
       }
    }
@@ -484,7 +487,8 @@ const args = yargs(hideBin(process.argv))
       'outfile': { alias: 'o', desc: 'save output to file', type: 'string' },
       'pwds': { alias: 'p', desc: 'password(s)', type: 'string', array: true },
       'silent': { alias: 's', desc: 'ask for only required input and show fewer messages', boolean: true },
-      'debug': { alias: 'd', desc: 'show debug info', boolean: true }
+      'debug': { alias: 'd', desc: 'show debug info', boolean: true },
+      'nocolor': { desc: 'disable colored output', boolean: true }
    })
    .conflicts('infile', 'text')
    .version(false)
@@ -519,12 +523,11 @@ async function main() {
    let pipedIn: ReadableStream<Uint8Array> | undefined;
    let binaryIn = false;
    if (args.infile) {
-      const fd = fs.openSync(args.infile, 'r');
-      const result = peekBinary(fd);
+      const result = await peekBinary(fs.createReadStream(args.infile));
       pipedIn = result.stream;
       binaryIn = result.binary;
    } else if (!process.stdin.isTTY) {
-      const result = peekBinary(process.stdin.fd);
+      const result = await peekBinary(process.stdin);
       pipedIn = result.stream;
       binaryIn = result.binary;
    } else if (args.text) {
