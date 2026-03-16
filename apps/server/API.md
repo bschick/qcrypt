@@ -122,8 +122,6 @@ This document provides documentation for the passkey-based authentication server
 - **Path:** `/v1/user`
 - **Authorization:** Required (cookie and x-csrf-token)
 - **Description:** Retrieves information about the currently authenticated user.
-- **Query Parameters:**
-  - `userid` (optional): Return the user name specified user rather than the calling user.
 - **Responses:**
   - `200 OK`: A `UserInfo` JSON object.
   - `400 Bad Request`: The request was malformed.
@@ -148,21 +146,24 @@ This document provides documentation for the passkey-based authentication server
 - **Path:** `/v1/users/{userid}/recover/{usercred}`
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
 - **Authorization:** Not required
-- **Description:** Deprecated, use `/v1/recover2` with `recoveryid` instead. Initiates the account recovery process. This will delete all existing passkeys for the user and return registration options to create a new passkey.
+- **Description:** Deprecated, upgrade account and use `/v1/recover2` instead. Initiates the account recovery process. This will delete all existing passkeys for the user and return registration options to create a new passkey.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server `PublicKeyCredentialCreationOptionsJSON` JSON object.
   - `400 Bad Request`: The user credential is not valid.
+  - `401 Unauthorized`: The request is not authorized.
 
-### POST /v1/users/{userid}/recover2/{recoverid}
+### POST /v1/recover2
 
 - **Method:** `POST`
-- **Path:** `/v1/users/{userid}/recover2/{recoverid}`
+- **Path:** `/v1/recover2`
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
 - **Authorization:** Not required
-- **Description:** Initiates the account recovery process using a recovery ID provided in `recoveryid`. This will delete all existing passkeys for the user and return registration options to create a new passkey.
+- **Description:** Initiates the account recovery process for the user Id and recovery Id sent in the request body. This will delete all existing passkeys for the user and return registration options to create a new passkey.
+- **Request Body:** A JSON object with `userId` and `recoveryId` keys. Example: `{"userId": "base64id", "recoveryId": "base64recoveryid"}`.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server `PublicKeyCredentialCreationOptionsJSON` JSON object.
   - `400 Bad Request`: The recovery ID is not valid.
+  - `401 Unauthorized`: The request is not authorized.
 
 ## Session Endpoints
 
