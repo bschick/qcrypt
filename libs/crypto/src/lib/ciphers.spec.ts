@@ -20,15 +20,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import sodium from 'libsodium-wrappers';
-import * as cc from '@qcrypt/crypto/consts';
+import * as cc from './cipher.consts';
 import {
    getRandom48, BYOBStreamReader, readStreamAll,
    Encipher, streamDecipher, latestEncipher,
    EncipherV7, _genCipherKey, _genHintCipherKeyAndIV, _genSigningKey,
    _genSigningKeyOld, _genHintCipherKeyOld,
-} from '@qcrypt/crypto';
+} from '../index';
 
-import type { EParams, CipherDataBlock } from '@qcrypt/crypto';
+import type { EParams, CipherDataBlock } from '../index';
 
 // Faster than .toEqual, resulting in few timeouts
 function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
