@@ -38,6 +38,7 @@ import { ClipboardModule } from '@angular/cdk/clipboard';
 import { Router, RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
 import { MatInputModule } from '@angular/material/input';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { AuthEvent, AuthenticatorService, SenderLinkInfo } from '../services/authenticator.service';
 import { Subscription } from 'rxjs';
@@ -66,7 +67,7 @@ export type ParticipantInfo = {
    imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink, MatInputModule,
     MatFormFieldModule, OptionsComponent, MatTableModule, ReactiveFormsModule,
     MatTooltipModule, MatTabsModule, MatStepperModule, MatButtonToggleModule,
-    MatButtonToggle, EditableComponent]
+    MatButtonToggle, EditableComponent, MatSlideToggleModule]
 
 })
 export class NewTopicComponent implements OnInit, OnDestroy, AfterViewInit {
@@ -76,6 +77,8 @@ export class NewTopicComponent implements OnInit, OnDestroy, AfterViewInit {
    private authSub!: Subscription;
    public descriptionInput = new FormControl('');
    public participantsControl = new FormControl('all');
+   public forkToggle = new FormControl(false);
+
 
    private _formBuilder = inject(FormBuilder);
    public readonly TOPIC_USERS_MAX = api.TOPIC_USERS_MAX;
@@ -83,12 +86,12 @@ export class NewTopicComponent implements OnInit, OnDestroy, AfterViewInit {
    // firstFormGroup = this._formBuilder.group({
    //    firstCtrl: ['', Validators.required],
    // });
-   participantsGroup = this._formBuilder.group({
+   newTopicForm = this._formBuilder.group({
       topicUsers: [1, [Validators.required, Validators.min(1), Validators.max(this.TOPIC_USERS_MAX)]],
    });
 
    participantsError(): string {
-      const ctrl = this.participantsGroup.get('topicUsers');
+      const ctrl = this.newTopicForm.get('topicUsers');
       if (ctrl?.hasError('min')) {
          return 'Must be at least 1';
       } else if (ctrl?.hasError('max')) {
@@ -105,13 +108,10 @@ export class NewTopicComponent implements OnInit, OnDestroy, AfterViewInit {
       private authSvc: AuthenticatorService,
       private router: Router,
       private snackBar: MatSnackBar) {
-      // effect(() => {
-      //    this.senderLinks = this.authSvc.senderLinks();
-      // });
+
    }
 
    ngOnInit(): void {
-//      this.senderLinks = this.authSvc.senderLinks();
 
       // this.participants.push({
       //    invitableId: "",
@@ -125,6 +125,10 @@ export class NewTopicComponent implements OnInit, OnDestroy, AfterViewInit {
    }
 
    ngAfterViewInit(): void {
+   }
+
+   onSubmit(): void {
+      console.log('submit');
    }
 
    onStepChange(event: StepperSelectionEvent): void {

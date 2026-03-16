@@ -28,39 +28,32 @@ SOFTWARE. -->
         [queryParams]="{search: 'who can decrypt'}">encrypted end-to-end</a> so not even
       the Quick Crypt server can decrypt shared data.
     </p>
-    <mat-form-field subscriptSizing="dynamic" class="description">
-      <mat-label>Optional Description</mat-label>
-      <input type="string" matInput [formControl]="descriptionInput"
-        matTooltip="Optional description of the topic. Visible to participants and the server" />
-    </mat-form-field>
 
-    <mat-stepper linear=true #stepper (selectionChange)="onStepChange($event)">
-      <mat-step label="Participant Type">
-        <p>Do you know the Quick Crypt IDs of the participants?</p>
-        <mat-button-toggle-group name="participants" [formControl]="participantsControl">
-          <mat-button-toggle value="all">All of them</mat-button-toggle>
-          <mat-button-toggle value="some">Some of them</mat-button-toggle>
-          <mat-button-toggle value="none">None of them</mat-button-toggle>
-        </mat-button-toggle-group>
-        <!--          <mat-form-field>
-            <mat-label>Name</mat-label>
-            <input matInput placeholder="Last name, First name" formControlName="firstCtrl" required>
-          </mat-form-field>-->
-        <div class="step-control">
-          <button matButton matStepperNext>Next</button>
-        </div>
-      </mat-step>
-      <mat-step [stepControl]="participantsGroup" label="Participant Information">
-        <form [formGroup]="participantsGroup">
-          @if (participantsControl.value != 'all') {
-          <mat-form-field subscriptSizing="dynamic" class="participants" hideRequiredMarker>
-            <mat-label>Participants</mat-label>
-            <input type="number" min="1" [max]="TOPIC_USERS_MAX" step="1" matInput formControlName="topicUsers" />
-            <mat-error>{{ participantsError() }}</mat-error>
+    <form [formGroup]="newTopicForm">
+      <mat-stepper linear=true #stepper (selectionChange)="onStepChange($event)">
+        <mat-step label="Get Started">
+          <mat-form-field subscriptSizing="dynamic" class="description">
+            <mat-label>Topic Description (optional)</mat-label>
+            <input type="string" matInput [formControl]="descriptionInput"
+              matTooltip="Optional description of the topic. Visible to participants and the server" />
           </mat-form-field>
-          }
+          <p>Do you know the Quick Crypt IDs of the participants?</p>
+          <mat-button-toggle-group name="participants" [formControl]="participantsControl">
+            <mat-button-toggle value="all">All of them</mat-button-toggle>
+            <mat-button-toggle value="some">Some of them</mat-button-toggle>
+            <mat-button-toggle value="none">None of them</mat-button-toggle>
+          </mat-button-toggle-group>
+          <!--          <mat-form-field>
+              <mat-label>Name</mat-label>
+              <input matInput placeholder="Last name, First name" formControlName="firstCtrl" required>
+            </mat-form-field>-->
+          <div class="step-control">
+            <button matButton matStepperNext type="button">Next</button>
+          </div>
+        </mat-step>
+        <mat-step [stepControl]="newTopicForm" label="Participants">
           @if (participantsControl.value != 'none') {
-          <p>Enter the Quick Crypt IDs of the participants</p>
+          <p>Known participants</p>
           <table mat-table [dataSource]="participants" class="participant-table">
             <!-- Invitable ID Column -->
             <ng-container matColumnDef="invitableId">
@@ -106,21 +99,31 @@ SOFTWARE. -->
             <tr mat-footer-row *matFooterRowDef="['addParticipant']" class="footer-row"></tr>
           </table>
           }
+          @if (participantsControl.value != 'all') {
+          <p>{{participantsControl.value === 'some' ? 'Additional' : 'Total'}} participants</p>
+          <mat-form-field subscriptSizing="dynamic" class="participants" hideRequiredMarker>
+            <mat-label>Count</mat-label>
+            <input type="number" min="1" [max]="TOPIC_USERS_MAX" step="1" matInput formControlName="topicUsers" />
+            <mat-error>{{ participantsError() }}</mat-error>
+          </mat-form-field>
+          }
           <div>
-            <button matButton matStepperPrevious>Back</button>
-            <button matButton matStepperNext>Next</button>
+            <button matButton matStepperPrevious type="button">Back</button>
+            <button matButton matStepperNext type="button">Next</button>
           </div>
-        </form>
-      </mat-step>
-      <mat-step>
-        <ng-template matStepLabel>Done</ng-template>
-        <p>You are now done.</p>
-        <div>
-          <button matButton matStepperPrevious>Back</button>
-          <button matButton (click)="stepper.reset()">Reset</button>
-        </div>
-      </mat-step>
-    </mat-stepper>
+        </mat-step>
+        <mat-step>
+          <ng-template matStepLabel>Ready to Create</ng-template>
+            <mat-slide-toggle [formControl]="forkToggle"
+              matTooltip="Create a separate topic for each participant">Fork Topics
+            </mat-slide-toggle>
+          <div>
+            <button matButton matStepperPrevious type="button">Back</button>
+            <button matButton type="submit" (click)="onSubmit()">Create Topic</button>
+          </div>
+        </mat-step>
+      </mat-stepper>
+    </form>
 
 
     <!-- <mat-tab-group animationDuration="0ms" dynamicHeight>

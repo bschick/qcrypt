@@ -27,8 +27,8 @@ import {
    encryptStream,
    decryptStream,
    getCipherStreamInfo,
+   kemKeyGen
 } from '@qcrypt/crypto';
-
 import type {
    EContext,
    CipherDataInfo,
@@ -36,6 +36,9 @@ import type {
 } from '@qcrypt/crypto';
 
 export type { EContext, CipherDataInfo, PWDProvider };
+
+import type { RequestTypes } from '@qcrypt/api';
+export type CreateTopicInfo = RequestTypes.CreateTopicInfo;
 
 const TARGET_HASH_MILLIS = 500;
 const MAX_HASH_MILLIS = 5 * 60 * 1000; //5 minutes
@@ -119,4 +122,27 @@ export class CipherService {
    ): Promise<ReadableStream<Uint8Array>> {
      return decryptStream(pwdProvider, userCred, cipherStream);
    }
+
+  //  async createTopic(
+  //    pwdProvider: PWDProvider,
+  //    userCred: Uint8Array,
+  //   createInfo: CreateTopicInfo
+  // ): Promise<any> {
+
+
+  //     const { publicKey: kemPublicKey, secretKey: kemSecretKey } = kemKeyGen(utils.base64UrlDecode(masterKey));
+
+
+  //     const serverTopicInfo = await this._doFetch<any>({
+  //        method: 'POST',
+  //        resource: 'topics',
+  //        bodyJSON: JSON.stringify(createInfo)
+  //     });
+
+  //     if (!serverTopicInfo) {
+  //        throw new Error('authentication failed');
+  //     }
+
+  //     return serverTopicInfo;
+  //  }
 }

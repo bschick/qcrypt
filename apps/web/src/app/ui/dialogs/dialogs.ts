@@ -42,12 +42,12 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { Router } from '@angular/router';
-import { AcceptableState, StrengthMeterComponent } from '../ui/strengthmeter/strengthmeter.component';
-import { AuthenticatorService } from '../services/authenticator.service';
-import { BubbleDirective } from '../ui/bubble/bubble.directive';
+import { AcceptableState, StrengthMeterComponent } from '../strengthmeter/strengthmeter.component';
+import { AuthenticatorService } from '../../services/authenticator.service';
+import { BubbleDirective } from '../bubble/bubble.directive';
 import * as cc from '@qcrypt/crypto/consts';
 import { bytesToBase64 } from '@qcrypt/crypto';
-import { CipherService, CipherDataInfo } from '../services/cipher.service';
+import { CipherService, CipherDataInfo } from '../../services/cipher.service';
 
 
 const PWD_CLOSE_TIMEOUT = 1000 * 60 * 5;
@@ -73,7 +73,7 @@ const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
 @Component({
    selector: 'password.dialog',
    templateUrl: './password.dialog.html',
-   styleUrl: './core.dialogs.scss',
+   styleUrl: './dialogs.scss',
    encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
    imports: [MatDialogModule, MatFormFieldModule, MatInputModule, MatIconModule,
       StrengthMeterComponent, FormsModule, ReactiveFormsModule, MatTooltipModule,
@@ -182,7 +182,7 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
 @Component({
    selector: 'cipher-info.dialog',
    templateUrl: './cipher-info.dialog.html',
-   styleUrl: './core.dialogs.scss',
+   styleUrl: './dialogs.scss',
    imports: [MatDialogModule, MatIconModule, MatButtonModule]
 })
 export class CipherInfoDialog {
@@ -219,7 +219,7 @@ export class CipherInfoDialog {
 @Component({
    selector: 'signin.dialog',
    templateUrl: './signin.dialog.html',
-   styleUrl: './core.dialogs.scss',
+   styleUrl: './dialogs.scss',
    imports: [MatDialogModule, MatProgressSpinnerModule, MatIconModule, MatTooltipModule, MatButtonModule]
 })
 export class SigninDialog {

@@ -44,8 +44,11 @@ const EXPIRY_INTERVAL = 1000 * 60 * 2;
 
 const RECOVERID_BYTES = 16;
 
-export type { AuthenticatorInfo, UserInfo, LoginUserInfo } from '@qcrypt/api';
-import type { AuthenticatorInfo, UserInfo, LoginUserInfo, InvitableInfo } from '@qcrypt/api';
+import type { ResponseTypes } from '@qcrypt/api';
+export type AuthenticatorInfo = ResponseTypes.AuthenticatorInfo;
+export type UserInfo = ResponseTypes.UserInfo;
+export type LoginUserInfo = ResponseTypes.LoginUserInfo;
+export type InvitableInfo = ResponseTypes.InvitableInfo;
 
 export type VerifiedUserInfo = {
    userId: string;
@@ -600,6 +603,7 @@ export class AuthenticatorService {
          return serverUserInfo.authenticators!.length;
       }
    }
+
 
    async refreshSenderLinks(): Promise<SenderLinkInfo[]> {
       if (!this.authenticated()) {
