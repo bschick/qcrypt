@@ -106,3 +106,6 @@ export type {
 
 // Armor functions
 export { makeCipherArmor, parseCipherArmor } from './lib/armor';
+
+// PQC functions
+export { kemKeyGen, KEMKeys } from './lib/pqc';

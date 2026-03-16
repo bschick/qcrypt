@@ -20,33 +20,45 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-export type AuthenticatorInfo = {
-   credentialId: string;
-   description: string;
-   lightIcon: string;
-   darkIcon: string;
-   name: string;
-};
+export namespace RequestTypes {
+   export type CreateTopicInfo = {
+      ownerKEMPublicKey: string;
+      participants?: string[];
+      additionalCount: number;
+      fork: boolean;
+      description?: string;
+   };
+}
 
-export type InvitableInfo = {
-   invitableId: string;
-   description?: string;
-};
+export namespace ResponseTypes {
+   export type AuthenticatorInfo = {
+      credentialId: string;
+      description: string;
+      lightIcon: string;
+      darkIcon: string;
+      name: string;
+   };
 
-export type UserInfo = {
-   verified: boolean;
-   userId?: string;
-   userName?: string;
-   hasRecoveryId?: boolean;
-   authenticators?: AuthenticatorInfo[];
-   invitables?: InvitableInfo[];
-};
+   export type InvitableInfo = {
+      invitableId: string;
+      description?: string;
+   };
 
-export type LoginUserInfo = UserInfo & {
-   pkId?: string;
-   userCred?: string;
-   recoveryId?: string;
-   csrf?: string;
-};
+   export type UserInfo = {
+      verified: boolean;
+      userId?: string;
+      userName?: string;
+      hasRecoveryId?: boolean;
+      authenticators?: AuthenticatorInfo[];
+      invitables?: InvitableInfo[];
+   };
+
+   export type LoginUserInfo = UserInfo & {
+      pkId?: string;
+      userCred?: string;
+      recoveryId?: string;
+      csrf?: string;
+   };
+}
 
 export const TOPIC_USERS_MAX = 255;
