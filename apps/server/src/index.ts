@@ -95,7 +95,12 @@ export type Response = {
    returnCsrf?: boolean;
 };
 
-import type { AuthenticatorInfo, UserInfo, LoginUserInfo, InvitableInfo } from '@qcrypt/api';
+import type { ResponseTypes } from '@qcrypt/api';
+
+type AuthenticatorInfo = ResponseTypes.AuthenticatorInfo;
+type UserInfo = ResponseTypes.UserInfo;
+type LoginUserInfo = ResponseTypes.LoginUserInfo;
+type InvitableInfo = ResponseTypes.InvitableInfo;
 
 type SenderLink = {
    receiverCert: string;
@@ -718,7 +723,7 @@ async function _doPostRegVerify(
    };
 }
 
-async function postSenderLinks(
+async function postTopics(
    httpDetails: HttpDetails,
    verifiedUser?: VerifiedUserItem
 ): Promise<Response> {
@@ -729,11 +734,15 @@ async function postSenderLinks(
    if (!verifiedUser) {
       throw new AuthError();
    }
-   const description = sanitizeString(body.description);
-   if (description.length < 6 || description.length > 55) {
-      throw new ParamError('description must more than 5 and less than 56 character');
+   let description: string | undefined;
+   if (body.description) {
+      description = sanitizeString(body.description);
+      if (description.length > 55) {
+         throw new ParamError('description must less than 56 character');
+      }
    }
-   if (!validB64(body.publicKey)) {
+
+   if (!validB64(body.ownerKEMPublicKey)) {
       throw new ParamError('invalid publicKey');
    }
    if (!validB64(body.senderId)) {
@@ -790,7 +799,7 @@ async function postSenderLinks(
          linkId,
          senderId: body.senderId,
          receiverId: verifiedUser.userId,
-         description,
+         description: description!,
          receiverCert,
          transportCert,
          transportPrivateKey: base64UrlEncode(privateKey)!,
@@ -1809,17 +1818,10 @@ async function postRecover2(
    let recoveryId = body?.recoveryId;
    let userId = body?.userId;
 
-   // For backward compatibility accept userid and recoveryid in url until clients update
-   if (!recoveryId) {
-      recoveryId = resources['recoveryid'];
-   }
-   if (!userId) {
-      userId = resources['userid'];
-   }
-
    if (!validB64(recoveryId)) {
       throw new ParamError('invalid recovery id');
    }
+
    // Require an existing verified user for recovery
    const unverifiedUser = await getUnverifiedUser(userId);
    const verifiedUser = checkVerified(unverifiedUser, userId);
@@ -2136,10 +2138,8 @@ const METHODMAP: MethodMap = {
       { name: 'postRegVerify', pattern: Patterns.regVerify, version: 1, authorize: false, handler: postRegVerify },
       { name: 'postRecover', pattern: Patterns.recover, version: 1, authorize: false, handler: postRecover },
       { name: 'postRecover2', pattern: Patterns.recover2, version: 1, authorize: false, handler: postRecover2 },
-      { name: 'postRecover2Old', pattern: Patterns.recover2Old, version: 1, authorize: false, handler: postRecover2 },
-
       // Sender links
-      // { name: 'postSenderLinks', pattern: Patterns.senderLinks, version: 1, authorize: true, handler: postSenderLinks },
+      { name: 'postTopics', pattern: Patterns.topics, version: 1, authorize: true, handler: postTopics },
       // { name: 'postSenderLinkVerify', pattern: Patterns.senderLinkVerify, version: 1, authorize: true, handler: postSenderLinkVerify },
       // { name: 'postSenderLinkBind', pattern: Patterns.senderLinkBind, version: 1, authorize: true, handler: postSenderLinkBind },
       // { name: 'postSenderLinksDelete', pattern: Patterns.senderLinksDelete, version: 1, authorize: true, handler: postSenderLinksDelete },

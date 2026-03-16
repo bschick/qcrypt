@@ -88,9 +88,6 @@ export const Patterns = {
    recover2: new URLPattern({
       pathname: `/v:ver/recover2`,
    }),
-   recover2Old: new URLPattern({
-      pathname: `/v:ver/users/:userid/recover2/:recoveryid`,
-   }),
    session: new URLPattern({
       pathname: `/v:ver/session`,
    }),
