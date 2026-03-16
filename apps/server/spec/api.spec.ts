@@ -46,11 +46,11 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          sessCookie
       );
 
-    expect(verifyRes.status).toBe(200);
-    expect(verifyRes.data.verified).toBe(true);
-    expect(verifyRes.data.csrf).toBeDefined();
-    expect(verifyRes.data.pkId).toBeDefined();
-    expect(verifyRes.cookie).toBeTruthy();
+      expect(verifyRes.status).toBe(200);
+      expect(verifyRes.data.verified).toBe(true);
+      expect(verifyRes.data.csrf).toBeDefined();
+      expect(verifyRes.data.pkId).toBeDefined();
+      expect(verifyRes.cookie).toBeTruthy();
 
       sessCookie = verifyRes.cookie;
       csrfToken = verifyRes.data.csrf;

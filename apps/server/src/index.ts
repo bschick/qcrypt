@@ -22,6 +22,9 @@ SOFTWARE. */
 
 
 import * as cc from './consts';
+if (!globalThis.URLPattern) {
+   require("urlpattern-polyfill");
+}
 import {
    INTERNAL_VERSION,
    matchEvent,
@@ -1811,7 +1814,6 @@ async function postRecover2(
    const {
       rpID,
       rpOrigin,
-      resources,
       body
    } = httpDetails;
 
