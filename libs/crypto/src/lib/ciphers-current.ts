@@ -1698,7 +1698,7 @@ export async function _genCipherKey(
    }
 
    const pwdBytes = new TextEncoder().encode(pwd);
-   let rawMaterial = new Uint8Array(pwdBytes.byteLength + cc.USERCRED_BYTES)
+   const rawMaterial = new Uint8Array(pwdBytes.byteLength + cc.USERCRED_BYTES)
    rawMaterial.set(pwdBytes);
    rawMaterial.set(userCred, pwdBytes.byteLength);
 
