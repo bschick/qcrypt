@@ -1,6 +1,6 @@
 # Agent Instructions for web client
 
-This document provides instructions for Human or AI agents working on the `web` client codebase.
+This document provides instructions for Human or AI agents working on the `web` client codebase. For monorepo-wide information (environment setup, command reference, shared conventions), see the root [`AGENTS.md`](../../AGENTS.md).
 
 ## 1. Project Overview
 
@@ -46,24 +46,7 @@ This `web` client can built, served, and tested locally. It depends on a backend
 
 ### a. One-time Setup of Dev/Test Environment
 
-- Create an up-to-date Ubuntu 24.04 (or similar) VM
-- (Optional) Setup an LXC container to simplify version testing by logging into the Ubuntu VM as a user with sudo permission and run the following:
-```bash
-sudo sudo snap install lxd
-sudo adduser $USER lxd
-newgrp lxd
-lxd init --auto
-lxc launch ubuntu:24.04 qcrypt
-lxc exec qcrypt -- /bin/bash
-```
-- Log into either the LXC container (exec above) or the Ubuntu VM as a user with sudo permission and run the following:
-```bash
-sudo apt update && sudo apt dist-upgrade -y
-sudo apt install -y git ca-certificates
-cd ~
-git clone https://github.com/bschick/qcrypt.git && cd qcrypt
-./ubsetup.sh 2>&1 | tee ubsetup.log
-```
+Follow the setup instructions in the root [`AGENTS.md`](../../AGENTS.md#2-one-time-devtest-environment-setup).
 
 ### b. Running Automated Tests
 
@@ -95,9 +78,9 @@ pkill pnpm; pkill ng # Stop the development server and ng process
 ### d. Build project for production deployment
 
 ```bash
-pnpm build
+pnpm build:web
 ```
-The output will be placed in the `dist/` directory.
+The output will be placed in the `dist/web/` directory.
 
 
 ---
@@ -125,5 +108,5 @@ pnpm test:e2e
 - **Testing:** Any new feature or bug fix should be accompanied by corresponding unit or e2e tests to prevent regressions.
 - **Immutability:** Follow best practices for immutability, especially when dealing with application state.
 - **Security:** Adhere to the security principles outlined in `src/assets/protocol6.pdf`, including the use of strong cryptographic primitives and secure coding practices.
-- **Github workflow:** All changes must be submitted as a github pull request from a cloned repository.
-- **AWS server resources:** The test API server at `https://test.quickcrypt.org` is intended only for those contributing to the Quick Crypt project. Unnecessary or excessive usage that drives up AWS costs will be blocked.
+
+See the root [`AGENTS.md`](../../AGENTS.md#5-shared-conventions) for additional shared conventions (GitHub workflow, AWS resource policies).

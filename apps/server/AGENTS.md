@@ -1,6 +1,6 @@
 # Agent Instructions for server
 
-This document provides instructions for AI agents working on the `server` codebase. This project lives in `apps/server/` within the `qcrypt` Nx monorepo.
+This document provides instructions for AI agents working on the `server` codebase. This project lives in `apps/server/` within the `qcrypt` Nx monorepo. For monorepo-wide information (environment setup, command reference, shared conventions), see the root [`AGENTS.md`](../../AGENTS.md).
 
 ## 1. Project Overview
 
@@ -42,7 +42,7 @@ This `server` can be built locally but currently is not setup to run locally and
 
 ### a. One-time Setup of Dev/Test Environment
 
-This project is part of the `qcrypt` monorepo. Follow the setup instructions in the root `AGENTS.md` or `README.md` for the monorepo. Once the monorepo is set up, `pnpm install` at the root will install all dependencies including those needed for `server`.
+Follow the setup instructions in the root [`AGENTS.md`](../../AGENTS.md#2-one-time-devtest-environment-setup).
 
 ### b. Building the Project
 
@@ -92,8 +92,8 @@ Before submitting any changes, you must run the server tests (`pnpm test:server`
 - **Database Updates:** Use the `.patch().set({...}).go()` pattern for updating records in DynamoDB.
 - **Security:** Never store plaintext secrets. Credentials and recovery IDs must be encrypted before being stored.
 - **Error Handling:** Use the custom `ParamError` and `AuthError` classes from `apps/server/src/utils.ts` for handling errors gracefully.
-- **Github workflow:** All changes must be submitted as a github pull request from a cloned repository.
-- **AWS server resources:** The test API server at `https://test.quickcrypt.org` is intended only for those contributing to the Quick Crypt project. Unnecessary or excessive usage that drives up AWS costs will be blocked.
+
+See the root [`AGENTS.md`](../../AGENTS.md#5-shared-conventions) for additional shared conventions (GitHub workflow, AWS resource policies).
 
 ---
 
