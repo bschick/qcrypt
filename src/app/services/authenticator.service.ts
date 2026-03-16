@@ -550,7 +550,7 @@ export class AuthenticatorService {
          throw new Error('invalid credentialId');
       }
       if (!this.authenticated()) {
-         throw new Error('not active user');
+         throw new Error('no active user');
       }
 
       const serverUserInfo = await this._doFetch<ServerUserInfo>({
@@ -575,7 +575,7 @@ export class AuthenticatorService {
          throw new Error('user name must be 6 to 31 characters');
       }
       if (!this.authenticated()) {
-         throw new Error('not active user');
+         throw new Error('no active user');
       }
 
       const serverUserInfo = await this._doFetch<ServerUserInfo>({
@@ -596,7 +596,7 @@ export class AuthenticatorService {
          throw new Error('invalid credentialId');
       }
       if (!this.authenticated()) {
-         throw new Error('not active user');
+         throw new Error('no active user');
       }
 
       const serverUserInfo = await this._doFetch<ServerUserInfo>({
@@ -619,9 +619,10 @@ export class AuthenticatorService {
       }
    }
 
+
    async refreshSenderLinks(): Promise<SenderLinkInfo[]> {
       if (!this.authenticated()) {
-         throw new Error('not active user');
+         throw new Error('no active user');
       }
       /*
             const links = await this.doFetch<SenderLinkInfo[]>(
@@ -656,7 +657,7 @@ export class AuthenticatorService {
 
    async refreshUserInfo(): Promise<UserInfo> {
       if (!this.authenticated()) {
-         throw new Error('not active user');
+         throw new Error('no active user');
       }
 
       const serverUserInfo = await this._doFetch<ServerUserInfo>({
@@ -827,7 +828,7 @@ export class AuthenticatorService {
    async addPasskey(): Promise<UserInfo> {
 
       if (!this.authenticated()) {
-         throw new Error('not active user');
+         throw new Error('no active user');
       }
 
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
