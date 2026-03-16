@@ -76,7 +76,7 @@ import {
    PasswordDialog,
    CipherInfoDialog,
    SigninDialog,
-} from './core.dialogs';
+} from '../ui/dialogs/dialogs';
 import { BubbleDirective } from '../ui/bubble/bubble.directive';
 import { OptionsComponent } from '../ui/options/options.component';
 import { Subscription } from 'rxjs';
@@ -691,7 +691,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
       return this.cipherSvc.encryptStream(
          econtext,
-         this.passwordProvider.bind(this),
+         (cdInfo, encrypting) => this.passwordProvider(cdInfo, encrypting),
          this.authSvc.userCred,
          clearStream
       );
@@ -853,7 +853,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    ): Promise<ReadableStream<Uint8Array>> {
 
       return await this.cipherSvc.decryptStream(
-         this.passwordProvider.bind(this),
+         (cdInfo, encrypting) => this.passwordProvider(cdInfo, encrypting),
          this.authSvc.userCred,
          cipherStream
       );
