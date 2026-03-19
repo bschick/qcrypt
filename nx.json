@@ -11,12 +11,24 @@
         "^production"
       ]
     },
+    "build-min": {
+      "cache": false
+    },
+    "serve": {
+      "cache": false
+    },
+    "extract-i18n": {
+      "cache": false
+    },
     "test": {
       "cache": false,
       "inputs": [
         "default",
         "^production"
       ]
+    },
+    "test-prod": {
+      "cache": false
     }
   },
   "namedInputs": {
@@ -28,5 +40,6 @@
     "production": [
       "default"
     ]
-  }
+  },
+  "analytics": true
 }
