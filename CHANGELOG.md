@@ -1,5 +1,16 @@
 # CHANGELOG.md
 
+## 6.1.5 (2026-03-19)
+
+#### Changes
+  - fixed loss of authentication after retrieving recovery words and usercred
+  - many improvements to command-line tool, piping works much better
+  - rounded various controls to fit web UI theme better
+  - monorepo structure using nx and pnpm for web, server, cli, and libs
+
+#### Security
+  - updated packages, fixing dependabot detected vulnerabilities
+
 ## 6.1.4 (2026-03-08)
 
 #### Changes
