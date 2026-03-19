@@ -36,21 +36,16 @@
   font-size: 14px;
 }
 
-.bytes tr > :first-child {
-  border-left: none;
-}
-
 .bytes tr > :last-child {
   border-right: none;
 }
 
-.bytes tr:first-child > th,
-.bytes tr:first-child > td {
-  border-top: none;
-}
-
 .bytes tr:last-child > th,
 .bytes tr:last-child > td {
+  border-bottom: none;
+}
+
+.bytes .last-row {
   border-bottom: none;
 }
 
