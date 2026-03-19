@@ -259,90 +259,6 @@ export const Invitables = new Entity(
    }
 );
 
-export const SenderLinks = new Entity(
-   {
-      model: {
-         entity: "senderlink",
-         version: "1",
-         service: "quickcrypt"
-      },
-      attributes: {
-         linkId: {
-            type: "string",
-            required: true
-         },
-         senderId: {
-            type: "string",
-            required: true
-         },
-         receiverId: {
-            type: "string",
-            required: true
-         },
-         description: {
-            type: "string",
-            required: true
-         },
-         receiverCert: {
-            type: "string",
-            required: true
-         },
-         transportCert: {
-            type: "string",
-            required: true
-         },
-         transportPrivateKey: {
-            type: "string",
-            required: true
-         },
-         multiUser: {
-            type: "boolean",
-            required: true
-         },
-         eep: {
-            type: "string",
-            required: false
-         },
-         createdAt: {
-            type: "number",
-            default: () => Date.now(),
-            // should not be modified after created
-            readOnly: true
-         }
-      },
-      indexes: {
-         byLinkSenderId: {
-            pk: {
-               field: "pk",
-               cast: "string",
-               composite: ["linkId"],
-               casing: 'none'
-            },
-            sk: {
-               field: "sk",
-               cast: "string",
-               composite: ["senderId"],
-               casing: 'none'
-            },
-         },
-         byReceiverId: {
-            index: "receiverid-index",
-            pk: {
-               field: "receiverId",
-               cast: "string",
-               composite: ["receiverId"],
-               casing: 'none'
-            }
-         }
-      }
-   },
-   {
-      table: "SenderLinks",
-      client: client
-   }
-);
-
-
 export const Challenges = new Entity(
    {
       model: {
@@ -475,7 +391,6 @@ export const AAGUIDs = new Entity(
 
 export type UnverifiedUserItem = EntityItem<typeof Users>;
 export type AuthItem = EntityItem<typeof Authenticators>;
-export type SenderLinkItem = EntityItem<typeof SenderLinks>;
 export type InvitableItem = EntityItem<typeof Invitables>;
 export type VerifiedUserItem = EntityRecord<typeof Users> & {
    lastCredentialId?: string;

@@ -22,12 +22,6 @@ SOFTWARE. */
 
 import { base64Decode, NotFoundError, ParamError } from "./utils";
 import type { VerifiedUserItem } from "./models";
-
-// Once we upgrade to node 24, this can be changed to import Urlpattern
-if (!globalThis.URLPattern) {
-   require("urlpattern-polyfill");
-}
-
 export type QParams = Record<string, string>;
 export const INTERNAL_VERSION = 0;
 export type Method = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -112,22 +106,6 @@ export const Patterns = {
    invitables: new URLPattern({
       pathname: `/v:ver/invitables/:invid`
    }),
-   topics: new URLPattern({
-      pathname: `/v:ver/topics`
-   }),
-   topicVerify: new URLPattern({
-      pathname: `/v:ver/topics/:topicid/verify`
-   }),
-   topicBind: new URLPattern({
-      pathname: `/v:ver/topics/:topicid/bind`
-   }),
-   topic: new URLPattern({
-      pathname: `/v:ver/topics/:topicid`
-   }),
-   topicsDelete: new URLPattern({
-      pathname: `/v:ver/topics/delete`
-   }),
-
    // Internal only URLS (not allowed through Cloudfront)
    munge: new URLPattern({
       pathname: '/v:ver/munge'
