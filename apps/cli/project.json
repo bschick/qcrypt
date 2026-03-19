@@ -7,18 +7,26 @@
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "node apps/cli/build.js",
-        "cwd": "{workspaceRoot}"
+        "commands": [
+          "node apps/cli/build.js",
+          "rm -f dist/cli/qcrypt.zip && zip -j dist/cli/qcrypt.zip dist/cli/qcrypt.cjs"
+        ],
+        "cwd": "{workspaceRoot}",
+        "parallel": false
       },
-      "outputs": ["{workspaceRoot}/dist/cli/qcrypt.cjs"]
+      "outputs": ["{workspaceRoot}/dist/cli/qcrypt.cjs", "{workspaceRoot}/dist/cli/qcrypt.zip"]
     },
     "build-min": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "node apps/cli/build.js",
-        "cwd": "{workspaceRoot}"
+        "commands": [
+          "node apps/cli/build.js --minify",
+          "rm -f dist/cli/qcrypt.zip && zip -j dist/cli/qcrypt.zip dist/cli/qcrypt.cjs"
+        ],
+        "cwd": "{workspaceRoot}",
+        "parallel": false
       },
-      "outputs": ["{workspaceRoot}/dist/cli/qcrypt.cjs"]
+      "outputs": ["{workspaceRoot}/dist/cli/qcrypt.cjs", "{workspaceRoot}/dist/cli/qcrypt.zip"]
     },
     "test": {
       "executor": "nx:run-commands",
