@@ -28,20 +28,13 @@
   }
 }
 
-.help-link {
-  color: var(--mat-sys-on-surface-variant);
-
-  &:hover {
-    color: var(--mat-sys-primary);
-  }
-}
 
 .help-icon {
   font-size: 16px;
   height: 16px;
   width: 16px;
   vertical-align: middle;
-  margin-top: -2px;
+  margin-top: -6px;
 }
 
 .tip {
