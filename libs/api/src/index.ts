@@ -21,13 +21,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 export namespace RequestTypes {
-   export type CreateTopicInfo = {
-      ownerKEMPublicKey: string;
-      participants?: string[];
-      additionalCount: number;
-      fork: boolean;
-      description?: string;
-   };
 }
 
 export namespace ResponseTypes {
