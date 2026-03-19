@@ -70,8 +70,9 @@ body {
     border-radius: 12px;
   }
 
-  --red-pwd-color: darkred;
-  --yellow-pwd-color: darkgoldenrod;
-  --green-pwd-color: darkgreen;
+  --none-pwd-color: oklch(0.8945 0.0056 119.1);
+  --red-pwd-color: oklch(0.3999 0.1641 29.2);
+  --yellow-pwd-color: oklch(0.6522 0.1540 87.6);
+  --green-pwd-color: oklch(0.4362 0.1781 138.4);
 
 }
