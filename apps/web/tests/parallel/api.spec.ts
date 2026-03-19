@@ -10,7 +10,7 @@ import {
    credentials
 } from '.././common';
 import { bufferToHexString } from '../../../../libs/crypto/src/lib/utils';
-import { ServerLoginUserInfo } from '../../src/app/services/authenticator.service';
+import { LoginUserInfo } from '../../src/app/services/authenticator.service';
 
 // Currently not direclty testing API that does authentication and registion of
 // users because haven't gotten SimpleWebAuthn to work in playwright.
@@ -621,9 +621,8 @@ async function smallFuzzCommaon(
    // POST auth verify
    await fuzzPost(page, headers,
       `${apiUrl}/auth/verify`,
-      [[...badIdsSmall, userId]],
-      'authenticator',
-      badNamesSmall
+      [badNamesSmall],
+      ['authenticator']
    );
 
 }
@@ -693,17 +692,15 @@ async function fullFuzzCommaon(
    // POST reg verify
    await fuzzPost(page, headers,
       `${apiUrl}/reg/verify`,
-      [[...badIds, userId]],
-      'authenticator',
-      badNames
+      [badNames],
+      ['authenticator']
    );
 
    // POST auth verify
    await fuzzPost(page, headers,
       `${apiUrl}/auth/verify`,
-      [[...badIds, userId]],
-      'authenticator',
-      badNames
+      [badNames],
+      ['authenticator']
    );
 
    // POST recovery
@@ -714,21 +711,9 @@ async function fullFuzzCommaon(
 
    // POST recovery2
    await fuzzPost(page, headers,
-      `${apiUrl}/users/{0}/recover2/{1}`,
-      [[...badIdsSmall, userId], badIds]
-   );
-
-   // GET passkeys options
-   // comment out during backward compatibility period
-   // await fuzzGet(page, headers,
-   //    `${apiUrl}/users/{0}/passkeys/options`,
-   //    [badIds]
-   // );
-
-   // POST passkeys verify
-   await fuzzPost(page, headers,
-      `${apiUrl}/passkeys/verify`,
-      [[...badIds, userId]]
+      `${apiUrl}/recover2/`,
+      [[...badIdsSmall, userId], badIds],
+      ["userId", "recoveryId"]
    );
 
    // Bad URLS generally
@@ -748,7 +733,7 @@ async function fullFuzzCommaon(
 
 }
 
-type ApiSetupResults = [string, ServerLoginUserInfo, Record<string, string>];
+type ApiSetupResults = [string, LoginUserInfo, Record<string, string>];
 
 async function apiSetup(
    testInfo: TestInfo,
@@ -781,7 +766,7 @@ async function apiSetup(
       `${apiUrl}/session`
    );
    expect(sessResp).toBeOK();
-   const apiUser: ServerLoginUserInfo = await sessResp.json();
+   const apiUser: LoginUserInfo = await sessResp.json();
 
    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -796,7 +781,7 @@ async function reSetup(
    page: Page,
    session: CDPSession,
    authId: string
-): Promise<[ServerLoginUserInfo, Record<string, string>]> {
+): Promise<[LoginUserInfo, Record<string, string>]> {
 
    await page.goto('/');
 
@@ -818,7 +803,7 @@ async function reSetup(
       `${apiUrl}/session`
    );
    expect(sessResp).toBeOK();
-   const apiUser: ServerLoginUserInfo = await sessResp.json();
+   const apiUser: LoginUserInfo = await sessResp.json();
 
    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -924,37 +909,36 @@ async function fuzzPatch(
 }
 
 
+// accepts array of array of repalcment values that are used
+// in either URL {} replacement positions or as body values
+// defined in bodyKeys[]
 async function fuzzPost(
    page: Page,
    defaultHeaders: Record<string, string>,
    urlTemplate: string,
-   urlValues: any[][],
-   dataKey?: string,
-   dataValues?: any[]
+   replaceValues: any[][],
+   bodyKeys?: string[]
 ) {
-   if (dataValues) {
-      urlValues.push(dataValues);
-   }
-   const subs = cartesianProduct(urlValues);
-
+   const subs = cartesianProduct(replaceValues);
    let headers = structuredClone(defaultHeaders);
 
    for (let sub of subs) {
-      let url = urlTemplate;
-      let pos = 0;
-      for (; pos < sub.length - (dataValues ? 1 : 0); ++pos) {
-         url = url.replace(`{${pos}}`, String(sub[pos]))
-      }
 
+      let url = urlTemplate;
       const data: Record<string, any> = {};
 
-      if (dataKey) {
-         // console.log(`datakey ${dataKey} ${pos} ${sub[pos]}`);
-
-         data[dataKey] = sub[pos];
+      let pos = 0;
+      if(bodyKeys) {
+         for (; pos < sub.length; ++pos) {
+            data[bodyKeys[pos]] = sub[pos];
+         }
          let bodyData = new TextEncoder().encode(JSON.stringify(data));
          let hash = await crypto.subtle.digest("SHA-256", bodyData);
          headers['x-amz-content-sha256'] = bufferToHexString(hash);
+      } else {
+         for (; pos < sub.length; ++pos) {
+            url = url.replace(`{${pos}}`, String(sub[pos]))
+         }
       }
 
       // console.log(`POST ${url}\n${JSON.stringify(data)}`);

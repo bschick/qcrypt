@@ -175,10 +175,10 @@ const ELEMENT_DATA: FAQElement[] = [
       password you used during encryption are the only inputs
       needed to decrypt Quick Crypt ciphertext. The website is not
       required. There is a
-      command-line tool that decrypts Quick Crypt cipher armor. Download the
-      <a href="https://github.com/bschick/qcrypt/tree/main/shell" target="_blank">qcrypt.cjs</a>
-      file, install <a href="https://nodejs.org/" target="_blank">Node.js</a>,
-      , and run the script from the command-line:
+      command-line tool that decrypts and encrypts Quick Crypt cipher armor.
+      <a href="https://github.com/bschick/qcrypt/releases/latest/download/qcrypt.zip" target="_blank">Download the qcrypt.zip file</a>,
+      extract it, install <a href="https://nodejs.org/" target="_blank">Node.js</a>,
+      and run the script from the command-line:
       <blockquote>> node qcrypt.cjs</blockquote>
       <p>Other tools could also be used to decrypt Quick Crypt cipher armor in a
       multi-step process. If you want to be sure someone can recreate Quick Crypt's
@@ -198,11 +198,10 @@ const ELEMENT_DATA: FAQElement[] = [
       <p>The Quick Crypt command-line tool is another option that never
       requires an internet connection once installed. You need your user credential
       and the password you used during encryption. You can get your user credential
-      by navigating to https://quickcrypt.org/cmdline. Then download the
-      <a href="https://github.com/bschick/qcrypt/tree/main/shell" target="_blank">qcrypt.cjs</a>
-      file and install <a href="https://nodejs.org/" target="_blank">Node.js</a>
-      before going offline. Then
-      run the script from the command-line and respond to the prompts:
+      by navigating to https://quickcrypt.org/cmdline. Then
+      <a href="https://github.com/bschick/qcrypt/releases/latest/download/qcrypt.zip" target="_blank">download the qcrypt.zip file</a>,
+      extract it, and install <a href="https://nodejs.org/" target="_blank">Node.js</a>
+      before going offline. Then run the script from the command-line and respond to the prompts:
       <blockquote>> node qcrypt.cjs</blockquote>.</p>`
    },
 
@@ -215,8 +214,8 @@ const ELEMENT_DATA: FAQElement[] = [
       data, you need your user credential and the password
       you used during encryption. You can get your user credential by
       navigating to https://quickcrypt.org/cmdline. Then
-      <a href="https://github.com/bschick/qcrypt/tree/main/shell" target="_blank">
-      download the qcrypt.cjs file</a>, ensure you have
+      <a href="https://github.com/bschick/qcrypt/releases/latest/download/qcrypt.zip" target="_blank">
+      download the qcrypt.zip file</a>, extract it, ensure you have
       <a href="https://nodejs.org/" target="_blank">Node.js</a> installed, and
       then run the tool from the command-line and respond to the prompts:
       <blockquote>> node qcrypt.cjs</blockquote>.`

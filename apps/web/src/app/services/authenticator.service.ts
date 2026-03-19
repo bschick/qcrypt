@@ -297,18 +297,14 @@ export class AuthenticatorService {
       this._cachedRecoveryId = undefined;
 
       if (!recoveryId) {
-         const verifyBody = await this._startAuth(this.userId);
-         const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
-            method: 'POST',
-            resource: 'auth/verify',
-            bodyJSON: JSON.stringify(verifyBody),
-            params: 'recovery=true'
-         });
-
-         if (!serverLoginUserInfo || !serverLoginUserInfo.recoveryId) {
+         const serverLoginUserInfo = await this._findLoginImpl(true, true, this.userId);
+         if (!serverLoginUserInfo.recoveryId) {
             throw new Error('authentication failed');
          }
+
+         // must call loginUser since fetch above changes csrf
          recoveryId = serverLoginUserInfo.recoveryId;
+         this._loginUser(serverLoginUserInfo);
       }
 
       const recoveryIdBytes = base64ToBytes(recoveryId);
@@ -432,7 +428,6 @@ export class AuthenticatorService {
          authenticators: serverUser.authenticators!
       };
 
-      this.refreshSenderLinks();
       this.userInfo.set(userInfo);
       this.activity();
       return userInfo;
@@ -685,26 +680,40 @@ export class AuthenticatorService {
       return this.findLogin(userId);
    }
 
-   // If no userId is provided, will present all Passkeys for this domain
    async findLogin(userId: string | null = null): Promise<VerifiedUserInfo> {
-
       if (this.authenticated()) {
          throw new Error('must be logged out to log in');
       }
+
+      const serverLoginUserInfo = await this._findLoginImpl(true, false, userId);
+      return this._loginUser(serverLoginUserInfo);
+   }
+
+   // If no userId is provided, will present all Passkeys for this domain
+   private async _findLoginImpl(
+      includeUserCred: boolean,
+      includeRecovery: boolean,
+      userId: string | null = null
+   ): Promise<LoginUserInfo> {
+      const parts = includeUserCred ? ['usercred=true'] : [];
+      if (includeRecovery) {
+         parts.push('recovery=true');
+      }
+      const params = parts.join('&');
 
       const verifyBody = await this._startAuth(userId);
       const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
          method: 'POST',
          resource: 'auth/verify',
          bodyJSON: JSON.stringify(verifyBody),
-         params: 'usercred=true'
+         params: params
       });
 
       if (!serverLoginUserInfo) {
          throw new Error('authentication failed');
       }
 
-      return this._loginUser(serverLoginUserInfo);
+      return serverLoginUserInfo;
    }
 
    private async _startAuth(
@@ -905,7 +914,7 @@ export class AuthenticatorService {
          challenge: optionsJson.challenge,
       }
 
-      let parts = includeUserCred ? ['usercred=true'] : [];
+      const parts = includeUserCred ? ['usercred=true'] : [];
       if (includeRecovery) {
          parts.push('recovery=true');
       }

@@ -7,7 +7,8 @@ import {
   clearCredentials,
   addCredential,
   hosts,
-  credentials
+  credentials,
+  deleteLastPasskey
 } from '.././common';
 
 
@@ -86,7 +87,7 @@ test.describe('creation', () => {
     tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
 
-    await deleteFirstPasskey(page);
+    await deleteFirstPasskey(page, 'PWFlippy');
 
     await page.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
@@ -97,7 +98,6 @@ test.describe('creation', () => {
 
 
 test.describe('sign on', () => {
-
 
   testWithAuth('check show reocvery', async ({ authFixture }) => {
     const { page, session, authId1, authId2 } = authFixture;
@@ -156,6 +156,44 @@ test.describe('sign on', () => {
 
   });
 
+  // This was a bug in the past where could not make further authenticated
+  // calls after cmdline (or recoveryword) download.
+  testWithAuth('check usercred and add pk', async ({ authFixture }) => {
+    const { page, session, authId1, authId2 } = authFixture;
+    test.setTimeout(45000);
+
+    await page.goto('/');
+
+    const testHost = new URL(page.url()).hostname as hosts;
+    await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
+
+    await passkeyAuth(session, authId1, async () => {
+      await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
+    });
+    await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+
+    await passkeyAuth(session, authId1, async () => {
+      await page.goto('/cmdline');
+    });
+
+    await page.waitForURL('/cmdline', { waitUntil: 'domcontentloaded' });
+
+    await expect(page.locator('input#credential')).toBeVisible();
+    await expect(page.locator('input#credential')).toHaveValue(credentials[testHost]['keeper2']['userCred']);
+
+    await page.getByRole('button', { name: 'Passkey information' }).click();
+
+    let tableBody = page.locator('table.credtable tbody');
+    await expect(tableBody.locator('tr')).toHaveCount(1);
+
+    await passkeyCreation(session, authId2, async () => {
+      await page.getByRole('button', { name: /New Passkey/ }).click();
+    });
+
+    await expect(tableBody.locator('tr')).toHaveCount(2);
+    await deleteLastPasskey(page);
+  });
 
   testWithAuth('log in and out', async ({ authFixture }) => {
     const { page, session, authId1, authId2 } = authFixture;
