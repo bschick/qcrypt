@@ -63,7 +63,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
    public strengthMin = 0;
 
    public segmentOnColor = '';
-   public segmentOffColor = '#dcdcdc';
+   public segmentOffColor = 'var(--none-pwd-color)';
    public strengthSlider = new FormControl(this.strengthMin + 1);
    public warning = '';
    public suggestion = '';
