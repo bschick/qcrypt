@@ -10,11 +10,9 @@
   z-index: 999;
 
   &::before {
-    content: '\25BC';
-    width: 0;
-    height: 0;
+    content: '';
     position: absolute;
-    font-size:25px;
+    background-color: inherit;
   }
 
   &--visible {
@@ -25,20 +23,11 @@
   &--light {
     background-color: lightblue;
     color: black;
-
-    &::before {
-      border: 0;
-      color: lightblue;
-    }
   }
 
   &--dark {
     background-color: black;
     color: white;
-
-    &::before {
-      border: 5px solid black;
-    }
   }
 
   &--below {
@@ -46,11 +35,11 @@
     margin-top: 7px;
 
     &::before {
-      border-left-color: transparent;
-      border-right-color: transparent;
-      border-top: none;
-      left: calc(50% - 5px);
-      top: -5px;
+      width: 16px;
+      height: 18px;
+      clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+      left: calc(50% - 8px);
+      top: -17px;
     }
   }
 
@@ -59,8 +48,11 @@
     margin-bottom: 7px;
 
     &::before {
-      left: calc(25% - 5px);
-      bottom: 10px;
+      width: 16px;
+      height: 18px;
+      clip-path: polygon(50% 100%, 0% 0%, 100% 0%);
+      left: calc(25% - 8px);
+      bottom: -15px;
       transform:rotate(10deg);
     }
   }
@@ -70,8 +62,11 @@
     margin-bottom: 7px;
 
     &::before {
-      left: calc(25% - 5px);
-      bottom: 10px;
+      width: 16px;
+      height: 18px;
+      clip-path: polygon(50% 100%, 0% 0%, 100% 0%);
+      left: calc(25% - 8px);
+      bottom: -15px;
       transform:rotate(10deg);
     }
   }
@@ -81,9 +76,11 @@
     margin-left: 7px;
 
     &::before {
-      left: 12px;
-      top: calc(50% - 5px);
-      transform:rotate(110deg);
+      width: 18px;
+      height: 16px;
+      clip-path: polygon(0% 50%, 100% 0%, 100% 100%);
+      left: -17px;
+      top: calc(50% - 8px);
     }
   }
 

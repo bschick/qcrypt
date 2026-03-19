@@ -15,27 +15,43 @@
 .bytes {
   width: 100%;
   margin-top: 20px;
-  border-collapse: collapse;
+  border-collapse: separate;
   border-spacing: 0;
   overflow: hidden;
   word-break: normal;
   font: var(--mat-sys-body-medium);
   text-align: left;
+  border-radius: 12px;
+  border: 1px solid black;
 }
 
-.bytes td {
+.bytes td,
+.bytes th {
   border: 1px solid black;
+  border-top: none;
+  border-left: none;
   padding: 5px 5px;
   vertical-align: top;
   white-space: nowrap;
   font-size: 14px;
 }
-.bytes th {
-  border: 1px solid black;
-  padding: 5px 5px;
-  vertical-align: top;
-  white-space: nowrap;
-  font-size: 14px;
+
+.bytes tr > :first-child {
+  border-left: none;
+}
+
+.bytes tr > :last-child {
+  border-right: none;
+}
+
+.bytes tr:first-child > th,
+.bytes tr:first-child > td {
+  border-top: none;
+}
+
+.bytes tr:last-child > th,
+.bytes tr:last-child > td {
+  border-bottom: none;
 }
 
 .bytes .tableheader {

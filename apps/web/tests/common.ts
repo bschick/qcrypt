@@ -191,13 +191,38 @@ export async function removeAuthenticator(session: CDPSession, authenticatorId: 
   });
 }
 
-export async function deleteFirstPasskey(page: Page): Promise<void> {
+export async function deleteFirstPasskey(
+  page: Page, userName?: string
+): Promise<void> {
   const tableBody = page.locator('table.credtable tbody');
   const count = await tableBody.locator('tr').count();
 
   await page.getByRole('button', { name: 'Delete' }).first().click();
-  if (count === 1) {
-    await page.locator('input#confirmInput').fill('PWFlippy');
+  if (count === 1 && userName) {
+    await page.locator('input#confirmInput').fill(userName);
+  }
+
+  const [deleteResponse] = await Promise.all([
+    page.waitForResponse(response =>
+      // /authenticator is for backward compat, remove when clients upgrade
+      (response.url().includes('/passkeys') || response.url().includes('/authenticator')) &&
+      response.request().method() === 'DELETE'
+    ),
+    page.getByRole('button', { name: 'Yes' }).click()
+  ]);
+  expect(deleteResponse.status()).toBe(200);
+}
+
+// Does not handle removal of last Passkey
+export async function deleteLastPasskey(
+  page: Page, userName?: string
+): Promise<void> {
+  const tableBody = page.locator('table.credtable tbody');
+  const count = await tableBody.locator('tr').count();
+
+  await page.getByRole('button', { name: 'Delete' }).last().click();
+  if (count === 1 && userName) {
+    await page.locator('input#confirmInput').fill(userName);
   }
 
   const [deleteResponse] = await Promise.all([
