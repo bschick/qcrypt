@@ -28,8 +28,10 @@ describe('CLI App', () => {
     };
 
     beforeAll(() => {
-        console.log('Building CLI before running tests...');
-        execSync('pnpm nx build cli', { stdio: 'inherit' });
+        if (!process.env['SKIP_BUILD']) {
+            console.log('Building CLI before running tests...');
+            execSync('pnpm nx build cli', { stdio: 'inherit' });
+        }
         fs.mkdirSync(tmpDir, { recursive: true });
         fs.writeFileSync(inFilePath, clearText, 'utf-8');
     });
