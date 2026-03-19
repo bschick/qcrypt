@@ -22,9 +22,6 @@ SOFTWARE. */
 
 
 import * as cc from './consts';
-if (!globalThis.URLPattern) {
-   require("urlpattern-polyfill");
-}
 import {
    INTERNAL_VERSION,
    matchEvent,
@@ -59,8 +56,6 @@ import {
    AuthEvents,
    AAGUIDs,
    Invitables,
-   SenderLinks,
-   type SenderLinkItem,
    type VerifiedUserItem,
    type UnverifiedUserItem,
    type AuthItem,
@@ -86,10 +81,8 @@ import {
    sanitizeString,
    validB64,
    base64UrlEncode,
-   base64UrlDecode,
-   CertPacker
+   base64UrlDecode
 } from './utils';
-import sodium from 'libsodium-wrappers';
 
 export type Response = {
    content: Record<string, any>;
@@ -99,24 +92,11 @@ export type Response = {
 };
 
 import type { ResponseTypes } from '@qcrypt/api';
-
 type AuthenticatorInfo = ResponseTypes.AuthenticatorInfo;
 type UserInfo = ResponseTypes.UserInfo;
 type LoginUserInfo = ResponseTypes.LoginUserInfo;
 type InvitableInfo = ResponseTypes.InvitableInfo;
 
-type SenderLink = {
-   receiverCert: string;
-   transportCert: string;
-   description: string;
-   senderId: string;
-   linkId: string;
-};
-
-type SenderLinkBind = SenderLink & {
-   senderCert: string;
-   eep: string;
-};
 
 type AAGUIDInfo = {
    data: {
@@ -153,8 +133,6 @@ export const kmsClient = new KMSClient({ region: "us-east-1" });
 let jwtMaterial: Uint8Array | undefined;
 const INTERNAL_PHRASE = "Yup, I'm internal";
 
-let signingKey: Uint8Array | undefined;
-
 
 function isVerified(unverifiedUser: UnverifiedUserItem, userId: string): unverifiedUser is VerifiedUserItem {
    return unverifiedUser && unverifiedUser.verified &&
@@ -172,31 +150,6 @@ function checkVerified(unverifiedUser: UnverifiedUserItem, userId: string): Veri
    return unverifiedUser;
 }
 
-async function createCert(
-   publicKey: Uint8Array,
-   verfifiedUser?: VerifiedUserItem,
-): Promise<string> {
-   if (!signingKey) {
-      signingKey = await setupSigningKey();
-   }
-   // const serverPublicKey = "0pbIB1B3k-oOTnMkq-41srsyiF18jms5HQKGiqS3f3c";
-   // const serverPrivateKey = "ig890QSJChMRLdz0jTDHLdsJ4OUgE_kpmsy33grFBO3SlsgHUHeT6g5OcySr7jWyuzKIXXyOazkdAoaKpLd_dw";
-
-   const packer = new CertPacker();
-   packer.ver = cc.CERT_VERSION;
-   packer.key = publicKey;
-   if(verfifiedUser) {
-      packer.uid = verfifiedUser.userId;
-      packer.uname = verfifiedUser.userName;
-   }
-
-   //   console.log("signing key: ", base64UrlEncode(signingKey));
-   const signed = sodium.crypto_sign(packer.trim(), signingKey, "base64");
-   //   console.log("signed: " + signed);
-   //   const opened = sodium.crypto_sign_open(base64UrlDecode(signed)!, base64UrlDecode(serverPublicKey)!, "base64");
-   //   console.log("opened: " + opened);
-   return signed;
-}
 
 async function encryptField(
    field: Uint8Array,
@@ -245,29 +198,6 @@ async function decryptField(
    }
 
    return result.Plaintext!;
-}
-
-
-async function setupSigningKey(): Promise<Uint8Array> {
-   if (!process.env.EncSigningKey) {
-      throw new Error('missing environment value');
-   }
-
-   try {
-      const signingKey = await decryptField(
-         process.env.EncSigningKey,
-         { purpose: "Signing Key" },
-         sodium.crypto_sign_SECRETKEYBYTES
-      );
-
-      if (!signingKey) {
-         throw new Error('signing key undefined');
-      }
-      return signingKey;
-   } catch (error) {
-      console.error("signing key setup error", error);
-      throw new Error('signing key setup error');
-   }
 }
 
 
@@ -434,7 +364,7 @@ async function postAuthVerify(
       throw new AuthError('invalid authorization');
    }
 
-   // Should this be changed to throw and error if no verified?
+   // Should this be changed to throw an error if not verified?
    let startSession: VerifiedUserItem | undefined;
    let responseContent: LoginUserInfo = {
       verified: verification.verified
@@ -726,358 +656,6 @@ async function _doPostRegVerify(
    };
 }
 
-async function postTopics(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
-   const {
-      body
-   } = httpDetails;
-
-   if (!verifiedUser) {
-      throw new AuthError();
-   }
-   let description: string | undefined;
-   if (body.description) {
-      description = sanitizeString(body.description);
-      if (description.length > 55) {
-         throw new ParamError('description must less than 56 character');
-      }
-   }
-
-   if (!validB64(body.ownerKEMPublicKey)) {
-      throw new ParamError('invalid publicKey');
-   }
-   if (!validB64(body.senderId)) {
-      throw new ParamError('invalid senderId');
-   }
-
-   const multiUser = body.multiUser ?? false;
-   if (multiUser && body.senderId !== cc.NOUSER_ID) {
-      throw new ParamError('cannot provider senderId with multiUser');
-   }
-
-   let linkId: string | undefined;
-
-   const rparams = {
-      NumberOfBytes: cc.LINKID_BYTES * cc.RETRIES
-   };
-   const rand = new GenerateRandomCommand(rparams);
-   const result = await kmsClient.send(rand);
-
-   const randData = result.Plaintext;
-   if (!randData || randData.byteLength != rparams.NumberOfBytes) {
-      throw new Error("GenerateRandomCommand failure");
-   }
-
-   // Loop in the very unlikley event that we randomly pick
-   // a duplicate (out of 3.4e38 possible)
-   for (let i = 0; i < cc.RETRIES; ++i) {
-      const linkIdBytes = randData.slice(i * cc.LINKID_BYTES, (i + 1) * cc.LINKID_BYTES);
-      linkId = base64UrlEncode(linkIdBytes)!;
-      // console.log(`linkId: ${linkId}`);
-
-      const links = await SenderLinks.get({
-         linkId: linkId,
-         senderId: body.senderId
-      }).go();
-
-      if (!links || !links.data) {
-         break;
-      } else {
-         linkId = undefined;
-      }
-   }
-
-   if (!linkId) {
-      throw new Error('could not allocate linkId');
-   }
-
-   const { publicKey, privateKey } = sodium.crypto_kx_keypair();
-   const transportCert = await createCert(publicKey);
-   const receiverCert = await createCert(base64UrlDecode(body.publicKey)!, verifiedUser);
-
-   try {
-      const link = await SenderLinks.create({
-         linkId,
-         senderId: body.senderId,
-         receiverId: verifiedUser.userId,
-         description: description!,
-         receiverCert,
-         transportCert,
-         transportPrivateKey: base64UrlEncode(privateKey)!,
-         multiUser
-      }).go();
-
-      if (!link || !link.data) {
-         throw new ParamError('could not create sender link');
-      }
-
-      const response = makeSenderLinkResponse(link.data);
-      return { content: response };
-   } catch (err) {
-      if (err instanceof ElectroError) {
-         console.error(err);
-         throw new ParamError('could not create sender link');
-      }
-      throw err;
-   }
-}
-
-async function postSenderLinkVerify(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
-   const {
-      body,
-      resources
-   } = httpDetails;
-
-   if (!verifiedUser) {
-      throw new AuthError();
-   }
-   if (!validB64(body.eep)) {
-      throw new ParamError('invalid eep');
-   }
-   if (!validB64(resources.linkid)) {
-      throw new ParamError('invalid linkid');
-   }
-   if (!validB64(body.senderId)) {
-      throw new ParamError('invalid senderId');
-   }
-
-   try {
-      const patched = await SenderLinks.patch({
-         linkId: resources.linkid,
-         senderId: body.senderId,
-      }).set({
-         eep: body.eep
-      }).where(
-         (attr, op) => op.eq(attr.receiverId, verifiedUser.userId)
-      ).go({ response: 'all_new' });
-
-      if (!patched || !patched.data) {
-         throw new ParamError('could not verify sender link');
-      }
-
-      const response = makeSenderLinkResponse(patched.data);
-      return { content: response };
-   } catch (err) {
-      if (err instanceof ElectroError) {
-         console.error(err);
-         throw new ParamError('sender link verify failed');
-      }
-      throw err;
-   }
-}
-
-async function postSenderLinkBind(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
-   const {
-      body,
-      resources
-   } = httpDetails;
-
-   if (!verifiedUser) {
-      throw new AuthError();
-   }
-   if (!validB64(body.publicKey)) {
-      throw new ParamError('invalid publicKey');
-   }
-   if (!validB64(resources.linkid)) {
-      throw new ParamError('invalid linkid');
-   }
-
-   try {
-      // See if there is a link bound to calling user
-      let link = await SenderLinks.get({
-         linkId: resources.linkid,
-         senderId: verifiedUser.userId
-      }).go();
-
-      if (!link || !link.data) {
-         // not found, see if there is an unbound link
-         link = await SenderLinks.get({
-            linkId: resources.linkid,
-            senderId: cc.NOUSER_ID
-         }).go();
-      } else {
-         if (link.data.receiverId === verifiedUser.userId) {
-            throw new ParamError('cannot self bind');
-         }
-      }
-
-      if (!link || !link.data || !link.data.eep) {
-         throw new ParamError('invalid link');
-      }
-
-      if (link.data.senderId === cc.NOUSER_ID) {
-         // bind to calling user
-         const newLink = await SenderLinks.create({
-            linkId: link.data.linkId,
-            senderId: verifiedUser.userId,
-            receiverId: link.data.receiverId,
-            description: link.data.description,
-            receiverCert: link.data.receiverCert,
-            transportCert: link.data.transportCert,
-            transportPrivateKey: link.data.transportPrivateKey,
-            multiUser: false,
-            eep: link.data.eep
-         }).go();
-
-         if (!newLink || !newLink.data) {
-            throw new ParamError('could not create sender link');
-         }
-
-         if (!link.data.multiUser) {
-            await SenderLinks.delete({
-               linkId: link.data.linkId,
-               senderId: cc.NOUSER_ID
-            }).go();
-         }
-
-         link = newLink;
-      }
-
-      const senderCert = await createCert(base64UrlDecode(body.publicKey)!, verifiedUser);
-      const response = makeSenderLinkBindResponse(link.data!, senderCert);
-      return { content: response };
-   } catch (err) {
-      if (err instanceof ElectroError) {
-         console.error(err);
-         throw new ParamError('sender link bind failed');
-      }
-      throw err;
-   }
-}
-
-async function patchSenderLink(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
-   const {
-      body,
-      resources
-   } = httpDetails;
-
-   if (!verifiedUser) {
-      throw new AuthError();
-   }
-   if (!validB64(resources.linkid)) {
-      throw new ParamError('invalid linkid');
-   }
-   const description = sanitizeString(body.description);
-   if (description.length < 6 || description.length > 55) {
-      throw new ParamError('description must more than 5 and less than 56 character');
-   }
-   if (!validB64(body.senderId)) {
-      throw new ParamError('invalid senderId');
-   }
-
-   try {
-      const patched = await SenderLinks.patch({
-         linkId: resources.linkid,
-         senderId: body.senderId,
-      }).set({
-         description
-      }).where(
-         (attr, op) => op.eq(attr.receiverId, verifiedUser.userId)
-      ).go();
-
-      if (!patched || !patched.data) {
-         throw new ParamError('could not update sender link');
-      }
-   } catch (err) {
-      if (err instanceof ElectroError) {
-         console.error(err);
-         throw new ParamError('sender link update failed');
-      }
-      throw err;
-   }
-
-   return { content: { linkId: resources.linkid } };
-}
-
-async function postSenderLinksDelete(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
-   const {
-      body
-   } = httpDetails;
-
-   if (!verifiedUser) {
-      throw new AuthError();
-   }
-   if (!Array.isArray(body)) {
-      throw new ParamError('body must be an array');
-   }
-   body.forEach((link: Record<string, string>) => {
-      if (!validB64(link.linkId)) {
-         throw new ParamError('invalid linkid');
-      }
-      if (!validB64(link.senderId)) {
-         throw new ParamError('invalid senderId');
-      }
-   });
-
-   let failed = 0;
-   let deleted;
-   for (const link of body) {
-      deleted = undefined;
-      console.log(`deleting link ${link.linkId}, ${link.senderId} for user ${verifiedUser.userId}`);
-      try {
-         deleted = await SenderLinks.delete({
-            linkId: link.linkId,
-            senderId: link.senderId,
-         }).where(
-            (attr, op) => op.eq(attr.receiverId, verifiedUser.userId)
-         ).go();
-      } catch (err) {
-         console.error(err);
-      } finally {
-         if (!deleted || !deleted.data) {
-            failed++;
-         }
-      }
-   }
-
-   if (failed > 0) {
-      throw new ParamError('could not delete some sender links');
-   }
-   return getSenderLinks(httpDetails, verifiedUser);
-}
-
-async function getSenderLinks(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
-
-   if (!verifiedUser) {
-      throw new AuthError();
-   }
-
-   try {
-      const links = await SenderLinks.query.byReceiverId({
-         receiverId: verifiedUser.userId
-      }).go();
-
-      let response: SenderLink[] = [];
-      if (links && links.data.length > 0) {
-         response = links.data.map((link: SenderLinkItem) => (makeSenderLinkResponse(link)));
-      }
-
-      return { content: response };
-   } catch (err) {
-      if (err instanceof ElectroError) {
-         console.error(err);
-         throw new ParamError('sender links get failed');
-      }
-      throw err;
-   }
-}
 
 async function getAuthOptions(
    httpDetails: HttpDetails
@@ -1309,8 +887,8 @@ async function registrationOptions(
 
       // Let this happen async
       recordEvent(EventNames.RegOptions, unverifiedUser.userId);
-//?      //@ts-ignore
-//      options.rp['origin'] = rpOrigin;
+      //@ts-ignore
+      options.rp['origin'] = rpOrigin;
       return { content: options };
    } catch (err) {
       console.error(err);
@@ -1359,6 +937,7 @@ async function makeLoginUserInfoResponse(
    }
 }
 
+
 async function makeUserInfoResponse(
    verifiedUser: VerifiedUserItem,
    auths?: AuthenticatorInfo[],
@@ -1382,28 +961,6 @@ async function makeUserInfoResponse(
    return userInfo;
 }
 
-function makeSenderLinkResponse(
-   senderLink: SenderLinkItem
-): SenderLink {
-   return {
-      receiverCert: senderLink.receiverCert,
-      transportCert: senderLink.transportCert,
-      description: senderLink.description,
-      senderId: senderLink.senderId,
-      linkId: senderLink.linkId
-   };
-}
-
-function makeSenderLinkBindResponse(
-   senderLink: SenderLinkItem,
-   senderCert: string
-): SenderLinkBind {
-   return {
-      ...makeSenderLinkResponse(senderLink),
-      eep: senderLink.eep!,
-      senderCert: senderCert,
-   };
-}
 
 function makeInvitableResponse(
    invitable: InvitableItem
@@ -2000,21 +1557,21 @@ async function verifyCookie(
       }
       const token = match[1];
 
-      let payload = decode(
+      const unverifiedPayload = decode(
          token, {
          json: true,
          complete: false
       });
 
-      if (!payload || !payload.userId) {
+      if (!unverifiedPayload || !unverifiedPayload.userId) {
          throw new Error('invalid cookie');
       }
 
-      const unverifiedUser = await getUnverifiedUser(payload.userId);
+      const unverifiedUser = await getUnverifiedUser(unverifiedPayload.userId);
       const jwtKey = await getSessionKey(unverifiedUser, "jwt_key");
 
       // Internally verifies exp date set with expiresIn during cookie creation
-      payload = verify(
+      const verifiedPayload = verify(
          token,
          jwtKey, {
             algorithms: ['HS512'],
@@ -2023,15 +1580,15 @@ async function verifyCookie(
       }) as JwtPayload;
 
       // lastCredentialId is cleared on logout so cookie is invalid after logout
-      if (!payload ||
-         !payload.pkId ||
-         payload.pkId !== unverifiedUser.lastCredentialId ||
-         payload.iss !== 'quickcrypt'
+      if (!verifiedPayload ||
+         !verifiedPayload.pkId ||
+         verifiedPayload.pkId !== unverifiedUser.lastCredentialId ||
+         verifiedPayload.iss !== 'quickcrypt'
       ) {
          throw new Error('invalid cookie');
       }
 
-      return checkVerified(unverifiedUser, payload.userId);
+      return checkVerified(unverifiedUser, verifiedPayload.userId);
 
    } catch (err) {
       console.error(err);
@@ -2130,8 +1687,6 @@ const METHODMAP: MethodMap = {
       // tab/window, and should be safe since csrf isn't technically needed for GET calls due to Same-Origin
       { name: 'getSession', pattern: Patterns.session, version: 1, authorize: true, checkCsrf: false, handler: getSession },
       { name: 'getInvitables', pattern: Patterns.invitables, version: 1, authorize: true, handler: getInvitables },
-
-      // { name: 'getSenderLinks', pattern: Patterns.senderLinks, version: 1, authorize: true, handler: getSenderLinks },
    ],
    POST: [
       { name: 'postAuthVerify', pattern: Patterns.authVerify, version: 1, authorize: false, handler: postAuthVerify },
@@ -2140,11 +1695,6 @@ const METHODMAP: MethodMap = {
       { name: 'postRegVerify', pattern: Patterns.regVerify, version: 1, authorize: false, handler: postRegVerify },
       { name: 'postRecover', pattern: Patterns.recover, version: 1, authorize: false, handler: postRecover },
       { name: 'postRecover2', pattern: Patterns.recover2, version: 1, authorize: false, handler: postRecover2 },
-      // Sender links
-      { name: 'postTopics', pattern: Patterns.topics, version: 1, authorize: true, handler: postTopics },
-      // { name: 'postSenderLinkVerify', pattern: Patterns.senderLinkVerify, version: 1, authorize: true, handler: postSenderLinkVerify },
-      // { name: 'postSenderLinkBind', pattern: Patterns.senderLinkBind, version: 1, authorize: true, handler: postSenderLinkBind },
-      // { name: 'postSenderLinksDelete', pattern: Patterns.senderLinksDelete, version: 1, authorize: true, handler: postSenderLinksDelete },
 
       // Internal only endpoints that are not exposed in cloudfront and require special auth
       { name: 'postMunge', pattern: Patterns.munge, version: INTERNAL_VERSION, authorize: false, handler: postMunge },
@@ -2156,8 +1706,6 @@ const METHODMAP: MethodMap = {
    PATCH: [
       { name: 'patchPasskey', pattern: Patterns.passkey, version: 1, authorize: true, handler: patchPasskey },
       { name: 'patchUser', pattern: Patterns.user, version: 1, authorize: true, handler: patchUser },
-
-      // { name: 'patchSenderLink', pattern: Patterns.senderLink, version: 1, authorize: true, handler: patchSenderLink },
    ],
    DELETE: [
       { name: 'deletePasskey', pattern: Patterns.passkey, version: 1, authorize: true, handler: deletePasskey },
