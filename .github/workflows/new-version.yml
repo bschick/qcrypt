@@ -22,7 +22,13 @@ jobs:
     - name: Install Playwright Browsers
       run: pnpm exec playwright install --with-deps
     - name: Run vitest chrome & firefox unit tests
-      run: pnpm test:all
+      run: pnpm test:web:all
+    - name: Run server unit tests
+      run: pnpm test:server
+    - name: Run library unit tests
+      run: pnpm test:lib
+    - name: Run cli unit tests
+      run: pnpm test:cli
 
   e2etest:
     timeout-minutes: 180
