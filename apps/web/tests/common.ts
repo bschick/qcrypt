@@ -191,6 +191,11 @@ export async function removeAuthenticator(session: CDPSession, authenticatorId: 
   });
 }
 
+export async function openCredentials(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Passkey information' }).click();
+  await expect(page.locator('table.credtable tbody tr').first()).toBeVisible();
+}
+
 export async function deleteFirstPasskey(
   page: Page, userName?: string
 ): Promise<void> {

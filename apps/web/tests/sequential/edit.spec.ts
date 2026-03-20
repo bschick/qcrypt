@@ -4,7 +4,8 @@ import {
   addCredential,
   credentials,
   passkeyAuth,
-  hosts
+  hosts,
+  openCredentials
 } from '.././common';
 
 
@@ -24,7 +25,7 @@ testWithAuth('edit fields', async ({ authFixture }) => {
   await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
 
-  await page.getByRole('button', { name: 'Passkey information' }).click();
+  await openCredentials(page);
 
   await page.locator('mat-sidenav input').first().click();
   await page.locator('mat-sidenav input').first().fill('Keeper<script>'+rand);
