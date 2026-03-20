@@ -13,9 +13,9 @@ jobs:
     timeout-minutes: 180
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: pnpm/action-setup@v4
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v5
       with:
         node-version: lts/*
     - name: Install dependencies
@@ -29,9 +29,9 @@ jobs:
     timeout-minutes: 180
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: pnpm/action-setup@v4
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v5
       with:
         node-version: lts/*
     - name: Install dependencies
@@ -53,13 +53,13 @@ jobs:
         done
     - name: Run Playwright e2e tests
       run: pnpm test:e2e
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v5
       if: ${{ !cancelled() }}
       with:
         name: playwright-e2e-report
         path: playwright-report/
         retention-days: 30
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v5
       if: ${{ !cancelled() }}
       with:
         name: serve-log
