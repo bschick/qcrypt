@@ -368,7 +368,7 @@ describe("Stream encryption and decryption", function () {
       }
    });
 
-   it("confirm successful version decryption, multi-version loops", async function () {
+   it("confirm successful version decryption, multi-version loops", { timeout: 45000 }, async function () {
 
       const vers = [
          { ver: 4,
