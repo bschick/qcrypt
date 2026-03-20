@@ -53,4 +53,8 @@ export class BubbleComponent implements OnInit {
    ) {}
 
    ngOnInit(): void {}
+
+   close(): void {
+      this.visible = false;
+   }
 }
