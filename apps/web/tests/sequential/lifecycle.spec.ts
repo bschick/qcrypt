@@ -8,7 +8,8 @@ import {
   addCredential,
   hosts,
   credentials,
-  deleteLastPasskey
+  deleteLastPasskey,
+  openCredentials
 } from '.././common';
 
 
@@ -37,7 +38,7 @@ test.describe('creation', () => {
 
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
-    await page.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page);
 
     let tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
@@ -56,7 +57,7 @@ test.describe('creation', () => {
 
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
 
-    await page.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page);
 
     tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(2);
@@ -82,7 +83,7 @@ test.describe('creation', () => {
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
 
     //NOTE: comment out the line below to test leaking passkey & user
-    await page.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page);
 
     tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
@@ -114,7 +115,7 @@ test.describe('sign on', () => {
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
 
-    await page.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page);
 
     let tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
@@ -182,7 +183,7 @@ test.describe('sign on', () => {
     await expect(page.locator('input#credential')).toBeVisible();
     await expect(page.locator('input#credential')).toHaveValue(credentials[testHost]['keeper2']['userCred']);
 
-    await page.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page);
 
     let tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
@@ -210,7 +211,7 @@ test.describe('sign on', () => {
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
 
-    await page.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page);
 
     let tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
@@ -224,7 +225,7 @@ test.describe('sign on', () => {
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
 
-    await page.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page);
 
     tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
@@ -259,7 +260,7 @@ test.describe('sign on', () => {
     await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
 
     // logout 2nd page and confirm first is logged out
-    await page2.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page2);
 
     let tableBody2 = page2.locator('table.credtable tbody');
     await expect(tableBody2.locator('tr')).toHaveCount(1);
@@ -301,11 +302,11 @@ test.describe('sign on', () => {
     await page2.goto('/');
     await page2.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
-    await page2.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page2);
     await expect(page2.locator('mat-sidenav input').first()).toHaveValue('KeeperOne');
 
     // log 1st page in as keepertwo
-    await page1.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page1);
 
     let tableBody1 = page1.locator('table.credtable tbody');
     await expect(tableBody1.locator('tr')).toHaveCount(1);
@@ -325,7 +326,7 @@ test.describe('sign on', () => {
     });
     await page1.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
-    await page1.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page1);
     await expect(page1.locator('mat-sidenav input').first()).toHaveValue('KeeperTwo');
 
     // page2 should go to welcome its user context is keeper2 and we don't directly transition
@@ -339,7 +340,7 @@ test.describe('sign on', () => {
     await page3.goto('/');
     await page3.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page3.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
-    await page3.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page3);
     let tableBody3 = page3.locator('table.credtable tbody');
     await expect(tableBody3.locator('tr')).toHaveCount(1);
     await expect(page3.locator('mat-sidenav input').first()).toHaveValue('KeeperTwo');
@@ -369,7 +370,7 @@ test.describe('sign on', () => {
     });
     await page1.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
-    await page1.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page1);
     await expect(page1.locator('mat-sidenav input').first()).toHaveValue('KeeperOne');
     await page1.getByRole('button', { name: 'Passkey information' }).click();
 
@@ -377,7 +378,7 @@ test.describe('sign on', () => {
     await page2.goto('/');
     await page2.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
-    await page2.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page2);
     await expect(page2.locator('mat-sidenav input').first()).toHaveValue('KeeperOne');
 
     // page3 should go to welcome page since it its user was logged out

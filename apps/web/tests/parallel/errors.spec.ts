@@ -7,7 +7,8 @@ import {
   clearCredentials,
   addCredential,
   hosts,
-  credentials
+  credentials,
+  openCredentials
 } from '.././common';
 
 
@@ -71,7 +72,7 @@ test.describe('errors', () => {
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
 
-    await page.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page);
     await page.getByRole('button', { name: /Sign out/ }).click();
 
     await clearCredentials(session, authId1);
@@ -122,7 +123,7 @@ test.describe('errors', () => {
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
 
-    await page.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page);
 
     await page.locator('mat-sidenav input').first().click();
     await page.locator('mat-sidenav input').first().fill('12345');
@@ -153,7 +154,7 @@ test.describe('errors', () => {
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
 
-    await page.getByRole('button', { name: 'Passkey information' }).click();
+    await openCredentials(page);
 
     await clearCredentials(session, authId1);
 
