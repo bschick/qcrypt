@@ -17,7 +17,8 @@ apps/web/src/assets/aaguid
 /node_modules
 pnpm-debug.log
 
-# IDEs and editors
+# IDEs,  editors, AI
+**/.claude
 .idea/
 .project
 .classpath
