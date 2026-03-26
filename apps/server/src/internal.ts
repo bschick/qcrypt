@@ -39,6 +39,7 @@ import {
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
+import sodium from 'libsodium-wrappers';
 import { base64UrlEncode } from "./utils";
 import { GenerateRandomCommand } from '@aws-sdk/client-kms';
 

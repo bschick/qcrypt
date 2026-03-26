@@ -106,6 +106,22 @@ export const Patterns = {
    invitables: new URLPattern({
       pathname: `/v:ver/invitables/:invid`
    }),
+   topics: new URLPattern({
+      pathname: `/v:ver/topics`
+   }),
+   topicVerify: new URLPattern({
+      pathname: `/v:ver/topics/:topicid/verify`
+   }),
+   topicBind: new URLPattern({
+      pathname: `/v:ver/topics/:topicid/bind`
+   }),
+   topic: new URLPattern({
+      pathname: `/v:ver/topics/:topicid`
+   }),
+   topicsDelete: new URLPattern({
+      pathname: `/v:ver/topics/delete`
+   }),
+
    // Internal only URLS (not allowed through Cloudfront)
    munge: new URLPattern({
       pathname: '/v:ver/munge'

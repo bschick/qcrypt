@@ -64,7 +64,8 @@ export const VERSION1 = 1;
 export const VERSION4 = 4;
 export const VERSION5 = 5;
 export const VERSION6 = 6;
-export const CURRENT_VERSION = VERSION6;
+export const VERSION7 = 7;
+export const CURRENT_VERSION = VERSION7;
 export const V1_BELOW = VERSION4 // leave fixed at 4
 
 // needs to fit into 255 bytes encypted... this allows for all double byte + max auth tag

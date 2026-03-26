@@ -59,14 +59,15 @@ export {
    Ciphers,
    Encipher,
    Decipher,
-   EncipherV6,
-   DecipherV6,
+   EncipherV7,
+   DecipherV67,
    CipherState,
    Extractor,
    Packer,
    _genCipherKey,
+   _genBlockCipherKey,
    _genDerivedKey,
-   _genHintCipherKey,
+   _genHintCipherKeyAndIV,
    _genSigningKey,
 } from './lib/ciphers-current';
 
@@ -105,3 +106,6 @@ export type {
 
 // Armor functions
 export { makeCipherArmor, parseCipherArmor } from './lib/armor';
+
+// PQC functions
+export { kemKeyGen, KEMKeys } from './lib/pqc';
