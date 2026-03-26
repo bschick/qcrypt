@@ -8,7 +8,7 @@
       "executor": "nx:run-commands",
       "options": {
         "commands": [
-          "pnpm exec esbuild --bundle --platform=node --target=es2022 --format=esm --outfile=dist/server/index.mjs --banner:js=\"import { createRequire } from 'module';import { fileURLToPath as __fileURLToPath } from 'url';import { dirname as __dirnameFn } from 'path';const require = createRequire(import.meta.url);const __filename = __fileURLToPath(import.meta.url);const __dirname = __dirnameFn(__filename);\" apps/server/src/index.ts",
+          "pnpm exec esbuild --bundle --platform=node --target=es2022 --format=esm --outfile=dist/server/index.mjs --banner:js=\"import { createRequire } from 'module';const require = createRequire(import.meta.url);\" apps/server/src/index.ts",
           "rm -f dist/server/index.zip && zip -j dist/server/index.zip dist/server/index.mjs apps/server/assets/combined_aaguid.json"
         ],
         "cwd": "{workspaceRoot}",
@@ -20,7 +20,7 @@
       "executor": "nx:run-commands",
       "options": {
         "commands": [
-          "pnpm exec esbuild --bundle --minify --platform=node --target=es2022 --format=esm --outfile=dist/server/index.mjs --banner:js=\"import { createRequire } from 'module';import { fileURLToPath as __fileURLToPath } from 'url';import { dirname as __dirnameFn } from 'path';const require = createRequire(import.meta.url);const __filename = __fileURLToPath(import.meta.url);const __dirname = __dirnameFn(__filename);\" apps/server/src/index.ts",
+          "pnpm exec esbuild --bundle --minify --platform=node --target=es2022 --format=esm --outfile=dist/server/index.mjs --banner:js=\"import { createRequire } from 'module';const require = createRequire(import.meta.url);\" apps/server/src/index.ts",
           "rm -f dist/server/index.zip && zip -j dist/server/index.zip dist/server/index.mjs apps/server/assets/combined_aaguid.json"
         ],
         "cwd": "{workspaceRoot}",

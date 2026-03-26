@@ -19,13 +19,13 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
+import sodium from 'libsodium-wrappers';
 import * as cc from './cipher.consts';
 import {
    getRandom48, BYOBStreamReader, readStreamAll,
    Encipher, streamDecipher, latestEncipher,
-   EncipherV6, _genCipherKey, _genSigningKey,
+   EncipherV7, _genCipherKey, _genHintCipherKeyAndIV, _genSigningKey,
    _genSigningKeyOld, _genHintCipherKeyOld,
-   _genHintCipherKey,
 } from '../index';
 
 import type { EParams, CipherDataBlock } from '../index';
@@ -129,6 +129,7 @@ function streamFromCipherBlock(cdBlocks: CipherDataBlock[]): [
 
 describe("Key generation", function () {
    beforeEach(async () => {
+      await sodium.ready;
    });
 
    it("successful and not equivalent key generation", async function () {
@@ -140,10 +141,11 @@ describe("Key generation", function () {
 
          const randomArray = getRandom48();
          const slt = randomArray.slice(0, cc.SLT_BYTES);
+         const iv = randomArray.slice(cc.SLT_BYTES, cc.SLT_BYTES + 12);
 
          const ek = await _genCipherKey(alg, ic, pwd, userCred, slt);
-         const sk = _genSigningKey(userCred);
-         const hk = _genHintCipherKey(userCred);
+         const sk = _genSigningKey(userCred, slt);
+         const [hk, hIV] = _genHintCipherKeyAndIV(userCred, iv, slt);
 
          expect(ek.byteLength).toBe(32);
          expect(sk.byteLength).toBe(32);
@@ -173,6 +175,7 @@ describe("Key generation", function () {
                ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
                sk: new Uint8Array([172, 133, 166, 39, 233, 237, 204, 73, 234, 53, 191, 16, 169, 71, 164, 71, 36, 51, 18, 87, 19, 33, 25, 50, 224, 33, 120, 21, 233, 20, 154, 79]),
                hk: new Uint8Array([34, 121, 121, 4, 207, 55, 202, 73, 83, 4, 58, 102, 135, 111, 186, 242, 3, 187, 239, 108, 251, 245, 3, 245, 3, 77, 228, 197, 101, 4, 16, 94]),
+               hIV: new Uint8Array([46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]),
                skOld: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
                hkOld: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
             },
@@ -180,6 +183,7 @@ describe("Key generation", function () {
                ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
                sk: new Uint8Array([172, 133, 166, 39, 233, 237, 204, 73, 234, 53, 191, 16, 169, 71, 164, 71, 36, 51, 18, 87, 19, 33, 25, 50, 224, 33, 120, 21, 233, 20, 154, 79]),
                hk: new Uint8Array([34, 121, 121, 4, 207, 55, 202, 73, 83, 4, 58, 102, 135, 111, 186, 242, 3, 187, 239, 108, 251, 245, 3, 245, 3, 77, 228, 197, 101, 4, 16, 94]),
+               hIV: new Uint8Array([46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]),
                skOld: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
                hkOld: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
             },
@@ -187,6 +191,33 @@ describe("Key generation", function () {
                ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
                sk: new Uint8Array([172, 133, 166, 39, 233, 237, 204, 73, 234, 53, 191, 16, 169, 71, 164, 71, 36, 51, 18, 87, 19, 33, 25, 50, 224, 33, 120, 21, 233, 20, 154, 79]),
                hk: new Uint8Array([34, 121, 121, 4, 207, 55, 202, 73, 83, 4, 58, 102, 135, 111, 186, 242, 3, 187, 239, 108, 251, 245, 3, 245, 3, 77, 228, 197, 101, 4, 16, 94]),
+               hIV: new Uint8Array([46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]),
+               skOld: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
+               hkOld: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
+            }
+         },
+         [cc.CURRENT_VERSION]: {
+            'AES-GCM': {
+               ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
+               sk: new Uint8Array([12, 11, 234, 82, 207, 215, 131, 80, 38, 32, 132, 108, 3, 142, 171, 167, 122, 64, 206, 141, 38, 119, 244, 14, 84, 157, 79, 143, 230, 193, 123, 152]),
+               hk: new Uint8Array([186, 23, 116, 170, 237, 110, 92, 251, 20, 233, 24, 0, 10, 15, 167, 201, 128, 120, 73, 71, 132, 103, 171, 49, 154, 150, 49, 100, 201, 201, 137, 45]),
+               hIV: new Uint8Array([209, 157, 68, 198, 140, 129, 200, 180, 195, 7, 203, 152, 159, 48, 27, 169, 238, 3, 71, 245, 252, 45, 165, 23]),
+               skOld: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
+               hkOld: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
+            },
+            'X20-PLY': {
+               ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
+               sk: new Uint8Array([12, 11, 234, 82, 207, 215, 131, 80, 38, 32, 132, 108, 3, 142, 171, 167, 122, 64, 206, 141, 38, 119, 244, 14, 84, 157, 79, 143, 230, 193, 123, 152]),
+               hk: new Uint8Array([186, 23, 116, 170, 237, 110, 92, 251, 20, 233, 24, 0, 10, 15, 167, 201, 128, 120, 73, 71, 132, 103, 171, 49, 154, 150, 49, 100, 201, 201, 137, 45]),
+               hIV: new Uint8Array([209, 157, 68, 198, 140, 129, 200, 180, 195, 7, 203, 152, 159, 48, 27, 169, 238, 3, 71, 245, 252, 45, 165, 23]),
+               skOld: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
+               hkOld: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
+            },
+            'AEGIS-256': {
+               ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
+               sk: new Uint8Array([12, 11, 234, 82, 207, 215, 131, 80, 38, 32, 132, 108, 3, 142, 171, 167, 122, 64, 206, 141, 38, 119, 244, 14, 84, 157, 79, 143, 230, 193, 123, 152]),
+               hk: new Uint8Array([186, 23, 116, 170, 237, 110, 92, 251, 20, 233, 24, 0, 10, 15, 167, 201, 128, 120, 73, 71, 132, 103, 171, 49, 154, 150, 49, 100, 201, 201, 137, 45]),
+               hIV: new Uint8Array([209, 157, 68, 198, 140, 129, 200, 180, 195, 7, 203, 152, 159, 48, 27, 169, 238, 3, 71, 245, 252, 45, 165, 23]),
                skOld: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
                hkOld: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
             }
@@ -194,7 +225,7 @@ describe("Key generation", function () {
       };
 
       for (let alg in cc.AlgInfo) {
-         for (let ver of [cc.VERSION6]) {
+         for (let ver of [cc.VERSION6, cc.CURRENT_VERSION]) {
             const pwd = 'a good pwd';
             const ic = cc.ICOUNT_MIN;
             const userCred = new Uint8Array([214, 245, 252, 122, 133, 39, 76, 162, 64, 201, 143, 217, 237, 57, 18, 207, 199, 153, 20, 28, 162, 9, 236, 66, 100, 103, 152, 159, 226, 50, 225, 129]);
@@ -202,54 +233,50 @@ describe("Key generation", function () {
             const iv = new Uint8Array([46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]);
 
             const ek = await _genCipherKey(alg, ic, pwd, userCred, slt);
-            const sk = _genSigningKey(userCred);
-            const hk = _genHintCipherKey(userCred);
+            const sk = _genSigningKey(userCred, slt, ver);
+            const [hk, hIV] = _genHintCipherKeyAndIV(userCred, iv, slt, ver);
             const skOld = await _genSigningKeyOld(userCred, slt);
             const hkOld = await _genHintCipherKeyOld(alg, userCred, slt);
 
             expect(isEqualArray(ek, expected[ver][alg]['ek'])).toBe(true);
             expect(isEqualArray(sk, expected[ver][alg]['sk'])).toBe(true);
             expect(isEqualArray(hk, expected[ver][alg]['hk'])).toBe(true);
+            expect(isEqualArray(hIV, expected[ver][alg]['hIV'])).toBe(true);
             expect(isEqualArray(skOld, expected[ver][alg]['skOld'])).toBe(true);
             expect(isEqualArray(hkOld, expected[ver][alg]['hkOld'])).toBe(true);
 
             expect(isEqualArray(ek, userCred)).toBe(false);
             expect(isEqualArray(sk, userCred)).toBe(false);
             expect(isEqualArray(hk, userCred)).toBe(false);
+            expect(isEqualArray(hIV, userCred)).toBe(false);
             expect(isEqualArray(skOld, userCred)).toBe(false);
             expect(isEqualArray(hkOld, userCred)).toBe(false);
+         }
       }
-   }});
+   });
 });
 
 
 describe("Encryption and decryption", function () {
    beforeEach(async () => {
+      await sodium.ready;
    });
 
-   function signAndRepack(
-      encipher: EncipherV6,
-      userCred: Uint8Array,
-      block: CipherDataBlock
-   ): Uint8Array {
+   function signAndRepack(encipher: EncipherV7, userCred: Uint8Array, block: CipherDataBlock, savedSlt: Uint8Array): Uint8Array {
 
       // cheating... parts[1] is _additionalData, parts[2] is encryptedData
       // and reset _lastMac and recreate _sk with specified (potentially forged) userCred
-      encipher['_sk'] = _genSigningKey(userCred);
+      encipher['_sk'] = _genSigningKey(userCred, savedSlt);
       encipher['_lastMac'] = new Uint8Array([0]);
       const headerData = encipher._createHeader(block.parts[2], block.parts[1]);
 
       const output = new Uint8Array(headerData.byteLength +
          block.parts[1].byteLength +
-         block.parts[2].byteLength
-      );
+         block.parts[2].byteLength);
 
       output.set(headerData);
       output.set(block.parts[1], headerData.byteLength);
-      output.set(
-         block.parts[2],
-         headerData.byteLength + block.parts[1].byteLength
-      );
+      output.set(block.parts[2], headerData.byteLength + block.parts[1].byteLength);
 
       return output;
    }
@@ -294,29 +321,24 @@ describe("Encryption and decryption", function () {
          };
 
          const reader = new BYOBStreamReader(clearStream);
-         const encipher = new EncipherV6(userCredA, reader);
-         const cipherBlock = await encipher.encryptBlock0(
-            eparams,
-            async (cdinfo) => {
-               expect(cdinfo.lp).toEqual(1);
-               expect(cdinfo.lpEnd).toEqual(1);
-               return [pwd, undefined];
-            }
-         );
+         const encipher = new EncipherV7(userCredA, reader);
+         let savedSlt: Uint8Array;
+         const cipherBlock = await encipher.encryptBlock0(eparams, async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            savedSlt = new Uint8Array(cdinfo.slt);
+            return [pwd, undefined];
+         });
 
          // Sign and repack with both the original (correct) values to help ensure the
          // code for repacking is valid and then with a new signature. Ensure the correct
          // one works (to ensure that signAndRepack works) and the replacment is detected.
-         let [cipherstreamA, cipherDataA] = streamFromBytes(
-            signAndRepack(encipher, userCredA, cipherBlock)
-         );
-         let [cipherstreamB, cipherDataB] = streamFromBytes(
-            signAndRepack(encipher, userCredB, cipherBlock)
-         );
+         let [cipherstreamA, cipherDataA] = streamFromBytes(signAndRepack(encipher, userCredA, cipherBlock, savedSlt!));
+         let [cipherstreamB, cipherDataB] = streamFromBytes(signAndRepack(encipher, userCredB, cipherBlock, savedSlt!));
 
          // These should fail because using the wrong userCred for each
-         let decipherA = await streamDecipher(userCredB, cipherstreamA)
-         let decipherB = await streamDecipher(userCredA, cipherstreamB)
+         let decipherA = await streamDecipher(userCredB, cipherstreamA);
+         let decipherB = await streamDecipher(userCredA, cipherstreamB);
 
          await expect(decipherA._decodeBlock0()).rejects.toThrow(/MAC/);
          await expect(decipherB._decodeBlock0()).rejects.toThrow(/MAC/);
@@ -324,8 +346,8 @@ describe("Encryption and decryption", function () {
          // Reaload streams, then test with correct matching userCreds
          [cipherstreamA] = streamFromBytes(cipherDataA);
          [cipherstreamB] = streamFromBytes(cipherDataB);
-         decipherA = await streamDecipher(userCredA, cipherstreamA)
-         decipherB = await streamDecipher(userCredB, cipherstreamB)
+         decipherA = await streamDecipher(userCredA, cipherstreamA);
+         decipherB = await streamDecipher(userCredB, cipherstreamB);
 
          // Both should succeed since the singatures are valid with the userCreds
          // passed below. Decrypting, cipherText should fail on B (checked below).
@@ -863,6 +885,7 @@ describe("Encryption and decryption", function () {
 
 describe("Detect changed cipher data", function () {
    beforeEach(async () => {
+      await sodium.ready;
    });
 
    it("detect changed headerData", async function () {
@@ -1155,6 +1178,7 @@ describe("Detect changed cipher data", function () {
 
 describe("Detect block order changes", function () {
    beforeEach(async () => {
+      await sodium.ready;
    });
 
    const pwd = 'a not good pwd';

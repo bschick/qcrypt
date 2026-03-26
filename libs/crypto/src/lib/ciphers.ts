@@ -27,8 +27,8 @@ import {
    Ciphers,
    Encipher,
    Decipher,
-   EncipherV6,
-   DecipherV6,
+   EncipherV7,
+   DecipherV67,
    EParams,
    PWDProvider,
    CipherState,
@@ -60,7 +60,7 @@ export function latestEncipher(
    clearStream: ReadableStream<Uint8Array>
 ): Encipher {
    const reader = new BYOBStreamReader(clearStream);
-   return new EncipherV6(userCred, reader);
+   return new EncipherV7(userCred, reader);
 }
 
 
@@ -86,8 +86,8 @@ export async function streamDecipher(
    // version is >=4). Fortunately ALG_BYTES and VER_BYTES are equal.
    const verOrAlg = bytesToNum(new Uint8Array(header.buffer, cc.MAC_BYTES, cc.VER_BYTES));
 
-   if (verOrAlg == cc.VERSION6) {
-      decipher = new DecipherV6(userCred, reader, header);
+   if (verOrAlg == cc.VERSION6 || verOrAlg == cc.VERSION7) {
+      decipher = new DecipherV67(userCred, reader, header);
    }
    else if (verOrAlg == cc.VERSION5) {
       decipher = new DecipherV5(userCred, reader, header);
