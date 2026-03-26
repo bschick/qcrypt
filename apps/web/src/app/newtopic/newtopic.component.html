@@ -1,0 +1,142 @@
+<!-- MIT License
+
+Copyright (c) 2025 Brad Schick
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. -->
+<div class="container">
+  <div class="content">
+    <h1>Create Topic</h1>
+    <p>
+      Topics allow other Quick Crypt users to send messages and filese to each other that
+      only you the participants can access. Data is <a [routerLink]="'/help/faqs'"
+        [queryParams]="{search: 'who can decrypt'}">encrypted end-to-end</a> so not even
+      the Quick Crypt server can decrypt shared data.
+    </p>
+
+    <form [formGroup]="newTopicForm">
+      <mat-stepper linear=true #stepper (selectionChange)="onStepChange($event)">
+        <mat-step label="Get Started">
+          <mat-form-field subscriptSizing="dynamic" class="description">
+            <mat-label>Topic Description (optional)</mat-label>
+            <input type="string" matInput [formControl]="descriptionInput"
+              matTooltip="Optional description of the topic. Visible to participants and the server" />
+          </mat-form-field>
+          <p>Do you know the Quick Crypt IDs of the participants?</p>
+          <mat-button-toggle-group name="participants" [formControl]="participantsControl">
+            <mat-button-toggle value="all">All of them</mat-button-toggle>
+            <mat-button-toggle value="some">Some of them</mat-button-toggle>
+            <mat-button-toggle value="none">None of them</mat-button-toggle>
+          </mat-button-toggle-group>
+          <!--          <mat-form-field>
+              <mat-label>Name</mat-label>
+              <input matInput placeholder="Last name, First name" formControlName="firstCtrl" required>
+            </mat-form-field>-->
+          <div class="step-control">
+            <button matButton matStepperNext type="button">Next</button>
+          </div>
+        </mat-step>
+        <mat-step [stepControl]="newTopicForm" label="Participants">
+          @if (participantsControl.value != 'none') {
+          <p>Known participants</p>
+          <table mat-table [dataSource]="participants" class="participant-table">
+            <!-- Invitable ID Column -->
+            <ng-container matColumnDef="invitableId">
+              <th mat-header-cell *matHeaderCellDef class="tdcommon">Participant ID</th>
+              <td mat-cell class="tdcommon invitable" *matCellDef="let element; let i = index">
+                <app-editable [id]="'invitableid-' + i" class="editable" minlength=22 maxlength=24 [value]="element.invitableId"
+                  [color]="element.error ? 'var(--mat-sys-error)' : ''"
+                  (valueChanged)="onInvitableIdChanged($event, element)" [writing]="true">
+                </app-editable>
+              </td>
+            </ng-container>
+
+            <!-- Description Column -->
+            <ng-container matColumnDef="description">
+              <th mat-header-cell *matHeaderCellDef class="tdcommon">Description</th>
+              <td mat-cell class="tdcommon" [class.error-text]="element.error" *matCellDef="let element">
+                {{element.description}}
+              </td>
+            </ng-container>
+
+            <!-- Delete Column -->
+            <ng-container matColumnDef="delete">
+              <th mat-header-cell *matHeaderCellDef class="tdcommon tdbutton"></th>
+              <td mat-cell class="tdcommon tdbutton" *matCellDef="let element; let i = index">
+                <button class="" (click)="onClickDelete(i)" matSuffix mat-icon-button aria-label="Delete"
+                  matTooltip="Delete Link">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="addParticipant">
+              <td mat-footer-cell *matFooterCellDef colspan="3" class="add-participant-footer">
+                <button mat-button color="primary" (click)="onClickAdd()" type="button" class="add-participant-btn">
+                  <mat-icon>add</mat-icon>
+                  Add Participant
+                </button>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+            <tr mat-footer-row *matFooterRowDef="['addParticipant']" class="footer-row"></tr>
+          </table>
+          }
+          @if (participantsControl.value != 'all') {
+          <p>{{participantsControl.value === 'some' ? 'Additional' : 'Total'}} participants</p>
+          <mat-form-field subscriptSizing="dynamic" class="participants" hideRequiredMarker>
+            <mat-label>Count</mat-label>
+            <input type="number" min="1" [max]="TOPIC_USERS_MAX" step="1" matInput formControlName="topicUsers" />
+            <mat-error>{{ participantsError() }}</mat-error>
+          </mat-form-field>
+          }
+          <div>
+            <button matButton matStepperPrevious type="button">Back</button>
+            <button matButton matStepperNext type="button">Next</button>
+          </div>
+        </mat-step>
+        <mat-step>
+          <ng-template matStepLabel>Ready to Create</ng-template>
+            <mat-slide-toggle [formControl]="forkToggle"
+              matTooltip="Create a separate topic for each participant">Fork Topics
+            </mat-slide-toggle>
+          <div>
+            <button matButton matStepperPrevious type="button">Back</button>
+            <button matButton type="submit" (click)="onSubmit()">Create Topic</button>
+          </div>
+        </mat-step>
+      </mat-stepper>
+    </form>
+
+
+    <!-- <mat-tab-group animationDuration="0ms" dynamicHeight>
+      <mat-tab label="Known Recipients">Content 1</mat-tab>
+      <mat-tab label="Mixed Recipients">Content 2</mat-tab>
+      <mat-tab label="Invite ">Content 3</mat-tab>
+    </mat-tab-group> -->
+
+  </div>
+</div>
+
+
+
+<div class="core">
+  <enc-options #options></enc-options>
+</div>
