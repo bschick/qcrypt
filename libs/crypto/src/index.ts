@@ -44,13 +44,13 @@ export {
    BYOBStreamReader,
    readStreamAll,
    streamWriteBYOD,
+   getRandom,
    selectCipherFile,
    selectClearFile,
    selectWriteableFile,
    selectWriteableJsonFile,
    selectWriteableQQFile,
    selectWriteableTxtFile,
-   getRandom48,
    bytesFromString,
 } from './lib/utils';
 
@@ -64,16 +64,9 @@ export {
    CipherState,
    Extractor,
    Packer,
-   _genCipherKey,
-   _genBlockCipherKey,
-   _genDerivedKey,
-   _genHintCipherKeyAndIV,
-   _genSigningKey,
 } from './lib/ciphers-current';
 
 export type {
-   EParams,
-   PWDProvider,
    CipherDataInfo,
    CipherDataBlock,
 } from './lib/ciphers-current';
@@ -88,9 +81,7 @@ export {
 export {
    DecipherV1,
    DecipherV4,
-   DecipherV5,
-   _genSigningKeyOld,
-   _genHintCipherKeyOld,
+   DecipherV5
 } from './lib/deciphers-old';
 
 // Cipher streams

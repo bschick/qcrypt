@@ -201,7 +201,6 @@ async function info(
       io.pipedOut.write(`Cipher and Mode   : ${cc.AlgInfo[cdInfo.alg]['description']}
 PBKDF2 Iterations : ${cdInfo.ic}
 Salt (b64Url)     : ${bytesToBase64(cdInfo.slt)}
-IV/Nonce (b64Url) : ${bytesToBase64(cdInfo.iv)}
 Password Hint     : ${cdInfo.hint}
 Loops             : ${cdInfo.lpEnd}
 Version           : ${cdInfo.ver}\n`);
@@ -360,8 +359,8 @@ async function decrypt(
 ): Promise<void> {
 
    try {
-      const userCred = await getUserCred(args, io);
       const rawStream = await getCipherStream(io, args.silent);
+      const userCred = await getUserCred(args, io);
 
       let cipherStream: ReadableStream<Uint8Array>;
       if (args.silent) {

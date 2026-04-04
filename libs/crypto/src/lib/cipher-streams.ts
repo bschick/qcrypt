@@ -29,7 +29,6 @@ import {
 } from './ciphers';
 
 import type {
-   EParams,
    CipherDataInfo,
    PWDProvider
 } from './ciphers';
@@ -85,14 +84,15 @@ async function _encryptStreamImpl(
       throw new Error('Invalid userCred length of: ' + userCred.byteLength);
    }
 
-   const encipher = latestEncipher(userCred, clearStream);
-
-   const eparams: EParams = {
-      ...econtext,
-      alg: alg,
+   const encipher = latestEncipher(
+      userCred,
+      alg,
+      econtext.ic,
       lp,
-      lpEnd: econtext.algs.length
-   };
+      econtext.algs.length,
+      clearStream,
+      pwdProvider
+   );
 
    let cipherStream = new ReadableStream({
       type: (browserSupportsBytesStream() ? 'bytes' : undefined),
@@ -101,7 +101,7 @@ async function _encryptStreamImpl(
 
          try {
             // Encryption may return zero data and not be Finished
-            const cipherData = await encipher.encryptBlock(eparams, pwdProvider);
+            const cipherData = await encipher.encryptBlock();
 
             if (cipherData.parts.length) {
                for (let data of cipherData.parts) {
@@ -146,8 +146,7 @@ export async function getCipherStreamInfo(
    if (userCred.byteLength != cc.USERCRED_BYTES) {
       throw new Error('Invalid userCred length of: ' + userCred.byteLength);
    }
-
-   const decipher = await streamDecipher(userCred, cipherStream);
+   const decipher = await streamDecipher(userCred, cipherStream, undefined);
    const info = await decipher.getCipherDataInfo();
    decipher.finishedState();
    return info;
@@ -164,7 +163,7 @@ export async function decryptStream(
       throw new Error('Invalid userCred length of: ' + userCred.byteLength);
    }
 
-   const decipher = await streamDecipher(userCred, cipherStream);
+   const decipher = await streamDecipher(userCred, cipherStream, pwdProvider);
    const cdInfo = await decipher.getCipherDataInfo();
 
    let readableStream = new ReadableStream({
@@ -174,7 +173,7 @@ export async function decryptStream(
 
          try {
             // Decryption always returns data if any remains
-            const decrypted = await decipher.decryptBlock(pwdProvider);
+            const decrypted = await decipher.decryptBlock();
 
             if (decrypted.byteLength) {
                streamWriteBYOD(controller, decrypted);

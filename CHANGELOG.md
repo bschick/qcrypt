@@ -1,5 +1,13 @@
 # CHANGELOG.md
 
+## 7.0.0 (TBD)
+
+#### Changes
+  - protocol
+    - added loop number to main cipher key derivation
+    - hint key gets its own IV
+    - added salt to all key derivations even though blake2b doesn't strictly need it
+
 ## 6.1.5 (2026-03-19)
 
 #### Changes
