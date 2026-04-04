@@ -190,7 +190,6 @@ export class CipherInfoDialog {
    public ic!: string;
    public alg!: string;
    public slt!: string;
-   public iv!: string;
    public ver!: string;
    public lps!: number;
    public hint?: string;
@@ -206,7 +205,6 @@ export class CipherInfoDialog {
       } else {
          this.ic = data.ic.toLocaleString();
          this.alg = this.cipherSvc.algDescription(data.alg);
-         this.iv = bytesToBase64(data.iv as Uint8Array);
          this.slt = bytesToBase64(data.slt as Uint8Array);
          this.hint = data.hint;
          this.lps = data.lpEnd;
