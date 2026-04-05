@@ -22,6 +22,7 @@ SOFTWARE. */
 import {
    Component, Output, Input, EventEmitter
 } from '@angular/core';
+import { Ciphers } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
@@ -43,9 +44,9 @@ export class AlgorithmsComponent {
    public loopCount = 1;
    public displayedColumns: string[] = ['loop', 'algorithm'];
    public loops: LoopInfo[] = [];
-   private _allowedAlgs = Object.keys(cc.AlgInfo);
-   private _defaultModes = ['X20-PLY'];
-   @Output() modesChange = new EventEmitter<string[]>();
+   private _allowedAlgs = Ciphers.algs();
+   private _defaultModes: cc.CipherAlgs[] = ['X20-PLY'];
+   @Output() modesChange = new EventEmitter<cc.CipherAlgs[]>();
 
    @Input() set count(count: number) {
 
@@ -77,11 +78,11 @@ export class AlgorithmsComponent {
       }
    }
 
-   @Input() set modes(modes: string[]) {
+   @Input() set modes(modes: cc.CipherAlgs[]) {
       this._defaultModes = modes;
    }
 
-   get modes(): string[] {
+   get modes(): cc.CipherAlgs[] {
       // note that this returns all defaults, even when larger than
       // the current loopCount
       return this._defaultModes;
@@ -93,7 +94,7 @@ export class AlgorithmsComponent {
    }
 
    algDescription(alg: string): string {
-      return cc.AlgInfo[alg]['description'] as string;
+      return Ciphers.algDescription(alg);
    }
 
 }

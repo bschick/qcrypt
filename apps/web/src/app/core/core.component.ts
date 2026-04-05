@@ -31,7 +31,7 @@ import {
    SecurityContext,
    NgZone,
 } from '@angular/core';
-import { makeCipherArmor, parseCipherArmor } from '@qcrypt/crypto';
+import { Ciphers, makeCipherArmor, parseCipherArmor } from '@qcrypt/crypto';
 import { CommonModule } from '@angular/common';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatRippleModule } from '@angular/material/core';
@@ -1081,7 +1081,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    algDescription(alg: string): string {
-      return this.cipherSvc.algDescription(alg);
+      return Ciphers.algDescription(alg);
    }
 }
 

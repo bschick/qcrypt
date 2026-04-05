@@ -22,7 +22,7 @@ SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
 import * as cc from '@qcrypt/crypto/consts';
 import { CipherService } from './cipher.service';
-import { readStreamAll, base64ToBytes, getArrayBuffer, Encipher } from '@qcrypt/crypto';
+import { readStreamAll, base64ToBytes, getArrayBuffer, Encipher, Ciphers, EContext } from '@qcrypt/crypto';
 
 
 describe('CipherService', () => {
@@ -127,22 +127,20 @@ describe("Stream encryption and decryption", function () {
 
    it("successful round trip, all algorithms, no pwd hint", async function () {
 
-      for (const alg of cipherSvc.algs()) {
+      for (const alg of Ciphers.algs()) {
 
          const srcString = 'This is a secret 🦆';
          const [clearStream, clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext = {
+         const econtext: EContext = {
             algs: [alg],
             ic: cc.ICOUNT_MIN
          };
 
          const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
-            const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
-            expect(cdinfo.iv.byteLength).toEqual(ivBytes);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
             expect(cdinfo.lp).toEqual(1);
@@ -154,8 +152,6 @@ describe("Stream encryption and decryption", function () {
 
          const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
-            const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
-            expect(cdinfo.iv.byteLength).toEqual(ivBytes);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
             expect(cdinfo.lp).toEqual(1);
@@ -172,7 +168,7 @@ describe("Stream encryption and decryption", function () {
 
    it("successful round trip, all algorithms", async function () {
 
-      for (const alg of cipherSvc.algs()) {
+      for (const alg of Ciphers.algs()) {
 
          const srcString = 'This is a secret 🦆';
          const [clearStream, clearData] = streamFromStr(srcString);
@@ -180,15 +176,13 @@ describe("Stream encryption and decryption", function () {
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext = {
+         const econtext: EContext = {
             algs: [alg],
             ic: cc.ICOUNT_MIN
          };
 
          const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
-            const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
-            expect(cdinfo.iv.byteLength).toEqual(ivBytes);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
             expect(cdinfo.lp).toEqual(1);
@@ -200,8 +194,6 @@ describe("Stream encryption and decryption", function () {
 
          const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
-            const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
-            expect(cdinfo.iv.byteLength).toEqual(ivBytes);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
             expect(cdinfo.lp).toEqual(1);
@@ -219,13 +211,13 @@ describe("Stream encryption and decryption", function () {
    it("successful round trip, all algorithms, loops", async function () {
 
       const maxLps = 3;
-      for (const alg of cipherSvc.algs()) {
+      for (const alg of Ciphers.algs()) {
 
          const srcString = 'This is a secret 🦆';
          const [clearStream, clearData] = streamFromStr(srcString);
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext = {
+         const econtext: EContext = {
             algs: Array(maxLps).fill(alg),
             ic: cc.ICOUNT_MIN
          };
@@ -263,14 +255,14 @@ describe("Stream encryption and decryption", function () {
 
    it("successful round trip, mixed algorithms, loops", async function () {
 
-      const algKeys = Object.keys(cc.AlgInfo);
+      const algKeys = Ciphers.algs();
       const maxLps = algKeys.length;
 
       const srcString = 'This is a secret 🦆';
-      const [clearStream, clearData] = streamFromStr(srcString);
+      const [clearStream] = streamFromStr(srcString);
       const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-      const econtext = {
+      const econtext: EContext = {
          algs: algKeys,
          ic: cc.ICOUNT_MIN
       };
@@ -578,13 +570,13 @@ describe("Stream encryption and decryption", function () {
    });
 
    it("detect wrong password, all alogrithms", async function () {
-      for (const alg of cipherSvc.algs()) {
+      for (const alg of Ciphers.algs()) {
          const [clearStream] = streamFromStr('This is a secret 🦄');
          const pwd = 'the correct pwd';
          const hint = '';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext = {
+         const econtext: EContext = {
             algs: [alg],
             ic: cc.ICOUNT_MIN
          };
@@ -612,13 +604,13 @@ describe("Stream encryption and decryption", function () {
       const maxLps = 3;
       for (let badLp = 1; badLp <= maxLps; badLp++) {
 
-         for (const alg of cipherSvc.algs()) {
+         for (const alg of Ciphers.algs()) {
 
             const srcString = 'This is a secret 🦆';
             const [clearStream, clearData] = streamFromStr(srcString);
             const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-            const econtext = {
+            const econtext: EContext = {
                algs: Array(maxLps).fill(alg),
                ic: cc.ICOUNT_MIN
             };
@@ -680,7 +672,7 @@ describe("Stream encryption and decryption", function () {
 
    it("detect corrupted MAC sig, all algorithms", async function () {
 
-      for (const alg of cipherSvc.algs()) {
+      for (const alg of Ciphers.algs()) {
 
          const [clearStream, clearData] = streamFromStr("asefwlefj4oh09f jw90fu w09fu 9");
 
@@ -688,7 +680,7 @@ describe("Stream encryption and decryption", function () {
          const hint = 'nope';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext = {
+         const econtext: EContext = {
             algs: [alg],
             ic: cc.ICOUNT_MIN
          };
@@ -713,14 +705,14 @@ describe("Stream encryption and decryption", function () {
 
    it("detect crafted bad cipher text, all algorithms", async function () {
 
-      for (const alg of cipherSvc.algs()) {
+      for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr("asdfh3roij 02f23kff 8u 3r90");
 
          const pwd = 'another good pwd';
          const hint = 'nope';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext = {
+         const econtext: EContext = {
             algs: [alg],
             ic: cc.ICOUNT_MIN
          };
@@ -763,7 +755,7 @@ describe("Stream encryption and decryption", function () {
       const pwd = 'another good pwd';
       const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-      const econtext = {
+      const econtext: EContext = {
          algs: ['AES-GCM'],
          ic: cc.ICOUNT_MIN
       };
@@ -819,7 +811,7 @@ describe("Stream encryption and decryption", function () {
       // ic too small
       [clearStream] = streamFromBytes(clearData);
 
-      let bcontext = {
+      let bcontext: EContext = {
          ...econtext,
          ic: cc.ICOUNT_MIN - 1
       };
@@ -846,24 +838,24 @@ describe("Stream encryption and decryption", function () {
 
       bcontext = {
          ...econtext,
-         algs: ['ABS-GCM']
+         algs: ['ABS-GCM'] as any
       };
 
       await expect(cipherSvc.encryptStream(bcontext, async (cdinfo) => {
          return [pwd, hint];
-      }, userCred, clearStream)).rejects.toThrow(new RegExp('Invalid alg.+'));
+      }, userCred, clearStream)).rejects.toThrow(new RegExp('Unsupported cipher mode.+'));
 
       // really invalid alg
       [clearStream] = streamFromBytes(clearData);
 
       bcontext = {
          ...econtext,
-         algs: ['asdfadfsk']
+         algs: ['asdfadfsk'] as any
       };
 
       await expect(cipherSvc.encryptStream(bcontext, async (cdinfo) => {
          return [pwd, hint];
-      }, userCred, clearStream)).rejects.toThrow(new RegExp('Invalid alg.+'));
+      }, userCred, clearStream)).rejects.toThrow(new RegExp('Unsupported cipher mode.+'));
 
    });
 });
@@ -890,7 +882,7 @@ describe("Read block size bugs check", function () {
       const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
       const clearData = crypto.getRandomValues(new Uint8Array(100));
 
-      for (const alg of cipherSvc.algs()) {
+      for (const alg of Ciphers.algs()) {
          for (const adjust of [-1, 0, 1]) {
 
             let [clearStream] = streamFromBytes(clearData);
@@ -902,7 +894,7 @@ describe("Read block size bugs check", function () {
             //@ts-ignore
             expect(clearData.byteLength + adjust).toEqual(Encipher['READ_SIZE_START']);
 
-            const econtext = {
+            const econtext: EContext = {
                algs: [alg],
                ic: cc.ICOUNT_MIN
             };
@@ -926,7 +918,7 @@ describe("Read block size bugs check", function () {
       const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
       const clearData = crypto.getRandomValues(new Uint8Array(100));
 
-      for (const alg of cipherSvc.algs()) {
+      for (const alg of Ciphers.algs()) {
          for (const adjust of [-1, 0, 1]) {
 
             let [clearStream] = streamFromBytes(clearData);
@@ -938,7 +930,7 @@ describe("Read block size bugs check", function () {
             //@ts-ignore
             expect(clearData.byteLength + adjust).toEqual(Encipher['READ_SIZE_START']);
 
-            const econtext = {
+            const econtext: EContext = {
                algs: [alg],
                ic: cc.ICOUNT_MIN
             };
@@ -1033,7 +1025,6 @@ describe("Stream manipulation, multi-version", function () {
             expect(cdinfo.lpEnd).toBe(1);
             expect(cdinfo.ic).toBe(1100000);
             expect(cdinfo.slt).toEqual(ver.slt);
-            expect(cdinfo.iv).toEqual(ver.iv);
             expect(Boolean(cdinfo.hint)).toBe(true);
             return ['asdf', undefined];
          }, userCred, cipherStream);
@@ -1164,7 +1155,7 @@ describe("Stream manipulation, multi-version", function () {
          let b0Alg = new Uint8Array(cipherdata);
          b0Alg[block0AlgOffset] = 128;
          let [stream] = streamFromBytes(b0Alg);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Invalid alg.+'));
+         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Unsupported cipher mode.+'));
 
          // Modified block0 valid but changed ALG
          b0Alg = new Uint8Array(cipherdata);
@@ -1241,7 +1232,7 @@ describe("Stream manipulation, multi-version", function () {
          bNAlg[block1AlgOffset] = 128;
          let [stream] = streamFromBytes(bNAlg);
          dec = await cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream);
-         await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid alg.+'));
+         await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Unsupported cipher mode.+'));
 
          // Modified blockN valid but changed ALG
          bNAlg = new Uint8Array(cipherdata);
@@ -1293,14 +1284,14 @@ describe("Stream manipulation, multi-version", function () {
 
       const [_, clearData] = streamFromBytes(crypto.getRandomValues(new Uint8Array(14)));
 
-      for (const alg of cipherSvc.algs()) {
+      for (const alg of Ciphers.algs()) {
          const [clearStream] = streamFromBytes(clearData);
 
          const pwd = 'another good pwd';
          const hint = 'nope';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext = {
+         const econtext: EContext = {
             algs: [alg],
             ic: cc.ICOUNT_MIN
          };
@@ -1336,7 +1327,7 @@ describe("Stream manipulation, multi-version", function () {
       ];
 
       for (const range of ranges) {
-         for (const alg of cipherSvc.algs()) {
+         for (const alg of Ciphers.algs()) {
             const fuzzLen = randomInclusive(range[0], range[1]);
             const [fuzzStream, fuzzData] = streamFromBytes(crypto.getRandomValues(new Uint8Array(fuzzLen)));
 
@@ -1356,14 +1347,14 @@ describe("Stream manipulation, multi-version", function () {
 
    it("detect removed bytes, all algorithms", async function () {
 
-      for (const alg of cipherSvc.algs()) {
+      for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromBytes(new Uint8Array(20));
 
          const pwd = 'another good pwd';
          const hint = 'nope';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext = {
+         const econtext: EContext = {
             algs: [alg],
             ic: cc.ICOUNT_MIN
          };
@@ -1394,14 +1385,14 @@ describe("Stream manipulation, multi-version", function () {
 
    it("detect added bytes, all algorithms", async function () {
 
-      for (const alg of cipherSvc.algs()) {
+      for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromBytes(new Uint8Array(20));
 
          const pwd = 'another good pwd';
          const hint = 'nope';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext = {
+         const econtext: EContext = {
             algs: [alg],
             ic: cc.ICOUNT_MIN
          };
@@ -1597,15 +1588,15 @@ describe("Cipher alg validate", function () {
    });
 
    it("detect invalid alg", async function () {
-      expect(cipherSvc.validateAlg('AES_GCM')).toBe(false);
-      expect(cipherSvc.validateAlg('')).toBe(false);
-      expect(cipherSvc.validateAlg('f2f33flin2o23f2j3f90j2')).toBe(false);
+      expect(Ciphers.isValidAlg('AES_GCM')).toBe(false);
+      expect(Ciphers.isValidAlg('')).toBe(false);
+      expect(Ciphers.isValidAlg('f2f33flin2o23f2j3f90j2')).toBe(false);
    });
 
    it("should be valid algs", async function () {
-      expect(cipherSvc.validateAlg('AES-GCM')).toBe(true);
-      expect(cipherSvc.validateAlg('X20-PLY')).toBe(true);
-      expect(cipherSvc.validateAlg('AEGIS-256')).toBe(true);
+      expect(Ciphers.isValidAlg('AES-GCM')).toBe(true);
+      expect(Ciphers.isValidAlg('X20-PLY')).toBe(true);
+      expect(Ciphers.isValidAlg('AEGIS-256')).toBe(true);
    });
 
 });
@@ -1621,7 +1612,7 @@ describe("Get cipherinfo from cipher text", function () {
 
    it("expected CipherInfo, all algorithms", async function () {
 
-      for (const alg of cipherSvc.algs()) {
+      for (const alg of Ciphers.algs()) {
 
          const srcString = 'This is a secret 🦋';
          const [clearStream, clearData] = streamFromStr(srcString);
@@ -1630,7 +1621,7 @@ describe("Get cipherinfo from cipher text", function () {
          const hint = 'try a himt';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const econtext = {
+         const econtext: EContext = {
             algs: [alg],
             ic: cc.ICOUNT_MIN
          };
@@ -1642,14 +1633,10 @@ describe("Get cipherinfo from cipher text", function () {
          }, userCred, clearStream);
 
          const cipherInfo = await cipherSvc.getCipherStreamInfo(userCred, cipherStream);
-
-         const expectedIVBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
-
          expect(cipherInfo.ver).toEqual(cc.CURRENT_VERSION);
          expect(cipherInfo.alg).toEqual(alg);
          expect(cipherInfo.ic).toEqual(cc.ICOUNT_MIN);
          expect(cipherInfo.lp).toEqual(1);
-         expect(cipherInfo.iv.byteLength).toEqual(expectedIVBytes);
          expect(cipherInfo.slt.byteLength).toEqual(cc.SLT_BYTES);
          expect(cipherInfo.hint).toEqual(hint);
       }
@@ -1664,7 +1651,7 @@ describe("Get cipherinfo from cipher text", function () {
       const hint = 'nope';
       const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-      const econtext = {
+      const econtext: EContext = {
          algs: ['AEGIS-256'],
          ic: cc.ICOUNT_MIN
       };

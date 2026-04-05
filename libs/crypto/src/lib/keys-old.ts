@@ -21,6 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import * as cc from './cipher.consts';
 import { BasePWDKeyProvider, PWDProvider } from './keys';
+import { KEMKeys } from './pqc';
 
 // To geenrate matching keys, these must not change
 const KDF_INFO_SIGNING = "cipherdata signing key";
@@ -174,5 +175,9 @@ export class PWDKeyProviderOld extends BasePWDKeyProvider {
    
    protected override async _genBlockCipherKey(blockNum: number): Promise<Uint8Array<ArrayBuffer>> {
       throw new Error('Block cipher keys not supported for this cipher version');
+   }
+
+   protected override async _genKEMKeys(encrypting: boolean): Promise<KEMKeys> {
+      throw new Error('KEM keys not supported for this cipher version');
    }
 }

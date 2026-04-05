@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2025 Brad Schick
+Copyright (c) 2025-2026 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,87 +22,20 @@ SOFTWARE. */
 import sodium from 'libsodium-wrappers';
 import * as cc from './cipher.consts';
 import {
-   getRandom, BYOBStreamReader, readStreamAll,
-   Encipher, streamDecipher, latestEncipher,
-   EncipherV7
+   BYOBStreamReader,
+   streamDecipher, latestEncipher,
+   EncipherV7,
+   Ciphers
 } from '../index';
-
-import type { EParams, CipherDataBlock } from '../index';
+import type { CipherDataBlock } from '../index';
 import { PWDKeyProvider } from './keys';
-import { PWDKeyProviderOld } from './keys-old';
+import {
+   isEqualArray,
+   streamFromBytes,
+   streamFromStr,
+   areEqual
+} from './utils.spec';
 
-// Faster than .toEqual, resulting in few timeouts
-function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
-   if (a.length != b.length) {
-      return false;
-   }
-   for (let i = 0; i < a.length; ++i) {
-      if (a[i] != b[i]) {
-         return false;
-      }
-   }
-   return true;
-}
-
-// Faster than .toEqual, resulting in few timeouts
-async function areEqual(a: Uint8Array | ReadableStream<Uint8Array>, b: Uint8Array | ReadableStream<Uint8Array>): Promise<boolean> {
-
-   if (a instanceof ReadableStream) {
-      a = await readStreamAll(a);
-   }
-   if (b instanceof ReadableStream) {
-      b = await readStreamAll(b);
-   }
-
-   if (a.byteLength != b.byteLength) {
-      return false;
-   }
-
-   for (let i = 0; i < a.byteLength; ++i) {
-      if (a[i] != b[i]) {
-         return false;
-      }
-   }
-   return true;
-}
-
-function streamFromBytes(data: Uint8Array | Uint8Array[]): [
-   ReadableStream<Uint8Array>,
-   Uint8Array
-] {
-
-   let parts: Uint8Array[];
-   if (data instanceof Uint8Array) {
-      parts = [data];
-   }
-   else {
-      parts = data;
-   }
-
-   let length = 0;
-   parts.forEach(part => {
-      length += part.length;
-   });
-
-   let merged = new Uint8Array(length);
-   let offset = 0;
-   parts.forEach(part => {
-      merged.set(part, offset);
-      offset += part.length;
-   });
-
-   const blob = new Blob([merged], { type: 'application/octet-stream' });
-   return [blob.stream(), merged];
-}
-
-function streamFromStr(str: string): [
-   ReadableStream<Uint8Array>,
-   Uint8Array
-] {
-   const data = new TextEncoder().encode(str);
-   const blob = new Blob([data], { type: 'application/octet-stream' });
-   return [blob.stream(), data];
-}
 
 function streamFromCipherBlock(cdBlocks: CipherDataBlock[]): [
    ReadableStream<Uint8Array>,
@@ -127,191 +60,6 @@ function streamFromCipherBlock(cdBlocks: CipherDataBlock[]): [
 
    return streamFromBytes(cipherData);
 }
-
-describe("Key generation", function () {
-   beforeEach(async () => {
-      await sodium.ready;
-   });
-
-   it("successful and not equivalent key generation", async function () {
-
-      for (let alg in cc.AlgInfo) {
-         const pwd = 'not a good pwd';
-         const ic = cc.ICOUNT_MIN;
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-
-         const randomArray = getRandom(48);
-         const slt = randomArray.slice(0, cc.SLT_BYTES);
-         const iv = randomArray.slice(cc.SLT_BYTES, cc.SLT_BYTES + 12);
-
-         const keyProvider = new PWDKeyProvider(userCred, [pwd, undefined]);
-         keyProvider.setCipherDataInfo({
-            ver: cc.CURRENT_VERSION,
-            alg,
-            ic,
-            slt,
-            lp: 1,
-            lpEnd: 1
-         });
-         const ek = await keyProvider.getCipherKey(false);
-         const sk = await keyProvider.getSigningKey();
-         const [hk, hIV] = await keyProvider.getHintCipherKeyAndIV(iv);
-
-         expect(ek.byteLength).toBe(32);
-         expect(sk.byteLength).toBe(32);
-         expect(hk.byteLength).toBe(32);
-
-         expect(isEqualArray(ek, sk)).toBe(false);
-         expect(isEqualArray(ek, hk)).toBe(false);
-         expect(isEqualArray(sk, hk)).toBe(false);
-
-         expect(isEqualArray(ek, userCred)).toBe(false);
-         expect(isEqualArray(sk, userCred)).toBe(false);
-         expect(isEqualArray(hk, userCred)).toBe(false);
-      }
-   });
-
-   it("keys should match expected values", async function () {
-
-      const expected: {
-         [kv: number]: {
-            [k1: string]: {
-               [k2: string]: Uint8Array;
-            };
-         };
-      } = {
-         [cc.VERSION5]: {
-            'AES-GCM': {
-               ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
-               sk: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
-               hk: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
-               hIV: new Uint8Array([46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]),
-            },
-            'X20-PLY': {
-               ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
-               sk: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
-               hk: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
-               hIV: new Uint8Array([46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]),
-            },
-            'AEGIS-256': {
-               ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
-               sk: new Uint8Array([238, 127, 13, 239, 238, 127, 177, 22, 231, 87, 89, 23, 88, 52, 42, 22, 6, 170, 172, 112, 111, 101, 147, 204, 238, 28, 203, 159, 118, 54, 139, 151]),
-               hk: new Uint8Array([253, 30, 237, 129, 147, 186, 235, 65, 217, 78, 219, 38, 163, 12, 23, 248, 3, 118, 123, 120, 237, 0, 56, 103, 67, 76, 88, 126, 153, 83, 238, 85]),
-               hIV: new Uint8Array([46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]),
-            }
-         },
-         [cc.VERSION6]: {
-            'AES-GCM': {
-               ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
-               sk: new Uint8Array([172, 133, 166, 39, 233, 237, 204, 73, 234, 53, 191, 16, 169, 71, 164, 71, 36, 51, 18, 87, 19, 33, 25, 50, 224, 33, 120, 21, 233, 20, 154, 79]),
-               hk: new Uint8Array([34, 121, 121, 4, 207, 55, 202, 73, 83, 4, 58, 102, 135, 111, 186, 242, 3, 187, 239, 108, 251, 245, 3, 245, 3, 77, 228, 197, 101, 4, 16, 94]),
-               hIV: new Uint8Array([46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]),
-               bk: new Uint8Array([192, 104, 75, 166, 230, 145, 51, 60, 135, 138, 96, 200, 191, 249, 197, 149, 134, 168, 133, 169, 65, 94, 40, 46, 229, 162, 180, 28, 232, 61, 3, 227]),
-            },
-            'X20-PLY': {
-               ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
-               sk: new Uint8Array([172, 133, 166, 39, 233, 237, 204, 73, 234, 53, 191, 16, 169, 71, 164, 71, 36, 51, 18, 87, 19, 33, 25, 50, 224, 33, 120, 21, 233, 20, 154, 79]),
-               hk: new Uint8Array([34, 121, 121, 4, 207, 55, 202, 73, 83, 4, 58, 102, 135, 111, 186, 242, 3, 187, 239, 108, 251, 245, 3, 245, 3, 77, 228, 197, 101, 4, 16, 94]),
-               hIV: new Uint8Array([46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]),
-               bk: new Uint8Array([192, 104, 75, 166, 230, 145, 51, 60, 135, 138, 96, 200, 191, 249, 197, 149, 134, 168, 133, 169, 65, 94, 40, 46, 229, 162, 180, 28, 232, 61, 3, 227]),
-            },
-            'AEGIS-256': {
-               ek: new Uint8Array([158, 221, 13, 155, 167, 216, 81, 115, 151, 193, 225, 53, 187, 156, 175, 196, 85, 234, 233, 199, 86, 45, 149, 120, 1, 57, 14, 102, 147, 123, 7, 150]),
-               sk: new Uint8Array([172, 133, 166, 39, 233, 237, 204, 73, 234, 53, 191, 16, 169, 71, 164, 71, 36, 51, 18, 87, 19, 33, 25, 50, 224, 33, 120, 21, 233, 20, 154, 79]),
-               hk: new Uint8Array([34, 121, 121, 4, 207, 55, 202, 73, 83, 4, 58, 102, 135, 111, 186, 242, 3, 187, 239, 108, 251, 245, 3, 245, 3, 77, 228, 197, 101, 4, 16, 94]),
-               hIV: new Uint8Array([46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]),
-               bk: new Uint8Array([192, 104, 75, 166, 230, 145, 51, 60, 135, 138, 96, 200, 191, 249, 197, 149, 134, 168, 133, 169, 65, 94, 40, 46, 229, 162, 180, 28, 232, 61, 3, 227]),
-            }
-         },
-         [cc.CURRENT_VERSION]: {
-            'AES-GCM': {
-               ek: new Uint8Array([57, 195, 65, 44, 111, 159, 65, 176, 164, 31, 186, 181, 12, 102, 241, 180, 55, 157, 229, 119, 213, 239, 11, 196, 252, 61, 138, 193, 111, 134, 194, 19]),
-               sk: new Uint8Array([12, 11, 234, 82, 207, 215, 131, 80, 38, 32, 132, 108, 3, 142, 171, 167, 122, 64, 206, 141, 38, 119, 244, 14, 84, 157, 79, 143, 230, 193, 123, 152]),
-               hk: new Uint8Array([186, 23, 116, 170, 237, 110, 92, 251, 20, 233, 24, 0, 10, 15, 167, 201, 128, 120, 73, 71, 132, 103, 171, 49, 154, 150, 49, 100, 201, 201, 137, 45]),
-               hIV: new Uint8Array([209, 157, 68, 198, 140, 129, 200, 180, 195, 7, 203, 152, 159, 48, 27, 169, 238, 3, 71, 245, 252, 45, 165, 23]),
-               bk: new Uint8Array([61, 239, 241, 139, 152, 53, 154, 62, 208, 244, 179, 18, 227, 158, 36, 2, 232, 115, 124, 108, 178, 71, 129, 26, 70, 118, 223, 30, 16, 47, 151, 170]),
-            },
-            'X20-PLY': {
-               ek: new Uint8Array([57, 195, 65, 44, 111, 159, 65, 176, 164, 31, 186, 181, 12, 102, 241, 180, 55, 157, 229, 119, 213, 239, 11, 196, 252, 61, 138, 193, 111, 134, 194, 19]),
-               sk: new Uint8Array([12, 11, 234, 82, 207, 215, 131, 80, 38, 32, 132, 108, 3, 142, 171, 167, 122, 64, 206, 141, 38, 119, 244, 14, 84, 157, 79, 143, 230, 193, 123, 152]),
-               hk: new Uint8Array([186, 23, 116, 170, 237, 110, 92, 251, 20, 233, 24, 0, 10, 15, 167, 201, 128, 120, 73, 71, 132, 103, 171, 49, 154, 150, 49, 100, 201, 201, 137, 45]),
-               hIV: new Uint8Array([209, 157, 68, 198, 140, 129, 200, 180, 195, 7, 203, 152, 159, 48, 27, 169, 238, 3, 71, 245, 252, 45, 165, 23]),
-               bk: new Uint8Array([61, 239, 241, 139, 152, 53, 154, 62, 208, 244, 179, 18, 227, 158, 36, 2, 232, 115, 124, 108, 178, 71, 129, 26, 70, 118, 223, 30, 16, 47, 151, 170]),
-            },
-            'AEGIS-256': {
-               ek: new Uint8Array([57, 195, 65, 44, 111, 159, 65, 176, 164, 31, 186, 181, 12, 102, 241, 180, 55, 157, 229, 119, 213, 239, 11, 196, 252, 61, 138, 193, 111, 134, 194, 19]),
-               sk: new Uint8Array([12, 11, 234, 82, 207, 215, 131, 80, 38, 32, 132, 108, 3, 142, 171, 167, 122, 64, 206, 141, 38, 119, 244, 14, 84, 157, 79, 143, 230, 193, 123, 152]),
-               hk: new Uint8Array([186, 23, 116, 170, 237, 110, 92, 251, 20, 233, 24, 0, 10, 15, 167, 201, 128, 120, 73, 71, 132, 103, 171, 49, 154, 150, 49, 100, 201, 201, 137, 45]),
-               hIV: new Uint8Array([209, 157, 68, 198, 140, 129, 200, 180, 195, 7, 203, 152, 159, 48, 27, 169, 238, 3, 71, 245, 252, 45, 165, 23]),
-               bk: new Uint8Array([61, 239, 241, 139, 152, 53, 154, 62, 208, 244, 179, 18, 227, 158, 36, 2, 232, 115, 124, 108, 178, 71, 129, 26, 70, 118, 223, 30, 16, 47, 151, 170]),
-            }
-         }
-      };
-
-      for (let alg in cc.AlgInfo) {
-         for (let ver of Object.keys(expected).map(Number)) {
-            const pwd = 'a good pwd';
-            const ic = cc.ICOUNT_MIN;
-            const userCred = new Uint8Array([214, 245, 252, 122, 133, 39, 76, 162, 64, 201, 143, 217, 237, 57, 18, 207, 199, 153, 20, 28, 162, 9, 236, 66, 100, 103, 152, 159, 226, 50, 225, 129]);
-            const slt = new Uint8Array([160, 202, 135, 230, 125, 174, 49, 189, 171, 56, 203, 1, 237, 233, 27, 76]);
-            const iv = new Uint8Array([46, 22, 226, 86, 89, 132, 143, 185, 198, 129, 242, 241, 183, 195, 191, 229, 162, 127, 162, 148, 75, 16, 28, 140]);
-
-            let ek: Uint8Array;
-            let sk: Uint8Array;
-            let hk: Uint8Array;
-            let hIV: Uint8Array;
-            let bk: Uint8Array | undefined;
-
-            if( ver >= cc.VERSION6) {
-               const keyProvider = new PWDKeyProvider(userCred, [pwd, undefined]);
-               keyProvider.setCipherDataInfo({
-                  ver: ver,
-                  alg,
-                  ic,
-                  slt,
-                  lp: 1,
-                  lpEnd: 1
-               });
-               ek = await keyProvider.getCipherKey(false);
-               sk = await keyProvider.getSigningKey();
-               [hk, hIV] = await keyProvider.getHintCipherKeyAndIV(iv);
-               await expect(keyProvider.getBlockCipherKey(0)).rejects.toThrow(/Invalid block number: 0/);
-               bk = await keyProvider.getBlockCipherKey(1);
-            } else {
-               const keyProviderOld = new PWDKeyProviderOld(userCred, [pwd, undefined]);
-               keyProviderOld.setCipherDataInfo({
-                  ver: ver,
-                  alg,
-                  ic,
-                  slt,
-                  lp: 1,
-                  lpEnd: 1
-               });
-               ek = await keyProviderOld.getCipherKey(false);
-               sk = await keyProviderOld.getSigningKey();
-               [hk, hIV] = await keyProviderOld.getHintCipherKeyAndIV(iv);
-            }
-
-            expect(isEqualArray(ek, expected[ver][alg]['ek'])).toBe(true);
-            expect(isEqualArray(sk, expected[ver][alg]['sk'])).toBe(true);
-            expect(isEqualArray(hk, expected[ver][alg]['hk'])).toBe(true);
-            expect(isEqualArray(hIV, expected[ver][alg]['hIV'])).toBe(true);
-            if (bk) {
-               expect(isEqualArray(bk, expected[ver][alg]['bk'])).toBe(true);
-            }
-
-            expect(isEqualArray(ek, userCred)).toBe(false);
-            expect(isEqualArray(sk, userCred)).toBe(false);
-            expect(isEqualArray(hk, userCred)).toBe(false);
-            expect(isEqualArray(hIV, userCred)).toBe(false);
-            if (bk) {
-               expect(isEqualArray(bk, userCred)).toBe(false);
-            }
-         }
-      }
-   });
-});
-
 
 describe("Encryption and decryption", function () {
    beforeEach(async () => {
@@ -366,7 +114,7 @@ describe("Encryption and decryption", function () {
 
    it("decryption should fail with replaced valid signature", async function () {
 
-      for (let alg in cc.AlgInfo) {
+      for (const alg of Ciphers.algs()) {
 
          const [clearStream, clearData] = streamFromStr('This is a secret 🐓');
          const pwd = 'a good pwd';
@@ -447,7 +195,7 @@ describe("Encryption and decryption", function () {
 
    it("round trip block0, all algorithms", async function () {
 
-      for (let alg in cc.AlgInfo) {
+      for (const alg of Ciphers.algs()) {
 
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
@@ -485,7 +233,7 @@ describe("Encryption and decryption", function () {
 
    it("round trip blockN, all algorithms", async function () {
 
-      for (let alg in cc.AlgInfo) {
+      for (const alg of Ciphers.algs()) {
 
          let [clearStream, clearData] = streamFromStr('This is a secret 🦀');
          const pwd = 'a not good pwd';
@@ -1080,7 +828,7 @@ describe("Detect changed cipher data", function () {
 
    it("detect changed headerData", async function () {
 
-      for (let alg in cc.AlgInfo) {
+      for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
@@ -1143,7 +891,7 @@ describe("Detect changed cipher data", function () {
 
    it("detect changed additionalData", async function () {
 
-      for (let alg in cc.AlgInfo) {
+      for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
@@ -1203,66 +951,72 @@ describe("Detect changed cipher data", function () {
 
    it("detect changed encryptedData", async function () {
 
-      for (let alg in cc.AlgInfo) {
+      for (const alg of Ciphers.algs()) {
          const [clearStream] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const eparams: EParams = {
-            alg: alg,
-            ic: cc.ICOUNT_MIN,
-            lp: 1,
-            lpEnd: 1
-         };
-
-         const latest = latestEncipher(userCred, clearStream);
-         const block0 = await latest.encryptBlock0(eparams, async (cdinfo) => {
-            expect(cdinfo.alg).toBe(alg);
-            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-            return [pwd, hint];
-         });
+         const latest = latestEncipher(
+            userCred,
+            alg,
+            cc.ICOUNT_MIN,
+            1, // lp
+            1, // lpEnd
+            clearStream,
+            async (cdinfo) => {
+               expect(cdinfo.alg).toBe(alg);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               return [pwd, hint];
+            }
+         );
+         const block0 = await latest.encryptBlock0();
 
          block0.parts[2][12] = block0.parts[2][12] == 123 ? 124 : 123;
          let [cipherStream] = streamFromCipherBlock([block0]);
-         let decipher = await streamDecipher(userCred, cipherStream);
-
-         await expect(decipher.decryptBlock0(async (cdinfo) => {
+         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
-         })).rejects.toThrow(new RegExp('.+MAC.+'));
+         });
+
+         await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('.+MAC.+'));
       }
    });
 
    it("does not detect changed headerData, skip MAC verify", async function () {
 
-      for (let alg in cc.AlgInfo) {
+      for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const eparams: EParams = {
-            alg: alg,
-            ic: cc.ICOUNT_MIN,
-            lp: 1,
-            lpEnd: 1
-         };
-
-         const latest = latestEncipher(userCred, clearStream);
-         const block0 = await latest.encryptBlock0(eparams, async (cdinfo) => {
-            expect(cdinfo.lp).toEqual(1);
-            expect(cdinfo.lpEnd).toEqual(1);
-            expect(cdinfo.alg).toBe(alg);
-            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-            return [pwd, hint];
-         });
+         const latest = latestEncipher(
+            userCred,
+            alg,
+            cc.ICOUNT_MIN,
+            1, // lp
+            1, // lpEnd
+            clearStream,
+            async (cdinfo) => {
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.alg).toBe(alg);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               return [pwd, hint];
+            }
+         );
+         const block0 = await latest.encryptBlock0();
 
          // set byte in MAC
          block0.parts[0][12] = block0.parts[0][12] == 123 ? 124 : 123;
          let [cipherStream] = streamFromCipherBlock([block0]);
-         let decipher = await streamDecipher(userCred, cipherStream);
+         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            return [pwd, undefined];
+         });
 
          // Monkey patch to skip MAC validation
          //@ts-ignore
@@ -1272,40 +1026,41 @@ describe("Detect changed cipher data", function () {
 
          // This should succeed even though the MAC has been changed (because
          // MAC was not tested due to monkey patch)
-         await expect(decipher.decryptBlock0(async (cdinfo) => {
-            expect(cdinfo.lp).toEqual(1);
-            expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
-         })).resolves.toEqual(clearData);
+         await expect(decipher.decryptBlock0()).resolves.toEqual(clearData);
       }
    });
 
    it("detect changed additionalData, skip MAC verify", async function () {
 
-      for (let alg in cc.AlgInfo) {
+      for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const eparams: EParams = {
-            alg: alg,
-            ic: cc.ICOUNT_MIN,
-            lp: 1,
-            lpEnd: 1
-         };
-
-         const latest = latestEncipher(userCred, clearStream);
-         const block0 = await latest.encryptBlock0(eparams, async (cdinfo) => {
-            expect(cdinfo.alg).toBe(alg);
-            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-            return [pwd, hint];
-         });
+         const latest = latestEncipher(
+            userCred,
+            alg,
+            cc.ICOUNT_MIN,
+            1, // lp
+            1, // lpEnd
+            clearStream,
+            async (cdinfo) => {
+               expect(cdinfo.alg).toBe(alg);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               return [pwd, hint];
+            }
+         );
+         const block0 = await latest.encryptBlock0();
 
          // set byte in additional data
          block0.parts[1][12] = block0.parts[1][12] == 123 ? 124 : 123;
          let [cipherStream] = streamFromCipherBlock([block0]);
-         let decipher = await streamDecipher(userCred, cipherStream);
+         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            return [pwd, undefined];
+         });
 
          // Monkey patch to skip MAC validation
          //@ts-ignore
@@ -1316,40 +1071,41 @@ describe("Detect changed cipher data", function () {
          // This should fail (even though MAC check wass skipped) because
          // AD check is part of all encryption algorithms. Note that this
          // should fail with DOMException rather than Error with MAC in message
-         await expect(decipher.decryptBlock0(async (cdinfo) => {
-            expect(cdinfo.lp).toEqual(1);
-            expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
-         })).rejects.toThrow(DOMException);
+         await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
       }
    });
 
    it("detect changed encryptedData, skip MAC verify", async function () {
 
-      for (let alg in cc.AlgInfo) {
+      for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const eparams: EParams = {
-            alg: alg,
-            ic: cc.ICOUNT_MIN,
-            lp: 1,
-            lpEnd: 1
-         };
-
-         const latest = latestEncipher(userCred, clearStream);
-         const block0 = await latest.encryptBlock0(eparams, async (cdinfo) => {
-            expect(cdinfo.alg).toBe(alg);
-            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-            return [pwd, hint];
-         });
+         const latest = latestEncipher(
+            userCred,
+            alg,
+            cc.ICOUNT_MIN,
+            1, // lp
+            1, // lpEnd
+            clearStream,
+            async (cdinfo) => {
+               expect(cdinfo.alg).toBe(alg);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               return [pwd, hint];
+            }
+         );
+         const block0 = await latest.encryptBlock0();
 
          // set byte in encrypted data
          block0.parts[2][12] = block0.parts[2][12] == 123 ? 124 : 123;
          let [cipherStream] = streamFromCipherBlock([block0]);
-         let decipher = await streamDecipher(userCred, cipherStream);
+         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            return [pwd, undefined];
+         });
 
          // Monkey patch to skip MAC validation
          //@ts-ignore
@@ -1360,11 +1116,7 @@ describe("Detect changed cipher data", function () {
          // This should fail (even though MAC check is skipped) because
          // encrypted data was modified. Note that this should
          // fail with DOMException rather than Error with MAC in message
-         await expect(decipher.decryptBlock0(async (cdinfo) => {
-            expect(cdinfo.lp).toEqual(1);
-            expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
-         })).rejects.toThrow(DOMException);
+         await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
       }
    });
 });
@@ -1379,32 +1131,33 @@ describe("Detect block order changes", function () {
    const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
    const clearStr = 'This is a secret 🦀 with extra wording for more blocks';
 
-   async function get_blocks(alg: string): Promise<[
+   async function get_blocks(alg: cc.CipherAlgs): Promise<[
       CipherDataBlock,
       CipherDataBlock,
       CipherDataBlock
    ]> {
-      const eparams: EParams = {
-         alg: alg,
-         ic: cc.ICOUNT_MIN,
-         lp: 1,
-         lpEnd: 1
-      };
-
       const [clearStream] = streamFromStr(clearStr);
 
-      const latest = latestEncipher(userCred, clearStream);
+      const latest = latestEncipher(
+         userCred,
+         alg,
+         cc.ICOUNT_MIN,
+         1, // lp
+         1, // lpEnd
+         clearStream,
+         async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            return [pwd, hint];
+         }
+      );
       const readStart = 11;
       //@ts-ignore force multiple blocks
       latest['_readTarget'] = readStart;
 
-      const block0 = await latest.encryptBlock0(eparams, async (cdinfo) => {
-         expect(cdinfo.lp).toEqual(1);
-         expect(cdinfo.lpEnd).toEqual(1);
-         return [pwd, hint];
-      });
-      const block1 = await latest.encryptBlockN(eparams);
-      const block2 = await latest.encryptBlockN(eparams);
+      const block0 = await latest.encryptBlock0();
+      const block1 = await latest.encryptBlockN();
+      const block2 = await latest.encryptBlockN();
 
       return [block0, block1, block2];
    }
@@ -1413,19 +1166,19 @@ describe("Detect block order changes", function () {
 
       const clearData = new TextEncoder().encode(clearStr);
 
-      for (let alg in cc.AlgInfo) {
+      for (const alg of Ciphers.algs()) {
 
          const [block0, block1, block2] = await get_blocks(alg);
 
          // First make sure we can decrypt in the proper order
          let [cipherStream] = streamFromCipherBlock([block0, block1, block2]);
-         let decipher = await streamDecipher(userCred, cipherStream);
-
-         const decb0 = await decipher.decryptBlock0(async (cdinfo) => {
+         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
+
+         const decb0 = await decipher.decryptBlock0();
          const decb1 = await decipher.decryptBlockN();
          const decb2 = await decipher.decryptBlockN();
 
@@ -1439,19 +1192,19 @@ describe("Detect block order changes", function () {
 
       const clearData = new TextEncoder().encode(clearStr);
 
-      for (let alg in cc.AlgInfo) {
+      for (const alg of Ciphers.algs()) {
 
          const [block0, block1, block2] = await get_blocks(alg);
 
          // Order of block N+ changed
          let [cipherStream] = streamFromCipherBlock([block0, block2, block1]);
-         let decipher = await streamDecipher(userCred, cipherStream);
-
-         const decb0 = await decipher.decryptBlock0(async (cdinfo) => {
+         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
+
+         const decb0 = await decipher.decryptBlock0();
 
          const partial = new TextDecoder().decode(decb0);
          expect(clearStr.startsWith(partial)).toBe(true);
@@ -1465,22 +1218,22 @@ describe("Detect block order changes", function () {
 
       const clearData = new TextEncoder().encode(clearStr);
 
-      for (let alg in cc.AlgInfo) {
+      for (const alg of Ciphers.algs()) {
 
          const [block0, block1, block2] = await get_blocks(alg);
 
          let [cipherStream] = streamFromCipherBlock([block1, block0, block2]);
-         let decipher = await streamDecipher(userCred, cipherStream);
+         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            return [pwd, undefined];
+         });
 
          // Will fail in V4 and later because block0 format or MAC is invalid.
          // Failure detection can happen at different spots while data is unpacked
          // since random values may look valid. MAC will alsways be
          // invalid if we get that far.
-         await expect(decipher.decryptBlock0(async (cdinfo) => {
-            expect(cdinfo.lp).toEqual(1);
-            expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
-         })).rejects.toThrow(new RegExp('Invalid.+'));
+         await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('Invalid.+'));
 
       }
    });

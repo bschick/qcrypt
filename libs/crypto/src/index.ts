@@ -98,5 +98,7 @@ export type {
 // Armor functions
 export { makeCipherArmor, parseCipherArmor } from './lib/armor';
 
+export type { PWDProvider } from './lib/keys';
+
 // PQC functions
 export { kemKeyGen, KEMKeys } from './lib/pqc';

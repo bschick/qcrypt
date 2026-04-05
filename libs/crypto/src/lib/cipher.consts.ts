@@ -71,8 +71,10 @@ export const V1_BELOW = VERSION4 // leave fixed at 4
 // needs to fit into 255 bytes encypted... this allows for all double byte + max auth tag
 export const HINT_MAX_LEN = Math.trunc(ENCRYPTED_HINT_MAX_BYTES / 2 - AUTH_TAG_MAX_BYTES);
 
-export const AlgInfo: { [key: string]: { [key: string]: string | number } } = {
-   'AES-GCM': { 'id': 1, 'description': 'AES 256 GCM', 'iv_bytes': 12 },
-   'X20-PLY': { 'id': 2, 'description': 'XChaCha20 Poly1305', 'iv_bytes': 24 },
-   'AEGIS-256': { 'id': 3, 'description': 'AEGIS 256', 'iv_bytes': 32 },
+export type CipherAlgs = "AES-GCM" | "X20-PLY" | "AEGIS-256";
+
+export const AlgInfo: Record<CipherAlgs, { id: number; description: string; iv_bytes: number }> = {
+   'AES-GCM': { id: 1, description: 'AES 256 GCM', iv_bytes: 12 },
+   'X20-PLY': { id: 2, description: 'XChaCha20 Poly1305', iv_bytes: 24 },
+   'AEGIS-256': { id: 3, description: 'AEGIS 256', iv_bytes: 32 },
 };

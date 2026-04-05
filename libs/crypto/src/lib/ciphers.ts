@@ -55,7 +55,7 @@ export type {
 
 export function latestEncipher(
    userCred: Uint8Array,
-   alg: string,
+   alg: cc.CipherAlgs,
    ic: number,
    lp: number,
    lpEnd: number,
@@ -123,5 +123,3 @@ export async function streamDecipher(
    }
    return decipher;
 }
-
-

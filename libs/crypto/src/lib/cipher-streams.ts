@@ -37,7 +37,7 @@ import { browserSupportsBytesStream, streamWriteBYOD } from './utils';
 export type {CipherDataInfo, PWDProvider};
 
 export type EContext = {
-   readonly algs: string[];
+   readonly algs: cc.CipherAlgs[];
    readonly ic: number;
 };
 
@@ -72,11 +72,7 @@ async function _encryptStreamImpl(
       throw new Error('Invalid loop end of: ' + econtext.algs.length);
    }
 
-   const alg = econtext.algs[lp - 1];
-
-   if (!Ciphers.validateAlg(alg)) {
-      throw new Error('Invalid alg of: ' + alg);
-   }
+   const validatedAlg = Ciphers.validateAlg(econtext.algs[lp - 1]);
    if (econtext.ic < cc.ICOUNT_MIN || econtext.ic > cc.ICOUNT_MAX) {
       throw new Error('Invalid ic of: ' + econtext.ic);
    }
@@ -86,7 +82,7 @@ async function _encryptStreamImpl(
 
    const encipher = latestEncipher(
       userCred,
-      alg,
+      validatedAlg,
       econtext.ic,
       lp,
       econtext.algs.length,
