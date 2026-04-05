@@ -48,7 +48,7 @@ export type CipherDataBlock = {
 
 export type CipherDataInfo = {
    readonly ver: number;
-   readonly alg: string;
+   readonly alg: cc.CipherAlgs;
    readonly ic: number;
    readonly lp: number;
    readonly lpEnd: number;
@@ -99,17 +99,20 @@ export abstract class Ciphers {
       maxMillis: number
    ): Promise<[number, number, number]> {
 
-      const cdInfo = {
+      const cdInfo: CipherDataInfo = {
          ver: cc.CURRENT_VERSION,
          alg: 'AES-GCM',
          ic: testSize,
          lp: 1,
-         lpEnd: 1
+         lpEnd: 1,
+         slt: crypto.getRandomValues(new Uint8Array(cc.SLT_BYTES))
       };
       const keyProvider = new PWDKeyProvider(
          crypto.getRandomValues(new Uint8Array(32)),
          ['AVeryBogusPwd', '']
       );
+      keyProvider.setCipherDataInfo(cdInfo);
+
       const start = Date.now();
       await keyProvider.getCipherKey(true);
       const test_millis = Date.now() - start;
@@ -134,34 +137,48 @@ export abstract class Ciphers {
       return [iCount, iCountMax, hashRate];
    }
 
-   static validateAlg(alg: string): boolean {
+   static isValidAlg(alg: string): alg is cc.CipherAlgs {
       return Object.keys(cc.AlgInfo).includes(alg);
    }
 
-   static findAlg(algNum: number): string {
+   static validateAlg(alg: string): cc.CipherAlgs {
+      if (!this.isValidAlg(alg)) {
+         throw new Error('Unsupported cipher mode: ' + alg + '.');
+      }
+      return alg;
+   }
+
+   static validateAlgs(algs: string[]): cc.CipherAlgs[] {
+      return algs.map(alg => this.validateAlg(alg));
+   }
+
+   static findAlg(algNum: number): cc.CipherAlgs {
       if (algNum < 1 || algNum > Object.keys(cc.AlgInfo).length) {
-         throw new Error('Invalid alg id of: ' + algNum);
+         throw new Error('Unsupported cipher mode: ' + algNum + '.');
       }
 
-      let alg: string | undefined;
+      let alg: cc.CipherAlgs;
       for (alg in cc.AlgInfo) {
          if (cc.AlgInfo[alg]['id'] == algNum) {
             break;
          }
       }
-
-      if (!alg) {
-         throw new Error('Invalid alg id of: ' + algNum);
-      }
-
       return alg!;
+   }
+
+   static algs(): cc.CipherAlgs[] {
+      return Object.keys(cc.AlgInfo) as cc.CipherAlgs[];
+   }
+
+   static algDescription(alg: string): string {
+      return this.isValidAlg(alg) ? cc.AlgInfo[alg].description : 'Invalid';
    }
 
    // Only useful for validating params before encoding. Decoded values are read with
    // expected sizes, so validity depends on signature validate rather than decoded lengths
    public static validateAdditionalData(
       args: {
-         alg: string;
+         alg: cc.CipherAlgs;
          iv: Uint8Array;
          term?: boolean;
          ic?: number;
@@ -172,10 +189,7 @@ export abstract class Ciphers {
          encryptedHint?: Uint8Array
       }) {
 
-      if (!Ciphers.validateAlg(args.alg)) {
-         throw new Error('Invalid alg: ' + args.alg);
-      }
-
+      Ciphers.validateAlg(args.alg);
       const ivBytes = Number(cc.AlgInfo[args.alg]['iv_bytes']);
       if (args.iv.byteLength != ivBytes) {
          throw new Error('Invalid iv size: ' + args.iv.byteLength);
@@ -230,7 +244,7 @@ export abstract class Ciphers {
 
    protected static _encodeAdditionalData(
       args: {
-         alg: string;
+         alg: cc.CipherAlgs;
          iv: Uint8Array;
          term?: boolean;
          ic?: number;
@@ -572,7 +586,7 @@ export class EncipherV7 extends Encipher {
 
    // Helper function
    protected static async _doEncrypt(
-      alg: string,
+      alg: cc.CipherAlgs,
       key: Uint8Array,
       iv: Uint8Array,
       clear: Uint8Array,
@@ -677,7 +691,7 @@ type BlockData = {
    readonly ver: number;
    readonly payloadSize: number;
    flags?: number;
-   alg?: string;
+   alg?: cc.CipherAlgs;
    iv?: Uint8Array<ArrayBuffer>;
    encryptedData?: Uint8Array<ArrayBuffer>;
    additionalData?: Uint8Array<ArrayBuffer>;
@@ -791,7 +805,7 @@ export abstract class Decipher extends Ciphers {
    }
 
    protected static async _doDecrypt(
-      alg: string,
+      alg: cc.CipherAlgs,
       key: Uint8Array,
       iv: Uint8Array,
       encrypted: Uint8Array,
@@ -1227,7 +1241,7 @@ export class DecipherV67 extends Decipher {
 export class Extractor<T extends ArrayBufferLike> {
    private _encoded: Uint8Array<T>;
    private _offset: number;
-   private _alg?: string;
+   private _alg?: cc.CipherAlgs;
 
    constructor(encoded: Uint8Array<T>, offset: number = 0) {
       this._encoded = encoded;
@@ -1273,7 +1287,7 @@ export class Extractor<T extends ArrayBufferLike> {
       return this.extract('mac', cc.MAC_BYTES);
    }
 
-   get alg(): string {
+   get alg(): cc.CipherAlgs {
       const algNum = bytesToNum(this.extract('alg', cc.ALG_BYTES));
       this._alg = Ciphers.findAlg(algNum);
       return this._alg;
@@ -1419,10 +1433,8 @@ export class Packer {
       this.pack('mac', sig);
    }
 
-   set alg(algName: string) {
-      if (!Ciphers.validateAlg(algName)) {
-         throw new Error('Invalid alg name: ' + algName);
-      }
+   set alg(algName: cc.CipherAlgs) {
+      Ciphers.validateAlg(algName);
       const algInfo = cc.AlgInfo[algName];
       this._ivBytes = Number(algInfo['iv_bytes']);
       this.pack('alg', numToBytes(Number(algInfo['id']), cc.ALG_BYTES));

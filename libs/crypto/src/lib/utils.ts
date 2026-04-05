@@ -21,6 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import sodium from 'libsodium-wrappers';
+import * as cc from './cipher.consts';
 import { base64URLStringToBuffer, bufferToBase64URLString } from './base64';
 import { Duration, DateTime } from 'luxon';
 

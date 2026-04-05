@@ -11,7 +11,6 @@ export default defineConfig({
   test: {
     globals: true,
     testTimeout: 30000,
-    exclude: ['tmp/**', 'node_modules/**'],
     browser: {
       enabled: true,
       headless: true,
