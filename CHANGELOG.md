@@ -1,5 +1,11 @@
 # CHANGELOG.md
 
+## 6.1.6 (2026-04-08)
+
+#### Security
+  - changed auth/options to post userId in request body [thanks to Rajat Shukla (@rajat4722)]
+  - updated packages
+
 ## 6.1.5 (2026-03-19)
 
 #### Changes
