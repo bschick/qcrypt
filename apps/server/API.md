@@ -34,14 +34,13 @@ This document provides documentation for the passkey-based authentication server
 
 ## Authentication Endpoints
 
-### GET /v1/auth/options
+### POST /v1/auth/options
 
-- **Method:** `GET`
+- **Method:** `POST`
 - **Path:** `/v1/auth/options`
 - **Authorization:** Not required
-- **Description:** Retrieves authentication options for a user. If a `userid` query parameter is provided, the response will include a list of allowed credentials for that user only.
-- **Query Parameters:**
-  - `userid` (optional): The ID of the user to get authentication options for.
+- **Description:** Retrieves authentication options for a user. If a `userid` is sent in the request body, the response will include a list of allowed credentials for that user only.
+- **Request Body:** (optional) A JSON object with the `userId` of a user whose allowed credentials should be returned. Example: `{"userId": "base64id"}`.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server `PublicKeyCredentialRequestOptionsJSON` JSON object.
   - `400 Bad Request`: The request was malformed or missing required parameters.
@@ -146,7 +145,7 @@ This document provides documentation for the passkey-based authentication server
 - **Path:** `/v1/users/{userid}/recover/{usercred}`
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
 - **Authorization:** Not required
-- **Description:** Deprecated, upgrade account and use `/v1/recover2` instead. Initiates the account recovery process. This will delete all existing passkeys for the user and return registration options to create a new passkey.
+- **Description:** DEPRECATED. Upgrade account and use `/v1/recover2` instead. Initiates the account recovery process. This will delete all existing passkeys for the user and return registration options to create a new passkey.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server `PublicKeyCredentialCreationOptionsJSON` JSON object.
   - `400 Bad Request`: The user credential is not valid.

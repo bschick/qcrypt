@@ -130,8 +130,9 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          expect(res.status).toBe(401); // Expect Unauthorized
 
          // Get Auth Options
-         const optsRes = await getJson(
-            `/v1/auth/options?userid=${userId}`,
+         const optsRes = await postJson(
+            `/v1/auth/options`,
+            { userId },
             {},
             "",
          );
