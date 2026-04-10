@@ -723,9 +723,9 @@ export class AuthenticatorService {
       // Start the process without userId just doesn't limit authenticator creds
       // so the user can look for an existing credential
       const optionsJson = await this._doFetch<PublicKeyCredentialRequestOptionsJSON>({
-         method: 'GET',
+         method: 'POST',
          resource: 'auth/options',
-         params: userId ? `userid=${userId}` : ''
+         bodyJSON: JSON.stringify({ userId: userId })
       });
 
       let startAuth: AuthenticationResponseJSON;
