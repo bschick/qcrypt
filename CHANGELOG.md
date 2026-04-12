@@ -8,6 +8,16 @@
     - hint key gets its own IV
     - added salt to all blake2b key derivations
 
+## 6.1.6 (2026-04-11)
+
+#### Changes
+  - load signin dialog rather than welcome page when when valid user is known
+
+#### Security
+  - moved auth/options userId into request body [thanks to Rajat Shukla (@rajat4722)]
+  - clear potentially sensitive persisted settings upon forgetting current user
+  - updated packages
+
 ## 6.1.5 (2026-03-19)
 
 #### Changes
