@@ -94,7 +94,8 @@
       "hono": ">=4.11.10",
       "undici": ">=7.24.0",
       "fast-xml-parser": ">=5.5.7",
-      "picomatch": ">=4.0.4"
+      "picomatch": ">=4.0.4",
+      "axios": ">=1.15.0"
     },
     "peerDependencyRules": {
       "allowedVersions": {
