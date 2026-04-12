@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2026 Brad Schick
+Copyright (c) 2024-2026 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,16 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-// Using noble-post-quantum until libsodium is released with PQC support
-import { XWing, combineSigners, ecSigner, expandSeedXof } from "@noble/post-quantum/hybrid.js";
-import { falcon512padded } from "@noble/post-quantum/falcon.js";
-import { shake256 } from "@noble/hashes/sha3.js";
-import { ed25519 } from "@noble/curves/ed25519.js";
+export const TOPICID_BYTES = 16;
+export const DESC_LEN_BYTES = 1;
+export const DESC_MAX_BYTES = 255;
 
-export const combinedSigner = combineSigners(32, expandSeedXof(shake256), ecSigner(ed25519), falcon512padded);
-export const combinedKEM = XWing;
-export type KEMKeys = ReturnType<typeof combinedKEM.keygen>;
-
-export function kemKeyGen(seed?: Uint8Array): KEMKeys {
-   return combinedKEM.keygen(seed);
-}
+export const TOPIC_MAX_BYTES = TOPICID_BYTES + DESC_LEN_BYTES + DESC_MAX_BYTES + SIG_CERT_MAX_BYTES + KEM_CERT_MAX_BYTES + MAX_TOPIC_MESSAGES_BYTES + TIMESTAMP_BYTES + LADDER_LEN_BYTES + LADDER_MAX_BYTES;

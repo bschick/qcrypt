@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2024 Brad Schick
+Copyright (c) 2024-2026 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -78,3 +78,31 @@ export const AlgInfo: Record<CipherAlgs, { id: number; description: string; iv_b
    'X20-PLY': { id: 2, description: 'XChaCha20 Poly1305', iv_bytes: 24 },
    'AEGIS-256': { id: 3, description: 'AEGIS 256', iv_bytes: 32 },
 };
+
+
+// PQC stuff
+export const SL_VERSION = 1;
+export const SL_VERSION_BYTES = 2;
+
+const MLDSA65_SIG_BYTES = 3309;
+const FALCON512_SIG_BYTES = 666;
+const FALCON512_PUB_KEY_BYTES = 897;
+const FALCON512_SEC_KEY_BYTES = 1281;
+const ED25519_SIG_BYTES = 64;
+const ED25519_PUB_KEY_BYTES = 32;
+const ED25519_SEC_KEY_BYTES = 32;
+const XWING_PUB_KEY_BYTES = 1216;
+const XWING_SEC_KEY_BYTES = 2432;
+const XWING_CIPHERTEXT_BYTES = 1120;
+//const XWING_CIPHERTEXT_LEN_BYTES = 2;
+
+
+export const KEM_PUB_KEY_BYTES = XWING_PUB_KEY_BYTES;
+export const KEM_SEC_KEY_BYTES = XWING_SEC_KEY_BYTES;
+export const KEM_CIPHERTEXT_BYTES = XWING_CIPHERTEXT_BYTES;
+
+export const SIG_PUB_KEY_BYTES = ED25519_PUB_KEY_BYTES + FALCON512_PUB_KEY_BYTES;
+export const SIG_SEC_KEY_BYTES = ED25519_SEC_KEY_BYTES + FALCON512_SEC_KEY_BYTES;
+
+
+export const COMBINED_SIG_BYTES = FALCON512_SIG_BYTES + ED25519_SIG_BYTES;
