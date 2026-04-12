@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-## 6.1.6 (2026-04-08)
+## 6.1.6 (2026-04-11)
 
 #### Changes
   - load signin dialog rather than welcome page when when valid user is known
