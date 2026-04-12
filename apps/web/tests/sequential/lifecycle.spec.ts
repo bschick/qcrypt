@@ -238,7 +238,7 @@ test.describe('sign on', () => {
 
   });
 
-  testWithAuth('2 tabs logout', async ({ authFixture }) => {
+  testWithAuth('3 tabs logout and forget', async ({ authFixture }) => {
     const { page, session, authId1, authId2 } = authFixture;
     test.setTimeout(45000);
 
@@ -259,7 +259,7 @@ test.describe('sign on', () => {
     await page2.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
 
-    // logout 2nd page and confirm first is logged out
+    // logout 2nd page and confirm first is logged out with Sign In dialog showing
     await openCredentials(page2);
 
     let tableBody2 = page2.locator('table.credtable tbody');
@@ -273,14 +273,25 @@ test.describe('sign on', () => {
     await page1.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible({timeout:10000});
 
+    // make sure a new pages goes to the sign in dialog not welcome pages
+    const page3 = await page1.context().newPage();
+    await page3.goto('/');
+    await page3.waitForURL('/', { waitUntil: 'domcontentloaded' });
+    await expect(page3.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible({timeout:10000});
+
+    // Forget user and all pages should go back to welcome page
     await page2.getByRole('button', { name: /Sign in as a different user/ }).click();
     await page2.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
     await expect(page2.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
 
-    // page1 should also go back to welcome page
     await page1.goto('/');
     await page1.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
     await expect(page1.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
+
+    await page3.goto('/');
+    await page3.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
+    await expect(page3.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
+
   });
 
   testWithAuth('3 tabs switch user', async ({ authFixture }) => {

@@ -245,7 +245,10 @@ export class SigninDialog {
       try {
          this.error = '';
 
+         // This can happen if another tab logs out or changes passkeys while the
+         // dialog is open. Not a great UX, but it's likely a rare race condition
          if (!this.authSvc.validKnownUser()) {
+            // don't kill other tab sessions
             this.authSvc.forgetUser(false);
             this.router.navigateByUrl('/welcome');
             this.dialogRef.close('Navigate');
@@ -268,6 +271,7 @@ export class SigninDialog {
 
    onClickForget(event: any) {
       this.error = '';
+      // kill other tab sessions
       this.authSvc.forgetUser(true);
       this.router.navigateByUrl('/welcome');
       this.dialogRef.close('Forget');

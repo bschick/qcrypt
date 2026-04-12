@@ -217,7 +217,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // subscribe to auth events
       this.authSub = this.authSvc.on(
-         [AuthEvent.Logout, AuthEvent.Login, AuthEvent.Delete],
+         [AuthEvent.Logout, AuthEvent.Forget, AuthEvent.Login, AuthEvent.Delete],
          this.onAuthEvent.bind(this)
       );
 
@@ -239,16 +239,21 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    onAuthEvent(data: AuthEventData) {
       if (data.event === AuthEvent.Login) {
-         this.options.loadOptions();
+         this.options.loadOptions(data.userId!);
          this.showTextFromParams();
-      } else if (data.event === AuthEvent.Logout) {
-         this.options.defaultOptions();
+      } else if (data.event === AuthEvent.Logout || data.event === AuthEvent.Forget) {
          this.privacyClear();
          this.onClearCipher();
-         this.trySigninDialog();
+         if(data.event === AuthEvent.Logout) {
+            this.options.detachOptions();
+            this.trySigninDialog();
+         } else {
+            this.options.nukeSensitiveOptions();
+            this.router.navigateByUrl('/welcome');
+         }
       } else if (data.event === AuthEvent.Delete) {
          localStorage.removeItem(data.userId + "welcomed");
-         this.options.nukeOptions();
+         this.options.nukeAllOptions();
       }
    }
 
@@ -263,7 +268,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.showProgress = false;
          }
 
-         // happens when another tab does forget user
+         // happens when another tab does forget or changes passkey
          if(!this.authSvc.validKnownUser()) {
             this.router.navigateByUrl('/welcome');
          } else if(!this.authSvc.authenticated()) {
