@@ -21,7 +21,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import sodium from 'libsodium-wrappers';
-import * as cc from './cipher.consts';
 import { base64URLStringToBuffer, bufferToBase64URLString } from './base64';
 import { Duration, DateTime } from 'luxon';
 
@@ -88,6 +87,18 @@ export function bytesToNum(arr: Uint8Array): number {
    }
    return num;
 }
+
+
+export function byteCount(num: number): number {
+   if (num < 0) {
+      throw new Error("Value must be an unsigned integer (non-negative).");
+   }
+   if (num === 0) {
+      return 1;
+   }
+   return Math.ceil(Math.log2(num + 1) / 8);
+}
+
 
 export function browserSupportsFilePickers(): boolean {
    //@ts-ignore

@@ -21,10 +21,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 // Constants
-export * from './lib/cipher.consts';
+//export * from './lib/cipher.consts';
 
 // Base64 utilities
-export { base64URLStringToBuffer, bufferToBase64URLString } from './lib/base64';
+//export { base64URLStringToBuffer, bufferToBase64URLString } from './lib/base64';
 
 // Utility functions and classes
 export {
@@ -36,6 +36,7 @@ export {
    bufferToHexString,
    numToBytes,
    bytesToNum,
+   byteCount,
    browserSupportsFilePickers,
    browserSupportsBytesStream,
    makeTookMsg,
@@ -101,4 +102,4 @@ export { makeCipherArmor, parseCipherArmor } from './lib/armor';
 export type { PWDProvider } from './lib/keys';
 
 // PQC functions
-export { kemKeyGen, KEMKeys } from './lib/pqc';
+export { kemKeyGen, KEMKeys, combinedSigner } from './lib/pqc';

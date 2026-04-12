@@ -40,7 +40,6 @@ import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { AuthEvent, AuthenticatorService, SenderLinkInfo } from '../services/authenticator.service';
 import { Subscription } from 'rxjs';
-import { base64URLStringToBuffer, bufferToBase64URLString } from '@qcrypt/crypto';
 import { OptionsComponent } from '../ui/options/options.component'
 
 
@@ -97,18 +96,18 @@ export class SenderLinksComponent implements OnInit, OnDestroy, AfterViewInit {
 
       /*
       this.message = 'hola';
-      const seedBuf = base64URLStringToBuffer(seed);
+      const seedBuf = bytesToBase64(seed);
       const keyPair = sodium.crypto_box_seed_keypair(new Uint8Array(seedBuf));
 
       console.log(`${keyPair.keyType}\n
-         Private: ${bufferToBase64URLString(keyPair.privateKey.buffer)}\n
-         Public: ${bufferToBase64URLString(keyPair.publicKey.buffer)}`
+         Private: ${bytesToBase64(keyPair.privateKey.buffer)}\n
+         Public: ${bytesToBase64(keyPair.publicKey.buffer)}`
       );
 
       const keyPairR = sodium.crypto_box_keypair();
 
       const ct = sodium.crypto_box_seal("this is a message", keyPair.publicKey);
-      console.log(`ciphertxt: ${bufferToBase64URLString(ct)}`);
+      console.log(`ciphertxt: ${bytesToBase64(ct)}`);
 */
 //      const clear = sodium.crypto_box_seal_open(ct, keyPair.publicKey, keyPair.privateKey);
   //    console.log(`cleartxt: ${new TextDecoder().decode(clear)}`);
