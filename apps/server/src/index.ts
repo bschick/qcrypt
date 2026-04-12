@@ -625,7 +625,7 @@ async function _doPostRegVerify(
       }
 
       const rparams = {
-         NumberOfBytes: cc.USERCRED_BYTES + cc.RECOVERYID_BYTES
+         NumberOfBytes: cc.USERCRED_BYTES + cc.RECOVERYID_BYTES + (cc.INVITABLEID_BYTES * cc.RETRIES)
       };
       const rand = new GenerateRandomCommand(rparams);
       const result = await kmsClient.send(rand);
@@ -645,7 +645,9 @@ async function _doPostRegVerify(
             throw new Error('unexpected user credential or recovery id');
          }
 
-         const userCred = randData.slice(0, cc.USERCRED_BYTES);
+         let randOffset = 0
+         const userCred = randData.slice(randOffset, randOffset + cc.USERCRED_BYTES);
+         randOffset += cc.USERCRED_BYTES;
          const userCredEnc = await encryptField(
             userCred,
             { userId: unverifiedUser.userId }
@@ -657,11 +659,45 @@ async function _doPostRegVerify(
             cc.KMS_KEYID_BACKUP
          );
 
-         const recoveryId = randData.slice(cc.USERCRED_BYTES);
+         const recoveryId = randData.slice(randOffset, randOffset + cc.RECOVERYID_BYTES);
+         randOffset += cc.RECOVERYID_BYTES;
          const recoveryIdEnc = await encryptField(
             recoveryId,
             { userId: unverifiedUser.userId }
          );
+
+         // Loop in the very unlikley event that we randomly pick
+         // a duplicate (out of 3.4e38 possible)
+         let invId: string | undefined;
+         for(let i = 0; i < cc.RETRIES; ++i) {
+            const invIdBytes = randData.slice(randOffset, randOffset + cc.INVITABLEID_BYTES);
+            randOffset += cc.INVITABLEID_BYTES;
+
+            invId = base64UrlEncode(invIdBytes)!;
+            const invitable = await Invitables.query.byInvitableId({
+               invitableId: invId
+            }).go();
+
+            if (!invitable || invitable.data.length == 0) {
+               break;
+            } else {
+               invId = undefined;
+            }
+         }
+
+         if (!invId) {
+            throw new Error('could not allocate invitableId');
+         }
+
+         const invitable = await Invitables.create({
+            userId: unverifiedUser.userId,
+            invitableId: invId,
+            description: unverifiedUser.userName
+         }).go();
+
+         if (!invitable || !invitable.data) {
+            throw new ParamError('invitable not created or found');
+         }
 
          // Very important that we remove the expiresAt attribute so that the
          // record is not automatically cleaned up by dynamoDB
@@ -1075,34 +1111,38 @@ async function getSenderLinks(
    }
 }
 
-async function getAuthOptions(
+async function postAuthOptions(
    httpDetails: HttpDetails
 ): Promise<Response> {
    const {
       rpID,
       params,
+      body
    } = httpDetails;
+
+   let userId = UnknownUserId;
+
+   // Temporarily for backward compat, check params for userId
+   let unverifiedUserId = body?.userId ?? params?.userid;
 
    // If no userid is provided, then we don't return allowed creds and
    // the user is forced to pick one on their own. That happens when the user is
    // linking a new device to a existing passkey or has fully signed out
    let allowedCreds: PublicKeyCredentialDescriptorJSON[] | undefined = undefined;
-   let userId = UnknownUserId;
 
-   if (params.userid) {
+   if (unverifiedUserId) {
       // Callers could use this to guess userids, but userid is 128bits psuedo-random,
       // so it would take an eternity (and size-large aws bills for me)
-      const unverifiedUser = await getUnverifiedUser(params.userid);
+      const unverifiedUser = await getUnverifiedUser(unverifiedUserId);
 
       userId = unverifiedUser.userId;
-
       const auths = await Authenticators.query.byUserId({
-         userId: unverifiedUser.userId
+         userId
       }).go();
 
       // a user id without authenticator creds was never verified, so reject
       if (!auths || auths.data.length === 0) {
-         throw new AuthError();
+         throw new ParamError('invalid user');
       }
 
       allowedCreds = auths.data.map((cred: AuthItem) => ({
@@ -1168,12 +1208,11 @@ async function postRegOptions(
    }
 
    let uId: string | undefined;
-   let invId: string | undefined;
 
    // Reduce round-trips by getting enough data for 3 x 16 bytes ID tries
    // and 1 x 32 bytes userCred
    const rparams = {
-      NumberOfBytes: cc.RETRIES * (cc.USERID_BYTES + cc.INVITABLEID_BYTES)
+      NumberOfBytes: cc.RETRIES * cc.USERID_BYTES
    };
    const rand = new GenerateRandomCommand(rparams);
    const result = await kmsClient.send(rand);
@@ -1183,13 +1222,13 @@ async function postRegOptions(
       throw new Error("GenerateRandomCommand failure");
    }
 
-   let byteOffset = 0;
+   let randOffset = 0;
 
    // Loop in the very unlikley event that we randomly pick
    // a duplicate (out of 3.4e38 possible)
    for (let i = 0; i < cc.RETRIES; ++i) {
-      const uIdBytes = randData.slice(byteOffset, byteOffset + cc.USERID_BYTES);
-      byteOffset += cc.USERID_BYTES;
+      const uIdBytes = randData.slice(randOffset, randOffset + cc.USERID_BYTES);
+      randOffset += cc.USERID_BYTES;
       
       uId = base64UrlEncode(uIdBytes)!;
 
@@ -1208,27 +1247,6 @@ async function postRegOptions(
       throw new Error('could not allocate userId');
    }
 
-   for(let i = 0; i < cc.RETRIES; ++i) {
-      const invIdBytes = randData.slice(byteOffset, byteOffset + cc.INVITABLEID_BYTES);
-      byteOffset += cc.INVITABLEID_BYTES;
-      
-      invId = base64UrlEncode(invIdBytes)!;
-
-      const invitable = await Invitables.query.byInvitableId({
-         invitableId: invId
-      }).go();
-
-      if (!invitable || invitable.data.length == 0) {
-         break;
-      } else {
-         invId = undefined;
-      }
-   }
-
-   if (!invId) {
-      throw new Error('could not allocate invitableId');
-   }
-
    // TTL value that DynamoDB references to delete recrod 1 day from now if
    // the registration is not verified (verify removes expiresAt attribute)
    const expires = Math.floor(Date.now() / 1000) + 86400;
@@ -1243,16 +1261,6 @@ async function postRegOptions(
 
    if (!user || !user.data) {
       throw new ParamError('user not created or found');
-   }
-
-   const invitable = await Invitables.create({
-      userId: uId,
-      invitableId: invId,
-      description: userName
-   }).go();
-
-   if (!invitable || !invitable.data) {
-      throw new ParamError('invitable not created or found');
    }
 
    return registrationOptions(rpID, rpOrigin, user.data);
@@ -1705,6 +1713,19 @@ async function deletePasskey(
    // If there are no authenticators remaining, delete the
    // entire user identity and return unverified UserInfo object
    if (auths.length == 0) {
+
+      // Delete all invitables for this user
+      const invitables = await Invitables.query.byUserId({
+         userId: verifiedUser.userId
+      }).go({ attributes: ['userId', 'invitableId'] });
+
+      if (invitables && invitables.data.length > 0) {
+         const result = await Invitables.delete(invitables.data).go();
+         if (result && result.unprocessed && result.unprocessed.length > 0) {
+            console.error(`failed to delete all invitables for user ${verifiedUser.userId}`);
+         }
+      }
+
       const deleted = await Users.delete({
          userId: verifiedUser.userId
       }).go({
@@ -1895,7 +1916,7 @@ async function getUnverifiedUser(
 ): Promise<UnverifiedUserItem> {
 
    if (!validB64(userId)) {
-      throw new ParamError('invalid userid');
+      throw new ParamError('invalid user');
    }
 
    // May not want to bring back all parameter (like recoveryIdEnc)
@@ -2119,7 +2140,8 @@ export async function handler(event: any, context: any) {
 
 const METHODMAP: MethodMap = {
    GET: [
-      { name: 'getAuthOptions', pattern: Patterns.authOptions, version: 1, authorize: false, handler: getAuthOptions },
+      // temporary for backward compatibility
+      { name: 'getAuthOptions', pattern: Patterns.authOptions, version: 1, authorize: false, handler: postAuthOptions },
       { name: 'getUser', pattern: Patterns.user, version: 1, authorize: true, handler: getUser },
       { name: 'getPasskeyOptions', pattern: Patterns.passkeyOptions, version: 1, authorize: true, handler: getPasskeyOptions },
       // Special case of an authenticated method that does not require csrf. Needed so GET session works in a fresh
@@ -2130,6 +2152,7 @@ const METHODMAP: MethodMap = {
       // { name: 'getSenderLinks', pattern: Patterns.senderLinks, version: 1, authorize: true, handler: getSenderLinks },
    ],
    POST: [
+      { name: 'postAuthOptions', pattern: Patterns.authOptions, version: 1, authorize: false, handler: postAuthOptions },
       { name: 'postAuthVerify', pattern: Patterns.authVerify, version: 1, authorize: false, handler: postAuthVerify },
       { name: 'postPasskeyVerify', pattern: Patterns.passkeyVerify, version: 1, authorize: true, handler: postPasskeyVerify },
       { name: 'postRegOptions', pattern: Patterns.regOptions, version: 1, authorize: false, handler: postRegOptions },

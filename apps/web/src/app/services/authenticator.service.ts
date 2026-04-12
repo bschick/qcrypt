@@ -40,7 +40,7 @@ const baseUrl = environment.apiHost;
 
 export const SESSION_TIMEOUT = 60 * 60 * 6;
 export const ACTIVITY_TIMEOUT = 60 * 60 * 1.5;
-const EXPIRY_INTERVAL = 1000 * 60 * 2;
+const EXPIRY_CHECK_INTERVAL = 1000 * 60 * 2;
 
 const RECOVERID_BYTES = 16;
 
@@ -149,16 +149,16 @@ export class AuthenticatorService {
    }
 
    public validKnownUser(): boolean {
-      let valid = false;
       const [userId, userName] = this.loadKnownUser();
       if (userId && userName) {
          const globalPKId = localStorage.getItem('pkid');
          const myPKId = sessionStorage.getItem('pkid');
-         if (myPKId && (globalPKId === myPKId)) {
-            valid = true;
+         if (globalPKId &&
+            ((globalPKId === myPKId) || !myPKId)) {
+            return true;
          }
       }
-      return valid;
+      return false;
    }
 
    public loadKnownUser(): [string | null, string | null] {
@@ -327,28 +327,6 @@ export class AuthenticatorService {
       ).subscribe(action);
    }
 
-
-   lsGet(key: string): string | null {
-      if (this.authenticated()) {
-         return localStorage.getItem(this.userId + key);
-      }
-      return null;
-   }
-
-   lsSet(key: string, value: string | number | boolean | null): boolean {
-      if (value != null && this.authenticated()) {
-         localStorage.setItem(this.userId + key, value.toString());
-         return true;
-      }
-      return false;
-   }
-
-   lsDel(key: string) {
-      if (this.authenticated()) {
-         localStorage.removeItem(this.userId + key);
-      }
-   }
-
    private _captureEventData(event: AuthEvent): AuthEventData {
       return {
          event: event,
@@ -445,24 +423,25 @@ export class AuthenticatorService {
       localStorage.setItem('activityexpiry', activityExpiry);
 
       // Currently every 2 minutes
-      this._intervalId = window.setInterval(() => this._timerTick(), EXPIRY_INTERVAL);
+      this._intervalId = window.setInterval(() => this._timerTick(), EXPIRY_CHECK_INTERVAL);
    }
 
    private _timerTick(): void {
       if (!this.validKnownUser()) {
-         // this happens when another tab or windows forgets the user or changes passkey
-         // don't do a global forget since other tab are onto a new user
+         // this happens when another tab or windows forgets the user or changes passkey.
+         // don't do a global forget user since other tab could have a valid session
          this.forgetUser(false);
       } else if (!this.potentialSession()) {
-         // validSession becomes false if either inactivity time happens in this tab
+         // potentialSession becomes false if either inactivity timer expires in this tab
          // or another. since we are tracking other tabs, this may be a bit annoying
-         // but its more conservative (and common) scenario to just have 1 open
+         // but its more conservative, and having multiple tabs open is less common
          this.logout(true);
       }
    }
 
    private _deletedUser() {
       const eventData = this._captureEventData(AuthEvent.Delete);
+      // kill other tab sessions
       this.forgetUser(true);
       this._emit(eventData);
    }
@@ -470,11 +449,13 @@ export class AuthenticatorService {
    forgetUser(global: boolean) {
       const eventData = this._captureEventData(AuthEvent.Forget);
       this.logout(global, false);
-      sessionStorage.clear();
+      // Don't clear sessionStorage for non-global logout because we want to
+      // prevent a page from surprisingly refreshing to another user or passkey
       if (global) {
          localStorage.removeItem('username');
          localStorage.removeItem('userid');
          localStorage.removeItem('pkid');
+         sessionStorage.clear();
       }
       this._emit(eventData);
    }
@@ -511,6 +492,7 @@ export class AuthenticatorService {
          this._userCred = undefined;
       }
       this._csrf = undefined;
+      this._cachedRecoveryId = undefined;
 
       if (emit) {
          this._emit(eventData);
@@ -666,7 +648,6 @@ export class AuthenticatorService {
       if (!invitableInfo) {
          throw new Error('missing invitable');
       }
-      console.log(invitableInfo);
 
       return invitableInfo;
    }
@@ -720,13 +701,12 @@ export class AuthenticatorService {
    private async _startAuth(
       userId: string | null
    ): Promise<Record<string, any>> {
-
       // Start the process without userId just doesn't limit authenticator creds
       // so the user can look for an existing credential
       const optionsJson = await this._doFetch<PublicKeyCredentialRequestOptionsJSON>({
-         method: 'GET',
+         method: 'POST',
          resource: 'auth/options',
-         params: userId ? `userid=${userId}` : ''
+         bodyJSON: JSON.stringify({ userId: userId })
       });
 
       let startAuth: AuthenticationResponseJSON;

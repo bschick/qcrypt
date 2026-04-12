@@ -124,6 +124,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    private _optionsLoaded = false;
    private _lastReminder = this.REMINDER_DEFAULT;
    private _algorithmList: cc.CipherAlgs[] = ['X20-PLY'];
+   private _userId: string | null = null;
 
    @ViewChild('formatLabel') formatLabel!: ElementRef;
    @ViewChild('minStrLabel') minStrLabel!: ElementRef;
@@ -167,7 +168,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
             // load after benchmark to overwrite benchmarks with saved values
             this.authSvc.ready.then( () => {
                if (this.authSvc.authenticated()) {
-                  this.loadOptions();
+                  this.loadOptions(this.authSvc.userId);
                } else {
                   this.defaultOptions();
                }
@@ -181,28 +182,29 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       this.minStrLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.7)";
    }
 
-   loadOptions() {
+   loadOptions(userId: string) {
       // First check localStorage, then apply params (which take president)
-      // (not that change are not presisted until the encrypt button is used)
+      // (note that changes are not presisted until the encrypt button is used)
       /* debug
       for (let i = 0; i < localStorage.length; i++) {
         let key = localStorage.key(i)!;
         console.log(`${key}: ${this.authSvc.lsGet(key)}`);
        } */
+      this._userId = userId;
       if (!this._optionsLoaded) {
          this._optionsLoaded = true;
 
          // set reminder first to reload _lastReminder, which get used in other settings
-         this.setReminder(this.authSvc.lsGet('reminder'));
-         this.setAlgorithm(this.authSvc.lsGet('algorithm'));
-         this.setIcount(this.authSvc.lsGet('icount'));
-         this.setHidePwd(this.authSvc.lsGet('hidepwd'));
-         this.setCacheTime(this.authSvc.lsGet('cachetime'));
-         this.setCheckPwned(this.authSvc.lsGet('checkpwned'));
-         this.setMinPwdStrength(this.authSvc.lsGet('minpwdstrength'));
-         this.setLoops(this.authSvc.lsGet('loops'));
-         this.setCTFormat(this.authSvc.lsGet('ctformat'));
-         this.setVisibilityClear(this.authSvc.lsGet('vclear'));
+         this.setReminder(this.lsGet('reminder'));
+         this.setAlgorithm(this.lsGet('algorithm'));
+         this.setIcount(this.lsGet('icount'));
+         this.setHidePwd(this.lsGet('hidepwd'));
+         this.setCacheTime(this.lsGet('cachetime'));
+         this.setCheckPwned(this.lsGet('checkpwned'));
+         this.setMinPwdStrength(this.lsGet('minpwdstrength'));
+         this.setLoops(this.lsGet('loops'));
+         this.setCTFormat(this.lsGet('ctformat'));
+         this.setVisibilityClear(this.lsGet('vclear'));
 
          let params = new HttpParams({ fromString: window.location.search });
 
@@ -236,8 +238,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    defaultOptions(): void {
-      this._optionsLoaded = false;
-
       this.setIcount(this.ICOUNT_DEFAULT);
       this.setHidePwd(this.HIDE_PWD_DEFAULT);
       this.setCacheTime(this.CACHE_TIME_DEFAULT);
@@ -253,21 +253,44 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       this._algorithmList = ['X20-PLY'];
       this.algorithmsCmp.modes = this._algorithmList;
       this.algorithmsCmp.count = this.loopsInput.value || this.LOOPS_DEFAULT;
+      this.lsSet('algorithm', JSON.stringify(this._algorithmList));
+
+      // these values are only stored when during onblur, so set manually
+      this.lsSet('loops', this.LOOPS_DEFAULT);
+      this.lsSet('icount', this.ICOUNT_DEFAULT);
    }
 
-   nukeOptions(): void {
+   detachOptions(): void {
+      this._optionsLoaded = false;
+      this._userId = null;
       this.defaultOptions();
+   }
+
+   nukeSensitiveOptions(): void {
       try {
-         this.authSvc.lsDel('algorithm');
-         this.authSvc.lsDel('icount');
-         this.authSvc.lsDel('hidepwd');
-         this.authSvc.lsDel('cachetime');
-         this.authSvc.lsDel('checkpwned');
-         this.authSvc.lsDel('minpwdstrength');
-         this.authSvc.lsDel('loops');
-         this.authSvc.lsDel('ctformat');
-         this.authSvc.lsDel('vclear');
-         this.authSvc.lsDel('reminder');
+         this.lsDel('algorithm');
+         this.lsDel('minpwdstrength');
+         this.lsDel('loops');
+         this.detachOptions();
+      } catch (err) {
+         console.error(err);
+         //otherwise ignore
+      }
+   }
+
+   nukeAllOptions(): void {
+      try {
+         this.lsDel('algorithm');
+         this.lsDel('icount');
+         this.lsDel('hidepwd');
+         this.lsDel('cachetime');
+         this.lsDel('checkpwned');
+         this.lsDel('minpwdstrength');
+         this.lsDel('loops');
+         this.lsDel('ctformat');
+         this.lsDel('vclear');
+         this.lsDel('reminder');
+         this.detachOptions();
       } catch (err) {
          console.error(err);
          //otherwise ignore
@@ -401,14 +424,14 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    onHidePwdChange(hide: boolean | null): void {
-      this.authSvc.lsSet('hidepwd', hide);
+      this.lsSet('hidepwd', hide);
    }
 
    onModesChange(modes: cc.CipherAlgs[]): void {
       // Note that modes length is the max number of modes that have
       // been set, which may be larger than the current # of loops
       // This is done to preserve default values
-      if (this.authSvc.lsSet('algorithm', JSON.stringify(modes))){
+      if (this.lsSet('algorithm', JSON.stringify(modes))){
          this._algorithmList = modes;
       }
    }
@@ -420,7 +443,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
       this.algorithmsCmp.count = loops;
       this.setLoops(loops);
-      this.authSvc.lsSet('loops', loops);
+      this.lsSet('loops', loops);
 
       this.loopsChange.emit(loops);
    }
@@ -431,7 +454,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       icount = Math.min(icount, this.ICOUNT_MAX);
 
       this.setIcount(icount);
-      this.authSvc.lsSet('icount', icount);
+      this.lsSet('icount', icount);
       this.setIcountWarning();
 
       this.icountChange.emit(icount);
@@ -451,26 +474,26 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          if (cacheTime != this.cacheTimeInput.value) {
             this.setCacheTime(cacheTime);
          } else {
-            this.authSvc.lsSet('cachetime', cacheTime);
+            this.lsSet('cachetime', cacheTime);
             this.cacheTimeChange.emit(cacheTime);
          }
       }
    }
 
    onPwdStrengthChange(minStrength: string | null): void {
-      this.authSvc.lsSet('minpwdstrength', minStrength);
+      this.lsSet('minpwdstrength', minStrength);
       this.pwdOptionsChange.emit(true);
    }
 
    onCheckPwnedChange(check: boolean | null): void {
-      this.authSvc.lsSet('checkpwned', check);
+      this.lsSet('checkpwned', check);
       this.pwdOptionsChange.emit(true);
    }
 
    onReminderChange(reminder: boolean | null) {
       // don't save reminder state if in link format (reminder is always false)
       if (this.formatSelect.value !== 'link') {
-         if (this.authSvc.lsSet('reminder', reminder)){
+         if (this.lsSet('reminder', reminder)){
             this._lastReminder = reminder!;
          }
          this.formatOptionsChange.emit(true);
@@ -478,7 +501,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    onVisClearChnage(vclear: boolean | null) {
-      this.authSvc.lsSet('vclear', vclear);
+      this.lsSet('vclear', vclear);
    }
 
    onFormatChange(selected: string | null) {
@@ -491,11 +514,32 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          this.setReminder(this._lastReminder);
          this.reminderToggle.enable();
       }
-      this.authSvc.lsSet('ctformat', selected);
+      this.lsSet('ctformat', selected);
       this.formatOptionsChange.emit(true);
    }
 
    onClickResetOptions(): void {
-      this.nukeOptions();
+      this.defaultOptions();
+   }
+
+   lsGet(key: string): string | null {
+      if(this._userId) {
+         return localStorage.getItem(this._userId + key);
+      }
+      return null;
+   }
+
+   lsSet(key: string, value: string | number | boolean | null): boolean {
+      if (value != null && this._userId) {
+         localStorage.setItem(this._userId + key, value.toString());
+         return true;
+      }
+      return false;
+   }
+
+   lsDel(key: string) {
+      if(this._userId) {
+         localStorage.removeItem(this._userId + key);
+      }
    }
 }

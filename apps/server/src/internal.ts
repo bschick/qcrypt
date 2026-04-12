@@ -232,6 +232,64 @@ export async function postConsistency(
       }
       console.log(`${total} users scanned with ${leaked} leaked, ${expired} expired, ${unverified} unverified, and ${deleted} deleted`);
    }
+   if (params['tables'] && params.tables.includes('invitables')) {
+
+      const invAttrs = ["invitableId", "userId"] as const;
+      let invitables = await Invitables.scan.go({
+         attributes: invAttrs,
+         limit: batchSize
+      });
+
+      let total = 0;
+      let leaked = 0;
+      let deleted = 0;
+      let deleteBatch = [];
+
+      while (invitables && invitables.data && invitables.data.length > 0) {
+         total += invitables.data.length;
+
+         for (let invitable of invitables.data) {
+            const user = await Users.get({
+               userId: invitable.userId
+            }).go({ attributes: ['userId'] });
+
+            if (!user || !user.data) {
+               console.log(`missing userId ${invitable.userId} for invitable ${invitable.invitableId}`);
+               leaked += 1;
+               if (params['cleanse']) {
+                  deleteBatch.push({
+                     userId: invitable.userId,
+                     invitableId: invitable.invitableId
+                  });
+               }
+            }
+         }
+
+         if (!invitables.cursor || total >= maxScan) {
+            break;
+         }
+         invitables = await Invitables.scan.go({
+            attributes: invAttrs,
+            limit: batchSize,
+            cursor: invitables.cursor
+         });
+      }
+
+      if (params['cleanse'] && deleteBatch.length > 0) {
+         // ElectroDB handles running this sequentially in groups of 25 for dynamoDB
+         console.log(`deleting ${deleteBatch.length} invitables`);
+         const result = await Invitables.delete(deleteBatch).go();
+
+         // results are unprocessed records, meaning it didn't complete if they exist
+         if (result && result.unprocessed && result.unprocessed.length > 0) {
+            console.error(`delete of all ${deleteBatch.length} invitables failed`);
+         } else {
+            deleted = deleteBatch.length;
+         }
+      }
+
+      console.log(`${total} invitables scanned with ${leaked} leaked and ${deleted} deleted`);
+   }
 
    return { content: { message: "done" } };
 }
@@ -280,7 +338,6 @@ export async function postMunge(
                byteOffset += cc.INVITABLEID_BYTES;
                
                invId = base64UrlEncode(invIdBytes)!;
-         
                const invitable = await Invitables.query.byInvitableId({
                   invitableId: invId
                }).go();
