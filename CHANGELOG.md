@@ -2,8 +2,12 @@
 
 ## 6.1.6 (2026-04-08)
 
+#### Changes
+  - load signin dialog rather than welcome page when when valid user is known
+
 #### Security
-  - changed auth/options to post userId in request body [thanks to Rajat Shukla (@rajat4722)]
+  - moved auth/options userId into request body [thanks to Rajat Shukla (@rajat4722)]
+  - clear potentially sensitive persisted settings upon forgetting current user
   - updated packages
 
 ## 6.1.5 (2026-03-19)

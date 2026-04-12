@@ -39,4 +39,4 @@ Thanks to the following security researchers:
 - [Vaibhav jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/): For reporting missing MTA-STS domain email support
 - **Rajat Shukla (@rajat4722)**:
     - For proposing move of recover2 parameters from url path into post request body and returning more generic errors
-    - For suggesting improvements to auth/options triggering move of userId into post request body
+    - For suggesting improvements to auth/options triggering move of userId into request body
