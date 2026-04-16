@@ -310,8 +310,6 @@ async function postAuthVerify(
       throw new ParamError('invalid challenge format');
    }
 
-   const unverifiedUser = await getUnverifiedUser(body.response.userHandle!);
-
    // Make sure this is a challenge the server really issued and that it is
    // not outdated. Once found, remove to prevent reuse even in error cases
    const challenge = await Challenges.get({
@@ -336,27 +334,36 @@ async function postAuthVerify(
       throw new AuthError('challenge not valid');
    }
 
+   // Derive identity from the credential record via GSI, not from the
+   // unsigned userHandle field in the assertion response
+   const credResult = await Authenticators.query.byCredId({
+      credentialId: body.id
+   }).go();
+
+   if (!credResult || credResult.data.length === 0) {
+      throw new AuthError();
+   }
+
+   const authenticator = credResult.data[0];
+   const unverifiedUser = await getUnverifiedUser(authenticator.userId);
+
    // If the auth challenge was bound to a specific user at creation, the verify must match.
    // Unbound auth challenges are allowed for discoverable credential flow.
    if (challenge.data.userId !== UnknownUserId && challenge.data.userId !== unverifiedUser.userId) {
       throw new AuthError('challenge not valid');
    }
 
-   // SimpleWebAuthn renamed these to WebAuthnCredential, so now we have a name missmatch with DB
-   const authenticator = await Authenticators.get({
-      userId: unverifiedUser.userId,
-      credentialId: body.id
-   }).go();
-
-   if (!authenticator || !authenticator.data) {
+   // userHandle is not part of the signed assertion — cross-check it against
+   // the credential-derived userId to detect tampering
+   if (body.response.userHandle !== unverifiedUser.userId) {
       throw new AuthError();
    }
 
    const webAuthnCredential: WebAuthnCredential = {
-      publicKey: base64UrlDecode(authenticator.data.credentialPublicKey)!,
-      id: authenticator.data.credentialId,
+      publicKey: base64UrlDecode(authenticator.credentialPublicKey)!,
+      id: authenticator.credentialId,
       counter: 0, // not using counters
-      transports: authenticator.data.transports as AuthenticatorTransportFuture[]
+      transports: authenticator.transports as AuthenticatorTransportFuture[]
    };
 
    let verification: VerifiedAuthenticationResponse;
@@ -373,21 +380,19 @@ async function postAuthVerify(
       throw new AuthError('invalid authorization');
    }
 
-   // Should this be changed to throw an error if not verified?
    let startSession: VerifiedUserItem | undefined;
    let responseContent: LoginUserInfo = {
       verified: verification.verified
    };
 
    if (verification.verified) {
-      // should now be verified
-      const verifiedUser = checkVerified(unverifiedUser, body.response.userHandle!);
+      const verifiedUser = checkVerified(unverifiedUser, authenticator.userId);
       startSession = verifiedUser
 
       // ok if this fails
       const patchAuths = Authenticators.patch({
-         userId: authenticator.data.userId,
-         credentialId: authenticator.data.credentialId
+         userId: authenticator.userId,
+         credentialId: authenticator.credentialId
       }).set({
          lastLogin: Date.now()
       }).go();
@@ -395,13 +400,13 @@ async function postAuthVerify(
       const patchUsers = Users.patch({
          userId: verifiedUser.userId,
       }).set({
-         lastCredentialId: authenticator.data.credentialId,
+         lastCredentialId: authenticator.credentialId,
          authCount: verifiedUser.authCount + 1
       }).go();
 
       await Promise.all([patchAuths, patchUsers]);
 
-      verifiedUser.lastCredentialId = authenticator.data.credentialId;
+      verifiedUser.lastCredentialId = authenticator.credentialId;
       verifiedUser.authCount += 1;
 
       const includeUserCred = !!params.usercred;
@@ -441,7 +446,7 @@ async function postAuthVerify(
    }
 
    // Let this happen async
-   recordEvent(EventNames.AuthVerify, unverifiedUser.userId, authenticator.data.credentialId);
+   recordEvent(EventNames.AuthVerify, unverifiedUser.userId, authenticator.credentialId);
 
    return {
       content: responseContent,

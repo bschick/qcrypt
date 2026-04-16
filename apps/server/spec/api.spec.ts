@@ -11,6 +11,24 @@ import {
 import jwtPkg from 'jsonwebtoken';
 import { randomBytes } from "node:crypto";
 
+// postAuthVerify looks up the credential via the Authenticators GSI (credentialid-index),
+// which is eventually consistent. When this suite registers a user and then immediately logs in,
+// the GSI may not yet reflect the new Authenticator record. Retry to give the GSI time to catch
+// up before failing. Not needed for normal clients because the calls are split by user actions
+async function postAuthVerifyWithRetry(
+   body: Record<string, unknown>,
+   cookie: string,
+): ReturnType<typeof postJson> {
+   const maxAttempts = 3;
+   let res = await postJson(`/v1/auth/verify`, body, {}, cookie);
+
+   for (let attempt = 2; res.status !== 200 && attempt <= maxAttempts; attempt++) {
+      await new Promise((r) => setTimeout(r, 10000));
+      res = await postJson(`/v1/auth/verify`, body, {}, cookie);
+   }
+   return res;
+}
+
 // ----- Test Suite -----
 
 describe("QuickCrypt WebAuthn Full API Suite", () => {
@@ -185,16 +203,63 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          });
 
          // Verify Auth
-         const verifyRes = await postJson(
-            `/v1/auth/verify`,
+         const verifyRes = await postAuthVerifyWithRetry(
             { ...assertion, challenge: optsRes.data.challenge },
-            {},
             sessCookie,
          );
 
          expect(verifyRes.status).toBe(200);
          expect(verifyRes.data.verified).toBe(true);
          expect(verifyRes.cookie).toBeTruthy();
+         expect(verifyRes.data.userId).toBe(userId);
+
+         // Restore session state
+         sessCookie = verifyRes.cookie;
+         csrfToken = verifyRes.data.csrf;
+      });
+
+      it("should login without userId in options", async () => {
+         let res = await deleteJson(
+            `/v1/session`,
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(res.status).toBe(200);
+         // Cookie should be invalidated/expired now
+
+         res = await getJson(
+            `/v1/user`,
+            { "x-csrf-token": csrfToken },
+            sessCookie, // Sending old cookie
+         );
+
+         expect(res.status).toBe(401); // Expect Unauthorized
+
+         // Get Auth Options
+         const optsRes = await postJson(
+            `/v1/auth/options`,
+            {},
+            {},
+            "",
+         );
+         expect(optsRes.status).toBe(200);
+
+         // Sign Challenge
+         const assertion = emulator.getJSON(RP_ORIGIN, {
+            ...optsRes.data,
+            challenge: optsRes.data.challenge,
+         });
+
+         // Verify Auth
+         const verifyRes = await postAuthVerifyWithRetry(
+            { ...assertion, challenge: optsRes.data.challenge },
+            sessCookie,
+         );
+
+         expect(verifyRes.status).toBe(200);
+         expect(verifyRes.data.verified).toBe(true);
+         expect(verifyRes.cookie).toBeTruthy();
+         expect(verifyRes.data.userId).toBe(userId);
 
          // Restore session state
          sessCookie = verifyRes.cookie;

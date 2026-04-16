@@ -28,7 +28,7 @@ export class ParamError extends Error {
 }
 
 export class AuthError extends Error {
-   constructor(msg: string = 'not authorize') {
+   constructor(msg: string = 'not authorized') {
       super(msg);
    }
 }
