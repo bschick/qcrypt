@@ -725,10 +725,7 @@ export class AuthenticatorService {
       const handleBytes = base64ToBytes(startAuth.response.userHandle!);
       startAuth.response.userHandle = new TextDecoder("utf-8").decode(handleBytes);
 
-      // Need to return challenge because in some cases it is not bound to
-      // a user id when created. The server validates that it created the challenge
-      // and the challenge's age. createRecovery controls creation of reocvery words
-      // on old account until when it is expicit
+      // Need to return challenge for server lookup w/o userId
       return {
          ...startAuth,
          challenge: optionsJson.challenge
