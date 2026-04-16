@@ -82,7 +82,6 @@ The `pnpm` scripts in `package.json` call `nx` under the hood. You can use eithe
 | What | pnpm script |
 |------|------------|
 | Serve web locally (HTTPS, all interfaces) | `pnpm serve` |
-| Serve SSR build | `pnpm serve:ssr:web` |
 
 ### Test Commands
 
