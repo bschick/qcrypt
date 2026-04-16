@@ -313,9 +313,7 @@ async function postAuthVerify(
    const unverifiedUser = await getUnverifiedUser(body.response.userHandle!);
 
    // Make sure this is a challenge the server really issued and that it is
-   // not outdated. Once validated, it's removed to prevent reuse. Note that
-   // this is not attached to the userId, but the odds of a corretly guessed
-   // challenge value are essentially zero.
+   // not outdated. Once found, remove to prevent reuse even in error cases
    const challenge = await Challenges.get({
       challenge: body.challenge
    }).go();
@@ -324,13 +322,24 @@ async function postAuthVerify(
       throw new ParamError('challenge not valid');
    }
 
-   // must wait or node.js can exit too fast on error
+   // must wait or node can exit too fast on error
    await Challenges.delete({
       challenge: body.challenge
    }).go();
 
    if ((Date.now() / 1000) > challenge.data.expiresAt) {
-      throw new AuthError('authentication timeout, try again');
+      throw new AuthError('challenge not valid');
+   }
+
+   // Refuse challenges that were issued for a different flow (reg/addpasskey).
+   if (challenge.data.purpose !== 'auth') {
+      throw new AuthError('challenge not valid');
+   }
+
+   // If the auth challenge was bound to a specific user at creation, the verify must match.
+   // Unbound auth challenges are allowed for discoverable credential flow.
+   if (challenge.data.userId !== UnknownUserId && challenge.data.userId !== unverifiedUser.userId) {
+      throw new AuthError('challenge not valid');
    }
 
    // SimpleWebAuthn renamed these to WebAuthnCredential, so now we have a name missmatch with DB
@@ -441,19 +450,30 @@ async function postAuthVerify(
 }
 
 async function postPasskeyVerify(
-   httpDetails: HttpDetails
+   httpDetails: HttpDetails,
+   verifiedUser?: VerifiedUserItem
 ): Promise<Response> {
-   return _doPostRegVerify(httpDetails, false);
+   if (!verifiedUser) {
+      throw new AuthError();
+   }
+   return _doPostRegVerify(httpDetails, verifiedUser, 'add', false);
 }
 
 async function postRegVerify(
    httpDetails: HttpDetails
 ): Promise<Response> {
-   return _doPostRegVerify(httpDetails, true);
+   const {
+      body
+   } = httpDetails;
+
+   const unverifiedUser = await getUnverifiedUser(body.userId);
+   return _doPostRegVerify(httpDetails, unverifiedUser, 'reg', true);
 }
 
 async function _doPostRegVerify(
    httpDetails: HttpDetails,
+   unverifiedUser: UnverifiedUserItem,
+   expectedPurpose: 'reg' | 'add',
    newSession: boolean
 ): Promise<Response> {
    const {
@@ -467,10 +487,8 @@ async function _doPostRegVerify(
       throw new ParamError('invalid challenge format');
    }
 
-   const unverifiedUser = await getUnverifiedUser(body.userId);
-
    // Make sure this is a challenge the server really issued and that it is
-   // not outdated. Once validated, remove to prevent reuse
+   // not outdated. Once found, remove to prevent reuse even in error cases
    const challenge = await Challenges.get({
       challenge: body.challenge
    }).go();
@@ -479,14 +497,20 @@ async function _doPostRegVerify(
       throw new ParamError('challenge not valid');
    }
 
-   // must wait or njs can exit too fast
+   // must wait or node can exit too fast
    await Challenges.delete({
       challenge: body.challenge
    }).go();
 
    // Must use the last challenged within 1 minute or its rejected
    if ((Date.now() / 1000) > challenge.data.expiresAt) {
-      throw new AuthError('verification timeout, try again');
+      throw new AuthError('challenge not valid');
+   }
+
+   // Registration-style challenges are always userId-bound at creation time.
+   if (challenge.data.purpose !== expectedPurpose ||
+       challenge.data.userId !== unverifiedUser.userId) {
+      throw new AuthError('challenge not valid');
    }
 
    let verification: VerifiedRegistrationResponse;
@@ -508,7 +532,6 @@ async function _doPostRegVerify(
    let responseContent: LoginUserInfo = {
       verified: verification.verified
    };
-
 
    if (verification.verified) {
       const {
@@ -667,7 +690,7 @@ async function _doPostRegVerify(
       }
 
       // should now be verified
-      const verifiedUser = checkVerified(unverifiedUser, body.userId);
+      const verifiedUser = checkVerified(unverifiedUser, challenge.data.userId);
       startSession = newSession ? verifiedUser : undefined;
 
       const includeUserCred = !!params.usercred;
@@ -741,8 +764,12 @@ async function postAuthOptions(
          userVerification: 'preferred',
       });
 
+      // Bind the challenge to its purpose, and to the userId. Note that userId
+      // can be "Unknown" for the discoverable-credential auth flow.
       await Challenges.create({
-         challenge: options.challenge
+         challenge: options.challenge,
+         purpose: 'auth',
+         userId
       }).go();
 
       // Let this happen async. Don't report a credentialId since
@@ -770,7 +797,7 @@ async function getPasskeyOptions(
       throw new AuthError();
    }
 
-   return registrationOptions(rpID, rpOrigin, verifiedUser);
+   return registrationOptions(rpID, rpOrigin, verifiedUser, 'add');
 }
 
 
@@ -811,7 +838,7 @@ async function postRegOptions(
    for (let i = 0; i < cc.RETRIES; ++i) {
       const uIdBytes = randData.slice(randOffset, randOffset + cc.USERID_BYTES);
       randOffset += cc.USERID_BYTES;
-      
+
       uId = base64UrlEncode(uIdBytes)!;
 
       const users = await Users.query.byUserId({
@@ -845,13 +872,14 @@ async function postRegOptions(
       throw new ParamError('user not created or found');
    }
 
-   return registrationOptions(rpID, rpOrigin, user.data);
+   return registrationOptions(rpID, rpOrigin, user.data, 'reg');
 }
 
 async function registrationOptions(
    rpID: string,
    rpOrigin: string,
-   unverifiedUser: UnverifiedUserItem
+   unverifiedUser: UnverifiedUserItem,
+   purpose: 'reg' | 'add'
 ): Promise<Response> {
 
    if (!unverifiedUser) {
@@ -890,7 +918,9 @@ async function registrationOptions(
       });
 
       await Challenges.create({
-         challenge: options.challenge
+         challenge: options.challenge,
+         purpose: purpose,
+         userId: unverifiedUser.userId
       }).go();
 
       // Let this happen async
@@ -1380,7 +1410,7 @@ async function postRecover(
    recordEvent(EventNames.Recover, verifiedUser.userId);
 
    // caller should followup with call to verifyRegistration
-   return registrationOptions(rpID, rpOrigin, verifiedUser);
+   return registrationOptions(rpID, rpOrigin, verifiedUser, 'reg');
 }
 
 // recover removes all existing passkeys, then initiates the
@@ -1461,7 +1491,7 @@ async function postRecover2(
    recordEvent(EventNames.Recover, verifiedUser.userId);
 
    // caller should followup with call to verifyRegistration
-   return registrationOptions(rpID, rpOrigin, verifiedUser);
+   return registrationOptions(rpID, rpOrigin, verifiedUser, 'reg');
 }
 
 // Currently origin is stored on each Authenticator, but it isn't used (other

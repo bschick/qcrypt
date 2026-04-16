@@ -890,6 +890,7 @@ export class AuthenticatorService {
          ...startReg,
          // To maintain compatibility with old clients, need to put this
          // back to actual b64Url rather than b64ofUT8BytesofBase64... argg
+         // UserId is ignored by server for passkeys/verify
          userId: actualB64UserId,
          challenge: optionsJson.challenge,
       }

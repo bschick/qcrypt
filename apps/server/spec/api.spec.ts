@@ -101,6 +101,46 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          expect(res.status).toBe(200);
          expect(res.data.userName).toBe(testUser);
       });
+
+      it("should add and remove passkey", async () => {
+
+         // Get passkey registration options
+         const optsRes = await getJson(
+            `/v1/passkeys/options`,
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(optsRes.status).toBe(200);
+
+         // Sign Challenge (Note: We give the emulator a fake user.id so it doesn't overwrite our primary test credential)
+         const attestation = emulator.createJSON(RP_ORIGIN, {
+            ...optsRes.data,
+            user: { ...optsRes.data.user, id: `${userId}_2` },
+            challenge: optsRes.data.challenge,
+            excludeCredentials: [],
+         });
+
+         // Verify passkey *with wrong userId* (it should just be ignored)
+         const verifyRes = await postJson(
+            `/v1/passkeys/verify`,
+            { ...attestation, userId: 'De9RClwTFhA6aChuBzDK2g', challenge: optsRes.data.challenge },
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+
+
+         expect(verifyRes.status).toBe(200);
+         expect(verifyRes.data.verified).toBe(true);
+         expect(verifyRes.data.userId).toBe(userId);
+
+         const delRes = await deleteJson(
+            `/v1/passkeys/${attestation.id}`,
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(delRes.status).toBe(200);
+
+      });
    });
 
    describe("Logout & Re-Login", () => {
@@ -147,7 +187,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          // Verify Auth
          const verifyRes = await postJson(
             `/v1/auth/verify`,
-            { ...assertion, userId, challenge: optsRes.data.challenge },
+            { ...assertion, challenge: optsRes.data.challenge },
             {},
             sessCookie,
          );
@@ -250,7 +290,6 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
 
          expect(res.status).toEqual(401);
       });
-
    });
 
    afterAll(async () => {
@@ -269,7 +308,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
       // Confirm user is gone
       // Try to fetch session or user info, should fail
       const checkRes = await getJson(`/v1/user`, {}, sessCookie);
-      expect(checkRes.status).toBeGreaterThanOrEqual(400); // 400, 401, or 404
+      expect(checkRes.status).toBeGreaterThanOrEqual(400);
    });
 });
 

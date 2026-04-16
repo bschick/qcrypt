@@ -80,7 +80,7 @@ This document provides documentation for the passkey-based authentication server
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
 - **Authorization:** Required (cookie and x-csrf-token)
 - **Description:** Verifies a registration response from a client and adds a new passkey to the currently authenticated user.
-- **Request Body:** The SimpleWebAuthn/client `RegistrationResponseJSON` JSON object response & `challenge` & `userId` created by client from previous POST to `/v1/passkeys/options`.
+- **Request Body:** The SimpleWebAuthn/client `RegistrationResponseJSON` JSON object response & `challenge` created by client from previous GET to `/v1/passkeys/options`.
 - **Query Parameters:**
   - `usercred` (optional, boolean): If `true`, the response will include the user credential in `userCred`.
   - `recovery` (optional, boolean): If `true`, the response will include the recovery id in `recoveryId`.

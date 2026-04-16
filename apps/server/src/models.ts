@@ -271,6 +271,16 @@ export const Challenges = new Entity(
             type: "string",
             required: true
          },
+         purpose: {
+            type: ["reg", "add", "auth"] as const,
+            required: true,
+            readOnly: true
+         },
+         userId: {
+            type: "string",
+            required: true,
+            readOnly: true
+         },
          expiresAt: {
             type: "number",
             // Needs unix time (convert from MS to S) and add 5 minutes after creation
