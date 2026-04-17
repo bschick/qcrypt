@@ -281,7 +281,8 @@ async function deleteSession(
    await Users.patch({
       userId: verifiedUser.userId,
    }).set({
-      lastCredentialId: ''
+      lastCredentialId: '',
+      authCount: verifiedUser.authCount + 1
    }).go();
 
    return {
@@ -311,20 +312,14 @@ async function postAuthVerify(
       throw new ParamError('invalid challenge format');
    }
 
-   // Make sure this is a challenge the server really issued and that it is
-   // not outdated. Once found, remove to prevent reuse even in error cases
-   const challenge = await Challenges.get({
+   // Atomically consume the challenge, then check its validity
+   const challenge = await Challenges.delete({
       challenge: body.challenge
-   }).go();
+   }).go({ response: 'all_old' });
 
    if (!challenge || !challenge.data) {
       throw new ParamError('challenge not valid');
    }
-
-   // must wait or node can exit too fast on error
-   await Challenges.delete({
-      challenge: body.challenge
-   }).go();
 
    if ((Date.now() / 1000) > challenge.data.expiresAt) {
       throw new AuthError('challenge not valid');
@@ -493,20 +488,14 @@ async function _doPostRegVerify(
       throw new ParamError('invalid challenge format');
    }
 
-   // Make sure this is a challenge the server really issued and that it is
-   // not outdated. Once found, remove to prevent reuse even in error cases
-   const challenge = await Challenges.get({
+   // Atomically consume the challenge, then check its validity
+   const challenge = await Challenges.delete({
       challenge: body.challenge
-   }).go();
+   }).go({ response: 'all_old' });
 
    if (!challenge || !challenge.data) {
       throw new ParamError('challenge not valid');
    }
-
-   // must wait or node can exit too fast
-   await Challenges.delete({
-      challenge: body.challenge
-   }).go();
 
    // Must use the last challenged within 1 minute or its rejected
    if ((Date.now() / 1000) > challenge.data.expiresAt) {
@@ -1545,12 +1534,13 @@ async function getSessionKey(user: UnverifiedUserItem, purpose: string): Promise
    const salt = base64UrlDecode(user.userId)!;
    const userMaterial = base64UrlDecode(user.userCredEnc)!;
    const combined = Buffer.concat([userMaterial, jwtMaterial]);
+   const sessionVersion = process.env.SessionVersion ?? '0';
 
    return Buffer.from(hkdfSync(
       'sha512',
       combined,
       salt,
-      purpose + user.authCount,
+      `${purpose}:${user.authCount}:${sessionVersion}`,
       32
    ));
 }
