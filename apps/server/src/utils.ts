@@ -85,3 +85,15 @@ export function base64Decode(base64: string | undefined): Uint8Array<ArrayBuffer
    }
    return undefined;
 }
+
+// Constant-time string comparison. Early length check is acceptable for fixed-length secrets.
+export function timingSafeEqual(a: string, b: string): boolean {
+   if (a.length !== b.length) {
+      return false;
+   }
+   let diff = 0;
+   for (let i = 0; i < a.length; i++) {
+      diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+   }
+   return diff === 0;
+}

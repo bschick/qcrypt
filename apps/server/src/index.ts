@@ -81,7 +81,8 @@ import {
    sanitizeString,
    validB64,
    base64UrlEncode,
-   base64UrlDecode
+   base64UrlDecode,
+   timingSafeEqual
 } from './utils';
 
 export type Response = {
@@ -1375,7 +1376,7 @@ async function postRecover(
    );
 
    // Critical check to ensure we do not recover the wrong user
-   if (base64UrlEncode(userCredDecBytes) !== userCred) {
+   if (!timingSafeEqual(base64UrlEncode(userCredDecBytes)!, userCred)) {
       // vague error to make guessing harder
       console.error(`user account ${verifiedUser.userId} invalid user credential`);
       throw new AuthError();
@@ -1456,7 +1457,7 @@ async function postRecover2(
    );
 
    // Critical check to ensure we do not recover the wrong user
-   if (base64UrlEncode(recoveryIdDecBytes) !== recoveryId) {
+   if (!timingSafeEqual(base64UrlEncode(recoveryIdDecBytes)!, recoveryId)) {
       // vague error on purpose to make guessing harder
       console.error(`user account ${verifiedUser.userId} invalid recovery id`);
       throw new AuthError();
@@ -1597,7 +1598,7 @@ async function verifyCsrf(
    // Even if we don't check csrf, make sure we can create one
    const serverCsrf = await createCsrf(verifiedUser);
 
-   if (checkCsrf && (serverCsrf !== headerCsrf || !headerCsrf)) {
+   if (checkCsrf && (!headerCsrf || !timingSafeEqual(serverCsrf, headerCsrf))) {
       throw new AuthError('invalid csrf token');
    }
 }
