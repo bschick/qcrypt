@@ -6,6 +6,7 @@ from selectolax.parser import HTMLParser
 from secrets import token_bytes
 from botocore.exceptions import ClientError
 
+client = boto3.client('s3')
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -31,7 +32,6 @@ def lambda_handler(event, context):
                     key = 'maintenance.html'
     etag, tree = stashed.get(key, ('',None))
 
-    client = boto3.client('s3')
     try:
         response = client.get_object(Bucket='quickcrypt', IfNoneMatch=etag, Key=key)
         # if etag matches, this raises 304 and we don't reparse
@@ -73,14 +73,14 @@ def lambda_handler(event, context):
                 "content-type": "text/html",
                 'Content-Security-Policy': csp,
                 'Etag': etag,
-                'Cache-Control': 'public, max-age=86400',
+                'Cache-Control': 'public, max-age=3600',
             },
             'body':body,
         }
     else:
         return {
             'statusCode': response['ResponseMetadata']['HTTPStatusCode'] if response else 500,
-            'body': 'could not load content from s3'
+            'body': 'cloud not load content from s3'
         }
 
 
