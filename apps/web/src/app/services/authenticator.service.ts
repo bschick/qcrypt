@@ -780,9 +780,8 @@ export class AuthenticatorService {
 
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
          method: 'POST',
-         userId: userId,
          resource: 'recover',
-         resourceId: userCred
+         bodyJSON: JSON.stringify({ userId: userId, userCred: userCred })
       });
 
       const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, false);

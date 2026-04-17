@@ -1352,16 +1352,20 @@ async function postRecover(
       rpID,
       rpOrigin,
       resources,
+      body,
    } = httpDetails;
 
-   const userCred = resources['usercred'];
+   // Prefer body; fall back to URL path params for backward compat until clients update
+   const userCred = body?.userCred ?? resources.usercred;
+   const userId = body?.userId ?? resources.userid;
+
    if (!validB64(userCred)) {
       throw new ParamError('invalid user credential');
    }
 
    // Require an existing verified user for recovery
-   const unverifiedUser = await getUnverifiedUser(resources.userid);
-   const verifiedUser = checkVerified(unverifiedUser, resources.userid);
+   const unverifiedUser = await getUnverifiedUser(userId);
+   const verifiedUser = checkVerified(unverifiedUser, userId);
 
    if (verifiedUser.recoveryIdEnc && verifiedUser.recoveryIdEnc.length > 1) {
       // vague error to make guessing harder
@@ -1753,6 +1757,8 @@ const METHODMAP: MethodMap = {
       { name: 'postRegOptions', pattern: Patterns.regOptions, version: 1, authorize: false, handler: postRegOptions },
       { name: 'postRegVerify', pattern: Patterns.regVerify, version: 1, authorize: false, handler: postRegVerify },
       { name: 'postRecover', pattern: Patterns.recover, version: 1, authorize: false, handler: postRecover },
+      // backward compat
+      { name: 'postRecoverOld', pattern: Patterns.recoverOld, version: 1, authorize: false, handler: postRecover },
       { name: 'postRecover2', pattern: Patterns.recover2, version: 1, authorize: false, handler: postRecover2 },
 
       // Internal only endpoints that are not exposed in cloudfront and require special auth
