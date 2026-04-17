@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2025 Brad Schick
+Copyright (c) 2025-2026 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -71,7 +71,8 @@ import {
    type EncryptCommandOutput
 } from "@aws-sdk/client-kms";
 
-import { hkdfSync } from 'node:crypto';
+import { hkdfSync, randomInt } from 'node:crypto';
+import { setTimeout } from 'node:timers/promises';
 import { sign, verify, decode, type JwtPayload } from 'jsonwebtoken';
 import { postConsistency, postLoadAAGUIDs, postMunge } from './internal';
 import {
@@ -711,6 +712,46 @@ async function _doPostRegVerify(
 }
 
 
+// Dummy allowCredentials list for unknown/invalid userIds to defeat
+// enumeration via /v1/auth/options. Determinism (seeded by jwtMaterial + inputUserId)
+// means repeat probes for the same bad userId return the same list
+async function dummyAllowedCreds(
+   inputUserId: string
+): Promise<PublicKeyCredentialDescriptorJSON[]> {
+   if (!jwtMaterial) {
+      jwtMaterial = await setupJwtMaterial();
+   }
+
+   const material = Buffer.from(hkdfSync(
+      'sha256',
+      jwtMaterial,
+      Buffer.from(inputUserId),
+      'dummy-auth-options',
+      64
+   ));
+
+   // Cumulative weights reflect the observed (len, transports) distribution
+   // in the Authenticators table. Ceil is summed weights. Since 98% of users have
+   // exactly one credential, we return a single entry. Resample and retune
+   // as the mix shifts.
+   const profiles: { ceil: number; len: number; transports: AuthenticatorTransportFuture[] }[] = [
+      { ceil:  82, len: 16, transports: ['hybrid', 'internal'] },
+      { ceil: 124, len: 32, transports: ['internal'] },
+      { ceil: 143, len: 20, transports: ['hybrid', 'internal'] },
+      { ceil: 147, len: 16, transports: ['internal'] },
+      { ceil: 149, len: 48, transports: ['usb'] },
+   ];
+
+   const pick = material.readUInt16BE(0) % 149;
+   const profile = profiles.find(p => pick < p.ceil)!;
+   const id = new Uint8Array(material.subarray(2, 2 + profile.len));
+   return [{
+      id: base64UrlEncode(id)!,
+      type: 'public-key',
+      transports: profile.transports
+   }];
+}
+
 async function postAuthOptions(
    httpDetails: HttpDetails
 ): Promise<Response> {
@@ -731,25 +772,38 @@ async function postAuthOptions(
    let allowedCreds: PublicKeyCredentialDescriptorJSON[] | undefined = undefined;
 
    if (unverifiedUserId) {
-      // Callers could use this to guess userids, but userid is 128bits psuedo-random,
-      // so it would take an eternity (and size-large aws bills for me)
-      const unverifiedUser = await getUnverifiedUser(unverifiedUserId);
+      // To prevent callers from using this to guess userids, the "user not found"
+      // and "user has no auths" paths fall through to return dummy responses.
+      try {
+         const unverifiedUser = await getUnverifiedUser(unverifiedUserId);
+         userId = unverifiedUser.userId;
+         const auths = await Authenticators.query.byUserId({
+            userId
+         }).go();
 
-      userId = unverifiedUser.userId;
-      const auths = await Authenticators.query.byUserId({
-         userId
-      }).go();
-
-      // a user id without authenticator creds was never verified, so reject
-      if (!auths || auths.data.length === 0) {
-         throw new ParamError('invalid user');
+         if (auths && auths.data.length > 0) {
+            allowedCreds = auths.data.map((cred: AuthItem) => ({
+               id: cred.credentialId,
+               type: 'public-key',
+               transports: cred.transports as AuthenticatorTransportFuture[],
+            }));
+         }
+      } catch {
+         // Swallow — dummy branch below handles timing/shape parity.
       }
 
-      allowedCreds = auths.data.map((cred: AuthItem) => ({
-         id: cred.credentialId,
-         type: 'public-key',
-         transports: cred.transports as AuthenticatorTransportFuture[],
-      }));
+      if (!allowedCreds) {
+         // Equivalent-cost DB call to keep timing aligned with the real path.
+         try {
+            await Authenticators.query.byUserId({ userId: unverifiedUserId }).go();
+         } catch {
+         }
+         allowedCreds = await dummyAllowedCreds(unverifiedUserId);
+         userId = UnknownUserId;
+
+         // Jitter to blur any residual wall-clock gap between real and dummy paths.
+         await setTimeout(randomInt(5, 35));
+      }
    }
 
    try {
@@ -1522,7 +1576,6 @@ async function getUnverifiedUser(
 
    return unverifiedUser.data;
 }
-
 
 
 // User may be verified or unverified
