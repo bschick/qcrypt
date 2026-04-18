@@ -1784,8 +1784,6 @@ export async function handler(event: any, context: any) {
 
 const METHODMAP: MethodMap = {
    GET: [
-      // temporary for backward compatibility
-      { name: 'getAuthOptions', pattern: Patterns.authOptions, version: 1, authorize: false, handler: postAuthOptions },
       { name: 'getUser', pattern: Patterns.user, version: 1, authorize: true, handler: getUser },
       { name: 'getPasskeyOptions', pattern: Patterns.passkeyOptions, version: 1, authorize: true, handler: getPasskeyOptions },
       // Special case of an authenticated method that does not require csrf. Needed so GET session works in a fresh
