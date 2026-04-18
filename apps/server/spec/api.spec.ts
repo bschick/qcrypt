@@ -56,7 +56,7 @@ async function postAuthVerifyWithRetry(
 describe("QuickCrypt WebAuthn Full API Suite", () => {
 
    // Shared state
-   const testUser = `test_${Date.now()}`;
+   const testUser = `PWTesty_${Date.now()}`;
    let userId: string;
    let credId: string; // pkId
    let sessCookie: string = "";
