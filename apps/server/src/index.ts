@@ -788,8 +788,8 @@ async function postAuthOptions(
                transports: cred.transports as AuthenticatorTransportFuture[],
             }));
          }
-      } catch {
-         // Swallow — dummy branch below handles timing/shape parity.
+      } catch (err) {
+         console.error(err);
       }
 
       if (!allowedCreds) {
