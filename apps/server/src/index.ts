@@ -1229,7 +1229,7 @@ async function postRegOptions(
    for (let i = 0; i < cc.RETRIES; ++i) {
       const uIdBytes = randData.slice(randOffset, randOffset + cc.USERID_BYTES);
       randOffset += cc.USERID_BYTES;
-      
+
       uId = base64UrlEncode(uIdBytes)!;
 
       const users = await Users.query.byUserId({
