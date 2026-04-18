@@ -65,8 +65,13 @@ const PINNED_UNKNOWN_USER_ID = 'dGVzdC1waW5uZWQtdXNyMQ';
 // Expected dummy credential for PINNED_UNKNOWN_USER_ID. Replace placeholders
 // with the actual values returned by the test server on first run. Update if
 // EncMaterial (the KMS-encrypted jwtMaterial seed) is rotated.
-const EXPECTED_PINNED_CRED: AllowCred = {
+const EXPECTED_PINNED_CRED_TEST: AllowCred = {
    id: 'mNcU4fpleZNUSgbS3pSfnQ',
+   type: 'public-key',
+   transports: ['hybrid', 'internal']
+};
+const EXPECTED_PINNED_CRED_PROD: AllowCred = {
+   id: '-UKU3OnG2DtIBmROhlNLug',
    type: 'public-key',
    transports: ['hybrid', 'internal']
 };
@@ -146,10 +151,8 @@ describe('auth/options credential shape', () => {
       const b = await getAllowCredentials(PINNED_UNKNOWN_USER_ID);
       expect(a.length).toBe(1);
       expect(b.length).toBe(1);
-      // toStrictEqual rejects extra keys on actual and distinguishes undefined
-      // from missing — stricter than toEqual.
       expect(a[0]).toStrictEqual(b[0]);
-      expect(a[0]).toStrictEqual(EXPECTED_PINNED_CRED);
+      expect(a[0]).toStrictEqual(process.env.QC_ENV === 'prod' ? EXPECTED_PINNED_CRED_PROD : EXPECTED_PINNED_CRED_TEST);
       assertValidCredentialShape(a[0]);
    });
 
