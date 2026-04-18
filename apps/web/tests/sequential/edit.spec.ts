@@ -100,7 +100,7 @@ testWithAuth('options persistence and defaults', async ({ authFixture }) => {
   await passkeyAuth(session, authId1, async () => {
     await page.getByRole('button', { name: /Sign in as KeeperTwo/ }).click();
   });
-  await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
   // Accordians should stay open
   await expect(page.locator('text="XChaCha20 Poly1305"')).toHaveCount(2);
 
@@ -127,7 +127,7 @@ testWithAuth('options persistence and defaults', async ({ authFixture }) => {
   await passkeyAuth(session, authId1, async () => {
     await page.getByRole('button', { name: /Sign in as KeeperTwo/ }).click();
   });
-  await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
   // Accordians should stay open
   await expect(page.locator('text="AES 256 GCM"')).toHaveCount(1);
   await expect(page.getByRole('switch', { name: 'Check If Stolen' })).not.toBeChecked();
