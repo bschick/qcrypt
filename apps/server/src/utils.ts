@@ -24,7 +24,6 @@ import { FilterXSS } from 'xss';
 import { Buffer } from "node:buffer";
 import * as cc from './consts.ts';
 
-
 export class ParamError extends Error {
 }
 
