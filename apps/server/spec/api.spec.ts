@@ -378,9 +378,6 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          expect(res.status).toEqual(401);
       });
 
-      // Regression: reject an auth/verify whose challenge was issued for a different user
-      // (per the check in index.ts at the comment "If the auth challenge was bound to a
-      // specific user at creation, the verify must match").
       it("should reject auth/verify when challenge userId does not match credential owner", async () => {
          const attackerName = `PWTesty_atk_${Date.now()}`;
          const attackerEmulator = getWebAuthnEmulator();
@@ -411,8 +408,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
             attackerCookie = regVerify.cookie;
             attackerCsrf = regVerify.data.csrf;
 
-            // Self-login once so the credentialid-index GSI is consistent before the bypass attempt;
-            // otherwise the attempt can 401 at the cred lookup and skip the binding check.
+            // Self-login once so the credentialid-index GSI is certain to be consistent before the bypass attempt
             const selfOpts = await postJson(`/v1/auth/options`, { userId: attackerUserId }, {}, "");
             expect(selfOpts.status).toBe(200);
             const selfAssertion = attackerEmulator.getJSON(RP_ORIGIN, {
@@ -434,8 +430,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
             const optsRes = await postJson(`/v1/auth/options`, { userId }, {}, "");
             expect(optsRes.status).toBe(200);
 
-            // Override allowCredentials so the emulator signs with the attacker's key rather than
-            // the victim-credId the server returned in optsRes
+            // Set allowCredentials to be sure the emulator signs with the attacker's key
             const assertion = attackerEmulator.getJSON(RP_ORIGIN, {
                ...optsRes.data,
                allowCredentials: [{ id: attackerCredId, type: 'public-key' }],
