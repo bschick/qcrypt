@@ -169,10 +169,9 @@ describe('auth/options credential shape', () => {
 });
 
 // Builds a WebAuthn AuthenticationResponseJSON the server will accept
-// structurally — challenge, origin and rpIdHash all match — so the verify
-// reaches the ECDSA check, where it fails because we don't have the private
-// key. Used to prove that the credential-known and credential-unknown branches
-// return indistinguishable responses.
+// structurally so the verify reaches the signature check, where it fails
+// because we don't have the private key. Used to prove that the credential-known
+// and credential-unknown branches return indistinguishable responses.
 function buildForgedAssertion(
    credentialId: string,
    challenge: string,
