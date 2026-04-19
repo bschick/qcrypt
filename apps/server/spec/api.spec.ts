@@ -377,6 +377,90 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
 
          expect(res.status).toEqual(401);
       });
+
+      // Regression: reject an auth/verify whose challenge was issued for a different user
+      // (per the check in index.ts at the comment "If the auth challenge was bound to a
+      // specific user at creation, the verify must match").
+      it("should reject auth/verify when challenge userId does not match credential owner", async () => {
+         const attackerName = `PWTesty_atk_${Date.now()}`;
+         const attackerEmulator = getWebAuthnEmulator();
+         let attackerUserId: string | undefined;
+         let attackerCredId: string | undefined;
+         let attackerCookie = "";
+         let attackerCsrf = "";
+
+         try {
+            const regOpts = await postJson("/v1/reg/options", { userName: attackerName }, {}, "");
+            expect(regOpts.status).toBe(200);
+            attackerUserId = regOpts.data.user.id;
+
+            const attestation = attackerEmulator.createJSON(RP_ORIGIN, {
+               ...regOpts.data,
+               user: { ...regOpts.data.user, id: attackerUserId },
+               challenge: regOpts.data.challenge,
+            });
+
+            const regVerify = await postJson(
+               `/v1/reg/verify`,
+               { ...attestation, userId: attackerUserId, challenge: regOpts.data.challenge },
+               {},
+               "",
+            );
+            expect(regVerify.status).toBe(200);
+            attackerCredId = regVerify.data.pkId;
+            attackerCookie = regVerify.cookie;
+            attackerCsrf = regVerify.data.csrf;
+
+            // Self-login once so the credentialid-index GSI is consistent before the bypass attempt;
+            // otherwise the attempt can 401 at the cred lookup and skip the binding check.
+            const selfOpts = await postJson(`/v1/auth/options`, { userId: attackerUserId }, {}, "");
+            expect(selfOpts.status).toBe(200);
+            const selfAssertion = attackerEmulator.getJSON(RP_ORIGIN, {
+               ...selfOpts.data,
+               challenge: selfOpts.data.challenge,
+            });
+            const selfVerify = await postAuthVerifyWithRetry(
+               { ...selfAssertion, challenge: selfOpts.data.challenge },
+               "",
+            );
+            expect(selfVerify.status).toBe(200);
+            expect(selfVerify.data.userId).toBe(attackerUserId);
+            if (selfVerify.cookie) {
+               attackerCookie = selfVerify.cookie;
+               attackerCsrf = selfVerify.data.csrf;
+            }
+
+            // Request an auth challenge bound to the victim (beforeAll user)
+            const optsRes = await postJson(`/v1/auth/options`, { userId }, {}, "");
+            expect(optsRes.status).toBe(200);
+
+            // Override allowCredentials so the emulator signs with the attacker's key rather than
+            // the victim-credId the server returned in optsRes
+            const assertion = attackerEmulator.getJSON(RP_ORIGIN, {
+               ...optsRes.data,
+               allowCredentials: [{ id: attackerCredId, type: 'public-key' }],
+               challenge: optsRes.data.challenge,
+            });
+
+            const bypass = await postJson(
+               `/v1/auth/verify`,
+               { ...assertion, challenge: optsRes.data.challenge },
+               {},
+               "",
+            );
+
+            expect(bypass.status).toBe(401);
+            expect(bypass.rawText).toBe('challenge not valid');
+         } finally {
+            if (attackerCredId && attackerCookie) {
+               await deleteJson(
+                  `/v1/passkeys/${attackerCredId}`,
+                  { "x-csrf-token": attackerCsrf },
+                  attackerCookie,
+               );
+            }
+         }
+      });
    });
 
    afterAll(async () => {
