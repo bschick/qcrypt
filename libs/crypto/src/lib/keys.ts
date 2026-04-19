@@ -23,7 +23,6 @@ import sodium from 'libsodium-wrappers';
 import * as cc from './cipher.consts';
 import { CipherDataInfo, Ciphers } from './ciphers-current';
 import { ensureArrayBuffer, getRandom, numToBytes } from './utils';
-import { kemKeyGen, KEMKeys } from './pqc';
 
 // V7 Contexts must be 8 bytes
 const KDF_CTX_SIGNING_V6 = "cipherdata signing key";
@@ -32,7 +31,6 @@ const KDF_CTX_HINT_V6 = "hint encryption key";
 const KDF_CTX_HINT_V7 = "Hint_Key";
 const KDF_CTX_BLOCK_V6 = "block encryption key";
 const KDF_CTX_BLOCK_V7 = "Blck_Key";
-const KDF_CTX_KEM_V7 = "KEM_Keys";
 
 
 export type PWDProvider =
@@ -52,7 +50,6 @@ export interface KeyProvider {
    getBlockCipherKey(blockNum: number): Promise<Uint8Array<ArrayBuffer>>;
    getSigningKey(): Promise<Uint8Array<ArrayBuffer>>;
    getHintCipherKeyAndIV(baseIV: Uint8Array<ArrayBuffer>): Promise<[Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>]>;
-   getKEMKeys(encrypting: boolean): Promise<KEMKeys>;
 };
 
 // IMPORTANT: This class caches calculated keys, and users must:
@@ -70,7 +67,6 @@ export abstract class BasePWDKeyProvider implements KeyProvider {
    protected _hint: string | undefined = undefined;
    protected _cdInfo: CipherDataInfo | undefined = undefined;
    protected _userCred: Uint8Array<ArrayBuffer>;
-   protected _kemKeys: KEMKeys | undefined = undefined;
 
    // _pwdProvider may be undefined when only hint or signing key is required
    constructor(
@@ -138,10 +134,6 @@ export abstract class BasePWDKeyProvider implements KeyProvider {
          this._cdInfo.hint = undefined;
          this._cdInfo = undefined;
       }
-      if (this._kemKeys) {
-         crypto.getRandomValues(this._kemKeys.secretKey);
-         crypto.getRandomValues(this._kemKeys.publicKey);
-      }
       for (const bk of this._bks) {
          if (bk) {
             crypto.getRandomValues(bk);
@@ -201,25 +193,12 @@ export abstract class BasePWDKeyProvider implements KeyProvider {
       return [this._hk, this._hIV!];
    }
 
-   public async getKEMKeys(
-      encrypting: boolean
-   ): Promise<KEMKeys> {
-      if (!this._kemKeys) {
-         this._kemKeys = await this._genKEMKeys(encrypting);
-         if (!this._kemKeys) {
-            throw new Error('Failed to generate KEM keys');
-         }
-      }
-      return this._kemKeys;
-   }
-
    protected abstract _genCipherKey(encrypting: boolean): Promise<Uint8Array<ArrayBuffer>>;
    protected abstract _genSigningKey(): Promise<Uint8Array<ArrayBuffer>>;
    protected abstract _genBlockCipherKey(blockNum: number): Promise<Uint8Array<ArrayBuffer>>;
    protected abstract _genHintCipherKeyAndIV(
       baseIV: Uint8Array<ArrayBuffer>
    ): Promise<[Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>]>;
-   protected abstract _genKEMKeys(encrypting: boolean): Promise<KEMKeys>;
 };
 
 
@@ -328,14 +307,6 @@ export class PWDKeyProvider extends BasePWDKeyProvider {
          this._genDerivedKey(this._userCred, ctx, 1),
          this._cdInfo?.ver === cc.VERSION6 ? baseIV : this._genDerivedKey(baseIV, ctx, 2)
       ];
-   }
-
-   protected override async _genKEMKeys(
-      encrypting: boolean
-   ): Promise<KEMKeys> {
-      const ek = await this.getCipherKey(encrypting);
-      const tmk = this._genDerivedKey(ek, KDF_CTX_KEM_V7, 0);
-      return kemKeyGen(tmk);
    }
 
    private _genDerivedKey(

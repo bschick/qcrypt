@@ -21,7 +21,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import * as cc from './cipher.consts';
 import { BasePWDKeyProvider, PWDProvider } from './keys';
-import { KEMKeys } from './pqc';
 
 // To geenrate matching keys, these must not change
 const KDF_INFO_SIGNING = "cipherdata signing key";
@@ -137,11 +136,11 @@ export class PWDKeyProviderOld extends BasePWDKeyProvider {
    }
 
    // Exported for testing and old deciphers, normal callers should not need this
-   protected override async _genHintCipherKeyAndIV(baseIV: Uint8Array<ArrayBuffer>): Promise<[Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>]> {   
+   protected override async _genHintCipherKeyAndIV(baseIV: Uint8Array<ArrayBuffer>): Promise<[Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>]> {
       if (!this._cdInfo) {
          throw new Error('Invalid state for hint key derivation');
       }
-   
+
       const hkMaterial = await crypto.subtle.importKey(
          'raw',
          this._userCred,
@@ -149,12 +148,12 @@ export class PWDKeyProviderOld extends BasePWDKeyProvider {
          false,
          ['deriveBits', 'deriveKey']
       );
-   
+
       // A bit of a hack, but subtle doesn't support other algorithms... so lie. This
       // is safe because the key is exported as bits and used in libsodium when not
       // AES-GCM. TODO: If more non-browser cipher are added, make this more generic.
       const dkAlg = 'AES-GCM';
-   
+
       let subtleKey: CryptoKey | undefined = await crypto.subtle.deriveKey(
          {
             name: 'HKDF',
@@ -167,17 +166,13 @@ export class PWDKeyProviderOld extends BasePWDKeyProvider {
          true,
          ['encrypt', 'decrypt']
       );
-   
+
       const exported = await crypto.subtle.exportKey("raw", subtleKey);
       subtleKey = undefined;
       return [new Uint8Array(exported), baseIV];
    }
-   
+
    protected override async _genBlockCipherKey(blockNum: number): Promise<Uint8Array<ArrayBuffer>> {
       throw new Error('Block cipher keys not supported for this cipher version');
-   }
-
-   protected override async _genKEMKeys(encrypting: boolean): Promise<KEMKeys> {
-      throw new Error('KEM keys not supported for this cipher version');
    }
 }
