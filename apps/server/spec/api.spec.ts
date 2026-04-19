@@ -445,7 +445,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
             );
 
             expect(bypass.status).toBe(401);
-            expect(bypass.rawText).toBe('challenge not valid');
+            expect(bypass.rawText).toBe('not authorized');
 
             // Same attack, but also forge userHandle to the victim. The challenge-binding
             // check should still fires first since the credId resolves to the attacker.
@@ -467,7 +467,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
                "",
             );
             expect(bypass2.status).toBe(401);
-            expect(bypass2.rawText).toBe('challenge not valid');
+            expect(bypass2.rawText).toBe('not authorized');
          } finally {
             if (attackerCredId && attackerCookie) {
                await deleteJson(

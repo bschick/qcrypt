@@ -71,7 +71,7 @@ import {
    type EncryptCommandOutput
 } from "@aws-sdk/client-kms";
 
-import { hkdfSync, randomInt } from 'node:crypto';
+import { hkdfSync, randomInt, randomBytes } from 'node:crypto';
 import { setTimeout } from 'node:timers/promises';
 import { sign, verify, decode, type JwtPayload } from 'jsonwebtoken';
 import { postConsistency, postLoadAAGUIDs, postMunge } from './internal';
@@ -338,6 +338,24 @@ async function postAuthVerify(
    }).go();
 
    if (!credResult || credResult.data.length === 0) {
+      // Timing parity for the credential-not-found branch.
+      try {
+         await getUnverifiedUser('AAAAAAAAAAAAAAAAAAAAAA');
+      } catch { /* expected */ }
+      try {
+         await verifyAuthenticationResponse({
+            response: body as AuthenticationResponseJSON,
+            expectedChallenge: challenge.data.challenge,
+            expectedOrigin: rpOrigin,
+            expectedRPID: rpID,
+            credential: {
+               publicKey: randomBytes(77),
+               id: 'AAAAAAAAAAAAAAAAAAAAAA',
+               counter: 0,
+               transports: ['internal']
+            }
+         });
+      } catch { /* expected */ }
       throw new AuthError();
    }
 
@@ -347,7 +365,7 @@ async function postAuthVerify(
    // If the auth challenge was bound to a specific user at creation, the verify must match.
    // Unbound auth challenges are allowed for discoverable credential flow.
    if (challenge.data.userId !== UnknownUserId && challenge.data.userId !== unverifiedUser.userId) {
-      throw new AuthError('challenge not valid');
+      throw new AuthError();
    }
 
    // userHandle is not part of the signed assertion — cross-check it against
@@ -374,7 +392,13 @@ async function postAuthVerify(
       });
    } catch (error) {
       console.error(error);
-      throw new AuthError('invalid authorization');
+      throw new AuthError();
+   }
+
+   // @simplewebauthn returns verified:false (without throwing) when signature check
+   // fails. Return same 401 as other failures to avoid leaking information
+   if (!verification.verified) {
+      throw new AuthError();
    }
 
    let startSession: VerifiedUserItem | undefined;
@@ -382,65 +406,63 @@ async function postAuthVerify(
       verified: verification.verified
    };
 
-   if (verification.verified) {
-      const verifiedUser = checkVerified(unverifiedUser, authenticator.userId);
-      startSession = verifiedUser
+   const verifiedUser = checkVerified(unverifiedUser, authenticator.userId);
+   startSession = verifiedUser
 
-      // ok if this fails
-      const patchAuths = Authenticators.patch({
-         userId: authenticator.userId,
-         credentialId: authenticator.credentialId
-      }).set({
-         lastLogin: Date.now()
-      }).go();
+   // ok if this fails
+   const patchAuths = Authenticators.patch({
+      userId: authenticator.userId,
+      credentialId: authenticator.credentialId
+   }).set({
+      lastLogin: Date.now()
+   }).go();
 
-      const patchUsers = Users.patch({
-         userId: verifiedUser.userId,
-      }).set({
-         lastCredentialId: authenticator.credentialId,
-         authCount: verifiedUser.authCount + 1
-      }).go();
+   const patchUsers = Users.patch({
+      userId: verifiedUser.userId,
+   }).set({
+      lastCredentialId: authenticator.credentialId,
+      authCount: verifiedUser.authCount + 1
+   }).go();
 
-      await Promise.all([patchAuths, patchUsers]);
+   await Promise.all([patchAuths, patchUsers]);
 
-      verifiedUser.lastCredentialId = authenticator.credentialId;
-      verifiedUser.authCount += 1;
+   verifiedUser.lastCredentialId = authenticator.credentialId;
+   verifiedUser.authCount += 1;
 
-      const includeUserCred = !!params.usercred;
-      const includeRecovery = !!params.recovery;
+   const includeUserCred = !!params.usercred;
+   const includeRecovery = !!params.recovery;
 
-      if (includeRecovery &&
-         (!verifiedUser.recoveryIdEnc || verifiedUser.recoveryIdEnc.length == 0)) {
-         const rand = new GenerateRandomCommand({
-            NumberOfBytes: cc.RECOVERYID_BYTES
-         });
-         const result = await kmsClient.send(rand);
-         const recoveryId = result.Plaintext;
+   if (includeRecovery &&
+      (!verifiedUser.recoveryIdEnc || verifiedUser.recoveryIdEnc.length == 0)) {
+      const rand = new GenerateRandomCommand({
+         NumberOfBytes: cc.RECOVERYID_BYTES
+      });
+      const result = await kmsClient.send(rand);
+      const recoveryId = result.Plaintext;
 
-         if (!recoveryId || recoveryId.byteLength != cc.RECOVERYID_BYTES) {
-            throw new Error("GenerateRandomCommand failure");
-         }
-
-         const recoveryIdEnc = await encryptField(
-            recoveryId,
-            { userId: verifiedUser.userId }
-         );
-
-         const patched = await Users.patch({
-            userId: verifiedUser.userId,
-         }).set({
-            recoveryIdEnc: recoveryIdEnc
-         }).go();
-
-         if (!patched || !patched.data) {
-            throw new ParamError('recovery update failed');
-         }
-
-         verifiedUser['recoveryIdEnc'] = recoveryIdEnc;
+      if (!recoveryId || recoveryId.byteLength != cc.RECOVERYID_BYTES) {
+         throw new Error("GenerateRandomCommand failure");
       }
 
-      responseContent = await makeLoginUserInfoResponse(verifiedUser, includeUserCred, includeRecovery);
+      const recoveryIdEnc = await encryptField(
+         recoveryId,
+         { userId: verifiedUser.userId }
+      );
+
+      const patched = await Users.patch({
+         userId: verifiedUser.userId,
+      }).set({
+         recoveryIdEnc: recoveryIdEnc
+      }).go();
+
+      if (!patched || !patched.data) {
+         throw new ParamError('recovery update failed');
+      }
+
+      verifiedUser['recoveryIdEnc'] = recoveryIdEnc;
    }
+
+   responseContent = await makeLoginUserInfoResponse(verifiedUser, includeUserCred, includeRecovery);
 
    // Let this happen async
    recordEvent(EventNames.AuthVerify, unverifiedUser.userId, authenticator.credentialId);
@@ -520,7 +542,7 @@ async function _doPostRegVerify(
       });
    } catch (err) {
       console.error(err);
-      throw new AuthError('invalid registration');
+      throw new AuthError();
    }
 
    // Should this be changed to throw and error if no verified?

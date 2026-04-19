@@ -20,8 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { describe, it, expect } from 'vitest';
-import { randomBytes } from 'node:crypto';
-import { postJson } from './common';
+import { createHash, randomBytes } from 'node:crypto';
+import { postJson, RP_ORIGIN } from './common';
 import { base64UrlDecode } from '../src/utils';
 
 type AllowCred = {
@@ -166,4 +166,73 @@ describe('auth/options credential shape', () => {
       }
       expect(ids.size).toBe(samples);
    });
+});
+
+// Builds a WebAuthn AuthenticationResponseJSON the server will accept
+// structurally — challenge, origin and rpIdHash all match — so the verify
+// reaches the ECDSA check, where it fails because we don't have the private
+// key. Used to prove that the credential-known and credential-unknown branches
+// return indistinguishable responses.
+function buildForgedAssertion(
+   credentialId: string,
+   challenge: string,
+   userId: string,
+   rpId: string,
+): Record<string, unknown> {
+   const clientDataJSON = Buffer.from(
+      JSON.stringify({
+         type: 'webauthn.get',
+         challenge,
+         origin: RP_ORIGIN,
+         crossOrigin: false,
+      }),
+      'utf8',
+   ).toString('base64url');
+   const rpIdHash = createHash('sha256').update(rpId).digest();
+   const flags = Buffer.from([0x05]); // UP | UV
+   const counter = Buffer.from([0, 0, 0, 0]);
+   const authenticatorData = Buffer.concat([rpIdHash, flags, counter]).toString('base64url');
+   return {
+      id: credentialId,
+      rawId: credentialId,
+      type: 'public-key',
+      challenge,
+      response: {
+         clientDataJSON,
+         authenticatorData,
+         signature: randomBytes(72).toString('base64url'),
+         userHandle: userId,
+      },
+      clientExtensionResults: {},
+   };
+}
+
+async function forgeAndVerify(userId: string) {
+   const opts = await postJson('/v1/auth/options', { userId }, {}, '');
+   expect(opts.status).toBe(200);
+   const credId = opts.data.allowCredentials[0].id;
+   const forged = buildForgedAssertion(credId, opts.data.challenge, userId, opts.data.rpId);
+   return postJson('/v1/auth/verify', forged, {}, '');
+}
+
+describe('auth/verify response parity', () => {
+
+   it('two different unknown userIds return indistinguishable 401 responses', async () => {
+      const a = await forgeAndVerify(unknownUserId());
+      const b = await forgeAndVerify(unknownUserId());
+      expect(a.status).toBe(401);
+      expect(b.status).toBe(401);
+      expect(a.rawText).toBe(b.rawText);
+   });
+
+   it.skipIf(process.env.QC_ENV === 'prod')(
+      'real userId with forged signature returns same status and body as unknown userId',
+      async () => {
+         const real = await forgeAndVerify(REAL_TEST_USER_ID);
+         const dummy = await forgeAndVerify(unknownUserId());
+         expect(real.status).toBe(401);
+         expect(dummy.status).toBe(401);
+         expect(real.rawText).toBe(dummy.rawText);
+      }
+   );
 });
