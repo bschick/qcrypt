@@ -1180,9 +1180,7 @@ async function postAuthOptions(
    } = httpDetails;
 
    let userId = UnknownUserId;
-
-   // Temporarily for backward compat, check params for userId
-   let unverifiedUserId = body?.userId ?? params?.userid;
+   let unverifiedUserId = body?.userId;
 
    // If no userid is provided, then we don't return allowed creds and
    // the user is forced to pick one on their own. That happens when the user is
