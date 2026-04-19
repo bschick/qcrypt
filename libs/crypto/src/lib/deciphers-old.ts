@@ -421,7 +421,7 @@ export class DecipherV4 extends Decipher {
          throw err;
       } finally {
          this._header = undefined;
-     }
+      }
    }
 
    public override async decryptBlockN(

@@ -333,9 +333,8 @@ export abstract class Encipher extends Ciphers {
    public abstract encryptBlockN(): Promise<CipherDataBlock>;
 };
 
-
-// Exported just for testing
-export class EncipherV7 extends Encipher {
+// Can handle version 6 and 7 because the code is very similar (exported for testing)
+export class EncipherV67 extends Encipher {
    /* V6/V7 CipherData Layout. Tags are just notation, and are not actually in the
     * data stream. All encodings have one block0 instance followed by zero or
     * more blockN instances
@@ -409,7 +408,7 @@ export class EncipherV7 extends Encipher {
    }
 
    public override protocolVersion(): number {
-      return cc.VERSION7;
+      return cc.CURRENT_VERSION;
    }
 
    // Overall order of operations for encryption
@@ -461,7 +460,7 @@ export class EncipherV7 extends Encipher {
             // If so proceed without a hint.
             if (hintBytes.byteLength > 0) {
                const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(iv);
-               encryptedHint = await EncipherV7._doEncrypt(
+               encryptedHint = await EncipherV67._doEncrypt(
                   cdInfo.alg,
                   hk,
                   hIV,
@@ -482,7 +481,7 @@ export class EncipherV7 extends Encipher {
          });
 
          // Only block0 uses the root cipher key. Simplifies backward compat and is no less secure
-         const encryptedData = await EncipherV7._doEncrypt(
+         const encryptedData = await EncipherV67._doEncrypt(
             cdInfo.alg,
             ek,
             iv,
@@ -552,7 +551,7 @@ export class EncipherV7 extends Encipher {
             term: done,
          });
 
-         const encryptedData = await EncipherV7._doEncrypt(
+         const encryptedData = await EncipherV67._doEncrypt(
             cdInfo.alg,
             bk,
             iv,
@@ -666,7 +665,7 @@ export class EncipherV7 extends Encipher {
       const payloadBytes = encryptedData.byteLength + additionalData.byteLength;
       // Packer validates ranges as values are added
       const packer = new Packer(cc.HEADER_BYTES_6P, cc.MAC_BYTES);
-      packer.ver = cc.VERSION7;
+      packer.ver = cc.CURRENT_VERSION;
       packer.size = payloadBytes;
 
       const sk = await this._keyProvider.getSigningKey();
@@ -953,7 +952,7 @@ export class DecipherV67 extends Decipher {
    }
 
    public override protocolVersion(): number {
-      return cc.VERSION7;
+      return cc.CURRENT_VERSION;
    }
 
    private async _decodeHeader(header?: Uint8Array): Promise<boolean> {

@@ -1326,7 +1326,6 @@ async function postRegOptions(
       const uIdBytes = randData.slice(randOffset, randOffset + cc.USERID_BYTES);
       randOffset += cc.USERID_BYTES;
 
-
       uId = base64UrlEncode(uIdBytes)!;
 
       const users = await Users.query.byUserId({
@@ -1462,6 +1461,7 @@ async function makeLoginUserInfoResponse(
       throw new AuthError('auth setup error');
    }
 }
+
 
 async function makeUserInfoResponse(
    verifiedUser: VerifiedUserItem,

@@ -27,7 +27,7 @@ import {
    Ciphers,
    Encipher,
    Decipher,
-   EncipherV7,
+   EncipherV67,
    DecipherV67,
    CipherState,
    CipherDataInfo,
@@ -68,7 +68,7 @@ export function latestEncipher(
 
    const slt = getRandom(cc.SLT_BYTES);
    keyProvider.setCipherDataInfo({
-      ver: cc.VERSION7,
+      ver: cc.CURRENT_VERSION,
       alg,
       ic,
       lp,
@@ -77,7 +77,7 @@ export function latestEncipher(
    });
 
    const reader = new BYOBStreamReader(clearStream);
-   return new EncipherV7(keyProvider, reader);
+   return new EncipherV67(keyProvider, reader);
 }
 
 

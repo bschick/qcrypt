@@ -24,7 +24,7 @@ import * as cc from './cipher.consts';
 import {
    BYOBStreamReader,
    streamDecipher, latestEncipher,
-   EncipherV7,
+   EncipherV67,
    Ciphers
 } from '../index';
 import type { CipherDataBlock } from '../index';
@@ -67,7 +67,7 @@ describe("Encryption and decryption", function () {
    });
 
    async function signAndRepack(
-      encipher: EncipherV7,
+      encipher: EncipherV67,
       block: CipherDataBlock,
       keyProvider: PWDKeyProvider
    ): Promise<Uint8Array> {
@@ -133,7 +133,7 @@ describe("Encryption and decryption", function () {
          });
 
          const reader = new BYOBStreamReader(clearStream);
-         const encipher = new EncipherV7(keyProvider, reader);
+         const encipher = new EncipherV67(keyProvider, reader);
          const cipherBlock = await encipher.encryptBlock0();
 
          // Create fresh key providers with same salt. Original gets purged after encrypt
@@ -595,7 +595,7 @@ describe("Encryption and decryption", function () {
       const hint = '🌧️';
       // base64url userCred for use in commandline for recreation (see Python helper function):
       // Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=
-      // creating the proper cipherdata requires a hacked/rebuilt cmdline that flips flags to 1 then 0 (search chipers-current for "term:") and READ_SIZE_START to 20 
+      // creating the proper cipherdata requires a hacked/rebuilt cmdline that flips flags to 1 then 0 (search chipers-current for "term:") and READ_SIZE_START to 20
       const userCred = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
       const [cipherStream] = streamFromBytes(new Uint8Array([24, 212, 67, 36, 232, 163, 170, 119, 145, 211, 157, 196, 172, 177, 63, 167, 12, 22, 20, 81, 250, 166, 94, 226, 132, 226, 253, 243, 133, 249, 38, 46, 6, 0, 108, 0, 0, 1, 2, 0, 85, 112, 249, 39, 40, 215, 94, 63, 122, 204, 193, 102, 64, 65, 163, 82, 69, 123, 185, 109, 204, 27, 14, 222, 237, 33, 135, 94, 11, 145, 15, 204, 88, 25, 166, 108, 158, 106, 108, 144, 64, 119, 27, 0, 0, 23, 249, 240, 198, 170, 184, 70, 4, 93, 213, 139, 151, 175, 168, 83, 58, 110, 57, 141, 165, 35, 67, 130, 224, 145, 19, 200, 206, 7, 210, 27, 238, 115, 65, 227, 65, 86, 173, 49, 27, 61, 214, 163, 247, 237, 148, 168, 221, 228, 49, 197, 130, 72, 232, 83, 9, 108, 84, 44, 172, 115, 101, 0, 244, 178, 175, 216, 196, 5, 182, 210, 63, 180, 227, 122, 3, 70, 210, 255, 100, 185, 98, 226, 215, 183, 55, 131, 223, 16, 182, 177, 109, 6, 0, 52, 0, 0, 0, 2, 0, 117, 159, 80, 68, 25, 102, 215, 193, 132, 143, 200, 39, 19, 204, 47, 81, 213, 236, 77, 70, 22, 228, 220, 182, 58, 75, 143, 225, 66, 207, 162, 138, 118, 145, 133, 192, 55, 108, 217, 36, 155, 122, 39, 41, 30, 18, 66, 109, 59]));
 
@@ -627,7 +627,7 @@ describe("Encryption and decryption", function () {
       const hint = '🌧️';
       // base64url userCred for use in commandline for recreation (see Python helper function):
       // Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=
-      // creating the proper cipherdata requires a hacked/rebuilt cmdline that flips flags to 1 then 0 (search chipers-current for "term:") and READ_SIZE_START to 20 
+      // creating the proper cipherdata requires a hacked/rebuilt cmdline that flips flags to 1 then 0 (search chipers-current for "term:") and READ_SIZE_START to 20
       const userCred = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
       const [cipherStream] = streamFromBytes(new Uint8Array([141, 83, 66, 190, 110, 251, 166, 187, 71, 125, 210, 226, 11, 78, 119, 209, 171, 159, 122, 214, 106, 240, 112, 186, 25, 93, 103, 22, 128, 132, 199, 19, 7, 0, 108, 0, 0, 1, 2, 0, 92, 74, 84, 65, 34, 10, 243, 84, 13, 1, 22, 55, 87, 6, 78, 255, 133, 159, 128, 106, 169, 207, 197, 14, 195, 35, 113, 147, 9, 242, 219, 186, 12, 247, 169, 72, 114, 97, 143, 202, 64, 119, 27, 0, 0, 23, 196, 177, 88, 75, 80, 138, 135, 239, 81, 171, 126, 216, 3, 124, 104, 97, 223, 40, 148, 244, 182, 147, 109, 194, 25, 51, 238, 225, 217, 186, 208, 91, 201, 96, 184, 13, 207, 83, 154, 30, 3, 237, 79, 100, 5, 216, 16, 133, 58, 175, 88, 105, 209, 42, 54, 220, 29, 215, 160, 150, 43, 146, 208, 138, 223, 135, 87, 159, 161, 42, 181, 134, 173, 114, 113, 94, 158, 62, 40, 27, 88, 105, 104, 214, 211, 146, 172, 108, 91, 143, 23, 7, 0, 52, 0, 0, 0, 2, 0, 4, 10, 91, 77, 71, 138, 179, 153, 144, 43, 138, 95, 179, 37, 198, 58, 190, 126, 108, 132, 52, 150, 105, 106, 22, 50, 47, 219, 39, 104, 157, 223, 104, 25, 17, 192, 153, 144, 202, 69, 80, 240, 2, 82, 216, 83, 183, 175, 15]));
 
