@@ -46,7 +46,7 @@ import { AcceptableState, StrengthMeterComponent } from '../strengthmeter/streng
 import { AuthenticatorService } from '../../services/authenticator.service';
 import { BubbleDirective } from '../bubble/bubble.directive';
 import * as cc from '@qcrypt/crypto/consts';
-import { bytesToBase64 } from '@qcrypt/crypto';
+import { bytesToBase64, Ciphers } from '@qcrypt/crypto';
 import { CipherService, CipherDataInfo } from '../../services/cipher.service';
 
 
@@ -190,7 +190,6 @@ export class CipherInfoDialog {
    public ic!: string;
    public alg!: string;
    public slt!: string;
-   public iv!: string;
    public ver!: string;
    public lps!: number;
    public hint?: string;
@@ -205,8 +204,7 @@ export class CipherInfoDialog {
          this.error = 'The wrong passkey was selected or the cipher armor is invalid';
       } else {
          this.ic = data.ic.toLocaleString();
-         this.alg = this.cipherSvc.algDescription(data.alg);
-         this.iv = bytesToBase64(data.iv as Uint8Array);
+         this.alg = Ciphers.algDescription(data.alg);
          this.slt = bytesToBase64(data.slt as Uint8Array);
          this.hint = data.hint;
          this.lps = data.lpEnd;

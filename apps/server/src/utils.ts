@@ -22,6 +22,7 @@ SOFTWARE. */
 
 import { FilterXSS } from 'xss';
 import { Buffer } from "node:buffer";
+import * as cc from './consts.ts';
 
 
 export class ParamError extends Error {
@@ -96,4 +97,27 @@ export function timingSafeEqual(a: string, b: string): boolean {
       diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
    }
    return diff === 0;
+}
+
+/* Javascript converts to signed 32 bit int when using bit shifting
+   and masking, so do this instead. Count is the number of bytes
+   used to pack the number.  */
+export function numToBytes(num: number, count: number): Uint8Array<ArrayBuffer> {
+   if (count < 1 || num >= Math.pow(256, count)) {
+      throw new Error(`Invalid arguments ${count} for ${num}`);
+   }
+   let arr = new Uint8Array(count);
+   for (let i = 0; i < count; ++i) {
+      arr[i] = num % 256;
+      num = Math.floor(num / 256);
+   }
+   return arr;
+}
+
+export function bytesToNum(arr: Uint8Array): number {
+   let num = 0;
+   for (let i = arr.length - 1; i >= 0; --i) {
+      num = num * 256 + arr[i];
+   }
+   return num;
 }

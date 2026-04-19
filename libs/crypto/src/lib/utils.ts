@@ -32,7 +32,6 @@ export function ensureArrayBuffer(value: Uint8Array): Uint8Array<ArrayBuffer> {
    if (hasArrayBuffer(value)) {
       return value;
    } else {
-      //@ts-ignore (something in angular tool-chain seems to be using old types)
       return value.slice(0);
    }
 }
@@ -88,6 +87,18 @@ export function bytesToNum(arr: Uint8Array): number {
    }
    return num;
 }
+
+
+export function byteCount(num: number): number {
+   if (num < 0) {
+      throw new Error("Value must be an unsigned integer (non-negative).");
+   }
+   if (num === 0) {
+      return 1;
+   }
+   return Math.ceil(Math.log2(num + 1) / 8);
+}
+
 
 export function browserSupportsFilePickers(): boolean {
    //@ts-ignore
@@ -469,8 +480,8 @@ export async function selectWriteableTxtFile(baseName?: string): Promise<FileSys
    return selectWriteableFileImpl(options);
 }
 
-export function getRandom48(): Uint8Array {
-   return sodium.randombytes_buf(48);
+export function getRandom(length: number): Uint8Array<ArrayBuffer> {
+   return ensureArrayBuffer(sodium.randombytes_buf(length));
 }
 
 // Helper function to get bytes from a string, truncated to a maximum byte length, ensuring valid UTF-8

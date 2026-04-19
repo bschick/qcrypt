@@ -45,7 +45,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { AuthenticatorService, ACTIVITY_TIMEOUT } from '../../services/authenticator.service';
 import { CipherService } from '../../services/cipher.service';
-import { makeTookMsg } from '@qcrypt/crypto';
+import { Ciphers, makeTookMsg } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import { HttpParams } from '@angular/common/http';
 
@@ -123,7 +123,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
    private _optionsLoaded = false;
    private _lastReminder = this.REMINDER_DEFAULT;
-   private _algorithmList = ['X20-PLY'];
+   private _algorithmList: cc.CipherAlgs[] = ['X20-PLY'];
    private _userId: string | null = null;
 
    @ViewChild('formatLabel') formatLabel!: ElementRef;
@@ -301,7 +301,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       return this.loopsInput.value || this.LOOPS_DEFAULT;
    }
 
-   get algorithms(): string[] {
+   get algorithms(): cc.CipherAlgs[] {
       return this._algorithmList.slice(0, this.loops);
    }
 
@@ -348,7 +348,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
             algs = [alg];
          }
 
-         if (this.cipherSvc.validateAlgs(algs)) {
+         if (Ciphers.validateAlgs(algs)) {
             this._algorithmList = algs;
          }
       }
@@ -427,7 +427,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       this.lsSet('hidepwd', hide);
    }
 
-   onModesChange(modes: string[]): void {
+   onModesChange(modes: cc.CipherAlgs[]): void {
       // Note that modes length is the max number of modes that have
       // been set, which may be larger than the current # of loops
       // This is done to preserve default values

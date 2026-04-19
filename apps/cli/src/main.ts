@@ -3,7 +3,7 @@ import sodium from 'libsodium-wrappers';
 import {
    decryptStream, encryptStream, getCipherStreamInfo,
    makeCipherArmor, parseCipherArmor,
-   base64ToBytes, bytesToBase64, readStreamAll,
+   base64ToBytes, bytesToBase64, readStreamAll, Ciphers,
 } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import fs from 'fs';
@@ -198,10 +198,9 @@ async function info(
          cipherStream
       );
 
-      io.pipedOut.write(`Cipher and Mode   : ${cc.AlgInfo[cdInfo.alg]['description']}
+      io.pipedOut.write(`Cipher and Mode   : ${cc.AlgInfo[cdInfo.alg].description}
 PBKDF2 Iterations : ${cdInfo.ic}
 Salt (b64Url)     : ${bytesToBase64(cdInfo.slt)}
-IV/Nonce (b64Url) : ${bytesToBase64(cdInfo.iv)}
 Password Hint     : ${cdInfo.hint}
 Loops             : ${cdInfo.lpEnd}
 Version           : ${cdInfo.ver}\n`);
@@ -210,7 +209,7 @@ Version           : ${cdInfo.ver}\n`);
       if (args.debug) {
          console.error(err);
       } else {
-         console.error('\nget info failed: ', (err as any).message);
+         console.error('\nget info failed: ', (err as Error).message);
       }
       process.exitCode = 1;
    }
@@ -243,21 +242,21 @@ async function encrypt(
 
       args.loops = Math.max(Math.min(args.loops, 6), 1);
 
-      let nextAlg = 'X20-PLY';
-      let keys = Object.keys(cc.AlgInfo);
+      let nextAlg: cc.CipherAlgs = 'X20-PLY';
+      const keys = Ciphers.algs();
       let choices = keys.map((key) => {
-         return { name: cc.AlgInfo[key]['description'] as string, value: key };
+         return { name: cc.AlgInfo[key].description, value: key };
       });
 
-      let algs = [];
+      let algs: cc.CipherAlgs[] = [];
 
       for (let l = 1; l <= args.loops; l++) {
          const lpMsg = args.loops > 1 ? ` for loop ${l} of ${args.loops}` : '';
-         let alg;
+         let alg: cc.CipherAlgs;
          if (args.algs && args.algs[l - 1]) {
-            alg = args.algs[l - 1];
+            alg = Ciphers.validateAlg(args.algs[l - 1]);
             if (!args.silent) {
-               showAnswered(`Select Cipher Mode${lpMsg}:`, cc.AlgInfo[alg]['description'] as string, io);
+               showAnswered(`Select Cipher Mode${lpMsg}:`, cc.AlgInfo[alg].description, io);
             }
          } else {
             alg = nextAlg;
@@ -343,7 +342,7 @@ async function encrypt(
       if (args.debug) {
          console.error(err);
       } else {
-         console.error('\nencryption failed: ', (err as any).message);
+         console.error('\nencryption failed: ', (err as Error).message);
       }
       process.exitCode = 1;
    }
@@ -360,8 +359,8 @@ async function decrypt(
 ): Promise<void> {
 
    try {
-      const userCred = await getUserCred(args, io);
       const rawStream = await getCipherStream(io, args.silent);
+      const userCred = await getUserCred(args, io);
 
       let cipherStream: ReadableStream<Uint8Array>;
       if (args.silent) {
@@ -409,7 +408,7 @@ async function decrypt(
       if (args.debug) {
          console.error(err);
       } else {
-         console.error('\ndecryption failed: ', (err as any).message);
+         console.error('\ndecryption failed: ', (err as Error).message);
       }
       process.exitCode = 1;
    }
@@ -425,15 +424,8 @@ function CoerceNumber(argName: string) {
    };
 }
 
-function CoerceAlgs(algs: string[]) {
-   const upperAlgs = algs.map((alg: string) => alg.toUpperCase());
-   const validChoices = Object.keys(cc.AlgInfo);
-   for (const alg of upperAlgs) {
-      if (!validChoices.includes(alg)) {
-         throw new Error(`Unsupported cipher mode: ${alg}. Valid choices are: ${validChoices.join(', ')}`);
-      }
-   }
-   return upperAlgs;
+function CoerceAlgs(algs: string[]): cc.CipherAlgs[] {
+   return Ciphers.validateAlgs(algs.map((alg: string) => alg.toUpperCase()));
 }
 
 //yargs seems to have a bug with nargs not working as described... if the credential starts with

@@ -21,16 +21,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import * as cc from './cipher.consts';
-import { BYOBStreamReader, bytesToNum } from "./utils";
+import { BYOBStreamReader, bytesToNum, getRandom } from "./utils";
 
 import {
    Ciphers,
    Encipher,
    Decipher,
-   EncipherV6,
-   DecipherV6,
-   EParams,
-   PWDProvider,
+   EncipherV67,
+   DecipherV67,
    CipherState,
    CipherDataInfo,
 }  from "./ciphers-current"
@@ -40,7 +38,8 @@ import {
    DecipherV4,
    DecipherV5
 }  from "./deciphers-old"
-
+import { PWDKeyProvider, PWDProvider } from './keys';
+import { PWDKeyProviderOld } from './keys-old';
 
 export {
    Ciphers,
@@ -50,24 +49,44 @@ export {
 };
 
 export type {
-   EParams,
    PWDProvider,
    CipherDataInfo
 };
 
 export function latestEncipher(
    userCred: Uint8Array,
-   clearStream: ReadableStream<Uint8Array>
+   alg: cc.CipherAlgs,
+   ic: number,
+   lp: number,
+   lpEnd: number,
+   clearStream: ReadableStream<Uint8Array>,
+   pwdProvider: PWDProvider
 ): Encipher {
+
+   // parameters are validated by PWDKeyProvider constructor and setCipherDataInfo
+   const keyProvider = new PWDKeyProvider(userCred, pwdProvider);
+
+   const slt = getRandom(cc.SLT_BYTES);
+   keyProvider.setCipherDataInfo({
+      ver: cc.CURRENT_VERSION,
+      alg,
+      ic,
+      lp,
+      lpEnd,
+      slt
+   });
+
    const reader = new BYOBStreamReader(clearStream);
-   return new EncipherV6(userCred, reader);
+   return new EncipherV67(keyProvider, reader);
 }
 
 
-// Return appropriate version of Decipher
+// Return appropriate version of Decipher. pwdProvider can be undefined when
+// only CipherDataInfo is needed
 export async function streamDecipher(
    userCred: Uint8Array,
-   cipherStream: ReadableStream<Uint8Array>
+   cipherStream: ReadableStream<Uint8Array>,
+   pwdProvider: PWDProvider | undefined
 ): Promise<Decipher> {
 
    let decipher: Decipher;
@@ -86,20 +105,21 @@ export async function streamDecipher(
    // version is >=4). Fortunately ALG_BYTES and VER_BYTES are equal.
    const verOrAlg = bytesToNum(new Uint8Array(header.buffer, cc.MAC_BYTES, cc.VER_BYTES));
 
-   if (verOrAlg == cc.VERSION6) {
-      decipher = new DecipherV6(userCred, reader, header);
-   }
-   else if (verOrAlg == cc.VERSION5) {
-      decipher = new DecipherV5(userCred, reader, header);
-   } else if (verOrAlg == cc.VERSION4) {
-      decipher = new DecipherV4(userCred, reader, header);
-   } else if (verOrAlg < cc.V1_BELOW && verOrAlg > 0) {
-      decipher = new DecipherV1(userCred, reader, header);
-   } else {
-      throw new Error('Invalid version: ' + verOrAlg);
-   }
 
+   if (verOrAlg == cc.VERSION6 || verOrAlg == cc.VERSION7) {
+      const keyProvider = new PWDKeyProvider(userCred, pwdProvider);
+      decipher = new DecipherV67(keyProvider, reader, header);
+   } else {
+      const keyProviderOld = new PWDKeyProviderOld(userCred, pwdProvider);
+      if (verOrAlg == cc.VERSION5) {
+         decipher = new DecipherV5(keyProviderOld, reader, header);
+      } else if (verOrAlg == cc.VERSION4) {
+         decipher = new DecipherV4(keyProviderOld, reader, header);
+      } else if (verOrAlg < cc.V1_BELOW && verOrAlg > 0) {
+         decipher = new DecipherV1(keyProviderOld, reader, header);
+      } else {
+         throw new Error('Invalid version: ' + verOrAlg);
+      }
+   }
    return decipher;
 }
-
-

@@ -24,18 +24,16 @@ import * as cc from './cipher.consts';
 import {
    numToBytes,
    BYOBStreamReader,
-   getArrayBuffer,
    ensureArrayBuffer
 } from './utils';
 
 import {
-   Ciphers,
    Decipher,
    CipherState,
    Extractor,
-   KDF_INFO_SIGNING,
-   KDF_INFO_HINT
+   CipherDataInfo,
 } from './ciphers-current';
+import { KeyProvider } from './keys';
 
 
 export class DecipherV1 extends Decipher {
@@ -56,11 +54,11 @@ export class DecipherV1 extends Decipher {
    private _headerish?: Uint8Array;
 
    constructor(
-      userCred: Uint8Array,
+      keyProvider: KeyProvider,
       reader: BYOBStreamReader,
       headerish?: Uint8Array
    ) {
-      super(userCred, reader);
+      super(keyProvider, reader);
 
       // V1 didn't really have a header, save the data to combine
       // with the rest of the stream for decoding
@@ -82,10 +80,6 @@ export class DecipherV1 extends Decipher {
          // May be called multiple times calling getCipherDataInfo or others.
          if (this._state == CipherState.Block0Decoded) {
             return;
-         }
-
-         if (this._sk) {
-            throw new Error('Decipher unexpected signing key');
          }
 
          // This isn't very efficient, but it simplifies object creation and V4 logic
@@ -112,8 +106,8 @@ export class DecipherV1 extends Decipher {
          const mac = extractor.mac;
          const alg = extractor.alg;
          const iv = extractor.iv;
-         this._slt = extractor.slt;
-         this._ic = extractor.ic;
+         const slt = extractor.slt;
+         const ic = extractor.ic;
          const ver = extractor.ver;
          if (ver != cc.VERSION1) {
             throw new Error('Invalid version of: ' + ver);
@@ -123,12 +117,12 @@ export class DecipherV1 extends Decipher {
 
          // Repack because we don't have the contiguous data any longer
          const additionalData = DecipherV1._encodeAdditionalData({
-            alg: alg,
-            iv: iv,
-            ver: ver,
-            ic: this._ic,
-            slt: this._slt,
-            encryptedHint: encryptedHint
+            alg,
+            iv,
+            ver,
+            ic,
+            slt,
+            encryptedHint
          });
 
          this._blockData = {
@@ -142,7 +136,15 @@ export class DecipherV1 extends Decipher {
             additionalData: additionalData
          }
 
-         this._sk = await _genSigningKeyOld(this._userCred!, this._slt);
+         const cdInfo: CipherDataInfo = {
+            ver,
+            alg,
+            ic,
+            lp: 1,
+            lpEnd: 1,
+            slt
+         };
+         this._keyProvider.setCipherDataInfo(cdInfo);
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we  have the signing key and data.
@@ -153,18 +155,16 @@ export class DecipherV1 extends Decipher {
             throw new Error('Invalid MAC error');
          }
 
-         let hint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
          if (encryptedHint!.byteLength != 0) {
-            let hk: Uint8Array | undefined = await _genHintCipherKeyOld(this._blockData!.alg!, this._userCred!, this._slt);
-            this._hint = await Decipher._doDecrypt(
-               this._blockData!.alg!,
+            const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(iv);
+            const hintBytes = await Decipher._doDecrypt(
+               alg,
                hk,
-               this._blockData!.iv!,
+               hIV,
                encryptedHint
             );
-
-            crypto.getRandomValues(hk);
-            hk = undefined;
+            cdInfo.hint = new TextDecoder().decode(hintBytes);
+            this._keyProvider.setCipherDataInfo(cdInfo);
          }
 
          this._state = CipherState.Block0Decoded;
@@ -180,7 +180,7 @@ export class DecipherV1 extends Decipher {
 
    private async _verifyMAC(): Promise<boolean> {
 
-      if (!this._blockData || !this._blockData.additionalData || !this._blockData.encryptedData || !this._sk || !this._blockData) {
+      if (!this._blockData || !this._blockData.additionalData || !this._blockData.encryptedData || !this._blockData) {
          throw new Error('Invalid MAC data');
       }
 
@@ -188,17 +188,19 @@ export class DecipherV1 extends Decipher {
       data.set(this._blockData.additionalData);
       data.set(this._blockData.encryptedData, this._blockData.additionalData.byteLength);
 
+      const sk = await this._keyProvider.getSigningKey();
+
       // V1 uses HMAC from webcrypto
-      let sk: CryptoKey | undefined = await crypto.subtle.importKey(
+      let subtleSK: CryptoKey | undefined = await crypto.subtle.importKey(
          'raw',
-         getArrayBuffer(this._sk),
+         sk,
          { name: 'HMAC', hash: 'SHA-256', length: 256 },
          false,
          ['verify']
       );
 
-      const valid: boolean = await crypto.subtle.verify('HMAC', sk, this._blockData.mac, data);
-      sk = undefined;
+      const valid: boolean = await crypto.subtle.verify('HMAC', subtleSK, this._blockData.mac, data);
+      subtleSK = undefined;
       if (valid) {
          return true;
       }
@@ -269,11 +271,11 @@ export class DecipherV4 extends Decipher {
    private _header?: Uint8Array;
 
    constructor(
-      userCred: Uint8Array,
+      keyProvider: KeyProvider,
       reader: BYOBStreamReader,
       header?: Uint8Array
    ) {
-      super(userCred, reader);
+      super(keyProvider, reader);
       this._header = header;
    }
 
@@ -346,12 +348,7 @@ export class DecipherV4 extends Decipher {
             return;
          }
 
-         if (this._sk) {
-            throw new Error('Decipher unexpected signing key');
-         }
-
          await this._decodeHeader(this._header);
-
          if (!this._blockData) {
             throw new Error('Data not initialized');
          }
@@ -372,9 +369,9 @@ export class DecipherV4 extends Decipher {
          // Order must be invariant
          this._blockData.alg = extractor.alg;
          this._blockData.iv = extractor.iv;
-         this._slt = extractor.slt;
-         this._ic = extractor.ic;
-         [this._lp, this._lpEnd] = extractor.lpp();
+         const slt = extractor.slt;
+         const ic = extractor.ic;
+         const [lp, lpEnd] = extractor.lpp();
          const encryptedHint = extractor.hint;
          this._blockData.encryptedData = extractor.remainder('edata');
 
@@ -385,7 +382,15 @@ export class DecipherV4 extends Decipher {
             extractor.offset - this._blockData.encryptedData.byteLength
          );
 
-         this._sk = await _genSigningKeyOld(this._userCred!, this._slt);
+         const cdInfo: CipherDataInfo = {
+            ver: this._blockData.ver,
+            alg: this._blockData.alg,
+            ic: ic,
+            lp: lp,
+            lpEnd: lpEnd,
+            slt: slt
+         };
+         this._keyProvider.setCipherDataInfo(cdInfo);
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we have the signing key and data.
@@ -398,16 +403,15 @@ export class DecipherV4 extends Decipher {
 
          let hint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
          if (encryptedHint!.byteLength != 0) {
-            let hk: Uint8Array | undefined = await _genHintCipherKeyOld(this._blockData.alg, this._userCred!, this._slt);
-            this._hint = await Decipher._doDecrypt(
+            const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(this._blockData.iv);
+            const hintBytes = await Decipher._doDecrypt(
                this._blockData.alg,
                hk,
-               this._blockData.iv,
+               hIV,
                encryptedHint
             );
-
-            crypto.getRandomValues(hk);
-            hk = undefined;
+            cdInfo.hint = new TextDecoder().decode(hintBytes);
+            this._keyProvider.setCipherDataInfo(cdInfo);
          }
 
          this._state = CipherState.Block0Decoded;
@@ -428,10 +432,6 @@ export class DecipherV4 extends Decipher {
             throw new Error(`Decipher invalid state ${this._state}`);
          }
 
-         if (!this._sk || !this._ek) {
-            throw new Error('Data not initialized, decrypt block0 first');
-         }
-
          // This does MAC check
          await this._decodeBlockN();
          //@ts-ignore
@@ -440,13 +440,14 @@ export class DecipherV4 extends Decipher {
             return new Uint8Array(0);
          }
 
-         if (!this._blockData || !this._blockData.alg || !this._ek || !this._blockData.iv || !this._blockData.encryptedData) {
+         if (!this._blockData || !this._blockData.alg || !this._blockData.iv || !this._blockData.encryptedData) {
             throw new Error('Data not initialized');
          }
 
+         const ek = await this._keyProvider.getCipherKey(false);
          const decrypted = await Decipher._doDecrypt(
             this._blockData.alg,
-            this._ek,
+            ek,
             this._blockData.iv,
             this._blockData.encryptedData,
             this._blockData.additionalData,
@@ -520,7 +521,7 @@ export class DecipherV4 extends Decipher {
    protected async _verifyMAC(): Promise<boolean> {
 
       if (!this._blockData || !this._blockData.payloadSize || !this._blockData.ver || !this._blockData.additionalData ||
-         !this._sk || !this._blockData.encryptedData || !this._blockData.mac) {
+          !this._blockData.encryptedData || !this._blockData.mac) {
          throw new Error('Data not initialized');
       }
 
@@ -531,7 +532,8 @@ export class DecipherV4 extends Decipher {
       headerPortion.set(encVer);
       headerPortion.set(encSizeBytes, cc.VER_BYTES);
 
-      const state = sodium.crypto_generichash_init(this._sk, cc.MAC_BYTES);
+      const sk = await this._keyProvider.getSigningKey();
+      const state = sodium.crypto_generichash_init(sk, cc.MAC_BYTES);
       sodium.crypto_generichash_update(state, headerPortion);
       sodium.crypto_generichash_update(state, this._blockData.additionalData);
       sodium.crypto_generichash_update(state, this._blockData.encryptedData);
@@ -601,7 +603,7 @@ export class DecipherV5 extends DecipherV4 {
    protected override async _verifyMAC(): Promise<boolean> {
 
       if (!this._blockData || !this._blockData.payloadSize || !this._blockData.ver || !this._blockData.additionalData ||
-         !this._sk || !this._blockData.encryptedData || !this._blockData.mac || !this._lastMac) {
+         !this._blockData.encryptedData || !this._blockData.mac || !this._lastMac) {
          throw new Error('Data not initialized');
       }
 
@@ -614,7 +616,8 @@ export class DecipherV5 extends DecipherV4 {
       headerPortion.set(encSizeBytes, cc.VER_BYTES);
       headerPortion.set(encFlags, cc.VER_BYTES + cc.PAYLOAD_SIZE_BYTES);
 
-      const state = sodium.crypto_generichash_init(this._sk, cc.MAC_BYTES);
+      const sk = await this._keyProvider.getSigningKey();
+      const state = sodium.crypto_generichash_init(sk, cc.MAC_BYTES);
 
       sodium.crypto_generichash_update(state, headerPortion);
       sodium.crypto_generichash_update(state, this._blockData.additionalData);
@@ -631,93 +634,4 @@ export class DecipherV5 extends DecipherV4 {
 
       throw new Error('Invalid MAC signature');
    }
-}
-
-// Exported for testing, normal callers should not need this
-export async function _genSigningKeyOld(
-   userCred: Uint8Array,
-   slt: Uint8Array
-): Promise<Uint8Array<ArrayBuffer>> {
-
-   if (userCred.byteLength != cc.USERCRED_BYTES) {
-      throw new Error('Invalid userCred length of: ' + userCred.byteLength);
-   }
-   if (slt.byteLength != cc.SLT_BYTES) {
-      throw new Error("Invalid slt length of: " + slt.byteLength);
-   }
-
-   const skMaterial = await crypto.subtle.importKey(
-      'raw',
-      getArrayBuffer(userCred),
-      'HKDF',
-      false,
-      ['deriveBits', 'deriveKey']
-   );
-
-   let subtleKey: CryptoKey | undefined = await crypto.subtle.deriveKey(
-      {
-         name: 'HKDF',
-         salt: getArrayBuffer(slt),
-         hash: 'SHA-512',
-         info: new TextEncoder().encode(KDF_INFO_SIGNING)
-      },
-      skMaterial,
-      { name: 'HMAC', hash: 'SHA-256', length: 256 },
-      true,
-      ['sign', 'verify']
-   );
-
-   // skMaterial is not extractable, so doesn't need clear
-
-   const exported = await crypto.subtle.exportKey("raw", subtleKey);
-   subtleKey = undefined;
-   return new Uint8Array(exported);
-}
-
-// Exported for testing and old deciphers, normal callers should not need this
-export async function _genHintCipherKeyOld(
-   alg: string,
-   userCred: Uint8Array,
-   slt: Uint8Array
-): Promise<Uint8Array<ArrayBuffer>> {
-
-   if (!Ciphers.validateAlg(alg)) {
-      throw new Error('Invalid alg: ' + alg);
-   }
-   if (userCred.byteLength != cc.USERCRED_BYTES) {
-      throw new Error('Invalid userCred length of: ' + userCred.byteLength);
-   }
-   if (slt.byteLength != cc.SLT_BYTES) {
-      throw new Error("Invalid slt length of: " + slt.byteLength);
-   }
-
-   const hkMaterial = await crypto.subtle.importKey(
-      'raw',
-      getArrayBuffer(userCred),
-      'HKDF',
-      false,
-      ['deriveBits', 'deriveKey']
-   );
-
-   // A bit of a hack, but subtle doesn't support other algorithms... so lie. This
-   // is safe because the key is exported as bits and used in libsodium when not
-   // AES-GCM. TODO: If more non-browser cipher are added, make this more generic.
-   const dkAlg = 'AES-GCM';
-
-   let subtleKey: CryptoKey | undefined = await crypto.subtle.deriveKey(
-      {
-         name: 'HKDF',
-         salt: getArrayBuffer(slt),
-         hash: 'SHA-512',
-         info: new TextEncoder().encode(KDF_INFO_HINT)
-      },
-      hkMaterial,
-      { name: dkAlg, length: 256 },
-      true,
-      ['encrypt', 'decrypt']
-   );
-
-   const exported = await crypto.subtle.exportKey("raw", subtleKey);
-   subtleKey = undefined;
-   return new Uint8Array(exported);
 }

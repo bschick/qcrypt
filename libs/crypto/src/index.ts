@@ -20,11 +20,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-// Constants
-export * from './lib/cipher.consts';
-
-// Base64 utilities
-export { base64URLStringToBuffer, bufferToBase64URLString } from './lib/base64';
 
 // Utility functions and classes
 export {
@@ -36,6 +31,7 @@ export {
    bufferToHexString,
    numToBytes,
    bytesToNum,
+   byteCount,
    browserSupportsFilePickers,
    browserSupportsBytesStream,
    makeTookMsg,
@@ -44,13 +40,13 @@ export {
    BYOBStreamReader,
    readStreamAll,
    streamWriteBYOD,
+   getRandom,
    selectCipherFile,
    selectClearFile,
    selectWriteableFile,
    selectWriteableJsonFile,
    selectWriteableQQFile,
    selectWriteableTxtFile,
-   getRandom48,
    bytesFromString,
 } from './lib/utils';
 
@@ -59,20 +55,14 @@ export {
    Ciphers,
    Encipher,
    Decipher,
-   EncipherV6,
-   DecipherV6,
+   EncipherV67,
+   DecipherV67,
    CipherState,
    Extractor,
    Packer,
-   _genCipherKey,
-   _genDerivedKey,
-   _genHintCipherKey,
-   _genSigningKey,
 } from './lib/ciphers-current';
 
 export type {
-   EParams,
-   PWDProvider,
    CipherDataInfo,
    CipherDataBlock,
 } from './lib/ciphers-current';
@@ -87,9 +77,7 @@ export {
 export {
    DecipherV1,
    DecipherV4,
-   DecipherV5,
-   _genSigningKeyOld,
-   _genHintCipherKeyOld,
+   DecipherV5
 } from './lib/deciphers-old';
 
 // Cipher streams
@@ -105,3 +93,5 @@ export type {
 
 // Armor functions
 export { makeCipherArmor, parseCipherArmor } from './lib/armor';
+
+export type { PWDProvider } from './lib/keys';

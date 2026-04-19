@@ -31,7 +31,7 @@ import {
 import type {
    EContext,
    CipherDataInfo,
-   PWDProvider,
+   PWDProvider
 } from '@qcrypt/crypto';
 
 export type { EContext, CipherDataInfo, PWDProvider };
@@ -72,28 +72,7 @@ export class CipherService {
       return [this._iCount, this._iCountMax, this._hashRate];
    }
 
-   validateAlgs(algs: string[]): boolean {
-      for (let alg of algs) {
-         if (!Ciphers.validateAlg(alg)) {
-            return false;
-         }
-      }
-      return true;
-   }
 
-   validateAlg(alg: string): boolean {
-      return Ciphers.validateAlg(alg);
-   }
-
-   algDescription(alg: string): string {
-      return Ciphers.validateAlg(alg)
-         ? (cc.AlgInfo[alg]["description"] as string)
-         : "Invalid";
-   }
-
-   algs(): string[] {
-      return Object.keys(cc.AlgInfo);
-   }
 
    async encryptStream(
       econtext: EContext,

@@ -29,7 +29,6 @@ import {
 } from './ciphers';
 
 import type {
-   EParams,
    CipherDataInfo,
    PWDProvider
 } from './ciphers';
@@ -38,7 +37,7 @@ import { browserSupportsBytesStream, streamWriteBYOD } from './utils';
 export type {CipherDataInfo, PWDProvider};
 
 export type EContext = {
-   readonly algs: string[];
+   readonly algs: cc.CipherAlgs[];
    readonly ic: number;
 };
 
@@ -73,11 +72,7 @@ async function _encryptStreamImpl(
       throw new Error('Invalid loop end of: ' + econtext.algs.length);
    }
 
-   const alg = econtext.algs[lp - 1];
-
-   if (!Ciphers.validateAlg(alg)) {
-      throw new Error('Invalid alg of: ' + alg);
-   }
+   const validatedAlg = Ciphers.validateAlg(econtext.algs[lp - 1]);
    if (econtext.ic < cc.ICOUNT_MIN || econtext.ic > cc.ICOUNT_MAX) {
       throw new Error('Invalid ic of: ' + econtext.ic);
    }
@@ -85,14 +80,15 @@ async function _encryptStreamImpl(
       throw new Error('Invalid userCred length of: ' + userCred.byteLength);
    }
 
-   const encipher = latestEncipher(userCred, clearStream);
-
-   const eparams: EParams = {
-      ...econtext,
-      alg: alg,
+   const encipher = latestEncipher(
+      userCred,
+      validatedAlg,
+      econtext.ic,
       lp,
-      lpEnd: econtext.algs.length
-   };
+      econtext.algs.length,
+      clearStream,
+      pwdProvider
+   );
 
    let cipherStream = new ReadableStream({
       type: (browserSupportsBytesStream() ? 'bytes' : undefined),
@@ -101,7 +97,7 @@ async function _encryptStreamImpl(
 
          try {
             // Encryption may return zero data and not be Finished
-            const cipherData = await encipher.encryptBlock(eparams, pwdProvider);
+            const cipherData = await encipher.encryptBlock();
 
             if (cipherData.parts.length) {
                for (let data of cipherData.parts) {
@@ -147,8 +143,7 @@ export async function getCipherStreamInfo(
    if (userCred.byteLength != cc.USERCRED_BYTES) {
       throw new Error('Invalid userCred length of: ' + userCred.byteLength);
    }
-
-   const decipher = await streamDecipher(userCred, cipherStream);
+   const decipher = await streamDecipher(userCred, cipherStream, undefined);
    const info = await decipher.getCipherDataInfo();
    decipher.finishedState();
    return info;
@@ -165,7 +160,7 @@ export async function decryptStream(
       throw new Error('Invalid userCred length of: ' + userCred.byteLength);
    }
 
-   const decipher = await streamDecipher(userCred, cipherStream);
+   const decipher = await streamDecipher(userCred, cipherStream, pwdProvider);
    const cdInfo = await decipher.getCipherDataInfo();
 
    if (cdInfo.lp < 1 || cdInfo.lp > cc.LP_MAX) {
@@ -180,7 +175,7 @@ export async function decryptStream(
 
          try {
             // Decryption always returns data if any remains
-            const decrypted = await decipher.decryptBlock(pwdProvider);
+            const decrypted = await decipher.decryptBlock();
 
             if (decrypted.byteLength) {
                streamWriteBYOD(controller, decrypted);
