@@ -116,6 +116,7 @@ async function _encryptStreamImpl(
             if(err instanceof Error && err.message.toLowerCase().includes("network")) {
                err = new Error('Error reading stream');
             }
+            encipher.errorState();
             controller.error(err);
          }
       }
@@ -162,6 +163,11 @@ export async function decryptStream(
    const decipher = await streamDecipher(userCred, cipherStream, pwdProvider);
    const cdInfo = await decipher.getCipherDataInfo();
 
+   if (cdInfo.lp < 1 || cdInfo.lp > cc.LP_MAX) {
+      decipher.errorState();
+      throw new Error('Invalid loop of: ' + cdInfo.lp);
+   }
+
    let readableStream = new ReadableStream({
       type: (browserSupportsBytesStream() ? 'bytes' : undefined),
 
@@ -186,6 +192,7 @@ export async function decryptStream(
             if(err instanceof Error && err.message.toLowerCase().includes("network")) {
                err = new Error('Error reading stream');
             }
+            decipher.errorState();
             controller.error(err);
          }
       }

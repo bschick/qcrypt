@@ -1,3 +1,25 @@
+/* MIT License
+
+Copyright (c) 2026 Brad Schick
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. */
+
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { WebAuthnEmulator } from "nid-webauthn-emulator";
 import {
@@ -11,12 +33,30 @@ import {
 import jwtPkg from 'jsonwebtoken';
 import { randomBytes } from "node:crypto";
 
+// postAuthVerify looks up the credential via the Authenticators GSI (credentialid-index),
+// which is eventually consistent. When this suite registers a user and then immediately logs in,
+// the GSI may not yet reflect the new Authenticator record. Retry to give the GSI time to catch
+// up before failing. Not needed for normal clients because the calls are split by user actions
+async function postAuthVerifyWithRetry(
+   body: Record<string, unknown>,
+   cookie: string,
+): ReturnType<typeof postJson> {
+   const maxAttempts = 3;
+   let res = await postJson(`/v1/auth/verify`, body, {}, cookie);
+
+   for (let attempt = 2; res.status !== 200 && attempt <= maxAttempts; attempt++) {
+      await new Promise((r) => setTimeout(r, 10000));
+      res = await postJson(`/v1/auth/verify`, body, {}, cookie);
+   }
+   return res;
+}
+
 // ----- Test Suite -----
 
 describe("QuickCrypt WebAuthn Full API Suite", () => {
 
    // Shared state
-   const testUser = `test_${Date.now()}`;
+   const testUser = `PWTesty_${Date.now()}`;
    let userId: string;
    let credId: string; // pkId
    let sessCookie: string = "";
@@ -101,6 +141,46 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          expect(res.status).toBe(200);
          expect(res.data.userName).toBe(testUser);
       });
+
+      it("should add and remove passkey", async () => {
+
+         // Get passkey registration options
+         const optsRes = await getJson(
+            `/v1/passkeys/options`,
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(optsRes.status).toBe(200);
+
+         // Sign Challenge (Note: We give the emulator a fake user.id so it doesn't overwrite our primary test credential)
+         const attestation = emulator.createJSON(RP_ORIGIN, {
+            ...optsRes.data,
+            user: { ...optsRes.data.user, id: `${userId}_2` },
+            challenge: optsRes.data.challenge,
+            excludeCredentials: [],
+         });
+
+         // Verify passkey *with wrong userId* (it should just be ignored)
+         const verifyRes = await postJson(
+            `/v1/passkeys/verify`,
+            { ...attestation, userId: 'De9RClwTFhA6aChuBzDK2g', challenge: optsRes.data.challenge },
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+
+
+         expect(verifyRes.status).toBe(200);
+         expect(verifyRes.data.verified).toBe(true);
+         expect(verifyRes.data.userId).toBe(userId);
+
+         const delRes = await deleteJson(
+            `/v1/passkeys/${attestation.id}`,
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(delRes.status).toBe(200);
+
+      });
    });
 
    describe("Logout & Re-Login", () => {
@@ -145,16 +225,63 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          });
 
          // Verify Auth
-         const verifyRes = await postJson(
-            `/v1/auth/verify`,
-            { ...assertion, userId, challenge: optsRes.data.challenge },
-            {},
+         const verifyRes = await postAuthVerifyWithRetry(
+            { ...assertion, challenge: optsRes.data.challenge },
             sessCookie,
          );
 
          expect(verifyRes.status).toBe(200);
          expect(verifyRes.data.verified).toBe(true);
          expect(verifyRes.cookie).toBeTruthy();
+         expect(verifyRes.data.userId).toBe(userId);
+
+         // Restore session state
+         sessCookie = verifyRes.cookie;
+         csrfToken = verifyRes.data.csrf;
+      });
+
+      it("should login without userId in options", async () => {
+         let res = await deleteJson(
+            `/v1/session`,
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(res.status).toBe(200);
+         // Cookie should be invalidated/expired now
+
+         res = await getJson(
+            `/v1/user`,
+            { "x-csrf-token": csrfToken },
+            sessCookie, // Sending old cookie
+         );
+
+         expect(res.status).toBe(401); // Expect Unauthorized
+
+         // Get Auth Options
+         const optsRes = await postJson(
+            `/v1/auth/options`,
+            {},
+            {},
+            "",
+         );
+         expect(optsRes.status).toBe(200);
+
+         // Sign Challenge
+         const assertion = emulator.getJSON(RP_ORIGIN, {
+            ...optsRes.data,
+            challenge: optsRes.data.challenge,
+         });
+
+         // Verify Auth
+         const verifyRes = await postAuthVerifyWithRetry(
+            { ...assertion, challenge: optsRes.data.challenge },
+            sessCookie,
+         );
+
+         expect(verifyRes.status).toBe(200);
+         expect(verifyRes.data.verified).toBe(true);
+         expect(verifyRes.cookie).toBeTruthy();
+         expect(verifyRes.data.userId).toBe(userId);
 
          // Restore session state
          sessCookie = verifyRes.cookie;
@@ -250,7 +377,6 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
 
          expect(res.status).toEqual(401);
       });
-
    });
 
    afterAll(async () => {
@@ -269,7 +395,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
       // Confirm user is gone
       // Try to fetch session or user info, should fail
       const checkRes = await getJson(`/v1/user`, {}, sessCookie);
-      expect(checkRes.status).toBeGreaterThanOrEqual(400); // 400, 401, or 404
+      expect(checkRes.status).toBeGreaterThanOrEqual(400);
    });
 });
 

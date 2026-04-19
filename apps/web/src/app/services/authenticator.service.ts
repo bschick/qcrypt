@@ -726,10 +726,7 @@ export class AuthenticatorService {
       const handleBytes = base64ToBytes(startAuth.response.userHandle!);
       startAuth.response.userHandle = new TextDecoder("utf-8").decode(handleBytes);
 
-      // Need to return challenge because in some cases it is not bound to
-      // a user id when created. The server validates that it created the challenge
-      // and the challenge's age. createRecovery controls creation of reocvery words
-      // on old account until when it is expicit
+      // Need to return challenge for server lookup w/o userId
       return {
          ...startAuth,
          challenge: optionsJson.challenge
@@ -784,9 +781,8 @@ export class AuthenticatorService {
 
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
          method: 'POST',
-         userId: userId,
          resource: 'recover',
-         resourceId: userCred
+         bodyJSON: JSON.stringify({ userId: userId, userCred: userCred })
       });
 
       const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, false);
@@ -891,6 +887,7 @@ export class AuthenticatorService {
          ...startReg,
          // To maintain compatibility with old clients, need to put this
          // back to actual b64Url rather than b64ofUT8BytesofBase64... argg
+         // UserId is ignored by server for passkeys/verify
          userId: actualB64UserId,
          challenge: optionsJson.challenge,
       }

@@ -51,6 +51,14 @@ git clone https://github.com/bschick/qcrypt.git && cd qcrypt
 ./ubsetup.sh 2>&1 | tee ubsetup.log
 ```
 
+### d. Background Environment (Non-Interactive Shells)
+
+When AI agents or automated tooling execute commands, they often spawn non-interactive background shells. These environments typically ignore `.zshrc`, `.bashrc`, and `.zprofile` and dynamically linked binaries (like Homebrew's `pnpm` or NVM's `node`) may fail to resolve.
+
+To ensure non-interactive shells works, export the required paths in a profile evaluated by all execution modes:
+- **Zsh:** Add the exports to `~/.zshenv` (e.g., `echo 'export PATH="/opt/homebrew/bin:/opt/homebrew/opt/node@24/bin:$PATH"' >> ~/.zshenv`).
+- **Bash:** Use `~/.bash_env` and ensure `BASH_ENV` points to it.
+
 **Very important (particularly for AI agents):** After setup, you must successfully run both the Unit and End-to-End test suites described in [`apps/web/AGENTS.md`](apps/web/AGENTS.md) with all tests passing *before* making any other changes. This helps distinguish environment setup problems from errors introduced by your changes.
 
 ---
@@ -74,7 +82,6 @@ The `pnpm` scripts in `package.json` call `nx` under the hood. You can use eithe
 | What | pnpm script |
 |------|------------|
 | Serve web locally (HTTPS, all interfaces) | `pnpm serve` |
-| Serve SSR build | `pnpm serve:ssr:web` |
 
 ### Test Commands
 

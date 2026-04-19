@@ -1,3 +1,25 @@
+/* MIT License
+
+Copyright (c) 2026 Brad Schick
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. */
+
 import crypto from "crypto";
 import { WebAuthnEmulator, AuthenticatorEmulator, PasskeysCredentialsFileRepository } from "nid-webauthn-emulator";
 
@@ -11,7 +33,10 @@ export const sha256Hex = (buf: Buffer): string => crypto.createHash("sha256").up
 
 export function getWebAuthnEmulator(persistent: boolean = false): WebAuthnEmulator {
    const repo = new PasskeysCredentialsFileRepository("apps/server/spec/credentials");
-   const auth = new AuthenticatorEmulator({ credentialsRepository: repo });
+   const auth = new AuthenticatorEmulator({
+      credentialsRepository: repo,
+      transports: ['internal']
+   });
    return persistent ? new WebAuthnEmulator(auth) : new WebAuthnEmulator();
 }
 

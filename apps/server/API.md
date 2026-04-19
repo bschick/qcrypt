@@ -80,7 +80,7 @@ This document provides documentation for the passkey-based authentication server
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
 - **Authorization:** Required (cookie and x-csrf-token)
 - **Description:** Verifies a registration response from a client and adds a new passkey to the currently authenticated user.
-- **Request Body:** The SimpleWebAuthn/client `RegistrationResponseJSON` JSON object response & `challenge` & `userId` created by client from previous POST to `/v1/passkeys/options`.
+- **Request Body:** The SimpleWebAuthn/client `RegistrationResponseJSON` JSON object response & `challenge` created by client from previous GET to `/v1/passkeys/options`.
 - **Query Parameters:**
   - `usercred` (optional, boolean): If `true`, the response will include the user credential in `userCred`.
   - `recovery` (optional, boolean): If `true`, the response will include the recovery id in `recoveryId`.
@@ -139,13 +139,14 @@ This document provides documentation for the passkey-based authentication server
   - `400 Bad Request`: The request was malformed or the request body is invalid.
   - `401 Unauthorized`: The request is not authorized.
 
-### POST /v1/users/{userid}/recover/{usercred}
+### POST /v1/recover
 
 - **Method:** `POST`
-- **Path:** `/v1/users/{userid}/recover/{usercred}`
+- **Path:** `/v1/recover`
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
 - **Authorization:** Not required
-- **Description:** DEPRECATED. Upgrade account and use `/v1/recover2` instead. Initiates the account recovery process. This will delete all existing passkeys for the user and return registration options to create a new passkey.
+- **Description:** DEPRECATED. Upgrade account and use `/v1/recover2` instead. Initiates the account recovery process for the user Id and user credential sent in the request body. This will delete all existing passkeys for the user and return registration options to create a new passkey.
+- **Request Body:** A JSON object with `userId` and `userCred` keys. Example: `{"userId": "base64id", "userCred": "base64usercred"}`.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server `PublicKeyCredentialCreationOptionsJSON` JSON object.
   - `400 Bad Request`: The user credential is not valid.

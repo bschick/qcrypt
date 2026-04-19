@@ -184,13 +184,15 @@ export const Authenticators = new Entity(
                casing: 'none'
             }
          },
-         /*         byCredId: {
-                     index: "cidpk-index",
-                     pk: {
-                        field: "cidpk",
-                        composite: ["credentialId"],
-                     },
-                  }*/
+         byCredId: {
+            index: "credentialid-index",
+            pk: {
+               field: "credentialId",
+               cast: "string",
+               composite: ["credentialId"],
+               casing: 'none'
+            },
+         }
       }
    },
    {
@@ -354,6 +356,16 @@ export const Challenges = new Entity(
          challenge: {
             type: "string",
             required: true
+         },
+         purpose: {
+            type: ["reg", "add", "auth"] as const,
+            required: true,
+            readOnly: true
+         },
+         userId: {
+            type: "string",
+            required: true,
+            readOnly: true
          },
          expiresAt: {
             type: "number",

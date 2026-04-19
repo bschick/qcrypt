@@ -29,7 +29,7 @@ export class ParamError extends Error {
 }
 
 export class AuthError extends Error {
-   constructor(msg: string = 'not authorize') {
+   constructor(msg: string = 'not authorized') {
       super(msg);
    }
 }
@@ -85,6 +85,18 @@ export function base64Decode(base64: string | undefined): Uint8Array<ArrayBuffer
       return new Uint8Array(nodeBuffer.buffer, nodeBuffer.byteOffset, nodeBuffer.byteLength);
    }
    return undefined;
+}
+
+// Constant-time string comparison. Early length check is acceptable for fixed-length secrets.
+export function timingSafeEqual(a: string, b: string): boolean {
+   if (a.length !== b.length) {
+      return false;
+   }
+   let diff = 0;
+   for (let i = 0; i < a.length; i++) {
+      diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+   }
+   return diff === 0;
 }
 
 /* Javascript converts to signed 32 bit int when using bit shifting
