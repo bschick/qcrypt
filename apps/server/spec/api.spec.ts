@@ -446,6 +446,28 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
 
             expect(bypass.status).toBe(401);
             expect(bypass.rawText).toBe('challenge not valid');
+
+            // Same attack, but also forge userHandle to the victim. The challenge-binding
+            // check should still fires first since the credId resolves to the attacker.
+            const optsRes2 = await postJson(`/v1/auth/options`, { userId }, {}, "");
+            expect(optsRes2.status).toBe(200);
+            const assertion2 = attackerEmulator.getJSON(RP_ORIGIN, {
+               ...optsRes2.data,
+               allowCredentials: [{ id: attackerCredId, type: 'public-key' }],
+               challenge: optsRes2.data.challenge,
+            });
+            const bypass2 = await postJson(
+               `/v1/auth/verify`,
+               {
+                  ...assertion2,
+                  response: { ...assertion2.response, userHandle: userId },
+                  challenge: optsRes2.data.challenge,
+               },
+               {},
+               "",
+            );
+            expect(bypass2.status).toBe(401);
+            expect(bypass2.rawText).toBe('challenge not valid');
          } finally {
             if (attackerCredId && attackerCookie) {
                await deleteJson(
