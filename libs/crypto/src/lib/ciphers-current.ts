@@ -56,15 +56,6 @@ export type CipherDataInfo = {
    hint?: string | undefined;
 };
 
-
-// V7 Contexts must be 8 bytes
-const KDF_CTX_SIGNING_V6 = "cipherdata signing key";
-const KDF_CTX_SIGNING_V7 = "Sign_Key";
-const KDF_CTX_HINT_V6 = "hint encryption key";
-const KDF_CTX_HINT_V7 = "Hint_Key";
-const KDF_CTX_BLOCK_V6 = "block encryption key";
-const KDF_CTX_BLOCK_V7 = "Blck_Key";
-
 export abstract class Ciphers {
 
    protected _state: CipherState;
