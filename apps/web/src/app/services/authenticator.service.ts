@@ -561,6 +561,8 @@ export class AuthenticatorService {
          throw new Error('no active user');
       }
 
+      const wasCurrentPk = this.isCurrentPk(credentialId);
+
       const serverUserInfo = await this._doFetch<UserInfo>({
          method: 'DELETE',
          resource: 'passkeys',
@@ -571,14 +573,20 @@ export class AuthenticatorService {
          throw new Error('authentication failed');
       }
 
-      // If we have an unverified response, that was the last PK and the user was deleted
+      // Unverified response means that was the last PK and the user was deleted.
+      // If we deleted our own current PK the server invalidated our session, so sign out locally.
+      // User still exists in that case, so return remaining count to keep the caller on page
+      // and let the Logout event surface the sign-in dialog.
       if (!serverUserInfo.verified) {
          this._deletedUser();
          return 0;
+      } else if (wasCurrentPk) {
+         this.logout(true);
       } else {
          this._updateLoggedInUser(serverUserInfo);
-         return serverUserInfo.authenticators!.length;
       }
+
+      return serverUserInfo.authenticators!.length;
    }
 
 

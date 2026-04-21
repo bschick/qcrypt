@@ -1369,11 +1369,11 @@ async function deletePasskey(
    let response: UserInfo = {
       verified: false
    };
+   let endSession = false;
 
    // If there are no authenticators remaining, delete the
    // entire user identity and return unverified UserInfo object
    if (auths.length == 0) {
-
       // Delete all invitables for this user
       const invitables = await Invitables.query.byUserId({
          userId: verifiedUser.userId
@@ -1397,12 +1397,17 @@ async function deletePasskey(
       }
       // Let this happen async
       recordEvent(EventNames.UserDelete, verifiedUser.userId, credId);
+      endSession = true;
    } else {
-      response = await makeUserInfoResponse(verifiedUser, auths);
       recordEvent(EventNames.RegDelete, verifiedUser.userId, credId);
+      response = await makeUserInfoResponse(verifiedUser, auths);
+      if (credId === verifiedUser.lastCredentialId) {
+         await deleteSession(httpDetails, verifiedUser);
+         endSession = true;
+      }
    }
 
-   return { content: response };
+   return { content: response, endSession };
 }
 
 // recover removes all existing passkeys, then initiates the
