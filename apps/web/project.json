@@ -91,7 +91,8 @@
       "options": {
         "tsConfig": "apps/web/tsconfig.spec.json",
         "runnerConfig": true,
-        "watch": false
+        "watch": false,
+        "exclude": ["tmp/**", "node_modules/**"]
       }
     }
   }
