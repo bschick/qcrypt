@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Response } from '@playwright/test';
 import {
   testWithAuth,
   addCredential,
@@ -27,36 +27,60 @@ testWithAuth('edit fields', async ({ authFixture }) => {
 
   await openCredentials(page);
 
-  await page.locator('mat-sidenav input').first().click();
-  await page.locator('mat-sidenav input').first().fill('Keeper<script>'+rand);
-  await page.keyboard.press('Enter');
+  const nameInput = page.locator('mat-sidenav input').first();
+  const descInput = page.locator('mat-sidenav input').nth(1);
 
-  await expect(page.getByText('User name updated')).toBeVisible({timeout:10000});
-  await expect(page.getByText('User name updated')).not.toBeVisible({timeout:10000});
-  await expect(page.locator('mat-sidenav input').first()).toHaveValue('Keeper'+rand);
+  // The success toast is only shown for ~2s, so polling for it can race with
+  // its appearance/removal. Instead, wait for the PATCH response and then
+  // assert the stable post-state (input value reflects server-sanitized result).
+  const userPatch = (response: Response) =>
+    response.url().includes('/user') &&
+    !response.url().includes('/users/') &&
+    response.request().method() === 'PATCH';
 
-  await page.locator('mat-sidenav input').first().click();
-  await page.locator('mat-sidenav input').first().fill('KeeperTwo');
-  await page.keyboard.press('Enter');
-  await expect(page.getByText('User name updated')).toBeVisible({timeout:10000});
-  await expect(page.getByText('User name updated')).not.toBeVisible({timeout:10000});
-  await expect(page.locator('mat-sidenav input').first()).toHaveValue('KeeperTwo');
+  const passkeyPatch = (response: Response) =>
+    response.url().includes('/passkeys') &&
+    response.request().method() === 'PATCH';
 
-  await page.locator('mat-sidenav input').nth(1).click();
-  await page.locator('mat-sidenav input').nth(1).fill('VirtualPK'+rand);
-  await page.keyboard.press('Enter');
+  await nameInput.click();
+  await nameInput.fill('Keeper<script>'+rand);
+  await expect(nameInput).toHaveValue('Keeper<script>'+rand);
+  let [resp] = await Promise.all([
+    page.waitForResponse(userPatch),
+    nameInput.press('Enter')
+  ]);
+  expect(resp.status()).toBe(200);
+  await expect(nameInput).toHaveValue('Keeper'+rand);
 
-  await expect(page.getByText('Passkey description updated')).toBeVisible({timeout:10000});
-  await expect(page.getByText('Passkey description updated')).not.toBeVisible({timeout:10000});
-  await expect(page.locator('mat-sidenav input').nth(1)).toHaveValue('VirtualPK'+rand);
+  await nameInput.click();
+  await nameInput.fill('KeeperTwo');
+  await expect(nameInput).toHaveValue('KeeperTwo');
+  [resp] = await Promise.all([
+    page.waitForResponse(userPatch),
+    nameInput.press('Enter')
+  ]);
+  expect(resp.status()).toBe(200);
+  await expect(nameInput).toHaveValue('KeeperTwo');
 
-  await page.locator('mat-sidenav input').nth(1).click();
-  await page.locator('mat-sidenav input').nth(1).fill('Passkey');
-  await page.keyboard.press('Enter');
+  await descInput.click();
+  await descInput.fill('VirtualPK'+rand);
+  await expect(descInput).toHaveValue('VirtualPK'+rand);
+  [resp] = await Promise.all([
+    page.waitForResponse(passkeyPatch),
+    descInput.press('Enter')
+  ]);
+  expect(resp.status()).toBe(200);
+  await expect(descInput).toHaveValue('VirtualPK'+rand);
 
-  await expect(page.getByText('Passkey description updated')).toBeVisible({timeout:10000});
-  await expect(page.getByText('Passkey description updated')).not.toBeVisible({timeout:10000});
-  await expect(page.locator('mat-sidenav input').nth(1)).toHaveValue('Passkey');
+  await descInput.click();
+  await descInput.fill('Passkey');
+  await expect(descInput).toHaveValue('Passkey');
+  [resp] = await Promise.all([
+    page.waitForResponse(passkeyPatch),
+    descInput.press('Enter')
+  ]);
+  expect(resp.status()).toBe(200);
+  await expect(descInput).toHaveValue('Passkey');
 
 });
 
