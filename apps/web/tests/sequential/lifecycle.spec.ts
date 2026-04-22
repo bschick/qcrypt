@@ -142,6 +142,27 @@ test.describe('creation', () => {
     tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
 
+    // Add a secondary passkey, then delete it. Active PK (authId2) is unchanged,
+    // so the session stays valid and the Sign In dialog must not appear.
+    await passkeyCreation(session, authId1, async () => {
+      await page.getByRole('button', { name: /New Passkey/ }).click();
+    });
+    await expect(tableBody.locator('tr')).toHaveCount(2);
+
+    await deleteLastPasskey(page);
+    await expect(tableBody.locator('tr')).toHaveCount(1);
+    await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
+
+    // Refresh and confirm the session was not invalidated
+    await page.reload();
+    await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+    await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
+
+    await openCredentials(page);
+    tableBody = page.locator('table.credtable tbody');
+    await expect(tableBody.locator('tr')).toHaveCount(1);
+
     // Cleanup: delete the last passkey, which also deletes the user
     await deleteFirstPasskey(page, 'PWFlippy');
     await page.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
