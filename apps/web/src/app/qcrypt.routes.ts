@@ -21,13 +21,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { Routes } from '@angular/router';
 import { CoreComponent } from './core/core.component';
+import { WelcomeComponent } from './welcome/welcome.component';
 import { showRecoveryGuard } from './showrecovery/showrecovery.guard';
 import { cmdlineGuard } from './cmdline/cmdline.guard';
 import { coreGuard } from './core/core.guard';
 import { welcomeGuard } from './welcome/welcome.guard';
 
 export const routes: Routes = [
-   { path: 'welcome', loadComponent: () => import('./welcome/welcome.component').then(m => m.WelcomeComponent), canActivate: [welcomeGuard] },
+   { path: 'welcome', component: WelcomeComponent, canActivate: [welcomeGuard] },
    { path: 'newuser', loadComponent: () => import('./newuser/newuser.component').then(m => m.NewUserComponent) },
    { path: 'showrecovery', loadComponent: () => import('./showrecovery/showrecovery.component').then(m => m.ShowRecoveryComponent), canActivate: [showRecoveryGuard] },
    { path: 'recovery', loadComponent: () => import('./recovery/recovery.component').then(m => m.RecoveryComponent) },

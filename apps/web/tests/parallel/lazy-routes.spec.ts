@@ -2,7 +2,6 @@ import { test, expect } from '@playwright/test';
 
 test.describe('lazy routes render', () => {
   const smokeRoutes = [
-    '/welcome',
     '/newuser',
     '/recovery',
     '/recovery2',
