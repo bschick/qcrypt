@@ -63,7 +63,7 @@ SOFTWARE.
   <mat-sidenav #sideNav class="side-nav" mode="over" position="end" (opened)="onOpenedCredentials()" >
     <app-credentials (done)="sideNav.close()"></app-credentials>
   </mat-sidenav>
-  <mat-sidenav-content id="scrollContent">
+  <mat-sidenav-content id="scrollContent" role="main">
     <router-outlet />
   </mat-sidenav-content>
 </mat-sidenav-container>

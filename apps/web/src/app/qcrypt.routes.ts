@@ -21,35 +21,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { Routes } from '@angular/router';
 import { CoreComponent } from './core/core.component';
-import { WelcomeComponent } from './welcome/welcome.component';
-import { NewUserComponent } from './newuser/newuser.component';
-import { ShowRecoveryComponent } from './showrecovery/showrecovery.component';
 import { showRecoveryGuard } from './showrecovery/showrecovery.guard';
-import { RecoveryComponent } from './recovery/recovery.component';
-import { Recovery2Component } from './recovery2/recovery2.component';
-import { CmdLineComponent } from './cmdline/cmdline.component';
 import { cmdlineGuard } from './cmdline/cmdline.guard';
-import { OverviewComponent } from './help/overview/overview.component';
-import { FaqsComponent } from './help/faqs/faqs.component';
-import { ProtocolComponent, Protocol4Component, Protocol5Component, Protocol6Component } from './help/protocol/protocol.component';
 import { coreGuard } from './core/core.guard';
 import { welcomeGuard } from './welcome/welcome.guard';
 
 export const routes: Routes = [
-   { path: 'welcome', component: WelcomeComponent, canActivate: [welcomeGuard] },
-   { path: 'newuser', component: NewUserComponent },
-   { path: 'showrecovery', component: ShowRecoveryComponent, canActivate: [showRecoveryGuard] },
-   { path: 'recovery', component: RecoveryComponent },
-   { path: 'recovery2', component: Recovery2Component },
-   { path: 'cmdline', component: CmdLineComponent, canActivate: [cmdlineGuard] },
-   { path: 'help/overview', component: OverviewComponent },
-   { path: 'help/faqs', component: FaqsComponent },
-   { path: 'help/protocol', component: Protocol6Component },
-   { path: 'help/protocol1', component: ProtocolComponent },
-   { path: 'help/protocol4', component: Protocol4Component },
-   { path: 'help/protocol5', component: Protocol5Component },
-   { path: 'help/protocol6', component: Protocol6Component },
-   { path: 'help', redirectTo: 'help/faqs', pathMatch: 'full'},
+   { path: 'welcome', loadComponent: () => import('./welcome/welcome.component').then(m => m.WelcomeComponent), canActivate: [welcomeGuard] },
+   { path: 'newuser', loadComponent: () => import('./newuser/newuser.component').then(m => m.NewUserComponent) },
+   { path: 'showrecovery', loadComponent: () => import('./showrecovery/showrecovery.component').then(m => m.ShowRecoveryComponent), canActivate: [showRecoveryGuard] },
+   { path: 'recovery', loadComponent: () => import('./recovery/recovery.component').then(m => m.RecoveryComponent) },
+   { path: 'recovery2', loadComponent: () => import('./recovery2/recovery2.component').then(m => m.Recovery2Component) },
+   { path: 'cmdline', loadComponent: () => import('./cmdline/cmdline.component').then(m => m.CmdLineComponent), canActivate: [cmdlineGuard] },
+   { path: 'help', loadChildren: () => import('./help/help.routes').then(m => m.helpRoutes) },
    { path: '', component: CoreComponent, canActivate: [coreGuard] },
    { path: '**', redirectTo: '', pathMatch: 'full' },
 ];

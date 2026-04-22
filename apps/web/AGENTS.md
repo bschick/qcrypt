@@ -108,5 +108,6 @@ pnpm test:e2e
 - **Testing:** Any new feature or bug fix should be accompanied by corresponding unit or e2e tests to prevent regressions.
 - **Immutability:** Follow best practices for immutability, especially when dealing with application state.
 - **Security:** Adhere to the security principles outlined in `src/assets/protocol6.pdf`, including the use of strong cryptographic primitives and secure coding practices.
+- **Cross-origin isolation:** The deployed site sets `Cross-Origin-Embedder-Policy: require-corp` alongside `COOP: same-origin` and `CORP: same-origin` (configured at CloudFront). This puts the page in a cross-origin-isolated context, which is what enables `SharedArrayBuffer` and high-resolution timers — appropriate for a crypto app. The tradeoff: every third-party asset (font, image, script, iframe, `fetch` target) must return `Cross-Origin-Resource-Policy: cross-origin` (or a matching CORS response) or the browser will refuse to load it and the page will break. Currently compatible: `fonts.gstatic.com` and `api.pwnedpasswords.com`. Before adding any new third-party dependency, confirm it returns CORP/CORS-friendly headers.
 
 See the root [`AGENTS.md`](../../AGENTS.md#5-shared-conventions) for additional shared conventions (GitHub workflow, AWS resource policies).
