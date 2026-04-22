@@ -22,8 +22,8 @@
     "build:server:min": "nx build-min server",
     "test:server": "nx test server",
     "test:server:prod": "nx test-prod server",
-    "test:server:timing": "nx test-timing server",
-    "test:server:timing:prod": "nx test-timing-prod server"
+    "test:timing": "nx test-timing server",
+    "test:timing:prod": "nx test-timing-prod server"
   },
   "private": true,
   "dependencies": {
