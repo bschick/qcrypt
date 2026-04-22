@@ -1,5 +1,12 @@
 # CHANGELOG.md
 
+## 6.1.7 (2026-04-21)
+
+#### Security
+  - server-side authentication hardening found using Claude Code
+  - fix for local sessions remaining valid after PK deletion [thanks to Rajat Shukla (@rajat4722)]
+  - updated packages
+
 ## 6.1.6 (2026-04-11)
 
 #### Changes

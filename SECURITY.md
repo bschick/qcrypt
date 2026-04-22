@@ -40,3 +40,4 @@ Thanks to the following security researchers:
 - **Rajat Shukla (@rajat4722)**:
     - For proposing move of recover2 parameters from url path into post request body and returning more generic errors
     - For suggesting improvements to auth/options triggering move of userId into request body
+    - For discovering that local sessions remained valid after PK deletion
