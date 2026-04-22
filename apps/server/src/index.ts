@@ -326,7 +326,7 @@ async function postAuthVerify(
       throw new AuthError('challenge not valid');
    }
 
-   // Refuse challenges that were issued for a different flow (reg/addpasskey).
+   // Refuse challenges that were issued for a different flow.
    if (challenge.data.purpose !== 'auth') {
       throw new AuthError('challenge not valid');
    }
