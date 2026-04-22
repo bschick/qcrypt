@@ -125,6 +125,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    public clearMsgClass = 'errorBox';
    public secondsRemaining = 0;
    public welcomed: boolean = true;
+   public clearInjected = false;
+   public cipherInjected = false;
 
    //  @ViewChild(MatRipple) ripple: MatRipple;
    @ViewChild('clearField') clearField!: ElementRef;
@@ -176,9 +178,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       const params = new HttpParams({ fromString: window.location.search });
       if (params.get('cipherarmor')) {
          const cipherData = parseCipherArmor(params.get('cipherarmor')!);
+         this.cipherInjected = true;
          this.showCipherData(cipherData);
       }
       if (params.get('cleartext')) {
+         this.clearInjected = true;
          this.showClearText(decodeURIComponent(params.get('cleartext')!));
       }
    }
@@ -381,6 +385,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cipherFile = undefined;
       this.cipherArmor = '';
       this.cipherLabel = 'Cipher Armor';
+      this.cipherInjected = false;
    }
 
    onClearClear() {
@@ -388,6 +393,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.clearFile = undefined;
       this.clearText = '';
       this.clearLabel = 'Clear Text';
+      this.clearInjected = false;
       if (!this.welcomed && this.authSvc.authenticated()) {
          this.bubbleTip1.show();
          this.bubbleTip2.hide();
@@ -395,9 +401,18 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onClearInput() {
+      if (!this.clearText) {
+         this.clearInjected = false;
+      }
       if (!this.welcomed && this.authSvc.authenticated()) {
          this.bubbleTip1.hide();
          this.bubbleTip2.show();
+      }
+   }
+
+   onCipherInput() {
+      if (!this.cipherArmor) {
+         this.cipherInjected = false;
       }
    }
 

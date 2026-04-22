@@ -92,6 +92,11 @@ SOFTWARE. -->
         bubbleWidth="250px" [style.width.%]="100" [style.height.%]="100" spellcheck="false">
         <mat-label>{{clearLabel}}</mat-label>
         <div class="toolbar">
+          <button [hidden]="!clearInjected" mat-icon-button color="warn" aria-label="Warning"
+            matTooltip="Content was copied from the address bar, please confirm its validity"
+            (click)="toastMessage('Content was copied from the address bar, please confirm its validity')">
+            <mat-icon>warning_amber</mat-icon>
+          </button>
           <button [hidden]="!clearText || showProgress" mat-icon-button aria-label="Copy"
             matTooltip="Copy clear text to clipboard" (click)="toastMessage('Clear text copied to clipboard')"
             [cdkCopyToClipboard]="clearText">
@@ -119,6 +124,11 @@ SOFTWARE. -->
       <mat-form-field [style.width.%]="100" [style.height.%]="100" spellcheck="false">
         <mat-label>{{cipherLabel}}</mat-label>
         <div class="toolbar">
+          <button [hidden]="!cipherInjected" mat-icon-button color="warn" aria-label="Warning"
+            matTooltip="Content was copied from the address bar, please confirm its validity"
+            (click)="toastMessage('Content was copied from the address bar, please confirm its validity')">
+            <mat-icon>warning_amber</mat-icon>
+          </button>
           <button [hidden]="!cipherArmor || showProgress" mat-icon-button aria-label="Copy"
             matTooltip="Copy cipher armor to clipboard" (click)="toastMessage('Cipher armor copied to clipboard')"
             [cdkCopyToClipboard]="cipherArmor">
@@ -137,7 +147,7 @@ SOFTWARE. -->
           <div [ngClass]="cipherMsgClass" [hidden]="!cipherMsg" [innerHTML]="cipherMsg"></div>
           <textarea matInput id="cipherInput" placeholder="" class="txt-area-armor" cdkTextareaAutosize
             [(ngModel)]="cipherArmor" [ngModelOptions]="{standalone: true}" [readonly]="cipherMsg ? 'true' : 'false'"
-            [disabled]="showProgress ? 'true' : 'false'">
+            [disabled]="showProgress ? 'true' : 'false'" (input)="onCipherInput()">
           </textarea>
         </div>
       </mat-form-field>
