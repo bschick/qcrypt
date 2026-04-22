@@ -41,6 +41,20 @@
         "command": "QC_ENV=prod pnpm exec vitest run --config apps/server/vitest.config.ts",
         "cwd": "{workspaceRoot}"
       }
+    },
+    "test-timing": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "QC_TIMING=1 pnpm exec vitest run --config apps/server/vitest.config.ts apps/server/spec/dummy-auth.spec.ts",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "test-timing-prod": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "QC_TIMING=1 QC_ENV=prod pnpm exec vitest run --config apps/server/vitest.config.ts apps/server/spec/dummy-auth.spec.ts",
+        "cwd": "{workspaceRoot}"
+      }
     }
   }
 }

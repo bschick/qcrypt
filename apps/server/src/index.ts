@@ -332,7 +332,7 @@ async function postAuthVerify(
    }
 
    // Derive identity from the credential record via GSI, not from the
-   // unsigned userHandle field in the assertion response
+   // unsigned userHandle field in the assertion response (which is fakeable)
    const credResult = await Authenticators.query.byCredId({
       credentialId: body.id
    }).go();
@@ -356,6 +356,9 @@ async function postAuthVerify(
             }
          });
       } catch { /* expected */ }
+
+      // Jitter blurs the residual gap: empty vs populated DDB returns, etc
+      await setTimeout(randomInt(5, 45));
       throw new AuthError();
    }
 
@@ -779,7 +782,6 @@ async function postAuthOptions(
 ): Promise<Response> {
    const {
       rpID,
-      params,
       body
    } = httpDetails;
 
@@ -813,16 +815,12 @@ async function postAuthOptions(
       }
 
       if (!allowedCreds) {
-         // Equivalent-cost DB call to keep timing aligned with the real path.
-         try {
-            await Authenticators.query.byUserId({ userId: unverifiedUserId }).go();
-         } catch {
-         }
          allowedCreds = await dummyAllowedCreds(unverifiedUserId);
          userId = UnknownUserId;
 
-         // Jitter to blur any residual wall-clock gap between real and dummy paths.
-         await setTimeout(randomInt(5, 35));
+         // Jitter blurs the gap between this path's empty lookups and the
+         // real path's populated DDB get + GSI query.
+         await setTimeout(randomInt(5, 95));
       }
    }
 

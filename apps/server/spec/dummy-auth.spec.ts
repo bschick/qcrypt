@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import { createHash, randomBytes } from 'node:crypto';
 import { postJson, RP_ORIGIN } from './common';
 import { base64UrlDecode } from '../src/utils';
@@ -114,8 +114,45 @@ function matchesAnyDummyProfile(cred: Record<string, unknown>): boolean {
    );
 }
 
-async function getAllowCredentials(userId: string): Promise<AllowCred[]> {
+// Per-endpoint timing buckets for valid (known userId) vs invalid (unknown
+// userId) calls. Summary printed in afterAll so M5/M5b timing parity can be
+// eyeballed across a run.
+//
+// "valid"/"invalid" refer to the userId only, not to an e2e successful auth
+// ceremony. The threat being measured is an attacker probing whether a userId
+// exists, and they don't have the private key either way.
+//
+// For prod, the "valid" bucket stays empty and the summary prints valid=n/a.
+// Run against the test env to see the comparison.
+type TimingLabel = 'valid' | 'invalid';
+const timings: Record<'options' | 'verify', Record<TimingLabel, number[]>> = {
+   options: { valid: [], invalid: [] },
+   verify: { valid: [], invalid: [] },
+};
+
+// Summary is printed only under QC_TIMING=1, which is set by the dedicated
+// timing script that runs this file in isolation. In the main server suite,
+// dummy-auth.spec.ts runs in parallel with other spec files, so the timings
+// would be misleading.
+afterAll(() => {
+   if (!process.env.QC_TIMING) {
+      return;
+   }
+   const avg = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : NaN;
+   const fmt = (v: number) => Number.isNaN(v) ? 'n/a' : `${v.toFixed(2)}ms`;
+   for (const name of ['options', 'verify'] as const) {
+      const inv = avg(timings[name].invalid);
+      const val = avg(timings[name].valid);
+      console.log(`auth/${name}: invalid=${fmt(inv)} valid=${fmt(val)} diff=${fmt(val - inv)}`);
+   }
+});
+
+async function getAllowCredentials(userId: string, label: TimingLabel | 'warmup'): Promise<AllowCred[]> {
+   const start = performance.now();
    const res = await postJson('/v1/auth/options', { userId }, {}, '');
+   if (label !== 'warmup') {
+      timings.options[label].push(performance.now() - start);
+   }
    expect(res.status).toBe(200);
    expect(Array.isArray(res.data.allowCredentials)).toBe(true);
    return res.data.allowCredentials as AllowCred[];
@@ -126,7 +163,7 @@ describe('auth/options credential shape', () => {
    it.skipIf(process.env.QC_ENV === 'prod')(
       'real registered user returns credentials with valid shape',
       async () => {
-         const creds = await getAllowCredentials(REAL_TEST_USER_ID);
+         const creds = await getAllowCredentials(REAL_TEST_USER_ID, 'valid');
          expect(creds.length).toBeGreaterThan(0);
          for (const c of creds) {
             assertValidCredentialShape(c);
@@ -136,7 +173,7 @@ describe('auth/options credential shape', () => {
 
    it('multiple unknown userIds each return a dummy credential matching a known profile', async () => {
       for (let i = 0; i < 5; i++) {
-         const creds = await getAllowCredentials(unknownUserId());
+         const creds = await getAllowCredentials(unknownUserId(), 'invalid');
          expect(creds.length).toBe(1);
          const cred = creds[0];
          expect(
@@ -147,8 +184,8 @@ describe('auth/options credential shape', () => {
    });
 
    it('pinned unknown userId returns the expected hardcoded dummy credential on every call', async () => {
-      const a = await getAllowCredentials(PINNED_UNKNOWN_USER_ID);
-      const b = await getAllowCredentials(PINNED_UNKNOWN_USER_ID);
+      const a = await getAllowCredentials(PINNED_UNKNOWN_USER_ID, 'invalid');
+      const b = await getAllowCredentials(PINNED_UNKNOWN_USER_ID, 'invalid');
       expect(a.length).toBe(1);
       expect(b.length).toBe(1);
       expect(a[0]).toStrictEqual(b[0]);
@@ -160,7 +197,7 @@ describe('auth/options credential shape', () => {
       const samples = 8;
       const ids = new Set<string>();
       for (let i = 0; i < samples; i++) {
-         const creds = await getAllowCredentials(unknownUserId());
+         const creds = await getAllowCredentials(unknownUserId(), 'invalid');
          expect(creds.length).toBe(1);
          ids.add(creds[0].id);
       }
@@ -206,19 +243,37 @@ function buildForgedAssertion(
    };
 }
 
-async function forgeAndVerify(userId: string) {
+async function forgeAndVerify(userId: string, label: TimingLabel | 'warmup') {
+   let start = performance.now();
    const opts = await postJson('/v1/auth/options', { userId }, {}, '');
+   if (label !== 'warmup') {
+      timings.options[label].push(performance.now() - start);
+   }
    expect(opts.status).toBe(200);
    const credId = opts.data.allowCredentials[0].id;
    const forged = buildForgedAssertion(credId, opts.data.challenge, userId, opts.data.rpId);
-   return postJson('/v1/auth/verify', forged, {}, '');
+   start = performance.now();
+   const result = await postJson('/v1/auth/verify', forged, {}, '');
+   if (label !== 'warmup') {
+      timings.verify[label].push(performance.now() - start);
+   }
+   return result;
 }
+
+// Lambda cold-start adds ~1s to the first call and skews the per-endpoint averages
+// Prime every endpoint and userId-label combination so the summary reflects warm-state
+beforeAll(async () => {
+   await forgeAndVerify(unknownUserId(), 'warmup');
+   if (process.env.QC_ENV !== 'prod') {
+      await forgeAndVerify(REAL_TEST_USER_ID, 'warmup');
+   }
+});
 
 describe('auth/verify response parity', () => {
 
    it('two different unknown userIds return indistinguishable 401 responses', async () => {
-      const a = await forgeAndVerify(unknownUserId());
-      const b = await forgeAndVerify(unknownUserId());
+      const a = await forgeAndVerify(unknownUserId(), 'invalid');
+      const b = await forgeAndVerify(unknownUserId(), 'invalid');
       expect(a.status).toBe(401);
       expect(b.status).toBe(401);
       expect(a.rawText).toBe(b.rawText);
@@ -227,11 +282,33 @@ describe('auth/verify response parity', () => {
    it.skipIf(process.env.QC_ENV === 'prod')(
       'real userId with forged signature returns same status and body as unknown userId',
       async () => {
-         const real = await forgeAndVerify(REAL_TEST_USER_ID);
-         const dummy = await forgeAndVerify(unknownUserId());
+         const real = await forgeAndVerify(REAL_TEST_USER_ID, 'valid');
+         const dummy = await forgeAndVerify(unknownUserId(), 'invalid');
          expect(real.status).toBe(401);
          expect(dummy.status).toBe(401);
          expect(real.rawText).toBe(dummy.rawText);
       }
    );
+});
+
+// Dedicated timing-sample loops. The parity tests above contribute a handful
+// of samples each, but the valid bucket especially is too small to average
+// reliably. These loops add enough samples per (endpoint × label) to make the
+// afterAll summary trustworthy for jitter tuning. Gated on QC_TIMING so the
+// main suite doesn't pay the extra ~8s of sampling.
+describe.skipIf(!process.env.QC_TIMING)('timing samples', () => {
+   const SAMPLES = 15;
+   const TIMEOUT_MS = 60_000;
+
+   it('invalid userId samples', async () => {
+      for (let i = 0; i < SAMPLES; i++) {
+         await forgeAndVerify(unknownUserId(), 'invalid');
+      }
+   }, TIMEOUT_MS);
+
+   it.skipIf(process.env.QC_ENV === 'prod')('valid userId samples', async () => {
+      for (let i = 0; i < SAMPLES; i++) {
+         await forgeAndVerify(REAL_TEST_USER_ID, 'valid');
+      }
+   }, TIMEOUT_MS);
 });
