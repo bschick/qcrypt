@@ -1444,7 +1444,7 @@ async function postRecover(
    );
 
    // Critical check to ensure we do not recover the wrong user
-   if (!timingSafeEqual(base64UrlEncode(userCredDecBytes)!, userCred)) {
+   if (!timingSafeEqual(userCredDecBytes, base64UrlDecode(userCred)!)) {
       // vague error to make guessing harder
       console.error(`user account ${verifiedUser.userId} invalid user credential`);
       throw new AuthError();
@@ -1525,7 +1525,7 @@ async function postRecover2(
    );
 
    // Critical check to ensure we do not recover the wrong user
-   if (!timingSafeEqual(base64UrlEncode(recoveryIdDecBytes)!, recoveryId)) {
+   if (!timingSafeEqual(recoveryIdDecBytes, base64UrlDecode(recoveryId)!)) {
       // vague error on purpose to make guessing harder
       console.error(`user account ${verifiedUser.userId} invalid recovery id`);
       throw new AuthError();
@@ -1623,13 +1623,12 @@ function killCookie(): string {
    return '__Host-JWT=X; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=0';
 }
 
-async function createCsrf(verifiedUser: VerifiedUserItem): Promise<string> {
+async function createCsrf(verifiedUser: VerifiedUserItem): Promise<Uint8Array> {
    if (!verifiedUser) {
       throw new AuthError();
    }
 
-   const csrfBytes = await getSessionKey(verifiedUser, "csrf");
-   return base64UrlEncode(csrfBytes)!;
+   return await getSessionKey(verifiedUser, "csrf");
 }
 
 async function createCookie(verifiedUser: VerifiedUserItem): Promise<string> {
@@ -1664,10 +1663,13 @@ async function verifyCsrf(
    headerCsrf: string | undefined
 ) {
    // Even if we don't check csrf, make sure we can create one
-   const serverCsrf = await createCsrf(verifiedUser);
+   const serverCsrfBytes = await createCsrf(verifiedUser);
 
-   if (checkCsrf && (!headerCsrf || !timingSafeEqual(serverCsrf, headerCsrf))) {
-      throw new AuthError('invalid csrf token');
+   if (checkCsrf) {
+      const headerCsrfBytes = base64UrlDecode(headerCsrf);
+      if (!headerCsrfBytes || !timingSafeEqual(serverCsrfBytes, headerCsrfBytes)) {
+         throw new AuthError('invalid csrf token');
+      }
    }
 }
 
@@ -1779,11 +1781,11 @@ export async function handler(event: any, context: any) {
       let respCookie: string | undefined;
       if (response.startSession) {
          respCookie = await createCookie(response.startSession);
-         response.content['csrf'] = await createCsrf(response.startSession);
+         response.content['csrf'] = base64UrlEncode(await createCsrf(response.startSession));
       } else if (response.endSession) {
          respCookie = killCookie();
       } else if (response.returnCsrf) {
-         response.content['csrf'] = await createCsrf(verifiedUser!);
+         response.content['csrf'] = base64UrlEncode(await createCsrf(verifiedUser!));
       }
       return makeResponse(JSON.stringify(response.content), 200, respCookie);
 
