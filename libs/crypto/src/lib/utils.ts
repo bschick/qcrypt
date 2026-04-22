@@ -22,7 +22,6 @@ SOFTWARE. */
 
 import sodium from 'libsodium-wrappers';
 import { base64URLStringToBuffer, bufferToBase64URLString } from './base64';
-import { Duration, DateTime } from 'luxon';
 
 export function hasArrayBuffer(value: Uint8Array): value is Uint8Array<ArrayBuffer> {
   return value.buffer instanceof ArrayBuffer;
@@ -119,13 +118,15 @@ export function browserSupportsBytesStream(): boolean {
 }
 
 export function makeTookMsg(start: number, end: number, word: string = 'took'): string {
-   const duration = Duration.fromMillis(end - start);
-   if (duration.as('minutes') >= 1.1) {
-      return `${word} ${Math.round(duration.as('minutes') * 10) / 10} minutes`;
-   } else if (duration.as('seconds') >= 2) {
-      return `${word} ${Math.round(duration.as('seconds'))} seconds`;
+   const millis = end - start;
+   const minutes = millis / 60000;
+   const seconds = millis / 1000;
+   if (minutes >= 1.1) {
+      return `${word} ${Math.round(minutes * 10) / 10} minutes`;
+   } else if (seconds >= 2) {
+      return `${word} ${Math.round(seconds)} seconds`;
    }
-   return `${word} ${duration.toMillis()} millis`;
+   return `${word} ${millis} millis`;
 }
 
 // important to note that a missing key is considered expired
@@ -134,7 +135,7 @@ export function expired(storage: Storage, key: string) : boolean {
    if (!value) {
       return true;
    }
-   return DateTime.now() > DateTime.fromISO(value);
+   return Date.now() > Date.parse(value);
 }
 
 export class ProcessCancelled extends Error {

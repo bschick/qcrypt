@@ -50,7 +50,6 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { HttpParams } from '@angular/common/http';
-import { DateTime } from 'luxon';
 import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { ClipboardModule } from '@angular/cdk/clipboard';
@@ -111,7 +110,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    private actionStart = 0;
    private authSub!: Subscription;
    private usedPasswords: string[] = [];
-   public cacheTimeout!: DateTime;
+   public cacheTimeout = 0;
    public clearText = '';
    public pwdCached = false;
    public cipherLabel = 'Cipher Armor';
@@ -292,13 +291,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    timerTick() {
-      if (DateTime.now() > this.cacheTimeout) {
+      if (Date.now() > this.cacheTimeout) {
          this.privacyClear();
       }
       let result = 0;
       if (this.pwdCached) {
-         const diff = this.cacheTimeout.diff(DateTime.now());
-         result = Math.max(0, Math.round(diff.toMillis() / 1000));
+         result = Math.max(0, Math.round((this.cacheTimeout - Date.now()) / 1000));
       }
       if (result != this.secondsRemaining) {
          // Do this to avoid setting a template value after it has been checked,
@@ -314,7 +312,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.intervalId = 0;
       }
 
-      this.cacheTimeout = DateTime.now().plus({ seconds: this.options.cacheTime });
+      this.cacheTimeout = Date.now() + this.options.cacheTime * 1000;
       this.secondsRemaining = this.options.cacheTime;
 
       // @ts-ignore

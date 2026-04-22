@@ -34,15 +34,15 @@ import { MatSliderModule } from '@angular/material/slider';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ZxcvbnOptionsService } from '../../services/zxcvbn-options.service';
-import { zxcvbnAsync, ZxcvbnResult } from '@zxcvbn-ts/core'
+import type { ZxcvbnResult } from '@zxcvbn-ts/core';
 import * as lev from '../../services/levenshtein';
-import {
+import type {
    MatchEstimated,
    MatchExtended,
    Match,
    MatchOptions,
    Matcher,
-} from '@zxcvbn-ts/core/dist/types'
+} from '@zxcvbn-ts/core/dist/types';
 
 const COLORS = ['var(--red-pwd-color)', 'var(--red-pwd-color)', 'var(--yellow-pwd-color)', 'var(--green-pwd-color)', 'var(--green-pwd-color)'];
 
@@ -133,6 +133,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
       if (!this._processing) {
          this._processing = true;
          (async () => {
+            const { zxcvbnAsync } = await this.zxcvbnOptions.preload();
             let results: ZxcvbnResult | undefined = undefined;
             while (this._testQueue.length > 0) {
                try {

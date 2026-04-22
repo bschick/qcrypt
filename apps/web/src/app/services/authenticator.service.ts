@@ -31,7 +31,7 @@ import {
    startRegistration, startAuthentication
 } from '@simplewebauthn/browser';
 import { Subject, Subscription, filter } from 'rxjs';
-import { DateTime } from 'luxon';
+import { ZxcvbnOptionsService } from './zxcvbn-options.service';
 import { base64ToBytes, bytesToBase64, bufferToHexString, expired } from '@qcrypt/crypto';
 import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
@@ -108,6 +108,7 @@ export class AuthenticatorService {
    public ready: Promise<[void, void]>;
 
    constructor(
+      private zxcvbnOptions: ZxcvbnOptionsService,
    ) {
       const loadSess = new Promise<void>((resolve) => {
          this.loadSession().catch(
@@ -119,6 +120,10 @@ export class AuthenticatorService {
       });
 
       this.ready = Promise.all([loadSess, sodium.ready]);
+
+      // Start the zxcvbn dictionary fetch in parallel with our own startup so
+      // the chunk is usually ready by the time any password field is shown.
+      this.zxcvbnOptions.preload().catch((err) => console.error(err));
    }
 
 
@@ -355,7 +360,7 @@ export class AuthenticatorService {
          throw new Error('invalid csrf token')
       }
 
-      const sessExpiry = DateTime.now().plus({ seconds: SESSION_TIMEOUT }).toISO();
+      const sessExpiry = new Date(Date.now() + SESSION_TIMEOUT * 1000).toISOString();
 
       this._userCred = base64ToBytes(serverLogin.userCred);
       this._csrf = serverLogin.csrf;
@@ -418,7 +423,7 @@ export class AuthenticatorService {
       }
 
       // Currently 1.5 hours inactivity expritation
-      const activityExpiry = DateTime.now().plus({ seconds: ACTIVITY_TIMEOUT }).toISO();
+      const activityExpiry = new Date(Date.now() + ACTIVITY_TIMEOUT * 1000).toISOString();
       localStorage.setItem('activityexpiry', activityExpiry);
 
       // Currently every 2 minutes
@@ -474,7 +479,7 @@ export class AuthenticatorService {
 
          // rather than clear values, which can trigger error in other tabs,
          // set expirations to the past to trigger clear self-logout
-         const expired = DateTime.now().minus({ seconds: 10 }).toISO();
+         const expired = new Date(Date.now() - 10000).toISOString();
          localStorage.setItem('activityexpiry', expired);
          localStorage.setItem('sessionexpiry', expired);
       }

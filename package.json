@@ -51,7 +51,6 @@
     "electrodb": "^3.7.5",
     "jsonwebtoken": "^9.0.3",
     "libsodium-wrappers": "^0.8.4",
-    "luxon": "^3.7.2",
     "reopen-tty": "^1.1.2",
     "rxjs": "~7.8.2",
     "tslib": "^2.8.1",
@@ -71,7 +70,6 @@
     "@playwright/test": "^1.59.1",
     "@schematics/angular": "^21.2.7",
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/luxon": "^3.7.1",
     "@types/node": "^25.6.0",
     "@types/yargs": "^17.0.35",
     "@vitest/browser-playwright": "^4.1.4",
@@ -86,7 +84,7 @@
   "pnpm": {
     "overrides": {
       "picomatch": ">=4.0.4",
-      "@angular/platform-server" : ">=21.2.9"
+      "@angular/platform-server": ">=21.2.9"
     },
     "peerDependencyRules": {
       "allowedVersions": {
@@ -102,5 +100,5 @@
       "nx"
     ]
   },
-  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"
+  "packageManager": "pnpm@10.33.1+sha512.05ba3c1d5d1c18f68df06470d74055e62d41fc110a0c660db1b2dfb2785327f04cf0f68345d4609bc52089e7fa0343c31593b2f9594e2c5d5da426230acc9820"
 }
