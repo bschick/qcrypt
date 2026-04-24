@@ -1,10 +1,15 @@
 import logging
+import re
 import boto3
 import base64
 import hashlib
 from selectolax.parser import HTMLParser
 from secrets import token_bytes
 from botocore.exceptions import ClientError
+
+# Matches the post-build script's `<!-- csp-hash sha384-... -->` comments.
+# See apps/web/scripts/postbuild-preload-check.mjs for why these exist.
+CSP_HASH_COMMENT_RE = re.compile(r'<!--\s*csp-hash\s+(sha\d+-[A-Za-z0-9+/=]+)\s*-->')
 
 client = boto3.client('s3')
 
@@ -18,8 +23,12 @@ nonce_replace = 'ew26COJKMG8qrA/bjTcl0w=='
 style_replace = '[style-hashes]'
 script_replace = '[script-hashes]'
 
-# Fragile since this must be upudate when the Cloudfront QC-NoCORS-and-StrictSecurity policy changes
-csp_base = f"base-uri 'self'; default-src 'none'; style-src 'self' 'nonce-ew26COJKMG8qrA/bjTcl0w==' {style_replace}; script-src {script_replace} 'wasm-unsafe-eval'; img-src 'self'; object-src 'none'; font-src 'self' https://fonts.gstatic.com/; connect-src 'self' https://api.pwnedpasswords.com/; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; trusted-types angular angular#components; require-trusted-types-for 'script'; upgrade-insecure-requests;"
+# Fragile since this must be upudate when the Cloudfront QC-NoCORS-and-StrictSecurity policy changes.
+# script-src is purely hash-based: every chunk hash comes from either an inline <script>'s content
+# or from a `<!-- csp-hash ... -->` comment emitted by the post-build script. We intentionally do NOT
+# use 'strict-dynamic' — Chrome's implementation doesn't reliably propagate hash-based trust through
+# ES module imports, so lazy chunks were getting blocked despite being loaded by main-*.js.
+csp_base = f"base-uri 'self'; default-src 'none'; style-src 'self' 'nonce-ew26COJKMG8qrA/bjTcl0w==' {style_replace}; script-src {script_replace} 'wasm-unsafe-eval'; img-src 'self'; object-src 'none'; font-src 'self' https://fonts.gstatic.com/; connect-src 'self' https://api.pwnedpasswords.com/; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; trusted-types angular angular#components; require-trusted-types-for 'script'; upgrade-insecure-requests; report-to csp-endpoint; report-uri https://o4511265226555392.ingest.us.sentry.io/api/4511265232650240/security/?sentry_key=a7be4684d4608abd82e299fea1b65927;"
 
 def lambda_handler(event, context):
     global stashed, style_hashes, script_hashes
@@ -39,6 +48,11 @@ def lambda_handler(event, context):
             base_html = response['Body'].read().decode('utf8')
             tree = HTMLParser(base_html)
             (style_hashes, script_hashes) = fix_csp(tree)
+            # Collect chunk hashes emitted by the post-build script as HTML
+            # comments. These cover every lazy chunk the module graph can load.
+            # See postbuild-preload-check.mjs.
+            for m in CSP_HASH_COMMENT_RE.finditer(base_html):
+                script_hashes.add(m.group(1))
             tree = tree.html
             stashed[key] = (response['ETag'], tree)
     except ClientError as ce:
@@ -88,13 +102,15 @@ def fix_csp(tree):
     style_hashes = update_hashes(tree, 'style')
     script_hashes = update_hashes(tree, 'script')
 
-    # angular adds integrity for css link, so collect those as well
-    # (done't want to add sha hash to links, however)
+    # Angular adds integrity on stylesheet links; collect those for style-src.
+    # modulepreload links also have integrity (for SRI), but their chunk
+    # hashes are covered by the post-build script's `csp-hash` comments, so
+    # we don't need to scrape them here.
     for element in tree.css('link'):
         if 'nonce' in element.attrs:
             del element.attrs['nonce']
 
-        if 'integrity' in element.attributes and element.attributes['rel'] == 'stylesheet':
+        if 'integrity' in element.attributes and element.attributes.get('rel') == 'stylesheet':
             style_hashes.add(element.attributes['integrity'])
 
     return (style_hashes, script_hashes)
