@@ -18,7 +18,7 @@ test.describe('lazy routes render', () => {
     test(`loads ${path}`, async ({ page }) => {
       await page.goto(path);
       await page.waitForURL(path, { waitUntil: 'domcontentloaded' });
-      await expect(page.locator('[role=main]')).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('mat-sidenav-content')).toBeVisible({ timeout: 10000 });
     });
   }
 });

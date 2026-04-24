@@ -20,14 +20,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { Routes } from '@angular/router';
+import { guardedImport } from '../reloader';
 
 export const helpRoutes: Routes = [
-   { path: 'overview', loadComponent: () => import('./overview/overview.component').then(m => m.OverviewComponent) },
-   { path: 'faqs', loadComponent: () => import('./faqs/faqs.component').then(m => m.FaqsComponent) },
-   { path: 'protocol', loadComponent: () => import('./protocol/protocol.component').then(m => m.Protocol6Component) },
-   { path: 'protocol1', loadComponent: () => import('./protocol/protocol.component').then(m => m.ProtocolComponent) },
-   { path: 'protocol4', loadComponent: () => import('./protocol/protocol.component').then(m => m.Protocol4Component) },
-   { path: 'protocol5', loadComponent: () => import('./protocol/protocol.component').then(m => m.Protocol5Component) },
-   { path: 'protocol6', loadComponent: () => import('./protocol/protocol.component').then(m => m.Protocol6Component) },
+   { path: 'overview', loadComponent: () => guardedImport(() => import('./overview/overview.component').then(m => m.OverviewComponent)) },
+   { path: 'faqs', loadComponent: () => guardedImport(() => import('./faqs/faqs.component').then(m => m.FaqsComponent)) },
+   { path: 'protocol', loadComponent: () => guardedImport(() => import('./protocol/protocol.component').then(m => m.Protocol6Component)) },
+   { path: 'protocol1', loadComponent: () => guardedImport(() => import('./protocol/protocol.component').then(m => m.ProtocolComponent)) },
+   { path: 'protocol4', loadComponent: () => guardedImport(() => import('./protocol/protocol.component').then(m => m.Protocol4Component)) },
+   { path: 'protocol5', loadComponent: () => guardedImport(() => import('./protocol/protocol.component').then(m => m.Protocol5Component)) },
+   { path: 'protocol6', loadComponent: () => guardedImport(() => import('./protocol/protocol.component').then(m => m.Protocol6Component)) },
    { path: '', redirectTo: 'faqs', pathMatch: 'full' },
 ];

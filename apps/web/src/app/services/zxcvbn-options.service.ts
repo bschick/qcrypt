@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import type { zxcvbnAsync, zxcvbnOptions } from '@zxcvbn-ts/core';
 import type { Matcher } from '@zxcvbn-ts/core/dist/types';
+import { guardedImport } from '../reloader';
 
 type ZxcvbnBundle = {
    zxcvbnAsync: typeof zxcvbnAsync;
@@ -21,12 +22,12 @@ export class ZxcvbnOptionsService {
    preload(): Promise<ZxcvbnBundle> {
       if (!this._bundle) {
          this._bundle = (async () => {
-            const [common, en, pwned, core] = await Promise.all([
+            const [common, en, pwned, core] = await guardedImport(() => Promise.all([
                import('@zxcvbn-ts/language-common'),
                import('@zxcvbn-ts/language-en'),
                import('@zxcvbn-ts/matcher-pwned'),
                import('@zxcvbn-ts/core'),
-            ]);
+            ]));
             core.zxcvbnOptions.setOptions({
                translations: en.translations,
                dictionary: {

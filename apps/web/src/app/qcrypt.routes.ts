@@ -26,15 +26,16 @@ import { showRecoveryGuard } from './showrecovery/showrecovery.guard';
 import { cmdlineGuard } from './cmdline/cmdline.guard';
 import { coreGuard } from './core/core.guard';
 import { welcomeGuard } from './welcome/welcome.guard';
+import { guardedImport } from './reloader';
 
 export const routes: Routes = [
    { path: 'welcome', component: WelcomeComponent, canActivate: [welcomeGuard] },
-   { path: 'newuser', loadComponent: () => import('./newuser/newuser.component').then(m => m.NewUserComponent) },
-   { path: 'showrecovery', loadComponent: () => import('./showrecovery/showrecovery.component').then(m => m.ShowRecoveryComponent), canActivate: [showRecoveryGuard] },
-   { path: 'recovery', loadComponent: () => import('./recovery/recovery.component').then(m => m.RecoveryComponent) },
-   { path: 'recovery2', loadComponent: () => import('./recovery2/recovery2.component').then(m => m.Recovery2Component) },
-   { path: 'cmdline', loadComponent: () => import('./cmdline/cmdline.component').then(m => m.CmdLineComponent), canActivate: [cmdlineGuard] },
-   { path: 'help', loadChildren: () => import('./help/help.routes').then(m => m.helpRoutes) },
+   { path: 'newuser', loadComponent: () => guardedImport(() => import('./newuser/newuser.component').then(m => m.NewUserComponent)) },
+   { path: 'showrecovery', loadComponent: () => guardedImport(() => import('./showrecovery/showrecovery.component').then(m => m.ShowRecoveryComponent)), canActivate: [showRecoveryGuard] },
+   { path: 'recovery', loadComponent: () => guardedImport(() => import('./recovery/recovery.component').then(m => m.RecoveryComponent)) },
+   { path: 'recovery2', loadComponent: () => guardedImport(() => import('./recovery2/recovery2.component').then(m => m.Recovery2Component)) },
+   { path: 'cmdline', loadComponent: () => guardedImport(() => import('./cmdline/cmdline.component').then(m => m.CmdLineComponent)), canActivate: [cmdlineGuard] },
+   { path: 'help', loadChildren: () => guardedImport(() => import('./help/help.routes').then(m => m.helpRoutes)) },
    { path: '', component: CoreComponent, canActivate: [coreGuard] },
    { path: '**', redirectTo: '', pathMatch: 'full' },
 ];
