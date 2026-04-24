@@ -30,7 +30,7 @@ import {
    base64UrlEncode,
    base64UrlDecode,
    base64Decode,
-   timingSafeEqual,
+   knownLenTimingSafeEqual,
 } from '../src/utils';
 
 describe('Error classes', () => {
@@ -186,29 +186,29 @@ describe('base64Decode', () => {
 
 describe('timingSafeEqual', () => {
    it('returns true for identical strings', () => {
-      expect(timingSafeEqual(Buffer.from(''), Buffer.from(''))).toBe(true);
-      expect(timingSafeEqual(Buffer.from('abc'), Buffer.from('abc'))).toBe(true);
-      expect(timingSafeEqual(Buffer.from('aGVsbG8'), Buffer.from('aGVsbG8'))).toBe(true);
+      expect(knownLenTimingSafeEqual(Buffer.from(''), Buffer.from(''))).toBe(true);
+      expect(knownLenTimingSafeEqual(Buffer.from('abc'), Buffer.from('abc'))).toBe(true);
+      expect(knownLenTimingSafeEqual(Buffer.from('aGVsbG8'), Buffer.from('aGVsbG8'))).toBe(true);
    });
 
    it('returns false for strings of different lengths', () => {
-      expect(timingSafeEqual(Buffer.from('abc'), Buffer.from('abcd'))).toBe(false);
-      expect(timingSafeEqual(Buffer.from('abcd'), Buffer.from('abc'))).toBe(false);
-      expect(timingSafeEqual(Buffer.from(''), Buffer.from('a'))).toBe(false);
+      expect(knownLenTimingSafeEqual(Buffer.from('abc'), Buffer.from('abcd'))).toBe(false);
+      expect(knownLenTimingSafeEqual(Buffer.from('abcd'), Buffer.from('abc'))).toBe(false);
+      expect(knownLenTimingSafeEqual(Buffer.from(''), Buffer.from('a'))).toBe(false);
    });
 
    it('returns false for equal-length strings that differ', () => {
-      expect(timingSafeEqual(Buffer.from('abc'), Buffer.from('abd'))).toBe(false);
-      expect(timingSafeEqual(Buffer.from('abc'), Buffer.from('xbc'))).toBe(false);
-      expect(timingSafeEqual(Buffer.from('abcd'), Buffer.from('abce'))).toBe(false);
+      expect(knownLenTimingSafeEqual(Buffer.from('abc'), Buffer.from('abd'))).toBe(false);
+      expect(knownLenTimingSafeEqual(Buffer.from('abc'), Buffer.from('xbc'))).toBe(false);
+      expect(knownLenTimingSafeEqual(Buffer.from('abcd'), Buffer.from('abce'))).toBe(false);
    });
 
    it('is case-sensitive', () => {
-      expect(timingSafeEqual(Buffer.from('Abc'), Buffer.from('abc'))).toBe(false);
+      expect(knownLenTimingSafeEqual(Buffer.from('Abc'), Buffer.from('abc'))).toBe(false);
    });
 
    it('handles unicode BMP code units identically', () => {
-      expect(timingSafeEqual(Buffer.from('é'), Buffer.from('é'))).toBe(true);
-      expect(timingSafeEqual(Buffer.from('é'), Buffer.from('e'))).toBe(false);
+      expect(knownLenTimingSafeEqual(Buffer.from('é'), Buffer.from('é'))).toBe(true);
+      expect(knownLenTimingSafeEqual(Buffer.from('é'), Buffer.from('e'))).toBe(false);
    });
 });

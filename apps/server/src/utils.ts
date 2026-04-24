@@ -88,10 +88,12 @@ export function base64Decode(base64: string | undefined): Uint8Array<ArrayBuffer
    return undefined;
 }
 
-// Constant-time comparison.
-export function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
-   const lengthEqual = (a.byteLength === b.byteLength);
-   return crypto.timingSafeEqual(a, lengthEqual ? b : a) && lengthEqual;
+// Constant-time comparison for known length arrays.
+export function knownLenTimingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
+   if (a.byteLength !== b.byteLength) {
+      return false;
+   }
+   return crypto.timingSafeEqual(a, b);
 }
 
 /* Javascript converts to signed 32 bit int when using bit shifting
