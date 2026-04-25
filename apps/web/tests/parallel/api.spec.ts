@@ -61,7 +61,6 @@ test.describe('authenticated api tests', () => {
       expect(user.authenticators.length).toBe(1);
 
       // Failure case, invalid userid
-      // Comment out during backward compatibility period
       usersResponse = await page.request.get(
          `${apiUrl}/users/42ebNajPIp3leX4K4a0qND`,
          { headers: apiHeaders }
@@ -76,15 +75,6 @@ test.describe('authenticated api tests', () => {
          { headers: apiHeaders }
       );
       expect(delResponse.status()).toBe(400);
-
-      // Should fail, invalid userId with valid credential
-      // comment out during backward compatibility period
-      // delResponse = await page.request.delete(
-      //    //@ts-ignore
-      //    `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/passkeys/${user.authenticators[0].credentialId}`,
-      //    { headers: apiHeaders }
-      // );
-      // expect(delResponse.status()).toBe(401);
 
       // Should fail, invalid userId and credential
       delResponse = await page.request.delete(
@@ -151,16 +141,6 @@ test.describe('authenticated api tests', () => {
       expect(descResponse.status()).toBe(200);
       user = await descResponse.json();
       expect(user.authenticators[0].description).toBe("567345 5");
-
-
-      // invalid user id
-      // comment out during backward compatibility period
-      // descResponse = await page.request.patch(
-      //    //@ts-ignore
-      //    `${apiUrl}/users/42ebNajPIp3leX4K4a0qND/passkeys/${user.authenticators[0].credentialId}`,
-      //    { headers: apiHeaders, data: body2 }
-      // );
-      // expect(descResponse.status()).toBe(401);
 
       // invalid cred id
       descResponse = await page.request.patch(
@@ -596,13 +576,6 @@ async function smallFuzzCommaon(
    userId: string,
    headers: Record<string, string>
 ) {
-   // GET UserInfo
-   // comment out during backward compatibility period
-   // await fuzzGet(page, headers,
-   //    `${apiUrl}/users/{0}`,
-   //    [badIdsSmall]
-   // );
-
    // PATCH passkey
    await fuzzPatch(page, headers,
       `${apiUrl}/passkeys/{1}`,
@@ -610,13 +583,6 @@ async function smallFuzzCommaon(
       'description',
       badNamesSmall
    );
-
-   // DELETE  session
-   // comment out during backward compatibility period
-   // await fuzzDelete(page, headers,
-   //    `${apiUrl}/users/{0}/session`,
-   //    [badIdsSmall]
-   // );
 
    // POST auth verify
    await fuzzPost(page, headers,
@@ -633,12 +599,6 @@ async function fullFuzzCommaon(
    userId: string,
    headers: Record<string, string>
 ) {
-   // GET UserInfo
-   // comment out during backward compatibility period
-   // await fuzzGet(page, headers,
-   //    `${apiUrl}/users/{0}`,
-   //    [badIds]
-   // );
 
    // PATCH UserInfo
    await fuzzPatch(page, headers,
@@ -662,20 +622,6 @@ async function fullFuzzCommaon(
       `${apiUrl}/passkeys/{1}`,
       [[...badIdsSmall, userId], badIds]
    );
-
-   // GET session
-   // comment out during backward compatibility period
-   // await fuzzGet(page, headers,
-   //    `${apiUrl}/users/{0}/session`,
-   //    [badIds]
-   // );
-
-   // DELETE  session
-   // comment out during backward compatibility period
-   // await fuzzDelete(page, headers,
-   //    `${apiUrl}/users/{0}/session`,
-   //    [badIds]
-   // );
 
    let delResponse = await page.request.delete(
       `${apiUrl}/user`,

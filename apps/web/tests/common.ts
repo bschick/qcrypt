@@ -209,8 +209,7 @@ export async function deleteFirstPasskey(
 
   const [deleteResponse] = await Promise.all([
     page.waitForResponse(response =>
-      // /authenticator is for backward compat, remove when clients upgrade
-      (response.url().includes('/passkeys') || response.url().includes('/authenticator')) &&
+      (response.url().includes('/passkeys')) &&
       response.request().method() === 'DELETE'
     ),
     page.getByRole('button', { name: 'Yes' }).click()
@@ -232,8 +231,7 @@ export async function deleteLastPasskey(
 
   const [deleteResponse] = await Promise.all([
     page.waitForResponse(response =>
-      // /authenticator is for backward compat, remove when clients upgrade
-      (response.url().includes('/passkeys') || response.url().includes('/authenticator')) &&
+      (response.url().includes('/passkeys')) &&
       response.request().method() === 'DELETE'
     ),
     page.getByRole('button', { name: 'Yes' }).click()
