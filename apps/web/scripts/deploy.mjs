@@ -97,6 +97,7 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
+import { closest } from '../src/app/services/levenshtein.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers (all take `argv` so they can be shared by every command)
@@ -345,6 +346,7 @@ function runDeploy(argv) {
    const bulkArgs = [
       's3', 'sync', argv.buildDir, `s3://${argv.bucket}/`,
       '--exact-timestamps',
+      '--no-progress',
       '--exclude', 'index.html',
       '--exclude', '.DS_Store', '--exclude', '*/.DS_Store',
       '--exclude', '._*', '--exclude', '*/._*',
@@ -355,23 +357,52 @@ function runDeploy(argv) {
    if (!argv.includeSubdirs) {
       bulkArgs.push('--exclude', '*/*');
    }
-   aws(argv, bulkArgs);
+   const bulkResult = aws(argv, bulkArgs);
 
+   // `aws s3 sync --no-progress` prints one "upload: ..." line per transferred
+   // file (without the carriage-return progress overlay). Match anchored to
+   // start-of-line / \r / \n so we'd still count correctly if the flag were
+   // ever dropped or a CLI variant left the progress overlay intact.
+   const countUploads = (out) => (out ?? '').match(/(?:^|[\r\n])upload: /g)?.length ?? 0;
+   let totalUploads = countUploads(bulkResult.stdout);
+
+   // index.html is sync'd separately so it lands AFTER its chunks. Using sync
+   // (not cp) means it's skipped when unchanged.
    if (newKeys.has('index.html')) {
-      aws(argv, [
-         's3', 'cp', join(argv.buildDir, 'index.html'),
-         `s3://${argv.bucket}/index.html`,
+      const indexResult = aws(argv, [
+         's3', 'sync', argv.buildDir, `s3://${argv.bucket}/`,
+         '--exact-timestamps',
+         '--no-progress',
+         '--exclude', '*',
+         '--include', 'index.html',
          '--cache-control', argv.cacheControl,
       ]);
+      totalUploads += countUploads(indexResult.stdout);
    }
 
-   // 3. Reconcile the manifest. Only in-scope keys are reconciled — out-of-scope
+   const manifest = readManifest(argv);
+   const manifestOrphans = new Map(Object.entries(manifest.orphans));
+
+   // 3. Short-circuit on a true no-op: nothing transferred ⇒ nothing to
+   //    reconcile, no manifest rewrite, no invalidation. Still scan for
+   //    leaks so untracked-in-bucket reports continue to surface.
+   if (!argv.dryRun && totalUploads === 0) {
+      const isTracked = trackedMatcher({
+         current: manifest.current,
+         orphans: Object.fromEntries(manifestOrphans),
+         expected: manifest.expected,
+      });
+      const untracked = listBucket(argv).filter((k) => !isTracked(k));
+      console.log(`deploy #${manifest.deployCount ?? 0}: no changes  untracked=${untracked.length}`);
+      printUntracked(untracked, "untracked in bucket (use 'expect' or 'unexpect' to update, 'prune' to remove):", argv.printLimit);
+      return;
+   }
+
+   // 4. Reconcile the manifest. Only in-scope keys are reconciled — out-of-scope
    //    entries (subdir files when --include-subdirs is off) are preserved
    //    verbatim so a top-level deploy doesn't mis-orphan subdir state a
    //    recursive bootstrap/deploy put there.
-   const manifest = readManifest(argv);
    const manifestCurrent = new Set(manifest.current);
-   const manifestOrphans = new Map(Object.entries(manifest.orphans));
    const inScope = (k) => argv.includeSubdirs || !k.includes('/');
 
    const now = new Date().toISOString();
@@ -419,7 +450,7 @@ function runDeploy(argv) {
       }
    }
 
-   // 5. Write the updated manifest.
+   // 6. Write the updated manifest.
    const deployCount = (manifest.deployCount ?? 0) + 1;
    writeManifest(argv, {
       version: 1,
@@ -430,7 +461,7 @@ function runDeploy(argv) {
       expected: [...manifest.expected].sort(),
    });
 
-   // 6. Leak detection: compare S3 listing against tracked sets.
+   // 7. Leak detection: compare S3 listing against tracked sets.
    // listBucket respects --include-subdirs for scope.
    const isTracked = trackedMatcher({
       current: [...newCurrent],
@@ -439,11 +470,11 @@ function runDeploy(argv) {
    });
    const untracked = listBucket(argv).filter((k) => !isTracked(k));
 
-   // 7. Summary.
+   // 8. Summary.
    const newlyOrphaned = [...orphans.keys()].filter((k) => !manifestOrphans.has(k));
    const dryRunTag = argv.dryRun ? ' (DRY RUN — no writes)' : '';
    console.log(
-      `deploy #${deployCount}: uploaded=${newKeys.size} newly-orphaned=${newlyOrphaned.length}` +
+      `deploy #${deployCount}: uploaded=${totalUploads} newly-orphaned=${newlyOrphaned.length}` +
       ` tracked-orphans=${orphans.size} expired-deleted=${deletedFromS3.length}` +
       ` untracked=${untracked.length}${dryRunTag}`,
    );
@@ -690,6 +721,13 @@ const addGlobalOpts = (y) => y
    .option('dry-run', { type: 'boolean', default: false, describe: 'Log actions without executing them' })
    .option('print-limit', { type: 'number', default: 20, describe: 'Max file keys to print in listings (deploy, leaks, prune)' });
 
+// Used to detect typo'd commands that would otherwise be silently consumed by
+// the default `$0 <bucket>` positional.
+const COMMANDS = [
+   'deploy', 'rollback', 'reset', 'bootstrap', 'manifest',
+   'leaks', 'expect', 'unexpect', 'prune',
+];
+
 const deployBuilder = (y) => addGlobalOpts(y)
    .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
    .option('build-dir', { type: 'string', default: 'dist/web/browser', describe: 'Local directory to upload' })
@@ -788,9 +826,26 @@ yargs(hideBin(process.argv))
       runPrune,
    )
    .demandCommand(1)
-   .fail((msg, err, y) => {
+   .fail((msg, err) => {
       if (err) {
          throw err;
+      }
+      // Catch typos like `deploy.mjs leaked quickcrypt` — yargs binds `leaked`
+      // to <bucket> and complains about the extra `quickcrypt`. With 2+
+      // positionals where the first isn't a known command, treat it as a
+      // typo'd command (no legitimate command takes an unknown leading
+      // positional plus extras).
+      if (msg && /^Unknown argument/.test(msg)) {
+         const positionals = hideBin(process.argv).filter((a) => !a.startsWith('-'));
+         if (positionals.length >= 2 && !COMMANDS.includes(positionals[0])) {
+            const match = closest(positionals[0], COMMANDS);
+            if (match.dist <= 2) {
+               console.error(`Unknown command '${positionals[0]}'. Did you mean '${match.closest}'?`);
+            } else {
+               console.error(`Unknown command '${positionals[0]}'. Available: ${COMMANDS.join(', ')}.`);
+            }
+            process.exit(1);
+         }
       }
       const rewritten = /Not enough non-option arguments/.test(msg ?? '')
          ? 'Error: you must specify the target S3 bucket. Run with --help for usage.'
