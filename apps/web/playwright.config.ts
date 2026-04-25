@@ -1,4 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 
 /**
  * Read environment variables from file.
@@ -7,6 +9,15 @@ import { defineConfig, devices } from '@playwright/test';
 // import dotenv from 'dotenv';
 // import path from 'path';
 // dotenv.config({ path: path.resolve(__dirname, '.env') });
+
+/* Anchor report + artifact paths to the project root regardless of cwd or
+   config-file location. outputFolder (HTML report) is resolved relative to
+   the config file, but outputDir (test artifacts) is resolved relative to
+   the nearest package.json — they disagree when the config lives in apps/web
+   but the test runner is invoked from the monorepo root. */
+const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const runStamp = new Date().toISOString().replace(/[:.]/g, '-');
+const runRoot = resolve(projectRoot, 'playwright-report', runStamp);
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -17,19 +28,32 @@ export default defineConfig({
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
+  /* Retry once locally (and twice on CI) so flakes surface a trace instead
+     of an opaque timeout. */
+  retries: process.env.CI ? 2 : 1,
   /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : 4,
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'html',
+  /* Each run gets its own timestamped folder containing both the HTML
+     report and per-test artifacts (trace/video/screenshot), so historical
+     runs are preserved side-by-side. */
+  reporter: [
+    ['html', {
+      outputFolder: resolve(runRoot, 'html'),
+      open: 'on-failure',
+    }],
+  ],
+  outputDir: resolve(runRoot, 'artifacts'),
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
     // baseURL: 'http://localhost:3000',
 
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: 'on-first-retry',
+    /* Keep trace/screenshot/video from the first failed attempt even if a
+       retry later succeeds — critical for debugging flakes where the
+       failure disappears on retry. */
+    trace: 'retain-on-first-failure',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
   },
 
   /* Configure projects for major browsers */

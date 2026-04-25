@@ -98,7 +98,7 @@ pnpm test
 ```bash
 pnpm test:e2e
 ```
-
+If a test fails, view the trace with `pnpm exec playwright show-trace playwright-report/<path-to-trace>`
 ---
 
 ## 6. Key Patterns & Conventions
