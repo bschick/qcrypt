@@ -1,6 +1,6 @@
 import './setup-color';
-import sodium from 'libsodium-wrappers';
 import {
+   cryptoReady,
    decryptStream, encryptStream, getCipherStreamInfo,
    makeCipherArmor, parseCipherArmor,
    base64ToBytes, bytesToBase64, readStreamAll, Ciphers,
@@ -510,7 +510,7 @@ function openTTY(kind: 'stdin' | 'stdout'): Promise<any> {
 }
 
 async function main() {
-   await sodium.ready;
+   await cryptoReady();
 
    let pipedIn: ReadableStream<Uint8Array> | undefined;
    let binaryIn = false;
