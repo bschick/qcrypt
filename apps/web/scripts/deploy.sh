@@ -30,5 +30,6 @@ node "$SCRIPT_DIR/deploy.mjs" \
    --build-dir "$REPO_ROOT/dist/web/browser" \
    --cache-control "public, max-age=31536000, immutable" \
    --expiration-days 30 \
+   --print-limit 300 \
    --cf-distribution <id> \
    "$@"

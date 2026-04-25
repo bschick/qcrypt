@@ -2,38 +2,38 @@
 /**
  * postbuild-preload-check.mjs
  *
- * Runs after `pnpm build:web`. Emits `<!-- csp-hash sha384-... -->` comments
- * in index.html's <head>, one per chunk the module graph can load (initial
- * + lazy). The Python Lambda (`apps/server/src/nonce/lambda_function.py`)
- * scrapes these into the CSP's `script-src`. Comments don't trigger browser
- * fetches, so lazy chunks stay lazy.
+ * Runs after `pnpm build:web`. Sanity-checks that Angular's experimental
+ * chunk optimizer collapsed the initial module graph into main-*.js, so
+ * nothing in the initial graph is connected via a static `from "./chunk-X.js"`
+ * import. If any such chunk is found, fail the build with a clear message.
  *
- * Prerequisite: `pnpm build:web` must be run with NG_BUILD_OPTIMIZE_CHUNKS=1
- * (Angular's experimental chunk optimizer, which rebundles with Rolldown to
- * collapse initial shared chunks into main-*.js). This removes the need for
- * us to inject modulepreload hints: there simply aren't enough initial
- * chunks to exceed Angular's MODULE_PRELOAD_MAX = 10 cap. The build script
- * sets the env var automatically.
+ * Why this matters
+ * ----------------
+ * The CSP served by `apps/server/src/nonce/lambda_function.py` uses hashes
+ * for the entry-point scripts (main, polyfills, inline nonce listener) and
+ * 'self' for dynamic imports. It does NOT use 'strict-dynamic' — Chrome
+ * doesn't propagate hash-based trust to dynamic imports — and it has no
+ * machinery for authorizing initial static-imported chunks by content hash.
  *
- * If someone removes the optimizer env var, esbuild's default splitting
- * produces 15+ initial chunks and CSP will block everything past the cap.
- * This script fails the build in that case with a clear message.
+ * Which means: if Angular's optimizer ever doesn't run, esbuild's default
+ * splitting produces ~15 initial chunks connected via static imports from
+ * main. Those chunks are parser-inserted-by-inheritance and would need
+ * modulepreload hints with integrity to get authorized by CSP. Rather than
+ * re-invent that machinery, this script fails the build loudly and tells
+ * you to check that `NG_BUILD_OPTIMIZE_CHUNKS=1` is in the build command.
+ *
+ * Dynamic imports of lazy chunks are fine — those load via `import()` and
+ * are authorized by the `'self'` source in the CSP's script-src.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const browserDir = process.argv[2] ?? 'dist/web/browser';
 const indexPath = join(browserDir, 'index.html');
 
-// Any quoted (single, double, or backtick) reference to a chunk filename.
-// The optimizer uses template literals; non-optimized builds use plain
-// quotes. Mixed case matters — Rolldown-output names include lowercase.
-const CHUNK_REF_RE = /["'`](\.\/chunk-[A-Za-z0-9_-]+\.js)["'`]/g;
-
-// Narrower: static imports only — `from "..."` or bare `import "..."`.
-// Used to detect whether the optimizer ran.
+// Matches static imports only — `from "./chunk-X.js"` and bare
+// `import "./chunk-X.js"`. Dynamic `import("./chunk-X.js")` is not matched.
 const STATIC_IMPORT_RE = /(?:from|\bimport)\s*["'`](\.\/chunk-[A-Za-z0-9_-]+\.js)["'`]/g;
 
 const html = readFileSync(indexPath, 'utf8');
@@ -56,42 +56,22 @@ if (entries.length === 0) {
    process.exit(1);
 }
 
-// BFS every chunk reachable from the entries.
-const visited = new Set();
-const allChunks = new Set();
+// Any chunk reachable via a static import chain from an entry is a failure.
 const staticallyImported = new Set();
-const queue = [...entries];
-while (queue.length > 0) {
-   const file = queue.shift();
-   if (visited.has(file)) {
-      continue;
-   }
-   visited.add(file);
-   const src = readFileSync(join(browserDir, file), 'utf8');
-   for (const m of src.matchAll(CHUNK_REF_RE)) {
-      const name = m[1].slice(2);
-      if (!allChunks.has(name)) {
-         allChunks.add(name);
-         queue.push(name);
-      }
-   }
+for (const entry of entries) {
+   const src = readFileSync(join(browserDir, entry), 'utf8');
    for (const m of src.matchAll(STATIC_IMPORT_RE)) {
       staticallyImported.add(m[1].slice(2));
    }
 }
 
-// If any chunk is statically imported by main, the optimizer didn't run —
-// some initial shared chunk was extracted, and if we have more than 10 of
-// them Angular won't emit modulepreload hints for all and CSP will block.
-// The build script sets NG_BUILD_OPTIMIZE_CHUNKS=1; if someone removed it,
-// surface that as a clear failure.
 if (staticallyImported.size > 0) {
    console.error(
       `postbuild-preload-check: ${staticallyImported.size} chunk(s) are statically imported\n` +
       '  by main, which means Angular\'s experimental chunk optimizer did not run.\n' +
       '  Expected `NG_BUILD_OPTIMIZE_CHUNKS=1` in the build command. Without it,\n' +
-      '  esbuild\'s default splitting extracts shared code and CSP will block\n' +
-      '  anything past Angular\'s MODULE_PRELOAD_MAX = 10 cap.\n' +
+      '  esbuild\'s default splitting extracts shared code into initial chunks and\n' +
+      '  the current CSP cannot authorize them.\n' +
       '\n' +
       '  Statically-imported chunks: ' +
       [...staticallyImported].sort().join(', '),
@@ -99,23 +79,4 @@ if (staticallyImported.size > 0) {
    process.exit(1);
 }
 
-if (allChunks.size === 0) {
-   console.log('postbuild-preload-check: no lazy chunks discovered; nothing to do');
-   process.exit(0);
-}
-
-// Emit csp-hash comments for every discovered chunk.
-const cspHashComments = [...allChunks].sort().map((name) => {
-   const body = readFileSync(join(browserDir, name));
-   const hash = 'sha384-' + createHash('sha384').update(body).digest('base64');
-   return `<!-- csp-hash ${hash} -->`;
-}).join('');
-
-const patched = html.replace('</head>', cspHashComments + '</head>');
-if (patched === html) {
-   console.error('postbuild-preload-check: could not find </head> to insert comments before');
-   process.exit(1);
-}
-
-writeFileSync(indexPath, patched);
-console.log(`postbuild-preload-check: emitted ${allChunks.size} csp-hash comment(s) for lazy chunks`);
+console.log('postbuild-preload-check: initial graph clean (no static chunk imports from main)');

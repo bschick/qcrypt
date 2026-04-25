@@ -147,10 +147,17 @@ function aws(argv, args, { input, allowFailure = false, readOnly = false } = {})
    return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
+// Known OS/editor metadata files we don't want to upload, but without
+// blanket-skipping dotfiles (e.g. `.well-known/` is legitimate).
+const METADATA_SKIP_RE = /^(?:\.DS_Store|\._.*|Thumbs\.db|desktop\.ini)$/;
+
 function collectLocalFiles(root, recursive) {
    const out = [];
    const walk = (dir, rel) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
+         if (METADATA_SKIP_RE.test(entry.name)) {
+            continue;
+         }
          const full = join(dir, entry.name);
          const key = rel ? `${rel}/${entry.name}` : entry.name;
          if (entry.isDirectory()) {
@@ -329,9 +336,20 @@ function runDeploy(argv) {
    }
 
    // 2. Upload everything except index.html, then index.html last.
+   // Known OS/editor metadata files are excluded (matches METADATA_SKIP_RE
+   // used locally) while legitimate dotdirs like `.well-known/` are kept.
+   // `--exact-timestamps` forces re-upload when sizes match but mtimes differ,
+   // covering edge cases where build tooling regenerates files with identical
+   // sizes but different content (e.g. Rolldown's chunk naming isn't always
+   // pure content-hash).
    const bulkArgs = [
       's3', 'sync', argv.buildDir, `s3://${argv.bucket}/`,
+      '--exact-timestamps',
       '--exclude', 'index.html',
+      '--exclude', '.DS_Store', '--exclude', '*/.DS_Store',
+      '--exclude', '._*', '--exclude', '*/._*',
+      '--exclude', 'Thumbs.db', '--exclude', '*/Thumbs.db',
+      '--exclude', 'desktop.ini', '--exclude', '*/desktop.ini',
       '--cache-control', argv.cacheControl,
    ];
    if (!argv.includeSubdirs) {
