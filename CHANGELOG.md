@@ -8,9 +8,9 @@
   - performance optimizations for web app load time and first render
 
 #### Security
-  - server-side authentication hardening found using Claude Code
+  - server-side authentication hardening fixes found using Claude Code
   - switched to node crypto.timingSafeEqual for constant time comparisons [thanks to CapsenR]
-  - fix for local sessions remaining valid after PK deletion [thanks to Rajat Shukla (@rajat4722)]
+  - fix for local session remaining valid after PK deletion [thanks to Rajat Shukla (@rajat4722)]
   - updated packages
 
 ## 6.1.6 (2026-04-11)
