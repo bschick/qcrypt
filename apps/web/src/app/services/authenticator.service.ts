@@ -133,8 +133,8 @@ export class AuthenticatorService {
    }
 
 
-   // it is possible for "authenticated" to be true and "validaSession"
-   // to be false. this happens when another tab logs out or out then in
+   // it is possible for "authenticated" to be true and "potentialSession"
+   // to be false. this happens when another tab logs out, or out then in,
    // using a different Pk until this tab detects it
    public authenticated(): boolean {
       return !!this._userCred && !!this._csrf;
@@ -474,11 +474,14 @@ export class AuthenticatorService {
       const eventData = this._captureEventData(AuthEvent.Logout);
 
       if (global) {
-         // Don't block on the logout, but all reg/auth methods must await _pendingLogout.
-         this._pendingLogout = this._doFetch<string>({
-            method: 'DELETE',
-            resource: 'session'
-         }).catch(() => undefined);
+         // Avoid trampling _pendingLogout by firing multiple DELETE's.
+         // They are noops when already logged out anyway.
+         if (this.authenticated()) {
+            this._pendingLogout = this._doFetch<string>({
+               method: 'DELETE',
+               resource: 'session'
+            }).catch(() => undefined);
+         }
 
          // rather than clear values, which can trigger error in other tabs,
          // set expirations to the past to trigger clear self-logout
