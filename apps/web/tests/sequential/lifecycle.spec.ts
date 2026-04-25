@@ -51,7 +51,9 @@ test.describe('creation', () => {
 
     await page.getByRole('button', { name: /Sign out/ }).click();
 
-    await passkeyAuth(session, authId1, async () => {
+    // Both authIds hold a passkey for PWFlippy at this point — pass both so
+    // presence sim covers whichever the browser picks.
+    await passkeyAuth(session, [authId1, authId2], async () => {
       await page.getByRole('button', { name: /Sign in as PWFlippy/ }).click();
     });
 
@@ -64,7 +66,7 @@ test.describe('creation', () => {
 
     await page.getByRole('button', { name: /Sign out/ }).click();
 
-    await passkeyAuth(session, authId2, async () => {
+    await passkeyAuth(session, [authId1, authId2], async () => {
       await page.getByRole('button', { name: /Sign in as PWFlippy/ }).click();
     });
 
