@@ -1,6 +1,6 @@
 // Learn more about Vitest configuration options at https://vitest.dev/config/
 
-import { defineConfig, configDefaults } from 'vitest/config';
+import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 
 export default defineConfig({
@@ -11,7 +11,6 @@ export default defineConfig({
     ],
   },
   test: {
-    exclude: [...configDefaults.exclude, 'tmp/**'],
     globals: true,
     testTimeout: 30000,
     browser: {

@@ -85,7 +85,7 @@ import {
    validB64,
    base64UrlEncode,
    base64UrlDecode,
-   timingSafeEqual,
+   knownLenTimingSafeEqual,
    CertPacker
 } from './utils';
 import sodium from 'libsodium-wrappers';
@@ -392,13 +392,13 @@ async function postAuthVerify(
       throw new AuthError('challenge not valid');
    }
 
-   // Refuse challenges that were issued for a different flow (reg/addpasskey).
+   // Refuse challenges that were issued for a different flow.
    if (challenge.data.purpose !== 'auth') {
       throw new AuthError('challenge not valid');
    }
 
    // Derive identity from the credential record via GSI, not from the
-   // unsigned userHandle field in the assertion response
+   // unsigned userHandle field in the assertion response (which is fakeable)
    const credResult = await Authenticators.query.byCredId({
       credentialId: body.id
    }).go();
@@ -422,6 +422,9 @@ async function postAuthVerify(
             }
          });
       } catch { /* expected */ }
+
+      // Jitter blurs the residual gap: empty vs populated DDB returns, etc
+      await setTimeout(randomInt(5, 45));
       throw new AuthError();
    }
 
@@ -1197,7 +1200,6 @@ async function postAuthOptions(
 ): Promise<Response> {
    const {
       rpID,
-      params,
       body
    } = httpDetails;
 
@@ -1231,16 +1233,12 @@ async function postAuthOptions(
       }
 
       if (!allowedCreds) {
-         // Equivalent-cost DB call to keep timing aligned with the real path.
-         try {
-            await Authenticators.query.byUserId({ userId: unverifiedUserId }).go();
-         } catch {
-         }
          allowedCreds = await dummyAllowedCreds(unverifiedUserId);
          userId = UnknownUserId;
 
-         // Jitter to blur any residual wall-clock gap between real and dummy paths.
-         await setTimeout(randomInt(5, 35));
+         // Jitter blurs the gap between this path's empty lookups and the
+         // real path's populated DDB get + GSI query.
+         await setTimeout(randomInt(5, 95));
       }
    }
 
@@ -1809,11 +1807,11 @@ async function deletePasskey(
    let response: UserInfo = {
       verified: false
    };
+   let endSession = false;
 
    // If there are no authenticators remaining, delete the
    // entire user identity and return unverified UserInfo object
    if (auths.length == 0) {
-
       // Delete all invitables for this user
       const invitables = await Invitables.query.byUserId({
          userId: verifiedUser.userId
@@ -1837,12 +1835,17 @@ async function deletePasskey(
       }
       // Let this happen async
       recordEvent(EventNames.UserDelete, verifiedUser.userId, credId);
+      endSession = true;
    } else {
-      response = await makeUserInfoResponse(verifiedUser, auths);
       recordEvent(EventNames.RegDelete, verifiedUser.userId, credId);
+      response = await makeUserInfoResponse(verifiedUser, auths);
+      if (credId === verifiedUser.lastCredentialId) {
+         await deleteSession(httpDetails, verifiedUser);
+         endSession = true;
+      }
    }
 
-   return { content: response };
+   return { content: response, endSession };
 }
 
 // recover removes all existing passkeys, then initiates the
@@ -1854,13 +1857,11 @@ async function postRecover(
    const {
       rpID,
       rpOrigin,
-      resources,
       body,
    } = httpDetails;
 
-   // Prefer body; fall back to URL path params for backward compat until clients update
-   const userCred = body?.userCred ?? resources.usercred;
-   const userId = body?.userId ?? resources.userid;
+   const userCred = body?.userCred;
+   const userId = body?.userId;
 
    if (!validB64(userCred)) {
       throw new ParamError('invalid user credential');
@@ -1883,7 +1884,7 @@ async function postRecover(
    );
 
    // Critical check to ensure we do not recover the wrong user
-   if (!timingSafeEqual(base64UrlEncode(userCredDecBytes)!, userCred)) {
+   if (!knownLenTimingSafeEqual(userCredDecBytes, base64UrlDecode(userCred)!)) {
       // vague error to make guessing harder
       console.error(`user account ${verifiedUser.userId} invalid user credential`);
       throw new AuthError();
@@ -1964,7 +1965,7 @@ async function postRecover2(
    );
 
    // Critical check to ensure we do not recover the wrong user
-   if (!timingSafeEqual(base64UrlEncode(recoveryIdDecBytes)!, recoveryId)) {
+   if (!knownLenTimingSafeEqual(recoveryIdDecBytes, base64UrlDecode(recoveryId)!)) {
       // vague error on purpose to make guessing harder
       console.error(`user account ${verifiedUser.userId} invalid recovery id`);
       throw new AuthError();
@@ -2062,13 +2063,12 @@ function killCookie(): string {
    return '__Host-JWT=X; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=0';
 }
 
-async function createCsrf(verifiedUser: VerifiedUserItem): Promise<string> {
+async function createCsrf(verifiedUser: VerifiedUserItem): Promise<Uint8Array> {
    if (!verifiedUser) {
       throw new AuthError();
    }
 
-   const csrfBytes = await getSessionKey(verifiedUser, "csrf");
-   return base64UrlEncode(csrfBytes)!;
+   return await getSessionKey(verifiedUser, "csrf");
 }
 
 async function createCookie(verifiedUser: VerifiedUserItem): Promise<string> {
@@ -2103,10 +2103,13 @@ async function verifyCsrf(
    headerCsrf: string | undefined
 ) {
    // Even if we don't check csrf, make sure we can create one
-   const serverCsrf = await createCsrf(verifiedUser);
+   const serverCsrfBytes = await createCsrf(verifiedUser);
 
-   if (checkCsrf && (!headerCsrf || !timingSafeEqual(serverCsrf, headerCsrf))) {
-      throw new AuthError('invalid csrf token');
+   if (checkCsrf) {
+      const headerCsrfBytes = base64UrlDecode(headerCsrf);
+      if (!headerCsrfBytes || !knownLenTimingSafeEqual(serverCsrfBytes, headerCsrfBytes)) {
+         throw new AuthError('invalid csrf token');
+      }
    }
 }
 
@@ -2218,11 +2221,11 @@ export async function handler(event: any, context: any) {
       let respCookie: string | undefined;
       if (response.startSession) {
          respCookie = await createCookie(response.startSession);
-         response.content['csrf'] = await createCsrf(response.startSession);
+         response.content['csrf'] = base64UrlEncode(await createCsrf(response.startSession));
       } else if (response.endSession) {
          respCookie = killCookie();
       } else if (response.returnCsrf) {
-         response.content['csrf'] = await createCsrf(verifiedUser!);
+         response.content['csrf'] = base64UrlEncode(await createCsrf(verifiedUser!));
       }
       return makeResponse(JSON.stringify(response.content), 200, respCookie);
 
@@ -2260,8 +2263,6 @@ const METHODMAP: MethodMap = {
       { name: 'postRegOptions', pattern: Patterns.regOptions, version: 1, authorize: false, handler: postRegOptions },
       { name: 'postRegVerify', pattern: Patterns.regVerify, version: 1, authorize: false, handler: postRegVerify },
       { name: 'postRecover', pattern: Patterns.recover, version: 1, authorize: false, handler: postRecover },
-      // backward compat
-      { name: 'postRecoverOld', pattern: Patterns.recoverOld, version: 1, authorize: false, handler: postRecover },
       { name: 'postRecover2', pattern: Patterns.recover2, version: 1, authorize: false, handler: postRecover2 },
       // Sender links
       { name: 'postTopics', pattern: Patterns.topics, version: 1, authorize: true, handler: postTopics },

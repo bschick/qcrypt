@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import sodium from 'libsodium-wrappers';
+import { cryptoReady } from './sodium';
 import * as cc from './cipher.consts';
 import { PWDKeyProvider } from './keys';
 import { PWDKeyProviderOld } from './keys-old';
@@ -29,7 +29,7 @@ import { isEqualArray } from './utils.spec';
 
 describe("Key generation", function () {
    beforeEach(async () => {
-      await sodium.ready;
+      await cryptoReady();
    });
 
    it("successful and not equivalent key generation", async function () {

@@ -51,7 +51,9 @@ test.describe('creation', () => {
 
     await page.getByRole('button', { name: /Sign out/ }).click();
 
-    await passkeyAuth(session, authId1, async () => {
+    // Both authIds hold a passkey for PWFlippy at this point — pass both so
+    // presence sim covers whichever the browser picks.
+    await passkeyAuth(session, [authId1, authId2], async () => {
       await page.getByRole('button', { name: /Sign in as PWFlippy/ }).click();
     });
 
@@ -64,7 +66,7 @@ test.describe('creation', () => {
 
     await page.getByRole('button', { name: /Sign out/ }).click();
 
-    await passkeyAuth(session, authId2, async () => {
+    await passkeyAuth(session, [authId1, authId2], async () => {
       await page.getByRole('button', { name: /Sign in as PWFlippy/ }).click();
     });
 
@@ -93,6 +95,80 @@ test.describe('creation', () => {
     await page.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
 
+  });
+
+  testWithAuth('delete active passkey signs out', { tag: '@nukeall' }, async ({ authFixture }) => {
+    const { page, session, authId1, authId2 } = authFixture;
+    test.setTimeout(60000);
+
+    await page.goto('/');
+
+    await passkeyCreation(session, authId1, async () => {
+      await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
+      await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible({timeout:10000});
+      await page.locator('input#userName').fill('PWFlippy');
+      await page.getByRole('button', { name: /Create new/ }).click();
+    });
+
+    await page.waitForURL('/showrecovery', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'Account Backup and Recovery' })).toBeVisible({timeout:10000});
+    await page.getByRole('button', { name: /I saved my/ }).click();
+
+    await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+    await openCredentials(page);
+
+    let tableBody = page.locator('table.credtable tbody');
+    await expect(tableBody.locator('tr')).toHaveCount(1);
+
+    await passkeyCreation(session, authId2, async () => {
+      await page.getByRole('button', { name: /New Passkey/ }).click();
+    });
+
+    await expect(tableBody.locator('tr')).toHaveCount(2);
+
+    // Delete the first passkey, which is the one used to sign in (active PK).
+    // Server invalidates the session, client calls logout(true), sign-in dialog appears.
+    await deleteFirstPasskey(page);
+    await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible({timeout:10000});
+
+    // Sign in with the remaining passkey (authId2)
+    await passkeyAuth(session, authId2, async () => {
+      await page.getByRole('button', { name: /Sign in as PWFlippy/ }).click();
+    });
+
+    await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+
+    await openCredentials(page);
+    tableBody = page.locator('table.credtable tbody');
+    await expect(tableBody.locator('tr')).toHaveCount(1);
+
+    // Add a secondary passkey, then delete it. Active PK (authId2) is unchanged,
+    // so the session stays valid and the Sign In dialog must not appear.
+    await passkeyCreation(session, authId1, async () => {
+      await page.getByRole('button', { name: /New Passkey/ }).click();
+    });
+    await expect(tableBody.locator('tr')).toHaveCount(2);
+
+    await deleteLastPasskey(page);
+    await expect(tableBody.locator('tr')).toHaveCount(1);
+    await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
+
+    // Refresh and confirm the session was not invalidated
+    await page.reload();
+    await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+    await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
+
+    await openCredentials(page);
+    tableBody = page.locator('table.credtable tbody');
+    await expect(tableBody.locator('tr')).toHaveCount(1);
+
+    // Cleanup: delete the last passkey, which also deletes the user
+    await deleteFirstPasskey(page, 'PWFlippy');
+    await page.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
   });
 
 });

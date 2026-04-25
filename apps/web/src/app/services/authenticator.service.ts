@@ -20,9 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import sodium from 'libsodium-wrappers';
 import { environment } from '../../environments/environment';
-import { Injectable, signal } from '@angular/core';
+import { Injectable, afterNextRender, signal } from '@angular/core';
 import {
    PublicKeyCredentialCreationOptionsJSON,
    PublicKeyCredentialRequestOptionsJSON,
@@ -31,8 +30,7 @@ import {
    startRegistration, startAuthentication
 } from '@simplewebauthn/browser';
 import { Subject, Subscription, filter } from 'rxjs';
-import { DateTime } from 'luxon';
-import { base64ToBytes, bytesToBase64, bufferToHexString, expired } from '@qcrypt/crypto';
+import { base64ToBytes, bytesToBase64, bufferToHexString, expired, cryptoReady, zxcvbnReady } from '@qcrypt/crypto';
 import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 
@@ -105,11 +103,12 @@ export class AuthenticatorService {
    private _userCred?: Uint8Array = undefined;
    private _csrf?: string = undefined;
    private _cachedRecoveryId?: string;
-   public ready: Promise<[void, void]>;
+   // In-flight logout DELETE; login paths await it to avoid sign-out → sign-in race.
+   private _pendingLogout: Promise<unknown> = Promise.resolve();
+   public ready: Promise<void>;
 
-   constructor(
-   ) {
-      const loadSess = new Promise<void>((resolve) => {
+   constructor() {
+      this.ready = new Promise<void>((resolve) => {
          this.loadSession().catch(
             // just for debugging, remove
             (err) => console.error(err)
@@ -118,12 +117,24 @@ export class AuthenticatorService {
          );
       });
 
-      this.ready = Promise.all([loadSess, sodium.ready]);
+      // Warm crypto and zxcvbn after first render so their chunks don't
+      // compete with LCP.
+      afterNextRender(() => {
+         const kickoff = () => {
+            cryptoReady().catch((err) => console.error(err));
+            zxcvbnReady().catch((err) => console.error(err));
+         };
+         if (typeof window.requestIdleCallback === 'function') {
+            window.requestIdleCallback(kickoff, { timeout: 2000 });
+         } else {
+            kickoff();
+         }
+      });
    }
 
 
-   // it is possible for "authenticated" to be true and "validaSession"
-   // to be false. this happens when another tab logs out or out then in
+   // it is possible for "authenticated" to be true and "potentialSession"
+   // to be false. this happens when another tab logs out, or out then in,
    // using a different Pk until this tab detects it
    public authenticated(): boolean {
       return !!this._userCred && !!this._csrf;
@@ -355,7 +366,7 @@ export class AuthenticatorService {
          throw new Error('invalid csrf token')
       }
 
-      const sessExpiry = DateTime.now().plus({ seconds: SESSION_TIMEOUT }).toISO();
+      const sessExpiry = new Date(Date.now() + SESSION_TIMEOUT * 1000).toISOString();
 
       this._userCred = base64ToBytes(serverLogin.userCred);
       this._csrf = serverLogin.csrf;
@@ -419,7 +430,7 @@ export class AuthenticatorService {
       }
 
       // Currently 1.5 hours inactivity expritation
-      const activityExpiry = DateTime.now().plus({ seconds: ACTIVITY_TIMEOUT }).toISO();
+      const activityExpiry = new Date(Date.now() + ACTIVITY_TIMEOUT * 1000).toISOString();
       localStorage.setItem('activityexpiry', activityExpiry);
 
       // Currently every 2 minutes
@@ -464,18 +475,18 @@ export class AuthenticatorService {
       const eventData = this._captureEventData(AuthEvent.Logout);
 
       if (global) {
-         // let this happen in the background. creates a race condition with next
-         // login, but highly unlikley to be an issue since login presents passkey auth
-         this._doFetch<string>({
-            method: 'DELETE',
-            resource: 'session'
-         }).catch((err) => {
-            // ignore
-         });
+         // Avoid trampling _pendingLogout by firing multiple DELETE's.
+         // They are noops when already logged out anyway.
+         if (this.authenticated()) {
+            this._pendingLogout = this._doFetch<string>({
+               method: 'DELETE',
+               resource: 'session'
+            }).catch(() => undefined);
+         }
 
          // rather than clear values, which can trigger error in other tabs,
          // set expirations to the past to trigger clear self-logout
-         const expired = DateTime.now().minus({ seconds: 10 }).toISO();
+         const expired = new Date(Date.now() - 10000).toISOString();
          localStorage.setItem('activityexpiry', expired);
          localStorage.setItem('sessionexpiry', expired);
       }
@@ -562,6 +573,8 @@ export class AuthenticatorService {
          throw new Error('no active user');
       }
 
+      const wasCurrentPk = this.isCurrentPk(credentialId);
+
       const serverUserInfo = await this._doFetch<UserInfo>({
          method: 'DELETE',
          resource: 'passkeys',
@@ -572,14 +585,20 @@ export class AuthenticatorService {
          throw new Error('authentication failed');
       }
 
-      // If we have an unverified response, that was the last PK and the user was deleted
+      // Unverified response means that was the last PK and the user was deleted.
+      // If we deleted our own current PK the server invalidated our session, so sign out locally.
+      // User still exists in that case, so return remaining count to keep the caller on page
+      // and let the Logout event surface the sign-in dialog.
       if (!serverUserInfo.verified) {
          this._deletedUser();
          return 0;
+      } else if (wasCurrentPk) {
+         this.logout(true);
       } else {
          this._updateLoggedInUser(serverUserInfo);
-         return serverUserInfo.authenticators!.length;
       }
+
+      return serverUserInfo.authenticators!.length;
    }
 
 
@@ -667,6 +686,7 @@ export class AuthenticatorService {
          throw new Error('must be logged out to log in');
       }
 
+      await this._pendingLogout;
       const serverLoginUserInfo = await this._findLoginImpl(true, false, userId);
       return this._loginUser(serverLoginUserInfo);
    }
@@ -763,6 +783,7 @@ export class AuthenticatorService {
    async recover2(recoveryWords: string): Promise<VerifiedUserInfo> {
 
       const [recoveryId, userId] = this.getRecoveryValues(recoveryWords);
+      await this._pendingLogout;
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
          method: 'POST',
          resource: 'recover2',
@@ -779,6 +800,7 @@ export class AuthenticatorService {
          throw new Error('missing userid or usercred');
       }
 
+      await this._pendingLogout;
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
          method: 'POST',
          resource: 'recover',
@@ -795,6 +817,7 @@ export class AuthenticatorService {
          throw new Error('missing require userName');
       }
 
+      await this._pendingLogout;
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
          method: 'POST',
          resource: 'reg/options',

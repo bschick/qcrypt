@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import sodium from 'libsodium-wrappers';
+import { getSodium } from './sodium';
 import * as cc from './cipher.consts';
 import { CipherDataInfo, Ciphers } from './ciphers-current';
 import { ensureArrayBuffer, getRandom, numToBytes } from './utils';
@@ -350,6 +350,7 @@ export class PWDKeyProvider extends BasePWDKeyProvider {
          throw new Error('Invalid state for key derivation');
       }
 
+      const sodium = getSodium();
       let mixedKey: Uint8Array;
 
       // VERSION7 adds a salt to key derivations

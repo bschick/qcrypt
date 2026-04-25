@@ -96,5 +96,11 @@ export { makeCipherArmor, parseCipherArmor } from './lib/armor';
 
 export type { PWDProvider } from './lib/keys';
 
+// Lazy libsodium loader; callers must `await cryptoReady()` before invoking any other crypto export.
+export { cryptoReady } from './lib/sodium';
+
+// Lazy zxcvbn loader; callers must `await zxcvbnReady()` before invoking any other zxcvbn export.
+export { zxcvbnReady, getZxcvbn, checkPwned, addMatcher, removeMatcher } from './lib/zxcvbn';
+
 // PQC functions
 export { kemKeyGen, KEMKeys, combinedSigner } from './lib/pqc';

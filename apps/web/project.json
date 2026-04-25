@@ -45,11 +45,12 @@
             },
             {
               "type": "anyComponentStyle",
-              "maximumWarning": "3kb",
-              "maximumError": "4kb"
+              "maximumWarning": "4kb",
+              "maximumError": "5kb"
             }
           ],
-          "outputHashing": "all"
+          "outputHashing": "all",
+          "sourceMap": true
         },
         "development": {
           "optimization": false,
@@ -91,7 +92,8 @@
       "options": {
         "tsConfig": "apps/web/tsconfig.spec.json",
         "runnerConfig": true,
-        "watch": false
+        "watch": false,
+        "exclude": ["tmp/**", "node_modules/**"]
       }
     }
   }

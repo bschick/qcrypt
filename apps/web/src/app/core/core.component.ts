@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2025 Brad Schick
+Copyright (c) 2025-2026 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -34,7 +34,6 @@ import {
 import { Ciphers, makeCipherArmor, parseCipherArmor } from '@qcrypt/crypto';
 import { CommonModule } from '@angular/common';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
-import { MatRippleModule } from '@angular/material/core';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -50,7 +49,6 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { HttpParams } from '@angular/common/http';
-import { DateTime } from 'luxon';
 import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { ClipboardModule } from '@angular/cdk/clipboard';
@@ -92,7 +90,7 @@ import { Router } from '@angular/router';
       MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
       ClipboardModule, CdkAccordionModule, MatSlideToggleModule,
       MatExpansionModule, MatSelectModule, MatButtonToggleModule,
-      MatTooltipModule, MatRippleModule, CommonModule, BubbleDirective,
+      MatTooltipModule, CommonModule, BubbleDirective,
       OptionsComponent, CopyrightComponent]
 })
 export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -111,7 +109,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    private actionStart = 0;
    private authSub!: Subscription;
    private usedPasswords: string[] = [];
-   public cacheTimeout!: DateTime;
+   public cacheTimeout = 0;
    public clearText = '';
    public pwdCached = false;
    public cipherLabel = 'Cipher Armor';
@@ -125,14 +123,13 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    public clearMsgClass = 'errorBox';
    public secondsRemaining = 0;
    public welcomed: boolean = true;
+   public clearInjected = false;
+   public cipherInjected = false;
 
-   //  @ViewChild(MatRipple) ripple: MatRipple;
    @ViewChild('clearField') clearField!: ElementRef;
    @ViewChild('cipherField') cipherField!: ElementRef;
    @ViewChild('inputArea') inputArea!: ElementRef;
    @ViewChild('fileUpload') fileUpload!: ElementRef;
-//   @ViewChild('formatLabel') formatLabel!: ElementRef;
-//   @ViewChild('minStrLabel') minStrLabel!: ElementRef;
    @ViewChild('bubbleTip1') bubbleTip1!: BubbleDirective;
    @ViewChild('bubbleTip2') bubbleTip2!: BubbleDirective;
    @ViewChild('options') options!: OptionsComponent;
@@ -176,9 +173,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       const params = new HttpParams({ fromString: window.location.search });
       if (params.get('cipherarmor')) {
          const cipherData = parseCipherArmor(params.get('cipherarmor')!);
+         this.cipherInjected = true;
          this.showCipherData(cipherData);
       }
       if (params.get('cleartext')) {
+         this.clearInjected = true;
          this.showClearText(decodeURIComponent(params.get('cleartext')!));
       }
    }
@@ -288,13 +287,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    timerTick() {
-      if (DateTime.now() > this.cacheTimeout) {
+      if (Date.now() > this.cacheTimeout) {
          this.privacyClear();
       }
       let result = 0;
       if (this.pwdCached) {
-         const diff = this.cacheTimeout.diff(DateTime.now());
-         result = Math.max(0, Math.round(diff.toMillis() / 1000));
+         result = Math.max(0, Math.round((this.cacheTimeout - Date.now()) / 1000));
       }
       if (result != this.secondsRemaining) {
          // Do this to avoid setting a template value after it has been checked,
@@ -310,7 +308,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.intervalId = 0;
       }
 
-      this.cacheTimeout = DateTime.now().plus({ seconds: this.options.cacheTime });
+      this.cacheTimeout = Date.now() + this.options.cacheTime * 1000;
       this.secondsRemaining = this.options.cacheTime;
 
       // @ts-ignore
@@ -381,6 +379,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cipherFile = undefined;
       this.cipherArmor = '';
       this.cipherLabel = 'Cipher Armor';
+      this.cipherInjected = false;
    }
 
    onClearClear() {
@@ -388,6 +387,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.clearFile = undefined;
       this.clearText = '';
       this.clearLabel = 'Clear Text';
+      this.clearInjected = false;
       if (!this.welcomed && this.authSvc.authenticated()) {
          this.bubbleTip1.show();
          this.bubbleTip2.hide();
@@ -395,9 +395,18 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onClearInput() {
+      if (!this.clearText) {
+         this.clearInjected = false;
+      }
       if (!this.welcomed && this.authSvc.authenticated()) {
          this.bubbleTip1.hide();
          this.bubbleTip2.show();
+      }
+   }
+
+   onCipherInput() {
+      if (!this.cipherArmor) {
+         this.cipherInjected = false;
       }
    }
 

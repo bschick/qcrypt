@@ -209,7 +209,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          let params = new HttpParams({ fromString: window.location.search });
 
          // If there are customized options, expand the panel by default
-         if (params.keys().length > 0) {
+         if (params.keys().some(p => !['cipherarmor', 'cleartext'].includes(p))) {
             this.expandOptions = true;
          }
 

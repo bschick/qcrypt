@@ -8,6 +8,19 @@
     - hint key gets its own IV
     - added salt to all blake2b key derivations
 
+## 6.1.7 (2026-04-21)
+
+#### Changes
+  - added source map to web production deployment for improved auditing
+  - show a warning icon when clear or cipher text is copied from url [thanks to CapsenR]
+  - performance optimizations for web app load time and first render
+
+#### Security
+  - server-side authentication hardening fixes found using Claude Code
+  - switched to node crypto.timingSafeEqual for constant time comparisons [thanks to CapsenR]
+  - fix for local session remaining valid after PK deletion [thanks to Rajat Shukla (@rajat4722)]
+  - updated packages
+
 ## 6.1.6 (2026-04-11)
 
 #### Changes

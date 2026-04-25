@@ -209,8 +209,7 @@ export async function deleteFirstPasskey(
 
   const [deleteResponse] = await Promise.all([
     page.waitForResponse(response =>
-      // /authenticator is for backward compat, remove when clients upgrade
-      (response.url().includes('/passkeys') || response.url().includes('/authenticator')) &&
+      (response.url().includes('/passkeys')) &&
       response.request().method() === 'DELETE'
     ),
     page.getByRole('button', { name: 'Yes' }).click()
@@ -232,8 +231,7 @@ export async function deleteLastPasskey(
 
   const [deleteResponse] = await Promise.all([
     page.waitForResponse(response =>
-      // /authenticator is for backward compat, remove when clients upgrade
-      (response.url().includes('/passkeys') || response.url().includes('/authenticator')) &&
+      (response.url().includes('/passkeys')) &&
       response.request().method() === 'DELETE'
     ),
     page.getByRole('button', { name: 'Yes' }).click()
@@ -243,10 +241,14 @@ export async function deleteLastPasskey(
 
 export async function passkeyAuth(
   session: CDPSession,
-  authId :string,
+  authId: string | string[],
   operationTrigger: () => Promise<void>
 ): Promise<Credential> {
 
+  // Pass an array when more than one authenticator holds a credential
+  // matching the user being signed in — the browser may pick any of them,
+  // and presence simulation must be enabled on whichever it picks.
+  const authIds = Array.isArray(authId) ? authId : [authId];
   let credential: Credential;
 
   // initialize event listeners to wait for a successful passkey input event
@@ -259,40 +261,39 @@ export async function passkeyAuth(
     });
   });
 
-  // set isUserVerified option to true
-  // (so that subsequent passkey operations will be successful)
-  await session.send('WebAuthn.setUserVerified', {
-    authenticatorId: authId,
-    isUserVerified: true,
-  });
-
-  // set automaticPresenceSimulation option to true
-  // (so that the virtual authenticator will respond to the next passkey prompt)
-  await session.send('WebAuthn.setAutomaticPresenceSimulation', {
-    authenticatorId: authId,
-    enabled: true,
-  });
+  for (const id of authIds) {
+    await session.send('WebAuthn.setUserVerified', {
+      authenticatorId: id,
+      isUserVerified: true,
+    });
+    await session.send('WebAuthn.setAutomaticPresenceSimulation', {
+      authenticatorId: id,
+      enabled: true,
+    });
+  }
 
   await operationTrigger();
 
   // wait to receive the event that the passkey was successfully registered or verified
   await operationCompleted;
 
-  // set automaticPresenceSimulation option back to false
-  await session.send('WebAuthn.setAutomaticPresenceSimulation', {
-    authenticatorId: authId,
-    enabled: false,
-  });
+  for (const id of authIds) {
+    await session.send('WebAuthn.setAutomaticPresenceSimulation', {
+      authenticatorId: id,
+      enabled: false,
+    });
+  }
 
   return credential!;
 }
 
 export async function passkeyCreation(
   session: CDPSession,
-  authId :string,
+  authId: string | string[],
   operationTrigger: () => Promise<void>
 ): Promise<Credential> {
 
+  const authIds = Array.isArray(authId) ? authId : [authId];
   let credential: Credential;
 
   // initialize event listeners to wait for a successful passkey input event
@@ -305,30 +306,28 @@ export async function passkeyCreation(
     });
   });
 
-  // set isUserVerified option to true
-  // (so that subsequent passkey operations will be successful)
-  await session.send('WebAuthn.setUserVerified', {
-    authenticatorId: authId,
-    isUserVerified: true,
-  });
-
-  // set automaticPresenceSimulation option to true
-  // (so that the virtual authenticator will respond to the next passkey prompt)
-  await session.send('WebAuthn.setAutomaticPresenceSimulation', {
-    authenticatorId: authId,
-    enabled: true,
-  });
+  for (const id of authIds) {
+    await session.send('WebAuthn.setUserVerified', {
+      authenticatorId: id,
+      isUserVerified: true,
+    });
+    await session.send('WebAuthn.setAutomaticPresenceSimulation', {
+      authenticatorId: id,
+      enabled: true,
+    });
+  }
 
   await operationTrigger();
 
   // wait to receive the event that the passkey was successfully registered or verified
   await operationCompleted;
 
-  // set automaticPresenceSimulation option back to false
-  await session.send('WebAuthn.setAutomaticPresenceSimulation', {
-    authenticatorId: authId,
-    enabled: false,
-  });
+  for (const id of authIds) {
+    await session.send('WebAuthn.setAutomaticPresenceSimulation', {
+      authenticatorId: id,
+      enabled: false,
+    });
+  }
 
   return credential!;
 }

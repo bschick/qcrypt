@@ -22,6 +22,7 @@ SOFTWARE. */
 
 import { FilterXSS } from 'xss';
 import { Buffer } from "node:buffer";
+import * as crypto from 'node:crypto';
 import * as cc from './consts.ts';
 
 export class ParamError extends Error {
@@ -86,16 +87,12 @@ export function base64Decode(base64: string | undefined): Uint8Array<ArrayBuffer
    return undefined;
 }
 
-// Constant-time string comparison. Early length check is acceptable for fixed-length secrets.
-export function timingSafeEqual(a: string, b: string): boolean {
-   if (a.length !== b.length) {
+// Constant-time comparison for known length arrays.
+export function knownLenTimingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
+   if (a.byteLength !== b.byteLength) {
       return false;
    }
-   let diff = 0;
-   for (let i = 0; i < a.length; i++) {
-      diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-   }
-   return diff === 0;
+   return crypto.timingSafeEqual(a, b);
 }
 
 /* Javascript converts to signed 32 bit int when using bit shifting

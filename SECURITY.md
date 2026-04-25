@@ -2,11 +2,18 @@
 
 [Quick Crypt](https://quickcrypt.org) is designed to protect your private data, so we naturally take security very seriously and welcome peer reviews and vulnerability reporting. Quick Crypt maintains a bug bounty program at [Open Bug Bounty](https://www.openbugbounty.org/bugbounty/schickb/)
 
+### Known Issues
+
+*Please do not report the following known issues:*
+- [Legacy account recovery links with sensitive data in path](https://github.com/bschick/qcrypt/issues/46)
+- [CSP style-src nonces aren't really nonces](https://github.com/bschick/qcrypt/issues/47)
+
+
 ### Reporting
 
 Please use our [vulnerability disclosure program at Open Bug Bounty](https://www.openbugbounty.org/bugbounty/schickb/) to provide details and repro steps. We will respond ASAP. If you cannot use Open Bug Bounty, you may [open a ticket on github](https://github.com/bschick/qcrypt/issues/new/choose) with details and repro steps.
 
-### Rewards (sorry but fees, taxes, etc come out of these amounts)
+### Rewards (sorry but fees, taxes, etc. come out of these amounts)
 - up to $50 for low to medium severity findings
 - $100 for high severity findings
 - $200 for critical findings
@@ -20,7 +27,6 @@ Please use our [vulnerability disclosure program at Open Bug Bounty](https://www
 - do not send social engineering exploits
 - source code scanning is encouraged, but please filter out AI generated noise before submission
     - https://github.com/bschick/qcrypt
-    - https://github.com/bschick/qcrypt-server
 - always send a working PoC and explain the problem clearly
 - attach screenshots or API response data to demonstrate issues
 - sending a remediation is appreciated but not required
@@ -34,9 +40,13 @@ Thanks to the following security researchers:
 
 - **destro4evr**:
     - The first to report potential issues and recommend improvements
-    - For developing server API unittests that support Webauthn
-    - For suggesting a user warning against password reuse between encryption loops
-- [Vaibhav jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/): For reporting missing MTA-STS domain email support
+    - Developed server API unittests that support Webauthn
+    - Suggested a user warning against password reuse between encryption loops
+- [Vaibhav jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/): Reported missing MTA-STS domain email support
 - **Rajat Shukla (@rajat4722)**:
-    - For proposing move of recover2 parameters from url path into post request body and returning more generic errors
-    - For suggesting improvements to auth/options triggering move of userId into request body
+    - Proposed move of recover2 parameters from url path into post request body and returning more generic errors
+    - Suggested improvements to auth/options triggering move of userId into request body
+    - Discovered that local sessions remained valid after PK deletion
+- **CapsenR**:
+    - Proposed adding a warning when clear or cipher text is copied from url
+    - Found timing weaknesses in javascript timingSafeEqual implementation

@@ -24,8 +24,5 @@ We designed Quick Crypt to make it easy to encrypt data and to decrypt that data
 <br />
 
 [Live Site](https://quickcrypt.org)
-<br />
-[Server Repository](https://github.com/bschick/qcrypt-server)
-
 
 

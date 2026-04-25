@@ -84,10 +84,6 @@ export const Patterns = {
    recover: new URLPattern({
       pathname: `/v:ver/recover`,
    }),
-   // backward compat
-   recoverOld: new URLPattern({
-      pathname: `/v:ver/users/:userid/recover/:usercred`,
-   }),
    recover2: new URLPattern({
       pathname: `/v:ver/recover2`,
    }),
