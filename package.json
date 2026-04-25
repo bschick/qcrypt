@@ -4,7 +4,7 @@
   "scripts": {
     "ng": "ng",
     "serve": "nx serve web --hmr false --host 0.0.0.0 --watch --poll 1000 --ssl --ssl-cert apps/web/localssl/localhost.crt --ssl-key apps/web/localssl/localhost.key",
-    "test": "pnpm test:web && pnpm test:server && pnpm test:lib && pnpm test:cli",
+    "test": "pnpm test:web && pnpm test:server && pnpm test:libs && pnpm test:cli",
     "build:web": "NG_BUILD_OPTIMIZE_CHUNKS=1 nx build web --configuration production --subresource-integrity && node apps/web/scripts/postbuild-preload-check.mjs",
     "deploy:web": "apps/web/scripts/deploy.sh",
     "rollback:web": "apps/web/scripts/deploy.sh rollback",
