@@ -106,6 +106,10 @@ SOFTWARE. */
   top: 2px;
 }
 
+.warn-icon {
+  --mat-icon-button-icon-color: #8b0000;
+}
+
 .pasword-input {
   width: 230px;
   margin-bottom: -0.5em;

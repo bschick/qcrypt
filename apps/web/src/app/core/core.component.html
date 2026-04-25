@@ -92,7 +92,7 @@ SOFTWARE. -->
         bubbleWidth="250px" [style.width.%]="100" [style.height.%]="100" spellcheck="false">
         <mat-label>{{clearLabel}}</mat-label>
         <div class="toolbar">
-          <button [hidden]="!clearInjected" mat-icon-button color="warn" aria-label="Warning"
+          <button [hidden]="!clearInjected" mat-icon-button class="warn-icon" aria-label="Warning"
             matTooltip="Content was copied from the address bar, please confirm its validity"
             (click)="toastMessage('Content was copied from the address bar, please confirm its validity')">
             <mat-icon>warning_amber</mat-icon>
@@ -124,7 +124,7 @@ SOFTWARE. -->
       <mat-form-field [style.width.%]="100" [style.height.%]="100" spellcheck="false">
         <mat-label>{{cipherLabel}}</mat-label>
         <div class="toolbar">
-          <button [hidden]="!cipherInjected" mat-icon-button color="warn" aria-label="Warning"
+          <button [hidden]="!cipherInjected" mat-icon-button class="warn-icon" aria-label="Warning"
             matTooltip="Content was copied from the address bar, please confirm its validity"
             (click)="toastMessage('Content was copied from the address bar, please confirm its validity')">
             <mat-icon>warning_amber</mat-icon>
