@@ -34,7 +34,6 @@ import {
 import { Ciphers, makeCipherArmor, parseCipherArmor } from '@qcrypt/crypto';
 import { CommonModule } from '@angular/common';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
-import { MatRippleModule } from '@angular/material/core';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -91,7 +90,7 @@ import { Router } from '@angular/router';
       MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
       ClipboardModule, CdkAccordionModule, MatSlideToggleModule,
       MatExpansionModule, MatSelectModule, MatButtonToggleModule,
-      MatTooltipModule, MatRippleModule, CommonModule, BubbleDirective,
+      MatTooltipModule, CommonModule, BubbleDirective,
       OptionsComponent, CopyrightComponent]
 })
 export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -127,13 +126,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    public clearInjected = false;
    public cipherInjected = false;
 
-   //  @ViewChild(MatRipple) ripple: MatRipple;
    @ViewChild('clearField') clearField!: ElementRef;
    @ViewChild('cipherField') cipherField!: ElementRef;
    @ViewChild('inputArea') inputArea!: ElementRef;
    @ViewChild('fileUpload') fileUpload!: ElementRef;
-//   @ViewChild('formatLabel') formatLabel!: ElementRef;
-//   @ViewChild('minStrLabel') minStrLabel!: ElementRef;
    @ViewChild('bubbleTip1') bubbleTip1!: BubbleDirective;
    @ViewChild('bubbleTip2') bubbleTip2!: BubbleDirective;
    @ViewChild('options') options!: OptionsComponent;

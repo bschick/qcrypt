@@ -17,11 +17,11 @@
 }
 
 .hero-icon {
-  font-size: 56px;
+  display: block;
   height: 56px;
   width: 56px;
   color: var(--mat-sys-primary);
-  margin-bottom: 16px;
+  margin: 0 auto 16px;
 }
 
 .title {

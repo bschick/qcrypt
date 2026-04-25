@@ -20,9 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import sodium from 'libsodium-wrappers';
 import { environment } from '../../environments/environment';
-import { Injectable, signal } from '@angular/core';
+import { Injectable, afterNextRender, signal } from '@angular/core';
 import {
    PublicKeyCredentialCreationOptionsJSON,
    PublicKeyCredentialRequestOptionsJSON,
@@ -31,8 +30,7 @@ import {
    startRegistration, startAuthentication
 } from '@simplewebauthn/browser';
 import { Subject, Subscription, filter } from 'rxjs';
-import { ZxcvbnOptionsService } from './zxcvbn-options.service';
-import { base64ToBytes, bytesToBase64, bufferToHexString, expired } from '@qcrypt/crypto';
+import { base64ToBytes, bytesToBase64, bufferToHexString, expired, cryptoReady, zxcvbnReady } from '@qcrypt/crypto';
 import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 
@@ -105,12 +103,12 @@ export class AuthenticatorService {
    private _userCred?: Uint8Array = undefined;
    private _csrf?: string = undefined;
    private _cachedRecoveryId?: string;
-   public ready: Promise<[void, void]>;
+   // In-flight logout DELETE; login paths await it to avoid sign-out → sign-in race.
+   private _pendingLogout: Promise<unknown> = Promise.resolve();
+   public ready: Promise<void>;
 
-   constructor(
-      private zxcvbnOptions: ZxcvbnOptionsService,
-   ) {
-      const loadSess = new Promise<void>((resolve) => {
+   constructor() {
+      this.ready = new Promise<void>((resolve) => {
          this.loadSession().catch(
             // just for debugging, remove
             (err) => console.error(err)
@@ -119,11 +117,19 @@ export class AuthenticatorService {
          );
       });
 
-      this.ready = Promise.all([loadSess, sodium.ready]);
-
-      // Start the zxcvbn dictionary fetch in parallel with our own startup so
-      // the chunk is usually ready by the time any password field is shown.
-      this.zxcvbnOptions.preload().catch((err) => console.error(err));
+      // Warm crypto and zxcvbn after first render so their chunks don't
+      // compete with LCP.
+      afterNextRender(() => {
+         const kickoff = () => {
+            cryptoReady().catch((err) => console.error(err));
+            zxcvbnReady().catch((err) => console.error(err));
+         };
+         if (typeof window.requestIdleCallback === 'function') {
+            window.requestIdleCallback(kickoff, { timeout: 2000 });
+         } else {
+            kickoff();
+         }
+      });
    }
 
 
@@ -468,14 +474,11 @@ export class AuthenticatorService {
       const eventData = this._captureEventData(AuthEvent.Logout);
 
       if (global) {
-         // let this happen in the background. creates a race condition with next
-         // login, but highly unlikley to be an issue since login presents passkey auth
-         this._doFetch<string>({
+         // Don't block on the logout, but all reg/auth methods must await _pendingLogout.
+         this._pendingLogout = this._doFetch<string>({
             method: 'DELETE',
             resource: 'session'
-         }).catch((err) => {
-            // ignore
-         });
+         }).catch(() => undefined);
 
          // rather than clear values, which can trigger error in other tabs,
          // set expirations to the past to trigger clear self-logout
@@ -679,6 +682,7 @@ export class AuthenticatorService {
          throw new Error('must be logged out to log in');
       }
 
+      await this._pendingLogout;
       const serverLoginUserInfo = await this._findLoginImpl(true, false, userId);
       return this._loginUser(serverLoginUserInfo);
    }
@@ -775,6 +779,7 @@ export class AuthenticatorService {
    async recover2(recoveryWords: string): Promise<VerifiedUserInfo> {
 
       const [recoveryId, userId] = this.getRecoveryValues(recoveryWords);
+      await this._pendingLogout;
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
          method: 'POST',
          resource: 'recover2',
@@ -791,6 +796,7 @@ export class AuthenticatorService {
          throw new Error('missing userid or usercred');
       }
 
+      await this._pendingLogout;
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
          method: 'POST',
          resource: 'recover',
@@ -807,6 +813,7 @@ export class AuthenticatorService {
          throw new Error('missing require userName');
       }
 
+      await this._pendingLogout;
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
          method: 'POST',
          resource: 'reg/options',

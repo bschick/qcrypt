@@ -26,7 +26,8 @@ import {
    Ciphers,
    encryptStream,
    decryptStream,
-   getCipherStreamInfo
+   getCipherStreamInfo,
+   cryptoReady,
 } from '@qcrypt/crypto';
 import type {
    EContext,
@@ -61,6 +62,7 @@ export class CipherService {
 
       await navigator.locks.request('benchmark', async () => {
          if (this._iCount === 0) {
+            await cryptoReady();
             [this._iCount, this._iCountMax, this._hashRate] = await Ciphers.benchmark(
                testSize,
                TARGET_HASH_MILLIS,
@@ -80,6 +82,7 @@ export class CipherService {
       userCred: Uint8Array,
       clearStream: ReadableStream<Uint8Array>
    ): Promise<ReadableStream<Uint8Array>> {
+      await cryptoReady();
       return encryptStream(econtext, pwdProvider, userCred, clearStream);
    }
 
@@ -87,6 +90,7 @@ export class CipherService {
       userCred: Uint8Array,
       cipherStream: ReadableStream<Uint8Array>
    ): Promise<CipherDataInfo> {
+      await cryptoReady();
       return getCipherStreamInfo(userCred, cipherStream);
    }
 
@@ -95,6 +99,7 @@ export class CipherService {
       userCred: Uint8Array,
       cipherStream: ReadableStream<Uint8Array>
    ): Promise<ReadableStream<Uint8Array>> {
+      await cryptoReady();
       return decryptStream(pwdProvider, userCred, cipherStream);
    }
 }

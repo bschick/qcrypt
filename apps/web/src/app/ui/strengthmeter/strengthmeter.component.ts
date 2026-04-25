@@ -33,7 +33,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatSliderModule } from '@angular/material/slider';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { ZxcvbnOptionsService } from '../../services/zxcvbn-options.service';
+import { zxcvbnReady, getZxcvbn, checkPwned, addMatcher, removeMatcher } from '@qcrypt/crypto';
 import type { ZxcvbnResult } from '@zxcvbn-ts/core';
 import * as lev from '../../services/levenshtein';
 import type {
@@ -133,7 +133,8 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
       if (!this._processing) {
          this._processing = true;
          (async () => {
-            const { zxcvbnAsync } = await this.zxcvbnOptions.preload();
+            await zxcvbnReady();
+            const { zxcvbnAsync } = getZxcvbn();
             let results: ZxcvbnResult | undefined = undefined;
             while (this._testQueue.length > 0) {
                try {
@@ -169,13 +170,8 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
       }
    }
 
-   constructor(
-      private zxcvbnOptions: ZxcvbnOptionsService,
-   ) {
-   }
-
    ngOnInit(): void {
-      this.zxcvbnOptions.checkPwned(this._checkPwned);
+      checkPwned(this._checkPwned);
 
       const parent = this;
 
@@ -236,11 +232,11 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
          }
       }
 
-      this.zxcvbnOptions.addMatcher('qqMatcher', qqMatcher);
+      addMatcher('qqMatcher', qqMatcher);
    }
 
    ngOnDestroy(): void {
-      this.zxcvbnOptions.removeMatcher('qqMatcher');
+      removeMatcher('qqMatcher');
    }
 
    ngAfterViewInit(): void {
