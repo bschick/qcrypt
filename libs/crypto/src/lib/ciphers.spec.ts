@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import sodium from 'libsodium-wrappers';
+import { cryptoReady } from './sodium';
 import * as cc from './cipher.consts';
 import {
    BYOBStreamReader,
@@ -63,7 +63,7 @@ function streamFromCipherBlock(cdBlocks: CipherDataBlock[]): [
 
 describe("Encryption and decryption", function () {
    beforeEach(async () => {
-      await sodium.ready;
+      await cryptoReady();
    });
 
    async function signAndRepack(
@@ -823,7 +823,7 @@ describe("Encryption and decryption", function () {
 
 describe("Detect changed cipher data", function () {
    beforeEach(async () => {
-      await sodium.ready;
+      await cryptoReady();
    });
 
    it("detect changed headerData", async function () {
@@ -1123,7 +1123,7 @@ describe("Detect changed cipher data", function () {
 
 describe("Detect block order changes", function () {
    beforeEach(async () => {
-      await sodium.ready;
+      await cryptoReady();
    });
 
    const pwd = 'a not good pwd';

@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import sodium from 'libsodium-wrappers';
+import { getSodium } from './sodium';
 import { base64URLStringToBuffer, bufferToBase64URLString } from './base64';
 
 export function hasArrayBuffer(value: Uint8Array): value is Uint8Array<ArrayBuffer> {
@@ -482,7 +482,7 @@ export async function selectWriteableTxtFile(baseName?: string): Promise<FileSys
 }
 
 export function getRandom(length: number): Uint8Array<ArrayBuffer> {
-   return ensureArrayBuffer(sodium.randombytes_buf(length));
+   return ensureArrayBuffer(getSodium().randombytes_buf(length));
 }
 
 // Helper function to get bytes from a string, truncated to a maximum byte length, ensuring valid UTF-8

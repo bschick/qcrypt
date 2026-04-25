@@ -27,7 +27,8 @@ import {
    bytesToBase64,
    BYOBStreamReader,
    bytesFromString,
-   readStreamAll
+   readStreamAll,
+   cryptoReady,
 } from '../index';
 
 
@@ -156,6 +157,9 @@ describe("Base64 encode decode", function () {
 });
 
 describe("getRandom48 tests", function () {
+   beforeEach(async () => {
+      await cryptoReady();
+   });
 
    it("pseudo random", async function () {
       const r1 = getRandom(48);

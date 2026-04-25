@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import sodium from 'libsodium-wrappers';
+import { getSodium } from './sodium';
 import * as cc from './cipher.consts';
 
 import {
@@ -591,7 +591,7 @@ export class EncipherV67 extends Encipher {
       let encryptedBytes: Uint8Array;
       if (alg == 'X20-PLY') {
          try {
-            encryptedBytes = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+            encryptedBytes = getSodium().crypto_aead_xchacha20poly1305_ietf_encrypt(
                clear,
                additionalData ?? null,
                null,
@@ -605,7 +605,7 @@ export class EncipherV67 extends Encipher {
          }
       } else if (alg == 'AEGIS-256') {
          try {
-            encryptedBytes = sodium.crypto_aead_aegis256_encrypt(
+            encryptedBytes = getSodium().crypto_aead_aegis256_encrypt(
                clear,
                additionalData ?? null,
                null,
@@ -659,6 +659,7 @@ export class EncipherV67 extends Encipher {
       packer.ver = cc.CURRENT_VERSION;
       packer.size = payloadBytes;
 
+      const sodium = getSodium();
       const sk = await this._keyProvider.getSigningKey();
       const state = sodium.crypto_generichash_init(sk, cc.MAC_BYTES);
       sodium.crypto_generichash_update(state, new Uint8Array(packer.buffer, cc.MAC_BYTES));
@@ -816,7 +817,7 @@ export abstract class Decipher extends Ciphers {
             console.log('dxcha keyBytes', keyBytes.byteLength, keyBytes);
          */
          try {
-            decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+            decrypted = getSodium().crypto_aead_xchacha20poly1305_ietf_decrypt(
                null,
                encrypted,
                additionalData ?? null,
@@ -830,7 +831,7 @@ export abstract class Decipher extends Ciphers {
          }
       } else if (alg == 'AEGIS-256') {
          try {
-            decrypted = sodium.crypto_aead_aegis256_decrypt(
+            decrypted = getSodium().crypto_aead_aegis256_decrypt(
                null,
                encrypted,
                additionalData ?? null,
@@ -1207,6 +1208,7 @@ export class DecipherV67 extends Decipher {
       headerPortion.set(encVerBytes);
       headerPortion.set(encSizeBytes, cc.VER_BYTES);
 
+      const sodium = getSodium();
       const sk = await this._keyProvider.getSigningKey();
       const state = sodium.crypto_generichash_init(sk, cc.MAC_BYTES);
 

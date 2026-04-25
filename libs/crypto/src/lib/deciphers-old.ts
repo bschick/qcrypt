@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import sodium from 'libsodium-wrappers';
+import { getSodium } from './sodium';
 import * as cc from './cipher.consts';
 import {
    numToBytes,
@@ -532,6 +532,7 @@ export class DecipherV4 extends Decipher {
       headerPortion.set(encVer);
       headerPortion.set(encSizeBytes, cc.VER_BYTES);
 
+      const sodium = getSodium();
       const sk = await this._keyProvider.getSigningKey();
       const state = sodium.crypto_generichash_init(sk, cc.MAC_BYTES);
       sodium.crypto_generichash_update(state, headerPortion);
@@ -616,6 +617,7 @@ export class DecipherV5 extends DecipherV4 {
       headerPortion.set(encSizeBytes, cc.VER_BYTES);
       headerPortion.set(encFlags, cc.VER_BYTES + cc.PAYLOAD_SIZE_BYTES);
 
+      const sodium = getSodium();
       const sk = await this._keyProvider.getSigningKey();
       const state = sodium.crypto_generichash_init(sk, cc.MAC_BYTES);
 
