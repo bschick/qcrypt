@@ -45,7 +45,8 @@ export type HttpDetails = {
    handler: HttpHandler,
    version: Version,
    checkCsrf: boolean,
-   cookie?: string
+   cookie?: string,
+   userAgent?: string
 };
 
 type HandlerInfo = {
@@ -115,6 +116,9 @@ export const Patterns = {
    }),
    consistency: new URLPattern({
       pathname: '/v:ver/consistency'
+   }),
+   cleanuptestusers: new URLPattern({
+      pathname: '/v:ver/cleanuptestusers'
    })
 };
 
@@ -167,6 +171,7 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
 
          const params: QParams = event['queryStringParameters'] ?? {};
          const cookie: string | undefined = event['headers']['cookie'];
+         const userAgent: string | undefined = event['headers']['user-agent'];
 
          // Uncomment for debugging
          // console.log('resources: ' + JSON.stringify(params));
@@ -185,7 +190,8 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
             version: handerInfo.version,
             params: params,
             body: body,
-            cookie: cookie
+            cookie: cookie,
+            userAgent: userAgent
          };
 
       }

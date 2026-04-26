@@ -66,6 +66,10 @@ export const validB64 = (base64: string | null | undefined): boolean => {
       /^[A-Za-z0-9+/=_-]+$/.test(base64);
 }
 
+export function isReservedTestUserName(userName: string): boolean {
+   return userName.toLowerCase().startsWith('pwtesty_');
+}
+
 export function base64UrlEncode(bytes: Uint8Array | undefined): string | undefined {
    return bytes ? Buffer.from(bytes).toString('base64url') : undefined;
 }

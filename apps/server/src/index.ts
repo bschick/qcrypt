@@ -74,7 +74,7 @@ import {
 import { hkdfSync, randomInt, randomBytes } from 'node:crypto';
 import { setTimeout } from 'node:timers/promises';
 import { sign, verify, decode, type JwtPayload } from 'jsonwebtoken';
-import { postConsistency, postLoadAAGUIDs, postMunge } from './internal';
+import { postCleanupTestUsers, postConsistency, postLoadAAGUIDs, postMunge } from './internal';
 import {
    ParamError,
    AuthError,
@@ -83,7 +83,8 @@ import {
    validB64,
    base64UrlEncode,
    base64UrlDecode,
-   knownLenTimingSafeEqual
+   knownLenTimingSafeEqual,
+   isReservedTestUserName
 } from './utils';
 
 export type Response = {
@@ -883,6 +884,13 @@ async function postRegOptions(
       throw new ParamError('user name must greater than 5 and less than 32 characters');
    }
 
+   // The PWTesty_ prefix is reserved for automated tests, so manual cleanup
+   // can more safely delete every PWTesty_ user. Not a security control since
+   // it easily spoofed, just a guardrail against admin errors.
+   if (isReservedTestUserName(userName) && !isTestClient(httpDetails)) {
+      throw new ParamError('reserved username prefix');
+   }
+
    let uId: string | undefined;
 
    // Reduce round-trips by getting enough data for 3 x 16 bytes ID tries
@@ -1151,6 +1159,11 @@ async function patchUser(
    const userName = sanitizeString(body.userName);
    if (userName.length < 6 || userName.length > 31) {
       throw new ParamError('username must more than 5 and less than 32 character');
+   }
+
+   // Same guardrail as postRegOptions, reserved for testing (and cleanup)
+   if (isReservedTestUserName(userName) && !isTestClient(httpDetails)) {
+      throw new ParamError('reserved username prefix');
    }
 
    try {
@@ -1623,6 +1636,13 @@ function killCookie(): string {
    return '__Host-JWT=X; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=0';
 }
 
+// Test runners (playwright config + spec common.ts) explicitly tag the
+// User-Agent with this marker so we can discourage normal user from creating
+// accoutns that may get cleaned up.
+function isTestClient(httpDetails: HttpDetails): boolean {
+   return (httpDetails.userAgent ?? '').includes('QCTestClient');
+}
+
 async function createCsrf(verifiedUser: VerifiedUserItem): Promise<Uint8Array> {
    if (!verifiedUser) {
       throw new AuthError();
@@ -1827,6 +1847,7 @@ const METHODMAP: MethodMap = {
       { name: 'postMunge', pattern: Patterns.munge, version: INTERNAL_VERSION, authorize: false, handler: postMunge },
       { name: 'postConsistency', pattern: Patterns.consistency, version: INTERNAL_VERSION, authorize: false, handler: postConsistency },
       { name: 'postLoadAAGUIDs', pattern: Patterns.loadaaguids, version: INTERNAL_VERSION, authorize: false, handler: postLoadAAGUIDs },
+      { name: 'postCleanupTestUsers', pattern: Patterns.cleanuptestusers, version: INTERNAL_VERSION, authorize: false, handler: postCleanupTestUsers }
    ],
    PUT: [
    ],
