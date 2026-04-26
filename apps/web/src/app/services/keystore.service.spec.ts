@@ -22,6 +22,7 @@ SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
 import { KeystoreService } from './keystore.service';
 import * as cc from '@qcrypt/crypto/consts';
+import { bytesToBase64 } from '@qcrypt/crypto';
 
 describe('KeystoreService', () => {
    let service: KeystoreService;
@@ -32,7 +33,7 @@ describe('KeystoreService', () => {
    });
 
    afterEach(async () => {
-      await service.close();
+      await service.flush();
    });
 
    it('should be created', () => {
@@ -214,6 +215,41 @@ describe('KeystoreService', () => {
       expect(masterKey).toBeDefined();
       expect(masterKey.extractable).toBe(false);
       await expect(crypto.subtle.exportKey('raw', masterKey)).rejects.toThrow();
+   });
+
+   it('flush should destroy database and prevent lookups', async () => {
+      const slot = 'test-flush-slot';
+      const salt = new Uint8Array(cc.SLT_BYTES);
+      crypto.getRandomValues(salt);
+      const userId = new Uint8Array(cc.USERID_BYTES);
+      crypto.getRandomValues(userId);
+
+      await service.upsert(slot, salt, userId);
+
+      const beforeFlush = await service.get(slot, salt);
+      expect(beforeFlush).toBeDefined();
+
+      await service.flush();
+
+      await expect(service.get(slot, salt)).rejects.toThrow(/No key found for slot/);
+   });
+
+   it('supports base64 string inputs for salt and userId', async () => {
+      const slot = 'test-base64-slot';
+      const saltBytes = new Uint8Array(cc.SLT_BYTES);
+      crypto.getRandomValues(saltBytes);
+      const userIdBytes = new Uint8Array(cc.USERID_BYTES);
+      crypto.getRandomValues(userIdBytes);
+
+      const saltStr = bytesToBase64(saltBytes);
+      const userIdStr = bytesToBase64(userIdBytes);
+
+      const upsertMaterial = await service.upsert(slot, saltStr, userIdStr);
+      expect(upsertMaterial).toBeInstanceOf(Uint8Array);
+
+      const getMaterial = await service.get(slot, saltStr);
+      expect(getMaterial).toBeInstanceOf(Uint8Array);
+      expect(upsertMaterial).toEqual(getMaterial);
    });
 
 });

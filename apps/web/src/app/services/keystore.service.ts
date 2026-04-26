@@ -21,6 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { Injectable } from '@angular/core';
 import * as cc from '@qcrypt/crypto/consts';
+import { base64ToBytes } from '@qcrypt/crypto';
 
 const DB_VERSION = 1;
 const MIN_SLOT_LEN = 4;
@@ -37,8 +38,9 @@ export class KeystoreService {
    // be used immediately and then overwritten and discarded
    async get(
       slot: string,
-      salt: Uint8Array<ArrayBuffer>
+      salt: Uint8Array<ArrayBuffer> | string
    ): Promise<Uint8Array<ArrayBuffer>> {
+      const saltBytes = typeof salt === 'string' ? base64ToBytes(salt) : salt;
 
       const db = await this._db();
       const masterKey = await new Promise<CryptoKey | undefined>((resolve, reject) => {
@@ -52,21 +54,23 @@ export class KeystoreService {
       }
 
       // Caller should overwrite the returned key immediately afer use
-      return this._deriveKeyMaterial(masterKey, salt);
+      return this._deriveKeyMaterial(masterKey, saltBytes);
    }
 
    // Either creates or replaces an existing key. Returned key material should
    // be used immediately and then overwritten and discarded
    async upsert(
       slot: string,
-      salt: Uint8Array<ArrayBuffer>,
-      userId: Uint8Array<ArrayBuffer>
+      salt: Uint8Array<ArrayBuffer> | string,
+      userId: Uint8Array<ArrayBuffer> | string
    ): Promise<Uint8Array<ArrayBuffer>> {
+      const saltBytes = typeof salt === 'string' ? base64ToBytes(salt) : salt;
+      const userIdBytes = typeof userId === 'string' ? base64ToBytes(userId) : userId;
 
-      const masterKey = await this._newMasterKey(slot, userId, salt);
+      const masterKey = await this._newMasterKey(slot, userIdBytes, saltBytes);
 
       // Caller should overwrite the returned key immediately afer use
-      return this._deriveKeyMaterial(masterKey, salt);
+      return this._deriveKeyMaterial(masterKey, saltBytes);
    }
 
    async delete(slot: string): Promise<void> {
@@ -79,8 +83,8 @@ export class KeystoreService {
       });
    }
 
-   // Release the cached DB handle. Safe to call when nothing is open
-   async close(): Promise<void> {
+   // Destroys the entire database, wiping all keys and schema
+   async flush(): Promise<void> {
       if (this._dbPromise) {
          const p = this._dbPromise;
          this._dbPromise = undefined;
@@ -90,6 +94,18 @@ export class KeystoreService {
             console.error(err);
          }
       }
+
+      return new Promise<void>((resolve, reject) => {
+         const req = indexedDB.deleteDatabase(this._dbName);
+         req.onsuccess = () => resolve();
+         req.onerror = () => reject(req.error);
+         req.onblocked = () => {
+             console.warn("Database deletion blocked by another open connection");
+             // Resolve anyway so the caller isn't permanently blocked.
+             // The browser will complete the deletion when other connections close.
+             resolve();
+         };
+      });
    }
 
    private async _deriveKeyMaterial(
