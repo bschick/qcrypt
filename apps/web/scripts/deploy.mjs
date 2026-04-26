@@ -82,9 +82,10 @@
  *   deploy.mjs bootstrap <bucket>                     seed manifest.current from bucket
  *   deploy.mjs manifest <bucket>                      print the current manifest
  *   deploy.mjs leaks <bucket>                         list untracked bucket files
+ *   deploy.mjs counts <bucket>                        print counts of current/orphaned/expected/untracked
  *   deploy.mjs expect <bucket> <patterns..>           register expected files (globs ok)
  *   deploy.mjs unexpect <bucket> <patterns..>         remove expected entries
- *   deploy.mjs prune <bucket>                         remove untracked files
+ *   deploy.mjs prune <bucket>                         remove untracked files and expired orphans
  *   deploy.mjs reset <bucket>                         clear the manifest (no file deletion)
  *   deploy.mjs rollback <bucket>                      delete latest index.html version (break-glass)
  *
@@ -310,6 +311,49 @@ function trackedMatcher(manifest) {
    return (key) => literals.has(key) || expectedMatch(key);
 }
 
+// Single source of truth for the include-subdirs scope rule. Top-level only
+// unless --include-subdirs is set; used by manifest reconciliation and by
+// listBucket-derived filters.
+function inScopeFor(argv) {
+   return (k) => argv.includeSubdirs || !k.includes('/');
+}
+
+// Bucket keys not covered by any of the manifest's tracking sets.
+function untrackedKeys(argv, manifest) {
+   const isTracked = trackedMatcher(manifest);
+   return listBucket(argv).filter((k) => !isTracked(k));
+}
+
+// Orphans whose retention clock has run out. `inScope` lets the caller skip
+// out-of-scope keys (subdir entries on a top-level run) so they aren't touched.
+function findExpiredOrphans(orphans, expirationDays, inScope) {
+   const cutoffMs = Date.now() - expirationDays * 86400 * 1000;
+   const expired = [];
+   for (const [key, orphanedAt] of orphans) {
+      if (!inScope(key)) {
+         continue;
+      }
+      const whenMs = Date.parse(orphanedAt);
+      if (Number.isFinite(whenMs) && whenMs < cutoffMs) {
+         expired.push(key);
+      }
+   }
+   return expired;
+}
+
+// Sequentially `aws s3 rm` each key, returning the subset that succeeded.
+// Failures are tolerated so one bad key doesn't abort the whole batch.
+function deleteKeys(argv, keys) {
+   const deleted = [];
+   for (const key of keys) {
+      const r = aws(argv, ['s3', 'rm', `s3://${argv.bucket}/${key}`], { allowFailure: true });
+      if (r.status === 0) {
+         deleted.push(key);
+      }
+   }
+   return deleted;
+}
+
 function printUntracked(untracked, heading, limit) {
    if (untracked.length === 0) {
       return;
@@ -387,12 +431,7 @@ function runDeploy(argv) {
    //    reconcile, no manifest rewrite, no invalidation. Still scan for
    //    leaks so untracked-in-bucket reports continue to surface.
    if (!argv.dryRun && totalUploads === 0) {
-      const isTracked = trackedMatcher({
-         current: manifest.current,
-         orphans: Object.fromEntries(manifestOrphans),
-         expected: manifest.expected,
-      });
-      const untracked = listBucket(argv).filter((k) => !isTracked(k));
+      const untracked = untrackedKeys(argv, manifest);
       console.log(`deploy #${manifest.deployCount ?? 0}: no changes  untracked=${untracked.length}`);
       printUntracked(untracked, "untracked in bucket (use 'expect' or 'unexpect' to update, 'prune' to remove):", argv.printLimit);
       return;
@@ -403,7 +442,7 @@ function runDeploy(argv) {
    //    verbatim so a top-level deploy doesn't mis-orphan subdir state a
    //    recursive bootstrap/deploy put there.
    const manifestCurrent = new Set(manifest.current);
-   const inScope = (k) => argv.includeSubdirs || !k.includes('/');
+   const inScope = inScopeFor(argv);
 
    const now = new Date().toISOString();
    const newCurrent = new Set(newKeys);
@@ -430,24 +469,10 @@ function runDeploy(argv) {
    }
 
    // 4. Delete expired orphans (in-scope only — we don't touch out-of-scope).
-   const cutoffMs = Date.now() - argv.expirationDays * 86400 * 1000;
-   const expired = [];
-   for (const [key, orphanedAt] of orphans) {
-      if (!inScope(key)) {
-         continue;
-      }
-      const whenMs = Date.parse(orphanedAt);
-      if (Number.isFinite(whenMs) && whenMs < cutoffMs) {
-         expired.push(key);
-      }
-   }
-   const deletedFromS3 = [];
-   for (const key of expired) {
-      const r = aws(argv, ['s3', 'rm', `s3://${argv.bucket}/${key}`], { allowFailure: true });
-      if (r.status === 0) {
-         orphans.delete(key);
-         deletedFromS3.push(key);
-      }
+   const expired = findExpiredOrphans(orphans, argv.expirationDays, inScope);
+   const deletedFromS3 = deleteKeys(argv, expired);
+   for (const key of deletedFromS3) {
+      orphans.delete(key);
    }
 
    // 6. Write the updated manifest.
@@ -463,12 +488,11 @@ function runDeploy(argv) {
 
    // 7. Leak detection: compare S3 listing against tracked sets.
    // listBucket respects --include-subdirs for scope.
-   const isTracked = trackedMatcher({
+   const untracked = untrackedKeys(argv, {
       current: [...newCurrent],
       orphans: Object.fromEntries(orphans),
       expected: manifest.expected,
    });
-   const untracked = listBucket(argv).filter((k) => !isTracked(k));
 
    // 8. Summary.
    const newlyOrphaned = [...orphans.keys()].filter((k) => !manifestOrphans.has(k));
@@ -612,11 +636,27 @@ function runManifest(argv) {
 // ---------------------------------------------------------------------------
 
 function runLeaks(argv) {
-   const manifest = readManifest(argv);
-   const isTracked = trackedMatcher(manifest);
-   const untracked = listBucket(argv).filter((k) => !isTracked(k));
+   const untracked = untrackedKeys(argv, readManifest(argv));
    console.log(`leaks: untracked=${untracked.length}`);
    printUntracked(untracked, 'untracked in bucket:', argv.printLimit);
+}
+
+// ---------------------------------------------------------------------------
+// counts (no deploy) — print per-category file counts
+// ---------------------------------------------------------------------------
+
+// Scope filter applies to manifest entries as if they were keys: a pattern
+// like `.well-known/*` (containing `/`) is excluded under top-level scope,
+// matching the behaviour for current/orphans keys.
+function runCounts(argv) {
+   const manifest = readManifest(argv);
+   const inScope = inScopeFor(argv);
+   const current = manifest.current.filter(inScope).length;
+   const orphaned = Object.keys(manifest.orphans).filter(inScope).length;
+   const expected = manifest.expected.filter(inScope).length;
+   const untracked = untrackedKeys(argv, manifest).length;
+   const scope = argv.includeSubdirs ? 'all' : 'top-level';
+   console.log(`counts: scope=${scope} current=${current} orphaned=${orphaned} expected=${expected} untracked=${untracked}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -677,7 +717,7 @@ function runUnexpect(argv) {
 }
 
 // ---------------------------------------------------------------------------
-// prune (no deploy) — remove untracked S3 objects
+// prune (no deploy) — remove untracked S3 objects and expired orphans
 // ---------------------------------------------------------------------------
 
 function runPrune(argv) {
@@ -692,22 +732,38 @@ function runPrune(argv) {
       process.exit(1);
    }
 
-   const isTracked = trackedMatcher(manifest);
-   const untracked = listBucket(argv).filter((k) => !isTracked(k));
-   if (untracked.length === 0) {
-      console.log('prune: no untracked files found');
+   const orphans = new Map(Object.entries(manifest.orphans));
+   const expired = findExpiredOrphans(orphans, argv.expirationDays, inScopeFor(argv));
+
+   // Compute untracked against the unmodified manifest so expired orphans
+   // (still tracked at this point) aren't double-counted as untracked.
+   const untracked = untrackedKeys(argv, manifest);
+
+   if (untracked.length === 0 && expired.length === 0) {
+      console.log('prune: nothing to delete (no untracked files, no expired orphans)');
       return;
    }
 
-   const deleted = [];
-   for (const key of untracked) {
-      const r = aws(argv, ['s3', 'rm', `s3://${argv.bucket}/${key}`], { allowFailure: true });
-      if (r.status === 0) {
-         deleted.push(key);
-      }
+   const deletedOrphans = deleteKeys(argv, expired);
+   for (const key of deletedOrphans) {
+      orphans.delete(key);
    }
-   console.log(`prune: deleted=${deleted.length}/${untracked.length}${argv.dryRun ? ' (DRY RUN)' : ''}`);
-   printUntracked(deleted, 'deleted:', argv.printLimit);
+   const deletedUntracked = deleteKeys(argv, untracked);
+
+   if (deletedOrphans.length > 0) {
+      writeManifest(argv, {
+         ...manifest,
+         orphans: Object.fromEntries(orphans),
+      });
+   }
+
+   const dryRunTag = argv.dryRun ? ' (DRY RUN)' : '';
+   console.log(
+      `prune: deleted-untracked=${deletedUntracked.length}/${untracked.length}` +
+      ` deleted-orphans=${deletedOrphans.length}/${expired.length}${dryRunTag}`,
+   );
+   printUntracked(deletedUntracked, 'deleted untracked:', argv.printLimit);
+   printUntracked(deletedOrphans, 'deleted orphans:', argv.printLimit);
 }
 
 // ---------------------------------------------------------------------------
@@ -725,7 +781,7 @@ const addGlobalOpts = (y) => y
 // the default `$0 <bucket>` positional.
 const COMMANDS = [
    'deploy', 'rollback', 'reset', 'bootstrap', 'manifest',
-   'leaks', 'expect', 'unexpect', 'prune',
+   'leaks', 'counts', 'expect', 'unexpect', 'prune',
 ];
 
 const deployBuilder = (y) => addGlobalOpts(y)
@@ -802,6 +858,14 @@ yargs(hideBin(process.argv))
       runLeaks,
    )
    .command(
+      'counts <bucket>',
+      'Print counts of current, orphaned, expected, and untracked files (no deploy).',
+      (y) => addGlobalOpts(y)
+         .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
+         .option('include-subdirs', { type: 'boolean', default: false, describe: 'Also count files in subdirectories (default: top-level only)' }),
+      runCounts,
+   )
+   .command(
       'expect <bucket> <patterns..>',
       "Add S3 keys or glob patterns to the manifest's expected list; also removes any matching entries from current/orphans (no deploy).",
       (y) => addGlobalOpts(y)
@@ -819,10 +883,17 @@ yargs(hideBin(process.argv))
    )
    .command(
       'prune <bucket>',
-      'Remove S3 files not tracked by the manifest (no deploy).',
+      'Remove S3 files not tracked by the manifest, plus orphans past the retention window (no deploy).',
       (y) => addGlobalOpts(y)
          .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('include-subdirs', { type: 'boolean', default: false, describe: 'Also consider files in subdirectories (default: top-level only)' }),
+         .option('include-subdirs', { type: 'boolean', default: false, describe: 'Also consider files in subdirectories (default: top-level only)' })
+         .option('expiration-days', { type: 'number', default: 30, describe: 'Days an orphan persists before deletion' })
+         .check((argv) => {
+            if (!Number.isFinite(argv.expirationDays) || argv.expirationDays < 0) {
+               throw new Error('--expiration-days must be a non-negative integer');
+            }
+            return true;
+         }),
       runPrune,
    )
    .demandCommand(1)

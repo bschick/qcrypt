@@ -52,6 +52,10 @@ case "${LEADING[0]:-deploy}" in
    rollback)
       DEFAULTS=(--cf-distribution <id>)
       ;;
+   prune)
+      # Match the deploy retention so on-demand prune uses the same window.
+      DEFAULTS=(--expiration-days 30)
+      ;;
    *)
       DEFAULTS=()
       ;;
