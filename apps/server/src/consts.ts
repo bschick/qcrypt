@@ -20,8 +20,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import sodium from 'libsodium-wrappers';
-
 export const RETRIES = 3;
 export const RPNAME = 'Quick Crypt';
 export const ALGIDS = [24, 7, 3, 1, -7, -257];

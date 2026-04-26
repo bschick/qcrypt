@@ -39,6 +39,7 @@ export const VER_BYTES = 2;
 export const MAC_BYTES = 32;
 export const KEY_BYTES = 32; // all keys are currently 32 bytes
 export const USERCRED_BYTES = 32;
+export const USERID_BYTES = 16;
 export const PAYLOAD_SIZE_BYTES = 3;
 export const FLAGS_BYTES = 1;
 

@@ -22,7 +22,7 @@ SOFTWARE. */
 import { getSodium } from './sodium';
 import * as cc from './cipher.consts';
 import { CipherDataInfo, Ciphers } from './ciphers-current';
-import { ensureArrayBuffer, getRandom, numToBytes } from './utils';
+import { ensureArrayBuffer, numToBytes } from './utils';
 
 // V7 Contexts must be 8 bytes
 const KDF_CTX_SIGNING_V6 = "cipherdata signing key";
