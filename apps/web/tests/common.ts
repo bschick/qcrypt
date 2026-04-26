@@ -1,4 +1,4 @@
-import { test, expect, Page, CDPSession } from '@playwright/test';
+import { test, expect, Page, CDPSession, type Cookie } from '@playwright/test';
 import { Protocol } from 'devtools-protocol';
 
 export type Credential = Protocol.WebAuthn.Credential;
@@ -83,11 +83,38 @@ export const credentials= {
   },
 };
 
+export type CreatedTestUser = {
+  userId: string;
+  userName: string;
+  userCred: string;
+  recoveryWords: string;
+  credential: Credential;
+};
+
 export type AuthFixture = {
   page: Page;
   session: CDPSession;
   authId1: string;
   authId2: string;
+  // Creates a fresh PWTesty_<timestamp> user via the UI registration flow on
+  // `authId`. The session is signed-in on return (page at '/' with Encryption
+  // Mode visible). Created users are tracked and torn down after the test.
+  createTestUser: (authId: string) => Promise<CreatedTestUser>;
+};
+
+type TrackedUser = {
+  userId: string;
+  authId: string;
+  csrf: string;
+  // Snapshot of context cookies right after registration (notably the
+  // __Host-JWT session cookie). Restored before each cleanup request so
+  // we authenticate as this specific user, even after the test signed
+  // out or switched users.
+  cookies: Cookie[];
+  // Saved so the fallback re-auth can put the credential back on the
+  // authenticator if the captured cookie is stale (e.g. test signed out,
+  // bumping authCount).
+  credential: Credential;
 };
 
 export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
@@ -95,44 +122,200 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
     const session = await page.context().newCDPSession(page);
     const authId1 = await setupAuthenticator(session, page, 'internal');
     const authId2 = await setupAuthenticator(session, page, 'usb');
+    const trackedUsers: TrackedUser[] = [];
+
+    const createTestUser = async (authId: string): Promise<CreatedTestUser> => {
+      const userName = `PWTesty_${Date.now()}`;
+      await page.goto('/');
+
+      const verifyPromise = page.waitForResponse((r) =>
+        r.url().includes('/v1/reg/verify') && r.request().method() === 'POST'
+      );
+      const credential = await passkeyCreation(session, authId, async () => {
+        await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
+        await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible({ timeout: 10000 });
+        await page.locator('input#userName').fill(userName);
+        await page.getByRole('button', { name: /Create new/ }).click();
+      });
+      const body = await (await verifyPromise).json();
+      if (!body.userId || !body.userCred || !body.csrf) {
+        throw new Error('createTestUser: missing userId/userCred/csrf in /reg/verify response');
+      }
+
+      await page.waitForURL('/showrecovery', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('heading', { name: 'Account Backup and Recovery' })).toBeVisible({ timeout: 10000 });
+      const recoveryWords = await page.locator('textarea#wordsArea').inputValue();
+      await page.getByRole('button', { name: /I saved my/ }).click();
+      await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({ timeout: 10000 });
+
+      trackedUsers.push({
+        userId: body.userId,
+        authId,
+        csrf: body.csrf,
+        cookies: await page.context().cookies(),
+        credential,
+      });
+      return {
+        userId: body.userId,
+        userName,
+        userCred: body.userCred,
+        recoveryWords,
+        credential,
+      };
+    };
 
     await use({
       page,
       session,
       authId1,
-      authId2
+      authId2,
+      createTestUser,
     });
 
-    // a bit ugly, but it works.
-    if (testInfo.tags.includes('@nukeall')) {
+    // Cleanup of users created via the helper. Fast path: restore the
+    // cookie+CSRF captured at registration, GET /v1/user, DELETE each
+    // passkey (server cascades the user record when the last one goes).
+    // Fallback: any test that signs out or switches users will have
+    // bumped authCount, so the captured cookie is stale and the fast
+    // path 401s — re-auth via the UI as the tracked user (using the
+    // saved credential) and DELETE through the fresh session. Original
+    // cookies are restored at the end so @nukeall sees the test's
+    // end state.
+    const apiUrl = (testInfo.project.use as { apiURL: string }).apiURL;
+    const originalCookies = await page.context().cookies();
 
-      const storageState = await page.context().storageState();
-      const loclStorage = storageState.origins[0].localStorage;
-      const userId = loclStorage.find(item => item.name === 'userid')?.value;
-
-      // If the test completd, the user lougout happened because the last PK was deleted
-      // So the existance of userid in localstorage means we didn't finish, so cleanup...
-      if (userId) {
-        //@ts-ignore
-        const apiUrl = testInfo.project.use.apiURL;
-
-        const usersResponse = await page.request.get(
-          `${apiUrl}/users/${userId}`
+    const deleteAllPasskeys = async (csrf: string, label: string): Promise<boolean> => {
+      const userResp = await page.request.get(
+        `${apiUrl}/user`,
+        { headers: { 'x-csrf-token': csrf } }
+      );
+      if (!userResp.ok()) {
+        console.error(`${label}: GET /user failed (${userResp.status()})`);
+        return false;
+      }
+      const user = await userResp.json();
+      for (const auth of user.authenticators ?? []) {
+        const delResp = await page.request.delete(
+          `${apiUrl}/passkeys/${auth.credentialId}`,
+          { headers: { 'x-csrf-token': csrf } }
         );
-
-        if (usersResponse.ok()) {
-          const user = await usersResponse.json();
-          const auths = user.authenticators;
-
-          for (const [count, auth] of auths.entries()) {
-            console.log(`cleanup on isle ${count+1}`);
-            const authsResponse = await page.request.delete(
-              //@ts-ignore
-              `${apiUrl}/users/${userId}/passkeys/${auth.credentialId}`
-            );
-            console.log(authsResponse.ok() ? 'done' : await authsResponse.text());
-          }
+        if (!delResp.ok()) {
+          console.error(`${label}: DELETE /passkeys/${auth.credentialId} failed (${delResp.status()})`);
         }
+      }
+      return true;
+    };
+
+    for (const tracked of trackedUsers) {
+      // Fast path. Any failure (non-ok GET, non-ok DELETE, throw) falls
+      // through to the fallback re-auth.
+      let fastPathOk = false;
+      try {
+        await page.context().clearCookies();
+        await page.context().addCookies(tracked.cookies);
+
+        const fastResp = await page.request.get(
+          `${apiUrl}/user`,
+          { headers: { 'x-csrf-token': tracked.csrf } }
+        );
+        if (fastResp.ok()) {
+          const user = await fastResp.json();
+          let allDeleted = true;
+          for (const auth of user.authenticators ?? []) {
+            const delResp = await page.request.delete(
+              `${apiUrl}/passkeys/${auth.credentialId}`,
+              { headers: { 'x-csrf-token': tracked.csrf } }
+            );
+            if (!delResp.ok()) {
+              allDeleted = false;
+              break;
+            }
+          }
+          fastPathOk = allDeleted;
+        }
+      } catch (err) {
+        console.error(`cleanup: fast path threw for ${tracked.userId}`, err);
+      }
+
+      if (fastPathOk) {
+        continue;
+      }
+
+      // Fallback: re-auth via UI then delete. Signs out the context, puts
+      // only the tracked user's credential on the authenticator, navigates
+      // to '/' as a fresh session, and clicks "I have used Quick Crypt"
+      // through passkeyAuth so the WebAuthn dance completes.
+      try {
+        await page.context().clearCookies();
+        await clearCredentials(session, tracked.authId);
+        await addCredential(session, tracked.authId, tracked.credential);
+
+        await page.goto('/');
+        await page.evaluate(() => localStorage.clear());
+        await page.reload();
+        await expect(page.getByRole('button', { name: /I have used Quick Crypt/ })).toBeVisible({ timeout: 10000 });
+
+        const verifyPromise = page.waitForResponse((r) =>
+          r.url().includes('/v1/auth/verify') && r.request().method() === 'POST'
+        );
+        await passkeyAuth(session, tracked.authId, async () => {
+          await page.getByRole('button', { name: /I have used Quick Crypt/ }).click();
+        });
+        const verifyResp = await verifyPromise;
+        if (!verifyResp.ok()) {
+          // Most common cause: the test removed the last passkey, which
+          // cascades the user record. Nothing to clean up — server-side
+          // state already matches what we wanted.
+          if (verifyResp.status() !== 401) {
+            console.error(`cleanup-fallback: /auth/verify for ${tracked.userId} failed (${verifyResp.status()})`);
+          }
+          continue;
+        }
+        const verifyBody = await verifyResp.json();
+        if (!verifyBody.csrf) {
+          console.error(`cleanup-fallback: missing csrf in /auth/verify response for ${tracked.userId}`);
+          continue;
+        }
+        await deleteAllPasskeys(verifyBody.csrf, `cleanup-fallback (${tracked.userId})`);
+      } catch (err) {
+        console.error(`cleanup-fallback: failed for ${tracked.userId}`, err);
+      }
+    }
+
+    await page.context().clearCookies();
+    if (originalCookies.length > 0) {
+      await page.context().addCookies(originalCookies);
+    }
+
+    // Fallback for tests that create users without the helper (e.g. inline
+    // registration in lifecycle.spec.ts). Uses the same /session approach
+    // and refuses to delete anything that isn't a PWTesty_ user, so a future
+    // @nukeall test that happens to end signed in as a Keeper can't wipe it.
+    if (testInfo.tags.includes('@nukeall')) {
+      try {
+        const sessionResp = await page.request.get(`${apiUrl}/session`);
+        if (sessionResp.ok()) {
+          const session = await sessionResp.json();
+          if (typeof session.userName === 'string' && session.userName.startsWith('PWTesty_')) {
+            for (const [count, auth] of (session.authenticators ?? []).entries()) {
+              console.log(`cleanup on isle ${count + 1}`);
+              const delResp = await page.request.delete(
+                `${apiUrl}/passkeys/${auth.credentialId}`,
+                { headers: { 'x-csrf-token': session.csrf } }
+              );
+              if (!delResp.ok()) {
+                console.error(`@nukeall: DELETE /passkeys/${auth.credentialId} failed (${delResp.status()})`);
+              }
+            }
+          } else if (session.userName) {
+            console.error(`@nukeall: refusing to nuke non-PWTesty_ user ${session.userName}`);
+          }
+        } else if (sessionResp.status() !== 401) {
+          console.error(`@nukeall: GET /session failed (${sessionResp.status()})`);
+        }
+      } catch (err) {
+        console.error('@nukeall: cleanup threw', err);
       }
     }
 

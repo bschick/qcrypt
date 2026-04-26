@@ -7,7 +7,8 @@ import {
    clearCredentials,
    addCredential,
    hosts,
-   credentials
+   credentials,
+   type AuthFixture
 } from '.././common';
 import { bufferToHexString } from '../../../../libs/crypto/src/lib/utils';
 import { LoginUserInfo } from '../../src/app/services/authenticator.service';
@@ -24,8 +25,7 @@ test.describe('authenticated api tests', () => {
 
    //@ts-ignore
    test.beforeEach(async ({ authFixture }, testInfo) => {
-      const { page, session, authId1, authId2 } = authFixture;
-      [apiUrl, apiUser, apiHeaders] = await apiSetup(testInfo, page, session, authId1);
+      [apiUrl, apiUser, apiHeaders] = await apiSetup(testInfo, authFixture);
    });
 
    test.afterEach(async ({ page }, testInfo) => {
@@ -57,7 +57,7 @@ test.describe('authenticated api tests', () => {
       expect(usersResponse).toBeOK();
 
       const user = await usersResponse.json();
-      expect(user.userName).toBe('PWFlippy');
+      expect(user.userName).toBe(apiUser.userName);
       expect(user.authenticators.length).toBe(1);
 
       // Failure case, invalid userid
@@ -201,7 +201,7 @@ test.describe('authenticated api tests', () => {
       expect(descResponse.status()).toBe(401);
 
       // sign back to get new session
-      [apiUser, apiHeaders] = await reSetup(testInfo, page, session, authId1);
+      [apiUser, apiHeaders] = await reSetup(testInfo, page, session, authId1, apiUser.userName!);
 
       // Valid passkey delete
       let delResponse = await page.request.delete(
@@ -224,7 +224,7 @@ test.describe('authenticated api tests', () => {
       expect(usersResponse).toBeOK();
 
       let user = await usersResponse.json();
-      expect(user.userName).toBe('PWFlippy');
+      expect(user.userName).toBe(apiUser.userName);
       expect(user.authenticators.length).toBe(1);
 
 
@@ -310,7 +310,7 @@ test.describe('authenticated api tests', () => {
       // between this comment and passkeyAuth success
 
       const body4 = {
-         userName: "PWFlippy"
+         userName: apiUser.userName
       }
 
       bodyData = new TextEncoder().encode(JSON.stringify(body4));
@@ -326,7 +326,7 @@ test.describe('authenticated api tests', () => {
       expect(patchResponse.status()).toBe(401);
 
       // sign back to get new session
-      [apiUser, apiHeaders] = await reSetup(testInfo, page, session, authId1);
+      [apiUser, apiHeaders] = await reSetup(testInfo, page, session, authId1, apiUser.userName!);
 
       const delResponse = await page.request.delete(
          //@ts-ignore
@@ -348,7 +348,7 @@ test.describe('authenticated api tests', () => {
 
       let user = await sessionResponse.json();
       expect(user.verified).toBeTruthy();
-      expect(user.userName).toBe('PWFlippy');
+      expect(user.userName).toBe(apiUser.userName);
       expect(user.userId).toBe(apiUser.userId);
       expect(user.hasRecoveryId).toBeTruthy()
       expect(user.authenticators.length).toBe(1);
@@ -420,7 +420,7 @@ test.describe('authenticated api tests', () => {
 
 
       // sign back to get new session
-      [apiUser, apiHeaders] = await reSetup(testInfo, page, session, authId1);
+      [apiUser, apiHeaders] = await reSetup(testInfo, page, session, authId1, apiUser.userName!);
 
       infoResponse = await page.request.get(
          //@ts-ignore
@@ -430,7 +430,7 @@ test.describe('authenticated api tests', () => {
       expect(infoResponse).toBeOK();
       let user = await infoResponse.json();
       expect(user.verified).toBeTruthy();
-      expect(user.userName).toBe('PWFlippy');
+      expect(user.userName).toBe(apiUser.userName);
       expect(user.userId).toBe(apiUser.userId);
       expect(user.hasRecoveryId).toBeTruthy()
       expect(user.authenticators.length).toBe(1);
@@ -683,34 +683,20 @@ type ApiSetupResults = [string, LoginUserInfo, Record<string, string>];
 
 async function apiSetup(
    testInfo: TestInfo,
-   page: Page,
-   session: CDPSession,
-   authId: string
+   authFixture: AuthFixture
 ): Promise<ApiSetupResults> {
 
-   await page.goto('/');
-
-   await passkeyCreation(session, authId, async () => {
-      await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
-      await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible({ timeout: 10000 });
-      await page.locator('input#userName').fill('PWFlippy');
-      await page.getByRole('button', { name: /Create new/ }).click();
-   });
-
-   await page.waitForURL('/showrecovery', { waitUntil: 'domcontentloaded' });
-   await expect(page.getByRole('heading', { name: 'Account Backup and Recovery' })).toBeVisible({ timeout: 10000 });
+   const { page } = authFixture;
+   await authFixture.createTestUser(authFixture.authId1);
 
    const storageState = await page.context().storageState();
    const loclStorage = storageState.origins[0].localStorage;
    const userId = loclStorage.find(item => item.name === 'userid')?.value;
    expect(userId).toBeTruthy();
 
-   //@ts-ignore
-   const apiUrl = testInfo.project.use.apiURL;
+   const apiUrl = (testInfo.project.use as { apiURL: string }).apiURL;
 
-   let sessResp = await page.request.get(
-      `${apiUrl}/session`
-   );
+   const sessResp = await page.request.get(`${apiUrl}/session`);
    expect(sessResp).toBeOK();
    const apiUser: LoginUserInfo = await sessResp.json();
 
@@ -726,28 +712,26 @@ async function reSetup(
    testInfo: TestInfo,
    page: Page,
    session: CDPSession,
-   authId: string
+   authId: string,
+   userName: string
 ): Promise<[LoginUserInfo, Record<string, string>]> {
 
    await page.goto('/');
 
    await passkeyAuth(session, authId, async () => {
-      await page.getByRole('button', { name: /Sign in as PWFlippy/ }).click();
+      await page.getByRole('button', { name: new RegExp(`Sign in as ${userName}`) }).click();
    });
    await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
-   await expect(page.getByRole('button', { name: 'Sign in as PWFlippy' })).not.toBeVisible({ timeout: 10000 });
+   await expect(page.getByRole('button', { name: new RegExp(`Sign in as ${userName}`) })).not.toBeVisible({ timeout: 10000 });
 
    const storageState = await page.context().storageState();
    const loclStorage = storageState.origins[0].localStorage;
    const userId = loclStorage.find(item => item.name === 'userid')?.value;
    expect(userId).toBeTruthy();
 
-   //@ts-ignore
-   const apiUrl = testInfo.project.use.apiURL;
+   const apiUrl = (testInfo.project.use as { apiURL: string }).apiURL;
 
-   let sessResp = await page.request.get(
-      `${apiUrl}/session`
-   );
+   const sessResp = await page.request.get(`${apiUrl}/session`);
    expect(sessResp).toBeOK();
    const apiUser: LoginUserInfo = await sessResp.json();
 

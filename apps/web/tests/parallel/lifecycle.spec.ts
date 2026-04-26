@@ -19,12 +19,19 @@ test.describe('creation', () => {
     const { page, session, authId1, authId2 } = authFixture;
     test.setTimeout(60000);
 
+    // Server strips <script> tags but keeps their content, so this fill
+    // sanitizes to userName — exercises XSS sanitization on the create path.
+    // Short rand keeps the fill (incl. tags) under the 31-char input limit.
+    const rand = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    const userName = `PWTesty_${rand}`;
+    const fillValue = `PWTesty<script>_${rand}</script>`;
+
     await page.goto('/');
 
     await passkeyCreation(session, authId1, async () => {
       await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
       await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible({timeout:10000});
-      await page.locator('input#userName').fill('PWFlipp<script>y</script>');
+      await page.locator('input#userName').fill(fillValue);
       await page.getByRole('button', { name: /Create new/ }).click();
     });
 
@@ -51,10 +58,10 @@ test.describe('creation', () => {
 
     await page.getByRole('button', { name: /Sign out/ }).click();
 
-    // Both authIds hold a passkey for PWFlippy at this point — pass both so
-    // presence sim covers whichever the browser picks.
+    // Both authIds hold a passkey for the test user at this point — pass both
+    // so presence sim covers whichever the browser picks.
     await passkeyAuth(session, [authId1, authId2], async () => {
-      await page.getByRole('button', { name: /Sign in as PWFlippy/ }).click();
+      await page.getByRole('button', { name: new RegExp(`Sign in as ${userName}`) }).click();
     });
 
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
@@ -67,7 +74,7 @@ test.describe('creation', () => {
     await page.getByRole('button', { name: /Sign out/ }).click();
 
     await passkeyAuth(session, [authId1, authId2], async () => {
-      await page.getByRole('button', { name: /Sign in as PWFlippy/ }).click();
+      await page.getByRole('button', { name: new RegExp(`Sign in as ${userName}`) }).click();
     });
 
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
@@ -90,7 +97,7 @@ test.describe('creation', () => {
     tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
 
-    await deleteFirstPasskey(page, 'PWFlippy');
+    await deleteFirstPasskey(page, userName);
 
     await page.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
@@ -101,12 +108,15 @@ test.describe('creation', () => {
     const { page, session, authId1, authId2 } = authFixture;
     test.setTimeout(60000);
 
+    const rand = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    const userName = `PWTesty_${rand}`;
+
     await page.goto('/');
 
     await passkeyCreation(session, authId1, async () => {
       await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
       await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible({timeout:10000});
-      await page.locator('input#userName').fill('PWFlippy');
+      await page.locator('input#userName').fill(userName);
       await page.getByRole('button', { name: /Create new/ }).click();
     });
 
@@ -134,7 +144,7 @@ test.describe('creation', () => {
 
     // Sign in with the remaining passkey (authId2)
     await passkeyAuth(session, authId2, async () => {
-      await page.getByRole('button', { name: /Sign in as PWFlippy/ }).click();
+      await page.getByRole('button', { name: new RegExp(`Sign in as ${userName}`) }).click();
     });
 
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
@@ -166,7 +176,7 @@ test.describe('creation', () => {
     await expect(tableBody.locator('tr')).toHaveCount(1);
 
     // Cleanup: delete the last passkey, which also deletes the user
-    await deleteFirstPasskey(page, 'PWFlippy');
+    await deleteFirstPasskey(page, userName);
     await page.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
   });
@@ -176,20 +186,11 @@ test.describe('creation', () => {
 
 test.describe('sign on', () => {
 
-  testWithAuth('check show reocvery', async ({ authFixture }) => {
-    const { page, session, authId1, authId2 } = authFixture;
+  testWithAuth('check show reocvery', { tag: '@nukeall' }, async ({ authFixture }) => {
+    const { page, session, authId1 } = authFixture;
     test.setTimeout(45000);
 
-    await page.goto('/');
-
-    const testHost = new URL(page.url()).hostname as hosts;
-    await addCredential(session, authId1, credentials[testHost]['keeper1']['id']);
-
-    await passkeyAuth(session, authId1, async () => {
-      await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-    });
-    await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+    const testUser = await authFixture.createTestUser(authId1);
 
     await openCredentials(page);
 
@@ -203,24 +204,15 @@ test.describe('sign on', () => {
     await page.waitForURL('/showrecovery', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: /I saved my recovery words securely/ })).toBeVisible({timeout:10000});
 
-    await expect(page.locator('textarea#wordsArea')).toHaveValue(credentials[testHost]['keeper1']['words']);
+    await expect(page.locator('textarea#wordsArea')).toHaveValue(testUser.recoveryWords);
 
   });
 
-  testWithAuth('check usercred', async ({ authFixture }) => {
-    const { page, session, authId1, authId2 } = authFixture;
+  testWithAuth('check usercred', { tag: '@nukeall' }, async ({ authFixture }) => {
+    const { page, session, authId1 } = authFixture;
     test.setTimeout(45000);
 
-    await page.goto('/');
-
-    const testHost = new URL(page.url()).hostname as hosts;
-    await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
-
-    await passkeyAuth(session, authId1, async () => {
-      await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-    });
-    await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+    const testUser = await authFixture.createTestUser(authId1);
 
     await passkeyAuth(session, authId1, async () => {
       await page.goto('/cmdline');
@@ -229,26 +221,20 @@ test.describe('sign on', () => {
     await page.waitForURL('/cmdline', { waitUntil: 'domcontentloaded' });
 
     await expect(page.locator('input#credential')).toBeVisible();
-    await expect(page.locator('input#credential')).toHaveValue(credentials[testHost]['keeper2']['userCred']);
+    await expect(page.locator('input#credential')).toHaveValue(testUser.userCred);
 
   });
 
   // This was a bug in the past where could not make further authenticated
   // calls after cmdline (or recoveryword) download.
-  testWithAuth('check usercred and add pk', async ({ authFixture }) => {
+  // Also exercises full UI-driven user teardown (delete every passkey →
+  // server removes the user) — the helper's after-test cleanup should find
+  // nothing left to do.
+  testWithAuth('check usercred and add pk', { tag: '@nukeall' }, async ({ authFixture }) => {
     const { page, session, authId1, authId2 } = authFixture;
     test.setTimeout(45000);
 
-    await page.goto('/');
-
-    const testHost = new URL(page.url()).hostname as hosts;
-    await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
-
-    await passkeyAuth(session, authId1, async () => {
-      await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-    });
-    await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+    const testUser = await authFixture.createTestUser(authId1);
 
     await passkeyAuth(session, authId1, async () => {
       await page.goto('/cmdline');
@@ -257,7 +243,7 @@ test.describe('sign on', () => {
     await page.waitForURL('/cmdline', { waitUntil: 'domcontentloaded' });
 
     await expect(page.locator('input#credential')).toBeVisible();
-    await expect(page.locator('input#credential')).toHaveValue(credentials[testHost]['keeper2']['userCred']);
+    await expect(page.locator('input#credential')).toHaveValue(testUser.userCred);
 
     await openCredentials(page);
 
@@ -269,23 +255,20 @@ test.describe('sign on', () => {
     });
 
     await expect(tableBody.locator('tr')).toHaveCount(2);
+
+    // Delete passkeys until the user is gone. The last delete needs username
+    // confirmation; the redirect to /welcome confirms the server removed the user.
     await deleteLastPasskey(page);
+    await expect(tableBody.locator('tr')).toHaveCount(1);
+    await deleteLastPasskey(page, testUser.userName);
+    await page.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
   });
 
-  testWithAuth('log in and out', async ({ authFixture }) => {
-    const { page, session, authId1, authId2 } = authFixture;
+  testWithAuth('log in and out', { tag: '@nukeall' }, async ({ authFixture }) => {
+    const { page, session, authId1 } = authFixture;
     test.setTimeout(45000);
 
-    await page.goto('/');
-
-    const testHost = new URL(page.url()).hostname as hosts;
-    await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
-
-    await passkeyAuth(session, authId1, async () => {
-      await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-    });
-    await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+    const testUser = await authFixture.createTestUser(authId1);
 
     await openCredentials(page);
 
@@ -295,7 +278,7 @@ test.describe('sign on', () => {
     await page.getByRole('button', { name: /Sign out/ }).click();
 
     await passkeyAuth(session, authId1, async () => {
-      await page.getByRole('button', { name: /Sign in as Keeper/ }).click();
+      await page.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
     });
 
     await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
@@ -314,21 +297,12 @@ test.describe('sign on', () => {
 
   });
 
-  testWithAuth('3 tabs logout and forget', async ({ authFixture }) => {
-    const { page, session, authId1, authId2 } = authFixture;
+  testWithAuth('3 tabs logout and forget', { tag: '@nukeall' }, async ({ authFixture }) => {
+    const { page, authId1 } = authFixture;
     test.setTimeout(45000);
 
     const page1 = page;
-    await page1.goto('/');
-
-    const testHost = new URL(page1.url()).hostname as hosts;
-    await addCredential(session, authId1, credentials[testHost]['keeper1']['id']);
-
-    await passkeyAuth(session, authId1, async () => {
-      await page1.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-    });
-    await page1.waitForURL('/', { waitUntil: 'domcontentloaded' });
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+    const testUser = await authFixture.createTestUser(authId1);
 
     const page2 = await page1.context().newPage();
     await page2.goto('/');
@@ -340,7 +314,7 @@ test.describe('sign on', () => {
 
     let tableBody2 = page2.locator('table.credtable tbody');
     await expect(tableBody2.locator('tr')).toHaveCount(1);
-    await expect(page2.locator('mat-sidenav input').first()).toHaveValue('KeeperOne');
+    await expect(page2.locator('mat-sidenav input').first()).toHaveValue(testUser.userName);
 
     await page2.getByRole('button', { name: /Sign out/ }).click();
     await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible({timeout:10000});
@@ -370,34 +344,26 @@ test.describe('sign on', () => {
 
   });
 
-  testWithAuth('3 tabs switch user', async ({ authFixture }) => {
-    const { page, session, authId1, authId2 } = authFixture;
+  testWithAuth('3 tabs switch user', { tag: '@nukeall' }, async ({ authFixture }) => {
+    const { page, session, authId1 } = authFixture;
     test.setTimeout(60000);
 
     const page1 = page;
-    await page1.goto('/');
-    const testHost = new URL(page.url()).hostname as hosts;
-    await addCredential(session, authId1, credentials[testHost]['keeper1']['id']);
-
-    await passkeyAuth(session, authId1, async () => {
-      await page1.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-    });
-    await page1.waitForURL('/', { waitUntil: 'domcontentloaded' });
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+    const testUserA = await authFixture.createTestUser(authId1);
 
     const page2 = await page1.context().newPage();
     await page2.goto('/');
     await page2.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
     await openCredentials(page2);
-    await expect(page2.locator('mat-sidenav input').first()).toHaveValue('KeeperOne');
+    await expect(page2.locator('mat-sidenav input').first()).toHaveValue(testUserA.userName);
 
-    // log 1st page in as keepertwo
+    // log 1st page in as a different user
     await openCredentials(page1);
 
     let tableBody1 = page1.locator('table.credtable tbody');
     await expect(tableBody1.locator('tr')).toHaveCount(1);
-    await expect(page1.locator('mat-sidenav input').first()).toHaveValue('KeeperOne');
+    await expect(page1.locator('mat-sidenav input').first()).toHaveValue(testUserA.userName);
 
     await page1.getByRole('button', { name: /Sign out/ }).click();
     await page1.getByRole('button', { name: /Sign in as a different user/ }).click();
@@ -406,17 +372,12 @@ test.describe('sign on', () => {
     await expect(page1.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
 
     await clearCredentials(session, authId1);
-    await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
+    const testUserB = await authFixture.createTestUser(authId1);
 
-    await passkeyAuth(session, authId1, async () => {
-      await page1.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-    });
-    await page1.waitForURL('/', { waitUntil: 'domcontentloaded' });
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
     await openCredentials(page1);
-    await expect(page1.locator('mat-sidenav input').first()).toHaveValue('KeeperTwo');
+    await expect(page1.locator('mat-sidenav input').first()).toHaveValue(testUserB.userName);
 
-    // page2 should go to welcome its user context is keeper2 and we don't directly transition
+    // page2 should go to welcome since its user context is now testUserB and we don't directly transition
     await page2.goto('/');
     await page2.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
     await expect(page2.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
@@ -430,7 +391,7 @@ test.describe('sign on', () => {
     await openCredentials(page3);
     let tableBody3 = page3.locator('table.credtable tbody');
     await expect(tableBody3.locator('tr')).toHaveCount(1);
-    await expect(page3.locator('mat-sidenav input').first()).toHaveValue('KeeperTwo');
+    await expect(page3.locator('mat-sidenav input').first()).toHaveValue(testUserB.userName);
     await page3.getByRole('button', { name: /Sign out/ }).click();
     await expect(page3.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible({timeout:10000});
 
@@ -444,13 +405,13 @@ test.describe('sign on', () => {
     await page1.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible({timeout:10000});
 
-    // sign back in as Keeper1
+    // sign back in as testUserA — restore its credential first so authId1 can authenticate
     await page1.getByRole('button', { name: /Sign in as a different user/ }).click();
     await page1.waitForURL('/welcome', { waitUntil: 'domcontentloaded' });
     await expect(page1.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({timeout:10000});
 
     await clearCredentials(session, authId1);
-    await addCredential(session, authId1, credentials[testHost]['keeper1']['id']);
+    await addCredential(session, authId1, testUserA.credential);
 
     await passkeyAuth(session, authId1, async () => {
       await page1.getByRole('button', { name: 'I have used Quick Crypt' }).click();
@@ -458,7 +419,7 @@ test.describe('sign on', () => {
     await page1.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
     await openCredentials(page1);
-    await expect(page1.locator('mat-sidenav input').first()).toHaveValue('KeeperOne');
+    await expect(page1.locator('mat-sidenav input').first()).toHaveValue(testUserA.userName);
     await page1.getByRole('button', { name: 'Passkey information' }).click();
 
     // page2 should now go to enryption page since origianl user is logged in again
@@ -466,7 +427,7 @@ test.describe('sign on', () => {
     await page2.waitForURL('/', { waitUntil: 'domcontentloaded' });
     await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
     await openCredentials(page2);
-    await expect(page2.locator('mat-sidenav input').first()).toHaveValue('KeeperOne');
+    await expect(page2.locator('mat-sidenav input').first()).toHaveValue(testUserA.userName);
 
     // page3 should go to welcome page since it its user was logged out
     await page3.goto('/');

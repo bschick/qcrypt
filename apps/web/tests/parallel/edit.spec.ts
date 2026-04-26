@@ -1,29 +1,17 @@
 import { test, expect, Response } from '@playwright/test';
 import {
   testWithAuth,
-  addCredential,
-  credentials,
   passkeyAuth,
-  hosts,
   openCredentials
 } from '.././common';
 
 
-testWithAuth('edit fields', async ({ authFixture }) => {
-  const { page, session, authId1, authId2 } = authFixture;
+testWithAuth('edit fields', { tag: '@nukeall' }, async ({ authFixture }) => {
+  const { page, authId1 } = authFixture;
   test.setTimeout(60000);
   const rand = Math.floor(Math.random() * (99 - 0 + 1)) + 0;
 
-  await page.goto('/');
-
-  const testHost = new URL(page.url()).hostname as hosts;
-  await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
-
-  await passkeyAuth(session, authId1, async () => {
-    await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-  });
-  await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+  const testUser = await authFixture.createTestUser(authId1);
 
   await openCredentials(page);
 
@@ -43,24 +31,24 @@ testWithAuth('edit fields', async ({ authFixture }) => {
     response.request().method() === 'PATCH';
 
   await nameInput.click();
-  await nameInput.fill('Keeper<script>'+rand);
-  await expect(nameInput).toHaveValue('Keeper<script>'+rand);
+  await nameInput.fill('PWTesty_<script>'+rand);
+  await expect(nameInput).toHaveValue('PWTesty_<script>'+rand);
   let [resp] = await Promise.all([
     page.waitForResponse(userPatch),
     nameInput.press('Enter')
   ]);
   expect(resp.status()).toBe(200);
-  await expect(nameInput).toHaveValue('Keeper'+rand);
+  await expect(nameInput).toHaveValue('PWTesty_'+rand);
 
   await nameInput.click();
-  await nameInput.fill('KeeperTwo');
-  await expect(nameInput).toHaveValue('KeeperTwo');
+  await nameInput.fill(testUser.userName);
+  await expect(nameInput).toHaveValue(testUser.userName);
   [resp] = await Promise.all([
     page.waitForResponse(userPatch),
     nameInput.press('Enter')
   ]);
   expect(resp.status()).toBe(200);
-  await expect(nameInput).toHaveValue('KeeperTwo');
+  await expect(nameInput).toHaveValue(testUser.userName);
 
   await descInput.click();
   await descInput.fill('VirtualPK'+rand);
@@ -84,20 +72,12 @@ testWithAuth('edit fields', async ({ authFixture }) => {
 
 });
 
-testWithAuth('options persistence and defaults', async ({ authFixture }) => {
-  const { page, session, authId1, authId2 } = authFixture;
+testWithAuth('options persistence and defaults', { tag: '@nukeall' }, async ({ authFixture }) => {
+  const { page, session, authId1 } = authFixture;
   test.setTimeout(60000);
-  const rand = Math.floor(Math.random() * (99 - 0 + 1)) + 0;
 
-  await page.goto('/');
+  const testUser = await authFixture.createTestUser(authId1);
 
-  const testHost = new URL(page.url()).hostname as hosts;
-  await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
-
-  await passkeyAuth(session, authId1, async () => {
-    await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-  });
-  await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
   await page.locator('mat-expansion-panel-header').filter({ hasText: 'Encryption Mode' }).click();
   await expect(page.locator('text="XChaCha20 Poly1305"')).toHaveCount(1);
   await page.locator('mat-expansion-panel-header').filter({ hasText: 'Advanced Options' }).click();
@@ -117,12 +97,12 @@ testWithAuth('options persistence and defaults', async ({ authFixture }) => {
   await openCredentials(page);
   let tableBody = page.locator('table.credtable tbody');
   await expect(tableBody.locator('tr')).toHaveCount(1);
-  await expect(page.locator('mat-sidenav input').first()).toHaveValue('KeeperTwo');
+  await expect(page.locator('mat-sidenav input').first()).toHaveValue(testUser.userName);
   await page.getByRole('button', { name: /Sign out/ }).click();
   await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible({timeout:10000});
 
   await passkeyAuth(session, authId1, async () => {
-    await page.getByRole('button', { name: /Sign in as KeeperTwo/ }).click();
+    await page.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
   });
   await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
   // Accordians should stay open
@@ -144,12 +124,12 @@ testWithAuth('options persistence and defaults', async ({ authFixture }) => {
   await openCredentials(page);
   tableBody = page.locator('table.credtable tbody');
   await expect(tableBody.locator('tr')).toHaveCount(1);
-  await expect(page.locator('mat-sidenav input').first()).toHaveValue('KeeperTwo');
+  await expect(page.locator('mat-sidenav input').first()).toHaveValue(testUser.userName);
   await page.getByRole('button', { name: /Sign out/ }).click();
   await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible({timeout:10000});
 
   await passkeyAuth(session, authId1, async () => {
-    await page.getByRole('button', { name: /Sign in as KeeperTwo/ }).click();
+    await page.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
   });
   await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
   // Accordians should stay open

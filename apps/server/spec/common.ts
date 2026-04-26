@@ -50,7 +50,9 @@ async function request(
 
    const headers: Record<string, string> = {
       ...extraHeaders,
-      "User-Agent": "Mozilla/5.0",
+      // QCTestClient marker lets the server's PWTesty_ prefix guard recognize
+      // these vitest specs as a known test client.
+      "User-Agent": "Mozilla/5.0 QCTestClient",
       "Origin": RP_ORIGIN
    };
 

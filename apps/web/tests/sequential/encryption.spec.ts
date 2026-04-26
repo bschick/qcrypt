@@ -9,6 +9,10 @@ import {
 } from '.././common';
 
 
+// Uses shared KeeperOne. A parallel sign-in (other test in another session or
+// another runner) can invalidate this session before the test finishes —
+// playwright's retry recovers. Single login + local-only crypto after, so
+// retry is sufficient and we keep the shared user.
 testWithAuth('encrypt decrypt', async ({ authFixture }) => {
   const { page, session, authId1, authId2 } = authFixture;
 
@@ -57,6 +61,10 @@ testWithAuth('encrypt decrypt', async ({ authFixture }) => {
 });
 
 
+// Uses shared KeeperTwo. A parallel sign-in (other test in another session or
+// another runner) can invalidate this session before the test finishes —
+// playwright's retry recovers. Single login + local-only crypto after, so
+// retry is sufficient and we keep the shared user.
 testWithAuth('loop encrypt decrypt', async ({ authFixture }) => {
   const { page, session, authId1, authId2 } = authFixture;
 

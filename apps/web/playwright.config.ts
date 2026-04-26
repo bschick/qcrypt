@@ -62,6 +62,9 @@ export default defineConfig({
       name: 'local',
       use: {
         ...devices['Desktop Chrome'],
+        // QCTestClient marker lets the server's PWTesty_ prefix guard
+        // recognize these e2e tests as a known test client.
+        userAgent: `${devices['Desktop Chrome'].userAgent} QCTestClient`,
         baseURL: 'https://t1.quickcrypt.org:4200',
         apiURL: 'https://test.quickcrypt.org/v1', // should lookup from project environment
         ignoreHTTPSErrors: true
@@ -72,6 +75,7 @@ export default defineConfig({
       name: 'prod',
       use: {
         ...devices['Desktop Chrome'],
+        userAgent: `${devices['Desktop Chrome'].userAgent} QCTestClient`,
         baseURL: 'https://quickcrypt.org',
         apiURL: 'https://quickcrypt.org/v1', // should lookup from project environment
         ignoreHTTPSErrors: true
