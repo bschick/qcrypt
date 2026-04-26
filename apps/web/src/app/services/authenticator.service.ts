@@ -183,7 +183,7 @@ export class AuthenticatorService {
       return testPK === this.pkId;
    }
 
-   //*** Start: These methods all return authenticated inforomation */
+   //*** Start: These methods all return authenticated information */
 
    public get userName(): string {
       return this.getUserInfo().userName;
@@ -215,7 +215,7 @@ export class AuthenticatorService {
       return this.userInfo()!;
    }
 
-   //*** End: These methods all return authenticated inforomation */
+   //*** End: These methods all return authenticated information */
 
    private async _doFetch<T>(
       args: FetchArgs
