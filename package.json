@@ -89,7 +89,8 @@
   "pnpm": {
     "overrides": {
       "picomatch": ">=4.0.4",
-      "@angular/platform-server": ">=21.2.9"
+      "@angular/platform-server": ">=21.2.9",
+      "fast-xml-parser": ">=5.7.0"
     },
     "peerDependencyRules": {
       "allowedVersions": {
