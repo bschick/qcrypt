@@ -63,86 +63,31 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
-import { closest } from '../../web/src/app/services/levenshtein.ts';
+import {
+   aws as awsBase,
+   resolveAwsCreds,
+   suggestCommandTypo,
+} from '../../../scripts/deploy-common.mjs';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-// Resolve --profile / --region with strict precedence: CLI flag > env var.
-// Env-var pair selection depends on --prod: prod-mode uses QC_PROD_*,
-// test-mode uses QC_TEST_*. Errors loudly if neither source provides a
-// value — never falls through to AWS_PROFILE / AWS_REGION (see header doc
-// for rationale). Memoized per-argv so error/resolution happen once.
-const AWS_CREDS_KEY = Symbol('awsCreds');
-function resolveAwsCreds(argv) {
-   if (argv[AWS_CREDS_KEY]) {
-      return argv[AWS_CREDS_KEY];
-   }
-   const envPrefix = isProd(argv) ? 'QC_PROD' : 'QC_TEST';
-   const envProfile = `${envPrefix}_AWS_PROFILE`;
-   const envRegion = `${envPrefix}_AWS_REGION`;
-   const profile = argv.profile ?? process.env[envProfile];
-   const region = argv.region ?? process.env[envRegion];
-   if (!profile) {
-      console.error(`Missing AWS profile: pass --profile or set ${envProfile}.`);
-      process.exit(1);
-   }
-   if (!region) {
-      console.error(`Missing AWS region: pass --region or set ${envRegion}.`);
-      process.exit(1);
-   }
-   argv[AWS_CREDS_KEY] = { profile, region };
-   return argv[AWS_CREDS_KEY];
+// Pick the env-var pair for AWS profile/region — prod-mode uses QC_PROD_*,
+// test-mode uses QC_TEST_*. The shared resolver enforces "explicit profile
+// / region required" semantics; this wrapper just hands it the names.
+function resolveCreds(argv) {
+   const prefix = isProd(argv) ? 'QC_PROD' : 'QC_TEST';
+   return resolveAwsCreds(argv, `${prefix}_AWS_PROFILE`, `${prefix}_AWS_REGION`);
 }
 
-function aws(argv, args, { allowFailure = false, readOnly = false } = {}) {
-   const { profile, region } = resolveAwsCreds(argv);
-   const full = ['--profile', profile, '--region', region, ...args];
-
-   // Read-only calls (get-alias, list-versions-by-function) always execute
-   // so --dry-run still produces accurate diagnostics. Only mutating calls
-   // are suppressed.
-   if (argv.dryRun && !readOnly) {
-      console.log(`[dry-run] aws ${full.map(shellQuote).join(' ')}`);
-      return { status: 0, stdout: '', stderr: '' };
-   }
-
-   const r = spawnSync('aws', full, {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-   });
-   if (r.error) {
-      console.error(`Failed to spawn aws: ${r.error.message}`);
-      process.exit(1);
-   }
-   if (r.status !== 0 && !allowFailure) {
-      process.stderr.write(r.stderr);
-      const combined = `${r.stderr ?? ''}${r.stdout ?? ''}`;
-      if (/ResourceNotFoundException/i.test(combined)) {
-         console.error(`Error: Lambda '${argv.lambda}' (or referenced alias/version) not found. Check --lambda and your AWS account/profile.`);
-      } else if (/AccessDenied|Access Denied|ForbiddenException/i.test(combined)) {
-         console.error(
-            `  - Verify the Lambda name '${argv.lambda}' exists in this account.\n` +
-            '  - Verify your AWS profile / SSO session is authenticated to the right account.\n' +
-            '  - Verify the role has the lambda permissions this command needs.',
-         );
-      } else {
-         console.error(`aws ${args.join(' ')} failed (exit ${r.status})`);
-      }
-      process.exit(1);
-   }
-   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
-}
-
-// POSIX single-quote a shell arg: safe wrap for anything containing spaces
-// or shell metachars. Used only for the --dry-run log so previewed commands
-// can be copy-pasted into a shell.
-function shellQuote(arg) {
-   if (arg === '' || /[^\w@%+=:,./-]/.test(arg)) {
-      return `'${arg.replace(/'/g, `'\\''`)}'`;
-   }
-   return arg;
+// Wrapper around the shared aws() that ensures creds are resolved (and
+// memoized on argv) before the shared helper runs. Keeps every call path
+// honoring the prod/test env-var split without each runX needing to
+// remember to call resolveCreds first.
+function aws(argv, args, opts) {
+   resolveCreds(argv);
+   return awsBase(argv, args, opts);
 }
 
 function isProd(argv) {
@@ -191,12 +136,25 @@ function getAliasVersion(argv, alias) {
 // CodeSha256) — the function-level "what's deployed right now to test"
 // signal. Updates to the function code or config bump LastModified;
 // publish-version alone does not.
+//
+// Uses allowFailure to surface the lambda-specific hint when the function
+// name itself is wrong — a common first-time-misconfig case. Other
+// failures bubble through with the shared aws()'s generic auth hints.
 function getFunctionConfig(argv) {
    const r = aws(argv, [
       'lambda', 'get-function-configuration',
       '--function-name', argv.lambda,
       '--output', 'json',
-   ], { readOnly: true });
+   ], { readOnly: true, allowFailure: true });
+   if (r.status !== 0) {
+      process.stderr.write(r.stderr);
+      if (/ResourceNotFoundException/i.test(r.stderr ?? '')) {
+         console.error(`Error: Lambda '${argv.lambda}' not found. Check --lambda and your AWS account/profile.`);
+      } else {
+         console.error(`aws lambda get-function-configuration failed (exit ${r.status})`);
+      }
+      process.exit(1);
+   }
    return JSON.parse(r.stdout || '{}');
 }
 
@@ -266,20 +224,15 @@ function runDeploy(argv) {
       }
    }
 
-   const dryRunTag = argv.dryRun ? ' (DRY RUN)' : '';
-   if (!isProd(argv)) {
-      console.log(`deploy: lambda=${argv.lambda} code-sha=${codeSha}${dryRunTag}`);
-      return;
-   }
-
-   const alias = aliasName(argv);
-
    // 1.5 Wait for the code update to settle. UpdateFunctionCode is async
    // — the function transitions through `LastUpdateStatus=InProgress`
-   // before `Successful`, and PublishVersion / UpdateAlias both fail with
-   // ResourceConflictException if called during that window. The CLI's
-   // `lambda wait function-updated` waiter polls (default 5s × 60
-   // attempts) until LastUpdateStatus is Successful (or fails loudly).
+   // before `Successful`. In prod-mode this also avoids the
+   // ResourceConflictException PublishVersion / UpdateAlias would hit if
+   // called during that window. In test-mode there's no follow-up call,
+   // but waiting still gives the user a clear "deploy is live" signal at
+   // exit instead of returning while the function is still updating.
+   // The CLI's `lambda wait function-updated` waiter polls (default 5s ×
+   // 60 attempts) until LastUpdateStatus is Successful (or fails loudly).
    if (!argv.dryRun) {
       console.log(`deploy: waiting for ${argv.lambda} to finish updating...`);
    }
@@ -287,6 +240,14 @@ function runDeploy(argv) {
       'lambda', 'wait', 'function-updated',
       '--function-name', argv.lambda,
    ]);
+
+   const dryRunTag = argv.dryRun ? ' (DRY RUN)' : '';
+   if (!isProd(argv)) {
+      console.log(`deploy: lambda=${argv.lambda} code-sha=${codeSha}${dryRunTag}`);
+      return;
+   }
+
+   const alias = aliasName(argv);
 
    // 2. Publish the just-uploaded code as a numbered version. The
    // --description IS the comment we surface in `info` listings.
@@ -312,12 +273,16 @@ function runDeploy(argv) {
 
    // 3. Bump the alias. Dry-run uses <NEW> as a placeholder so the logged
    // command is readable rather than `--function-version ` with an empty arg.
+   // Alias description is hard-coded — argv.comment is recorded on the
+   // version (above), and copying it onto the alias would just duplicate
+   // the same text. The alias-level description tracks what kind of move
+   // was last made ("new deploy" vs "rolled back").
    aws(argv, [
       'lambda', 'update-alias',
       '--function-name', argv.lambda,
       '--name', alias,
       '--function-version', newVersion || '<NEW>',
-      '--description', argv.comment,
+      '--description', 'new deploy',
       '--output', 'json',
    ]);
 
@@ -381,7 +346,7 @@ function runRollback(argv) {
       '--function-name', argv.lambda,
       '--name', alias,
       '--function-version', target,
-      '--description', argv.comment,
+      '--description', 'rolled back',
       '--output', 'json',
    ]);
 
@@ -433,33 +398,15 @@ function runInfo(argv) {
 // yargs wiring
 // ---------------------------------------------------------------------------
 
-// Used by the .fail() handler to pull the actual user-typed positional out
-// of a process.argv that includes `--flag value` pairs. Listed here (rather
-// than derived from yargs internals) for the same reason as bash's
-// COMMON_VALUE_FLAGS — keep the list explicit and easy to audit. Mirror
-// any new value-taking option here.
+// Listed here (rather than derived from yargs internals) for the same
+// reason as bash's COMMON_VALUE_FLAGS — keep the list explicit and easy
+// to audit. Used by the shared suggestCommandTypo helper to walk argv
+// past flag-value pairs when identifying a typo'd subcommand. Mirror any
+// new value-taking option here.
 const VALUE_FLAGS = new Set([
    '--prod', '--lambda', '--profile', '--region', '--print-limit',
    '--build-dir', '--comment', '--version',
 ]);
-function realPositionals(argv) {
-   const out = [];
-   let expectValue = false;
-   for (const arg of argv) {
-      if (expectValue) {
-         expectValue = false;
-         continue;
-      }
-      if (VALUE_FLAGS.has(arg)) {
-         expectValue = true;
-         continue;
-      }
-      if (!arg.startsWith('-')) {
-         out.push(arg);
-      }
-   }
-   return out;
-}
 
 const addGlobalOpts = (y) => y
    .option('prod', { type: 'string', describe: 'Enable prod-mode targeting <alias> (e.g. --prod prod). Absent ⇒ test-mode.' })
@@ -475,7 +422,7 @@ const COMMANDS = ['deploy', 'bdeploy', 'rollback', 'info'];
 
 const deployBuilder = (y) => addGlobalOpts(y)
    .option('build-dir', { type: 'string', default: 'dist/server', describe: 'Directory containing index.zip' })
-   .option('comment', { type: 'string', default: '', describe: 'Description recorded on publish-version / update-alias.' })
+   .option('comment', { type: 'string', default: '', describe: 'Description recorded on the new published version (prod-mode only).' })
    .check((argv) => {
       try {
          if (!statSync(argv.buildDir).isDirectory()) {
@@ -491,8 +438,7 @@ const bdeployBuilder = (y) => deployBuilder(y)
    .option('no-min', { type: 'boolean', default: false, describe: 'Build with `pnpm build:server` (unminified) instead of `pnpm build:server:min`' });
 
 const rollbackBuilder = (y) => addGlobalOpts(y)
-   .option('version', { type: 'string', describe: 'Specific version to roll back to (default: version preceding current alias target)' })
-   .option('comment', { type: 'string', default: '', describe: 'Description recorded on update-alias.' });
+   .option('version', { type: 'string', describe: 'Specific version to roll back to (default: version preceding current alias target)' });
 
 yargs(hideBin(process.argv))
    .scriptName('deploy.mjs')
@@ -506,23 +452,10 @@ yargs(hideBin(process.argv))
       if (err) {
          throw err;
       }
-      // bdeplo, deplo, rollbac, etc. — walk argv ourselves (skipping known
-      // flag values via VALUE_FLAGS) and pick the first non-flag token
-      // that isn't a registered command. Relying on `msg`'s
-      // unknown-argument naming is unreliable when flags precede the
-      // typo'd subcommand.
-      if (msg && /Unknown argument/.test(msg)) {
-         const candidate = realPositionals(hideBin(process.argv)).find((p) => !COMMANDS.includes(p));
-         if (candidate) {
-            const match = closest(candidate, COMMANDS);
-            if (match.dist <= 2) {
-               console.error(`Unknown command '${candidate}'. Did you mean '${match.closest}'?`);
-            } else {
-               console.error(`Unknown command '${candidate}'. Available: ${COMMANDS.join(', ')}.`);
-            }
-            process.exit(1);
-         }
-      }
+      // Typos like `bdeplo`, `rollbac`, etc. — get a "did you mean ...?"
+      // suggestion when close to a registered command. Returns silently
+      // otherwise so we fall through to the bare msg below.
+      suggestCommandTypo(msg, COMMANDS, VALUE_FLAGS);
       console.error(msg);
       process.exit(1);
    })

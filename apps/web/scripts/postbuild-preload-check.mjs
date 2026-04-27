@@ -39,9 +39,9 @@ const STATIC_IMPORT_RE = /(?:from|\bimport)\s*["'`](\.\/chunk-[A-Za-z0-9_-]+\.js
 const html = readFileSync(indexPath, 'utf8');
 
 // Starting points: every <script type="module" src="…"> in the index.
-const SCRIPT_TAG_RE = /<script\b[^>]*>/g;
-const TYPE_MODULE_RE = /type\s*=\s*["']module["']/;
-const SRC_ATTR_RE = /src\s*=\s*["']([^"']+)["']/;
+const SCRIPT_TAG_RE = /<script\b[^>]*>/gi;
+const TYPE_MODULE_RE = /type\s*=\s*["']module["']/i;
+const SRC_ATTR_RE = /src\s*=\s*["']([^"']+)["']/i;
 const entries = [];
 for (const m of html.matchAll(SCRIPT_TAG_RE)) {
    if (TYPE_MODULE_RE.test(m[0])) {

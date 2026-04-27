@@ -85,7 +85,6 @@ case "${SUBCMD:-deploy}" in
       ;;
    rollback)
       default_unless_user_supplied --lambda "$LAMBDA" "$@"
-      default_comment_from_git_tag "$@"
       ;;
    info)
       default_unless_user_supplied --lambda "$LAMBDA" "$@"

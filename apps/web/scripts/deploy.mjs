@@ -109,77 +109,32 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
-import { closest } from '../src/app/services/levenshtein.ts';
+import {
+   aws as awsBase,
+   resolveAwsCreds,
+   suggestCommandTypo,
+} from '../../../scripts/deploy-common.mjs';
 
 // ---------------------------------------------------------------------------
 // Helpers (all take `argv` so they can be shared by every command)
 // ---------------------------------------------------------------------------
 
-// Resolve --profile / --region with strict precedence: CLI flag > env var.
-// Errors loudly if neither source provides a value — we never want to fall
-// through to AWS_PROFILE / AWS_REGION (see header doc for rationale).
-// Memoized per-argv via a Symbol so the error message and resolution work
-// happen once per process invocation.
-const AWS_CREDS_KEY = Symbol('awsCreds');
-function resolveAwsCreds(argv) {
-   if (argv[AWS_CREDS_KEY]) {
-      return argv[AWS_CREDS_KEY];
-   }
+// Web is always prod-mode. Resolves to QC_PROD_AWS_* env vars (or --profile
+// / --region overrides) via the shared resolver, after enforcing the
+// always-prod precondition.
+function resolveCreds(argv) {
    if (!argv.prod) {
       console.error('Web deploys are always prod-mode. Pass --prod <alias> (e.g. --prod prod).');
       process.exit(1);
    }
-   const profile = argv.profile ?? process.env.QC_PROD_AWS_PROFILE;
-   const region = argv.region ?? process.env.QC_PROD_AWS_REGION;
-   if (!profile) {
-      console.error('Missing AWS profile: pass --profile or set QC_PROD_AWS_PROFILE.');
-      process.exit(1);
-   }
-   if (!region) {
-      console.error('Missing AWS region: pass --region or set QC_PROD_AWS_REGION.');
-      process.exit(1);
-   }
-   argv[AWS_CREDS_KEY] = { profile, region };
-   return argv[AWS_CREDS_KEY];
+   return resolveAwsCreds(argv, 'QC_PROD_AWS_PROFILE', 'QC_PROD_AWS_REGION');
 }
 
-function aws(argv, args, { input, allowFailure = false, readOnly = false } = {}) {
-   const { profile, region } = resolveAwsCreds(argv);
-   const full = ['--profile', profile, '--region', region, ...args];
-
-   // Read-only calls (list, fetch manifest) always execute so --dry-run still
-   // produces accurate diagnostics. Only mutating calls are suppressed.
-   if (argv.dryRun && !readOnly) {
-      console.log(`[dry-run] aws ${full.map(shellQuote).join(' ')}`);
-      return { status: 0, stdout: '', stderr: '' };
-   }
-
-   const r = spawnSync('aws', full, {
-      input,
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-   });
-   if (r.error) {
-      console.error(`Failed to spawn aws: ${r.error.message}`);
-      process.exit(1);
-   }
-   if (r.status !== 0 && !allowFailure) {
-      process.stderr.write(r.stderr);
-      const combined = `${r.stderr ?? ''}${r.stdout ?? ''}`;
-      if (/NoSuchBucket/i.test(combined)) {
-         console.error(`Error: bucket '${argv.bucket}' does not exist. Check the bucket name and your AWS account/profile.`);
-      } else if (/AccessDenied|Access Denied/i.test(combined)) {
-         console.error(
-            `  - Verify the bucket name '${argv.bucket}' exists.\n` +
-            '  - Verify your AWS profile / SSO session is authenticated to the right account.\n' +
-            '  - Verify the role has the S3 permissions this command needs.',
-         );
-      } else {
-         console.error(`aws ${args.join(' ')} failed (exit ${r.status})`);
-      }
-      process.exit(1);
-   }
-   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
+// Wrapper around the shared aws() that ensures creds are resolved (so
+// every command path gets the always-prod check) before delegating.
+function aws(argv, args, opts) {
+   resolveCreds(argv);
+   return awsBase(argv, args, opts);
 }
 
 // Known OS/editor metadata files we don't want to upload, but without
@@ -221,11 +176,18 @@ function readManifest(argv) {
       // missing) returns the empty manifest instead of crashing — but ANY
       // other failure (NoSuchBucket, AccessDenied, expired SSO token, etc.)
       // would silently masquerade as an empty manifest, which is dangerous.
-      // Treat only object-missing patterns as "no manifest yet".
+      // Treat only object-missing patterns as "no manifest yet"; everything
+      // else exits, with the bucket-specific hint when the bucket itself
+      // doesn't exist (the resource-specific message that the generic
+      // shared aws() can't produce because it doesn't know argv.bucket).
       const stderr = r.stderr ?? '';
       if (!/NoSuchKey|Not Found|\b404\b/i.test(stderr)) {
          process.stderr.write(stderr);
-         console.error(`Failed to read manifest at ${key}.`);
+         if (/NoSuchBucket/i.test(stderr)) {
+            console.error(`Error: bucket '${argv.bucket}' does not exist. Check the bucket name and your AWS account/profile.`);
+         } else {
+            console.error(`Failed to read manifest at ${key}.`);
+         }
          process.exit(1);
       }
       manifest = emptyManifest();
@@ -272,16 +234,6 @@ function listBucket(argv) {
    const parsed = JSON.parse(r.stdout);
    const keys = (parsed.Contents ?? []).map((o) => o.Key);
    return argv.subdirs ? keys : keys.filter((k) => !k.includes('/'));
-}
-
-// POSIX single-quote a shell arg: safe wrap for anything containing spaces
-// or shell metachars. Used only for the --dry-run log so previewed commands
-// can be copy-pasted into a shell.
-function shellQuote(arg) {
-   if (arg === '' || /[^\w@%+=:,./-]/.test(arg)) {
-      return `'${arg.replace(/'/g, `'\\''`)}'`;
-   }
-   return arg;
 }
 
 // Convert a shell-style glob to an anchored RegExp. `*` matches any run of
@@ -860,34 +812,16 @@ function runPrune(argv) {
 // yargs wiring
 // ---------------------------------------------------------------------------
 
-// Used by the .fail() handler to pull the actual user-typed positional out
-// of a process.argv that includes `--flag value` pairs. Listed here (rather
-// than derived from yargs internals) for the same reason as bash's
-// COMMON_VALUE_FLAGS — keep the list explicit and easy to audit. Mirror
-// any new value-taking option here.
+// Listed here (rather than derived from yargs internals) for the same
+// reason as bash's COMMON_VALUE_FLAGS — keep the list explicit and easy
+// to audit. Used by the shared suggestCommandTypo helper to walk argv
+// past flag-value pairs when identifying a typo'd subcommand. Mirror any
+// new value-taking option here.
 const VALUE_FLAGS = new Set([
    '--prod', '--profile', '--region', '--manifest-key', '--print-limit',
    '--build-dir', '--cache-control', '--expiration-days', '--cf-distribution',
    '--comment',
 ]);
-function realPositionals(argv) {
-   const out = [];
-   let expectValue = false;
-   for (const arg of argv) {
-      if (expectValue) {
-         expectValue = false;
-         continue;
-      }
-      if (VALUE_FLAGS.has(arg)) {
-         expectValue = true;
-         continue;
-      }
-      if (!arg.startsWith('-')) {
-         out.push(arg);
-      }
-   }
-   return out;
-}
 
 const addGlobalOpts = (y) => y
    .option('prod', { type: 'string', describe: 'Required. Alias name (currently unused on the web side; kept symmetric with server). Web is always prod-mode.' })
@@ -1029,24 +963,11 @@ yargs(hideBin(process.argv))
       if (err) {
          throw err;
       }
-      // Catch typos like `deploy.mjs leaked my-bucket` or `deploy.mjs --prod
-      // prod inf my-bucket`. We walk argv ourselves (skipping known flag
-      // values) and pick the first non-flag token that isn't a registered
-      // command — relying on `msg`'s unknown-argument naming is unreliable
-      // because `<typo> <bucket>` makes yargs bind the typo to <bucket> and
-      // complain about the *bucket* as the extra.
-      if (msg && /Unknown argument/.test(msg)) {
-         const candidate = realPositionals(hideBin(process.argv)).find((p) => !COMMANDS.includes(p));
-         if (candidate) {
-            const match = closest(candidate, COMMANDS);
-            if (match.dist <= 2) {
-               console.error(`Unknown command '${candidate}'. Did you mean '${match.closest}'?`);
-            } else {
-               console.error(`Unknown command '${candidate}'. Available: ${COMMANDS.join(', ')}.`);
-            }
-            process.exit(1);
-         }
-      }
+      // Typos like `deploy.mjs leaked my-bucket` or `deploy.mjs --prod prod
+      // inf my-bucket` get a "did you mean ...?" suggestion if they're close
+      // to a known command. Returns silently if no typo is detected so the
+      // bucket-positional rewrite below can still fire.
+      suggestCommandTypo(msg, COMMANDS, VALUE_FLAGS);
       const rewritten = /Not enough non-option arguments/.test(msg ?? '')
          ? 'Error: you must specify the target S3 bucket. Run with --help for usage.'
          : msg;
