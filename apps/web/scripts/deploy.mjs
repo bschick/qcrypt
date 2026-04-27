@@ -67,11 +67,21 @@
  * AWS auth
  * ============================================================
  *
- * This script shells out to the `aws` CLI for all S3 operations, so it
- * picks up credentials the same way `aws` itself does: environment
- * variables (AWS_PROFILE, AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY,
- * AWS_REGION), `~/.aws/credentials`, or IAM role. Use --profile and
- * --region for explicit selection.
+ * Web deploys are always prod-mode. --prod <alias> is required (the alias
+ * value is currently unused on the web side — there's no Lambda alias to
+ * track — but kept symmetric with the server script so the wrappers can
+ * share auth resolution logic).
+ *
+ * Every `aws` invocation is called with an explicit --profile and --region
+ * resolved at startup. Resolution order (per option):
+ *
+ *   1. CLI flag (--profile / --region) if given
+ *   2. env var QC_PROD_AWS_PROFILE / QC_PROD_AWS_REGION
+ *
+ * If neither source provides a value the script exits with a clear error.
+ * The AWS CLI's own AWS_PROFILE / AWS_REGION env vars are intentionally
+ * never consulted — keeps the active account explicit and prevents an
+ * unrelated env from silently routing a deploy to the wrong account.
  *
  * ============================================================
  * Usage
@@ -79,10 +89,11 @@
  *
  *   deploy.mjs <bucket> [options]                     deploy the built SPA
  *   deploy.mjs deploy <bucket> [options]              same as above (explicit)
+ *   deploy.mjs bdeploy <bucket> [options]             build then deploy
  *   deploy.mjs bootstrap <bucket>                     seed manifest.current from bucket
  *   deploy.mjs manifest <bucket>                      print the current manifest
  *   deploy.mjs leaks <bucket>                         list untracked bucket files
- *   deploy.mjs counts <bucket>                        print counts of current/orphaned/expected/untracked
+ *   deploy.mjs info <bucket>                          prints files counts and last deploy information
  *   deploy.mjs expect <bucket> <patterns..>           register expected files (globs ok)
  *   deploy.mjs unexpect <bucket> <patterns..>         remove expected entries
  *   deploy.mjs prune <bucket>                         remove untracked files and expired orphans
@@ -104,15 +115,37 @@ import { closest } from '../src/app/services/levenshtein.ts';
 // Helpers (all take `argv` so they can be shared by every command)
 // ---------------------------------------------------------------------------
 
+// Resolve --profile / --region with strict precedence: CLI flag > env var.
+// Errors loudly if neither source provides a value — we never want to fall
+// through to AWS_PROFILE / AWS_REGION (see header doc for rationale).
+// Memoized per-argv via a Symbol so the error message and resolution work
+// happen once per process invocation.
+const AWS_CREDS_KEY = Symbol('awsCreds');
+function resolveAwsCreds(argv) {
+   if (argv[AWS_CREDS_KEY]) {
+      return argv[AWS_CREDS_KEY];
+   }
+   if (!argv.prod) {
+      console.error('Web deploys are always prod-mode. Pass --prod <alias> (e.g. --prod prod).');
+      process.exit(1);
+   }
+   const profile = argv.profile ?? process.env.QC_PROD_AWS_PROFILE;
+   const region = argv.region ?? process.env.QC_PROD_AWS_REGION;
+   if (!profile) {
+      console.error('Missing AWS profile: pass --profile or set QC_PROD_AWS_PROFILE.');
+      process.exit(1);
+   }
+   if (!region) {
+      console.error('Missing AWS region: pass --region or set QC_PROD_AWS_REGION.');
+      process.exit(1);
+   }
+   argv[AWS_CREDS_KEY] = { profile, region };
+   return argv[AWS_CREDS_KEY];
+}
+
 function aws(argv, args, { input, allowFailure = false, readOnly = false } = {}) {
-   const full = [];
-   if (argv.profile) {
-      full.push('--profile', argv.profile);
-   }
-   if (argv.region) {
-      full.push('--region', argv.region);
-   }
-   full.push(...args);
+   const { profile, region } = resolveAwsCreds(argv);
+   const full = ['--profile', profile, '--region', region, ...args];
 
    // Read-only calls (list, fetch manifest) always execute so --dry-run still
    // produces accurate diagnostics. Only mutating calls are suppressed.
@@ -184,6 +217,17 @@ function readManifest(argv) {
    const r = aws(argv, ['s3', 'cp', key, '-'], { allowFailure: true, readOnly: true });
    let manifest;
    if (r.status !== 0) {
+      // `allowFailure` is set so a never-deployed bucket (manifest object
+      // missing) returns the empty manifest instead of crashing — but ANY
+      // other failure (NoSuchBucket, AccessDenied, expired SSO token, etc.)
+      // would silently masquerade as an empty manifest, which is dangerous.
+      // Treat only object-missing patterns as "no manifest yet".
+      const stderr = r.stderr ?? '';
+      if (!/NoSuchKey|Not Found|\b404\b/i.test(stderr)) {
+         process.stderr.write(stderr);
+         console.error(`Failed to read manifest at ${key}.`);
+         process.exit(1);
+      }
       manifest = emptyManifest();
    } else {
       try {
@@ -218,7 +262,7 @@ function writeManifest(argv, m) {
 // command family doesn't produce structured JSON output; `s3api` maps
 // directly to the S3 API and returns the JSON we need to parse.
 //
-// Returns only top-level keys unless argv.includeSubdirs is true, matching
+// Returns only top-level keys unless argv.subdirs is true, matching
 // the scope rule the deploy/prune commands use for uploading and removing.
 function listBucket(argv) {
    const r = aws(argv, ['s3api', 'list-objects-v2', '--bucket', argv.bucket, '--output', 'json'], { readOnly: true });
@@ -227,7 +271,7 @@ function listBucket(argv) {
    }
    const parsed = JSON.parse(r.stdout);
    const keys = (parsed.Contents ?? []).map((o) => o.Key);
-   return argv.includeSubdirs ? keys : keys.filter((k) => !k.includes('/'));
+   return argv.subdirs ? keys : keys.filter((k) => !k.includes('/'));
 }
 
 // POSIX single-quote a shell arg: safe wrap for anything containing spaces
@@ -265,9 +309,6 @@ function matcherFor(patterns) {
    return (key) => literals.has(key) || regexes.some((re) => re.test(key));
 }
 
-// Accept either a bare CloudFront distribution ID (e.g. <id>) or
-// a full ARN (arn:aws:cloudfront::ACCT:distribution/<id>) and
-// return the ID the CLI expects.
 function cloudfrontDistributionId(value) {
    if (value.startsWith('arn:')) {
       return value.split('/').pop();
@@ -311,11 +352,11 @@ function trackedMatcher(manifest) {
    return (key) => literals.has(key) || expectedMatch(key);
 }
 
-// Single source of truth for the include-subdirs scope rule. Top-level only
-// unless --include-subdirs is set; used by manifest reconciliation and by
+// Single source of truth for the subdirs scope rule. Top-level only
+// unless --subdirs is set; used by manifest reconciliation and by
 // listBucket-derived filters.
 function inScopeFor(argv) {
-   return (k) => argv.includeSubdirs || !k.includes('/');
+   return (k) => argv.subdirs || !k.includes('/');
 }
 
 // Bucket keys not covered by any of the manifest's tracking sets.
@@ -373,10 +414,10 @@ function printUntracked(untracked, heading, limit) {
 
 function runDeploy(argv) {
    // 1. Enumerate the local build.
-   const files = collectLocalFiles(argv.buildDir, argv.includeSubdirs);
+   const files = collectLocalFiles(argv.buildDir, argv.subdirs);
    const newKeys = new Set(files.map((f) => f.relKey));
    if (newKeys.size === 0) {
-      console.error(`No files found under ${argv.buildDir}${argv.includeSubdirs ? '' : ' (top-level only)'}`);
+      console.error(`No files found under ${argv.buildDir}${argv.subdirs ? '' : ' (top-level only)'}`);
       process.exit(1);
    }
 
@@ -398,7 +439,7 @@ function runDeploy(argv) {
       '--exclude', 'desktop.ini', '--exclude', '*/desktop.ini',
       '--cache-control', argv.cacheControl,
    ];
-   if (!argv.includeSubdirs) {
+   if (!argv.subdirs) {
       bulkArgs.push('--exclude', '*/*');
    }
    const bulkResult = aws(argv, bulkArgs);
@@ -438,7 +479,7 @@ function runDeploy(argv) {
    }
 
    // 4. Reconcile the manifest. Only in-scope keys are reconciled — out-of-scope
-   //    entries (subdir files when --include-subdirs is off) are preserved
+   //    entries (subdir files when --subdirs is off) are preserved
    //    verbatim so a top-level deploy doesn't mis-orphan subdir state a
    //    recursive bootstrap/deploy put there.
    const manifestCurrent = new Set(manifest.current);
@@ -475,19 +516,21 @@ function runDeploy(argv) {
       orphans.delete(key);
    }
 
-   // 6. Write the updated manifest.
+   // 6. Write the updated manifest. `deployComment` reflects only the latest
+   //    deploy (defaults to '' so omitting --comment clears any prior comment).
    const deployCount = (manifest.deployCount ?? 0) + 1;
    writeManifest(argv, {
       version: 1,
-      lastDeploy: now,
+      deployDate: now,
       deployCount,
+      deployComment: argv.comment,
       current: [...newCurrent].sort(),
       orphans: Object.fromEntries(orphans),
       expected: [...manifest.expected].sort(),
    });
 
    // 7. Leak detection: compare S3 listing against tracked sets.
-   // listBucket respects --include-subdirs for scope.
+   // listBucket respects --subdirs for scope.
    const untracked = untrackedKeys(argv, {
       current: [...newCurrent],
       orphans: Object.fromEntries(orphans),
@@ -508,6 +551,32 @@ function runDeploy(argv) {
    printUntracked(newlyOrphaned, 'newly orphaned (retention clock starts now):', argv.printLimit);
    printUntracked(untracked, "untracked in bucket (use 'expect' or 'unexpect' to update, 'prune' to remove):", argv.printLimit);
    invalidateCloudFront(argv);
+}
+
+// ---------------------------------------------------------------------------
+// bdeploy — build then deploy
+// ---------------------------------------------------------------------------
+
+// Convenience wrapper: runs `pnpm build:web` (always — there's no
+// minification toggle on the web side), then defers to runDeploy with the
+// same argv so all deploy options (including --comment) flow through.
+function runBdeploy(argv) {
+   const cmd = 'pnpm';
+   const args = ['build:web'];
+   if (argv.dryRun) {
+      console.log(`[dry-run] ${cmd} ${args.join(' ')}`);
+   } else {
+      const r = spawnSync(cmd, args, { stdio: 'inherit' });
+      if (r.error) {
+         console.error(`Failed to spawn ${cmd}: ${r.error.message}`);
+         process.exit(1);
+      }
+      if (r.status !== 0) {
+         console.error(`bdeploy: ${cmd} ${args.join(' ')} failed (exit ${r.status})`);
+         process.exit(r.status ?? 1);
+      }
+   }
+   runDeploy(argv);
 }
 
 // ---------------------------------------------------------------------------
@@ -532,10 +601,12 @@ function runDeploy(argv) {
 // at which point the site 404s on chunk load. Use soon after the bad
 // deploy, not weeks later.
 //
-// The manifest is intentionally NOT rolled back here. The next real deploy
-// reconciles against whichever manifest state is current, and any lingering
-// drift (chunks from the aborted deploy) is handled by the normal orphan
-// clock.
+// The current/orphans/expected sets are intentionally NOT rolled back here:
+// the next real deploy reconciles against whichever manifest state is
+// current, and any lingering drift (chunks from the aborted deploy) is
+// handled by the normal orphan clock. The manifest IS rewritten — but only
+// to refresh `deployDate` and `deployComment`, since the rule is that
+// deploy/bdeploy/rollback are the only commands that touch those fields.
 function runRollback(argv) {
    const key = 'index.html';
    const listResult = aws(argv, [
@@ -564,6 +635,14 @@ function runRollback(argv) {
       '--key', key,
       '--version-id', latest.VersionId,
    ]);
+
+   const manifest = readManifest(argv);
+   writeManifest(argv, {
+      ...manifest,
+      deployDate: new Date().toISOString(),
+      deployComment: argv.comment,
+   });
+
    console.log(
       `rollback: deleted ${key} version ${latest.VersionId};` +
       ` previous version is now current${argv.dryRun ? ' (DRY RUN)' : ''}`,
@@ -593,7 +672,7 @@ function runReset(argv) {
 // Takes whatever is already in the bucket and writes it into manifest.current,
 // resets orphans, and leaves expected alone. Useful when adopting the script
 // on a bucket that was populated by a previous deploy mechanism. Respects
-// --include-subdirs for scope.
+// --subdirs for scope.
 function runBootstrap(argv) {
    const manifest = readManifest(argv);
    // Anything already covered by `expected` (including the manifest file, which
@@ -602,19 +681,23 @@ function runBootstrap(argv) {
    // yields the same end state.
    const isExpected = matcherFor(manifest.expected);
    const current = listBucket(argv).filter((k) => !isExpected(k)).sort();
-   // `lastDeploy` and `deployCount` are deploy-only fields. Preserve whatever
-   // was there (or leave unset if the bucket has never seen a real deploy).
+   // `deployDate`, `deployCount`, and `deployComment` are deploy-only fields.
+   // Preserve whatever was there (or leave unset if the bucket has never seen
+   // a real deploy).
    const next = {
       version: 1,
       current,
       orphans: {},
       expected: [...manifest.expected].sort(),
    };
-   if (manifest.lastDeploy) {
-      next.lastDeploy = manifest.lastDeploy;
+   if (manifest.deployDate) {
+      next.deployDate = manifest.deployDate;
    }
    if (manifest.deployCount !== undefined) {
       next.deployCount = manifest.deployCount;
+   }
+   if (manifest.deployComment !== undefined) {
+      next.deployComment = manifest.deployComment;
    }
    writeManifest(argv, next);
    console.log(
@@ -642,21 +725,28 @@ function runLeaks(argv) {
 }
 
 // ---------------------------------------------------------------------------
-// counts (no deploy) — print per-category file counts
+// info (no deploy) — print file counts plus last deploy info
 // ---------------------------------------------------------------------------
 
-// Scope filter applies to manifest entries as if they were keys: a pattern
-// like `.well-known/*` (containing `/`) is excluded under top-level scope,
-// matching the behaviour for current/orphans keys.
-function runCounts(argv) {
+// Scope filter applies to current/orphans keys (top-level vs all). `expected`
+// is always the raw entry count — it's a registry of patterns, not a file
+// listing, and a glob like `.well-known/*` doesn't have a meaningful "scope"
+// (it covers subdir files but lives as one registry entry). Showing the
+// scope-filtered count was confusing because it conveyed neither the entry
+// count nor the actual matched-file count.
+function runInfo(argv) {
    const manifest = readManifest(argv);
    const inScope = inScopeFor(argv);
    const current = manifest.current.filter(inScope).length;
    const orphaned = Object.keys(manifest.orphans).filter(inScope).length;
-   const expected = manifest.expected.filter(inScope).length;
+   const expected = manifest.expected.length;
    const untracked = untrackedKeys(argv, manifest).length;
-   const scope = argv.includeSubdirs ? 'all' : 'top-level';
-   console.log(`counts: scope=${scope} current=${current} orphaned=${orphaned} expected=${expected} untracked=${untracked}`);
+   const scope = argv.subdirs ? 'all' : 'top-level';
+   console.log(`info: scope=${scope} current=${current} orphaned=${orphaned} expected=${expected} untracked=${untracked}`);
+   if (manifest.deployDate) {
+      console.log(`  last-deploy: ${manifest.deployDate}`);
+      console.log(`  comment: ${manifest.deployComment ?? ''}`);
+   }
 }
 
 // ---------------------------------------------------------------------------
@@ -770,9 +860,39 @@ function runPrune(argv) {
 // yargs wiring
 // ---------------------------------------------------------------------------
 
+// Used by the .fail() handler to pull the actual user-typed positional out
+// of a process.argv that includes `--flag value` pairs. Listed here (rather
+// than derived from yargs internals) for the same reason as bash's
+// COMMON_VALUE_FLAGS — keep the list explicit and easy to audit. Mirror
+// any new value-taking option here.
+const VALUE_FLAGS = new Set([
+   '--prod', '--profile', '--region', '--manifest-key', '--print-limit',
+   '--build-dir', '--cache-control', '--expiration-days', '--cf-distribution',
+   '--comment',
+]);
+function realPositionals(argv) {
+   const out = [];
+   let expectValue = false;
+   for (const arg of argv) {
+      if (expectValue) {
+         expectValue = false;
+         continue;
+      }
+      if (VALUE_FLAGS.has(arg)) {
+         expectValue = true;
+         continue;
+      }
+      if (!arg.startsWith('-')) {
+         out.push(arg);
+      }
+   }
+   return out;
+}
+
 const addGlobalOpts = (y) => y
-   .option('profile', { type: 'string', describe: 'AWS CLI profile (defaults to env/config)' })
-   .option('region', { type: 'string', describe: 'AWS region (defaults to env/config)' })
+   .option('prod', { type: 'string', describe: 'Required. Alias name (currently unused on the web side; kept symmetric with server). Web is always prod-mode.' })
+   .option('profile', { type: 'string', describe: 'AWS CLI profile (falls back to QC_PROD_AWS_PROFILE; required)' })
+   .option('region', { type: 'string', describe: 'AWS region (falls back to QC_PROD_AWS_REGION; required)' })
    .option('manifest-key', { type: 'string', default: '_build/manifest.json', describe: 'S3 key for the deploy manifest' })
    .option('dry-run', { type: 'boolean', default: false, describe: 'Log actions without executing them' })
    .option('print-limit', { type: 'number', default: 20, describe: 'Max file keys to print in listings (deploy, leaks, prune)' });
@@ -780,17 +900,18 @@ const addGlobalOpts = (y) => y
 // Used to detect typo'd commands that would otherwise be silently consumed by
 // the default `$0 <bucket>` positional.
 const COMMANDS = [
-   'deploy', 'rollback', 'reset', 'bootstrap', 'manifest',
-   'leaks', 'counts', 'expect', 'unexpect', 'prune',
+   'deploy', 'bdeploy', 'rollback', 'reset', 'bootstrap', 'manifest',
+   'leaks', 'info', 'expect', 'unexpect', 'prune',
 ];
 
 const deployBuilder = (y) => addGlobalOpts(y)
    .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
    .option('build-dir', { type: 'string', default: 'dist/web/browser', describe: 'Local directory to upload' })
-   .option('include-subdirs', { type: 'boolean', default: false, describe: 'Upload files in subdirectories (default: top-level only)' })
+   .option('subdirs', { type: 'boolean', default: false, describe: 'Upload files in subdirectories (default: top-level only)' })
    .option('cache-control', { type: 'string', default: 'public, max-age=31536000, immutable', describe: 'Cache-Control header for uploaded files' })
    .option('expiration-days', { type: 'number', default: 30, describe: 'Days an orphan persists before deletion' })
    .option('cf-distribution', { type: 'string', describe: 'CloudFront distribution ID or ARN to invalidate (/*) after deploy. Omit to skip.' })
+   .option('comment', { type: 'string', default: '', describe: 'Comment recorded in the manifest (only the latest is kept).' })
    .check((argv) => {
       if (!Number.isFinite(argv.expirationDays) || argv.expirationDays < 0) {
          throw new Error('--expiration-days must be a non-negative integer');
@@ -820,11 +941,18 @@ yargs(hideBin(process.argv))
       runDeploy,
    )
    .command(
+      'bdeploy <bucket>',
+      'Run `pnpm build:web`, then deploy.',
+      deployBuilder,
+      runBdeploy,
+   )
+   .command(
       'rollback <bucket>',
       'Break-glass: delete the current S3 version of index.html so the previous version becomes current. Requires bucket versioning.',
       (y) => addGlobalOpts(y)
          .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('cf-distribution', { type: 'string', describe: 'CloudFront distribution ID or ARN to invalidate (/*) after rollback. Omit to skip.' }),
+         .option('cf-distribution', { type: 'string', describe: 'CloudFront distribution ID or ARN to invalidate (/*) after rollback. Omit to skip.' })
+         .option('comment', { type: 'string', default: '', describe: 'Comment recorded in the manifest (only the latest is kept).' }),
       runRollback,
    )
    .command(
@@ -839,7 +967,7 @@ yargs(hideBin(process.argv))
       'Seed manifest.current from the existing bucket contents (no deploy). Resets orphans; leaves expected alone.',
       (y) => addGlobalOpts(y)
          .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('include-subdirs', { type: 'boolean', default: false, describe: 'Include files in subdirectories (default: top-level only)' }),
+         .option('subdirs', { type: 'boolean', default: false, describe: 'Include files in subdirectories (default: top-level only)' }),
       runBootstrap,
    )
    .command(
@@ -854,16 +982,16 @@ yargs(hideBin(process.argv))
       'List S3 files not tracked by the manifest (no deploy).',
       (y) => addGlobalOpts(y)
          .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('include-subdirs', { type: 'boolean', default: false, describe: 'Also consider files in subdirectories (default: top-level only)' }),
+         .option('subdirs', { type: 'boolean', default: false, describe: 'Also consider files in subdirectories (default: top-level only)' }),
       runLeaks,
    )
    .command(
-      'counts <bucket>',
-      'Print counts of current, orphaned, expected, and untracked files (no deploy).',
+      'info <bucket>',
+      'Print files counts and last deploy information (no deploy).',
       (y) => addGlobalOpts(y)
          .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('include-subdirs', { type: 'boolean', default: false, describe: 'Also count files in subdirectories (default: top-level only)' }),
-      runCounts,
+         .option('subdirs', { type: 'boolean', default: false, describe: 'Also count files in subdirectories (default: top-level only)' }),
+      runInfo,
    )
    .command(
       'expect <bucket> <patterns..>',
@@ -886,7 +1014,7 @@ yargs(hideBin(process.argv))
       'Remove S3 files not tracked by the manifest, plus orphans past the retention window (no deploy).',
       (y) => addGlobalOpts(y)
          .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('include-subdirs', { type: 'boolean', default: false, describe: 'Also consider files in subdirectories (default: top-level only)' })
+         .option('subdirs', { type: 'boolean', default: false, describe: 'Also consider files in subdirectories (default: top-level only)' })
          .option('expiration-days', { type: 'number', default: 30, describe: 'Days an orphan persists before deletion' })
          .check((argv) => {
             if (!Number.isFinite(argv.expirationDays) || argv.expirationDays < 0) {
@@ -901,19 +1029,20 @@ yargs(hideBin(process.argv))
       if (err) {
          throw err;
       }
-      // Catch typos like `deploy.mjs leaked quickcrypt` — yargs binds `leaked`
-      // to <bucket> and complains about the extra `quickcrypt`. With 2+
-      // positionals where the first isn't a known command, treat it as a
-      // typo'd command (no legitimate command takes an unknown leading
-      // positional plus extras).
-      if (msg && /^Unknown argument/.test(msg)) {
-         const positionals = hideBin(process.argv).filter((a) => !a.startsWith('-'));
-         if (positionals.length >= 2 && !COMMANDS.includes(positionals[0])) {
-            const match = closest(positionals[0], COMMANDS);
+      // Catch typos like `deploy.mjs leaked my-bucket` or `deploy.mjs --prod
+      // prod inf my-bucket`. We walk argv ourselves (skipping known flag
+      // values) and pick the first non-flag token that isn't a registered
+      // command — relying on `msg`'s unknown-argument naming is unreliable
+      // because `<typo> <bucket>` makes yargs bind the typo to <bucket> and
+      // complain about the *bucket* as the extra.
+      if (msg && /Unknown argument/.test(msg)) {
+         const candidate = realPositionals(hideBin(process.argv)).find((p) => !COMMANDS.includes(p));
+         if (candidate) {
+            const match = closest(candidate, COMMANDS);
             if (match.dist <= 2) {
-               console.error(`Unknown command '${positionals[0]}'. Did you mean '${match.closest}'?`);
+               console.error(`Unknown command '${candidate}'. Did you mean '${match.closest}'?`);
             } else {
-               console.error(`Unknown command '${positionals[0]}'. Available: ${COMMANDS.join(', ')}.`);
+               console.error(`Unknown command '${candidate}'. Available: ${COMMANDS.join(', ')}.`);
             }
             process.exit(1);
          }
