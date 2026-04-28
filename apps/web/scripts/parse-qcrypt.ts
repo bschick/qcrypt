@@ -1155,11 +1155,19 @@ function render(parsed: ParsedFile): string {
 // ---- Block-morph DSL ----
 //
 // Three operators, all shell-safe (no quoting needed):
-//   bA^bB  — swap original blocks A and B
-//   bN-    — delete original block N (slot stays as a placeholder so later
-//            swaps can still target the original index)
-//   bNxK   — repeat: original block N's emit-count multiplies by K, so
-//            `b1x3 b1x2` produces 6 copies of block 1
+//   bA^bB                       — swap original blocks A and B
+//   bN-                         — delete original block N (slot stays as a
+//                                  placeholder so later swaps can still
+//                                  target the original index)
+//   bNxK / bN*K                 — repeat: original block N's emit-count
+//                                  multiplies by K, so `b1x3 b1x2` produces
+//                                  6 copies of block 1
+//   bN!FIELD[OFFSET]=BYTES      — write into a field of original block N.
+//                                  OFFSET is optional (default 0). BYTES is
+//                                  a sequence of either two-char hex pairs
+//                                  or single `^` characters that flip one
+//                                  byte (XOR 0xFF). Writes mutate the bytes
+//                                  used for every copy of that block.
 //
 // Sequence separators: comma, whitespace, or underscore. The output
 // filename gets the DSL with all separators normalized to '_'.
@@ -1168,10 +1176,48 @@ function render(parsed: ParsedFile): string {
 // after `b2^b7`, `b2-` deletes the slot that originally held block 2
 // (now sitting where block 7 used to be).
 
+// One element in a write op's value sequence. Either a literal byte
+// (`hex`) or a flip marker (`flip` -> XOR 0xFF with the existing byte).
+type ValueByte = { kind: 'hex'; byte: number } | { kind: 'flip' };
+
 type Op =
    | { kind: 'swap'; a: number; b: number; raw: string }
    | { kind: 'delete'; n: number; raw: string }
-   | { kind: 'repeat'; n: number; count: number; raw: string };
+   | { kind: 'repeat'; n: number; count: number; raw: string }
+   | { kind: 'write'; n: number; field: string; offset: number; values: ValueByte[]; raw: string };
+
+// Maps a DSL field id to the parser-pushed Field.name(s). Some ids alias
+// to multiple names because the on-disk layout differs across versions
+// (V4 calls the header trailer "reserved", V5+ calls it "flags").
+const DSL_FIELD_TO_NAMES: Record<string, readonly string[]> = {
+   hmac: ['hmac'],
+   ver: ['version'],
+   plen: ['payload len'],
+   flgs: ['flags', 'reserved'],
+   alg: ['alg'],
+   iv: ['iv'],
+   slt: ['salt'],
+   ic: ['iterations'],
+   lpp: ['loop / end'],
+   hlen: ['hint len'],
+   eh: ['hint encrypted'],
+   em: ['encrypted data'],
+};
+
+const DSL_FIELD_DOCS: { id: string; description: string }[] = [
+   { id: 'hmac', description: 'HMAC signature (32 bytes, every block)' },
+   { id: 'ver',  description: 'version number (2 bytes, every block)' },
+   { id: 'plen', description: 'payload length (3 bytes, every block; not in V1)' },
+   { id: 'flgs', description: 'flags byte; bit 0 = terminal-block (1 byte; V4 reserved, V5 in header, V6+ in payload AD; not in V1)' },
+   { id: 'alg',  description: 'algorithm id (2 bytes, every block)' },
+   { id: 'iv',   description: 'initialization vector (12/24/32 bytes by alg, every block)' },
+   { id: 'slt',  description: 'salt (16 bytes, block 0 only)' },
+   { id: 'ic',   description: 'iteration count (4 bytes, block 0 only)' },
+   { id: 'lpp',  description: 'loop/loop-end packed byte (1 byte, block 0 only; (lpe-1)<<4 | (lp-1))' },
+   { id: 'hlen', description: 'encrypted-hint length (1 byte, block 0 only)' },
+   { id: 'eh',   description: 'encrypted hint (hlen bytes, block 0 only)' },
+   { id: 'em',   description: 'encrypted message data (rest of payload, every block)' },
+];
 
 type Slot = {
    origIdx: number;
@@ -1204,20 +1250,78 @@ function parseSingleOp(raw: string): Op {
    if (m) {
       return { kind: 'repeat', n: Number(m[1]), count: Number(m[2]), raw };
    }
-   throw new Error(`Invalid op "${raw}". Expected bA^bB (swap), bN- (delete), or bNxK (repeat)`);
+   m = raw.match(/^b(\d+)!([a-zA-Z]+)(?:\[(\d+)\])?=(.+)$/);
+   if (m) {
+      return {
+         kind: 'write',
+         n: Number(m[1]),
+         field: m[2].toLowerCase(),
+         offset: m[3] !== undefined ? Number(m[3]) : 0,
+         values: parseWriteValue(m[4], raw),
+         raw,
+      };
+   }
+   throw new Error(
+      `Invalid op "${raw}". Expected bA^bB (swap), bN- (delete), bNxK (repeat), or bN!FIELD[OFFSET]=BYTES (write)`
+   );
+}
+
+// Parses a write op's value sequence. Each "byte slot" is either a single
+// `^` (flip the corresponding byte via XOR 0xFF) or two hex chars (write
+// that literal byte). E.g. `A0^B1` => write 0xA0, flip, write 0xB1.
+function parseWriteValue(s: string, raw: string): ValueByte[] {
+   const out: ValueByte[] = [];
+   let i = 0;
+   while (i < s.length) {
+      const c = s[i];
+      if (c === '^') {
+         out.push({ kind: 'flip' });
+         i += 1;
+         continue;
+      }
+      if (i + 1 >= s.length) {
+         throw new Error(`Invalid value in op "${raw}": dangling hex digit at position ${i}`);
+      }
+      const pair = s.substring(i, i + 2);
+      if (!/^[0-9a-fA-F]{2}$/.test(pair)) {
+         throw new Error(`Invalid value in op "${raw}": "${pair}" is not a hex byte or "^"`);
+      }
+      out.push({ kind: 'hex', byte: parseInt(pair, 16) });
+      i += 2;
+   }
+   if (out.length === 0) {
+      throw new Error(`Invalid value in op "${raw}": empty value`);
+   }
+   return out;
+}
+
+function findFieldByDslId(block: ParsedBlock, dslId: string): Field | null {
+   const candidates = DSL_FIELD_TO_NAMES[dslId];
+   if (!candidates) {
+      return null;
+   }
+   for (const name of candidates) {
+      const f = block.fields.find((x) => x.name === name);
+      if (f) {
+         return f;
+      }
+   }
+   return null;
 }
 
 function findSlot(slots: readonly Slot[], origIdx: number): number {
    const i = slots.findIndex((s) => s.origIdx === origIdx);
    if (i < 0) {
-      throw new Error(`block ${origIdx} not found (file has ${slots.length} blocks)`);
+      throw new Error(
+         `block ${origIdx} not found (file has ${slots.length} block${slots.length === 1 ? '' : 's'})`
+      );
    }
    return i;
 }
 
-function applyOps(blockCount: number, ops: readonly Op[]): Slot[] {
+function applyOps(blocks: readonly ParsedBlock[], ops: readonly Op[], buffer: Buffer): Slot[] {
    const slots: Slot[] = [];
-   for (let i = 0; i < blockCount; i++) {
+   for (let i = 0; i < blocks.length; i++) {
       slots.push({ origIdx: i, count: 1, deleted: false, touched: false, moved: false });
    }
    for (const op of ops) {
@@ -1234,7 +1338,7 @@ function applyOps(blockCount: number, ops: readonly Op[]): Slot[] {
          slots[i].deleted = true;
          slots[i].count = 0;
          slots[i].touched = true;
-      } else {
+      } else if (op.kind === 'repeat') {
          const i = findSlot(slots, op.n);
          if (slots[i].deleted) {
             throw new Error(
@@ -1243,12 +1347,71 @@ function applyOps(blockCount: number, ops: readonly Op[]): Slot[] {
          }
          slots[i].count *= op.count;
          slots[i].touched = true;
+      } else {
+         applyWrite(blocks, slots, buffer, op);
       }
    }
    for (let i = 0; i < slots.length; i++) {
       slots[i].moved = slots[i].origIdx !== i;
    }
    return slots;
+}
+
+function applyWrite(
+   blocks: readonly ParsedBlock[],
+   slots: readonly Slot[],
+   buffer: Buffer,
+   op: Op & { kind: 'write' }
+): void {
+   if (op.n < 0 || op.n >= blocks.length) {
+      throw new Error(
+         `block ${op.n} not found (file has ${blocks.length} block${blocks.length === 1 ? '' : 's'}) (op "${op.raw}")`
+      );
+   }
+   const slotIdx = findSlot(slots, op.n);
+   if (slots[slotIdx].deleted) {
+      throw new Error(
+         `cannot modify block ${op.n}: it was already deleted by an earlier op (op "${op.raw}")`
+      );
+   }
+   if (!(op.field in DSL_FIELD_TO_NAMES)) {
+      const ids = Object.keys(DSL_FIELD_TO_NAMES).join(', ');
+      throw new Error(`unknown field "${op.field}" (op "${op.raw}"). Known: ${ids}`);
+   }
+   const block = blocks[op.n];
+   const field = findFieldByDslId(block, op.field);
+   if (!field) {
+      throw new Error(
+         `field "${op.field}" does not exist in block ${op.n} (op "${op.raw}"). ` +
+            `Some fields are block-0 only or are absent from certain versions.`
+      );
+   }
+   if (field.length === 0) {
+      throw new Error(
+         `field "${op.field}" in block ${op.n} has length 0; nothing to write into (op "${op.raw}")`
+      );
+   }
+   if (op.offset < 0 || op.offset >= field.length) {
+      throw new Error(
+         `offset ${op.offset} out of range for field "${op.field}" (length ${field.length}) (op "${op.raw}")`
+      );
+   }
+   if (op.offset + op.values.length > field.length) {
+      throw new Error(
+         `writing ${op.values.length} byte(s) at offset ${op.offset} would exceed ` +
+            `field "${op.field}" length ${field.length} (op "${op.raw}")`
+      );
+   }
+   const absStart = field.offset + op.offset;
+   slots[slotIdx].touched = true;
+   for (let i = 0; i < op.values.length; i++) {
+      const v = op.values[i];
+      if (v.kind === 'hex') {
+         buffer[absStart + i] = v.byte;
+      } else {
+         buffer[absStart + i] ^= 0xFF;
+      }
+   }
 }
 
 function buildOutputBytes(buffer: Buffer, blocks: readonly ParsedBlock[], slots: readonly Slot[]): Buffer {
@@ -1330,6 +1493,30 @@ function renderPlan(slots: readonly Slot[], blocks: readonly ParsedBlock[]): str
    return `${heading}\n${table}\n${footer}`;
 }
 
+function renderWrites(ops: readonly Op[], blocks: readonly ParsedBlock[]): string | null {
+   const writes = ops.filter((o): o is Op & { kind: 'write' } => o.kind === 'write');
+   if (writes.length === 0) {
+      return null;
+   }
+   const heading = paint('── Writes ──', ANSI.boldCyan);
+   const rows: Row[] = writes.map((op) => {
+      const field = findFieldByDslId(blocks[op.n], op.field);
+      const fileOffset = field !== null ? field.offset + op.offset : -1;
+      const valueStr = op.values
+         .map((v) => (v.kind === 'flip' ? '^' : v.byte.toString(16).padStart(2, '0')))
+         .join('');
+      return [
+         `b${op.n}`,
+         op.field,
+         `[${op.offset}]`,
+         String(op.values.length),
+         valueStr,
+         fileOffset >= 0 ? `@ file offset ${fileOffset}` : '(field missing)',
+      ];
+   });
+   return `${heading}\n${renderTable(['Block', 'Field', 'Offset', 'Bytes', 'Value', 'Note'], rows)}`;
+}
+
 type ColorMode = 'auto' | 'always' | 'never';
 
 function resolveColor(mode: ColorMode): boolean {
@@ -1394,8 +1581,10 @@ async function main(): Promise<number> {
          type: 'string',
          describe:
             'Apply a sequence of block operations and write a modified file. DSL: ' +
-            'bA^bB swap; bN- delete; bNxK repeat (count multiplies). ' +
-            'Separate ops with comma, space, or underscore. Example: --morph "b2^b7,b3-,b1x4". ' +
+            'bA^bB swap; bN- delete; bNxK repeat (count multiplies); ' +
+            'bN!FIELD[OFFSET]=BYTES write into a field. ' +
+            'Separate ops with comma, space, or underscore. ' +
+            'Example: --morph "b2^b7,b3-,b1x4,b0!plen[1]=1B03". ' +
             'Output filename is the input base + _<sanitized-DSL> + extension.',
       })
       .check((args) => {
@@ -1407,10 +1596,20 @@ async function main(): Promise<number> {
          }
          return true;
       })
+      .epilogue(
+         '--morph field IDs (for "bN!FIELD[OFFSET]=BYTES"):\n' +
+            DSL_FIELD_DOCS.map((d) => `  ${d.id.padEnd(5)} ${d.description}`).join('\n') +
+            '\n\nValue bytes are either two-char hex pairs (e.g. "1B03") or single ' +
+            '"^" chars to flip one byte (XOR 0xFF). Example: "=A0^B1" writes 0xA0, ' +
+            'flips one byte, writes 0xB1. Writes mutate the source bytes for the ' +
+            'block, so all repeated copies see the modification. Writes cannot ' +
+            'extend past the field’s on-disk length.'
+      )
       .strict()
       .help()
       .alias('help', 'h')
       .version(false)
+      .wrap(Math.min(110, yargs().terminalWidth()))
       .parseAsync();
 
    const opts: Options = {
@@ -1457,16 +1656,18 @@ async function main(): Promise<number> {
                continue;
             }
 
-            const slots = applyOps(parsed.blocks.length, ops);
+            // Work on a copy so write ops don't mutate the parsed buffer
+            // (which we still need around for the no-op byte comparison).
+            const workingBuffer = Buffer.from(parsed.buffer);
+            const slots = applyOps(parsed.blocks, ops, workingBuffer);
+            const outBytes = buildOutputBytes(workingBuffer, parsed.blocks, slots);
 
-            // No-op plan = every slot still in its original position with
-            // count 1 and not deleted. Skip the write in that case.
-            const isNoop = slots.every(
-               (s, i) => s.origIdx === i && s.count === 1 && !s.deleted
-            );
-            if (isNoop) {
+            // No-op = output bytes match the input bytes exactly. This
+            // covers cancellation cases (b0^b1 b0^b1) AND identity writes
+            // (writing a byte to its own current value).
+            if (outBytes.equals(parsed.buffer)) {
                console.log(
-                  `\n${paint('No-op:', ANSI.yellow)} operations cancel out; input file unchanged. Not writing output.`
+                  `\n${paint('No-op:', ANSI.yellow)} operations net to zero changes; input file unchanged. Not writing output.`
                );
                continue;
             }
@@ -1474,7 +1675,12 @@ async function main(): Promise<number> {
             console.log();
             console.log(renderPlan(slots, parsed.blocks));
 
-            const outBytes = buildOutputBytes(parsed.buffer, parsed.blocks, slots);
+            const writesTable = renderWrites(ops, parsed.blocks);
+            if (writesTable) {
+               console.log();
+               console.log(writesTable);
+            }
+
             const outPath = deriveOutputPath(file, morphString);
             writeFileSync(outPath, outBytes);
             console.log(`\n${paint('Wrote', ANSI.green)} ${outPath} (${outBytes.length} bytes)`);
