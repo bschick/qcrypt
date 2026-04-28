@@ -102,8 +102,9 @@ The `pnpm` scripts in `package.json` call `nx` under the hood. You can use eithe
 | CLI unit tests | `pnpm test:cli` | `pnpm nx test cli` | |
 
 > **Note:** When passing flags through `nx`, use camelCase for config options (e.g., `--runnerConfig=` not `--runner-config`).
-> **Note:** To run a specific test files user `--include`. For example `pnpm test:web -- --include='**/keystore.service.spec.ts'`
-
+> **Note:** To run specific test files, use `--include`. 
+>   - For `test:web` (Angular builder), `--include` expects a file glob. You must use the `**/` prefix to find nested files. Example: `pnpm test:web -- --include='**/keystore.service.spec.ts'`
+>   - For other projects (`test:libs`, `test:server`, `test:cli`), they invoke Vitest directly, which uses string/regex matching. **Do not use the `**/` prefix** for these. Example: `pnpm test:libs -- --include=ciphers.spec.ts`
 ### Deploy Commands
 
 Both apps deploy through wrapper shell scripts (`apps/<app>/scripts/deploy.sh`) that invoke matching `deploy.mjs` orchestrators. The wrappers handle the SSO liveness probe, env-var resolution, and per-subcommand defaults; the .mjs files do the AWS work via the `aws` CLI. Shared bash helpers live in `scripts/deploy-common.sh`.
