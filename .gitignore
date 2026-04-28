@@ -51,6 +51,7 @@ Thumbs.db
 
 # Vitest
 __screenshots__/
+.vitest-attachments/
 
 # Playwright
 node_modules/
