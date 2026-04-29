@@ -60,11 +60,12 @@ export function latestEncipher(
    lp: number,
    lpEnd: number,
    clearStream: ReadableStream<Uint8Array>,
-   pwdProvider: PWDProvider
+   pwdProvider: PWDProvider,
+   customAd: Uint8Array<ArrayBuffer> | undefined = undefined
 ): Encipher {
 
    // parameters are validated by PWDKeyProvider constructor and setCipherDataInfo
-   const keyProvider = new PWDKeyProvider(userCred, pwdProvider);
+   const keyProvider = new PWDKeyProvider(userCred, pwdProvider, customAd);
 
    const slt = getRandom(cc.SLT_BYTES);
    keyProvider.setCipherDataInfo({
@@ -86,7 +87,8 @@ export function latestEncipher(
 export async function streamDecipher(
    userCred: Uint8Array,
    cipherStream: ReadableStream<Uint8Array>,
-   pwdProvider: PWDProvider | undefined
+   pwdProvider: PWDProvider | undefined,
+   customAd: Uint8Array<ArrayBuffer> | undefined = undefined
 ): Promise<Decipher> {
 
    let decipher: Decipher;
@@ -96,7 +98,7 @@ export async function streamDecipher(
 
    if (header.byteLength != cc.HEADER_BYTES_6P || done) {
       reader.cleanup();
-      throw new Error('Invalid cipher stream length: ' + header.byteLength);
+      throw new Error('Invalid cipher header length: ' + header.byteLength);
    }
 
    // This is rather ugly, but the original CiphersV1 encoding stupidly had the
@@ -107,7 +109,7 @@ export async function streamDecipher(
 
 
    if (verOrAlg == cc.VERSION6 || verOrAlg == cc.VERSION7) {
-      const keyProvider = new PWDKeyProvider(userCred, pwdProvider);
+      const keyProvider = new PWDKeyProvider(userCred, pwdProvider, customAd);
       decipher = new DecipherV67(keyProvider, reader, header);
    } else {
       const keyProviderOld = new PWDKeyProviderOld(userCred, pwdProvider);

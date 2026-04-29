@@ -228,8 +228,8 @@ export abstract class Ciphers {
          throw new Error('Unexpected version and lp');
       }
 
-      if (args.encryptedHint && (args.encryptedHint.length > cc.ENCRYPTED_HINT_MAX_BYTES)) {
-         throw new Error('Invalid encrypted hint length: ' + args.encryptedHint.length);
+      if (args.encryptedHint && (args.encryptedHint.byteLength > cc.ENCRYPTED_HINT_MAX_BYTES)) {
+         throw new Error('Invalid encrypted hint length: ' + args.encryptedHint.byteLength);
       }
    }
 
@@ -294,10 +294,10 @@ export abstract class Encipher extends Ciphers {
    //    NOTE: should find a better way to generate test data since
    //    its too easy for forget to restore these values (resulting in inefficient
    //    blocks)
-   //protected static readonly READ_SIZE_START = 1048576/1024/4;
-   //protected static readonly READ_SIZE_MAX =  READ_SIZE_START * 41;
-   //protected static readonly READ_SIZE_START = 9;
-   //protected static readonly READ_SIZE_MAX = READ_SIZE_START * 16
+   // protected static readonly READ_SIZE_START = 1048576/1024/4;
+   // protected static readonly READ_SIZE_MAX = Encipher.READ_SIZE_START * 41;
+   // protected static readonly READ_SIZE_START = 20;
+   // protected static readonly READ_SIZE_MAX = Encipher.READ_SIZE_START * 16;
 
    protected constructor(
       keyProvider: KeyProvider,
@@ -471,13 +471,21 @@ export class EncipherV67 extends Encipher {
             encryptedHint
          });
 
+         let customAdditionalData = additionalData;
+         const customAd = this._keyProvider.getCustomAd();
+         if (customAd) {
+            customAdditionalData = new Uint8Array(additionalData.byteLength + customAd.byteLength);
+            customAdditionalData.set(additionalData);
+            customAdditionalData.set(customAd, additionalData.byteLength);
+         }
+
          // Only block0 uses the root cipher key. Simplifies backward compat and is no less secure
          const encryptedData = await EncipherV67._doEncrypt(
             cdInfo.alg,
             ek,
             iv,
             clearBuffer,
-            additionalData,
+            customAdditionalData,
          );
 
          const headerData = await this._createHeader(
@@ -539,7 +547,7 @@ export class EncipherV67 extends Encipher {
          const additionalData = Ciphers._encodeAdditionalData({
             alg: cdInfo.alg,
             iv,
-            term: done,
+            term: done
          });
 
          const encryptedData = await EncipherV67._doEncrypt(
@@ -581,6 +589,7 @@ export class EncipherV67 extends Encipher {
       iv: Uint8Array,
       clear: Uint8Array,
       additionalData?: Uint8Array,
+      customAd?: Uint8Array
    ): Promise<Uint8Array> {
 
       const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
@@ -745,11 +754,19 @@ export abstract class Decipher extends Ciphers {
 
          // This does MAC check
          await this._decodeBlock0();
-         if (!this._blockData || !this._blockData.alg || !this._blockData.iv || !this._blockData.encryptedData) {
+         if (!this._blockData || !this._blockData.alg || !this._blockData.iv || !this._blockData.encryptedData || !this._blockData.additionalData) {
             throw new Error('Data not initialized');
          }
 
          const ek = await this._keyProvider.getCipherKey(false);
+
+         let customAdditionalData = this._blockData.additionalData;
+         const customAd = this._keyProvider.getCustomAd();
+         if (customAd) {
+            customAdditionalData = new Uint8Array(this._blockData.additionalData.byteLength + customAd.byteLength);
+            customAdditionalData.set(this._blockData.additionalData);
+            customAdditionalData.set(customAd, this._blockData.additionalData.byteLength);
+         }
 
          // Only block0 uses the root cipher key. Simplifies backward compat and is no less secure
          const decrypted = await Decipher._doDecrypt(
@@ -757,7 +774,7 @@ export abstract class Decipher extends Ciphers {
             ek,
             this._blockData.iv,
             this._blockData.encryptedData,
-            this._blockData.additionalData,
+            customAdditionalData,
          );
 
          this._state = CipherState.Block0Done;
@@ -790,7 +807,6 @@ export abstract class Decipher extends Ciphers {
          slt: cdInfo.slt,
          lp: cdInfo.lp,
          lpEnd: cdInfo.lpEnd,
-         // iv: this._blockData.iv,
          hint: cdInfo.hint
       };
    }
@@ -1094,7 +1110,7 @@ export class DecipherV67 extends Decipher {
             return new Uint8Array(0);
          }
 
-         if (!this._blockData || !this._blockData.alg || !this._blockData.iv || !this._blockData.encryptedData) {
+         if (!this._blockData || !this._blockData.alg || !this._blockData.iv || !this._blockData.encryptedData || !this._blockData.additionalData) {
             throw new Error('Data not initialized');
          }
 
@@ -1161,13 +1177,6 @@ export class DecipherV67 extends Decipher {
          this._blockData.alg = extractor.alg;
          this._blockData.iv = extractor.iv;
          this._blockData.encryptedData = extractor.remainder('edata');
-
-         // V6/V7 additional data is payload - encrypted data
-         this._blockData.additionalData = new Uint8Array(
-            payload.buffer,
-            payload.byteOffset,
-            extractor.offset - this._blockData.encryptedData.byteLength
-         );
 
          // Since V4, additional data is the payload minus encrypted data
          this._blockData.additionalData = new Uint8Array(

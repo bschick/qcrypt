@@ -46,14 +46,16 @@ export async function encryptStream(
    econtext: EContext,
    pwdProvider: PWDProvider,
    userCred: Uint8Array,
-   clearStream: ReadableStream<Uint8Array>
+   clearStream: ReadableStream<Uint8Array>,
+   customAd: Uint8Array<ArrayBuffer> | undefined = undefined
 ): Promise<ReadableStream<Uint8Array>> {
    return _encryptStreamImpl(
       econtext,
       pwdProvider,
       userCred,
       clearStream,
-      1
+      1,
+      customAd
    );
 }
 
@@ -62,7 +64,8 @@ async function _encryptStreamImpl(
    pwdProvider: PWDProvider,
    userCred: Uint8Array,
    clearStream: ReadableStream<Uint8Array>,
-   lp: number
+   lp: number,
+   customAd: Uint8Array<ArrayBuffer> | undefined
 ): Promise<ReadableStream<Uint8Array>> {
 
    if (lp < 1 || lp > econtext.algs.length) {
@@ -87,7 +90,8 @@ async function _encryptStreamImpl(
       lp,
       econtext.algs.length,
       clearStream,
-      pwdProvider
+      pwdProvider,
+      customAd
    );
 
    let cipherStream = new ReadableStream({
@@ -128,7 +132,8 @@ async function _encryptStreamImpl(
          pwdProvider,
          userCred,
          cipherStream,
-         lp + 1
+         lp + 1,
+         customAd
       );
    }
 
@@ -153,14 +158,15 @@ export async function getCipherStreamInfo(
 export async function decryptStream(
    pwdProvider: PWDProvider,
    userCred: Uint8Array,
-   cipherStream: ReadableStream<Uint8Array>
+   cipherStream: ReadableStream<Uint8Array>,
+   customAd: Uint8Array<ArrayBuffer> | undefined = undefined
 ): Promise<ReadableStream<Uint8Array>> {
 
    if (userCred.byteLength != cc.USERCRED_BYTES) {
       throw new Error('Invalid userCred length of: ' + userCred.byteLength);
    }
 
-   const decipher = await streamDecipher(userCred, cipherStream, pwdProvider);
+   const decipher = await streamDecipher(userCred, cipherStream, pwdProvider, customAd);
    const cdInfo = await decipher.getCipherDataInfo();
 
    if (cdInfo.lp < 1 || cdInfo.lp > cc.LP_MAX) {
@@ -203,7 +209,8 @@ export async function decryptStream(
       readableStream = await decryptStream(
          pwdProvider,
          userCred,
-         readableStream
+         readableStream,
+         customAd
       );
    }
 

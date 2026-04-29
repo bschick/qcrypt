@@ -32,9 +32,9 @@ export class PWDKeyProviderOld extends BasePWDKeyProvider {
    // _pwdProvider may be undefined when only hint or signing key is required
    constructor(
       userCred: Uint8Array,
-      pwdProvider: PWDProvider | undefined = undefined,
+      private _pwdProvider: PWDProvider | undefined = undefined,
    ) {
-      super(userCred, pwdProvider);
+      super(userCred);
    }
 
    protected override async _genCipherKey(

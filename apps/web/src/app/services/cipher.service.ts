@@ -74,16 +74,15 @@ export class CipherService {
       return [this._iCount, this._iCountMax, this._hashRate];
    }
 
-
-
    async encryptStream(
       econtext: EContext,
       pwdProvider: PWDProvider,
       userCred: Uint8Array,
-      clearStream: ReadableStream<Uint8Array>
+      clearStream: ReadableStream<Uint8Array>,
+      customAd: Uint8Array<ArrayBuffer> | undefined = undefined
    ): Promise<ReadableStream<Uint8Array>> {
       await cryptoReady();
-      return encryptStream(econtext, pwdProvider, userCred, clearStream);
+      return encryptStream(econtext, pwdProvider, userCred, clearStream, customAd);
    }
 
    async getCipherStreamInfo(
@@ -97,9 +96,10 @@ export class CipherService {
    async decryptStream(
       pwdProvider: PWDProvider,
       userCred: Uint8Array,
-      cipherStream: ReadableStream<Uint8Array>
+      cipherStream: ReadableStream<Uint8Array>,
+      customAd: Uint8Array<ArrayBuffer> | undefined = undefined
    ): Promise<ReadableStream<Uint8Array>> {
       await cryptoReady();
-      return decryptStream(pwdProvider, userCred, cipherStream);
+      return decryptStream(pwdProvider, userCred, cipherStream, customAd);
    }
 }

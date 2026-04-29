@@ -40,154 +40,91 @@ describe('KeystoreService', () => {
       expect(service).toBeTruthy();
    });
 
+   it('same inputs should have different outputs', async () => {
+      const slot = 'test-slot-1';
+      const credId = new Uint8Array(cc.CREDID_MIN_BYTES);
+      crypto.getRandomValues(credId);
+
+      const createMaterial1 = await service.create(slot, credId);
+      const createMaterial2 = await service.create(slot, credId);
+      expect(createMaterial1).not.toEqual(createMaterial2);
+
+      await service.delete(slot);
+   });
+
    it('different slots should have different outputs', async () => {
       const slot1 = 'test-slot-1';
       const slot2 = 'test-slot-2';
-      const salt = new Uint8Array(cc.SLT_BYTES);
-      crypto.getRandomValues(salt);
-      const userId = new Uint8Array(cc.USERID_BYTES);
-      crypto.getRandomValues(userId);
+      const credId = new Uint8Array(cc.CREDID_MIN_BYTES);
+      crypto.getRandomValues(credId);
 
-      const upsertMaterial1 = await service.upsert(slot1, salt, userId);
-      const getMaterial1 = await service.get(slot1, salt);
-      expect(upsertMaterial1).toEqual(getMaterial1);
+      const createMaterial1 = await service.create(slot1, credId);
+      const getMaterial1 = await service.get(slot1, credId);
+      expect(createMaterial1).toEqual(getMaterial1);
 
-      const upsertMaterial2 = await service.upsert(slot2, salt, userId);
-      const getMaterial2 = await service.get(slot2, salt);
-      expect(upsertMaterial2).toEqual(getMaterial2);
+      const createMaterial2 = await service.create(slot2, credId);
+      const getMaterial2 = await service.get(slot2, credId);
+      expect(createMaterial2).toEqual(getMaterial2);
 
-      // the big test... should not be the same
-      expect(upsertMaterial1).not.toEqual(upsertMaterial2);
+      // the key test...
+      expect(createMaterial1).not.toEqual(createMaterial2);
 
       await service.delete(slot1);
       await service.delete(slot2);
    });
 
-   it('different salts should have different outputs', async () => {
+   it('different credIds should have different outputs', async () => {
       const slot = 'test-slot-1';
-      const salt1 = new Uint8Array(cc.SLT_BYTES);
-      crypto.getRandomValues(salt1);
-      const salt2 = new Uint8Array(cc.SLT_BYTES);
-      crypto.getRandomValues(salt2);
-      const userId = new Uint8Array(cc.USERID_BYTES);
-      crypto.getRandomValues(userId);
 
-      const upsertMaterial1 = await service.upsert(slot, salt1, userId);
-      const upsertMaterial2 = await service.upsert(slot, salt2, userId);
+      const credId1 = new Uint8Array(cc.CREDID_MIN_BYTES);
+      crypto.getRandomValues(credId1);
+      const credId2 = new Uint8Array(cc.CREDID_MIN_BYTES);
+      crypto.getRandomValues(credId2);
 
-      // the big test... should not be the same
-      expect(upsertMaterial1).not.toEqual(upsertMaterial2);
+      const createMaterial1 = await service.create(slot, credId1);
+      const createMaterial2 = await service.create(slot, credId2);
+      expect(createMaterial1).not.toEqual(createMaterial2);
 
       await service.delete(slot);
    });
 
-   it('different userIds should have different outputs', async () => {
-      const slot = 'test-slot-1';
-      const salt = new Uint8Array(cc.SLT_BYTES);
-      crypto.getRandomValues(salt);
-
-      const userId1 = new Uint8Array(cc.USERID_BYTES);
-      crypto.getRandomValues(userId1);
-      const userId2 = new Uint8Array(cc.USERID_BYTES);
-      crypto.getRandomValues(userId2);
-
-      const upsertMaterial1 = await service.upsert(slot, salt, userId1);
-      const upsertMaterial2 = await service.upsert(slot, salt, userId2);
-
-      // the big test... should not be the same
-      expect(upsertMaterial1).not.toEqual(upsertMaterial2);
-
-      await service.delete(slot);
-   });
-
-
-   it('known input should produce known output', async () => {
-      const slot = 'test-slot-1';
-      const salt = new Uint8Array([17, 33, 6, 99, 168, 209, 111, 118, 13, 220, 186, 201, 115, 9, 99, 154]);
-      const userId = new Uint8Array([79, 62, 118, 219, 222, 118, 141, 232, 170, 57, 34, 139, 163, 83, 123, 122]);
-      const expectedMaterial = new Uint8Array([227, 53, 58, 164, 166, 52, 44, 247, 252, 23, 66, 169, 21, 69, 244, 85, 63, 209, 133, 38, 63, 235, 40, 89, 92, 25, 166, 146, 97, 190, 1, 60]);
-
-      const upsertMaterial = await service.upsert(slot, salt, userId);
-      expect(upsertMaterial).toEqual(expectedMaterial);
-
-      const getMaterial = await service.get(slot, salt);
-      expect(getMaterial).toEqual(expectedMaterial);
-
-      await service.delete(slot);
-   });
-
-   it('upsert and upsert with same inputs should match', async () => {
+   it('create and get with same inputs should match', async () => {
       const slot = 'test-slot-2';
-      const salt = new Uint8Array(cc.SLT_BYTES);
-      crypto.getRandomValues(salt);
-      const userId = new Uint8Array(cc.USERID_BYTES);
-      crypto.getRandomValues(userId);
+      const credId = new Uint8Array(cc.CREDID_MIN_BYTES);
+      crypto.getRandomValues(credId);
 
-      const upsertMaterial1 = await service.upsert(slot, salt, userId);
-      const upsertMaterial2 = await service.upsert(slot, salt, userId);
-      expect(upsertMaterial1).toEqual(upsertMaterial2);
+      const createMaterial = await service.create(slot, credId);
+      expect(createMaterial).toBeInstanceOf(Uint8Array);
+      expect(createMaterial.byteLength).toEqual(cc.KEY_BYTES);
 
-      await service.delete(slot);
-   });
-
-   it('upsert and get with same inputs should match', async () => {
-      const slot = 'test-slot-2';
-      const salt = new Uint8Array(cc.SLT_BYTES);
-      crypto.getRandomValues(salt);
-      const userId = new Uint8Array(cc.USERID_BYTES);
-      crypto.getRandomValues(userId);
-
-      const upsertMaterial = await service.upsert(slot, salt, userId);
-      expect(upsertMaterial).toBeInstanceOf(Uint8Array);
-
-      const getMaterial = await service.get(slot, salt);
+      const getMaterial = await service.get(slot, credId);
       expect(getMaterial).toBeInstanceOf(Uint8Array);
-      expect(upsertMaterial).toEqual(getMaterial);
+      expect(getMaterial.byteLength).toEqual(cc.KEY_BYTES);
 
+      expect(createMaterial).toEqual(getMaterial);
       await service.delete(slot);
    });
 
    it('should throw if slot is too short', async () => {
       const slot = '123'; // MIN_SLOT_LEN is 4
-      const salt = new Uint8Array(cc.SLT_BYTES);
-      const userId = new Uint8Array(cc.USERID_BYTES);
-
-      await expect(service.upsert(slot, salt, userId)).rejects.toThrow(/Slot must be at least/);
+      const credId = new Uint8Array(cc.CREDID_MIN_BYTES);
+      await expect(service.create(slot, credId)).rejects.toThrow(/Slot must be at least/);
    });
 
-   it('should throw if salt is incorrect length', async () => {
-      const slot = 'test-slot-2';
-      const invalidSalt = new Uint8Array(cc.SLT_BYTES - 1);
-      const userId = new Uint8Array(cc.USERID_BYTES);
-
-      await expect(service.upsert(slot, invalidSalt, userId)).rejects.toThrow(/Salt is not \d+ bytes/);
-   });
-
-   it('should throw if userId is incorrect length', async () => {
+   it('should throw if credId is too short', async () => {
       const slot = 'test-slot-3';
-      const salt = new Uint8Array(cc.SLT_BYTES);
-      const invalidUserId = new Uint8Array(cc.USERID_BYTES + 1);
+      const invalidCredId = new Uint8Array(cc.CREDID_MIN_BYTES - 1);
+      crypto.getRandomValues(invalidCredId);
+      const invalidCredIdStr = bytesToBase64(invalidCredId);
 
-      await expect(service.upsert(slot, salt, invalidUserId)).rejects.toThrow(/User id is not \d+ bytes/);
-   });
-
-   it('should throw if salt is incorrect length', async () => {
-      const slot = 'test-slot-4';
-      const salt = new Uint8Array(cc.SLT_BYTES);
-      const userId = new Uint8Array(cc.USERID_BYTES);
-
-      await service.upsert(slot, salt, userId);
-      const invalidSalt = new Uint8Array(cc.SLT_BYTES + 1);
-      await expect(service.get(slot, invalidSalt)).rejects.toThrow(/Salt is not \d+ bytes/);
-
-      await service.delete(slot);
+      await expect(service.create(slot, invalidCredId)).rejects.toThrow(/Credential id is < 16 bytes/);
+      await expect(service.create(slot, invalidCredIdStr)).rejects.toThrow(/Credential id is < 16 bytes/);
    });
 
    it('get should throw if slot does not exist', async () => {
       const slot = 'non-existent-slot';
-      const salt = new Uint8Array(cc.SLT_BYTES);
-
-      await expect(service.get(slot, salt)).rejects.toThrow(/No key found for slot/);
+      const credId = new Uint8Array(cc.CREDID_MIN_BYTES);
+      await expect(service.get(slot, credId)).rejects.toThrow(/No key found for slot/);
    });
 
    it('delete should not throw if slot does not exist', async () => {
@@ -197,11 +134,9 @@ describe('KeystoreService', () => {
 
    it('master key should not be extractable', async () => {
       const slot = 'session-key';
-      const salt = new Uint8Array(cc.SLT_BYTES);
-      crypto.getRandomValues(salt);
-      const userId = new Uint8Array(cc.USERID_BYTES);
-      crypto.getRandomValues(userId);
-      await service.upsert(slot, salt, userId);
+      const credId = new Uint8Array(cc.CREDID_MIN_BYTES);
+      crypto.getRandomValues(credId);
+      await service.create(slot, credId);
 
       // Bypass private member checks by casting to any
       const srvAny = service as any;
@@ -219,37 +154,29 @@ describe('KeystoreService', () => {
 
    it('flush should destroy database and prevent lookups', async () => {
       const slot = 'test-flush-slot';
-      const salt = new Uint8Array(cc.SLT_BYTES);
-      crypto.getRandomValues(salt);
-      const userId = new Uint8Array(cc.USERID_BYTES);
-      crypto.getRandomValues(userId);
+      const credId = new Uint8Array(cc.CREDID_MIN_BYTES);
+      crypto.getRandomValues(credId);
 
-      await service.upsert(slot, salt, userId);
-
-      const beforeFlush = await service.get(slot, salt);
+      await service.create(slot, credId);
+      const beforeFlush = await service.get(slot, credId);
       expect(beforeFlush).toBeDefined();
 
       await service.flush();
-
-      await expect(service.get(slot, salt)).rejects.toThrow(/No key found for slot/);
+      await expect(service.get(slot, credId)).rejects.toThrow(/No key found for slot/);
    });
 
-   it('supports base64 string inputs for salt and userId', async () => {
+   it('supports base64 string for credId', async () => {
       const slot = 'test-base64-slot';
-      const saltBytes = new Uint8Array(cc.SLT_BYTES);
-      crypto.getRandomValues(saltBytes);
-      const userIdBytes = new Uint8Array(cc.USERID_BYTES);
-      crypto.getRandomValues(userIdBytes);
+      const credIdBytes = new Uint8Array(cc.CREDID_MIN_BYTES);
+      crypto.getRandomValues(credIdBytes);
+      const credIdStr = bytesToBase64(credIdBytes);
 
-      const saltStr = bytesToBase64(saltBytes);
-      const userIdStr = bytesToBase64(userIdBytes);
+      const createMaterial = await service.create(slot, credIdStr);
+      expect(createMaterial).toBeInstanceOf(Uint8Array);
 
-      const upsertMaterial = await service.upsert(slot, saltStr, userIdStr);
-      expect(upsertMaterial).toBeInstanceOf(Uint8Array);
-
-      const getMaterial = await service.get(slot, saltStr);
+      const getMaterial = await service.get(slot, credIdStr);
       expect(getMaterial).toBeInstanceOf(Uint8Array);
-      expect(upsertMaterial).toEqual(getMaterial);
+      expect(createMaterial).toEqual(getMaterial);
    });
 
 });

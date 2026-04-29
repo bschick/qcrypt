@@ -396,6 +396,7 @@ describe("Encryption and decryption", function () {
       const hint = '🌧️';
       // base64url userCred for use in commandline for recreation (see Python helper function):
       // Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=
+      // NOTE: this cipherStream can be created with "testgen.ts armor7-3b.qq --set 1"
       const userCred = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
       const [cipherStream] = streamFromBytes(new Uint8Array([75, 67, 72, 3, 80, 226, 101, 28, 192, 33, 232, 133, 179, 116, 165, 149, 149, 31, 16, 55, 162, 227, 219, 153, 35, 191, 195, 75, 50, 198, 116, 34, 7, 0, 117, 0, 0, 1, 2, 0, 140, 23, 135, 49, 78, 230, 82, 168, 169, 154, 46, 151, 64, 243, 65, 230, 55, 137, 114, 161, 78, 128, 24, 99, 137, 230, 0, 23, 255, 99, 255, 2, 129, 199, 168, 215, 49, 94, 57, 29, 64, 119, 27, 0, 0, 23, 2, 144, 63, 30, 135, 104, 68, 170, 207, 177, 20, 115, 242, 67, 168, 221, 173, 68, 23, 119, 49, 252, 245, 56, 167, 186, 205, 231, 167, 164, 142, 181, 208, 124, 219, 18, 217, 57, 28, 44, 101, 21, 174, 27, 65, 48, 40, 254, 174, 79, 154, 220, 163, 100, 7, 32, 228, 161, 22, 194, 47, 32, 178, 71, 137, 29, 22, 162]));
 
@@ -496,7 +497,6 @@ describe("Encryption and decryption", function () {
       const hint = '🌧️';
       // base64url userCred for use in commandline for recreation (see Python helper function):
       // Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=
-      // creating the proper cipherdata requires a hacked/rebuilt cmdline that always sets flags to 0 (search chipers-current for "term:")
       const userCred = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
       const [cipherStream] = streamFromBytes(new Uint8Array([209, 240, 80, 168, 179, 48, 240, 241, 10, 5, 106, 71, 60, 33, 6, 88, 2, 92, 9, 113, 97, 17, 227, 74, 229, 187, 126, 159, 89, 136, 76, 115, 7, 0, 117, 0, 0, 0, 2, 0, 144, 192, 88, 15, 25, 183, 62, 200, 83, 148, 77, 165, 57, 32, 233, 121, 39, 211, 4, 73, 10, 209, 123, 122, 156, 2, 132, 58, 152, 234, 145, 172, 183, 45, 158, 85, 84, 119, 238, 37, 64, 119, 27, 0, 0, 23, 190, 80, 107, 244, 46, 134, 188, 170, 53, 63, 39, 49, 202, 61, 68, 143, 96, 230, 197, 94, 157, 167, 104, 56, 174, 34, 181, 45, 146, 117, 232, 180, 176, 141, 190, 86, 146, 145, 127, 108, 204, 132, 53, 163, 30, 5, 236, 163, 206, 126, 147, 74, 102, 178, 77, 146, 92, 86, 29, 1, 117, 147, 145, 154, 201, 120, 3, 141]));
 
@@ -562,7 +562,7 @@ describe("Encryption and decryption", function () {
       const hint = '🌧️';
       // base64url userCred for use in commandline for recreation (see Python helper function):
       // Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=
-      // creating the proper cipherdata requires a hacked/rebuilt cmdline that always sets flags to 1 (search chipers-current for "term:") and READ_SIZE_START to 20
+      // NOTE: creating the proper cipherdata requires a hacked/rebuilt cmdline that always sets flags to 1 (search chipers-current for "term:") and READ_SIZE_START to 20
       const userCred = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
       const [cipherStream] = streamFromBytes(new Uint8Array([71, 26, 9, 62, 172, 47, 214, 150, 172, 219, 175, 2, 130, 150, 83, 10, 50, 117, 51, 110, 216, 166, 180, 128, 2, 198, 40, 167, 14, 175, 179, 212, 7, 0, 108, 0, 0, 1, 2, 0, 157, 224, 179, 10, 66, 233, 196, 45, 242, 174, 198, 127, 240, 213, 132, 79, 248, 187, 196, 215, 158, 253, 179, 7, 50, 15, 185, 66, 17, 69, 99, 111, 166, 161, 171, 245, 57, 4, 39, 37, 64, 119, 27, 0, 0, 23, 42, 234, 155, 172, 178, 126, 198, 56, 245, 128, 224, 166, 219, 229, 232, 44, 129, 255, 56, 211, 234, 164, 68, 130, 13, 85, 146, 244, 19, 163, 38, 30, 211, 39, 126, 116, 209, 233, 150, 73, 94, 178, 228, 51, 112, 50, 90, 10, 205, 28, 18, 62, 8, 58, 154, 220, 161, 162, 134, 63, 131, 73, 164, 93, 34, 56, 195, 196, 109, 219, 60, 151, 173, 171, 240, 127, 32, 153, 203, 140, 36, 90, 14, 175, 224, 111, 212, 109, 98, 172, 211, 7, 0, 52, 0, 0, 1, 2, 0, 12, 217, 34, 57, 87, 125, 55, 51, 12, 121, 39, 53, 140, 18, 44, 213, 198, 131, 191, 124, 49, 61, 10, 108, 165, 137, 86, 33, 125, 14, 197, 207, 74, 157, 221, 39, 125, 88, 122, 36, 36, 112, 111, 39, 183, 209, 161, 91, 45]));
 
@@ -627,7 +627,7 @@ describe("Encryption and decryption", function () {
       const hint = '🌧️';
       // base64url userCred for use in commandline for recreation (see Python helper function):
       // Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=
-      // creating the proper cipherdata requires a hacked/rebuilt cmdline that flips flags to 1 then 0 (search chipers-current for "term:") and READ_SIZE_START to 20
+      // NOTE: creating the proper cipherdata requires a hacked/rebuilt cmdline that flips flags to 1 then 0 (search chipers-current for "term:") and READ_SIZE_START to 20
       const userCred = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
       const [cipherStream] = streamFromBytes(new Uint8Array([141, 83, 66, 190, 110, 251, 166, 187, 71, 125, 210, 226, 11, 78, 119, 209, 171, 159, 122, 214, 106, 240, 112, 186, 25, 93, 103, 22, 128, 132, 199, 19, 7, 0, 108, 0, 0, 1, 2, 0, 92, 74, 84, 65, 34, 10, 243, 84, 13, 1, 22, 55, 87, 6, 78, 255, 133, 159, 128, 106, 169, 207, 197, 14, 195, 35, 113, 147, 9, 242, 219, 186, 12, 247, 169, 72, 114, 97, 143, 202, 64, 119, 27, 0, 0, 23, 196, 177, 88, 75, 80, 138, 135, 239, 81, 171, 126, 216, 3, 124, 104, 97, 223, 40, 148, 244, 182, 147, 109, 194, 25, 51, 238, 225, 217, 186, 208, 91, 201, 96, 184, 13, 207, 83, 154, 30, 3, 237, 79, 100, 5, 216, 16, 133, 58, 175, 88, 105, 209, 42, 54, 220, 29, 215, 160, 150, 43, 146, 208, 138, 223, 135, 87, 159, 161, 42, 181, 134, 173, 114, 113, 94, 158, 62, 40, 27, 88, 105, 104, 214, 211, 146, 172, 108, 91, 143, 23, 7, 0, 52, 0, 0, 0, 2, 0, 4, 10, 91, 77, 71, 138, 179, 153, 144, 43, 138, 95, 179, 37, 198, 58, 190, 126, 108, 132, 52, 150, 105, 106, 22, 50, 47, 219, 39, 104, 157, 223, 104, 25, 17, 192, 153, 144, 202, 69, 80, 240, 2, 82, 216, 83, 183, 175, 15]));
 
@@ -653,7 +653,8 @@ describe("Encryption and decryption", function () {
       await expect(decipher.decryptBlockN()).rejects.toThrow(/Extra data block/);
    });
 
-   it("bad input to cipherdata info and decrypt, v4", async function () {
+
+   it("bad pwd to cipherdata info and decrypt, v4", async function () {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwdGood = 'a 🌲 of course';
       const pwdBad = 'a 🌵 of course';
@@ -700,7 +701,7 @@ describe("Encryption and decryption", function () {
       await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('Invalid MAC.+'));
    });
 
-   it("bad input to cipherdata info and decrypt, v5", async function () {
+   it("bad pwd to cipherdata info and decrypt, v5", async function () {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwdGood = 'a 🌲 of course';
       const pwdBad = 'a 🌵 of course';
@@ -740,7 +741,7 @@ describe("Encryption and decryption", function () {
       await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('Decipher invalid state.+'));
    });
 
-   it("bad input to cipherdata info and decrypt, v6", async function () {
+   it("bad pwd to cipherdata info and decrypt, v6", async function () {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwdGood = 'a 🌲 of course';
       const pwdBad = 'a 🌵 of course';
@@ -779,7 +780,7 @@ describe("Encryption and decryption", function () {
       await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('Decipher invalid state.+'));
    });
 
-   it("bad input to cipherdata info and decrypt, v7", async function () {
+   it("bad pwd to cipherdata info and decrypt, v7", async function () {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwdGood = 'a 🌲 of course';
       const pwdBad = 'a 🌵 of course';
@@ -819,6 +820,309 @@ describe("Encryption and decryption", function () {
    });
 });
 
+describe("Custom AD encryption and decryption", function () {
+   beforeEach(async () => {
+      await cryptoReady();
+   });
+
+   it("round trip block0, all algorithms with customAd", async function () {
+      for (const alg of Ciphers.algs()) {
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
+         const pwd = 'a good pwd';
+         const hint = 'not really';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const customAd = crypto.getRandomValues(new Uint8Array(52));
+
+         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream,
+            async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+               return [pwd, hint];
+            },
+            customAd
+         );
+         const block0 = await latest.encryptBlock0();
+
+         const [cipherStream] = streamFromCipherBlock([block0]);
+         const decipher = await streamDecipher(userCred, cipherStream,
+            async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               expect(cdinfo.hint).toEqual(hint);
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+               return [pwd, undefined];
+            },
+            customAd
+         );
+
+         const decrypted = await decipher.decryptBlock0();
+         await expect(areEqual(decrypted, clearData)).resolves.toEqual(true);
+      }
+   });
+
+   it("round trip blockN, all algorithms with customAd", async function () {
+
+      for (const alg of Ciphers.algs()) {
+         let [clearStream, clearData] = streamFromStr('This is a secret 🦀');
+         const pwd = 'a not good pwd';
+         const hint = 'sorta';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const customAd = crypto.getRandomValues(new Uint8Array(123));
+
+         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream, async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            return [pwd, hint];
+         }, customAd);
+
+         const readStart = 12;
+         //@ts-ignore force multiple blocks
+         latest['_readTarget'] = readStart;
+
+         const block0 = await latest.encryptBlock0();
+         const blockN = await latest.encryptBlockN();
+
+         let [cipherStream] = streamFromCipherBlock([block0, blockN]);
+         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            return [pwd, undefined];
+         }, customAd);
+
+         let decb0 = await decipher.decryptBlock0();
+         await expect(areEqual(decb0, clearData.slice(0, readStart))).resolves.toEqual(true);
+
+         const decb1 = await decipher.decryptBlockN();
+         await expect(areEqual(decb1, clearData.slice(readStart))).resolves.toEqual(true);
+      }
+   });
+
+   it("round trip block0, all algorithms missing customAd", async function () {
+      for (const alg of Ciphers.algs()) {
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
+         const pwd = 'a good pwd';
+         const hint = 'not really';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const customAd = crypto.getRandomValues(new Uint8Array(52));
+
+         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream,
+            async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+               return [pwd, hint];
+            },
+            customAd
+         );
+         const block0 = await latest.encryptBlock0();
+
+         const [cipherStream] = streamFromCipherBlock([block0]);
+         const decipher = await streamDecipher(userCred, cipherStream,
+            async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               expect(cdinfo.hint).toEqual(hint);
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+               return [pwd, undefined];
+            }
+         );
+
+         await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
+      }
+   });
+
+   it("round trip block0, all algorithms added customAd", async function () {
+      for (const alg of Ciphers.algs()) {
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
+         const pwd = 'a good pwd';
+         const hint = 'not really';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const customAd = crypto.getRandomValues(new Uint8Array(52));
+
+         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream,
+            async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+               return [pwd, hint];
+            },
+         );
+         const block0 = await latest.encryptBlock0();
+
+         const [cipherStream] = streamFromCipherBlock([block0]);
+         const decipher = await streamDecipher(userCred, cipherStream,
+            async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               expect(cdinfo.hint).toEqual(hint);
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+               return [pwd, undefined];
+            },
+            customAd
+         );
+
+         await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
+      }
+   });
+
+   it("round trip block0, all algorithms changed customAd", async function () {
+      for (const alg of Ciphers.algs()) {
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
+         const pwd = 'a good pwd';
+         const hint = 'not really';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const customAd = crypto.getRandomValues(new Uint8Array(52));
+
+         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream,
+            async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+               return [pwd, hint];
+            },
+            customAd
+         );
+         const block0 = await latest.encryptBlock0();
+
+         // modify customAd so it doesn't match what was used for encryption
+         customAd[2] ^= 1;
+         const [cipherStream] = streamFromCipherBlock([block0]);
+         const decipher = await streamDecipher(userCred, cipherStream,
+            async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+               expect(cdinfo.hint).toEqual(hint);
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+               return [pwd, undefined];
+            },
+            customAd
+         );
+
+         await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
+      }
+   });
+
+   it("round trip blockN, all algorithms missing customAd", async function () {
+
+      for (const alg of Ciphers.algs()) {
+         let [clearStream, clearData] = streamFromStr('This is a secret 🦀');
+         const pwd = 'a not good pwd';
+         const hint = 'sorta';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const customAd = crypto.getRandomValues(new Uint8Array(123));
+
+         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream, async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            return [pwd, hint];
+         }, customAd);
+
+         const readStart = 12;
+         //@ts-ignore force multiple blocks
+         latest['_readTarget'] = readStart;
+
+         const block0 = await latest.encryptBlock0();
+         const blockN = await latest.encryptBlockN();
+
+         let [cipherStream] = streamFromCipherBlock([block0, blockN]);
+         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            return [pwd, undefined];
+         });
+
+         await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
+         await expect(decipher.decryptBlockN()).rejects.toThrow(/Decipher invalid state/);
+      }
+   });
+
+
+   it("round trip blockN, all algorithms added customAd", async function () {
+
+      for (const alg of Ciphers.algs()) {
+         let [clearStream, clearData] = streamFromStr('This is a secret 🦀');
+         const pwd = 'a not good pwd';
+         const hint = 'sorta';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const customAd = crypto.getRandomValues(new Uint8Array(123));
+
+         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream, async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            return [pwd, hint];
+         });
+
+         const readStart = 12;
+         //@ts-ignore force multiple blocks
+         latest['_readTarget'] = readStart;
+
+         const block0 = await latest.encryptBlock0();
+         const blockN = await latest.encryptBlockN();
+
+         let [cipherStream] = streamFromCipherBlock([block0, blockN]);
+         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            return [pwd, undefined];
+         }, customAd);
+
+         await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
+         await expect(decipher.decryptBlockN()).rejects.toThrow(/Decipher invalid state/);
+      }
+   });
+
+   it("round trip blockN, all algorithms added customAd", async function () {
+
+      for (const alg of Ciphers.algs()) {
+         let [clearStream, clearData] = streamFromStr('This is a secret 🦀');
+         const pwd = 'a not good pwd';
+         const hint = 'sorta';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const customAd = crypto.getRandomValues(new Uint8Array(123));
+
+         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream, async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            return [pwd, hint];
+         }, customAd);
+
+         const readStart = 12;
+         //@ts-ignore force multiple blocks
+         latest['_readTarget'] = readStart;
+
+         const block0 = await latest.encryptBlock0();
+         const blockN = await latest.encryptBlockN();
+
+         // modify customAd so it doesn't match what was used for encryption
+         customAd[customAd.length - 1] ^= 1;
+         let [cipherStream] = streamFromCipherBlock([block0, blockN]);
+         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            return [pwd, undefined];
+         }, customAd);
+
+         await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
+         await expect(decipher.decryptBlockN()).rejects.toThrow(/Decipher invalid state/);
+      }
+   });});
 
 
 describe("Detect changed cipher data", function () {
@@ -1254,4 +1558,11 @@ def hexTou8a(hstr):
    ta = hstr.split()
    ia = [int(v, 16) for v in ta]
    print(f'new Uint8Array({ia});')
-*/
+
+def b64ToHexStr(b64str):
+   ba = b64d(b64str);
+   return ' '.join(f'{b:02x}' for b in ba)
+
+def uint8AToHexStr(ua):
+   return ' '.join(f'{b:02x}' for b in ua)
+   */

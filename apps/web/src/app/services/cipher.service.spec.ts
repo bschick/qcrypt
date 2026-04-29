@@ -300,6 +300,7 @@ describe("Stream encryption and decryption", function () {
    it("confirm successful version decryption, multi-version", async function () {
 
       const vers = [
+         //v1
          { ver: 1,
             cts: [
                // AEG-GCM: V1
@@ -309,6 +310,7 @@ describe("Stream encryption and decryption", function () {
                // AEGIS: V1
                'ZhiPRZ7YOIjWXEMBFmyZsSWwor9WNId6oPXqBgJmCxkDAMCrHZhWSw5s_dZzPc-k9R2TqHmrs-8kYl2YCxT3PblxGLL51besQyoLQsuJHYvKGUB3GwABACXwMpAj4tQpvDM0yLAUJWwWFpSPHMxwMtxvB6xUvbQQDRdzkm1rFPPYm_PfWPXh_vekCrJTjXCp22hvGCr9NhPTCxnhrPu4hpVkIaPawZ77bB6uAoXI8htcZoLrf2CuSx2-F-v7XRCNYtFfOpwLQQx1u_df4xpFZWXwz_pZafMN6dvbYniu3-x4Iwcj1RtzqOajBPrgMO143pTu9n2LlKUkeUVR3VmeJIFeXhdbUaVWo498Jeboltf7XLUGy--Ox5yVFaCcmPiYUZFe0UolFPJLPIAEHB4Smdw83LoHwwjgjedzvuyzi5SHpq03OYME87dUQBVdgIDwaxwIyJDxpbLvXP9P',
             ] },
+         //v4
          { ver: 4,
             cts: [
                // AEG-GCM: V4
@@ -318,6 +320,7 @@ describe("Stream encryption and decryption", function () {
                // AEGIS: V4
                "9qNOjLZ9-rH4psG5tikgFRhLfhiHLQCQrROmpFPqAAkEADsBAAADAIijvSZ00lRB-Edts0p2oEYxlrL5emmsclderCvjedg0UqNiq9mwx79iufCn3rCwieDIEAAAJfCjOKlYsM_LPXZLEmj6Bq0tOClxc764eABkaL_oxK6Ynx5SDj_Pzwa-iTXT2hbgShLadz4kMcaba_baFzmbD8HjfMehHaRApQ86KZRvfkMA1E5eFp7IIe1szgx7fyT0vE5wQeZzIB_mhsomYLdW46aP0_g5e95qjP2rLBAqav_AdC2rzWLR6AwZsuA2XgRr6uNVot4OYgFeJkVVaI0uvrmQj07D84e78-UjuU66zo6KbydWLRFm2zQBkRyGn1vAFoiv7RKM9pHWPoATJYiEG6V5pxQyZGZe-_6zKCqWF5H4wZXTuHCdb5EauQjwYGCQz2GCk7ZSztl-KYmKsSowCYPjRuw",
             ] },
+         //v5
          { ver: 5,
             cts: [
                // AEG-GCM: V5
@@ -327,6 +330,7 @@ describe("Stream encryption and decryption", function () {
                // AEGIS: V5
                "ZUDYZTXyYnJhG-9MZMD4j8ymWuNP8Oy5jr_qmISjOF0FADsBAAEDANHCkN2qd1mYu4zrsjS5AzIg9LsqLr3Dh8dJpcPkC9wK0Bwl_iFu5hpDTmyQ3P1G-eDIEAAAJbNfK1hDFINnuh3UpFAzOJnyH1fzCbjPuKFQcuZj8YfWkZV-_USgfgSqG1NLt2szc6ZMDEWoHKPPYgsRS6IH3JqrCJF8_W8RhV_1X51v9FAHE7D1VvNs5qiMiuKWN7IU9pXad18isn2leUwI0O24-8tCK7rCIX-CqGaY5y3mHEQavpoNHBD9QQKyKWNUqnWhvO39a_FtgNrtNaLx0LFLYKOpXYzFWSCbwQfeCDxXMK-J81u7z_K_OqLWTaZdjvEqaBDCqJQPapSRlgi0eh5bu94Vg9QsLKPYcFIXXjBMLOU7gNm0oRDMDok5Qu-Ln9OeWIAv1lNVS56JcYfEpOdZKYCStRc",
             ] },
+         //v5
          { ver: 6,
             cts: [
                // AEG-GCM: V6
@@ -363,6 +367,7 @@ describe("Stream encryption and decryption", function () {
    it("confirm successful version decryption, multi-version loops", { timeout: 45000 }, async function () {
 
       const vers = [
+         //v4
          { ver: 4,
             cts: [
                // AEG-GCM, V4, 3 LPS
@@ -372,6 +377,7 @@ describe("Stream encryption and decryption", function () {
                // AEGIS: V4, 3 LPS
                "AqjJe0x_GChxY-Z9bt2ZSk0-PUIeKoCoLUBleSCPp5gEAHUCAAADAKz1zLmRbFugjv3u5xN4k2H6Lb_WGPeRsBX-J3n4_j8VZwA9BPGMfnH2GltYCtKqMuDIEAAiIdMVRyGeIb0OpQG1_NCGvTVzdWwTfjq9vAR9g1cfm9Q6MDxX3p2TS_EKH26O4SOqwrmilRV6Qyer4Tx7NTUpMaJIXmD_j5KOh3P_nkfZ1IAGYj_nUfDaGTaW7_fao1udKaxlTSj7M-_-mRZ18UUEvEazOwrkuYFBBcur8y-k5tKLZSfhjeODD4-rup7rSON2XOvaX_FET5S13ga-DOluX7ITb9NJphSW3_g1l7267iLrmFOmVO3XBGnenPgeUl2D4aadSHfzc0iIkLIWs8WOe54LAwAvbJFMupAC-NDCZ4_OamDb4OwLq81AXnMXN1g5fifSn6SIWArQ9oN4j42y7CWpow0UfB8ansFv5F95rpljGrLJkKg1oEetP1U2YZXreSGo0seSoEFB1KlKojI5YN9UC2GeiHpzbH0dSKhhzVShJWpDG_NRNV9M-D2feNZ2E-bhsM747euXpGymFXZIxYTksF3dzQ50tJbomvLdAGNau8wS5fFDIptwK1C9p6OwZYlPWhCPs5JhBMOTdbeGvfV2rvx-fN5BTYT0hflFe-Or2YjX_jAI1YCDqYM5TxaS9XGKhqfFNYbXyexbB3V7yx4w4QqP1_NwnTn9WEsCJhQvRhBoQPYqHAJTKiaMjcCLmXMeNDDwb_5oHCJY-LTY8n0Ifn9safDdSKLnJMCypAtgOuk1ZB0JtvX7KzNisy-Dd8iyAIpKS89Y5g1sxfpXZQ8frAJnL6-O-Dcb2QU4oW3Db22JjVL_2L2dVHCwGw",
             ] },
+         //v5
          { ver: 5,
             cts: [
                // AES-GCM, XChaCha, AEGIS, V5, 3 LPS
@@ -381,10 +387,11 @@ describe("Stream encryption and decryption", function () {
                // AEGIS: AES-GCM, AES-GCM V5, 3 LPS
                "5HrnYQIAB6OTA8HO27AviugsbVz_otVhIU9SUGfAKN8FAA0CAAEBAJyuTIwejjoTJAMKQ5jI6umcC7Tdy3KzFfKF4qDgyBAAIhHh4OAHh7b9A0cRZQqcwvP_Y7xOKHQzGn55oxKi0YuOXtser60NoJxoMARtP0Pe-8x9aYT5T_Ml7d87zxZXfFcMk2MfOYLPpUZO6rHKZ1IXIFbrzW_YlVTgLwUwLYM01tmr9gg17kz5D1hTKRXxJ5CWq6nu_xlXwsi8Yo44OY6Ei1hpSLF8xhw1-w6oz0DRSqUedXlo2Y1KBj7e0rLBnW1WLnnJWhwSvOOaX6Cu7qslwBRQ3w12bxGQNIJLpbcw6LriQ1Tf7iBI6vmDDpSFN4r9zvJomyB2RqO9eTa6Y4u3yDrdpBlujw8LY3c0DSA_1SSkVKinYucKhNYWtwjSD9hCE-n0qgRcHZYLZB0JlyFv3on9mIdMhRDH_4sbs6b-car5nqzXxTIaoiDu5la78Y_gWjLRk7nCTONVluVHlk3pf4tZ2pf5C9SRC1PrH5q7OVmGDWhiHIpL-9twubrjB9e2_UQa2QZsVLiMdeNpmzeiqQM5maGIVFVi9AbE8q2kq8CqeHHu2YvJuG8Q2fH2RIUb4DCT-FHvyeLPl91k1ADw4JFtrHSwMHC1fxj3ZqIRic-f6MNEoJDm5ROV9O_4V77RMX3NqpSjQyxyvOk3lmaO7au-mJYg6txDqKlSeQXoxcLV4LG2Tdhj-D4",
             ] },
+         //v6
          { ver: 6,
             cts: [
                // AES-GCM, XChaCha, AEGIS, V6, 3 LPS
-               "4QB_HTME7CBlOtrq2oRKtOE3coA7F-rrFnHDGaztkAcGABoCAAEDANhmAzoORQG4Mfk00xuLjYaw3ShiY8tN2vzIPEdjpwbQVBaIL8GqsItRagyVmcFdwUBCDwAiIeXZuPSfuxgRb0E-W63eGZ9NZ360gPsuUU8W1dC8JkUnWsKtIgiBHSuHKV2gxXx3w0Ev8oyMrzqBEx5FERu3FTzk-bB4zmYoqhrnY6Y6F8HzeNqQSuJ4eBzmsvCY6nSb3Z0GmkUyG4xR-eFzPICOJdZGWdkWhT0penWoqM4EFnf2Upjda-R0hivSgwSwUTNhO1H26NzidOOAvMfczZVnIhVWlxCvXp9adhhQnjMPKiAVDP7zPxkMtPUlWGhGT-TESABsaa8qYBj1il2l-LRaxk22sSSpxT3VB5i32x_qcUbXrZSsHdWl0NMDb8z8Bfy-SlAhyxwK8S5XrboUp5chDixQ50qSOaiIOAaf4nP-JKFOLdw7DO7PMfRife6oXCO2OS7iVbHtFE1phEVCfys9wyLzZFbzAzB68yoH8NMMU6_p7XAiS91VDbCFtSareVvtlMeSeImC7jNhKfiHtflb8FGl6xjT_lxSTxEZvnCYe1JUJ7kd8od2w8tYWHcTaMrJ0jxHIKNB_zaRn5yZl8h4FX5N-Ex07Dfjddh16s1JWgN_nXi-lVP6utLBGxC8E_1SDTg2SMzjvTu5BkpBbw3xRf0V4jUU9n_NGMk7AP2wCYT79HiMZ3zj4Ac6Ak8h9hfIbrg",
+               "4QB_HTME7CBlOtrq2oRKtOE3coA7F-rrFnHDGaztkAcGABoCAAEDANhmAzoORQG4Mfk00xuLjYaw3ShiY8tN2vzIPEdjpwbQVBaIL8GqsItRagyVmcFdwUBCDwAiIeXZuPSfuxgRb0E-W63eGZ9NZ360gPsuUU8W1dC8JkUnWsKtIgiBHSuHKV2gxXx3w0Ev8oyMrzqBEx5FERu3FTzk-bB4zmYoqhrnY6Y6F8HzeNqQSuJ4eBzmsvCY6nSb3Z0GmkUyG4xR-eFzPICOJdZGWdkWhT0penWoqM4EFnf2Upjda-R0hivSgwSwUTNhO1H26NzidOOAvMfczZVnIhVWlxCvXp9adhhQnjMPKiAVDP7zPxkMtPUlWGhGT-TESABsaa8qYBj1il2l-LRaxk22sSSpxT3VB5i32x_qcUbXrZSsHdWl0NMDb8z8Bfy-SlAhyxwK8S5XrboUp5chDixQ50qSOaiIOAaf4nP-JKFOLdw7DO7PMfRife6oXCO2OS7iVbHtFE1phEVCfys9wyLzZFbzAzB68yoH8NMMU6_p7XAiS91VDbCFtSareVvtlMeSeImC7jNhKfiHtflb8FGl6xjT_lxSTxEZvnCYe1JUJ7kd8od2w8tYWHcTaMrJ0jxHIKNB_zaRn5yZl8h4FX5N-Ex07Dfjddh16s1JWgN_nXi-lVP6utLBGxC8E_1SDTg2SMzjvTu5BkpBbw3xRf0V4jUU9n_NGMk7AP2wCYT79HiMZ3zj4Ac6Ak8h9hfIbrg=",
                // AEGIS, XChaCha, AEGIS: V6, 3 LPS
                "w7OQx2Q88GDQ4ZmXN6tPkx7Yst-Veg81ujZ-_Eg4u_IGAE4CAAEDAMOP93rYo71KmzQ8o2Vi_ld3KdaGvgIqnG4dAAO1c2Yk7WLwZtROssHxCL93eiwPSkBCDwAiIfqwWUZ3l_u5DIYKlFTpurpijTfON-fY8TisKu9y2MlGw1IGCmHebVFFCmhhwmBPhMJ9nDyA5qT99EfKtyNadC1Vjr2kAXh94JiE9JEWLB298vb583GCJodLrstiU3KxlFALz4CF8Wnk0jdhSKL4L4uIhzMMul03cHaeXIQCf6N_KHTmyi6uBu8hz_iVUq8Ia2zqBACa1Iz5P2AKPIUjvX_qsARY_vFkqOgsYbNRmabSwONmjuS-fUa_mDkupH2KG6c2lbWHNs1kE7KGzGLZ21XFsNWiojnveu0zE-IHcVIK1-lymTQzN1YoKIMKdBM_mznmS5mDgRSQvXeo7qlpU4sxn3-_qP6ZoiaKzbqqKGh0_NRNjnUd8G8GzQuQfdWY4VmVHxLrm9yJcxPbVD2GBsqmIi1wNkSJW0PRbMAsLMbeHRwJJ0w0DsjodngjvAl9D66tZSa17x_XEQlslDprbcR4jfsYFe2PSAEDUT3a1HndlSsuXHsfk_ZolC86rAxTdVV9VZi8QqcHZ7nr3AR9oTz5H66QmoZcmJlUTNpfShPneF_EzXx0gGH6DjOtfrWjKD6iW2oJlpnXqMvWla60w5dYYUG43TQmoHSjb7kUqH1PtJjcsZbz4egTxrkNxvrLJGK9r7BpRk819eX5_zTlH4X3O3JsFmWK4lT6hlpW6sw69SXVzFrMxdHBJEmqF3VCk1NqUazr",
                // AEGIS: AES-GCM, AES-GCM V6, 3 LPS
@@ -423,9 +430,11 @@ describe("Stream encryption and decryption", function () {
       // Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=
       // manually created with missing terminal flag bit
       const vers = [
+         //v5
          { ver: 5,
             cipherData: new Uint8Array([225, 67, 20, 31, 134, 179, 27, 202, 138, 52, 68, 42, 197, 34, 48, 209, 76, 235, 39, 166, 101, 12, 253, 101, 237, 25, 234, 119, 91, 227, 169, 172, 5, 0, 116, 0, 0, 0, 2, 0, 53, 140, 213, 212, 134, 206, 178, 102, 222, 97, 207, 8, 252, 103, 8, 64, 25, 112, 206, 146, 159, 150, 220, 236, 162, 203, 172, 111, 119, 158, 192, 123, 81, 141, 89, 174, 126, 4, 65, 105, 64, 119, 27, 0, 0, 23, 138, 253, 130, 153, 78, 2, 31, 195, 254, 142, 102, 116, 200, 50, 125, 8, 178, 151, 113, 13, 205, 228, 10, 85, 83, 101, 57, 149, 191, 166, 4, 221, 153, 198, 0, 18, 185, 165, 203, 53, 211, 218, 24, 198, 162, 13, 99, 240, 249, 210, 255, 200, 217, 232, 10, 187, 212, 92, 204, 165, 217, 7, 202, 6, 114, 70, 200, 221])
          },
+         //v6
          { ver: 6,
             cipherData: new Uint8Array([132, 28, 138, 123, 147, 127, 43, 62, 165, 146, 225, 63, 193, 229, 103, 67, 52, 78, 235, 87, 222, 81, 39, 59, 221, 183, 97, 72, 255, 88, 246, 58, 6, 0, 117, 0, 0, 0, 2, 0, 34, 40, 133, 44, 12, 94, 228, 213, 26, 168, 170, 128, 158, 80, 186, 10, 199, 186, 216, 165, 74, 175, 77, 14, 167, 87, 224, 153, 52, 15, 148, 75, 171, 2, 77, 176, 158, 14, 41, 21, 64, 119, 27, 0, 0, 23, 60, 217, 5, 30, 103, 244, 158, 250, 216, 37, 3, 99, 119, 58, 27, 195, 99, 129, 80, 65, 210, 179, 102, 243, 232, 235, 177, 129, 48, 29, 127, 154, 58, 17, 16, 73, 65, 218, 12, 57, 251, 92, 205, 101, 8, 236, 63, 89, 47, 41, 190, 168, 125, 241, 136, 131, 63, 67, 146, 42, 204, 9, 202, 62, 160, 22, 123, 154])
          },
@@ -506,6 +515,7 @@ describe("Stream encryption and decryption", function () {
    it("detect corrupt cipher text, all algs, multi-version", async function () {
 
       const vers = [
+         //v4
          { ver: 4,
             cts: [
                //AES-GCM
@@ -515,6 +525,7 @@ describe("Stream encryption and decryption", function () {
                //AEGIS-256
                "1Jnt7bRakMkdgo9s0DhbdA3RZgTxQjdpczG4bVqLtdsEAJIAAAADACkhdnd1jqoOrNpifLk1Cg7qUi6-j_0EBJyyTAvtSXxxZe2cMLuH14b8TGNIsFQ6L-DIEAAAJGmwNdy_5f7etj9t6Q1l9zwg1er2CcW4gk2AnVyzqZXvxZrq1heuiam-6RtQ4Wkx2NIUruYKnYah4IRKMfuRJVLYge042ICZneCwQ6Tg1cG8adP0P1nzEXcdJA"
             ] },
+         //v6
          { ver: 6,
             cts: [
                //AES-GCM
@@ -860,6 +871,259 @@ describe("Stream encryption and decryption", function () {
    });
 });
 
+describe("Stream encryption and decryption with customAd", function () {
+
+   let cipherSvc: CipherService;
+   beforeEach(() => {
+      TestBed.configureTestingModule({});
+      cipherSvc = TestBed.inject(CipherService);
+   });
+
+   it("successful round trip, all algorithms, no pwd hint, with customAd", async function () {
+
+      for (const alg of Ciphers.algs()) {
+         const srcString = 'This is a secret 🦆';
+         const [clearStream, clearData] = streamFromStr(srcString);
+         const pwd = 'a good pwd';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const customAd = crypto.getRandomValues(new Uint8Array(16));
+
+         const econtext: EContext = {
+            algs: [alg],
+            ic: cc.ICOUNT_MIN
+         };
+
+         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.hint).toBeFalsy();
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, undefined];
+         }, userCred, clearStream, customAd);
+
+         const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.hint).toBeFalsy();
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, undefined];
+         }, userCred, cipherStream, customAd);
+
+         const resString = await readStreamAll(decrypted, true);
+         expect(resString).toEqual(srcString);
+      }
+   });
+
+   it("successful round trip, all algorithms, with customAd", async function () {
+
+      for (const alg of Ciphers.algs()) {
+         const srcString = 'This is a secret 🦆';
+         const [clearStream, clearData] = streamFromStr(srcString);
+         const pwd = 'a good pwd';
+         const hint = 'not really';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const customAd = crypto.getRandomValues(new Uint8Array(1));
+
+         const econtext: EContext = {
+            algs: [alg],
+            ic: cc.ICOUNT_MIN
+         };
+
+         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.hint).toBeFalsy();
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, hint];
+         }, userCred, clearStream, customAd);
+
+         const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.hint).toEqual(hint);
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, undefined];
+         }, userCred, cipherStream, customAd);
+
+         const resString = await readStreamAll(decrypted, true);
+         expect(resString).toEqual(srcString);
+      }
+   });
+
+   it("successful cipherdatainfo, all algorithms, with customAd", async function () {
+
+      for (const alg of Ciphers.algs()) {
+         const srcString = 'This is a secret 🦆';
+         const [clearStream, clearData] = streamFromStr(srcString);
+         const pwd = 'a good pwd';
+         const hint = 'not really';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const customAd = crypto.getRandomValues(new Uint8Array(1));
+
+         const econtext: EContext = {
+            algs: [alg],
+            ic: cc.ICOUNT_MIN
+         };
+
+         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.hint).toBeFalsy();
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, hint];
+         }, userCred, clearStream, customAd);
+
+         // cipherdata extract happens without core data decrypt, so no customAd needed
+         const cipherInfo = await cipherSvc.getCipherStreamInfo(userCred, cipherStream);
+         expect(cipherInfo.ver).toEqual(cc.CURRENT_VERSION);
+         expect(cipherInfo.alg).toEqual(alg);
+         expect(cipherInfo.ic).toEqual(cc.ICOUNT_MIN);
+         expect(cipherInfo.lp).toEqual(1);
+         expect(cipherInfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+         expect(cipherInfo.hint).toEqual(hint);
+      }
+   });
+
+
+   it("failed round trip, all algorithms, missing customAd", async function () {
+
+      for (const alg of Ciphers.algs()) {
+         const srcString = 'This is a secret 🦆';
+         const [clearStream, clearData] = streamFromStr(srcString);
+         const pwd = 'a good pwd';
+         const hint = 'not really';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const customAd = crypto.getRandomValues(new Uint8Array(1));
+
+         const econtext: EContext = {
+            algs: [alg],
+            ic: cc.ICOUNT_MIN
+         };
+
+         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.hint).toBeFalsy();
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, hint];
+         }, userCred, clearStream, customAd);
+
+         const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.hint).toEqual(hint);
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, undefined];
+         }, userCred, cipherStream);
+
+         await expect(readStreamAll(decrypted)).rejects.toThrow(DOMException);
+      }
+   });
+
+   it("failed round trip, all algorithms, added customAd", async function () {
+
+      for (const alg of Ciphers.algs()) {
+         const srcString = 'This is a secret 🦆';
+         const [clearStream, clearData] = streamFromStr(srcString);
+         const pwd = 'a good pwd';
+         const hint = 'not really';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const customAd = crypto.getRandomValues(new Uint8Array(14));
+
+         const econtext: EContext = {
+            algs: [alg],
+            ic: cc.ICOUNT_MIN
+         };
+
+         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.hint).toBeFalsy();
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, hint];
+         }, userCred, clearStream);
+
+         const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.hint).toEqual(hint);
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, undefined];
+         }, userCred, cipherStream, customAd);
+
+         await expect(readStreamAll(decrypted)).rejects.toThrow(DOMException);
+      }
+   });
+
+   it("failed round trip, all algorithms, wrong customAd", async function () {
+
+      for (const alg of Ciphers.algs()) {
+         const srcString = 'This is a secret 🦆';
+         const [clearStream, clearData] = streamFromStr(srcString);
+         const pwd = 'a good pwd';
+         const hint = 'not really';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const customAd = crypto.getRandomValues(new Uint8Array(1));
+
+         const econtext: EContext = {
+            algs: [alg],
+            ic: cc.ICOUNT_MIN
+         };
+
+         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.hint).toBeFalsy();
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, hint];
+         }, userCred, clearStream, customAd);
+
+         const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.hint).toEqual(hint);
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, undefined];
+         }, userCred, cipherStream, new Uint8Array(0));
+
+         await expect(readStreamAll(decrypted)).rejects.toThrow(DOMException);
+      }
+   });
+});
+
 describe("Read block size bugs check", function () {
    let cipherSvc: CipherService;
    let savedReadSize: number;
@@ -971,14 +1235,14 @@ describe("Stream manipulation, multi-version", function () {
    //const READ_SIZE_MAX = READ_SIZE_START * 41
 
    const vers = [
-      //V5
+      //v5
       {
          ct: "YxDP37WZjE6JP5EBZYd113DywXGmChJgQwJ27yUZkEgFAEgBAAABAKJehRspDKhtYi8y5MvSXUNDxyqrov5RGGOs5BzgyBAAABTw7-eoyC1TGBuraNUCj00sv1OwfcpiwKyOcCZKhPdYt63ia-dg3bV9b0IOCBleMeQyCRhc61FNyKZmUp7vonh5lIbXMUKFODQqRJRhECYDUzBLuCFvfs6ojmRKXll_-unkhH9hRtFvaTR4GDWkJKI62QP992yAIPVtPjN7Y0PlxDshWrfWMKR0_-fd7cKoHmO3JXKB7i6blEupayrqtI1VRhpY1OmGkVYSQcFjlPBkXms-VCxroGk_oA2blfrocNuf0mv2-4rdL4j9ev-k0YiKDu_HkE4tuwkhJ3pdmONEIpW7KMugg3Tg6uWk4KIMYpQKI0R1M-6CYbLXWpKL71vrJ6v_qukX8nUkpiQaqaOTYX8OhFqOPhsU5ChyTmK7ChOscZ_PwjmibGRacyvou6dRDyA_sXs7wqhUe7w3CJfQaZnQAv4FAG4BAAEBAPXFxXNhZ3Gem8pWhq4W9QT8pfUpDpHNKuNcSamS6gnfE0bg9T5FDEp-B0d0LjrhUu_fstk4VOd3k_UfrHjuQ5qD-I8s4Fd9NMkjraXLh2pdAc6E8mCOhdB3pXJp7PEByohXmxfQ6wSpacnckhB4OAPSiUBASNSNNuSWQDRJHBeYIJeNKr8znow9rIRwEe7Nsc_dbmkmfsAknLZO8QR_Glpu4by16DuULi_RLtEfgjAeRzisX7WY65CqlhiQ9KbJtiVKWZXUgVAhTPv1Kyle_uCCgB4dSeZ0C9BC7F1F15QZIEogaxM8OsgpM1szhCahQQjUdj_JVWVeyQ0YKCR9Ku-WszcBdXf7v2RA6A6C30p-B7GFrT8EWod9KSYwu-jA8PMzCymt5rINNB81uOxDc3mJwfgXI0Cailb9RMiuSSvBvUQ1yOWENXhD-L6J9Dn4b6buO4RW3Jx3qrPlwn-LndPzfJgN8P19U-PBAOA=",
          slt: new Uint8Array([203, 210, 93, 67, 67, 199, 42, 171, 162, 254, 81, 24, 99, 172, 228, 28]),
          iv: new Uint8Array([162, 94, 133, 27, 41, 12, 168, 109, 98, 47, 50, 228]),
          ver: 5
       },
-      //V6
+      //v6
       {
          ct: "QN-b9IO7eFdTfwLrSpwTJBAQa4mLYb6L1FykX04GHgMGAEkBAAABAIGEvDGIwIKtB6Q_TQBRA-R3wkRpJO-Q-1tcwjbgyBAAABRUjQsN5Nz1_aaEcmuuO7meixdbZL0eCWmNNMuu0oWp8KYFqneceUygklENjuJJ6FUT4iWlBHN5y0qMyTIg4fMQT5kT_aT66ropqfztsDBCZKC3CyFJN-t2jyHyg86OrLrI6f-XemY0YXxhf4Aqv0V97sU43IbQvmedBg8fp-Az7Hy5jPeuzNbu8AM6hLzjmh9nJwVN8TRxoACTaQ2Z3CyAPjUO8N4_Tk3vRCLo0tWkp4Fguuyxermjba9XM1TxLcBhmN4LVbid1JWax09hiDsSbfvJg9nTBptsSu30A19oGx_jVTuI1QwMp-tzrcY6yuoEdZTYctx4PRQE_3EMaqwKSxrTduP7UMR7k-_3qwsKucPiVbIeF_TkTvfWXEnLp9vNXtLchFUxskFvQOhs0RuKKuCb6fkoMYD-7vYWtPzMpbjzI8MGAG8BAAEBADZqgj3PDWTKRYhsxnUl7V-Uj01mOPZgOcetSpf8NqYdbOU8k8Ajc95Dpcym_PHhujoO98OWfRa6ZqCIajWsBzl83PUz6zpX8-DSme71w_WR28fQE4Qu3zrZwPLvoYig1fOGGhNmNHy88BzAxrRrXnrlJuvW6z3ZtD02lLyrvW28DLK75atN32WJgyVrb8N78J-w6erBvFDpu42Wfg4hYeeuvrQLAx_kBLKNCa1AGsPngFNrF76SmIbM7xgIbjcx_yhh3CGe3OfoIJ5Az7eyXqIDGr_Vw-29sx4-mSjavFaDxTSu_gcfhk9xlXmljXSJpLqyOEhA-2dEF5-OLcqOVsY9kH_cdi6YgKl5GCr-q35hd4YWMaI2V89-2js1ABfOZvx21s3WRwiSXGsGHl2IG-Lg9NdJRnikf7qTWSIa5RTMoDHA1pYk9B_mJdchu7IxiUZ-Q4Zy8PE03fSTOfHBQ0KlfW_QdkN084IitMw",
          slt: new Uint8Array([0, 81, 3, 228, 119, 194, 68, 105, 36, 239, 144, 251, 91, 92, 194, 54]),
@@ -1460,7 +1724,7 @@ describe("Block order change and deletion detection, multi-version", function ()
    //const READ_SIZE_MAX = READ_SIZE_START * 16
 
    const vers = [
-      //V5
+      //v5
       {
          ver: 5,
          goodCt: "v6xsVVBD4pOtHHfzLsKBVHscJ7Q4kv_KqOKH3X_Fx1IFAFEAAAABAAZsrNtMucZUIr2UFJF3Y9R2FtBAqbm_YLotMSzgyBAAABRnUeng3ADKX8ZIicklSvESgyOeUPCFnOoBhpY-g10PWujfV7mwWWJZdMylaext9jLzwDxOLnu6u4cxcgbt1Ga1Vn5F0qDCyO0Xp9W1mAUAMAAAAAEAQTScPYuFjasQGAKP6oqkR9d58Q0YgvW3zEg50a0en8vK2ShqzFWqL5E9A_mmkaAvhGj9rr43RZhZiInC6ccflFeTqERnpm0jqQL9ysQtBQBCAAAAAQCH0B81axAaykKtBBNhvA0of9kUOniwBgdkzLFYwPH_pz75AdARszabKfDmBWOZFAzy9dDJfiqIz2Nbfr4S59sVkfpg_FPiD6_QgqLXQtv7_SDDAHb5a3C-NLGvP4KhxAYFAGYAAAABAIVBoUjIij7b-5zUE6FMbuAaiegCEYXBcSuLeeKfCH5WHveQq6-8KA4U-IQ6IZ5Rz_ocEv1L5e9uqanzYvGkFMfbhjO3oNH5-C_CqfCIF_1OzrgztnYx2feFXB0DGiR7PBWkPKErkb7VBUkVLd8T-ZqVhNFQstJrXxEXdriJzUfeLrGV3wUArgAAAAEA44DnCIDUxMUHlsvdM6d5QAs_MSRUx0y7_a6hecMnN1K5eOxDxqGDf-3xzL0dpb5CrbW99lYJLwZz9zqyAmPMeCx2KNFL2YFkhBSMy7XrDV9u2wT1ulIKPq6IQpOCos7LqBhiTeh46TqpYgYpeckATiYUrIS5RBfHdxAVQ6Sy-VOAPwHGochCI4AYBjcLGWWYKYkZD3d3CGjjI-haOmFab1vWKNIPE4Cyuvh0bH8dXs3DmHv4vEU8bW5JwioVuw5ciDOH7wgZTdCOBOLqBQCuAAAAAQCwx1-ma6ln7jlEN5K8rAzplIiJ5_iWANGMRdIJhjzQEX7KKCw-bffXnbx_gdPBU0o5ZzkU-HfQih-BeR6nzMsK5KSZBMJUwCAZ9ibCPjkO9cB_iyXAj_82Kk2argCNVaVNVD1rIg8Ig2lyi7btAsFiF5ANSlTv6lpJIqYapa_d1eaNIT6SOEWs2cVCgu4OaGAAzzFg_cw6A1z8VAhBFeyX-VBgerpVZVMijFcgvRxCglN1AVY8Ts5kORAaVCh9w2JFytcXHS4YElml_mgFAK4AAAABAOBdI8pBAWBb4TWSeJEQGRBchmv2EnJ_GKiBxdUuDtTO2ayK-iYjZdXrfxrKenbMcfcKrOZv7zccFcsICw-YqrS6TuKYzlbWUFm_5-mLNuDCQwTjDSok50r0j3vFD2I03wBB9j1NgGgDkhq8LMrRBCIMt0xRv6rz1RXdftsZ-gRklpvNCJPsw20SMBB8jVO7owExMM7HQZ289lY_z8q4hFA8_RepUItTnckfZtl0ZWxnf1JY05yAOI17w8-h80jjQfLXityWRu29nWAsdgUANwAAAQEA-CZxmBlulfdy7xc9NP2C2PH1FoGV4ClHPFor1PaqvS8PIGwJjYpN4Pq0S9o4DPPVd-WzFhg=",
@@ -1484,9 +1748,10 @@ describe("Block order change and deletion detection, multi-version", function ()
             'Block1 Block7 deleted': 'v6xsVVBD4pOtHHfzLsKBVHscJ7Q4kv_KqOKH3X_Fx1IFAFEAAAABAAZsrNtMucZUIr2UFJF3Y9R2FtBAqbm_YLotMSzgyBAAABRnUeng3ADKX8ZIicklSvESgyOeUPCFnOoBhpY-g10PWujfV7mwWWJZdMylaew=',
          }
       },
+      //v6
       {
          ver: 6,
-         goodCt: "145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0b8z5ZdoouvyB9aG3QlCbc9XTBfAN4yPYcxrzdASguAgYAMQAAAAEAl0vO23m4DaUuLlCchOsXoKnl4bYKmhmX_ydWm2p95AwKZcdXuNcSgBMD17fjfQxogLpTAVw46IYT6Yade9GaEZeK-H4_IWcRVVloHAjiBgBDAAAAAQCkAj9mmn0ml0CccOOHETPlyrQ0qPr2vtFzCrvt-SAx_VfWK3UP7bsmKruWrF9fXPaHjlhEl9b3BzLgWFRhEI1tccFm2H62Twhok-txX_Tzma2f-1wEacpdfUYuiGgYpgIGAGcAAAABAOjptoow8I9KMVohLYUE7yt4Bvt23UzOw_nrRXVseI-n_TJ1i3jBtcdWk1hfrvWlw-2PoJZyH2oFJi2vn0Ulo_TxtGOAxKV6bPz28qxg4AenSlhmenw8N6AuS-QkSe71LDKczPAYp90W6ZiO06uOk9Dgv3ftONRWM9yuN7Kt0IqnKR5FRwYArwAAAAEAcUDPBJ_iL9JmZB8vrg4cNOJQ0zniAhWDhetArzNGPK9jJ1XPpvt7eZUyCCIvMbMFJL9sCMMNyQ6GpQbu3Yb5ykCA7UjRKDyjZaHvMifXl1DtJX8D7tkilUD9CxFG5JDiZP5WSVbK9vufZZXYmO0Rb55-XDrEwAkFGv_Z7baL3CCvFBApV8pgJFP4Y6BgzoF3X1Twah0_lpB8amihm74KoQmIR-PzuCZwRYdIcbnSCPRcEQDEAJteYV1mNHZZ4RjAebx4UKfaNFzpS3bRBgCvAAAAAQBi_iVR4Q8bxXY2--aZBV6HpYFK8iHV2R5wynUcAjctCSonwJJkv0_LZ14vFpgDak70e6exgvIfAkLb_vpjfDN8B_xKWKcuBNLvg1XwVHwEkXu0OW_a2T6FJLwVN9yYMd7TrCEqjx-Ey77eGlvie66gfdsAfqsfM_bA_rmstmDdEWZN0oKZQ4dhEuuinf61NL6R2zuH_AOm-rqgSYuHnZSZrVkmFCvmWDPsthBVH_ndo_8jdaFw-0H6fTScHXdxi4ByWbFikOScO7Og4UsGAK8AAAABAKMxDRKY02yKwaHyj5hGCyjjzls4u_KJbhq_kyU1LapORWJ8PrLU7ngWKZVV7nDbLbiGr7618KJTO9QTypg-mpqZLxKshTQh1T9y7OcIi41phr-OgQtmfLNsTq-poL9KA8j4JKQOE7BbgKWuGuD2106SJueQ0j-OdQq8FmZF3wvI_GH3jKlxnc-TsZYNz297pBBEx1X87YWHlaEG6IYsuMxTZUmuOXrZ4EAXWa2fNQwontou1_P0uGJW-zOp_0B_66xoXQZzWxBZDYXMHwYAOAAAAQEAQRiF8kaVmi2xqbQV1__kKXlpRGQvNsAWpDpH20Q-1_GWz1vSBPm5Q3OEPzO4jYh7NNy3GqI",
+         goodCt: "145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0b8z5ZdoouvyB9aG3QlCbc9XTBfAN4yPYcxrzdASguAgYAMQAAAAEAl0vO23m4DaUuLlCchOsXoKnl4bYKmhmX_ydWm2p95AwKZcdXuNcSgBMD17fjfQxogLpTAVw46IYT6Yade9GaEZeK-H4_IWcRVVloHAjiBgBDAAAAAQCkAj9mmn0ml0CccOOHETPlyrQ0qPr2vtFzCrvt-SAx_VfWK3UP7bsmKruWrF9fXPaHjlhEl9b3BzLgWFRhEI1tccFm2H62Twhok-txX_Tzma2f-1wEacpdfUYuiGgYpgIGAGcAAAABAOjptoow8I9KMVohLYUE7yt4Bvt23UzOw_nrRXVseI-n_TJ1i3jBtcdWk1hfrvWlw-2PoJZyH2oFJi2vn0Ulo_TxtGOAxKV6bPz28qxg4AenSlhmenw8N6AuS-QkSe71LDKczPAYp90W6ZiO06uOk9Dgv3ftONRWM9yuN7Kt0IqnKR5FRwYArwAAAAEAcUDPBJ_iL9JmZB8vrg4cNOJQ0zniAhWDhetArzNGPK9jJ1XPpvt7eZUyCCIvMbMFJL9sCMMNyQ6GpQbu3Yb5ykCA7UjRKDyjZaHvMifXl1DtJX8D7tkilUD9CxFG5JDiZP5WSVbK9vufZZXYmO0Rb55-XDrEwAkFGv_Z7baL3CCvFBApV8pgJFP4Y6BgzoF3X1Twah0_lpB8amihm74KoQmIR-PzuCZwRYdIcbnSCPRcEQDEAJteYV1mNHZZ4RjAebx4UKfaNFzpS3bRBgCvAAAAAQBi_iVR4Q8bxXY2--aZBV6HpYFK8iHV2R5wynUcAjctCSonwJJkv0_LZ14vFpgDak70e6exgvIfAkLb_vpjfDN8B_xKWKcuBNLvg1XwVHwEkXu0OW_a2T6FJLwVN9yYMd7TrCEqjx-Ey77eGlvie66gfdsAfqsfM_bA_rmstmDdEWZN0oKZQ4dhEuuinf61NL6R2zuH_AOm-rqgSYuHnZSZrVkmFCvmWDPsthBVH_ndo_8jdaFw-0H6fTScHXdxi4ByWbFikOScO7Og4UsGAK8AAAABAKMxDRKY02yKwaHyj5hGCyjjzls4u_KJbhq_kyU1LapORWJ8PrLU7ngWKZVV7nDbLbiGr7618KJTO9QTypg-mpqZLxKshTQh1T9y7OcIi41phr-OgQtmfLNsTq-poL9KA8j4JKQOE7BbgKWuGuD2106SJueQ0j-OdQq8FmZF3wvI_GH3jKlxnc-TsZYNz297pBBEx1X87YWHlaEG6IYsuMxTZUmuOXrZ4EAXWa2fNQwontou1_P0uGJW-zOp_0B_66xoXQZzWxBZDYXMHwYAOAAAAQEAQRiF8kaVmi2xqbQV1__kKXlpRGQvNsAWpDpH20Q-1_GWz1vSBPm5Q3OEPzO4jYh7NNy3GqI=",
          badCts: {
             'Block0 Block7 swap': 'nzUMKJ7aLtfz9LhiVvszqf9Af-usaF0Gc1sQWQ2FzB8GADgAAAEBAEEYhfJGlZotsam0Fdf_5Cl5aURkLzbAFqQ6R9tEPtfxls9b0gT5uUNzhD8zuI2IezTctxqiG_M-WXaKLr8gfWht0JQm3PV0wXwDeMj2HMa83QEoLgIGADEAAAABAJdLztt5uA2lLi5QnITrF6Cp5eG2CpoZl_8nVptqfeQMCmXHV7jXEoATA9e3430MaIC6UwFcOOiGE-mGnXvRmhGXivh-PyFnEVVZaBwI4gYAQwAAAAEApAI_Zpp9JpdAnHDjhxEz5cq0NKj69r7Rcwq77fkgMf1X1it1D-27Jiq7lqxfX1z2h45YRJfW9wcy4FhUYRCNbXHBZth-tk8IaJPrcV_085mtn_tcBGnKXX1GLohoGKYCBgBnAAAAAQDo6baKMPCPSjFaIS2FBO8reAb7dt1MzsP560V1bHiPp_0ydYt4wbXHVpNYX671pcPtj6CWch9qBSYtr59FJaP08bRjgMSlemz89vKsYOAHp0pYZnp8PDegLkvkJEnu9SwynMzwGKfdFumYjtOrjpPQ4L937TjUVjPcrjeyrdCKpykeRUcGAK8AAAABAHFAzwSf4i_SZmQfL64OHDTiUNM54gIVg4XrQK8zRjyvYydVz6b7e3mVMggiLzGzBSS_bAjDDckOhqUG7t2G-cpAgO1I0Sg8o2Wh7zIn15dQ7SV_A-7ZIpVA_QsRRuSQ4mT-VklWyvb7n2WV2JjtEW-eflw6xMAJBRr_2e22i9wgrxQQKVfKYCRT-GOgYM6Bd19U8GodP5aQfGpooZu-CqEJiEfj87gmcEWHSHG50gj0XBEAxACbXmFdZjR2WeEYwHm8eFCn2jRc6Ut20QYArwAAAAEAYv4lUeEPG8V2NvvmmQVeh6WBSvIh1dkecMp1HAI3LQkqJ8CSZL9Py2deLxaYA2pO9HunsYLyHwJC2_76Y3wzfAf8SlinLgTS74NV8FR8BJF7tDlv2tk-hSS8FTfcmDHe06whKo8fhMu-3hpb4nuuoH3bAH6rHzP2wP65rLZg3RFmTdKCmUOHYRLrop3-tTS-kds7h_wDpvq6oEmLh52Uma1ZJhQr5lgz7LYQVR_53aP_I3WhcPtB-n00nB13cYuAclmxYpDknDuzoOFLBgCvAAAAAQCjMQ0SmNNsisGh8o-YRgso485bOLvyiW4av5MlNS2qTkVifD6y1O54FimVVe5w2y24hq--tfCiUzvUE8qYPpqamS8SrIU0IdU_cuznCIuNaYa_joELZnyzbE6vqaC_SgPI-CSkDhOwW4Clrhrg9tdOkibnkNI_jnUKvBZmRd8LyPxh94ypcZ3Pk7GWDc9ve6QQRMdV_O2Fh5WhBuiGLLjMU2VJrjl62eBAF1mt145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0',
 

@@ -40,8 +40,10 @@ export const MAC_BYTES = 32;
 export const KEY_BYTES = 32; // all keys are currently 32 bytes
 export const USERCRED_BYTES = 32;
 export const USERID_BYTES = 16;
+export const CREDID_MIN_BYTES = 16;
 export const PAYLOAD_SIZE_BYTES = 3;
 export const FLAGS_BYTES = 1;
+export const CUSTOM_AD_BYTES_MAX = 255;
 
 // Changing this is the future will be messy. Better change version and put
 // length changes into the payload
@@ -66,7 +68,7 @@ export const VERSION4 = 4;
 export const VERSION5 = 5;
 export const VERSION6 = 6;
 export const VERSION7 = 7;
-export const CURRENT_VERSION = VERSION6;
+export const CURRENT_VERSION = VERSION7;
 export const V1_BELOW = VERSION4 // leave fixed at 4
 
 // needs to fit into 255 bytes encypted... this allows for all double byte + max auth tag

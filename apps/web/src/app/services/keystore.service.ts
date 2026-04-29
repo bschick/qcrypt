@@ -38,9 +38,9 @@ export class KeystoreService {
    // be used immediately and then overwritten and discarded
    async get(
       slot: string,
-      salt: Uint8Array<ArrayBuffer> | string
+      credId: Uint8Array<ArrayBuffer> | string
    ): Promise<Uint8Array<ArrayBuffer>> {
-      const saltBytes = typeof salt === 'string' ? base64ToBytes(salt) : salt;
+      const credIdBytes = (typeof credId === 'string') ? base64ToBytes(credId) : credId;
 
       const db = await this._db();
       const masterKey = await new Promise<CryptoKey | undefined>((resolve, reject) => {
@@ -54,23 +54,20 @@ export class KeystoreService {
       }
 
       // Caller should overwrite the returned key immediately afer use
-      return this._deriveKeyMaterial(masterKey, saltBytes);
+      return this._deriveKeyMaterial(masterKey, slot, credIdBytes);
    }
 
-   // Either creates or replaces an existing key. Returned key material should
-   // be used immediately and then overwritten and discarded
-   async upsert(
+   // Create and replace the key in `slot`
+   async create(
       slot: string,
-      salt: Uint8Array<ArrayBuffer> | string,
-      userId: Uint8Array<ArrayBuffer> | string
+      credId: Uint8Array<ArrayBuffer> | string
    ): Promise<Uint8Array<ArrayBuffer>> {
-      const saltBytes = typeof salt === 'string' ? base64ToBytes(salt) : salt;
-      const userIdBytes = typeof userId === 'string' ? base64ToBytes(userId) : userId;
+      const credIdBytes = (typeof credId === 'string') ? base64ToBytes(credId) : credId;
 
-      const masterKey = await this._newMasterKey(slot, userIdBytes, saltBytes);
+      const masterKey = await this._newMasterKey(slot);
 
       // Caller should overwrite the returned key immediately afer use
-      return this._deriveKeyMaterial(masterKey, saltBytes);
+      return this._deriveKeyMaterial(masterKey, slot, credIdBytes);
    }
 
    async delete(slot: string): Promise<void> {
@@ -110,79 +107,51 @@ export class KeystoreService {
 
    private async _deriveKeyMaterial(
       masterKey: CryptoKey,
-      salt: Uint8Array<ArrayBuffer>
+      purpose: string,
+      credId: Uint8Array<ArrayBuffer>
    ): Promise<Uint8Array<ArrayBuffer>> {
 
-      if (salt.length !== cc.SLT_BYTES) {
-         throw new Error('Salt is not ' + cc.SLT_BYTES + ' bytes');
+      if (purpose.length < MIN_SLOT_LEN) {
+         throw new Error('Slot must be at least ' + MIN_SLOT_LEN + ' characters');
+      }
+      if (credId.byteLength < cc.CREDID_MIN_BYTES) {
+         throw new Error('Credential id is < ' + cc.CREDID_MIN_BYTES + ' bytes');
       }
 
-      const purpose = new TextEncoder().encode('qq-derived');
-      const derivedBits = await crypto.subtle.deriveBits(
-         {
-            name: 'HKDF',
-            hash: 'SHA-512',
-            salt: salt,
-            info: purpose,
-         },
-         masterKey,
-         256
-      );
+      const purposeBytes = new TextEncoder().encode(purpose);
+      const data = new Uint8Array(purposeBytes.byteLength + credId.byteLength);
+      data.set(purposeBytes);
+      data.set(credId, purposeBytes.byteLength);
 
-      return new Uint8Array(derivedBits);
+      const derivedBytes = await crypto.subtle.sign(
+         "HMAC",
+         masterKey,
+         data
+      );
+      if (derivedBytes.byteLength !== cc.KEY_BYTES * 2) {
+         throw new Error('Invalid derived key length: ' + derivedBytes.byteLength);
+      }
+
+      return new Uint8Array(derivedBytes.slice(cc.KEY_BYTES));
    }
 
-   private async _newMasterKey(
-      slot: string,
-      userId: Uint8Array<ArrayBuffer>,
-      salt: Uint8Array<ArrayBuffer>
-   ): Promise<CryptoKey> {
+   private async _newMasterKey(slot: string): Promise<CryptoKey> {
 
       if (slot.length < MIN_SLOT_LEN) {
          throw new Error('Slot must be at least ' + MIN_SLOT_LEN + ' characters');
       }
-      if (userId.byteLength !== cc.USERID_BYTES) {
-         throw new Error('User id is not ' + cc.USERID_BYTES + ' bytes');
-      }
-      if (salt.byteLength !== cc.SLT_BYTES) {
-         throw new Error('Salt is not ' + cc.SLT_BYTES + ' bytes');
-      }
 
-      const baseKey = await window.crypto.subtle.importKey(
-         'raw',
-         userId,
-         'HKDF',
-         false,
-         ['deriveBits'],
-      );
-
-      // SubtleCrypto is so lame. It will not let you create a derived CryptoKey
-      // for the purpose of deriving further keys. Instead you are forced to
-      // momentarily expose the bits, then reimport and wipe.
-      const purpose = new TextEncoder().encode(slot + 'qq-master');
-      const masterBits = await crypto.subtle.deriveBits(
+      // SubtleCrypto is lame... It will not let you generate CryptoKey for
+      // the purpose of deriving further symetric keys. So we generate an HMAC
+      // key and bascially rebuild a KDF from that.
+      const masterKey = await crypto.subtle.generateKey(
          {
-            name: 'HKDF',
-            hash: 'SHA-512',
-            salt: salt,
-            info: purpose,
+            name: "HMAC",
+            hash: { name: "SHA-512" },
          },
-         baseKey,
-         256
-      );
-
-      // Derive a new CryptoKey from the raw bits. Critical that it is not
-      // exportable so that it isn't accessible to JS when at rest
-      const masterKey = await crypto.subtle.importKey(
-         'raw',
-         masterBits,
-         'HKDF',
          false,
-         ['deriveBits', 'deriveKey'],
+         ["sign"]
       );
-
-      // Wipe the intermediate bits in place.
-      crypto.getRandomValues(new Uint8Array(masterBits));
 
       const db = await this._db();
       await new Promise<void>((resolve, reject) => {
