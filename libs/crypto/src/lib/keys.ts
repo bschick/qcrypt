@@ -24,14 +24,15 @@ import * as cc from './cipher.consts';
 import { CipherDataInfo, Ciphers } from './ciphers-current';
 import { ensureArrayBuffer, numToBytes } from './utils';
 
-// V7 Contexts must be 8 bytes
-const KDF_CTX_SIGNING_V6 = "cipherdata signing key";
+// Contexts must be 8 bytes. Old v6 CTX had a bug of passing more that was
+// truncated silently by libsodium (fortunately, harmless)
+const KDF_CTX_SIGNING_V6 = "cipherda";
 const KDF_CTX_SIGNING_V7 = "Sign_Key";
-const KDF_CTX_HINT_V6 = "hint encryption key";
-const KDF_CTX_HINT_V7 = "Hint_Key";
-const KDF_CTX_BLOCK_V6 = "block encryption key";
-const KDF_CTX_BLOCK_V7 = "Blck_Key";
-const KDF_CTX_CIPHER_V7 = "Cphr_Key";
+const KDF_CTX_HINT_V6    = "hint enc";
+const KDF_CTX_HINT_V7    = "Hint_Key";
+const KDF_CTX_BLOCK_V6   = "block en";
+const KDF_CTX_BLOCK_V7   = "Blck_Key";
+const KDF_CTX_CIPHER_V7  = "Cphr_Key";
 
 
 export type PWDProvider =
@@ -65,6 +66,8 @@ export abstract class BaseKeyProvider implements KeyProvider {
    protected _bks: Uint8Array<ArrayBuffer>[] = [];
    protected _hint: string | undefined = undefined;
    protected _cdInfo: CipherDataInfo | undefined = undefined;
+
+   // referenced values
    protected _customAd: Uint8Array<ArrayBuffer> | undefined = undefined;
 
    constructor(customAd: Uint8Array<ArrayBuffer> | undefined = undefined) {
@@ -109,7 +112,6 @@ export abstract class BaseKeyProvider implements KeyProvider {
 
 
    public purge(): void {
-
       // overwrite owned values to clear
       if (this._ek) {
          crypto.getRandomValues(this._ek);
@@ -140,6 +142,7 @@ export abstract class BaseKeyProvider implements KeyProvider {
       if (this._hint) {
          this._hint = undefined;
       }
+      // salt and customAd not secrets, so left alone
    }
 
    public async getCipherKey(
@@ -147,8 +150,8 @@ export abstract class BaseKeyProvider implements KeyProvider {
    ): Promise<Uint8Array<ArrayBuffer>> {
       if (!this._ek) {
          this._ek = await this._genCipherKey(encrypting);
-         if (!this._ek) {
-            throw new Error('Failed to generate cipher key');
+         if (!this._ek || this._ek.byteLength !== cc.KEY_BYTES) {
+            throw new Error('Invalid cipher key');
          }
       }
       return this._ek;
@@ -159,11 +162,14 @@ export abstract class BaseKeyProvider implements KeyProvider {
       if (blockNum < 1) {
          throw new Error('Invalid block number: ' + blockNum);
       }
+      if (!this._ek) {
+         throw new Error('Invalid state, getCipherKey() must be called first');
+      }
       // cache block keys primarily to overwrite at purge
       if (!this._bks[blockNum - 1]) {
          this._bks[blockNum - 1] = await this._genBlockCipherKey(blockNum);
-         if (!this._bks[blockNum - 1]) {
-            throw new Error('Failed to generate block cipher key');
+         if (!this._bks[blockNum - 1] || this._bks[blockNum - 1].byteLength !== cc.KEY_BYTES) {
+            throw new Error('Invalid block cipher key');
          }
       }
       return this._bks[blockNum - 1];
@@ -172,22 +178,26 @@ export abstract class BaseKeyProvider implements KeyProvider {
    public async getSigningKey(): Promise<Uint8Array<ArrayBuffer>> {
       if (!this._sk) {
          this._sk = await this._genSigningKey();
-         if (!this._sk) {
-            throw new Error('Failed to generate signing key');
+         if (!this._sk || this._sk.byteLength !== cc.KEY_BYTES) {
+            throw new Error('Invalid signing key');
          }
       }
       return this._sk;
    }
 
    public async getHintCipherKeyAndIV(baseIV: Uint8Array<ArrayBuffer>): Promise<[Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>]> {
+      if (baseIV.byteLength !== cc.AlgInfo[this._cdInfo!.alg].iv_bytes) {
+         throw new Error('Invalid base IV length: ' + baseIV.byteLength);
+      }
+
       // cache hint key primarily to overwrite at purge
-      if (!this._hk) {
+      if (!this._hk || !this._hIV) {
          [this._hk, this._hIV] = await this._genHintCipherKeyAndIV(baseIV);
-         if (!this._hk || !this._hIV) {
-            throw new Error('Failed to generate hint key and IV');
+         if (!this._hk || !this._hIV || this._hk.byteLength !== cc.KEY_BYTES || this._hIV.byteLength < cc.IV_MIN_BYTES) {
+            throw new Error('Invalid hint key or hint IV');
          }
       }
-      return [this._hk, this._hIV!];
+      return [this._hk, this._hIV];
    }
 
    protected abstract _genCipherKey(encrypting: boolean): Promise<Uint8Array<ArrayBuffer>>;
@@ -201,10 +211,12 @@ export abstract class BaseKeyProvider implements KeyProvider {
 
 export abstract class BasePWDKeyProvider extends BaseKeyProvider {
 
+   // TODO: Change this to an owned value
    // referenced values
    protected _userCred: Uint8Array<ArrayBuffer>;
 
    constructor(
+      // Caller is assigning ownership of customAd to this instance (userCred it a TODO)
       userCred: Uint8Array,
       customAd: Uint8Array<ArrayBuffer> | undefined = undefined
    ) {
@@ -237,6 +249,11 @@ export class PWDKeyProvider extends BasePWDKeyProvider {
       super(userCred, customAd);
    }
 
+   public override purge(): void {
+      super.purge();
+      this._pwdProvider = undefined;
+   }
+
    protected override async _genCipherKey(
       encrypting: boolean
    ): Promise<Uint8Array<ArrayBuffer>> {
@@ -265,10 +282,18 @@ export class PWDKeyProvider extends BasePWDKeyProvider {
       let rawMaterial: Uint8Array<ArrayBuffer>;
 
       if (this._cdInfo.ver === cc.VERSION7) {
-         rawMaterial = new Uint8Array(pwdBytes.byteLength + this._userCred.byteLength + cc.LPP_BYTES)
-         rawMaterial.set(pwdBytes);
-         rawMaterial.set(this._userCred, pwdBytes.byteLength);
-         rawMaterial.set(numToBytes(this._cdInfo.lp, cc.LPP_BYTES), pwdBytes.byteLength + this._userCred.byteLength);
+         const parts = [pwdBytes, this._userCred, numToBytes(this._cdInfo.lp, cc.LPP_BYTES)];
+         if (this._customAd) {
+            parts.push(this._customAd);
+         }
+
+         const totalLen = parts.reduce((sum, part) => sum + part.byteLength, 0);
+         rawMaterial = new Uint8Array(totalLen);
+         let offset = 0;
+         for (const part of parts) {
+            rawMaterial.set(part, offset);
+            offset += part.byteLength;
+         }
       } else {
          rawMaterial = new Uint8Array(pwdBytes.byteLength + this._userCred.byteLength)
          rawMaterial.set(pwdBytes);
@@ -283,7 +308,7 @@ export class PWDKeyProvider extends BasePWDKeyProvider {
          ['deriveBits', 'deriveKey']
       );
 
-      // overwrite to clear userCred and pwd
+      // overwrite to clear
       crypto.getRandomValues(rawMaterial);
       crypto.getRandomValues(pwdBytes);
 
@@ -334,6 +359,7 @@ export class PWDKeyProvider extends BasePWDKeyProvider {
       ];
    }
 
+   // Returns a derived with the same byteLength as master
    private _genDerivedKey(
       master: Uint8Array,
       purpose: string,
@@ -345,32 +371,33 @@ export class PWDKeyProvider extends BasePWDKeyProvider {
       if (!this._cdInfo || !this._cdInfo.slt) {
          throw new Error('Invalid state for key derivation');
       }
+      if (!purpose || purpose.length != 8) {
+         throw new Error('Invalid purpose length of: ' + purpose?.length);
+      }
 
       const sodium = getSodium();
       let mixedKey: Uint8Array;
 
       // VERSION7 adds a salt to key derivations
       if (this._cdInfo.ver === cc.VERSION7) {
-         if (!purpose || purpose.length != 8) {
-            throw new Error('Invalid purpose length of: ' + purpose?.length);
-         }
          if (this._cdInfo.slt.byteLength != cc.SLT_BYTES) {
             throw new Error('Invalid salt length of: ' + this._cdInfo.slt.byteLength);
          }
 
          // because crypto_kdf_derive_from_key does not take a salt, we first merge salt and
-         // master into a single hash.
+         // master into a cryptographic hash.
          mixedKey = sodium.crypto_generichash(cc.KEY_BYTES, this._cdInfo.slt, master);
       } else {
          mixedKey = master;
       }
 
-      return ensureArrayBuffer(sodium.crypto_kdf_derive_from_key(
-         master.byteLength,
+      const derivedKey = ensureArrayBuffer(sodium.crypto_kdf_derive_from_key(
+         Math.max(master.byteLength, sodium.crypto_kdf_BYTES_MIN),
          instance,
-         purpose.slice(0, 8),
+         purpose,
          mixedKey
       ));
+      return derivedKey.slice(0, master.byteLength);
    }
 }
 
@@ -385,6 +412,7 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
    private _masterKey: Uint8Array<ArrayBuffer> | undefined;
 
    constructor(
+      // Caller is assinging ownershp of these values to this instance
       masterKey: Uint8Array,
       customAd: Uint8Array<ArrayBuffer> | undefined = undefined
    ) {
@@ -409,18 +437,16 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       if (!this._cdInfo) {
          throw new Error('Invalid state, cipherDataInfo not set');
       }
-      if (this._cdInfo.ver !== cc.VERSION7) {
-         throw new Error('Invalid version: ' + this._cdInfo.ver);
-      }
       if (!this._masterKey) {
          throw new Error('Invalid state, masterKey missing');
       }
 
-      const rawMaterial = new Uint8Array(this._masterKey.byteLength + cc.LPP_BYTES)
-      rawMaterial.set(this._masterKey);
-      rawMaterial.set(numToBytes(this._cdInfo.lp, cc.LPP_BYTES), this._masterKey.byteLength);
+      const extraMaterial = [numToBytes(this._cdInfo.lp, cc.LPP_BYTES)];
+      if (this._customAd) {
+         extraMaterial.push(this._customAd);
+      }
 
-      return this._genDerivedKey(rawMaterial, KDF_CTX_CIPHER_V7, 0);
+      return this._genDerivedKey(this._masterKey, KDF_CTX_CIPHER_V7, 0, extraMaterial);
    }
 
    protected override async _genSigningKey(): Promise<Uint8Array<ArrayBuffer>> {
@@ -444,12 +470,14 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       ];
    }
 
+   // Returns a derived with the same byteLength as master
    private _genDerivedKey(
       master: Uint8Array<ArrayBuffer>,
       purpose: string,
       instance: number,
+      extraMaterial: Uint8Array<ArrayBuffer>[] = []
    ): Uint8Array<ArrayBuffer> {
-      if (!master || master.byteLength < cc.KEY_BYTES) {
+      if (!master || master.byteLength < cc.IV_MIN_BYTES) {
          throw new Error('Invalid master key length of: ' + master?.byteLength);
       }
       if (!this._cdInfo) {
@@ -461,17 +489,26 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       if (!this._cdInfo.slt || this._cdInfo.slt.byteLength != cc.SLT_BYTES) {
          throw new Error('Invalid salt length of: ' + this._cdInfo.slt?.byteLength);
       }
+      if (this._cdInfo.ver < cc.VERSION7) {
+         throw new Error('Invalid version: ' + this._cdInfo.ver);
+      }
 
       // because crypto_kdf_derive_from_key does not take a salt, we first merge salt and
       // master into a single hash.
       const sodium = getSodium();
-      const mixedKey = sodium.crypto_generichash(cc.KEY_BYTES, this._cdInfo.slt, master);
+      const state = sodium.crypto_generichash_init(master, cc.KEY_BYTES);
+      sodium.crypto_generichash_update(state, this._cdInfo.slt);
+      for (const extra of extraMaterial) {
+         sodium.crypto_generichash_update(state, extra);
+      }
+      const mixedKey = sodium.crypto_generichash_final(state, cc.KEY_BYTES);
 
-      return ensureArrayBuffer(sodium.crypto_kdf_derive_from_key(
-         master.byteLength,
+      const derivedKey = ensureArrayBuffer(sodium.crypto_kdf_derive_from_key(
+         Math.max(master.byteLength, sodium.crypto_kdf_BYTES_MIN),
          instance,
-         purpose.slice(0, 8),
+         purpose,
          mixedKey
       ));
+      return derivedKey.slice(0, master.byteLength);
    }
 }

@@ -37,6 +37,11 @@ export class PWDKeyProviderOld extends BasePWDKeyProvider {
       super(userCred);
    }
 
+   public override purge(): void {
+      super.purge();
+      this._pwdProvider = undefined;
+   }
+
    protected override async _genCipherKey(
       encrypting: boolean
    ): Promise<Uint8Array<ArrayBuffer>> {
@@ -100,7 +105,6 @@ export class PWDKeyProviderOld extends BasePWDKeyProvider {
       subtleKey = undefined;
       return ek;
    }
-
 
    protected override async _genSigningKey(): Promise<Uint8Array<ArrayBuffer>> {
       if (!this._cdInfo) {
