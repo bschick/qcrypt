@@ -51,7 +51,7 @@ export const HEADER_BYTES_OLD = MAC_BYTES + VER_BYTES + PAYLOAD_SIZE_BYTES + FLA
 export const HEADER_BYTES_6P = MAC_BYTES + VER_BYTES + PAYLOAD_SIZE_BYTES;
 
 export const PAYLOAD_SIZE_MIN = IV_MIN_BYTES + ALG_BYTES + AUTH_TAG_MIN_BYTES + 1;
-export const PAYLOAD_SIZE_MAX = 16777215;  // limit to 3 bytes size (extra byte is reserved)
+export const PAYLOAD_SIZE_MAX = 16777215;  // limited to 3 byte max value
 
 export const ADDIONTAL_DATA_MAX_BYTES = FLAGS_BYTES + ALG_BYTES + IV_MAX_BYTES + IC_BYTES + SLT_BYTES + LPP_BYTES + HINT_LEN_BYTES + ENCRYPTED_HINT_MAX_BYTES;
 export const CLEAR_DATA_MAX_BYTES = PAYLOAD_SIZE_MAX - ADDIONTAL_DATA_MAX_BYTES;
@@ -76,7 +76,7 @@ export const HINT_MAX_LEN = Math.trunc(ENCRYPTED_HINT_MAX_BYTES / 2 - AUTH_TAG_M
 
 export type CipherAlgs = "AES-GCM" | "X20-PLY" | "AEGIS-256";
 
-export const AlgInfo: Record<CipherAlgs, { id: number; description: string; iv_bytes: number }> = {
+export const AlgInfo: Readonly<Record<CipherAlgs, { id: number; description: string; iv_bytes: number }>> = {
    'AES-GCM': { id: 1, description: 'AES 256 GCM', iv_bytes: 12 },
    'X20-PLY': { id: 2, description: 'XChaCha20 Poly1305', iv_bytes: 24 },
    'AEGIS-256': { id: 3, description: 'AEGIS 256', iv_bytes: 32 },

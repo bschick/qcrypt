@@ -24,7 +24,7 @@ import * as cc from './cipher.consts';
 import {
    BYOBStreamReader,
    streamDecipher, latestEncipher,
-   EncipherV67,
+   EncipherV7,
    Ciphers
 } from '../index';
 import type { CipherDataBlock } from '../index';
@@ -67,7 +67,7 @@ describe("Encryption and decryption", function () {
    });
 
    async function signAndRepack(
-      encipher: EncipherV67,
+      encipher: EncipherV7,
       block: CipherDataBlock,
       keyProvider: PWDKeyProvider
    ): Promise<Uint8Array> {
@@ -133,7 +133,7 @@ describe("Encryption and decryption", function () {
          });
 
          const reader = new BYOBStreamReader(clearStream);
-         const encipher = new EncipherV67(keyProvider, reader);
+         const encipher = new EncipherV7(keyProvider, reader);
          const cipherBlock = await encipher.encryptBlock0();
 
          // Create fresh key providers with same salt. Original gets purged after encrypt
@@ -227,6 +227,55 @@ describe("Encryption and decryption", function () {
 
          const decrypted = await decipher.decryptBlock0();
          await expect(areEqual(decrypted, clearData)).resolves.toEqual(true);
+      }
+   });
+
+
+   it("concurrent getCipherDataInfo and decryptBlock0 share one decode", async function () {
+
+      // This tests _decodeBlock0 serialization by calling getCipherDataInfo() and
+      // decryptBlock0() without awaiting between calls.
+      for (const alg of Ciphers.algs()) {
+
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
+         const pwd = 'a good pwd';
+         const hint = 'not really';
+         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+
+         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream,
+            async () => [pwd, hint],
+         );
+         const block0 = await latest.encryptBlock0();
+
+         // Happy path: kick off both without awaiting first.
+         const [cipherStream] = streamFromCipherBlock([block0]);
+         const decipher = await streamDecipher(userCred, cipherStream,
+            async () => [pwd, undefined],
+         );
+
+         const cdInfoPromise = decipher.getCipherDataInfo();
+         const decryptPromise = decipher.decryptBlock0();
+
+         const cdInfo = await cdInfoPromise;
+         expect(cdInfo.alg).toEqual(alg);
+         expect(cdInfo.hint).toEqual(hint);
+         expect(cdInfo.ver).toEqual(cc.CURRENT_VERSION);
+
+         const decrypted = await decryptPromise;
+         await expect(areEqual(decrypted, clearData)).resolves.toEqual(true);
+
+         // Failure-propagation path: tamper userCred so MAC fails. Both
+         // concurrent callers should see the same exception
+         const [tamperedStream] = streamFromCipherBlock([block0]);
+         const wrongUserCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const badDecipher = await streamDecipher(wrongUserCred, tamperedStream,
+            async () => [pwd, undefined],
+         );
+
+         const badCdInfoPromise = badDecipher.getCipherDataInfo();
+         const badDecryptPromise = badDecipher.decryptBlock0();
+         await expect(badCdInfoPromise).rejects.toThrow(/MAC/);
+         await expect(badDecryptPromise).rejects.toThrow(/MAC/);
       }
    });
 
@@ -389,6 +438,8 @@ describe("Encryption and decryption", function () {
       await expect(decipher.decryptBlock0()).resolves.toEqual(clearData);
       await expect(decipher.decryptBlockN()).resolves.toEqual(new Uint8Array(0));
    });
+
+   // TODO: make these test multi-ALG. For better coverage.
 
    it("correct cipherdata info and decryption, v7", async function () {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
@@ -872,7 +923,7 @@ describe("Custom AD encryption and decryption", function () {
          const pwd = 'a not good pwd';
          const hint = 'sorta';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const customAd = crypto.getRandomValues(new Uint8Array(123));
+         const customAd = crypto.getRandomValues(new Uint8Array(223));
 
          const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);

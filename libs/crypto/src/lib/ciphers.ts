@@ -27,7 +27,7 @@ import {
    Ciphers,
    Encipher,
    Decipher,
-   EncipherV67,
+   EncipherV7,
    DecipherV67,
    CipherState,
    CipherDataInfo,
@@ -78,7 +78,7 @@ export function latestEncipher(
    });
 
    const reader = new BYOBStreamReader(clearStream);
-   return new EncipherV67(keyProvider, reader);
+   return new EncipherV7(keyProvider, reader);
 }
 
 

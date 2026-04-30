@@ -55,7 +55,7 @@ export {
    Ciphers,
    Encipher,
    Decipher,
-   EncipherV67,
+   EncipherV7,
    DecipherV67,
    CipherState,
    Extractor,

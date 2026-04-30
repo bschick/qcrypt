@@ -70,18 +70,9 @@ export class DecipherV1 extends Decipher {
    }
 
    // For V1, this should be the entire CipherData array
-   override async _decodeBlock0(): Promise<void> {
+   protected override async _decodeBlock0Impl(): Promise<void> {
 
       try {
-         if (![CipherState.Initialized, CipherState.Block0Decoded].includes(this._state)) {
-            throw new Error(`Decipher invalid state ${this._state}`);
-         }
-
-         // May be called multiple times calling getCipherDataInfo or others.
-         if (this._state == CipherState.Block0Decoded) {
-            return;
-         }
-
          // This isn't very efficient, but it simplifies object creation and V4 logic
          // (which are more important)
          let [payload] = await this._reader.readFill(new ArrayBuffer(cc.PAYLOAD_SIZE_MAX));
@@ -333,21 +324,11 @@ export class DecipherV4 extends Decipher {
       return false;
    }
 
-   // Importers of CipherService should not need this function directly,
-   // but it is public for unit testing. Does not allow encoding
-   // with zero length encrypted text since that is not needed
-   override async _decodeBlock0(): Promise<void> {
+   // Does not allow encoding with zero length encrypted text since that
+   // is not needed.
+   protected override async _decodeBlock0Impl(): Promise<void> {
 
       try {
-         if (![CipherState.Initialized, CipherState.Block0Decoded].includes(this._state)) {
-            throw new Error(`Decipher invalid state ${this._state}`);
-         }
-
-         if (this._state == CipherState.Block0Decoded) {
-            // If already decoded, return early since the state was saved
-            return;
-         }
-
          await this._decodeHeader(this._header);
          if (!this._blockData) {
             throw new Error('Data not initialized');
@@ -567,9 +548,9 @@ export class DecipherV5 extends DecipherV4 {
       super._purge();
    }
 
-   override async _decodeBlock0(): Promise<void> {
+   protected override async _decodeBlock0Impl(): Promise<void> {
 
-      await super._decodeBlock0();
+      await super._decodeBlock0Impl();
 
       // Eventually flags may be a bitfield
       if (this._state === CipherState.Finished && this._lastFlags !== 1) {
@@ -628,9 +609,9 @@ export class DecipherV5 extends DecipherV4 {
 
       const testMac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
       const validMac: boolean = sodium.memcmp(this._blockData.mac, testMac);
-      this._lastMac = testMac;
 
       if (validMac) {
+         this._lastMac = testMac;
          return true;
       }
 

@@ -144,17 +144,12 @@ export abstract class Ciphers {
    }
 
    static findAlg(algNum: number): cc.CipherAlgs {
-      if (algNum < 1 || algNum > Object.keys(cc.AlgInfo).length) {
-         throw new Error('Unsupported cipher mode: ' + algNum + '.');
-      }
-
-      let alg: cc.CipherAlgs;
-      for (alg in cc.AlgInfo) {
-         if (cc.AlgInfo[alg]['id'] == algNum) {
-            break;
+      for (const alg of Ciphers.algs()) {
+         if (cc.AlgInfo[alg].id === algNum) {
+            return alg;
          }
       }
-      return alg!;
+      throw new Error('Unsupported cipher mode: ' + algNum);
    }
 
    static algs(): cc.CipherAlgs[] {
@@ -324,9 +319,9 @@ export abstract class Encipher extends Ciphers {
    public abstract encryptBlockN(): Promise<CipherDataBlock>;
 };
 
-// Can handle version 6 and 7 because the code is very similar (exported for testing)
-export class EncipherV67 extends Encipher {
-   /* V6/V7 CipherData Layout. Tags are just notation, and are not actually in the
+// (exported for testing)
+export class EncipherV7 extends Encipher {
+   /* CipherData Layout. Tags are just notation, and are not actually in the
     * data stream. All encodings have one block0 instance followed by zero or
     * more blockN instances
 
@@ -358,10 +353,10 @@ export class EncipherV67 extends Encipher {
                MAC_BYTES
                VER_BYTES
                PAYLOAD_SIZE_BYTES
-               FLAGS_BYTES
             </Header>
             <Payload>
                <Additional Data>
+                  FLAGS_BYTES
                   ALG_BYTES
                   IV_BYTES (variable)
                </Additional Data>
@@ -399,7 +394,7 @@ export class EncipherV67 extends Encipher {
    }
 
    public override protocolVersion(): number {
-      return cc.CURRENT_VERSION;
+      return cc.VERSION7;
    }
 
    // Overall order of operations for encryption
@@ -447,17 +442,13 @@ export class EncipherV67 extends Encipher {
             const maxHintBytes = cc.ENCRYPTED_HINT_MAX_BYTES - cc.AUTH_TAG_MAX_BYTES;
             let hintBytes = bytesFromString(cdInfo.hint, maxHintBytes);
 
-            // It's possible that even a single character (e.g. emoji) might exceed maxHintBytes
-            // If so proceed without a hint.
-            if (hintBytes.byteLength > 0) {
-               const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(iv);
-               encryptedHint = await EncipherV67._doEncrypt(
-                  cdInfo.alg,
-                  hk,
-                  hIV,
-                  hintBytes
-               );
-            }
+            const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(iv);
+            encryptedHint = await EncipherV7._doEncrypt(
+               cdInfo.alg,
+               hk,
+               hIV,
+               hintBytes
+            );
          }
 
          const additionalData = Ciphers._encodeAdditionalData({
@@ -480,7 +471,7 @@ export class EncipherV67 extends Encipher {
          }
 
          // Only block0 uses the root cipher key. Simplifies backward compat and is no less secure
-         const encryptedData = await EncipherV67._doEncrypt(
+         const encryptedData = await EncipherV7._doEncrypt(
             cdInfo.alg,
             ek,
             iv,
@@ -550,7 +541,7 @@ export class EncipherV67 extends Encipher {
             term: done
          });
 
-         const encryptedData = await EncipherV67._doEncrypt(
+         const encryptedData = await EncipherV7._doEncrypt(
             cdInfo.alg,
             bk,
             iv,
@@ -588,8 +579,7 @@ export class EncipherV67 extends Encipher {
       key: Uint8Array,
       iv: Uint8Array,
       clear: Uint8Array,
-      additionalData?: Uint8Array,
-      customAd?: Uint8Array
+      additionalData?: Uint8Array
    ): Promise<Uint8Array> {
 
       const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
@@ -701,6 +691,7 @@ export abstract class Decipher extends Ciphers {
 
    protected _blockNum;
    protected _blockData?: BlockData;
+   private _decodeBlock0InFlight?: Promise<void>;
 
    protected constructor(
       keyProvider: KeyProvider,
@@ -788,8 +779,29 @@ export abstract class Decipher extends Ciphers {
       }
    }
 
-   //public only for testing
-   abstract _decodeBlock0(): Promise<void>;
+   // Public only for testing. Subclasses implement _decodeBlock0Impl;
+   // this wrapper enforces state preconditions and serializes concurrent
+   // callers.
+   public async _decodeBlock0(): Promise<void> {
+      if (this._decodeBlock0InFlight) {
+         return this._decodeBlock0InFlight;
+      }
+      if (this._state === CipherState.Block0Decoded) {
+         return;
+      }
+      if (this._state !== CipherState.Initialized) {
+         throw new Error(`Decipher invalid state ${this._state}`);
+      }
+
+      this._decodeBlock0InFlight = this._decodeBlock0Impl();
+      try {
+         await this._decodeBlock0InFlight;
+      } finally {
+         this._decodeBlock0InFlight = undefined;
+      }
+   }
+
+   protected abstract _decodeBlock0Impl(): Promise<void>;
    public abstract decryptBlockN(): Promise<Uint8Array>;
 
    public async getCipherDataInfo(): Promise<CipherDataInfo> {
@@ -923,6 +935,7 @@ export class DecipherV67 extends Decipher {
             </Header>
             <Payload>
                <Additional Data>
+                  FLAGS_BYTES
                   ALG_BYTES
                   IV_BYTES (variable)
                </Additional Data>
@@ -960,7 +973,7 @@ export class DecipherV67 extends Decipher {
    }
 
    public override protocolVersion(): number {
-      return cc.CURRENT_VERSION;
+      return cc.VERSION7;
    }
 
    private async _decodeHeader(header?: Uint8Array): Promise<boolean> {
@@ -999,21 +1012,10 @@ export class DecipherV67 extends Decipher {
       return false;
    }
 
-   // Importers of CipherService should not need this function directly,
-   // but it is public for unit testing. Does not allow encoding
-   // with zero length encrypted text since that is not needed
-   override async _decodeBlock0(): Promise<void> {
-
+   // Does not allow encoding with zero length encrypted text since that
+   // is not needed.
+   protected override async _decodeBlock0Impl(): Promise<void> {
       try {
-         if (![CipherState.Initialized, CipherState.Block0Decoded].includes(this._state)) {
-            throw new Error(`Decipher invalid state ${this._state}`);
-         }
-
-         if (this._state == CipherState.Block0Decoded) {
-            // If already decoded, return early since the state was saved
-            return;
-         }
-
          // This setups up _blockData
          await this._decodeHeader(this._header);
          if (!this._blockData) {
@@ -1228,9 +1230,9 @@ export class DecipherV67 extends Decipher {
 
       const testMac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
       const validMac: boolean = sodium.memcmp(this._blockData.mac, testMac);
-      this._lastMac = this._blockData.mac;
 
       if (validMac) {
+         this._lastMac = this._blockData.mac;
          return true;
       }
 
