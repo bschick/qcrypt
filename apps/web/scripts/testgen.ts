@@ -31,13 +31,21 @@ SOFTWARE. */
 //
 // Run with Node 24+ (native TypeScript stripping):
 //   node apps/web/scripts/testgen.ts <file> --set 1 --set 2
+//   cat secret.qq | node apps/web/scripts/testgen.ts --set 1
 
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { basename } from 'node:path';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { morphInMemory, parseFile } from './parser.ts';
-import type { Options, ParsedFile } from './parser.ts';
+import {
+   decodeBase64UrlInput,
+   decodesInput,
+   encodesOutput,
+   morphInMemory,
+   parseBuffer,
+   readAllStdin,
+} from './parser.ts';
+import type { B64UrlMode, Options, ParsedFile } from './parser.ts';
 
 // ---- Test set catalogue ----
 //
@@ -243,25 +251,27 @@ async function main(): Promise<number> {
    const argv = await yargs(hideBin(process.argv))
       .scriptName('testgen')
       .usage(
-         '$0 <files..>',
-         'Apply morph sequences to one or more Quick Crypt files and emit the bytes as test fixtures',
+         '$0 [files..]',
+         'Apply morph sequences to one or more Quick Crypt files and emit the bytes as test fixtures. ' +
+            'When no files are given, a single input is read from stdin.',
          (y) =>
-            y
-               .positional('files', {
-                  describe: 'Path(s) to source Quick Crypt encrypted file(s)',
-                  type: 'string',
-               })
-               .demandOption('files')
+            y.positional('files', {
+               describe:
+                  'Path(s) to source Quick Crypt encrypted file(s); omit to read from stdin',
+               type: 'string',
+            })
       )
       .option('set', {
          type: 'array',
          describe: 'Test set ID(s) to run (repeat for multiple, e.g. --set 1 --set 2)',
          demandOption: true,
       })
-      .option('format', {
-         choices: ['uint8', 'b64url'] as const,
-         default: 'uint8' as const,
-         describe: 'Output encoding for fixture bytes',
+      .option('b64url', {
+         choices: ['in', 'out', 'both'] as const,
+         describe:
+            'Treat input ("in") as base64url-encoded text instead of raw binary, and/or ' +
+            'emit fixture bytes as base64url ("out"). "both" applies to input and output. ' +
+            'When --b64url is unset or only "in", fixture bytes are emitted as a Uint8Array literal.',
       })
       .option('wrap', {
          type: 'boolean',
@@ -304,31 +314,44 @@ async function main(): Promise<number> {
    const files = (Array.isArray(rawFiles) ? rawFiles : rawFiles ? [rawFiles] : []).map(String);
    const requestedIds = (argv.set as readonly (string | number)[]).map((s) => Number(s));
    const requested = requestedIds.map((id) => findTestSet(id)!);
-   const format = argv.format as OutputFormat;
    const wrap = argv.wrap as boolean;
+   const b64url = (argv['b64url'] as B64UrlMode | undefined) ?? null;
+   const format: OutputFormat = encodesOutput(b64url) ? 'b64url' : 'uint8';
 
    const opts: Options = {
       maxHex: 32, // unused by testgen but required by parser.Options
       maxBlocks: argv['max-blocks'] as number,
    };
 
+   const useStdin = files.length === 0;
+   const sources: string[] = useStdin ? ['<stdin>'] : files;
+
    let exitCode = 0;
-   for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+   for (let i = 0; i < sources.length; i++) {
+      const source = sources[i];
       if (i > 0) {
          console.log('\n');
       }
       try {
-         const stat = statSync(file);
-         if (!stat.isFile()) {
-            throw new Error('not a regular file');
+         let inputBytes: Buffer;
+         if (useStdin) {
+            inputBytes = readAllStdin();
+         } else {
+            const stat = statSync(source);
+            if (!stat.isFile()) {
+               throw new Error('not a regular file');
+            }
+            inputBytes = readFileSync(source);
          }
-         const parsed = parseFile(file, opts);
+         if (decodesInput(b64url)) {
+            inputBytes = decodeBase64UrlInput(inputBytes);
+         }
+         const parsed = parseBuffer(inputBytes, source, opts);
          const fatal = parsed.errors.filter((e) => e.fatal);
          if (fatal.length > 0) {
-            console.log(renderFileHeader(parsed, i + 1, files.length));
+            console.log(renderFileHeader(parsed, i + 1, sources.length));
             console.error(
-               `${basename(file)}: input has ${fatal.length} fatal parse error${fatal.length === 1 ? '' : 's'}; cannot generate fixtures.`
+               `${useStdin ? source : basename(source)}: input has ${fatal.length} fatal parse error${fatal.length === 1 ? '' : 's'}; cannot generate fixtures.`
             );
             for (const e of fatal) {
                console.error(`  ${e.where}: ${e.message}`);
@@ -337,7 +360,7 @@ async function main(): Promise<number> {
             continue;
          }
 
-         console.log(renderFileHeader(parsed, i + 1, files.length));
+         console.log(renderFileHeader(parsed, i + 1, sources.length));
          console.log(renderSummary(parsed, requested));
          for (const set of requested) {
             console.log(renderTestSet(set, parsed, format, wrap));
@@ -345,7 +368,7 @@ async function main(): Promise<number> {
          console.log();
       } catch (err) {
          const msg = err instanceof Error ? err.message : String(err);
-         console.error(`${basename(file)}: ${msg}`);
+         console.error(`${useStdin ? source : basename(source)}: ${msg}`);
          exitCode = 1;
       }
    }

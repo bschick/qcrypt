@@ -104,6 +104,17 @@ export function streamFromStr(str: string): [
    const blob = new Blob([data], { type: 'application/octet-stream' });
    return [blob.stream(), data];
 }
+
+export function streamFromBase64Url(b64Url: string): [
+   ReadableStream<Uint8Array>,
+   Uint8Array
+] {
+   const data = base64ToBytes(b64Url);
+   const blob = new Blob([data], { type: 'application/octet-stream' });
+   return [blob.stream(), data];
+}
+
+
 function randomBlob(byteLength: number): Blob {
    // Create on max-size array and repeate it
    const randData = crypto.getRandomValues(new Uint8Array(512));

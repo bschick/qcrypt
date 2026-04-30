@@ -28,21 +28,27 @@ SOFTWARE. */
 // Run with Node 24+ (native TypeScript stripping):
 //   node apps/web/scripts/morpher.ts <file...>
 //   node apps/web/scripts/morpher.ts <file> --morph "b2^b7,b1x4"
+//   cat secret.qq | node apps/web/scripts/morpher.ts --morph "b0-"
 
-import { statSync, writeFileSync } from 'node:fs';
+import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import {
    applyOps,
    buildOutputBytes,
+   decodeBase64UrlInput,
+   decodesInput,
    DSL_FIELD_DOCS,
+   encodesOutput,
    findFieldByDslId,
-   parseFile,
+   parseBuffer,
    parseOpsString,
+   readAllStdin,
    resolveOpIndexes,
 } from './parser.ts';
 import type {
+   B64UrlMode,
    ErrorRecord,
    Field,
    Op,
@@ -332,12 +338,26 @@ function renderWrites(ops: readonly Op[], blocks: readonly ParsedBlock[]): strin
    return `${heading}\n${renderTable(['Block', 'Field', 'Offset', 'Bytes', 'Value', 'Note'], rows)}`;
 }
 
+// Turn a morph DSL string into a filename-safe suffix.
+function dslSuffix(dsl: string): string {
+   return dsl.replace(/\*/g, 'x').replace(/[,\s_]+/g, '_');
+}
+
 function deriveOutputPath(inPath: string, dsl: string): string {
    const ext = extname(inPath);
    const base = basename(inPath, ext);
    const dir = dirname(inPath);
-   const suffix = dsl.replace(/\*/g, 'x').replace(/[,\s_]+/g, '_');
-   return join(dir, `${base}_${suffix}${ext}`);
+   return join(dir, `${base}_${dslSuffix(dsl)}${ext}`);
+}
+
+// When the input came from stdin there's no source path to derive from.
+// Mirror the file-input naming (`<base>_<sanitized-DSL><ext>`) using a
+// fixed base of "morphed" in the current directory; the extension
+// reflects the output encoding so it's obvious whether the file is
+// binary or base64url text.
+function defaultStdinOutputPath(dsl: string, b64urlOut: boolean): string {
+   const ext = b64urlOut ? '.b64' : '.qq';
+   return `morphed_${dslSuffix(dsl)}${ext}`;
 }
 
 // ---- CLI ----
@@ -352,18 +372,18 @@ async function main(): Promise<number> {
       throw err;
    });
 
-   const argv = await yargs(hideBin(process.argv))
+   const parser = yargs(hideBin(process.argv))
       .scriptName('morpher')
       .usage(
-         '$0 <files..>',
-         'Inspect Quick Crypt files; optionally apply a morph and write a modified copy',
+         '$0 [files..]',
+         'Inspect Quick Crypt files; optionally apply a morph and write a modified copy. ' +
+            'When no files are given, a single input is read from stdin.',
          (y) =>
-            y
-               .positional('files', {
-                  describe: 'Path(s) to Quick Crypt encrypted file(s)',
-                  type: 'string',
-               })
-               .demandOption('files')
+            y.positional('files', {
+               describe:
+                  'Path(s) to Quick Crypt encrypted file(s); omit to read from stdin',
+               type: 'string',
+            })
       )
       .option('max-hex', {
          type: 'number',
@@ -382,6 +402,12 @@ async function main(): Promise<number> {
             'Colorize output. "auto" uses color when stdout is a TTY. ' +
             'NO_COLOR disables; FORCE_COLOR enables (e.g., when piping to `less -R`).',
       })
+      .option('b64url', {
+         choices: ['in', 'out', 'both'] as const,
+         describe:
+            'Treat input ("in"), morph output ("out"), or both ("both") as base64url-encoded ' +
+            'text instead of raw binary. Whitespace in base64url input is ignored.',
+      })
       .option('morph', {
          type: 'string',
          describe:
@@ -391,7 +417,9 @@ async function main(): Promise<number> {
             'Block indexes may be negative (Python-style: b-1 = last block). ' +
             'Separate ops with comma, space, or underscore. ' +
             'Example: --morph "b2^b-1,b-1-,b1x4,b0!plen[1]=1B03". ' +
-            'Output filename is the input base + _<sanitized-DSL> + extension.',
+            'When input came from a file, output is written next to it as ' +
+            '<base>_<sanitized-DSL><ext>. When input came from stdin, output is ' +
+            'written to ./morphed_<sanitized-DSL>.qq (or .b64 with --b64url out|both).',
       })
       .check((args) => {
          if (!Number.isInteger(args['max-hex']) || args['max-hex'] <= 0) {
@@ -418,8 +446,8 @@ async function main(): Promise<number> {
       .help()
       .alias('help', 'h')
       .version(false)
-      .wrap(Math.min(110, yargs().terminalWidth()))
-      .parseAsync();
+      .wrap(Math.min(110, yargs().terminalWidth()));
+   const argv = await parser.parseAsync();
 
    const opts: Options = {
       maxHex: argv['max-hex'] as number,
@@ -427,6 +455,8 @@ async function main(): Promise<number> {
    };
 
    useColor = resolveColor(argv.color as ColorMode);
+
+   const b64url = (argv['b64url'] as B64UrlMode | undefined) ?? null;
 
    const morphString = (argv.morph as string | undefined) ?? null;
    const ops = morphString !== null ? parseOpsString(morphString) : null;
@@ -443,18 +473,39 @@ async function main(): Promise<number> {
    const rawFiles = argv.files as string | string[] | undefined;
    const files = (Array.isArray(rawFiles) ? rawFiles : rawFiles ? [rawFiles] : []).map(String);
 
+   // No positional files = read a single input from stdin. The morph
+   // result (when --morph is set) is still written to a file in the
+   // current directory rather than stdout — see defaultStdinOutputPath.
+   const useStdin = files.length === 0;
+   // Bare invocation in a terminal — no files, nothing piped in. Show
+   // help instead of silently blocking on a stdin read.
+   if (useStdin && process.stdin.isTTY) {
+      parser.showHelp('log');
+      return 0;
+   }
+   const sources: string[] = useStdin ? ['<stdin>'] : files;
+
    let exitCode = 0;
-   for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+   for (let i = 0; i < sources.length; i++) {
+      const source = sources[i];
       if (i > 0) {
          console.log();
       }
       try {
-         const stat = statSync(file);
-         if (!stat.isFile()) {
-            throw new Error('Not a regular file');
+         let inputBytes: Buffer;
+         if (useStdin) {
+            inputBytes = readAllStdin();
+         } else {
+            const stat = statSync(source);
+            if (!stat.isFile()) {
+               throw new Error('Not a regular file');
+            }
+            inputBytes = readFileSync(source);
          }
-         const parsed = parseFile(file, opts);
+         if (decodesInput(b64url)) {
+            inputBytes = decodeBase64UrlInput(inputBytes);
+         }
+         const parsed = parseBuffer(inputBytes, source, opts);
 
          if (ops !== null && morphString !== null) {
             // Morph mode: summary + moves + write file. Per spec, do NOT
@@ -465,7 +516,7 @@ async function main(): Promise<number> {
             if (fatal.length > 0) {
                const lines = fatal.map((e) => `  ${e.where}: ${e.message}`);
                console.error(
-                  `\n${paint('Aborting --morph:', ANSI.red)} input file has ${fatal.length} fatal parse error${
+                  `\n${paint('Aborting --morph:', ANSI.red)} input has ${fatal.length} fatal parse error${
                      fatal.length === 1 ? '' : 's'
                   }; cannot reliably modify.\n${lines.join('\n')}`
                );
@@ -489,7 +540,7 @@ async function main(): Promise<number> {
             // (writing a byte to its own current value).
             if (outBytes.equals(parsed.buffer)) {
                console.log(
-                  `\n${paint('No-op:', ANSI.yellow)} operations net to zero changes; input file unchanged. Not writing output.`
+                  `\n${paint('No-op:', ANSI.yellow)} operations net to zero changes; input unchanged. Not writing output.`
                );
                continue;
             }
@@ -503,9 +554,18 @@ async function main(): Promise<number> {
                console.log(writesTable);
             }
 
-            const outPath = deriveOutputPath(file, morphString);
-            writeFileSync(outPath, outBytes);
-            console.log(`\n${paint('Wrote', ANSI.green)} ${outPath} (${outBytes.length} bytes)`);
+            const outPath = useStdin
+               ? defaultStdinOutputPath(morphString, encodesOutput(b64url))
+               : deriveOutputPath(source, morphString);
+            const fileBytes = encodesOutput(b64url)
+               ? Buffer.from(`${outBytes.toString('base64url')}\n`, 'utf8')
+               : outBytes;
+            writeFileSync(outPath, fileBytes);
+            console.log(
+               `\n${paint('Wrote', ANSI.green)} ${outPath} (${fileBytes.length} byte${fileBytes.length === 1 ? '' : 's'}` +
+                  (encodesOutput(b64url) ? ', base64url' : '') +
+                  ')'
+            );
          } else {
             console.log(renderFile(parsed));
             if (parsed.errors.length > 0) {
@@ -514,7 +574,7 @@ async function main(): Promise<number> {
          }
       } catch (err) {
          const msg = err instanceof Error ? err.message : String(err);
-         console.error(`${basename(file)}: ${msg}`);
+         console.error(`${useStdin ? source : basename(source)}: ${msg}`);
          exitCode = 1;
       }
    }

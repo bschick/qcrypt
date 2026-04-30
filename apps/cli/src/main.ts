@@ -22,6 +22,8 @@ interface IO {
    binaryIn: boolean;
    pipedOut: NodeJS.WritableStream;
    binaryOut: boolean;
+   b64urlIn: boolean;
+   b64urlOut: boolean;
 }
 
 // Returns a disposable Writable that delegates to io.ttyOut.
@@ -135,7 +137,13 @@ async function getCipherStream(
    silent?: boolean
 ): Promise<ReadableStream<Uint8Array>> {
    let stream;
-   if (io.pipedIn && io.binaryIn) {
+   if (io.pipedIn && io.b64urlIn) {
+      const text = await readStreamAll(io.pipedIn, true);
+      if (!text) {
+         throw new Error('Cipher text is empty (use positional arg, --infile, or stdin)');
+      }
+      stream = streamFromBytes(base64ToBytes(text.trim()));
+   } else if (io.pipedIn && io.binaryIn) {
       stream = io.pipedIn;
    } else if (io.pipedIn) {
       const text = await readStreamAll(io.pipedIn, true);
@@ -147,13 +155,15 @@ async function getCipherStream(
       throw new ParamError('Cipher text is required in silent mode (use positional arg, --infile, or stdin)');
    } else {
       const text = await input(
-         { message: 'Cipher Armor:', required: true },
+         { message: io.b64urlIn ? 'Cipher (b64url):' : 'Cipher Armor:', required: true },
          { input: io.ttyIn, output: iqOutput(io) }
       );
       if (!text) {
          throw new Error('Cipher text is empty (use positional arg, --infile, or stdin)');
       }
-      stream = streamFromBytes(parseCipherArmor(text));
+      stream = io.b64urlIn
+         ? streamFromBytes(base64ToBytes(text.trim()))
+         : streamFromBytes(parseCipherArmor(text));
    }
    return stream;
 }
@@ -163,19 +173,27 @@ async function getClearStream(
    silent?: boolean
 ): Promise<ReadableStream<Uint8Array>> {
    let stream;
-   if (io.pipedIn) {
+   if (io.pipedIn && io.b64urlIn) {
+      const text = await readStreamAll(io.pipedIn, true);
+      if (!text) {
+         throw new Error('Clear text is empty (use positional arg, --infile, or stdin)');
+      }
+      stream = streamFromBytes(base64ToBytes(text.trim()));
+   } else if (io.pipedIn) {
       stream = io.pipedIn;
    } else if (silent) {
       throw new ParamError('Clear text is required in silent mode (use positional arg, --infile, or stdin)');
    } else {
       const text = await input(
-         { message: 'Clear Text:', required: true },
+         { message: io.b64urlIn ? 'Clear (b64url):' : 'Clear Text:', required: true },
          { input: io.ttyIn, output: iqOutput(io) }
       );
       if (!text) {
          throw new Error('Clear text is empty (use positional arg, --infile, or stdin)');
       }
-      stream = streamFromBytes(new TextEncoder().encode(text));
+      stream = io.b64urlIn
+         ? streamFromBytes(base64ToBytes(text.trim()))
+         : streamFromBytes(new TextEncoder().encode(text));
    }
    return stream;
 }
@@ -220,6 +238,9 @@ async function getSensitiveInput(msg: string, io: IO): Promise<string> {
       { message: msg + ':', mask: '*', validate: (v) => !v ? `${msg} is required` : true },
       { input: io.ttyIn, output: iqOutput(io) }
    );
+   // inquirer's answered render leaves the cursor on the same line; ensure the
+   // next direct write to ttyOut/pipedOut starts on a fresh line.
+   io.ttyOut.write('\n');
    return val;
 }
 
@@ -344,7 +365,10 @@ async function encrypt(
          clearStream
       );
 
-      if (io.binaryOut) {
+      if (io.b64urlOut) {
+         const cipherData = await readStreamAll(cipherStream);
+         io.pipedOut.write(bytesToBase64(cipherData) + '\n');
+      } else if (io.binaryOut) {
          await writeAndCloseStream(cipherStream, io.pipedOut);
       } else {
          const cipherData = await readStreamAll(cipherStream);
@@ -410,7 +434,10 @@ async function decrypt(
          cipherStream
       );
 
-      if (io.binaryOut) {
+      if (io.b64urlOut) {
+         const clearData = await readStreamAll(clearStream);
+         io.pipedOut.write(bytesToBase64(clearData) + '\n');
+      } else if (io.binaryOut) {
          await writeAndCloseStream(clearStream, io.pipedOut);
       } else {
          const clearText = await readStreamAll(clearStream, true);
@@ -492,6 +519,7 @@ const args = yargs(hideBin(process.argv))
       'infile': { alias: 'f', desc: 'read input from file', type: 'string' },
       'outfile': { alias: 'o', desc: 'save output to file', type: 'string' },
       'pwds': { alias: 'p', desc: 'password(s)', type: 'string', array: true },
+      'b64url': { alias: 'b', desc: 'base64url-encode input, output, or both', type: 'string', choices: ['in', 'out', 'both'] },
       'silent': { alias: 's', desc: 'ask for only required input and show fewer messages', boolean: true },
       'debug': { alias: 'd', desc: 'show debug info', boolean: true },
       'nocolor': { desc: 'disable colored output', boolean: true }
@@ -509,6 +537,9 @@ const args = yargs(hideBin(process.argv))
       }
       if (args.hints && (args.hints.length > args.loops)) {
          throw new Error(`${args.hints.length} hints provided for ${args.loops} loops`);
+      }
+      if (args._[0] === 'info' && args.b64url && args.b64url !== 'in') {
+         throw new Error(`--b64url ${args.b64url} is not supported with the info command (only "in" is allowed)`);
       }
       return true;
    })
@@ -552,6 +583,9 @@ async function main() {
       outfileStream = fs.createWriteStream(args.outfile);
    }
 
+   const b64urlIn = args.b64url === 'in' || args.b64url === 'both';
+   const b64urlOut = args.b64url === 'out' || args.b64url === 'both';
+
    const io: IO = {
       ttyIn: reopenedIn,
       ttyOut: reopenedOut ?? process.stdout,
@@ -559,6 +593,8 @@ async function main() {
       binaryIn,
       pipedOut: outfileStream ?? process.stdout,
       binaryOut: !!outfileStream || !process.stdout.isTTY,
+      b64urlIn,
+      b64urlOut,
    };
 
    if (args._.length && args._[0] === 'info') {

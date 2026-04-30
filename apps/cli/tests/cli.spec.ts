@@ -388,5 +388,106 @@ describe('CLI App', () => {
             expect(output).toContain('Cipher and Mode');
             expect(output).toContain('Loops');
         });
+
+        it('should reject --b64url out on info command', () => {
+            const result = execCli(['info', '--cred', userCred, '--silent', '--infile', encryptedFilePath, '--b64url', 'out']);
+            expect(result.status).toBe(1);
+            expect(result.stderr).toContain('not supported with the info command');
+        });
+
+        it('should reject --b64url both on info command', () => {
+            const result = execCli(['info', '--cred', userCred, '--silent', '--infile', encryptedFilePath, '--b64url', 'both']);
+            expect(result.status).toBe(1);
+            expect(result.stderr).toContain('not supported with the info command');
+        });
+
+        it('should accept --b64url in on info command', () => {
+            const enc = execCli(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass', '--b64url', 'out'], clearText);
+            expect(enc.status).toBe(0);
+            const result = execCli(['info', '--cred', userCred, '--silent', '--b64url', 'in'], enc.stdout.trim());
+            expect(result.status).toBe(0);
+            expect(result.stdout).toContain('Cipher and Mode');
+        });
+    });
+
+    describe('--b64url flag', () => {
+        const b64urlRe = /^[A-Za-z0-9_-]+$/;
+
+        it('should reject invalid choice', () => {
+            const result = execCli(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass', '--b64url', 'bogus'], clearText);
+            expect(result.status).toBe(1);
+            expect(result.stderr).toMatch(/b64url/i);
+        });
+
+        it('should emit b64url cipher to stdout when --b64url out', () => {
+            const result = execCli(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass', '--b64url', 'out'], clearText);
+            expect(result.status).toBe(0);
+            const out = result.stdout.trim();
+            expect(out).toMatch(b64urlRe);
+            // not JSON armor and not raw binary chars
+            expect(out.startsWith('{')).toBe(false);
+        });
+
+        it('should write b64url cipher to --outfile when --b64url out', () => {
+            const tmpEnc = path.resolve(tmpDir, 'test-b64url-out.txt');
+            const enc = execCli(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass', '--b64url', 'out', '--outfile', tmpEnc], clearText);
+            expect(enc.status).toBe(0);
+            const written = fs.readFileSync(tmpEnc, 'utf-8').trim();
+            expect(written).toMatch(b64urlRe);
+            fs.unlinkSync(tmpEnc);
+        });
+
+        it('should accept b64url cipher input on dec when --b64url in', () => {
+            const enc = execCli(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass', '--b64url', 'out'], clearText);
+            expect(enc.status).toBe(0);
+            const cipherB64 = enc.stdout.trim();
+            const dec = execCli(['dec', '--cred', userCred, '--silent', '--pwds', 'pass', '--b64url', 'in'], cipherB64);
+            expect(dec.status).toBe(0);
+            expect(dec.stdout.trim()).toBe(clearText);
+        });
+
+        it('should roundtrip clear text through --b64url both', () => {
+            const clearB64 = Buffer.from(clearText, 'utf-8').toString('base64url');
+            const enc = execCli(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass', '--b64url', 'both'], clearB64);
+            expect(enc.status).toBe(0);
+            const cipherB64 = enc.stdout.trim();
+            expect(cipherB64).toMatch(b64urlRe);
+            const dec = execCli(['dec', '--cred', userCred, '--silent', '--pwds', 'pass', '--b64url', 'both'], cipherB64);
+            expect(dec.status).toBe(0);
+            // dec output is b64url-encoded clear bytes
+            expect(dec.stdout.trim()).toBe(clearB64);
+            expect(Buffer.from(dec.stdout.trim(), 'base64url').toString('utf-8')).toBe(clearText);
+        });
+
+        it('should roundtrip via files with --b64url', () => {
+            const rtEnc = path.resolve(tmpDir, 'test-b64url-rt.txt');
+            const rtDec = path.resolve(tmpDir, 'test-b64url-rt-dec.txt');
+            const enc = execCli(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass', '--b64url', 'out', '--outfile', rtEnc], clearText);
+            expect(enc.status).toBe(0);
+            expect(fs.readFileSync(rtEnc, 'utf-8').trim()).toMatch(b64urlRe);
+            const dec = execCli(['dec', '--cred', userCred, '--silent', '--pwds', 'pass', '--b64url', 'in', '--infile', rtEnc, '--outfile', rtDec]);
+            expect(dec.status).toBe(0);
+            expect(fs.readFileSync(rtDec, 'utf-8').trim()).toBe(clearText);
+            fs.unlinkSync(rtEnc);
+            fs.unlinkSync(rtDec);
+        });
+
+        it('should fall back to probe on dec when --b64url in is not specified', () => {
+            // existing JSON-armor path still works without --b64url
+            const enc = execCli(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'], clearText);
+            expect(enc.status).toBe(0);
+            // enc to TTY would emit JSON armor; here piped/non-TTY emits binary, so re-encode as JSON for the probe path
+            const binEnc = path.resolve(tmpDir, 'test-b64url-probe.bin');
+            const jsonEnc = path.resolve(tmpDir, 'test-b64url-probe.json');
+            const enc2 = execCli(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass', '--outfile', binEnc], clearText);
+            expect(enc2.status).toBe(0);
+            const cipherArmor = JSON.stringify({ ct: fs.readFileSync(binEnc).toString('base64url') });
+            fs.writeFileSync(jsonEnc, cipherArmor, 'utf-8');
+            const dec = execCli(['dec', '--cred', userCred, '--silent', '--pwds', 'pass', '--infile', jsonEnc]);
+            expect(dec.status).toBe(0);
+            expect(dec.stdout.trim()).toBe(clearText);
+            fs.unlinkSync(binEnc);
+            fs.unlinkSync(jsonEnc);
+        });
     });
 });

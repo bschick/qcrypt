@@ -906,14 +906,13 @@ function parseV1Document(
    };
 }
 
-export function parseFile(path: string, opts: Options): ParsedFile {
-   const buffer = readFileSync(path);
+export function parseBuffer(buffer: Buffer, label: string, opts: Options): ParsedFile {
    const errors: ErrorRecord[] = [];
 
    if (buffer.length < MAC_BYTES + VER_BYTES) {
       recordFatal(errors, 'file', `file too small (${buffer.length} bytes) to contain a header`);
       return {
-         path,
+         path: label,
          size: buffer.length,
          buffer,
          version: FALLBACK_VERSION,
@@ -934,7 +933,7 @@ export function parseFile(path: string, opts: Options): ParsedFile {
    if (version === 1) {
       const block = parseV1Document(reader, buffer.length, opts, errors);
       return {
-         path,
+         path: label,
          size: buffer.length,
          buffer,
          version,
@@ -965,7 +964,7 @@ export function parseFile(path: string, opts: Options): ParsedFile {
    }
 
    return {
-      path,
+      path: label,
       size: buffer.length,
       buffer,
       version,
@@ -973,6 +972,10 @@ export function parseFile(path: string, opts: Options): ParsedFile {
       blocks,
       errors,
    };
+}
+
+export function parseFile(path: string, opts: Options): ParsedFile {
+   return parseBuffer(readFileSync(path), path, opts);
 }
 
 // ---- Block-morph DSL ----
@@ -1299,4 +1302,30 @@ export function morphInMemory(
    const slots = applyOps(parsed.blocks, ops, workingBuffer);
    const bytes = buildOutputBytes(workingBuffer, parsed.blocks, slots);
    return { bytes, slots, ops };
+}
+
+// ---- CLI I/O helpers (shared by morpher.ts and testgen.ts) ----
+
+// Selects which side of an I/O boundary is base64url-encoded text rather
+// than raw binary. Both CLIs accept this as a --b64url flag value.
+export type B64UrlMode = 'in' | 'out' | 'both';
+
+export function decodesInput(mode: B64UrlMode | null): boolean {
+   return mode === 'in' || mode === 'both';
+}
+
+export function encodesOutput(mode: B64UrlMode | null): boolean {
+   return mode === 'out' || mode === 'both';
+}
+
+// Drains stdin synchronously into a Buffer. Works for both piped binary
+// input and redirected base64url text.
+export function readAllStdin(): Buffer {
+   return readFileSync(0);
+}
+
+// Buffer.from(..., 'base64url') ignores any whitespace, so wrapped
+// multi-line base64url text decodes the same as a single line.
+export function decodeBase64UrlInput(buffer: Buffer): Buffer {
+   return Buffer.from(buffer.toString('utf8'), 'base64url');
 }
