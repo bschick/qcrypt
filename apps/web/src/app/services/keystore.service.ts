@@ -54,7 +54,7 @@ export class KeystoreService {
       }
 
       // Caller should overwrite the returned key immediately afer use
-      return this._deriveKeyMaterial(masterKey, slot, credIdBytes);
+      return this._deriveKey(masterKey, slot, credIdBytes);
    }
 
    // Create and replace the key in `slot`
@@ -67,7 +67,7 @@ export class KeystoreService {
       const masterKey = await this._newMasterKey(slot);
 
       // Caller should overwrite the returned key immediately afer use
-      return this._deriveKeyMaterial(masterKey, slot, credIdBytes);
+      return this._deriveKey(masterKey, slot, credIdBytes);
    }
 
    async delete(slot: string): Promise<void> {
@@ -105,7 +105,7 @@ export class KeystoreService {
       });
    }
 
-   private async _deriveKeyMaterial(
+   private async _deriveKey(
       masterKey: CryptoKey,
       purpose: string,
       credId: Uint8Array<ArrayBuffer>
