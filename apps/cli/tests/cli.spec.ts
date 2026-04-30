@@ -78,6 +78,58 @@ describe('CLI App', () => {
             expect(result.stderr).toContain('2 pwds provided for 1 loops');
         });
 
+        it('should throw error if more hints than loops', () => {
+            const result = execCli(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--loops', '1', '--pwds', 'pass', '--hints', 'h1', 'h2'], clearText);
+            expect(result.status).toBe(1);
+            expect(result.stderr).toContain('2 hints provided for 1 loops');
+        });
+
+        it('should store hint provided via --hints in cipher info', () => {
+            const tmpEnc = path.resolve(tmpDir, 'test-hint.bin');
+            const enc = execCli(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--outfile', tmpEnc, '--pwds', 'pass', '--hints', 'my hint'], clearText);
+            expect(enc.status).toBe(0);
+            const info = execCli(['info', '--cred', userCred, '--silent', '--infile', tmpEnc]);
+            expect(info.status).toBe(0);
+            expect(info.stdout).toContain('Password Hint     : my hint');
+            fs.unlinkSync(tmpEnc);
+        });
+
+        it('should align hints by position with pwds across loops', () => {
+            const tmpEnc = path.resolve(tmpDir, 'test-multi-hint.bin');
+            // hints[0] pairs with pwds[0] (loop 1, innermost); hints[1] with pwds[1] (loop 2, outermost).
+            // info reveals only the outermost layer's hint.
+            const enc = execCli(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--loops', '2', '--outfile', tmpEnc, '--pwds', 'p1', 'p2', '--hints', 'inner hint', 'outer hint'], clearText);
+            expect(enc.status).toBe(0);
+            const info = execCli(['info', '--cred', userCred, '--silent', '--infile', tmpEnc]);
+            expect(info.status).toBe(0);
+            expect(info.stdout).toContain('Password Hint     : outer hint');
+            expect(info.stdout).not.toContain('inner hint');
+            fs.unlinkSync(tmpEnc);
+        });
+
+        it('should accept fewer hints than pwds', () => {
+            const tmpEnc = path.resolve(tmpDir, 'test-partial-hint.bin');
+            // hints only covers loop 1; loop 2 (outermost) gets no hint
+            const enc = execCli(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--loops', '2', '--outfile', tmpEnc, '--pwds', 'p1', 'p2', '--hints', 'inner only'], clearText);
+            expect(enc.status).toBe(0);
+            const info = execCli(['info', '--cred', userCred, '--silent', '--infile', tmpEnc]);
+            expect(info.status).toBe(0);
+            expect(info.stdout).not.toContain('inner only');
+            fs.unlinkSync(tmpEnc);
+        });
+
+        it('should roundtrip encrypt/decrypt with --hints', () => {
+            const rtEnc = path.resolve(tmpDir, 'test-rt-hint.bin');
+            const rtDec = path.resolve(tmpDir, 'test-rt-hint.txt');
+            const enc = execCli(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--outfile', rtEnc, '--pwds', 'pass', '--hints', 'roundtrip hint'], clearText);
+            expect(enc.status).toBe(0);
+            const dec = execCli(['dec', '--cred', userCred, '--silent', '--infile', rtEnc, '--outfile', rtDec, '--pwds', 'pass']);
+            expect(dec.status).toBe(0);
+            expect(fs.readFileSync(rtDec, 'utf-8')).toBe(clearText);
+            fs.unlinkSync(rtEnc);
+            fs.unlinkSync(rtDec);
+        });
+
         it('should reject invalid alg options', () => {
             const result = execCli(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--loops', '1', '--algs', 'FAKE-CIPHER', '--pwds', 'pass'], clearText);
             expect(result.status).toBe(1);

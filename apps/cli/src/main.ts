@@ -227,6 +227,7 @@ async function encrypt(
    args: {
       cred?: string,
       pwds?: string[],
+      hints?: string[],
       iters?: number,
       algs?: string,
       loops: number,
@@ -313,17 +314,29 @@ async function encrypt(
          async (cdinfo) => {
             const pos = cdinfo.lp - 1;
             const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} of ${cdinfo.lpEnd}` : '';
+            const argHint = (args.hints && pos < args.hints.length) ? args.hints[pos] : undefined;
             if (args.pwds && pos < args.pwds.length) {
                if (!args.silent) {
                   showAnswered(`Password${lpMsg}:`, '******', io);
+                  if (argHint) {
+                     showAnswered(`Password Hint${lpMsg}:`, argHint, io);
+                  }
                }
-               return [args.pwds[pos]!, undefined];
+               return [args.pwds[pos]!, argHint];
             } else {
                const pwd = await getSensitiveInput(`Password${lpMsg}`, io);
-               const hint = await input(
-                  { message: `Password Hint${lpMsg}:`, required: false },
-                  { input: io.ttyIn, output: iqOutput(io) }
-               );
+               let hint: string | undefined;
+               if (argHint) {
+                  if (!args.silent) {
+                     showAnswered(`Password Hint${lpMsg}:`, argHint, io);
+                  }
+                  hint = argHint;
+               } else {
+                  hint = await input(
+                     { message: `Password Hint${lpMsg}:`, required: false },
+                     { input: io.ttyIn, output: iqOutput(io) }
+                  );
+               }
                return [pwd, hint];
             }
          },
@@ -462,6 +475,7 @@ const args = yargs(hideBin(process.argv))
             .options({
                'iters': { alias: 'i', desc: `password hash iterations (min ${cc.ICOUNT_MIN})`, type: 'number' },
                'algs': { alias: 'a', desc: 'encryption cipher mode(s)', type: 'string', array: true, choices: Object.keys(cc.AlgInfo) },
+               'hints': { alias: 'H', desc: 'password hint(s), aligned by position with --pwds', type: 'string', array: true },
                'loops': { alias: 'l', desc: 'nested encryption loops (max 6)', type: 'number', default: 1 },
             })
             .coerce({
@@ -492,6 +506,9 @@ const args = yargs(hideBin(process.argv))
       }
       if (args.pwds && (args.pwds.length > args.loops)) {
          throw new Error(`${args.pwds.length} pwds provided for ${args.loops} loops`);
+      }
+      if (args.hints && (args.hints.length > args.loops)) {
+         throw new Error(`${args.hints.length} hints provided for ${args.loops} loops`);
       }
       return true;
    })
