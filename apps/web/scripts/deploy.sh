@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+#
+# AI-Assist: 100% Claude Code Generated
+#
 # deploy.sh — thin wrapper that invokes deploy.mjs with this project's defaults.
 #
 # Typical usage (from the repo root):

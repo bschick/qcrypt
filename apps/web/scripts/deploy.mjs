@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+//
+// AI-Assist: 100% Claude Code Generated
+//
 /**
  * deploy.mjs
  *
@@ -29,7 +32,10 @@
  * The fix is to track orphan status explicitly. This script keeps a small
  * manifest file in S3 that records:
  *
- *   - `current`  : files the most recent deploy uploaded
+ *   - `current`  : files the most recent deploy uploaded, with the date
+ *                  each was last actually transferred (preserved across
+ *                  deploys when `aws s3 sync` skipped re-uploading, so
+ *                  files like robots.txt show their true last-upload time)
  *   - `orphans`  : previously-current files now absent, with the date they
  *                  were orphaned
  *   - `expected` : manually-registered keys and/or glob patterns the script
@@ -164,7 +170,16 @@ function collectLocalFiles(root, recursive) {
 }
 
 function emptyManifest() {
-   return { version: 1, current: [], orphans: {}, expected: [] };
+   return { version: 1, current: {}, orphans: {}, expected: [] };
+}
+
+// JSON preserves insertion order; sorting keys keeps manifest diffs stable.
+function sortedDict(d) {
+   const out = {};
+   for (const k of Object.keys(d).sort()) {
+      out[k] = d[k];
+   }
+   return out;
 }
 
 function readManifest(argv) {
@@ -194,7 +209,7 @@ function readManifest(argv) {
    } else {
       try {
          manifest = JSON.parse(r.stdout);
-         manifest.current ??= [];
+         manifest.current ??= {};
          manifest.orphans ??= {};
          manifest.expected ??= [];
       } catch (e) {
@@ -224,8 +239,8 @@ function writeManifest(argv, m) {
 // command family doesn't produce structured JSON output; `s3api` maps
 // directly to the S3 API and returns the JSON we need to parse.
 //
-// Returns only top-level keys unless argv.subdirs is true, matching
-// the scope rule the deploy/prune commands use for uploading and removing.
+// Returned keys are filtered through getScope so the same scope rule
+// applies everywhere (deploy/prune/leaks/info/bootstrap).
 function listBucket(argv) {
    const r = aws(argv, ['s3api', 'list-objects-v2', '--bucket', argv.bucket, '--output', 'json'], { readOnly: true });
    if (!r.stdout) {
@@ -233,7 +248,7 @@ function listBucket(argv) {
    }
    const parsed = JSON.parse(r.stdout);
    const keys = (parsed.Contents ?? []).map((o) => o.Key);
-   return argv.subdirs ? keys : keys.filter((k) => !k.includes('/'));
+   return keys.filter(getScope(argv).inScope);
 }
 
 // Convert a shell-style glob to an anchored RegExp. `*` matches any run of
@@ -297,18 +312,41 @@ function invalidateCloudFront(argv) {
 // manifest's own key is in expected, so no special case is needed here.
 function trackedMatcher(manifest) {
    const literals = new Set([
-      ...manifest.current,
+      ...Object.keys(manifest.current),
       ...Object.keys(manifest.orphans),
    ]);
    const expectedMatch = matcherFor(manifest.expected);
    return (key) => literals.has(key) || expectedMatch(key);
 }
 
-// Single source of truth for the subdirs scope rule. Top-level only
-// unless --subdirs is set; used by manifest reconciliation and by
-// listBucket-derived filters.
+// Single source of truth for the active scope. Three modes:
+//   - default            top-level keys only
+//   - --subdirs          all keys (recursive)
+//   - --aaguids          only keys under the assets/aaguid/ prefix
+// Used by local file enumeration, bucket listing, manifest reconciliation,
+// and the deploy s3 sync source/destination.
+function getScope(argv) {
+   if (argv.aaguids) {
+      const prefix = 'assets/aaguid/';
+      return {
+         recursive: true,
+         inScope: (k) => k.startsWith(prefix),
+         label: 'aaguids',
+         localSubpath: 'assets/aaguid',
+         s3Prefix: prefix,
+      };
+   }
+   return {
+      recursive: !!argv.subdirs,
+      inScope: (k) => argv.subdirs || !k.includes('/'),
+      label: argv.subdirs ? 'all' : 'top-level',
+      localSubpath: '',
+      s3Prefix: '',
+   };
+}
+
 function inScopeFor(argv) {
-   return (k) => argv.subdirs || !k.includes('/');
+   return getScope(argv).inScope;
 }
 
 // Bucket keys not covered by any of the manifest's tracking sets.
@@ -365,11 +403,13 @@ function printUntracked(untracked, heading, limit) {
 // ---------------------------------------------------------------------------
 
 function runDeploy(argv) {
-   // 1. Enumerate the local build.
-   const files = collectLocalFiles(argv.buildDir, argv.subdirs);
+   const scope = getScope(argv);
+   // 1. Enumerate the local build, filtered to the active scope.
+   const files = collectLocalFiles(argv.buildDir, scope.recursive)
+      .filter((f) => scope.inScope(f.relKey));
    const newKeys = new Set(files.map((f) => f.relKey));
    if (newKeys.size === 0) {
-      console.error(`No files found under ${argv.buildDir}${argv.subdirs ? '' : ' (top-level only)'}`);
+      console.error(`No files found under ${argv.buildDir} (scope=${scope.label})`);
       process.exit(1);
    }
 
@@ -380,8 +420,14 @@ function runDeploy(argv) {
    // covering edge cases where build tooling regenerates files with identical
    // sizes but different content (e.g. Rolldown's chunk naming isn't always
    // pure content-hash).
+   //
+   // For a prefixed scope (--aaguids) the sync source/destination are scoped
+   // to the prefix so only matching files are walked and S3 keys land at the
+   // right spot.
+   const localSrc = scope.localSubpath ? join(argv.buildDir, scope.localSubpath) : argv.buildDir;
+   const s3Dest = `s3://${argv.bucket}/${scope.s3Prefix}`;
    const bulkArgs = [
-      's3', 'sync', argv.buildDir, `s3://${argv.bucket}/`,
+      's3', 'sync', localSrc, s3Dest,
       '--exact-timestamps',
       '--no-progress',
       '--exclude', 'index.html',
@@ -391,17 +437,31 @@ function runDeploy(argv) {
       '--exclude', 'desktop.ini', '--exclude', '*/desktop.ini',
       '--cache-control', argv.cacheControl,
    ];
-   if (!argv.subdirs) {
+   if (!scope.recursive) {
       bulkArgs.push('--exclude', '*/*');
    }
    const bulkResult = aws(argv, bulkArgs);
 
-   // `aws s3 sync --no-progress` prints one "upload: ..." line per transferred
-   // file (without the carriage-return progress overlay). Match anchored to
-   // start-of-line / \r / \n so we'd still count correctly if the flag were
-   // ever dropped or a CLI variant left the progress overlay intact.
-   const countUploads = (out) => (out ?? '').match(/(?:^|[\r\n])upload: /g)?.length ?? 0;
-   let totalUploads = countUploads(bulkResult.stdout);
+   // `aws s3 sync --no-progress` prints one line per transferred file:
+   //   upload: <local path> to s3://<bucket>/<key>
+   // Parse out the trailing s3 key so we can update each transferred key's
+   // uploadedAt timestamp (skipped files keep their prior timestamp). Splits
+   // on \r and \n so progress-overlay output (if --no-progress is ever
+   // dropped) still parses cleanly.
+   const parseUploadedKeys = (out) => {
+      const keys = new Set();
+      if (!out) {
+         return keys;
+      }
+      for (const line of out.split(/[\r\n]+/)) {
+         const m = line.match(/^upload: \S+ to s3:\/\/[^/]+\/(.+)$/);
+         if (m) {
+            keys.add(m[1]);
+         }
+      }
+      return keys;
+   };
+   const uploadedKeys = parseUploadedKeys(bulkResult.stdout);
 
    // index.html is sync'd separately so it lands AFTER its chunks. Using sync
    // (not cp) means it's skipped when unchanged.
@@ -414,8 +474,11 @@ function runDeploy(argv) {
          '--include', 'index.html',
          '--cache-control', argv.cacheControl,
       ]);
-      totalUploads += countUploads(indexResult.stdout);
+      for (const k of parseUploadedKeys(indexResult.stdout)) {
+         uploadedKeys.add(k);
+      }
    }
+   const totalUploads = uploadedKeys.size;
 
    const manifest = readManifest(argv);
    const manifestOrphans = new Map(Object.entries(manifest.orphans));
@@ -434,14 +497,29 @@ function runDeploy(argv) {
    //    entries (subdir files when --subdirs is off) are preserved
    //    verbatim so a top-level deploy doesn't mis-orphan subdir state a
    //    recursive bootstrap/deploy put there.
-   const manifestCurrent = new Set(manifest.current);
+   const prevCurrent = manifest.current;
    const inScope = inScopeFor(argv);
 
    const now = new Date().toISOString();
-   const newCurrent = new Set(newKeys);
-   for (const key of manifestCurrent) {
+   // Build new current dict: in-scope keys that aws s3 sync actually
+   // transferred this run get `now`; in-scope keys that sync skipped
+   // (size+mtime matched the bucket version) keep their prior timestamp
+   // — so "uploadedAt" reflects the last time the file was actually put
+   // on the wire, not the first time the key joined the current set.
+   // Out-of-scope entries are preserved verbatim.
+   const newCurrent = {};
+   for (const key of newKeys) {
+      if (inScope(key)) {
+         if (uploadedKeys.has(key)) {
+            newCurrent[key] = now;
+         } else {
+            newCurrent[key] = prevCurrent[key] ?? now;
+         }
+      }
+   }
+   for (const [key, ts] of Object.entries(prevCurrent)) {
       if (!inScope(key)) {
-         newCurrent.add(key);
+         newCurrent[key] = ts;
       }
    }
 
@@ -455,7 +533,7 @@ function runDeploy(argv) {
       // else: in-scope orphan that reappeared in the new build — dropped; it
       // ends up in newCurrent via newKeys with a reset clock.
    }
-   for (const key of manifestCurrent) {
+   for (const key of Object.keys(prevCurrent)) {
       if (inScope(key) && !newKeys.has(key) && !orphans.has(key)) {
          orphans.set(key, now);
       }
@@ -476,7 +554,7 @@ function runDeploy(argv) {
       deployDate: now,
       deployCount,
       deployComment: argv.comment,
-      current: [...newCurrent].sort(),
+      current: sortedDict(newCurrent),
       orphans: Object.fromEntries(orphans),
       expected: [...manifest.expected].sort(),
    });
@@ -484,7 +562,7 @@ function runDeploy(argv) {
    // 7. Leak detection: compare S3 listing against tracked sets.
    // listBucket respects --subdirs for scope.
    const untracked = untrackedKeys(argv, {
-      current: [...newCurrent],
+      current: newCurrent,
       orphans: Object.fromEntries(orphans),
       expected: manifest.expected,
    });
@@ -632,7 +710,15 @@ function runBootstrap(argv) {
    // key is only tracked once. Running `expect` before or after bootstrap
    // yields the same end state.
    const isExpected = matcherFor(manifest.expected);
-   const current = listBucket(argv).filter((k) => !isExpected(k)).sort();
+   const keys = listBucket(argv).filter((k) => !isExpected(k));
+   // We don't know when each key was uploaded; today's date is the best
+   // approximation. The deploy that follows bootstrap will preserve these
+   // timestamps for any keys it considers still current.
+   const now = new Date().toISOString();
+   const current = {};
+   for (const k of keys.sort()) {
+      current[k] = now;
+   }
    // `deployDate`, `deployCount`, and `deployComment` are deploy-only fields.
    // Preserve whatever was there (or leave unset if the bucket has never seen
    // a real deploy).
@@ -653,7 +739,7 @@ function runBootstrap(argv) {
    }
    writeManifest(argv, next);
    console.log(
-      `bootstrap: current=${current.length} expected-retained=${manifest.expected.length}` +
+      `bootstrap: current=${keys.length} expected-retained=${manifest.expected.length}` +
       `${argv.dryRun ? ' (DRY RUN)' : ''}`,
    );
 }
@@ -672,8 +758,27 @@ function runManifest(argv) {
 
 function runLeaks(argv) {
    const untracked = untrackedKeys(argv, readManifest(argv));
-   console.log(`leaks: untracked=${untracked.length}`);
+   console.log(`leaks: scope=${getScope(argv).label} untracked=${untracked.length}`);
    printUntracked(untracked, 'untracked in bucket:', argv.printLimit);
+}
+
+// ---------------------------------------------------------------------------
+// current (no deploy) — list manifest.current entries with timestamps
+// ---------------------------------------------------------------------------
+
+function runCurrent(argv) {
+   const manifest = readManifest(argv);
+   const scope = getScope(argv);
+   const entries = Object.entries(manifest.current)
+      .filter(([k]) => scope.inScope(k))
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+   console.log(`current: scope=${scope.label} count=${entries.length}`);
+   for (const [key, uploadedAt] of entries.slice(0, argv.printLimit)) {
+      console.log(`  ${uploadedAt}  ${key}`);
+   }
+   if (entries.length > argv.printLimit) {
+      console.log(`  ...and ${entries.length - argv.printLimit} more`);
+   }
 }
 
 // ---------------------------------------------------------------------------
@@ -688,13 +793,12 @@ function runLeaks(argv) {
 // count nor the actual matched-file count.
 function runInfo(argv) {
    const manifest = readManifest(argv);
-   const inScope = inScopeFor(argv);
-   const current = manifest.current.filter(inScope).length;
-   const orphaned = Object.keys(manifest.orphans).filter(inScope).length;
+   const scope = getScope(argv);
+   const current = Object.keys(manifest.current).filter(scope.inScope).length;
+   const orphaned = Object.keys(manifest.orphans).filter(scope.inScope).length;
    const expected = manifest.expected.length;
    const untracked = untrackedKeys(argv, manifest).length;
-   const scope = argv.subdirs ? 'all' : 'top-level';
-   console.log(`info: scope=${scope} current=${current} orphaned=${orphaned} expected=${expected} untracked=${untracked}`);
+   console.log(`info: scope=${scope.label} current=${current} orphaned=${orphaned} expected=${expected} untracked=${untracked}`);
    if (manifest.deployDate) {
       console.log(`  last-deploy: ${manifest.deployDate}`);
       console.log(`  comment: ${manifest.deployComment ?? ''}`);
@@ -719,11 +823,13 @@ function runExpect(argv) {
    // orphans so a key is tracked via only one mechanism. Matching covers the
    // glob case: `expect .well-known/*` also drops .well-known/foo etc.
    const matchesNewlyExpected = matcherFor([...added]);
-   const current = manifest.current.filter((k) => !matchesNewlyExpected(k));
+   const current = Object.fromEntries(
+      Object.entries(manifest.current).filter(([k]) => !matchesNewlyExpected(k)),
+   );
    const orphans = Object.fromEntries(
       Object.entries(manifest.orphans).filter(([k]) => !matchesNewlyExpected(k)),
    );
-   const currentRemoved = manifest.current.length - current.length;
+   const currentRemoved = Object.keys(manifest.current).length - Object.keys(current).length;
    const orphansRemoved = Object.keys(manifest.orphans).length - Object.keys(orphans).length;
 
    writeManifest(argv, {
@@ -766,7 +872,7 @@ function runPrune(argv) {
    const manifest = readManifest(argv);
    // readManifest always seeds `expected` with the manifest key, so check the
    // other buckets to decide whether this looks like a never-deployed bucket.
-   const hasData = manifest.current.length > 0
+   const hasData = Object.keys(manifest.current).length > 0
       || Object.keys(manifest.orphans).length > 0
       || manifest.expected.length > 1;
    if (!hasData) {
@@ -831,14 +937,27 @@ const addGlobalOpts = (y) => y
    .option('dry-run', { type: 'boolean', default: false, describe: 'Log actions without executing them' })
    .option('print-limit', { type: 'number', default: 20, describe: 'Max file keys to print in listings (deploy, leaks, prune)' });
 
+// Constrains the command to the assets/aaguid/ key prefix only — local
+// enumeration, bucket listing, and manifest reconciliation all skip
+// anything outside that subtree. Mutually exclusive with --subdirs.
+const addAaguidsOpt = (y) => y
+   .option('aaguids', { type: 'boolean', default: false, describe: 'Limit scope to the assets/aaguid/ subtree (mutually exclusive with --subdirs)' });
+
+function checkScopeFlags(argv) {
+   if (argv.aaguids && argv.subdirs) {
+      throw new Error('--aaguids and --subdirs are mutually exclusive');
+   }
+   return true;
+}
+
 // Used to detect typo'd commands that would otherwise be silently consumed by
 // the default `$0 <bucket>` positional.
 const COMMANDS = [
    'deploy', 'bdeploy', 'rollback', 'reset', 'bootstrap', 'manifest',
-   'leaks', 'info', 'expect', 'unexpect', 'prune',
+   'leaks', 'info', 'current', 'expect', 'unexpect', 'prune',
 ];
 
-const deployBuilder = (y) => addGlobalOpts(y)
+const deployBuilder = (y) => addAaguidsOpt(addGlobalOpts(y))
    .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
    .option('build-dir', { type: 'string', default: 'dist/web/browser', describe: 'Local directory to upload' })
    .option('subdirs', { type: 'boolean', default: false, describe: 'Upload files in subdirectories (default: top-level only)' })
@@ -847,6 +966,7 @@ const deployBuilder = (y) => addGlobalOpts(y)
    .option('cf-distribution', { type: 'string', describe: 'CloudFront distribution ID or ARN to invalidate (/*) after deploy. Omit to skip.' })
    .option('comment', { type: 'string', default: '', describe: 'Comment recorded in the manifest (only the latest is kept).' })
    .check((argv) => {
+      checkScopeFlags(argv);
       if (!Number.isFinite(argv.expirationDays) || argv.expirationDays < 0) {
          throw new Error('--expiration-days must be a non-negative integer');
       }
@@ -899,9 +1019,10 @@ yargs(hideBin(process.argv))
    .command(
       'bootstrap <bucket>',
       'Seed manifest.current from the existing bucket contents (no deploy). Resets orphans; leaves expected alone.',
-      (y) => addGlobalOpts(y)
+      (y) => addAaguidsOpt(addGlobalOpts(y))
          .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('subdirs', { type: 'boolean', default: false, describe: 'Include files in subdirectories (default: top-level only)' }),
+         .option('subdirs', { type: 'boolean', default: false, describe: 'Include files in subdirectories (default: top-level only)' })
+         .check(checkScopeFlags),
       runBootstrap,
    )
    .command(
@@ -914,18 +1035,29 @@ yargs(hideBin(process.argv))
    .command(
       'leaks <bucket>',
       'List S3 files not tracked by the manifest (no deploy).',
-      (y) => addGlobalOpts(y)
+      (y) => addAaguidsOpt(addGlobalOpts(y))
          .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('subdirs', { type: 'boolean', default: false, describe: 'Also consider files in subdirectories (default: top-level only)' }),
+         .option('subdirs', { type: 'boolean', default: false, describe: 'Also consider files in subdirectories (default: top-level only)' })
+         .check(checkScopeFlags),
       runLeaks,
    )
    .command(
       'info <bucket>',
       'Print files counts and last deploy information (no deploy).',
-      (y) => addGlobalOpts(y)
+      (y) => addAaguidsOpt(addGlobalOpts(y))
          .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('subdirs', { type: 'boolean', default: false, describe: 'Also count files in subdirectories (default: top-level only)' }),
+         .option('subdirs', { type: 'boolean', default: false, describe: 'Also count files in subdirectories (default: top-level only)' })
+         .check(checkScopeFlags),
       runInfo,
+   )
+   .command(
+      'current <bucket>',
+      "Print the manifest's current files with their uploaded-at timestamps (no deploy).",
+      (y) => addAaguidsOpt(addGlobalOpts(y))
+         .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
+         .option('subdirs', { type: 'boolean', default: false, describe: 'Also include files in subdirectories (default: top-level only)' })
+         .check(checkScopeFlags),
+      runCurrent,
    )
    .command(
       'expect <bucket> <patterns..>',
@@ -946,11 +1078,12 @@ yargs(hideBin(process.argv))
    .command(
       'prune <bucket>',
       'Remove S3 files not tracked by the manifest, plus orphans past the retention window (no deploy).',
-      (y) => addGlobalOpts(y)
+      (y) => addAaguidsOpt(addGlobalOpts(y))
          .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
          .option('subdirs', { type: 'boolean', default: false, describe: 'Also consider files in subdirectories (default: top-level only)' })
          .option('expiration-days', { type: 'number', default: 30, describe: 'Days an orphan persists before deletion' })
          .check((argv) => {
+            checkScopeFlags(argv);
             if (!Number.isFinite(argv.expirationDays) || argv.expirationDays < 0) {
                throw new Error('--expiration-days must be a non-negative integer');
             }

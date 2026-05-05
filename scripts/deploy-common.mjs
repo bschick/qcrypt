@@ -128,18 +128,49 @@ export function realPositionals(argv, valueFlags) {
    return out;
 }
 
-// If yargs' fail-message names an unknown argument and the first
-// real positional in argv isn't one of the registered commands, treat it
-// as a typo'd subcommand and print a "did you mean X?" suggestion (or
-// "Available: ..." for a far-off match), then process.exit(1).
-//
-// Returns silently if no typo is detected so the caller can continue on
-// to project-specific message handling.
+// Yargs lists both kebab and camelCase aliases of an unknown flag (default
+// camel-case-expansion). Dedupe by kebab form so the user sees what they
+// typed, not the internal alias too.
+function stripCamelCaseDuplicates(msg) {
+   const m = /^Unknown arguments?:\s*(.+)$/.exec(msg);
+   if (!m) {
+      return msg;
+   }
+   const args = m[1].split(/,\s*/);
+   const toKebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
+   const seen = new Set();
+   const unique = [];
+   for (const a of args) {
+      const k = toKebab(a);
+      if (!seen.has(k)) {
+         seen.add(k);
+         unique.push(a);
+      }
+   }
+   const label = unique.length === 1 ? 'argument' : 'arguments';
+   return `Unknown ${label}: ${unique.join(', ')}`;
+}
+
+// Handles yargs "Unknown argument" failures with two modes:
+//   - real command in positionals → print yargs' message and a hint to run
+//     `<command> --help` for valid options. The unknown is a flag/arg, not
+//     a typo'd subcommand.
+//   - no real command in positionals → treat the first stray positional as
+//     a typo'd subcommand: "did you mean X?" or "Available: ...".
+// Either branch process.exit(1)s; returns silently when no Unknown-argument
+// failure is in play so callers can continue on to other message handling.
 export function suggestCommandTypo(msg, commands, valueFlags) {
    if (!msg || !/Unknown argument/.test(msg)) {
       return;
    }
-   const candidate = realPositionals(hideBin(process.argv), valueFlags).find((p) => !commands.includes(p));
+   const positionals = realPositionals(hideBin(process.argv), valueFlags);
+   const matchedCommand = positionals.find((p) => commands.includes(p));
+   if (matchedCommand) {
+      console.error(stripCamelCaseDuplicates(msg));
+      console.error(`Run with \`${matchedCommand} --help\` to see valid options for the '${matchedCommand}' command.`);
+      process.exit(1);
+   }
+   const candidate = positionals.find((p) => !commands.includes(p));
    if (!candidate) {
       return;
    }

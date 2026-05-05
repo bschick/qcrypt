@@ -1,3 +1,5 @@
+// AI-Assist: 100% Claude Code Generated
+//
 /* MIT License
 
 Copyright (c) 2024-2026 Brad Schick
@@ -614,7 +616,9 @@ function parseBlock0Tail(
    const icOffset = reader.pos;
    const ic = reader.readU32LE();
    let icNote = '';
-   if (ic < ICOUNT_MIN || ic > ICOUNT_MAX) {
+   if (ic === 0) {
+      icNote = 'non-pdkf2 block';
+   } else if(ic < ICOUNT_MIN || ic > ICOUNT_MAX) {
       icNote = recordError(
          errors,
          where,
@@ -817,7 +821,7 @@ function parseV1Document(
       const icOffset = reader.pos;
       const ic = reader.readU32LE();
       let icNote = '';
-      if (ic < ICOUNT_MIN || ic > ICOUNT_MAX) {
+      if(ic < ICOUNT_MIN || ic > ICOUNT_MAX) {
          icNote = recordError(errors, where, `iterations ${ic} out of range [${ICOUNT_MIN}, ${ICOUNT_MAX}]`);
       }
       fields.push({

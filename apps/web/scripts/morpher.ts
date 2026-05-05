@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+
+// AI-Assist: 100% Claude Code Generated
+//
 /* MIT License
 
 Copyright (c) 2024-2026 Brad Schick
@@ -49,8 +52,6 @@ import {
 } from './parser.ts';
 import type {
    B64UrlMode,
-   ErrorRecord,
-   Field,
    Op,
    Options,
    ParsedBlock,
