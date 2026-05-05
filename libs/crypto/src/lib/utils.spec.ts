@@ -26,7 +26,7 @@ import {
    base64ToBytes,
    bytesToBase64,
    BYOBStreamReader,
-   bytesFromString,
+   bytesFromUTF8String,
    readStreamAll,
    cryptoReady,
 } from '../index';
@@ -232,17 +232,17 @@ describe("string byte truncation", function () {
 
       const src = 'this c its encrypted';
 
-      const underFit = bytesFromString(src, 50);
+      const underFit = bytesFromUTF8String(src, 50);
       const underFitStr = new TextDecoder().decode(underFit);
       expect(underFit.byteLength).toEqual(new TextEncoder().encode(src).byteLength);
       expect(underFitStr).toEqual(src);
 
-      const fit = bytesFromString(src, 20);
+      const fit = bytesFromUTF8String(src, 20);
       const fitStr = new TextDecoder().decode(fit);
       expect(fit.byteLength).toEqual(new TextEncoder().encode(src).byteLength);
       expect(fitStr).toEqual(src);
 
-      const noFit = bytesFromString(src, 18);
+      const noFit = bytesFromUTF8String(src, 18);
       const noFitStr = new TextDecoder().decode(noFit);
       expect(noFit.byteLength).toEqual(18);
       expect(src.slice(0, -2)).toEqual(noFitStr);
@@ -253,17 +253,17 @@ describe("string byte truncation", function () {
       // Oddly 🌧️ results in 7 bytes due to an extra "Zero Width Joiner ZWJ"
       const src = 'this 🌧️ its encrypted';
 
-      const underFit = bytesFromString(src, 50);
+      const underFit = bytesFromUTF8String(src, 50);
       const underFitStr = new TextDecoder().decode(underFit);
       expect(underFit.byteLength).toEqual(new TextEncoder().encode(src).byteLength);
       expect(underFitStr).toEqual(src);
 
-      const fit = bytesFromString(src, 26);
+      const fit = bytesFromUTF8String(src, 26);
       const fitStr = new TextDecoder().decode(fit);
       expect(fit.byteLength).toEqual(new TextEncoder().encode(src).byteLength);
       expect(fitStr).toEqual(src);
 
-      const noFit = bytesFromString(src, 24);
+      const noFit = bytesFromUTF8String(src, 24);
       const noFitStr = new TextDecoder().decode(noFit);
       expect(noFit.byteLength).toEqual(24);
       expect(src.slice(0, -2)).toEqual(noFitStr);
@@ -275,12 +275,12 @@ describe("string byte truncation", function () {
       // Oddly 🌧️ results in 7 bytes due to an extra "Zero Width Joiner ZWJ"
       const src = 'this 🌧️ its 🌧️🌧️🌧️🌧️';
 
-      const underFit = bytesFromString(src, 50);
+      const underFit = bytesFromUTF8String(src, 50);
       const underFitStr = new TextDecoder().decode(underFit);
       expect(underFit.byteLength).toEqual(new TextEncoder().encode(src).byteLength);
       expect(underFitStr).toEqual(src);
 
-      const fit = bytesFromString(src, 45);
+      const fit = bytesFromUTF8String(src, 45);
       const fitStr = new TextDecoder().decode(fit);
       expect(fit.byteLength).toEqual(new TextEncoder().encode(src).byteLength);
       expect(fitStr).toEqual(src);
@@ -290,7 +290,7 @@ describe("string byte truncation", function () {
       // of characters because a sequence can have "Zero Width Joiner ZWJ" chars.
       // Also string slice does not seem to work at the character level (or perhaps)
       // it is the text editor saving different values than expected
-      const noFit = bytesFromString(src, 41);
+      const noFit = bytesFromUTF8String(src, 41);
       const noFitStr = new TextDecoder().decode(noFit);
       expect(noFit.byteLength).toEqual(38);
       expect(src.slice(0, -3)).toEqual(noFitStr);

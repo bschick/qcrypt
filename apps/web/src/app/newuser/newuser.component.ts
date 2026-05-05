@@ -62,7 +62,7 @@ export class NewUserComponent implements OnInit, AfterViewInit {
       if (userId && userName) {
          this.currentUserName = userName;
       }
-      this.authenticated = this.authSvc.authenticated();
+      this.authenticated = this.authSvc.hasSession();
    }
 
    ngAfterViewInit(): void {
@@ -86,7 +86,7 @@ export class NewUserComponent implements OnInit, AfterViewInit {
       try {
          this.error = '';
          this.showProgress = true;
-         await this.authSvc.defaultLogin();
+         await this.authSvc.createDefaultSession();
          this.router.navigateByUrl('/');
       } catch (err) {
          console.error(err);

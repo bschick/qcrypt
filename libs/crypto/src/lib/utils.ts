@@ -88,6 +88,10 @@ export function bytesToNum(arr: Uint8Array): number {
 }
 
 
+export function clamp(n: number, min: number, max: number): number {
+   return Math.min(max, Math.max(min, n));
+}
+
 export function byteCount(num: number): number {
    if (num < 0) {
       throw new Error("Value must be an unsigned integer (non-negative).");
@@ -150,6 +154,11 @@ export class ProcessCancelled extends Error {
    }
 }
 
+export function streamFromBase64(b64: string): ReadableStream<Uint8Array> {
+   const data = base64ToBytes(b64);
+   const blob = new Blob([data], { type: 'application/octet-stream' });
+   return blob.stream();
+}
 
 export class BYOBStreamReader {
 
@@ -486,7 +495,7 @@ export function getRandom(length: number): Uint8Array<ArrayBuffer> {
 }
 
 // Helper function to get bytes from a string, truncated to a maximum byte length, ensuring valid UTF-8
-export function bytesFromString(str: string, maxByteLength: number): Uint8Array<ArrayBuffer> {
+export function bytesFromUTF8String(str: string, maxByteLength: number): Uint8Array<ArrayBuffer> {
    const encoder = new TextEncoder();
 
    // Attempt to encode the entire string first

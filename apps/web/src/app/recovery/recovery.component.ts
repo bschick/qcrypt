@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -50,10 +50,11 @@ export class RecoveryComponent implements OnInit {
    private recoveryUserId: string | null = null;
    private recoverUserCred: string | null = null;
 
-   constructor(
-      private authSvc: AuthenticatorService,
-      private router: Router,
-      private activeRoute: ActivatedRoute) {
+   private authSvc = inject(AuthenticatorService);
+   private router = inject(Router);
+   private activeRoute = inject(ActivatedRoute);
+
+   constructor() {
    }
 
    ngOnInit() {
@@ -64,8 +65,8 @@ export class RecoveryComponent implements OnInit {
 
       this.showProgress = true;
 
-      this.authSvc.ready.then( () => {
-         this.authenticated = this.authSvc.authenticated();
+      this.authSvc.ready.then( async () => {
+         this.authenticated = this.authSvc.hasSession();
 
          if (this.authenticated && this.authSvc.hasRecoveryId()) {
              this.router.navigateByUrl('/recovery2');
@@ -78,7 +79,9 @@ export class RecoveryComponent implements OnInit {
                }
                this.validRecoveryLink = true;
                if (this.authenticated) {
-                  this.selfRecovery = this.recoverUserCred === bytesToBase64(this.authSvc.userCred);
+                  const userCred = await this.authSvc.getUserCred()
+                  this.selfRecovery = this.recoverUserCred === bytesToBase64(userCred);
+                  userCred.fill(0);
                }
             } catch (err) {
                console.error(err);
@@ -97,7 +100,7 @@ export class RecoveryComponent implements OnInit {
       try {
          this.error = '';
          this.showProgress = true;
-         await this.authSvc.defaultLogin();
+         await this.authSvc.createDefaultSession();
          this.router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
@@ -115,6 +118,8 @@ export class RecoveryComponent implements OnInit {
       try {
          this.showProgress = true;
          await this.authSvc.recover(this.recoveryUserId!, this.recoverUserCred!);
+         this.recoverUserCred = null;
+         this.recoveryUserId = null;
          this.router.navigateByUrl('/');
       } catch (err) {
          if (err instanceof Error && err.message.includes('instead')) {

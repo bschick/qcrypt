@@ -73,7 +73,7 @@ export async function postLoadAAGUIDs(
       }
 
       const results = await AAGUIDs.put(batch).go();
-      return { content: { message: 'success' } };
+      return { content: { message: `success: ${count} aaguids updated` } };
    } catch (err) {
       console.error(err);
       return { content: { message: 'failed' } };

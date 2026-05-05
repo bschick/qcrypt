@@ -73,10 +73,6 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    }
 
    ngOnInit(): void {
-      const userInfo = this.authSvc.userInfo();
-      this.passKeys = userInfo ? userInfo.authenticators : [];
-      this.userName = userInfo ? userInfo.userName : '';
-
       this.routeSub = this.router.events.subscribe((event) => {
          if (event instanceof NavigationStart) {
             this.done.emit(true);
@@ -158,7 +154,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
 
    async refresh(): Promise<void> {
       this.error = '';
-      if (this.authSvc.authenticated()) {
+      if (this.authSvc.hasSession()) {
          // This runs async handle updates in signal
          this.authSvc.refreshUserInfo().catch((err) => {
             console.error(err);

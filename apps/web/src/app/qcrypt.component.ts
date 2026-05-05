@@ -54,7 +54,7 @@ export class QCryptComponent implements OnInit, OnDestroy {
    }
 
    ngOnInit(): void {
-      this.showPKButton = this.authSvc.authenticated();
+      this.showPKButton = this.authSvc.hasSession();
       this.authSub = this.authSvc.on(
          [AuthEvent.Logout, AuthEvent.Login],
          this.onAuthEvent.bind(this)
@@ -72,7 +72,7 @@ export class QCryptComponent implements OnInit, OnDestroy {
    }
 
    toggleNav(nav: MatSidenav) {
-      if (this.authSvc.authenticated()) {
+      if (this.authSvc.hasSession()) {
          nav.toggle();
       } else {
          nav.close();

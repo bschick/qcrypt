@@ -31,6 +31,7 @@ import {
    DecipherV67,
    CipherState,
    CipherDataInfo,
+   ReadOpts,
 }  from "./ciphers-current"
 
 import {
@@ -38,8 +39,7 @@ import {
    DecipherV4,
    DecipherV5
 }  from "./deciphers-old"
-import { PWDKeyProvider, PWDProvider } from './keys';
-import { PWDKeyProviderOld } from './keys-old';
+import { KeyProvider, PWDProvider } from './keys';
 
 export {
    Ciphers,
@@ -50,45 +50,40 @@ export {
 
 export type {
    PWDProvider,
-   CipherDataInfo
+   CipherDataInfo,
+   ReadOpts
 };
 
-export function latestEncipher(
-   userCred: Uint8Array,
+export function getLatestEncipher(
+   clearStream: ReadableStream<Uint8Array>,
+   keyProvider: KeyProvider,
    alg: cc.CipherAlgs,
-   ic: number,
    lp: number,
    lpEnd: number,
-   clearStream: ReadableStream<Uint8Array>,
-   pwdProvider: PWDProvider,
-   customAd: Uint8Array<ArrayBuffer> | undefined = undefined
+   ic: number = 0,
+   readOpts?: ReadOpts
 ): Encipher {
-
-   // parameters are validated by PWDKeyProvider constructor and setCipherDataInfo
-   const keyProvider = new PWDKeyProvider(userCred, pwdProvider, customAd);
 
    const slt = getRandom(cc.SLT_BYTES);
    keyProvider.setCipherDataInfo({
       ver: cc.CURRENT_VERSION,
       alg,
-      ic,
       lp,
       lpEnd,
-      slt
+      slt,
+      ic
    });
 
    const reader = new BYOBStreamReader(clearStream);
-   return new EncipherV7(keyProvider, reader);
+   return new EncipherV7(keyProvider, reader, readOpts);
 }
 
 
 // Return appropriate version of Decipher. pwdProvider can be undefined when
 // only CipherDataInfo is needed
-export async function streamDecipher(
-   userCred: Uint8Array,
+export async function getStreamDecipher(
    cipherStream: ReadableStream<Uint8Array>,
-   pwdProvider: PWDProvider | undefined,
-   customAd: Uint8Array<ArrayBuffer> | undefined = undefined
+   keyProvider: KeyProvider
 ): Promise<Decipher> {
 
    let decipher: Decipher;
@@ -104,21 +99,18 @@ export async function streamDecipher(
    // This is rather ugly, but the original CiphersV1 encoding stupidly had the
    // version in the middle of the encoding. So detect old version by the first 2 bytes
    // after MAC being < 4 (since encoded started with ALG and v1 max ALG was 3 and beyond v1
-   // version is >=4). Fortunately ALG_BYTES and VER_BYTES are equal.
+   // version is >=4). WARNING: Breaks if ALG_BYTES or VER_BYTES sizes changes.
    const verOrAlg = bytesToNum(new Uint8Array(header.buffer, cc.MAC_BYTES, cc.VER_BYTES));
 
-
    if (verOrAlg == cc.VERSION6 || verOrAlg == cc.VERSION7) {
-      const keyProvider = new PWDKeyProvider(userCred, pwdProvider, customAd);
       decipher = new DecipherV67(keyProvider, reader, header);
    } else {
-      const keyProviderOld = new PWDKeyProviderOld(userCred, pwdProvider);
       if (verOrAlg == cc.VERSION5) {
-         decipher = new DecipherV5(keyProviderOld, reader, header);
+         decipher = new DecipherV5(keyProvider, reader, header);
       } else if (verOrAlg == cc.VERSION4) {
-         decipher = new DecipherV4(keyProviderOld, reader, header);
+         decipher = new DecipherV4(keyProvider, reader, header);
       } else if (verOrAlg < cc.V1_BELOW && verOrAlg > 0) {
-         decipher = new DecipherV1(keyProviderOld, reader, header);
+         decipher = new DecipherV1(keyProvider, reader, header);
       } else {
          throw new Error('Invalid version: ' + verOrAlg);
       }

@@ -203,6 +203,9 @@ export class CipherInfoDialog {
       if (!data) {
          this.error = 'The wrong passkey was selected or the cipher armor is invalid';
       } else {
+         if (!data.ic) {
+            throw new Error('Invalid iter count');
+         }
          this.ic = data.ic.toLocaleString();
          this.alg = Ciphers.algDescription(data.alg);
          this.slt = bytesToBase64(data.slt as Uint8Array);
@@ -252,7 +255,7 @@ export class SigninDialog {
             this.dialogRef.close('Navigate');
          } else {
             this.showProgress = true;
-            await this.authSvc.defaultLogin();
+            await this.authSvc.createDefaultSession();
             this.dialogRef.close('Login');
          }
       } catch (err) {

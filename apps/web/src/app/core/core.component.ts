@@ -31,7 +31,7 @@ import {
    SecurityContext,
    NgZone,
 } from '@angular/core';
-import { Ciphers, makeCipherArmor, parseCipherArmor } from '@qcrypt/crypto';
+import { Ciphers, makeCipherArmor, parseCipherArmor, PWDKeyProvider } from '@qcrypt/crypto';
 import { CommonModule } from '@angular/common';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -183,7 +183,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    ngAfterViewInit() {
-      if (this.authSvc.authenticated()) {
+      if (this.authSvc.hasSession()) {
          this.showTextFromParams();
          if (localStorage.getItem(this.authSvc.userId + "welcomed") != 'yup') {
             setTimeout(() => {
@@ -270,7 +270,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          // happens when another tab does forget or changes passkey
          if(!this.authSvc.validKnownUser()) {
             this.router.navigateByUrl('/welcome');
-         } else if(!this.authSvc.authenticated()) {
+         } else if(!this.authSvc.hasSession()) {
             this.signinDialogRef = this.dialog.open(SigninDialog, {
                backdropClass: 'signinBackdrop',
                closeOnNavigation: true
@@ -318,11 +318,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    clearPassword() {
       this.pwdCached = false;
       if (this.cachedPassword) {
-         crypto.getRandomValues(this.cachedPassword);
+         this.cachedPassword.fill(0);
          this.cachedPassword = undefined;
       }
       if (this.cachedHint) {
-         crypto.getRandomValues(this.cachedHint);
+         this.cachedHint.fill(0);
          this.cachedHint = undefined;
       }
       if (this.intervalId != 0) {
@@ -388,7 +388,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.clearText = '';
       this.clearLabel = 'Clear Text';
       this.clearInjected = false;
-      if (!this.welcomed && this.authSvc.authenticated()) {
+      if (!this.welcomed && this.authSvc.hasSession()) {
          this.bubbleTip1.show();
          this.bubbleTip2.hide();
       }
@@ -398,7 +398,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this.clearText) {
          this.clearInjected = false;
       }
-      if (!this.welcomed && this.authSvc.authenticated()) {
+      if (!this.welcomed && this.authSvc.hasSession()) {
          this.bubbleTip1.hide();
          this.bubbleTip2.show();
       }
@@ -419,6 +419,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       cdInfo: CipherDataInfo,
       encrypting: boolean
    ): Promise<[string, string | undefined]> {
+      if (cdInfo.ic === undefined) {
+         throw new Error('Missing CipherDataInfo iter count');
+      }
 
       let pwd: string;
       let hint: string | undefined;
@@ -528,7 +531,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          return;
       }
 
-      if (!this.authSvc.authenticated()) {
+      if (!this.authSvc.hasSession()) {
          this.showClearError('User not authenticated, try refreshing this page');
          return;
       }
@@ -598,7 +601,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          return;
       }
 
-      if (!this.authSvc.authenticated()) {
+      if (!this.authSvc.hasSession()) {
          this.showClearError('User not authenticated, try refreshing this page');
          return;
       }
@@ -703,12 +706,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          ic: this.options.icount
       };
 
-      return this.cipherSvc.encryptStream(
-         econtext,
-         (cdInfo, encrypting) => this.passwordProvider(cdInfo, encrypting),
-         this.authSvc.userCred,
-         clearStream
+      // PWDKeyProvider takes ownershp of userCred
+      const keyProvider = new PWDKeyProvider(
+         await this.authSvc.getUserCred(),
+         (cdInfo, encrypting) => this.passwordProvider(cdInfo, encrypting)
       );
+      return this.cipherSvc.encryptStream(clearStream, keyProvider, econtext);
    }
 
    async onDecrypt(): Promise<void> {
@@ -719,7 +722,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          return;
       }
 
-      if (!this.authSvc.authenticated()) {
+      if (!this.authSvc.hasSession()) {
          this.showClearError('User not authenticated, try refreshing this page');
          return;
       }
@@ -763,7 +766,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          return;
       }
 
-      if (!this.authSvc.authenticated()) {
+      if (!this.authSvc.hasSession()) {
          this.showClearError('User not authenticated, try refreshing this page');
          return;
       }
@@ -866,11 +869,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       cipherStream: ReadableStream<Uint8Array>
    ): Promise<ReadableStream<Uint8Array>> {
 
-      return await this.cipherSvc.decryptStream(
-         (cdInfo, encrypting) => this.passwordProvider(cdInfo, encrypting),
-         this.authSvc.userCred,
-         cipherStream
+      // PWDKeyProvider takes ownershp of userCred
+      const keyProvider = new PWDKeyProvider(
+         await this.authSvc.getUserCred(),
+         (cdInfo, encrypting) => this.passwordProvider(cdInfo, encrypting)
       );
+      return await this.cipherSvc.decryptStream(cipherStream, keyProvider);
    }
 
    showClearError(msg: string, hdr: string | null = null): void {
@@ -1065,7 +1069,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    async onCipherTextInfo(): Promise<void> {
       try {
-         if (!this.authSvc.authenticated()) {
+         if (!this.authSvc.hasSession()) {
             throw new Error('User not authenticated, try refreshing this page')
          }
 
@@ -1080,18 +1084,18 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    // note that we aren't checking plain text cipher armor for loops because
    // it was never used in the wild
    async getCipherDataInfo(): Promise<CipherDataInfo> {
-      if (!this.authSvc.authenticated()) {
-         throw new Error('User not authenticated, try refreshing this page')
+      if (!this.authSvc.hasSession()) {
+      throw new Error('User not authenticated, try refreshing this page')
       }
 
       const [cipherStream, size] = await this.getCipherStream();
       if (size < cc.HEADER_BYTES_6P + cc.PAYLOAD_SIZE_MIN) {
          throw new Error('Missing cipher armor');
       }
-      return await this.cipherSvc.getCipherStreamInfo(
-         this.authSvc.userCred,
-         cipherStream
-      );
+
+      // PWDKeyProvider takes ownershp of userCred
+      const keyProvider = new PWDKeyProvider(await this.authSvc.getUserCred());
+      return await this.cipherSvc.getCipherStreamInfo(cipherStream, keyProvider);
    }
 
    algDescription(alg: string): string {

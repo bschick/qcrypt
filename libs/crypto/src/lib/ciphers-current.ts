@@ -27,9 +27,10 @@ import {
    numToBytes,
    bytesToNum,
    BYOBStreamReader,
-   bytesFromString,
+   bytesFromUTF8String,
    getArrayBuffer,
    ensureArrayBuffer,
+   clamp,
 } from './utils';
 import { KeyProvider, PWDKeyProvider } from './keys';
 
@@ -46,13 +47,18 @@ export type CipherDataBlock = {
    readonly state: CipherState;
 };
 
+export type ReadOpts = {
+   startSize?: number;
+   maxSize?: number;
+};
+
 export type CipherDataInfo = {
    readonly ver: number;
    readonly alg: cc.CipherAlgs;
-   readonly ic: number;
    readonly lp: number;
    readonly lpEnd: number;
    readonly slt: Uint8Array<ArrayBuffer>;
+   readonly ic: number;
    hint?: string | undefined;
 };
 
@@ -90,23 +96,23 @@ export abstract class Ciphers {
       maxMillis: number
    ): Promise<[number, number, number]> {
 
-      const cdInfo: CipherDataInfo = {
+      const keyProvider = new PWDKeyProvider(
+         crypto.getRandomValues(new Uint8Array(32)),
+         ['AVeryBogusPwd', '']
+      );
+      keyProvider.setCipherDataInfo({
          ver: cc.CURRENT_VERSION,
          alg: 'AES-GCM',
          ic: testSize,
          lp: 1,
          lpEnd: 1,
          slt: crypto.getRandomValues(new Uint8Array(cc.SLT_BYTES))
-      };
-      const keyProvider = new PWDKeyProvider(
-         crypto.getRandomValues(new Uint8Array(32)),
-         ['AVeryBogusPwd', '']
-      );
-      keyProvider.setCipherDataInfo(cdInfo);
+      });
 
       const start = Date.now();
       await keyProvider.getCipherKey(true);
       const test_millis = Date.now() - start;
+      keyProvider.purge();
 
       const hashRate = testSize / test_millis;
 
@@ -143,13 +149,21 @@ export abstract class Ciphers {
       return algs.map(alg => this.validateAlg(alg));
    }
 
-   static findAlg(algNum: number): cc.CipherAlgs {
+   static algName(algId: number): cc.CipherAlgs {
       for (const alg of Ciphers.algs()) {
-         if (cc.AlgInfo[alg].id === algNum) {
+         if (cc.AlgInfo[alg].id === algId) {
             return alg;
          }
       }
-      throw new Error('Unsupported cipher mode: ' + algNum);
+      throw new Error('Unsupported cipher mode: ' + algId);
+   }
+
+   static algId(alg: cc.CipherAlgs): number {
+      return cc.AlgInfo[alg].id;
+   }
+
+   static algIVByteLength(alg: cc.CipherAlgs): number {
+      return cc.AlgInfo[alg].ivBytes;
    }
 
    static algs(): cc.CipherAlgs[] {
@@ -176,22 +190,22 @@ export abstract class Ciphers {
       }) {
 
       Ciphers.validateAlg(args.alg);
-      const ivBytes = Number(cc.AlgInfo[args.alg]['iv_bytes']);
+      const ivBytes = Number(Ciphers.algIVByteLength(args.alg));
       if (args.iv.byteLength != ivBytes) {
          throw new Error('Invalid iv size: ' + args.iv.byteLength);
       }
 
-      if (args.ic && (args.ic < cc.ICOUNT_MIN || args.ic > cc.ICOUNT_MAX)) {
-         throw new Error('Invalid ic: ' + args.ic);
-      }
-
-      if (args.slt) {
+      if (!args.slt) {
+         // If there is no salt, there should be no ic
+         if (args.ic !== undefined) {
+            throw new Error('Unexpected ic with slt');
+         }
+      } else {
          if (args.slt.byteLength != cc.SLT_BYTES) {
             throw new Error('Invalid slt len: ' + args.slt.byteLength);
          }
-         // If there is a salt, ic must also be present (and valid)
-         if (!args.ic) {
-            throw new Error('Missing ic');
+         if (args.ic === undefined || args.ic !== 0 && (args.ic < cc.ICOUNT_MIN || args.ic > cc.ICOUNT_MAX)) {
+            throw new Error('Invalid ic: ' + args.ic);
          }
       }
 
@@ -257,7 +271,7 @@ export abstract class Ciphers {
          packer.slt = args.slt;
       }
 
-      if (args.ic) {
+      if (args.ic !== undefined) {
          packer.ic = args.ic;
       }
 
@@ -284,15 +298,6 @@ export abstract class Encipher extends Ciphers {
    // readAvailable with READ_SIZE_MAX of 4x to be the fastest
    protected static readonly READ_SIZE_START = 1048576; // 1 MiB
    protected static readonly READ_SIZE_MAX = Encipher.READ_SIZE_START * 4;
-
-   // Used to create hardcoded cipherdata for some tests
-   //    NOTE: should find a better way to generate test data since
-   //    its too easy for forget to restore these values (resulting in inefficient
-   //    blocks)
-   // protected static readonly READ_SIZE_START = 1048576/1024/4;
-   // protected static readonly READ_SIZE_MAX = Encipher.READ_SIZE_START * 41;
-   // protected static readonly READ_SIZE_START = 20;
-   // protected static readonly READ_SIZE_MAX = Encipher.READ_SIZE_START * 16;
 
    protected constructor(
       keyProvider: KeyProvider,
@@ -369,25 +374,28 @@ export class EncipherV7 extends Encipher {
       </Document>
    */
 
-   private _blockNum;
-   private _readTarget;
+   private _blockNum: number;
+   private _readTarget: number;
+   private readonly _readSizeMax: number;
    private _lastMac?: Uint8Array;
 
    constructor(
       keyProvider: KeyProvider,
-      reader: BYOBStreamReader
+      reader: BYOBStreamReader,
+      readOpts?: ReadOpts
    ) {
       super(keyProvider, reader);
 
       // Assign in ctor to allow for monkey patching in tests
-      this._readTarget = Encipher.READ_SIZE_START;
+      this._readTarget = clamp(readOpts?.startSize ?? Encipher.READ_SIZE_START, 1, Encipher.READ_SIZE_MAX);
+      this._readSizeMax = clamp(readOpts?.maxSize ?? Encipher.READ_SIZE_MAX, 1, Encipher.READ_SIZE_MAX);
       this._blockNum = 1;
       this._lastMac = new Uint8Array([0]);
    }
 
    protected override _purge() {
       if (this._lastMac) {
-         crypto.getRandomValues(this._lastMac);
+         this._lastMac.fill(0);
          this._lastMac = undefined;
       }
       super._purge();
@@ -433,14 +441,15 @@ export class EncipherV7 extends Encipher {
             };
          }
 
-         const cdInfo = this._keyProvider.getCipherDataInfo();
-         const iv = getRandom(Number(cc.AlgInfo[cdInfo.alg]['iv_bytes']));
+         let cdInfo = this._keyProvider.getCipherDataInfo();
+         const iv = getRandom(Number(Ciphers.algIVByteLength(cdInfo.alg)));
          const ek = await this._keyProvider.getCipherKey(true);
+         cdInfo = this._keyProvider.getCipherDataInfo();
 
          let encryptedHint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
          if (cdInfo.hint) {
             const maxHintBytes = cc.ENCRYPTED_HINT_MAX_BYTES - cc.AUTH_TAG_MAX_BYTES;
-            let hintBytes = bytesFromString(cdInfo.hint, maxHintBytes);
+            let hintBytes = bytesFromUTF8String(cdInfo.hint, maxHintBytes);
 
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(iv);
             encryptedHint = await EncipherV7._doEncrypt(
@@ -512,7 +521,7 @@ export class EncipherV7 extends Encipher {
             throw new Error(`Encipher invalid state ${this._state}`);
          }
 
-         this._readTarget = Math.min(this._readTarget * 2, Encipher.READ_SIZE_MAX);
+         this._readTarget = Math.min(this._readTarget * 2, this._readSizeMax);
          let clearBuffer: Uint8Array;
          let done: boolean;
 
@@ -531,7 +540,7 @@ export class EncipherV7 extends Encipher {
          }
 
          const cdInfo = this._keyProvider.getCipherDataInfo();
-         const iv = getRandom(Number(cc.AlgInfo[cdInfo.alg]['iv_bytes']));
+         const iv = getRandom(Number(Ciphers.algIVByteLength(cdInfo.alg)));
          const bk = await this._keyProvider.getBlockCipherKey(this._blockNum);
          this._blockNum += 1;
 
@@ -582,7 +591,7 @@ export class EncipherV7 extends Encipher {
       additionalData?: Uint8Array
    ): Promise<Uint8Array> {
 
-      const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
+      const ivBytes = Number(Ciphers.algIVByteLength(alg));
       if (ivBytes != iv.byteLength) {
          throw new Error('incorrect iv length of: ' + iv.byteLength);
       }
@@ -780,8 +789,7 @@ export abstract class Decipher extends Ciphers {
    }
 
    // Public only for testing. Subclasses implement _decodeBlock0Impl;
-   // this wrapper enforces state preconditions and serializes concurrent
-   // callers.
+   // This wrapper exists to serialize concurrent callers.
    public async _decodeBlock0(): Promise<void> {
       if (this._decodeBlock0InFlight) {
          return this._decodeBlock0InFlight;
@@ -813,13 +821,9 @@ export abstract class Decipher extends Ciphers {
 
       const cdInfo = this._keyProvider.getCipherDataInfo();
       return {
+         ...cdInfo,
          ver: this._blockData.ver,
          alg: this._blockData.alg,
-         ic: cdInfo.ic,
-         slt: cdInfo.slt,
-         lp: cdInfo.lp,
-         lpEnd: cdInfo.lpEnd,
-         hint: cdInfo.hint
       };
    }
 
@@ -831,7 +835,7 @@ export abstract class Decipher extends Ciphers {
       additionalData?: Uint8Array,
    ): Promise<Uint8Array> {
 
-      const ivBytes = Number(cc.AlgInfo[alg]['iv_bytes']);
+      const ivBytes = Number(Ciphers.algIVByteLength(alg));
       if (ivBytes != iv.byteLength) {
          throw new Error('incorrect iv length of: ' + iv.byteLength);
       }
@@ -966,7 +970,7 @@ export class DecipherV67 extends Decipher {
 
    protected override _purge() {
       if (this._lastMac) {
-         crypto.getRandomValues(this._lastMac);
+         this._lastMac.fill(0);
          this._lastMac = undefined;
       }
       super._purge();
@@ -1061,6 +1065,7 @@ export class DecipherV67 extends Decipher {
             lpEnd: lpEnd,
             slt: slt
          };
+
          this._keyProvider.setCipherDataInfo(cdInfo);
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
@@ -1080,8 +1085,7 @@ export class DecipherV67 extends Decipher {
                hIV,
                encryptedHint
             );
-            cdInfo.hint = new TextDecoder().decode(hintBytes);
-            this._keyProvider.setCipherDataInfo(cdInfo);
+            this._keyProvider.setHint(new TextDecoder().decode(hintBytes));
          }
 
          this._state = CipherState.Block0Decoded;
@@ -1222,7 +1226,6 @@ export class DecipherV67 extends Decipher {
       const sodium = getSodium();
       const sk = await this._keyProvider.getSigningKey();
       const state = sodium.crypto_generichash_init(sk, cc.MAC_BYTES);
-
       sodium.crypto_generichash_update(state, headerPortion);
       sodium.crypto_generichash_update(state, this._blockData.additionalData);
       sodium.crypto_generichash_update(state, this._blockData.encryptedData);
@@ -1292,7 +1295,7 @@ export class Extractor<T extends ArrayBufferLike> {
 
    get alg(): cc.CipherAlgs {
       const algNum = bytesToNum(this.extract('alg', cc.ALG_BYTES));
-      this._alg = Ciphers.findAlg(algNum);
+      this._alg = Ciphers.algName(algNum);
       return this._alg;
    }
 
@@ -1300,7 +1303,7 @@ export class Extractor<T extends ArrayBufferLike> {
       if (!this._alg) {
          throw new Error('iv length unknown, get extractor.alg first');
       }
-      const ivBytes = Number(cc.AlgInfo[this._alg]['iv_bytes']);
+      const ivBytes = Ciphers.algIVByteLength(this._alg);
       return this.extract('iv', ivBytes);
    }
 
@@ -1310,7 +1313,7 @@ export class Extractor<T extends ArrayBufferLike> {
 
    get ic(): number {
       const ic = bytesToNum(this.extract('ic', cc.IC_BYTES));
-      if (ic < cc.ICOUNT_MIN || ic > cc.ICOUNT_MAX) {
+      if (ic !== 0 && (ic < cc.ICOUNT_MIN || ic > cc.ICOUNT_MAX)) {
          throw new Error('Invalid ic of: ' + ic);
       }
       return ic;
@@ -1438,9 +1441,8 @@ export class Packer {
 
    set alg(algName: cc.CipherAlgs) {
       Ciphers.validateAlg(algName);
-      const algInfo = cc.AlgInfo[algName];
-      this._ivBytes = Number(algInfo['iv_bytes']);
-      this.pack('alg', numToBytes(Number(algInfo['id']), cc.ALG_BYTES));
+      this._ivBytes = Ciphers.algIVByteLength(algName);
+      this.pack('alg', numToBytes(Ciphers.algId(algName), cc.ALG_BYTES));
    }
 
    set iv(iVect: Uint8Array) {
@@ -1461,7 +1463,7 @@ export class Packer {
    }
 
    set ic(iCount: number) {
-      if (iCount < cc.ICOUNT_MIN || iCount > cc.ICOUNT_MAX) {
+      if (iCount !==0 && (iCount < cc.ICOUNT_MIN || iCount > cc.ICOUNT_MAX)) {
          throw new Error('Invalid ic of: ' + iCount);
       }
       this.pack('ic', numToBytes(iCount, cc.IC_BYTES));

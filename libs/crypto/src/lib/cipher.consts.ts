@@ -40,7 +40,7 @@ export const MAC_BYTES = 32;
 export const KEY_BYTES = 32; // all keys are currently 32 bytes
 export const USERCRED_BYTES = 32;
 export const USERID_BYTES = 16;
-export const CREDID_MIN_BYTES = 16;
+export const PKID_MIN_BYTES = 16;
 export const PAYLOAD_SIZE_BYTES = 3;
 export const FLAGS_BYTES = 1;
 export const CUSTOM_AD_BYTES_MAX = 255;
@@ -76,8 +76,8 @@ export const HINT_MAX_LEN = Math.trunc(ENCRYPTED_HINT_MAX_BYTES / 2 - AUTH_TAG_M
 
 export type CipherAlgs = "AES-GCM" | "X20-PLY" | "AEGIS-256";
 
-export const AlgInfo: Readonly<Record<CipherAlgs, { id: number; description: string; iv_bytes: number }>> = {
-   'AES-GCM': { id: 1, description: 'AES 256 GCM', iv_bytes: 12 },
-   'X20-PLY': { id: 2, description: 'XChaCha20 Poly1305', iv_bytes: 24 },
-   'AEGIS-256': { id: 3, description: 'AEGIS 256', iv_bytes: 32 },
+export const AlgInfo: Readonly<Record<CipherAlgs, { id: number; description: string; ivBytes: number }>> = {
+   'AES-GCM': { id: 1, description: 'AES 256 GCM', ivBytes: 12 },
+   'X20-PLY': { id: 2, description: 'XChaCha20 Poly1305', ivBytes: 24 },
+   'AEGIS-256': { id: 3, description: 'AEGIS 256', ivBytes: 32 },
 };

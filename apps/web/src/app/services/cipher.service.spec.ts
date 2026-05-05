@@ -22,7 +22,15 @@ SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
 import * as cc from '@qcrypt/crypto/consts';
 import { CipherService } from './cipher.service';
-import { readStreamAll, base64ToBytes, getArrayBuffer, Encipher, Ciphers, EContext } from '@qcrypt/crypto';
+import {
+   readStreamAll,
+   base64ToBytes,
+   getArrayBuffer,
+   Encipher,
+   Ciphers,
+   EContext,
+   PWDKeyProvider
+} from '@qcrypt/crypto';
 
 
 describe('CipherService', () => {
@@ -139,27 +147,25 @@ describe("Stream encryption and decryption", function () {
             ic: cc.ICOUNT_MIN
          };
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
-            expect(cdinfo.alg).toEqual(alg);
-            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-            expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
-            expect(cdinfo.lp).toEqual(1);
-            expect(cdinfo.lpEnd).toEqual(1);
-            expect(cdinfo.hint).toBeFalsy();
-            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-            return [pwd, undefined];
-         }, userCred, clearStream);
+         const makeKP = () => {
+            const kp = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+               expect(cdinfo.alg).toEqual(alg);
+               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+               expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               expect(cdinfo.hint).toBeFalsy();
+               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+               return [pwd, undefined];
+            });
+            return kp;
+         };
 
-         const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
-            expect(cdinfo.alg).toEqual(alg);
-            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-            expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
-            expect(cdinfo.lp).toEqual(1);
-            expect(cdinfo.lpEnd).toEqual(1);
-            expect(cdinfo.hint).toBeFalsy();
-            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-            return [pwd, undefined];
-         }, userCred, cipherStream);
+         const encKeyProvider = makeKP();
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+         const decKeyProvider = makeKP();
+         const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
          const resString = await readStreamAll(decrypted, true);
          expect(resString).toEqual(srcString);
@@ -181,7 +187,7 @@ describe("Stream encryption and decryption", function () {
             ic: cc.ICOUNT_MIN
          };
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
@@ -190,9 +196,10 @@ describe("Stream encryption and decryption", function () {
             expect(cdinfo.hint).toBeFalsy();
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             return [pwd, hint];
-         }, userCred, clearStream);
+         });
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
-         const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
@@ -201,7 +208,8 @@ describe("Stream encryption and decryption", function () {
             expect(cdinfo.hint).toEqual(hint);
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             return [pwd, undefined];
-         }, userCred, cipherStream);
+         });
+         const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
          const resString = await readStreamAll(decrypted, true);
          expect(resString).toEqual(srcString);
@@ -224,7 +232,7 @@ describe("Stream encryption and decryption", function () {
 
          let expectedEncLp = 1;
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(expectedEncLp);
             expect(cdinfo.lpEnd).toEqual(maxLps);
             expect(cdinfo.alg).toEqual(alg);
@@ -233,11 +241,12 @@ describe("Stream encryption and decryption", function () {
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             expectedEncLp += 1;
             return [String(cdinfo.lp), String(cdinfo.lp)];
-         }, userCred, clearStream);
+         });
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
          let expectedDecLp = maxLps;
 
-         const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(expectedDecLp);
             expect(cdinfo.lpEnd).toEqual(maxLps);
             expect(cdinfo.alg).toEqual(alg);
@@ -246,7 +255,8 @@ describe("Stream encryption and decryption", function () {
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             expectedDecLp -= 1;
             return [cdinfo.hint!, undefined];
-         }, userCred, cipherStream);
+         });
+         const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
          const resString = await readStreamAll(decrypted, true);
          expect(resString).toEqual(srcString);
@@ -269,7 +279,7 @@ describe("Stream encryption and decryption", function () {
 
       let expectedEncLp = 1;
 
-      const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+      const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
          expect(cdinfo.lp).toEqual(expectedEncLp);
          expect(cdinfo.lpEnd).toEqual(maxLps);
          expect(cdinfo.alg).toEqual(algKeys[cdinfo.lp - 1]);
@@ -278,11 +288,12 @@ describe("Stream encryption and decryption", function () {
          expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
          expectedEncLp += 1;
          return [String(cdinfo.lp), String(cdinfo.lp)];
-      }, userCred, clearStream);
+      });
+      const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
       let expectedDecLp = maxLps;
 
-      const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
+      const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
          expect(cdinfo.lp).toEqual(expectedDecLp);
          expect(cdinfo.lpEnd).toEqual(maxLps);
          expect(cdinfo.alg).toEqual(algKeys[cdinfo.lp - 1]);
@@ -291,7 +302,8 @@ describe("Stream encryption and decryption", function () {
          expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
          expectedDecLp -= 1;
          return [cdinfo.hint!, undefined];
-      }, userCred, cipherStream);
+      });
+      const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
       const resString = await readStreamAll(decrypted, true);
       expect(resString).toEqual(srcString);
@@ -352,11 +364,12 @@ describe("Stream encryption and decryption", function () {
       for (const ver of vers) {
          for (let ct of ver.cts) {
             const [cipherStream] = streamFromBase64(ct);
-            const clearStream = await cipherSvc.decryptStream(async (cdinfo) => {
+            const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                expect(cdinfo.hint).toEqual(hintCheck);
                expect(cdinfo.ver).toEqual(ver.ver);
                return [pwd, undefined];
-            }, userCred, cipherStream);
+            });
+            const clearStream = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
             // version ${ver.ver}
             await expect(areEqual(clearStream, clearCheck)).resolves.toBe(true);
@@ -380,22 +393,32 @@ describe("Stream encryption and decryption", function () {
          //v5
          { ver: 5,
             cts: [
-               // AES-GCM, XChaCha, AEGIS, V5, 3 LPS
+               // AES-GCM, X20-PLY, AEGIS-256, V5, 3 LPS
                "fr1l3aTIL4-4O5shIllF7cmgx9JZ0iZdIHQLLDc71_sFABkCAAEDAI436nhP6Y5r9CQJL4ny_B9y2tylKH2ZxSzdvN6uqxoFG8CP2YqVB0vbQ46sdRAkheDIEAAiIa7leKW-j2vN4CT31z2cAH3bm1ddjQ9KPfKXIKLds8gJVy4UPbA8mQ_SKDLARhJuReb2SqmKU_17X6_nWnScIIPBMBvoOWdul0jb2cBlioOZ968OipMLRggD74pVeegvePLzQhTQvBZiyqOyRkta7tSfiwY6Pqb8efej-T3ItJ2q-It-NQdnloZBrThoP9Lh3hJUt5OwMgFrhTMy_5wOYDI_X8t-kmnfSKt8BdQKoCG-tri0Xe2OVN9_ae2u_l4bvE9-GkTjvFCw3l_egIYjYRAmBJTWv9SnIAwXDuxonTHMiw0QO3x0AYCF9rJ1Lu2pSeLZbL8ke8XUFqfULTlOiXb4Xc13q-DWFhEYNHz2go6zBmXg3dElK94mv2f8mfZyA5psvl4Kte5BJq9G4uJdqrFkqX7Snx5i5AQhP4JISK_3xCuC0DNNAk6fG0ARjMS2zrRbfjVwyPY_vw4HcQU2JhYqsgsRauoBABy-LmH3VUvFXkdvQi_lRPBD7hVqu0ZKjh0k6ZypFR_nXo4zwoi84IAG_527NCevoxgGqBvEdVaUL8-XjcJhxkreysrCFYSTYdhA-6qbBPgkoooSMhFwZjN-qku4lqKo7KIIIeGO7HT7XbyxldZN6pm4Q82gecrAGYs",
-               // AEGIS, XChaCha, AEGIS: V5, 3 LPS
+               // AEGIS-256, X20-PLY, AEGIS-256: V5, 3 LPS
                "hV1RikjDpxKuimJkPcHs0ZX95pPW6LHIllYhoMdte2YFAE0CAAEDAKvbjrnfg3VDgvnILDZKbIaUGxMp5Iv9JYYr09KEhmQGVgyB62xjoffJabxC5zz3FeDIEAAiIWrG6htNwiOOBXfZu2IUwQpMiNqQVR0GegoX-aESZ1gppQNKj-b63ucKTaybnvSeiqExW9rsGFYxOz8u5qLH15_p2qZsNO-mGpc1wylR_Ge-aXaUF9P1bZn9AAMOxX3q2dtP5ey7bA22SYe_JeQiDPBGAvfzAk3WJ5GuHPmGzc3yoHZXmMMxSm2tytvJy6fEx2TkktobNnhI9eAXBxn82xX-rmM00djST2LAZQZG_SSQByzFk5rZUGLmhomiZz-SQQdVZDY45BD-zjNqj0jSGXAr8vKKwXPsAGKIq_uK7Gr-G4uw1_kkI02yu1AQjb3Jfpc8AvkD5KJ5V1Y42CSkmf07oMmrxqJ0QSGgEIxS0Za-XNdsDKJP2YoggGnRTW__EEp15xnnqwDzPxFgvhMBdCN4z03ERPy0rqTSeSYnY35ag6OrA9cBYD6kEVMIi-VVSErsqJCDNmq0kqnM2FBMFFCCVOT8pasoRtQuzXQzaXZiovmceXsGUNeMgU38AnYgYjUtYhNonYnHw-A3LsIYvzKDtshJRh1qekNqBMdycFrkxF405nEJe6kdyiaxKajYkjlXY9xbSt-AK3_0MWNNB3Adr_HiO9IQaj7hByCqQgxbHm8aLM2oK4KtIxNEE2AWSZ8xSpBrj2naCLNg21zo9iYfHytX8a_eDvTYIi-zwoh7725S2RkqRuRUQYPhX3RPhVzqKUfq",
-               // AEGIS: AES-GCM, AES-GCM V5, 3 LPS
+               // AEGIS-256: AES-GCM, AES-GCM V5, 3 LPS
                "5HrnYQIAB6OTA8HO27AviugsbVz_otVhIU9SUGfAKN8FAA0CAAEBAJyuTIwejjoTJAMKQ5jI6umcC7Tdy3KzFfKF4qDgyBAAIhHh4OAHh7b9A0cRZQqcwvP_Y7xOKHQzGn55oxKi0YuOXtser60NoJxoMARtP0Pe-8x9aYT5T_Ml7d87zxZXfFcMk2MfOYLPpUZO6rHKZ1IXIFbrzW_YlVTgLwUwLYM01tmr9gg17kz5D1hTKRXxJ5CWq6nu_xlXwsi8Yo44OY6Ei1hpSLF8xhw1-w6oz0DRSqUedXlo2Y1KBj7e0rLBnW1WLnnJWhwSvOOaX6Cu7qslwBRQ3w12bxGQNIJLpbcw6LriQ1Tf7iBI6vmDDpSFN4r9zvJomyB2RqO9eTa6Y4u3yDrdpBlujw8LY3c0DSA_1SSkVKinYucKhNYWtwjSD9hCE-n0qgRcHZYLZB0JlyFv3on9mIdMhRDH_4sbs6b-car5nqzXxTIaoiDu5la78Y_gWjLRk7nCTONVluVHlk3pf4tZ2pf5C9SRC1PrH5q7OVmGDWhiHIpL-9twubrjB9e2_UQa2QZsVLiMdeNpmzeiqQM5maGIVFVi9AbE8q2kq8CqeHHu2YvJuG8Q2fH2RIUb4DCT-FHvyeLPl91k1ADw4JFtrHSwMHC1fxj3ZqIRic-f6MNEoJDm5ROV9O_4V77RMX3NqpSjQyxyvOk3lmaO7au-mJYg6txDqKlSeQXoxcLV4LG2Tdhj-D4",
             ] },
          //v6
          { ver: 6,
             cts: [
-               // AES-GCM, XChaCha, AEGIS, V6, 3 LPS
+               // AES-GCM, X20-PLY, AEGIS-256, V6, 3 LPS
                "4QB_HTME7CBlOtrq2oRKtOE3coA7F-rrFnHDGaztkAcGABoCAAEDANhmAzoORQG4Mfk00xuLjYaw3ShiY8tN2vzIPEdjpwbQVBaIL8GqsItRagyVmcFdwUBCDwAiIeXZuPSfuxgRb0E-W63eGZ9NZ360gPsuUU8W1dC8JkUnWsKtIgiBHSuHKV2gxXx3w0Ev8oyMrzqBEx5FERu3FTzk-bB4zmYoqhrnY6Y6F8HzeNqQSuJ4eBzmsvCY6nSb3Z0GmkUyG4xR-eFzPICOJdZGWdkWhT0penWoqM4EFnf2Upjda-R0hivSgwSwUTNhO1H26NzidOOAvMfczZVnIhVWlxCvXp9adhhQnjMPKiAVDP7zPxkMtPUlWGhGT-TESABsaa8qYBj1il2l-LRaxk22sSSpxT3VB5i32x_qcUbXrZSsHdWl0NMDb8z8Bfy-SlAhyxwK8S5XrboUp5chDixQ50qSOaiIOAaf4nP-JKFOLdw7DO7PMfRife6oXCO2OS7iVbHtFE1phEVCfys9wyLzZFbzAzB68yoH8NMMU6_p7XAiS91VDbCFtSareVvtlMeSeImC7jNhKfiHtflb8FGl6xjT_lxSTxEZvnCYe1JUJ7kd8od2w8tYWHcTaMrJ0jxHIKNB_zaRn5yZl8h4FX5N-Ex07Dfjddh16s1JWgN_nXi-lVP6utLBGxC8E_1SDTg2SMzjvTu5BkpBbw3xRf0V4jUU9n_NGMk7AP2wCYT79HiMZ3zj4Ac6Ak8h9hfIbrg=",
-               // AEGIS, XChaCha, AEGIS: V6, 3 LPS
+               // AEGIS-256, X20-PLY, AEGIS-256: V6, 3 LPS
                "w7OQx2Q88GDQ4ZmXN6tPkx7Yst-Veg81ujZ-_Eg4u_IGAE4CAAEDAMOP93rYo71KmzQ8o2Vi_ld3KdaGvgIqnG4dAAO1c2Yk7WLwZtROssHxCL93eiwPSkBCDwAiIfqwWUZ3l_u5DIYKlFTpurpijTfON-fY8TisKu9y2MlGw1IGCmHebVFFCmhhwmBPhMJ9nDyA5qT99EfKtyNadC1Vjr2kAXh94JiE9JEWLB298vb583GCJodLrstiU3KxlFALz4CF8Wnk0jdhSKL4L4uIhzMMul03cHaeXIQCf6N_KHTmyi6uBu8hz_iVUq8Ia2zqBACa1Iz5P2AKPIUjvX_qsARY_vFkqOgsYbNRmabSwONmjuS-fUa_mDkupH2KG6c2lbWHNs1kE7KGzGLZ21XFsNWiojnveu0zE-IHcVIK1-lymTQzN1YoKIMKdBM_mznmS5mDgRSQvXeo7qlpU4sxn3-_qP6ZoiaKzbqqKGh0_NRNjnUd8G8GzQuQfdWY4VmVHxLrm9yJcxPbVD2GBsqmIi1wNkSJW0PRbMAsLMbeHRwJJ0w0DsjodngjvAl9D66tZSa17x_XEQlslDprbcR4jfsYFe2PSAEDUT3a1HndlSsuXHsfk_ZolC86rAxTdVV9VZi8QqcHZ7nr3AR9oTz5H66QmoZcmJlUTNpfShPneF_EzXx0gGH6DjOtfrWjKD6iW2oJlpnXqMvWla60w5dYYUG43TQmoHSjb7kUqH1PtJjcsZbz4egTxrkNxvrLJGK9r7BpRk819eX5_zTlH4X3O3JsFmWK4lT6hlpW6sw69SXVzFrMxdHBJEmqF3VCk1NqUazr",
-               // AEGIS: AES-GCM, AES-GCM V6, 3 LPS
+               // AEGIS-256: AES-GCM, AES-GCM V6, 3 LPS
                "S18WntQoRGYoTy9W4i8fuPPjKbwWUIFBbnSpBUanhLAGAA4CAAEBABMOsbaYDQFYF1taNhZq2S208_fs-vCrT2EUJkVAQg8AIhFcpOTEGHbFby411jzaT54UiYB7muuIFIgZNxIMzEyyI-Rw4ivyQiqTNv9L0NAt1K-oDAOa2OM_yN5picketRG6-4hLpgZiEhdLQEDqQ_zHIsW9VnO1JNPlZ7c_Aa4JIDMF3NqGcJnuATkDI52uDXlqpQ9qk52DB0Y37qHaHHqYyI2kBgdMdD9tWHpCNrm63fXOOSKfOE9FRxPMmZeGWzJIOhBwQ0OGAdBCUDKsrP2rADgwQcpW-5SU4oxwsWKhoMRueAlbK6KLHTVQc8LBybqUvUI3g7PGtOU0RQOkD2q15F8jGJkog8nqlNF3ZMG3Y3DM-gC45Fx5p_4k5F4B4i6FZFFYOEHJjhPV38xECb3X8mdInAZ88bhthHW-IlrPEmI9Tz1F9_qABS0tO2wEeTs96pTyDKH1Y42sL9utaBNA7Es4-_SIRUmr8aPDW6hCCpg-o2-Snecc7A-PlxHzFm10j7BB3Y5iLcaQScUzJ-ONpx4GAJzWP8tb23zAH_zeJTmwbZ0so3OTwfS07SffFIuyrdtvBWGZarCY3eTwC5URJ5RvOGs-_NWewGC3jn-UNW_yVEEl8tAFeah3db5ljunTx2DLwnIeUPAGHZpQh9bjq7c7BE1c8S4my9a3yqzLgB3ASRezSrlGZBg",
+            ] },
+         //v7
+         { ver: 7,
+            cts: [
+               // AES-GCM, X20-PLY, AEGIS-256, V7, 3 LPS
+               "-eLbV_R4_KMWNOLXCAkQbLiuB-EThJWJLTV84kjLSkMHABoCAAEDAMzicisd4XCerupEWOV2ZaZLDtqM0Q4UcP3lvxDMwKVQ8JgDCyr8V9WbUBMK6fU7OqBoBgAiId69h-VWxAayY7CPwOuWXusK5ugd_f42dCa74GjOmeqZ9Kw7iZUUkbx9KvcJGqYABJSvOs1IOQRChj2lMyrsiwrAKN2lRPenbN09AsGVYIwjEygzRroNOG-wpuj-fdG9CyPVl3Pbi-D52UvpkQdR0ojHjiTaSM7RkaAG4pkj_7V1X4V0m3JFuDERMXVG-W7CTFbYF5NwOFtNTXc6w7YY1Oe9BXgFmpAV6t08E9RseSFV1Kwq7uz5U9oUf2eC6fyTDoR2-TU5M7WknHgEzrgqRW4BiTnCYg3FQwXZlHe3k6y-Qr3mOG-OenyA7FddDRva_T7qcqxvYJBEUI9TIRlJ8Tfum_TP3VB_zYKodVt879x-lQqeEM5QtUNMYg7wFKtZGUxYatBi2HsRdyz27lA_E7N9nFTJaaxQFG8d8uiU4rKHR1oWtNHy6uSf6G3OpDm6VALtM3akj4E-Hci7SXBGHXpRCYrYBTKdNcSYSrfI0loYxu1PWlgUlJatSb5DaQaYrqVfjsj5JrJ16EJdI8-fXnn62oLiI114KkCaaDzp-qZSu1iKkSqVs-5TKQqc643HDtQ7NJRm5I3PXybes2ygXweOpjx5v4VEpWZS9wUeodlTaCuD2OZYMdV9H3zlc1yksR8",
+               // AEGIS-256, X20-PLY, AEGIS-256, V7, 3 LPS
+               "7TKuj2xq_zuZss7ZCDulTq8OeyrBkC4w6a-GRKkxUqYHAE4CAAEDANbEU9rejN2YbM1AoSITuJYKJ8uHoj8XXqxHqXyGYhNOBOYlrnDKRLBjzu__Gzbsq6BoBgAiIcWqu-fTUVQV7iFpk8F9k1cawSSW1KyLrW1KqsAKnC-gOgU8_eeuuBasg03clUsgbPGE7Wf9xSnTcgYUkwJBuSeFvIiinuZc4pWaL2AEiy7DepzBnxarUzYTnVcIpoNAA7bOWKP6nPCgH8hoD98aA58ZgbGCF-fqRbaX-GFIxdocxyXmu55oD0Eu46jPpjwpENldjLNgpzaaOTEtRrOsksrVIJORpvMutrliuCtlSmAG5OaevJGRbibqEQReJZnJkiXFYlNSFk3H_XLp0ObA-0OmxYOTw369W1NIfVQRCSA3EHsat2s9BAEXCFRakBldm8dtviDQJ13vz7Is2yTr-6Yr64anc0wmacxC_5BhVB2nKdhu4JbEiaKY2kY-gGWWI94J9CaQgYcSRnd-zhHppoH0vWVzsgik2wP8j1X3_LneF5yjmA03aWoEATN_ujP-6Eu3S7k_STbNP_jgIB2qJMPV7uCD3BwbARltz5rOwkJyBcIzXcdMK1HNDsuVqH8rNBxPBUh5EJ3hduH8gn-bVc951jDuo60_tzlFyg2Vd5VmYjNhooYJnJcKQ4jIz_XdAAIsI-HzVgVNGnQ1zgWiai6DCHYZYrsoSb_TPS-JRQiKoBz9v4I9GyFeEeQtsUHEypB-R_3jjkBCyaztudHk8Xjo8KN_2KO6NrcEmIFcpAirXE3Gz5zKTEjkK1M9MLMLRdp_cpx8",
+               // AEGIS-256, AES-GCM, AES-GCM, V7, 3 LPS
+               "j-WsNubPVEfrYRxARUvF2UW-mXsc4SbxIZUuDBBJcAoHAA4CAAEBACLRB8to8J1jE7L3H-9EllLgnY2mfZCuF0-F1LCgaAYAIhH1HFqcnD8BN6IHzVevJXoox9pXeLKa9RMyUzko_QFFUHlQm1qTAaqW6WItqg6ntX5zRgjtNoFO9Nba87PBL8q73LdfOa2mjN8YXIIpZo0M1o6OXOynaOxdP6mYMEPiqq6xkatd7deAwiRPNASHrUdHeEtsqgMT5FtUf9bfa8XeXBJ-n3VSm5y4MwxS7nkKtNUJngNPenuagcG2qaXGIYTYvZRW-MdPzw-hFMMNLUZ3klBNp1pgFpm7oSyn8JI8s4IQpooKXd1dtAMh_nL-IoU7sWd8JCGpPLc1eDcqKpe7Bt4YfpLgRm50rnZeYu2Fu8OSo4r8DTxoNps29l3YGoW0T7CzSX7RM5YvnAr8D-YeY5EvKNIwvAcLXuycZhSkXz2OUg6wK_ggFVdjJ15Noy_h608GktpJ2rqy9aj1AO4l68x7uNOhNA2if3-vppY6JwRpqrT0MGf-L63HvMeCInsfYHj3-TwN-XCrqHGLZHbRUVBi8YTDSC17BbwFWAbeNkPjvUXqNH5z8SocwDA59uCs3g4Zvu228delES_ycg9Wy86fIWrz6jce-xuPdNQ1qK4GS_K8TVrkKQH8gG8A9su5LSTLL_iimPpjgI61Lz9zeanXDZ9EKh2eWJIyciHW4haRWmRcSpvf_3w",
             ] },
       ];
 
@@ -409,14 +432,15 @@ describe("Stream encryption and decryption", function () {
             const userCred = new Uint8Array([198, 18, 166, 217, 14, 52, 226, 145, 164, 169, 245, 164, 79, 36, 247, 82, 135, 84, 71, 239, 125, 108, 221, 48, 137, 177, 250, 178, 47, 110, 23, 194]);
             const [_, clearCheck] = streamFromStr('physical farm bolt correct bee nonchalant glib high able pinch left quaint strip valuable exultant disgusted curved bless geese snatch zoom fat touch boot abject wink pretty accessible foamy');
 
-            const clearStream = await cipherSvc.decryptStream(async (cdinfo) => {
+            const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
                expect(cdinfo.lp).toEqual(expectedLp);
                expect(cdinfo.lpEnd).toEqual(3);
                expect(Number(cdinfo.hint)).toEqual(expectedLp);
                expect(cdinfo.ver).toEqual(ver.ver);
                expectedLp -= 1;
                return [cdinfo.hint!, undefined];
-            }, userCred, cipherStream);
+            });
+            const clearStream = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
             // version ${ver.ver}
             await expect(areEqual(clearStream, clearCheck)).resolves.toBe(true);
@@ -438,6 +462,10 @@ describe("Stream encryption and decryption", function () {
          { ver: 6,
             cipherData: new Uint8Array([132, 28, 138, 123, 147, 127, 43, 62, 165, 146, 225, 63, 193, 229, 103, 67, 52, 78, 235, 87, 222, 81, 39, 59, 221, 183, 97, 72, 255, 88, 246, 58, 6, 0, 117, 0, 0, 0, 2, 0, 34, 40, 133, 44, 12, 94, 228, 213, 26, 168, 170, 128, 158, 80, 186, 10, 199, 186, 216, 165, 74, 175, 77, 14, 167, 87, 224, 153, 52, 15, 148, 75, 171, 2, 77, 176, 158, 14, 41, 21, 64, 119, 27, 0, 0, 23, 60, 217, 5, 30, 103, 244, 158, 250, 216, 37, 3, 99, 119, 58, 27, 195, 99, 129, 80, 65, 210, 179, 102, 243, 232, 235, 177, 129, 48, 29, 127, 154, 58, 17, 16, 73, 65, 218, 12, 57, 251, 92, 205, 101, 8, 236, 63, 89, 47, 41, 190, 168, 125, 241, 136, 131, 63, 67, 146, 42, 204, 9, 202, 62, 160, 22, 123, 154])
          },
+         //v7
+         { ver: 7,
+            cipherData: new Uint8Array([218, 133, 51, 133, 245, 233, 230, 231, 173, 175, 15, 159, 179, 222, 101, 179, 78, 89, 73, 205, 142, 187, 161, 136, 227, 194, 62, 8, 124, 169, 28, 199, 7, 0, 108, 0, 0, 0, 2, 0, 242, 97, 95, 209, 159, 179, 147, 230, 156, 232, 238, 195, 88, 17, 119, 127, 43, 220, 77, 91, 211, 155, 55, 170, 17, 111, 25, 123, 51, 169, 60, 24, 76, 127, 50, 250, 134, 64, 232, 29, 64, 119, 27, 0, 0, 23, 209, 127, 62, 149, 252, 94, 5, 185, 175, 126, 171, 181, 159, 56, 102, 19, 92, 28, 87, 223, 104, 216, 82, 84, 194, 61, 25, 52, 234, 23, 76, 201, 185, 22, 18, 12, 149, 105, 110, 24, 138, 211, 251, 158, 126, 64, 140, 55, 183, 159, 84, 69, 59, 149, 205, 163, 136, 109, 17, 203, 137, 92, 166, 117, 33, 180, 192, 194, 139, 233, 51, 254, 61, 112, 219, 108, 68, 198, 240, 70, 131, 0, 132, 66, 159, 30, 47, 212, 223, 132, 213, 7, 0, 52, 0, 0, 0, 2, 0, 121, 232, 58, 204, 92, 45, 40, 107, 43, 91, 232, 235, 32, 50, 197, 214, 112, 106, 235, 9, 176, 89, 138, 169, 241, 68, 34, 23, 146, 224, 13, 241, 243, 66, 216, 119, 153, 59, 223, 17, 62, 207, 219, 67, 43, 39, 85, 204, 153])
+         },
 
       ];
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
@@ -448,7 +476,7 @@ describe("Stream encryption and decryption", function () {
       for (const ver of vers) {
          const [cipherStream] = streamFromBytes(ver.cipherData);
 
-         const decryptedStream = await cipherSvc.decryptStream(async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.hint).toEqual(hint);
             expect(cdinfo.alg).toBe('X20-PLY');
             expect(cdinfo.ver).toBe(ver.ver);
@@ -456,7 +484,8 @@ describe("Stream encryption and decryption", function () {
             expect(cdinfo.lpEnd).toBe(1);
             expect(cdinfo.ic).toBe(1800000);
             return [pwd, undefined];
-         }, userCred, cipherStream);
+         });
+         const decryptedStream = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
          await expect(readStreamAll(decryptedStream)).rejects.toThrow(new RegExp('Missing terminal.+'));
       }
@@ -472,7 +501,7 @@ describe("Stream encryption and decryption", function () {
       // copied from ciphers.spec.ts
       const [cipherStream] = streamFromBytes(new Uint8Array([114, 105, 149, 122, 214, 68, 66, 254, 204, 60, 108, 90, 88, 145, 24, 13, 64, 232, 184, 211, 137, 68, 207, 107, 242, 54, 26, 74, 31, 99, 61, 110, 6, 0, 108, 0, 0, 1, 2, 0, 38, 7, 93, 115, 159, 181, 216, 73, 45, 124, 29, 242, 220, 98, 213, 145, 114, 236, 39, 248, 11, 6, 42, 127, 123, 242, 217, 57, 58, 205, 0, 255, 238, 184, 227, 83, 181, 100, 188, 208, 64, 119, 27, 0, 0, 23, 154, 92, 181, 175, 144, 243, 53, 142, 153, 165, 44, 241, 86, 111, 236, 209, 43, 164, 62, 163, 196, 163, 117, 144, 20, 60, 205, 74, 135, 202, 75, 142, 62, 9, 135, 94, 49, 180, 28, 58, 209, 97, 164, 112, 49, 76, 42, 209, 140, 8, 93, 78, 168, 68, 248, 120, 26, 49, 28, 173, 242, 51, 71, 237, 8, 237, 174, 172, 162, 15, 13, 206, 208, 202, 130, 231, 36, 205, 62, 47, 252, 216, 35, 203, 182, 64, 202, 194, 87, 132, 92, 6, 0, 52, 0, 0, 1, 2, 0, 51, 173, 77, 222, 222, 129, 65, 79, 156, 158, 88, 144, 22, 46, 77, 72, 215, 184, 30, 152, 149, 40, 86, 78, 225, 236, 11, 99, 214, 240, 246, 48, 170, 7, 183, 213, 15, 213, 179, 207, 3, 190, 145, 97, 125, 81, 96, 46, 74]));
 
-      const decryptedStream = await cipherSvc.decryptStream(async (cdinfo) => {
+      const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
          expect(cdinfo.hint).toEqual(hint);
          expect(cdinfo.alg).toBe('X20-PLY');
          expect(cdinfo.ver).toBe(cc.VERSION6);
@@ -480,7 +509,8 @@ describe("Stream encryption and decryption", function () {
          expect(cdinfo.lpEnd).toBe(1);
          expect(cdinfo.ic).toBe(1800000);
          return [pwd, undefined];
-      }, userCred, cipherStream);
+      });
+      const decryptedStream = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
       await expect(readStreamAll(decryptedStream)).rejects.toThrow(new RegExp('Extra data block.+'));
    });
@@ -495,7 +525,7 @@ describe("Stream encryption and decryption", function () {
       // copied from ciphers.spec.ts
       const [cipherStream] = streamFromBytes(new Uint8Array([24, 212, 67, 36, 232, 163, 170, 119, 145, 211, 157, 196, 172, 177, 63, 167, 12, 22, 20, 81, 250, 166, 94, 226, 132, 226, 253, 243, 133, 249, 38, 46, 6, 0, 108, 0, 0, 1, 2, 0, 85, 112, 249, 39, 40, 215, 94, 63, 122, 204, 193, 102, 64, 65, 163, 82, 69, 123, 185, 109, 204, 27, 14, 222, 237, 33, 135, 94, 11, 145, 15, 204, 88, 25, 166, 108, 158, 106, 108, 144, 64, 119, 27, 0, 0, 23, 249, 240, 198, 170, 184, 70, 4, 93, 213, 139, 151, 175, 168, 83, 58, 110, 57, 141, 165, 35, 67, 130, 224, 145, 19, 200, 206, 7, 210, 27, 238, 115, 65, 227, 65, 86, 173, 49, 27, 61, 214, 163, 247, 237, 148, 168, 221, 228, 49, 197, 130, 72, 232, 83, 9, 108, 84, 44, 172, 115, 101, 0, 244, 178, 175, 216, 196, 5, 182, 210, 63, 180, 227, 122, 3, 70, 210, 255, 100, 185, 98, 226, 215, 183, 55, 131, 223, 16, 182, 177, 109, 6, 0, 52, 0, 0, 0, 2, 0, 117, 159, 80, 68, 25, 102, 215, 193, 132, 143, 200, 39, 19, 204, 47, 81, 213, 236, 77, 70, 22, 228, 220, 182, 58, 75, 143, 225, 66, 207, 162, 138, 118, 145, 133, 192, 55, 108, 217, 36, 155, 122, 39, 41, 30, 18, 66, 109, 59]));
 
-      const decryptedStream = await cipherSvc.decryptStream(async (cdinfo) => {
+      const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
          expect(cdinfo.hint).toEqual(hint);
          expect(cdinfo.alg).toBe('X20-PLY');
          expect(cdinfo.ver).toBe(cc.VERSION6);
@@ -503,7 +533,8 @@ describe("Stream encryption and decryption", function () {
          expect(cdinfo.lpEnd).toBe(1);
          expect(cdinfo.ic).toBe(1800000);
          return [pwd, undefined];
-      }, userCred, cipherStream);
+      });
+      const decryptedStream = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
       await expect(readStreamAll(decryptedStream)).rejects.toThrow(new RegExp('Extra data block.+'));
    });
@@ -524,7 +555,7 @@ describe("Stream encryption and decryption", function () {
                "p5q5r4dV44AsP9pxwrwOK7uf90EynliXMqpQaiOczHYEAGoAAAACAMJWRiT0rS-ivexQXh-uqAZgWjQQT-vON15dSo6XwD3zs51ix2T3k8HgyBAAABTzx6m-vqvQYCQpGcaJjO-6PmqurA32TDa_Ibq2rtCsuXLAGbO-8DM6JjfJua4tNUOHZ1W1itDO7xJ9",
                //AEGIS-256
                "1Jnt7bRakMkdgo9s0DhbdA3RZgTxQjdpczG4bVqLtdsEAJIAAAADACkhdnd1jqoOrNpifLk1Cg7qUi6-j_0EBJyyTAvtSXxxZe2cMLuH14b8TGNIsFQ6L-DIEAAAJGmwNdy_5f7etj9t6Q1l9zwg1er2CcW4gk2AnVyzqZXvxZrq1heuiam-6RtQ4Wkx2NIUruYKnYah4IRKMfuRJVLYge042ICZneCwQ6Tg1cG8adP0P1nzEXcdJA"
-            ] },
+         ]},
          //v6
          { ver: 6,
             cts: [
@@ -534,10 +565,20 @@ describe("Stream encryption and decryption", function () {
                "n8cmquHjnA6hWBN3fKi7pVubV1gtSUANgVxz4tfwvloGAGsAAAECAI_iMR3xE5g7tItxHqmoU6b9jCdVK8UUXg7AeWnNHdaHeXOA95lwiYNAQg8AABQTwpzuSG6H9n4m7fSkn9h64ls4nxwO7Hja7ruNfWuI8QWaVIy1map39Pm0F-wY1HFuu9KCwM4btVyP",
                //AEGIS-256
                "0iccnvyBA-Yer_7ur626xinuNSUivimb6SMYR5zWsisGAJMAAAEDAAwVFwpbKuzARYXHcaRN3oZFZ1ypFmUaW129_vD8i6Yxt81J2uCbtCnYQpGMW68fo0BCDwAAJIGfEG6HCbani4qkMSlgiV5oJaR2H2ir7PELn8ruJDjmk07BDCSzlAcUakQXuck-KCi6ySITkfffBojZrTSuLNRhruKhvcpDZiFCJPf7shjFmdIytH0lgHnZ9Q"
-            ] },
+         ]},
+         //v7
+         { ver: 7,
+            cts: [
+               //AES-GCM
+               "rWGg1PkFa76UAfLsDSJn9wLyE7JZH0m1-914i0hOn4AHAF8AAAEBAEt_dEOtYgyYMFXEdnDinZhDHFAUDQv1ClggFSDgyBAAABRThSTD_shvxi4g9S0tyUGi2MPmEadoVNgCDBvJToj5sQU7skina_bxuD_XpV2ufVEJgl56G54du70S",
+               //X20-PLY
+               "rAKk250mYfHui8B0jFGVZZo9hoC5oTDLHboZrmy-aasHAGsAAAECAE065We7TbGYX1QG0ytbgnRH7niAIzqPMiikdw7-tVpQ7BEYBuXX7NXgyBAAABQTtj-EV5b_VtNPgrv4WWbgxfaI6mpFqDFnsuyE-ps65_PO0PeJGgA0JeCa_9Zf1XVgQ8oFTY55WGWy",
+               //AEGIS-256
+               "AouHxBVx76TCoyzrEP6C_EnsIjWpIVIuybvklVD29XgHAJMAAAEDAD793yHQl6Fpjg8RJoslGzm-gDER2q1GmEY_s2yu3eUFpYcpgB95KwJWzhxnV7aRLuDIEAAAJB4uSNVf4FUMQjQnvBFuKm3wrCrFV06fZ4kr-r3hUV2KOZxcDDJZyZss0qzRccAm_TkBZYh6pwWwFkHrrSsk91Ghyz3uKh1vc7zf-kk73NUZFkLyPM4bdOv_uA",
+         ]},
       ];
 
-      // base64Url usercred for commandline: ZfZIlUPklSM8fFG7nWDQ2XuT5DxU1sZ0wKKykzJ3Yfs=
+      // base64Url usercred for tools: ZfZIlUPklSM8fFG7nWDQ2XuT5DxU1sZ0wKKykzJ3Yfs=
       const userCred = new Uint8Array([101, 246, 72, 149, 67, 228, 149, 35, 60, 124, 81, 187, 157, 96, 208, 217, 123, 147, 228, 60, 84, 214, 198, 116, 192, 162, 178, 147, 50, 119, 97, 251]);
 
       for (const ver of vers) {
@@ -546,11 +587,12 @@ describe("Stream encryption and decryption", function () {
             const [cipherStream, cipherData] = streamFromBase64(ct);
 
             // First ensure we can decrypt with valid inputs
-            const clear = await cipherSvc.decryptStream(async (cdinfo) => {
+            const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                expect(cdinfo.hint).toEqual("asdf");
                expect(cdinfo.ver).toEqual(ver.ver);
                return ["asdf", undefined];
-            }, userCred, cipherStream);
+            });
+            const clear = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
             await expect(areEqual(clearData, clear)).resolves.toEqual(true);
 
             let skipCount = 0;
@@ -571,10 +613,11 @@ describe("Stream encryption and decryption", function () {
                   continue;
                }
 
-               await expect(cipherSvc.decryptStream(async (cdinfo) => {
+               const badKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                   expect(cdinfo.hint).toEqual("asdf");
                   return ["asdf", undefined];
-               }, userCred, corruptStream)).rejects.toThrow(Error);
+               });
+               await expect(cipherSvc.decryptStream(corruptStream, badKeyProvider)).rejects.toThrow(Error);
             }
          }
       }
@@ -592,18 +635,20 @@ describe("Stream encryption and decryption", function () {
             ic: cc.ICOUNT_MIN
          };
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
             return [pwd, hint];
-         }, userCred, clearStream);
+         });
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
-         const decryptedStream = await cipherSvc.decryptStream(async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.hint).toEqual(hint);
             return ['the wrong pwd', undefined];
-         }, userCred, cipherStream);
+         });
+         const decryptedStream = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
          // Password isn't used until stream reading starts
          await expect(readStreamAll(decryptedStream)).rejects.toThrow(DOMException);
@@ -628,14 +673,15 @@ describe("Stream encryption and decryption", function () {
 
             let expectedEncLp = 1;
 
-            const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+            const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                expect(cdinfo.lp).toEqual(expectedEncLp);
                expect(cdinfo.lpEnd).toEqual(maxLps);
                expect(cdinfo.alg).toEqual(alg);
                expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
                expectedEncLp += 1;
                return [String(cdinfo.lp), String(cdinfo.lp)];
-            }, userCred, clearStream);
+            });
+            const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
             let expectedDecLp = maxLps;
 
@@ -653,7 +699,7 @@ describe("Stream encryption and decryption", function () {
             // detected the bad pwd. Perhaps this is a poor design of the looped (nesting) encryption design...
             let detected = false;
             try {
-               const decryptedStream = await cipherSvc.decryptStream(async (cdinfo) => {
+               const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                   expect(cdinfo.lp).toEqual(expectedDecLp);
                   expect(cdinfo.lpEnd).toEqual(maxLps);
                   expect(cdinfo.hint).toEqual(String(cdinfo.lp));
@@ -666,7 +712,8 @@ describe("Stream encryption and decryption", function () {
                   else {
                      return [cdinfo.hint!, undefined];
                   }
-               }, userCred, cipherStream);
+               });
+               const decryptedStream = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
                await readStreamAll(decryptedStream);
 
@@ -696,9 +743,10 @@ describe("Stream encryption and decryption", function () {
             ic: cc.ICOUNT_MIN
          };
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             return [pwd, hint];
-         }, userCred, clearStream);
+         });
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
          const cipherData = await readStreamAll(cipherStream);
 
@@ -706,11 +754,12 @@ describe("Stream encryption and decryption", function () {
          const corruptData = pokeValue(cipherData, 3, -1);
          const [corruptStream] = streamFromBytes(corruptData);
 
-         await expect(cipherSvc.decryptStream(async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             // should never execute
             expect(false, 'should not execute').toBe(true);
             return [pwd, undefined];
-         }, userCred, corruptStream)).rejects.toThrow(new RegExp('.+MAC.+'));
+         });
+         await expect(cipherSvc.decryptStream(corruptStream, decKeyProvider)).rejects.toThrow(new RegExp('.+MAC.+'));
       }
    });
 
@@ -728,9 +777,10 @@ describe("Stream encryption and decryption", function () {
             ic: cc.ICOUNT_MIN
          };
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             return [pwd, hint];
-         }, userCred, clearStream);
+         });
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
          const cipherData = await readStreamAll(cipherStream);
 
@@ -739,21 +789,23 @@ describe("Stream encryption and decryption", function () {
          let corruptData = pokeValue(cipherData, 100, -1);
          let [corruptStream] = streamFromBytes(corruptData);
 
-         await expect(cipherSvc.decryptStream(async (cdinfo) => {
+         const decKeyProvider1 = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             // should never execute
             expect(false, 'should not execute').toBe(true);
             return [pwd, undefined];
-         }, userCred, corruptStream)).rejects.toThrow(new RegExp('.+MAC.+'));
+         });
+         await expect(cipherSvc.decryptStream(corruptStream, decKeyProvider1)).rejects.toThrow(new RegExp('.+MAC.+'));
 
          // Hit another value
          corruptData = pokeValue(cipherData, cipherData.length - 30, 4);
          [corruptStream] = streamFromBytes(corruptData);
 
-         await expect(cipherSvc.decryptStream(async (cdinfo) => {
+         const decKeyProvider2 = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             // should never execute
             expect(false, 'should not execute').toBe(true);
             return [pwd, undefined];
-         }, userCred, corruptStream)).rejects.toThrow(new RegExp('.+MAC.+'));
+         });
+         await expect(cipherSvc.decryptStream(corruptStream, decKeyProvider2)).rejects.toThrow(new RegExp('.+MAC.+'));
       }
    });
 
@@ -771,18 +823,20 @@ describe("Stream encryption and decryption", function () {
          ic: cc.ICOUNT_MIN
       };
 
-      let cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+      let encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
          return [pwd, hint];
-      }, userCred, clearStream);
+      });
+      let cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
       await expect(readStreamAll(cipherStream)).resolves.not.toThrow();
 
       // empty pwd
       [clearStream] = streamFromBytes(clearData);
 
-      cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+      const emptyPwdKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
          return ['', hint];
-      }, userCred, clearStream);
+      });
+      cipherStream = await cipherSvc.encryptStream(clearStream, emptyPwdKeyProvider, econtext);
 
       await expect(readStreamAll(cipherStream)).rejects.toThrow(new RegExp('Missing password.*'));
 
@@ -790,32 +844,40 @@ describe("Stream encryption and decryption", function () {
       // hint too long
       [clearStream] = streamFromBytes(clearData);
 
-      cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+      const longHintKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
          return [pwd, 'this is too long'.repeat(8)];
-      }, userCred, clearStream);
+      });
+      cipherStream = await cipherSvc.encryptStream(clearStream, longHintKeyProvider, econtext);
 
       await expect(readStreamAll(cipherStream)).rejects.toThrow(new RegExp('Hint length.+'));
 
       // no userCred
       [clearStream] = streamFromBytes(clearData);
 
-      await expect(cipherSvc.encryptStream(econtext, async (cdinfo) => {
-         return [pwd, hint];
-      }, new Uint8Array(0), clearStream)).rejects.toThrow(new RegExp('.+userCred.*'));
+      await expect((async () => {
+         const noUcKeyProvider = new PWDKeyProvider(new Uint8Array(0), async (cdinfo) => {
+            return [pwd, hint];
+         });
+         return cipherSvc.encryptStream(clearStream, noUcKeyProvider, econtext);
+      })()).rejects.toThrow(new RegExp('.+userCred.*'));
 
       // extra long userCred
       [clearStream] = streamFromBytes(clearData);
 
-      await expect(cipherSvc.encryptStream(econtext, async (cdinfo) => {
-         return [pwd, hint];
-      }, crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES + 2)), clearStream)).rejects.toThrow(new RegExp('.+userCred.*'));
+      await expect((async () => {
+         const longUcKeyProvider = new PWDKeyProvider(crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES + 2)), async (cdinfo) => {
+            return [pwd, hint];
+         });
+         return cipherSvc.encryptStream(clearStream, longUcKeyProvider, econtext);
+      })()).rejects.toThrow(new RegExp('.+userCred.*'));
 
       // empty clear data
       [clearStream] = streamFromBytes(new Uint8Array());
 
-      cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+      const emptyClearKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
          return [pwd, hint];
-      }, userCred, clearStream);
+      });
+      cipherStream = await cipherSvc.encryptStream(clearStream, emptyClearKeyProvider, econtext);
 
       await expect(readStreamAll(cipherStream)).rejects.toThrow(new RegExp('Missing clear.+'));
 
@@ -827,9 +889,10 @@ describe("Stream encryption and decryption", function () {
          ic: cc.ICOUNT_MIN - 1
       };
 
-      await expect(cipherSvc.encryptStream(bcontext, async (cdinfo) => {
+      const smallIcKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
          return [pwd, hint];
-      }, userCred, clearStream)).rejects.toThrow(new RegExp('Invalid ic.+'));
+      });
+      await expect(cipherSvc.encryptStream(clearStream, smallIcKeyProvider, bcontext)).rejects.toThrow(new RegExp('Invalid ic.+'));
 
       // ic too big
       [clearStream] = streamFromBytes(clearData);
@@ -839,9 +902,10 @@ describe("Stream encryption and decryption", function () {
          ic: cc.ICOUNT_MAX + 1
       };
 
-      await expect(cipherSvc.encryptStream(bcontext, async (cdinfo) => {
+      const bigIcKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
          return [pwd, hint];
-      }, userCred, clearStream)).rejects.toThrow(new RegExp('Invalid ic.+'));
+      });
+      await expect(cipherSvc.encryptStream(clearStream, bigIcKeyProvider, bcontext)).rejects.toThrow(new RegExp('Invalid ic.+'));
 
 
       // invalid alg
@@ -852,9 +916,10 @@ describe("Stream encryption and decryption", function () {
          algs: ['ABS-GCM'] as any
       };
 
-      await expect(cipherSvc.encryptStream(bcontext, async (cdinfo) => {
+      const badAlgKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
          return [pwd, hint];
-      }, userCred, clearStream)).rejects.toThrow(new RegExp('Unsupported cipher mode.+'));
+      });
+      await expect(cipherSvc.encryptStream(clearStream, badAlgKeyProvider, bcontext)).rejects.toThrow(new RegExp('Unsupported cipher mode.+'));
 
       // really invalid alg
       [clearStream] = streamFromBytes(clearData);
@@ -864,9 +929,10 @@ describe("Stream encryption and decryption", function () {
          algs: ['asdfadfsk'] as any
       };
 
-      await expect(cipherSvc.encryptStream(bcontext, async (cdinfo) => {
+      const badAlg2KeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
          return [pwd, hint];
-      }, userCred, clearStream)).rejects.toThrow(new RegExp('Unsupported cipher mode.+'));
+      });
+      await expect(cipherSvc.encryptStream(clearStream, badAlg2KeyProvider, bcontext)).rejects.toThrow(new RegExp('Unsupported cipher mode.+'));
 
    });
 });
@@ -893,7 +959,7 @@ describe("Stream encryption and decryption with customAd", function () {
             ic: cc.ICOUNT_MIN
          };
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
@@ -902,9 +968,10 @@ describe("Stream encryption and decryption with customAd", function () {
             expect(cdinfo.hint).toBeFalsy();
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             return [pwd, undefined];
-         }, userCred, clearStream, customAd);
+         }, customAd);
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
-         const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
@@ -913,7 +980,8 @@ describe("Stream encryption and decryption with customAd", function () {
             expect(cdinfo.hint).toBeFalsy();
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             return [pwd, undefined];
-         }, userCred, cipherStream, customAd);
+         }, customAd);
+         const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
          const resString = await readStreamAll(decrypted, true);
          expect(resString).toEqual(srcString);
@@ -935,7 +1003,7 @@ describe("Stream encryption and decryption with customAd", function () {
             ic: cc.ICOUNT_MIN
          };
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
@@ -944,9 +1012,10 @@ describe("Stream encryption and decryption with customAd", function () {
             expect(cdinfo.hint).toBeFalsy();
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             return [pwd, hint];
-         }, userCred, clearStream, customAd);
+         }, customAd);
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
-         const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
@@ -955,7 +1024,8 @@ describe("Stream encryption and decryption with customAd", function () {
             expect(cdinfo.hint).toEqual(hint);
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             return [pwd, undefined];
-         }, userCred, cipherStream, customAd);
+         }, customAd);
+         const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
          const resString = await readStreamAll(decrypted, true);
          expect(resString).toEqual(srcString);
@@ -977,7 +1047,7 @@ describe("Stream encryption and decryption with customAd", function () {
             ic: cc.ICOUNT_MIN
          };
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
@@ -986,10 +1056,11 @@ describe("Stream encryption and decryption with customAd", function () {
             expect(cdinfo.hint).toBeFalsy();
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             return [pwd, hint];
-         }, userCred, clearStream, customAd);
+         }, customAd);
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
-         // cipherdata extract happens without core data decrypt, so no customAd needed
-         const cipherInfo = await cipherSvc.getCipherStreamInfo(userCred, cipherStream);
+         const infoKeyProvider = new PWDKeyProvider(userCred.slice(0), undefined, customAd);
+         const cipherInfo = await cipherSvc.getCipherStreamInfo(cipherStream, infoKeyProvider);
          expect(cipherInfo.ver).toEqual(cc.CURRENT_VERSION);
          expect(cipherInfo.alg).toEqual(alg);
          expect(cipherInfo.ic).toEqual(cc.ICOUNT_MIN);
@@ -1015,7 +1086,7 @@ describe("Stream encryption and decryption with customAd", function () {
             ic: cc.ICOUNT_MIN
          };
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
@@ -1024,9 +1095,10 @@ describe("Stream encryption and decryption with customAd", function () {
             expect(cdinfo.hint).toBeFalsy();
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             return [pwd, hint];
-         }, userCred, clearStream, customAd);
+         }, customAd);
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
-         const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
@@ -1035,9 +1107,8 @@ describe("Stream encryption and decryption with customAd", function () {
             expect(cdinfo.hint).toEqual(hint);
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             return [pwd, undefined];
-         }, userCred, cipherStream);
-
-         await expect(readStreamAll(decrypted)).rejects.toThrow(DOMException);
+         });
+         await expect(cipherSvc.decryptStream(cipherStream, decKeyProvider)).rejects.toThrow(/Invalid MAC/);
       }
    });
 
@@ -1056,7 +1127,7 @@ describe("Stream encryption and decryption with customAd", function () {
             ic: cc.ICOUNT_MIN
          };
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
@@ -1065,9 +1136,10 @@ describe("Stream encryption and decryption with customAd", function () {
             expect(cdinfo.hint).toBeFalsy();
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             return [pwd, hint];
-         }, userCred, clearStream);
+         });
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
-         const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
@@ -1076,9 +1148,8 @@ describe("Stream encryption and decryption with customAd", function () {
             expect(cdinfo.hint).toEqual(hint);
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             return [pwd, undefined];
-         }, userCred, cipherStream, customAd);
-
-         await expect(readStreamAll(decrypted)).rejects.toThrow(DOMException);
+         }, customAd);
+         await expect(cipherSvc.decryptStream(cipherStream, decKeyProvider)).rejects.toThrow(/Invalid MAC/);
       }
    });
 
@@ -1097,7 +1168,7 @@ describe("Stream encryption and decryption with customAd", function () {
             ic: cc.ICOUNT_MIN
          };
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
@@ -1106,9 +1177,10 @@ describe("Stream encryption and decryption with customAd", function () {
             expect(cdinfo.hint).toBeFalsy();
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             return [pwd, hint];
-         }, userCred, clearStream, customAd);
+         }, customAd);
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
-         const decrypted = await cipherSvc.decryptStream(async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
@@ -1117,9 +1189,8 @@ describe("Stream encryption and decryption with customAd", function () {
             expect(cdinfo.hint).toEqual(hint);
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             return [pwd, undefined];
-         }, userCred, cipherStream, new Uint8Array(0));
-
-         await expect(readStreamAll(decrypted)).rejects.toThrow(DOMException);
+         }, new Uint8Array(0));
+         await expect(cipherSvc.decryptStream(cipherStream, decKeyProvider)).rejects.toThrow(/Invalid MAC/);
       }
    });
 });
@@ -1163,10 +1234,11 @@ describe("Read block size bugs check", function () {
                ic: cc.ICOUNT_MIN
             };
 
-            let cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+            const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                expect(cdinfo.alg).toEqual(alg);
                return [pwd, hint];
-            }, userCred, clearStream);
+            });
+            let cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
             // This previously stalled
             await expect(readStreamAll(cipherStream)).resolves.not.toThrow();
@@ -1199,16 +1271,18 @@ describe("Read block size bugs check", function () {
                ic: cc.ICOUNT_MIN
             };
 
-            let cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+            const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                expect(cdinfo.alg).toEqual(alg);
                return [pwd, hint];
-            }, userCred, clearStream);
+            });
+            let cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
-            let dec = await cipherSvc.decryptStream(async (cdinfo) => {
+            const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                expect(cdinfo.hint).toEqual(hint);
                expect(cdinfo.alg).toEqual(alg);
                return [pwd, undefined];
-            }, userCred, cipherStream);
+            });
+            let dec = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
             // This previously failed due to missing term block
             await expect(areEqual(dec, clearData)).resolves.toEqual(true);
@@ -1249,6 +1323,14 @@ describe("Stream manipulation, multi-version", function () {
          iv: new Uint8Array([129, 132, 188, 49, 136, 192, 130, 173, 7, 164, 63, 77]),
          ver: 6
       },
+      //v7
+      {
+         ct: "wDQDAAMCu-7y7nxOrvCv62O31uebelDSfd1mXVxxpLcHAEkBAAABAIpThpzVKC3PLaPVr-6qkAKq8gJ7KAk-JhRHxfzgyBAAABRPlyUfcBh4sGHrI1hTanGYHm5RvBNuReW-_TiMUn_Z__W_7u7k8CZ1zAi5bWWL7Dto7-2MJc1fobc5gZY64jHMqboHYlwZqKzyl5jVtguqOfUiLgpuSc10mupWO4EgduGA6SrnClM07iOMW_aCxvnFeIjYk7riFVn4491Lacdz9URJGnrj_Foac2L-U7sEnsk5fp2bJvW7-nM6lT475y-0Kynkk-Xr2kOO4IYw_qgFlRnOYL6yGXUEwiQRaYWDKj0ukr7wxZ_dvrJOkyxJk1GxPIdGfX8xFMrFRvbnqkyczyj8Y2h4KN6zBOXPvZ62Xfq3NQOd8BMWl2fflDnZN70upCS4KwiR74V-pna3uYDFpYE6SsxI3CzvazPPyWfk_Mhxs4DUeMmhBLlWAlERSJOXTS6WYUq7AAZFDhhkoCTJgLc-X68HAG8BAAEBAP5AyF03yl8-AApuXTf4fB4Ewm3jAMSenb6gm6bJDh5L5OxgpTWhLQP278XJWxMpYWhyZCRmd3KGUADSOfvsoqr-JbOiBdCEdO71_OBCW2cmR4-urIF9_L9DDbsskBfp54qZfqqt3WTfVQ6iCtlU4g3ZSL0uinMG3-A9kjxBuKAAIReejP_0uokRmJNJFWq3qQtRXv1J6pEXiT_HgJ9aQpHEWJV_BLkD8-aP38_PFntlZoZROWggGXxJGC_CT0cAjuL0k347y4ylguwvAOTdqqGChm0hb5sxCX4_ah50cB2RifjSxOUQ8FVDBxe9AkJ_7Ig6ncmKduFWvGvZ_uB4W4NpUfRHmH3Sx3xCayGFGie4sftzSELYAYd8K7hLSr7hAJlsw1fG7Qtqj-ff12_6XwAl3dRh7GeQ5YDAlXgxSSWbcDnesU7QuJIpRHdjchBOOO3mYGDFgE8hnd5Xm8MpowrJ0wFy-13OxoClJA4",
+         slt: new Uint8Array([238, 170, 144, 2, 170, 242, 2, 123, 40, 9, 62, 38, 20, 71, 197, 252]),
+         iv: new Uint8Array([138, 83, 134, 156, 213, 40, 45, 207, 45, 163, 213, 175]),
+         ver: 7
+      },
+
    ];
 
    const clearData = new Uint8Array([118, 101, 114, 115, 105, 111, 110, 58, 32, 34, 51, 46, 56, 34, 10, 115, 101, 114, 118, 105, 99, 101, 115, 58, 10, 32, 32, 100, 111, 99, 107, 103, 101, 58, 10, 32, 32, 32, 32, 105, 109, 97, 103, 101, 58, 32, 108, 111, 117, 105, 115, 108, 97, 109, 47, 100, 111, 99, 107, 103, 101, 58, 49, 10, 32, 32, 32, 32, 114, 101, 115, 116, 97, 114, 116, 58, 32, 117, 110, 108, 101, 115, 115, 45, 115, 116, 111, 112, 112, 101, 100, 10, 32, 32, 32, 32, 112, 111, 114, 116, 115, 58, 10, 32, 32, 32, 32, 32, 32, 45, 32, 53, 48, 48, 49, 58, 53, 48, 48, 49, 10, 32, 32, 32, 32, 118, 111, 108, 117, 109, 101, 115, 58, 10, 32, 32, 32, 32, 32, 32, 45, 32, 47, 118, 97, 114, 47, 114, 117, 110, 47, 100, 111, 99, 107, 101, 114, 46, 115, 111, 99, 107, 58, 47, 118, 97, 114, 47, 114, 117, 110, 47, 100, 111, 99, 107, 101, 114, 46, 115, 111, 99, 107, 10, 32, 32, 32, 32, 32, 32, 45, 32, 46, 47, 100, 97, 116, 97, 58, 47, 97, 112, 112, 47, 100, 97, 116, 97, 10, 32, 32, 32, 32, 32, 32, 35, 32, 83, 116, 97, 99, 107, 115, 32, 68, 105, 114, 101, 99, 116, 111, 114, 121, 10, 32, 32, 32, 32, 32, 32, 35, 32, 226, 154, 160, 239, 184, 143, 32, 82, 69, 65, 68, 32, 73, 84, 32, 67, 65, 82, 69, 70, 85, 76, 76, 89, 46, 32, 73, 102, 32, 121, 111, 117, 32, 100, 105, 100, 32, 105, 116, 32, 119, 114, 111, 110, 103, 44, 32, 121, 111, 117, 114, 32, 100, 97, 116, 97, 32, 99, 111, 117, 108, 100, 32, 101, 110, 100, 32, 117, 112, 32, 119, 114, 105, 116, 105, 110, 103, 32, 105, 110, 116, 111, 32, 97, 32, 87, 82, 79, 78, 71, 32, 80, 65, 84, 72, 46, 10, 32, 32, 32, 32, 32, 32, 35, 32, 226, 154, 160, 239, 184, 143, 32, 49, 46, 32, 70, 85, 76, 76, 32, 112, 97, 116, 104, 32, 111, 110, 108, 121, 46, 32, 78, 111, 32, 114, 101, 108, 97, 116, 105, 118, 101, 32, 112, 97, 116, 104, 32, 40, 77, 85, 83, 84, 41, 10, 32, 32, 32, 32, 32, 32, 35, 32, 226, 154, 160, 239, 184, 143, 32, 50, 46, 32, 76, 101, 102, 116, 32, 83, 116, 97, 99, 107, 115, 32, 80, 97, 116, 104, 32, 61, 61, 61, 32, 82, 105, 103, 104, 116, 32, 83, 116, 97, 99, 107, 115, 32, 80, 97, 116, 104, 32, 40, 77, 85, 83, 84, 41, 10, 32, 32, 32, 32, 32, 32, 45, 32, 47, 111, 112, 116, 47, 115, 116, 97, 99, 107, 115, 58, 47, 111, 112, 116, 47, 115, 116, 97, 99, 107, 115, 10, 32, 32, 32, 32, 101, 110, 118, 105, 114, 111, 110, 109, 101, 110, 116, 58, 10, 32, 32, 32, 32, 32, 32, 35, 32, 84, 101, 108, 108, 32, 68, 111, 99, 107, 103, 101, 32, 119, 104, 101, 114, 101, 32, 116, 111, 32, 102, 105, 110, 100, 32, 116, 104, 101, 32, 115, 116, 97, 99, 107, 115, 10, 32, 32, 32, 32, 32, 32, 45, 32, 68, 79, 67, 75, 71, 69, 95, 83, 84, 65, 67, 75, 83, 95, 68, 73, 82, 61, 47, 111, 112, 116, 47, 115, 116, 97, 99, 107, 115]);
@@ -1260,7 +1342,7 @@ describe("Stream manipulation, multi-version", function () {
    const block0ADOffset = block0FlagsOffset + cc.FLAGS_BYTES;
    const block0AlgOffset = block0ADOffset;
    const block0IVOffset = block0AlgOffset + cc.ALG_BYTES;
-   const block0SltOffset = block0IVOffset + Number(cc.AlgInfo['AES-GCM']['iv_bytes']);
+   const block0SltOffset = block0IVOffset + Number(Ciphers.algIVByteLength('AES-GCM'));
    const block0ICOffset = block0SltOffset + cc.SLT_BYTES;
    const block0LPOffset = block0ICOffset + cc.IC_BYTES; //LP should be at 72
    const block0HintLenOffset = block0LPOffset + cc.LPP_BYTES;
@@ -1281,7 +1363,7 @@ describe("Stream manipulation, multi-version", function () {
       for (const ver of vers) {
          // First make sure it decrypts as expected
          let [cipherStream, cipherData] = streamFromBase64(ver.ct);
-         let dec = await cipherSvc.decryptStream(async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.hint).toEqual('4321');
             expect(cdinfo.alg).toBe('AES-GCM');
             expect(cdinfo.ver).toBe(ver.ver);
@@ -1291,7 +1373,8 @@ describe("Stream manipulation, multi-version", function () {
             expect(cdinfo.slt).toEqual(ver.slt);
             expect(Boolean(cdinfo.hint)).toBe(true);
             return ['asdf', undefined];
-         }, userCred, cipherStream);
+         });
+         let dec = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
          await expect(areEqual(dec, clearData)).resolves.toEqual(true);
 
          // Modified block0 MAC
@@ -1299,44 +1382,44 @@ describe("Stream manipulation, multi-version", function () {
          b0Mac[block0MACOffset] = 255;
 
          let [stream] = streamFromBytes(b0Mac);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Test modified block0 version
          const b0Ver = new Uint8Array(cipherData);
          b0Ver[block0VerOffset] = 22;
          [stream] = streamFromBytes(b0Ver);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Invalid version.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid version.+'));
 
          // Test modified block0 size, valid size but too small
          let b0Size = new Uint8Array(cipherData);
          b0Size.set([20, 1], block0SizeOffset);
          [stream] = streamFromBytes(b0Size);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Too small block0 size, invalid
          b0Size = new Uint8Array(cipherData);
          b0Size.set([0, 0], block0SizeOffset);
          [stream] = streamFromBytes(b0Size);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Invalid payload size3.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid payload size3.+'));
 
          // Test too big block0 size
          b0Size = new Uint8Array(cipherData);
          b0Size.set([255, 255, 255], block0SizeOffset);
          [stream] = streamFromBytes(b0Size);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Cipher data length mismatch1.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Cipher data length mismatch1.+'));
 
          // Test modified block0 flags, invalid
          let b0Flags = new Uint8Array(cipherData);
          b0Flags[block0FlagsOffset] = 6;
          [stream] = streamFromBytes(b0Flags);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Invalid flags.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid flags.+'));
 
          // Test modified block0 flags, early terminal (detected by MAC first because
          // early term isn't known until next block)
          b0Flags = new Uint8Array(cipherData);
          b0Flags[block0FlagsOffset] = 1;
          [stream] = streamFromBytes(b0Flags);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
       }
    });
 
@@ -1346,59 +1429,59 @@ describe("Stream manipulation, multi-version", function () {
 
          // First make sure it decrypts as expected
          let [cipherStream, cipherdata] = streamFromBase64(ver.ct);
-         let dec = await cipherSvc.decryptStream(async (cdinfo) => {
+         let dec = await cipherSvc.decryptStream(cipherStream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.hint).toEqual('4321');
             return ['asdf', undefined];
-         }, userCred, cipherStream);
+         }));
          await expect(areEqual(dec, clearData)).resolves.toEqual(true);
 
          // Modified blockN MAC
          const bNMac = new Uint8Array(cipherdata);
          bNMac[block1MACOffset] = 255;
          let [stream] = streamFromBytes(bNMac);
-         dec = await cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream);
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Modified blockN version
          const bNVer = new Uint8Array(cipherdata);
          bNVer.set([4, 1], block1VerOffset);
          [stream] = streamFromBytes(bNVer);
-         dec = await cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream);
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid version.+'));
 
          // Test modified blockN size, too small valid
          let bNSize = new Uint8Array(cipherdata);
          bNSize.set([20, 1], block1SizeOffset);
          [stream] = streamFromBytes(bNSize);
-         dec = await cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream);
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Too small blockN size, too small invalid
          bNSize = new Uint8Array(cipherdata);
          bNSize.set([0, 0], block1SizeOffset);
          [stream] = streamFromBytes(bNSize);
-         dec = await cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream);
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid payload.+'));
 
          // Test too big blockN but valid
          bNSize = new Uint8Array(cipherdata);
          bNSize.set([255, 255, 255], block1SizeOffset);
          [stream] = streamFromBytes(bNSize);
-         dec = await cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream);
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Cipher data length mismatch2.+'));
 
          // Test modified block0 flags, invalid
          let bNFlags = new Uint8Array(cipherdata);
          bNFlags[block1FlagsOffset] = 6;
          [stream] = streamFromBytes(bNFlags);
-         dec = await cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream);
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid flags.+'));
 
          // Test modified block0 flags, early terminal (detected by MAC first)
          bNFlags = new Uint8Array(cipherdata);
          bNFlags[block1FlagsOffset] = 0;
          [stream] = streamFromBytes(bNFlags);
-         dec = await cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream);
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid MAC.+'));
       }
    });
@@ -1409,17 +1492,17 @@ describe("Stream manipulation, multi-version", function () {
       for (const ver of vers) {
          // First make sure it decrypts as expected
          let [cipherStream, cipherdata] = streamFromBase64(ver.ct);
-         let dec = await cipherSvc.decryptStream(async (cdinfo) => {
+         let dec = await cipherSvc.decryptStream(cipherStream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.hint).toEqual('4321');
             return ['asdf', undefined];
-         }, userCred, cipherStream);
+         }));
          await expect(areEqual(dec, clearData)).resolves.toEqual(true);
 
          // Modified block0 invalid ALG
          let b0Alg = new Uint8Array(cipherdata);
          b0Alg[block0AlgOffset] = 128;
          let [stream] = streamFromBytes(b0Alg);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Unsupported cipher mode.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Unsupported cipher mode.+'));
 
          // Modified block0 valid but changed ALG
          b0Alg = new Uint8Array(cipherdata);
@@ -1428,55 +1511,55 @@ describe("Stream manipulation, multi-version", function () {
          // Error will be different given different cipherdata because changing the alg
          // above changes the IV read len and therefore location of following values.
          // Therefore don't check for specific error message
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(Error);
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(Error);
 
          // Modified block0 IV
          let b0OIV = new Uint8Array(cipherdata);
          b0OIV[block0IVOffset] = 0;
          [stream] = streamFromBytes(b0OIV);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Modified block0 Salt
          let b0Slt = new Uint8Array(cipherdata);
          b0Slt[block0SltOffset] = 1;
          [stream] = streamFromBytes(b0Slt);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Modified block0 invalid IC
          let b0IC = new Uint8Array(cipherdata);
          b0IC.set([0, 0, 0, 0], block0ICOffset);
          [stream] = streamFromBytes(b0IC);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Invalid ic.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Modified block0 valid but changed IC
          b0IC = new Uint8Array(cipherdata);
          b0IC.set([64, 119, 21, 1], block0ICOffset);
          [stream] = streamFromBytes(b0IC);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Modified block0 invalid LPP
          let b0LP = new Uint8Array(cipherdata);
          b0LP[block0LPOffset] = 24; // lp > lpEnd
          [stream] = streamFromBytes(b0LP);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Invalid lp.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid lp.+'));
 
          // Modified block0 valid but changed LPP
          b0LP = new Uint8Array(cipherdata);
          b0LP[block0LPOffset] = 48;
          [stream] = streamFromBytes(b0LP);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Modified block0 hint length
          let b0HintLen = new Uint8Array(cipherdata);
          b0HintLen[block0HintLenOffset] = 12;
          [stream] = streamFromBytes(b0HintLen);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Modified block0 hint
          let b0Hint = new Uint8Array(cipherdata);
          b0Hint[block0HintOffset] = 12;
          [stream] = streamFromBytes(b0Hint);
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
       }
    });
 
@@ -1485,24 +1568,24 @@ describe("Stream manipulation, multi-version", function () {
       for (const ver of vers) {
          // First make sure it decrypts as expected
          let [cipherStream, cipherdata] = streamFromBase64(ver.ct);
-         let dec = await cipherSvc.decryptStream(async (cdinfo) => {
+         let dec = await cipherSvc.decryptStream(cipherStream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.hint).toEqual('4321');
             return ['asdf', undefined];
-         }, userCred, cipherStream);
+         }));
          await expect(areEqual(dec, clearData)).resolves.toEqual(true);
 
          // Modified blockN invalid ALG
          let bNAlg = new Uint8Array(cipherdata);
          bNAlg[block1AlgOffset] = 128;
          let [stream] = streamFromBytes(bNAlg);
-         dec = await cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream);
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Unsupported cipher mode.+'));
 
          // Modified blockN valid but changed ALG
          bNAlg = new Uint8Array(cipherdata);
          bNAlg[block1AlgOffset] = 2;
          [stream] = streamFromBytes(bNAlg);
-         dec = await cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream);
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
          // Error will be different given different cipherdata because changing the alg
          // above changes the IV read len and therefore location of following values.
          // Therefore don't check for specific error message
@@ -1512,7 +1595,7 @@ describe("Stream manipulation, multi-version", function () {
          let bNIV = new Uint8Array(cipherdata);
          bNIV[block1IVOffset] = 0;
          [stream] = streamFromBytes(bNIV);
-         dec = await cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream);
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid MAC.+'));
       }
    });
@@ -1522,10 +1605,10 @@ describe("Stream manipulation, multi-version", function () {
       for (const ver of vers) {
          // First make sure ct decrypts as expected
          let [cipherStream, cipherdata] = streamFromBase64(ver.ct);
-         let dec = await cipherSvc.decryptStream(async (cdinfo) => {
+         let dec = await cipherSvc.decryptStream(cipherStream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.hint).toEqual('4321');
             return ['asdf', undefined];
-         }, userCred, cipherStream);
+         }));
          await expect(areEqual(dec, clearData)).resolves.toEqual(true);
 
          // Modified block0 encrypted data
@@ -1533,13 +1616,13 @@ describe("Stream manipulation, multi-version", function () {
          b0Enc[block0EncOffset] = 0;
          let [stream] = streamFromBytes(b0Enc);
          // version ${ver.ver}
-         await expect(cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream)).rejects.toThrow(/Invalid MAC/);
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(/Invalid MAC/);
 
          // Modified blockN encrypted data
          let bNEnc = new Uint8Array(cipherdata);
          bNEnc[block1EncOffset] = 0;
          [stream] = streamFromBytes(bNEnc);
-         dec = await cipherSvc.decryptStream(async (cdinfo) => { return ['asdf', undefined]; }, userCred, stream);
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid MAC.+'));
       }
    });
@@ -1560,9 +1643,10 @@ describe("Stream manipulation, multi-version", function () {
             ic: cc.ICOUNT_MIN
          };
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             return [pwd, hint];
-         }, userCred, clearStream);
+         });
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
          const cipherData = await readStreamAll(cipherStream);
          const modLen = randomInclusive(1, 10);
@@ -1573,11 +1657,12 @@ describe("Stream manipulation, multi-version", function () {
          const [corruptStream] = streamFromBytes(cipherData);
 
          // alg ${alg}, modLen ${modLen}, modPos ${modPos}
-         await expect(cipherSvc.decryptStream(async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             // should never execute
             expect(false, 'should not execute').toBe(true);
             return [pwd, undefined];
-         }, userCred, corruptStream)).rejects.toThrow(Error);
+         });
+         await expect(cipherSvc.decryptStream(corruptStream, decKeyProvider)).rejects.toThrow(Error);
       }
    });
 
@@ -1599,11 +1684,12 @@ describe("Stream manipulation, multi-version", function () {
             const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
             // alg ${alg}, fuzzLen ${fuzzLen}
-            await expect(cipherSvc.decryptStream(async (cdinfo) => {
+            const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
                // should never execute
                expect(false, 'should not execute').toBe(true);
                return [pwd, undefined];
-            }, userCred, fuzzStream)).rejects.toThrow(Error);
+            });
+            await expect(cipherSvc.decryptStream(fuzzStream, decKeyProvider)).rejects.toThrow(Error);
          }
       }
    });
@@ -1623,9 +1709,10 @@ describe("Stream manipulation, multi-version", function () {
             ic: cc.ICOUNT_MIN
          };
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             return [pwd, hint];
-         }, userCred, clearStream);
+         });
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
          const cipherData = await readStreamAll(cipherStream);
          const rmLen = randomInclusive(1, 10);
@@ -1638,11 +1725,12 @@ describe("Stream manipulation, multi-version", function () {
             let [corruptStream] = streamFromBytes(corruptData);
 
             // alg ${alg}, rmLen ${rmLen}, rmPos ${rmPos}
-            await expect(cipherSvc.decryptStream(async (cdinfo) => {
+            const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                // should never execute
                expect(false, 'should not execute').toBe(true);
                return [pwd, undefined];
-            }, userCred, corruptStream)).rejects.toThrow(Error);
+            });
+            await expect(cipherSvc.decryptStream(corruptStream, decKeyProvider)).rejects.toThrow(Error);
          }
       }
    });
@@ -1661,9 +1749,10 @@ describe("Stream manipulation, multi-version", function () {
             ic: cc.ICOUNT_MIN
          };
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             return [pwd, hint];
-         }, userCred, clearStream);
+         });
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
          const cipherData = await readStreamAll(cipherStream);
          const addLen = randomInclusive(1, 10);
@@ -1684,11 +1773,12 @@ describe("Stream manipulation, multi-version", function () {
             let [corruptStream] = streamFromBytes(corruptData);
 
             // alg ${alg}, addLen ${addLen}, addPos ${addPos}
-            await expect(cipherSvc.decryptStream(async (cdinfo) => {
+            const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                // should never execute
                expect(false, 'should not execute').toBe(true);
                return [pwd, undefined];
-            }, userCred, corruptStream)).rejects.toThrow(Error);
+            });
+            await expect(cipherSvc.decryptStream(corruptStream, decKeyProvider)).rejects.toThrow(Error);
          }
 
          // Appending data after block0 throws and error at stream read since
@@ -1698,15 +1788,15 @@ describe("Stream manipulation, multi-version", function () {
          corruptData.set(addData, cipherData.byteLength);
          let [corruptStream] = streamFromBytes(corruptData);
 
-         const corrupStream = await cipherSvc.decryptStream(async (cdinfo) => {
+         const corruptKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             return [pwd, undefined];
-         }, userCred, corruptStream);
+         });
+         const corrupStream = await cipherSvc.decryptStream(corruptStream, corruptKeyProvider);
 
          // alg ${alg}, addLen ${addLen}
          await expect(readStreamAll(corrupStream)).rejects.toThrow(Error);
       }
    });
-
 });
 
 describe("Block order change and deletion detection, multi-version", function () {
@@ -1730,21 +1820,13 @@ describe("Block order change and deletion detection, multi-version", function ()
          goodCt: "v6xsVVBD4pOtHHfzLsKBVHscJ7Q4kv_KqOKH3X_Fx1IFAFEAAAABAAZsrNtMucZUIr2UFJF3Y9R2FtBAqbm_YLotMSzgyBAAABRnUeng3ADKX8ZIicklSvESgyOeUPCFnOoBhpY-g10PWujfV7mwWWJZdMylaext9jLzwDxOLnu6u4cxcgbt1Ga1Vn5F0qDCyO0Xp9W1mAUAMAAAAAEAQTScPYuFjasQGAKP6oqkR9d58Q0YgvW3zEg50a0en8vK2ShqzFWqL5E9A_mmkaAvhGj9rr43RZhZiInC6ccflFeTqERnpm0jqQL9ysQtBQBCAAAAAQCH0B81axAaykKtBBNhvA0of9kUOniwBgdkzLFYwPH_pz75AdARszabKfDmBWOZFAzy9dDJfiqIz2Nbfr4S59sVkfpg_FPiD6_QgqLXQtv7_SDDAHb5a3C-NLGvP4KhxAYFAGYAAAABAIVBoUjIij7b-5zUE6FMbuAaiegCEYXBcSuLeeKfCH5WHveQq6-8KA4U-IQ6IZ5Rz_ocEv1L5e9uqanzYvGkFMfbhjO3oNH5-C_CqfCIF_1OzrgztnYx2feFXB0DGiR7PBWkPKErkb7VBUkVLd8T-ZqVhNFQstJrXxEXdriJzUfeLrGV3wUArgAAAAEA44DnCIDUxMUHlsvdM6d5QAs_MSRUx0y7_a6hecMnN1K5eOxDxqGDf-3xzL0dpb5CrbW99lYJLwZz9zqyAmPMeCx2KNFL2YFkhBSMy7XrDV9u2wT1ulIKPq6IQpOCos7LqBhiTeh46TqpYgYpeckATiYUrIS5RBfHdxAVQ6Sy-VOAPwHGochCI4AYBjcLGWWYKYkZD3d3CGjjI-haOmFab1vWKNIPE4Cyuvh0bH8dXs3DmHv4vEU8bW5JwioVuw5ciDOH7wgZTdCOBOLqBQCuAAAAAQCwx1-ma6ln7jlEN5K8rAzplIiJ5_iWANGMRdIJhjzQEX7KKCw-bffXnbx_gdPBU0o5ZzkU-HfQih-BeR6nzMsK5KSZBMJUwCAZ9ibCPjkO9cB_iyXAj_82Kk2argCNVaVNVD1rIg8Ig2lyi7btAsFiF5ANSlTv6lpJIqYapa_d1eaNIT6SOEWs2cVCgu4OaGAAzzFg_cw6A1z8VAhBFeyX-VBgerpVZVMijFcgvRxCglN1AVY8Ts5kORAaVCh9w2JFytcXHS4YElml_mgFAK4AAAABAOBdI8pBAWBb4TWSeJEQGRBchmv2EnJ_GKiBxdUuDtTO2ayK-iYjZdXrfxrKenbMcfcKrOZv7zccFcsICw-YqrS6TuKYzlbWUFm_5-mLNuDCQwTjDSok50r0j3vFD2I03wBB9j1NgGgDkhq8LMrRBCIMt0xRv6rz1RXdftsZ-gRklpvNCJPsw20SMBB8jVO7owExMM7HQZ289lY_z8q4hFA8_RepUItTnckfZtl0ZWxnf1JY05yAOI17w8-h80jjQfLXityWRu29nWAsdgUANwAAAQEA-CZxmBlulfdy7xc9NP2C2PH1FoGV4ClHPFor1PaqvS8PIGwJjYpN4Pq0S9o4DPPVd-WzFhg=",
          badCts: {
             'Block0 Block7 swap': 'dGVsZ39SWNOcgDiNe8PPofNI40Hy14rclkbtvZ1gLHYFADcAAAEBAPgmcZgZbpX3cu8XPTT9gtjx9RaBleApRzxaK9T2qr0vDyBsCY2KTeD6tEvaOAzz1XflsxYYbfYy88A8Ti57uruHMXIG7dRmtVZ-RdKgwsjtF6fVtZgFADAAAAABAEE0nD2LhY2rEBgCj-qKpEfXefENGIL1t8xIOdGtHp_LytkoasxVqi-RPQP5ppGgL4Ro_a6-N0WYWYiJwunHH5RXk6hEZ6ZtI6kC_crELQUAQgAAAAEAh9AfNWsQGspCrQQTYbwNKH_ZFDp4sAYHZMyxWMDx_6c--QHQEbM2mynw5gVjmRQM8vXQyX4qiM9jW36-EufbFZH6YPxT4g-v0IKi10Lb-_0gwwB2-WtwvjSxrz-CocQGBQBmAAAAAQCFQaFIyIo-2_uc1BOhTG7gGonoAhGFwXEri3ninwh-Vh73kKuvvCgOFPiEOiGeUc_6HBL9S-Xvbqmp82LxpBTH24Yzt6DR-fgvwqnwiBf9Ts64M7Z2Mdn3hVwdAxokezwVpDyhK5G-1QVJFS3fE_malYTRULLSa18RF3a4ic1H3i6xld8FAK4AAAABAOOA5wiA1MTFB5bL3TOneUALPzEkVMdMu_2uoXnDJzdSuXjsQ8ahg3_t8cy9HaW-Qq21vfZWCS8Gc_c6sgJjzHgsdijRS9mBZIQUjMu16w1fbtsE9bpSCj6uiEKTgqLOy6gYYk3oeOk6qWIGKXnJAE4mFKyEuUQXx3cQFUOksvlTgD8BxqHIQiOAGAY3CxllmCmJGQ93dwho4yPoWjphWm9b1ijSDxOAsrr4dGx_HV7Nw5h7-LxFPG1uScIqFbsOXIgzh-8IGU3QjgTi6gUArgAAAAEAsMdfpmupZ-45RDeSvKwM6ZSIief4lgDRjEXSCYY80BF-yigsPm331528f4HTwVNKOWc5FPh30IofgXkep8zLCuSkmQTCVMAgGfYmwj45DvXAf4slwI__NipNmq4AjVWlTVQ9ayIPCINpcou27QLBYheQDUpU7-paSSKmGqWv3dXmjSE-kjhFrNnFQoLuDmhgAM8xYP3MOgNc_FQIQRXsl_lQYHq6VWVTIoxXIL0cQoJTdQFWPE7OZDkQGlQofcNiRcrXFx0uGBJZpf5oBQCuAAAAAQDgXSPKQQFgW-E1kniREBkQXIZr9hJyfxiogcXVLg7UztmsivomI2XV638aynp2zHH3Cqzmb-83HBXLCAsPmKq0uk7imM5W1lBZv-fpizbgwkME4w0qJOdK9I97xQ9iNN8AQfY9TYBoA5IavCzK0QQiDLdMUb-q89UV3X7bGfoEZJabzQiT7MNtEjAQfI1Tu6MBMTDOx0GdvPZWP8_KuIRQPP0XqVCLU53JH2bZdGVsZ39SWNOcgDiNe8PPofNI40Hy14rclkbtvZ1gLHYFADcAAAEBAPgmcZgZbpX3cu8XPTT9gtjx9RaBleApRzxaK9T2qr0vDyBsCY2KTeD6tEvaOAzz1XflsxYYv6xsVVBD4pOtHHfzLsKBVHscJ7Q4kv_KqOKH3X_Fx1IFAFEAAAABAAZsrNtMucZUIr2UFJF3Y9R2FtBAqbm_YLotMSzgyBAAABRnUeng3ADKX8ZIicklSvESgyOeUPCFnOoBhpY-g10PWujfV7mwWWJZdMylaew=',
-
             'Block1 Block4 swap': 'v6xsVVBD4pOtHHfzLsKBVHscJ7Q4kv_KqOKH3X_Fx1IFAFEAAAABAAZsrNtMucZUIr2UFJF3Y9R2FtBAqbm_YLotMSzgyBAAABRnUeng3ADKX8ZIicklSvESgyOeUPCFnOoBhpY-g10PWujfV7mwWWJZdMylaewrkb7VBUkVLd8T-ZqVhNFQstJrXxEXdriJzUfeLrGV3wUArgAAAAEA44DnCIDUxMUHlsvdM6d5QAs_MSRUx0y7_a6hecMnN1K5eOxDxqGDf-3xzL0dpb5CrbW99lYJLwZz9zqyAmPMeCx2KNFL2YFkhBSMy7XrDV9u2wT1ulIKPq6IQpOCos7LqBhiTeh46TqpYgYpeckATiYUrIS5RBfHdxAVQ6Sy-VOAPwHGochCI4AYBjcLGWWYKYkZD3d3CGjjI-haOmFab1vWKNIPE4Cyuvh0bKAvhGj9rr43RZhZiInC6ccflFeTqERnpm0jqQL9ysQtBQBCAAAAAQCH0B81axAaykKtBBNhvA0of9kUOniwBgdkzLFYwPH_pz75AdARszabKfDmBWOZFAzy9dDJfiqIz2Nbfr4S59sVkfpg_FPiD6_QgqLXQtv7_SDDAHb5a3C-NLGvP4KhxAYFAGYAAAABAIVBoUjIij7b-5zUE6FMbuAaiegCEYXBcSuLeeKfCH5WHveQq6-8KA4U-IQ6IZ5Rz_ocEv1L5e9uqanzYvGkFMfbhjO3oNH5-C_CqfCIF_1OzrgztnYx2feFXB0DGiR7PBWkPKFt9jLzwDxOLnu6u4cxcgbt1Ga1Vn5F0qDCyO0Xp9W1mAUAMAAAAAEAQTScPYuFjasQGAKP6oqkR9d58Q0YgvW3zEg50a0en8vK2ShqzFWqL5E9A_mmkX8dXs3DmHv4vEU8bW5JwioVuw5ciDOH7wgZTdCOBOLqBQCuAAAAAQCwx1-ma6ln7jlEN5K8rAzplIiJ5_iWANGMRdIJhjzQEX7KKCw-bffXnbx_gdPBU0o5ZzkU-HfQih-BeR6nzMsK5KSZBMJUwCAZ9ibCPjkO9cB_iyXAj_82Kk2argCNVaVNVD1rIg8Ig2lyi7btAsFiF5ANSlTv6lpJIqYapa_d1eaNIT6SOEWs2cVCgu4OaGAAzzFg_cw6A1z8VAhBFeyX-VBgerpVZVMijFcgvRxCglN1AVY8Ts5kORAaVCh9w2JFytcXHS4YElml_mgFAK4AAAABAOBdI8pBAWBb4TWSeJEQGRBchmv2EnJ_GKiBxdUuDtTO2ayK-iYjZdXrfxrKenbMcfcKrOZv7zccFcsICw-YqrS6TuKYzlbWUFm_5-mLNuDCQwTjDSok50r0j3vFD2I03wBB9j1NgGgDkhq8LMrRBCIMt0xRv6rz1RXdftsZ-gRklpvNCJPsw20SMBB8jVO7owExMM7HQZ289lY_z8q4hFA8_RepUItTnckfZtl0ZWxnf1JY05yAOI17w8-h80jjQfLXityWRu29nWAsdgUANwAAAQEA-CZxmBlulfdy7xc9NP2C2PH1FoGV4ClHPFor1PaqvS8PIGwJjYpN4Pq0S9o4DPPVd-WzFhg=',
-
             'Block1 repeated': 'v6xsVVBD4pOtHHfzLsKBVHscJ7Q4kv_KqOKH3X_Fx1IFAFEAAAABAAZsrNtMucZUIr2UFJF3Y9R2FtBAqbm_YLotMSzgyBAAABRnUeng3ADKX8ZIicklSvESgyOeUPCFnOoBhpY-g10PWujfV7mwWWJZdMylaext9jLzwDxOLnu6u4cxcgbt1Ga1Vn5F0qDCyO0Xp9W1mAUAMAAAAAEAQTScPYuFjasQGAKP6oqkR9d58Q0YgvW3zEg50a0en8vK2ShqzFWqL5E9A_mmkW32MvPAPE4ue7q7hzFyBu3UZrVWfkXSoMLI7Ren1bWYBQAwAAAAAQBBNJw9i4WNqxAYAo_qiqRH13nxDRiC9bfMSDnRrR6fy8rZKGrMVaovkT0D-aaRoC-EaP2uvjdFmFmIicLpxx-UV5OoRGembSOpAv3KxC0FAEIAAAABAIfQHzVrEBrKQq0EE2G8DSh_2RQ6eLAGB2TMsVjA8f-nPvkB0BGzNpsp8OYFY5kUDPL10Ml-KojPY1t-vhLn2xWR-mD8U-IPr9CCotdC2_v9IMMAdvlrcL40sa8_gqHEBgUAZgAAAAEAhUGhSMiKPtv7nNQToUxu4BqJ6AIRhcFxK4t54p8IflYe95Crr7woDhT4hDohnlHP-hwS_Uvl726pqfNi8aQUx9uGM7eg0fn4L8Kp8IgX_U7OuDO2djHZ94VcHQMaJHs8FaQ8oSuRvtUFSRUt3xP5mpWE0VCy0mtfERd2uInNR94usZXfBQCuAAAAAQDjgOcIgNTExQeWy90zp3lACz8xJFTHTLv9rqF5wyc3Url47EPGoYN_7fHMvR2lvkKttb32VgkvBnP3OrICY8x4LHYo0UvZgWSEFIzLtesNX27bBPW6Ugo-rohCk4KizsuoGGJN6HjpOqliBil5yQBOJhSshLlEF8d3EBVDpLL5U4A_AcahyEIjgBgGNwsZZZgpiRkPd3cIaOMj6Fo6YVpvW9Yo0g8TgLK6-HRsfx1ezcOYe_i8RTxtbknCKhW7DlyIM4fvCBlN0I4E4uoFAK4AAAABALDHX6ZrqWfuOUQ3krysDOmUiInn-JYA0YxF0gmGPNARfsooLD5t99edvH-B08FTSjlnORT4d9CKH4F5HqfMywrkpJkEwlTAIBn2JsI-OQ71wH-LJcCP_zYqTZquAI1VpU1UPWsiDwiDaXKLtu0CwWIXkA1KVO_qWkkiphqlr93V5o0hPpI4RazZxUKC7g5oYADPMWD9zDoDXPxUCEEV7Jf5UGB6ulVlUyKMVyC9HEKCU3UBVjxOzmQ5EBpUKH3DYkXK1xcdLhgSWaX-aAUArgAAAAEA4F0jykEBYFvhNZJ4kRAZEFyGa_YScn8YqIHF1S4O1M7ZrIr6JiNl1et_Gsp6dsxx9wqs5m_vNxwVywgLD5iqtLpO4pjOVtZQWb_n6Ys24MJDBOMNKiTnSvSPe8UPYjTfAEH2PU2AaAOSGrwsytEEIgy3TFG_qvPVFd1-2xn6BGSWm80Ik-zDbRIwEHyNU7ujATEwzsdBnbz2Vj_PyriEUDz9F6lQi1OdyR9m2XRlbGd_UljTnIA4jXvDz6HzSONB8teK3JZG7b2dYCx2BQA3AAABAQD4JnGYGW6V93LvFz00_YLY8fUWgZXgKUc8WivU9qq9Lw8gbAmNik3g-rRL2jgM89V35bMWGA==',
-
             "Block1 deleted": 'v6xsVVBD4pOtHHfzLsKBVHscJ7Q4kv_KqOKH3X_Fx1IFAFEAAAABAAZsrNtMucZUIr2UFJF3Y9R2FtBAqbm_YLotMSzgyBAAABRnUeng3ADKX8ZIicklSvESgyOeUPCFnOoBhpY-g10PWujfV7mwWWJZdMylaeygL4Ro_a6-N0WYWYiJwunHH5RXk6hEZ6ZtI6kC_crELQUAQgAAAAEAh9AfNWsQGspCrQQTYbwNKH_ZFDp4sAYHZMyxWMDx_6c--QHQEbM2mynw5gVjmRQM8vXQyX4qiM9jW36-EufbFZH6YPxT4g-v0IKi10Lb-_0gwwB2-WtwvjSxrz-CocQGBQBmAAAAAQCFQaFIyIo-2_uc1BOhTG7gGonoAhGFwXEri3ninwh-Vh73kKuvvCgOFPiEOiGeUc_6HBL9S-Xvbqmp82LxpBTH24Yzt6DR-fgvwqnwiBf9Ts64M7Z2Mdn3hVwdAxokezwVpDyhK5G-1QVJFS3fE_malYTRULLSa18RF3a4ic1H3i6xld8FAK4AAAABAOOA5wiA1MTFB5bL3TOneUALPzEkVMdMu_2uoXnDJzdSuXjsQ8ahg3_t8cy9HaW-Qq21vfZWCS8Gc_c6sgJjzHgsdijRS9mBZIQUjMu16w1fbtsE9bpSCj6uiEKTgqLOy6gYYk3oeOk6qWIGKXnJAE4mFKyEuUQXx3cQFUOksvlTgD8BxqHIQiOAGAY3CxllmCmJGQ93dwho4yPoWjphWm9b1ijSDxOAsrr4dGx_HV7Nw5h7-LxFPG1uScIqFbsOXIgzh-8IGU3QjgTi6gUArgAAAAEAsMdfpmupZ-45RDeSvKwM6ZSIief4lgDRjEXSCYY80BF-yigsPm331528f4HTwVNKOWc5FPh30IofgXkep8zLCuSkmQTCVMAgGfYmwj45DvXAf4slwI__NipNmq4AjVWlTVQ9ayIPCINpcou27QLBYheQDUpU7-paSSKmGqWv3dXmjSE-kjhFrNnFQoLuDmhgAM8xYP3MOgNc_FQIQRXsl_lQYHq6VWVTIoxXIL0cQoJTdQFWPE7OZDkQGlQofcNiRcrXFx0uGBJZpf5oBQCuAAAAAQDgXSPKQQFgW-E1kniREBkQXIZr9hJyfxiogcXVLg7UztmsivomI2XV638aynp2zHH3Cqzmb-83HBXLCAsPmKq0uk7imM5W1lBZv-fpizbgwkME4w0qJOdK9I97xQ9iNN8AQfY9TYBoA5IavCzK0QQiDLdMUb-q89UV3X7bGfoEZJabzQiT7MNtEjAQfI1Tu6MBMTDOx0GdvPZWP8_KuIRQPP0XqVCLU53JH2bZdGVsZ39SWNOcgDiNe8PPofNI40Hy14rclkbtvZ1gLHYFADcAAAEBAPgmcZgZbpX3cu8XPTT9gtjx9RaBleApRzxaK9T2qr0vDyBsCY2KTeD6tEvaOAzz1XflsxYY',
-
             'Block2 repeated': 'v6xsVVBD4pOtHHfzLsKBVHscJ7Q4kv_KqOKH3X_Fx1IFAFEAAAABAAZsrNtMucZUIr2UFJF3Y9R2FtBAqbm_YLotMSzgyBAAABRnUeng3ADKX8ZIicklSvESgyOeUPCFnOoBhpY-g10PWujfV7mwWWJZdMylaext9jLzwDxOLnu6u4cxcgbt1Ga1Vn5F0qDCyO0Xp9W1mAUAMAAAAAEAQTScPYuFjasQGAKP6oqkR9d58Q0YgvW3zEg50a0en8vK2ShqzFWqL5E9A_mmkaAvhGj9rr43RZhZiInC6ccflFeTqERnpm0jqQL9ysQtBQBCAAAAAQCH0B81axAaykKtBBNhvA0of9kUOniwBgdkzLFYwPH_pz75AdARszabKfDmBWOZFAzy9dDJfiqIz2Nbfr4S59sVoC-EaP2uvjdFmFmIicLpxx-UV5OoRGembSOpAv3KxC0FAEIAAAABAIfQHzVrEBrKQq0EE2G8DSh_2RQ6eLAGB2TMsVjA8f-nPvkB0BGzNpsp8OYFY5kUDPL10Ml-KojPY1t-vhLn2xWR-mD8U-IPr9CCotdC2_v9IMMAdvlrcL40sa8_gqHEBgUAZgAAAAEAhUGhSMiKPtv7nNQToUxu4BqJ6AIRhcFxK4t54p8IflYe95Crr7woDhT4hDohnlHP-hwS_Uvl726pqfNi8aQUx9uGM7eg0fn4L8Kp8IgX_U7OuDO2djHZ94VcHQMaJHs8FaQ8oSuRvtUFSRUt3xP5mpWE0VCy0mtfERd2uInNR94usZXfBQCuAAAAAQDjgOcIgNTExQeWy90zp3lACz8xJFTHTLv9rqF5wyc3Url47EPGoYN_7fHMvR2lvkKttb32VgkvBnP3OrICY8x4LHYo0UvZgWSEFIzLtesNX27bBPW6Ugo-rohCk4KizsuoGGJN6HjpOqliBil5yQBOJhSshLlEF8d3EBVDpLL5U4A_AcahyEIjgBgGNwsZZZgpiRkPd3cIaOMj6Fo6YVpvW9Yo0g8TgLK6-HRsfx1ezcOYe_i8RTxtbknCKhW7DlyIM4fvCBlN0I4E4uoFAK4AAAABALDHX6ZrqWfuOUQ3krysDOmUiInn-JYA0YxF0gmGPNARfsooLD5t99edvH-B08FTSjlnORT4d9CKH4F5HqfMywrkpJkEwlTAIBn2JsI-OQ71wH-LJcCP_zYqTZquAI1VpU1UPWsiDwiDaXKLtu0CwWIXkA1KVO_qWkkiphqlr93V5o0hPpI4RazZxUKC7g5oYADPMWD9zDoDXPxUCEEV7Jf5UGB6ulVlUyKMVyC9HEKCU3UBVjxOzmQ5EBpUKH3DYkXK1xcdLhgSWaX-aAUArgAAAAEA4F0jykEBYFvhNZJ4kRAZEFyGa_YScn8YqIHF1S4O1M7ZrIr6JiNl1et_Gsp6dsxx9wqs5m_vNxwVywgLD5iqtLpO4pjOVtZQWb_n6Ys24MJDBOMNKiTnSvSPe8UPYjTfAEH2PU2AaAOSGrwsytEEIgy3TFG_qvPVFd1-2xn6BGSWm80Ik-zDbRIwEHyNU7ujATEwzsdBnbz2Vj_PyriEUDz9F6lQi1OdyR9m2XRlbGd_UljTnIA4jXvDz6HzSONB8teK3JZG7b2dYCx2BQA3AAABAQD4JnGYGW6V93LvFz00_YLY8fUWgZXgKUc8WivU9qq9Lw8gbAmNik3g-rRL2jgM89V35bMWGA==',
-
             'Block2 deleted': 'v6xsVVBD4pOtHHfzLsKBVHscJ7Q4kv_KqOKH3X_Fx1IFAFEAAAABAAZsrNtMucZUIr2UFJF3Y9R2FtBAqbm_YLotMSzgyBAAABRnUeng3ADKX8ZIicklSvESgyOeUPCFnOoBhpY-g10PWujfV7mwWWJZdMylaext9jLzwDxOLnu6u4cxcgbt1Ga1Vn5F0qDCyO0Xp9W1mAUAMAAAAAEAQTScPYuFjasQGAKP6oqkR9d58Q0YgvW3zEg50a0en8vK2ShqzFWqL5E9A_mmkZH6YPxT4g-v0IKi10Lb-_0gwwB2-WtwvjSxrz-CocQGBQBmAAAAAQCFQaFIyIo-2_uc1BOhTG7gGonoAhGFwXEri3ninwh-Vh73kKuvvCgOFPiEOiGeUc_6HBL9S-Xvbqmp82LxpBTH24Yzt6DR-fgvwqnwiBf9Ts64M7Z2Mdn3hVwdAxokezwVpDyhK5G-1QVJFS3fE_malYTRULLSa18RF3a4ic1H3i6xld8FAK4AAAABAOOA5wiA1MTFB5bL3TOneUALPzEkVMdMu_2uoXnDJzdSuXjsQ8ahg3_t8cy9HaW-Qq21vfZWCS8Gc_c6sgJjzHgsdijRS9mBZIQUjMu16w1fbtsE9bpSCj6uiEKTgqLOy6gYYk3oeOk6qWIGKXnJAE4mFKyEuUQXx3cQFUOksvlTgD8BxqHIQiOAGAY3CxllmCmJGQ93dwho4yPoWjphWm9b1ijSDxOAsrr4dGx_HV7Nw5h7-LxFPG1uScIqFbsOXIgzh-8IGU3QjgTi6gUArgAAAAEAsMdfpmupZ-45RDeSvKwM6ZSIief4lgDRjEXSCYY80BF-yigsPm331528f4HTwVNKOWc5FPh30IofgXkep8zLCuSkmQTCVMAgGfYmwj45DvXAf4slwI__NipNmq4AjVWlTVQ9ayIPCINpcou27QLBYheQDUpU7-paSSKmGqWv3dXmjSE-kjhFrNnFQoLuDmhgAM8xYP3MOgNc_FQIQRXsl_lQYHq6VWVTIoxXIL0cQoJTdQFWPE7OZDkQGlQofcNiRcrXFx0uGBJZpf5oBQCuAAAAAQDgXSPKQQFgW-E1kniREBkQXIZr9hJyfxiogcXVLg7UztmsivomI2XV638aynp2zHH3Cqzmb-83HBXLCAsPmKq0uk7imM5W1lBZv-fpizbgwkME4w0qJOdK9I97xQ9iNN8AQfY9TYBoA5IavCzK0QQiDLdMUb-q89UV3X7bGfoEZJabzQiT7MNtEjAQfI1Tu6MBMTDOx0GdvPZWP8_KuIRQPP0XqVCLU53JH2bZdGVsZ39SWNOcgDiNe8PPofNI40Hy14rclkbtvZ1gLHYFADcAAAEBAPgmcZgZbpX3cu8XPTT9gtjx9RaBleApRzxaK9T2qr0vDyBsCY2KTeD6tEvaOAzz1XflsxYY',
-
             'Block7 (last) repeated': 'v6xsVVBD4pOtHHfzLsKBVHscJ7Q4kv_KqOKH3X_Fx1IFAFEAAAABAAZsrNtMucZUIr2UFJF3Y9R2FtBAqbm_YLotMSzgyBAAABRnUeng3ADKX8ZIicklSvESgyOeUPCFnOoBhpY-g10PWujfV7mwWWJZdMylaext9jLzwDxOLnu6u4cxcgbt1Ga1Vn5F0qDCyO0Xp9W1mAUAMAAAAAEAQTScPYuFjasQGAKP6oqkR9d58Q0YgvW3zEg50a0en8vK2ShqzFWqL5E9A_mmkaAvhGj9rr43RZhZiInC6ccflFeTqERnpm0jqQL9ysQtBQBCAAAAAQCH0B81axAaykKtBBNhvA0of9kUOniwBgdkzLFYwPH_pz75AdARszabKfDmBWOZFAzy9dDJfiqIz2Nbfr4S59sVkfpg_FPiD6_QgqLXQtv7_SDDAHb5a3C-NLGvP4KhxAYFAGYAAAABAIVBoUjIij7b-5zUE6FMbuAaiegCEYXBcSuLeeKfCH5WHveQq6-8KA4U-IQ6IZ5Rz_ocEv1L5e9uqanzYvGkFMfbhjO3oNH5-C_CqfCIF_1OzrgztnYx2feFXB0DGiR7PBWkPKErkb7VBUkVLd8T-ZqVhNFQstJrXxEXdriJzUfeLrGV3wUArgAAAAEA44DnCIDUxMUHlsvdM6d5QAs_MSRUx0y7_a6hecMnN1K5eOxDxqGDf-3xzL0dpb5CrbW99lYJLwZz9zqyAmPMeCx2KNFL2YFkhBSMy7XrDV9u2wT1ulIKPq6IQpOCos7LqBhiTeh46TqpYgYpeckATiYUrIS5RBfHdxAVQ6Sy-VOAPwHGochCI4AYBjcLGWWYKYkZD3d3CGjjI-haOmFab1vWKNIPE4Cyuvh0bH8dXs3DmHv4vEU8bW5JwioVuw5ciDOH7wgZTdCOBOLqBQCuAAAAAQCwx1-ma6ln7jlEN5K8rAzplIiJ5_iWANGMRdIJhjzQEX7KKCw-bffXnbx_gdPBU0o5ZzkU-HfQih-BeR6nzMsK5KSZBMJUwCAZ9ibCPjkO9cB_iyXAj_82Kk2argCNVaVNVD1rIg8Ig2lyi7btAsFiF5ANSlTv6lpJIqYapa_d1eaNIT6SOEWs2cVCgu4OaGAAzzFg_cw6A1z8VAhBFeyX-VBgerpVZVMijFcgvRxCglN1AVY8Ts5kORAaVCh9w2JFytcXHS4YElml_mgFAK4AAAABAOBdI8pBAWBb4TWSeJEQGRBchmv2EnJ_GKiBxdUuDtTO2ayK-iYjZdXrfxrKenbMcfcKrOZv7zccFcsICw-YqrS6TuKYzlbWUFm_5-mLNuDCQwTjDSok50r0j3vFD2I03wBB9j1NgGgDkhq8LMrRBCIMt0xRv6rz1RXdftsZ-gRklpvNCJPsw20SMBB8jVO7owExMM7HQZ289lY_z8q4hFA8_RepUItTnckfZtl0ZWxnf1JY05yAOI17w8-h80jjQfLXityWRu29nWAsdgUANwAAAQEA-CZxmBlulfdy7xc9NP2C2PH1FoGV4ClHPFor1PaqvS8PIGwJjYpN4Pq0S9o4DPPVd-WzFhh0ZWxnf1JY05yAOI17w8-h80jjQfLXityWRu29nWAsdgUANwAAAQEA-CZxmBlulfdy7xc9NP2C2PH1FoGV4ClHPFor1PaqvS8PIGwJjYpN4Pq0S9o4DPPVd-WzFhg=',
-
             'Block7 (last) deleted': 'v6xsVVBD4pOtHHfzLsKBVHscJ7Q4kv_KqOKH3X_Fx1IFAFEAAAABAAZsrNtMucZUIr2UFJF3Y9R2FtBAqbm_YLotMSzgyBAAABRnUeng3ADKX8ZIicklSvESgyOeUPCFnOoBhpY-g10PWujfV7mwWWJZdMylaext9jLzwDxOLnu6u4cxcgbt1Ga1Vn5F0qDCyO0Xp9W1mAUAMAAAAAEAQTScPYuFjasQGAKP6oqkR9d58Q0YgvW3zEg50a0en8vK2ShqzFWqL5E9A_mmkaAvhGj9rr43RZhZiInC6ccflFeTqERnpm0jqQL9ysQtBQBCAAAAAQCH0B81axAaykKtBBNhvA0of9kUOniwBgdkzLFYwPH_pz75AdARszabKfDmBWOZFAzy9dDJfiqIz2Nbfr4S59sVkfpg_FPiD6_QgqLXQtv7_SDDAHb5a3C-NLGvP4KhxAYFAGYAAAABAIVBoUjIij7b-5zUE6FMbuAaiegCEYXBcSuLeeKfCH5WHveQq6-8KA4U-IQ6IZ5Rz_ocEv1L5e9uqanzYvGkFMfbhjO3oNH5-C_CqfCIF_1OzrgztnYx2feFXB0DGiR7PBWkPKErkb7VBUkVLd8T-ZqVhNFQstJrXxEXdriJzUfeLrGV3wUArgAAAAEA44DnCIDUxMUHlsvdM6d5QAs_MSRUx0y7_a6hecMnN1K5eOxDxqGDf-3xzL0dpb5CrbW99lYJLwZz9zqyAmPMeCx2KNFL2YFkhBSMy7XrDV9u2wT1ulIKPq6IQpOCos7LqBhiTeh46TqpYgYpeckATiYUrIS5RBfHdxAVQ6Sy-VOAPwHGochCI4AYBjcLGWWYKYkZD3d3CGjjI-haOmFab1vWKNIPE4Cyuvh0bH8dXs3DmHv4vEU8bW5JwioVuw5ciDOH7wgZTdCOBOLqBQCuAAAAAQCwx1-ma6ln7jlEN5K8rAzplIiJ5_iWANGMRdIJhjzQEX7KKCw-bffXnbx_gdPBU0o5ZzkU-HfQih-BeR6nzMsK5KSZBMJUwCAZ9ibCPjkO9cB_iyXAj_82Kk2argCNVaVNVD1rIg8Ig2lyi7btAsFiF5ANSlTv6lpJIqYapa_d1eaNIT6SOEWs2cVCgu4OaGAAzzFg_cw6A1z8VAhBFeyX-VBgerpVZVMijFcgvRxCglN1AVY8Ts5kORAaVCh9w2JFytcXHS4YElml_mgFAK4AAAABAOBdI8pBAWBb4TWSeJEQGRBchmv2EnJ_GKiBxdUuDtTO2ayK-iYjZdXrfxrKenbMcfcKrOZv7zccFcsICw-YqrS6TuKYzlbWUFm_5-mLNuDCQwTjDSok50r0j3vFD2I03wBB9j1NgGgDkhq8LMrRBCIMt0xRv6rz1RXdftsZ-gRklpvNCJPsw20SMBB8jVO7owExMM7HQZ289lY_z8q4hFA8_RepUItTnckfZtk=',
-
             'Block1 Block7 deleted': 'v6xsVVBD4pOtHHfzLsKBVHscJ7Q4kv_KqOKH3X_Fx1IFAFEAAAABAAZsrNtMucZUIr2UFJF3Y9R2FtBAqbm_YLotMSzgyBAAABRnUeng3ADKX8ZIicklSvESgyOeUPCFnOoBhpY-g10PWujfV7mwWWJZdMylaew=',
          }
       },
@@ -1753,35 +1835,41 @@ describe("Block order change and deletion detection, multi-version", function ()
          ver: 6,
          goodCt: "145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0b8z5ZdoouvyB9aG3QlCbc9XTBfAN4yPYcxrzdASguAgYAMQAAAAEAl0vO23m4DaUuLlCchOsXoKnl4bYKmhmX_ydWm2p95AwKZcdXuNcSgBMD17fjfQxogLpTAVw46IYT6Yade9GaEZeK-H4_IWcRVVloHAjiBgBDAAAAAQCkAj9mmn0ml0CccOOHETPlyrQ0qPr2vtFzCrvt-SAx_VfWK3UP7bsmKruWrF9fXPaHjlhEl9b3BzLgWFRhEI1tccFm2H62Twhok-txX_Tzma2f-1wEacpdfUYuiGgYpgIGAGcAAAABAOjptoow8I9KMVohLYUE7yt4Bvt23UzOw_nrRXVseI-n_TJ1i3jBtcdWk1hfrvWlw-2PoJZyH2oFJi2vn0Ulo_TxtGOAxKV6bPz28qxg4AenSlhmenw8N6AuS-QkSe71LDKczPAYp90W6ZiO06uOk9Dgv3ftONRWM9yuN7Kt0IqnKR5FRwYArwAAAAEAcUDPBJ_iL9JmZB8vrg4cNOJQ0zniAhWDhetArzNGPK9jJ1XPpvt7eZUyCCIvMbMFJL9sCMMNyQ6GpQbu3Yb5ykCA7UjRKDyjZaHvMifXl1DtJX8D7tkilUD9CxFG5JDiZP5WSVbK9vufZZXYmO0Rb55-XDrEwAkFGv_Z7baL3CCvFBApV8pgJFP4Y6BgzoF3X1Twah0_lpB8amihm74KoQmIR-PzuCZwRYdIcbnSCPRcEQDEAJteYV1mNHZZ4RjAebx4UKfaNFzpS3bRBgCvAAAAAQBi_iVR4Q8bxXY2--aZBV6HpYFK8iHV2R5wynUcAjctCSonwJJkv0_LZ14vFpgDak70e6exgvIfAkLb_vpjfDN8B_xKWKcuBNLvg1XwVHwEkXu0OW_a2T6FJLwVN9yYMd7TrCEqjx-Ey77eGlvie66gfdsAfqsfM_bA_rmstmDdEWZN0oKZQ4dhEuuinf61NL6R2zuH_AOm-rqgSYuHnZSZrVkmFCvmWDPsthBVH_ndo_8jdaFw-0H6fTScHXdxi4ByWbFikOScO7Og4UsGAK8AAAABAKMxDRKY02yKwaHyj5hGCyjjzls4u_KJbhq_kyU1LapORWJ8PrLU7ngWKZVV7nDbLbiGr7618KJTO9QTypg-mpqZLxKshTQh1T9y7OcIi41phr-OgQtmfLNsTq-poL9KA8j4JKQOE7BbgKWuGuD2106SJueQ0j-OdQq8FmZF3wvI_GH3jKlxnc-TsZYNz297pBBEx1X87YWHlaEG6IYsuMxTZUmuOXrZ4EAXWa2fNQwontou1_P0uGJW-zOp_0B_66xoXQZzWxBZDYXMHwYAOAAAAQEAQRiF8kaVmi2xqbQV1__kKXlpRGQvNsAWpDpH20Q-1_GWz1vSBPm5Q3OEPzO4jYh7NNy3GqI=",
          badCts: {
-            'Block0 Block7 swap': 'nzUMKJ7aLtfz9LhiVvszqf9Af-usaF0Gc1sQWQ2FzB8GADgAAAEBAEEYhfJGlZotsam0Fdf_5Cl5aURkLzbAFqQ6R9tEPtfxls9b0gT5uUNzhD8zuI2IezTctxqiG_M-WXaKLr8gfWht0JQm3PV0wXwDeMj2HMa83QEoLgIGADEAAAABAJdLztt5uA2lLi5QnITrF6Cp5eG2CpoZl_8nVptqfeQMCmXHV7jXEoATA9e3430MaIC6UwFcOOiGE-mGnXvRmhGXivh-PyFnEVVZaBwI4gYAQwAAAAEApAI_Zpp9JpdAnHDjhxEz5cq0NKj69r7Rcwq77fkgMf1X1it1D-27Jiq7lqxfX1z2h45YRJfW9wcy4FhUYRCNbXHBZth-tk8IaJPrcV_085mtn_tcBGnKXX1GLohoGKYCBgBnAAAAAQDo6baKMPCPSjFaIS2FBO8reAb7dt1MzsP560V1bHiPp_0ydYt4wbXHVpNYX671pcPtj6CWch9qBSYtr59FJaP08bRjgMSlemz89vKsYOAHp0pYZnp8PDegLkvkJEnu9SwynMzwGKfdFumYjtOrjpPQ4L937TjUVjPcrjeyrdCKpykeRUcGAK8AAAABAHFAzwSf4i_SZmQfL64OHDTiUNM54gIVg4XrQK8zRjyvYydVz6b7e3mVMggiLzGzBSS_bAjDDckOhqUG7t2G-cpAgO1I0Sg8o2Wh7zIn15dQ7SV_A-7ZIpVA_QsRRuSQ4mT-VklWyvb7n2WV2JjtEW-eflw6xMAJBRr_2e22i9wgrxQQKVfKYCRT-GOgYM6Bd19U8GodP5aQfGpooZu-CqEJiEfj87gmcEWHSHG50gj0XBEAxACbXmFdZjR2WeEYwHm8eFCn2jRc6Ut20QYArwAAAAEAYv4lUeEPG8V2NvvmmQVeh6WBSvIh1dkecMp1HAI3LQkqJ8CSZL9Py2deLxaYA2pO9HunsYLyHwJC2_76Y3wzfAf8SlinLgTS74NV8FR8BJF7tDlv2tk-hSS8FTfcmDHe06whKo8fhMu-3hpb4nuuoH3bAH6rHzP2wP65rLZg3RFmTdKCmUOHYRLrop3-tTS-kds7h_wDpvq6oEmLh52Uma1ZJhQr5lgz7LYQVR_53aP_I3WhcPtB-n00nB13cYuAclmxYpDknDuzoOFLBgCvAAAAAQCjMQ0SmNNsisGh8o-YRgso485bOLvyiW4av5MlNS2qTkVifD6y1O54FimVVe5w2y24hq--tfCiUzvUE8qYPpqamS8SrIU0IdU_cuznCIuNaYa_joELZnyzbE6vqaC_SgPI-CSkDhOwW4Clrhrg9tdOkibnkNI_jnUKvBZmRd8LyPxh94ypcZ3Pk7GWDc9ve6QQRMdV_O2Fh5WhBuiGLLjMU2VJrjl62eBAF1mt145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0',
-
-            'Block1 Block7 swap': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb2fNQwontou1_P0uGJW-zOp_0B_66xoXQZzWxBZDYXMHwYAOAAAAQEAQRiF8kaVmi2xqbQV1__kKXlpRGQvNsAWpDpH20Q-1_GWz1vSBPm5Q3OEPzO4jYh7NNy3GqIMaIC6UwFcOOiGE-mGnXvRmhGXivh-PyFnEVVZaBwI4gYAQwAAAAEApAI_Zpp9JpdAnHDjhxEz5cq0NKj69r7Rcwq77fkgMf1X1it1D-27Jiq7lqxfX1z2h45YRJfW9wcy4FhUYRCNbXHBZth-tk8IaJPrcV_085mtn_tcBGnKXX1GLohoGKYCBgBnAAAAAQDo6baKMPCPSjFaIS2FBO8reAb7dt1MzsP560V1bHiPp_0ydYt4wbXHVpNYX671pcPtj6CWch9qBSYtr59FJaP08bRjgMSlemz89vKsYOAHp0pYZnp8PDegLkvkJEnu9SwynMzwGKfdFumYjtOrjpPQ4L937TjUVjPcrjeyrdCKpykeRUcGAK8AAAABAHFAzwSf4i_SZmQfL64OHDTiUNM54gIVg4XrQK8zRjyvYydVz6b7e3mVMggiLzGzBSS_bAjDDckOhqUG7t2G-cpAgO1I0Sg8o2Wh7zIn15dQ7SV_A-7ZIpVA_QsRRuSQ4mT-VklWyvb7n2WV2JjtEW-eflw6xMAJBRr_2e22i9wgrxQQKVfKYCRT-GOgYM6Bd19U8GodP5aQfGpooZu-CqEJiEfj87gmcEWHSHG50gj0XBEAxACbXmFdZjR2WeEYwHm8eFCn2jRc6Ut20QYArwAAAAEAYv4lUeEPG8V2NvvmmQVeh6WBSvIh1dkecMp1HAI3LQkqJ8CSZL9Py2deLxaYA2pO9HunsYLyHwJC2_76Y3wzfAf8SlinLgTS74NV8FR8BJF7tDlv2tk-hSS8FTfcmDHe06whKo8fhMu-3hpb4nuuoH3bAH6rHzP2wP65rLZg3RFmTdKCmUOHYRLrop3-tTS-kds7h_wDpvq6oEmLh52Uma1ZJhQr5lgz7LYQVR_53aP_I3WhcPtB-n00nB13cYuAclmxYpDknDuzoOFLBgCvAAAAAQCjMQ0SmNNsisGh8o-YRgso485bOLvyiW4av5MlNS2qTkVifD6y1O54FimVVe5w2y24hq--tfCiUzvUE8qYPpqamS8SrIU0IdU_cuznCIuNaYa_joELZnyzbE6vqaC_SgPI-CSkDhOwW4Clrhrg9tdOkibnkNI_jnUKvBZmRd8LyPxh94ypcZ3Pk7GWDc9ve6QQRMdV_O2Fh5WhBuiGLLjMU2VJrjl62eBAF1mtG_M-WXaKLr8gfWht0JQm3PV0wXwDeMj2HMa83QEoLgIGADEAAAABAJdLztt5uA2lLi5QnITrF6Cp5eG2CpoZl_8nVptqfeQMCmXHV7jXEoATA9e3430',
-
-            'Block1 Block4 swap': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0Yp90W6ZiO06uOk9Dgv3ftONRWM9yuN7Kt0IqnKR5FRwYArwAAAAEAcUDPBJ_iL9JmZB8vrg4cNOJQ0zniAhWDhetArzNGPK9jJ1XPpvt7eZUyCCIvMbMFJL9sCMMNyQ6GpQbu3Yb5ykCA7UjRKDyjZaHvMifXl1DtJX8D7tkilUD9CxFG5JDiZP5WSVbK9vufZZXYmO0Rb55-XDrEwAkFGv_Z7baL3CCvFBApV8pgJFP4Y6BgzoF3X1Twah0_lpB8amihm74KoQmIR-PzuCZwRYdIcQxogLpTAVw46IYT6Yade9GaEZeK-H4_IWcRVVloHAjiBgBDAAAAAQCkAj9mmn0ml0CccOOHETPlyrQ0qPr2vtFzCrvt-SAx_VfWK3UP7bsmKruWrF9fXPaHjlhEl9b3BzLgWFRhEI1tccFm2H62Twhok-txX_Tzma2f-1wEacpdfUYuiGgYpgIGAGcAAAABAOjptoow8I9KMVohLYUE7yt4Bvt23UzOw_nrRXVseI-n_TJ1i3jBtcdWk1hfrvWlw-2PoJZyH2oFJi2vn0Ulo_TxtGOAxKV6bPz28qxg4AenSlhmenw8N6AuS-QkSe71LDKczPAb8z5ZdoouvyB9aG3QlCbc9XTBfAN4yPYcxrzdASguAgYAMQAAAAEAl0vO23m4DaUuLlCchOsXoKnl4bYKmhmX_ydWm2p95AwKZcdXuNcSgBMD17fjfbnSCPRcEQDEAJteYV1mNHZZ4RjAebx4UKfaNFzpS3bRBgCvAAAAAQBi_iVR4Q8bxXY2--aZBV6HpYFK8iHV2R5wynUcAjctCSonwJJkv0_LZ14vFpgDak70e6exgvIfAkLb_vpjfDN8B_xKWKcuBNLvg1XwVHwEkXu0OW_a2T6FJLwVN9yYMd7TrCEqjx-Ey77eGlvie66gfdsAfqsfM_bA_rmstmDdEWZN0oKZQ4dhEuuinf61NL6R2zuH_AOm-rqgSYuHnZSZrVkmFCvmWDPsthBVH_ndo_8jdaFw-0H6fTScHXdxi4ByWbFikOScO7Og4UsGAK8AAAABAKMxDRKY02yKwaHyj5hGCyjjzls4u_KJbhq_kyU1LapORWJ8PrLU7ngWKZVV7nDbLbiGr7618KJTO9QTypg-mpqZLxKshTQh1T9y7OcIi41phr-OgQtmfLNsTq-poL9KA8j4JKQOE7BbgKWuGuD2106SJueQ0j-OdQq8FmZF3wvI_GH3jKlxnc-TsZYNz297pBBEx1X87YWHlaEG6IYsuMxTZUmuOXrZ4EAXWa2fNQwontou1_P0uGJW-zOp_0B_66xoXQZzWxBZDYXMHwYAOAAAAQEAQRiF8kaVmi2xqbQV1__kKXlpRGQvNsAWpDpH20Q-1_GWz1vSBPm5Q3OEPzO4jYh7NNy3GqI',
-
-            'Block0 repeated': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb3XjlJ8Hh0ipuZjL5sfWueHWnIU3xPUTITIUIwW2C4GQAYAUgAAAAEAMewcwvztyFBgr_nxHEJrSVUtFb255UQ7nlIfq-DIEAAAFE7d6qc1X_E3EGexf6vsphaCfkX7EyIDmVM18NjDu06gKC0X-p105ePIeKwRvRvzPll2ii6_IH1obdCUJtz1dMF8A3jI9hzGvN0BKC4CBgAxAAAAAQCXS87bebgNpS4uUJyE6xegqeXhtgqaGZf_J1aban3kDAplx1e41xKAEwPXt-N9DGiAulMBXDjohhPphp170ZoRl4r4fj8hZxFVWWgcCOIGAEMAAAABAKQCP2aafSaXQJxw44cRM-XKtDSo-va-0XMKu-35IDH9V9YrdQ_tuyYqu5asX19c9oeOWESX1vcHMuBYVGEQjW1xwWbYfrZPCGiT63Ff9POZrZ_7XARpyl19Ri6IaBimAgYAZwAAAAEA6Om2ijDwj0oxWiEthQTvK3gG-3bdTM7D-etFdWx4j6f9MnWLeMG1x1aTWF-u9aXD7Y-glnIfagUmLa-fRSWj9PG0Y4DEpXps_PbyrGDgB6dKWGZ6fDw3oC5L5CRJ7vUsMpzM8Bin3RbpmI7Tq46T0OC_d-041FYz3K43sq3QiqcpHkVHBgCvAAAAAQBxQM8En-Iv0mZkHy-uDhw04lDTOeICFYOF60CvM0Y8r2MnVc-m-3t5lTIIIi8xswUkv2wIww3JDoalBu7dhvnKQIDtSNEoPKNloe8yJ9eXUO0lfwPu2SKVQP0LEUbkkOJk_lZJVsr2-59lldiY7RFvnn5cOsTACQUa_9nttovcIK8UEClXymAkU_hjoGDOgXdfVPBqHT-WkHxqaKGbvgqhCYhH4_O4JnBFh0hxudII9FwRAMQAm15hXWY0dlnhGMB5vHhQp9o0XOlLdtEGAK8AAAABAGL-JVHhDxvFdjb75pkFXoelgUryIdXZHnDKdRwCNy0JKifAkmS_T8tnXi8WmANqTvR7p7GC8h8CQtv--mN8M3wH_EpYpy4E0u-DVfBUfASRe7Q5b9rZPoUkvBU33Jgx3tOsISqPH4TLvt4aW-J7rqB92wB-qx8z9sD-uay2YN0RZk3SgplDh2ES66Kd_rU0vpHbO4f8A6b6uqBJi4edlJmtWSYUK-ZYM-y2EFUf-d2j_yN1oXD7Qfp9NJwdd3GLgHJZsWKQ5Jw7s6DhSwYArwAAAAEAozENEpjTbIrBofKPmEYLKOPOWzi78oluGr-TJTUtqk5FYnw-stTueBYplVXucNstuIavvrXwolM71BPKmD6ampkvEqyFNCHVP3Ls5wiLjWmGv46BC2Z8s2xOr6mgv0oDyPgkpA4TsFuApa4a4PbXTpIm55DSP451CrwWZkXfC8j8YfeMqXGdz5Oxlg3Pb3ukEETHVfzthYeVoQbohiy4zFNlSa45etngQBdZrZ81DCie2i7X8_S4Ylb7M6n_QH_rrGhdBnNbEFkNhcwfBgA4AAABAQBBGIXyRpWaLbGptBXX_-QpeWlEZC82wBakOkfbRD7X8ZbPW9IE-blDc4Q_M7iNiHs03Lcaog',
-
-            'Block0 deleted': 'G_M-WXaKLr8gfWht0JQm3PV0wXwDeMj2HMa83QEoLgIGADEAAAABAJdLztt5uA2lLi5QnITrF6Cp5eG2CpoZl_8nVptqfeQMCmXHV7jXEoATA9e3430MaIC6UwFcOOiGE-mGnXvRmhGXivh-PyFnEVVZaBwI4gYAQwAAAAEApAI_Zpp9JpdAnHDjhxEz5cq0NKj69r7Rcwq77fkgMf1X1it1D-27Jiq7lqxfX1z2h45YRJfW9wcy4FhUYRCNbXHBZth-tk8IaJPrcV_085mtn_tcBGnKXX1GLohoGKYCBgBnAAAAAQDo6baKMPCPSjFaIS2FBO8reAb7dt1MzsP560V1bHiPp_0ydYt4wbXHVpNYX671pcPtj6CWch9qBSYtr59FJaP08bRjgMSlemz89vKsYOAHp0pYZnp8PDegLkvkJEnu9SwynMzwGKfdFumYjtOrjpPQ4L937TjUVjPcrjeyrdCKpykeRUcGAK8AAAABAHFAzwSf4i_SZmQfL64OHDTiUNM54gIVg4XrQK8zRjyvYydVz6b7e3mVMggiLzGzBSS_bAjDDckOhqUG7t2G-cpAgO1I0Sg8o2Wh7zIn15dQ7SV_A-7ZIpVA_QsRRuSQ4mT-VklWyvb7n2WV2JjtEW-eflw6xMAJBRr_2e22i9wgrxQQKVfKYCRT-GOgYM6Bd19U8GodP5aQfGpooZu-CqEJiEfj87gmcEWHSHG50gj0XBEAxACbXmFdZjR2WeEYwHm8eFCn2jRc6Ut20QYArwAAAAEAYv4lUeEPG8V2NvvmmQVeh6WBSvIh1dkecMp1HAI3LQkqJ8CSZL9Py2deLxaYA2pO9HunsYLyHwJC2_76Y3wzfAf8SlinLgTS74NV8FR8BJF7tDlv2tk-hSS8FTfcmDHe06whKo8fhMu-3hpb4nuuoH3bAH6rHzP2wP65rLZg3RFmTdKCmUOHYRLrop3-tTS-kds7h_wDpvq6oEmLh52Uma1ZJhQr5lgz7LYQVR_53aP_I3WhcPtB-n00nB13cYuAclmxYpDknDuzoOFLBgCvAAAAAQCjMQ0SmNNsisGh8o-YRgso485bOLvyiW4av5MlNS2qTkVifD6y1O54FimVVe5w2y24hq--tfCiUzvUE8qYPpqamS8SrIU0IdU_cuznCIuNaYa_joELZnyzbE6vqaC_SgPI-CSkDhOwW4Clrhrg9tdOkibnkNI_jnUKvBZmRd8LyPxh94ypcZ3Pk7GWDc9ve6QQRMdV_O2Fh5WhBuiGLLjMU2VJrjl62eBAF1mtnzUMKJ7aLtfz9LhiVvszqf9Af-usaF0Gc1sQWQ2FzB8GADgAAAEBAEEYhfJGlZotsam0Fdf_5Cl5aURkLzbAFqQ6R9tEPtfxls9b0gT5uUNzhD8zuI2IezTctxqi',
-
-            'Block1 repeated': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0b8z5ZdoouvyB9aG3QlCbc9XTBfAN4yPYcxrzdASguAgYAMQAAAAEAl0vO23m4DaUuLlCchOsXoKnl4bYKmhmX_ydWm2p95AwKZcdXuNcSgBMD17fjfRvzPll2ii6_IH1obdCUJtz1dMF8A3jI9hzGvN0BKC4CBgAxAAAAAQCXS87bebgNpS4uUJyE6xegqeXhtgqaGZf_J1aban3kDAplx1e41xKAEwPXt-N9DGiAulMBXDjohhPphp170ZoRl4r4fj8hZxFVWWgcCOIGAEMAAAABAKQCP2aafSaXQJxw44cRM-XKtDSo-va-0XMKu-35IDH9V9YrdQ_tuyYqu5asX19c9oeOWESX1vcHMuBYVGEQjW1xwWbYfrZPCGiT63Ff9POZrZ_7XARpyl19Ri6IaBimAgYAZwAAAAEA6Om2ijDwj0oxWiEthQTvK3gG-3bdTM7D-etFdWx4j6f9MnWLeMG1x1aTWF-u9aXD7Y-glnIfagUmLa-fRSWj9PG0Y4DEpXps_PbyrGDgB6dKWGZ6fDw3oC5L5CRJ7vUsMpzM8Bin3RbpmI7Tq46T0OC_d-041FYz3K43sq3QiqcpHkVHBgCvAAAAAQBxQM8En-Iv0mZkHy-uDhw04lDTOeICFYOF60CvM0Y8r2MnVc-m-3t5lTIIIi8xswUkv2wIww3JDoalBu7dhvnKQIDtSNEoPKNloe8yJ9eXUO0lfwPu2SKVQP0LEUbkkOJk_lZJVsr2-59lldiY7RFvnn5cOsTACQUa_9nttovcIK8UEClXymAkU_hjoGDOgXdfVPBqHT-WkHxqaKGbvgqhCYhH4_O4JnBFh0hxudII9FwRAMQAm15hXWY0dlnhGMB5vHhQp9o0XOlLdtEGAK8AAAABAGL-JVHhDxvFdjb75pkFXoelgUryIdXZHnDKdRwCNy0JKifAkmS_T8tnXi8WmANqTvR7p7GC8h8CQtv--mN8M3wH_EpYpy4E0u-DVfBUfASRe7Q5b9rZPoUkvBU33Jgx3tOsISqPH4TLvt4aW-J7rqB92wB-qx8z9sD-uay2YN0RZk3SgplDh2ES66Kd_rU0vpHbO4f8A6b6uqBJi4edlJmtWSYUK-ZYM-y2EFUf-d2j_yN1oXD7Qfp9NJwdd3GLgHJZsWKQ5Jw7s6DhSwYArwAAAAEAozENEpjTbIrBofKPmEYLKOPOWzi78oluGr-TJTUtqk5FYnw-stTueBYplVXucNstuIavvrXwolM71BPKmD6ampkvEqyFNCHVP3Ls5wiLjWmGv46BC2Z8s2xOr6mgv0oDyPgkpA4TsFuApa4a4PbXTpIm55DSP451CrwWZkXfC8j8YfeMqXGdz5Oxlg3Pb3ukEETHVfzthYeVoQbohiy4zFNlSa45etngQBdZrZ81DCie2i7X8_S4Ylb7M6n_QH_rrGhdBnNbEFkNhcwfBgA4AAABAQBBGIXyRpWaLbGptBXX_-QpeWlEZC82wBakOkfbRD7X8ZbPW9IE-blDc4Q_M7iNiHs03Lcaog',
-
-            "Block1 deleted": '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0MaIC6UwFcOOiGE-mGnXvRmhGXivh-PyFnEVVZaBwI4gYAQwAAAAEApAI_Zpp9JpdAnHDjhxEz5cq0NKj69r7Rcwq77fkgMf1X1it1D-27Jiq7lqxfX1z2h45YRJfW9wcy4FhUYRCNbXHBZth-tk8IaJPrcV_085mtn_tcBGnKXX1GLohoGKYCBgBnAAAAAQDo6baKMPCPSjFaIS2FBO8reAb7dt1MzsP560V1bHiPp_0ydYt4wbXHVpNYX671pcPtj6CWch9qBSYtr59FJaP08bRjgMSlemz89vKsYOAHp0pYZnp8PDegLkvkJEnu9SwynMzwGKfdFumYjtOrjpPQ4L937TjUVjPcrjeyrdCKpykeRUcGAK8AAAABAHFAzwSf4i_SZmQfL64OHDTiUNM54gIVg4XrQK8zRjyvYydVz6b7e3mVMggiLzGzBSS_bAjDDckOhqUG7t2G-cpAgO1I0Sg8o2Wh7zIn15dQ7SV_A-7ZIpVA_QsRRuSQ4mT-VklWyvb7n2WV2JjtEW-eflw6xMAJBRr_2e22i9wgrxQQKVfKYCRT-GOgYM6Bd19U8GodP5aQfGpooZu-CqEJiEfj87gmcEWHSHG50gj0XBEAxACbXmFdZjR2WeEYwHm8eFCn2jRc6Ut20QYArwAAAAEAYv4lUeEPG8V2NvvmmQVeh6WBSvIh1dkecMp1HAI3LQkqJ8CSZL9Py2deLxaYA2pO9HunsYLyHwJC2_76Y3wzfAf8SlinLgTS74NV8FR8BJF7tDlv2tk-hSS8FTfcmDHe06whKo8fhMu-3hpb4nuuoH3bAH6rHzP2wP65rLZg3RFmTdKCmUOHYRLrop3-tTS-kds7h_wDpvq6oEmLh52Uma1ZJhQr5lgz7LYQVR_53aP_I3WhcPtB-n00nB13cYuAclmxYpDknDuzoOFLBgCvAAAAAQCjMQ0SmNNsisGh8o-YRgso485bOLvyiW4av5MlNS2qTkVifD6y1O54FimVVe5w2y24hq--tfCiUzvUE8qYPpqamS8SrIU0IdU_cuznCIuNaYa_joELZnyzbE6vqaC_SgPI-CSkDhOwW4Clrhrg9tdOkibnkNI_jnUKvBZmRd8LyPxh94ypcZ3Pk7GWDc9ve6QQRMdV_O2Fh5WhBuiGLLjMU2VJrjl62eBAF1mtnzUMKJ7aLtfz9LhiVvszqf9Af-usaF0Gc1sQWQ2FzB8GADgAAAEBAEEYhfJGlZotsam0Fdf_5Cl5aURkLzbAFqQ6R9tEPtfxls9b0gT5uUNzhD8zuI2IezTctxqi',
-
-            'Block2 repeated': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0b8z5ZdoouvyB9aG3QlCbc9XTBfAN4yPYcxrzdASguAgYAMQAAAAEAl0vO23m4DaUuLlCchOsXoKnl4bYKmhmX_ydWm2p95AwKZcdXuNcSgBMD17fjfQxogLpTAVw46IYT6Yade9GaEZeK-H4_IWcRVVloHAjiBgBDAAAAAQCkAj9mmn0ml0CccOOHETPlyrQ0qPr2vtFzCrvt-SAx_VfWK3UP7bsmKruWrF9fXPaHjlhEl9b3BzLgWFRhEI1tDGiAulMBXDjohhPphp170ZoRl4r4fj8hZxFVWWgcCOIGAEMAAAABAKQCP2aafSaXQJxw44cRM-XKtDSo-va-0XMKu-35IDH9V9YrdQ_tuyYqu5asX19c9oeOWESX1vcHMuBYVGEQjW1xwWbYfrZPCGiT63Ff9POZrZ_7XARpyl19Ri6IaBimAgYAZwAAAAEA6Om2ijDwj0oxWiEthQTvK3gG-3bdTM7D-etFdWx4j6f9MnWLeMG1x1aTWF-u9aXD7Y-glnIfagUmLa-fRSWj9PG0Y4DEpXps_PbyrGDgB6dKWGZ6fDw3oC5L5CRJ7vUsMpzM8Bin3RbpmI7Tq46T0OC_d-041FYz3K43sq3QiqcpHkVHBgCvAAAAAQBxQM8En-Iv0mZkHy-uDhw04lDTOeICFYOF60CvM0Y8r2MnVc-m-3t5lTIIIi8xswUkv2wIww3JDoalBu7dhvnKQIDtSNEoPKNloe8yJ9eXUO0lfwPu2SKVQP0LEUbkkOJk_lZJVsr2-59lldiY7RFvnn5cOsTACQUa_9nttovcIK8UEClXymAkU_hjoGDOgXdfVPBqHT-WkHxqaKGbvgqhCYhH4_O4JnBFh0hxudII9FwRAMQAm15hXWY0dlnhGMB5vHhQp9o0XOlLdtEGAK8AAAABAGL-JVHhDxvFdjb75pkFXoelgUryIdXZHnDKdRwCNy0JKifAkmS_T8tnXi8WmANqTvR7p7GC8h8CQtv--mN8M3wH_EpYpy4E0u-DVfBUfASRe7Q5b9rZPoUkvBU33Jgx3tOsISqPH4TLvt4aW-J7rqB92wB-qx8z9sD-uay2YN0RZk3SgplDh2ES66Kd_rU0vpHbO4f8A6b6uqBJi4edlJmtWSYUK-ZYM-y2EFUf-d2j_yN1oXD7Qfp9NJwdd3GLgHJZsWKQ5Jw7s6DhSwYArwAAAAEAozENEpjTbIrBofKPmEYLKOPOWzi78oluGr-TJTUtqk5FYnw-stTueBYplVXucNstuIavvrXwolM71BPKmD6ampkvEqyFNCHVP3Ls5wiLjWmGv46BC2Z8s2xOr6mgv0oDyPgkpA4TsFuApa4a4PbXTpIm55DSP451CrwWZkXfC8j8YfeMqXGdz5Oxlg3Pb3ukEETHVfzthYeVoQbohiy4zFNlSa45etngQBdZrZ81DCie2i7X8_S4Ylb7M6n_QH_rrGhdBnNbEFkNhcwfBgA4AAABAQBBGIXyRpWaLbGptBXX_-QpeWlEZC82wBakOkfbRD7X8ZbPW9IE-blDc4Q_M7iNiHs03Lcaog',
-
-            'Block2 deleted': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0b8z5ZdoouvyB9aG3QlCbc9XTBfAN4yPYcxrzdASguAgYAMQAAAAEAl0vO23m4DaUuLlCchOsXoKnl4bYKmhmX_ydWm2p95AwKZcdXuNcSgBMD17fjfXHBZth-tk8IaJPrcV_085mtn_tcBGnKXX1GLohoGKYCBgBnAAAAAQDo6baKMPCPSjFaIS2FBO8reAb7dt1MzsP560V1bHiPp_0ydYt4wbXHVpNYX671pcPtj6CWch9qBSYtr59FJaP08bRjgMSlemz89vKsYOAHp0pYZnp8PDegLkvkJEnu9SwynMzwGKfdFumYjtOrjpPQ4L937TjUVjPcrjeyrdCKpykeRUcGAK8AAAABAHFAzwSf4i_SZmQfL64OHDTiUNM54gIVg4XrQK8zRjyvYydVz6b7e3mVMggiLzGzBSS_bAjDDckOhqUG7t2G-cpAgO1I0Sg8o2Wh7zIn15dQ7SV_A-7ZIpVA_QsRRuSQ4mT-VklWyvb7n2WV2JjtEW-eflw6xMAJBRr_2e22i9wgrxQQKVfKYCRT-GOgYM6Bd19U8GodP5aQfGpooZu-CqEJiEfj87gmcEWHSHG50gj0XBEAxACbXmFdZjR2WeEYwHm8eFCn2jRc6Ut20QYArwAAAAEAYv4lUeEPG8V2NvvmmQVeh6WBSvIh1dkecMp1HAI3LQkqJ8CSZL9Py2deLxaYA2pO9HunsYLyHwJC2_76Y3wzfAf8SlinLgTS74NV8FR8BJF7tDlv2tk-hSS8FTfcmDHe06whKo8fhMu-3hpb4nuuoH3bAH6rHzP2wP65rLZg3RFmTdKCmUOHYRLrop3-tTS-kds7h_wDpvq6oEmLh52Uma1ZJhQr5lgz7LYQVR_53aP_I3WhcPtB-n00nB13cYuAclmxYpDknDuzoOFLBgCvAAAAAQCjMQ0SmNNsisGh8o-YRgso485bOLvyiW4av5MlNS2qTkVifD6y1O54FimVVe5w2y24hq--tfCiUzvUE8qYPpqamS8SrIU0IdU_cuznCIuNaYa_joELZnyzbE6vqaC_SgPI-CSkDhOwW4Clrhrg9tdOkibnkNI_jnUKvBZmRd8LyPxh94ypcZ3Pk7GWDc9ve6QQRMdV_O2Fh5WhBuiGLLjMU2VJrjl62eBAF1mtnzUMKJ7aLtfz9LhiVvszqf9Af-usaF0Gc1sQWQ2FzB8GADgAAAEBAEEYhfJGlZotsam0Fdf_5Cl5aURkLzbAFqQ6R9tEPtfxls9b0gT5uUNzhD8zuI2IezTctxqi',
-
-            'Block7 (last) repeated': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0b8z5ZdoouvyB9aG3QlCbc9XTBfAN4yPYcxrzdASguAgYAMQAAAAEAl0vO23m4DaUuLlCchOsXoKnl4bYKmhmX_ydWm2p95AwKZcdXuNcSgBMD17fjfQxogLpTAVw46IYT6Yade9GaEZeK-H4_IWcRVVloHAjiBgBDAAAAAQCkAj9mmn0ml0CccOOHETPlyrQ0qPr2vtFzCrvt-SAx_VfWK3UP7bsmKruWrF9fXPaHjlhEl9b3BzLgWFRhEI1tccFm2H62Twhok-txX_Tzma2f-1wEacpdfUYuiGgYpgIGAGcAAAABAOjptoow8I9KMVohLYUE7yt4Bvt23UzOw_nrRXVseI-n_TJ1i3jBtcdWk1hfrvWlw-2PoJZyH2oFJi2vn0Ulo_TxtGOAxKV6bPz28qxg4AenSlhmenw8N6AuS-QkSe71LDKczPAYp90W6ZiO06uOk9Dgv3ftONRWM9yuN7Kt0IqnKR5FRwYArwAAAAEAcUDPBJ_iL9JmZB8vrg4cNOJQ0zniAhWDhetArzNGPK9jJ1XPpvt7eZUyCCIvMbMFJL9sCMMNyQ6GpQbu3Yb5ykCA7UjRKDyjZaHvMifXl1DtJX8D7tkilUD9CxFG5JDiZP5WSVbK9vufZZXYmO0Rb55-XDrEwAkFGv_Z7baL3CCvFBApV8pgJFP4Y6BgzoF3X1Twah0_lpB8amihm74KoQmIR-PzuCZwRYdIcbnSCPRcEQDEAJteYV1mNHZZ4RjAebx4UKfaNFzpS3bRBgCvAAAAAQBi_iVR4Q8bxXY2--aZBV6HpYFK8iHV2R5wynUcAjctCSonwJJkv0_LZ14vFpgDak70e6exgvIfAkLb_vpjfDN8B_xKWKcuBNLvg1XwVHwEkXu0OW_a2T6FJLwVN9yYMd7TrCEqjx-Ey77eGlvie66gfdsAfqsfM_bA_rmstmDdEWZN0oKZQ4dhEuuinf61NL6R2zuH_AOm-rqgSYuHnZSZrVkmFCvmWDPsthBVH_ndo_8jdaFw-0H6fTScHXdxi4ByWbFikOScO7Og4UsGAK8AAAABAKMxDRKY02yKwaHyj5hGCyjjzls4u_KJbhq_kyU1LapORWJ8PrLU7ngWKZVV7nDbLbiGr7618KJTO9QTypg-mpqZLxKshTQh1T9y7OcIi41phr-OgQtmfLNsTq-poL9KA8j4JKQOE7BbgKWuGuD2106SJueQ0j-OdQq8FmZF3wvI_GH3jKlxnc-TsZYNz297pBBEx1X87YWHlaEG6IYsuMxTZUmuOXrZ4EAXWa2fNQwontou1_P0uGJW-zOp_0B_66xoXQZzWxBZDYXMHwYAOAAAAQEAQRiF8kaVmi2xqbQV1__kKXlpRGQvNsAWpDpH20Q-1_GWz1vSBPm5Q3OEPzO4jYh7NNy3GqKfNQwontou1_P0uGJW-zOp_0B_66xoXQZzWxBZDYXMHwYAOAAAAQEAQRiF8kaVmi2xqbQV1__kKXlpRGQvNsAWpDpH20Q-1_GWz1vSBPm5Q3OEPzO4jYh7NNy3GqI',
-
-            'Block7 (last) deleted': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0b8z5ZdoouvyB9aG3QlCbc9XTBfAN4yPYcxrzdASguAgYAMQAAAAEAl0vO23m4DaUuLlCchOsXoKnl4bYKmhmX_ydWm2p95AwKZcdXuNcSgBMD17fjfQxogLpTAVw46IYT6Yade9GaEZeK-H4_IWcRVVloHAjiBgBDAAAAAQCkAj9mmn0ml0CccOOHETPlyrQ0qPr2vtFzCrvt-SAx_VfWK3UP7bsmKruWrF9fXPaHjlhEl9b3BzLgWFRhEI1tccFm2H62Twhok-txX_Tzma2f-1wEacpdfUYuiGgYpgIGAGcAAAABAOjptoow8I9KMVohLYUE7yt4Bvt23UzOw_nrRXVseI-n_TJ1i3jBtcdWk1hfrvWlw-2PoJZyH2oFJi2vn0Ulo_TxtGOAxKV6bPz28qxg4AenSlhmenw8N6AuS-QkSe71LDKczPAYp90W6ZiO06uOk9Dgv3ftONRWM9yuN7Kt0IqnKR5FRwYArwAAAAEAcUDPBJ_iL9JmZB8vrg4cNOJQ0zniAhWDhetArzNGPK9jJ1XPpvt7eZUyCCIvMbMFJL9sCMMNyQ6GpQbu3Yb5ykCA7UjRKDyjZaHvMifXl1DtJX8D7tkilUD9CxFG5JDiZP5WSVbK9vufZZXYmO0Rb55-XDrEwAkFGv_Z7baL3CCvFBApV8pgJFP4Y6BgzoF3X1Twah0_lpB8amihm74KoQmIR-PzuCZwRYdIcbnSCPRcEQDEAJteYV1mNHZZ4RjAebx4UKfaNFzpS3bRBgCvAAAAAQBi_iVR4Q8bxXY2--aZBV6HpYFK8iHV2R5wynUcAjctCSonwJJkv0_LZ14vFpgDak70e6exgvIfAkLb_vpjfDN8B_xKWKcuBNLvg1XwVHwEkXu0OW_a2T6FJLwVN9yYMd7TrCEqjx-Ey77eGlvie66gfdsAfqsfM_bA_rmstmDdEWZN0oKZQ4dhEuuinf61NL6R2zuH_AOm-rqgSYuHnZSZrVkmFCvmWDPsthBVH_ndo_8jdaFw-0H6fTScHXdxi4ByWbFikOScO7Og4UsGAK8AAAABAKMxDRKY02yKwaHyj5hGCyjjzls4u_KJbhq_kyU1LapORWJ8PrLU7ngWKZVV7nDbLbiGr7618KJTO9QTypg-mpqZLxKshTQh1T9y7OcIi41phr-OgQtmfLNsTq-poL9KA8j4JKQOE7BbgKWuGuD2106SJueQ0j-OdQq8FmZF3wvI_GH3jKlxnc-TsZYNz297pBBEx1X87YWHlaEG6IYsuMxTZUmuOXrZ4EAXWa0',
-
-            'Block1 Block7 deleted': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0MaIC6UwFcOOiGE-mGnXvRmhGXivh-PyFnEVVZaBwI4gYAQwAAAAEApAI_Zpp9JpdAnHDjhxEz5cq0NKj69r7Rcwq77fkgMf1X1it1D-27Jiq7lqxfX1z2h45YRJfW9wcy4FhUYRCNbXHBZth-tk8IaJPrcV_085mtn_tcBGnKXX1GLohoGKYCBgBnAAAAAQDo6baKMPCPSjFaIS2FBO8reAb7dt1MzsP560V1bHiPp_0ydYt4wbXHVpNYX671pcPtj6CWch9qBSYtr59FJaP08bRjgMSlemz89vKsYOAHp0pYZnp8PDegLkvkJEnu9SwynMzwGKfdFumYjtOrjpPQ4L937TjUVjPcrjeyrdCKpykeRUcGAK8AAAABAHFAzwSf4i_SZmQfL64OHDTiUNM54gIVg4XrQK8zRjyvYydVz6b7e3mVMggiLzGzBSS_bAjDDckOhqUG7t2G-cpAgO1I0Sg8o2Wh7zIn15dQ7SV_A-7ZIpVA_QsRRuSQ4mT-VklWyvb7n2WV2JjtEW-eflw6xMAJBRr_2e22i9wgrxQQKVfKYCRT-GOgYM6Bd19U8GodP5aQfGpooZu-CqEJiEfj87gmcEWHSHG50gj0XBEAxACbXmFdZjR2WeEYwHm8eFCn2jRc6Ut20QYArwAAAAEAYv4lUeEPG8V2NvvmmQVeh6WBSvIh1dkecMp1HAI3LQkqJ8CSZL9Py2deLxaYA2pO9HunsYLyHwJC2_76Y3wzfAf8SlinLgTS74NV8FR8BJF7tDlv2tk-hSS8FTfcmDHe06whKo8fhMu-3hpb4nuuoH3bAH6rHzP2wP65rLZg3RFmTdKCmUOHYRLrop3-tTS-kds7h_wDpvq6oEmLh52Uma1ZJhQr5lgz7LYQVR_53aP_I3WhcPtB-n00nB13cYuAclmxYpDknDuzoOFLBgCvAAAAAQCjMQ0SmNNsisGh8o-YRgso485bOLvyiW4av5MlNS2qTkVifD6y1O54FimVVe5w2y24hq--tfCiUzvUE8qYPpqamS8SrIU0IdU_cuznCIuNaYa_joELZnyzbE6vqaC_SgPI-CSkDhOwW4Clrhrg9tdOkibnkNI_jnUKvBZmRd8LyPxh94ypcZ3Pk7GWDc9ve6QQRMdV_O2Fh5WhBuiGLLjMU2VJrjl62eBAF1mt',
-
-            'All Term': // accomplished with cmdline code hack (so macs are valid)
-            'Gj8LJHitylJ4aVAkkSi1U1m4p-YoXONCOeamFCQbsY8GAFIAAAEBABE3_KB_Dqut_HwspmtRghT_YZ3NN0W-I4CNycjgyBAAABRBs_JlRZdmQiGo7-mEvgH-U-gN5QqP9a_ypYLPYjR0vDUzKmRulgjphyjMxKB2CnZk3CAA4j2o8BBh__OlfCcRXUds7AAzMnrqcImCGwYAMQAAAQEAR_GnJtWuRNBwsduFt11xVHEtBHmfdRCpSMXSbBPRxU8_qwmNHafh2F7bgTY39wdWZoxNZAtMDnhy1BwYpeslwb7dladP1OGFd2GzkUAtBgBDAAABAQCA_Br3aygBwCOF_0gsLX_S7q-9Lrk1IYKXT6gGJ2A9oB52VhiAD76dOnc1bYyeKi3iE8Rs9JRy_jkcp1WvM3R1yjh4XJ_QRmmWnl1xyFP0P8uaH4xu0G1GMyJrc_ZyB94GAGcAAAEBAPfxMbSg-KvMam2Mhkr5Hn_ACH6GX-0k2slg7uUsKELb7COjpxrGJrCuVVb2i3Y-gffCDlQ6GUmPoasRFU_Kmb6UQV5hNnwI7-mbKL8twvBsiplzl3IddqOMT6O5Si6rOmhAHINSa9IRy7UgchtreGzjBjgjc8vViInfw6BihF7r05AVaQYArwAAAQEAXhTRCseFwbouAxpSGQ4dgTlv7qAWOCDGt_DpL99ghxNxPaOZQgCAMIM0xmbZI3stQEfbUhdNWAn6zYoj4cQcfBiYdRfKj4AkWpzKQF8H38e5NgoilJ7bFEaqIeLuJItrE4JBKUr8HXklJPyuCjXKEsQpJ_goSsAqfvlOnZvh4CRq2LQ07s3qBLxhouZ4rXLrx4j8uxPg1Ghz82lOxPcRp4MdHvqLfwg9h9osUInMJI-wNa4CIl_af8GFTreyXA4bQdHTOzS3aTtqnL-_BgCvAAABAQCly24SzO2UtPsMOCEklLhpj-t_EvX3fgZkHGzG-h6JMCevq9YK3WmLjg0Fy8InTz0pqXjzcJUz-foMtkul4JDWj6nllSD9aTKTsj6SIhK6_ettdrvljxi5AdiYE_iCFtyF6MIReWOmLnFFizIKNO1WYu8n9Jli0Be1IzxOU5WawkN_VM-8iA2-MEN5pJxwlRK2f9TGsqS0P5d6xKcGryH7dX-NMwN2ywZHRuPe6GY5DKlLXsEIw0kJmb--07VokAXouCwbzkFydZW6wekGAK8AAAEBABmE5-OFM3LcqrBjJzXAZzhKgOG6GBQYFC_mKndl07saC3IfJXDenX-x2IzsBD_HcoyMMZm2ig1ObGqaZ5SqijRbAyTt13-3HoZoE6DTAF3MiW0p_0-SAniNkcSDX_bqT_NDjsKLI4AtY3rXOv_AhT3X8Aorpy1c41v89899yFDuXa0R2aZiEndgDJ1ifUGqEXkpQgASz25uJ6gJwjqlsi8AjVXIhKx0ZeNqQiEfIBu4Mm8S6SV-sIGpZe1jryCPoRbObZkMxKUhcHpHOAYAOAAAAQEA12z4tjJz4fKYHWjq4e0nyKcEjAhjBeDWhD-qE523OX5NcEXfAfqf7oj6q0wcN5PKgKzsi6I',
-
-            'No Term': // accomplished with cmdline code hack (so macs are valid)
-            'DBSj10kBKZ85UUBqgW05vS8wXkFlJCXMF37GwEpWAyIGAFIAAAABAGDNsxpQxcJfSTqljJ3_gQF59Dbw9Fo--1coQtXgyBAAABS7tNDYzTpFw-K7GQ3f46fD_kqiW4sdg0Gqo8NgaohCHvc9CAK_lKIEWltbdW0OQkHeofnoJfvquDZEPcThNI6stiALDeP865vVsJ3ozQYAMQAAAAEASFE_HU_e4zvofNC3y2YJc_TDtgTl2NkWbMh_Yj4Dz6fjgeRuVJjqk8R2mcLDiucVINP1sa0C8exDYYgIBhhyJNZKbAF4vGcts76qYN5NBgBDAAAAAQDG5uS6qlBCA10PZ5TchRsg_50IVg3H64ASIZbdkfYlIalDmnKx2_lkFkt9LkEODBfLNoCg3280ixQ2mwae3M4V0XMLGdznAYrgMnXet7ZiEtToldVzGv0m-6d29pz4umYGAGcAAAABAPqd0fors414KtU1ViEKmqkeGgHcyjEoJ4DIRH742xXTxh4nOhoFm19PvDVNeAVQIdbSCDa-s4IqdCzLgUQK-Yx8DM0YOdUBolZxJQOb-5OoVhfVmm99yiggklZPtzT1bfCaXQvKM7Xw2wAIrw1xMTkRltH8lH5yaz3Xb8elQbKYTIpFvgYArwAAAAEApmzfDJvug6b2EaDTKr61O-JGsSrEboPHwsxX9LSUcCh0eBIQ1MLG1v2owMbgK2jQy8bEOhM4rRrpiZ1TzDd0cKyhelLFCDUsOtBJO6uOknPb9YOBwcna2B9UMj8lrZb9My9ChfjofXDk_b-uRhZbIqnGFhhNTYSwkZ2dyuYleIiD1GQPoP4MYJ4XnUs3nEg392FXgTKjGlRzwwbSsIQpbWn94zN4KLQ_ziCkOwF-HDDKf8wD3WevkbFImsYM6RZbvDGt5Eei9_fvyyprBgCvAAAAAQAD-ci_1XMFjh67-ziFnGkaCeq5wfh_kwFybPRzU2HSutmX6e6jkEQrUwSfEkYvavlpMNQKFjL10aVvC1JNbI7CCx6FE2sog2ZL5lfPtRGPhbu8_BnMvS_zAG9uvvTqMneXUrvii79uhT8MY7dCuLCBCtVMtyzmQFRsXFMcVMrKEKXQH3Voi_TkLNPr7MtJGzegKQcm1y6sX3VEkPapdqkG636zmCE4tFDIptJBDgJ8uXP5no0c-CtHepqL1jcKkeIgZVt8bCK4b9-8OtcGAK8AAAABALEZNnMJXsYobGKOn8U63Wtho1muI87OKzMI_BZDDFiUQZduletcTCNjsm4iZinPpFGtGrOuS8oSbxrcnkZgJA6_RhpuN63lEOX9NAv-T5wiz8sJbWVWm59xtZ6pcR7tuyVK444Nl89f2ZeHEp_DuCWdFo-AZhUBqp7lL3_H42AABHS_iHcMU5dT3ZvVmZbiazVFCgIlpo-biDihT1XR9uuWtPZlNUE80YACm3sxSvSZ7bZZkWsgACouG3HweAeG_gILIhm6O0XwP9gUMwYAOAAAAAEAmB0NrkLBUxOT-kUrJwTlORQ62fdJKCePOjPUNnBawoupsH5c34r2leStBcHeJkokVev3OWg',
+            '1. Block0 Block7 swap': 'nzUMKJ7aLtfz9LhiVvszqf9Af-usaF0Gc1sQWQ2FzB8GADgAAAEBAEEYhfJGlZotsam0Fdf_5Cl5aURkLzbAFqQ6R9tEPtfxls9b0gT5uUNzhD8zuI2IezTctxqiG_M-WXaKLr8gfWht0JQm3PV0wXwDeMj2HMa83QEoLgIGADEAAAABAJdLztt5uA2lLi5QnITrF6Cp5eG2CpoZl_8nVptqfeQMCmXHV7jXEoATA9e3430MaIC6UwFcOOiGE-mGnXvRmhGXivh-PyFnEVVZaBwI4gYAQwAAAAEApAI_Zpp9JpdAnHDjhxEz5cq0NKj69r7Rcwq77fkgMf1X1it1D-27Jiq7lqxfX1z2h45YRJfW9wcy4FhUYRCNbXHBZth-tk8IaJPrcV_085mtn_tcBGnKXX1GLohoGKYCBgBnAAAAAQDo6baKMPCPSjFaIS2FBO8reAb7dt1MzsP560V1bHiPp_0ydYt4wbXHVpNYX671pcPtj6CWch9qBSYtr59FJaP08bRjgMSlemz89vKsYOAHp0pYZnp8PDegLkvkJEnu9SwynMzwGKfdFumYjtOrjpPQ4L937TjUVjPcrjeyrdCKpykeRUcGAK8AAAABAHFAzwSf4i_SZmQfL64OHDTiUNM54gIVg4XrQK8zRjyvYydVz6b7e3mVMggiLzGzBSS_bAjDDckOhqUG7t2G-cpAgO1I0Sg8o2Wh7zIn15dQ7SV_A-7ZIpVA_QsRRuSQ4mT-VklWyvb7n2WV2JjtEW-eflw6xMAJBRr_2e22i9wgrxQQKVfKYCRT-GOgYM6Bd19U8GodP5aQfGpooZu-CqEJiEfj87gmcEWHSHG50gj0XBEAxACbXmFdZjR2WeEYwHm8eFCn2jRc6Ut20QYArwAAAAEAYv4lUeEPG8V2NvvmmQVeh6WBSvIh1dkecMp1HAI3LQkqJ8CSZL9Py2deLxaYA2pO9HunsYLyHwJC2_76Y3wzfAf8SlinLgTS74NV8FR8BJF7tDlv2tk-hSS8FTfcmDHe06whKo8fhMu-3hpb4nuuoH3bAH6rHzP2wP65rLZg3RFmTdKCmUOHYRLrop3-tTS-kds7h_wDpvq6oEmLh52Uma1ZJhQr5lgz7LYQVR_53aP_I3WhcPtB-n00nB13cYuAclmxYpDknDuzoOFLBgCvAAAAAQCjMQ0SmNNsisGh8o-YRgso485bOLvyiW4av5MlNS2qTkVifD6y1O54FimVVe5w2y24hq--tfCiUzvUE8qYPpqamS8SrIU0IdU_cuznCIuNaYa_joELZnyzbE6vqaC_SgPI-CSkDhOwW4Clrhrg9tdOkibnkNI_jnUKvBZmRd8LyPxh94ypcZ3Pk7GWDc9ve6QQRMdV_O2Fh5WhBuiGLLjMU2VJrjl62eBAF1mt145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0',
+            '2. Block1 Block7 swap': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb2fNQwontou1_P0uGJW-zOp_0B_66xoXQZzWxBZDYXMHwYAOAAAAQEAQRiF8kaVmi2xqbQV1__kKXlpRGQvNsAWpDpH20Q-1_GWz1vSBPm5Q3OEPzO4jYh7NNy3GqIMaIC6UwFcOOiGE-mGnXvRmhGXivh-PyFnEVVZaBwI4gYAQwAAAAEApAI_Zpp9JpdAnHDjhxEz5cq0NKj69r7Rcwq77fkgMf1X1it1D-27Jiq7lqxfX1z2h45YRJfW9wcy4FhUYRCNbXHBZth-tk8IaJPrcV_085mtn_tcBGnKXX1GLohoGKYCBgBnAAAAAQDo6baKMPCPSjFaIS2FBO8reAb7dt1MzsP560V1bHiPp_0ydYt4wbXHVpNYX671pcPtj6CWch9qBSYtr59FJaP08bRjgMSlemz89vKsYOAHp0pYZnp8PDegLkvkJEnu9SwynMzwGKfdFumYjtOrjpPQ4L937TjUVjPcrjeyrdCKpykeRUcGAK8AAAABAHFAzwSf4i_SZmQfL64OHDTiUNM54gIVg4XrQK8zRjyvYydVz6b7e3mVMggiLzGzBSS_bAjDDckOhqUG7t2G-cpAgO1I0Sg8o2Wh7zIn15dQ7SV_A-7ZIpVA_QsRRuSQ4mT-VklWyvb7n2WV2JjtEW-eflw6xMAJBRr_2e22i9wgrxQQKVfKYCRT-GOgYM6Bd19U8GodP5aQfGpooZu-CqEJiEfj87gmcEWHSHG50gj0XBEAxACbXmFdZjR2WeEYwHm8eFCn2jRc6Ut20QYArwAAAAEAYv4lUeEPG8V2NvvmmQVeh6WBSvIh1dkecMp1HAI3LQkqJ8CSZL9Py2deLxaYA2pO9HunsYLyHwJC2_76Y3wzfAf8SlinLgTS74NV8FR8BJF7tDlv2tk-hSS8FTfcmDHe06whKo8fhMu-3hpb4nuuoH3bAH6rHzP2wP65rLZg3RFmTdKCmUOHYRLrop3-tTS-kds7h_wDpvq6oEmLh52Uma1ZJhQr5lgz7LYQVR_53aP_I3WhcPtB-n00nB13cYuAclmxYpDknDuzoOFLBgCvAAAAAQCjMQ0SmNNsisGh8o-YRgso485bOLvyiW4av5MlNS2qTkVifD6y1O54FimVVe5w2y24hq--tfCiUzvUE8qYPpqamS8SrIU0IdU_cuznCIuNaYa_joELZnyzbE6vqaC_SgPI-CSkDhOwW4Clrhrg9tdOkibnkNI_jnUKvBZmRd8LyPxh94ypcZ3Pk7GWDc9ve6QQRMdV_O2Fh5WhBuiGLLjMU2VJrjl62eBAF1mtG_M-WXaKLr8gfWht0JQm3PV0wXwDeMj2HMa83QEoLgIGADEAAAABAJdLztt5uA2lLi5QnITrF6Cp5eG2CpoZl_8nVptqfeQMCmXHV7jXEoATA9e3430',
+            '3. Block1 Block4 swap': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0Yp90W6ZiO06uOk9Dgv3ftONRWM9yuN7Kt0IqnKR5FRwYArwAAAAEAcUDPBJ_iL9JmZB8vrg4cNOJQ0zniAhWDhetArzNGPK9jJ1XPpvt7eZUyCCIvMbMFJL9sCMMNyQ6GpQbu3Yb5ykCA7UjRKDyjZaHvMifXl1DtJX8D7tkilUD9CxFG5JDiZP5WSVbK9vufZZXYmO0Rb55-XDrEwAkFGv_Z7baL3CCvFBApV8pgJFP4Y6BgzoF3X1Twah0_lpB8amihm74KoQmIR-PzuCZwRYdIcQxogLpTAVw46IYT6Yade9GaEZeK-H4_IWcRVVloHAjiBgBDAAAAAQCkAj9mmn0ml0CccOOHETPlyrQ0qPr2vtFzCrvt-SAx_VfWK3UP7bsmKruWrF9fXPaHjlhEl9b3BzLgWFRhEI1tccFm2H62Twhok-txX_Tzma2f-1wEacpdfUYuiGgYpgIGAGcAAAABAOjptoow8I9KMVohLYUE7yt4Bvt23UzOw_nrRXVseI-n_TJ1i3jBtcdWk1hfrvWlw-2PoJZyH2oFJi2vn0Ulo_TxtGOAxKV6bPz28qxg4AenSlhmenw8N6AuS-QkSe71LDKczPAb8z5ZdoouvyB9aG3QlCbc9XTBfAN4yPYcxrzdASguAgYAMQAAAAEAl0vO23m4DaUuLlCchOsXoKnl4bYKmhmX_ydWm2p95AwKZcdXuNcSgBMD17fjfbnSCPRcEQDEAJteYV1mNHZZ4RjAebx4UKfaNFzpS3bRBgCvAAAAAQBi_iVR4Q8bxXY2--aZBV6HpYFK8iHV2R5wynUcAjctCSonwJJkv0_LZ14vFpgDak70e6exgvIfAkLb_vpjfDN8B_xKWKcuBNLvg1XwVHwEkXu0OW_a2T6FJLwVN9yYMd7TrCEqjx-Ey77eGlvie66gfdsAfqsfM_bA_rmstmDdEWZN0oKZQ4dhEuuinf61NL6R2zuH_AOm-rqgSYuHnZSZrVkmFCvmWDPsthBVH_ndo_8jdaFw-0H6fTScHXdxi4ByWbFikOScO7Og4UsGAK8AAAABAKMxDRKY02yKwaHyj5hGCyjjzls4u_KJbhq_kyU1LapORWJ8PrLU7ngWKZVV7nDbLbiGr7618KJTO9QTypg-mpqZLxKshTQh1T9y7OcIi41phr-OgQtmfLNsTq-poL9KA8j4JKQOE7BbgKWuGuD2106SJueQ0j-OdQq8FmZF3wvI_GH3jKlxnc-TsZYNz297pBBEx1X87YWHlaEG6IYsuMxTZUmuOXrZ4EAXWa2fNQwontou1_P0uGJW-zOp_0B_66xoXQZzWxBZDYXMHwYAOAAAAQEAQRiF8kaVmi2xqbQV1__kKXlpRGQvNsAWpDpH20Q-1_GWz1vSBPm5Q3OEPzO4jYh7NNy3GqI',
+            '4. Block0 repeated': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb3XjlJ8Hh0ipuZjL5sfWueHWnIU3xPUTITIUIwW2C4GQAYAUgAAAAEAMewcwvztyFBgr_nxHEJrSVUtFb255UQ7nlIfq-DIEAAAFE7d6qc1X_E3EGexf6vsphaCfkX7EyIDmVM18NjDu06gKC0X-p105ePIeKwRvRvzPll2ii6_IH1obdCUJtz1dMF8A3jI9hzGvN0BKC4CBgAxAAAAAQCXS87bebgNpS4uUJyE6xegqeXhtgqaGZf_J1aban3kDAplx1e41xKAEwPXt-N9DGiAulMBXDjohhPphp170ZoRl4r4fj8hZxFVWWgcCOIGAEMAAAABAKQCP2aafSaXQJxw44cRM-XKtDSo-va-0XMKu-35IDH9V9YrdQ_tuyYqu5asX19c9oeOWESX1vcHMuBYVGEQjW1xwWbYfrZPCGiT63Ff9POZrZ_7XARpyl19Ri6IaBimAgYAZwAAAAEA6Om2ijDwj0oxWiEthQTvK3gG-3bdTM7D-etFdWx4j6f9MnWLeMG1x1aTWF-u9aXD7Y-glnIfagUmLa-fRSWj9PG0Y4DEpXps_PbyrGDgB6dKWGZ6fDw3oC5L5CRJ7vUsMpzM8Bin3RbpmI7Tq46T0OC_d-041FYz3K43sq3QiqcpHkVHBgCvAAAAAQBxQM8En-Iv0mZkHy-uDhw04lDTOeICFYOF60CvM0Y8r2MnVc-m-3t5lTIIIi8xswUkv2wIww3JDoalBu7dhvnKQIDtSNEoPKNloe8yJ9eXUO0lfwPu2SKVQP0LEUbkkOJk_lZJVsr2-59lldiY7RFvnn5cOsTACQUa_9nttovcIK8UEClXymAkU_hjoGDOgXdfVPBqHT-WkHxqaKGbvgqhCYhH4_O4JnBFh0hxudII9FwRAMQAm15hXWY0dlnhGMB5vHhQp9o0XOlLdtEGAK8AAAABAGL-JVHhDxvFdjb75pkFXoelgUryIdXZHnDKdRwCNy0JKifAkmS_T8tnXi8WmANqTvR7p7GC8h8CQtv--mN8M3wH_EpYpy4E0u-DVfBUfASRe7Q5b9rZPoUkvBU33Jgx3tOsISqPH4TLvt4aW-J7rqB92wB-qx8z9sD-uay2YN0RZk3SgplDh2ES66Kd_rU0vpHbO4f8A6b6uqBJi4edlJmtWSYUK-ZYM-y2EFUf-d2j_yN1oXD7Qfp9NJwdd3GLgHJZsWKQ5Jw7s6DhSwYArwAAAAEAozENEpjTbIrBofKPmEYLKOPOWzi78oluGr-TJTUtqk5FYnw-stTueBYplVXucNstuIavvrXwolM71BPKmD6ampkvEqyFNCHVP3Ls5wiLjWmGv46BC2Z8s2xOr6mgv0oDyPgkpA4TsFuApa4a4PbXTpIm55DSP451CrwWZkXfC8j8YfeMqXGdz5Oxlg3Pb3ukEETHVfzthYeVoQbohiy4zFNlSa45etngQBdZrZ81DCie2i7X8_S4Ylb7M6n_QH_rrGhdBnNbEFkNhcwfBgA4AAABAQBBGIXyRpWaLbGptBXX_-QpeWlEZC82wBakOkfbRD7X8ZbPW9IE-blDc4Q_M7iNiHs03Lcaog',
+            '5. Block0 deleted': 'G_M-WXaKLr8gfWht0JQm3PV0wXwDeMj2HMa83QEoLgIGADEAAAABAJdLztt5uA2lLi5QnITrF6Cp5eG2CpoZl_8nVptqfeQMCmXHV7jXEoATA9e3430MaIC6UwFcOOiGE-mGnXvRmhGXivh-PyFnEVVZaBwI4gYAQwAAAAEApAI_Zpp9JpdAnHDjhxEz5cq0NKj69r7Rcwq77fkgMf1X1it1D-27Jiq7lqxfX1z2h45YRJfW9wcy4FhUYRCNbXHBZth-tk8IaJPrcV_085mtn_tcBGnKXX1GLohoGKYCBgBnAAAAAQDo6baKMPCPSjFaIS2FBO8reAb7dt1MzsP560V1bHiPp_0ydYt4wbXHVpNYX671pcPtj6CWch9qBSYtr59FJaP08bRjgMSlemz89vKsYOAHp0pYZnp8PDegLkvkJEnu9SwynMzwGKfdFumYjtOrjpPQ4L937TjUVjPcrjeyrdCKpykeRUcGAK8AAAABAHFAzwSf4i_SZmQfL64OHDTiUNM54gIVg4XrQK8zRjyvYydVz6b7e3mVMggiLzGzBSS_bAjDDckOhqUG7t2G-cpAgO1I0Sg8o2Wh7zIn15dQ7SV_A-7ZIpVA_QsRRuSQ4mT-VklWyvb7n2WV2JjtEW-eflw6xMAJBRr_2e22i9wgrxQQKVfKYCRT-GOgYM6Bd19U8GodP5aQfGpooZu-CqEJiEfj87gmcEWHSHG50gj0XBEAxACbXmFdZjR2WeEYwHm8eFCn2jRc6Ut20QYArwAAAAEAYv4lUeEPG8V2NvvmmQVeh6WBSvIh1dkecMp1HAI3LQkqJ8CSZL9Py2deLxaYA2pO9HunsYLyHwJC2_76Y3wzfAf8SlinLgTS74NV8FR8BJF7tDlv2tk-hSS8FTfcmDHe06whKo8fhMu-3hpb4nuuoH3bAH6rHzP2wP65rLZg3RFmTdKCmUOHYRLrop3-tTS-kds7h_wDpvq6oEmLh52Uma1ZJhQr5lgz7LYQVR_53aP_I3WhcPtB-n00nB13cYuAclmxYpDknDuzoOFLBgCvAAAAAQCjMQ0SmNNsisGh8o-YRgso485bOLvyiW4av5MlNS2qTkVifD6y1O54FimVVe5w2y24hq--tfCiUzvUE8qYPpqamS8SrIU0IdU_cuznCIuNaYa_joELZnyzbE6vqaC_SgPI-CSkDhOwW4Clrhrg9tdOkibnkNI_jnUKvBZmRd8LyPxh94ypcZ3Pk7GWDc9ve6QQRMdV_O2Fh5WhBuiGLLjMU2VJrjl62eBAF1mtnzUMKJ7aLtfz9LhiVvszqf9Af-usaF0Gc1sQWQ2FzB8GADgAAAEBAEEYhfJGlZotsam0Fdf_5Cl5aURkLzbAFqQ6R9tEPtfxls9b0gT5uUNzhD8zuI2IezTctxqi',
+            '6. Block1 repeated': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0b8z5ZdoouvyB9aG3QlCbc9XTBfAN4yPYcxrzdASguAgYAMQAAAAEAl0vO23m4DaUuLlCchOsXoKnl4bYKmhmX_ydWm2p95AwKZcdXuNcSgBMD17fjfRvzPll2ii6_IH1obdCUJtz1dMF8A3jI9hzGvN0BKC4CBgAxAAAAAQCXS87bebgNpS4uUJyE6xegqeXhtgqaGZf_J1aban3kDAplx1e41xKAEwPXt-N9DGiAulMBXDjohhPphp170ZoRl4r4fj8hZxFVWWgcCOIGAEMAAAABAKQCP2aafSaXQJxw44cRM-XKtDSo-va-0XMKu-35IDH9V9YrdQ_tuyYqu5asX19c9oeOWESX1vcHMuBYVGEQjW1xwWbYfrZPCGiT63Ff9POZrZ_7XARpyl19Ri6IaBimAgYAZwAAAAEA6Om2ijDwj0oxWiEthQTvK3gG-3bdTM7D-etFdWx4j6f9MnWLeMG1x1aTWF-u9aXD7Y-glnIfagUmLa-fRSWj9PG0Y4DEpXps_PbyrGDgB6dKWGZ6fDw3oC5L5CRJ7vUsMpzM8Bin3RbpmI7Tq46T0OC_d-041FYz3K43sq3QiqcpHkVHBgCvAAAAAQBxQM8En-Iv0mZkHy-uDhw04lDTOeICFYOF60CvM0Y8r2MnVc-m-3t5lTIIIi8xswUkv2wIww3JDoalBu7dhvnKQIDtSNEoPKNloe8yJ9eXUO0lfwPu2SKVQP0LEUbkkOJk_lZJVsr2-59lldiY7RFvnn5cOsTACQUa_9nttovcIK8UEClXymAkU_hjoGDOgXdfVPBqHT-WkHxqaKGbvgqhCYhH4_O4JnBFh0hxudII9FwRAMQAm15hXWY0dlnhGMB5vHhQp9o0XOlLdtEGAK8AAAABAGL-JVHhDxvFdjb75pkFXoelgUryIdXZHnDKdRwCNy0JKifAkmS_T8tnXi8WmANqTvR7p7GC8h8CQtv--mN8M3wH_EpYpy4E0u-DVfBUfASRe7Q5b9rZPoUkvBU33Jgx3tOsISqPH4TLvt4aW-J7rqB92wB-qx8z9sD-uay2YN0RZk3SgplDh2ES66Kd_rU0vpHbO4f8A6b6uqBJi4edlJmtWSYUK-ZYM-y2EFUf-d2j_yN1oXD7Qfp9NJwdd3GLgHJZsWKQ5Jw7s6DhSwYArwAAAAEAozENEpjTbIrBofKPmEYLKOPOWzi78oluGr-TJTUtqk5FYnw-stTueBYplVXucNstuIavvrXwolM71BPKmD6ampkvEqyFNCHVP3Ls5wiLjWmGv46BC2Z8s2xOr6mgv0oDyPgkpA4TsFuApa4a4PbXTpIm55DSP451CrwWZkXfC8j8YfeMqXGdz5Oxlg3Pb3ukEETHVfzthYeVoQbohiy4zFNlSa45etngQBdZrZ81DCie2i7X8_S4Ylb7M6n_QH_rrGhdBnNbEFkNhcwfBgA4AAABAQBBGIXyRpWaLbGptBXX_-QpeWlEZC82wBakOkfbRD7X8ZbPW9IE-blDc4Q_M7iNiHs03Lcaog',
+            "7. Block1 deleted": '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0MaIC6UwFcOOiGE-mGnXvRmhGXivh-PyFnEVVZaBwI4gYAQwAAAAEApAI_Zpp9JpdAnHDjhxEz5cq0NKj69r7Rcwq77fkgMf1X1it1D-27Jiq7lqxfX1z2h45YRJfW9wcy4FhUYRCNbXHBZth-tk8IaJPrcV_085mtn_tcBGnKXX1GLohoGKYCBgBnAAAAAQDo6baKMPCPSjFaIS2FBO8reAb7dt1MzsP560V1bHiPp_0ydYt4wbXHVpNYX671pcPtj6CWch9qBSYtr59FJaP08bRjgMSlemz89vKsYOAHp0pYZnp8PDegLkvkJEnu9SwynMzwGKfdFumYjtOrjpPQ4L937TjUVjPcrjeyrdCKpykeRUcGAK8AAAABAHFAzwSf4i_SZmQfL64OHDTiUNM54gIVg4XrQK8zRjyvYydVz6b7e3mVMggiLzGzBSS_bAjDDckOhqUG7t2G-cpAgO1I0Sg8o2Wh7zIn15dQ7SV_A-7ZIpVA_QsRRuSQ4mT-VklWyvb7n2WV2JjtEW-eflw6xMAJBRr_2e22i9wgrxQQKVfKYCRT-GOgYM6Bd19U8GodP5aQfGpooZu-CqEJiEfj87gmcEWHSHG50gj0XBEAxACbXmFdZjR2WeEYwHm8eFCn2jRc6Ut20QYArwAAAAEAYv4lUeEPG8V2NvvmmQVeh6WBSvIh1dkecMp1HAI3LQkqJ8CSZL9Py2deLxaYA2pO9HunsYLyHwJC2_76Y3wzfAf8SlinLgTS74NV8FR8BJF7tDlv2tk-hSS8FTfcmDHe06whKo8fhMu-3hpb4nuuoH3bAH6rHzP2wP65rLZg3RFmTdKCmUOHYRLrop3-tTS-kds7h_wDpvq6oEmLh52Uma1ZJhQr5lgz7LYQVR_53aP_I3WhcPtB-n00nB13cYuAclmxYpDknDuzoOFLBgCvAAAAAQCjMQ0SmNNsisGh8o-YRgso485bOLvyiW4av5MlNS2qTkVifD6y1O54FimVVe5w2y24hq--tfCiUzvUE8qYPpqamS8SrIU0IdU_cuznCIuNaYa_joELZnyzbE6vqaC_SgPI-CSkDhOwW4Clrhrg9tdOkibnkNI_jnUKvBZmRd8LyPxh94ypcZ3Pk7GWDc9ve6QQRMdV_O2Fh5WhBuiGLLjMU2VJrjl62eBAF1mtnzUMKJ7aLtfz9LhiVvszqf9Af-usaF0Gc1sQWQ2FzB8GADgAAAEBAEEYhfJGlZotsam0Fdf_5Cl5aURkLzbAFqQ6R9tEPtfxls9b0gT5uUNzhD8zuI2IezTctxqi',
+            '8. Block2 repeated': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0b8z5ZdoouvyB9aG3QlCbc9XTBfAN4yPYcxrzdASguAgYAMQAAAAEAl0vO23m4DaUuLlCchOsXoKnl4bYKmhmX_ydWm2p95AwKZcdXuNcSgBMD17fjfQxogLpTAVw46IYT6Yade9GaEZeK-H4_IWcRVVloHAjiBgBDAAAAAQCkAj9mmn0ml0CccOOHETPlyrQ0qPr2vtFzCrvt-SAx_VfWK3UP7bsmKruWrF9fXPaHjlhEl9b3BzLgWFRhEI1tDGiAulMBXDjohhPphp170ZoRl4r4fj8hZxFVWWgcCOIGAEMAAAABAKQCP2aafSaXQJxw44cRM-XKtDSo-va-0XMKu-35IDH9V9YrdQ_tuyYqu5asX19c9oeOWESX1vcHMuBYVGEQjW1xwWbYfrZPCGiT63Ff9POZrZ_7XARpyl19Ri6IaBimAgYAZwAAAAEA6Om2ijDwj0oxWiEthQTvK3gG-3bdTM7D-etFdWx4j6f9MnWLeMG1x1aTWF-u9aXD7Y-glnIfagUmLa-fRSWj9PG0Y4DEpXps_PbyrGDgB6dKWGZ6fDw3oC5L5CRJ7vUsMpzM8Bin3RbpmI7Tq46T0OC_d-041FYz3K43sq3QiqcpHkVHBgCvAAAAAQBxQM8En-Iv0mZkHy-uDhw04lDTOeICFYOF60CvM0Y8r2MnVc-m-3t5lTIIIi8xswUkv2wIww3JDoalBu7dhvnKQIDtSNEoPKNloe8yJ9eXUO0lfwPu2SKVQP0LEUbkkOJk_lZJVsr2-59lldiY7RFvnn5cOsTACQUa_9nttovcIK8UEClXymAkU_hjoGDOgXdfVPBqHT-WkHxqaKGbvgqhCYhH4_O4JnBFh0hxudII9FwRAMQAm15hXWY0dlnhGMB5vHhQp9o0XOlLdtEGAK8AAAABAGL-JVHhDxvFdjb75pkFXoelgUryIdXZHnDKdRwCNy0JKifAkmS_T8tnXi8WmANqTvR7p7GC8h8CQtv--mN8M3wH_EpYpy4E0u-DVfBUfASRe7Q5b9rZPoUkvBU33Jgx3tOsISqPH4TLvt4aW-J7rqB92wB-qx8z9sD-uay2YN0RZk3SgplDh2ES66Kd_rU0vpHbO4f8A6b6uqBJi4edlJmtWSYUK-ZYM-y2EFUf-d2j_yN1oXD7Qfp9NJwdd3GLgHJZsWKQ5Jw7s6DhSwYArwAAAAEAozENEpjTbIrBofKPmEYLKOPOWzi78oluGr-TJTUtqk5FYnw-stTueBYplVXucNstuIavvrXwolM71BPKmD6ampkvEqyFNCHVP3Ls5wiLjWmGv46BC2Z8s2xOr6mgv0oDyPgkpA4TsFuApa4a4PbXTpIm55DSP451CrwWZkXfC8j8YfeMqXGdz5Oxlg3Pb3ukEETHVfzthYeVoQbohiy4zFNlSa45etngQBdZrZ81DCie2i7X8_S4Ylb7M6n_QH_rrGhdBnNbEFkNhcwfBgA4AAABAQBBGIXyRpWaLbGptBXX_-QpeWlEZC82wBakOkfbRD7X8ZbPW9IE-blDc4Q_M7iNiHs03Lcaog',
+            '9. Block2 deleted': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0b8z5ZdoouvyB9aG3QlCbc9XTBfAN4yPYcxrzdASguAgYAMQAAAAEAl0vO23m4DaUuLlCchOsXoKnl4bYKmhmX_ydWm2p95AwKZcdXuNcSgBMD17fjfXHBZth-tk8IaJPrcV_085mtn_tcBGnKXX1GLohoGKYCBgBnAAAAAQDo6baKMPCPSjFaIS2FBO8reAb7dt1MzsP560V1bHiPp_0ydYt4wbXHVpNYX671pcPtj6CWch9qBSYtr59FJaP08bRjgMSlemz89vKsYOAHp0pYZnp8PDegLkvkJEnu9SwynMzwGKfdFumYjtOrjpPQ4L937TjUVjPcrjeyrdCKpykeRUcGAK8AAAABAHFAzwSf4i_SZmQfL64OHDTiUNM54gIVg4XrQK8zRjyvYydVz6b7e3mVMggiLzGzBSS_bAjDDckOhqUG7t2G-cpAgO1I0Sg8o2Wh7zIn15dQ7SV_A-7ZIpVA_QsRRuSQ4mT-VklWyvb7n2WV2JjtEW-eflw6xMAJBRr_2e22i9wgrxQQKVfKYCRT-GOgYM6Bd19U8GodP5aQfGpooZu-CqEJiEfj87gmcEWHSHG50gj0XBEAxACbXmFdZjR2WeEYwHm8eFCn2jRc6Ut20QYArwAAAAEAYv4lUeEPG8V2NvvmmQVeh6WBSvIh1dkecMp1HAI3LQkqJ8CSZL9Py2deLxaYA2pO9HunsYLyHwJC2_76Y3wzfAf8SlinLgTS74NV8FR8BJF7tDlv2tk-hSS8FTfcmDHe06whKo8fhMu-3hpb4nuuoH3bAH6rHzP2wP65rLZg3RFmTdKCmUOHYRLrop3-tTS-kds7h_wDpvq6oEmLh52Uma1ZJhQr5lgz7LYQVR_53aP_I3WhcPtB-n00nB13cYuAclmxYpDknDuzoOFLBgCvAAAAAQCjMQ0SmNNsisGh8o-YRgso485bOLvyiW4av5MlNS2qTkVifD6y1O54FimVVe5w2y24hq--tfCiUzvUE8qYPpqamS8SrIU0IdU_cuznCIuNaYa_joELZnyzbE6vqaC_SgPI-CSkDhOwW4Clrhrg9tdOkibnkNI_jnUKvBZmRd8LyPxh94ypcZ3Pk7GWDc9ve6QQRMdV_O2Fh5WhBuiGLLjMU2VJrjl62eBAF1mtnzUMKJ7aLtfz9LhiVvszqf9Af-usaF0Gc1sQWQ2FzB8GADgAAAEBAEEYhfJGlZotsam0Fdf_5Cl5aURkLzbAFqQ6R9tEPtfxls9b0gT5uUNzhD8zuI2IezTctxqi',
+            '10. Block7 (last) repeated': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0b8z5ZdoouvyB9aG3QlCbc9XTBfAN4yPYcxrzdASguAgYAMQAAAAEAl0vO23m4DaUuLlCchOsXoKnl4bYKmhmX_ydWm2p95AwKZcdXuNcSgBMD17fjfQxogLpTAVw46IYT6Yade9GaEZeK-H4_IWcRVVloHAjiBgBDAAAAAQCkAj9mmn0ml0CccOOHETPlyrQ0qPr2vtFzCrvt-SAx_VfWK3UP7bsmKruWrF9fXPaHjlhEl9b3BzLgWFRhEI1tccFm2H62Twhok-txX_Tzma2f-1wEacpdfUYuiGgYpgIGAGcAAAABAOjptoow8I9KMVohLYUE7yt4Bvt23UzOw_nrRXVseI-n_TJ1i3jBtcdWk1hfrvWlw-2PoJZyH2oFJi2vn0Ulo_TxtGOAxKV6bPz28qxg4AenSlhmenw8N6AuS-QkSe71LDKczPAYp90W6ZiO06uOk9Dgv3ftONRWM9yuN7Kt0IqnKR5FRwYArwAAAAEAcUDPBJ_iL9JmZB8vrg4cNOJQ0zniAhWDhetArzNGPK9jJ1XPpvt7eZUyCCIvMbMFJL9sCMMNyQ6GpQbu3Yb5ykCA7UjRKDyjZaHvMifXl1DtJX8D7tkilUD9CxFG5JDiZP5WSVbK9vufZZXYmO0Rb55-XDrEwAkFGv_Z7baL3CCvFBApV8pgJFP4Y6BgzoF3X1Twah0_lpB8amihm74KoQmIR-PzuCZwRYdIcbnSCPRcEQDEAJteYV1mNHZZ4RjAebx4UKfaNFzpS3bRBgCvAAAAAQBi_iVR4Q8bxXY2--aZBV6HpYFK8iHV2R5wynUcAjctCSonwJJkv0_LZ14vFpgDak70e6exgvIfAkLb_vpjfDN8B_xKWKcuBNLvg1XwVHwEkXu0OW_a2T6FJLwVN9yYMd7TrCEqjx-Ey77eGlvie66gfdsAfqsfM_bA_rmstmDdEWZN0oKZQ4dhEuuinf61NL6R2zuH_AOm-rqgSYuHnZSZrVkmFCvmWDPsthBVH_ndo_8jdaFw-0H6fTScHXdxi4ByWbFikOScO7Og4UsGAK8AAAABAKMxDRKY02yKwaHyj5hGCyjjzls4u_KJbhq_kyU1LapORWJ8PrLU7ngWKZVV7nDbLbiGr7618KJTO9QTypg-mpqZLxKshTQh1T9y7OcIi41phr-OgQtmfLNsTq-poL9KA8j4JKQOE7BbgKWuGuD2106SJueQ0j-OdQq8FmZF3wvI_GH3jKlxnc-TsZYNz297pBBEx1X87YWHlaEG6IYsuMxTZUmuOXrZ4EAXWa2fNQwontou1_P0uGJW-zOp_0B_66xoXQZzWxBZDYXMHwYAOAAAAQEAQRiF8kaVmi2xqbQV1__kKXlpRGQvNsAWpDpH20Q-1_GWz1vSBPm5Q3OEPzO4jYh7NNy3GqKfNQwontou1_P0uGJW-zOp_0B_66xoXQZzWxBZDYXMHwYAOAAAAQEAQRiF8kaVmi2xqbQV1__kKXlpRGQvNsAWpDpH20Q-1_GWz1vSBPm5Q3OEPzO4jYh7NNy3GqI',
+            '11. Block7 (last) deleted': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0b8z5ZdoouvyB9aG3QlCbc9XTBfAN4yPYcxrzdASguAgYAMQAAAAEAl0vO23m4DaUuLlCchOsXoKnl4bYKmhmX_ydWm2p95AwKZcdXuNcSgBMD17fjfQxogLpTAVw46IYT6Yade9GaEZeK-H4_IWcRVVloHAjiBgBDAAAAAQCkAj9mmn0ml0CccOOHETPlyrQ0qPr2vtFzCrvt-SAx_VfWK3UP7bsmKruWrF9fXPaHjlhEl9b3BzLgWFRhEI1tccFm2H62Twhok-txX_Tzma2f-1wEacpdfUYuiGgYpgIGAGcAAAABAOjptoow8I9KMVohLYUE7yt4Bvt23UzOw_nrRXVseI-n_TJ1i3jBtcdWk1hfrvWlw-2PoJZyH2oFJi2vn0Ulo_TxtGOAxKV6bPz28qxg4AenSlhmenw8N6AuS-QkSe71LDKczPAYp90W6ZiO06uOk9Dgv3ftONRWM9yuN7Kt0IqnKR5FRwYArwAAAAEAcUDPBJ_iL9JmZB8vrg4cNOJQ0zniAhWDhetArzNGPK9jJ1XPpvt7eZUyCCIvMbMFJL9sCMMNyQ6GpQbu3Yb5ykCA7UjRKDyjZaHvMifXl1DtJX8D7tkilUD9CxFG5JDiZP5WSVbK9vufZZXYmO0Rb55-XDrEwAkFGv_Z7baL3CCvFBApV8pgJFP4Y6BgzoF3X1Twah0_lpB8amihm74KoQmIR-PzuCZwRYdIcbnSCPRcEQDEAJteYV1mNHZZ4RjAebx4UKfaNFzpS3bRBgCvAAAAAQBi_iVR4Q8bxXY2--aZBV6HpYFK8iHV2R5wynUcAjctCSonwJJkv0_LZ14vFpgDak70e6exgvIfAkLb_vpjfDN8B_xKWKcuBNLvg1XwVHwEkXu0OW_a2T6FJLwVN9yYMd7TrCEqjx-Ey77eGlvie66gfdsAfqsfM_bA_rmstmDdEWZN0oKZQ4dhEuuinf61NL6R2zuH_AOm-rqgSYuHnZSZrVkmFCvmWDPsthBVH_ndo_8jdaFw-0H6fTScHXdxi4ByWbFikOScO7Og4UsGAK8AAAABAKMxDRKY02yKwaHyj5hGCyjjzls4u_KJbhq_kyU1LapORWJ8PrLU7ngWKZVV7nDbLbiGr7618KJTO9QTypg-mpqZLxKshTQh1T9y7OcIi41phr-OgQtmfLNsTq-poL9KA8j4JKQOE7BbgKWuGuD2106SJueQ0j-OdQq8FmZF3wvI_GH3jKlxnc-TsZYNz297pBBEx1X87YWHlaEG6IYsuMxTZUmuOXrZ4EAXWa0',
+            '12. Block1 Block7 deleted': '145SfB4dIqbmYy-bH1rnh1pyFN8T1EyEyFCMFtguBkAGAFIAAAABADHsHML87chQYK_58RxCa0lVLRW9ueVEO55SH6vgyBAAABRO3eqnNV_xNxBnsX-r7KYWgn5F-xMiA5lTNfDYw7tOoCgtF_qddOXjyHisEb0MaIC6UwFcOOiGE-mGnXvRmhGXivh-PyFnEVVZaBwI4gYAQwAAAAEApAI_Zpp9JpdAnHDjhxEz5cq0NKj69r7Rcwq77fkgMf1X1it1D-27Jiq7lqxfX1z2h45YRJfW9wcy4FhUYRCNbXHBZth-tk8IaJPrcV_085mtn_tcBGnKXX1GLohoGKYCBgBnAAAAAQDo6baKMPCPSjFaIS2FBO8reAb7dt1MzsP560V1bHiPp_0ydYt4wbXHVpNYX671pcPtj6CWch9qBSYtr59FJaP08bRjgMSlemz89vKsYOAHp0pYZnp8PDegLkvkJEnu9SwynMzwGKfdFumYjtOrjpPQ4L937TjUVjPcrjeyrdCKpykeRUcGAK8AAAABAHFAzwSf4i_SZmQfL64OHDTiUNM54gIVg4XrQK8zRjyvYydVz6b7e3mVMggiLzGzBSS_bAjDDckOhqUG7t2G-cpAgO1I0Sg8o2Wh7zIn15dQ7SV_A-7ZIpVA_QsRRuSQ4mT-VklWyvb7n2WV2JjtEW-eflw6xMAJBRr_2e22i9wgrxQQKVfKYCRT-GOgYM6Bd19U8GodP5aQfGpooZu-CqEJiEfj87gmcEWHSHG50gj0XBEAxACbXmFdZjR2WeEYwHm8eFCn2jRc6Ut20QYArwAAAAEAYv4lUeEPG8V2NvvmmQVeh6WBSvIh1dkecMp1HAI3LQkqJ8CSZL9Py2deLxaYA2pO9HunsYLyHwJC2_76Y3wzfAf8SlinLgTS74NV8FR8BJF7tDlv2tk-hSS8FTfcmDHe06whKo8fhMu-3hpb4nuuoH3bAH6rHzP2wP65rLZg3RFmTdKCmUOHYRLrop3-tTS-kds7h_wDpvq6oEmLh52Uma1ZJhQr5lgz7LYQVR_53aP_I3WhcPtB-n00nB13cYuAclmxYpDknDuzoOFLBgCvAAAAAQCjMQ0SmNNsisGh8o-YRgso485bOLvyiW4av5MlNS2qTkVifD6y1O54FimVVe5w2y24hq--tfCiUzvUE8qYPpqamS8SrIU0IdU_cuznCIuNaYa_joELZnyzbE6vqaC_SgPI-CSkDhOwW4Clrhrg9tdOkibnkNI_jnUKvBZmRd8LyPxh94ypcZ3Pk7GWDc9ve6QQRMdV_O2Fh5WhBuiGLLjMU2VJrjl62eBAF1mt',
+            '13. All Term': 'Gj8LJHitylJ4aVAkkSi1U1m4p-YoXONCOeamFCQbsY8GAFIAAAEBABE3_KB_Dqut_HwspmtRghT_YZ3NN0W-I4CNycjgyBAAABRBs_JlRZdmQiGo7-mEvgH-U-gN5QqP9a_ypYLPYjR0vDUzKmRulgjphyjMxKB2CnZk3CAA4j2o8BBh__OlfCcRXUds7AAzMnrqcImCGwYAMQAAAQEAR_GnJtWuRNBwsduFt11xVHEtBHmfdRCpSMXSbBPRxU8_qwmNHafh2F7bgTY39wdWZoxNZAtMDnhy1BwYpeslwb7dladP1OGFd2GzkUAtBgBDAAABAQCA_Br3aygBwCOF_0gsLX_S7q-9Lrk1IYKXT6gGJ2A9oB52VhiAD76dOnc1bYyeKi3iE8Rs9JRy_jkcp1WvM3R1yjh4XJ_QRmmWnl1xyFP0P8uaH4xu0G1GMyJrc_ZyB94GAGcAAAEBAPfxMbSg-KvMam2Mhkr5Hn_ACH6GX-0k2slg7uUsKELb7COjpxrGJrCuVVb2i3Y-gffCDlQ6GUmPoasRFU_Kmb6UQV5hNnwI7-mbKL8twvBsiplzl3IddqOMT6O5Si6rOmhAHINSa9IRy7UgchtreGzjBjgjc8vViInfw6BihF7r05AVaQYArwAAAQEAXhTRCseFwbouAxpSGQ4dgTlv7qAWOCDGt_DpL99ghxNxPaOZQgCAMIM0xmbZI3stQEfbUhdNWAn6zYoj4cQcfBiYdRfKj4AkWpzKQF8H38e5NgoilJ7bFEaqIeLuJItrE4JBKUr8HXklJPyuCjXKEsQpJ_goSsAqfvlOnZvh4CRq2LQ07s3qBLxhouZ4rXLrx4j8uxPg1Ghz82lOxPcRp4MdHvqLfwg9h9osUInMJI-wNa4CIl_af8GFTreyXA4bQdHTOzS3aTtqnL-_BgCvAAABAQCly24SzO2UtPsMOCEklLhpj-t_EvX3fgZkHGzG-h6JMCevq9YK3WmLjg0Fy8InTz0pqXjzcJUz-foMtkul4JDWj6nllSD9aTKTsj6SIhK6_ettdrvljxi5AdiYE_iCFtyF6MIReWOmLnFFizIKNO1WYu8n9Jli0Be1IzxOU5WawkN_VM-8iA2-MEN5pJxwlRK2f9TGsqS0P5d6xKcGryH7dX-NMwN2ywZHRuPe6GY5DKlLXsEIw0kJmb--07VokAXouCwbzkFydZW6wekGAK8AAAEBABmE5-OFM3LcqrBjJzXAZzhKgOG6GBQYFC_mKndl07saC3IfJXDenX-x2IzsBD_HcoyMMZm2ig1ObGqaZ5SqijRbAyTt13-3HoZoE6DTAF3MiW0p_0-SAniNkcSDX_bqT_NDjsKLI4AtY3rXOv_AhT3X8Aorpy1c41v89899yFDuXa0R2aZiEndgDJ1ifUGqEXkpQgASz25uJ6gJwjqlsi8AjVXIhKx0ZeNqQiEfIBu4Mm8S6SV-sIGpZe1jryCPoRbObZkMxKUhcHpHOAYAOAAAAQEA12z4tjJz4fKYHWjq4e0nyKcEjAhjBeDWhD-qE523OX5NcEXfAfqf7oj6q0wcN5PKgKzsi6I',
+            '14. No Term': 'DBSj10kBKZ85UUBqgW05vS8wXkFlJCXMF37GwEpWAyIGAFIAAAABAGDNsxpQxcJfSTqljJ3_gQF59Dbw9Fo--1coQtXgyBAAABS7tNDYzTpFw-K7GQ3f46fD_kqiW4sdg0Gqo8NgaohCHvc9CAK_lKIEWltbdW0OQkHeofnoJfvquDZEPcThNI6stiALDeP865vVsJ3ozQYAMQAAAAEASFE_HU_e4zvofNC3y2YJc_TDtgTl2NkWbMh_Yj4Dz6fjgeRuVJjqk8R2mcLDiucVINP1sa0C8exDYYgIBhhyJNZKbAF4vGcts76qYN5NBgBDAAAAAQDG5uS6qlBCA10PZ5TchRsg_50IVg3H64ASIZbdkfYlIalDmnKx2_lkFkt9LkEODBfLNoCg3280ixQ2mwae3M4V0XMLGdznAYrgMnXet7ZiEtToldVzGv0m-6d29pz4umYGAGcAAAABAPqd0fors414KtU1ViEKmqkeGgHcyjEoJ4DIRH742xXTxh4nOhoFm19PvDVNeAVQIdbSCDa-s4IqdCzLgUQK-Yx8DM0YOdUBolZxJQOb-5OoVhfVmm99yiggklZPtzT1bfCaXQvKM7Xw2wAIrw1xMTkRltH8lH5yaz3Xb8elQbKYTIpFvgYArwAAAAEApmzfDJvug6b2EaDTKr61O-JGsSrEboPHwsxX9LSUcCh0eBIQ1MLG1v2owMbgK2jQy8bEOhM4rRrpiZ1TzDd0cKyhelLFCDUsOtBJO6uOknPb9YOBwcna2B9UMj8lrZb9My9ChfjofXDk_b-uRhZbIqnGFhhNTYSwkZ2dyuYleIiD1GQPoP4MYJ4XnUs3nEg392FXgTKjGlRzwwbSsIQpbWn94zN4KLQ_ziCkOwF-HDDKf8wD3WevkbFImsYM6RZbvDGt5Eei9_fvyyprBgCvAAAAAQAD-ci_1XMFjh67-ziFnGkaCeq5wfh_kwFybPRzU2HSutmX6e6jkEQrUwSfEkYvavlpMNQKFjL10aVvC1JNbI7CCx6FE2sog2ZL5lfPtRGPhbu8_BnMvS_zAG9uvvTqMneXUrvii79uhT8MY7dCuLCBCtVMtyzmQFRsXFMcVMrKEKXQH3Voi_TkLNPr7MtJGzegKQcm1y6sX3VEkPapdqkG636zmCE4tFDIptJBDgJ8uXP5no0c-CtHepqL1jcKkeIgZVt8bCK4b9-8OtcGAK8AAAABALEZNnMJXsYobGKOn8U63Wtho1muI87OKzMI_BZDDFiUQZduletcTCNjsm4iZinPpFGtGrOuS8oSbxrcnkZgJA6_RhpuN63lEOX9NAv-T5wiz8sJbWVWm59xtZ6pcR7tuyVK444Nl89f2ZeHEp_DuCWdFo-AZhUBqp7lL3_H42AABHS_iHcMU5dT3ZvVmZbiazVFCgIlpo-biDihT1XR9uuWtPZlNUE80YACm3sxSvSZ7bZZkWsgACouG3HweAeG_gILIhm6O0XwP9gUMwYAOAAAAAEAmB0NrkLBUxOT-kUrJwTlORQ62fdJKCePOjPUNnBawoupsH5c34r2leStBcHeJkokVev3OWg',
+         }
+      },
+      //v7
+      {
+         ver: 7,
+         goodCt: "pL3ehW61dNy-iAYXYw3H_9YrmBcHMGOznwSF5aOqGkcHAFIAAAABABCPFiGEgTpwHMDCzkaFVcO9aFqGpBNgCGjQjD_gyBAAABQ5v6xnJq7wgpEvYpCpbJ8cMMabRhx-MJoCpkpOhHZU3VJSpG0OaTA6f9iKEK8VJ9awT3q0WqzMknLn6xE48MlmXWWsOmQbwazGQrFRvwcAMQAAAAEAW8VK2lMLdK_v8_LT3Iez1iHH8DTzBBOXbd2R-vYm4n6QjqGol7GbviKQeyxCESGtQxas36F0EFUdtyPBZi3IaYIX3j3mexkiuwJ-wxAmBwBDAAAAAQBfzespUn8SnOG8FcfM58_f3LtIRs0XXKqCbFbVZ0XXn8GHtbRhoqTnCE3qsnGFaCFvQuZ3ws6s2VOdSn0Ycl6kDilWILxmQm6uDMIRkyOPYqmf4HgZ7-1xdUGwGepvLBsHAGcAAAABAOPaeZBbVizdcgG5NEimoT3ToxWgaQReKTckXaPszOtfCRIamApjzgxHIggy8oeDC0KG_3wOdeKUX-d_GFPM824rrHqwXGJ4qAr0e_glmGcaGnVYecL_Hffa--MrtWAUvFK1lQyP8lhrbSrlBnd8mJl3rpn5uXy2iiIT9QOGfvSa07_wTQcArwAAAAEAQKqkyyfq_ixBTq8JKotjIZt06Y4S0J7bcKYUnxKqUlADSrH0BHGfducGJXgIUgo2nEdxlTL0frwZL0nbTLczrCtloJa54s6mYWGWvAX6M_yEgI35kRbD9WS3DpcqE9qpAXXkR_HKBUtDJ7aC-Io4FURDqBps_h5-YgiFGcqXtX5RYTjRF_c0pPCBOJ6JJ_JTBi1dZodG6MTPRjZ0uOCezgDizJLKNOvKrPIXpIUuIoKvFroDIQ7GoE5O7hmt5nAgb4k7dzLeYBoidNB4BwCvAAAAAQBpcGc7ogkCjN-OOFkGQIOG16Do8WFL8NKcxenP7HPQScz-i6fdl-hPANvSr6zCD3uUEWDtgziL7Jph7TXR6m3-yJyolny_8MDZVRkRN0uadS_lkEP1T_eKptNedo_ubXHI-QcdW7qReTcNr8SpyZsC7zKoQ6y97A8zznULXLPvNIY3kCaS6RElxQKQkFDXqG1tk1dtPInqI-zBcRmocL4_iVLbExpoXWse9L5MhQxEHJZuDCcFx1930Yu6qq1urFIF-V0r9qEKe_g789AHAK8AAAABAHPEiPt3zOyAu6nrirRrSiCbFoynKkIzU-1egQzqjADw8pebD-4zmobUZz5eTk1Mzs4Ge0bXfj__zpRsd8iUGTg4YYgk8_DlQSnpl2f7CRaFYua4ShE6OICm6cjxCU90dCWbobykpIrmv71QrBPA6WDoCy3dsWTNIGMUstxlWiRyNfgS2QucrFCszoQ2PxaaCKDNr1jF20v83gwySFgzNJS4XNBJiqiZ4DjnlbW2qGuuBneVkqOFO81kGpyju6FrAdFAS8VdxOawCcMCYQcAOAAAAQEAwVacsrBdRdhH3U39SptDhwGkz4p797KURUcdDG4dEQQJ943JYGAjYhXJoHsUZheBOK2bZNY",
+         badCts: {
+            '1. Block0 Block7 swap': 'tqhrrgZ3lZKjhTvNZBqco7uhawHRQEvFXcTmsAnDAmEHADgAAAEBAMFWnLKwXUXYR91N_UqbQ4cBpM-Ke_eylEVHHQxuHREECfeNyWBgI2IVyaB7FGYXgTitm2TWFSfWsE96tFqszJJy5-sROPDJZl1lrDpkG8GsxkKxUb8HADEAAAABAFvFStpTC3Sv7_Py09yHs9Yhx_A08wQTl23dkfr2JuJ-kI6hqJexm74ikHssQhEhrUMWrN-hdBBVHbcjwWYtyGmCF9495nsZIrsCfsMQJgcAQwAAAAEAX83rKVJ_EpzhvBXHzOfP39y7SEbNF1yqgmxW1WdF15_Bh7W0YaKk5whN6rJxhWghb0Lmd8LOrNlTnUp9GHJepA4pViC8ZkJurgzCEZMjj2Kpn-B4Ge_tcXVBsBnqbywbBwBnAAAAAQDj2nmQW1Ys3XIBuTRIpqE906MVoGkEXik3JF2j7MzrXwkSGpgKY84MRyIIMvKHgwtChv98DnXilF_nfxhTzPNuK6x6sFxieKgK9Hv4JZhnGhp1WHnC_x332vvjK7VgFLxStZUMj_JYa20q5QZ3fJiZd66Z-bl8tooiE_UDhn70mtO_8E0HAK8AAAABAECqpMsn6v4sQU6vCSqLYyGbdOmOEtCe23CmFJ8SqlJQA0qx9ARxn3bnBiV4CFIKNpxHcZUy9H68GS9J20y3M6wrZaCWueLOpmFhlrwF-jP8hICN-ZEWw_Vktw6XKhPaqQF15EfxygVLQye2gviKOBVEQ6gabP4efmIIhRnKl7V-UWE40Rf3NKTwgTieiSfyUwYtXWaHRujEz0Y2dLjgns4A4sySyjTryqzyF6SFLiKCrxa6AyEOxqBOTu4ZreZwIG-JO3cy3mAaInTQeAcArwAAAAEAaXBnO6IJAozfjjhZBkCDhteg6PFhS_DSnMXpz-xz0EnM_oun3ZfoTwDb0q-swg97lBFg7YM4i-yaYe010ept_sicqJZ8v_DA2VUZETdLmnUv5ZBD9U_3iqbTXnaP7m1xyPkHHVu6kXk3Da_EqcmbAu8yqEOsvewPM851C1yz7zSGN5AmkukRJcUCkJBQ16htbZNXbTyJ6iPswXEZqHC-P4lS2xMaaF1rHvS-TIUMRByWbgwnBcdfd9GLuqqtbqxSBfldK_ahCnv4O_PQBwCvAAAAAQBzxIj7d8zsgLup64q0a0ogmxaMpypCM1PtXoEM6owA8PKXmw_uM5qG1Gc-Xk5NTM7OBntG134__86UbHfIlBk4OGGIJPPw5UEp6Zdn-wkWhWLmuEoROjiApunI8QlPdHQlm6G8pKSK5r-9UKwTwOlg6Ast3bFkzSBjFLLcZVokcjX4EtkLnKxQrM6ENj8Wmgigza9YxdtL_N4MMkhYMzSUuFzQSYqomeA455W1pL3ehW61dNy-iAYXYw3H_9YrmBcHMGOznwSF5aOqGkcHAFIAAAABABCPFiGEgTpwHMDCzkaFVcO9aFqGpBNgCGjQjD_gyBAAABQ5v6xnJq7wgpEvYpCpbJ8cMMabRhx-MJoCpkpOhHZU3VJSpG0OaTA6f9iKEK8',
+            '2. Block1 Block7 swap': 'pL3ehW61dNy-iAYXYw3H_9YrmBcHMGOznwSF5aOqGkcHAFIAAAABABCPFiGEgTpwHMDCzkaFVcO9aFqGpBNgCGjQjD_gyBAAABQ5v6xnJq7wgpEvYpCpbJ8cMMabRhx-MJoCpkpOhHZU3VJSpG0OaTA6f9iKEK-2qGuuBneVkqOFO81kGpyju6FrAdFAS8VdxOawCcMCYQcAOAAAAQEAwVacsrBdRdhH3U39SptDhwGkz4p797KURUcdDG4dEQQJ943JYGAjYhXJoHsUZheBOK2bZNYhrUMWrN-hdBBVHbcjwWYtyGmCF9495nsZIrsCfsMQJgcAQwAAAAEAX83rKVJ_EpzhvBXHzOfP39y7SEbNF1yqgmxW1WdF15_Bh7W0YaKk5whN6rJxhWghb0Lmd8LOrNlTnUp9GHJepA4pViC8ZkJurgzCEZMjj2Kpn-B4Ge_tcXVBsBnqbywbBwBnAAAAAQDj2nmQW1Ys3XIBuTRIpqE906MVoGkEXik3JF2j7MzrXwkSGpgKY84MRyIIMvKHgwtChv98DnXilF_nfxhTzPNuK6x6sFxieKgK9Hv4JZhnGhp1WHnC_x332vvjK7VgFLxStZUMj_JYa20q5QZ3fJiZd66Z-bl8tooiE_UDhn70mtO_8E0HAK8AAAABAECqpMsn6v4sQU6vCSqLYyGbdOmOEtCe23CmFJ8SqlJQA0qx9ARxn3bnBiV4CFIKNpxHcZUy9H68GS9J20y3M6wrZaCWueLOpmFhlrwF-jP8hICN-ZEWw_Vktw6XKhPaqQF15EfxygVLQye2gviKOBVEQ6gabP4efmIIhRnKl7V-UWE40Rf3NKTwgTieiSfyUwYtXWaHRujEz0Y2dLjgns4A4sySyjTryqzyF6SFLiKCrxa6AyEOxqBOTu4ZreZwIG-JO3cy3mAaInTQeAcArwAAAAEAaXBnO6IJAozfjjhZBkCDhteg6PFhS_DSnMXpz-xz0EnM_oun3ZfoTwDb0q-swg97lBFg7YM4i-yaYe010ept_sicqJZ8v_DA2VUZETdLmnUv5ZBD9U_3iqbTXnaP7m1xyPkHHVu6kXk3Da_EqcmbAu8yqEOsvewPM851C1yz7zSGN5AmkukRJcUCkJBQ16htbZNXbTyJ6iPswXEZqHC-P4lS2xMaaF1rHvS-TIUMRByWbgwnBcdfd9GLuqqtbqxSBfldK_ahCnv4O_PQBwCvAAAAAQBzxIj7d8zsgLup64q0a0ogmxaMpypCM1PtXoEM6owA8PKXmw_uM5qG1Gc-Xk5NTM7OBntG134__86UbHfIlBk4OGGIJPPw5UEp6Zdn-wkWhWLmuEoROjiApunI8QlPdHQlm6G8pKSK5r-9UKwTwOlg6Ast3bFkzSBjFLLcZVokcjX4EtkLnKxQrM6ENj8Wmgigza9YxdtL_N4MMkhYMzSUuFzQSYqomeA455W1FSfWsE96tFqszJJy5-sROPDJZl1lrDpkG8GsxkKxUb8HADEAAAABAFvFStpTC3Sv7_Py09yHs9Yhx_A08wQTl23dkfr2JuJ-kI6hqJexm74ikHssQhE',
+            '3. Block1 Block4 swap': 'pL3ehW61dNy-iAYXYw3H_9YrmBcHMGOznwSF5aOqGkcHAFIAAAABABCPFiGEgTpwHMDCzkaFVcO9aFqGpBNgCGjQjD_gyBAAABQ5v6xnJq7wgpEvYpCpbJ8cMMabRhx-MJoCpkpOhHZU3VJSpG0OaTA6f9iKEK-P8lhrbSrlBnd8mJl3rpn5uXy2iiIT9QOGfvSa07_wTQcArwAAAAEAQKqkyyfq_ixBTq8JKotjIZt06Y4S0J7bcKYUnxKqUlADSrH0BHGfducGJXgIUgo2nEdxlTL0frwZL0nbTLczrCtloJa54s6mYWGWvAX6M_yEgI35kRbD9WS3DpcqE9qpAXXkR_HKBUtDJ7aC-Io4FURDqBps_h5-YgiFGcqXtX5RYTjRF_c0pPCBOJ6JJ_JTBi1dZodG6MTPRjZ0uOCezgDizJLKNOvKrPIXpCGtQxas36F0EFUdtyPBZi3IaYIX3j3mexkiuwJ-wxAmBwBDAAAAAQBfzespUn8SnOG8FcfM58_f3LtIRs0XXKqCbFbVZ0XXn8GHtbRhoqTnCE3qsnGFaCFvQuZ3ws6s2VOdSn0Ycl6kDilWILxmQm6uDMIRkyOPYqmf4HgZ7-1xdUGwGepvLBsHAGcAAAABAOPaeZBbVizdcgG5NEimoT3ToxWgaQReKTckXaPszOtfCRIamApjzgxHIggy8oeDC0KG_3wOdeKUX-d_GFPM824rrHqwXGJ4qAr0e_glmGcaGnVYecL_Hffa--MrtWAUvFK1lQwVJ9awT3q0WqzMknLn6xE48MlmXWWsOmQbwazGQrFRvwcAMQAAAAEAW8VK2lMLdK_v8_LT3Iez1iHH8DTzBBOXbd2R-vYm4n6QjqGol7GbviKQeyxCEYUuIoKvFroDIQ7GoE5O7hmt5nAgb4k7dzLeYBoidNB4BwCvAAAAAQBpcGc7ogkCjN-OOFkGQIOG16Do8WFL8NKcxenP7HPQScz-i6fdl-hPANvSr6zCD3uUEWDtgziL7Jph7TXR6m3-yJyolny_8MDZVRkRN0uadS_lkEP1T_eKptNedo_ubXHI-QcdW7qReTcNr8SpyZsC7zKoQ6y97A8zznULXLPvNIY3kCaS6RElxQKQkFDXqG1tk1dtPInqI-zBcRmocL4_iVLbExpoXWse9L5MhQxEHJZuDCcFx1930Yu6qq1urFIF-V0r9qEKe_g789AHAK8AAAABAHPEiPt3zOyAu6nrirRrSiCbFoynKkIzU-1egQzqjADw8pebD-4zmobUZz5eTk1Mzs4Ge0bXfj__zpRsd8iUGTg4YYgk8_DlQSnpl2f7CRaFYua4ShE6OICm6cjxCU90dCWbobykpIrmv71QrBPA6WDoCy3dsWTNIGMUstxlWiRyNfgS2QucrFCszoQ2PxaaCKDNr1jF20v83gwySFgzNJS4XNBJiqiZ4DjnlbW2qGuuBneVkqOFO81kGpyju6FrAdFAS8VdxOawCcMCYQcAOAAAAQEAwVacsrBdRdhH3U39SptDhwGkz4p797KURUcdDG4dEQQJ943JYGAjYhXJoHsUZheBOK2bZNY',
+            '4. Block0 repeated': 'pL3ehW61dNy-iAYXYw3H_9YrmBcHMGOznwSF5aOqGkcHAFIAAAABABCPFiGEgTpwHMDCzkaFVcO9aFqGpBNgCGjQjD_gyBAAABQ5v6xnJq7wgpEvYpCpbJ8cMMabRhx-MJoCpkpOhHZU3VJSpG0OaTA6f9iKEK-kvd6FbrV03L6IBhdjDcf_1iuYFwcwY7OfBIXlo6oaRwcAUgAAAAEAEI8WIYSBOnAcwMLORoVVw71oWoakE2AIaNCMP-DIEAAAFDm_rGcmrvCCkS9ikKlsnxwwxptGHH4wmgKmSk6EdlTdUlKkbQ5pMDp_2IoQrxUn1rBPerRarMyScufrETjwyWZdZaw6ZBvBrMZCsVG_BwAxAAAAAQBbxUraUwt0r-_z8tPch7PWIcfwNPMEE5dt3ZH69ibifpCOoaiXsZu-IpB7LEIRIa1DFqzfoXQQVR23I8FmLchpghfePeZ7GSK7An7DECYHAEMAAAABAF_N6ylSfxKc4bwVx8znz9_cu0hGzRdcqoJsVtVnRdefwYe1tGGipOcITeqycYVoIW9C5nfCzqzZU51KfRhyXqQOKVYgvGZCbq4MwhGTI49iqZ_geBnv7XF1QbAZ6m8sGwcAZwAAAAEA49p5kFtWLN1yAbk0SKahPdOjFaBpBF4pNyRdo-zM618JEhqYCmPODEciCDLyh4MLQob_fA514pRf538YU8zzbiuserBcYnioCvR7-CWYZxoadVh5wv8d99r74yu1YBS8UrWVDI_yWGttKuUGd3yYmXeumfm5fLaKIhP1A4Z-9JrTv_BNBwCvAAAAAQBAqqTLJ-r-LEFOrwkqi2Mhm3TpjhLQnttwphSfEqpSUANKsfQEcZ925wYleAhSCjacR3GVMvR-vBkvSdtMtzOsK2WglrnizqZhYZa8Bfoz_ISAjfmRFsP1ZLcOlyoT2qkBdeRH8coFS0MntoL4ijgVREOoGmz-Hn5iCIUZype1flFhONEX9zSk8IE4nokn8lMGLV1mh0boxM9GNnS44J7OAOLMkso068qs8hekhS4igq8WugMhDsagTk7uGa3mcCBviTt3Mt5gGiJ00HgHAK8AAAABAGlwZzuiCQKM3444WQZAg4bXoOjxYUvw0pzF6c_sc9BJzP6Lp92X6E8A29KvrMIPe5QRYO2DOIvsmmHtNdHqbf7InKiWfL_wwNlVGRE3S5p1L-WQQ_VP94qm0152j-5tccj5Bx1bupF5Nw2vxKnJmwLvMqhDrL3sDzPOdQtcs-80hjeQJpLpESXFApCQUNeobW2TV208ieoj7MFxGahwvj-JUtsTGmhdax70vkyFDEQclm4MJwXHX3fRi7qqrW6sUgX5XSv2oQp7-Dvz0AcArwAAAAEAc8SI-3fM7IC7qeuKtGtKIJsWjKcqQjNT7V6BDOqMAPDyl5sP7jOahtRnPl5OTUzOzgZ7Rtd-P__OlGx3yJQZODhhiCTz8OVBKemXZ_sJFoVi5rhKETo4gKbpyPEJT3R0JZuhvKSkiua_vVCsE8DpYOgLLd2xZM0gYxSy3GVaJHI1-BLZC5ysUKzOhDY_FpoIoM2vWMXbS_zeDDJIWDM0lLhc0EmKqJngOOeVtbaoa64Gd5WSo4U7zWQanKO7oWsB0UBLxV3E5rAJwwJhBwA4AAABAQDBVpyysF1F2EfdTf1Km0OHAaTPinv3spRFRx0Mbh0RBAn3jclgYCNiFcmgexRmF4E4rZtk1g',
+            '5. Block0 deleted': 'FSfWsE96tFqszJJy5-sROPDJZl1lrDpkG8GsxkKxUb8HADEAAAABAFvFStpTC3Sv7_Py09yHs9Yhx_A08wQTl23dkfr2JuJ-kI6hqJexm74ikHssQhEhrUMWrN-hdBBVHbcjwWYtyGmCF9495nsZIrsCfsMQJgcAQwAAAAEAX83rKVJ_EpzhvBXHzOfP39y7SEbNF1yqgmxW1WdF15_Bh7W0YaKk5whN6rJxhWghb0Lmd8LOrNlTnUp9GHJepA4pViC8ZkJurgzCEZMjj2Kpn-B4Ge_tcXVBsBnqbywbBwBnAAAAAQDj2nmQW1Ys3XIBuTRIpqE906MVoGkEXik3JF2j7MzrXwkSGpgKY84MRyIIMvKHgwtChv98DnXilF_nfxhTzPNuK6x6sFxieKgK9Hv4JZhnGhp1WHnC_x332vvjK7VgFLxStZUMj_JYa20q5QZ3fJiZd66Z-bl8tooiE_UDhn70mtO_8E0HAK8AAAABAECqpMsn6v4sQU6vCSqLYyGbdOmOEtCe23CmFJ8SqlJQA0qx9ARxn3bnBiV4CFIKNpxHcZUy9H68GS9J20y3M6wrZaCWueLOpmFhlrwF-jP8hICN-ZEWw_Vktw6XKhPaqQF15EfxygVLQye2gviKOBVEQ6gabP4efmIIhRnKl7V-UWE40Rf3NKTwgTieiSfyUwYtXWaHRujEz0Y2dLjgns4A4sySyjTryqzyF6SFLiKCrxa6AyEOxqBOTu4ZreZwIG-JO3cy3mAaInTQeAcArwAAAAEAaXBnO6IJAozfjjhZBkCDhteg6PFhS_DSnMXpz-xz0EnM_oun3ZfoTwDb0q-swg97lBFg7YM4i-yaYe010ept_sicqJZ8v_DA2VUZETdLmnUv5ZBD9U_3iqbTXnaP7m1xyPkHHVu6kXk3Da_EqcmbAu8yqEOsvewPM851C1yz7zSGN5AmkukRJcUCkJBQ16htbZNXbTyJ6iPswXEZqHC-P4lS2xMaaF1rHvS-TIUMRByWbgwnBcdfd9GLuqqtbqxSBfldK_ahCnv4O_PQBwCvAAAAAQBzxIj7d8zsgLup64q0a0ogmxaMpypCM1PtXoEM6owA8PKXmw_uM5qG1Gc-Xk5NTM7OBntG134__86UbHfIlBk4OGGIJPPw5UEp6Zdn-wkWhWLmuEoROjiApunI8QlPdHQlm6G8pKSK5r-9UKwTwOlg6Ast3bFkzSBjFLLcZVokcjX4EtkLnKxQrM6ENj8Wmgigza9YxdtL_N4MMkhYMzSUuFzQSYqomeA455W1tqhrrgZ3lZKjhTvNZBqco7uhawHRQEvFXcTmsAnDAmEHADgAAAEBAMFWnLKwXUXYR91N_UqbQ4cBpM-Ke_eylEVHHQxuHREECfeNyWBgI2IVyaB7FGYXgTitm2TW',
+            '6. Block1 repeated': 'pL3ehW61dNy-iAYXYw3H_9YrmBcHMGOznwSF5aOqGkcHAFIAAAABABCPFiGEgTpwHMDCzkaFVcO9aFqGpBNgCGjQjD_gyBAAABQ5v6xnJq7wgpEvYpCpbJ8cMMabRhx-MJoCpkpOhHZU3VJSpG0OaTA6f9iKEK8VJ9awT3q0WqzMknLn6xE48MlmXWWsOmQbwazGQrFRvwcAMQAAAAEAW8VK2lMLdK_v8_LT3Iez1iHH8DTzBBOXbd2R-vYm4n6QjqGol7GbviKQeyxCERUn1rBPerRarMyScufrETjwyWZdZaw6ZBvBrMZCsVG_BwAxAAAAAQBbxUraUwt0r-_z8tPch7PWIcfwNPMEE5dt3ZH69ibifpCOoaiXsZu-IpB7LEIRIa1DFqzfoXQQVR23I8FmLchpghfePeZ7GSK7An7DECYHAEMAAAABAF_N6ylSfxKc4bwVx8znz9_cu0hGzRdcqoJsVtVnRdefwYe1tGGipOcITeqycYVoIW9C5nfCzqzZU51KfRhyXqQOKVYgvGZCbq4MwhGTI49iqZ_geBnv7XF1QbAZ6m8sGwcAZwAAAAEA49p5kFtWLN1yAbk0SKahPdOjFaBpBF4pNyRdo-zM618JEhqYCmPODEciCDLyh4MLQob_fA514pRf538YU8zzbiuserBcYnioCvR7-CWYZxoadVh5wv8d99r74yu1YBS8UrWVDI_yWGttKuUGd3yYmXeumfm5fLaKIhP1A4Z-9JrTv_BNBwCvAAAAAQBAqqTLJ-r-LEFOrwkqi2Mhm3TpjhLQnttwphSfEqpSUANKsfQEcZ925wYleAhSCjacR3GVMvR-vBkvSdtMtzOsK2WglrnizqZhYZa8Bfoz_ISAjfmRFsP1ZLcOlyoT2qkBdeRH8coFS0MntoL4ijgVREOoGmz-Hn5iCIUZype1flFhONEX9zSk8IE4nokn8lMGLV1mh0boxM9GNnS44J7OAOLMkso068qs8hekhS4igq8WugMhDsagTk7uGa3mcCBviTt3Mt5gGiJ00HgHAK8AAAABAGlwZzuiCQKM3444WQZAg4bXoOjxYUvw0pzF6c_sc9BJzP6Lp92X6E8A29KvrMIPe5QRYO2DOIvsmmHtNdHqbf7InKiWfL_wwNlVGRE3S5p1L-WQQ_VP94qm0152j-5tccj5Bx1bupF5Nw2vxKnJmwLvMqhDrL3sDzPOdQtcs-80hjeQJpLpESXFApCQUNeobW2TV208ieoj7MFxGahwvj-JUtsTGmhdax70vkyFDEQclm4MJwXHX3fRi7qqrW6sUgX5XSv2oQp7-Dvz0AcArwAAAAEAc8SI-3fM7IC7qeuKtGtKIJsWjKcqQjNT7V6BDOqMAPDyl5sP7jOahtRnPl5OTUzOzgZ7Rtd-P__OlGx3yJQZODhhiCTz8OVBKemXZ_sJFoVi5rhKETo4gKbpyPEJT3R0JZuhvKSkiua_vVCsE8DpYOgLLd2xZM0gYxSy3GVaJHI1-BLZC5ysUKzOhDY_FpoIoM2vWMXbS_zeDDJIWDM0lLhc0EmKqJngOOeVtbaoa64Gd5WSo4U7zWQanKO7oWsB0UBLxV3E5rAJwwJhBwA4AAABAQDBVpyysF1F2EfdTf1Km0OHAaTPinv3spRFRx0Mbh0RBAn3jclgYCNiFcmgexRmF4E4rZtk1g',
+            '7. Block1 deleted': 'pL3ehW61dNy-iAYXYw3H_9YrmBcHMGOznwSF5aOqGkcHAFIAAAABABCPFiGEgTpwHMDCzkaFVcO9aFqGpBNgCGjQjD_gyBAAABQ5v6xnJq7wgpEvYpCpbJ8cMMabRhx-MJoCpkpOhHZU3VJSpG0OaTA6f9iKEK8hrUMWrN-hdBBVHbcjwWYtyGmCF9495nsZIrsCfsMQJgcAQwAAAAEAX83rKVJ_EpzhvBXHzOfP39y7SEbNF1yqgmxW1WdF15_Bh7W0YaKk5whN6rJxhWghb0Lmd8LOrNlTnUp9GHJepA4pViC8ZkJurgzCEZMjj2Kpn-B4Ge_tcXVBsBnqbywbBwBnAAAAAQDj2nmQW1Ys3XIBuTRIpqE906MVoGkEXik3JF2j7MzrXwkSGpgKY84MRyIIMvKHgwtChv98DnXilF_nfxhTzPNuK6x6sFxieKgK9Hv4JZhnGhp1WHnC_x332vvjK7VgFLxStZUMj_JYa20q5QZ3fJiZd66Z-bl8tooiE_UDhn70mtO_8E0HAK8AAAABAECqpMsn6v4sQU6vCSqLYyGbdOmOEtCe23CmFJ8SqlJQA0qx9ARxn3bnBiV4CFIKNpxHcZUy9H68GS9J20y3M6wrZaCWueLOpmFhlrwF-jP8hICN-ZEWw_Vktw6XKhPaqQF15EfxygVLQye2gviKOBVEQ6gabP4efmIIhRnKl7V-UWE40Rf3NKTwgTieiSfyUwYtXWaHRujEz0Y2dLjgns4A4sySyjTryqzyF6SFLiKCrxa6AyEOxqBOTu4ZreZwIG-JO3cy3mAaInTQeAcArwAAAAEAaXBnO6IJAozfjjhZBkCDhteg6PFhS_DSnMXpz-xz0EnM_oun3ZfoTwDb0q-swg97lBFg7YM4i-yaYe010ept_sicqJZ8v_DA2VUZETdLmnUv5ZBD9U_3iqbTXnaP7m1xyPkHHVu6kXk3Da_EqcmbAu8yqEOsvewPM851C1yz7zSGN5AmkukRJcUCkJBQ16htbZNXbTyJ6iPswXEZqHC-P4lS2xMaaF1rHvS-TIUMRByWbgwnBcdfd9GLuqqtbqxSBfldK_ahCnv4O_PQBwCvAAAAAQBzxIj7d8zsgLup64q0a0ogmxaMpypCM1PtXoEM6owA8PKXmw_uM5qG1Gc-Xk5NTM7OBntG134__86UbHfIlBk4OGGIJPPw5UEp6Zdn-wkWhWLmuEoROjiApunI8QlPdHQlm6G8pKSK5r-9UKwTwOlg6Ast3bFkzSBjFLLcZVokcjX4EtkLnKxQrM6ENj8Wmgigza9YxdtL_N4MMkhYMzSUuFzQSYqomeA455W1tqhrrgZ3lZKjhTvNZBqco7uhawHRQEvFXcTmsAnDAmEHADgAAAEBAMFWnLKwXUXYR91N_UqbQ4cBpM-Ke_eylEVHHQxuHREECfeNyWBgI2IVyaB7FGYXgTitm2TW',
+            '8. Block2 repeated': 'pL3ehW61dNy-iAYXYw3H_9YrmBcHMGOznwSF5aOqGkcHAFIAAAABABCPFiGEgTpwHMDCzkaFVcO9aFqGpBNgCGjQjD_gyBAAABQ5v6xnJq7wgpEvYpCpbJ8cMMabRhx-MJoCpkpOhHZU3VJSpG0OaTA6f9iKEK8VJ9awT3q0WqzMknLn6xE48MlmXWWsOmQbwazGQrFRvwcAMQAAAAEAW8VK2lMLdK_v8_LT3Iez1iHH8DTzBBOXbd2R-vYm4n6QjqGol7GbviKQeyxCESGtQxas36F0EFUdtyPBZi3IaYIX3j3mexkiuwJ-wxAmBwBDAAAAAQBfzespUn8SnOG8FcfM58_f3LtIRs0XXKqCbFbVZ0XXn8GHtbRhoqTnCE3qsnGFaCFvQuZ3ws6s2VOdSn0Ycl6kIa1DFqzfoXQQVR23I8FmLchpghfePeZ7GSK7An7DECYHAEMAAAABAF_N6ylSfxKc4bwVx8znz9_cu0hGzRdcqoJsVtVnRdefwYe1tGGipOcITeqycYVoIW9C5nfCzqzZU51KfRhyXqQOKVYgvGZCbq4MwhGTI49iqZ_geBnv7XF1QbAZ6m8sGwcAZwAAAAEA49p5kFtWLN1yAbk0SKahPdOjFaBpBF4pNyRdo-zM618JEhqYCmPODEciCDLyh4MLQob_fA514pRf538YU8zzbiuserBcYnioCvR7-CWYZxoadVh5wv8d99r74yu1YBS8UrWVDI_yWGttKuUGd3yYmXeumfm5fLaKIhP1A4Z-9JrTv_BNBwCvAAAAAQBAqqTLJ-r-LEFOrwkqi2Mhm3TpjhLQnttwphSfEqpSUANKsfQEcZ925wYleAhSCjacR3GVMvR-vBkvSdtMtzOsK2WglrnizqZhYZa8Bfoz_ISAjfmRFsP1ZLcOlyoT2qkBdeRH8coFS0MntoL4ijgVREOoGmz-Hn5iCIUZype1flFhONEX9zSk8IE4nokn8lMGLV1mh0boxM9GNnS44J7OAOLMkso068qs8hekhS4igq8WugMhDsagTk7uGa3mcCBviTt3Mt5gGiJ00HgHAK8AAAABAGlwZzuiCQKM3444WQZAg4bXoOjxYUvw0pzF6c_sc9BJzP6Lp92X6E8A29KvrMIPe5QRYO2DOIvsmmHtNdHqbf7InKiWfL_wwNlVGRE3S5p1L-WQQ_VP94qm0152j-5tccj5Bx1bupF5Nw2vxKnJmwLvMqhDrL3sDzPOdQtcs-80hjeQJpLpESXFApCQUNeobW2TV208ieoj7MFxGahwvj-JUtsTGmhdax70vkyFDEQclm4MJwXHX3fRi7qqrW6sUgX5XSv2oQp7-Dvz0AcArwAAAAEAc8SI-3fM7IC7qeuKtGtKIJsWjKcqQjNT7V6BDOqMAPDyl5sP7jOahtRnPl5OTUzOzgZ7Rtd-P__OlGx3yJQZODhhiCTz8OVBKemXZ_sJFoVi5rhKETo4gKbpyPEJT3R0JZuhvKSkiua_vVCsE8DpYOgLLd2xZM0gYxSy3GVaJHI1-BLZC5ysUKzOhDY_FpoIoM2vWMXbS_zeDDJIWDM0lLhc0EmKqJngOOeVtbaoa64Gd5WSo4U7zWQanKO7oWsB0UBLxV3E5rAJwwJhBwA4AAABAQDBVpyysF1F2EfdTf1Km0OHAaTPinv3spRFRx0Mbh0RBAn3jclgYCNiFcmgexRmF4E4rZtk1g',
+            '9. Block2 deleted': 'pL3ehW61dNy-iAYXYw3H_9YrmBcHMGOznwSF5aOqGkcHAFIAAAABABCPFiGEgTpwHMDCzkaFVcO9aFqGpBNgCGjQjD_gyBAAABQ5v6xnJq7wgpEvYpCpbJ8cMMabRhx-MJoCpkpOhHZU3VJSpG0OaTA6f9iKEK8VJ9awT3q0WqzMknLn6xE48MlmXWWsOmQbwazGQrFRvwcAMQAAAAEAW8VK2lMLdK_v8_LT3Iez1iHH8DTzBBOXbd2R-vYm4n6QjqGol7GbviKQeyxCEQ4pViC8ZkJurgzCEZMjj2Kpn-B4Ge_tcXVBsBnqbywbBwBnAAAAAQDj2nmQW1Ys3XIBuTRIpqE906MVoGkEXik3JF2j7MzrXwkSGpgKY84MRyIIMvKHgwtChv98DnXilF_nfxhTzPNuK6x6sFxieKgK9Hv4JZhnGhp1WHnC_x332vvjK7VgFLxStZUMj_JYa20q5QZ3fJiZd66Z-bl8tooiE_UDhn70mtO_8E0HAK8AAAABAECqpMsn6v4sQU6vCSqLYyGbdOmOEtCe23CmFJ8SqlJQA0qx9ARxn3bnBiV4CFIKNpxHcZUy9H68GS9J20y3M6wrZaCWueLOpmFhlrwF-jP8hICN-ZEWw_Vktw6XKhPaqQF15EfxygVLQye2gviKOBVEQ6gabP4efmIIhRnKl7V-UWE40Rf3NKTwgTieiSfyUwYtXWaHRujEz0Y2dLjgns4A4sySyjTryqzyF6SFLiKCrxa6AyEOxqBOTu4ZreZwIG-JO3cy3mAaInTQeAcArwAAAAEAaXBnO6IJAozfjjhZBkCDhteg6PFhS_DSnMXpz-xz0EnM_oun3ZfoTwDb0q-swg97lBFg7YM4i-yaYe010ept_sicqJZ8v_DA2VUZETdLmnUv5ZBD9U_3iqbTXnaP7m1xyPkHHVu6kXk3Da_EqcmbAu8yqEOsvewPM851C1yz7zSGN5AmkukRJcUCkJBQ16htbZNXbTyJ6iPswXEZqHC-P4lS2xMaaF1rHvS-TIUMRByWbgwnBcdfd9GLuqqtbqxSBfldK_ahCnv4O_PQBwCvAAAAAQBzxIj7d8zsgLup64q0a0ogmxaMpypCM1PtXoEM6owA8PKXmw_uM5qG1Gc-Xk5NTM7OBntG134__86UbHfIlBk4OGGIJPPw5UEp6Zdn-wkWhWLmuEoROjiApunI8QlPdHQlm6G8pKSK5r-9UKwTwOlg6Ast3bFkzSBjFLLcZVokcjX4EtkLnKxQrM6ENj8Wmgigza9YxdtL_N4MMkhYMzSUuFzQSYqomeA455W1tqhrrgZ3lZKjhTvNZBqco7uhawHRQEvFXcTmsAnDAmEHADgAAAEBAMFWnLKwXUXYR91N_UqbQ4cBpM-Ke_eylEVHHQxuHREECfeNyWBgI2IVyaB7FGYXgTitm2TW',
+            '10. Block7 (last) repeated': 'pL3ehW61dNy-iAYXYw3H_9YrmBcHMGOznwSF5aOqGkcHAFIAAAABABCPFiGEgTpwHMDCzkaFVcO9aFqGpBNgCGjQjD_gyBAAABQ5v6xnJq7wgpEvYpCpbJ8cMMabRhx-MJoCpkpOhHZU3VJSpG0OaTA6f9iKEK8VJ9awT3q0WqzMknLn6xE48MlmXWWsOmQbwazGQrFRvwcAMQAAAAEAW8VK2lMLdK_v8_LT3Iez1iHH8DTzBBOXbd2R-vYm4n6QjqGol7GbviKQeyxCESGtQxas36F0EFUdtyPBZi3IaYIX3j3mexkiuwJ-wxAmBwBDAAAAAQBfzespUn8SnOG8FcfM58_f3LtIRs0XXKqCbFbVZ0XXn8GHtbRhoqTnCE3qsnGFaCFvQuZ3ws6s2VOdSn0Ycl6kDilWILxmQm6uDMIRkyOPYqmf4HgZ7-1xdUGwGepvLBsHAGcAAAABAOPaeZBbVizdcgG5NEimoT3ToxWgaQReKTckXaPszOtfCRIamApjzgxHIggy8oeDC0KG_3wOdeKUX-d_GFPM824rrHqwXGJ4qAr0e_glmGcaGnVYecL_Hffa--MrtWAUvFK1lQyP8lhrbSrlBnd8mJl3rpn5uXy2iiIT9QOGfvSa07_wTQcArwAAAAEAQKqkyyfq_ixBTq8JKotjIZt06Y4S0J7bcKYUnxKqUlADSrH0BHGfducGJXgIUgo2nEdxlTL0frwZL0nbTLczrCtloJa54s6mYWGWvAX6M_yEgI35kRbD9WS3DpcqE9qpAXXkR_HKBUtDJ7aC-Io4FURDqBps_h5-YgiFGcqXtX5RYTjRF_c0pPCBOJ6JJ_JTBi1dZodG6MTPRjZ0uOCezgDizJLKNOvKrPIXpIUuIoKvFroDIQ7GoE5O7hmt5nAgb4k7dzLeYBoidNB4BwCvAAAAAQBpcGc7ogkCjN-OOFkGQIOG16Do8WFL8NKcxenP7HPQScz-i6fdl-hPANvSr6zCD3uUEWDtgziL7Jph7TXR6m3-yJyolny_8MDZVRkRN0uadS_lkEP1T_eKptNedo_ubXHI-QcdW7qReTcNr8SpyZsC7zKoQ6y97A8zznULXLPvNIY3kCaS6RElxQKQkFDXqG1tk1dtPInqI-zBcRmocL4_iVLbExpoXWse9L5MhQxEHJZuDCcFx1930Yu6qq1urFIF-V0r9qEKe_g789AHAK8AAAABAHPEiPt3zOyAu6nrirRrSiCbFoynKkIzU-1egQzqjADw8pebD-4zmobUZz5eTk1Mzs4Ge0bXfj__zpRsd8iUGTg4YYgk8_DlQSnpl2f7CRaFYua4ShE6OICm6cjxCU90dCWbobykpIrmv71QrBPA6WDoCy3dsWTNIGMUstxlWiRyNfgS2QucrFCszoQ2PxaaCKDNr1jF20v83gwySFgzNJS4XNBJiqiZ4DjnlbW2qGuuBneVkqOFO81kGpyju6FrAdFAS8VdxOawCcMCYQcAOAAAAQEAwVacsrBdRdhH3U39SptDhwGkz4p797KURUcdDG4dEQQJ943JYGAjYhXJoHsUZheBOK2bZNa2qGuuBneVkqOFO81kGpyju6FrAdFAS8VdxOawCcMCYQcAOAAAAQEAwVacsrBdRdhH3U39SptDhwGkz4p797KURUcdDG4dEQQJ943JYGAjYhXJoHsUZheBOK2bZNY',
+            '11. Block7 (last) deleted': 'pL3ehW61dNy-iAYXYw3H_9YrmBcHMGOznwSF5aOqGkcHAFIAAAABABCPFiGEgTpwHMDCzkaFVcO9aFqGpBNgCGjQjD_gyBAAABQ5v6xnJq7wgpEvYpCpbJ8cMMabRhx-MJoCpkpOhHZU3VJSpG0OaTA6f9iKEK8VJ9awT3q0WqzMknLn6xE48MlmXWWsOmQbwazGQrFRvwcAMQAAAAEAW8VK2lMLdK_v8_LT3Iez1iHH8DTzBBOXbd2R-vYm4n6QjqGol7GbviKQeyxCESGtQxas36F0EFUdtyPBZi3IaYIX3j3mexkiuwJ-wxAmBwBDAAAAAQBfzespUn8SnOG8FcfM58_f3LtIRs0XXKqCbFbVZ0XXn8GHtbRhoqTnCE3qsnGFaCFvQuZ3ws6s2VOdSn0Ycl6kDilWILxmQm6uDMIRkyOPYqmf4HgZ7-1xdUGwGepvLBsHAGcAAAABAOPaeZBbVizdcgG5NEimoT3ToxWgaQReKTckXaPszOtfCRIamApjzgxHIggy8oeDC0KG_3wOdeKUX-d_GFPM824rrHqwXGJ4qAr0e_glmGcaGnVYecL_Hffa--MrtWAUvFK1lQyP8lhrbSrlBnd8mJl3rpn5uXy2iiIT9QOGfvSa07_wTQcArwAAAAEAQKqkyyfq_ixBTq8JKotjIZt06Y4S0J7bcKYUnxKqUlADSrH0BHGfducGJXgIUgo2nEdxlTL0frwZL0nbTLczrCtloJa54s6mYWGWvAX6M_yEgI35kRbD9WS3DpcqE9qpAXXkR_HKBUtDJ7aC-Io4FURDqBps_h5-YgiFGcqXtX5RYTjRF_c0pPCBOJ6JJ_JTBi1dZodG6MTPRjZ0uOCezgDizJLKNOvKrPIXpIUuIoKvFroDIQ7GoE5O7hmt5nAgb4k7dzLeYBoidNB4BwCvAAAAAQBpcGc7ogkCjN-OOFkGQIOG16Do8WFL8NKcxenP7HPQScz-i6fdl-hPANvSr6zCD3uUEWDtgziL7Jph7TXR6m3-yJyolny_8MDZVRkRN0uadS_lkEP1T_eKptNedo_ubXHI-QcdW7qReTcNr8SpyZsC7zKoQ6y97A8zznULXLPvNIY3kCaS6RElxQKQkFDXqG1tk1dtPInqI-zBcRmocL4_iVLbExpoXWse9L5MhQxEHJZuDCcFx1930Yu6qq1urFIF-V0r9qEKe_g789AHAK8AAAABAHPEiPt3zOyAu6nrirRrSiCbFoynKkIzU-1egQzqjADw8pebD-4zmobUZz5eTk1Mzs4Ge0bXfj__zpRsd8iUGTg4YYgk8_DlQSnpl2f7CRaFYua4ShE6OICm6cjxCU90dCWbobykpIrmv71QrBPA6WDoCy3dsWTNIGMUstxlWiRyNfgS2QucrFCszoQ2PxaaCKDNr1jF20v83gwySFgzNJS4XNBJiqiZ4DjnlbU',
+            '12. Block1 Block7 deleted': 'pL3ehW61dNy-iAYXYw3H_9YrmBcHMGOznwSF5aOqGkcHAFIAAAABABCPFiGEgTpwHMDCzkaFVcO9aFqGpBNgCGjQjD_gyBAAABQ5v6xnJq7wgpEvYpCpbJ8cMMabRhx-MJoCpkpOhHZU3VJSpG0OaTA6f9iKEK8hrUMWrN-hdBBVHbcjwWYtyGmCF9495nsZIrsCfsMQJgcAQwAAAAEAX83rKVJ_EpzhvBXHzOfP39y7SEbNF1yqgmxW1WdF15_Bh7W0YaKk5whN6rJxhWghb0Lmd8LOrNlTnUp9GHJepA4pViC8ZkJurgzCEZMjj2Kpn-B4Ge_tcXVBsBnqbywbBwBnAAAAAQDj2nmQW1Ys3XIBuTRIpqE906MVoGkEXik3JF2j7MzrXwkSGpgKY84MRyIIMvKHgwtChv98DnXilF_nfxhTzPNuK6x6sFxieKgK9Hv4JZhnGhp1WHnC_x332vvjK7VgFLxStZUMj_JYa20q5QZ3fJiZd66Z-bl8tooiE_UDhn70mtO_8E0HAK8AAAABAECqpMsn6v4sQU6vCSqLYyGbdOmOEtCe23CmFJ8SqlJQA0qx9ARxn3bnBiV4CFIKNpxHcZUy9H68GS9J20y3M6wrZaCWueLOpmFhlrwF-jP8hICN-ZEWw_Vktw6XKhPaqQF15EfxygVLQye2gviKOBVEQ6gabP4efmIIhRnKl7V-UWE40Rf3NKTwgTieiSfyUwYtXWaHRujEz0Y2dLjgns4A4sySyjTryqzyF6SFLiKCrxa6AyEOxqBOTu4ZreZwIG-JO3cy3mAaInTQeAcArwAAAAEAaXBnO6IJAozfjjhZBkCDhteg6PFhS_DSnMXpz-xz0EnM_oun3ZfoTwDb0q-swg97lBFg7YM4i-yaYe010ept_sicqJZ8v_DA2VUZETdLmnUv5ZBD9U_3iqbTXnaP7m1xyPkHHVu6kXk3Da_EqcmbAu8yqEOsvewPM851C1yz7zSGN5AmkukRJcUCkJBQ16htbZNXbTyJ6iPswXEZqHC-P4lS2xMaaF1rHvS-TIUMRByWbgwnBcdfd9GLuqqtbqxSBfldK_ahCnv4O_PQBwCvAAAAAQBzxIj7d8zsgLup64q0a0ogmxaMpypCM1PtXoEM6owA8PKXmw_uM5qG1Gc-Xk5NTM7OBntG134__86UbHfIlBk4OGGIJPPw5UEp6Zdn-wkWhWLmuEoROjiApunI8QlPdHQlm6G8pKSK5r-9UKwTwOlg6Ast3bFkzSBjFLLcZVokcjX4EtkLnKxQrM6ENj8Wmgigza9YxdtL_N4MMkhYMzSUuFzQSYqomeA455W1',
+            '13. All Term': 'xbPqrGbcivHwiiO_36IBvde0ODU5lT2lK6gB722IBuoHAFIAAAEBAM7B28BwT_pLK78YPTLwFgs7vHtmesASivW4tgHgyBAAABRw7Ty6PqVbC9bJthlNKnzSOohw-Y_gEqXreBKRhrhV9T3Du-mrPNm5SrnH7HO0q9CGhoJEvK7WrZOkRwWqpH2O_0axiewuwl9N4IoDCgcAMQAAAQEAcP07R-QIwcRV8FSLokLhyLfQeqFe7wfOfpmOfzO_IsHizpPBGQVWZKcv9zGMt26cU8VqPRDCFQZdQDFeGQz8CizyUnrP2kncagnmRlRcBwBDAAABAQCSmCSq3Bnztv3fgZc93Fa3h_hMbv4wa9vmPlZ4liFugw_S16gNXEjLLe92oaFFahUcqP5NmySKXj_-JhE9e_oxjtRYBNwK9VKbLOeNXaOQqOPszoJRew7vbofvLIl8_dUHAGcAAAEBAAQaMaeoCUMRlZxJDrLmoZLsamReNFwLwv_aFtZYXk8Pg1P77zGz0ZcvAHU9e_CQCybtJmwIlPyW_wiOWTiR5T-3s6AXPmW3USceJTD_ca4nFmWcltVSw5IWf1RYlQv9Z-U86_QeVFYYwCNYEeHmAryUtoUWg3imIzCariWmWONXmW3rxgcArwAAAQEAN2ep2tFt-cqViKn-F_At47lPR5T6M0btWdBRHWdeVynnJU3rtBhjfMftg47OCC1Xw1NA_abxZ7OgzmLHh6H3uZnl6cDZKSYPn3moIu_Kn6lBwmG9Sd32mP72NtUpoJBQHVqByRTIrzjpGZoQ88FqzC6H6GjpHW24wk3PaTGDYcZ_HKoTvA6vW_U4ULSr0dApt355aMsuwUpfBXEyaJo1P-5VyQEXeH7CCLGMmnOl5J5a9XGaB3jdewXakeKbmiCKvvAKSt1Dj_5EXvF7BwCvAAABAQA82S37GutPOKhx_YRITVbOdPYL67SPeeE5wLsAzmT7qpN_qgRt3FvM5_iop2HkTAnI-e1v7DY75_Stsk3U6UPeFpbOgE816w-KkLShkXB25galCQiML2XOcekSEZQJcVlRvuC5maZIvZEuVfUnTojGjB3HpQj4Pu0Yn9BBSV_8GQUZ9tcDYAI6ugU7NFivtdqasBFxzRMi_9Bt0iJ3JpUFKBhBtyMJVB14e3J-vbki2kz7jxfKSjqEjKsLKf75umb2Gra2Vf38Qg6cyaUHAK8AAAEBAN2nxvP8Q2oe6-tkAw231VL4zKhQgrYoVpEq_MnREMIRbU1T5fm3XF0FREVU1Gis5b-Tj_7c1jR2Dej9DqDhiJMtay0DhCy6z5bd_MB7cjdQJ-IFTLu3YaUaETAxbGLKsVkukeZBsWqjcE3zcJbbzBzxa4t5f9lqLgB-Dy-AVKSY1SqSv-q5j6pT-l4QDyd0iqUzuJwjScGUM9s607HKKsJY2KfaPMfehAvm9KlO1Htw8uC2jYMPuiZs-oIpV2EoGPwbFydad-xKJanQrwcAOAAAAQEASYMFBLBhs7lzlatbA0eENzDxsAGJVHoUtPfhULaHW1rWJ8GxRXG_7jKrmUhNJVdwpgWTiUU',
+            '14. No Term': 'pfURecVQgzgGnNMnOTud78EsUkdoZiPhVLGFC2BjMbkHAFIAAAABAEnN0mz6IrezINkeBviqn2Dn3Z87fK6wpsNT2AbgyBAAABS_WDh7Qvh3JzebcB-3djwmVQkixAS0QDnA3l6GMCXIZw_hTWYp_4ucxVasxKK1bT_hP6GgjsewSf2en51APsS6nYoXjjDgBKZrDh-sXgcAMQAAAAEAyqlV-93sl1ZRAQK7bSNIUA-HgYOlWI5nFm9b--Z8UEhDI1rPENfgG5wDwx_QVSTX8GIJccoFikF06OjyOR_jL1mUGc7X4aLByxjzI8nwBwBDAAAAAQBiU_26KVS5BMz2AwMLXhpEUGgXvBDVid-7wr-34Yt3XcdsYm42g9CmfeHMB1JR3fa7v-Jk1dvPbY77hdp3C58HKQdysPtqRS7orW_tAxW7iqo5CKmwsyDlG1z6oNP_E6EHAGcAAAABAGhrTD_AW1QtaAcV9v2q65QkFeoWBFTAx1Lw0JNqLrIJMIrb2Y5tNvNyFoshV8EZmtT-GD8tq-PdSVHt9LYC8xIKtFdPnPiArNbKNC7qJ4NXpo63GxaUdV3sZkhw2BmWM-h7oFx-jeIpJ90FnVIMudJKNvkCaS7vg8NoRGlpfYKXGPBOtgcArwAAAAEAYyVZ2HvysF_08IV_bqlcF1bQgdnDhwRKIYXGOGceoeoVhvFUk52P-S9Gn98biDbzLwsaHCHU1-WTIusC1j8LoDt4vLaLwCp27kzEzL56mwtiHFNV_igw7_NKgwRJ4p_y-2YPV-fQy81TAdSzc3pT7QogdFjRfRN33Yacax_nv2S52LTEN92F9WF4NfsrZKzlTOo5IfbZkZiWfVdbS1zyTqA-Eq7tvOfhkF06ZKvOTEvrIKXWNPQPceL44j4N_lUn_Kh41bcAf3Bmzt2JBwCvAAAAAQCVn_sp6-fzu0xIf-XkNH84N90VH65Qwh4BKkCRADYiOT7axYy1_-KwAKxfvt6wi_T8azq09cMnWLdDyeMP1Y0ejjEyC4vJwpsAK7BH8NtqVNHBZ2ZkTWyT9pmlKQfTUFFTtL5YbQP0DKvZ1G5wOBmtSJ3Dd7xCQvibS4sU9NL-nOjT1mSTIUffP4kuZnZUZpZsujRyCfuS5Faw6rd912de6a9xIz_QqS-nksdndb4U5C9NJAxa_I1IRa6Ne1-GmFDbxBuDU4N_QbJoMKgHAK8AAAABADx0vGinOs4Fo06akS9Rpussi3R7tJPJbdLyuZCPwGs8q32-tmU27vlF8t2X9pWJ6wQD3ecyMfBE377aS9jI6k2HOP8HTZdXTtryJfDt9IuAPupv0U7qN6W_-mA0tYjdwuOSi1QL_v7eURo1Ew1-9BUgPJQFukLDl6HkvryTOUlGl2RPbaO6NfrygvA_dwvWv0pz1IcCwrTJrJ1aDGuTU9PpX47QPln58uuCSh9BlrTi_C2MYUhcomsR8EJJXpmwGN1uPOebwxXbMf6hCgcAOAAAAAEAe34_c4eq0rc7NOqeH2yL2p8vvBEV-Is86atL4P_nZSf7pQwghDOMiyTc0krWU2t_pnpNExg',
          }
       }
    ];
@@ -1792,7 +1880,7 @@ describe("Block order change and deletion detection, multi-version", function ()
       for (const ver of vers) {
          // First make sure it decrypts as expected
          let [cipherStream] = streamFromBase64(ver.goodCt);
-         let dec = await cipherSvc.decryptStream(async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.hint).toEqual('4321');
             expect(cdinfo.alg).toBe('AES-GCM');
             expect(cdinfo.ver).toBe(ver.ver);
@@ -1801,20 +1889,20 @@ describe("Block order change and deletion detection, multi-version", function ()
             expect(cdinfo.ic).toBe(1100000);
             expect(Boolean(cdinfo.hint)).toBe(true);
             return ['asdf', undefined];
-         }, userCred, cipherStream);
+         });
+         let dec = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
          await expect(areEqual(dec, clearData)).resolves.toEqual(true);
       }
    });
 
    it("changed multi block ciphertext", async function () {
-
       for (const ver of vers) {
          for (const [change, ct] of Object.entries(ver.badCts)) {
             let [cipherStream] = streamFromBase64(ct);
-            // version ${ver.ver} change ${change}
-            await expect(cipherSvc.decryptStream(async (cdinfo) => {
+            const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                return ['asdf', undefined];
-            }, userCred, cipherStream).then((dec) => {
+            });
+            await expect(cipherSvc.decryptStream(cipherStream, decKeyProvider).then((dec) => {
                return areEqual(dec, clearData);
             })).rejects.toThrow(Error);
          }
@@ -1891,13 +1979,15 @@ describe("Get cipherinfo from cipher text", function () {
             ic: cc.ICOUNT_MIN
          };
 
-         const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.ic).toEqual(cc.ICOUNT_MIN);
             return [pwd, hint];
-         }, userCred, clearStream);
+         });
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
-         const cipherInfo = await cipherSvc.getCipherStreamInfo(userCred, cipherStream);
+         const infoKeyProvider = new PWDKeyProvider(userCred.slice(0));
+         const cipherInfo = await cipherSvc.getCipherStreamInfo(cipherStream, infoKeyProvider);
          expect(cipherInfo.ver).toEqual(cc.CURRENT_VERSION);
          expect(cipherInfo.alg).toEqual(alg);
          expect(cipherInfo.ic).toEqual(cc.ICOUNT_MIN);
@@ -1921,23 +2011,28 @@ describe("Get cipherinfo from cipher text", function () {
          ic: cc.ICOUNT_MIN
       };
 
-      const cipherStream = await cipherSvc.encryptStream(econtext, async (cdinfo) => {
+      const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
          return [pwd, hint];
-      }, userCred, clearStream);
+      });
+      const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
       // Valid, but doesn't match orignal userCred
       let problemUserCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-      await expect(cipherSvc.getCipherStreamInfo(problemUserCred, cipherStream)).rejects.toThrow(new RegExp('.+MAC.+'));
+      await expect(cipherSvc.getCipherStreamInfo(cipherStream, new PWDKeyProvider(problemUserCred))).rejects.toThrow(new RegExp('.+MAC.+'));
 
       // Missing one byte of userCred
       problemUserCred = userCred.slice(0, userCred.byteLength - 1);
-      await expect(cipherSvc.getCipherStreamInfo(problemUserCred, cipherStream)).rejects.toThrow(new RegExp('Invalid userCred length.+'));
+      await expect((async () => {
+         return cipherSvc.getCipherStreamInfo(cipherStream, new PWDKeyProvider(problemUserCred));
+      })()).rejects.toThrow(new RegExp('Invalid userCred length.+'));
 
       // One bytes extra userCred
       problemUserCred = new Uint8Array(cc.USERCRED_BYTES + 1);
       problemUserCred.set(userCred);
       problemUserCred.set([0], userCred.byteLength);
-      await expect(cipherSvc.getCipherStreamInfo(problemUserCred, cipherStream)).rejects.toThrow(new RegExp('Invalid userCred length.+'));
+      await expect((async () => {
+         return cipherSvc.getCipherStreamInfo(cipherStream, new PWDKeyProvider(problemUserCred));
+      })()).rejects.toThrow(new RegExp('Invalid userCred length.+'));
    });
 
 });

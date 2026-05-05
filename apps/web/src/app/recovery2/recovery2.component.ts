@@ -70,7 +70,7 @@ export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit{
       this.showProgress = true;
 
       this.authSvc.ready.then( () => {
-         this.authenticated = this.authSvc.authenticated();
+         this.authenticated = this.authSvc.hasSession();
       }).finally( () => {
          this.ready = true;
          this.showProgress = false;
@@ -96,7 +96,7 @@ export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit{
       try {
          this.error = '';
          this.showProgress = true;
-         await this.authSvc.defaultLogin();
+         await this.authSvc.createDefaultSession();
          this.router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
@@ -147,7 +147,7 @@ export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit{
    private async _checkProceed(recoveryWords: string): Promise<boolean> {
 
       const [_, userId] = this.authSvc.getRecoveryValues(recoveryWords);
-      if (!this.authSvc.authenticated() || userId === this.authSvc.userId) {
+      if (!this.authSvc.hasSession() || userId === this.authSvc.userId) {
          return true;
       }
 

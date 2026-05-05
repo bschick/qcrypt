@@ -47,7 +47,8 @@ export {
    selectWriteableJsonFile,
    selectWriteableQQFile,
    selectWriteableTxtFile,
-   bytesFromString,
+   bytesFromUTF8String,
+   streamFromBase64,
 } from './lib/utils';
 
 // Cipher core types and classes
@@ -69,8 +70,8 @@ export type {
 
 // Cipher factory functions
 export {
-   latestEncipher,
-   streamDecipher,
+   getLatestEncipher,
+   getStreamDecipher,
 } from './lib/ciphers';
 
 // Old decipher versions
@@ -89,12 +90,13 @@ export {
 
 export type {
    EContext,
+   ReadOpts,
 } from './lib/cipher-streams';
 
 // Armor functions
 export { makeCipherArmor, parseCipherArmor } from './lib/armor';
 
-export type { PWDProvider } from './lib/keys';
+export { PWDKeyProvider, MasterKeyKeyProvider, type PWDProvider, type KeyProvider } from './lib/keys';
 
 // Lazy libsodium loader; callers must `await cryptoReady()` before invoking any other crypto export.
 export { cryptoReady } from './lib/sodium';

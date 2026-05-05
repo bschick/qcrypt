@@ -16,6 +16,7 @@ import {
    encryptStream,
    readStreamAll,
    base64ToBytes,
+   Ciphers,
 } from '@qcrypt/crypto';
 import type { EContext } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
@@ -119,7 +120,7 @@ async function genStreamManipulation(clearData: Uint8Array): Promise<void> {
    );
 
    // Extract slt and iv from block0 at the v6+ offsets (FLAGS in payload AD).
-   const ivLen = Number(cc.AlgInfo[ALG].ivBytes);
+   const ivLen = Number(Ciphers.algIVByteLength(ALG));
    const ivOffset = cc.MAC_BYTES + cc.VER_BYTES + cc.PAYLOAD_SIZE_BYTES + cc.FLAGS_BYTES + cc.ALG_BYTES;
    const sltOffset = ivOffset + ivLen;
    const iv = bytes.slice(ivOffset, ivOffset + ivLen);

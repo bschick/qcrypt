@@ -4,6 +4,7 @@ import {
    decryptStream, encryptStream, getCipherStreamInfo,
    makeCipherArmor, parseCipherArmor,
    base64ToBytes, bytesToBase64, readStreamAll, Ciphers,
+   PWDKeyProvider,
 } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import fs from 'fs';
@@ -111,7 +112,7 @@ async function getUserCred(args: {
    cred?: string,
    silent?: boolean,
    debug?: boolean
-}, io: IO): Promise<Uint8Array> {
+}, io: IO): Promise<Uint8Array<ArrayBuffer>> {
 
    let credText: string;
    if (args.cred) {
@@ -212,11 +213,11 @@ async function info(
       const userCred = await getUserCred(args, io);
 
       const cdInfo = await getCipherStreamInfo(
-         userCred,
-         cipherStream
+         cipherStream,
+         new PWDKeyProvider(userCred, undefined)
       );
 
-      io.pipedOut.write(`Cipher and Mode   : ${cc.AlgInfo[cdInfo.alg].description}
+      io.pipedOut.write(`Cipher and Mode   : ${Ciphers.algDescription(cdInfo.alg)}
 PBKDF2 Iterations : ${cdInfo.ic}
 Salt (b64Url)     : ${bytesToBase64(cdInfo.slt)}
 Password Hint     : ${cdInfo.hint}
@@ -252,6 +253,8 @@ async function encrypt(
       iters?: number,
       algs?: string,
       loops: number,
+      readStart?: number,
+      readMax?: number,
       silent?: boolean,
       debug?: boolean
    },
@@ -259,15 +262,12 @@ async function encrypt(
 ): Promise<void> {
 
    try {
-      const clearStream = await getClearStream(io, args.silent);
-      const userCred = await getUserCred(args, io);
-
       args.loops = Math.max(Math.min(args.loops, 6), 1);
 
       let nextAlg: cc.CipherAlgs = 'X20-PLY';
       const keys = Ciphers.algs();
       let choices = keys.map((key) => {
-         return { name: cc.AlgInfo[key].description, value: key };
+         return { name: Ciphers.algDescription(key), value: key };
       });
 
       let algs: cc.CipherAlgs[] = [];
@@ -278,7 +278,7 @@ async function encrypt(
          if (args.algs && args.algs[l - 1]) {
             alg = Ciphers.validateAlg(args.algs[l - 1]);
             if (!args.silent) {
-               showAnswered(`Select Cipher Mode${lpMsg}:`, cc.AlgInfo[alg].description, io);
+               showAnswered(`Select Cipher Mode${lpMsg}:`, Ciphers.algDescription(alg), io);
             }
          } else {
             alg = nextAlg;
@@ -324,45 +324,46 @@ async function encrypt(
          );
       }
 
-      const econtext = {
-         lpEnd: args.loops,
-         algs: algs,
-         ic: iters!
-      };
+      const clearStream = await getClearStream(io, args.silent);
+      const userCred = await getUserCred(args, io);
 
-      const cipherStream = await encryptStream(
-         econtext,
-         async (cdinfo) => {
-            const pos = cdinfo.lp - 1;
-            const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} of ${cdinfo.lpEnd}` : '';
-            const argHint = (args.hints && pos < args.hints.length) ? args.hints[pos] : undefined;
-            if (args.pwds && pos < args.pwds.length) {
-               if (!args.silent) {
-                  showAnswered(`Password${lpMsg}:`, '******', io);
-                  if (argHint) {
-                     showAnswered(`Password Hint${lpMsg}:`, argHint, io);
-                  }
-               }
-               return [args.pwds[pos]!, argHint];
-            } else {
-               const pwd = await getSensitiveInput(`Password${lpMsg}`, io);
-               let hint: string | undefined;
+      const keyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
+         const pos = cdinfo.lp - 1;
+         const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} of ${cdinfo.lpEnd}` : '';
+         const argHint = (args.hints && pos < args.hints.length) ? args.hints[pos] : undefined;
+         if (args.pwds && pos < args.pwds.length) {
+            if (!args.silent) {
+               showAnswered(`Password${lpMsg}:`, '******', io);
                if (argHint) {
-                  if (!args.silent) {
-                     showAnswered(`Password Hint${lpMsg}:`, argHint, io);
-                  }
-                  hint = argHint;
-               } else {
-                  hint = await input(
-                     { message: `Password Hint${lpMsg}:`, required: false },
-                     { input: io.ttyIn, output: iqOutput(io) }
-                  );
+                  showAnswered(`Password Hint${lpMsg}:`, argHint, io);
                }
-               return [pwd, hint];
             }
-         },
-         userCred,
-         clearStream
+            return [args.pwds[pos]!, argHint];
+         } else {
+            const pwd = await getSensitiveInput(`Password${lpMsg}`, io);
+            let hint: string | undefined;
+            if (argHint) {
+               if (!args.silent) {
+                  showAnswered(`Password Hint${lpMsg}:`, argHint, io);
+               }
+               hint = argHint;
+            } else {
+               hint = await input(
+                  { message: `Password Hint${lpMsg}:`, required: false },
+                  { input: io.ttyIn, output: iqOutput(io) }
+               );
+            }
+            return [pwd, hint];
+         }
+      });
+
+      const readOpts = (args.readStart || args.readMax)
+         ? { startSize: args.readStart, maxSize: args.readMax }
+         : undefined;
+      const cipherStream = await encryptStream(
+         clearStream,
+         keyProvider,
+         { algs, ic: iters!, readOpts }
       );
 
       if (io.b64urlOut) {
@@ -402,7 +403,7 @@ async function decrypt(
       let cipherStream: ReadableStream<Uint8Array>;
       if (args.silent) {
          const [infoStream, mainStream] = rawStream.tee();
-         const cdInfo = await getCipherStreamInfo(userCred, infoStream);
+         const cdInfo = await getCipherStreamInfo(infoStream, new PWDKeyProvider(userCred.slice(0), undefined));
          await infoStream.cancel();
          if (!args.pwds || args.pwds.length < cdInfo.lpEnd) {
             await mainStream.cancel();
@@ -415,24 +416,22 @@ async function decrypt(
          cipherStream = rawStream;
       }
 
-      const clearStream = await decryptStream(
-         async (cdinfo) => {
-            const pos = cdinfo.lpEnd - cdinfo.lp;
-            const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} of ${cdinfo.lpEnd}` : '';
-            if (args.pwds && pos < args.pwds.length) {
-               if (!args.silent) {
-                  showAnswered(`Password${lpMsg}:`, '******', io);
-               }
-               return [args.pwds[pos]!, undefined];
-            } else {
-               const hintMsg = lpMsg + (cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '');
-               const pwd = await getSensitiveInput(`Password${hintMsg}`, io);
-               return [pwd, undefined];
+      const keyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
+         const pos = cdinfo.lpEnd - cdinfo.lp;
+         const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} of ${cdinfo.lpEnd}` : '';
+         if (args.pwds && pos < args.pwds.length) {
+            if (!args.silent) {
+               showAnswered(`Password${lpMsg}:`, '******', io);
             }
-         },
-         userCred,
-         cipherStream
-      );
+            return [args.pwds[pos]!, undefined];
+         } else {
+            const hintMsg = lpMsg + (cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '');
+            const pwd = await getSensitiveInput(`Password${hintMsg}`, io);
+            return [pwd, undefined];
+         }
+      });
+
+      const clearStream = await decryptStream(cipherStream, keyProvider);
 
       if (io.b64urlOut) {
          const clearData = await readStreamAll(clearStream);
@@ -504,11 +503,15 @@ const args = yargs(hideBin(process.argv))
                'algs': { alias: 'a', desc: 'encryption cipher mode(s)', type: 'string', array: true, choices: Object.keys(cc.AlgInfo) },
                'hints': { alias: 'H', desc: 'password hint(s), aligned by position with --pwds', type: 'string', array: true },
                'loops': { alias: 'l', desc: 'nested encryption loops (max 6)', type: 'number', default: 1 },
+               'read-start': { desc: 'initial read chunk size in bytes (testing only)', type: 'number', hidden: true },
+               'read-max': { desc: 'maximum read chunk size in bytes (testing only)', type: 'number', hidden: true },
             })
             .coerce({
                algs: CoerceAlgs,
                iters: CoerceNumber('iters'),
-               loops: CoerceNumber('loops')
+               loops: CoerceNumber('loops'),
+               'read-start': CoerceNumber('read-start'),
+               'read-max': CoerceNumber('read-max')
             })
             .example('$0 enc -c 97jQeo8N16L4vhKzWy7ys -f doc.txt', ': prints encrypted text of doc.txt');
       },

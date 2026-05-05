@@ -154,8 +154,7 @@ export class DecipherV1 extends Decipher {
                hIV,
                encryptedHint
             );
-            cdInfo.hint = new TextDecoder().decode(hintBytes);
-            this._keyProvider.setCipherDataInfo(cdInfo);
+            this._keyProvider.setHint(new TextDecoder().decode(hintBytes));
          }
 
          this._state = CipherState.Block0Decoded;
@@ -391,8 +390,7 @@ export class DecipherV4 extends Decipher {
                hIV,
                encryptedHint
             );
-            cdInfo.hint = new TextDecoder().decode(hintBytes);
-            this._keyProvider.setCipherDataInfo(cdInfo);
+            this._keyProvider.setHint(new TextDecoder().decode(hintBytes));
          }
 
          this._state = CipherState.Block0Decoded;
@@ -542,7 +540,7 @@ export class DecipherV5 extends DecipherV4 {
 
    protected override _purge() {
       if (this._lastMac) {
-         crypto.getRandomValues(this._lastMac);
+         this._lastMac.fill(0);
          this._lastMac = undefined;
       }
       super._purge();

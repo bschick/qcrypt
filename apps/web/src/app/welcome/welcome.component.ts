@@ -60,7 +60,7 @@ export class WelcomeComponent {
       try {
          this.error = '';
          this.showProgress = true;
-         await this.authSvc.findLogin();
+         await this.authSvc.createSession();
          this.router.navigateByUrl('/' + paramsToQueryString());
       } catch (err) {
          console.error(err);

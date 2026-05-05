@@ -32,10 +32,10 @@ import {
 import type {
    EContext,
    CipherDataInfo,
-   PWDProvider
+   KeyProvider,
 } from '@qcrypt/crypto';
 
-export type { EContext, CipherDataInfo, PWDProvider };
+export type { EContext, CipherDataInfo };
 
 const TARGET_HASH_MILLIS = 500;
 const MAX_HASH_MILLIS = 5 * 60 * 1000; //5 minutes
@@ -74,32 +74,31 @@ export class CipherService {
       return [this._iCount, this._iCountMax, this._hashRate];
    }
 
+   // This method purges the passed in KeyProvider
    async encryptStream(
-      econtext: EContext,
-      pwdProvider: PWDProvider,
-      userCred: Uint8Array,
       clearStream: ReadableStream<Uint8Array>,
-      customAd: Uint8Array<ArrayBuffer> | undefined = undefined
+      keyProvider: KeyProvider,
+      econtext: EContext,
    ): Promise<ReadableStream<Uint8Array>> {
       await cryptoReady();
-      return encryptStream(econtext, pwdProvider, userCred, clearStream, customAd);
+      return encryptStream(clearStream, keyProvider, econtext);
    }
 
+   // This method purges the passed in KeyProvider
    async getCipherStreamInfo(
-      userCred: Uint8Array,
-      cipherStream: ReadableStream<Uint8Array>
+      cipherStream: ReadableStream<Uint8Array>,
+      keyProvider: KeyProvider,
    ): Promise<CipherDataInfo> {
       await cryptoReady();
-      return getCipherStreamInfo(userCred, cipherStream);
+      return getCipherStreamInfo(cipherStream, keyProvider);
    }
 
+   // This method purges the passed in KeyProvider
    async decryptStream(
-      pwdProvider: PWDProvider,
-      userCred: Uint8Array,
       cipherStream: ReadableStream<Uint8Array>,
-      customAd: Uint8Array<ArrayBuffer> | undefined = undefined
+      keyProvider: KeyProvider,
    ): Promise<ReadableStream<Uint8Array>> {
       await cryptoReady();
-      return decryptStream(pwdProvider, userCred, cipherStream, customAd);
+      return decryptStream(cipherStream, keyProvider);
    }
 }

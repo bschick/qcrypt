@@ -24,48 +24,51 @@ import * as cc from './cipher.consts';
 import {
    Ciphers,
    CipherState,
-   streamDecipher,
-   latestEncipher
+   getStreamDecipher,
+   getLatestEncipher
 } from './ciphers';
 
 import type {
    CipherDataInfo,
-   PWDProvider
+   PWDProvider,
+   ReadOpts
 } from './ciphers';
+import { KeyProvider } from './keys';
 import { browserSupportsBytesStream, streamWriteBYOD } from './utils';
 
-export type {CipherDataInfo, PWDProvider};
+export type { CipherDataInfo, PWDProvider, ReadOpts };
 
 export type EContext = {
    readonly algs: cc.CipherAlgs[];
-   readonly ic: number;
+   readonly ic?: number | undefined;
+   readonly readOpts?: ReadOpts | undefined;
 };
 
 
+// This method purges the passed in KeyProvider
 export async function encryptStream(
-   econtext: EContext,
-   pwdProvider: PWDProvider,
-   userCred: Uint8Array,
    clearStream: ReadableStream<Uint8Array>,
-   customAd: Uint8Array<ArrayBuffer> | undefined = undefined
+   keyProvider: KeyProvider,
+   econtext: EContext,
 ): Promise<ReadableStream<Uint8Array>> {
-   return _encryptStreamImpl(
-      econtext,
-      pwdProvider,
-      userCred,
-      clearStream,
-      1,
-      customAd
-   );
+   try {
+      return await _encryptStreamImpl(
+         clearStream,
+         keyProvider,
+         econtext,
+         1
+      );
+   } finally {
+      keyProvider.purge();
+   }
 }
 
+
 async function _encryptStreamImpl(
-   econtext: EContext,
-   pwdProvider: PWDProvider,
-   userCred: Uint8Array,
    clearStream: ReadableStream<Uint8Array>,
+   keyProvider: KeyProvider,
+   econtext: EContext,
    lp: number,
-   customAd: Uint8Array<ArrayBuffer> | undefined
 ): Promise<ReadableStream<Uint8Array>> {
 
    if (lp < 1 || lp > econtext.algs.length) {
@@ -76,143 +79,153 @@ async function _encryptStreamImpl(
    }
 
    const validatedAlg = Ciphers.validateAlg(econtext.algs[lp - 1]);
-   if (econtext.ic < cc.ICOUNT_MIN || econtext.ic > cc.ICOUNT_MAX) {
-      throw new Error('Invalid ic of: ' + econtext.ic);
-   }
-   if (userCred.byteLength != cc.USERCRED_BYTES) {
-      throw new Error('Invalid userCred length of: ' + userCred.byteLength);
-   }
+   const keyProviderClone = keyProvider.clone();
 
-   const encipher = latestEncipher(
-      userCred,
-      validatedAlg,
-      econtext.ic,
-      lp,
-      econtext.algs.length,
-      clearStream,
-      pwdProvider,
-      customAd
-   );
-
-   let cipherStream = new ReadableStream({
-      type: (browserSupportsBytesStream() ? 'bytes' : undefined),
-
-      async pull(controller) {
-
-         try {
-            // Encryption may return zero data and not be Finished
-            const cipherData = await encipher.encryptBlock();
-
-            if (cipherData.parts.length) {
-               for (let data of cipherData.parts) {
-                  streamWriteBYOD(controller, data);
-               }
-            }
-
-            if (cipherData.state === CipherState.Finished) {
-               controller.close();
-               // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
-               //@ts-ignore
-               controller.byobRequest?.respond(0);
-            }
-         } catch (err) {
-            // Chrome throws an odd "network err" when files have errors, so replace with a consistent error
-            if(err instanceof Error && err.message.toLowerCase().includes("network")) {
-               err = new Error('Error reading stream');
-            }
-            encipher.errorState();
-            controller.error(err);
-         }
-      }
-   });
-
-   if (lp < econtext.algs.length) {
-      cipherStream = await _encryptStreamImpl(
-         econtext,
-         pwdProvider,
-         userCred,
-         cipherStream,
-         lp + 1,
-         customAd
+   try {
+      const encipher = getLatestEncipher(
+         clearStream,
+         keyProviderClone,
+         validatedAlg,
+         lp,
+         econtext.algs.length,
+         econtext.ic,
+         econtext.readOpts
       );
-   }
 
-   return cipherStream;
+      let cipherStream = new ReadableStream({
+         type: (browserSupportsBytesStream() ? 'bytes' : undefined),
+
+         async pull(controller) {
+            try {
+               // Encryption may return zero data and not be Finished
+               const cipherData = await encipher.encryptBlock();
+
+               if (cipherData.parts.length) {
+                  for (let data of cipherData.parts) {
+                     streamWriteBYOD(controller, data);
+                  }
+               }
+
+               if (cipherData.state === CipherState.Finished) {
+                  controller.close();
+                  // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
+                  //@ts-ignore
+                  controller.byobRequest?.respond(0);
+               }
+            } catch (err) {
+               // Chrome throws an odd "network err" when files have errors, so replace with a consistent error
+               if(err instanceof Error && err.message.toLowerCase().includes("network")) {
+                  err = new Error('Error reading stream');
+               }
+               encipher.errorState();
+               controller.error(err);
+            }
+         },
+         async cancel(reason) {
+            encipher.errorState();
+            await clearStream.cancel(reason);
+         }
+      });
+
+      if (lp < econtext.algs.length) {
+         return await _encryptStreamImpl(cipherStream, keyProvider, econtext, lp + 1);
+      }
+
+      return cipherStream;
+   } catch (err) {
+      keyProviderClone.purge();
+      throw err;
+   }
 }
 
 
+// This method purges the passed in KeyProvider
 export async function getCipherStreamInfo(
-   userCred: Uint8Array,
    cipherStream: ReadableStream<Uint8Array>,
+   keyProvider: KeyProvider,
 ): Promise<CipherDataInfo> {
-   if (userCred.byteLength != cc.USERCRED_BYTES) {
-      throw new Error('Invalid userCred length of: ' + userCred.byteLength);
+   try {
+      const decipher = await getStreamDecipher(cipherStream, keyProvider);
+      const info = await decipher.getCipherDataInfo();
+      decipher.finishedState();
+      return info;
+   } catch (err) {
+      // No clones inside getStreamDecipher, so catch instead of finally
+      keyProvider.purge();
+      throw err;
    }
-   const decipher = await streamDecipher(userCred, cipherStream, undefined);
-   const info = await decipher.getCipherDataInfo();
-   decipher.finishedState();
-   return info;
 }
 
 
+// This method purges the passed in KeyProvider
 export async function decryptStream(
-   pwdProvider: PWDProvider,
-   userCred: Uint8Array,
    cipherStream: ReadableStream<Uint8Array>,
-   customAd: Uint8Array<ArrayBuffer> | undefined = undefined
+   keyProvider: KeyProvider
+): Promise<ReadableStream<Uint8Array>> {
+   try {
+      return await _decryptStreamImpl(cipherStream, keyProvider);
+   } finally {
+      keyProvider.purge();
+   }
+}
+
+async function _decryptStreamImpl(
+   cipherStream: ReadableStream<Uint8Array>,
+   keyProvider: KeyProvider
 ): Promise<ReadableStream<Uint8Array>> {
 
-   if (userCred.byteLength != cc.USERCRED_BYTES) {
-      throw new Error('Invalid userCred length of: ' + userCred.byteLength);
-   }
+   const keyProviderClone = keyProvider.clone();
+   try {
+      const decipher = await getStreamDecipher(cipherStream, keyProviderClone);
+      const cdInfo = await decipher.getCipherDataInfo();
 
-   const decipher = await streamDecipher(userCred, cipherStream, pwdProvider, customAd);
-   const cdInfo = await decipher.getCipherDataInfo();
-
-   if (cdInfo.lp < 1 || cdInfo.lp > cc.LP_MAX) {
-      decipher.errorState();
-      throw new Error('Invalid loop of: ' + cdInfo.lp);
-   }
-
-   let readableStream = new ReadableStream({
-      type: (browserSupportsBytesStream() ? 'bytes' : undefined),
-
-      async pull(controller) {
-
-         try {
-            // Decryption always returns data if any remains
-            const decrypted = await decipher.decryptBlock();
-
-            if (decrypted.byteLength) {
-               streamWriteBYOD(controller, decrypted);
-            } else {
-               // Reached the end of the stream peacefully...
-               controller.close();
-               // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
-               //@ts-ignore
-               controller.byobRequest?.respond(0);
-            }
-
-         } catch (err) {
-            // Chrome throws an odd "network err" when files have errors, so replace with a consistent error
-            if(err instanceof Error && err.message.toLowerCase().includes("network")) {
-               err = new Error('Error reading stream');
-            }
-            decipher.errorState();
-            controller.error(err);
-         }
+      if (cdInfo.lp < 1 || cdInfo.lp > cc.LP_MAX) {
+         decipher.errorState();
+         throw new Error('Invalid loop of: ' + cdInfo.lp);
       }
 
-   });
+      let readableStream = new ReadableStream({
+         type: (browserSupportsBytesStream() ? 'bytes' : undefined),
 
-   if (cdInfo.lp > 1) {
-      readableStream = await decryptStream(
-         pwdProvider,
-         userCred,
-         readableStream,
-         customAd
-      );
+         async pull(controller) {
+
+            try {
+               // Decryption always returns data if any remains
+               const decrypted = await decipher.decryptBlock();
+
+               if (decrypted.byteLength) {
+                  streamWriteBYOD(controller, decrypted);
+               } else {
+                  // Reached the end of the stream peacefully...
+                  controller.close();
+                  // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
+                  //@ts-ignore
+                  controller.byobRequest?.respond(0);
+               }
+
+            } catch (err) {
+               // Chrome throws an odd "network err" when files have errors, so replace with a consistent error
+               if(err instanceof Error && err.message.toLowerCase().includes("network")) {
+                  err = new Error('Error reading stream');
+               }
+               decipher.errorState();
+               controller.error(err);
+            }
+         },
+         async cancel(reason) {
+            decipher.errorState();
+            await cipherStream.cancel(reason);
+         }
+      });
+
+      if (cdInfo.lp > 1) {
+         return await _decryptStreamImpl(readableStream, keyProvider);
+      }
+
+      return readableStream
+   } catch (err) {
+      keyProviderClone.purge();
+      throw err;
    }
 
-   return readableStream
 }

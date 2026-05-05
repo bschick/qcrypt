@@ -167,7 +167,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          }).finally(() => {
             // load after benchmark to overwrite benchmarks with saved values
             this.authSvc.ready.then( () => {
-               if (this.authSvc.authenticated()) {
+               if (this.authSvc.hasSession()) {
                   this.loadOptions(this.authSvc.userId);
                } else {
                   this.defaultOptions();

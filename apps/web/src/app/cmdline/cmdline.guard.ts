@@ -8,7 +8,7 @@ export const cmdlineGuard: CanActivateFn = async (route, state) => {
    const router = inject(Router);
 
    await authSvc.ready;
-   if (authSvc.authenticated()) {
+   if (authSvc.hasSession()) {
       return true;
    } else if(authSvc.validKnownUser()) {
       return router.parseUrl('/');

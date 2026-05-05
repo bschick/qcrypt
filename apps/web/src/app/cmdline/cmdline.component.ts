@@ -76,14 +76,23 @@ export class CmdLineComponent implements OnInit, OnDestroy {
       this.reloadData();
    }
 
+   ngOnDestroy() {
+      this.userCredential.setValue('');
+      if (this.authSub) {
+         this.authSub.unsubscribe();
+      }
+   }
+
    reloadData() {
       this.showProgress = true;
       this.error = '';
 
       // Not actually using recovery words, just an existing way
       // to force reauthentication
-      this.authSvc.getRecoveryWords().then( () => {
-         this.userCredential.setValue(bytesToBase64(this.authSvc.userCred));
+      this.authSvc.getRecoveryWords().then( async () => {
+         const userCred = await this.authSvc.getUserCred();
+         this.userCredential.setValue(bytesToBase64(userCred));
+         userCred.fill(0);
       }).catch( (err) => {
          console.error(err);
          if(err instanceof Error && err.message.includes("fetch")) {
@@ -94,13 +103,6 @@ export class CmdLineComponent implements OnInit, OnDestroy {
       }).finally(
         () => this.showProgress = false
       );
-   }
-
-   ngOnDestroy() {
-      this.userCredential.setValue('');
-      if (this.authSub) {
-         this.authSub.unsubscribe();
-      }
    }
 
    toastMessage(msg: string) {

@@ -23,7 +23,7 @@ import { cryptoReady } from './sodium';
 import * as cc from './cipher.consts';
 import {
    BYOBStreamReader,
-   streamDecipher, latestEncipher,
+   getStreamDecipher, getLatestEncipher,
    EncipherV7,
    Ciphers
 } from '../index';
@@ -123,58 +123,43 @@ describe("Encryption and decryption", function () {
          const userCredB = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
          const slt = crypto.getRandomValues(new Uint8Array(cc.SLT_BYTES));
 
-         const keyProvider = new PWDKeyProvider(userCredA, [pwd, undefined]);
-         keyProvider.setCipherDataInfo({
-            ver: cc.CURRENT_VERSION,
-            alg,
-            ic: cc.ICOUNT_MIN,
-            slt,
-            lp: 1,
-            lpEnd: 1
-         });
+         const makeKP = (userCred: Uint8Array<ArrayBuffer>, encrypting: boolean): PWDKeyProvider => {
+            const kp = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+            encrypting && kp.setCipherDataInfo({
+               ver: cc.CURRENT_VERSION,
+               alg,
+               ic: cc.ICOUNT_MIN,
+               slt,
+               lp: 1,
+               lpEnd: 1
+            });
+            return kp;
+         };
 
          const reader = new BYOBStreamReader(clearStream);
-         const encipher = new EncipherV7(keyProvider, reader);
+         const encipher = new EncipherV7(makeKP(userCredA, true), reader);
          const cipherBlock = await encipher.encryptBlock0();
-
-         // Create fresh key providers with same salt. Original gets purged after encrypt
-         const keyProviderA = new PWDKeyProvider(userCredA, [pwd, undefined]);
-         keyProviderA.setCipherDataInfo({
-            ver: cc.CURRENT_VERSION,
-            alg,
-            ic: cc.ICOUNT_MIN,
-            slt,
-            lp: 1,
-            lpEnd: 1
-         });
-         const keyProviderB = new PWDKeyProvider(userCredB, [pwd, undefined]);
-         keyProviderB.setCipherDataInfo({
-            ver: cc.CURRENT_VERSION,
-            alg,
-            ic: cc.ICOUNT_MIN,
-            slt,
-            lp: 1,
-            lpEnd: 1
-         });
 
          // Sign and repack with both the original (correct) values to help ensure the
          // code for repacking is valid and then with a new signature to be sure
-         // the replacment is detected.
-         let [cipherstreamA, cipherDataA] = streamFromBytes(await signAndRepack(encipher, cipherBlock, keyProviderA));
-         let [cipherstreamB, cipherDataB] = streamFromBytes(await signAndRepack(encipher, cipherBlock, keyProviderB));
+         // the replacment is detected. Each signAndRepack uses a fresh keyProvider
+         // because the encipher purges its keyProvider after encryptBlock0.
+         let [cipherstreamA, cipherDataA] = streamFromBytes(await signAndRepack(encipher, cipherBlock, makeKP(userCredA, true)));
+         let [cipherstreamB, cipherDataB] = streamFromBytes(await signAndRepack(encipher, cipherBlock, makeKP(userCredB, true)));
 
-         // These should fail because using the wrong userCred for each
-         let decipherA = await streamDecipher(userCredB, cipherstreamA, [pwd, undefined]);
-         let decipherB = await streamDecipher(userCredA, cipherstreamB, [pwd, undefined]);
+         // These should fail because using the wrong keyProvider/userCred for each.
+         // A fresh keyProvider is needed per decipher call since errorState purges it.
+         let decipherA = await getStreamDecipher(cipherstreamA, makeKP(userCredB, false));
+         let decipherB = await getStreamDecipher(cipherstreamB, makeKP(userCredA, false));
 
          await expect(decipherA._decodeBlock0()).rejects.toThrow(/MAC/);
          await expect(decipherB._decodeBlock0()).rejects.toThrow(/MAC/);
 
-         // Reaload streams, then test with correct matching userCreds
+         // Reaload streams, then test with correct matching keyProvider/userCred
          [cipherstreamA] = streamFromBytes(cipherDataA);
          [cipherstreamB] = streamFromBytes(cipherDataB);
-         decipherA = await streamDecipher(userCredA, cipherstreamA, [pwd, undefined]);
-         decipherB = await streamDecipher(userCredB, cipherstreamB, [pwd, undefined]);
+         decipherA = await getStreamDecipher(cipherstreamA, makeKP(userCredA, false));
+         decipherB = await getStreamDecipher(cipherstreamB, makeKP(userCredB, false));
 
          // Both should succeed since the re-signed signatures are now valid for each
          // userCred. But while decrypting, we should fail on B because that userCred wasn't
@@ -203,28 +188,28 @@ describe("Encryption and decryption", function () {
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream,
-            async (cdinfo) => {
-               expect(cdinfo.alg).toEqual(alg);
-               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               expect(cdinfo.lp).toEqual(1);
-               expect(cdinfo.lpEnd).toEqual(1);
-               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, hint];
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, hint];
          });
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
          const block0 = await latest.encryptBlock0();
 
          const [cipherStream] = streamFromCipherBlock([block0]);
-         const decipher = await streamDecipher(userCred, cipherStream,
-            async (cdinfo) => {
-               expect(cdinfo.alg).toEqual(alg);
-               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               expect(cdinfo.hint).toEqual(hint);
-               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, undefined];
+         const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            expect(cdinfo.hint).toEqual(hint);
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, undefined];
          });
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          const decrypted = await decipher.decryptBlock0();
          await expect(areEqual(decrypted, clearData)).resolves.toEqual(true);
@@ -242,16 +227,14 @@ describe("Encryption and decryption", function () {
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream,
-            async () => [pwd, hint],
-         );
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, hint]);
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
          const block0 = await latest.encryptBlock0();
 
          // Happy path: kick off both without awaiting first.
          const [cipherStream] = streamFromCipherBlock([block0]);
-         const decipher = await streamDecipher(userCred, cipherStream,
-            async () => [pwd, undefined],
-         );
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          const cdInfoPromise = decipher.getCipherDataInfo();
          const decryptPromise = decipher.decryptBlock0();
@@ -268,9 +251,8 @@ describe("Encryption and decryption", function () {
          // concurrent callers should see the same exception
          const [tamperedStream] = streamFromCipherBlock([block0]);
          const wrongUserCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const badDecipher = await streamDecipher(wrongUserCred, tamperedStream,
-            async () => [pwd, undefined],
-         );
+         const wrongKeyProvider = new PWDKeyProvider(wrongUserCred, [pwd, undefined]);
+         const badDecipher = await getStreamDecipher(tamperedStream, wrongKeyProvider);
 
          const badCdInfoPromise = badDecipher.getCipherDataInfo();
          const badDecryptPromise = badDecipher.decryptBlock0();
@@ -289,12 +271,9 @@ describe("Encryption and decryption", function () {
          const hint = 'sorta';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         let latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream, async (cdinfo) => {
-            return [pwd, hint];
-         });
          const readStart = 12;
-         //@ts-ignore force multiple blocks
-         latest['_readTarget'] = readStart;
+         let encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, hint]);
+         let latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, { startSize: readStart });
 
          await expect(latest.encryptBlockN()).rejects.toThrow(/Encipher invalid state/);
 
@@ -302,23 +281,24 @@ describe("Encryption and decryption", function () {
          await expect(latest.encryptBlock0()).rejects.toThrow(new RegExp('Encipher invalid state.+'));
 
          [clearStream, clearData] = streamFromStr('This is a secret 🦀');
-         latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream, async (cdinfo) => {
+         encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, hint];
          });
-         //@ts-ignore force multiple blocks
-         latest['_readTarget'] = readStart;
+         latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, { startSize: readStart });
 
          const block0 = await latest.encryptBlock0();
          const blockN = await latest.encryptBlockN();
 
-         let [cipherStream] = streamFromCipherBlock([block0, blockN]);
-         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+         const makeDecKP = () => new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
+
+         let [cipherStream] = streamFromCipherBlock([block0, blockN]);
+         let decipher = await getStreamDecipher(cipherStream, makeDecKP());
 
          let decb0 = await decipher.decryptBlock0();
          await expect(areEqual(decb0, clearData.slice(0, readStart))).resolves.toEqual(true);
@@ -333,11 +313,7 @@ describe("Encryption and decryption", function () {
          badBlockN.parts[0] = block0.parts[0];
 
          [cipherStream] = streamFromCipherBlock([block0, badBlockN]);
-         decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
-            expect(cdinfo.lp).toEqual(1);
-            expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
-         });
+         decipher = await getStreamDecipher(cipherStream, makeDecKP());
 
          decb0 = await decipher.decryptBlock0();
          await expect(areEqual(decb0, clearData.slice(0, readStart))).resolves.toEqual(true);
@@ -347,13 +323,16 @@ describe("Encryption and decryption", function () {
 });
 
 describe("Decryption known values", function () {
-   beforeEach(async () => {
-      await cryptoReady();
-   });
 
    // base64url userCred for use in commandline for recreation:
    // Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=
-   const userCred = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
+   const userCredBytes = [58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55];
+   let userCred: Uint8Array<ArrayBuffer>;
+
+   beforeEach(async () => {
+      await cryptoReady();
+      userCred = new Uint8Array(userCredBytes);
+   });
 
    it("correct cipherdata info and decryption, v4", async function () {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
@@ -361,7 +340,7 @@ describe("Decryption known values", function () {
       const hint = '🌧️';
       const [cipherStream] = streamFromBytes(new Uint8Array([117, 163, 250, 117, 59, 97, 3, 10, 139, 12, 55, 161, 115, 52, 28, 105, 246, 126, 220, 0, 129, 151, 165, 136, 46, 97, 163, 160, 91, 9, 189, 218, 4, 0, 116, 0, 0, 0, 2, 0, 16, 242, 98, 46, 102, 223, 79, 227, 209, 73, 22, 207, 92, 80, 75, 125, 125, 234, 18, 21, 88, 64, 43, 68, 25, 193, 133, 31, 159, 156, 8, 184, 10, 164, 33, 46, 20, 159, 218, 222, 64, 119, 27, 0, 0, 23, 5, 135, 172, 203, 4, 101, 163, 155, 133, 221, 40, 227, 91, 222, 227, 213, 97, 77, 24, 117, 60, 188, 27, 153, 253, 134, 10, 112, 75, 76, 146, 132, 123, 217, 7, 171, 211, 24, 206, 186, 248, 244, 119, 18, 165, 195, 59, 160, 76, 31, 90, 80, 53, 19, 39, 143, 99, 141, 109, 68, 72, 63, 121, 199, 96, 95, 157, 81]));
 
-      const decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+      const keyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
          expect(cdinfo.hint).toEqual(hint);
          expect(cdinfo.lp).toEqual(1);
          expect(cdinfo.lpEnd).toEqual(1);
@@ -371,6 +350,7 @@ describe("Decryption known values", function () {
          expect(isEqualArray(cdinfo.slt, new Uint8Array([25, 193, 133, 31, 159, 156, 8, 184, 10, 164, 33, 46, 20, 159, 218, 222]))).toBe(true);
          return [pwd, undefined];
       });
+      const decipher = await getStreamDecipher(cipherStream, keyProvider);
       const cdInfo = await decipher.getCipherDataInfo();
 
       expect(cdInfo.alg).toEqual('X20-PLY');
@@ -388,7 +368,7 @@ describe("Decryption known values", function () {
       const hint = '🌧️';
       const [cipherStream] = streamFromBytes(new Uint8Array([166, 123, 188, 183, 212, 97, 47, 147, 59, 39, 78, 222, 101, 74, 221, 53, 27, 11, 194, 67, 156, 235, 116, 104, 65, 64, 76, 166, 29, 220, 71, 179, 5, 0, 116, 0, 0, 1, 2, 0, 121, 78, 37, 8, 192, 196, 110, 22, 164, 106, 59, 161, 122, 165, 176, 147, 49, 43, 41, 250, 163, 111, 218, 4, 174, 61, 6, 169, 145, 216, 66, 166, 139, 82, 19, 207, 29, 75, 105, 149, 64, 119, 27, 0, 0, 23, 93, 92, 56, 163, 242, 71, 208, 3, 190, 44, 140, 222, 149, 159, 152, 193, 162, 44, 177, 93, 197, 119, 131, 88, 92, 53, 108, 167, 253, 64, 216, 200, 121, 212, 193, 153, 180, 39, 92, 35, 142, 6, 240, 115, 51, 211, 198, 63, 12, 126, 128, 206, 178, 114, 65, 37, 246, 197, 19, 79, 58, 96, 56, 86, 172, 162, 217, 70]));
 
-      const decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+      const keyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
          expect(cdinfo.hint).toEqual(hint);
          expect(cdinfo.lp).toEqual(1);
          expect(cdinfo.lpEnd).toEqual(1);
@@ -399,6 +379,7 @@ describe("Decryption known values", function () {
          expect(isEqualArray(cdinfo.slt, new Uint8Array([174, 61, 6, 169, 145, 216, 66, 166, 139, 82, 19, 207, 29, 75, 105, 149]))).toBe(true);
          return [pwd, undefined];
       });
+      const decipher = await getStreamDecipher(cipherStream, keyProvider);
       const cdInfo = await decipher.getCipherDataInfo();
 
       expect(cdInfo.alg).toEqual('X20-PLY');
@@ -416,9 +397,8 @@ describe("Decryption known values", function () {
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
 
-      // NOTE: this cipherStream can be created by:
-      //   * set ciphers-current: READ_SIZE_START = 20; READ_SIZE_MAX = Encipher.READ_SIZE_START * 16;
-      //   * run ./apps/web/scripts/ciphers_tests.sh
+      // NOTE: this cipherStream can be created by running:
+      //   pnpm vectors:ciphers
       const vers = [
          //v6
          {  ver: 6,
@@ -431,9 +411,9 @@ describe("Decryption known values", function () {
          //v7
          {  ver: 7,
             cts: {
-               'AES-GCM': 'f54Kbfvskz0fSmqLMKu5meoa98Pjd7acb842dogLb5oHAGAAAAABAMad0LlIngQIQmfHf5UlOBpI22Gqs_yc9ONnRUpAdxsAABdlMKpBc7lTiu1ubTTqtyXg1w_gpoPBTqraECeUbj-J_rOkysOSg_0bj6tkWQ8K7QEe9YtthrNyIueZz7SjNZTyyqYssKkhLcgwA_M6r3yWfnnTukXCQCoo9tYaBwAoAAABAQCFQZFWQYSA2CBs8ljZzqqjUiFqKCS7uw6RE0e8S2LEiPuIHJwB',
-               'X20-PLY': 'AZwRvYONTmUiGmy1FD_E_W-KIMwISoTV1928-TQsWDkHAGwAAAACAGWfXMaHOiKMdRhrASFEp6IBNAiA77MvWrl14TQBYKzViy1hGaH7x1lAdxsAABdYtEAsyZ70RPsXSHo91g5W2RE2mGtid91BdMw4p_pnhYXVjdU50bJdrfp8iQa-KzC5CrfpwopR_hufqd1klSAXe0jqCNoMKq9lV_dZmbkgyp-P3OidXHXTPiZnBwA0AAABAgBdgykbdEQtRtnwwo46Jd0X8fxc0ZR5SahASYPMaMkvZmDD1erhR8LHVF4rMtZoOvvc',
-               'AEGIS-256': '7V_KLO_W6Dn3z_Nm8ApEvpuCStCCrI9DotqOK4NlL3YHAJQAAAADAGQBbVBjySD_E4d9VA1ALhL291hssjA9dXCUPaxKiOi0VsaLhpx2DAYSG0YOEDtIEkB3GwAAJ3oAD7PgLd1p_WcJgtbVhwfU1oEuVaKWWphOpDzc2u6aoWKxZlIqEIrtWExNZu4vTi2-Y4IT5RoBtsIvQ00Y_VVK6hGRVHxhbeDGPgMuybUanllaCCurgP4JSo0SASwEnImEQpHYraWRqSEXO80Y5FszBdMODnIyrJwWPgcATAAAAQMAcoz6mX1p-OtwhmpbsQnq8sDZRmzcByWMsv0-k_4FRJ4FvHYt-ZxL7f9GHTc9glJRufqaapbSmr5aX5x0a_ioF4jijYiOSAmKDA',
+               'AES-GCM': 'QI9tSYHZBMLcVOtkCebgv99cI5xIukDZHIdhtZgiyNMHAGAAAAABANUrjAgeq9s842izFMDZ4ap07SqhUfqiRnTetVZAdxsAABdmM5hNf1AVwZFQYHpYwQCTKkQO3yU4VGiL81pGCtL5iuUIt90D9Mz9Em_tes2sd4P8BqP1MDbknWADX8uywaweOxudJkbRr0lwiwjfA1ol5KRc_SVn2MS6W2sPBwAoAAABAQA-d2q1Kg5a2v9qOS4KleoOjWepviDWD3fpNiX1UYrl9hIbeb6n',
+               'X20-PLY': 'dcUCsZKjBS5_DjFhzYJJEVoYIqT2rrGQCmvcWvdQKXsHAGwAAAACAKbm1DdR9t4r3VtbK9jES7Msl_ER8iEYTPsIfugU0DTGa2pjlJ5dxzBAdxsAABcFehrXDPcAPu0fTUo3qrw6GQd01woo0nk__v_xmajhDZd0M6AZf0epFCuutkikzSzyUpj3ydcMaxwv3tcbCQ-qEdSJMF8IplNOIzzukxU2wNxuJuIsv2atiRv6BwA0AAABAgDuUwXaIMsX6afoalQdi3Roh1h2YXeIDzGQ9yp-pxlZn3hlnkaIsDNWUg-Sc4jfQriD',
+               'AEGIS-256': 'V_69lDNanPv_RLgSMAOmOJqPlUAprBgUayTScleDa84HAJQAAAADAFt5Zy6A_SjkMIo9mZUqIWNL382vdK3AKnuyoqkJySAOric2ywhh_QDRQkPqtuaHykB3GwAAJymZMFNnDz8ipaaXLdYpNZjzNNtsA7jvxhzE_xMr-NWe42wQ6i1YAc_u8PQ2lg5DixiiDeIMegKWYZyJxtXquOzkvTncR9K4IosEaalF59qNTZmJ1mnNe4BvCybtI4Xw856cjN7ecfEOLiomsLksqW-LxJOmGT89b4zcwQcATAAAAQMAvdMCxfOqOTrY83pUuAKqrAWf4jxBpXl1qSADjMKJNt_fDes4MHzJdQGZ1ZjbhrlNinzxXLDqUMBxAc8zBsol1kF0JUVr4y0TbQ',
             },
          }
       ];
@@ -443,7 +423,7 @@ describe("Decryption known values", function () {
          for (const [alg, cipherTxt] of Object.entries(cts)) {
             const [cipherStream] = streamFromBase64Url(cipherTxt);
 
-            const decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+            const keyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
                expect(cdinfo.hint).toEqual(hint);
                expect(cdinfo.lp).toEqual(1);
                expect(cdinfo.lpEnd).toEqual(1);
@@ -454,6 +434,7 @@ describe("Decryption known values", function () {
                expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
                return [pwd, undefined];
             });
+            const decipher = await getStreamDecipher(cipherStream, keyProvider);
             const cdInfo = await decipher.getCipherDataInfo();
 
             expect(cdInfo.alg).toEqual(alg);
@@ -474,7 +455,7 @@ describe("Decryption known values", function () {
       const hint = '🌧️';
       const [cipherStream] = streamFromBytes(new Uint8Array([225, 67, 20, 31, 134, 179, 27, 202, 138, 52, 68, 42, 197, 34, 48, 209, 76, 235, 39, 166, 101, 12, 253, 101, 237, 25, 234, 119, 91, 227, 169, 172, 5, 0, 116, 0, 0, 0, 2, 0, 53, 140, 213, 212, 134, 206, 178, 102, 222, 97, 207, 8, 252, 103, 8, 64, 25, 112, 206, 146, 159, 150, 220, 236, 162, 203, 172, 111, 119, 158, 192, 123, 81, 141, 89, 174, 126, 4, 65, 105, 64, 119, 27, 0, 0, 23, 138, 253, 130, 153, 78, 2, 31, 195, 254, 142, 102, 116, 200, 50, 125, 8, 178, 151, 113, 13, 205, 228, 10, 85, 83, 101, 57, 149, 191, 166, 4, 221, 153, 198, 0, 18, 185, 165, 203, 53, 211, 218, 24, 198, 162, 13, 99, 240, 249, 210, 255, 200, 217, 232, 10, 187, 212, 92, 204, 165, 217, 7, 202, 6, 114, 70, 200, 221]));
 
-      const decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+      const keyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
          expect(cdinfo.hint).toEqual(hint);
          expect(cdinfo.lp).toEqual(1);
          expect(cdinfo.lpEnd).toEqual(1);
@@ -484,6 +465,7 @@ describe("Decryption known values", function () {
          expect(isEqualArray(cdinfo.slt, new Uint8Array([162, 203, 172, 111, 119, 158, 192, 123, 81, 141, 89, 174, 126, 4, 65, 105]))).toBe(true);
          return [pwd, undefined];
       });
+      const decipher = await getStreamDecipher(cipherStream, keyProvider);
       const cdInfo = await decipher.getCipherDataInfo();
 
       expect(cdInfo.alg).toEqual('X20-PLY');
@@ -503,10 +485,8 @@ describe("Decryption known values", function () {
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
 
-      // NOTE: this cipherStream can be created by:
-      //   * set ciphers-current: READ_SIZE_START = 20; READ_SIZE_MAX = Encipher.READ_SIZE_START * 16;
-      //   * manually set ciphers-current term:false in two places (search for term:) and rebuilding the cli
-      //   * run ./apps/web/scripts/ciphers_tests.sh
+      // NOTE: this cipherStream can be created by running:
+      //   pnpm vectors:ciphers
       const vers = [
          //v6
          {  ver: 6,
@@ -519,9 +499,9 @@ describe("Decryption known values", function () {
          //v7
          {  ver: 7,
             cts: {
-               'AES-GCM': '6RA2trl6fUk79HunesjBIc5QzCZHVmLP8LycF9nSlMYHAGAAAAABAG89sHG8QqsNCmFhD4dzxokWvimyPabHADr9l_tAdxsAABc8EqnWkomp5aaWElBAgGRjELah1-pGKCb1RcEUTDjTIO9eYbwBFVLdBBGIfxJ4cuuITGBRT19GvXYXrxB42YokPVuQ7j25s-vqLnKNxs0b71KnMMPemwM_YMptBwAoAAAAAQBP4fGvmDZNvxnArsrJ2GIM-JYVMLkrt-2WJgiAdjTbHiablssV',
-               'X20-PLY': 'XJywoA5hCWvKKuUeafFGFdKr5fVIsSTPwlMPFEnqQIsHAGwAAAACAD7dwujhdRKAz1CxnBVRCAMv3U-0yymOvfdCfs6lixJA7qt3EQWpqdVAdxsAABf_vYUapnFjfO4UPkzUuWE7drM7IiJuHQhS7g04ZQqXxFO2LFZsmoAkbFsvruQhvawrBHnmuQUZsXM5eiakgPWPH-Pt956x8ISTNDR6KuvTknW96pqOca5uKRFMBwA0AAAAAgClljvvVjtEb9GFux4vpVecg6uVKuLWMB8pKS1mWLI-WqOtvGENGnmT4gPpppf2uK72',
-               'AEGIS-256': 'zxpeZ6-Z83Ekdj9qTlYASx1wD_0tLAVK0VEoMWhdO10HAJQAAAADAO2xoAUh7Klhh8f7jEWdRy7rFI78CYG4cxAbbeRuEwkKaRxofiiJ1aqZqHOjfBCUCUB3GwAAJzuPgU-AEr1CALn5F-Kgqme360HrCl78A47On3P_nLnSTIUqHvAQwnYpWvXoTVRBarnUzSqBXMmTO5D7h6I26k7kbx8eHRNbxD5SCvjBPKZt6hTufhdo8dRUWZXQwaQzOX_u3_DaOovUUCvKcdaQAwiixy-j5fYxbE6L-wcATAAAAAMAFVFvmLZLgigXe9LZxWe1XBJZ-FWckKeC8ovR6swdbTv0WcxTF22Zr_cylCFWcVmLGXp54tUQtTVsRdqywh9fZ-Knml99gdiR2g',
+               'AES-GCM': 'NTmNSxaqnPekDoPRJwNFe0QGTDN6uRDtnJxBtG3nu-oHAGAAAAABAKsclFmOck7H76jxVzq8gosi38_DgPb83hQjop1AdxsAABcTvGW7sEFiQaVqihhup64SaqBGek6HYAr8WJOrc-235NyhmBf2yJI8Em0LW0iV60pxUrrB77zsiyDWOyA438c0JfygX9mK1mtwK6RdPH3T1AjywtJDVzUqqUXOBwAoAAAAAQDMqzY-yTEuh-xGW4SmRCs0lM-fdlLx_tRjIHAdC46JdVQAHdYe',
+               'X20-PLY': 'UGUaYdaLrFzez0ogh5pxmk8nyejLz_U-zgRNiUjUbTwHAGwAAAACAJuJOa4tyqNUcNz1NVAeVcy_f5mf15HM2HwXcMv5VoSkZZfotdJlKURAdxsAABcCfyBFnL0jyYPeTuXwELlEuvCuTNtpIKRHQ6XmjWJ-zaksD5QsEttobXYuoElccKaWBS-93wiJBIjXj9U6oUNwqqKIXXLQMA0HT1S6LPXWiOcUCg8_MsFfqshABwA0AAAAAgCBzy7FaeXPe7qrtZtuE64AtJqsNMeoMmbZQTD5n4Tp0zrRWI16lkmYPV5NBIGsVKcR',
+               'AEGIS-256': 'jJFZJGtaYvN0D4xP0XO1Kfup_HRhSB8c4Z7VSVVZUtYHAJQAAAADAL9tc2PAu1A0VuatkDXM6StTxtGYNcPUnmh8gwXe_S5huzf8iZMz4XPBT9D89Qd3xEB3GwAAJyUV-ONQJDk29qVTdwnjK8fXex6iq1J8T8xkmfh8AzkMywnc58py3BPbexDG2h3QT5AHL7We5aP-y77aXhunKDk3P_o5g8fgqcCPSMzGPiUzle3WNrbsh7N35ObpVjrFXsZmOHF9HIGPqb3fzcfRCP42cz7GdtAiLnbbowcATAAAAAMAJJqMtBPHh9yo97IPkCIiaQbckH_8Mz0JR4J4SQjbV7ElH40E_OMG02j4q2UqNKILLUPlvaVXm99o1tOu27_bjQnoyhj7nmcr6w',
             },
          }
       ];
@@ -530,7 +510,7 @@ describe("Decryption known values", function () {
          for (const [alg, cipherTxt] of Object.entries(cts)) {
             const [cipherStream] = streamFromBase64Url(cipherTxt);
 
-            const decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+            const keyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                expect(cdinfo.hint).toEqual(hint);
                expect(cdinfo.lp).toEqual(1);
                expect(cdinfo.lpEnd).toEqual(1);
@@ -540,6 +520,7 @@ describe("Decryption known values", function () {
                expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
                return [pwd, undefined];
             });
+            const decipher = await getStreamDecipher(cipherStream, keyProvider);
             const cdInfo = await decipher.getCipherDataInfo();
 
             expect(cdInfo.alg).toEqual(alg);
@@ -562,10 +543,8 @@ describe("Decryption known values", function () {
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
 
-      // NOTE: this cipherStream can be created by:
-      //   * set ciphers-current: READ_SIZE_START = 20; READ_SIZE_MAX = Encipher.READ_SIZE_START * 16;
-      //   * manually set ciphers-current term:true in two places (search for term:) and rebuilding the cli
-      //   * run ./apps/web/scripts/ciphers_tests.sh
+      // NOTE: this cipherStream can be created by running:
+      //   pnpm vectors:ciphers
       const vers = [
          //v6
          {  ver: 6,
@@ -578,9 +557,9 @@ describe("Decryption known values", function () {
          //v7
          {  ver: 7,
             cts: {
-               'AES-GCM': 'F3v_Pi6wH46zJFgyiyhI8DXAYKpO57dUnsxtOqfaNrkHAGAAAAEBAODZZ0Gwv0CCxoV7MZePzXvhluwX6nGziHmKQslAdxsAABe0zKtIKF4d50iBWVAty99DTnTFA1jdcSSE1Jh1WFNv_dKPg-djalFfCfIAnKUqux2eo2XHd8TAwza6V-wbFM54rfgARJaMbTArEnn8n9x-Qkk5iyhy-nL3OChvBwAoAAABAQB0ZNFh6fRfq85nh4t_1ezBFfPF9pqcdVhqZWJyCYNgejRwSQ9T',
-               'X20-PLY': 'FaREI6wP_wPw1ByYBoxPa-YQTXdL2iAtgEljYb7pOnMHAGwAAAECACVsYFkEdmCTuMTTEC85RHOFJqk4e0Kj19WJZQXjFSwV3p-F_l23PcBAdxsAABc2fpd4zH47GXApu5WgXmuXzUXNwjXEtv0gbmVYboDAIqn8-WIEBhJGNKuvLUfXHoIiObQcQoSttKowEi5Hl_qODW_d8FjaH9Sf0wnnbuGF8pJhGTIwDksS_6P7BwA0AAABAgD7PFO6b61Ug3UfmiXKrj-MZENvjqGBBASgBxiSpAgPZ0tbuECBNa8WM6Glv94Dlukx',
-               'AEGIS-256': 'uac6SPBDTpFsCr__H6fH6HA2deh5UT1Wuz6J9knxN6cHAJQAAAEDAFC36W0e0eNbwepQhIqbNTEClc47gLXZOQEbV1oIUEPd1_SihYM3bG51REU5oTqrQEB3GwAAJ-ECNPzfIclvvH9lfdT2_9aMwQFWc4pZa0sX8CEhAl5ulY3OYWkVVh_NzITu1Oot6BhvOnWwTcycogO9mNDDentQ0O3xtPJP4krZJUPtxgW0tLzxCN5snzPlX67clO6VpUI8ETrbX5yuw_2eDTErML4gmju8imum991UwgcATAAAAQMAvkSKYNBGevjW50PohhMMc-fhfuYP9xdJS0EGvIPs0AuRYLntmB6bdSkT33R-mF3AyBAQZpHBMqY8zEBq1cX3BbtPiHfp9BoR8g',
+               'AES-GCM': 'VTCtjbUfA-4Y_37Cj8n6BOJ48DXXoTol-Unv4f_2Kc8HAGAAAAEBAOgh6nz0W6FBABfw60gLq3fs7a_jLUK-8-sq7DZAdxsAABfUmJXyHuemAga9Ta00L8Bwb5_z8remjg7Qctc5ls3JdpTMxPolNRQjHTnVy9fQYQdy3MGOX36Vi6aLkykd-RtW5ABQG01DQ9MIsH0YO6cTTQe63DOOF5NOnfrEBwAoAAABAQDrCoVLRl4DfRZn2Wi5Nl4DzSGp6hrqIOYhTtWC-179Aaiol1-W',
+               'X20-PLY': 'mCjRjkoq7DsYjM6yoxprfHliqtEiGfcJXCvH_xMw1PQHAGwAAAECAFDW82ljhW5yRUJwXsV_zHit9xa9xWY33M3uYvoqjedFex6iesZOd0FAdxsAABchUlNqAETTZhE3aXp_EDWB9rGyOcKX8Cftu8KUY74fsNhiOj8uGJmeyQwVo-65gaUIZjDBeIgtINsH2LJA_00uRHdbB24KS6JrALPtTjoJbeNAMB-4D_CbTQUVBwA0AAABAgDyapJ4lVBz72TgUWb8iGwUIN4FnRakjIbhsgA0ZdI3jxNr7BnOHySU7qIq0lkl_LeO',
+               'AEGIS-256': 'Z6pIEKsxJG-pvql5TD-7Wr7XPhuq8KLQS-jt6-SmR0IHAJQAAAEDAAx2-rTb8qJDFBRa7hzFBzE8IrhPKIs2WrsIpwOhCLadx9V0XzPvSBret917o2-apEB3GwAAJ9qI0xdH3KzwATPtNjXOAxlKMyPdLIz5hAfx1P-5x47kzgHBx2Y8b6adw3KF2_yaJlV-7M-aGQw_I397f7UnIMWidSx7tJvI0FutCa3mHSyFZbkr0kd3YC6A5i9lao9QVfjAf0uv4dXrudmBVxIgjE2_lj-r_kKZt5AOnAcATAAAAQMAaBZetnv6Du9VT2-z_ag-R4Ap4bDElXs-ezLFP_bv1XtmM8MZ8EotR64HLVbdwp4jbseWNNU62rsJehGOVJFXgulGBbo8O33AaQ',
             },
          }
       ];
@@ -589,7 +568,7 @@ describe("Decryption known values", function () {
          for (const [alg, cipherTxt] of Object.entries(cts)) {
             const [cipherStream] = streamFromBase64Url(cipherTxt);
 
-            const decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+            const keyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                expect(cdinfo.hint).toEqual(hint);
                expect(cdinfo.lp).toEqual(1);
                expect(cdinfo.lpEnd).toEqual(1);
@@ -599,6 +578,7 @@ describe("Decryption known values", function () {
                expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
                return [pwd, undefined];
             });
+            const decipher = await getStreamDecipher(cipherStream, keyProvider);
             const cdInfo = await decipher.getCipherDataInfo();
 
             expect(cdInfo.alg).toEqual(alg);
@@ -618,10 +598,8 @@ describe("Decryption known values", function () {
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
 
-      // NOTE: this cipherStream can be created by:
-      //   * set ciphers-current: READ_SIZE_START = 20; READ_SIZE_MAX = Encipher.READ_SIZE_START * 16;
-      //   * manually set ciphers-current term:true then false in two places (search for term:) and rebuilding the cli
-      //   * run ./apps/web/scripts/ciphers_tests.sh
+      // NOTE: this cipherStream can be created by running:
+      //   pnpm vectors:ciphers
       const vers = [
          //v6
          {  ver: 6,
@@ -634,9 +612,9 @@ describe("Decryption known values", function () {
          //v7
          {  ver: 7,
             cts: {
-               'AES-GCM': 'r2XtsTt5znYG3JRp89J6EtMmcV_yeuucyb2HxhaoML4HAGAAAAEBANT_KOEL6JpCLoa4ThqWw7_N4oAww7Rs2O_rtgFAdxsAABehiGogOpkUkw57qV3bN3mRtX7j9jVCW86XnKbtebLj62c0KkT8wOflclxQfO3fk1HDmofGzGXGaDj6qpQV3NKqhRchM-xVR5KQvbI7Dq0aKk6DgM7jU-ugX9w4BwAoAAAAAQA3S43iFIVmrxzuDavRCNCgF9NMtzPeeRLefHmHZ84RgPaQMoHB',
-               'X20-PLY': 'qUmQI6Yb4w7bnoWqvHzCSNAIUAyEkpB4fTBdZG1y2UcHAGwAAAECAFMazLZ3rkgn-1I6jKvWh_VqCcxwh78hF51rNFrgBPXPhMmyGtw3swNAdxsAABfJKJOPB6vJEXvDajGtT6880FlKcRa3bJmkDAErmkt8BSCfr3aO5GtGbZ_2bwIcSzuUnlVU9bLjYO732LHiy7GnJtqLlMcCseAuqoA63mJnqP5QarD-gbq8f5_3BwA0AAAAAgD3yFXS0Av9DtGNNcvtDYFvqCq_8Hwju4P5B1P8ZIknZmYADRVUNF9wMXFQrPG6v2DU',
-               'AEGIS-256': 'cWFcmdpN77SH9vVP2HN_6MTqpeC_VKqVox97CkZkXcAHAJQAAAEDALfnYSqMy3StceLZoBTbRNhRzhc9ZxYxASRynSHbwlRkJo_OCNZPjWBAN5A36mcaO0B3GwAAJ1IhFFKx70J6wo3Mk_qnF0Swnq7qFJsMcysry0pACwze3k-_DY6nhrox_BV9m6hzb1oGB6fPChp1tYYQJsDq6HdlwgNZsZYhuGylt2AGkvBWU9751-t4q4GjK3hQKFDJKhToaIfR_fMmLnFc8Re1_6gM0GZtNPbyUEDHHgcATAAAAAMApYpNppo4FzPkLYv8T-ev2JHrMI3BaMTrKw70cHXpWZ0j4ZfQWw10uCXL4utvnI7f9f9Qu-yi6g_Vaq4byirzoNNEVUwsQ2Cupw',
+               'AES-GCM': 'ICMTbZv-mEZS1-pmXzPgLb2ds9rdjZXYGservrKAOVAHAGAAAAEBADKaM2ItChwxcp2fNARPzM6DEoclz5SzEjZm7JhAdxsAABemOv8L4_auczq3tFEurVIH1B_glDDHl37ZhhLyL0RbUhQ3Wk7b7nKjNkIToU-Xz3Cf8hpI83HRflkK2-GpVkku5wgP9Qw0abHiHWYIP2W8bdjIq6sbbHqrMf61BwAoAAAAAQCTtsH_Cb26AsKpGCoMV4q5JQeCzZFqaV8rinh-IvzcyR-GDavH',
+               'X20-PLY': 'IJvaSenlyiln9rxdoAD8bry76Ao2b8CHaBsDBOlBRn0HAGwAAAECANKL91b9x5ZWSm_gvz4-le2Qq6epuZEPAWxh0W_EFusp-NauYbgkbfJAdxsAABdkjkDYn45FN82MgQyzTkZMq4ELXyGHYyBw4CRikrd0drXqLw-hHMY_EIO1T6QyqjVeSlmWXywYwZvvKvOr8cV8SfKNq7d3lJdVPygL68-sgW4oGCZniVX_caxKBwA0AAAAAgBLFlNxigbcAyLjgGqZtc3YIzBv95YAhxQpSxbUXDW5TC3JWrEZgtHRAE8XFAkc5p0e',
+               'AEGIS-256': 'kkFn5bpWh2H9Zdu7vc4SibT13oI2u4vu5qlyjHvz6f4HAJQAAAEDAOSDZE_adfTq_XmBCOopqJSWbmJyVy1Qc6_TJObtYKGoZqUwEGXaVxVAgJbKWeD8e0B3GwAAJ06qNQGNNwpryfr4b-sc7jd4hK6mbe075h3rGfGGsDEYOBXwg8knKAnrWcwL8Hn_FcRICagcvSkIIQhwucE6Wi7CMXNM9Qdnq055xab0Yx-W42gCD9j4Cw64RROgvC64mobHzprXSuyC7Isml1TfEE6wIY3_OwXDCsl5QgcATAAAAAMAK0TiORRe380FGuzOFzG7gCl7gxKorbnAFI_LAIl16M6umL69FKcdKmIS9hcknIcMbM0YoviDMj-nrWceiHJjJ3Gv7SPFXEtufQ',
             },
          }
       ];
@@ -645,7 +623,7 @@ describe("Decryption known values", function () {
          for (const [alg, cipherTxt] of Object.entries(cts)) {
             const [cipherStream] = streamFromBase64Url(cipherTxt);
 
-            const decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+            const keyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                expect(cdinfo.hint).toEqual(hint);
                expect(cdinfo.lp).toEqual(1);
                expect(cdinfo.lpEnd).toEqual(1);
@@ -655,6 +633,7 @@ describe("Decryption known values", function () {
                expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
                return [pwd, undefined];
             });
+            const decipher = await getStreamDecipher(cipherStream, keyProvider);
             const cdInfo = await decipher.getCipherDataInfo();
 
             expect(cdInfo.alg).toEqual(alg);
@@ -679,28 +658,29 @@ describe("Decryption known values", function () {
       const userCredGood = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
 
       let [cipherStream, cipherData] = streamFromBytes(new Uint8Array([117, 163, 250, 117, 59, 97, 3, 10, 139, 12, 55, 161, 115, 52, 28, 105, 246, 126, 220, 0, 129, 151, 165, 136, 46, 97, 163, 160, 91, 9, 189, 218, 4, 0, 116, 0, 0, 0, 2, 0, 16, 242, 98, 46, 102, 223, 79, 227, 209, 73, 22, 207, 92, 80, 75, 125, 125, 234, 18, 21, 88, 64, 43, 68, 25, 193, 133, 31, 159, 156, 8, 184, 10, 164, 33, 46, 20, 159, 218, 222, 64, 119, 27, 0, 0, 23, 5, 135, 172, 203, 4, 101, 163, 155, 133, 221, 40, 227, 91, 222, 227, 213, 97, 77, 24, 117, 60, 188, 27, 153, 253, 134, 10, 112, 75, 76, 146, 132, 123, 217, 7, 171, 211, 24, 206, 186, 248, 244, 119, 18, 165, 195, 59, 160, 76, 31, 90, 80, 53, 19, 39, 143, 99, 141, 109, 68, 72, 63, 121, 199, 96, 95, 157, 81]));
-      let decipher = await streamDecipher(userCredGood, cipherStream, async (cdinfo) => {
+      let keyProvider = new PWDKeyProvider(userCredGood.slice(0), async (cdinfo) => {
          expect(cdinfo.alg).toBe('X20-PLY');
          expect(cdinfo.ic).toBe(1800000);
          expect(cdinfo.hint).toBeTruthy();
          expect(cdinfo.ver).toEqual(cc.VERSION4);
          return [pwdGood, undefined];
       });
+      let decipher = await getStreamDecipher(cipherStream, keyProvider);
 
       // First make sure the good values are actually good
       await expect(decipher.decryptBlock0()).resolves.toEqual(clearData);
 
       // Ensure bad password fails
       [cipherStream] = streamFromBytes(cipherData);
-      decipher = await streamDecipher(userCredGood, cipherStream, async () => {
-         return [pwdBad, undefined];
-      });
+      keyProvider = new PWDKeyProvider(userCredGood.slice(0), [pwdBad, undefined]);
+      decipher = await getStreamDecipher(cipherStream, keyProvider);
 
       await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
 
       // Test wrong userCred
       [cipherStream] = streamFromBytes(cipherData);
-      decipher = await streamDecipher(userCredBad, cipherStream, undefined);
+      keyProvider = new PWDKeyProvider(userCredBad.slice(0), undefined);
+      decipher = await getStreamDecipher(cipherStream, keyProvider);
 
       await expect(decipher.getCipherDataInfo()).rejects.toThrow(/Invalid MAC/);
 
@@ -709,9 +689,8 @@ describe("Decryption known values", function () {
 
       // Test wrong userCred with block decrypt first (error msg is different)
       [cipherStream] = streamFromBytes(cipherData);
-      decipher = await streamDecipher(userCredBad, cipherStream, async () => {
-         return [pwdGood, undefined];
-      });
+      keyProvider = new PWDKeyProvider(userCredBad.slice(0), [pwdGood, undefined]);
+      decipher = await getStreamDecipher(cipherStream, keyProvider);
 
       await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('Invalid MAC.+'));
    });
@@ -726,28 +705,29 @@ describe("Decryption known values", function () {
       const userCredGood = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
 
       let [cipherStream, cipherData] = streamFromBytes(new Uint8Array([166, 123, 188, 183, 212, 97, 47, 147, 59, 39, 78, 222, 101, 74, 221, 53, 27, 11, 194, 67, 156, 235, 116, 104, 65, 64, 76, 166, 29, 220, 71, 179, 5, 0, 116, 0, 0, 1, 2, 0, 121, 78, 37, 8, 192, 196, 110, 22, 164, 106, 59, 161, 122, 165, 176, 147, 49, 43, 41, 250, 163, 111, 218, 4, 174, 61, 6, 169, 145, 216, 66, 166, 139, 82, 19, 207, 29, 75, 105, 149, 64, 119, 27, 0, 0, 23, 93, 92, 56, 163, 242, 71, 208, 3, 190, 44, 140, 222, 149, 159, 152, 193, 162, 44, 177, 93, 197, 119, 131, 88, 92, 53, 108, 167, 253, 64, 216, 200, 121, 212, 193, 153, 180, 39, 92, 35, 142, 6, 240, 115, 51, 211, 198, 63, 12, 126, 128, 206, 178, 114, 65, 37, 246, 197, 19, 79, 58, 96, 56, 86, 172, 162, 217, 70]));
-      let decipher = await streamDecipher(userCredGood, cipherStream, async (cdinfo) => {
+      let keyProvider = new PWDKeyProvider(userCredGood, async (cdinfo) => {
          expect(cdinfo.alg).toBe('X20-PLY');
          expect(cdinfo.ic).toBe(1800000);
          expect(cdinfo.hint).toBeTruthy();
          expect(cdinfo.ver).toEqual(cc.VERSION5);
          return [pwdGood, undefined];
       });
+      let decipher = await getStreamDecipher(cipherStream, keyProvider);
 
       // First make sure the good values are actually good
       await expect(decipher.decryptBlock0()).resolves.toEqual(clearData);
 
       // Ensure bad password fails
       [cipherStream] = streamFromBytes(cipherData);
-      decipher = await streamDecipher(userCredGood, cipherStream, async () => {
-         return [pwdBad, undefined];
-      });
+      keyProvider = new PWDKeyProvider(userCredGood, [pwdBad, undefined]);
+      decipher = await getStreamDecipher(cipherStream, keyProvider);
 
       await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
 
       // Test wrong userCred
       [cipherStream] = streamFromBytes(cipherData);
-      decipher = await streamDecipher(userCredBad, cipherStream, undefined);
+      keyProvider = new PWDKeyProvider(userCredBad, undefined);
+      decipher = await getStreamDecipher(cipherStream, keyProvider);
 
       await expect(decipher.getCipherDataInfo()).rejects.toThrow(/MAC/);
 
@@ -763,7 +743,6 @@ describe("Decryption known values", function () {
       const userCredBad = new Uint8Array([0, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
 
       // NOTE: this cipherStream can be created by:
-      //   * set ciphers-current: READ_SIZE_START = 20; READ_SIZE_MAX = Encipher.READ_SIZE_START * 16;
       //   * run ./apps/web/scripts/ciphers_tests.sh
       const vers = [
          //v6
@@ -777,9 +756,9 @@ describe("Decryption known values", function () {
          //v7
          {  ver: 7,
             cts: {
-               'AES-GCM': 'f54Kbfvskz0fSmqLMKu5meoa98Pjd7acb842dogLb5oHAGAAAAABAMad0LlIngQIQmfHf5UlOBpI22Gqs_yc9ONnRUpAdxsAABdlMKpBc7lTiu1ubTTqtyXg1w_gpoPBTqraECeUbj-J_rOkysOSg_0bj6tkWQ8K7QEe9YtthrNyIueZz7SjNZTyyqYssKkhLcgwA_M6r3yWfnnTukXCQCoo9tYaBwAoAAABAQCFQZFWQYSA2CBs8ljZzqqjUiFqKCS7uw6RE0e8S2LEiPuIHJwB',
-               'X20-PLY': 'AZwRvYONTmUiGmy1FD_E_W-KIMwISoTV1928-TQsWDkHAGwAAAACAGWfXMaHOiKMdRhrASFEp6IBNAiA77MvWrl14TQBYKzViy1hGaH7x1lAdxsAABdYtEAsyZ70RPsXSHo91g5W2RE2mGtid91BdMw4p_pnhYXVjdU50bJdrfp8iQa-KzC5CrfpwopR_hufqd1klSAXe0jqCNoMKq9lV_dZmbkgyp-P3OidXHXTPiZnBwA0AAABAgBdgykbdEQtRtnwwo46Jd0X8fxc0ZR5SahASYPMaMkvZmDD1erhR8LHVF4rMtZoOvvc',
-               'AEGIS-256': '7V_KLO_W6Dn3z_Nm8ApEvpuCStCCrI9DotqOK4NlL3YHAJQAAAADAGQBbVBjySD_E4d9VA1ALhL291hssjA9dXCUPaxKiOi0VsaLhpx2DAYSG0YOEDtIEkB3GwAAJ3oAD7PgLd1p_WcJgtbVhwfU1oEuVaKWWphOpDzc2u6aoWKxZlIqEIrtWExNZu4vTi2-Y4IT5RoBtsIvQ00Y_VVK6hGRVHxhbeDGPgMuybUanllaCCurgP4JSo0SASwEnImEQpHYraWRqSEXO80Y5FszBdMODnIyrJwWPgcATAAAAQMAcoz6mX1p-OtwhmpbsQnq8sDZRmzcByWMsv0-k_4FRJ4FvHYt-ZxL7f9GHTc9glJRufqaapbSmr5aX5x0a_ioF4jijYiOSAmKDA',
+               'AES-GCM': '4HqaA_x0NfL-Lf5Na8y6hL-riHK3KyJdFE2SEhwx5LYHAGAAAAABAPysHkdL0M4zcysF2og_ge5wsMwKT_xAuMXGrBxAdxsAABe6Z3m9EvN6Y_sxYrElDyN-6PvyIoShWg6tPvimnho4H99MxYZgbLIcrBX8zC9dpUgBGWKratN9-Fa50tZKXDJ3qO3ABIiOAVA0xPFD1XdQtlLo415xQhTRlFZEBwAoAAABAQC75YGxqP9hDNbA8i6guGLiU3HCFjeaphHkd96Ua7IV2XHfqfU8',
+               'X20-PLY': 'STL1yvGUQsZ6fch9ZF1EeDhm6Hy4mVXnsCxb92-KlG4HAGwAAAACACRL5HqJgFlW-9pzMeoLPwTkV9zlhPQmhGcdeNSg1IosOyT5vie1waBAdxsAABeQyA19trqyQq1TPajNoT2ANyfeHy-RHf22aKmmad_iKz4na77KerqvuOs-2HG02pTAwFgAiFq28NXb1p0ls98l73bdWRE8XUGCRsiO5Sw8SSt0HsOdpMZ2NRhkBwA0AAABAgAmYrJ3dIibkQvtcLGNMAnJf_kaNeLoO2SqXHNhZVb5Z-S2Osa7ELbim_QuupRqq6Dk',
+               'AEGIS-256': 'bGHlPFIsJywbOgUndKGIIsifY3BQA19u46baaSScykEHAJQAAAADAGTaDfFs-4ZU0QWQd6XUJmkqnpsHNecSyO41OmJIjmVklHUwfvTKK_42cnKuVJeOE0B3GwAAJ0p2jphORQO78U7BwslRPiw9hAalYreWxAxesoTZZjr3GGqI_vPRdJfTaS5xemfNiJqmtBgZglc9CViYpnbQQvxA5emMmJ7rOX3RsUhpA-DVe2A6YeMv8hFGrih3sG_z65nG6dAgmD9X0EZqZ07lw_fua9fgy5gm4acDAgcATAAAAQMAkmSgZwBhr94ilIxrYT25tMzbh8v8O6YK1xf4g3dmoArIyqgravttSr_r8FyQyojSo8qfMojQTPp2UDhdmxBrB_IIHcaNCTx-OQ',
             },
          }
       ];
@@ -787,28 +766,27 @@ describe("Decryption known values", function () {
       for (const { ver, cts } of vers) {
          for (const [alg, cipherTxt] of Object.entries(cts)) {
             let [cipherStream, cipherData] = streamFromBase64Url(cipherTxt);
-             // First make sure the good values are actually good
-             let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+            // First make sure the good values are actually good
+            let keyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                expect(cdinfo.alg).toBe(alg);
                expect(cdinfo.ic).toBe(1800000);
                expect(cdinfo.hint).toBeTruthy();
                expect(cdinfo.ver).toEqual(ver);
                return [pwdGood, undefined];
             });
+            let decipher = await getStreamDecipher(cipherStream, keyProvider);
             await expect(decipher.decryptBlock0()).resolves.toEqual(clearData.slice(0,20));
 
             // Ensure bad password fails
             [cipherStream] = streamFromBytes(cipherData);
-            decipher = await streamDecipher(userCred, cipherStream, async () => {
-               return [pwdBad, undefined];
-            });
+            keyProvider = new PWDKeyProvider(userCred.slice(0), [pwdBad, undefined]);
+            decipher = await getStreamDecipher(cipherStream, keyProvider);
             await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
 
             // Test wrong userCred
             [cipherStream] = streamFromBytes(cipherData);
-            decipher = await streamDecipher(userCredBad, cipherStream, async () => {
-               return [pwdGood, undefined];
-            });
+            keyProvider = new PWDKeyProvider(userCredBad.slice(0), [pwdGood, undefined]);
+            decipher = await getStreamDecipher(cipherStream, keyProvider);
             await expect(decipher.getCipherDataInfo()).rejects.toThrow(/MAC/);
 
             // Does not get MAC error because the decipher instance is now in a
@@ -833,32 +811,28 @@ describe("Custom AD encryption and decryption", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
          const customAd = crypto.getRandomValues(new Uint8Array(52));
 
-         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream,
-            async (cdinfo) => {
-               expect(cdinfo.alg).toEqual(alg);
-               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               expect(cdinfo.lp).toEqual(1);
-               expect(cdinfo.lpEnd).toEqual(1);
-               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, hint];
-            },
-            customAd
-         );
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, hint];
+         }, customAd);
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
          const block0 = await latest.encryptBlock0();
 
          const [cipherStream] = streamFromCipherBlock([block0]);
-         const decipher = await streamDecipher(userCred, cipherStream,
-            async (cdinfo) => {
-               expect(cdinfo.alg).toEqual(alg);
-               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               expect(cdinfo.hint).toEqual(hint);
-               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, undefined];
-            },
-            customAd
-         );
+         const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            expect(cdinfo.hint).toEqual(hint);
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, undefined];
+         }, customAd);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          const decrypted = await decipher.decryptBlock0();
          await expect(areEqual(decrypted, clearData)).resolves.toEqual(true);
@@ -874,25 +848,24 @@ describe("Custom AD encryption and decryption", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
          const customAd = crypto.getRandomValues(new Uint8Array(223));
 
-         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream, async (cdinfo) => {
+         const readStart = 12;
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, hint];
          }, customAd);
-
-         const readStart = 12;
-         //@ts-ignore force multiple blocks
-         latest['_readTarget'] = readStart;
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, { startSize: readStart });
 
          const block0 = await latest.encryptBlock0();
          const blockN = await latest.encryptBlockN();
 
          let [cipherStream] = streamFromCipherBlock([block0, blockN]);
-         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          }, customAd);
+         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          let decb0 = await decipher.decryptBlock0();
          await expect(areEqual(decb0, clearData.slice(0, readStart))).resolves.toEqual(true);
@@ -910,33 +883,30 @@ describe("Custom AD encryption and decryption", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
          const customAd = crypto.getRandomValues(new Uint8Array(52));
 
-         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream,
-            async (cdinfo) => {
-               expect(cdinfo.alg).toEqual(alg);
-               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               expect(cdinfo.lp).toEqual(1);
-               expect(cdinfo.lpEnd).toEqual(1);
-               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, hint];
-            },
-            customAd
-         );
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, hint];
+         }, customAd);
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
          const block0 = await latest.encryptBlock0();
 
          const [cipherStream] = streamFromCipherBlock([block0]);
-         const decipher = await streamDecipher(userCred, cipherStream,
-            async (cdinfo) => {
-               expect(cdinfo.alg).toEqual(alg);
-               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               expect(cdinfo.hint).toEqual(hint);
-               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, undefined];
-            }
-         );
+         const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            expect(cdinfo.hint).toEqual(hint);
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, undefined];
+         });
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
-         await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
+         await expect(decipher.decryptBlock0()).rejects.toThrow(/Invalid MAC/);
       }
    });
 
@@ -948,33 +918,30 @@ describe("Custom AD encryption and decryption", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
          const customAd = crypto.getRandomValues(new Uint8Array(52));
 
-         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream,
-            async (cdinfo) => {
-               expect(cdinfo.alg).toEqual(alg);
-               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               expect(cdinfo.lp).toEqual(1);
-               expect(cdinfo.lpEnd).toEqual(1);
-               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, hint];
-            },
-         );
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, hint];
+         });
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
          const block0 = await latest.encryptBlock0();
 
          const [cipherStream] = streamFromCipherBlock([block0]);
-         const decipher = await streamDecipher(userCred, cipherStream,
-            async (cdinfo) => {
-               expect(cdinfo.alg).toEqual(alg);
-               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               expect(cdinfo.hint).toEqual(hint);
-               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, undefined];
-            },
-            customAd
-         );
+         const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            expect(cdinfo.hint).toEqual(hint);
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, undefined];
+         }, customAd);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
-         await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
+         await expect(decipher.decryptBlock0()).rejects.toThrow(/Invalid MAC/);
       }
    });
 
@@ -986,36 +953,32 @@ describe("Custom AD encryption and decryption", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
          const customAd = crypto.getRandomValues(new Uint8Array(52));
 
-         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream,
-            async (cdinfo) => {
-               expect(cdinfo.alg).toEqual(alg);
-               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               expect(cdinfo.lp).toEqual(1);
-               expect(cdinfo.lpEnd).toEqual(1);
-               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, hint];
-            },
-            customAd
-         );
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, hint];
+         }, customAd);
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
          const block0 = await latest.encryptBlock0();
 
          // modify customAd so it doesn't match what was used for encryption
          customAd[2] ^= 1;
          const [cipherStream] = streamFromCipherBlock([block0]);
-         const decipher = await streamDecipher(userCred, cipherStream,
-            async (cdinfo) => {
-               expect(cdinfo.alg).toEqual(alg);
-               expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               expect(cdinfo.hint).toEqual(hint);
-               expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, undefined];
-            },
-            customAd
-         );
+         const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
+            expect(cdinfo.alg).toEqual(alg);
+            expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            expect(cdinfo.hint).toEqual(hint);
+            expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+            return [pwd, undefined];
+         }, customAd);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
-         await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
+         await expect(decipher.decryptBlock0()).rejects.toThrow(/Invalid MAC/);
       }
    });
 
@@ -1028,27 +991,25 @@ describe("Custom AD encryption and decryption", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
          const customAd = crypto.getRandomValues(new Uint8Array(123));
 
-         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, hint];
          }, customAd);
-
-         const readStart = 12;
-         //@ts-ignore force multiple blocks
-         latest['_readTarget'] = readStart;
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, { startSize: 12 });
 
          const block0 = await latest.encryptBlock0();
          const blockN = await latest.encryptBlockN();
 
          let [cipherStream] = streamFromCipherBlock([block0, blockN]);
-         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
+         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
-         await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
+         await expect(decipher.decryptBlock0()).rejects.toThrow(/Invalid MAC/);
          await expect(decipher.decryptBlockN()).rejects.toThrow(/Decipher invalid state/);
       }
    });
@@ -1063,32 +1024,30 @@ describe("Custom AD encryption and decryption", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
          const customAd = crypto.getRandomValues(new Uint8Array(123));
 
-         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, hint];
          });
-
-         const readStart = 12;
-         //@ts-ignore force multiple blocks
-         latest['_readTarget'] = readStart;
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, { startSize: 12 });
 
          const block0 = await latest.encryptBlock0();
          const blockN = await latest.encryptBlockN();
 
          let [cipherStream] = streamFromCipherBlock([block0, blockN]);
-         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          }, customAd);
+         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
-         await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
+         await expect(decipher.decryptBlock0()).rejects.toThrow(/Invalid MAC/);
          await expect(decipher.decryptBlockN()).rejects.toThrow(/Decipher invalid state/);
       }
    });
 
-   it("round trip blockN, all algorithms added customAd", async function () {
+   it("round trip blockN, all algorithms tampered customAd", async function () {
 
       for (const alg of Ciphers.algs()) {
          let [clearStream, clearData] = streamFromStr('This is a secret 🦀');
@@ -1097,15 +1056,15 @@ describe("Custom AD encryption and decryption", function () {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
          const customAd = crypto.getRandomValues(new Uint8Array(123));
 
-         const latest = latestEncipher(userCred, alg, cc.ICOUNT_MIN, 1, 1, clearStream, async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, hint];
          }, customAd);
-
-         const readStart = 12;
-         //@ts-ignore force multiple blocks
-         latest['_readTarget'] = readStart;
+         const latest = getLatestEncipher(
+            clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN,
+            { startSize: 12 }
+         );
 
          const block0 = await latest.encryptBlock0();
          const blockN = await latest.encryptBlockN();
@@ -1113,16 +1072,18 @@ describe("Custom AD encryption and decryption", function () {
          // modify customAd so it doesn't match what was used for encryption
          customAd[customAd.length - 1] ^= 1;
          let [cipherStream] = streamFromCipherBlock([block0, blockN]);
-         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          }, customAd);
+         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
-         await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
+         await expect(decipher.decryptBlock0()).rejects.toThrow(/Invalid MAC/);
          await expect(decipher.decryptBlockN()).rejects.toThrow(/Decipher invalid state/);
       }
-   });});
+   });
+});
 
 
 describe("Detect changed cipher data", function () {
@@ -1138,40 +1099,31 @@ describe("Detect changed cipher data", function () {
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const latest = latestEncipher(
-            userCred,
-            alg,
-            cc.ICOUNT_MIN,
-            1, // lp
-            1, // lpEnd
-            clearStream,
-            async (cdinfo) => {
-               expect(cdinfo.lp).toEqual(1);
-               expect(cdinfo.lpEnd).toEqual(1);
-               expect(cdinfo.alg).toBe(alg);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               return [pwd, hint];
-            }
-         );
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.alg).toBe(alg);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            return [pwd, hint];
+         });
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
 
          const block0 = await latest.encryptBlock0();
 
          const savedHeader = new Uint8Array(block0.parts[0]);
 
+         const makeDecKP = () => new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+
          // set byte in MAC
          block0.parts[0][12] = block0.parts[0][12] == 123 ? 124 : 123;
          let [cipherStream] = streamFromCipherBlock([block0]);
-         let decipher = await streamDecipher(userCred, cipherStream, async () => {
-            return [pwd, undefined];
-         });
+         let decipher = await getStreamDecipher(cipherStream, makeDecKP());
 
          await expect(decipher.decryptBlock0()).rejects.toThrow(/Invalid MAC.+/);
 
          block0.parts[0] = new Uint8Array(savedHeader);
          [cipherStream] = streamFromCipherBlock([block0]);
-         decipher = await streamDecipher(userCred, cipherStream, async () => {
-            return [pwd, undefined];
-         });
+         decipher = await getStreamDecipher(cipherStream, makeDecKP());
 
          await expect(decipher.decryptBlock0()).resolves.toEqual(clearData);
 
@@ -1179,15 +1131,13 @@ describe("Detect changed cipher data", function () {
          block0.parts[0][33] = block0.parts[0][33] == 43 ? 45 : 43;
          [cipherStream] = streamFromCipherBlock([block0]);
 
-         await expect(streamDecipher(userCred, cipherStream, undefined)).rejects.toThrow(/Invalid version/);
+         await expect(getStreamDecipher(cipherStream, new PWDKeyProvider(userCred.slice(0), undefined))).rejects.toThrow(/Invalid version/);
 
          // set length
          block0.parts[0] = new Uint8Array(savedHeader);
          block0.parts[0][36] = block0.parts[0][36] == 43 ? 45 : 43;
          [cipherStream] = streamFromCipherBlock([block0]);
-         decipher = await streamDecipher(userCred, cipherStream, async () => {
-            return [pwd, undefined];
-         });
+         decipher = await getStreamDecipher(cipherStream, makeDecKP());
 
          await expect(decipher.decryptBlock0()).rejects.toThrow(/Cipher data length mismatch+/);
       }
@@ -1201,41 +1151,32 @@ describe("Detect changed cipher data", function () {
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const latest = latestEncipher(
-            userCred,
-            alg,
-            cc.ICOUNT_MIN,
-            1, // lp
-            1, // lpEnd
-            clearStream,
-            async (cdinfo) => {
-               expect(cdinfo.alg).toBe(alg);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               return [pwd, hint];
-            }
-         );
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            expect(cdinfo.alg).toBe(alg);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            return [pwd, hint];
+         });
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
          const block0 = await latest.encryptBlock0();
 
          const savedAD = new Uint8Array(block0.parts[1]);
 
-         block0.parts[1][12] = block0.parts[1][12] == 123 ? 124 : 123;
-         let [cipherStream] = streamFromCipherBlock([block0]);
-         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+         const makeDecKP = () => new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
+
+         block0.parts[1][12] = block0.parts[1][12] == 123 ? 124 : 123;
+         let [cipherStream] = streamFromCipherBlock([block0]);
+         let decipher = await getStreamDecipher(cipherStream, makeDecKP());
 
          await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('.+MAC.+'));
 
          // Confirm we're back to good state
          block0.parts[1] = new Uint8Array(savedAD);
          [cipherStream] = streamFromCipherBlock([block0]);
-         decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
-            expect(cdinfo.lp).toEqual(1);
-            expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
-         });
+         decipher = await getStreamDecipher(cipherStream, makeDecKP());
 
          await expect(decipher.decryptBlock0()).resolves.toEqual(clearData);
 
@@ -1243,11 +1184,7 @@ describe("Detect changed cipher data", function () {
          const back = block0.parts[1].byteLength - 4;
          block0.parts[1][back] = block0.parts[1][back] == 43 ? 45 : 43;
          [cipherStream] = streamFromCipherBlock([block0]);
-         decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
-            expect(cdinfo.lp).toEqual(1);
-            expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
-         });
+         decipher = await getStreamDecipher(cipherStream, makeDecKP());
 
          await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('.+MAC.+'));
       }
@@ -1261,28 +1198,22 @@ describe("Detect changed cipher data", function () {
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const latest = latestEncipher(
-            userCred,
-            alg,
-            cc.ICOUNT_MIN,
-            1, // lp
-            1, // lpEnd
-            clearStream,
-            async (cdinfo) => {
-               expect(cdinfo.alg).toBe(alg);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               return [pwd, hint];
-            }
-         );
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            expect(cdinfo.alg).toBe(alg);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            return [pwd, hint];
+         });
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
          const block0 = await latest.encryptBlock0();
 
          block0.parts[2][12] = block0.parts[2][12] == 123 ? 124 : 123;
          let [cipherStream] = streamFromCipherBlock([block0]);
-         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
+         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('.+MAC.+'));
       }
@@ -1296,31 +1227,25 @@ describe("Detect changed cipher data", function () {
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const latest = latestEncipher(
-            userCred,
-            alg,
-            cc.ICOUNT_MIN,
-            1, // lp
-            1, // lpEnd
-            clearStream,
-            async (cdinfo) => {
-               expect(cdinfo.lp).toEqual(1);
-               expect(cdinfo.lpEnd).toEqual(1);
-               expect(cdinfo.alg).toBe(alg);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               return [pwd, hint];
-            }
-         );
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            expect(cdinfo.alg).toBe(alg);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            return [pwd, hint];
+         });
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
          const block0 = await latest.encryptBlock0();
 
          // set byte in MAC
          block0.parts[0][12] = block0.parts[0][12] == 123 ? 124 : 123;
          let [cipherStream] = streamFromCipherBlock([block0]);
-         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
+         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          // Monkey patch to skip MAC validation
          //@ts-ignore
@@ -1342,29 +1267,23 @@ describe("Detect changed cipher data", function () {
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const latest = latestEncipher(
-            userCred,
-            alg,
-            cc.ICOUNT_MIN,
-            1, // lp
-            1, // lpEnd
-            clearStream,
-            async (cdinfo) => {
-               expect(cdinfo.alg).toBe(alg);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               return [pwd, hint];
-            }
-         );
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            expect(cdinfo.alg).toBe(alg);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            return [pwd, hint];
+         });
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
          const block0 = await latest.encryptBlock0();
 
          // set byte in additional data
          block0.parts[1][12] = block0.parts[1][12] == 123 ? 124 : 123;
          let [cipherStream] = streamFromCipherBlock([block0]);
-         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
+         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          // Monkey patch to skip MAC validation
          //@ts-ignore
@@ -1387,29 +1306,23 @@ describe("Detect changed cipher data", function () {
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
-         const latest = latestEncipher(
-            userCred,
-            alg,
-            cc.ICOUNT_MIN,
-            1, // lp
-            1, // lpEnd
-            clearStream,
-            async (cdinfo) => {
-               expect(cdinfo.alg).toBe(alg);
-               expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
-               return [pwd, hint];
-            }
-         );
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            expect(cdinfo.alg).toBe(alg);
+            expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
+            return [pwd, hint];
+         });
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
          const block0 = await latest.encryptBlock0();
 
          // set byte in encrypted data
          block0.parts[2][12] = block0.parts[2][12] == 123 ? 124 : 123;
          let [cipherStream] = streamFromCipherBlock([block0]);
-         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
+         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          // Monkey patch to skip MAC validation
          //@ts-ignore
@@ -1426,14 +1339,16 @@ describe("Detect changed cipher data", function () {
 });
 
 describe("Detect block order changes", function () {
-   beforeEach(async () => {
-      await cryptoReady();
-   });
 
    const pwd = 'a not good pwd';
    const hint = 'sorta';
-   const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+   let userCred: Uint8Array<ArrayBuffer>;
    const clearStr = 'This is a secret 🦀 with extra wording for more blocks';
+
+   beforeEach(async () => {
+      await cryptoReady();
+      userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+   });
 
    async function get_blocks(alg: cc.CipherAlgs): Promise<[
       CipherDataBlock,
@@ -1442,22 +1357,15 @@ describe("Detect block order changes", function () {
    ]> {
       const [clearStream] = streamFromStr(clearStr);
 
-      const latest = latestEncipher(
-         userCred,
-         alg,
-         cc.ICOUNT_MIN,
-         1, // lp
-         1, // lpEnd
-         clearStream,
-         async (cdinfo) => {
-            expect(cdinfo.lp).toEqual(1);
-            expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, hint];
-         }
+      const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         expect(cdinfo.lp).toEqual(1);
+         expect(cdinfo.lpEnd).toEqual(1);
+         return [pwd, hint];
+      });
+      const latest = getLatestEncipher(
+         clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN,
+         { startSize: 12 }
       );
-      const readStart = 11;
-      //@ts-ignore force multiple blocks
-      latest['_readTarget'] = readStart;
 
       const block0 = await latest.encryptBlock0();
       const block1 = await latest.encryptBlockN();
@@ -1476,11 +1384,12 @@ describe("Detect block order changes", function () {
 
          // First make sure we can decrypt in the proper order
          let [cipherStream] = streamFromCipherBlock([block0, block1, block2]);
-         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
+         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          const decb0 = await decipher.decryptBlock0();
          const decb1 = await decipher.decryptBlockN();
@@ -1502,11 +1411,12 @@ describe("Detect block order changes", function () {
 
          // Order of block N+ changed
          let [cipherStream] = streamFromCipherBlock([block0, block2, block1]);
-         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
+         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          const decb0 = await decipher.decryptBlock0();
 
@@ -1527,11 +1437,12 @@ describe("Detect block order changes", function () {
          const [block0, block1, block2] = await get_blocks(alg);
 
          let [cipherStream] = streamFromCipherBlock([block1, block0, block2]);
-         let decipher = await streamDecipher(userCred, cipherStream, async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
+         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          // Will fail in V4 and later because block0 format or MAC is invalid.
          // Failure detection can happen at different spots while data is unpacked

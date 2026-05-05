@@ -30,7 +30,16 @@ import {
    startRegistration, startAuthentication
 } from '@simplewebauthn/browser';
 import { Subject, Subscription, filter } from 'rxjs';
-import { base64ToBytes, bytesToBase64, bufferToHexString, expired, cryptoReady, zxcvbnReady } from '@qcrypt/crypto';
+import {
+   base64ToBytes,
+   bytesToBase64,
+   bufferToHexString,
+   expired,
+   cryptoReady,
+   zxcvbnReady,
+   streamFromBase64,
+   MasterKeyKeyProvider,
+   readStreamAll } from '@qcrypt/crypto';
 import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 
@@ -39,10 +48,11 @@ const baseUrl = environment.apiHost;
 export const SESSION_TIMEOUT = 60 * 60 * 6;
 export const ACTIVITY_TIMEOUT = 60 * 60 * 1.5;
 const EXPIRY_CHECK_INTERVAL = 1000 * 60 * 2;
-
 const RECOVERID_BYTES = 16;
 
 import type { ResponseTypes } from '@qcrypt/api';
+import { KeystoreService } from './keystore.service';
+import { CipherService } from './cipher.service';
 export type AuthenticatorInfo = ResponseTypes.AuthenticatorInfo;
 export type UserInfo = ResponseTypes.UserInfo;
 export type LoginUserInfo = ResponseTypes.LoginUserInfo;
@@ -64,6 +74,11 @@ type FetchArgs = {
    params?: string;
    bodyJSON?: string;
 }
+
+type SessionState = {
+   pkId: string;
+   userCredEnc?: string;
+};
 
 
 export type SenderLinkInfo = {
@@ -89,32 +104,29 @@ export type AuthEventData = {
    readonly userName: string | null,
 };
 
-
 @Injectable({
    providedIn: 'root'
 })
 export class AuthenticatorService {
 
    public userInfo = signal<VerifiedUserInfo | undefined>(undefined);
-   public senderLinks = signal<SenderLinkInfo[]>([]);
+   public ready: Promise<void>;
 
    private _subject = new Subject<AuthEventData>();
    private _intervalId: number = 0;
-   private _userCred?: Uint8Array = undefined;
    private _csrf?: string = undefined;
    private _cachedRecoveryId?: string;
-   // In-flight logout DELETE; login paths await it to avoid sign-out → sign-in race.
    private _pendingLogout: Promise<unknown> = Promise.resolve();
-   public ready: Promise<void>;
 
-   constructor() {
+   constructor(
+      private _keystoreSvc: KeystoreService,
+      private _cipherSvc: CipherService,
+   ) {
       this.ready = new Promise<void>((resolve) => {
-         this.loadSession().catch(
+         this.restoreSession().catch(
             // just for debugging, remove
             (err) => console.error(err)
-         ).finally(
-            () => resolve()
-         );
+         ).finally(() => resolve());
       });
 
       // Warm crypto and zxcvbn after first render so their chunks don't
@@ -133,18 +145,20 @@ export class AuthenticatorService {
    }
 
 
-   // it is possible for "authenticated" to be true and "potentialSession"
+   // it is possible for "hasSession" to be true and "potentialSession"
    // to be false. this happens when another tab logs out, or out then in,
    // using a different Pk until this tab detects it
-   public authenticated(): boolean {
-      return !!this._userCred && !!this._csrf;
+   public hasSession(): boolean {
+      return !!this._getSessionState()?.userCredEnc
+         && !!this._csrf
+         && !!this.userInfo();
    }
 
    public potentialSession(): boolean {
       // Expiry or changed passkey (from another tab) mean invalid sessoin
       // Cookie may still be valid, but we won't use it.
       const globalPKId = localStorage.getItem('pkid');
-      const myPKId = sessionStorage.getItem('pkid');
+      const myPKId = this._getSessionState()?.pkId;
       const sessionExpired = expired(localStorage, 'sessionexpiry');
       const activityExpired = expired(localStorage, 'activityexpiry');
       const [userId, userName] = this.loadKnownUser();
@@ -163,7 +177,7 @@ export class AuthenticatorService {
       const [userId, userName] = this.loadKnownUser();
       if (userId && userName) {
          const globalPKId = localStorage.getItem('pkid');
-         const myPKId = sessionStorage.getItem('pkid');
+         const myPKId = this._getSessionState()?.pkId;
          if (globalPKId &&
             ((globalPKId === myPKId) || !myPKId)) {
             return true;
@@ -177,6 +191,11 @@ export class AuthenticatorService {
          localStorage.getItem('userid'),
          localStorage.getItem('username')
       ];
+   }
+
+   private _getSessionState(): SessionState | null {
+      const raw = sessionStorage.getItem('sessionstate');
+      return raw ? JSON.parse(raw) : null;
    }
 
    public isCurrentPk(testPK: string): boolean {
@@ -201,15 +220,33 @@ export class AuthenticatorService {
       return this.getUserInfo().pkId;
    }
 
-   public get userCred(): Uint8Array {
-      if (!this.authenticated()) {
+   // Callers MUST overwrite returned value ASAP
+   public async getUserCred(): Promise<Uint8Array<ArrayBuffer>> {
+      const session = this._getSessionState();
+      if (!session?.userCredEnc) {
          throw new Error('no active user');
       }
-      return this._userCred!;
+
+      const masterKey = await this._keystoreSvc.get('user-cred-key', session.pkId);
+      if (!masterKey) {
+         throw new Error('no active user');
+      }
+
+      // Keyprovider takes ownership of masterkey and decryptStream takes ownership of keyprovider.
+      // The caller of getUserCred still needs to overwrite the returned userCred ASAP
+      const keyProvider = new MasterKeyKeyProvider(masterKey, this.userId);
+      try {
+         // This will fail if another tab has logged in with a different pkID (for any userId)
+         const clearStream = await this._cipherSvc.decryptStream(streamFromBase64(session.userCredEnc), keyProvider);
+         return await readStreamAll(clearStream);
+      } catch {
+         this.logout(false);
+         throw new Error('credentials are stale');
+      }
    }
 
    public getUserInfo(): VerifiedUserInfo {
-      if (!this.authenticated()) {
+      if (!this.hasSession()) {
          throw new Error('no active user');
       }
       return this.userInfo()!;
@@ -277,8 +314,7 @@ export class AuthenticatorService {
    }
 
    // does not recieve cookies, downloads user data again
-   public async loadSession(): Promise<boolean> {
-
+   public async restoreSession(): Promise<boolean> {
       if (!this.potentialSession()) {
          return false;
       }
@@ -291,7 +327,7 @@ export class AuthenticatorService {
          return false;
       }
 
-      this._loginUser(serverLoginUserInfo);
+      await this._loginUser(serverLoginUserInfo);
       return true;
    }
 
@@ -299,7 +335,7 @@ export class AuthenticatorService {
    public async getRecoveryWords(): Promise<string> {
       await this.ready;
 
-      if (!this.authenticated()) {
+      if (!this.hasSession()) {
          throw new Error('no active user');
       }
 
@@ -308,14 +344,14 @@ export class AuthenticatorService {
       this._cachedRecoveryId = undefined;
 
       if (!recoveryId) {
-         const serverLoginUserInfo = await this._findLoginImpl(true, true, this.userId);
+         const serverLoginUserInfo = await this._createSessionImpl(true, true, this.userId);
          if (!serverLoginUserInfo.recoveryId) {
             throw new Error('authentication failed');
          }
 
          // must call loginUser since fetch above changes csrf
          recoveryId = serverLoginUserInfo.recoveryId;
-         this._loginUser(serverLoginUserInfo);
+         await this._loginUser(serverLoginUserInfo);
       }
 
       const recoveryIdBytes = base64ToBytes(recoveryId);
@@ -341,8 +377,8 @@ export class AuthenticatorService {
    private _captureEventData(event: AuthEvent): AuthEventData {
       return {
          event: event,
-         userId: this.authenticated() ? this.userId : null,
-         userName: this.authenticated() ? this.userName : null
+         userId: this.hasSession() ? this.userId : null,
+         userName: this.hasSession() ? this.userName : null
       };
    }
 
@@ -350,9 +386,9 @@ export class AuthenticatorService {
       this._subject.next(eventData);
    }
 
-   private _loginUser(
+   private async _loginUser(
       serverLogin: LoginUserInfo
-   ): VerifiedUserInfo {
+   ): Promise<VerifiedUserInfo> {
       if (!serverLogin.userId || serverLogin.userId.length == 0) {
          throw new Error('invalid user id')
       }
@@ -366,14 +402,31 @@ export class AuthenticatorService {
          throw new Error('invalid csrf token')
       }
 
-      const sessExpiry = new Date(Date.now() + SESSION_TIMEOUT * 1000).toISOString();
+      const masterKey = await this._keystoreSvc.create('user-cred-key', serverLogin.pkId);
+      if (!masterKey) {
+         throw new Error('no active user');
+      }
 
-      this._userCred = base64ToBytes(serverLogin.userCred);
+      // Keyprovider takes ownership of masterkey and encryptStream takes ownership of keyprovider
+      const keyProvider = new MasterKeyKeyProvider(masterKey, serverLogin.userId);
+      const cipherData = await readStreamAll(
+         await this._cipherSvc.encryptStream(
+            streamFromBase64(serverLogin.userCred),
+            keyProvider,
+            { algs: ['X20-PLY'] }
+         )
+      );
+      const session: SessionState = {
+         pkId: serverLogin.pkId,
+         userCredEnc: bytesToBase64(cipherData)
+      };
+      sessionStorage.setItem('sessionstate', JSON.stringify(session));
+
+      const sessExpiry = new Date(Date.now() + SESSION_TIMEOUT * 1000).toISOString();
       this._csrf = serverLogin.csrf;
       localStorage.setItem('sessionexpiry', sessExpiry);
       localStorage.setItem('userid', serverLogin.userId);
       localStorage.setItem('pkid', serverLogin.pkId);
-      sessionStorage.setItem('pkid', serverLogin.pkId);
 
       const userInfo = this._updateLoggedInUser(serverLogin);
       this._emit(this._captureEventData(AuthEvent.Login));
@@ -384,7 +437,6 @@ export class AuthenticatorService {
    private _updateLoggedInUser(
       serverUser: UserInfo
    ): VerifiedUserInfo {
-
       if (!serverUser.verified) {
          throw new Error('unverified user');
       }
@@ -398,21 +450,25 @@ export class AuthenticatorService {
          throw new Error('missing recovery id info');
       }
 
-      if (!this.authenticated()) {
+      const session = this._getSessionState();
+      if (!session) {
          throw new Error('no active user');
-      }
-
-      const globalPKId = localStorage.getItem('pkid');
-      if (!globalPKId) {
-         throw new Error('missing passkey id');
       }
 
       localStorage.setItem('username', serverUser.userName);
 
+      // TODO (CHANGED, but keeping comment during testing):
+      // The logic behind setting to globalPKId seems wrong. If in another tab a
+      // new user or new pkID for the current user is the current globalPKId, then
+      // that is injected into current userInfo, which seems wrong. Seems like
+      // this should be storing sessionStorage pkID and if that doesn't agree
+      // with global this user will be logged out by the timer tick. Although,
+      // that situation is unlikely because _updateLoggedInUser is preceeded by
+      // server calls which would return failure if our pkID and CSRF are out of date.
       const userInfo: VerifiedUserInfo = {
          userId: serverUser.userId!,
          userName: serverUser.userName!,
-         pkId: globalPKId,
+         pkId: session.pkId,
          hasRecoveryId: serverUser.hasRecoveryId!,
          authenticators: serverUser.authenticators!
       };
@@ -476,7 +532,7 @@ export class AuthenticatorService {
       if (global) {
          // Avoid trampling _pendingLogout by firing multiple DELETE's.
          // They are noops when already logged out anyway.
-         if (this.authenticated()) {
+         if (this.hasSession()) {
             this._pendingLogout = this._doFetch<string>({
                method: 'DELETE',
                resource: 'session'
@@ -488,6 +544,7 @@ export class AuthenticatorService {
          const expired = new Date(Date.now() - 10000).toISOString();
          localStorage.setItem('activityexpiry', expired);
          localStorage.setItem('sessionexpiry', expired);
+         this._keystoreSvc.delete('user-cred-key');
       }
 
       if (this._intervalId) {
@@ -495,12 +552,17 @@ export class AuthenticatorService {
          this._intervalId = 0;
       }
 
-      // clear sensitive in-memory values
       this.userInfo.set(undefined);
-      if (this._userCred) {
-         crypto.getRandomValues(this._userCred);
-         this._userCred = undefined;
+      // Preserve pkId so this tab refuses to auto-resume a different user's
+      // session.
+      const session = this._getSessionState();
+      if (session?.pkId) {
+         sessionStorage.setItem('sessionstate', JSON.stringify({ pkId: session.pkId }));
+      } else {
+         sessionStorage.removeItem('sessionstate');
       }
+
+      // clear sensitive in-memory values
       this._csrf = undefined;
       this._cachedRecoveryId = undefined;
 
@@ -522,7 +584,7 @@ export class AuthenticatorService {
       if (!credentialId) {
          throw new Error('invalid credentialId');
       }
-      if (!this.authenticated()) {
+      if (!this.hasSession()) {
          throw new Error('no active user');
       }
 
@@ -547,7 +609,7 @@ export class AuthenticatorService {
       if (userName.length < 6 || userName.length > 31) {
          throw new Error('user name must be 6 to 31 characters');
       }
-      if (!this.authenticated()) {
+      if (!this.hasSession()) {
          throw new Error('no active user');
       }
 
@@ -568,7 +630,7 @@ export class AuthenticatorService {
       if (!credentialId) {
          throw new Error('invalid credentialId');
       }
-      if (!this.authenticated()) {
+      if (!this.hasSession()) {
          throw new Error('no active user');
       }
 
@@ -585,9 +647,8 @@ export class AuthenticatorService {
       }
 
       // Unverified response means that was the last PK and the user was deleted.
-      // If we deleted our own current PK the server invalidated our session, so sign out locally.
-      // User still exists in that case, so return remaining count to keep the caller on page
-      // and let the Logout event surface the sign-in dialog.
+      // If the user is still valid but we deleted our own current PK, the server
+      // invalidated our session so sign out locally.
       if (!serverUserInfo.verified) {
          this._deletedUser();
          return 0;
@@ -600,43 +661,8 @@ export class AuthenticatorService {
       return serverUserInfo.authenticators!.length;
    }
 
-
-   async refreshSenderLinks(): Promise<SenderLinkInfo[]> {
-      if (!this.authenticated()) {
-         throw new Error('no active user');
-      }
-      /*
-            const links = await this.doFetch<SenderLinkInfo[]>(
-               `senderlinks?userid=${this._userId}`,
-               'GET'
-            );
-      */
-      const links = [
-         {
-            linkId: '1l23rks34',
-            url: 'https://quickcrypt.org/send/1l23rks34',
-            description: 'this is for a friend to send stuff',
-            otherId: 'l23rknmfwc923jf9',
-            otherName: 'nedfered t great',
-            send: false,
-            receive: true
-         },
-         {
-            linkId: '3LDKFJ)(3',
-            url: 'https://quickcrypt.org/send/3LDKFJ3d3',
-            description: 'for private comms',
-            otherId: 'asdflinf29',
-            otherName: 'weston schick',
-            send: true,
-            receive: false
-         }
-      ];
-      this.senderLinks.set(links);
-      return links;
-   }
-
    async refreshUserInfo(): Promise<VerifiedUserInfo> {
-      if (!this.authenticated()) {
+      if (!this.hasSession()) {
          throw new Error('no active user');
       }
 
@@ -653,7 +679,7 @@ export class AuthenticatorService {
    }
 
    async getInvitableInfo(invitableId: string): Promise<InvitableInfo> {
-      if (!this.authenticated()) {
+      if (!this.hasSession()) {
          throw new Error('no active user');
       }
 
@@ -671,27 +697,27 @@ export class AuthenticatorService {
    }
 
    // Uses the current stored userId
-   async defaultLogin(): Promise<VerifiedUserInfo> {
+   async createDefaultSession(): Promise<VerifiedUserInfo> {
       const [userId] = this.loadKnownUser();
       if (!userId) {
          throw new Error('missing local userId, sign in as different user');
       }
 
-      return this.findLogin(userId);
+      return this.createSession(userId);
    }
 
-   async findLogin(userId: string | null = null): Promise<VerifiedUserInfo> {
-      if (this.authenticated()) {
+   async createSession(userId: string | null = null): Promise<VerifiedUserInfo> {
+      if (this.hasSession()) {
          throw new Error('must be logged out to log in');
       }
 
       await this._pendingLogout;
-      const serverLoginUserInfo = await this._findLoginImpl(true, false, userId);
+      const serverLoginUserInfo = await this._createSessionImpl(true, false, userId);
       return this._loginUser(serverLoginUserInfo);
    }
 
    // If no userId is provided, will present all Passkeys for this domain
-   private async _findLoginImpl(
+   private async _createSessionImpl(
       includeUserCred: boolean,
       includeRecovery: boolean,
       userId: string | null = null
@@ -838,7 +864,7 @@ export class AuthenticatorService {
    // Adds passkey to current user
    async addPasskey(): Promise<VerifiedUserInfo> {
 
-      if (!this.authenticated()) {
+      if (!this.hasSession()) {
          throw new Error('no active user');
       }
 

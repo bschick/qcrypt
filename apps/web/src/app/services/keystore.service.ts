@@ -31,16 +31,16 @@ const MIN_SLOT_LEN = 4;
 })
 export class KeystoreService {
    private _dbPromise?: Promise<IDBDatabase>;
-   private _dbName: string = 'quick-crypt';
+   private _dbName: string = 'quickcrypt';
    private _storeName: string = 'keys';
 
    // Uses an existing key. Returned key material should
    // be used immediately and then overwritten and discarded
    async get(
       slot: string,
-      credId: Uint8Array<ArrayBuffer> | string
+      pkId: Uint8Array<ArrayBuffer> | string
    ): Promise<Uint8Array<ArrayBuffer>> {
-      const credIdBytes = (typeof credId === 'string') ? base64ToBytes(credId) : credId;
+      const pkIdBytes = (typeof pkId === 'string') ? base64ToBytes(pkId) : pkId;
 
       const db = await this._db();
       const masterKey = await new Promise<CryptoKey | undefined>((resolve, reject) => {
@@ -54,20 +54,20 @@ export class KeystoreService {
       }
 
       // Caller should overwrite the returned key immediately afer use
-      return this._deriveKey(masterKey, slot, credIdBytes);
+      return this._deriveKey(masterKey, slot, pkIdBytes);
    }
 
    // Create and replace the key in `slot`
    async create(
       slot: string,
-      credId: Uint8Array<ArrayBuffer> | string
+      pkId: Uint8Array<ArrayBuffer> | string
    ): Promise<Uint8Array<ArrayBuffer>> {
-      const credIdBytes = (typeof credId === 'string') ? base64ToBytes(credId) : credId;
+      const pkIdBytes = (typeof pkId === 'string') ? base64ToBytes(pkId) : pkId;
 
       const masterKey = await this._newMasterKey(slot);
 
       // Caller should overwrite the returned key immediately afer use
-      return this._deriveKey(masterKey, slot, credIdBytes);
+      return this._deriveKey(masterKey, slot, pkIdBytes);
    }
 
    async delete(slot: string): Promise<void> {
@@ -108,20 +108,20 @@ export class KeystoreService {
    private async _deriveKey(
       masterKey: CryptoKey,
       purpose: string,
-      credId: Uint8Array<ArrayBuffer>
+      pkId: Uint8Array<ArrayBuffer>
    ): Promise<Uint8Array<ArrayBuffer>> {
 
       if (purpose.length < MIN_SLOT_LEN) {
          throw new Error('Slot must be at least ' + MIN_SLOT_LEN + ' characters');
       }
-      if (credId.byteLength < cc.CREDID_MIN_BYTES) {
-         throw new Error('Credential id is < ' + cc.CREDID_MIN_BYTES + ' bytes');
+      if (pkId.byteLength < cc.PKID_MIN_BYTES) {
+         throw new Error('Credential id is < ' + cc.PKID_MIN_BYTES + ' bytes');
       }
 
       const purposeBytes = new TextEncoder().encode(purpose);
-      const data = new Uint8Array(purposeBytes.byteLength + credId.byteLength);
+      const data = new Uint8Array(purposeBytes.byteLength + pkId.byteLength);
       data.set(purposeBytes);
-      data.set(credId, purposeBytes.byteLength);
+      data.set(pkId, purposeBytes.byteLength);
 
       const derivedBytes = await crypto.subtle.sign(
          "HMAC",
