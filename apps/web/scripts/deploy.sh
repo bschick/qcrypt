@@ -5,32 +5,30 @@
 # deploy.sh — thin wrapper that invokes deploy.mjs with this project's defaults.
 #
 # Typical usage (from the repo root):
-#   ./apps/web/scripts/deploy.sh --prod prod                 # default deploy
-#   ./apps/web/scripts/deploy.sh --prod prod bdeploy         # build then deploy
-#   ./apps/web/scripts/deploy.sh --prod prod prune           # subcommand
-#   ./apps/web/scripts/deploy.sh --prod prod expect 'foo*'   # subcommand with extra args
+#   ./apps/web/scripts/deploy.sh                             # default deploy (test)
+#   ./apps/web/scripts/deploy.sh --prod prod                 # default deploy (prod)
+#   ./apps/web/scripts/deploy.sh bdeploy                     # build then deploy (test)
+#   ./apps/web/scripts/deploy.sh --prod prod prune           # subcommand (prod)
+#   ./apps/web/scripts/deploy.sh expect 'foo*'               # subcommand with extra args (test)
 #
-# Web deploys are always prod — --prod is required (use --prod prod, the
-# alias value is currently unused on the web side but kept symmetric with
-# the server script). The wrapper errors clearly if --prod is missing.
+# Mode is selected by --prod presence: --prod (with any value) selects prod
+# mode; absence selects test mode. The --prod value itself is unused on the
+# web side, but kept symmetric with the server script.
 #
-# Profile/region come from --profile/--region flags or QC_PROD_AWS_PROFILE
-# / QC_PROD_AWS_REGION env vars (deploy.mjs hard-errors if neither source
-# provides a value).
+# Profile/region/bucket/CF/Chrome-profile env vars are picked per mode from
+# the QC_{PROD,TEST}_* pair below.
 #
-# Bucket comes from QC_PROD_BUCKET (required; wrapper errors if unset).
-# CloudFront distribution ID comes from QC_PROD_CF_DISTRIBUTION (optional;
-# when unset the wrapper omits --cf-distribution and CloudFront isn't
-# invalidated). Pass --cf-distribution on the CLI to override for one-off
-# targets.
+# Bucket env var is required (wrapper errors if unset). CF-distribution env
+# var is optional — when unset the wrapper omits --cf-distribution and
+# CloudFront isn't invalidated. Pass --cf-distribution on the CLI to
+# override for one-off targets.
 #
-# Optional: set QC_PROD_CHROME_PROFILE to your Chrome profile directory
-# name (BASENAME, e.g. "Default" or "Profile 3" — NOT a full path; Chrome
-# resolves it under its own user-data-dir). When set, the wrapper prints
-# a copy-pasteable macOS `open -na "Google Chrome" ...` command alongside
-# the SSO device URL so the link opens in the right Identity Center user's
-# profile (dodges the "device flow silently re-uses the wrong user's
-# session" trap).
+# Optional Chrome profile env var holds a profile directory name (BASENAME,
+# e.g. "Default" or "Profile 3" — NOT a full path; Chrome resolves it under
+# its own user-data-dir). When set, the wrapper prints a copy-pasteable
+# macOS `open -na "Google Chrome" ...` command alongside the SSO device URL
+# so the link opens in the right Identity Center user's profile (dodges the
+# "device flow silently re-uses the wrong user's session" trap).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -43,23 +41,34 @@ if [ "${1:-}" = "--" ]; then
    shift
 fi
 
-# Web is always prod — fail fast with a clearer error than the deeper
-# "Missing AWS profile" deploy.mjs would otherwise hit.
-if [ "$(is_prod_mode "$@")" != "1" ]; then
-   echo "deploy.sh: web deploys are always prod-mode. Pass --prod (e.g. --prod prod)." >&2
-   exit 1
+# Pick env-var pair names per prod/test mode (--prod presence = prod-mode).
+# Per-mode build-dir avoids the wrong artifact being deployed to the wrong
+# environment if someone test-builds then runs deploy:web:prod (or vice
+# versa) — each mode reads from its own output directory.
+if [ "$(is_prod_mode "$@")" = "1" ]; then
+   BUCKET_ENV_NAME="QC_PROD_BUCKET"
+   PROFILE_ENV_NAME="QC_PROD_AWS_PROFILE"
+   CF_DIST_ENV_NAME="QC_PROD_CF_DISTRIBUTION"
+   CHROME_PROFILE_ENV_NAME="QC_PROD_CHROME_PROFILE"
+   BUILD_DIR_DEFAULT="$REPO_ROOT/dist/web/browser"
+else
+   BUCKET_ENV_NAME="QC_TEST_BUCKET"
+   PROFILE_ENV_NAME="QC_TEST_AWS_PROFILE"
+   CF_DIST_ENV_NAME="QC_TEST_CF_DISTRIBUTION"
+   CHROME_PROFILE_ENV_NAME="QC_TEST_CHROME_PROFILE"
+   BUILD_DIR_DEFAULT="$REPO_ROOT/dist/web-test/browser"
 fi
 
 # Bucket is required and not committed to repo (account-identifying).
-if [ -z "${QC_PROD_BUCKET:-}" ]; then
-   echo "deploy.sh: QC_PROD_BUCKET env var must be set to the target S3 bucket name." >&2
+if [ -z "${!BUCKET_ENV_NAME:-}" ]; then
+   echo "deploy.sh: $BUCKET_ENV_NAME env var must be set to the target S3 bucket name." >&2
    exit 1
 fi
 
 # Resolve --profile for the SSO probe (CLI takes precedence over env).
 PROFILE="$(resolve_flag --profile "$@")"
-PROFILE="${PROFILE:-${QC_PROD_AWS_PROFILE:-}}"
-do_sso_check "$PROFILE" "${QC_PROD_CHROME_PROFILE:-}"
+PROFILE="${PROFILE:-${!PROFILE_ENV_NAME:-}}"
+do_sso_check "$PROFILE" "${!CHROME_PROFILE_ENV_NAME:-}"
 
 # Subcommand drives DEFAULTS selection AND has to be spliced in front of
 # the hardcoded bucket positional in the deploy.mjs invocation.
@@ -75,17 +84,17 @@ DEFAULTS=()
 default_unless_user_supplied --print-limit 150 "$@"
 case "${SUBCMD:-deploy}" in
    deploy|bdeploy)
-      default_unless_user_supplied --build-dir "$REPO_ROOT/dist/web/browser" "$@"
+      default_unless_user_supplied --build-dir "$BUILD_DIR_DEFAULT" "$@"
       default_unless_user_supplied --cache-control "public, max-age=31536000, immutable" "$@"
       default_unless_user_supplied --expiration-days 30 "$@"
-      if [ -n "${QC_PROD_CF_DISTRIBUTION:-}" ]; then
-         default_unless_user_supplied --cf-distribution "$QC_PROD_CF_DISTRIBUTION" "$@"
+      if [ -n "${!CF_DIST_ENV_NAME:-}" ]; then
+         default_unless_user_supplied --cf-distribution "${!CF_DIST_ENV_NAME}" "$@"
       fi
       default_comment_from_git_tag "$@"
       ;;
    rollback)
-      if [ -n "${QC_PROD_CF_DISTRIBUTION:-}" ]; then
-         default_unless_user_supplied --cf-distribution "$QC_PROD_CF_DISTRIBUTION" "$@"
+      if [ -n "${!CF_DIST_ENV_NAME:-}" ]; then
+         default_unless_user_supplied --cf-distribution "${!CF_DIST_ENV_NAME}" "$@"
       fi
       default_comment_from_git_tag "$@"
       ;;
@@ -95,10 +104,13 @@ case "${SUBCMD:-deploy}" in
       ;;
 esac
 
-# Splice: subcommand (if any) before bucket; user args last so user values
-# show up exactly once.
+# Splice subcommand before bucket; user args last so user values show up
+# exactly once. Always pass an explicit subcommand (defaulting to "deploy"
+# when none was given) so suggestCommandTypo can distinguish "bucket
+# positional" from "typo'd subcommand" — without it, a bare `deploy:web
+# --bad-flag` would have the bucket name reported as the unknown command.
 node "$SCRIPT_DIR/deploy.mjs" \
-   ${SUBCMD:+"$SUBCMD"} \
-   "$QC_PROD_BUCKET" \
+   "${SUBCMD:-deploy}" \
+   "${!BUCKET_ENV_NAME}" \
    "${DEFAULTS[@]}" \
    "${ARGS_WITHOUT_SUBCMD[@]}"

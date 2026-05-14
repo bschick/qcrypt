@@ -176,7 +176,7 @@ function listVersions(argv) {
 
 function runBuild(argv) {
    const cmd = 'pnpm';
-   const args = argv.noMin ? ['build:server'] : ['build:server:min'];
+   const args = argv.min ? ['build:server:min'] : ['build:server'];
    if (argv.dryRun) {
       console.log(`[dry-run] ${cmd} ${args.join(' ')}`);
       return;
@@ -435,7 +435,7 @@ const deployBuilder = (y) => addGlobalOpts(y)
    });
 
 const bdeployBuilder = (y) => deployBuilder(y)
-   .option('no-min', { type: 'boolean', default: false, describe: 'Build with `pnpm build:server` (unminified) instead of `pnpm build:server:min`' });
+   .option('min', { type: 'boolean', default: true, describe: 'Minify the build via `pnpm build:server:min` (default). Pass `--no-min` to use `pnpm build:server` instead.' });
 
 const rollbackBuilder = (y) => addGlobalOpts(y)
    .option('version', { type: 'string', describe: 'Specific version to roll back to (default: version preceding current alias target)' });

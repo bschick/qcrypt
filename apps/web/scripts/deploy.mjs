@@ -73,16 +73,17 @@
  * AWS auth
  * ============================================================
  *
- * Web deploys are always prod-mode. --prod <alias> is required (the alias
- * value is currently unused on the web side — there's no Lambda alias to
- * track — but kept symmetric with the server script so the wrappers can
- * share auth resolution logic).
+ * Mode is selected by --prod presence: --prod (with any alias value) selects
+ * prod mode; absence selects test mode. The alias value itself is unused on
+ * the web side — there's no Lambda alias to track — but kept symmetric with
+ * the server script so the wrappers can share auth resolution logic.
  *
  * Every `aws` invocation is called with an explicit --profile and --region
  * resolved at startup. Resolution order (per option):
  *
  *   1. CLI flag (--profile / --region) if given
- *   2. env var QC_PROD_AWS_PROFILE / QC_PROD_AWS_REGION
+ *   2. env var QC_{PROD,TEST}_AWS_PROFILE / QC_{PROD,TEST}_AWS_REGION (chosen
+ *      by --prod presence)
  *
  * If neither source provides a value the script exits with a clear error.
  * The AWS CLI's own AWS_PROFILE / AWS_REGION env vars are intentionally
@@ -125,15 +126,13 @@ import {
 // Helpers (all take `argv` so they can be shared by every command)
 // ---------------------------------------------------------------------------
 
-// Web is always prod-mode. Resolves to QC_PROD_AWS_* env vars (or --profile
-// / --region overrides) via the shared resolver, after enforcing the
-// always-prod precondition.
+// --prod presence selects prod mode (QC_PROD_AWS_* env vars); absence
+// selects test mode (QC_TEST_AWS_* env vars). CLI --profile / --region
+// flags override either, via the shared resolver.
 function resolveCreds(argv) {
-   if (!argv.prod) {
-      console.error('Web deploys are always prod-mode. Pass --prod <alias> (e.g. --prod prod).');
-      process.exit(1);
-   }
-   return resolveAwsCreds(argv, 'QC_PROD_AWS_PROFILE', 'QC_PROD_AWS_REGION');
+   const profileEnv = argv.prod ? 'QC_PROD_AWS_PROFILE' : 'QC_TEST_AWS_PROFILE';
+   const regionEnv = argv.prod ? 'QC_PROD_AWS_REGION' : 'QC_TEST_AWS_REGION';
+   return resolveAwsCreds(argv, profileEnv, regionEnv);
 }
 
 // Wrapper around the shared aws() that ensures creds are resolved (so
@@ -587,12 +586,13 @@ function runDeploy(argv) {
 // bdeploy — build then deploy
 // ---------------------------------------------------------------------------
 
-// Convenience wrapper: runs `pnpm build:web` (always — there's no
-// minification toggle on the web side), then defers to runDeploy with the
-// same argv so all deploy options (including --comment) flow through.
+// Convenience wrapper: builds with the environment matching the target
+// mode (`pnpm build:web:prod` when --prod is set, `pnpm build:web` for
+// test), then defers to runDeploy with the same argv so all deploy
+// options (including --comment) flow through.
 function runBdeploy(argv) {
    const cmd = 'pnpm';
-   const args = ['build:web'];
+   const args = [argv.prod ? 'build:web:prod' : 'build:web'];
    if (argv.dryRun) {
       console.log(`[dry-run] ${cmd} ${args.join(' ')}`);
    } else {
@@ -930,7 +930,7 @@ const VALUE_FLAGS = new Set([
 ]);
 
 const addGlobalOpts = (y) => y
-   .option('prod', { type: 'string', describe: 'Required. Alias name (currently unused on the web side; kept symmetric with server). Web is always prod-mode.' })
+   .option('prod', { type: 'string', describe: 'Presence selects prod mode (test mode otherwise). Alias-name value is unused on the web side; kept symmetric with server.' })
    .option('profile', { type: 'string', describe: 'AWS CLI profile (falls back to QC_PROD_AWS_PROFILE; required)' })
    .option('region', { type: 'string', describe: 'AWS region (falls back to QC_PROD_AWS_REGION; required)' })
    .option('manifest-key', { type: 'string', default: '_build/manifest.json', describe: 'S3 key for the deploy manifest' })
@@ -996,7 +996,7 @@ yargs(hideBin(process.argv))
    )
    .command(
       'bdeploy <bucket>',
-      'Run `pnpm build:web`, then deploy.',
+      'Build either production (--prod) or test, then deploy.',
       deployBuilder,
       runBdeploy,
    )
