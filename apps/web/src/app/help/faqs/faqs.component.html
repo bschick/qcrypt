@@ -10,7 +10,7 @@
         </mat-icon>
       </mat-form-field>
       <button mat-icon-button aria-label="Expand Answers" (click)="onToggleExpand()">
-        <mat-icon [fontIcon]="allExpanded ? 'unfold_less' : 'unfold_more'"></mat-icon>
+        <mat-icon>{{ allExpanded ? 'unfold_less' : 'unfold_more' }}</mat-icon>
       </button>
     </div>
     <table mat-table [dataSource]="dataSource" multiTemplateDataRows class="faq-table mat-elevation-z0">

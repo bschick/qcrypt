@@ -19,8 +19,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { ApplicationConfig } from '@angular/core';
+import { ApplicationConfig, inject, provideAppInitializer } from '@angular/core';
 import { OVERLAY_DEFAULT_CONFIG } from '@angular/cdk/overlay';
+import { MatIconRegistry } from '@angular/material/icon';
 import { provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { routes } from './qcrypt.routes';
@@ -37,5 +38,8 @@ export const appConfig: ApplicationConfig = {
     },
       provideRouter(routes),
       provideHttpClient(),
+      provideAppInitializer(() => {
+         inject(MatIconRegistry).setDefaultFontSetClass('material-symbols-rounded');
+      }),
    ],
 };

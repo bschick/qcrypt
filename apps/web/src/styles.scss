@@ -29,6 +29,11 @@ body {
   background: rgba(0, 0, 0, 0.32);
 }
 
+// Add class="filled" to a <mat-icon> to override the default outlined look.
+.material-symbols-rounded.filled {
+  font-variation-settings: 'FILL' 1;
+}
+
 :root {
 //  --mat-button-filled-container-color: green;
 

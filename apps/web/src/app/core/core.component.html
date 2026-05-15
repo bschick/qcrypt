@@ -40,11 +40,11 @@ SOFTWARE. -->
         </button>
         <button mat-menu-item (click)="onLoadClearFile()" matTooltip="Select clear text file"
           matTooltipPosition="right">
-          <mat-icon fontSet="material-icons-outlined">file_upload</mat-icon>Select Clear File
+          <mat-icon>file_upload</mat-icon>Select Clear File
         </button>
         <button mat-menu-item (click)="onSaveClearFile()" matTooltip="Save clear text file" matTooltipPosition="right"
           [disabled]="!clearText ? 'true' : 'false'">
-          <mat-icon fontSet="material-icons-outlined">file_download</mat-icon>Save Clear File
+          <mat-icon>file_download</mat-icon>Save Clear File
         </button>
       </mat-menu>
     </span>
@@ -68,11 +68,11 @@ SOFTWARE. -->
         </button>
         <button mat-menu-item (click)="onLoadCipherFile()" matTooltip="Select cipher armor file"
           matTooltipPosition="left">
-          <mat-icon fontSet="material-icons-outlined">file_upload</mat-icon>Select Cipher File
+          <mat-icon>file_upload</mat-icon>Select Cipher File
         </button>
         <button mat-menu-item (click)="onSaveCipherFile()" matTooltip="Save cipher armor file" matTooltipPosition="left"
           [disabled]="!cipherArmor ? 'true' : 'false'">
-          <mat-icon fontSet="material-icons-outlined">file_download</mat-icon>Save Cipher File
+          <mat-icon>file_download</mat-icon>Save Cipher File
         </button>
       </mat-menu>
       <button mat-raised-button (click)="onDecrypt()" class="top-button strong-button mleft15" aria-label="Decrypt Text"
@@ -95,7 +95,7 @@ SOFTWARE. -->
           <button [hidden]="!clearInjected" mat-icon-button class="warn-icon" aria-label="Warning"
             matTooltip="Content was copied from the address bar, please confirm its validity"
             (click)="toastMessage('Content was copied from the address bar, please confirm its validity')">
-            <mat-icon>warning_amber</mat-icon>
+            <mat-icon>warning</mat-icon>
           </button>
           <button [hidden]="!clearText || showProgress" mat-icon-button aria-label="Copy"
             matTooltip="Copy clear text to clipboard" (click)="toastMessage('Clear text copied to clipboard')"
@@ -127,7 +127,7 @@ SOFTWARE. -->
           <button [hidden]="!cipherInjected" mat-icon-button class="warn-icon" aria-label="Warning"
             matTooltip="Content was copied from the address bar, please confirm its validity"
             (click)="toastMessage('Content was copied from the address bar, please confirm its validity')">
-            <mat-icon>warning_amber</mat-icon>
+            <mat-icon>warning</mat-icon>
           </button>
           <button [hidden]="!cipherArmor || showProgress" mat-icon-button aria-label="Copy"
             matTooltip="Copy cipher armor to clipboard" (click)="toastMessage('Cipher armor copied to clipboard')"
@@ -136,7 +136,7 @@ SOFTWARE. -->
           </button>
           <button [hidden]="(!cipherArmor && !cipherFile) || showProgress" mat-icon-button aria-label="Info"
             matTooltip="Show decryption parameters" (click)="onCipherTextInfo()">
-            <mat-icon fontSet="material-icons-outlined">info</mat-icon>
+            <mat-icon>info</mat-icon>
           </button>
           <button [hidden]="showProgress" mat-icon-button aria-label="Clear" matTooltip="Clear cipher armor"
             (click)="onClearCipher()">

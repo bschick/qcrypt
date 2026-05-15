@@ -148,11 +148,14 @@ export class AuthenticatorService {
       });
 
       // Warm crypto and zxcvbn after first render so their chunks don't
-      // compete with LCP.
+      // compete with LCP. zxcvbn's dictionary ranking is expensive, so wait
+      // 4s after first idle to load
       afterNextRender(() => {
          const kickoff = () => {
             cryptoReady().catch((err) => console.error(err));
-            zxcvbnReady().catch((err) => console.error(err));
+            setTimeout(() => {
+               zxcvbnReady().catch((err) => console.error(err));
+            }, 4000);
          };
          if (typeof window.requestIdleCallback === 'function') {
             window.requestIdleCallback(kickoff, { timeout: 2000 });
