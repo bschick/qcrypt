@@ -25,10 +25,11 @@ import { guardedImport } from '../reloader';
 export const helpRoutes: Routes = [
    { path: 'overview', loadComponent: () => guardedImport(() => import('./overview/overview.component').then(m => m.OverviewComponent)) },
    { path: 'faqs', loadComponent: () => guardedImport(() => import('./faqs/faqs.component').then(m => m.FaqsComponent)) },
-   { path: 'protocol', loadComponent: () => guardedImport(() => import('./protocol/protocol.component').then(m => m.Protocol6Component)) },
+   { path: 'protocol', loadComponent: () => guardedImport(() => import('./protocol/protocol.component').then(m => m.Protocol7Component)) },
    { path: 'protocol1', loadComponent: () => guardedImport(() => import('./protocol/protocol.component').then(m => m.ProtocolComponent)) },
    { path: 'protocol4', loadComponent: () => guardedImport(() => import('./protocol/protocol.component').then(m => m.Protocol4Component)) },
    { path: 'protocol5', loadComponent: () => guardedImport(() => import('./protocol/protocol.component').then(m => m.Protocol5Component)) },
    { path: 'protocol6', loadComponent: () => guardedImport(() => import('./protocol/protocol.component').then(m => m.Protocol6Component)) },
+   { path: 'protocol7', loadComponent: () => guardedImport(() => import('./protocol/protocol.component').then(m => m.Protocol7Component)) },
    { path: '', redirectTo: 'faqs', pathMatch: 'full' },
 ];

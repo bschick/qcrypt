@@ -60,7 +60,7 @@ export class Protocol5Component {
 
 @Component({
     selector: 'app-protocol6',
-    imports: [MatTooltipModule, CopyrightComponent, VersionsComponent],
+    imports: [MatTooltipModule, RouterLink, CopyrightComponent, VersionsComponent],
     templateUrl: './protocol6.component.html',
     styleUrl: './protocol.component.scss'
 })
@@ -74,6 +74,22 @@ export class Protocol6Component {
    }
 }
 
+
+@Component({
+    selector: 'app-protocol7',
+    imports: [MatTooltipModule, CopyrightComponent, VersionsComponent],
+    templateUrl: './protocol7.component.html',
+    styleUrl: './protocol.component.scss'
+})
+export class Protocol7Component {
+
+   constructor(private dialog: MatDialog){
+   }
+
+   openFlowImage(flowImage:string) {
+      this.dialog.open(FlowDialog, { data: flowImage });
+   }
+}
 
 @Component({
     selector: 'flow-dialog',
