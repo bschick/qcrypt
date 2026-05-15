@@ -50,7 +50,7 @@ to assert most of the meaninful actions in this table
 */
 
 import { test, expect } from '@playwright/test';
-import { testWithAuth, toggleCredentials, passkeyAuth, passkeyCreation, deleteFirstPasskey, deleteLastPasskey, clearCredentials, addCredential, setupAuthenticator, removeAuthenticator, expectActiveServerSession } from '.././common';
+import { testWithAuth, toggleCredentials, passkeyAuth, deleteFirstPasskey, deleteLastPasskey, clearCredentials, addCredential, setupAuthenticator, removeAuthenticator, expectActiveServerSession } from '.././common';
 
 
 test.describe('login relay', () => {
@@ -290,7 +290,7 @@ test.describe('login relay', () => {
     const { page: page1, session, authenticatorId1, authenticatorId2 } = authFixture;
     test.setTimeout(60000);
 
-    await authFixture.createTestUser(authenticatorId1);
+    const testUser = await authFixture.createTestUser(authenticatorId1);
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
     await toggleCredentials(page1);
     const tableBody1 = page1.locator('table.credtable tbody');
@@ -305,7 +305,7 @@ test.describe('login relay', () => {
     const tableBody2 = page2.locator('table.credtable tbody');
     await expect(tableBody2.locator('tr')).toHaveCount(1);
 
-    await passkeyCreation(page1, session, authenticatorId2, async () => {
+    await authFixture.addPasskey(testUser.userId, authenticatorId2, async () => {
       await page1.getByRole('button', { name: /New Passkey/ }).click();
     });
 
@@ -318,13 +318,13 @@ test.describe('login relay', () => {
     const { page: page1, session, authenticatorId1, authenticatorId2 } = authFixture;
     test.setTimeout(60000);
 
-    await authFixture.createTestUser(authenticatorId1);
+    const testUser = await authFixture.createTestUser(authenticatorId1);
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
     await toggleCredentials(page1);
     const tableBody1 = page1.locator('table.credtable tbody');
     await expect(tableBody1.locator('tr')).toHaveCount(1);
 
-    await passkeyCreation(page1, session, authenticatorId2, async () => {
+    await authFixture.addPasskey(testUser.userId, authenticatorId2, async () => {
       await page1.getByRole('button', { name: /New Passkey/ }).click();
     });
     await expect(tableBody1.locator('tr')).toHaveCount(2);
@@ -354,7 +354,7 @@ test.describe('login relay', () => {
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
     await toggleCredentials(page1);
-    await passkeyCreation(page1, session, authenticatorId2, async () => {
+    await authFixture.addPasskey(testUser.userId, authenticatorId2, async () => {
       await page1.getByRole('button', { name: /New Passkey/ }).click();
     });
     await expect(page1.locator('table.credtable tbody').locator('tr')).toHaveCount(2);

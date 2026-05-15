@@ -15,7 +15,7 @@ import {
 
 test.describe('creation', () => {
 
-  testWithAuth('full lifecycle', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('full lifecycle', { tag: '@nukeall' }, async ({ authFixture }, testInfo) => {
     const { page, session, authenticatorId1: authenticatorId1, authenticatorId2: authenticatorId2 } = authFixture;
     test.setTimeout(60000);
 
@@ -28,11 +28,22 @@ test.describe('creation', () => {
 
     await page.goto('/');
 
-    await passkeyCreation(page, session, authenticatorId1, async () => {
+    const regVerify = page.waitForResponse((r) =>
+      r.url().includes('/v1/reg/verify') && r.request().method() === 'POST'
+    );
+    const credential = await passkeyCreation(page, session, authenticatorId1, async () => {
       await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
       await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible({timeout:10000});
       await page.locator('input#userName').fill(fillValue);
       await page.getByRole('button', { name: /Create new/ }).click();
+    });
+    const regBody = await (await regVerify).json();
+    console.log(`[user-create] fn=inline-registration test="${testInfo.title}" userName=${userName}`);
+    authFixture.trackUser({
+      userId: regBody.userId,
+      userName,
+      passkey: { credentialId: regBody.pkId, authenticatorId: authenticatorId1, credential },
+      fastSession: { cookies: await page.context().cookies(), csrf: regBody.csrf },
     });
 
     await expect(page).toHaveURL(/\/showrecovery$/);
@@ -50,7 +61,7 @@ test.describe('creation', () => {
     let tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
 
-    await passkeyCreation(page, session, authenticatorId2, async () => {
+    await authFixture.addPasskey(regBody.userId, authenticatorId2, async () => {
       await page.getByRole('button', { name: /New Passkey/ }).click();
     });
 
@@ -84,7 +95,9 @@ test.describe('creation', () => {
 
     await page.locator('textarea#wordsArea').fill(recoveryWords);
 
-    await passkeyCreation(page, session, authenticatorId2, async () => {
+    // Recovery wipes all server-side PKs and creates a new one. Track the new
+    // one; cleanup naturally shifts the now-stale prior entries.
+    await authFixture.addPasskey(regBody.userId, authenticatorId2, async () => {
       await page.getByRole('button', { name: /Start Recovery/ }).click();
     });
 
@@ -104,7 +117,7 @@ test.describe('creation', () => {
 
   });
 
-  testWithAuth('delete active passkey signs out', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('delete active passkey signs out', { tag: '@nukeall' }, async ({ authFixture }, testInfo) => {
     const { page, session, authenticatorId1: authenticatorId1, authenticatorId2: authenticatorId2 } = authFixture;
     test.setTimeout(60000);
 
@@ -113,11 +126,22 @@ test.describe('creation', () => {
 
     await page.goto('/');
 
-    await passkeyCreation(page, session, authenticatorId1, async () => {
+    const regVerify = page.waitForResponse((r) =>
+      r.url().includes('/v1/reg/verify') && r.request().method() === 'POST'
+    );
+    const credential = await passkeyCreation(page, session, authenticatorId1, async () => {
       await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
       await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible({timeout:10000});
       await page.locator('input#userName').fill(userName);
       await page.getByRole('button', { name: /Create new/ }).click();
+    });
+    const regBody = await (await regVerify).json();
+    console.log(`[user-create] fn=inline-registration test="${testInfo.title}" userName=${userName}`);
+    authFixture.trackUser({
+      userId: regBody.userId,
+      userName,
+      passkey: { credentialId: regBody.pkId, authenticatorId: authenticatorId1, credential },
+      fastSession: { cookies: await page.context().cookies(), csrf: regBody.csrf },
     });
 
     await expect(page).toHaveURL(/\/showrecovery$/);
@@ -131,7 +155,7 @@ test.describe('creation', () => {
     let tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
 
-    await passkeyCreation(page, session, authenticatorId2, async () => {
+    await authFixture.addPasskey(regBody.userId, authenticatorId2, async () => {
       await page.getByRole('button', { name: /New Passkey/ }).click();
     });
 
@@ -156,7 +180,7 @@ test.describe('creation', () => {
 
     // Add a secondary passkey, then delete it. Active PK (authenticatorId2) is unchanged,
     // so the session stays valid and the Sign In dialog must not appear.
-    await passkeyCreation(page, session, authenticatorId1, async () => {
+    await authFixture.addPasskey(regBody.userId, authenticatorId1, async () => {
       await page.getByRole('button', { name: /New Passkey/ }).click();
     });
     await expect(tableBody.locator('tr')).toHaveCount(2);
@@ -250,7 +274,7 @@ test.describe('sign on', () => {
     let tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
 
-    await passkeyCreation(page, session, authenticatorId2, async () => {
+    await authFixture.addPasskey(testUser.userId, authenticatorId2, async () => {
       await page.getByRole('button', { name: /New Passkey/ }).click();
     });
 

@@ -91,30 +91,67 @@ export type CreatedTestUser = {
   credential: Credential;
 };
 
+// TODO: This has become sloppy AI generated code, which I generally don't mind for testing
+// but test user leaks is a repeating problem, so this should be refactored by a human.
+
+// A passkey owned by a tracked user. The fixture needs three things to clean
+// it up: the server-side credentialId (to issue DELETE), the CDP authenticator
+// holding it (so the fallback can put the credential back if the registration
+// session is stale), and the CDP credential payload itself (to feed addCredential).
+export type TrackedPasskey = {
+  credentialId: string;
+  authenticatorId: string;
+  credential: Credential;
+};
+
+// Info passed to trackUser by tests that create users outside createTestUser
+// (inline UI registration, direct API). Cookies+csrf are optional; if provided
+// they enable the fast cleanup path.
+export type TrackUserInfo = {
+  userId: string;
+  userName: string;
+  passkey: TrackedPasskey;
+  fastSession?: { cookies: Cookie[]; csrf: string };
+};
+
 export type AuthFixture = {
   page: Page;
   session: CDPSession;
   authenticatorId1: string;
   authenticatorId2: string;
   // Creates a fresh PWTesty_<timestamp> user via the UI registration flow on
-  // `authenticatorId`. The session is signed-in on return (page at '/' with Encryption
-  // Mode visible). Created users are tracked and torn down after the test.
+  // `authenticatorId`. Returns signed-in on '/' (Encryption Mode visible).
+  // The user and its initial passkey are auto-tracked.
   createTestUser: (authenticatorId: string) => Promise<CreatedTestUser>;
+  // Register a user created outside createTestUser. Tests doing inline
+  // UI registration or direct-API user creation MUST call this so cleanup
+  // can find the user.
+  trackUser: (info: TrackUserInfo) => void;
+  // Register an already-created passkey on an already-tracked user. Use
+  // when the passkey is created via a path that doesn't go through addPasskey
+  // (e.g., direct API).
+  trackPasskey: (userId: string, passkey: TrackedPasskey) => void;
+  // Convenience wrapper around passkeyCreation for the common case of adding
+  // a passkey to an already-tracked user via UI ("New Passkey", recovery,
+  // etc.). Captures /passkeys/verify (or /reg/verify) to extract the new
+  // credentialId, then registers it on the user.
+  addPasskey: (
+    userId: string,
+    authenticatorId: string,
+    trigger: () => Promise<void>
+  ) => Promise<Credential>;
 };
 
 type TrackedUser = {
   userId: string;
-  authenticatorId: string;
-  csrf: string;
-  // Snapshot of context cookies right after registration (notably the
-  // __Host-JWT session cookie). Restored before each cleanup request so
-  // we authenticate as this specific user, even after the test signed
-  // out or switched users.
-  cookies: Cookie[];
-  // Saved so the fallback re-auth can put the credential back on the
-  // authenticator if the captured cookie is stale (e.g. test signed out,
-  // bumping authCount).
-  credential: Credential;
+  userName: string;
+  // Passkeys we know belong to this user. Mutated as cleanup deletes them.
+  // The first entry is the registration PK and is assumed to be the active
+  // one for the fast-path session — fast-path delete sorts it last.
+  passkeys: TrackedPasskey[];
+  // Registration-time session, used by the fast cleanup path. Absent for
+  // users tracked late (e.g., via trackUser without cookies).
+  fastSession?: { cookies: Cookie[]; csrf: string };
 };
 
 export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
@@ -138,9 +175,10 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
         await page.getByRole('button', { name: /Create new/ }).click();
       });
       const body = await (await verifyPromise).json();
-      if (!body.userId || !body.userCred || !body.csrf) {
-        throw new Error('createTestUser: missing userId/userCred/csrf in /reg/verify response');
+      if (!body.userId || !body.userCred || !body.csrf || !body.pkId) {
+        throw new Error('createTestUser: missing userId/userCred/csrf/pkId in /reg/verify response');
       }
+      console.log(`[user-create] fn=createTestUser test="${testInfo.title}" userName=${userName}`);
 
       await expect(page).toHaveURL(/\/showrecovery$/);
       await expect(page.getByRole('heading', { name: 'Account Backup and Recovery' })).toBeVisible({ timeout: 10000 });
@@ -151,10 +189,16 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
 
       trackedUsers.push({
         userId: body.userId,
-        authenticatorId: authenticatorId,
-        csrf: body.csrf,
-        cookies: await page.context().cookies(),
-        credential,
+        userName,
+        passkeys: [{
+          credentialId: body.pkId,
+          authenticatorId,
+          credential,
+        }],
+        fastSession: {
+          cookies: await page.context().cookies(),
+          csrf: body.csrf,
+        },
       });
       return {
         userId: body.userId,
@@ -165,23 +209,66 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       };
     };
 
+    const trackUser = (info: TrackUserInfo): void => {
+      if (trackedUsers.some(u => u.userId === info.userId)) {
+        throw new Error(`trackUser: userId ${info.userId} already tracked`);
+      }
+      trackedUsers.push({
+        userId: info.userId,
+        userName: info.userName,
+        passkeys: [info.passkey],
+        fastSession: info.fastSession,
+      });
+    };
+
+    const trackPasskey = (userId: string, passkey: TrackedPasskey): void => {
+      const user = trackedUsers.find(u => u.userId === userId);
+      if (!user) {
+        throw new Error(`trackPasskey: userId ${userId} not tracked`);
+      }
+      user.passkeys.push(passkey);
+    };
+
+    const addPasskey = async (
+      userId: string,
+      authenticatorId: string,
+      trigger: () => Promise<void>
+    ): Promise<Credential> => {
+      const verifyPromise = page.waitForResponse((r) =>
+        (r.url().includes('/v1/passkeys/verify') || r.url().includes('/v1/reg/verify')) &&
+        r.request().method() === 'POST'
+      );
+      const credential = await passkeyCreation(page, session, authenticatorId, trigger);
+      const body = await (await verifyPromise).json();
+      if (!body.pkId) {
+        throw new Error(`addPasskey: missing pkId in verify response for ${userId}`);
+      }
+      trackPasskey(userId, {
+        credentialId: body.pkId,
+        authenticatorId,
+        credential,
+      });
+      return credential;
+    };
+
     await use({
       page,
       session,
       authenticatorId1: authenticatorId1,
       authenticatorId2: authenticatorId2,
       createTestUser,
+      trackUser,
+      trackPasskey,
+      addPasskey,
     });
 
-    // Cleanup of users created via the helper. Fast path: restore the
-    // cookie+CSRF captured at registration, GET /v1/user, DELETE each
-    // passkey (server cascades the user record when the last one goes).
-    // Fallback: any test that signs out or switches users will have
-    // bumped authCount, so the captured cookie is stale and the fast
-    // path 401s — re-auth via the UI as the tracked user (using the
-    // saved credential) and DELETE through the fresh session. Original
-    // cookies are restored at the end so @nukeall sees the test's
-    // end state.
+    // Cleanup runs in two stages per user. Fast path: restore the
+    // registration-time cookies+csrf, GET /user, DELETE each passkey
+    // (active PK sorted last so the session survives until the last DELETE).
+    // Fallback: iterate the user's tracked passkeys, re-auth with each in
+    // turn; on success run deleteAllPasskeys with a fresh session; on 401
+    // (passkey gone from server) shift to the next. Successfully-deleted PKs
+    // are removed from the tracked list so the two stages compose cleanly.
     const apiUrl = (testInfo.project.use as { apiURL: string }).apiURL;
     const originalCookies = await page.context().cookies();
     const baseURL = (testInfo.project.use as { baseURL: string }).baseURL;
@@ -216,79 +303,86 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       return true;
     };
 
-    for (const tracked of trackedUsers) {
-      // Fast path. Any failure (non-ok GET, non-ok DELETE, throw) falls
-      // through to the fallback re-auth.
-      let fastPathOk = false;
-      try {
-        await page.context().clearCookies();
-        await page.context().addCookies(tracked.cookies);
+    for (const user of trackedUsers) {
+      // Fast path. Best-effort; safe to skip on any failure.
+      if (user.fastSession) {
+        try {
+          await page.context().clearCookies();
+          await page.context().addCookies(user.fastSession.cookies);
 
-        const fastResp = await page.request.get(
-          `${apiUrl}/user`,
-          { headers: { 'x-csrf-token': tracked.csrf, 'Origin': baseURL } }
-        );
-        if (fastResp.ok()) {
-          const user = await fastResp.json();
-          let allDeleted = true;
-          for (const auth of user.authenticators ?? []) {
-            const delResp = await page.request.delete(
-              `${apiUrl}/passkeys/${auth.credentialId}`,
-              { headers: { 'x-csrf-token': tracked.csrf, 'Origin': baseURL } }
-            );
-            if (!delResp.ok()) {
-              allDeleted = false;
-              break;
+          const fastResp = await page.request.get(
+            `${apiUrl}/user`,
+            { headers: { 'x-csrf-token': user.fastSession.csrf, 'Origin': baseURL } }
+          );
+          if (fastResp.ok()) {
+            const data = await fastResp.json();
+            const auths: { credentialId: string }[] = data.authenticators ?? [];
+            // The fast-path session was authenticated by the registration PK,
+            // which is the first tracked passkey. Sort that last so we don't
+            // kill the session before deleting the others.
+            const activePkId = user.passkeys[0]?.credentialId;
+            auths.sort((a, b) => Number(a.credentialId === activePkId) - Number(b.credentialId === activePkId));
+            for (const auth of auths) {
+              const delResp = await page.request.delete(
+                `${apiUrl}/passkeys/${auth.credentialId}`,
+                { headers: { 'x-csrf-token': user.fastSession.csrf, 'Origin': baseURL } }
+              );
+              if (delResp.ok()) {
+                user.passkeys = user.passkeys.filter(p => p.credentialId !== auth.credentialId);
+              } else {
+                break;
+              }
             }
           }
-          fastPathOk = allDeleted;
+        } catch (err) {
+          console.error(`cleanup: fast path threw for ${user.userId}`, err);
         }
-      } catch (err) {
-        console.error(`cleanup: fast path threw for ${tracked.userId}`, err);
       }
 
-      if (fastPathOk) {
-        continue;
-      }
+      // Fallback: iterate remaining tracked passkeys, re-auth with each.
+      // 401 means that PK is gone from the server — shift and try the next.
+      // A successful sign-in delegates to deleteAllPasskeys with the fresh
+      // session and ends iteration.
+      while (user.passkeys.length > 0) {
+        const pk = user.passkeys[0];
+        let cleaned = false;
+        try {
+          await page.context().clearCookies();
+          await clearCredentials(session, pk.authenticatorId);
+          await addCredential(session, pk.authenticatorId, pk.credential);
 
-      // Fallback: re-auth via UI then delete. Signs out the context, puts
-      // only the tracked user's credential on the authenticator, navigates
-      // to '/' as a fresh session, and clicks "I have used Quick Crypt"
-      // through passkeyAuth so the WebAuthn dance completes.
-      try {
-        await page.context().clearCookies();
-        await clearCredentials(session, tracked.authenticatorId);
-        await addCredential(session, tracked.authenticatorId, tracked.credential);
+          await page.goto('/');
+          await page.evaluate(() => localStorage.clear());
+          await page.reload();
+          await expect(page.getByRole('button', { name: /I have used Quick Crypt/ })).toBeVisible({ timeout: 10000 });
 
-        await page.goto('/');
-        await page.evaluate(() => localStorage.clear());
-        await page.reload();
-        await expect(page.getByRole('button', { name: /I have used Quick Crypt/ })).toBeVisible({ timeout: 10000 });
-
-        const verifyPromise = page.waitForResponse((r) =>
-          r.url().includes('/v1/auth/verify') && r.request().method() === 'POST'
-        );
-        await passkeyAuth(page, session, tracked.authenticatorId, async () => {
-          await page.getByRole('button', { name: /I have used Quick Crypt/ }).click();
-        });
-        const verifyResp = await verifyPromise;
-        if (!verifyResp.ok()) {
-          // Most common cause: the test removed the last passkey, which
-          // cascades the user record. Nothing to clean up — server-side
-          // state already matches what we wanted.
-          if (verifyResp.status() !== 401) {
-            console.error(`cleanup-fallback: /auth/verify for ${tracked.userId} failed (${verifyResp.status()})`);
+          const verifyPromise = page.waitForResponse((r) =>
+            r.url().includes('/v1/auth/verify') && r.request().method() === 'POST'
+          );
+          await passkeyAuth(page, session, pk.authenticatorId, async () => {
+            await page.getByRole('button', { name: /I have used Quick Crypt/ }).click();
+          });
+          const verifyResp = await verifyPromise;
+          if (verifyResp.ok()) {
+            const verifyBody = await verifyResp.json();
+            if (verifyBody.csrf && verifyBody.pkId) {
+              await deleteAllPasskeys(verifyBody.csrf, verifyBody.pkId, `cleanup-fallback (${user.userId})`);
+              cleaned = true;
+            } else {
+              console.error(`cleanup-fallback: missing csrf or pkId for ${user.userId}`);
+            }
+          } else if (verifyResp.status() !== 401) {
+            console.error(`cleanup-fallback: /auth/verify for ${user.userId} via ${pk.credentialId} failed (${verifyResp.status()})`);
           }
-          continue;
+        } catch (err) {
+          console.error(`cleanup-fallback: failed for ${user.userId} via ${pk.credentialId}`, err);
         }
-        const verifyBody = await verifyResp.json();
-        if (!verifyBody.csrf || !verifyBody.pkId) {
-          console.error(`cleanup-fallback: missing csrf or pkId in /auth/verify response for ${tracked.userId}`);
-          continue;
+
+        if (cleaned) {
+          user.passkeys = [];
+        } else {
+          user.passkeys.shift();
         }
-        await deleteAllPasskeys(verifyBody.csrf, verifyBody.pkId, `cleanup-fallback (${tracked.userId})`);
-      } catch (err) {
-        console.error(`cleanup-fallback: failed for ${tracked.userId}`, err);
       }
     }
 
@@ -297,28 +391,27 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       await page.context().addCookies(originalCookies);
     }
 
-    // Fallback for tests that create users without the helper (e.g. inline
-    // registration in lifecycle.spec.ts). Uses the same /session approach
-    // and refuses to delete anything that isn't a PWTesty_ user, so a future
-    // @nukeall test that happens to end signed in as a Keeper can't wipe it.
+    // Leak alarm. If a PWTesty_ session is still authenticatable after
+    // cleanup, a test created a user/passkey without calling trackUser /
+    // trackPasskey / addPasskey. Log loudly and opportunistically clean up.
     if (testInfo.tags.includes('@nukeall')) {
       try {
         const sessionResp = await page.request.get(`${apiUrl}/session`);
         if (sessionResp.ok()) {
-          const session = await sessionResp.json();
-          if (typeof session.userName === 'string' && session.userName.startsWith('PWTesty_')) {
-            for (const [count, auth] of (session.authenticators ?? []).entries()) {
-              console.log(`cleanup on isle ${count + 1}`);
+          const sess = await sessionResp.json();
+          if (typeof sess.userName === 'string' && sess.userName.startsWith('PWTesty_')) {
+            console.error(`@nukeall LEAK ALARM: untracked PWTesty user ${sess.userName} (${sess.userId}) — tests must call trackUser/trackPasskey/addPasskey for users and passkeys created outside createTestUser`);
+            for (const auth of sess.authenticators ?? []) {
               const delResp = await page.request.delete(
                 `${apiUrl}/passkeys/${auth.credentialId}`,
-                { headers: { 'x-csrf-token': session.csrf, 'Origin': baseURL } }
+                { headers: { 'x-csrf-token': sess.csrf, 'Origin': baseURL } }
               );
               if (!delResp.ok()) {
                 console.error(`@nukeall: DELETE /passkeys/${auth.credentialId} failed (${delResp.status()})`);
               }
             }
-          } else if (session.userName) {
-            console.error(`@nukeall: refusing to nuke non-PWTesty_ user ${session.userName}`);
+          } else if (sess.userName) {
+            console.error(`@nukeall: refusing to nuke non-PWTesty_ user ${sess.userName}`);
           }
         } else if (sessionResp.status() !== 401) {
           console.error(`@nukeall: GET /session failed (${sessionResp.status()})`);

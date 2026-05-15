@@ -935,7 +935,8 @@ const addGlobalOpts = (y) => y
    .option('region', { type: 'string', describe: 'AWS region (falls back to QC_PROD_AWS_REGION; required)' })
    .option('manifest-key', { type: 'string', default: '_build/manifest.json', describe: 'S3 key for the deploy manifest' })
    .option('dry-run', { type: 'boolean', default: false, describe: 'Log actions without executing them' })
-   .option('print-limit', { type: 'number', default: 20, describe: 'Max file keys to print in listings (deploy, leaks, prune)' });
+   .option('print-limit', { type: 'number', default: 20, describe: 'Max file keys to print in listings (deploy, leaks, prune)' })
+   .option('yes', { type: 'boolean', alias: 'y', default: false, describe: 'Bypass the prod-action confirmation prompt (consumed by the wrapper; no effect on deploy.mjs itself).' });
 
 // Constrains the command to the assets/aaguid/ key prefix only — local
 // enumeration, bucket listing, and manifest reconciliation all skip

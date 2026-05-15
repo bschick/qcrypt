@@ -414,7 +414,8 @@ const addGlobalOpts = (y) => y
    .option('profile', { type: 'string', describe: 'AWS CLI profile (falls back to QC_{PROD,TEST}_AWS_PROFILE; required)' })
    .option('region', { type: 'string', describe: 'AWS region (falls back to QC_{PROD,TEST}_AWS_REGION; required)' })
    .option('dry-run', { type: 'boolean', default: false, alias: 'dryrun', describe: 'Log actions without executing them' })
-   .option('print-limit', { type: 'number', default: 10, describe: 'Max version rows to print (info)' });
+   .option('print-limit', { type: 'number', default: 10, describe: 'Max version rows to print (info)' })
+   .option('yes', { type: 'boolean', alias: 'y', default: false, describe: 'Bypass the prod-action confirmation prompt (consumed by the wrapper; no effect on deploy.mjs itself).' });
 
 // Used to detect typo'd commands so the fail handler can suggest the
 // closest match.

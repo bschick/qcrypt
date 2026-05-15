@@ -183,6 +183,46 @@ default_unless_user_supplied() {
    fi
 }
 
+# Interactively confirm a destructive prod action. Caller passes the
+# resolved subcommand, a short target summary (e.g. "bucket: foo" or
+# "lambda: Auth"), and the remaining args — which are scanned for
+# --dry-run / --yes / -y. Any of those bypass the prompt; otherwise the
+# user must type "yes" to proceed or the script aborts. Non-interactive
+# shells (no stdin tty) also abort unless --yes is passed, so a piped
+# invocation can't sleepwalk past the gate.
+confirm_prod_action() {
+   local subcmd=$1
+   local target=$2
+   shift 2
+   for arg in "$@"; do
+      case "$arg" in
+         --dry-run|--dry-run=*|--yes|--yes=*|-y)
+            return 0
+            ;;
+      esac
+   done
+   if [ ! -t 0 ]; then
+      echo "Refusing to run prod '$subcmd' non-interactively. Pass --yes (or -y) to skip the prompt." >&2
+      exit 1
+   fi
+   echo
+   echo "  ====================================="
+   echo "    About to modify PRODUCTION:"
+   echo "      command: $subcmd"
+   echo "      $target"
+   echo "  ====================================="
+   local response
+   read -r -p "  Type 'yes' (or 'y') to proceed, anything else aborts: " response
+   case "$response" in
+      [Yy]|[Yy][Ee][Ss]) ;;
+      *)
+         echo "  Aborted." >&2
+         exit 1
+         ;;
+   esac
+   echo
+}
+
 # Verify the SSO session for `profile` is live; trigger device-code login
 # (with optional chrome-profile hint) if not. No-op when profile is empty
 # — deploy.mjs will hard-error on its own with a clearer message in that
