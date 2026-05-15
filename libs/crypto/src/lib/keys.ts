@@ -22,7 +22,7 @@ SOFTWARE. */
 import { getSodium } from './sodium';
 import * as cc from './cipher.consts';
 import { CipherDataInfo, Ciphers } from './ciphers-current';
-import { ensureArrayBuffer, numToBytes, base64ToBytes } from './utils';
+import { ensureArrayBuffer, numToBytes, base64ToBytes, concatArrays } from './utils';
 
 // Contexts must be 8 bytes. Old v6 CTX had a bug of passing more that was
 // truncated silently by libsodium (fortunately, harmless)
@@ -64,7 +64,7 @@ export abstract class BaseKeyProvider implements KeyProvider {
    protected _sk: Uint8Array<ArrayBuffer> | undefined = undefined;
    protected _hk: Uint8Array<ArrayBuffer> | undefined = undefined;
    protected _hIV: Uint8Array<ArrayBuffer> | undefined = undefined;
-   protected _bks: Uint8Array<ArrayBuffer>[] = [];
+   protected _bks: Map<number, Uint8Array<ArrayBuffer>> = new Map();
    protected _cdInfo: CipherDataInfo | undefined = undefined;
 
    // referenced values
@@ -145,12 +145,10 @@ export abstract class BaseKeyProvider implements KeyProvider {
          this._cdInfo.hint = undefined;
          this._cdInfo = undefined;
       }
-      for (const bk of this._bks) {
-         if (bk) {
-            bk.fill(0);
-         }
+      for (const bk of this._bks.values()) {
+         bk.fill(0);
       }
-      this._bks = [];
+      this._bks.clear();
       this._customAd = undefined;
    }
 
@@ -168,20 +166,22 @@ export abstract class BaseKeyProvider implements KeyProvider {
 
    public async getBlockCipherKey(blockNum: number): Promise<Uint8Array<ArrayBuffer>> {
       // expect blockNum >= 1
-      if (blockNum < 1) {
+      if (blockNum < 1 || blockNum > cc.BLOCKS_MAX) {
          throw new Error('Invalid block number: ' + blockNum);
       }
       if (!this._ek) {
          throw new Error('Invalid state, getCipherKey() must be called first');
       }
       // cache block keys primarily to overwrite at purge
-      if (!this._bks[blockNum - 1]) {
-         this._bks[blockNum - 1] = await this._genBlockCipherKey(blockNum);
-         if (!this._bks[blockNum - 1] || this._bks[blockNum - 1].byteLength !== cc.KEY_BYTES) {
+      let bk = this._bks.get(blockNum);
+      if (!bk) {
+         bk = await this._genBlockCipherKey(blockNum);
+         if (!bk || bk.byteLength !== cc.KEY_BYTES) {
             throw new Error('Invalid block cipher key');
          }
+         this._bks.set(blockNum, bk);
       }
-      return this._bks[blockNum - 1];
+      return bk;
    }
 
    public async getSigningKey(): Promise<Uint8Array<ArrayBuffer>> {
@@ -543,8 +543,11 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       if (!this._cdInfo.slt || this._cdInfo.slt.byteLength != cc.SLT_BYTES) {
          throw new Error('Invalid salt length of: ' + this._cdInfo.slt?.byteLength);
       }
-      if (this._cdInfo.ver < cc.VERSION7) {
+      if (this._cdInfo.ver < cc.VERSION7 || this._cdInfo.ver > cc.CURRENT_VERSION) {
          throw new Error('Invalid version: ' + this._cdInfo.ver);
+      }
+      if (this._cdInfo.ic) {
+         throw new Error('Invalid ic, not used by masterkey keyprovider');
       }
 
       // because crypto_kdf_derive_from_key does not take a salt, we first merge salt,
@@ -635,16 +638,7 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
 
       this.setHint(hint);
       const pwdBytes = new TextEncoder().encode(pwd);
-
-      const parts = [pwdBytes, this._userCred, ...this._extraMaterial()];
-      const totalLen = parts.reduce((sum, part) => sum + part.byteLength, 0);
-
-      const rawMaterial = new Uint8Array(totalLen);
-      let offset = 0;
-      for (const part of parts) {
-         rawMaterial.set(part, offset);
-         offset += part.byteLength;
-      }
+      const rawMaterial = concatArrays([pwdBytes, this._userCred, ...this._extraMaterial()]);
 
       const ek = await this._pbkdf2CipherKey(rawMaterial);
       pwdBytes.fill(0);
@@ -695,6 +689,9 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       }
       if (this._cdInfo.slt.byteLength != cc.SLT_BYTES) {
          throw new Error('Invalid salt length of: ' + this._cdInfo.slt.byteLength);
+      }
+      if (this._cdInfo.ver !== cc.VERSION7) {
+         throw new Error('Invalid version: ' + this._cdInfo.ver);
       }
 
       // because crypto_kdf_derive_from_key does not take a salt, we first merge salt,
@@ -758,10 +755,7 @@ export class PWDKeyProviderV6 extends BasePWDKeyProvider {
 
       this.setHint(hint);
       const pwdBytes = new TextEncoder().encode(pwd);
-
-      const rawMaterial = new Uint8Array(pwdBytes.byteLength + this._userCred.byteLength)
-      rawMaterial.set(pwdBytes);
-      rawMaterial.set(this._userCred, pwdBytes.byteLength);
+      const rawMaterial = concatArrays([pwdBytes, this._userCred]);
 
       const ek = await this._pbkdf2CipherKey(rawMaterial);
       pwdBytes.fill(0);
@@ -861,9 +855,7 @@ export class PWDKeyProviderLegacy extends BasePWDKeyProvider {
 
       this.setHint(hint);
       const pwdBytes = new TextEncoder().encode(pwd);
-      const rawMaterial = new Uint8Array(pwdBytes.byteLength + this._userCred.byteLength)
-      rawMaterial.set(pwdBytes);
-      rawMaterial.set(this._userCred, pwdBytes.byteLength);
+      const rawMaterial = concatArrays([pwdBytes, this._userCred]);
 
       const ek = await this._pbkdf2CipherKey(rawMaterial);
       pwdBytes.fill(0);

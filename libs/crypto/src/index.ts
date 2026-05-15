@@ -49,6 +49,7 @@ export {
    selectWriteableTxtFile,
    bytesFromUTF8String,
    streamFromBase64,
+   concatArrays,
 } from './lib/utils';
 
 // Cipher core types and classes

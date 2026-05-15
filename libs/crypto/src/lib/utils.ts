@@ -92,6 +92,17 @@ export function clamp(n: number, min: number, max: number): number {
    return Math.min(max, Math.max(min, n));
 }
 
+export function concatArrays(arrays: Uint8Array[]): Uint8Array<ArrayBuffer> {
+   const totalLen = arrays.reduce((sum, part) => sum + part.byteLength, 0);
+   const output = new Uint8Array(totalLen);
+   let offset = 0;
+   for (const array of arrays) {
+      output.set(array, offset);
+      offset += array.byteLength;
+   }
+   return output;
+}
+
 export function byteCount(num: number): number {
    if (num < 0) {
       throw new Error("Value must be an unsigned integer (non-negative).");
@@ -305,22 +316,19 @@ export async function readStreamAll(
    let result: string | Uint8Array<ArrayBuffer>;
    const reader = stream.getReader();
    try {
-      let readBytes = 0;
       const blocks: Uint8Array[] = [];
 
       while (true) {
          const { done, value } = await reader.read();
          if (value) {
             blocks.push(value);
-            readBytes += value.byteLength;
          }
-
          if (done) {
             break;
          }
       }
 
-      result = coalesceBlocks(blocks, readBytes);
+      result = coalesceBlocks(blocks);
       if (decode) {
          result = new TextDecoder().decode(result);
       }
@@ -331,19 +339,10 @@ export async function readStreamAll(
    return result;
 }
 
-function coalesceBlocks(
-   blocks: Uint8Array[],
-   byteLen: number
-): Uint8Array<ArrayBuffer> {
-
-   let result = new Uint8Array(0);
+function coalesceBlocks(blocks: Uint8Array[]): Uint8Array<ArrayBuffer> {
+   let result: Uint8Array<ArrayBuffer>;
    if (blocks.length > 1) {
-      result = new Uint8Array(byteLen);
-      let offset = 0;
-      for (const block of blocks) {
-         result.set(block, offset);
-         offset += block.byteLength;
-      }
+      result = concatArrays(blocks);
    } else {
       result = ensureArrayBuffer(blocks[0]);
    }

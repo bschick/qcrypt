@@ -29,6 +29,8 @@ import {
    bytesFromUTF8String,
    readStreamAll,
    cryptoReady,
+   concatArrays,
+   ensureArrayBuffer
 } from '../index';
 
 
@@ -71,27 +73,7 @@ export function streamFromBytes(data: Uint8Array | Uint8Array[]): [
    ReadableStream<Uint8Array>,
    Uint8Array
 ] {
-
-   let parts: Uint8Array[];
-   if (data instanceof Uint8Array) {
-      parts = [data];
-   }
-   else {
-      parts = data;
-   }
-
-   let length = 0;
-   parts.forEach(part => {
-      length += part.length;
-   });
-
-   let merged = new Uint8Array(length);
-   let offset = 0;
-   parts.forEach(part => {
-      merged.set(part, offset);
-      offset += part.length;
-   });
-
+   const merged = data instanceof Uint8Array ? ensureArrayBuffer(data) : concatArrays(data);
    const blob = new Blob([merged], { type: 'application/octet-stream' });
    return [blob.stream(), merged];
 }

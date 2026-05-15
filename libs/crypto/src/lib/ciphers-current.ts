@@ -31,6 +31,7 @@ import {
    getArrayBuffer,
    ensureArrayBuffer,
    clamp,
+   concatArrays,
 } from './utils';
 import { KeyProvider, PWDKeyProvider } from './keys';
 
@@ -474,9 +475,7 @@ export class EncipherV7 extends Encipher {
          let customAdditionalData = additionalData;
          const customAd = this._keyProvider.getCustomAd();
          if (customAd) {
-            customAdditionalData = new Uint8Array(additionalData.byteLength + customAd.byteLength);
-            customAdditionalData.set(additionalData);
-            customAdditionalData.set(customAd, additionalData.byteLength);
+            customAdditionalData = concatArrays([additionalData, customAd]);
          }
 
          // Only block0 uses the root cipher key. Simplifies backward compat and is no less secure
@@ -763,9 +762,7 @@ export abstract class Decipher extends Ciphers {
          let customAdditionalData = this._blockData.additionalData;
          const customAd = this._keyProvider.getCustomAd();
          if (customAd) {
-            customAdditionalData = new Uint8Array(this._blockData.additionalData.byteLength + customAd.byteLength);
-            customAdditionalData.set(this._blockData.additionalData);
-            customAdditionalData.set(customAd, this._blockData.additionalData.byteLength);
+            customAdditionalData = concatArrays([this._blockData.additionalData, customAd]);
          }
 
          // Only block0 uses the root cipher key. Simplifies backward compat and is no less secure
@@ -1070,8 +1067,6 @@ export class DecipherV67 extends Decipher {
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we have the signing key and data.
-         // Might be cleaner to do this elsewhere, but keeping it at the lowest level
-         // ensures we don't skip the step
          const validMac: boolean = await this._verifyMAC();
          if (!validMac) {
             throw new Error('Invalid MAC error');
@@ -1193,8 +1188,6 @@ export class DecipherV67 extends Decipher {
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we  have the signing key and data.
-         // Might be cleaner to do this elswhere, but keeping it at the lowest level
-         // ensures we don't skip the step
          const validMac: boolean = await this._verifyMAC();
          if (!validMac) {
             throw new Error('Invalid MAC error');
@@ -1219,14 +1212,11 @@ export class DecipherV67 extends Decipher {
       const encVerBytes = numToBytes(this._blockData.ver, cc.VER_BYTES);
       const encSizeBytes = numToBytes(this._blockData.payloadSize, cc.PAYLOAD_SIZE_BYTES);
 
-      const headerPortion = new Uint8Array(cc.VER_BYTES + cc.PAYLOAD_SIZE_BYTES);
-      headerPortion.set(encVerBytes);
-      headerPortion.set(encSizeBytes, cc.VER_BYTES);
-
       const sodium = getSodium();
       const sk = await this._keyProvider.getSigningKey();
       const state = sodium.crypto_generichash_init(sk, cc.MAC_BYTES);
-      sodium.crypto_generichash_update(state, headerPortion);
+      sodium.crypto_generichash_update(state, encVerBytes);
+      sodium.crypto_generichash_update(state, encSizeBytes);
       sodium.crypto_generichash_update(state, this._blockData.additionalData);
       sodium.crypto_generichash_update(state, this._blockData.encryptedData);
       sodium.crypto_generichash_update(state, this._lastMac);

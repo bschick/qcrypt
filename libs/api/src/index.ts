@@ -55,3 +55,4 @@ export namespace ResponseTypes {
 }
 
 export const TOPIC_USERS_MAX = 255;
+export const SESSION_TIMEOUT_SEC = 60 * 60 * 3;

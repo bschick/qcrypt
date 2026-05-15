@@ -24,7 +24,8 @@ import * as cc from './cipher.consts';
 import {
    numToBytes,
    BYOBStreamReader,
-   ensureArrayBuffer
+   ensureArrayBuffer,
+   concatArrays,
 } from './utils';
 
 import {
@@ -78,10 +79,7 @@ export class DecipherV1 extends Decipher {
          let [payload] = await this._reader.readFill(new ArrayBuffer(cc.PAYLOAD_SIZE_MAX));
 
          if (this._headerish) {
-            const newPayload = new Uint8Array(this._headerish.byteLength + payload.byteLength);
-            newPayload.set(this._headerish);
-            newPayload.set(payload, this._headerish.byteLength);
-            payload = newPayload;
+            payload = concatArrays([this._headerish, payload]);
          }
 
          // V1 should test be larger, but this get simple cases
@@ -139,8 +137,6 @@ export class DecipherV1 extends Decipher {
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we  have the signing key and data.
-         // Might be cleaner to do this elswhere, but keeping it at the lowest level
-         // ensures we don't skip the step
          const validMac: boolean = await this._verifyMAC();
          if (!validMac) {
             throw new Error('Invalid MAC error');
@@ -174,9 +170,7 @@ export class DecipherV1 extends Decipher {
          throw new Error('Invalid MAC data');
       }
 
-      const data = new Uint8Array(this._blockData.additionalData.byteLength + this._blockData.encryptedData.byteLength);
-      data.set(this._blockData.additionalData);
-      data.set(this._blockData.encryptedData, this._blockData.additionalData.byteLength);
+      const data = concatArrays([this._blockData.additionalData, this._blockData.encryptedData]);
 
       const sk = await this._keyProvider.getSigningKey();
 
@@ -285,10 +279,7 @@ export class DecipherV4 extends Decipher {
          // (which are more important)
          let missed: Uint8Array;
          [missed, done] = await this._reader.readFill(new ArrayBuffer(cc.HEADER_BYTES_OLD - header.byteLength));
-         const newHeader = new Uint8Array(cc.HEADER_BYTES_OLD);
-         newHeader.set(header);
-         newHeader.set(missed, header.byteLength);
-         header = newHeader;
+         header = concatArrays([header, missed]);
       }
 
       // This signals successful completion of block reads
@@ -374,8 +365,6 @@ export class DecipherV4 extends Decipher {
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we have the signing key and data.
-         // Might be cleaner to do this elsewhere, but keeping it at the lowest level
-         // ensures we don't skip the step
          const validMac: boolean = await this._verifyMAC();
          if (!validMac) {
             throw new Error('Invalid MAC error');
@@ -484,8 +473,6 @@ export class DecipherV4 extends Decipher {
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we  have the signing key and data.
-         // Might be cleaner to do this elswhere, but keeping it at the lowest level
-         // ensures we don't skip the step
          const validMac: boolean = await this._verifyMAC();
          if (!validMac) {
             throw new Error('Invalid MAC error');
@@ -507,14 +494,11 @@ export class DecipherV4 extends Decipher {
       const encVer = numToBytes(this._blockData.ver, cc.VER_BYTES);
       const encSizeBytes = numToBytes(this._blockData.payloadSize, cc.PAYLOAD_SIZE_BYTES + cc.FLAGS_BYTES);
 
-      const headerPortion = new Uint8Array(cc.VER_BYTES + cc.PAYLOAD_SIZE_BYTES + cc.FLAGS_BYTES);
-      headerPortion.set(encVer);
-      headerPortion.set(encSizeBytes, cc.VER_BYTES);
-
       const sodium = getSodium();
       const sk = await this._keyProvider.getSigningKey();
       const state = sodium.crypto_generichash_init(sk, cc.MAC_BYTES);
-      sodium.crypto_generichash_update(state, headerPortion);
+      sodium.crypto_generichash_update(state, encVer);
+      sodium.crypto_generichash_update(state, encSizeBytes);
       sodium.crypto_generichash_update(state, this._blockData.additionalData);
       sodium.crypto_generichash_update(state, this._blockData.encryptedData);
 
@@ -591,16 +575,13 @@ export class DecipherV5 extends DecipherV4 {
       const encSizeBytes = numToBytes(this._blockData.payloadSize, cc.PAYLOAD_SIZE_BYTES);
       const encFlags = numToBytes(this._blockData.flags!, cc.FLAGS_BYTES);
 
-      const headerPortion = new Uint8Array(cc.VER_BYTES + cc.PAYLOAD_SIZE_BYTES + cc.FLAGS_BYTES);
-      headerPortion.set(encVer);
-      headerPortion.set(encSizeBytes, cc.VER_BYTES);
-      headerPortion.set(encFlags, cc.VER_BYTES + cc.PAYLOAD_SIZE_BYTES);
-
       const sodium = getSodium();
       const sk = await this._keyProvider.getSigningKey();
       const state = sodium.crypto_generichash_init(sk, cc.MAC_BYTES);
 
-      sodium.crypto_generichash_update(state, headerPortion);
+      sodium.crypto_generichash_update(state, encVer);
+      sodium.crypto_generichash_update(state, encSizeBytes);
+      sodium.crypto_generichash_update(state, encFlags);
       sodium.crypto_generichash_update(state, this._blockData.additionalData);
       sodium.crypto_generichash_update(state, this._blockData.encryptedData);
       sodium.crypto_generichash_update(state, this._lastMac);

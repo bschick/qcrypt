@@ -60,6 +60,7 @@ export const LP_MAX = 16;
 export const ICOUNT_MIN = 420000;
 export const ICOUNT_DEFAULT = 1000000;
 export const ICOUNT_MAX = 4294000000; // limited to 4 bytes unsigned rounded to millions
+export const BLOCKS_MAX = 2 ** 31 -1;
 
 // Change version number when the encoding format changes or we add a new
 // cipher algorithm
