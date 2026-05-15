@@ -178,8 +178,6 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       if (!body.userId || !body.userCred || !body.csrf || !body.pkId) {
         throw new Error('createTestUser: missing userId/userCred/csrf/pkId in /reg/verify response');
       }
-      console.log(`[user-create] fn=createTestUser test="${testInfo.title}" userName=${userName}`);
-
       await expect(page).toHaveURL(/\/showrecovery$/);
       await expect(page.getByRole('heading', { name: 'Account Backup and Recovery' })).toBeVisible({ timeout: 10000 });
       const recoveryWords = await page.locator('textarea#wordsArea').inputValue();

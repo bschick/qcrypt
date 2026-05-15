@@ -15,7 +15,7 @@ import {
 
 test.describe('creation', () => {
 
-  testWithAuth('full lifecycle', { tag: '@nukeall' }, async ({ authFixture }, testInfo) => {
+  testWithAuth('full lifecycle', { tag: '@nukeall' }, async ({ authFixture }) => {
     const { page, session, authenticatorId1: authenticatorId1, authenticatorId2: authenticatorId2 } = authFixture;
     test.setTimeout(60000);
 
@@ -38,7 +38,6 @@ test.describe('creation', () => {
       await page.getByRole('button', { name: /Create new/ }).click();
     });
     const regBody = await (await regVerify).json();
-    console.log(`[user-create] fn=inline-registration test="${testInfo.title}" userName=${userName}`);
     authFixture.trackUser({
       userId: regBody.userId,
       userName,
@@ -117,7 +116,7 @@ test.describe('creation', () => {
 
   });
 
-  testWithAuth('delete active passkey signs out', { tag: '@nukeall' }, async ({ authFixture }, testInfo) => {
+  testWithAuth('delete active passkey signs out', { tag: '@nukeall' }, async ({ authFixture }) => {
     const { page, session, authenticatorId1: authenticatorId1, authenticatorId2: authenticatorId2 } = authFixture;
     test.setTimeout(60000);
 
@@ -136,7 +135,6 @@ test.describe('creation', () => {
       await page.getByRole('button', { name: /Create new/ }).click();
     });
     const regBody = await (await regVerify).json();
-    console.log(`[user-create] fn=inline-registration test="${testInfo.title}" userName=${userName}`);
     authFixture.trackUser({
       userId: regBody.userId,
       userName,
