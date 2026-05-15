@@ -307,7 +307,7 @@ export async function postCleanupTestUsers(
    const batchSize = 50;
    const maxScan = 1000;
    const minAgeMs = 15 * 60 * 1000;
-   const olderThan = Date.now() - minAgeMs;
+   const minCreated = Date.now() - minAgeMs;
    // Per-call delete cap. Large cleanups need repeat invocations;
    const maxDeletes = 25;
 
@@ -331,7 +331,7 @@ export async function postCleanupTestUsers(
          if (user.userId === 'AAAAAAAAAAAAAAAAAAAAAA') {
             continue;
          }
-         if (!user.createdAt || user.createdAt > olderThan) {
+         if (!user.createdAt || user.createdAt > minCreated) {
             console.log(`not expired test user ${user.userName} - ${user.userId}`);
             continue;
          }
