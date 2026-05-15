@@ -102,16 +102,19 @@ The `pnpm` scripts in `package.json` call `nx` under the hood. You can use eithe
 | CLI unit tests | `pnpm test:cli` | `pnpm nx test cli` | |
 
 > **Note:** When passing flags through `nx`, use camelCase for config options (e.g., `--runnerConfig=` not `--runner-config`).
-> **Note:** To run specific test files, use `--include`. 
+> **Note:** To run specific test files, use `--include`.
 >   - For `test:web` (Angular builder), `--include` expects a file glob. You must use the `**/` prefix to find nested files. Example: `pnpm test:web -- --include='**/keystore.service.spec.ts'`
+>   - For `test:e2e` which runs playwrigth you and pass any valid playwright filters. For matching specific regex of the test name use `-g`. Example: `pnpm test:e2e -g "sign in logs out tabs"`
 >   - For other projects (`test:libs`, `test:server`, `test:cli`), they invoke Vitest directly, which uses string/regex matching. **Do not use the `**/` prefix** for these. Example: `pnpm test:libs -- --include=ciphers.spec.ts`
+
 ### Deploy Commands
 
 Both apps deploy through wrapper shell scripts (`apps/<app>/scripts/deploy.sh`) that invoke matching `deploy.mjs` orchestrators. The wrappers handle the SSO liveness probe, env-var resolution, and per-subcommand defaults; the .mjs files do the AWS work via the `aws` CLI. Shared bash helpers live in `scripts/deploy-common.sh`.
 
 | Command | Description |
 |---------|-------------|
-| `pnpm deploy:web:prod [command] [flags]` | Defaults to `deploy` command. Web is only prod on AWS |
+| `pnpm deploy:web [command] [flags]` | Defaults to `deploy` command for web test AWS upload |
+| `pnpm deploy:web:prod [command] [flags]` | Defaults to `deploy` command for web prod AWS upload |
 | `pnpm rollback:web:prod` | Shortcut for `pnpm deploy:web:prod rollback` |
 | `pnpm deploy:server [command] [flags]` | Defaults to `deploy` command for test server |
 | `pnpm deploy:server:prod [command] [flags]` | Defaults to `deploy` command for prod server |
