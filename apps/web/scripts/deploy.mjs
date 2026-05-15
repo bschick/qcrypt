@@ -118,6 +118,7 @@ import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import {
    aws as awsBase,
+   confirmProdAction,
    resolveAwsCreds,
    suggestCommandTypo,
 } from '../../../scripts/deploy-common.mjs';
@@ -401,7 +402,8 @@ function printUntracked(untracked, heading, limit) {
 // deploy (default command)
 // ---------------------------------------------------------------------------
 
-function runDeploy(argv) {
+async function runDeploy(argv) {
+   await confirmProdAction(argv, 'deploy', `bucket: ${argv.bucket}`);
    const scope = getScope(argv);
    // 1. Enumerate the local build, filtered to the active scope.
    const files = collectLocalFiles(argv.buildDir, scope.recursive)
@@ -590,7 +592,8 @@ function runDeploy(argv) {
 // mode (`pnpm build:web:prod` when --prod is set, `pnpm build:web` for
 // test), then defers to runDeploy with the same argv so all deploy
 // options (including --comment) flow through.
-function runBdeploy(argv) {
+async function runBdeploy(argv) {
+   await confirmProdAction(argv, 'bdeploy', `bucket: ${argv.bucket}`);
    const cmd = 'pnpm';
    const args = [argv.prod ? 'build:web:prod' : 'build:web'];
    if (argv.dryRun) {
@@ -606,7 +609,8 @@ function runBdeploy(argv) {
          process.exit(r.status ?? 1);
       }
    }
-   runDeploy(argv);
+   // bdeploy already confirmed; suppress the redundant prompt inside runDeploy.
+   await runDeploy({ ...argv, yes: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -637,7 +641,8 @@ function runBdeploy(argv) {
 // handled by the normal orphan clock. The manifest IS rewritten — but only
 // to refresh `deployDate` and `deployComment`, since the rule is that
 // deploy/bdeploy/rollback are the only commands that touch those fields.
-function runRollback(argv) {
+async function runRollback(argv) {
+   await confirmProdAction(argv, 'rollback', `bucket: ${argv.bucket}`);
    const key = 'index.html';
    const listResult = aws(argv, [
       's3api', 'list-object-versions',
@@ -868,7 +873,8 @@ function runUnexpect(argv) {
 // prune (no deploy) — remove untracked S3 objects and expired orphans
 // ---------------------------------------------------------------------------
 
-function runPrune(argv) {
+async function runPrune(argv) {
+   await confirmProdAction(argv, 'prune', `bucket: ${argv.bucket}`);
    const manifest = readManifest(argv);
    // readManifest always seeds `expected` with the manifest key, so check the
    // other buckets to decide whether this looks like a never-deployed bucket.
@@ -936,7 +942,7 @@ const addGlobalOpts = (y) => y
    .option('manifest-key', { type: 'string', default: '_build/manifest.json', describe: 'S3 key for the deploy manifest' })
    .option('dry-run', { type: 'boolean', default: false, describe: 'Log actions without executing them' })
    .option('print-limit', { type: 'number', default: 20, describe: 'Max file keys to print in listings (deploy, leaks, prune)' })
-   .option('yes', { type: 'boolean', alias: 'y', default: false, describe: 'Bypass the prod-action confirmation prompt (consumed by the wrapper; no effect on deploy.mjs itself).' });
+   .option('yes', { type: 'boolean', alias: 'y', default: false, describe: 'Bypass the prod-action confirmation prompt for destructive commands (deploy, bdeploy, prune, rollback).' });
 
 // Constrains the command to the assets/aaguid/ key prefix only — local
 // enumeration, bucket listing, and manifest reconciliation all skip
@@ -1111,4 +1117,4 @@ yargs(hideBin(process.argv))
    .strict()
    .help()
    .version(false)
-   .parseSync();
+   .parse();

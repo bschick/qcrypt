@@ -75,16 +75,6 @@ do_sso_check "$PROFILE" "${!CHROME_PROFILE_ENV_NAME:-}"
 SUBCMD="$(detect_subcommand "$@")"
 remove_subcommand_from_args "$SUBCMD" "$@"
 
-# Prod-mode confirmation for destructive subcommands. Skipped under
-# --dry-run / --yes / -y. See confirm_prod_action.
-if [ "$(is_prod_mode "$@")" = "1" ]; then
-   case "${SUBCMD:-deploy}" in
-      deploy|bdeploy|prune|rollback)
-         confirm_prod_action "${SUBCMD:-deploy}" "bucket: ${!BUCKET_ENV_NAME}" "$@"
-         ;;
-   esac
-fi
-
 # Per-command project defaults. Each command in deploy.mjs only accepts a
 # subset of options under strict mode, so the wrapper must scope flags to
 # the command being invoked. default_unless_user_supplied skips injection

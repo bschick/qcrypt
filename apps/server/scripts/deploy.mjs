@@ -65,6 +65,7 @@ import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import {
    aws as awsBase,
+   confirmProdAction,
    resolveAwsCreds,
    suggestCommandTypo,
 } from '../../../scripts/deploy-common.mjs';
@@ -196,7 +197,8 @@ function runBuild(argv) {
 // deploy (default command)
 // ---------------------------------------------------------------------------
 
-function runDeploy(argv) {
+async function runDeploy(argv) {
+   await confirmProdAction(argv, 'deploy', `lambda: ${argv.lambda}`);
    const zipPath = join(argv.buildDir, 'index.zip');
    try {
       if (!statSync(zipPath).isFile()) {
@@ -293,9 +295,11 @@ function runDeploy(argv) {
 // bdeploy — build then deploy
 // ---------------------------------------------------------------------------
 
-function runBdeploy(argv) {
+async function runBdeploy(argv) {
+   await confirmProdAction(argv, 'bdeploy', `lambda: ${argv.lambda}`);
    runBuild(argv);
-   runDeploy(argv);
+   // bdeploy already confirmed; suppress the redundant prompt inside runDeploy.
+   await runDeploy({ ...argv, yes: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -308,11 +312,12 @@ function runBdeploy(argv) {
 //
 // Doesn't delete or modify any version — only moves the alias. Re-deploy or
 // a forward `update-alias` reverses the rollback at any time.
-function runRollback(argv) {
+async function runRollback(argv) {
    if (!isProd(argv)) {
       console.error('rollback: requires --prod <alias>.');
       process.exit(1);
    }
+   await confirmProdAction(argv, 'rollback', `lambda: ${argv.lambda}`);
    const alias = aliasName(argv);
    const versions = listVersions(argv);
    if (versions.length === 0) {
@@ -415,7 +420,7 @@ const addGlobalOpts = (y) => y
    .option('region', { type: 'string', describe: 'AWS region (falls back to QC_{PROD,TEST}_AWS_REGION; required)' })
    .option('dry-run', { type: 'boolean', default: false, alias: 'dryrun', describe: 'Log actions without executing them' })
    .option('print-limit', { type: 'number', default: 10, describe: 'Max version rows to print (info)' })
-   .option('yes', { type: 'boolean', alias: 'y', default: false, describe: 'Bypass the prod-action confirmation prompt (consumed by the wrapper; no effect on deploy.mjs itself).' });
+   .option('yes', { type: 'boolean', alias: 'y', default: false, describe: 'Bypass the prod-action confirmation prompt for destructive commands (deploy, bdeploy, rollback).' });
 
 // Used to detect typo'd commands so the fail handler can suggest the
 // closest match.
@@ -463,4 +468,4 @@ yargs(hideBin(process.argv))
    .strict()
    .help()
    .version(false)
-   .parseSync();
+   .parse();
