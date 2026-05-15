@@ -7,7 +7,7 @@
   - session state refresh across browser tabs and windows in the same profile
 
 #### Changes
-  - automatically generated test vectors (sames time during protocol version changes)
+  - automatically generated test vectors
   - improved unit test coverage and e2e playwright coverage in several areas
 
 #### Security
