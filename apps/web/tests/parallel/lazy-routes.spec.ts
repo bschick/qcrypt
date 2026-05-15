@@ -17,7 +17,7 @@ test.describe('lazy routes render', () => {
   for (const path of smokeRoutes) {
     test(`loads ${path}`, async ({ page }) => {
       await page.goto(path);
-      await page.waitForURL(path, { waitUntil: 'domcontentloaded' });
+      await expect(page).toHaveURL(new RegExp(`${path.replace(/\//g, '\\/')}$`));
       await expect(page.locator('mat-sidenav-content')).toBeVisible({ timeout: 10000 });
     });
   }

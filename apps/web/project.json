@@ -62,6 +62,29 @@
               "with": "apps/web/src/environments/environment.development.ts"
             }
           ]
+        },
+        "test": {
+          "outputPath": "dist/web-test",
+          "budgets": [
+            {
+              "type": "initial",
+              "maximumWarning": "3.5mb",
+              "maximumError": "4.5mb"
+            },
+            {
+              "type": "anyComponentStyle",
+              "maximumWarning": "4kb",
+              "maximumError": "5kb"
+            }
+          ],
+          "outputHashing": "all",
+          "sourceMap": true,
+          "fileReplacements": [
+            {
+              "replace": "apps/web/src/environments/environment.ts",
+              "with": "apps/web/src/environments/environment.test.ts"
+            }
+          ]
         }
       },
       "defaultConfiguration": "production",
@@ -93,6 +116,7 @@
         "tsConfig": "apps/web/tsconfig.spec.json",
         "runnerConfig": true,
         "watch": false,
+        "include": ["**/*.spec.ts"],
         "exclude": ["tmp/**", "node_modules/**"]
       }
     }

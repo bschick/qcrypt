@@ -14,17 +14,17 @@ import {
 // playwright's retry recovers. Single login + local-only crypto after, so
 // retry is sufficient and we keep the shared user.
 testWithAuth('encrypt decrypt', async ({ authFixture }) => {
-  const { page, session, authId1, authId2 } = authFixture;
+  const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
 
   await page.goto('/');
 
   const testHost = new URL(page.url()).hostname as hosts;
-  await addCredential(session, authId1, credentials[testHost]['keeper1']['id']);
+  await addCredential(session, authenticatorId1, credentials[testHost]['keeper1']['id']);
 
-  await passkeyAuth(session, authId1, async () => {
+  await passkeyAuth(page, session, authenticatorId1, async () => {
     await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
   });
-  await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
   await page.getByRole('button', { name: 'Advanced Options' }).click();
   await page.getByRole('switch', { name: 'Hide Password' }).uncheck();
@@ -66,20 +66,20 @@ testWithAuth('encrypt decrypt', async ({ authFixture }) => {
 // playwright's retry recovers. Single login + local-only crypto after, so
 // retry is sufficient and we keep the shared user.
 testWithAuth('loop encrypt decrypt', async ({ authFixture }) => {
-  const { page, session, authId1, authId2 } = authFixture;
+  const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
 
   await page.goto('/');
 
   const testHost = new URL(page.url()).hostname as hosts;
-  await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
+  await addCredential(session, authenticatorId1, credentials[testHost]['keeper2']['id']);
 
   const loops = 3
   const clearText = 'this is another 🚧';
 
-  await passkeyAuth(session, authId1, async () => {
+  await passkeyAuth(page, session, authenticatorId1, async () => {
     await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
   });
-  await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(/\/$/);
   await page.getByRole('button', { name: 'Encryption Mode' }).click();
   await page.getByRole('button', { name: 'Advanced Options' }).click();
   await page.getByRole('switch', { name: 'Hide Password' }).uncheck();

@@ -2,8 +2,11 @@
 //
 // Generates v{CURRENT_VERSION} cipher text vectors for tests in
 // apps/web/src/app/services/cipher.service.spec.ts:
+//   - "confirm successful version decryption, multi-version"
 //   - "confirm successful version decryption, multi-version loops"
 //   - "detect missing terminal block indicator, multi-version"
+//   - "detect extra terminal block indicator, multi-version"
+//   - "detect flipped terminal block indicator, multi-version"
 //   - "detect corrupt cipher text, all algs, multi-version"
 //   - "Stream manipulation, multi-version"
 //   - "Block order change and deletion detection, multi-version"
@@ -36,6 +39,25 @@ import {
 } from './gen_helpers.ts';
 
 const VER = cc.CURRENT_VERSION;
+
+// Single-loop, multi-alg vectors for "confirm successful version decryption,
+// multi-version". Inputs match the test's userCred / pwd / hint / clear text.
+async function genSingleLoopMultiVersion(): Promise<void> {
+   const PLAIN = 'physical farm bolt correct bee nonchalant glib high able pinch left quaint strip valuable exultant disgusted curved bless geese snatch zoom fat touch boot abject wink pretty accessible foamy';
+   const CRED = base64ToBytes('xhKm2Q404pGkqfWkTyT3UodUR-99bN0wibH6si9uF8I');
+   const PWD = '9j5J4QnKD3D2R7Ks5gAAa';
+   const HINT = 'royal';
+   const ALGS: cc.CipherAlgs[] = ['AES-GCM', 'X20-PLY', 'AEGIS-256'];
+
+   printBanner(`confirm successful version decryption, multi-version (V${VER})`);
+
+   for (const alg of ALGS) {
+      const bytes = await encryptOneLoop(streamFromStr(PLAIN), CRED, PWD, HINT, alg, cc.ICOUNT_MIN);
+      console.log(`               // ${alg}: V${VER}`);
+      console.log(`               "${toBase64(bytes)}",`);
+   }
+   console.log();
+}
 
 // Generates the 3-loop vectors. Each entry is one ciphertext with a 3-alg
 // loop chain. Algs match the comments above the existing v6 vectors.
@@ -84,6 +106,31 @@ async function genMissingTerminal(): Promise<void> {
       return encryptOneLoop(streamFromStr(PLAIN), CRED, PWD, HINT, ALG, IC, READ_OPTS);
    });
    console.log(`            cipherData: ${uint8ArrayLiteral(bytes)}`);
+   console.log();
+}
+
+async function genExtraAndFlippedTerminal(): Promise<void> {
+   // Same inputs as genMissingTerminal so the test reuses the same userCred/pwd/hint.
+   const PLAIN = 'A nice 🦫 came to say hello';
+   const PWD = 'a 🌲 of course';
+   const HINT = '🌧️';
+   const CRED = base64ToBytes('Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=');
+   const IC = 1800000;
+   const ALG: cc.CipherAlgs = 'X20-PLY';
+   const READ_OPTS = { startSize: 20, maxSize: 320 };
+
+   printBanner(`detect extra terminal block indicator, V${VER}`);
+   const extraBytes = await withTermOverride(true, true, async () => {
+      return encryptOneLoop(streamFromStr(PLAIN), CRED, PWD, HINT, ALG, IC, READ_OPTS);
+   });
+   console.log(`         cipherData: ${uint8ArrayLiteral(extraBytes)}`);
+   console.log();
+
+   printBanner(`detect flipped terminal block indicator, V${VER}`);
+   const flippedBytes = await withTermOverride(true, false, async () => {
+      return encryptOneLoop(streamFromStr(PLAIN), CRED, PWD, HINT, ALG, IC, READ_OPTS);
+   });
+   console.log(`         cipherData: ${uint8ArrayLiteral(flippedBytes)}`);
    console.log();
 }
 
@@ -219,8 +266,10 @@ const CLEAR_DATA = new Uint8Array([118, 101, 114, 115, 105, 111, 110, 58, 32, 34
 
 async function main() {
    await cryptoReady();
+   await genSingleLoopMultiVersion();
    await genMultiVersionLoops();
    await genMissingTerminal();
+   await genExtraAndFlippedTerminal();
    await genCorruptCipherText();
    await genStreamManipulation(CLEAR_DATA);
    await genBlockOrder(CLEAR_DATA);

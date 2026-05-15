@@ -1,11 +1,13 @@
 // AI-Assist: 100% Claude Code Generated
 //
-// Generates v7 cipher text vectors used by these tests in
+// Generates v{CURRENT_VERSION} cipher text vectors used by these tests in
 // libs/crypto/src/lib/ciphers.spec.ts:
 //   - "correct cipherdata info and decryption, multi version"
 //   - "missing terminal block indicator, multi version"
 //   - "extra terminal block indicator, multi version"
 //   - "flipped terminal block indicator, multi version"
+//   - "bad pwd to cipherdata info and decrypt, multi version" (reuses the
+//     "correct cipherdata info and decryption" output)
 //
 // Run with: pnpm vectors:ciphers
 

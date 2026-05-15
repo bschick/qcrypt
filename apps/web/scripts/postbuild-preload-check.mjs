@@ -2,10 +2,10 @@
 /**
  * postbuild-preload-check.mjs
  *
- * Runs after `pnpm build:web`. Sanity-checks that Angular's experimental
- * chunk optimizer collapsed the initial module graph into main-*.js, so
- * nothing in the initial graph is connected via a static `from "./chunk-X.js"`
- * import. If any such chunk is found, fail the build with a clear message.
+ * Sanity-checks that Angular's experimental chunk optimizer collapsed the
+ * initial module graph into main-*.js, so nothing in the initial graph is
+ * connected via a static `from "./chunk-X.js"` import. If any such chunk
+ * is found, fail the build with a clear message.
  *
  * Why this matters
  * ----------------

@@ -15,18 +15,18 @@ test.describe('errors', () => {
   // playwright's retry recovers. Single login + local-only operations after,
   // so retry is sufficient and we keep the shared user.
   testWithAuth('enc dec errors', async ({ authFixture }) => {
-    const { page, session, authId1, authId2 } = authFixture;
+    const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
     test.setTimeout(45000);
 
     await page.goto('/');
 
     const testHost = new URL(page.url()).hostname as hosts;
-    await addCredential(session, authId1, credentials[testHost]['keeper2']['id']);
+    await addCredential(session, authenticatorId1, credentials[testHost]['keeper2']['id']);
 
-    await passkeyAuth(session, authId1, async () => {
+    await passkeyAuth(page, session, authenticatorId1, async () => {
       await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
     });
-    await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
 
     await page.getByRole('button', { name: 'Encrypt Text'}).click();

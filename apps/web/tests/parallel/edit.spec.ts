@@ -2,18 +2,18 @@ import { test, expect, Response } from '@playwright/test';
 import {
   testWithAuth,
   passkeyAuth,
-  openCredentials
+  toggleCredentials
 } from '.././common';
 
 
 testWithAuth('edit fields', { tag: '@nukeall' }, async ({ authFixture }) => {
-  const { page, authId1 } = authFixture;
+  const { page, authenticatorId1: authauthenticatorId1 } = authFixture;
   test.setTimeout(60000);
   const rand = Math.floor(Math.random() * (99 - 0 + 1)) + 0;
 
-  const testUser = await authFixture.createTestUser(authId1);
+  const testUser = await authFixture.createTestUser(authauthenticatorId1);
 
-  await openCredentials(page);
+  await toggleCredentials(page);
 
   const nameInput = page.locator('mat-sidenav input').first();
   const descInput = page.locator('mat-sidenav input').nth(1);
@@ -73,10 +73,10 @@ testWithAuth('edit fields', { tag: '@nukeall' }, async ({ authFixture }) => {
 });
 
 testWithAuth('options persistence and defaults', { tag: '@nukeall' }, async ({ authFixture }) => {
-  const { page, session, authId1 } = authFixture;
+  const { page, session, authenticatorId1: authenticatorId1 } = authFixture;
   test.setTimeout(60000);
 
-  const testUser = await authFixture.createTestUser(authId1);
+  const testUser = await authFixture.createTestUser(authenticatorId1);
 
   await page.locator('mat-expansion-panel-header').filter({ hasText: 'Encryption Mode' }).click();
   await expect(page.locator('text="XChaCha20 Poly1305"')).toHaveCount(1);
@@ -94,17 +94,17 @@ testWithAuth('options persistence and defaults', { tag: '@nukeall' }, async ({ a
   await page.locator('text="AES 256 GCM"').nth(1).click();
 
   // Log out and back in to verify persistence
-  await openCredentials(page);
+  await toggleCredentials(page);
   let tableBody = page.locator('table.credtable tbody');
   await expect(tableBody.locator('tr')).toHaveCount(1);
   await expect(page.locator('mat-sidenav input').first()).toHaveValue(testUser.userName);
   await page.getByRole('button', { name: /Sign out/ }).click();
   await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible({timeout:10000});
 
-  await passkeyAuth(session, authId1, async () => {
+  await passkeyAuth(page, session, authenticatorId1, async () => {
     await page.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
   });
-  await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
+  await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible({timeout:10000});
   // Accordians should stay open
   await expect(page.locator('text="XChaCha20 Poly1305"')).toHaveCount(2);
 
@@ -121,17 +121,17 @@ testWithAuth('options persistence and defaults', { tag: '@nukeall' }, async ({ a
   // Reset to default, check expected values then log out and in to verify persistence
   await page.getByRole('button', { name: 'Reset To Defaults' }).click();
 
-  await openCredentials(page);
+  await toggleCredentials(page);
   tableBody = page.locator('table.credtable tbody');
   await expect(tableBody.locator('tr')).toHaveCount(1);
   await expect(page.locator('mat-sidenav input').first()).toHaveValue(testUser.userName);
   await page.getByRole('button', { name: /Sign out/ }).click();
   await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible({timeout:10000});
 
-  await passkeyAuth(session, authId1, async () => {
+  await passkeyAuth(page, session, authenticatorId1, async () => {
     await page.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
   });
-  await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
+  await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible({timeout:10000});
   // Accordians should stay open
   await expect(page.locator('text="AES 256 GCM"')).toHaveCount(1);
   await expect(page.getByRole('switch', { name: 'Check If Stolen' })).not.toBeChecked();

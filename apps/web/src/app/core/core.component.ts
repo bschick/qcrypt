@@ -217,7 +217,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       // subscribe to auth events
       this.authSub = this.authSvc.on(
          [AuthEvent.Logout, AuthEvent.Forget, AuthEvent.Login, AuthEvent.Delete],
-         this.onAuthEvent.bind(this)
+         (data) => this.onAuthEvent(data)
       );
 
       // core.guard doesn't allow reaching this point if the

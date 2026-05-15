@@ -9,6 +9,7 @@ import {
    getLatestEncipher,
    bytesToBase64,
    readStreamAll,
+   concatArrays,
 } from '@qcrypt/crypto';
 import type { ReadOpts } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
@@ -101,7 +102,7 @@ export async function encryptOneLoop(
       // avoid importing the enum (see ciphers-current.ts).
       if (block.state === 4 /* CipherState.Finished */) break;
    }
-   return concat(parts);
+   return concatArrays(parts);
 }
 
 // Reads a stream fully, returning the concatenated bytes.
@@ -110,17 +111,6 @@ export async function readAllBytes(stream: ReadableStream<Uint8Array>): Promise<
    return buf instanceof Uint8Array ? buf : new TextEncoder().encode(buf as unknown as string);
 }
 
-export function concat(parts: Uint8Array[]): Uint8Array {
-   let total = 0;
-   for (const p of parts) total += p.byteLength;
-   const out = new Uint8Array(total);
-   let off = 0;
-   for (const p of parts) {
-      out.set(p, off);
-      off += p.byteLength;
-   }
-   return out;
-}
 
 // Formats a Uint8Array as a TS literal: `new Uint8Array([1, 2, 3, ...])`
 export function uint8ArrayLiteral(bytes: Uint8Array): string {

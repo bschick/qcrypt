@@ -94,17 +94,17 @@ export type CreatedTestUser = {
 export type AuthFixture = {
   page: Page;
   session: CDPSession;
-  authId1: string;
-  authId2: string;
+  authenticatorId1: string;
+  authenticatorId2: string;
   // Creates a fresh PWTesty_<timestamp> user via the UI registration flow on
-  // `authId`. The session is signed-in on return (page at '/' with Encryption
+  // `authenticatorId`. The session is signed-in on return (page at '/' with Encryption
   // Mode visible). Created users are tracked and torn down after the test.
-  createTestUser: (authId: string) => Promise<CreatedTestUser>;
+  createTestUser: (authenticatorId: string) => Promise<CreatedTestUser>;
 };
 
 type TrackedUser = {
   userId: string;
-  authId: string;
+  authenticatorId: string;
   csrf: string;
   // Snapshot of context cookies right after registration (notably the
   // __Host-JWT session cookie). Restored before each cleanup request so
@@ -120,18 +120,18 @@ type TrackedUser = {
 export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
   authFixture: async ({ page }, use, testInfo) => {
     const session = await page.context().newCDPSession(page);
-    const authId1 = await setupAuthenticator(session, page, 'internal');
-    const authId2 = await setupAuthenticator(session, page, 'usb');
+    const authenticatorId1 = await setupAuthenticator(session, page, 'internal');
+    const authenticatorId2 = await setupAuthenticator(session, page, 'usb');
     const trackedUsers: TrackedUser[] = [];
 
-    const createTestUser = async (authId: string): Promise<CreatedTestUser> => {
+    const createTestUser = async (authenticatorId: string): Promise<CreatedTestUser> => {
       const userName = `PWTesty_${Date.now()}`;
       await page.goto('/');
 
       const verifyPromise = page.waitForResponse((r) =>
         r.url().includes('/v1/reg/verify') && r.request().method() === 'POST'
       );
-      const credential = await passkeyCreation(session, authId, async () => {
+      const credential = await passkeyCreation(page, session, authenticatorId, async () => {
         await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
         await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible({ timeout: 10000 });
         await page.locator('input#userName').fill(userName);
@@ -142,16 +142,16 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
         throw new Error('createTestUser: missing userId/userCred/csrf in /reg/verify response');
       }
 
-      await page.waitForURL('/showrecovery', { waitUntil: 'domcontentloaded' });
+      await expect(page).toHaveURL(/\/showrecovery$/);
       await expect(page.getByRole('heading', { name: 'Account Backup and Recovery' })).toBeVisible({ timeout: 10000 });
       const recoveryWords = await page.locator('textarea#wordsArea').inputValue();
       await page.getByRole('button', { name: /I saved my/ }).click();
-      await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+      await expect(page).toHaveURL(/\/$/);
       await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({ timeout: 10000 });
 
       trackedUsers.push({
         userId: body.userId,
-        authId,
+        authenticatorId: authenticatorId,
         csrf: body.csrf,
         cookies: await page.context().cookies(),
         credential,
@@ -168,8 +168,8 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
     await use({
       page,
       session,
-      authId1,
-      authId2,
+      authenticatorId1: authenticatorId1,
+      authenticatorId2: authenticatorId2,
       createTestUser,
     });
 
@@ -184,21 +184,30 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
     // end state.
     const apiUrl = (testInfo.project.use as { apiURL: string }).apiURL;
     const originalCookies = await page.context().cookies();
+    const baseURL = (testInfo.project.use as { baseURL: string }).baseURL;
 
-    const deleteAllPasskeys = async (csrf: string, label: string): Promise<boolean> => {
+    const deleteAllPasskeys = async (
+      csrf: string,
+      currentPkId: string,
+      label: string
+    ): Promise<boolean> => {
       const userResp = await page.request.get(
         `${apiUrl}/user`,
-        { headers: { 'x-csrf-token': csrf } }
+        { headers: { 'x-csrf-token': csrf, 'Origin': baseURL } }
       );
       if (!userResp.ok()) {
         console.error(`${label}: GET /user failed (${userResp.status()})`);
         return false;
       }
       const user = await userResp.json();
-      for (const auth of user.authenticators ?? []) {
+      // Sort the current passkey last — deleting it invalidates the session
+      // and any subsequent delete would 401.
+      const auths: { credentialId: string }[] = user.authenticators ?? [];
+      auths.sort((a, b) => Number(a.credentialId === currentPkId) - Number(b.credentialId === currentPkId));
+      for (const auth of auths) {
         const delResp = await page.request.delete(
           `${apiUrl}/passkeys/${auth.credentialId}`,
-          { headers: { 'x-csrf-token': csrf } }
+          { headers: { 'x-csrf-token': csrf, 'Origin': baseURL } }
         );
         if (!delResp.ok()) {
           console.error(`${label}: DELETE /passkeys/${auth.credentialId} failed (${delResp.status()})`);
@@ -217,7 +226,7 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
 
         const fastResp = await page.request.get(
           `${apiUrl}/user`,
-          { headers: { 'x-csrf-token': tracked.csrf } }
+          { headers: { 'x-csrf-token': tracked.csrf, 'Origin': baseURL } }
         );
         if (fastResp.ok()) {
           const user = await fastResp.json();
@@ -225,7 +234,7 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
           for (const auth of user.authenticators ?? []) {
             const delResp = await page.request.delete(
               `${apiUrl}/passkeys/${auth.credentialId}`,
-              { headers: { 'x-csrf-token': tracked.csrf } }
+              { headers: { 'x-csrf-token': tracked.csrf, 'Origin': baseURL } }
             );
             if (!delResp.ok()) {
               allDeleted = false;
@@ -248,8 +257,8 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       // through passkeyAuth so the WebAuthn dance completes.
       try {
         await page.context().clearCookies();
-        await clearCredentials(session, tracked.authId);
-        await addCredential(session, tracked.authId, tracked.credential);
+        await clearCredentials(session, tracked.authenticatorId);
+        await addCredential(session, tracked.authenticatorId, tracked.credential);
 
         await page.goto('/');
         await page.evaluate(() => localStorage.clear());
@@ -259,7 +268,7 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
         const verifyPromise = page.waitForResponse((r) =>
           r.url().includes('/v1/auth/verify') && r.request().method() === 'POST'
         );
-        await passkeyAuth(session, tracked.authId, async () => {
+        await passkeyAuth(page, session, tracked.authenticatorId, async () => {
           await page.getByRole('button', { name: /I have used Quick Crypt/ }).click();
         });
         const verifyResp = await verifyPromise;
@@ -273,11 +282,11 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
           continue;
         }
         const verifyBody = await verifyResp.json();
-        if (!verifyBody.csrf) {
-          console.error(`cleanup-fallback: missing csrf in /auth/verify response for ${tracked.userId}`);
+        if (!verifyBody.csrf || !verifyBody.pkId) {
+          console.error(`cleanup-fallback: missing csrf or pkId in /auth/verify response for ${tracked.userId}`);
           continue;
         }
-        await deleteAllPasskeys(verifyBody.csrf, `cleanup-fallback (${tracked.userId})`);
+        await deleteAllPasskeys(verifyBody.csrf, verifyBody.pkId, `cleanup-fallback (${tracked.userId})`);
       } catch (err) {
         console.error(`cleanup-fallback: failed for ${tracked.userId}`, err);
       }
@@ -302,7 +311,7 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
               console.log(`cleanup on isle ${count + 1}`);
               const delResp = await page.request.delete(
                 `${apiUrl}/passkeys/${auth.credentialId}`,
-                { headers: { 'x-csrf-token': session.csrf } }
+                { headers: { 'x-csrf-token': session.csrf, 'Origin': baseURL } }
               );
               if (!delResp.ok()) {
                 console.error(`@nukeall: DELETE /passkeys/${auth.credentialId} failed (${delResp.status()})`);
@@ -319,8 +328,8 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       }
     }
 
-    await removeAuthenticator(session, authId1);
-    await removeAuthenticator(session, authId2);
+    await removeAuthenticator(session, authenticatorId1);
+    await removeAuthenticator(session, authenticatorId2);
     await session.detach();
   }
 });
@@ -374,9 +383,27 @@ export async function removeAuthenticator(session: CDPSession, authenticatorId: 
   });
 }
 
-export async function openCredentials(page: Page): Promise<void> {
+export async function toggleCredentials(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Passkey information' }).click();
   await expect(page.locator('table.credtable tbody tr').first()).toBeVisible();
+}
+
+// Verifies the page's tab can complete an authenticated server call.
+// Triggers the credentials sidenav Refresh and asserts the resulting
+// /user request returned 200.
+export async function expectActiveServerSession(page: Page, expectedUserName?: string): Promise<void> {
+  if (!(await page.locator('table.credtable tbody tr').first().isVisible())) {
+    await toggleCredentials(page);
+  }
+  const userResponse = page.waitForResponse((response) =>
+    response.url().includes('/v1/user') && response.request().method() === 'GET'
+  );
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  const resp = await userResponse;
+  expect(resp.status()).toBe(200);
+  if (expectedUserName !== undefined) {
+    await expect(page.locator('mat-sidenav input').first()).toHaveValue(expectedUserName);
+  }
 }
 
 export async function deleteFirstPasskey(
@@ -423,20 +450,22 @@ export async function deleteLastPasskey(
 }
 
 export async function passkeyAuth(
+  page: Page,
   session: CDPSession,
-  authId: string | string[],
-  operationTrigger: () => Promise<void>
+  authenticatorId: string | string[],
+  operationTrigger: () => Promise<void>,
+  awaitVerify: boolean = true
 ): Promise<Credential> {
 
   // Pass an array when more than one authenticator holds a credential
   // matching the user being signed in — the browser may pick any of them,
   // and presence simulation must be enabled on whichever it picks.
-  const authIds = Array.isArray(authId) ? authId : [authId];
+  const authenticatorIds = Array.isArray(authenticatorId) ? authenticatorId : [authenticatorId];
   let credential: Credential;
 
   // initialize event listeners to wait for a successful passkey input event
   const operationCompleted = new Promise<void>(resolve => {
-    const timeout = setTimeout(() => resolve(), 5000);
+    const timeout = setTimeout(() => resolve(), 8000);
     session.on('WebAuthn.credentialAsserted', (payload) => {
       clearTimeout(timeout);
       credential = payload.credential;
@@ -444,7 +473,14 @@ export async function passkeyAuth(
     });
   });
 
-  for (const id of authIds) {
+  // also wait for the server-side verify response so callers can assert on
+  // signed-in UI without racing the response. Opt out for error-path tests
+  // that never reach /v1/auth/verify.
+  const verifyPromise: Promise<unknown> = awaitVerify ? page.waitForResponse((r) =>
+    r.url().includes('/v1/auth/verify') && r.request().method() === 'POST'
+  ) : Promise.resolve();
+
+  for (const id of authenticatorIds) {
     await session.send('WebAuthn.setUserVerified', {
       authenticatorId: id,
       isUserVerified: true,
@@ -459,8 +495,9 @@ export async function passkeyAuth(
 
   // wait to receive the event that the passkey was successfully registered or verified
   await operationCompleted;
+  await verifyPromise;
 
-  for (const id of authIds) {
+  for (const id of authenticatorIds) {
     await session.send('WebAuthn.setAutomaticPresenceSimulation', {
       authenticatorId: id,
       enabled: false,
@@ -471,17 +508,19 @@ export async function passkeyAuth(
 }
 
 export async function passkeyCreation(
+  page: Page,
   session: CDPSession,
-  authId: string | string[],
-  operationTrigger: () => Promise<void>
+  authenticatorId: string | string[],
+  operationTrigger: () => Promise<void>,
+  awaitVerify: boolean = true
 ): Promise<Credential> {
 
-  const authIds = Array.isArray(authId) ? authId : [authId];
+  const authenticatorIds = Array.isArray(authenticatorId) ? authenticatorId : [authenticatorId];
   let credential: Credential;
 
   // initialize event listeners to wait for a successful passkey input event
   const operationCompleted = new Promise<void>(resolve => {
-    const timeout = setTimeout(() => resolve(), 5000);
+    const timeout = setTimeout(() => resolve(), 8000);
     session.on('WebAuthn.credentialAdded', (payload) => {
       clearTimeout(timeout);
       credential = payload.credential;
@@ -489,7 +528,15 @@ export async function passkeyCreation(
     });
   });
 
-  for (const id of authIds) {
+  // also wait for the server-side verify response so callers can assert on
+  // signed-in UI without racing the response. Opt out for error-path tests
+  // that never reach the /verify endpoint.
+  const verifyPromise: Promise<unknown> = awaitVerify ? page.waitForResponse((r) =>
+    (r.url().includes('/v1/reg/verify') || r.url().includes('/v1/passkeys/verify')) &&
+    r.request().method() === 'POST'
+  ) : Promise.resolve();
+
+  for (const id of authenticatorIds) {
     await session.send('WebAuthn.setUserVerified', {
       authenticatorId: id,
       isUserVerified: true,
@@ -504,8 +551,9 @@ export async function passkeyCreation(
 
   // wait to receive the event that the passkey was successfully registered or verified
   await operationCompleted;
+  await verifyPromise;
 
-  for (const id of authIds) {
+  for (const id of authenticatorIds) {
     await session.send('WebAuthn.setAutomaticPresenceSimulation', {
       authenticatorId: id,
       enabled: false,

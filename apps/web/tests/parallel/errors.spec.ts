@@ -5,81 +5,81 @@ import {
   passkeyCreation,
   deleteFirstPasskey,
   clearCredentials,
-  openCredentials
+  toggleCredentials
 } from '.././common';
 
 
 test.describe('errors', () => {
 
   testWithAuth('user too short', async ({ authFixture }) => {
-    const { page, session, authId1, authId2 } = authFixture;
+    const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
 
     await page.goto('/');
 
-    await passkeyCreation(session, authId1, async () => {
+    await passkeyCreation(page, session, authenticatorId1, async () => {
       await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
       await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible({timeout:10000});
       await page.locator('input#userName').fill('short');
       await page.getByRole('button', { name: /Create new/ }).click();
-    });
+    }, false);
 
     const parent = page.locator('.error-msg p');
     expect(parent).toContainText('User name must be 6 to 31 characters long');
   });
 
   testWithAuth('user too long', async ({ authFixture }) => {
-    const { page, session, authId1, authId2 } = authFixture;
+    const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
 
     await page.goto('/');
 
-    await passkeyCreation(session, authId1, async () => {
+    await passkeyCreation(page, session, authenticatorId1, async () => {
       await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
       await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible({timeout:10000});
       await page.locator('input#userName').fill('1234567890123456789012345678901234567890');
       await page.getByRole('button', { name: /Create new/ }).click();
-    });
+    }, false);
 
     const parent = page.locator('.error-msg p');
     expect(parent).toContainText('User name must be 6 to 31 characters long');
   });
 
   testWithAuth('no passkey cold', async ({ authFixture }) => {
-    const { page, session, authId1, authId2 } = authFixture;
+    const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
 
     await page.goto('/');
 
-    await passkeyAuth(session, authId1, async () => {
+    await passkeyAuth(page, session, authenticatorId1, async () => {
       await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-    });
+    }, false);
     const parent = page.locator('p.error-msg');
     expect(parent).toContainText(/Passkey not recognized/);
   });
 
   testWithAuth('no passkey re-signin', { tag: '@nukeall' }, async ({ authFixture }) => {
-    const { page, session, authId1 } = authFixture;
+    const { page, session, authenticatorId1 } = authFixture;
 
-    const testUser = await authFixture.createTestUser(authId1);
+    const testUser = await authFixture.createTestUser(authenticatorId1);
 
-    await openCredentials(page);
+    await toggleCredentials(page);
     await page.getByRole('button', { name: /Sign out/ }).click();
 
-    await clearCredentials(session, authId1);
+    await clearCredentials(session, authenticatorId1);
 
-    await passkeyAuth(session, authId1, async () => {
+    await passkeyAuth(page, session, authenticatorId1, async () => {
       await page.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
-    });
+    }, false);
 
     expect(page.locator('div.button-host div.error-msg')).toContainText(/Sign in failed, try again or change users/);
   });
 
 
   testWithAuth('edit errors', { tag: '@nukeall' }, async ({ authFixture }) => {
-    const { page, authId1 } = authFixture;
+    const { page, authenticatorId1 } = authFixture;
     test.setTimeout(45000);
 
-    await authFixture.createTestUser(authId1);
+    await authFixture.createTestUser(authenticatorId1);
 
-    await openCredentials(page);
+    await toggleCredentials(page);
 
     await page.locator('mat-sidenav input').first().click();
     await page.locator('mat-sidenav input').first().fill('12345');
@@ -96,20 +96,20 @@ test.describe('errors', () => {
 
 
   testWithAuth('no recovery access', { tag: '@nukeall' }, async ({ authFixture }) => {
-    const { page, session, authId1 } = authFixture;
+    const { page, session, authenticatorId1 } = authFixture;
     test.setTimeout(45000);
 
-    await authFixture.createTestUser(authId1);
+    await authFixture.createTestUser(authenticatorId1);
 
-    await openCredentials(page);
+    await toggleCredentials(page);
 
-    await clearCredentials(session, authId1);
+    await clearCredentials(session, authenticatorId1);
 
-    await passkeyAuth(session, authId1, async () => {
+    await passkeyAuth(page, session, authenticatorId1, async () => {
       await page.getByRole('button', { name: /Show recovery link/ }).click();
-    });
+    }, false);
 
-    await page.waitForURL('/showrecovery', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/showrecovery$/);
     await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible({timeout:10000});
 
     expect(page.locator('.error-msg p')).toContainText('Retrieval failed, try again', {timeout:10000});
@@ -117,18 +117,18 @@ test.describe('errors', () => {
   });
 
   testWithAuth('no usercred access', { tag: '@nukeall' }, async ({ authFixture }) => {
-    const { page, session, authId1 } = authFixture;
+    const { page, session, authenticatorId1 } = authFixture;
     test.setTimeout(45000);
 
-    await authFixture.createTestUser(authId1);
+    await authFixture.createTestUser(authenticatorId1);
 
-    await clearCredentials(session, authId1);
+    await clearCredentials(session, authenticatorId1);
 
-    await passkeyAuth(session, authId1, async () => {
+    await passkeyAuth(page, session, authenticatorId1, async () => {
       await page.goto('/cmdline');
-    });
+    }, false);
 
-    await page.waitForURL('/cmdline', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/cmdline$/);
     await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible({timeout:10000});
 
     expect(page.locator('.error-msg p')).toContainText('Retrieval failed, try again', {timeout:10000});

@@ -18,6 +18,7 @@ COMMAND=(
   "$TESTS_PATH/parallel/"
   "--grep-invert"
   "/@fullfuzz/"
+  "--ui"
 )
 
 # Add test filter if we have one

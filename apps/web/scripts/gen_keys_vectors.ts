@@ -85,9 +85,13 @@ function emitAlgEntry(
 async function genPwdBlock(
    customAd: Uint8Array<ArrayBuffer> | undefined,
    lp: number,
-   lpEnd: number
+   lpEnd: number,
+   includeLpInTuple: boolean = false
 ): Promise<void> {
-   console.log(`         [cc.VERSION${VER}, {`);
+   const header = includeLpInTuple
+      ? `         [cc.VERSION${VER}, ${lp}, {`
+      : `         [cc.VERSION${VER}, {`;
+   console.log(header);
    for (const alg of ALGS) {
       const keyProvider = new PWDKeyProvider(PWD_USERCRED.slice(0), [PWD_PWD, undefined], customAd);
       keyProvider.setCipherDataInfo({
@@ -108,9 +112,13 @@ async function genPwdBlock(
 async function genMasterBlock(
    customAd: Uint8Array<ArrayBuffer> | undefined,
    lp: number,
-   lpEnd: number
+   lpEnd: number,
+   includeLpInTuple: boolean = false
 ): Promise<void> {
-   console.log(`         [cc.VERSION${VER}, {`);
+   const header = includeLpInTuple
+      ? `         [cc.VERSION${VER}, ${lp}, {`
+      : `         [cc.VERSION${VER}, {`;
+   console.log(header);
    for (const alg of ALGS) {
       const keyProvider = new MasterKeyKeyProvider(MASTER_KEY.slice(0), customAd);
       keyProvider.setCipherDataInfo({
@@ -138,10 +146,10 @@ async function main() {
    await genPwdBlock(PWD_CUSTOMAD, 1, 1);
 
    printBanner(`PWDKeyProvider, V${VER}, lp=1 of 2, with customAd`);
-   await genPwdBlock(PWD_CUSTOMAD, 1, 2);
+   await genPwdBlock(PWD_CUSTOMAD, 1, 2, true);
 
    printBanner(`PWDKeyProvider, V${VER}, lp=2 of 2, with customAd`);
-   await genPwdBlock(PWD_CUSTOMAD, 2, 2);
+   await genPwdBlock(PWD_CUSTOMAD, 2, 2, true);
 
    printBanner(`MasterKeyKeyProvider, V${VER}, single-loop, no customAd (re-emit)`);
    await genMasterBlock(undefined, 1, 1);
@@ -150,10 +158,10 @@ async function main() {
    await genMasterBlock(MASTER_CUSTOMAD, 1, 1);
 
    printBanner(`MasterKeyKeyProvider, V${VER}, lp=1 of 2, with customAd`);
-   await genMasterBlock(MASTER_CUSTOMAD, 1, 2);
+   await genMasterBlock(MASTER_CUSTOMAD, 1, 2, true);
 
    printBanner(`MasterKeyKeyProvider, V${VER}, lp=2 of 2, with customAd`);
-   await genMasterBlock(MASTER_CUSTOMAD, 2, 2);
+   await genMasterBlock(MASTER_CUSTOMAD, 2, 2, true);
 }
 
 main().catch((err) => {

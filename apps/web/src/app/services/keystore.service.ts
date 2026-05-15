@@ -21,10 +21,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { Injectable } from '@angular/core';
 import * as cc from '@qcrypt/crypto/consts';
-import { base64ToBytes } from '@qcrypt/crypto';
+import { base64ToBytes, concatArrays } from '@qcrypt/crypto';
 
 const DB_VERSION = 1;
 const MIN_SLOT_LEN = 4;
+
+type KeystoreEntry = {
+   masterKey: CryptoKey;
+   version: number;
+};
+
+export type KeystoreResult = {
+   derivedKey: Uint8Array<ArrayBuffer>;
+   version: number;
+};
 
 @Injectable({
    providedIn: 'root',
@@ -39,35 +49,38 @@ export class KeystoreService {
    async get(
       slot: string,
       pkId: Uint8Array<ArrayBuffer> | string
-   ): Promise<Uint8Array<ArrayBuffer>> {
+   ): Promise<KeystoreResult> {
       const pkIdBytes = (typeof pkId === 'string') ? base64ToBytes(pkId) : pkId;
 
       const db = await this._db();
-      const masterKey = await new Promise<CryptoKey | undefined>((resolve, reject) => {
+      const entry = await new Promise<KeystoreEntry | undefined>((resolve, reject) => {
          const req = db.transaction(this._storeName, 'readonly').objectStore(this._storeName).get(slot);
-         req.onsuccess = () => resolve(req.result as CryptoKey | undefined);
+         req.onsuccess = () => resolve(req.result as KeystoreEntry | undefined);
          req.onerror = () => reject(req.error);
       });
 
-      if (!masterKey) {
+      if (!entry) {
          throw new Error('No key found for slot: ' + slot);
       }
 
       // Caller should overwrite the returned key immediately afer use
-      return this._deriveKey(masterKey, slot, pkIdBytes);
+      const derivedKey = await this._deriveKey(entry.masterKey, slot, pkIdBytes);
+      return { derivedKey, version: entry.version };
    }
 
    // Create and replace the key in `slot`
    async create(
       slot: string,
       pkId: Uint8Array<ArrayBuffer> | string
-   ): Promise<Uint8Array<ArrayBuffer>> {
+   ): Promise<KeystoreResult> {
       const pkIdBytes = (typeof pkId === 'string') ? base64ToBytes(pkId) : pkId;
 
       const masterKey = await this._newMasterKey(slot);
+      const version = await this._writeEntry(slot, masterKey);
 
       // Caller should overwrite the returned key immediately afer use
-      return this._deriveKey(masterKey, slot, pkIdBytes);
+      const derivedKey = await this._deriveKey(masterKey, slot, pkIdBytes);
+      return { derivedKey, version };
    }
 
    async delete(slot: string): Promise<void> {
@@ -119,9 +132,7 @@ export class KeystoreService {
       }
 
       const purposeBytes = new TextEncoder().encode(purpose);
-      const data = new Uint8Array(purposeBytes.byteLength + pkId.byteLength);
-      data.set(purposeBytes);
-      data.set(pkId, purposeBytes.byteLength);
+      const data = concatArrays([purposeBytes, pkId]);
 
       const derivedBytes = await crypto.subtle.sign(
          "HMAC",
@@ -144,7 +155,7 @@ export class KeystoreService {
       // SubtleCrypto is lame... It will not let you generate CryptoKey for
       // the purpose of deriving further symetric keys. So we generate an HMAC
       // key and bascially rebuild a KDF from that.
-      const masterKey = await crypto.subtle.generateKey(
+      return crypto.subtle.generateKey(
          {
             name: "HMAC",
             hash: { name: "SHA-512" },
@@ -152,16 +163,25 @@ export class KeystoreService {
          false,
          ["sign"]
       );
+   }
 
+   private async _writeEntry(slot: string, masterKey: CryptoKey): Promise<number> {
       const db = await this._db();
-      await new Promise<void>((resolve, reject) => {
+      return new Promise<number>((resolve, reject) => {
          const tx = db.transaction(this._storeName, 'readwrite');
-         tx.objectStore(this._storeName).put(masterKey, slot);
-         tx.oncomplete = () => resolve();
+         const store = tx.objectStore(this._storeName);
+         let nextVersion: number;
+
+         const getReq = store.get(slot);
+         getReq.onsuccess = () => {
+            const existing = getReq.result as KeystoreEntry | undefined;
+            nextVersion = existing ? existing.version + 1 : 1;
+            store.put({ masterKey, version: nextVersion }, slot);
+         };
+         getReq.onerror = () => reject(getReq.error);
+         tx.oncomplete = () => resolve(nextVersion);
          tx.onerror = () => reject(tx.error);
       });
-
-      return masterKey;
    }
 
    private async _db(): Promise<IDBDatabase> {

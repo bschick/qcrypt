@@ -39,24 +39,34 @@ import {
    zxcvbnReady,
    streamFromBase64,
    MasterKeyKeyProvider,
-   readStreamAll } from '@qcrypt/crypto';
+   readStreamAll,
+   concatArrays } from '@qcrypt/crypto';
 import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 
-const baseUrl = environment.apiHost;
-
-export const SESSION_TIMEOUT = 60 * 60 * 6;
-export const ACTIVITY_TIMEOUT = 60 * 60 * 1.5;
-const EXPIRY_CHECK_INTERVAL = 1000 * 60 * 2;
-const RECOVERID_BYTES = 16;
-
-import type { ResponseTypes } from '@qcrypt/api';
+import { SESSION_TIMEOUT_SEC, type ResponseTypes } from '@qcrypt/api';
 import { KeystoreService } from './keystore.service';
 import { CipherService } from './cipher.service';
+import {
+   BroadcastService,
+   CredentialPayload,
+   LoginPayload,
+   LogoutPayload,
+   MessageKind,
+   PasskeyIdPayload,
+   PeerMessage,
+} from './broadcast.service';
 export type AuthenticatorInfo = ResponseTypes.AuthenticatorInfo;
 export type UserInfo = ResponseTypes.UserInfo;
 export type LoginUserInfo = ResponseTypes.LoginUserInfo;
 export type InvitableInfo = ResponseTypes.InvitableInfo;
+
+const baseUrl = environment.apiHost;
+export const ACTIVITY_TIMEOUT_SEC = 60 * 60 * 1.5;
+const EXPIRY_CHECK_INTERVAL_MS = 1000 * 60 * 2;
+const RECOVERID_BYTES = 16;
+const KEYSTORE_SLOT = 'user-cred-key';
+
 
 export type VerifiedUserInfo = {
    userId: string;
@@ -75,11 +85,7 @@ type FetchArgs = {
    bodyJSON?: string;
 }
 
-type SessionState = {
-   pkId: string;
-   userCredEnc?: string;
-};
-
+type SessionState = Partial<CredentialPayload> & { userId: string };
 
 export type SenderLinkInfo = {
    linkId: string;
@@ -121,9 +127,21 @@ export class AuthenticatorService {
    constructor(
       private _keystoreSvc: KeystoreService,
       private _cipherSvc: CipherService,
+      private _broadcastSvc: BroadcastService,
    ) {
+      this._broadcastSvc.setCredentialProvider(() => this._getCredentialPayload());
+      this._broadcastSvc.setMessageHandler((msg) => this._handlePeerMessage(msg));
+      this._broadcastSvc.start();
+
+      // Drop sessionStorage state left over from versions that didn't track userId.
+      // TODO: delete after backward compat perdio
+      const sessionState = this._getSessionState();
+      if (sessionState && !sessionState.userId) {
+         this.logout(false);
+      }
+
       this.ready = new Promise<void>((resolve) => {
-         this.restoreSession().catch(
+         this._restoreSession().catch(
             // just for debugging, remove
             (err) => console.error(err)
          ).finally(() => resolve());
@@ -149,23 +167,27 @@ export class AuthenticatorService {
    // to be false. this happens when another tab logs out, or out then in,
    // using a different Pk until this tab detects it
    public hasSession(): boolean {
-      return !!this._getSessionState()?.userCredEnc
+      const session = this._getSessionState();
+      return !!session
+         && !!session.pkId
+         && !!session.userCredEnc
+         && !!session.version
          && !!this._csrf
          && !!this.userInfo();
    }
 
    public potentialSession(): boolean {
-      // Expiry or changed passkey (from another tab) mean invalid sessoin
+      // Expiry or changed user (from another tab) means invalid session.
       // Cookie may still be valid, but we won't use it.
       const globalPKId = localStorage.getItem('pkid');
-      const myPKId = this._getSessionState()?.pkId;
+      const myUserId = this._getSessionState()?.userId;
       const sessionExpired = expired(localStorage, 'sessionexpiry');
       const activityExpired = expired(localStorage, 'activityexpiry');
       const [userId, userName] = this.loadKnownUser();
 
       const valid = !(
          !globalPKId ||
-         (myPKId && (globalPKId !== myPKId)) ||
+         (myUserId && (userId !== myUserId)) ||
          sessionExpired ||
          activityExpired ||
          !userId || !userName
@@ -175,11 +197,9 @@ export class AuthenticatorService {
 
    public validKnownUser(): boolean {
       const [userId, userName] = this.loadKnownUser();
-      if (userId && userName) {
-         const globalPKId = localStorage.getItem('pkid');
-         const myPKId = this._getSessionState()?.pkId;
-         if (globalPKId &&
-            ((globalPKId === myPKId) || !myPKId)) {
+      if (userId && userName && localStorage.getItem('pkid')) {
+         const myUserId = this._getSessionState()?.userId;
+         if (!myUserId || myUserId === userId) {
             return true;
          }
       }
@@ -223,20 +243,20 @@ export class AuthenticatorService {
    // Callers MUST overwrite returned value ASAP
    public async getUserCred(): Promise<Uint8Array<ArrayBuffer>> {
       const session = this._getSessionState();
-      if (!session?.userCredEnc) {
+      if (!session?.userCredEnc || !session.pkId) {
          throw new Error('no active user');
       }
 
-      const masterKey = await this._keystoreSvc.get('user-cred-key', session.pkId);
-      if (!masterKey) {
+      const { derivedKey } = await this._keystoreSvc.get(KEYSTORE_SLOT, session.pkId);
+      if (!derivedKey) {
          throw new Error('no active user');
       }
 
-      // Keyprovider takes ownership of masterkey and decryptStream takes ownership of keyprovider.
-      // The caller of getUserCred still needs to overwrite the returned userCred ASAP
-      const keyProvider = new MasterKeyKeyProvider(masterKey, this.userId);
+      // The caller of getUserCred must overwrite the returned userCred ASAP
+      // Keyprovider takes ownership of derivedKey and decryptStream takes ownership of keyProvider.
+      const keyProvider = new MasterKeyKeyProvider(derivedKey, this.userId);
       try {
-         // This will fail if another tab has logged in with a different pkID (for any userId)
+         // This will fail if another tab has logged in with a different pkID, and this tab has not updated
          const clearStream = await this._cipherSvc.decryptStream(streamFromBase64(session.userCredEnc), keyProvider);
          return await readStreamAll(clearStream);
       } catch {
@@ -313,21 +333,56 @@ export class AuthenticatorService {
       return response.json() as T;
    }
 
-   // does not recieve cookies, downloads user data again
-   public async restoreSession(): Promise<boolean> {
+   // public to simplify testing, normal clients shouldn't call
+   public async _restoreSession(): Promise<boolean> {
       if (!this.potentialSession()) {
          return false;
       }
-      const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
-         method: 'GET',
-         resource: 'session'
-      });
+
+      const session = this._getSessionState();
+      let userCredEnc = session?.userCredEnc;
+      let userCredExpiry = session?.userCredExpiry;
+      let version = session?.version ?? -1;
+      const targetPkId = session?.pkId ?? localStorage.getItem('pkid');
+      if (!targetPkId) {
+         return false;
+      }
+
+      // under common conditions, these take about the same time to complete
+      const [relay, serverLoginUserInfo] = await Promise.all([
+         this._broadcastSvc.requestCredential(targetPkId, true),
+         this._doFetch<LoginUserInfo>({
+            method: 'GET',
+            resource: 'session',
+            params: 'usercred=false' // TODO: remove this after backward compat period
+         })
+      ]);
 
       if (!serverLoginUserInfo || !serverLoginUserInfo.verified) {
          return false;
       }
 
-      await this._loginUser(serverLoginUserInfo);
+      if (relay && relay.pkId === serverLoginUserInfo.pkId && relay.version > version) {
+         userCredEnc = relay.userCredEnc;
+         userCredExpiry = relay.userCredExpiry;
+         version = relay.version;
+      }
+
+      if (!userCredEnc || !userCredExpiry || version < 1) {
+         return false;
+      }
+
+      await this._loginRestore(serverLoginUserInfo, userCredEnc, userCredExpiry, version);
+
+      // test decrypt to fail fast if userCredEnc is invalid
+      try {
+         const userCred = await this.getUserCred();
+         userCred.fill(0);
+      } catch {
+         this.logout(false);
+         return false;
+      }
+
       return true;
    }
 
@@ -361,9 +416,7 @@ export class AuthenticatorService {
 
       const userIdBytes = base64ToBytes(this.userId);
 
-      let recoveryBytes = new Uint8Array(recoveryIdBytes.byteLength + userIdBytes.byteLength);
-      recoveryBytes.set(recoveryIdBytes, 0);
-      recoveryBytes.set(userIdBytes, recoveryIdBytes.byteLength);
+      const recoveryBytes = concatArrays([recoveryIdBytes, userIdBytes]);
 
       return entropyToMnemonic(recoveryBytes, wordlist);
    }
@@ -398,17 +451,14 @@ export class AuthenticatorService {
       if (!serverLogin.pkId || serverLogin.pkId.length == 0) {
          throw new Error('invalid passkey id')
       }
-      if (!serverLogin.csrf || serverLogin.csrf.length == 0) {
-         throw new Error('invalid csrf token')
-      }
 
-      const masterKey = await this._keystoreSvc.create('user-cred-key', serverLogin.pkId);
-      if (!masterKey) {
+      const { derivedKey, version } = await this._keystoreSvc.create(KEYSTORE_SLOT, serverLogin.pkId);
+      if (!derivedKey) {
          throw new Error('no active user');
       }
 
       // Keyprovider takes ownership of masterkey and encryptStream takes ownership of keyprovider
-      const keyProvider = new MasterKeyKeyProvider(masterKey, serverLogin.userId);
+      const keyProvider = new MasterKeyKeyProvider(derivedKey, serverLogin.userId);
       const cipherData = await readStreamAll(
          await this._cipherSvc.encryptStream(
             streamFromBase64(serverLogin.userCred),
@@ -416,22 +466,157 @@ export class AuthenticatorService {
             { algs: ['X20-PLY'] }
          )
       );
-      const session: SessionState = {
-         pkId: serverLogin.pkId,
-         userCredEnc: bytesToBase64(cipherData)
-      };
-      sessionStorage.setItem('sessionstate', JSON.stringify(session));
 
-      const sessExpiry = new Date(Date.now() + SESSION_TIMEOUT * 1000).toISOString();
+      const userCredEnc = bytesToBase64(cipherData);
+      const userCredExpiry = new Date(Date.now() + SESSION_TIMEOUT_SEC * 1000).toISOString();
+      const userInfo = this._loginRestore(serverLogin, userCredEnc, userCredExpiry, version )
+      this._broadcastSvc.sendLogin({
+         pkId: serverLogin.pkId,
+         userCredEnc,
+         userCredExpiry,
+         version,
+      });
+
+      return userInfo;
+   }
+
+   // Restores session from a peer tab's relay.
+   private async _loginRestore(
+      serverLogin: LoginUserInfo,
+      userCredEnc: string,
+      userCredExpiry: string,
+      version: number
+   ): Promise<VerifiedUserInfo> {
+      if (!serverLogin.userId || serverLogin.userId.length == 0) {
+         throw new Error('invalid user id')
+      }
+      if (!serverLogin.pkId || serverLogin.pkId.length == 0) {
+         throw new Error('invalid passkey id')
+      }
+      if (!userCredEnc) {
+         throw new Error('missing encrypted credential')
+      }
+      if (!userCredExpiry) {
+         throw new Error('missing credential expiry')
+      }
+      if (version < 1) {
+         throw new Error('invalid version number')
+      }
+
+      const sessionState: SessionState = {
+         pkId: serverLogin.pkId,
+         userId: serverLogin.userId,
+         userCredEnc: userCredEnc,
+         userCredExpiry: userCredExpiry,
+         version: version,
+      };
+      sessionStorage.setItem('sessionstate', JSON.stringify(sessionState));
+      return this._loginFinalize(serverLogin, userCredExpiry);
+   }
+
+   private _loginFinalize(serverLogin: LoginUserInfo, sessExpiry: string): VerifiedUserInfo {
+      if (!serverLogin.csrf || serverLogin.csrf.length == 0) {
+         throw new Error('invalid csrf token')
+      }
+      if (!sessExpiry) {
+         throw new Error('missing session expiry')
+      }
+
       this._csrf = serverLogin.csrf;
       localStorage.setItem('sessionexpiry', sessExpiry);
-      localStorage.setItem('userid', serverLogin.userId);
-      localStorage.setItem('pkid', serverLogin.pkId);
+      localStorage.setItem('userid', serverLogin.userId!);
+      localStorage.setItem('pkid', serverLogin.pkId!);
 
       const userInfo = this._updateLoggedInUser(serverLogin);
       this._emit(this._captureEventData(AuthEvent.Login));
-
       return userInfo;
+   }
+
+   private _getCredentialPayload(): CredentialPayload | undefined {
+      const sessionState = this._getSessionState();
+      if (sessionState && this.hasSession() && !expired(localStorage, 'sessionexpiry')) {
+         return {
+            pkId: sessionState.pkId!,
+            version: sessionState.version!,
+            userCredEnc: sessionState.userCredEnc!,
+            userCredExpiry: sessionState.userCredExpiry!,
+         };
+      }
+      return undefined;
+   }
+
+   private _handlePeerMessage(msg: PeerMessage): void {
+      switch (msg.kind) {
+         case MessageKind.Forget:
+            this._handlePeerForget();
+            return;
+         case MessageKind.Logout:
+            this._handlePeerLogout(msg);
+            return;
+         case MessageKind.Login:
+            this._handlePeerLogin(msg);
+            return;
+         case MessageKind.UserInfoChanged:
+            this._handlePeerUserInfoChanged(msg);
+            return;
+      }
+   }
+
+   private _handlePeerForget(): void {
+      this.forgetUser(false);
+   }
+
+   private _handlePeerLogout(msg: LogoutPayload): void {
+      const sessionState = this._getSessionState();
+      if (sessionState && sessionState.version && msg.version >= sessionState.version) {
+         this.logout(false);
+      }
+   }
+
+   private _handlePeerLogin(msg: LoginPayload): void {
+      if(this.hasSession()) {
+         const sessionState = this._getSessionState()!;
+         if (msg.version > sessionState.version!) {
+            if (this.userInfo()!.authenticators.some((auth) => auth.credentialId === msg.pkId)) {
+               // We know the passkey, switch to it
+               this._adoptPeerLogin(msg);
+            } else if (this.validKnownUser()) {
+               // Same user, unknown passkey (rare), logout
+               this.logout(false);
+            } else {
+               // Different user signed in
+               this.forgetUser(false);
+            }
+         }
+      } else if (!this.validKnownUser()) {
+         // No session and a different user signed in
+         this.forgetUser(false);
+      }
+   }
+
+   private _handlePeerUserInfoChanged(msg: PasskeyIdPayload): void {
+      const userInfo = this.userInfo();
+      if (this.hasSession() && userInfo!.authenticators.some((auth) => auth.credentialId === msg.pkId)) {
+         this.refreshUserInfo().catch((err) => console.error(err));
+      }
+   }
+
+   private async _adoptPeerLogin(msg: LoginPayload): Promise<void> {
+      const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
+         method: 'GET',
+         resource: 'session',
+         params: 'usercred=false' // TODO: remove this after backward compat period
+      });
+      if (!serverLoginUserInfo || !serverLoginUserInfo.verified) {
+         this.logout(false);
+      } else {
+         await this._loginRestore(
+            serverLoginUserInfo,
+            msg.userCredEnc,
+            msg.userCredExpiry,
+            msg.version,
+         );
+      }
    }
 
    private _updateLoggedInUser(
@@ -457,18 +642,10 @@ export class AuthenticatorService {
 
       localStorage.setItem('username', serverUser.userName);
 
-      // TODO (CHANGED, but keeping comment during testing):
-      // The logic behind setting to globalPKId seems wrong. If in another tab a
-      // new user or new pkID for the current user is the current globalPKId, then
-      // that is injected into current userInfo, which seems wrong. Seems like
-      // this should be storing sessionStorage pkID and if that doesn't agree
-      // with global this user will be logged out by the timer tick. Although,
-      // that situation is unlikely because _updateLoggedInUser is preceeded by
-      // server calls which would return failure if our pkID and CSRF are out of date.
       const userInfo: VerifiedUserInfo = {
          userId: serverUser.userId!,
          userName: serverUser.userName!,
-         pkId: session.pkId,
+         pkId: session.pkId!,
          hasRecoveryId: serverUser.hasRecoveryId!,
          authenticators: serverUser.authenticators!
       };
@@ -485,22 +662,22 @@ export class AuthenticatorService {
       }
 
       // Currently 1.5 hours inactivity expritation
-      const activityExpiry = new Date(Date.now() + ACTIVITY_TIMEOUT * 1000).toISOString();
+      const activityExpiry = new Date(Date.now() + ACTIVITY_TIMEOUT_SEC * 1000).toISOString();
       localStorage.setItem('activityexpiry', activityExpiry);
 
       // Currently every 2 minutes
-      this._intervalId = window.setInterval(() => this._timerTick(), EXPIRY_CHECK_INTERVAL);
+      this._intervalId = window.setInterval(() => this._timerTick(), EXPIRY_CHECK_INTERVAL_MS);
    }
 
    private _timerTick(): void {
       if (!this.validKnownUser()) {
-         // this happens when another tab or windows forgets the user or changes passkey.
-         // don't do a global forget user since other tab could have a valid session
+         // this happens when another tab or window forgets the user or switches to a different user.
+         // don't do a global forgetuser since other tab could have a valid session
          this.forgetUser(false);
       } else if (!this.potentialSession()) {
          // potentialSession becomes false if either inactivity timer expires in this tab
          // or another. since we are tracking other tabs, this may be a bit annoying
-         // but its more conservative, and having multiple tabs open is less common
+         // but is more conservative, and having multiple tabs open is less common
          this.logout(true);
       }
    }
@@ -522,29 +699,29 @@ export class AuthenticatorService {
          localStorage.removeItem('userid');
          localStorage.removeItem('pkid');
          sessionStorage.clear();
+         this._keystoreSvc.delete(KEYSTORE_SLOT);
+         this._broadcastSvc.sendForget();
       }
       this._emit(eventData);
    }
 
    logout(global: boolean, emit: boolean = true) {
       const eventData = this._captureEventData(AuthEvent.Logout);
+      const session = this._getSessionState();
 
-      if (global) {
-         // Avoid trampling _pendingLogout by firing multiple DELETE's.
-         // They are noops when already logged out anyway.
-         if (this.hasSession()) {
-            this._pendingLogout = this._doFetch<string>({
-               method: 'DELETE',
-               resource: 'session'
-            }).catch(() => undefined);
-         }
+      if (global && this.hasSession()) {
+         this._pendingLogout = this._doFetch<string>({
+            method: 'DELETE',
+            resource: 'session'
+         }).catch(() => undefined);
 
          // rather than clear values, which can trigger error in other tabs,
          // set expirations to the past to trigger clear self-logout
          const expired = new Date(Date.now() - 10000).toISOString();
          localStorage.setItem('activityexpiry', expired);
          localStorage.setItem('sessionexpiry', expired);
-         this._keystoreSvc.delete('user-cred-key');
+
+         this._broadcastSvc.sendLogout({ pkId: session!.pkId!, version: session!.version! });
       }
 
       if (this._intervalId) {
@@ -553,11 +730,10 @@ export class AuthenticatorService {
       }
 
       this.userInfo.set(undefined);
-      // Preserve pkId so this tab refuses to auto-resume a different user's
-      // session.
-      const session = this._getSessionState();
-      if (session?.pkId) {
-         sessionStorage.setItem('sessionstate', JSON.stringify({ pkId: session.pkId }));
+      if (session?.userId) {
+         // Preserve userId so this tab refuses to auto-resume a different user's session
+         const partial: SessionState = { userId: session.userId };
+         sessionStorage.setItem('sessionstate', JSON.stringify(partial));
       } else {
          sessionStorage.removeItem('sessionstate');
       }
@@ -599,7 +775,9 @@ export class AuthenticatorService {
          throw new Error('authentication failed');
       }
 
-      return this._updateLoggedInUser(serverUserInfo);
+      const userInfo = this._updateLoggedInUser(serverUserInfo);
+      this._broadcastSvc.sendUserInfoChanged({ pkId: userInfo.pkId });
+      return userInfo;
    }
 
    async setUserName(userName: string): Promise<VerifiedUserInfo> {
@@ -623,7 +801,9 @@ export class AuthenticatorService {
          throw new Error('authentication failed');
       }
 
-      return this._updateLoggedInUser(serverUserInfo);
+      const userInfo = this._updateLoggedInUser(serverUserInfo);
+      this._broadcastSvc.sendUserInfoChanged({ pkId: userInfo.pkId });
+      return userInfo;
    }
 
    async deletePasskey(credentialId: string): Promise<number> {
@@ -655,7 +835,8 @@ export class AuthenticatorService {
       } else if (wasCurrentPk) {
          this.logout(true);
       } else {
-         this._updateLoggedInUser(serverUserInfo);
+         const userInfo = this._updateLoggedInUser(serverUserInfo);
+         this._broadcastSvc.sendUserInfoChanged({ pkId: userInfo.pkId });
       }
 
       return serverUserInfo.authenticators!.length;
@@ -863,7 +1044,6 @@ export class AuthenticatorService {
 
    // Adds passkey to current user
    async addPasskey(): Promise<VerifiedUserInfo> {
-
       if (!this.hasSession()) {
          throw new Error('no active user');
       }
@@ -874,7 +1054,9 @@ export class AuthenticatorService {
       });
 
       const serverLoginUserInfo = await this._passkeyVerify(optionsJson, false, false);
-      return this._updateLoggedInUser(serverLoginUserInfo);
+      const userInfo = this._updateLoggedInUser(serverLoginUserInfo);
+      this._broadcastSvc.sendUserInfoChanged({ pkId: userInfo.pkId });
+      return userInfo;
    }
 
    private async _passkeyVerify(

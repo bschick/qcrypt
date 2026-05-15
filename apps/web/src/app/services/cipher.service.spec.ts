@@ -25,17 +25,22 @@ import { CipherService } from './cipher.service';
 import {
    readStreamAll,
    base64ToBytes,
+   bytesToBase64,
+   cryptoReady,
    getArrayBuffer,
+   getRandom,
    Encipher,
    Ciphers,
    EContext,
-   PWDKeyProvider
+   PWDKeyProvider,
+   concatArrays,
 } from '@qcrypt/crypto';
 
 
 describe('CipherService', () => {
    let cipherSvc: CipherService;
-   beforeEach(() => {
+   beforeEach(async () => {
+      await cryptoReady();
       TestBed.configureTestingModule({});
       cipherSvc = TestBed.inject(CipherService);
    });
@@ -128,7 +133,8 @@ function streamFromBase64(b64: string): [
 describe("Stream encryption and decryption", function () {
 
    let cipherSvc: CipherService;
-   beforeEach(() => {
+   beforeEach(async () => {
+      await cryptoReady();
       TestBed.configureTestingModule({});
       cipherSvc = TestBed.inject(CipherService);
    });
@@ -140,7 +146,7 @@ describe("Stream encryption and decryption", function () {
          const srcString = 'This is a secret 🦆';
          const [clearStream, clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const userCred = getRandom(cc.USERCRED_BYTES);
 
          const econtext: EContext = {
             algs: [alg],
@@ -180,7 +186,7 @@ describe("Stream encryption and decryption", function () {
          const [clearStream, clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const userCred = getRandom(cc.USERCRED_BYTES);
 
          const econtext: EContext = {
             algs: [alg],
@@ -223,7 +229,7 @@ describe("Stream encryption and decryption", function () {
 
          const srcString = 'This is a secret 🦆';
          const [clearStream, clearData] = streamFromStr(srcString);
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const userCred = getRandom(cc.USERCRED_BYTES);
 
          const econtext: EContext = {
             algs: Array(maxLps).fill(alg),
@@ -270,7 +276,7 @@ describe("Stream encryption and decryption", function () {
 
       const srcString = 'This is a secret 🦆';
       const [clearStream] = streamFromStr(srcString);
-      const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+      const userCred = getRandom(cc.USERCRED_BYTES);
 
       const econtext: EContext = {
          algs: algKeys,
@@ -301,6 +307,34 @@ describe("Stream encryption and decryption", function () {
          expect(cdinfo.hint).toEqual(String(cdinfo.lp));
          expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
          expectedDecLp -= 1;
+         return [cdinfo.hint!, undefined];
+      });
+      const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+
+      const resString = await readStreamAll(decrypted, true);
+      expect(resString).toEqual(srcString);
+   });
+
+   it("successful round trip, lpEnd=LP_MAX", { timeout: 60000 }, async function () {
+
+      const algs: cc.CipherAlgs[] = Array(cc.LP_MAX).fill('AES-GCM');
+      const srcString = 'This is a secret 🦆';
+      const [clearStream] = streamFromStr(srcString);
+      const userCred = getRandom(cc.USERCRED_BYTES);
+
+      const econtext: EContext = {
+         algs,
+         ic: cc.ICOUNT_MIN
+      };
+
+      const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         expect(cdinfo.lpEnd).toEqual(cc.LP_MAX);
+         return [String(cdinfo.lp), String(cdinfo.lp)];
+      });
+      const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+      const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
+         expect(cdinfo.lpEnd).toEqual(cc.LP_MAX);
          return [cdinfo.hint!, undefined];
       });
       const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
@@ -342,7 +376,7 @@ describe("Stream encryption and decryption", function () {
                // AEGIS: V5
                "ZUDYZTXyYnJhG-9MZMD4j8ymWuNP8Oy5jr_qmISjOF0FADsBAAEDANHCkN2qd1mYu4zrsjS5AzIg9LsqLr3Dh8dJpcPkC9wK0Bwl_iFu5hpDTmyQ3P1G-eDIEAAAJbNfK1hDFINnuh3UpFAzOJnyH1fzCbjPuKFQcuZj8YfWkZV-_USgfgSqG1NLt2szc6ZMDEWoHKPPYgsRS6IH3JqrCJF8_W8RhV_1X51v9FAHE7D1VvNs5qiMiuKWN7IU9pXad18isn2leUwI0O24-8tCK7rCIX-CqGaY5y3mHEQavpoNHBD9QQKyKWNUqnWhvO39a_FtgNrtNaLx0LFLYKOpXYzFWSCbwQfeCDxXMK-J81u7z_K_OqLWTaZdjvEqaBDCqJQPapSRlgi0eh5bu94Vg9QsLKPYcFIXXjBMLOU7gNm0oRDMDok5Qu-Ln9OeWIAv1lNVS56JcYfEpOdZKYCStRc",
             ] },
-         //v5
+         //v6
          { ver: 6,
             cts: [
                // AEG-GCM: V6
@@ -352,10 +386,18 @@ describe("Stream encryption and decryption", function () {
                // AEGIS: V6
                "pB9kP1BYfukyE6IGD6gZ-_SHCjiV0AGI1UoJHEc6a3AGADwBAAEDAALbWMdn4I92-SWsCZpRgRqwM0Hzqp9yVg8crnjUCskbYzIqgLt7dSdfN19d3pnZjUBCDwAAJV0CeJDHHvGZ-cxRpIXKnPK9Cgh42Z_tqiOx88hUFvBISL6nOIK2pTymkZcmVN9Apw3g9WZcroMG6zTVUemIigqtzdsgEZ8IdfelvCTy1ULEzEMAsXX1n_itrE-nxVe1Q_qkJyZhzBRg4jJVL9zdXON6-l4cgTm4www0Ml9-6kl9skgjRBhk9RMFpAMIQ8Wll6tyN9Pen9uk_ahDrMFSA32eLGArQNIYZIEiompoMn1jMzMSAPTLzHN-6PgRdQUhTFr_rdEyiWjRxQWrTF8Rv57eYHxCgm_6faLPR0dLwoX0BgM83dsRjor5pzu4usO84J6TCY8fDhrXSg-1nyKUSeagYZ8",
             ] },
+         //v7 — generated by: pnpm vectors:ciphersvc
+         { ver: 7,
+            cts: [
+               // AES-GCM: V7
+               "YpMlHFV7fJw69ooc4sZ5GUtbRtD1Xxy7FM2qsgAttcgHAAgBAAEBAHb14fOLkvXg4kfL85r6Vz7D1kGPxmDZHZjWhTSgaAYAABULaUod_Abh_2X45bf2lphj9i8P1qFEGP8W5MllSS1MygY3xzmmWNhMgeFpgXNfo9X4X7EY1yeVb0RcMbfQJ62iTsn3nkmzsfaTWcBF_KJYfd4wJpEcb5UqWzHQdYXRd3nN11JVVst3T85b5jRTZpsIaMjam598jTaE6VWKek_-ssnM3ylVuS1zl-lEaKl3yiFnrtoEtjVoYV6ymuaVq6ROieYst5tAGi_71QbMVqPedisJnYZ_fN-_vGD9pk8tsHmd0YL-gc1Nqt0urZHmpXE-pNXWFI5f5tRYjB0XzKZOilhHiQ",
+               // X20-PLY: V7
+               "614git3W749LLaLeJ2Sqe1GzCea_-c6bTu60Gjh5Pz8HABQBAAECAPRbwSsLz4sfmMyqY6fujioJa7_r8GAjEtVJori9pNnSC4BSrsH66XmgaAYAABUZsYFdJQ0TbghjeieDFglneTN1XkNFm_9L6bRcoLrB8JVH7WgLO5YeENh_JuYKwbkoEPJGfWOl1E2_T3nItrPhreFOQ0FAic8PqYLB3dTAsv47pdt_RPWyEFSt5gYtIwqYnRay1vPdEy5z3lheC0SQxv6G4e0rz5AOyz6eq9pHnBP2jjkRPMm_DndCivi1hVjaWIlWG1LS1Fss0VO2AWwCPFnNSb_BBjYx2nxHarVpF4H7Zwwr3q7G3ES0vlXjfknNTo8DT9BJ-1eNVmFgmM7KsP1adHWO0qYp_VaJF3UjZ0zhog",
+               // AEGIS-256: V7
+               "eS6G3h_zHeeRHMn-xaSB-TgnMTantLq-HnqSZviKzHUHADwBAAEDAIMAFp1I45HmgMuQBfbTWHM88YKIse8pKJnhsaZCRydM36VA9S9WX6jnuRgZVxVpJKBoBgAAJb8Q182Y1pQykzecZl6sWBM1sUTOOvDbNQAwECeKZlAh52cLtC6NVabX_K2jBKch_cQozOgYyOKCC1M-k_bXh1wxupKea7BNPDMwcUFm_oeG8gGcsM-tzXw4hwHyogQzpAt7ojrFnPinDZjZvwelKm0RKVn77ktxxmJQZq6LfA9GWdxkTy5x5EyHwxR38hF8kIc0hA1krkXzhn91mdoDEskSLh-jKZ3nt3AikSNuhod2oTZUCmEUSDnIWsW10HvpHzJp69w1sNq2hPYT5RAs0Ekj01kGgPyrTWI7YxBvkXXl7piHdPPIBwdRrdU7MdbirCyrGQhovUJESLPdfIVLyWnTOIc",
+            ] },
       ];
 
-      // userCred used for creation of the CTS above
-      // b64url userCred for browser injection: xhKm2Q404pGkqfWkTyT3UodUR-99bN0wibH6si9uF8I
       const userCred = new Uint8Array([198, 18, 166, 217, 14, 52, 226, 145, 164, 169, 245, 164, 79, 36, 247, 82, 135, 84, 71, 239, 125, 108, 221, 48, 137, 177, 250, 178, 47, 110, 23, 194]);
       const [_, clearCheck] = streamFromStr('physical farm bolt correct bee nonchalant glib high able pinch left quaint strip valuable exultant disgusted curved bless geese snatch zoom fat touch boot abject wink pretty accessible foamy');
       const hintCheck = 'royal';
@@ -410,7 +452,7 @@ describe("Stream encryption and decryption", function () {
                // AEGIS-256: AES-GCM, AES-GCM V6, 3 LPS
                "S18WntQoRGYoTy9W4i8fuPPjKbwWUIFBbnSpBUanhLAGAA4CAAEBABMOsbaYDQFYF1taNhZq2S208_fs-vCrT2EUJkVAQg8AIhFcpOTEGHbFby411jzaT54UiYB7muuIFIgZNxIMzEyyI-Rw4ivyQiqTNv9L0NAt1K-oDAOa2OM_yN5picketRG6-4hLpgZiEhdLQEDqQ_zHIsW9VnO1JNPlZ7c_Aa4JIDMF3NqGcJnuATkDI52uDXlqpQ9qk52DB0Y37qHaHHqYyI2kBgdMdD9tWHpCNrm63fXOOSKfOE9FRxPMmZeGWzJIOhBwQ0OGAdBCUDKsrP2rADgwQcpW-5SU4oxwsWKhoMRueAlbK6KLHTVQc8LBybqUvUI3g7PGtOU0RQOkD2q15F8jGJkog8nqlNF3ZMG3Y3DM-gC45Fx5p_4k5F4B4i6FZFFYOEHJjhPV38xECb3X8mdInAZ88bhthHW-IlrPEmI9Tz1F9_qABS0tO2wEeTs96pTyDKH1Y42sL9utaBNA7Es4-_SIRUmr8aPDW6hCCpg-o2-Snecc7A-PlxHzFm10j7BB3Y5iLcaQScUzJ-ONpx4GAJzWP8tb23zAH_zeJTmwbZ0so3OTwfS07SffFIuyrdtvBWGZarCY3eTwC5URJ5RvOGs-_NWewGC3jn-UNW_yVEEl8tAFeah3db5ljunTx2DLwnIeUPAGHZpQh9bjq7c7BE1c8S4my9a3yqzLgB3ASRezSrlGZBg",
             ] },
-         //v7
+         //v7 — generated by: pnpm vectors:ciphersvc
          { ver: 7,
             cts: [
                // AES-GCM, X20-PLY, AEGIS-256, V7, 3 LPS
@@ -427,8 +469,6 @@ describe("Stream encryption and decryption", function () {
             const [cipherStream, cipherData] = streamFromBase64(ct);
             let expectedLp = 3;
 
-            // userCred used for creation of the CTS above
-            // b64url userCred for browsser injection: xhKm2Q404pGkqfWkTyT3UodUR-99bN0wibH6si9uF8I
             const userCred = new Uint8Array([198, 18, 166, 217, 14, 52, 226, 145, 164, 169, 245, 164, 79, 36, 247, 82, 135, 84, 71, 239, 125, 108, 221, 48, 137, 177, 250, 178, 47, 110, 23, 194]);
             const [_, clearCheck] = streamFromStr('physical farm bolt correct bee nonchalant glib high able pinch left quaint strip valuable exultant disgusted curved bless geese snatch zoom fat touch boot abject wink pretty accessible foamy');
 
@@ -450,9 +490,6 @@ describe("Stream encryption and decryption", function () {
 
    it("detect missing terminal block indicator, multi-version", async function () {
 
-      // base64url userCred for injection into browser for recreation:
-      // Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=
-      // manually created with missing terminal flag bit
       const vers = [
          //v5
          { ver: 5,
@@ -462,7 +499,7 @@ describe("Stream encryption and decryption", function () {
          { ver: 6,
             cipherData: new Uint8Array([132, 28, 138, 123, 147, 127, 43, 62, 165, 146, 225, 63, 193, 229, 103, 67, 52, 78, 235, 87, 222, 81, 39, 59, 221, 183, 97, 72, 255, 88, 246, 58, 6, 0, 117, 0, 0, 0, 2, 0, 34, 40, 133, 44, 12, 94, 228, 213, 26, 168, 170, 128, 158, 80, 186, 10, 199, 186, 216, 165, 74, 175, 77, 14, 167, 87, 224, 153, 52, 15, 148, 75, 171, 2, 77, 176, 158, 14, 41, 21, 64, 119, 27, 0, 0, 23, 60, 217, 5, 30, 103, 244, 158, 250, 216, 37, 3, 99, 119, 58, 27, 195, 99, 129, 80, 65, 210, 179, 102, 243, 232, 235, 177, 129, 48, 29, 127, 154, 58, 17, 16, 73, 65, 218, 12, 57, 251, 92, 205, 101, 8, 236, 63, 89, 47, 41, 190, 168, 125, 241, 136, 131, 63, 67, 146, 42, 204, 9, 202, 62, 160, 22, 123, 154])
          },
-         //v7
+         //v7 — generated by: pnpm vectors:ciphersvc
          { ver: 7,
             cipherData: new Uint8Array([218, 133, 51, 133, 245, 233, 230, 231, 173, 175, 15, 159, 179, 222, 101, 179, 78, 89, 73, 205, 142, 187, 161, 136, 227, 194, 62, 8, 124, 169, 28, 199, 7, 0, 108, 0, 0, 0, 2, 0, 242, 97, 95, 209, 159, 179, 147, 230, 156, 232, 238, 195, 88, 17, 119, 127, 43, 220, 77, 91, 211, 155, 55, 170, 17, 111, 25, 123, 51, 169, 60, 24, 76, 127, 50, 250, 134, 64, 232, 29, 64, 119, 27, 0, 0, 23, 209, 127, 62, 149, 252, 94, 5, 185, 175, 126, 171, 181, 159, 56, 102, 19, 92, 28, 87, 223, 104, 216, 82, 84, 194, 61, 25, 52, 234, 23, 76, 201, 185, 22, 18, 12, 149, 105, 110, 24, 138, 211, 251, 158, 126, 64, 140, 55, 183, 159, 84, 69, 59, 149, 205, 163, 136, 109, 17, 203, 137, 92, 166, 117, 33, 180, 192, 194, 139, 233, 51, 254, 61, 112, 219, 108, 68, 198, 240, 70, 131, 0, 132, 66, 159, 30, 47, 212, 223, 132, 213, 7, 0, 52, 0, 0, 0, 2, 0, 121, 232, 58, 204, 92, 45, 40, 107, 43, 91, 232, 235, 32, 50, 197, 214, 112, 106, 235, 9, 176, 89, 138, 169, 241, 68, 34, 23, 146, 224, 13, 241, 243, 66, 216, 119, 153, 59, 223, 17, 62, 207, 219, 67, 43, 39, 85, 204, 153])
          },
@@ -491,52 +528,72 @@ describe("Stream encryption and decryption", function () {
       }
    });
 
-   it("detect extra terminal block indicator, v6", async function () {
-      const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
+   it("detect extra terminal block indicator, multi-version", async function () {
+
+      const vers = [
+         //v6
+         { ver: 6,
+            cipherData: new Uint8Array([114, 105, 149, 122, 214, 68, 66, 254, 204, 60, 108, 90, 88, 145, 24, 13, 64, 232, 184, 211, 137, 68, 207, 107, 242, 54, 26, 74, 31, 99, 61, 110, 6, 0, 108, 0, 0, 1, 2, 0, 38, 7, 93, 115, 159, 181, 216, 73, 45, 124, 29, 242, 220, 98, 213, 145, 114, 236, 39, 248, 11, 6, 42, 127, 123, 242, 217, 57, 58, 205, 0, 255, 238, 184, 227, 83, 181, 100, 188, 208, 64, 119, 27, 0, 0, 23, 154, 92, 181, 175, 144, 243, 53, 142, 153, 165, 44, 241, 86, 111, 236, 209, 43, 164, 62, 163, 196, 163, 117, 144, 20, 60, 205, 74, 135, 202, 75, 142, 62, 9, 135, 94, 49, 180, 28, 58, 209, 97, 164, 112, 49, 76, 42, 209, 140, 8, 93, 78, 168, 68, 248, 120, 26, 49, 28, 173, 242, 51, 71, 237, 8, 237, 174, 172, 162, 15, 13, 206, 208, 202, 130, 231, 36, 205, 62, 47, 252, 216, 35, 203, 182, 64, 202, 194, 87, 132, 92, 6, 0, 52, 0, 0, 1, 2, 0, 51, 173, 77, 222, 222, 129, 65, 79, 156, 158, 88, 144, 22, 46, 77, 72, 215, 184, 30, 152, 149, 40, 86, 78, 225, 236, 11, 99, 214, 240, 246, 48, 170, 7, 183, 213, 15, 213, 179, 207, 3, 190, 145, 97, 125, 81, 96, 46, 74])
+         },
+         //v7 — generated by: pnpm vectors:ciphersvc
+         { ver: 7,
+            cipherData: new Uint8Array([166, 142, 241, 98, 52, 77, 110, 154, 114, 179, 158, 140, 118, 101, 73, 222, 188, 24, 166, 116, 57, 41, 91, 167, 219, 100, 60, 34, 102, 147, 52, 231, 7, 0, 108, 0, 0, 1, 2, 0, 77, 63, 93, 58, 234, 82, 154, 32, 11, 134, 79, 167, 142, 152, 254, 155, 148, 178, 46, 98, 8, 191, 73, 143, 18, 243, 182, 128, 15, 218, 152, 54, 46, 248, 211, 27, 238, 187, 166, 189, 64, 119, 27, 0, 0, 23, 56, 244, 64, 153, 132, 225, 227, 65, 108, 6, 218, 90, 87, 255, 152, 47, 143, 66, 70, 32, 225, 254, 141, 99, 226, 114, 91, 75, 229, 14, 80, 211, 158, 178, 63, 93, 204, 240, 73, 202, 51, 178, 249, 254, 183, 210, 158, 156, 255, 27, 228, 184, 213, 27, 21, 39, 128, 175, 1, 230, 230, 254, 223, 209, 142, 40, 43, 191, 130, 75, 4, 252, 61, 238, 208, 64, 143, 199, 104, 160, 251, 55, 234, 31, 112, 245, 170, 100, 156, 236, 33, 7, 0, 52, 0, 0, 1, 2, 0, 44, 246, 201, 127, 106, 74, 109, 148, 116, 139, 240, 118, 40, 92, 183, 23, 146, 77, 190, 230, 174, 3, 168, 55, 34, 111, 171, 231, 38, 122, 83, 189, 62, 98, 191, 229, 15, 251, 77, 221, 109, 100, 117, 126, 177, 130, 49, 168, 143])
+         },
+      ];
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
-      // base64Url userCred for generated with commandline
-      // Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=
       const userCred = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
-      // copied from ciphers.spec.ts
-      const [cipherStream] = streamFromBytes(new Uint8Array([114, 105, 149, 122, 214, 68, 66, 254, 204, 60, 108, 90, 88, 145, 24, 13, 64, 232, 184, 211, 137, 68, 207, 107, 242, 54, 26, 74, 31, 99, 61, 110, 6, 0, 108, 0, 0, 1, 2, 0, 38, 7, 93, 115, 159, 181, 216, 73, 45, 124, 29, 242, 220, 98, 213, 145, 114, 236, 39, 248, 11, 6, 42, 127, 123, 242, 217, 57, 58, 205, 0, 255, 238, 184, 227, 83, 181, 100, 188, 208, 64, 119, 27, 0, 0, 23, 154, 92, 181, 175, 144, 243, 53, 142, 153, 165, 44, 241, 86, 111, 236, 209, 43, 164, 62, 163, 196, 163, 117, 144, 20, 60, 205, 74, 135, 202, 75, 142, 62, 9, 135, 94, 49, 180, 28, 58, 209, 97, 164, 112, 49, 76, 42, 209, 140, 8, 93, 78, 168, 68, 248, 120, 26, 49, 28, 173, 242, 51, 71, 237, 8, 237, 174, 172, 162, 15, 13, 206, 208, 202, 130, 231, 36, 205, 62, 47, 252, 216, 35, 203, 182, 64, 202, 194, 87, 132, 92, 6, 0, 52, 0, 0, 1, 2, 0, 51, 173, 77, 222, 222, 129, 65, 79, 156, 158, 88, 144, 22, 46, 77, 72, 215, 184, 30, 152, 149, 40, 86, 78, 225, 236, 11, 99, 214, 240, 246, 48, 170, 7, 183, 213, 15, 213, 179, 207, 3, 190, 145, 97, 125, 81, 96, 46, 74]));
 
-      const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
-         expect(cdinfo.hint).toEqual(hint);
-         expect(cdinfo.alg).toBe('X20-PLY');
-         expect(cdinfo.ver).toBe(cc.VERSION6);
-         expect(cdinfo.lp).toBe(1);
-         expect(cdinfo.lpEnd).toBe(1);
-         expect(cdinfo.ic).toBe(1800000);
-         return [pwd, undefined];
-      });
-      const decryptedStream = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+      for (const ver of vers) {
+         const [cipherStream] = streamFromBytes(ver.cipherData);
 
-      await expect(readStreamAll(decryptedStream)).rejects.toThrow(new RegExp('Extra data block.+'));
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            expect(cdinfo.hint).toEqual(hint);
+            expect(cdinfo.alg).toBe('X20-PLY');
+            expect(cdinfo.ver).toBe(ver.ver);
+            expect(cdinfo.lp).toBe(1);
+            expect(cdinfo.lpEnd).toBe(1);
+            expect(cdinfo.ic).toBe(1800000);
+            return [pwd, undefined];
+         });
+         const decryptedStream = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+
+         await expect(readStreamAll(decryptedStream)).rejects.toThrow(new RegExp('Extra data block.+'));
+      }
    });
 
-   it("detect flipped terminal block indicator, v6", async function () {
-      const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
+   it("detect flipped terminal block indicator, multi-version", async function () {
+
+      const vers = [
+         //v6
+         { ver: 6,
+            cipherData: new Uint8Array([24, 212, 67, 36, 232, 163, 170, 119, 145, 211, 157, 196, 172, 177, 63, 167, 12, 22, 20, 81, 250, 166, 94, 226, 132, 226, 253, 243, 133, 249, 38, 46, 6, 0, 108, 0, 0, 1, 2, 0, 85, 112, 249, 39, 40, 215, 94, 63, 122, 204, 193, 102, 64, 65, 163, 82, 69, 123, 185, 109, 204, 27, 14, 222, 237, 33, 135, 94, 11, 145, 15, 204, 88, 25, 166, 108, 158, 106, 108, 144, 64, 119, 27, 0, 0, 23, 249, 240, 198, 170, 184, 70, 4, 93, 213, 139, 151, 175, 168, 83, 58, 110, 57, 141, 165, 35, 67, 130, 224, 145, 19, 200, 206, 7, 210, 27, 238, 115, 65, 227, 65, 86, 173, 49, 27, 61, 214, 163, 247, 237, 148, 168, 221, 228, 49, 197, 130, 72, 232, 83, 9, 108, 84, 44, 172, 115, 101, 0, 244, 178, 175, 216, 196, 5, 182, 210, 63, 180, 227, 122, 3, 70, 210, 255, 100, 185, 98, 226, 215, 183, 55, 131, 223, 16, 182, 177, 109, 6, 0, 52, 0, 0, 0, 2, 0, 117, 159, 80, 68, 25, 102, 215, 193, 132, 143, 200, 39, 19, 204, 47, 81, 213, 236, 77, 70, 22, 228, 220, 182, 58, 75, 143, 225, 66, 207, 162, 138, 118, 145, 133, 192, 55, 108, 217, 36, 155, 122, 39, 41, 30, 18, 66, 109, 59])
+         },
+         //v7 — generated by: pnpm vectors:ciphersvc
+         { ver: 7,
+            cipherData: new Uint8Array([83, 48, 184, 220, 60, 4, 212, 196, 64, 84, 58, 40, 32, 7, 171, 118, 246, 102, 145, 60, 128, 56, 123, 211, 56, 232, 123, 236, 143, 177, 242, 189, 7, 0, 108, 0, 0, 1, 2, 0, 92, 23, 153, 178, 251, 255, 45, 227, 181, 60, 0, 54, 241, 82, 22, 109, 201, 18, 90, 50, 180, 91, 153, 215, 51, 81, 22, 169, 139, 164, 176, 166, 122, 65, 34, 6, 30, 187, 37, 4, 64, 119, 27, 0, 0, 23, 78, 6, 235, 8, 176, 115, 158, 108, 162, 74, 30, 109, 184, 188, 61, 96, 68, 150, 138, 28, 58, 209, 105, 79, 63, 188, 146, 102, 40, 3, 92, 147, 96, 144, 185, 134, 214, 163, 134, 189, 81, 211, 130, 167, 82, 6, 238, 223, 184, 1, 97, 216, 37, 8, 40, 105, 255, 80, 54, 185, 60, 56, 66, 193, 225, 74, 54, 62, 136, 189, 173, 170, 198, 13, 243, 165, 81, 142, 128, 195, 28, 205, 38, 13, 221, 142, 184, 26, 251, 98, 71, 7, 0, 52, 0, 0, 0, 2, 0, 76, 101, 197, 153, 144, 32, 11, 188, 225, 15, 236, 83, 95, 91, 174, 205, 255, 167, 10, 110, 190, 43, 238, 18, 207, 113, 31, 147, 162, 127, 220, 226, 36, 138, 0, 7, 221, 222, 158, 218, 144, 88, 79, 80, 43, 122, 71, 83, 19])
+         },
+      ];
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
-      // base64Url userCred for generated with commandline
-      // Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=
       const userCred = new Uint8Array([58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98, 180, 61, 166, 219, 54, 164, 55]);
-      // copied from ciphers.spec.ts
-      const [cipherStream] = streamFromBytes(new Uint8Array([24, 212, 67, 36, 232, 163, 170, 119, 145, 211, 157, 196, 172, 177, 63, 167, 12, 22, 20, 81, 250, 166, 94, 226, 132, 226, 253, 243, 133, 249, 38, 46, 6, 0, 108, 0, 0, 1, 2, 0, 85, 112, 249, 39, 40, 215, 94, 63, 122, 204, 193, 102, 64, 65, 163, 82, 69, 123, 185, 109, 204, 27, 14, 222, 237, 33, 135, 94, 11, 145, 15, 204, 88, 25, 166, 108, 158, 106, 108, 144, 64, 119, 27, 0, 0, 23, 249, 240, 198, 170, 184, 70, 4, 93, 213, 139, 151, 175, 168, 83, 58, 110, 57, 141, 165, 35, 67, 130, 224, 145, 19, 200, 206, 7, 210, 27, 238, 115, 65, 227, 65, 86, 173, 49, 27, 61, 214, 163, 247, 237, 148, 168, 221, 228, 49, 197, 130, 72, 232, 83, 9, 108, 84, 44, 172, 115, 101, 0, 244, 178, 175, 216, 196, 5, 182, 210, 63, 180, 227, 122, 3, 70, 210, 255, 100, 185, 98, 226, 215, 183, 55, 131, 223, 16, 182, 177, 109, 6, 0, 52, 0, 0, 0, 2, 0, 117, 159, 80, 68, 25, 102, 215, 193, 132, 143, 200, 39, 19, 204, 47, 81, 213, 236, 77, 70, 22, 228, 220, 182, 58, 75, 143, 225, 66, 207, 162, 138, 118, 145, 133, 192, 55, 108, 217, 36, 155, 122, 39, 41, 30, 18, 66, 109, 59]));
 
-      const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
-         expect(cdinfo.hint).toEqual(hint);
-         expect(cdinfo.alg).toBe('X20-PLY');
-         expect(cdinfo.ver).toBe(cc.VERSION6);
-         expect(cdinfo.lp).toBe(1);
-         expect(cdinfo.lpEnd).toBe(1);
-         expect(cdinfo.ic).toBe(1800000);
-         return [pwd, undefined];
-      });
-      const decryptedStream = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+      for (const ver of vers) {
+         const [cipherStream] = streamFromBytes(ver.cipherData);
 
-      await expect(readStreamAll(decryptedStream)).rejects.toThrow(new RegExp('Extra data block.+'));
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            expect(cdinfo.hint).toEqual(hint);
+            expect(cdinfo.alg).toBe('X20-PLY');
+            expect(cdinfo.ver).toBe(ver.ver);
+            expect(cdinfo.lp).toBe(1);
+            expect(cdinfo.lpEnd).toBe(1);
+            expect(cdinfo.ic).toBe(1800000);
+            return [pwd, undefined];
+         });
+         const decryptedStream = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+
+         await expect(readStreamAll(decryptedStream)).rejects.toThrow(new RegExp('Extra data block.+'));
+      }
    });
 
    // using  base64-url alphabet
@@ -566,7 +623,7 @@ describe("Stream encryption and decryption", function () {
                //AEGIS-256
                "0iccnvyBA-Yer_7ur626xinuNSUivimb6SMYR5zWsisGAJMAAAEDAAwVFwpbKuzARYXHcaRN3oZFZ1ypFmUaW129_vD8i6Yxt81J2uCbtCnYQpGMW68fo0BCDwAAJIGfEG6HCbani4qkMSlgiV5oJaR2H2ir7PELn8ruJDjmk07BDCSzlAcUakQXuck-KCi6ySITkfffBojZrTSuLNRhruKhvcpDZiFCJPf7shjFmdIytH0lgHnZ9Q"
          ]},
-         //v7
+         //v7 — generated by: pnpm vectors:ciphersvc
          { ver: 7,
             cts: [
                //AES-GCM
@@ -578,7 +635,6 @@ describe("Stream encryption and decryption", function () {
          ]},
       ];
 
-      // base64Url usercred for tools: ZfZIlUPklSM8fFG7nWDQ2XuT5DxU1sZ0wKKykzJ3Yfs=
       const userCred = new Uint8Array([101, 246, 72, 149, 67, 228, 149, 35, 60, 124, 81, 187, 157, 96, 208, 217, 123, 147, 228, 60, 84, 214, 198, 116, 192, 162, 178, 147, 50, 119, 97, 251]);
 
       for (const ver of vers) {
@@ -628,7 +684,7 @@ describe("Stream encryption and decryption", function () {
          const [clearStream] = streamFromStr('This is a secret 🦄');
          const pwd = 'the correct pwd';
          const hint = '';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const userCred = getRandom(cc.USERCRED_BYTES);
 
          const econtext: EContext = {
             algs: [alg],
@@ -664,7 +720,7 @@ describe("Stream encryption and decryption", function () {
 
             const srcString = 'This is a secret 🦆';
             const [clearStream, clearData] = streamFromStr(srcString);
-            const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+            const userCred = getRandom(cc.USERCRED_BYTES);
 
             const econtext: EContext = {
                algs: Array(maxLps).fill(alg),
@@ -736,7 +792,7 @@ describe("Stream encryption and decryption", function () {
 
          const pwd = 'another good pwd';
          const hint = 'nope';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const userCred = getRandom(cc.USERCRED_BYTES);
 
          const econtext: EContext = {
             algs: [alg],
@@ -770,7 +826,7 @@ describe("Stream encryption and decryption", function () {
 
          const pwd = 'another good pwd';
          const hint = 'nope';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const userCred = getRandom(cc.USERCRED_BYTES);
 
          const econtext: EContext = {
             algs: [alg],
@@ -816,7 +872,7 @@ describe("Stream encryption and decryption", function () {
 
       const hint = 'nope';
       const pwd = 'another good pwd';
-      const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+      const userCred = getRandom(cc.USERCRED_BYTES);
 
       const econtext: EContext = {
          algs: ['AES-GCM'],
@@ -865,7 +921,7 @@ describe("Stream encryption and decryption", function () {
       [clearStream] = streamFromBytes(clearData);
 
       await expect((async () => {
-         const longUcKeyProvider = new PWDKeyProvider(crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES + 2)), async (cdinfo) => {
+         const longUcKeyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES + 2), async (cdinfo) => {
             return [pwd, hint];
          });
          return cipherSvc.encryptStream(clearStream, longUcKeyProvider, econtext);
@@ -935,12 +991,133 @@ describe("Stream encryption and decryption", function () {
       await expect(cipherSvc.encryptStream(clearStream, badAlg2KeyProvider, bcontext)).rejects.toThrow(new RegExp('Unsupported cipher mode.+'));
 
    });
+
+   it("hint length validation", async function () {
+
+      const srcString = 'This is a secret 🦆';
+      const pwd = 'a good pwd';
+      const userCred = getRandom(cc.USERCRED_BYTES);
+      const econtext: EContext = {
+         algs: ['AES-GCM'],
+         ic: cc.ICOUNT_MIN
+      };
+
+      // hint max len success
+      const exactHint = 'a'.repeat(cc.HINT_MAX_LEN);
+      let [clearStream] = streamFromStr(srcString);
+      const exactKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, exactHint]);
+      const exactCipherStream = await cipherSvc.encryptStream(clearStream, exactKeyProvider, econtext);
+
+      const exactDecKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         expect(cdinfo.hint).toEqual(exactHint);
+         return [pwd, undefined];
+      });
+      const exactDecrypted = await cipherSvc.decryptStream(exactCipherStream, exactDecKeyProvider);
+      expect(await readStreamAll(exactDecrypted, true)).toEqual(srcString);
+
+      // hint len > max failes
+      const overHint = 'a'.repeat(cc.HINT_MAX_LEN + 1);
+      [clearStream] = streamFromStr(srcString);
+      const overKeyProvider = new PWDKeyProvider(userCred, [pwd, overHint]);
+      const overCipherStream = await cipherSvc.encryptStream(clearStream, overKeyProvider, econtext);
+      await expect(readStreamAll(overCipherStream)).rejects.toThrow(/Hint length.+/);
+   });
+
+   it("multibyte UTF-8 hint under limit succeeds", async function () {
+
+      const srcString = 'This is a secret 🦆';
+      const pwd = 'a good pwd';
+      const userCred = getRandom(cc.USERCRED_BYTES);
+      const econtext: EContext = {
+         algs: ['AES-GCM'],
+         ic: cc.ICOUNT_MIN
+      };
+
+      const hint = '🌧️'.repeat(30);
+      expect(hint.length).toBeLessThanOrEqual(cc.HINT_MAX_LEN);
+
+      const [clearStream] = streamFromStr(srcString);
+      const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, hint]);
+      const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+      const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
+         expect(cdinfo.hint).toEqual(hint);
+         return [pwd, undefined];
+      });
+      const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+      expect(await readStreamAll(decrypted, true)).toEqual(srcString);
+   });
+
+   /// hint should be cleanly truncated at a codepoint boundary
+   it("UTF-8 hint overflows byte limit is cleanly truncated", async function () {
+
+      const srcString = 'This is a secret 🦆';
+      const pwd = 'a good pwd';
+      const userCred = getRandom(cc.USERCRED_BYTES);
+      const econtext: EContext = {
+         algs: ['AES-GCM'],
+         ic: cc.ICOUNT_MIN
+      };
+
+      // 'は' is 3 UTF-8 bytes. HINT_MAX_LEN of them passes the
+      // length check but overflows the AEAD plaintext budget.
+      const hint = 'は'.repeat(cc.HINT_MAX_LEN);
+      const truncatedCharCount = Math.floor((cc.ENCRYPTED_HINT_MAX_BYTES - cc.AUTH_TAG_MAX_BYTES) / 3);
+      const expectedHint = 'は'.repeat(truncatedCharCount);
+
+      const [clearStream] = streamFromStr(srcString);
+      const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, hint]);
+      const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+      const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
+         expect(cdinfo.hint).toEqual(expectedHint);
+         return [pwd, undefined];
+      });
+      const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+      expect(await readStreamAll(decrypted, true)).toEqual(srcString);
+   });
+
+   it("each encryption gets a different init vector and salt", async function () {
+
+      const srcString = 'This is a secret 🦆';
+      const pwd = 'a good pwd';
+      const userCred = getRandom(cc.USERCRED_BYTES);
+
+      for (const alg of Ciphers.algs()) {
+
+         const econtext: EContext = {
+            algs: [alg],
+            ic: cc.ICOUNT_MIN
+         };
+
+         const ivOffset = cc.MAC_BYTES + cc.VER_BYTES + cc.PAYLOAD_SIZE_BYTES + cc.FLAGS_BYTES + cc.ALG_BYTES;
+         const ivLen = Number(Ciphers.algIVByteLength(alg));
+         const sltOffset = ivOffset + ivLen;
+
+         const [clearStream1] = streamFromStr(srcString);
+         const kp1 = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const cipher1 = await readStreamAll(await cipherSvc.encryptStream(clearStream1, kp1, econtext));
+
+         const [clearStream2] = streamFromStr(srcString);
+         const kp2 = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const cipher2 = await readStreamAll(await cipherSvc.encryptStream(clearStream2, kp2, econtext));
+
+         const iv1 = cipher1.slice(ivOffset, ivOffset + ivLen);
+         const iv2 = cipher2.slice(ivOffset, ivOffset + ivLen);
+         const slt1 = cipher1.slice(sltOffset, sltOffset + cc.SLT_BYTES);
+         const slt2 = cipher2.slice(sltOffset, sltOffset + cc.SLT_BYTES);
+
+         expect(iv1).not.toEqual(iv2);
+         expect(slt1).not.toEqual(slt2);
+      }
+   });
 });
 
 describe("Stream encryption and decryption with customAd", function () {
 
    let cipherSvc: CipherService;
-   beforeEach(() => {
+   beforeEach(async () => {
+      await cryptoReady();
       TestBed.configureTestingModule({});
       cipherSvc = TestBed.inject(CipherService);
    });
@@ -951,8 +1128,8 @@ describe("Stream encryption and decryption with customAd", function () {
          const srcString = 'This is a secret 🦆';
          const [clearStream, clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const customAd = crypto.getRandomValues(new Uint8Array(16));
+         const userCred = getRandom(cc.USERCRED_BYTES);
+         const customAd = bytesToBase64(getRandom(16));
 
          const econtext: EContext = {
             algs: [alg],
@@ -995,8 +1172,8 @@ describe("Stream encryption and decryption with customAd", function () {
          const [clearStream, clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const customAd = crypto.getRandomValues(new Uint8Array(1));
+         const userCred = getRandom(cc.USERCRED_BYTES);
+         const customAd = getRandom(1);
 
          const econtext: EContext = {
             algs: [alg],
@@ -1039,8 +1216,8 @@ describe("Stream encryption and decryption with customAd", function () {
          const [clearStream, clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const customAd = crypto.getRandomValues(new Uint8Array(1));
+         const userCred = getRandom(cc.USERCRED_BYTES);
+         const customAd = getRandom(1);
 
          const econtext: EContext = {
             algs: [alg],
@@ -1078,8 +1255,8 @@ describe("Stream encryption and decryption with customAd", function () {
          const [clearStream, clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const customAd = crypto.getRandomValues(new Uint8Array(1));
+         const userCred = getRandom(cc.USERCRED_BYTES);
+         const customAd = getRandom(1);
 
          const econtext: EContext = {
             algs: [alg],
@@ -1119,8 +1296,8 @@ describe("Stream encryption and decryption with customAd", function () {
          const [clearStream, clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const customAd = crypto.getRandomValues(new Uint8Array(14));
+         const userCred = getRandom(cc.USERCRED_BYTES);
+         const customAd = getRandom(14);
 
          const econtext: EContext = {
             algs: [alg],
@@ -1160,8 +1337,8 @@ describe("Stream encryption and decryption with customAd", function () {
          const [clearStream, clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const customAd = crypto.getRandomValues(new Uint8Array(1));
+         const userCred = getRandom(cc.USERCRED_BYTES);
+         const customAd = getRandom(1);
 
          const econtext: EContext = {
             algs: [alg],
@@ -1193,6 +1370,98 @@ describe("Stream encryption and decryption with customAd", function () {
          await expect(cipherSvc.decryptStream(cipherStream, decKeyProvider)).rejects.toThrow(/Invalid MAC/);
       }
    });
+
+   it("successful round trip, mixed algorithms, loops, with customAd", async function () {
+
+      const algKeys = Ciphers.algs();
+      const maxLps = algKeys.length;
+
+      const srcString = 'This is a secret 🦆';
+      const [clearStream] = streamFromStr(srcString);
+      const userCred = getRandom(cc.USERCRED_BYTES);
+      const customAd = getRandom(16);
+
+      const econtext: EContext = {
+         algs: algKeys,
+         ic: cc.ICOUNT_MIN
+      };
+
+      let expectedEncLp = 1;
+
+      const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         expect(cdinfo.lp).toEqual(expectedEncLp);
+         expect(cdinfo.lpEnd).toEqual(maxLps);
+         expect(cdinfo.alg).toEqual(algKeys[cdinfo.lp - 1]);
+         expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+         expectedEncLp += 1;
+         return [String(cdinfo.lp), String(cdinfo.lp)];
+      }, customAd);
+      const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+      let expectedDecLp = maxLps;
+
+      const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         expect(cdinfo.lp).toEqual(expectedDecLp);
+         expect(cdinfo.lpEnd).toEqual(maxLps);
+         expect(cdinfo.alg).toEqual(algKeys[cdinfo.lp - 1]);
+         expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
+         expectedDecLp -= 1;
+         return [cdinfo.hint!, undefined];
+      }, customAd);
+      const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+
+      const resString = await readStreamAll(decrypted, true);
+      expect(resString).toEqual(srcString);
+   });
+
+   it("failed round trip, mixed algorithms, loops, missing customAd", async function () {
+
+      const algKeys = Ciphers.algs();
+      const srcString = 'This is a secret 🦆';
+      const [clearStream] = streamFromStr(srcString);
+      const userCred = getRandom(cc.USERCRED_BYTES);
+      const customAd = getRandom(16);
+
+      const econtext: EContext = {
+         algs: algKeys,
+         ic: cc.ICOUNT_MIN
+      };
+
+      const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         return [String(cdinfo.lp), String(cdinfo.lp)];
+      }, customAd);
+      const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+      const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         return [cdinfo.hint!, undefined];
+      });
+      await expect(cipherSvc.decryptStream(cipherStream, decKeyProvider)).rejects.toThrow(/Invalid MAC/);
+   });
+
+   it("failed round trip, mixed algorithms, loops, wrong customAd", async function () {
+
+      const algKeys = Ciphers.algs();
+      const srcString = 'This is a secret 🦆';
+      const [clearStream] = streamFromStr(srcString);
+      const userCred = getRandom(cc.USERCRED_BYTES);
+      const customAd = getRandom(16);
+      const wrongCustomAd = getRandom(16);
+
+      const econtext: EContext = {
+         algs: algKeys,
+         ic: cc.ICOUNT_MIN
+      };
+
+      const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         return [String(cdinfo.lp), String(cdinfo.lp)];
+      }, customAd);
+      const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+      const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         return [cdinfo.hint!, undefined];
+      }, wrongCustomAd);
+      await expect(cipherSvc.decryptStream(cipherStream, decKeyProvider)).rejects.toThrow(/Invalid MAC/);
+   });
 });
 
 describe("Read block size bugs check", function () {
@@ -1214,8 +1483,8 @@ describe("Read block size bugs check", function () {
 
       const hint = 'nope';
       const pwd = 'another good pwd';
-      const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-      const clearData = crypto.getRandomValues(new Uint8Array(100));
+      const userCred = getRandom(cc.USERCRED_BYTES);
+      const clearData = getRandom(100);
 
       for (const alg of Ciphers.algs()) {
          for (const adjust of [-1, 0, 1]) {
@@ -1251,8 +1520,8 @@ describe("Read block size bugs check", function () {
 
       const hint = 'nope';
       const pwd = 'another good pwd';
-      const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-      const clearData = crypto.getRandomValues(new Uint8Array(100));
+      const userCred = getRandom(cc.USERCRED_BYTES);
+      const clearData = getRandom(100);
 
       for (const alg of Ciphers.algs()) {
          for (const adjust of [-1, 0, 1]) {
@@ -1296,17 +1565,13 @@ describe("Read block size bugs check", function () {
 describe("Stream manipulation, multi-version", function () {
 
    let cipherSvc: CipherService;
-   beforeEach(() => {
+   beforeEach(async () => {
+      await cryptoReady();
       TestBed.configureTestingModule({});
       cipherSvc = TestBed.inject(CipherService);
    });
 
-   // userCred used for creation of the CTS below
-   // b64url userCred for browser injection: xhKm2Q404pGkqfWkTyT3UodUR-99bN0wibH6si9uF8I
    const userCred = new Uint8Array([198, 18, 166, 217, 14, 52, 226, 145, 164, 169, 245, 164, 79, 36, 247, 82, 135, 84, 71, 239, 125, 108, 221, 48, 137, 177, 250, 178, 47, 110, 23, 194]);
-   // Also replace following value in cipher.ts to create small blocks
-   //const READ_SIZE_START = 1048576/1024/4;
-   //const READ_SIZE_MAX = READ_SIZE_START * 41
 
    const vers = [
       //v5
@@ -1323,7 +1588,7 @@ describe("Stream manipulation, multi-version", function () {
          iv: new Uint8Array([129, 132, 188, 49, 136, 192, 130, 173, 7, 164, 63, 77]),
          ver: 6
       },
-      //v7
+      //v7 — generated by: pnpm vectors:ciphersvc
       {
          ct: "wDQDAAMCu-7y7nxOrvCv62O31uebelDSfd1mXVxxpLcHAEkBAAABAIpThpzVKC3PLaPVr-6qkAKq8gJ7KAk-JhRHxfzgyBAAABRPlyUfcBh4sGHrI1hTanGYHm5RvBNuReW-_TiMUn_Z__W_7u7k8CZ1zAi5bWWL7Dto7-2MJc1fobc5gZY64jHMqboHYlwZqKzyl5jVtguqOfUiLgpuSc10mupWO4EgduGA6SrnClM07iOMW_aCxvnFeIjYk7riFVn4491Lacdz9URJGnrj_Foac2L-U7sEnsk5fp2bJvW7-nM6lT475y-0Kynkk-Xr2kOO4IYw_qgFlRnOYL6yGXUEwiQRaYWDKj0ukr7wxZ_dvrJOkyxJk1GxPIdGfX8xFMrFRvbnqkyczyj8Y2h4KN6zBOXPvZ62Xfq3NQOd8BMWl2fflDnZN70upCS4KwiR74V-pna3uYDFpYE6SsxI3CzvazPPyWfk_Mhxs4DUeMmhBLlWAlERSJOXTS6WYUq7AAZFDhhkoCTJgLc-X68HAG8BAAEBAP5AyF03yl8-AApuXTf4fB4Ewm3jAMSenb6gm6bJDh5L5OxgpTWhLQP278XJWxMpYWhyZCRmd3KGUADSOfvsoqr-JbOiBdCEdO71_OBCW2cmR4-urIF9_L9DDbsskBfp54qZfqqt3WTfVQ6iCtlU4g3ZSL0uinMG3-A9kjxBuKAAIReejP_0uokRmJNJFWq3qQtRXv1J6pEXiT_HgJ9aQpHEWJV_BLkD8-aP38_PFntlZoZROWggGXxJGC_CT0cAjuL0k347y4ylguwvAOTdqqGChm0hb5sxCX4_ah50cB2RifjSxOUQ8FVDBxe9AkJ_7Ig6ncmKduFWvGvZ_uB4W4NpUfRHmH3Sx3xCayGFGie4sftzSELYAYd8K7hLSr7hAJlsw1fG7Qtqj-ff12_6XwAl3dRh7GeQ5YDAlXgxSSWbcDnesU7QuJIpRHdjchBOOO3mYGDFgE8hnd5Xm8MpowrJ0wFy-13OxoClJA4",
          slt: new Uint8Array([238, 170, 144, 2, 170, 242, 2, 123, 40, 9, 62, 38, 20, 71, 197, 252]),
@@ -1382,44 +1647,55 @@ describe("Stream manipulation, multi-version", function () {
          b0Mac[block0MACOffset] = 255;
 
          let [stream] = streamFromBytes(b0Mac);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Test modified block0 version
          const b0Ver = new Uint8Array(cipherData);
          b0Ver[block0VerOffset] = 22;
          [stream] = streamFromBytes(b0Ver);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid version.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid version.+'));
 
          // Test modified block0 size, valid size but too small
          let b0Size = new Uint8Array(cipherData);
          b0Size.set([20, 1], block0SizeOffset);
          [stream] = streamFromBytes(b0Size);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Too small block0 size, invalid
          b0Size = new Uint8Array(cipherData);
          b0Size.set([0, 0], block0SizeOffset);
          [stream] = streamFromBytes(b0Size);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid payload size3.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid payload size3.+'));
 
          // Test too big block0 size
          b0Size = new Uint8Array(cipherData);
          b0Size.set([255, 255, 255], block0SizeOffset);
          [stream] = streamFromBytes(b0Size);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Cipher data length mismatch1.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Cipher data length mismatch1.+'));
+
+         // Boundary: PAYLOAD_SIZE_MIN - 1 fails the size check
+         b0Size = new Uint8Array(cipherData);
+         b0Size.set([cc.PAYLOAD_SIZE_MIN - 1, 0, 0], block0SizeOffset);
+         [stream] = streamFromBytes(b0Size);
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid payload size3.+'));
+
+         b0Size = new Uint8Array(cipherData);
+         b0Size.set([cc.PAYLOAD_SIZE_MIN, 0, 0], block0SizeOffset);
+         [stream] = streamFromBytes(b0Size);
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid.+'));
 
          // Test modified block0 flags, invalid
          let b0Flags = new Uint8Array(cipherData);
          b0Flags[block0FlagsOffset] = 6;
          [stream] = streamFromBytes(b0Flags);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid flags.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid flags.+'));
 
          // Test modified block0 flags, early terminal (detected by MAC first because
          // early term isn't known until next block)
          b0Flags = new Uint8Array(cipherData);
          b0Flags[block0FlagsOffset] = 1;
          [stream] = streamFromBytes(b0Flags);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid MAC.+'));
       }
    });
 
@@ -1439,49 +1715,49 @@ describe("Stream manipulation, multi-version", function () {
          const bNMac = new Uint8Array(cipherdata);
          bNMac[block1MACOffset] = 255;
          let [stream] = streamFromBytes(bNMac);
-         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Modified blockN version
          const bNVer = new Uint8Array(cipherdata);
          bNVer.set([4, 1], block1VerOffset);
          [stream] = streamFromBytes(bNVer);
-         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid version.+'));
 
          // Test modified blockN size, too small valid
          let bNSize = new Uint8Array(cipherdata);
          bNSize.set([20, 1], block1SizeOffset);
          [stream] = streamFromBytes(bNSize);
-         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Too small blockN size, too small invalid
          bNSize = new Uint8Array(cipherdata);
          bNSize.set([0, 0], block1SizeOffset);
          [stream] = streamFromBytes(bNSize);
-         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid payload.+'));
 
          // Test too big blockN but valid
          bNSize = new Uint8Array(cipherdata);
          bNSize.set([255, 255, 255], block1SizeOffset);
          [stream] = streamFromBytes(bNSize);
-         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Cipher data length mismatch2.+'));
 
          // Test modified block0 flags, invalid
          let bNFlags = new Uint8Array(cipherdata);
          bNFlags[block1FlagsOffset] = 6;
          [stream] = streamFromBytes(bNFlags);
-         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid flags.+'));
 
          // Test modified block0 flags, early terminal (detected by MAC first)
          bNFlags = new Uint8Array(cipherdata);
          bNFlags[block1FlagsOffset] = 0;
          [stream] = streamFromBytes(bNFlags);
-         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid MAC.+'));
       }
    });
@@ -1502,7 +1778,7 @@ describe("Stream manipulation, multi-version", function () {
          let b0Alg = new Uint8Array(cipherdata);
          b0Alg[block0AlgOffset] = 128;
          let [stream] = streamFromBytes(b0Alg);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Unsupported cipher mode.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Unsupported cipher mode.+'));
 
          // Modified block0 valid but changed ALG
          b0Alg = new Uint8Array(cipherdata);
@@ -1511,56 +1787,90 @@ describe("Stream manipulation, multi-version", function () {
          // Error will be different given different cipherdata because changing the alg
          // above changes the IV read len and therefore location of following values.
          // Therefore don't check for specific error message
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(Error);
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(Error);
 
          // Modified block0 IV
          let b0OIV = new Uint8Array(cipherdata);
          b0OIV[block0IVOffset] = 0;
          [stream] = streamFromBytes(b0OIV);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Modified block0 Salt
          let b0Slt = new Uint8Array(cipherdata);
          b0Slt[block0SltOffset] = 1;
          [stream] = streamFromBytes(b0Slt);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Modified block0 invalid IC
          let b0IC = new Uint8Array(cipherdata);
          b0IC.set([0, 0, 0, 0], block0ICOffset);
          [stream] = streamFromBytes(b0IC);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Modified block0 valid but changed IC
          b0IC = new Uint8Array(cipherdata);
          b0IC.set([64, 119, 21, 1], block0ICOffset);
          [stream] = streamFromBytes(b0IC);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid MAC.+'));
+
+         // Modified block0 IC
+         b0IC = new Uint8Array(cipherdata);
+         b0IC.set([255, 255, 255, 255], block0ICOffset);
+         [stream] = streamFromBytes(b0IC);
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid ic.+'));
 
          // Modified block0 invalid LPP
          let b0LP = new Uint8Array(cipherdata);
          b0LP[block0LPOffset] = 24; // lp > lpEnd
          [stream] = streamFromBytes(b0LP);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid lp.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid lp.+'));
 
          // Modified block0 valid but changed LPP
          b0LP = new Uint8Array(cipherdata);
          b0LP[block0LPOffset] = 48;
          [stream] = streamFromBytes(b0LP);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
-         // Modified block0 hint length
+         // Modified block0 hint length under
          let b0HintLen = new Uint8Array(cipherdata);
-         b0HintLen[block0HintLenOffset] = 12;
+         b0HintLen[block0HintLenOffset] = 2;
          [stream] = streamFromBytes(b0HintLen);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid MAC.+'));
+
+         // Modified block0 hint length over
+         b0HintLen = new Uint8Array(cipherdata);
+         b0HintLen[block0HintLenOffset] = 250;
+         [stream] = streamFromBytes(b0HintLen);
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid MAC.+'));
 
          // Modified block0 hint
          let b0Hint = new Uint8Array(cipherdata);
          b0Hint[block0HintOffset] = 12;
          [stream] = streamFromBytes(b0Hint);
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(new RegExp('Invalid MAC.+'));
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(new RegExp('Invalid MAC.+'));
       }
+   });
+
+   // Small plaintext keeps the payload short so the tampered hintLen overruns it.
+   it("detect hintLen overrun on block0", async function () {
+      const pwd = 'asdf';
+      const hint = 'h';
+      const userCredHere = getRandom(cc.USERCRED_BYTES);
+      const [clearStream] = streamFromStr('short');
+      const econtext: EContext = {
+         algs: ['AES-GCM'],
+         ic: cc.ICOUNT_MIN
+      };
+
+      const encKeyProvider = new PWDKeyProvider(userCredHere.slice(0), [pwd, hint]);
+      const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+      const cipherdata = await readStreamAll(cipherStream);
+
+      const tampered = new Uint8Array(cipherdata);
+      tampered[block0HintLenOffset] = 250;
+      const [stream] = streamFromBytes(tampered);
+
+      await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCredHere, [pwd, undefined]))).rejects.toThrow(new RegExp('Invalid hint.+'));
    });
 
    it("detect manipulated cipher stream additional data, blockN", async function () {
@@ -1578,14 +1888,14 @@ describe("Stream manipulation, multi-version", function () {
          let bNAlg = new Uint8Array(cipherdata);
          bNAlg[block1AlgOffset] = 128;
          let [stream] = streamFromBytes(bNAlg);
-         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Unsupported cipher mode.+'));
 
          // Modified blockN valid but changed ALG
          bNAlg = new Uint8Array(cipherdata);
          bNAlg[block1AlgOffset] = 2;
          [stream] = streamFromBytes(bNAlg);
-         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]));
          // Error will be different given different cipherdata because changing the alg
          // above changes the IV read len and therefore location of following values.
          // Therefore don't check for specific error message
@@ -1595,7 +1905,7 @@ describe("Stream manipulation, multi-version", function () {
          let bNIV = new Uint8Array(cipherdata);
          bNIV[block1IVOffset] = 0;
          [stream] = streamFromBytes(bNIV);
-         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid MAC.+'));
       }
    });
@@ -1616,27 +1926,27 @@ describe("Stream manipulation, multi-version", function () {
          b0Enc[block0EncOffset] = 0;
          let [stream] = streamFromBytes(b0Enc);
          // version ${ver.ver}
-         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }))).rejects.toThrow(/Invalid MAC/);
+         await expect(cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]))).rejects.toThrow(/Invalid MAC/);
 
          // Modified blockN encrypted data
          let bNEnc = new Uint8Array(cipherdata);
          bNEnc[block1EncOffset] = 0;
          [stream] = streamFromBytes(bNEnc);
-         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), async (cdinfo) => { return ['asdf', undefined]; }));
+         dec = await cipherSvc.decryptStream(stream, new PWDKeyProvider(userCred.slice(0), ['asdf', undefined]));
          await expect(readStreamAll(dec)).rejects.toThrow(new RegExp('Invalid MAC.+'));
       }
    });
 
    it("detect random changed bytes, all algorithms", async function () {
 
-      const [_, clearData] = streamFromBytes(crypto.getRandomValues(new Uint8Array(14)));
+      const [_, clearData] = streamFromBytes(getRandom(14));
 
       for (const alg of Ciphers.algs()) {
          const [clearStream] = streamFromBytes(clearData);
 
          const pwd = 'another good pwd';
          const hint = 'nope';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const userCred = getRandom(cc.USERCRED_BYTES);
 
          const econtext: EContext = {
             algs: [alg],
@@ -1650,7 +1960,7 @@ describe("Stream manipulation, multi-version", function () {
 
          const cipherData = await readStreamAll(cipherStream);
          const modLen = randomInclusive(1, 10);
-         const modData = crypto.getRandomValues(new Uint8Array(modLen));
+         const modData = getRandom(modLen);
          const modPos = randomInclusive(0, cipherData.byteLength - modLen);
 
          cipherData.set(modData, modPos);
@@ -1678,10 +1988,10 @@ describe("Stream manipulation, multi-version", function () {
       for (const range of ranges) {
          for (const alg of Ciphers.algs()) {
             const fuzzLen = randomInclusive(range[0], range[1]);
-            const [fuzzStream, fuzzData] = streamFromBytes(crypto.getRandomValues(new Uint8Array(fuzzLen)));
+            const [fuzzStream, fuzzData] = streamFromBytes(getRandom(fuzzLen));
 
             const pwd = 'another good pwd';
-            const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+            const userCred = getRandom(cc.USERCRED_BYTES);
 
             // alg ${alg}, fuzzLen ${fuzzLen}
             const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
@@ -1702,7 +2012,7 @@ describe("Stream manipulation, multi-version", function () {
 
          const pwd = 'another good pwd';
          const hint = 'nope';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const userCred = getRandom(cc.USERCRED_BYTES);
 
          const econtext: EContext = {
             algs: [alg],
@@ -1719,9 +2029,10 @@ describe("Stream manipulation, multi-version", function () {
 
          for (let rmPos = 0; rmPos < cipherData.byteLength - rmLen; rmPos++) {
 
-            let corruptData = new Uint8Array(cipherData.byteLength - rmLen);
-            corruptData.set(cipherData.slice(0, rmPos));
-            corruptData.set(cipherData.slice(rmPos + rmLen), rmPos);
+            const corruptData = concatArrays([
+               cipherData.slice(0, rmPos),
+               cipherData.slice(rmPos + rmLen),
+            ]);
             let [corruptStream] = streamFromBytes(corruptData);
 
             // alg ${alg}, rmLen ${rmLen}, rmPos ${rmPos}
@@ -1742,7 +2053,7 @@ describe("Stream manipulation, multi-version", function () {
 
          const pwd = 'another good pwd';
          const hint = 'nope';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const userCred = getRandom(cc.USERCRED_BYTES);
 
          const econtext: EContext = {
             algs: [alg],
@@ -1756,7 +2067,7 @@ describe("Stream manipulation, multi-version", function () {
 
          const cipherData = await readStreamAll(cipherStream);
          const addLen = randomInclusive(1, 10);
-         const addData = crypto.getRandomValues(new Uint8Array(addLen));
+         const addData = getRandom(addLen);
 
          // make sure first byte of addData doesn't match last byte of cipherData or
          // the extra padding won't be detected until readStreamAll (see below)
@@ -1766,10 +2077,11 @@ describe("Stream manipulation, multi-version", function () {
 
          for (let addPos = 0; addPos < cipherData.byteLength; addPos++) {
 
-            let corruptData = new Uint8Array(cipherData.byteLength + addLen);
-            corruptData.set(cipherData.slice(0, addPos));
-            corruptData.set(addData, addPos);
-            corruptData.set(cipherData.slice(addPos), addPos + addLen);
+            const corruptData = concatArrays([
+               cipherData.slice(0, addPos),
+               addData,
+               cipherData.slice(addPos),
+            ]);
             let [corruptStream] = streamFromBytes(corruptData);
 
             // alg ${alg}, addLen ${addLen}, addPos ${addPos}
@@ -1783,9 +2095,7 @@ describe("Stream manipulation, multi-version", function () {
 
          // Appending data after block0 throws and error at stream read since
          // only block0 is validated during stream construction
-         let corruptData = new Uint8Array(cipherData.byteLength + addLen);
-         corruptData.set(cipherData);
-         corruptData.set(addData, cipherData.byteLength);
+         const corruptData = concatArrays([cipherData, addData]);
          let [corruptStream] = streamFromBytes(corruptData);
 
          const corruptKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
@@ -1801,17 +2111,13 @@ describe("Stream manipulation, multi-version", function () {
 
 describe("Block order change and deletion detection, multi-version", function () {
    let cipherSvc: CipherService;
-   beforeEach(() => {
+   beforeEach(async () => {
+      await cryptoReady();
       TestBed.configureTestingModule({});
       cipherSvc = TestBed.inject(CipherService);
    });
 
-   // userCred used for creation of the CTS above
-   // b64url userCred for commadline: xhKm2Q404pGkqfWkTyT3UodUR-99bN0wibH6si9uF8I
    const userCred = new Uint8Array([198, 18, 166, 217, 14, 52, 226, 145, 164, 169, 245, 164, 79, 36, 247, 82, 135, 84, 71, 239, 125, 108, 221, 48, 137, 177, 250, 178, 47, 110, 23, 194]);
-   // Also replace following value in cipher.ts to create small blocks
-   //const READ_SIZE_START = 9;
-   //const READ_SIZE_MAX = READ_SIZE_START * 16
 
    const vers = [
       //v5
@@ -1851,7 +2157,7 @@ describe("Block order change and deletion detection, multi-version", function ()
             '14. No Term': 'DBSj10kBKZ85UUBqgW05vS8wXkFlJCXMF37GwEpWAyIGAFIAAAABAGDNsxpQxcJfSTqljJ3_gQF59Dbw9Fo--1coQtXgyBAAABS7tNDYzTpFw-K7GQ3f46fD_kqiW4sdg0Gqo8NgaohCHvc9CAK_lKIEWltbdW0OQkHeofnoJfvquDZEPcThNI6stiALDeP865vVsJ3ozQYAMQAAAAEASFE_HU_e4zvofNC3y2YJc_TDtgTl2NkWbMh_Yj4Dz6fjgeRuVJjqk8R2mcLDiucVINP1sa0C8exDYYgIBhhyJNZKbAF4vGcts76qYN5NBgBDAAAAAQDG5uS6qlBCA10PZ5TchRsg_50IVg3H64ASIZbdkfYlIalDmnKx2_lkFkt9LkEODBfLNoCg3280ixQ2mwae3M4V0XMLGdznAYrgMnXet7ZiEtToldVzGv0m-6d29pz4umYGAGcAAAABAPqd0fors414KtU1ViEKmqkeGgHcyjEoJ4DIRH742xXTxh4nOhoFm19PvDVNeAVQIdbSCDa-s4IqdCzLgUQK-Yx8DM0YOdUBolZxJQOb-5OoVhfVmm99yiggklZPtzT1bfCaXQvKM7Xw2wAIrw1xMTkRltH8lH5yaz3Xb8elQbKYTIpFvgYArwAAAAEApmzfDJvug6b2EaDTKr61O-JGsSrEboPHwsxX9LSUcCh0eBIQ1MLG1v2owMbgK2jQy8bEOhM4rRrpiZ1TzDd0cKyhelLFCDUsOtBJO6uOknPb9YOBwcna2B9UMj8lrZb9My9ChfjofXDk_b-uRhZbIqnGFhhNTYSwkZ2dyuYleIiD1GQPoP4MYJ4XnUs3nEg392FXgTKjGlRzwwbSsIQpbWn94zN4KLQ_ziCkOwF-HDDKf8wD3WevkbFImsYM6RZbvDGt5Eei9_fvyyprBgCvAAAAAQAD-ci_1XMFjh67-ziFnGkaCeq5wfh_kwFybPRzU2HSutmX6e6jkEQrUwSfEkYvavlpMNQKFjL10aVvC1JNbI7CCx6FE2sog2ZL5lfPtRGPhbu8_BnMvS_zAG9uvvTqMneXUrvii79uhT8MY7dCuLCBCtVMtyzmQFRsXFMcVMrKEKXQH3Voi_TkLNPr7MtJGzegKQcm1y6sX3VEkPapdqkG636zmCE4tFDIptJBDgJ8uXP5no0c-CtHepqL1jcKkeIgZVt8bCK4b9-8OtcGAK8AAAABALEZNnMJXsYobGKOn8U63Wtho1muI87OKzMI_BZDDFiUQZduletcTCNjsm4iZinPpFGtGrOuS8oSbxrcnkZgJA6_RhpuN63lEOX9NAv-T5wiz8sJbWVWm59xtZ6pcR7tuyVK444Nl89f2ZeHEp_DuCWdFo-AZhUBqp7lL3_H42AABHS_iHcMU5dT3ZvVmZbiazVFCgIlpo-biDihT1XR9uuWtPZlNUE80YACm3sxSvSZ7bZZkWsgACouG3HweAeG_gILIhm6O0XwP9gUMwYAOAAAAAEAmB0NrkLBUxOT-kUrJwTlORQ62fdJKCePOjPUNnBawoupsH5c34r2leStBcHeJkokVev3OWg',
          }
       },
-      //v7
+      //v7 — generated by: pnpm vectors:ciphersvc
       {
          ver: 7,
          goodCt: "pL3ehW61dNy-iAYXYw3H_9YrmBcHMGOznwSF5aOqGkcHAFIAAAABABCPFiGEgTpwHMDCzkaFVcO9aFqGpBNgCGjQjD_gyBAAABQ5v6xnJq7wgpEvYpCpbJ8cMMabRhx-MJoCpkpOhHZU3VJSpG0OaTA6f9iKEK8VJ9awT3q0WqzMknLn6xE48MlmXWWsOmQbwazGQrFRvwcAMQAAAAEAW8VK2lMLdK_v8_LT3Iez1iHH8DTzBBOXbd2R-vYm4n6QjqGol7GbviKQeyxCESGtQxas36F0EFUdtyPBZi3IaYIX3j3mexkiuwJ-wxAmBwBDAAAAAQBfzespUn8SnOG8FcfM58_f3LtIRs0XXKqCbFbVZ0XXn8GHtbRhoqTnCE3qsnGFaCFvQuZ3ws6s2VOdSn0Ycl6kDilWILxmQm6uDMIRkyOPYqmf4HgZ7-1xdUGwGepvLBsHAGcAAAABAOPaeZBbVizdcgG5NEimoT3ToxWgaQReKTckXaPszOtfCRIamApjzgxHIggy8oeDC0KG_3wOdeKUX-d_GFPM824rrHqwXGJ4qAr0e_glmGcaGnVYecL_Hffa--MrtWAUvFK1lQyP8lhrbSrlBnd8mJl3rpn5uXy2iiIT9QOGfvSa07_wTQcArwAAAAEAQKqkyyfq_ixBTq8JKotjIZt06Y4S0J7bcKYUnxKqUlADSrH0BHGfducGJXgIUgo2nEdxlTL0frwZL0nbTLczrCtloJa54s6mYWGWvAX6M_yEgI35kRbD9WS3DpcqE9qpAXXkR_HKBUtDJ7aC-Io4FURDqBps_h5-YgiFGcqXtX5RYTjRF_c0pPCBOJ6JJ_JTBi1dZodG6MTPRjZ0uOCezgDizJLKNOvKrPIXpIUuIoKvFroDIQ7GoE5O7hmt5nAgb4k7dzLeYBoidNB4BwCvAAAAAQBpcGc7ogkCjN-OOFkGQIOG16Do8WFL8NKcxenP7HPQScz-i6fdl-hPANvSr6zCD3uUEWDtgziL7Jph7TXR6m3-yJyolny_8MDZVRkRN0uadS_lkEP1T_eKptNedo_ubXHI-QcdW7qReTcNr8SpyZsC7zKoQ6y97A8zznULXLPvNIY3kCaS6RElxQKQkFDXqG1tk1dtPInqI-zBcRmocL4_iVLbExpoXWse9L5MhQxEHJZuDCcFx1930Yu6qq1urFIF-V0r9qEKe_g789AHAK8AAAABAHPEiPt3zOyAu6nrirRrSiCbFoynKkIzU-1egQzqjADw8pebD-4zmobUZz5eTk1Mzs4Ge0bXfj__zpRsd8iUGTg4YYgk8_DlQSnpl2f7CRaFYua4ShE6OICm6cjxCU90dCWbobykpIrmv71QrBPA6WDoCy3dsWTNIGMUstxlWiRyNfgS2QucrFCszoQ2PxaaCKDNr1jF20v83gwySFgzNJS4XNBJiqiZ4DjnlbW2qGuuBneVkqOFO81kGpyju6FrAdFAS8VdxOawCcMCYQcAOAAAAQEAwVacsrBdRdhH3U39SptDhwGkz4p797KURUcdDG4dEQQJ943JYGAjYhXJoHsUZheBOK2bZNY",
@@ -1914,7 +2220,8 @@ describe("Block order change and deletion detection, multi-version", function ()
 describe("Benchmark execution", function () {
 
    let cipherSvc: CipherService;
-   beforeEach(() => {
+   beforeEach(async () => {
+      await cryptoReady();
       TestBed.configureTestingModule({});
       cipherSvc = TestBed.inject(CipherService);
    });
@@ -1935,7 +2242,8 @@ describe("Benchmark execution", function () {
 describe("Cipher alg validate", function () {
 
    let cipherSvc: CipherService;
-   beforeEach(() => {
+   beforeEach(async () => {
+      await cryptoReady();
       TestBed.configureTestingModule({});
       cipherSvc = TestBed.inject(CipherService);
    });
@@ -1958,7 +2266,8 @@ describe("Cipher alg validate", function () {
 describe("Get cipherinfo from cipher text", function () {
 
    let cipherSvc: CipherService;
-   beforeEach(() => {
+   beforeEach(async () => {
+      await cryptoReady();
       TestBed.configureTestingModule({});
       cipherSvc = TestBed.inject(CipherService);
    });
@@ -1972,7 +2281,7 @@ describe("Get cipherinfo from cipher text", function () {
 
          const pwd = 'not good pwd';
          const hint = 'try a himt';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const userCred = getRandom(cc.USERCRED_BYTES);
 
          const econtext: EContext = {
             algs: [alg],
@@ -2004,7 +2313,7 @@ describe("Get cipherinfo from cipher text", function () {
 
       const pwd = 'another good pwd';
       const hint = 'nope';
-      const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+      const userCred = getRandom(cc.USERCRED_BYTES);
 
       const econtext: EContext = {
          algs: ['AEGIS-256'],
@@ -2017,7 +2326,7 @@ describe("Get cipherinfo from cipher text", function () {
       const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
       // Valid, but doesn't match orignal userCred
-      let problemUserCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+      let problemUserCred = getRandom(cc.USERCRED_BYTES);
       await expect(cipherSvc.getCipherStreamInfo(cipherStream, new PWDKeyProvider(problemUserCred))).rejects.toThrow(new RegExp('.+MAC.+'));
 
       // Missing one byte of userCred

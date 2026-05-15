@@ -43,7 +43,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
-import { AuthenticatorService, ACTIVITY_TIMEOUT } from '../../services/authenticator.service';
+import { AuthenticatorService, ACTIVITY_TIMEOUT_SEC } from '../../services/authenticator.service';
 import { CipherService } from '../../services/cipher.service';
 import { Ciphers, makeTookMsg } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
@@ -95,7 +95,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    public cipherPanelExpanded = false;
    public hashTimeWarning = '';
 
-   public readonly ACTIVITY_TIMEOUT = ACTIVITY_TIMEOUT;
+   public readonly ACTIVITY_TIMEOUT = ACTIVITY_TIMEOUT_SEC;
    public readonly LOOPS_MAX = 6;
    public readonly LOOPS_DEFAULT = 1;
    public readonly ICOUNT_MIN = cc.ICOUNT_MIN;

@@ -18,7 +18,7 @@ testWithAuth('account creation', async ({ authFixture }) => {
     await page.getByRole('button', { name: /Create new/ }).click();
   });
 
-  await page.waitForURL('/showrecovery', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(/\/showrecovery$/);
 
   await expect(page.getByRole('heading', { name: 'Account Backup and Recovery' })).toBeVisible();
 

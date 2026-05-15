@@ -2,12 +2,6 @@ import { test, expect, Page, CDPSession, TestInfo } from '@playwright/test';
 import {
    testWithAuth,
    passkeyAuth,
-   passkeyCreation,
-   deleteFirstPasskey,
-   clearCredentials,
-   addCredential,
-   hosts,
-   credentials,
    type AuthFixture
 } from '.././common';
 import { bufferToHexString } from '../../../../libs/crypto/src/lib/utils';
@@ -47,7 +41,7 @@ test.describe('authenticated api tests', () => {
    });
 
    testWithAuth('create, edit, remove passkey', { tag: ['@nukeall', '@api'] }, async ({ authFixture }, testInfo) => {
-      const { page, session, authId1, authId2 } = authFixture;
+      const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
 
       // Success case
       let usersResponse = await page.request.get(
@@ -104,7 +98,7 @@ test.describe('authenticated api tests', () => {
    });
 
    testWithAuth('edit passkey description', { tag: ['@nukeall', '@api'] }, async ({ authFixture }, testInfo) => {
-      const { page, session, authId1, authId2 } = authFixture;
+      const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
 
       // Test good patch of description
       const body1 = {
@@ -201,7 +195,7 @@ test.describe('authenticated api tests', () => {
       expect(descResponse.status()).toBe(401);
 
       // sign back to get new session
-      [apiUser, apiHeaders] = await reSetup(testInfo, page, session, authId1, apiUser.userName!);
+      [apiUser, apiHeaders] = await reSetup(testInfo, page, session, authenticatorId1, apiUser.userName!);
 
       // Valid passkey delete
       let delResponse = await page.request.delete(
@@ -214,7 +208,7 @@ test.describe('authenticated api tests', () => {
    });
 
    testWithAuth('edit user name', { tag: ['@nukeall', '@api'] }, async ({ authFixture }, testInfo) => {
-      const { page, session, authId1, authId2 } = authFixture;
+      const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
 
       // Success case
       let usersResponse = await page.request.get(
@@ -326,7 +320,7 @@ test.describe('authenticated api tests', () => {
       expect(patchResponse.status()).toBe(401);
 
       // sign back to get new session
-      [apiUser, apiHeaders] = await reSetup(testInfo, page, session, authId1, apiUser.userName!);
+      [apiUser, apiHeaders] = await reSetup(testInfo, page, session, authenticatorId1, apiUser.userName!);
 
       const delResponse = await page.request.delete(
          //@ts-ignore
@@ -338,7 +332,7 @@ test.describe('authenticated api tests', () => {
    });
 
    testWithAuth('get session', { tag: ['@nukeall', '@api'] }, async ({ authFixture }, testInfo) => {
-      const { page, session, authId1, authId2 } = authFixture;
+      const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
 
       let sessionResponse = await page.request.get(
          `${apiUrl}/session`,
@@ -370,7 +364,7 @@ test.describe('authenticated api tests', () => {
    });
 
    testWithAuth('delete session', { tag: ['@nukeall', '@api'] }, async ({ authFixture }, testInfo) => {
-      const { page, session, authId1, authId2 } = authFixture;
+      const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
 
       let sessionResponse = await page.request.get(
          `${apiUrl}/session`,
@@ -420,7 +414,7 @@ test.describe('authenticated api tests', () => {
 
 
       // sign back to get new session
-      [apiUser, apiHeaders] = await reSetup(testInfo, page, session, authId1, apiUser.userName!);
+      [apiUser, apiHeaders] = await reSetup(testInfo, page, session, authenticatorId1, apiUser.userName!);
 
       infoResponse = await page.request.get(
          //@ts-ignore
@@ -445,7 +439,7 @@ test.describe('authenticated api tests', () => {
 
 
    testWithAuth('test bad csrf', { tag: ['@nukeall', '@api'] }, async ({ authFixture }, testInfo) => {
-      const { page, session, authId1, authId2 } = authFixture;
+      const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
 
       let headers = structuredClone(apiHeaders);
       delete headers['x-csrf-token'];
@@ -484,7 +478,7 @@ test.describe('authenticated api tests', () => {
       );
       expect(delResponse.status()).toBe(401);
 
-      // Correcr csrf, should work
+      // Correct csrf, should work
       delResponse = await page.request.delete(
          //@ts-ignore
          `${apiUrl}/passkeys/${apiUser.authenticators[0].credentialId}`,
@@ -494,7 +488,7 @@ test.describe('authenticated api tests', () => {
    });
 
    testWithAuth('small fuzz', { tag: ['@nukeall', '@api'] }, async ({ authFixture }, testInfo) => {
-      const { page, session, authId1, authId2 } = authFixture;
+      const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
 
       test.setTimeout(60000);
 
@@ -509,7 +503,7 @@ test.describe('authenticated api tests', () => {
    });
 
    testWithAuth('full fuzz', { tag: ['@nukeall', '@api', '@fullfuzz'] }, async ({ authFixture }, testInfo) => {
-      const { page, session, authId1, authId2 } = authFixture;
+      const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
 
       test.setTimeout(180000);
 
@@ -529,7 +523,7 @@ test.describe('authenticated api tests', () => {
 test.describe('unauthenticated api', () => {
 
    testWithAuth('full fuzz', { tag: ['@api', '@fullfuzz'] }, async ({ authFixture }, testInfo) => {
-      const { page, session, authId1, authId2 } = authFixture;
+      const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
       test.setTimeout(180000);
 
       await page.goto('/');
@@ -546,7 +540,7 @@ test.describe('unauthenticated api', () => {
    });
 
    testWithAuth('small fuzz', { tag: ['@api'] }, async ({ authFixture }, testInfo) => {
-      const { page, session, authId1, authId2 } = authFixture;
+      const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
       test.setTimeout(60000);
 
       await page.goto('/');
@@ -687,41 +681,47 @@ async function apiSetup(
 ): Promise<ApiSetupResults> {
 
    const { page } = authFixture;
-   await authFixture.createTestUser(authFixture.authId1);
+   await authFixture.createTestUser(authFixture.authenticatorId1);
 
    const storageState = await page.context().storageState();
    const loclStorage = storageState.origins[0].localStorage;
    const userId = loclStorage.find(item => item.name === 'userid')?.value;
    expect(userId).toBeTruthy();
 
-   const apiUrl = (testInfo.project.use as { apiURL: string }).apiURL;
+   const apiURL = (testInfo.project.use as { apiURL: string }).apiURL;
+   const baseURL = (testInfo.project.use as { baseURL: string }).baseURL;
 
-   const sessResp = await page.request.get(`${apiUrl}/session`);
+   // Origin is needed to match what the browser passes (is sets rpid on the server)
+   const sessHeaders = {
+      'Origin': baseURL
+   };
+   const sessResp = await page.request.get(`${apiURL}/session`, { headers: sessHeaders });
    expect(sessResp).toBeOK();
    const apiUser: LoginUserInfo = await sessResp.json();
 
    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'x-csrf-token': apiUser.csrf!
+      'x-csrf-token': apiUser.csrf!,
+      'Origin': baseURL
    };
 
-   return [apiUrl, apiUser, headers];
+   return [apiURL, apiUser, headers];
 }
 
 async function reSetup(
    testInfo: TestInfo,
    page: Page,
    session: CDPSession,
-   authId: string,
+   authenticatorId: string,
    userName: string
 ): Promise<[LoginUserInfo, Record<string, string>]> {
 
    await page.goto('/');
 
-   await passkeyAuth(session, authId, async () => {
+   await passkeyAuth(page, session, authenticatorId, async () => {
       await page.getByRole('button', { name: new RegExp(`Sign in as ${userName}`) }).click();
    });
-   await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
+   await expect(page).toHaveURL(/\/$/);
    await expect(page.getByRole('button', { name: new RegExp(`Sign in as ${userName}`) })).not.toBeVisible({ timeout: 10000 });
 
    const storageState = await page.context().storageState();
@@ -730,14 +730,20 @@ async function reSetup(
    expect(userId).toBeTruthy();
 
    const apiUrl = (testInfo.project.use as { apiURL: string }).apiURL;
+   const baseURL = (testInfo.project.use as { baseURL: string }).baseURL;
 
-   const sessResp = await page.request.get(`${apiUrl}/session`);
+   // Origin is needed to match what the browser passes (is sets rpid on the server)
+   const sessHeaders = {
+      'Origin': baseURL
+   };
+   const sessResp = await page.request.get(`${apiUrl}/session`, { headers: sessHeaders });
    expect(sessResp).toBeOK();
    const apiUser: LoginUserInfo = await sessResp.json();
 
    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'x-csrf-token': apiUser.csrf!
+      'x-csrf-token': apiUser.csrf!,
+      'Origin': baseURL
    };
 
    return [apiUser, headers];
