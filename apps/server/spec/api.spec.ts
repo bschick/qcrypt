@@ -21,6 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
+import { SESSION_TIMEOUT_SEC } from '@qcrypt/api';
 import { WebAuthnEmulator } from "nid-webauthn-emulator";
 import {
    getWebAuthnEmulator,
@@ -106,7 +107,21 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          );
          expect(res.status).toBe(200);
          expect(res.data.csrf).toBeDefined();
+         // Backward-compat default: userCred is returned when ?usercred=false is not passed.
+         expect(res.data.userCred).toBeDefined();
          // Update CSRF in case it rotated (though usually static per session)
+         if (res.data.csrf) csrfToken = res.data.csrf;
+      });
+
+      it("should omit userCred when ?usercred=false is passed", async () => {
+         const res = await getJson(
+            `/v1/session?usercred=false`,
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(res.status).toBe(200);
+         expect(res.data.csrf).toBeDefined();
+         expect(res.data.userCred).toBeUndefined();
          if (res.data.csrf) csrfToken = res.data.csrf;
       });
 
@@ -344,7 +359,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
             userId: jwtPayload!.userId
          };
          const jwtKey = randomBytes(32);
-         const expiresIn = 10800;
+         const expiresIn = SESSION_TIMEOUT_SEC;
 
          const newToken = jwtPkg.sign(
             newPayload,

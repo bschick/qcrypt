@@ -94,7 +94,7 @@ export type Response = {
    returnCsrf?: boolean;
 };
 
-import type { ResponseTypes } from '@qcrypt/api';
+import { SESSION_TIMEOUT_SEC, type ResponseTypes } from '@qcrypt/api';
 type AuthenticatorInfo = ResponseTypes.AuthenticatorInfo;
 type UserInfo = ResponseTypes.UserInfo;
 type LoginUserInfo = ResponseTypes.LoginUserInfo;
@@ -253,15 +253,17 @@ async function getSession(
    httpDetails: HttpDetails,
    verifiedUser?: VerifiedUserItem
 ): Promise<Response> {
+   const { params } = httpDetails;
 
    if (!verifiedUser) {
       throw new AuthError();
    }
 
-   // TODO: This endpoint is the only way to get userCred and csrf token w/o
-   // (re)authentication, making it the weakest link in security. Should we force
-   // fresh tabs/windows to reauth?
-   const responseContent = await makeLoginUserInfoResponse(verifiedUser, true, false);
+   // Default to returning userCred for backward compat with older clients;
+   // newer clients pass ?usercred=false to opt out. Once all deployed clients
+   // pass false, drop this and stop returning userCred unconditionally.
+   const includeUserCred = params.usercred !== 'false';
+   const responseContent = await makeLoginUserInfoResponse(verifiedUser, includeUserCred, false);
 
    // Return passed in csrf but don't start new session so that expiration is not reset
    return {
@@ -884,9 +886,8 @@ async function postRegOptions(
       throw new ParamError('user name must greater than 5 and less than 32 characters');
    }
 
-   // The PWTesty_ prefix is reserved for automated tests, so manual cleanup
-   // can more safely delete every PWTesty_ user. Not a security control since
-   // it easily spoofed, just a guardrail against admin errors.
+   // Some names reserved for automated tests, so cleanup is safer. Not a security
+   // control since its easily spoofed, just a guardrail against admin errors.
    if (isReservedTestUserName(userName) && !isTestClient(httpDetails)) {
       throw new ParamError('reserved username prefix');
    }
@@ -1636,9 +1637,9 @@ function killCookie(): string {
    return '__Host-JWT=X; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=0';
 }
 
-// Test runners (playwright config + spec common.ts) explicitly tag the
-// User-Agent with this marker so we can discourage normal user from creating
-// accoutns that may get cleaned up.
+// Test runners tag User-Agent with this marker so we can discourage normal
+// users and allow creation of test user names. Not a security
+// control since its easily spoofed, just a guardrail against admin errors.
 function isTestClient(httpDetails: HttpDetails): boolean {
    return (httpDetails.userAgent ?? '').includes('QCTestClient');
 }
@@ -1651,7 +1652,7 @@ async function createCsrf(verifiedUser: VerifiedUserItem): Promise<Uint8Array> {
    return await getSessionKey(verifiedUser, "csrf");
 }
 
-async function createCookie(verifiedUser: VerifiedUserItem): Promise<string> {
+async function createCookie(verifiedUser: VerifiedUserItem, rpID: string): Promise<string> {
    if (!verifiedUser) {
       throw new AuthError();
    }
@@ -1663,13 +1664,13 @@ async function createCookie(verifiedUser: VerifiedUserItem): Promise<string> {
       userId: verifiedUser.userId
    };
 
-   const expiresIn = 10800;
+   const expiresIn = SESSION_TIMEOUT_SEC;
    const token = sign(
       payload,
       jwtKey, {
          algorithm: 'HS512',
          expiresIn: expiresIn,
-         issuer: 'quickcrypt'
+         issuer: rpID
       }
    );
 
@@ -1694,7 +1695,8 @@ async function verifyCsrf(
 }
 
 async function verifyCookie(
-   cookie: string
+   cookie: string,
+   rpID: string
 ): Promise<VerifiedUserItem> {
 
    try {
@@ -1722,7 +1724,7 @@ async function verifyCookie(
          token,
          jwtKey, {
             algorithms: ['HS512'],
-            issuer: 'quickcrypt',
+            issuer: rpID,
             complete: false
       }) as JwtPayload;
 
@@ -1730,7 +1732,7 @@ async function verifyCookie(
       if (!verifiedPayload ||
          !verifiedPayload.pkId ||
          verifiedPayload.pkId !== unverifiedUser.lastCredentialId ||
-         verifiedPayload.iss !== 'quickcrypt'
+         verifiedPayload.iss !== rpID
       ) {
          throw new Error('invalid cookie');
       }
@@ -1781,7 +1783,7 @@ export async function handler(event: any, context: any) {
          const headerCsrf = event['headers']['x-csrf-token'];
 
          // these throw an exception if cookie or headerCsrf is invalid
-         verifiedUser = await verifyCookie(httpDetails.cookie);
+         verifiedUser = await verifyCookie(httpDetails.cookie, httpDetails.rpID);
          await verifyCsrf(verifiedUser, httpDetails.checkCsrf, headerCsrf);
       }
 
@@ -1800,7 +1802,7 @@ export async function handler(event: any, context: any) {
 
       let respCookie: string | undefined;
       if (response.startSession) {
-         respCookie = await createCookie(response.startSession);
+         respCookie = await createCookie(response.startSession, httpDetails.rpID);
          response.content['csrf'] = base64UrlEncode(await createCsrf(response.startSession));
       } else if (response.endSession) {
          respCookie = killCookie();
