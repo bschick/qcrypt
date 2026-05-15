@@ -16,6 +16,7 @@
 //     only emits hints that apply to *every* AWS call (auth/role).
 
 import { spawnSync } from 'node:child_process';
+import { createInterface } from 'node:readline';
 import { hideBin } from 'yargs/helpers';
 import { closest } from '../apps/web/src/app/services/levenshtein.ts';
 
@@ -181,4 +182,38 @@ export function suggestCommandTypo(msg, commands, valueFlags) {
       console.error(`Unknown command '${candidate}'. Available: ${commands.join(', ')}.`);
    }
    process.exit(1);
+}
+
+// Interactively confirm a destructive prod action. No-op when --prod is
+// absent (test mode), when --dry-run is set, or when --yes / -y bypassed
+// the gate. Non-interactive stdin aborts unless --yes was passed, so a
+// piped or CI invocation can't sleepwalk past the prompt. Accepts y, Y,
+// yes, YES (any case); anything else aborts.
+export async function confirmProdAction(argv, subcmd, target) {
+   if (!argv.prod || argv.dryRun || argv.yes) {
+      return;
+   }
+   if (!process.stdin.isTTY) {
+      console.error(`Refusing to run prod '${subcmd}' non-interactively. Pass --yes (or -y) to skip the prompt.`);
+      process.exit(1);
+   }
+   console.log();
+   console.log('  =====================================');
+   console.log('    About to modify PRODUCTION:');
+   console.log(`      command: ${subcmd}`);
+   console.log(`      ${target}`);
+   console.log('  =====================================');
+   const rl = createInterface({ input: process.stdin, output: process.stdout });
+   try {
+      const response = await new Promise((resolve) => {
+         rl.question(`  Type 'yes' (or 'y') to proceed, anything else aborts: `, resolve);
+      });
+      if (!/^\s*(y|yes)\s*$/i.test(response)) {
+         console.error('  Aborted.');
+         process.exit(1);
+      }
+   } finally {
+      rl.close();
+   }
+   console.log();
 }
