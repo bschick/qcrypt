@@ -1,5 +1,28 @@
 # CHANGELOG.md
 
+## 7.0.0 (TBD)
+
+#### Features
+  - user information state refresh across browser tabs and windows in the same profile
+  - session state refresh across browser tabs and windows in the same profile
+
+#### Changes
+  - automatically generated test vectors (sames time during protocol version changes)
+  - improved unit test coverage and e2e playwright coverage in several areas
+
+#### Security
+  - [protocol version 7 released] (https://quickcrypt.org/help/protocol7)
+    - additional context specific input added to key derivations
+    - initialization vector no longer shared between hint and block0
+    - new non-password based key derivation for encrypting data at rest
+  - browser app keeps userCred in memory only during cryptographic operations
+  - browser sessionstore used to persist encrypted userCred
+  - versioned cross tab relay of encrypted userCred to prevent excess re-authentication
+  - server binds jwt cookies to requesting origin
+  - server no longer returns userCred from GET /v1/sessoin for updated clients
+  - updated packages
+
+
 ## 6.1.7 (2026-04-21)
 
 #### Changes
@@ -77,7 +100,7 @@
 ## 6.0.0 (2025-11-13)
 
 #### Security
-  - protocol version 6 released
+  - [protocol version 6 released] (https://quickcrypt.org/help/protocol6)
     - replaced WebCrypto HKDF-SHA512 with libsodium BLAKE2b-512 KDF
     - use KDF to generate block number specific encryption keys for all blocks after the first
     - moved block flags from header to additional data to be incluced in AEAD ciphers
@@ -167,7 +190,7 @@
   - removed option to retrieve random data from https://random.org
 
 #### Changes
-  - protocol and its description updated to v5
+  - [protocol version 5 released] (https://quickcrypt.org/help/protocol5)
   - various other doc updates
   - improved enchiper and decipher state tracking
   - added a template for inspecting cipherdata files using [Hex Fiend](https://hexfiend.com/) on macOS
@@ -216,7 +239,7 @@
 
 #### Features
   - added support for encryption and decrytion of files (even big files)
-  - implemented [v4 encryption protocol](https://quickcrypt.org/help/protocol4)
+  - [protocol version 4 released] (https://quickcrypt.org/help/protocol4)
 
 #### Changes
   - improved display and content of error messages
