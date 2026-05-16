@@ -33,6 +33,7 @@ const KDF_CTX_HINT_V7 = "Hint_Key";
 const KDF_CTX_BLOCK_V6 = "block en";
 const KDF_CTX_BLOCK_V7 = "Blck_Key";
 const KDF_CTX_CIPHER_V7 = "Cphr_Key";
+const KDF_CTX_COMMIT_V7 = "Cmit_Key";
 const KDF_INFO_SIGNING_V1 = "cipherdata signing key";
 const KDF_INFO_HINT_V1 = "hint encryption key";
 
@@ -53,6 +54,8 @@ export interface KeyProvider {
    getBlockCipherKey(blockNum: number): Promise<Uint8Array<ArrayBuffer>>;
    getSigningKey(): Promise<Uint8Array<ArrayBuffer>>;
    getHintCipherKeyAndIV(baseIV: Uint8Array<ArrayBuffer>): Promise<[Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>]>;
+   getKeyCommitment(): Promise<Uint8Array<ArrayBuffer>>;
+   get supportsCommitment(): boolean;
    getCustomAd(): Uint8Array<ArrayBuffer> | undefined;
 };
 
@@ -65,6 +68,7 @@ export abstract class BaseKeyProvider implements KeyProvider {
    protected _hk: Uint8Array<ArrayBuffer> | undefined = undefined;
    protected _hIV: Uint8Array<ArrayBuffer> | undefined = undefined;
    protected _bks: Map<number, Uint8Array<ArrayBuffer>> = new Map();
+   protected _commitKey: Uint8Array<ArrayBuffer> | undefined = undefined;
    protected _cdInfo: CipherDataInfo | undefined = undefined;
 
    // referenced values
@@ -141,6 +145,10 @@ export abstract class BaseKeyProvider implements KeyProvider {
          this._hIV.fill(0);
          this._hIV = undefined;
       }
+      if (this._commitKey) {
+         this._commitKey.fill(0);
+         this._commitKey = undefined;
+      }
       if (this._cdInfo) {
          this._cdInfo.hint = undefined;
          this._cdInfo = undefined;
@@ -209,13 +217,28 @@ export abstract class BaseKeyProvider implements KeyProvider {
       return [this._hk, this._hIV];
    }
 
+   public async getKeyCommitment(): Promise<Uint8Array<ArrayBuffer>> {
+      if (!this._commitKey) {
+         if (!this._ek) {
+            throw new Error('Cipher key must be generated before commitment');
+         }
+         this._commitKey = await this._genKeyCommitment();
+         if (!this._commitKey || this._commitKey.byteLength !== cc.KEY_BYTES) {
+            throw new Error('Invalid commitment key');
+         }
+      }
+      return this._commitKey;
+   }
+
    public abstract clone(): KeyProvider;
+   public abstract get supportsCommitment(): boolean;
    protected abstract _genCipherKey(encrypting: boolean): Promise<Uint8Array<ArrayBuffer>>;
    protected abstract _genSigningKey(): Promise<Uint8Array<ArrayBuffer>>;
    protected abstract _genBlockCipherKey(blockNum: number): Promise<Uint8Array<ArrayBuffer>>;
    protected abstract _genHintCipherKeyAndIV(
       baseIV: Uint8Array<ArrayBuffer>
    ): Promise<[Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>]>;
+   protected abstract _genKeyCommitment(): Promise<Uint8Array<ArrayBuffer>>;
 };
 
 
@@ -419,6 +442,20 @@ export class PWDKeyProvider implements KeyProvider {
       return this._impl.getHintCipherKeyAndIV(baseIV);
    }
 
+   public async getKeyCommitment(): Promise<Uint8Array<ArrayBuffer>> {
+      if (!this._impl) {
+         throw new Error('CipherDataInfo not set');
+      }
+      return this._impl.getKeyCommitment();
+   }
+
+   public get supportsCommitment(): boolean {
+      if (!this._impl) {
+         throw new Error('CipherDataInfo not set');
+      }
+      return this._impl.supportsCommitment;
+   }
+
    public getCustomAd(): Uint8Array<ArrayBuffer> | undefined {
       if (!this._impl) {
          return this._customAd;
@@ -435,7 +472,7 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
 
    // owned values (wiped on purge)
    private _masterKey: Uint8Array<ArrayBuffer> | undefined;
-   private _cachedExtraMaterial?: Uint8Array<ArrayBuffer>[];
+   private _cachedExtraContext?: Uint8Array<ArrayBuffer>[];
 
    /**
     * Takes ownership of masterKey. Caller must not read or modify it after construction
@@ -470,26 +507,30 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
          this._masterKey.fill(0);
          this._masterKey = undefined;
       }
-      this._cachedExtraMaterial = undefined;
+      this._cachedExtraContext = undefined;
       this._customAd = undefined;
    }
 
-   private _extraMaterial(): Uint8Array<ArrayBuffer>[] {
+   public get supportsCommitment(): boolean {
+      return true;
+   }
+
+   private _extraContext(): Uint8Array<ArrayBuffer>[] {
       if (!this._cdInfo) {
          throw new Error('Invalid state, cipherDataInfo not set');
       }
-      if (!this._cachedExtraMaterial) {
-         this._cachedExtraMaterial = [
+      if (!this._cachedExtraContext) {
+         this._cachedExtraContext = [
             numToBytes(Ciphers.algId(this._cdInfo.alg), cc.ALG_BYTES),
             numToBytes(this._cdInfo.ver, cc.VER_BYTES),
             numToBytes(this._cdInfo.lp, cc.LPP_BYTES)
          ];
          if (this._customAd) {
-            this._cachedExtraMaterial.push(this._customAd);
+            this._cachedExtraContext.push(this._customAd);
          }
       }
 
-      return this._cachedExtraMaterial;
+      return this._cachedExtraContext;
    }
 
    protected override async _genCipherKey(
@@ -498,17 +539,17 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       if (!this._masterKey) {
          throw new Error('Invalid state, masterKey missing');
       }
-      return this._genDerivedKey(this._masterKey, KDF_CTX_CIPHER_V7, 0, this._extraMaterial());
+      return this._genDerivedKey(this._masterKey, KDF_CTX_CIPHER_V7, 0, this._extraContext());
    }
 
    protected override async _genSigningKey(): Promise<Uint8Array<ArrayBuffer>> {
-      return this._genDerivedKey(this._masterKey!, KDF_CTX_SIGNING_V7, 1, this._extraMaterial());
+      return this._genDerivedKey(this._masterKey!, KDF_CTX_SIGNING_V7, 1, this._extraContext());
    }
 
    protected override async _genBlockCipherKey(
       blockNum: number
    ): Promise<Uint8Array<ArrayBuffer>> {
-      // No extra material for block keys because _ek was already derived from it
+      // No extra context for block keys because _ek was already derived from it
       return this._genDerivedKey(this._ek!, KDF_CTX_BLOCK_V7, blockNum);
    }
 
@@ -517,11 +558,16 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
          throw new Error('Invalid state for hint key derivation');
       }
 
-      const extraMaterial = this._extraMaterial();
+      const extraContext = this._extraContext();
       return [
-         this._genDerivedKey(this._masterKey!, KDF_CTX_HINT_V7, 1, extraMaterial),
-         this._genDerivedKey(baseIV, KDF_CTX_HINT_V7, 2, extraMaterial)
+         this._genDerivedKey(this._masterKey!, KDF_CTX_HINT_V7, 1, extraContext),
+         this._genDerivedKey(baseIV, KDF_CTX_HINT_V7, 2, extraContext)
       ];
+   }
+
+   protected override async _genKeyCommitment(): Promise<Uint8Array<ArrayBuffer>> {
+      // No extra context for commit keys because _ek was already derived from it
+      return this._genDerivedKey(this._ek!, KDF_CTX_COMMIT_V7, 1);
    }
 
    // Returns a derived with the same byteLength as master
@@ -529,7 +575,7 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       master: Uint8Array<ArrayBuffer>,
       purpose: string,
       instance: number,
-      extraMaterial: Uint8Array<ArrayBuffer>[] = []
+      extraContext: Uint8Array<ArrayBuffer>[] = []
    ): Uint8Array<ArrayBuffer> {
       if (!master || master.byteLength < cc.IV_MIN_BYTES) {
          throw new Error('Invalid master key length of: ' + master?.byteLength);
@@ -555,7 +601,7 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       const sodium = getSodium();
       const state = sodium.crypto_generichash_init(master, cc.KEY_BYTES);
       sodium.crypto_generichash_update(state, this._cdInfo.slt);
-      for (const extra of extraMaterial) {
+      for (const extra of extraContext) {
          sodium.crypto_generichash_update(state, extra);
       }
       const mixedKey = sodium.crypto_generichash_final(state, cc.KEY_BYTES);
@@ -572,7 +618,7 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
 
 export class PWDKeyProviderV7 extends BasePWDKeyProvider {
 
-   private _cachedExtraMaterial?: Uint8Array<ArrayBuffer>[];
+   private _cachedExtraContext?: Uint8Array<ArrayBuffer>[];
 
    constructor(
       userCred: Uint8Array<ArrayBuffer>,
@@ -591,25 +637,29 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
 
    public override purge(): void {
       super.purge();
-      this._cachedExtraMaterial = undefined;
+      this._cachedExtraContext = undefined;
    }
 
-   private _extraMaterial(): Uint8Array<ArrayBuffer>[] {
+   public get supportsCommitment(): boolean {
+      return true;
+   }
+
+   private _extraContext(): Uint8Array<ArrayBuffer>[] {
       if (!this._cdInfo) {
          throw new Error('Invalid state, cipherDataInfo not set');
       }
-      if (!this._cachedExtraMaterial) {
-         this._cachedExtraMaterial = [
+      if (!this._cachedExtraContext) {
+         this._cachedExtraContext = [
             numToBytes(Ciphers.algId(this._cdInfo.alg), cc.ALG_BYTES),
             numToBytes(this._cdInfo.ver, cc.VER_BYTES),
             numToBytes(this._cdInfo.lp, cc.LPP_BYTES)
          ];
          if (this._customAd) {
-            this._cachedExtraMaterial.push(this._customAd);
+            this._cachedExtraContext.push(this._customAd);
          }
       }
 
-      return this._cachedExtraMaterial;
+      return this._cachedExtraContext;
    }
 
    protected override async _genCipherKey(encrypting: boolean): Promise<Uint8Array<ArrayBuffer>> {
@@ -638,7 +688,7 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
 
       this.setHint(hint);
       const pwdBytes = new TextEncoder().encode(pwd);
-      const rawMaterial = concatArrays([pwdBytes, this._userCred, ...this._extraMaterial()]);
+      const rawMaterial = concatArrays([pwdBytes, this._userCred, ...this._extraContext()]);
 
       const ek = await this._pbkdf2CipherKey(rawMaterial);
       pwdBytes.fill(0);
@@ -650,11 +700,11 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       if (!this._userCred) {
          throw new Error('User credential not set');
       }
-      return this._genDerivedKey(this._userCred, KDF_CTX_SIGNING_V7, 1, this._extraMaterial());
+      return this._genDerivedKey(this._userCred, KDF_CTX_SIGNING_V7, 1, this._extraContext());
    }
 
    protected override async _genBlockCipherKey(blockNum: number): Promise<Uint8Array<ArrayBuffer>> {
-      // No extra material for block keys because _ek was already derived from it
+      // No extra context for block keys because _ek was already derived from it
       return this._genDerivedKey(this._ek!, KDF_CTX_BLOCK_V7, blockNum);
    }
 
@@ -665,18 +715,23 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
          throw new Error('User credential not set');
       }
 
-      const extraMaterial = this._extraMaterial();
+      const extraContext = this._extraContext();
       return [
-         this._genDerivedKey(this._userCred, KDF_CTX_HINT_V7, 1, extraMaterial),
-         this._genDerivedKey(baseIV, KDF_CTX_HINT_V7, 2, extraMaterial)
+         this._genDerivedKey(this._userCred, KDF_CTX_HINT_V7, 1, extraContext),
+         this._genDerivedKey(baseIV, KDF_CTX_HINT_V7, 2, extraContext)
       ];
+   }
+
+   protected override async _genKeyCommitment(): Promise<Uint8Array<ArrayBuffer>> {
+      // No extra context for commit keys because _ek was already derived from it
+      return this._genDerivedKey(this._ek!, KDF_CTX_COMMIT_V7, 1);
    }
 
    private _genDerivedKey(
       master: Uint8Array<ArrayBuffer>,
       purpose: string,
       instance: number,
-      extraMaterial: Uint8Array<ArrayBuffer>[] = []
+      extraContext: Uint8Array<ArrayBuffer>[] = []
    ): Uint8Array<ArrayBuffer> {
       if (!master || master.byteLength < cc.IV_MIN_BYTES) {
          throw new Error('Invalid master key length of: ' + master?.byteLength);
@@ -699,7 +754,7 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       const sodium = getSodium();
       const state = sodium.crypto_generichash_init(master, cc.KEY_BYTES);
       sodium.crypto_generichash_update(state, this._cdInfo.slt);
-      for (const extra of extraMaterial) {
+      for (const extra of extraContext) {
          sodium.crypto_generichash_update(state, extra);
       }
       const mixedKey = sodium.crypto_generichash_final(state, cc.KEY_BYTES);
@@ -727,6 +782,10 @@ export class PWDKeyProviderV6 extends BasePWDKeyProvider {
          throw new Error('Cannot clone a purged keyProvider');
       }
       return new PWDKeyProviderV6(this._userCred.slice(0), this._pwdProvider);
+   }
+
+   public get supportsCommitment(): boolean {
+      return false;
    }
 
    protected override async _genCipherKey(encrypting: boolean): Promise<Uint8Array<ArrayBuffer>> {
@@ -786,6 +845,10 @@ export class PWDKeyProviderV6 extends BasePWDKeyProvider {
       ];
    }
 
+   protected override async _genKeyCommitment(): Promise<Uint8Array<ArrayBuffer>> {
+      throw new Error('Key commitments not supported for this cipher version');
+   }
+
    private _genDerivedKey(
       master: Uint8Array<ArrayBuffer>,
       purpose: string,
@@ -827,6 +890,10 @@ export class PWDKeyProviderLegacy extends BasePWDKeyProvider {
          throw new Error('Cannot clone a purged keyProvider');
       }
       return new PWDKeyProviderLegacy(this._userCred.slice(0), this._pwdProvider);
+   }
+
+   public get supportsCommitment(): boolean {
+      return false;
    }
 
    protected override async _genCipherKey(encrypting: boolean): Promise<Uint8Array<ArrayBuffer>> {
@@ -948,5 +1015,9 @@ export class PWDKeyProviderLegacy extends BasePWDKeyProvider {
       const exported = await crypto.subtle.exportKey("raw", subtleKey);
       subtleKey = undefined;
       return [new Uint8Array(exported), baseIV];
+   }
+
+   protected override async _genKeyCommitment(): Promise<Uint8Array<ArrayBuffer>> {
+      throw new Error('Key commitments not supported for this cipher version');
    }
 }

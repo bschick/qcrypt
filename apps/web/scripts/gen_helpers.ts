@@ -19,7 +19,7 @@ export function streamFromStr(s: string): ReadableStream<Uint8Array> {
    return new Blob([data], { type: 'application/octet-stream' }).stream();
 }
 
-export function streamFromBytes(data: Uint8Array): ReadableStream<Uint8Array> {
+export function streamFromBytes(data: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Array> {
    return new Blob([data], { type: 'application/octet-stream' }).stream();
 }
 
@@ -27,7 +27,7 @@ export function bytesFromStr(s: string): Uint8Array {
    return new TextEncoder().encode(s);
 }
 
-// Monkey-patches Ciphers._encodeAdditionalData to override the `term` flag on
+// Monkey-patches Ciphers._encodeFileAD to override the `term` flag on
 // the first invocation (block0) and on the invocation that has term=true (the
 // natural last block). null = pass through. Restores the original on return.
 export async function withTermOverride<T>(
@@ -35,9 +35,9 @@ export async function withTermOverride<T>(
    forceBlockNTerm: boolean | null,
    fn: () => Promise<T>
 ): Promise<T> {
-   const original = (Ciphers as any)._encodeAdditionalData.bind(Ciphers);
+   const original = (Ciphers as any)._encodeFileAD.bind(Ciphers);
    let firstCall = true;
-   (Ciphers as any)._encodeAdditionalData = (args: any) => {
+   (Ciphers as any)._encodeFileAD = (args: any) => {
       let force: boolean | null = null;
       if (firstCall) {
          force = forceBlock0Term;
@@ -53,7 +53,7 @@ export async function withTermOverride<T>(
    try {
       return await fn();
    } finally {
-      (Ciphers as any)._encodeAdditionalData = original;
+      (Ciphers as any)._encodeFileAD = original;
    }
 }
 
@@ -63,8 +63,8 @@ export async function withTermOverrideEvery<T>(
    force: boolean,
    fn: () => Promise<T>
 ): Promise<T> {
-   const original = (Ciphers as any)._encodeAdditionalData.bind(Ciphers);
-   (Ciphers as any)._encodeAdditionalData = (args: any) => {
+   const original = (Ciphers as any)._encodeFileAD.bind(Ciphers);
+   (Ciphers as any)._encodeFileAD = (args: any) => {
       if ('term' in args) {
          args = { ...args, term: force };
       }
@@ -73,7 +73,7 @@ export async function withTermOverrideEvery<T>(
    try {
       return await fn();
    } finally {
-      (Ciphers as any)._encodeAdditionalData = original;
+      (Ciphers as any)._encodeFileAD = original;
    }
 }
 
@@ -82,13 +82,13 @@ export async function withTermOverrideEvery<T>(
 // Returns the concatenated cipher bytes.
 export async function encryptOneLoop(
    clearStream: ReadableStream<Uint8Array>,
-   userCred: Uint8Array,
+   userCred: Uint8Array<ArrayBuffer>,
    pwd: string,
    hint: string | undefined,
    alg: cc.CipherAlgs,
    ic: number,
    readOpts?: ReadOpts,
-   customAd?: Uint8Array
+   customAd?: Uint8Array<ArrayBuffer>
 ): Promise<Uint8Array> {
    const kp = new PWDKeyProvider(userCred.slice(0), [pwd, hint], customAd);
    const encipher = getLatestEncipher(clearStream, kp, alg, 1, 1, ic, readOpts);

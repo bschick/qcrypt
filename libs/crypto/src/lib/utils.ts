@@ -93,6 +93,13 @@ export function clamp(n: number, min: number, max: number): number {
 }
 
 export function concatArrays(arrays: Uint8Array[]): Uint8Array<ArrayBuffer> {
+   if (arrays.length === 0) {
+      throw new Error('No arrays to concat');
+   }
+   if (arrays.length === 1) {
+      return ensureArrayBuffer(arrays[0]);
+   }
+
    const totalLen = arrays.reduce((sum, part) => sum + part.byteLength, 0);
    const output = new Uint8Array(totalLen);
    let offset = 0;
@@ -328,23 +335,12 @@ export async function readStreamAll(
          }
       }
 
-      result = coalesceBlocks(blocks);
+      result = concatArrays(blocks);
       if (decode) {
          result = new TextDecoder().decode(result);
       }
    } finally {
       reader.releaseLock();
-   }
-
-   return result;
-}
-
-function coalesceBlocks(blocks: Uint8Array[]): Uint8Array<ArrayBuffer> {
-   let result: Uint8Array<ArrayBuffer>;
-   if (blocks.length > 1) {
-      result = concatArrays(blocks);
-   } else {
-      result = ensureArrayBuffer(blocks[0]);
    }
 
    return result;

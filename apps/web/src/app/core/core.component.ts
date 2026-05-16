@@ -1102,4 +1102,3 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       return Ciphers.algDescription(alg);
    }
 }
-

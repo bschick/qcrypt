@@ -12,8 +12,9 @@
 
 #### Security
   - [protocol version 7 released] (https://quickcrypt.org/help/protocol7)
-    - additional context specific input added to key derivations
+    - improved domain isolation by adding context-specific input to key derivations
     - initialization vector no longer shared between hint and block0
+    - cipher key hash added to associated data to provide full key commitment
     - new non-password based key derivation for encrypting data at rest
   - browser app keeps userCred in memory only during cryptographic operations
   - browser sessionstore used to persist encrypted userCred

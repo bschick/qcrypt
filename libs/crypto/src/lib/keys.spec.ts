@@ -1076,7 +1076,7 @@ describe("Key generation", function () {
       }
    });
 
-   it("PWDKeyProvider signing keys vary with extraMaterial components", async function () {
+   it("PWDKeyProvider signing keys vary with extraContext components", async function () {
       const userCred = getRandom(cc.USERCRED_BYTES);
       const slt = getRandom(cc.SLT_BYTES);
       const pwd = 'a good pwd';
@@ -1116,7 +1116,7 @@ describe("Key generation", function () {
       }
    });
 
-   it("MasterKeyKeyProvider signing keys vary with extraMaterial components", async function () {
+   it("MasterKeyKeyProvider signing keys vary with extraContext components", async function () {
       const master = getRandom(cc.USERCRED_BYTES);
       const slt = getRandom(cc.SLT_BYTES);
       const customAd = getRandom(16);

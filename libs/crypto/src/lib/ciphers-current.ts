@@ -243,7 +243,7 @@ export abstract class Ciphers {
       }
    }
 
-   protected static _encodeAdditionalData(
+   protected static _encodeFileAD(
       args: {
          alg: cc.CipherAlgs;
          iv: Uint8Array;
@@ -289,6 +289,24 @@ export abstract class Ciphers {
       }
 
       return packer.trim();
+   }
+
+   protected static async _packFullAD(
+      baseAd: Uint8Array<ArrayBuffer>,
+      keyProvider: KeyProvider
+   ): Promise<Uint8Array<ArrayBuffer>> {
+      const parts: Uint8Array<ArrayBuffer>[] = [baseAd];
+
+      const customAd = keyProvider.getCustomAd();
+      if (customAd) {
+         parts.push(customAd);
+      }
+
+      if (keyProvider.supportsCommitment) {
+         parts.push(await keyProvider.getKeyCommitment());
+      }
+
+      return concatArrays(parts);
    }
 }
 
@@ -461,7 +479,7 @@ export class EncipherV7 extends Encipher {
             );
          }
 
-         const additionalData = Ciphers._encodeAdditionalData({
+         const fileAD = Ciphers._encodeFileAD({
             alg: cdInfo.alg,
             iv: iv,
             term: done,
@@ -472,11 +490,7 @@ export class EncipherV7 extends Encipher {
             encryptedHint
          });
 
-         let customAdditionalData = additionalData;
-         const customAd = this._keyProvider.getCustomAd();
-         if (customAd) {
-            customAdditionalData = concatArrays([additionalData, customAd]);
-         }
+         const fullAD = await Ciphers._packFullAD(fileAD, this._keyProvider);
 
          // Only block0 uses the root cipher key. Simplifies backward compat and is no less secure
          const encryptedData = await EncipherV7._doEncrypt(
@@ -484,12 +498,12 @@ export class EncipherV7 extends Encipher {
             ek,
             iv,
             clearBuffer,
-            customAdditionalData,
+            fullAD,
          );
 
          const headerData = await this._createHeader(
             encryptedData,
-            additionalData
+            fileAD
          );
 
          if (done) {
@@ -501,7 +515,7 @@ export class EncipherV7 extends Encipher {
          return {
             parts: [
                headerData,
-               additionalData,
+               fileAD,
                encryptedData
             ],
             state: this._state
@@ -543,23 +557,25 @@ export class EncipherV7 extends Encipher {
          const bk = await this._keyProvider.getBlockCipherKey(this._blockNum);
          this._blockNum += 1;
 
-         const additionalData = Ciphers._encodeAdditionalData({
+         const fileAD = Ciphers._encodeFileAD({
             alg: cdInfo.alg,
             iv,
             term: done
          });
+
+         const fullAD = await Ciphers._packFullAD(fileAD, this._keyProvider);
 
          const encryptedData = await EncipherV7._doEncrypt(
             cdInfo.alg,
             bk,
             iv,
             clearBuffer,
-            additionalData,
+            fullAD,
          );
 
          const headerData = await this._createHeader(
             encryptedData,
-            additionalData
+            fileAD
          );
 
          if (done) {
@@ -569,7 +585,7 @@ export class EncipherV7 extends Encipher {
          return {
             parts: [
                headerData,
-               additionalData,
+               fileAD,
                encryptedData
             ],
             state: this._state
@@ -758,12 +774,7 @@ export abstract class Decipher extends Ciphers {
          }
 
          const ek = await this._keyProvider.getCipherKey(false);
-
-         let customAdditionalData = this._blockData.additionalData;
-         const customAd = this._keyProvider.getCustomAd();
-         if (customAd) {
-            customAdditionalData = concatArrays([this._blockData.additionalData, customAd]);
-         }
+         const fullAD = await Ciphers._packFullAD(this._blockData.additionalData, this._keyProvider);
 
          // Only block0 uses the root cipher key. Simplifies backward compat and is no less secure
          const decrypted = await Decipher._doDecrypt(
@@ -771,7 +782,7 @@ export abstract class Decipher extends Ciphers {
             ek,
             this._blockData.iv,
             this._blockData.encryptedData,
-            customAdditionalData,
+            fullAD,
          );
 
          this._state = CipherState.Block0Done;
@@ -1118,12 +1129,14 @@ export class DecipherV67 extends Decipher {
          const bk = await this._keyProvider.getBlockCipherKey(this._blockNum);
          this._blockNum += 1;
 
+         const fullAD = await Ciphers._packFullAD(this._blockData.additionalData, this._keyProvider);
+
          const decrypted = await Decipher._doDecrypt(
             this._blockData.alg,
             bk,
             this._blockData.iv,
             this._blockData.encryptedData,
-            this._blockData.additionalData,
+            fullAD,
          );
 
          return decrypted;
