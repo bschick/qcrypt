@@ -1530,6 +1530,83 @@ describe("Inter-block MAC chaining", function () {
 });
 
 
+describe("Key commitment is enforced by AEAD", function () {
+   beforeEach(async () => {
+      await cryptoReady();
+   });
+
+   const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+
+   function normalKeyProvider(): PWDKeyProvider {
+      const keyProvider = new PWDKeyProvider(userCred.slice(0), ['a good pwd', undefined]);
+      return keyProvider;
+   }
+
+   // Wraps a KeyProvider to tamper with the commit key
+   function tamperingKeyProvider(baseKeyProvider: PWDKeyProvider): PWDKeyProvider {
+      const origGetKeyCommitment = baseKeyProvider.getKeyCommitment.bind(baseKeyProvider);
+      baseKeyProvider.getKeyCommitment = async () => {
+         const commitKey = await origGetKeyCommitment();
+         const tamperedKey = commitKey.slice(0);
+         tamperedKey[3] ^= 0x01;
+         return tamperedKey;
+      };
+      return baseKeyProvider;
+   }
+
+   it("block0 decryption fails when commitment is tampered", async function () {
+      for (const alg of Ciphers.algs()) {
+         const [clearStream, clearData] = streamFromStr('A block0 secret 🦫');
+
+         const encKeyProvider = normalKeyProvider();
+         const encipher = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
+         const block0 = await encipher.encryptBlock();
+         const cipherBytes = concatArrays(block0.parts);
+
+         // Control should succeeed
+         let [cipherStream] = streamFromBytes(cipherBytes);
+         const controlDec = await getStreamDecipher(cipherStream, normalKeyProvider());
+         await expect(controlDec.decryptBlock0()).resolves.toEqual(clearData);
+
+         [cipherStream] = streamFromBytes(cipherBytes);
+         const tamperedDec = await getStreamDecipher(cipherStream, tamperingKeyProvider(normalKeyProvider()));
+         await expect(tamperedDec.decryptBlock0()).rejects.toThrow(DOMException);
+      }
+   });
+
+   it("blockN decryption fails when commitment is tampered", async function () {
+      for (const alg of Ciphers.algs()) {
+         // Enough plaintext to produce a block1
+         const plaintext = 'x'.repeat(2048);
+         const [clearStream, clearData] = streamFromStr(plaintext);
+
+         const encKeyProvider = normalKeyProvider();
+         const encipher = getLatestEncipher(
+            clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN,
+            { startSize: 64, maxSize: 256 }
+         );
+         const block0 = await encipher.encryptBlock();
+         const block1 = await encipher.encryptBlock();
+         const cipherBytes = concatArrays([block0, block1].flatMap((block) => block.parts));
+
+         // Control should succeeed
+         let [cipherStream] = streamFromBytes(cipherBytes);
+         const controlDec = await getStreamDecipher(cipherStream, normalKeyProvider());
+         await expect(controlDec.decryptBlock0()).resolves.toEqual(clearData.subarray(0, 64));
+         await expect(controlDec.decryptBlockN()).resolves.toEqual(clearData.subarray(64, 64 + 128));
+
+         [cipherStream] = streamFromBytes(cipherBytes);
+         const tamperedDec = await getStreamDecipher(cipherStream, normalKeyProvider());
+         await expect(tamperedDec.decryptBlock0()).resolves.not.toThrow();
+
+         // @ts-ignore — inject tampering keyProvider for blockN only
+         tamperedDec._keyProvider = tamperingKeyProvider(tamperedDec._keyProvider);
+         await expect(tamperedDec.decryptBlockN()).rejects.toThrow(DOMException);
+      }
+   });
+});
+
+
 // Python helper function to recreate values
 /*
 from base64 import urlsafe_b64decode as b64d

@@ -281,6 +281,13 @@ export abstract class BasePWDKeyProvider extends BaseKeyProvider {
    }
 
    protected async _pbkdf2CipherKey(rawMaterial: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+      if (!this._cdInfo || this._cdInfo.ic === undefined || !this._cdInfo.slt) {
+         throw new Error('Invalid CipherDataInfo');
+      }
+      if (this._cdInfo.ic < cc.ICOUNT_MIN || this._cdInfo.ic > cc.ICOUNT_MAX) {
+         throw new Error('Invalid ic of: ' + this._cdInfo.ic);
+      }
+
       const ekMaterial = await crypto.subtle.importKey(
          'raw',
          rawMaterial,
@@ -288,12 +295,6 @@ export abstract class BasePWDKeyProvider extends BaseKeyProvider {
          false,
          ['deriveBits', 'deriveKey']
       );
-      if (!this._cdInfo || this._cdInfo.ic === undefined || !this._cdInfo.slt) {
-         throw new Error('Invalid CipherDataInfo');
-      }
-      if (this._cdInfo.ic < cc.ICOUNT_MIN || this._cdInfo.ic > cc.ICOUNT_MAX) {
-         throw new Error('Invalid ic of: ' + this._cdInfo.ic);
-      }
 
       // A bit of a hack, but subtle doesn't support other algorithms... so lie. This
       // is safe because the key is exported as bits and used in libsodium when not
