@@ -41,6 +41,12 @@ if [ "${1:-}" = "--" ]; then
    shift
 fi
 
+# --help / -h short-circuit: skip env-var resolution and SSO probe so help
+# text doesn't trigger an auth prompt. Just hand the args to yargs.
+if [ "$(is_help_mode "$@")" = "1" ]; then
+   exec node "$SCRIPT_DIR/deploy.mjs" "$@"
+fi
+
 # Pick env-var pair names per prod/test mode (--prod presence = prod-mode).
 # Per-mode build-dir avoids the wrong artifact being deployed to the wrong
 # environment if someone test-builds then runs deploy:web:prod (or vice

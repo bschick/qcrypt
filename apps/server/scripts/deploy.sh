@@ -40,6 +40,12 @@ if [ "${1:-}" = "--" ]; then
    shift
 fi
 
+# --help / -h short-circuit: skip env-var resolution and SSO probe so help
+# text doesn't trigger an auth prompt. Just hand the args to yargs.
+if [ "$(is_help_mode "$@")" = "1" ]; then
+   exec node "$SCRIPT_DIR/deploy.mjs" "$@"
+fi
+
 # Pick env-var pair names per prod/test mode (--prod presence = prod-mode).
 if [ "$(is_prod_mode "$@")" = "1" ]; then
    LAMBDA_ENV_NAME="QC_PROD_LAMBDA"

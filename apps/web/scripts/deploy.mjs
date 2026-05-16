@@ -374,12 +374,48 @@ function findExpiredOrphans(orphans, expirationDays, inScope) {
 
 // Sequentially `aws s3 rm` each key, returning the subset that succeeded.
 // Failures are tolerated so one bad key doesn't abort the whole batch.
+// One `aws s3api delete-objects` call removes up to 1000 keys at a time
+// instead of one per CLI invocation, turning a per-file ~1-2s spawn cost
+// into a single batched request. Larger sets are chunked. The Delete spec
+// is piped via stdin to keep arbitrarily large key lists clear of ARG_MAX.
 function deleteKeys(argv, keys) {
    const deleted = [];
-   for (const key of keys) {
-      const r = aws(argv, ['s3', 'rm', `s3://${argv.bucket}/${key}`], { allowFailure: true });
-      if (r.status === 0) {
-         deleted.push(key);
+   const CHUNK_SIZE = 1000;
+   for (let offset = 0; offset < keys.length; offset += CHUNK_SIZE) {
+      const chunk = keys.slice(offset, offset + CHUNK_SIZE);
+      const payload = JSON.stringify({
+         Objects: chunk.map((key) => ({ Key: key })),
+         Quiet: true,
+      });
+      const r = aws(argv, [
+         's3api', 'delete-objects',
+         '--bucket', argv.bucket,
+         '--delete', 'file:///dev/stdin',
+      ], { input: payload, allowFailure: true });
+      if (r.status !== 0) {
+         // Whole-chunk failure (auth, network, etc.); leave none recorded.
+         continue;
+      }
+      // With Quiet=true, a successful response is either empty or contains
+      // only an Errors array for the keys that failed.
+      let errors = [];
+      try {
+         const parsed = JSON.parse(r.stdout || '{}');
+         errors = parsed.Errors ?? [];
+      } catch {
+         // Empty stdout is fine when Quiet=true and nothing errored.
+      }
+      const failed = new Set(errors.map((err) => err.Key));
+      for (const key of chunk) {
+         if (!failed.has(key)) {
+            deleted.push(key);
+         }
+      }
+      if (errors.length > 0) {
+         console.error(`Failed to delete ${errors.length} of ${chunk.length} keys in batch:`);
+         for (const err of errors.slice(0, argv.printLimit ?? 5)) {
+            console.error(`  ${err.Key}: ${err.Message ?? err.Code ?? ''}`);
+         }
       }
    }
    return deleted;

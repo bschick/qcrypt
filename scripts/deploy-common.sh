@@ -25,6 +25,21 @@ is_prod_mode() {
    echo 0
 }
 
+# Echoes "1" if --help or -h is anywhere in args, else "0". Used by
+# wrappers to short-circuit env-var resolution / SSO before yargs prints
+# help and exits — so `--help` doesn't pay the auth-prompt cost.
+is_help_mode() {
+   for arg in "$@"; do
+      case "$arg" in
+         --help|-h)
+            echo 1
+            return 0
+            ;;
+      esac
+   done
+   echo 0
+}
+
 # Scan args for `--<flag> value` or `--<flag>=value`. Echoes the value or
 # the empty string if not found. Used by callers that need to know what
 # value the user passed for a flag *before* deploy.mjs sees the args
