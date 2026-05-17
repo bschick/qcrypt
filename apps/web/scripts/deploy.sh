@@ -57,12 +57,14 @@ if [ "$(is_prod_mode "$@")" = "1" ]; then
    CF_DIST_ENV_NAME="QC_PROD_CF_DISTRIBUTION"
    CHROME_PROFILE_ENV_NAME="QC_PROD_CHROME_PROFILE"
    BUILD_DIR_DEFAULT="$REPO_ROOT/dist/web/browser"
+   EXPIRATION_DAYS_DEFAULT=14
 else
    BUCKET_ENV_NAME="QC_TEST_BUCKET"
    PROFILE_ENV_NAME="QC_TEST_AWS_PROFILE"
    CF_DIST_ENV_NAME="QC_TEST_CF_DISTRIBUTION"
    CHROME_PROFILE_ENV_NAME="QC_TEST_CHROME_PROFILE"
    BUILD_DIR_DEFAULT="$REPO_ROOT/dist/web-test/browser"
+   EXPIRATION_DAYS_DEFAULT=7
 fi
 
 # Bucket is required and not committed to repo (account-identifying).
@@ -92,7 +94,7 @@ case "${SUBCMD:-deploy}" in
    deploy|bdeploy)
       default_unless_user_supplied --build-dir "$BUILD_DIR_DEFAULT" "$@"
       default_unless_user_supplied --cache-control "public, max-age=31536000, immutable" "$@"
-      default_unless_user_supplied --expiration-days 30 "$@"
+      default_unless_user_supplied --expiration-days "$EXPIRATION_DAYS_DEFAULT" "$@"
       if [ -n "${!CF_DIST_ENV_NAME:-}" ]; then
          default_unless_user_supplied --cf-distribution "${!CF_DIST_ENV_NAME}" "$@"
       fi
@@ -106,7 +108,7 @@ case "${SUBCMD:-deploy}" in
       ;;
    prune)
       # Match the deploy retention so on-demand prune uses the same window.
-      default_unless_user_supplied --expiration-days 30 "$@"
+      default_unless_user_supplied --expiration-days "$EXPIRATION_DAYS_DEFAULT" "$@"
       ;;
 esac
 
