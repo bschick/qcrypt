@@ -121,7 +121,7 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'Where should I report problems or get help with Quick Crypt?',
       answer: `Please report problems by <a href="https://github.com/bschick/qcrypt/issues/new/choose" target="_blank">
-      creating an issue on Github</a>. A discussion forum is not yet
+      creating an issue on GitHub</a>. A discussion forum is not yet
       available, but we may create one in the future. You can also try common sites
       like Stack Overflow.`
    },
@@ -254,8 +254,8 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'What is a sender link and how do I use it?',
-      answer: `<p>A sender link allows other to encrypt text or files that only you can
-      decrypt without exposing your credentials. You specify how many times a each
+      answer: `<p>A sender link allows others to encrypt text or files that only you can
+      decrypt without exposing your credentials. You specify how many times each
       sender link can be used and when the link will expire. Once created, you can give
       the sender link to others who can use it to encrypt data only you can decrypt.
       Recipients should follow the link and encrypt data with passwords just as they
@@ -279,12 +279,12 @@ const ELEMENT_DATA: FAQElement[] = [
       question: 'What should I do if someone I don\'t trust obtains a sender link I created?',
       answer: `<p>First, it is important to understand that sender links can only encrypt data.
       When someone has a sender link you created, they cannot use it to decrypt your data nor
-      even the resulting cipher armor they creating themselves using your link.</p>
+      even the resulting cipher armor they create themselves using your link.</p>
       <p>
       If an untrusted person has a sender link you created they could use it to encrypt data
       you don't want or trust. There are several ways to handle this situation:
       <ol type='i'>
-      <li>Delete the sender link on <a href="/help/overview">Quick Crypt's sender like page</a></li>
+      <li>Delete the sender link on <a href="/help/overview">Quick Crypt's sender link page</a></li>
       <li>Quick Crypt helps you detect lost sender links by showing you the
       user name from the account who encrypted data. If you did not expect data from that
       sender, you should not trust it</li>
@@ -296,20 +296,20 @@ const ELEMENT_DATA: FAQElement[] = [
 
 
       does not allow
-      other to decrypt your data. Sender links can only be used to encrypt data, and others
-      uho use your sender link cannot even decrypt that data themselves.
+      others to decrypt your data. Sender links can only be used to encrypt data, and others
+      who use your sender link cannot even decrypt that data themselves.
 
-      A sender link allows other to encrypt text or files that only you can
-      decrypt without exposing your credentials. You specify how many times a each
+      A sender link allows others to encrypt text or files that only you can
+      decrypt without exposing your credentials. You specify how many times each
       sender link can be used and when the link will expire. Once created, you can give
       the sender link to others who can use it to encrypt data only you can decrypt.
       Recipients should follow the link and encrypt data with passwords just as they
       would normally in Quick Crypt. Recipients may then send you the encrypted
-      data by any means they chose (message app, email, file sharing, etc). Neither
+      data by any means they choose (message app, email, file sharing, etc). Neither
       unencrypted nor encrypted data is processed, sent, or stored by Quick Crypt
       servers, ensuring you maintain full control over the information provided by
       the sender. When you
-      receive encrypted data, you decrypted it as you would normally in Quick Crypt
+      receive encrypted data, you decrypt it as you would normally in Quick Crypt
       with the same strong privacy and authenticity characteristics.</p>
       <p>
 
@@ -325,7 +325,7 @@ const ELEMENT_DATA: FAQElement[] = [
       answer: `Quick Crypt does not request, collect, or process PII. When you enter a user
       name or a
       passkey description, you may use whatever values you choose. It is best not to use PII
-      for those values, but even if you use an email address or personal name Quick Crypt
+      for those values, but even if you use an email address or personal name, Quick Crypt
       treats that as an opaque value and will not contact you. If you change your user name
       or passkey descriptions, previous values are
       not retained.`
@@ -469,8 +469,8 @@ const ELEMENT_DATA: FAQElement[] = [
       credential. Passwords are easy to share (although doing so securely is
       not easy), and passkeys can be shared with a good management
       tool like Bitwarden or 1Password. If the recipient has both,
-      they can decrypt cipher armor you copy from Quick Crypt and send them.
-      But again, there are better ways to do this.`
+      they can decrypt cipher armor you copy from Quick Crypt and send to them.
+      But again, there are better ways to do this.</p>`
    },
 
    {
@@ -637,12 +637,12 @@ const ELEMENT_DATA: FAQElement[] = [
       your criteria.
       <ul>
          <li>If you want the most recently designed symmetric cipher mode, that is key-committing
-         even without Quick Crypt's additional BLAKE2b keyed hash, choose <b>AEGIS 256</b>.
+         even without Quick Crypt's additional commitment key, choose <b>AEGIS 256</b>.
          </li>
          <li>If you want the most widely used and studied mode, choose <b>AES 256 GCM</b>,
          which is the most commonly used TLS 1.3 cipher in browsers.
          <li>If you want a mode that many regard as more robust than AES 256 GCM and
-         whose close sibling is in the TLS 1.3 standard, choose <b>XChaCha20 Poly130</b>.
+         whose close sibling is in the TLS 1.3 standard, choose <b>XChaCha20 Poly1305</b>.
          </li>
          <li>If you want the smallest resulting cipher armor (although not by much),
          choose <b>AES 256 GCM</b> first, then <b>XChaCha20 Poly1305</b>, and <b>AEGIS 256</b>
@@ -663,14 +663,14 @@ const ELEMENT_DATA: FAQElement[] = [
          and <b>AES 256 GCM</b> last.
          </li>
       </ul>
-      <p>Quick Cyrpt defaults to <b>XChaCha20 Poly1305</b> because it is very
+      <p>Quick Crypt defaults to <b>XChaCha20 Poly1305</b> because it is very
       well-established and generally considered more robust than AES 256 GCM. The
       libsodium implementation is also designed to be side-channel attack resistant,
-      is key-committing when paired with Quick Crypt's extra MAC tag, and
+      is key-committing when paired with Quick Crypt's additional commitment key, and
       is easy for Quick Crypt to update if needed.
       </p><p>For increased protection, you can encrypt your data multiple times
       by setting loop encrypt in the "Advanced Options" section to greater than 1.
-      Each loop shoud use a different cipher mode and password. So rather than
+      Each loop should use a different cipher mode and password. So rather than
       choosing between your browser's AES 256 GCM implementation and libsodium's
       XChaCha20 Poly1305, for example, you can apply both.</p>`
    },
@@ -894,11 +894,11 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'Why does Quick Crypt use both MACs and AEAD ciphers?',
-      answer: `First, by adding a distinct BLAKE2b keyed hash generated with
-      a key derived from the same key material as the primary encryption key,
-      Quick Crypt's protocol is <href="https://en.wikipedia.org/wiki/Authenticated_encryption#Key-committing_AEAD"
-      target="_blank">key-committing</a> for all underlying AEAD
-      cipher modes. Second, Quick Crypt can safely read and display unencrypted
+      answer: `First, this improves ciphertext integrity (INT-CTXT) by detecting
+      per block tampering early. Each block's header MAC also includes the previous
+      block's MAC ensuring block reordering, duplication, or removal is detected.
+      The outer MAC creates a strict "Encrypt-then-MAC" protocol that lets Quick Crypt safely
+      read and display unencrypted
       metadata, such as the version number, before the primary decryption algorithm
       runs. And finally, the additional MAC provides defense-in-depth. Imagine an
       attacker could modify your encrypted data and knows of a bug in Chrome's
@@ -906,7 +906,21 @@ const ELEMENT_DATA: FAQElement[] = [
       ciphertext such that data is leaked when you decrypt it. The additional MAC
       validation means that there would need to be problems with both the libsodium
       generated BLAKE2b MAC and Chrome's AES cipher implementation for such an attack
-      to succeed, which is even less likely.`
+      to succeed.`
+   },
+
+   {
+      position: 0,
+      question: 'Is Quick Crypt\'s protocol key committing?',
+      answer: `Yes, Quick Crypt's protocol is <a href="https://en.wikipedia.org/wiki/Authenticated_encryption#Key-committing_AEAD"
+      target="_blank">key-committing</a> for all underlying AEAD
+      cipher modes. During encryption a commitment key is derived from the
+      root cipher key via a BLAKE2b KDF and then injected into the AEAD additional data.
+      Because the root cipher key is itself derived from the user credential and
+      password, the commitment key binds each ciphertext block to those secrets. An
+      attacker therefore cannot construct a single ciphertext that decrypts to two
+      different cleartexts under two different keys. The AEGIS 256 cipher mode
+      provided by Quick Crypt is also independently key-committing.`
    },
 
    {
@@ -945,7 +959,7 @@ const ELEMENT_DATA: FAQElement[] = [
       users can access already encrypted data. Depending upon the
       severity of the weakness, Quick Crypt would notify users of the situation on
       this site (remember we have no contact info) and recommend that you re-encrypt
-      data using a different cipher mode. Such a weakenss would be massive news
+      data using a different cipher mode. Such a weakness would be massive news
       since two modes are part of the TLS 1.3 standard used by most browsers,
       and the third is proposed for a future TLS version.`
    },
@@ -954,8 +968,8 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: "What does the 'Decryption Reminder' Advanced Option do?",
       answer: `When enabled, this option adds text to JSON cipher armor that reminds
-      you where to decrypt the cipher armor. Quick Crypt does not use this text; It
-      is just a reminder for anyone who may forgotten how the cipher armor was created.`
+      you where to decrypt the cipher armor. Quick Crypt does not use this text; it
+      is just a reminder for anyone who may have forgotten how the cipher armor was created.`
    },
 
    {
