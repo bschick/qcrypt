@@ -1832,7 +1832,7 @@ const METHODMAP: MethodMap = {
       { name: 'getUser', pattern: Patterns.user, version: 1, authorize: true, handler: getUser },
       { name: 'getPasskeyOptions', pattern: Patterns.passkeyOptions, version: 1, authorize: true, handler: getPasskeyOptions },
       // Special case of an authenticated method that does not require csrf. Needed so GET session works in a fresh
-      // tab/window, and should be safe since csrf isn't technically needed for GET calls due to Same-Origin
+      // tab/window, and is safe since csrf isn't technically needed for GET calls due to Same-Origin
       { name: 'getSession', pattern: Patterns.session, version: 1, authorize: true, checkCsrf: false, handler: getSession },
       { name: 'getInvitables', pattern: Patterns.invitables, version: 1, authorize: true, handler: getInvitables },
    ],
