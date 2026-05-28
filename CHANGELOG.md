@@ -3,18 +3,19 @@
 ## 7.0.0 (TBD)
 
 #### Features
-  - user information state refresh across browser tabs and windows in the same profile
-  - session state refresh across browser tabs and windows in the same profile
+  - user information refreshed across browser tabs and windows in the same profile
+  - session state refreshed across browser tabs and windows in the same profile
 
 #### Changes
-  - automatically generated test vectors
   - improved unit test coverage and e2e playwright coverage in several areas
+  - more performance optimizations for web app load time and first render
+  - automatically generated test vectors (internal, and so helfpul)
 
 #### Security
   - [protocol version 7 released] (https://quickcrypt.org/help/protocol7)
     - improved domain isolation by adding context-specific input to key derivations
     - initialization vector no longer shared between hint and block0
-    - cipher key hash added to associated data to provide full key commitment
+    - cipher key hashes added to associated data to provide full key commitment
     - new non-password based key derivation for encrypting data at rest
   - browser app keeps userCred in memory only during cryptographic operations
   - browser sessionstore used to persist encrypted userCred
