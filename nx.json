@@ -42,5 +42,10 @@
       "default"
     ]
   },
-  "analytics": true
+  "analytics": true,
+  "generators": {
+    "@nx/angular:component": {
+      "style": "scss"
+    }
+  }
 }

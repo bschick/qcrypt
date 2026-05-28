@@ -16,15 +16,15 @@ export interface FAQElement {
 }
 
 @Component({
-    selector: 'app-faqs',
-    templateUrl: './faqs.component.html',
-    styleUrl: './faqs.component.scss',
-    encapsulation: ViewEncapsulation.None,
-    imports: [
-    MatTableModule, MatInputModule, MatFormFieldModule, MatIconModule,
-    MatButtonModule, FormsModule,
-    CopyrightComponent
-]
+   selector: 'app-faqs',
+   templateUrl: './faqs.component.html',
+   styleUrl: './faqs.component.scss',
+   encapsulation: ViewEncapsulation.None,
+   imports: [
+      MatTableModule, MatInputModule, MatFormFieldModule, MatIconModule,
+      MatButtonModule, FormsModule,
+      CopyrightComponent
+   ]
 })
 export class FaqsComponent implements AfterViewInit {
 
@@ -133,10 +133,10 @@ const ELEMENT_DATA: FAQElement[] = [
       password you used for encryption and a passkey restricting access to your
       Quick Crypt user credential. Unless you share your passkey and encryption
       password with someone, only you can decrypt data that you have encrypted.`
-//      This is true for self-encrypted data and data encrypted for you through
-//      a sender link. The Quick Crypt web app does not store your passwords and
-//      therefore cannot decrypt your data. Do not forget the passwords you use
- //     for encryption.`
+      //      This is true for self-encrypted data and data encrypted for you through
+      //      a sender link. The Quick Crypt web app does not store your passwords and
+      //      therefore cannot decrypt your data. Do not forget the passwords you use
+      //     for encryption.`
    },
 
    {
@@ -250,74 +250,74 @@ const ELEMENT_DATA: FAQElement[] = [
       existing ciphertext. If you find your original recovery word pattern or passkey
       later, you can use either to regain access to your original user identity.`
    },
-/*
-   {
-      position: 0,
-      question: 'What is a sender link and how do I use it?',
-      answer: `<p>A sender link allows others to encrypt text or files that only you can
-      decrypt without exposing your credentials. You specify how many times each
-      sender link can be used and when the link will expire. Once created, you can give
-      the sender link to others who can use it to encrypt data only you can decrypt.
-      Recipients should follow the link and encrypt data with passwords just as they
-      would normally in Quick Crypt. Recipients may then send you the encrypted
-      data by any means they chose (message app, email, file sharing, etc). Neither
-      unencrypted nor encrypted data is processed, sent, or stored by Quick Crypt
-      servers, ensuring you maintain full control over the information provided by
-      the sender. When you
-      receive encrypted data, you decrypted it as you would normally in Quick Crypt
-      with the same strong privacy and authenticity characteristics.</p>
-      <p>
+   /*
+      {
+         position: 0,
+         question: 'What is a sender link and how do I use it?',
+         answer: `<p>A sender link allows others to encrypt text or files that only you can
+         decrypt without exposing your credentials. You specify how many times each
+         sender link can be used and when the link will expire. Once created, you can give
+         the sender link to others who can use it to encrypt data only you can decrypt.
+         Recipients should follow the link and encrypt data with passwords just as they
+         would normally in Quick Crypt. Recipients may then send you the encrypted
+         data by any means they chose (message app, email, file sharing, etc). Neither
+         unencrypted nor encrypted data is processed, sent, or stored by Quick Crypt
+         servers, ensuring you maintain full control over the information provided by
+         the sender. When you
+         receive encrypted data, you decrypted it as you would normally in Quick Crypt
+         with the same strong privacy and authenticity characteristics.</p>
+         <p>
 
-      </p>
+         </p>
 
-       To create a sender link, click the "Sender Link" button on the main page.`
-   },
-
-
-   {
-      position: 0,
-      question: 'What should I do if someone I don\'t trust obtains a sender link I created?',
-      answer: `<p>First, it is important to understand that sender links can only encrypt data.
-      When someone has a sender link you created, they cannot use it to decrypt your data nor
-      even the resulting cipher armor they create themselves using your link.</p>
-      <p>
-      If an untrusted person has a sender link you created they could use it to encrypt data
-      you don't want or trust. There are several ways to handle this situation:
-      <ol type='i'>
-      <li>Delete the sender link on <a href="/help/overview">Quick Crypt's sender link page</a></li>
-      <li>Quick Crypt helps you detect lost sender links by showing you the
-      user name from the account who encrypted data. If you did not expect data from that
-      sender, you should not trust it</li>
-      <li>Since Quick Crypt never stores or sends encrypted data, you can also confirm you received
-      encrypted data from an expected sender (email address, messaging user, etc.)</li>
-      </ol>
-
-      </p>
+          To create a sender link, click the "Sender Link" button on the main page.`
+      },
 
 
-      does not allow
-      others to decrypt your data. Sender links can only be used to encrypt data, and others
-      who use your sender link cannot even decrypt that data themselves.
+      {
+         position: 0,
+         question: 'What should I do if someone I don\'t trust obtains a sender link I created?',
+         answer: `<p>First, it is important to understand that sender links can only encrypt data.
+         When someone has a sender link you created, they cannot use it to decrypt your data nor
+         even the resulting cipher armor they create themselves using your link.</p>
+         <p>
+         If an untrusted person has a sender link you created they could use it to encrypt data
+         you don't want or trust. There are several ways to handle this situation:
+         <ol type='i'>
+         <li>Delete the sender link on <a href="/help/overview">Quick Crypt's sender link page</a></li>
+         <li>Quick Crypt helps you detect lost sender links by showing you the
+         user name from the account who encrypted data. If you did not expect data from that
+         sender, you should not trust it</li>
+         <li>Since Quick Crypt never stores or sends encrypted data, you can also confirm you received
+         encrypted data from an expected sender (email address, messaging user, etc.)</li>
+         </ol>
 
-      A sender link allows others to encrypt text or files that only you can
-      decrypt without exposing your credentials. You specify how many times each
-      sender link can be used and when the link will expire. Once created, you can give
-      the sender link to others who can use it to encrypt data only you can decrypt.
-      Recipients should follow the link and encrypt data with passwords just as they
-      would normally in Quick Crypt. Recipients may then send you the encrypted
-      data by any means they choose (message app, email, file sharing, etc). Neither
-      unencrypted nor encrypted data is processed, sent, or stored by Quick Crypt
-      servers, ensuring you maintain full control over the information provided by
-      the sender. When you
-      receive encrypted data, you decrypt it as you would normally in Quick Crypt
-      with the same strong privacy and authenticity characteristics.</p>
-      <p>
+         </p>
 
-      </p>
 
-       To create a sender link, click the "Sender Link" button on the main page.`
-   },
-*/
+         does not allow
+         others to decrypt your data. Sender links can only be used to encrypt data, and others
+         who use your sender link cannot even decrypt that data themselves.
+
+         A sender link allows others to encrypt text or files that only you can
+         decrypt without exposing your credentials. You specify how many times each
+         sender link can be used and when the link will expire. Once created, you can give
+         the sender link to others who can use it to encrypt data only you can decrypt.
+         Recipients should follow the link and encrypt data with passwords just as they
+         would normally in Quick Crypt. Recipients may then send you the encrypted
+         data by any means they choose (message app, email, file sharing, etc). Neither
+         unencrypted nor encrypted data is processed, sent, or stored by Quick Crypt
+         servers, ensuring you maintain full control over the information provided by
+         the sender. When you
+         receive encrypted data, you decrypt it as you would normally in Quick Crypt
+         with the same strong privacy and authenticity characteristics.</p>
+         <p>
+
+         </p>
+
+          To create a sender link, click the "Sender Link" button on the main page.`
+      },
+   */
 
    {
       position: 0,
@@ -636,11 +636,12 @@ const ELEMENT_DATA: FAQElement[] = [
       XChaCha20 Poly1305, and AEGIS 256. No mode is bad, and choosing one depends on
       your criteria.
       <ul>
-         <li>If you want the most recently designed symmetric cipher mode, that is key-committing
-         even without Quick Crypt's additional commitment key, choose <b>AEGIS 256</b>.
+         <li>If you want the most quantum-resistant cipher mode, choose <b>AEGIS 256</b> first,
+         then <b>XChaCha20 Poly1305</b>, and <b>AES 256 GCM</b> last.
          </li>
          <li>If you want the most widely used and studied mode, choose <b>AES 256 GCM</b>,
          which is the most commonly used TLS 1.3 cipher in browsers.
+         </li>
          <li>If you want a mode that many regard as more robust than AES 256 GCM and
          whose close sibling is in the TLS 1.3 standard, choose <b>XChaCha20 Poly1305</b>.
          </li>
@@ -652,10 +653,13 @@ const ELEMENT_DATA: FAQElement[] = [
          </li>
          <li>If you want a mode that runs in your browser but is implemented by the open-source
          <a href="https://doc.libsodium.org/" target="_blank">libsodium library</a>,
-         choose <b>XChaCha20 Poly1305</b> or <b>AEGIS 256</b>
+         choose <b>XChaCha20 Poly1305</b> or <b>AEGIS 256</b>.
          </li>
          <li>If you want an implementation designed to resist side-channel attacks, choose
-         either <b>XChaCha20 Poly1305</b> or <b>AEGIS 256</b>, which are provided by libsodium
+         either <b>XChaCha20 Poly1305</b> or <b>AEGIS 256</b>, which are provided by libsodium.
+         </li>
+         <li>If you want a cipher mode that is CMT-1 key-committing
+         even without Quick Crypt's additional commitment key, choose <b>AEGIS 256</b>.
          </li>
          <li>While there is no universal agreement on the "safest" mode, the
          <a href="https://doc.libsodium.org/secret-key_cryptography/aead#tl-dr-which-one-should-i-use" target="_blank">
@@ -664,15 +668,15 @@ const ELEMENT_DATA: FAQElement[] = [
          </li>
       </ul>
       <p>Quick Crypt defaults to <b>XChaCha20 Poly1305</b> because it is very
-      well-established and generally considered more robust than AES 256 GCM. The
-      libsodium implementation is also designed to be side-channel attack resistant,
-      is key-committing when paired with Quick Crypt's additional commitment key, and
-      is easy for Quick Crypt to update if needed.
+      well-established, is generally considered more robust than AES 256 GCM,
+      is post-quantum robust, is key-committing when paired with Quick Crypt's
+      additional commitment key, and is easy for Quick Crypt to update if needed.
+      The libsodium implementation is also designed to be side-channel attack resistant.
       </p><p>For increased protection, you can encrypt your data multiple times
       by setting loop encrypt in the "Advanced Options" section to greater than 1.
       Each loop should use a different cipher mode and password. So rather than
       choosing between your browser's AES 256 GCM implementation and libsodium's
-      XChaCha20 Poly1305, for example, you can apply both.</p>`
+      XChaCha20 Poly1305 or AEGIS 256, you could apply all three.</p>`
    },
 
    {
@@ -895,32 +899,37 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'Why does Quick Crypt use both MACs and AEAD ciphers?',
       answer: `First, this improves ciphertext integrity (INT-CTXT) by detecting
-      per block tampering early. Each block's header MAC also includes the previous
-      block's MAC ensuring block reordering, duplication, or removal is detected.
+      per-block tampering early. Each block's header MAC also includes the previous
+      block's MAC, ensuring block reordering, duplication, or removal is detected.
       The outer MAC creates a strict "Encrypt-then-MAC" protocol that lets Quick Crypt safely
       read and display unencrypted
       metadata, such as the version number, before the primary decryption algorithm
-      runs. And finally, the additional MAC provides defense-in-depth. Imagine an
+      runs. Next, by outputting cipher armor with a collision-resistant BLAKE2b hash,
+      Quick Crypt achieves CMT-4/FROB-secure key commitment for all cipher modes.
+      And finally, the additional MAC provides defense-in-depth. Imagine an
       attacker could modify your encrypted data and knows of a bug in Chrome's
       AES-GCM cipher. Although unlikely, this might allow an attacker to craft the
-      ciphertext such that data is leaked when you decrypt it. The additional MAC
-      validation means that there would need to be problems with both the libsodium
-      generated BLAKE2b MAC and Chrome's AES cipher implementation for such an attack
-      to succeed.`
+      ciphertext such that data is leaked when you decrypt it. The additional upfront
+      MAC validation during decryption adds a layer atop all underlying AEAD ciphers
+      that further protects data security and system robustness.`
    },
 
    {
       position: 0,
       question: 'Is Quick Crypt\'s protocol key committing?',
-      answer: `Yes, Quick Crypt's protocol is <a href="https://en.wikipedia.org/wiki/Authenticated_encryption#Key-committing_AEAD"
-      target="_blank">key-committing</a> for all underlying AEAD
-      cipher modes. During encryption a commitment key is derived from the
-      root cipher key via a BLAKE2b KDF and then injected into the AEAD additional data.
-      Because the root cipher key is itself derived from the user credential and
+      answer: `Yes, <a href="/help/protocol">Quick Crypt's protocol</a> is
+      <a href="https://en.wikipedia.org/wiki/Authenticated_encryption#Key-committing_AEAD" target="_blank">
+      key-committing</a> for all underlying AEAD cipher modes as of v7. Two features
+      combine to achieve a <a href="https://tosc.iacr.org/index.php/ToSC/article/view/11404/10902"
+      target="_blank">FROB-secure</a> protocol. During encryption, a commitment key is derived
+      from the root cipher key via a BLAKE2b KDF and then injected into the AEAD additional
+      data. Because the root cipher key is itself derived from the user credential and
       password, the commitment key binds each ciphertext block to those secrets. An
-      attacker therefore cannot construct a single ciphertext that decrypts to two
-      different cleartexts under two different keys. The AEGIS 256 cipher mode
-      provided by Quick Crypt is also independently key-committing.`
+      attacker therefore cannot construct a single ciphertext that decrypts to two different
+      cleartexts under two different keys. Next, Quick Crypt creates cipher armor with a collision-
+      resistant 256-bit BLAKE2b keyed hash covering metadata, additional data, and ciphertext. The
+      hash is verified before decryption, creating an "Encrypt-then-MAC" protocol that rejects both
+      cipher key and additional data manipulation.`
    },
 
    {
@@ -940,14 +949,24 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'Are Quick Crypt\'s algorithms quantum-resistant?',
-      answer: `Quick Crypt's symmetric cipher modes XChaCha20 Poly1305, AEGIS 256, and AES GCM 256
-      use 256-bit keys that are considered quantum-resistant, even if usable quantum computers
-      are built in the future. If a quantum computer capable of running Grover's algorithm were
-      built, it would reduce brute-force attacks by halving effective key strength, but breaking
-      256-bit keys would still require billions of years. Quick Crypt does not use public-key
-      algorithms like Diffie-Hellman that would be highly vulnerable to a future quantum computer
-      capable of running Shor's algorithm. Quantum cryptographic theory continues to evolve,
-      however, and Quick Crypt will evolve with it.`
+      answer: `<p>Quick Crypt's protocol is designed to be quantum-resistant against
+      several attack vectors:</p>
+      <ul>
+         <li><b>Key Recovery Attacks:</b> Quick Crypt's symmetric cipher modes (XChaCha20 Poly1305,
+         AEGIS 256, and AES 256 GCM) use 256-bit keys. If a quantum computer capable of running
+         Grover's algorithm were built, it would reduce brute-force attacks by halving the effective
+         key strength, but breaking an effective 128-bit key would still require billions of years.</li>
+         <li><b>State Recovery Attacks:</b> Ciphers with larger internal states are more resistant.
+         AEGIS 256 uses a 768-bit internal state and provides formal guarantees under the post-quantum
+         Q1 threat model, making it provably resilient. XChaCha20 Poly1305 uses a 512-bit state, making
+         it strongly resistant, but not immune. AES 256 GCM uses a 128-bit
+         internal state and is the most susceptible to quantum state-collision or
+         recovery attacks.</li>
+         <li><b>Public-Key Attacks:</b> Quick Crypt does not use public-key algorithms,
+         like Diffie-Hellman, which would be highly vulnerable to a future quantum computer
+         capable of running Shor's algorithm.</li>
+      </ul>
+      <p>Quantum cryptographic theory continues to evolve, however, and Quick Crypt will evolve with it.</p>`
    },
 
    {

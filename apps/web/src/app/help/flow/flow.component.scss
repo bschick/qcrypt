@@ -1,0 +1,161 @@
+@use "../help.scss";
+
+.flow-page {
+   display: flex;
+   flex-direction: column;
+   height: calc(100vh - 64px);
+   padding: 16px 24px;
+   gap: 12px;
+   box-sizing: border-box;
+}
+
+.breadcrumb-bar {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   gap: 8px;
+   flex: 0 0 auto;
+   min-height: 40px;
+}
+
+.crumbs {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: baseline;
+   gap: 6px;
+   flex: 1 1 auto;
+   min-width: 0;
+}
+
+.zoom-controls {
+   display: flex;
+   align-items: center;
+   gap: 2px;
+   flex: 0 0 auto;
+   // align icon with .full-svg right edge (offsets mat-icon-button padding)
+   margin-right: -10px;
+}
+
+.crumb-chip {
+   display: inline-flex;
+   align-items: baseline;
+   padding: 4px 12px;
+   border-radius: 999px;
+   font-size: 14px;
+   line-height: 18px;
+   text-decoration: none;
+   font-family: inherit;
+   border: 1px solid transparent;
+   background: transparent;
+   color: inherit;
+   cursor: default;
+}
+
+.crumb-link {
+   background: #eef1f5;
+   color: #1a73e8;
+   cursor: pointer;
+   transition: background-color 120ms ease;
+
+   &:hover,
+   &:focus-visible {
+      background: #dfe6ee;
+      outline: none;
+   }
+
+   &:focus-visible {
+      border-color: #1a73e8;
+   }
+}
+
+.crumb-current {
+   background: #1a73e8;
+   color: white;
+   font-weight: 500;
+}
+
+.crumb-sep {
+   color: #5f6368;
+   font-size: 18px;
+   line-height: 1;
+   user-select: none;
+}
+
+.flow-stage {
+   flex: 1 1 auto;
+   display: flex;
+   align-items: stretch;
+   justify-content: center;
+   min-height: 0;
+}
+
+.overview-grid {
+   display: grid;
+   grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), max-content));
+   justify-content: center;
+   align-content: safe center;
+   gap: 32px;
+   padding: 16px;
+   width: 100%;
+   height: 100%;
+   box-sizing: border-box;
+   overflow-y: auto;
+}
+
+.grid-cell {
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   gap: 10px;
+}
+
+.thumb {
+   // aspect-ratio matches the overview SVG viewBox so the thumb has no
+   // internal letterboxing - if that ratio changes, update here.
+   aspect-ratio: 1524 / 1287;
+   width: min(46vw, 70vh);
+   min-width: 280px;
+   max-width: 600px;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   padding: 12px;
+   border: 1px solid #d0d7de;
+   border-radius: 8px;
+   background: white;
+   cursor: pointer;
+   transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+   box-sizing: border-box;
+
+   img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+   }
+
+   &:hover,
+   &:focus-visible {
+      border-color: #1a73e8;
+      box-shadow: 0 2px 8px rgba(26, 115, 232, 0.15);
+      outline: none;
+   }
+}
+
+.thumb-label {
+   flex: 0 0 auto;
+}
+
+.full-svg {
+   flex: 1 1 auto;
+   width: 100%;
+   display: block;
+   min-height: 0;
+   position: relative;
+   border: 1px solid #d0d7de;
+   border-radius: 4px;
+   background: white;
+   box-sizing: border-box;
+   overflow: hidden;
+   outline: none;
+}
+

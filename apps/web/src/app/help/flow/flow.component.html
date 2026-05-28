@@ -1,0 +1,83 @@
+<div class="flow-page">
+   <nav class="breadcrumb-bar" aria-label="Flow navigation">
+      <div class="crumbs">
+         @for (chip of breadcrumbs(); track $index; let last = $last) {
+            @if (chip.queryParams) {
+               <a class="crumb-chip crumb-link"
+                  href="#"
+                  (click)="onCrumbClick($event, chip.queryParams)">
+                  <sub-label [text]="chip.label" />
+               </a>
+            } @else {
+               <span class="crumb-chip crumb-current" aria-current="page">
+                  <sub-label [text]="chip.label" />
+               </span>
+            }
+            @if (!last) {
+               <span class="crumb-sep" aria-hidden="true">›</span>
+            }
+         }
+      </div>
+
+      @if (mode() !== 'grid') {
+         <div class="zoom-controls" role="group" aria-label="Zoom and pan controls">
+            <button mat-icon-button
+                    type="button"
+                    (click)="zoomOut()"
+                    matTooltip="Zoom out (- or _)"
+                    aria-label="Zoom out">
+               <mat-icon>remove</mat-icon>
+            </button>
+            <button mat-icon-button
+                    type="button"
+                    (click)="zoomIn()"
+                    matTooltip="Zoom in (+ or =)"
+                    aria-label="Zoom in">
+               <mat-icon>add</mat-icon>
+            </button>
+            <button mat-icon-button
+                    type="button"
+                    (click)="resetView()"
+                    matTooltip="Reset view (0 or Home)"
+                    aria-label="Reset view">
+               <mat-icon>center_focus_strong</mat-icon>
+            </button>
+         </div>
+      }
+   </nav>
+
+   <div class="flow-stage">
+      @switch (mode()) {
+         @case ('grid') {
+            <div class="overview-grid">
+               @for (entry of overviewEntries; track entry[0]) {
+                  <div class="grid-cell">
+                     <button type="button"
+                             class="thumb"
+                             (click)="selectOverview(entry[0], $event)"
+                             [attr.aria-label]="'Open ' + entry[1].label">
+                        <img [src]="entry[1].svg" [alt]="entry[1].label" />
+                     </button>
+                     <button type="button"
+                             class="crumb-chip crumb-link thumb-label"
+                             (click)="selectOverview(entry[0], $event)">
+                        <sub-label [text]="entry[1].label" />
+                     </button>
+                  </div>
+               }
+            </div>
+         }
+         @case ('node') {
+            <div class="full-svg"
+                 panZoom
+                 [panZoomKey]="viewerKey()"
+                 [svgInline]="currentSvgUrl()!"
+                 (svgLoaded)="onSvgLoaded($event)"
+                 (click)="onSvgClick($event)"
+                 [attr.aria-label]="currentItem()!.label"
+                 #viewer="panZoom"></div>
+         }
+      }
+   </div>
+   <app-copyright />
+</div>
