@@ -1,9 +1,14 @@
 @use "../help.scss";
 
+:host {
+   display: block;
+   height: 100%;
+}
+
 .flow-page {
    display: flex;
    flex-direction: column;
-   height: calc(100vh - 64px);
+   height: 100%;
    padding: 16px 24px;
    gap: 12px;
    box-sizing: border-box;
