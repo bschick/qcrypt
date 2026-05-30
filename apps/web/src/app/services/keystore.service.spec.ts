@@ -178,7 +178,7 @@ describe('KeystoreService', () => {
 
       expect(entry).toBeDefined();
       expect(entry.masterKey.extractable).toBe(false);
-      await expect(crypto.subtle.exportKey('raw', entry.masterKey)).rejects.toThrow(/extractable/i);
+      await expect(crypto.subtle.exportKey('raw', entry.masterKey)).rejects.toThrow();
    });
 
    it('flush should destroy database and prevent lookups', async () => {

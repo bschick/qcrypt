@@ -28,9 +28,6 @@ async function registerHash(url: string, svg: string): Promise<ArrayBuffer> {
    return bytes.buffer;
 }
 
-// Let the directive's async verify-then-insert settle.
-const settle = () => new Promise<void>(resolve => setTimeout(resolve, 0));
-
 describe('SvgInlineDirective', () => {
    let fixture: ComponentFixture<HostComponent>;
    let httpController: HttpTestingController;
@@ -46,6 +43,13 @@ describe('SvgInlineDirective', () => {
 
    afterEach(() => httpController.verify());
 
+   const waitForSvg = () =>
+      vi.waitFor(() => {
+         const svg = fixture.nativeElement.querySelector('svg') as SVGSVGElement | null;
+         expect(svg).toBeTruthy();
+         return svg!;
+      });
+
    it('verifies the hash, then inserts a <svg> child', async () => {
       const buf = await registerHash('/test.svg', SAMPLE_SVG);
       fixture.detectChanges();
@@ -53,21 +57,20 @@ describe('SvgInlineDirective', () => {
       const req = httpController.expectOne('/test.svg');
       expect(req.request.responseType).toBe('arraybuffer');
       req.flush(buf);
-      await settle();
 
-      const host: HTMLElement = fixture.nativeElement.querySelector('div');
-      const svg = host.querySelector('svg');
-      expect(svg).toBeTruthy();
-      expect(svg?.getAttribute('viewBox')).toBe('0 0 100 100');
-      expect(svg?.getAttribute('width')).toBe('100%');
-      expect(svg?.getAttribute('height')).toBe('100%');
+      const svg = await waitForSvg();
+      expect(svg.getAttribute('viewBox')).toBe('0 0 100 100');
+      expect(svg.getAttribute('width')).toBe('100%');
+      expect(svg.getAttribute('height')).toBe('100%');
    });
 
    it('replaces the existing SVG when the URL changes', async () => {
       const buf1 = await registerHash('/test.svg', SAMPLE_SVG);
       fixture.detectChanges();
       httpController.expectOne('/test.svg').flush(buf1);
-      await settle();
+      await vi.waitFor(() =>
+         expect(fixture.nativeElement.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 100 100'),
+      );
 
       const buf2 = await registerHash(
          '/other.svg',
@@ -76,22 +79,25 @@ describe('SvgInlineDirective', () => {
       fixture.componentInstance.url.set('/other.svg');
       fixture.detectChanges();
       httpController.expectOne('/other.svg').flush(buf2);
-      await settle();
 
+      await vi.waitFor(() =>
+         expect(fixture.nativeElement.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 50 50'),
+      );
       const host: HTMLElement = fixture.nativeElement.querySelector('div');
-      const svgs = host.querySelectorAll('svg');
-      expect(svgs.length).toBe(1);
-      expect(svgs[0].getAttribute('viewBox')).toBe('0 0 50 50');
+      expect(host.querySelectorAll('svg').length).toBe(1);
    });
 
    it('refuses to insert when the bytes do not match the recorded hash', async () => {
       await registerHash('/test.svg', SAMPLE_SVG);
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       fixture.detectChanges();
 
       // Flush different bytes than were hashed.
       const tampered = new TextEncoder().encode(SAMPLE_SVG.replace('red', 'blue')).buffer;
       httpController.expectOne('/test.svg').flush(tampered);
-      await settle();
+
+      await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled());
+      errorSpy.mockRestore();
 
       const host: HTMLElement = fixture.nativeElement.querySelector('div');
       expect(host.querySelector('svg')).toBeNull();
@@ -110,10 +116,8 @@ describe('SvgInlineDirective', () => {
       fixture.componentInstance.url.set('/danger.svg');
       fixture.detectChanges();
       httpController.expectOne('/danger.svg').flush(buf);
-      await settle();
 
-      const svg: SVGSVGElement = fixture.nativeElement.querySelector('svg');
-      expect(svg).toBeTruthy();
+      const svg = await waitForSvg();
       expect(svg.querySelector('script')).toBeNull();
       expect(svg.querySelector('[onclick]')).toBeNull();
 
@@ -137,10 +141,8 @@ describe('SvgInlineDirective', () => {
       fixture.componentInstance.url.set('/script.svg');
       fixture.detectChanges();
       httpController.expectOne('/script.svg').flush(buf);
-      await settle();
 
-      const svg: SVGSVGElement = fixture.nativeElement.querySelector('svg');
-      expect(svg).toBeTruthy();
+      const svg = await waitForSvg();
       expect(svg.querySelector('script')).toBeNull();
       // The element survives but its event-handler attribute is gone.
       const rect = svg.querySelector('rect');

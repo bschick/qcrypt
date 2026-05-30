@@ -44,11 +44,15 @@ export class SvgInlineDirective {
    private readonly _renderer = inject(Renderer2);
    private readonly _http = inject(HttpClient);
    private readonly _destroyRef = inject(DestroyRef);
-
    readonly svgInline = input.required<string>();
    readonly svgLoaded = output<SVGSVGElement>();
+   private _destroyed = false;
 
    constructor() {
+      this._destroyRef.onDestroy(() => {
+         this._destroyed = true;
+      });
+
       effect(() => {
          const url = this.svgInline();
          this._clearHost();
@@ -68,6 +72,9 @@ export class SvgInlineDirective {
       try {
          const expected = FLOW_SVG_HASHES[url];
          const digest = await crypto.subtle.digest('SHA-256', bytes);
+         if (this._destroyed) {
+            return;
+         }
          if (!expected || `sha256-${bufferToBase64URLString(digest)}` !== expected) {
             console.error(`flow: refusing SVG that failed its integrity check: ${url}`);
             return;
