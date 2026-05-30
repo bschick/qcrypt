@@ -5,6 +5,7 @@
 #### Features
   - user information refreshed across browser tabs and windows in the same profile
   - session state refreshed across browser tabs and windows in the same profile
+  - interactive protocol flow diagrams
 
 #### Changes
   - improved unit test coverage and e2e playwright coverage in several areas
@@ -20,7 +21,7 @@
   - browser app keeps userCred in memory only during cryptographic operations
   - browser sessionstore used to persist encrypted userCred
   - versioned cross tab relay of encrypted userCred to prevent excess re-authentication
-  - server binds jwt cookies to requesting origin
+  - server binds and verifies requesting origin in jwt cookies
   - server no longer returns userCred from GET /v1/sessoin for updated clients
   - updated packages
 
