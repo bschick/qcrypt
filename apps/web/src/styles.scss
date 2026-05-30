@@ -81,3 +81,32 @@ body {
   --green-pwd-color: oklch(0.4362 0.1781 138.4);
 
 }
+
+.qc-inline-svg {
+  .qc-clickable {
+    cursor: pointer;
+  }
+
+  .qc-clickable,
+  .qc-clickable rect,
+  .qc-clickable path {
+    transition: stroke 120ms ease, stroke-width 120ms ease;
+  }
+
+  .qc-clickable:hover,
+  .qc-clickable:hover rect,
+  .qc-clickable:hover path {
+    stroke: #1a73e8;
+    stroke-width: 3;
+  }
+
+  .qc-clickable:focus,
+  .qc-clickable:focus-visible {
+    outline: none;
+  }
+
+  // <use> glyphs must not intercept clicks meant for their box.
+  use {
+    pointer-events: none;
+  }
+}

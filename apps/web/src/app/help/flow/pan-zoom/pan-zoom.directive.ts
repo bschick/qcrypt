@@ -46,7 +46,9 @@ const DRAG_PIXEL_THRESHOLD = 4;
    exportAs: 'panZoom',
    host: {
       tabindex: '0',
-      style: 'touch-action: none; overflow: hidden; user-select: none;',
+      '[style.touch-action]': '"none"',
+      '[style.overflow]': '"hidden"',
+      '[style.user-select]': '"none"',
       '[style.cursor]': 'cursorStyle()',
    },
 })

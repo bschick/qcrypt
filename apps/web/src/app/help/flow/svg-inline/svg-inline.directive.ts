@@ -37,6 +37,7 @@ import { FLOW_SVG_HASHES } from '../flow.config';
 
 @Directive({
    selector: '[svgInline]',
+   host: { class: 'qc-inline-svg' },
 })
 export class SvgInlineDirective {
    private readonly _host = inject(ElementRef<HTMLElement>);
@@ -105,33 +106,7 @@ export class SvgInlineDirective {
       this._renderer.setAttribute(root, 'height', '100%');
       this._renderer.setAttribute(root, 'preserveAspectRatio', 'xMidYMid meet');
       this._renderer.setStyle(root, 'display', 'block');
-      this._injectInteractionStyles(root);
       this._renderer.appendChild(this._host.nativeElement, root);
       this.svgLoaded.emit(root);
-   }
-
-   private _injectInteractionStyles(root: SVGSVGElement): void {
-
-      const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-      // depends on properly setup SVG files
-      style.textContent = `
-         .qc-clickable { cursor: pointer; }
-         .qc-clickable,
-         .qc-clickable rect,
-         .qc-clickable path {
-            transition: stroke 120ms ease, stroke-width 120ms ease;
-         }
-         .qc-clickable:hover,
-         .qc-clickable:hover rect,
-         .qc-clickable:hover path {
-            stroke: #1a73e8;
-            stroke-width: 3;
-         }
-         .qc-clickable:focus { outline: none; }
-         .qc-clickable:focus-visible { outline: none; }
-         /* make use paths transparent to pointer events so clicks reach the box. */
-         use { pointer-events: none; }
-      `;
-      this._renderer.insertBefore(root, style, root.firstChild);
    }
 }
