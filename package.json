@@ -39,17 +39,17 @@
   },
   "private": true,
   "dependencies": {
-    "@angular/animations": "^21.2.14",
+    "@angular/animations": "^21.2.15",
     "@angular/cdk": "^21.2.13",
-    "@angular/common": "^21.2.14",
-    "@angular/compiler": "^21.2.14",
-    "@angular/core": "^21.2.14",
-    "@angular/forms": "^21.2.14",
+    "@angular/common": "^21.2.15",
+    "@angular/compiler": "^21.2.15",
+    "@angular/core": "^21.2.15",
+    "@angular/forms": "^21.2.15",
     "@angular/material": "^21.2.13",
-    "@angular/platform-browser": "^21.2.14",
-    "@angular/router": "^21.2.14",
-    "@aws-sdk/client-dynamodb": "^3.1055.0",
-    "@aws-sdk/client-kms": "^3.1055.0",
+    "@angular/platform-browser": "^21.2.15",
+    "@angular/router": "^21.2.15",
+    "@aws-sdk/client-dynamodb": "^3.1057.0",
+    "@aws-sdk/client-kms": "^3.1057.0",
     "@inquirer/core": "^11.2.0",
     "@inquirer/prompts": "^8.5.0",
     "@scure/bip39": "^2.2.0",
@@ -60,6 +60,7 @@
     "@zxcvbn-ts/language-en": "^3.0.2",
     "@zxcvbn-ts/language-es-es": "^3.0.2",
     "@zxcvbn-ts/matcher-pwned": "^3.0.4",
+    "dompurify": "^3.4.7",
     "electrodb": "^3.9.0",
     "jsonwebtoken": "^9.0.3",
     "libsodium-wrappers": "^0.8.4",
@@ -75,7 +76,7 @@
     "@angular-devkit/schematics": "^21.2.13",
     "@angular/build": "^21.2.13",
     "@angular/cli": "^21.2.13",
-    "@angular/compiler-cli": "^21.2.14",
+    "@angular/compiler-cli": "^21.2.15",
     "@aws-sdk/types": "^3.973.9",
     "@nx/angular": "^22.7.5",
     "@nx/workspace": "^22.7.5",
@@ -85,7 +86,7 @@
     "@types/node": "^25.9.1",
     "@types/yargs": "^17.0.35",
     "@vitest/browser-playwright": "^4.1.7",
-    "devtools-protocol": "^0.0.1628107",
+    "devtools-protocol": "^0.0.1638241",
     "esbuild": "^0.28.0",
     "nid-webauthn-emulator": "^0.2.11",
     "nx": "^22.7.5",
@@ -94,25 +95,5 @@
     "typescript": "~5.9.3",
     "vitest": "^4.1.7"
   },
-  "pnpm": {
-    "overrides": {
-      "picomatch": ">=4.0.4",
-      "@angular/platform-server": ">=21.2.9",
-      "fast-xml-parser": ">=5.7.0"
-    },
-    "peerDependencyRules": {
-      "allowedVersions": {
-        "@module-federation/enhanced": "2.1.0"
-      }
-    },
-    "onlyBuiltDependencies": [
-      "@parcel/watcher",
-      "esbuild",
-      "less",
-      "lmdb",
-      "msgpackr-extract",
-      "nx"
-    ]
-  },
-  "packageManager": "pnpm@10.33.4+sha512.1c67b3b359b2d408119ba1ed289f34b8fc3c6873412bec6fd264fbdc82489e510fcbecb9ce9d22dae7f3b76269d8441046014bdca53b9979cd7a561ad631b800"
+  "packageManager": "pnpm@11.5.0+sha512.dbfcc4f81cf48597afd4bc391ffdf12c11f1a9fb83a395bfa6b0a2d9cc2fd8ffebafdb1ccbd529632153f793904c2615b7f09fe1a345473fd1c35845172a8eb1"
 }
