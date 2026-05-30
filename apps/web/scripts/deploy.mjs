@@ -294,18 +294,36 @@ function invalidateCloudFront(argv) {
       '--distribution-id', distId,
       '--paths', '/*',
    ]);
-   let idSuffix = '';
+   let invalidationId;
    if (!argv.dryRun && r.stdout) {
       try {
-         const parsed = JSON.parse(r.stdout);
-         if (parsed.Invalidation?.Id) {
-            idSuffix = ` id=${parsed.Invalidation.Id}`;
-         }
+         invalidationId = JSON.parse(r.stdout).Invalidation?.Id;
       } catch {
-         // Non-JSON stdout; skip the id suffix silently.
+         // Non-JSON stdout; skip the id (and the wait below) silently.
       }
    }
+   const idSuffix = invalidationId ? ` id=${invalidationId}` : '';
    console.log(`  cloudfront: created /* invalidation for distribution ${distId}${idSuffix}${argv.dryRun ? ' (DRY RUN)' : ''}`);
+
+   if (!invalidationId) {
+      return;
+   }
+   // Block until the edge caches are purged so the deploy doesn't return
+   // "done" while stale assets are still being served. `wait` polls every
+   // ~20s and gives up after ~10min; a timeout is non-fatal here because the
+   // upload + manifest already succeeded and the invalidation will still
+   // finish on its own — surface it rather than aborting.
+   console.log('  cloudfront: waiting for invalidation to complete...');
+   const waitResult = aws(argv, [
+      'cloudfront', 'wait', 'invalidation-completed',
+      '--distribution-id', distId,
+      '--id', invalidationId,
+   ], { allowFailure: true });
+   if (waitResult.status === 0) {
+      console.log('  cloudfront: invalidation completed');
+   } else {
+      console.error(`  cloudfront: wait did not confirm completion (invalidation ${invalidationId} is likely still in progress; check the AWS console)`);
+   }
 }
 
 // "Is this key tracked by the manifest?" — union of current, orphans keys,
@@ -487,6 +505,7 @@ async function runDeploy(argv) {
    if (!scope.recursive) {
       bulkArgs.push('--exclude', '*/*');
    }
+   console.log(`deploy: syncing ${newKeys.size} local files to ${s3Dest} (changed files upload)...`);
    const bulkResult = aws(argv, bulkArgs);
 
    // `aws s3 sync --no-progress` prints one line per transferred file:
