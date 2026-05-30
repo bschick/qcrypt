@@ -56,7 +56,6 @@ import { environment } from '../../environments/environment';
 import * as cc from '@qcrypt/crypto/consts';
 import { CipherService, CipherDataInfo } from '../services/cipher.service';
 import {
-   base64ToBytes,
    browserSupportsFilePickers,
    readStreamAll,
    selectWriteableFile,

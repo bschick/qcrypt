@@ -8,6 +8,9 @@
 #   2. svgo - applies the repo's default optimization config.
 # Both steps are idempotent; safe to re-run on already-processed files.
 #
+# Finally regenerates the integrity hashes in flow.config.ts, since processing
+# changes the asset bytes the runtime verifies against.
+#
 # Usage:
 #   pnpm svgo:flow                            # all .svg files in flow dir (recursive)
 #   pnpm svgo:flow derive_enc_kM0.svg         # one file, path rooted in flow dir
@@ -48,3 +51,6 @@ for file in "${files[@]}"; do
    pnpm exec tsx "$TAG_SCRIPT" "$file"
    pnpm exec svgo "$file" | sed '/./,$!d'
 done
+
+echo
+pnpm exec tsx apps/web/scripts/hash_flow_svgs.ts

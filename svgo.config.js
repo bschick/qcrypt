@@ -17,6 +17,11 @@ export default {
                // Off because it also normalises attribute values like
                // data-target="01" into "1", breaking the 2-char hex contract.
                cleanupNumericValues: false,
+               // Strip Lucidchart's round-trip metadata (xmlns:lucid +
+               // lucid:* attrs); we never import back into Lucidchart.
+               removeEditorsNSData: {
+                  additionalNamespaces: ['lucid'],
+               },
             },
          },
       },

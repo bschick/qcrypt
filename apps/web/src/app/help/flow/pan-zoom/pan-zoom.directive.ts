@@ -38,7 +38,7 @@ const MAX_SCALE = 12;
 const WHEEL_STEP = 1.04;
 const BUTTON_STEP = 1.25;
 const KEY_PAN_PX = 60;
-const KEY_PAN_PX_FAST = 200;
+const KEY_PAN_PX_FAST = 240;
 const DRAG_PIXEL_THRESHOLD = 4;
 
 @Directive({
@@ -51,8 +51,8 @@ const DRAG_PIXEL_THRESHOLD = 4;
    },
 })
 export class PanZoomDirective {
-   private readonly host = inject(ElementRef<HTMLElement>);
-   private readonly changeDector = inject(ChangeDetectorRef);
+   private readonly _host = inject(ElementRef<HTMLElement>);
+   private readonly _changeDector = inject(ChangeDetectorRef);
 
    readonly panZoomKey = input<string | null | undefined>(undefined);
 
@@ -72,24 +72,24 @@ export class PanZoomDirective {
       return this.dragging() ? 'grabbing' : 'grab';
    });
 
-   private originalViewBox: { x: number; y: number; w: number; h: number } | null = null;
-   private cachedSvg: SVGSVGElement | null = null;
-   private downX = 0;
-   private downY = 0;
-   private lastX = 0;
-   private lastY = 0;
-   private movedFar = false;
-   private activePointerId: number | null = null;
+   private _originalViewBox: { x: number; y: number; w: number; h: number } | null = null;
+   private _cachedSvg: SVGSVGElement | null = null;
+   private _downX = 0;
+   private _downY = 0;
+   private _lastX = 0;
+   private _lastY = 0;
+   private _movedFar = false;
+   private _activePointerId: number | null = null;
 
    constructor() {
       const destroyRef = inject(DestroyRef);
-      destroyRef.onDestroy(() => this.releaseCapture());
+      destroyRef.onDestroy(() => this._releaseCapture());
 
       effect(() => {
          this.panZoomKey();
          untracked(() => {
-            this.originalViewBox = null;
-            this.cachedSvg = null;
+            this._originalViewBox = null;
+            this._cachedSvg = null;
             this.reset();
          });
       });
@@ -97,8 +97,8 @@ export class PanZoomDirective {
       // Resizing the host re-fits the SVG, which changes the pan limits, so
       // pull the current offset back inside the new bounds and redraw.
       if (typeof ResizeObserver !== 'undefined') {
-         const observer = new ResizeObserver(() => this.clampPanToLimits());
-         observer.observe(this.host.nativeElement);
+         const observer = new ResizeObserver(() => this._clampPanToLimits());
+         observer.observe(this._host.nativeElement);
          destroyRef.onDestroy(() => observer.disconnect());
       }
    }
@@ -107,119 +107,119 @@ export class PanZoomDirective {
       this.scale.set(1);
       this.panX.set(0);
       this.panY.set(0);
-      this.applyViewBox();
+      this._applyViewBox();
    }
 
    zoomIn(): void {
-      this.scaleAtCenter(BUTTON_STEP);
+      this._scaleAtCenter(BUTTON_STEP);
    }
 
    zoomOut(): void {
-      this.scaleAtCenter(1 / BUTTON_STEP);
+      this._scaleAtCenter(1 / BUTTON_STEP);
    }
 
    panBy(dx: number, dy: number): void {
       if (this.scale() <= 1) {
          return;
       }
-      const { cw0, ch0 } = this.geometry();
+      const { fitWidth, fitHeight } = this._geometry();
       const scale = this.scale();
-      this.panX.set(this.clampPan(this.panX() + dx, cw0, scale));
-      this.panY.set(this.clampPan(this.panY() + dy, ch0, scale));
-      this.applyViewBox();
+      this.panX.set(this._clampPan(this.panX() + dx, fitWidth, scale));
+      this.panY.set(this._clampPan(this.panY() + dy, fitHeight, scale));
+      this._applyViewBox();
    }
 
-   private clampPanToLimits(): void {
-      const { cw0, ch0 } = this.geometry();
+   private _clampPanToLimits(): void {
+      const { fitWidth, fitHeight } = this._geometry();
       const scale = this.scale();
-      this.panX.set(this.clampPan(this.panX(), cw0, scale));
-      this.panY.set(this.clampPan(this.panY(), ch0, scale));
-      this.applyViewBox();
+      this.panX.set(this._clampPan(this.panX(), fitWidth, scale));
+      this.panY.set(this._clampPan(this.panY(), fitHeight, scale));
+      this._applyViewBox();
    }
 
    wasDrag(): boolean {
-      return this.movedFar;
+      return this._movedFar;
    }
 
    focus(): void {
-      this.host.nativeElement.focus({ preventScroll: true });
+      this._host.nativeElement.focus({ preventScroll: true });
    }
 
-   private getOrCacheOriginalViewBox(svg: SVGSVGElement): { x: number; y: number; w: number; h: number } | null {
-      if (svg !== this.cachedSvg || !this.originalViewBox) {
-         this.cachedSvg = svg;
+   private _getOrCacheOriginalViewBox(svg: SVGSVGElement): { x: number; y: number; w: number; h: number } | null {
+      if (svg !== this._cachedSvg || !this._originalViewBox) {
+         this._cachedSvg = svg;
          const base = svg.viewBox.baseVal;
          if (base && base.width > 0 && base.height > 0) {
-            this.originalViewBox = { x: base.x, y: base.y, w: base.width, h: base.height };
+            this._originalViewBox = { x: base.x, y: base.y, w: base.width, h: base.height };
          } else {
-            this.originalViewBox = null;
+            this._originalViewBox = null;
          }
       }
-      return this.originalViewBox;
+      return this._originalViewBox;
    }
 
    // Host viewport size and the SVG content's size at scale 1 (fit with
    // letterbox margins on the narrower axis). Falls back to a host-filling
    // size until the SVG element is present.
-   private geometry(): { ew: number; eh: number; cw0: number; ch0: number } {
-      const rect = this.host.nativeElement.getBoundingClientRect();
-      const ew = rect.width || 1;
-      const eh = rect.height || 1;
-      const svg = this.host.nativeElement.querySelector('svg') as SVGSVGElement | null;
-      const orig = svg ? this.getOrCacheOriginalViewBox(svg) : null;
+   private _geometry(): { hostWidth: number; hostHeight: number; fitWidth: number; fitHeight: number } {
+      const rect = this._host.nativeElement.getBoundingClientRect();
+      const hostWidth = rect.width || 1;
+      const hostHeight = rect.height || 1;
+      const svg = this._host.nativeElement.querySelector('svg') as SVGSVGElement | null;
+      const orig = svg ? this._getOrCacheOriginalViewBox(svg) : null;
       if (!orig) {
-         return { ew, eh, cw0: ew, ch0: eh };
+         return { hostWidth, hostHeight, fitWidth: hostWidth, fitHeight: hostHeight };
       }
-      const fit = Math.min(ew / orig.w, eh / orig.h);
-      return { ew, eh, cw0: orig.w * fit, ch0: orig.h * fit };
+      const fit = Math.min(hostWidth / orig.w, hostHeight / orig.h);
+      return { hostWidth, hostHeight, fitWidth: orig.w * fit, fitHeight: orig.h * fit };
    }
 
    // Max pan offset is half the SVG's overhang past its fit rectangle. 0 at
    // scale 1 (locked centered), growing linearly with scale.
-   private clampPan(pan: number, fitSize: number, scale: number): number {
+   private _clampPan(pan: number, fitSize: number, scale: number): number {
       const maxPan = (fitSize * (scale - 1)) / 2;
       return clamp(pan, -maxPan, maxPan);
    }
 
-   private scaleAtCenter(factor: number): void {
-      const rect = this.host.nativeElement.getBoundingClientRect();
-      this.scaleAt(factor, rect.width / 2, rect.height / 2);
+   private _scaleAtCenter(factor: number): void {
+      const rect = this._host.nativeElement.getBoundingClientRect();
+      this._scaleAt(factor, rect.width / 2, rect.height / 2);
    }
 
-   private scaleAt(factor: number, px: number, py: number): void {
+   private _scaleAt(factor: number, px: number, py: number): void {
       const oldScale = this.scale();
       const newScale = clamp(oldScale * factor, MIN_SCALE, MAX_SCALE);
       if (newScale === oldScale) {
          return;
       }
       const ratio = newScale / oldScale;
-      const { ew, eh, cw0, ch0 } = this.geometry();
+      const { hostWidth, hostHeight, fitWidth, fitHeight } = this._geometry();
 
       // Current top-left of the SVG on screen (centered position + pan).
-      const tx = (ew - cw0 * oldScale) / 2 + this.panX();
-      const ty = (eh - ch0 * oldScale) / 2 + this.panY();
+      const tx = (hostWidth - fitWidth * oldScale) / 2 + this.panX();
+      const ty = (hostHeight - fitHeight * oldScale) / 2 + this.panY();
 
       // Clamp the cursor into the SVG's on-screen rect so a point in the
       // letterbox margin zooms toward the nearest SVG edge instead of empty space.
-      const fx = clamp(px, Math.max(0, tx), Math.min(ew, tx + cw0 * oldScale));
-      const fy = clamp(py, Math.max(0, ty), Math.min(eh, ty + ch0 * oldScale));
+      const fx = clamp(px, Math.max(0, tx), Math.min(hostWidth, tx + fitWidth * oldScale));
+      const fy = clamp(py, Math.max(0, ty), Math.min(hostHeight, ty + fitHeight * oldScale));
 
       // Keep that point fixed across the scale change, then re-express as a pan
       // offset under the new scale and clamp to the new limits.
       const txNew = fx - (fx - tx) * ratio;
       const tyNew = fy - (fy - ty) * ratio;
       this.scale.set(newScale);
-      this.panX.set(this.clampPan(txNew - (ew - cw0 * newScale) / 2, cw0, newScale));
-      this.panY.set(this.clampPan(tyNew - (eh - ch0 * newScale) / 2, ch0, newScale));
-      this.applyViewBox();
+      this.panX.set(this._clampPan(txNew - (hostWidth - fitWidth * newScale) / 2, fitWidth, newScale));
+      this.panY.set(this._clampPan(tyNew - (hostHeight - fitHeight * newScale) / 2, fitHeight, newScale));
+      this._applyViewBox();
    }
 
    @HostListener('wheel', ['$event'])
    onWheel(event: WheelEvent): void {
       event.preventDefault();
-      const rect = this.host.nativeElement.getBoundingClientRect();
+      const rect = this._host.nativeElement.getBoundingClientRect();
       const factor = event.deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP;
-      this.scaleAt(factor, event.clientX - rect.left, event.clientY - rect.top);
+      this._scaleAt(factor, event.clientX - rect.left, event.clientY - rect.top);
    }
 
    @HostListener('pointerdown', ['$event'])
@@ -228,32 +228,32 @@ export class PanZoomDirective {
          return;
       }
       // Intentionally not calling preventDefault or setPointerCapture.
-      this.activePointerId = event.pointerId;
+      this._activePointerId = event.pointerId;
       this.dragging.set(true);
-      this.downX = this.lastX = event.clientX;
-      this.downY = this.lastY = event.clientY;
-      this.movedFar = false;
+      this._downX = this._lastX = event.clientX;
+      this._downY = this._lastY = event.clientY;
+      this._movedFar = false;
       this.focus();
    }
 
    @HostListener('pointermove', ['$event'])
    onPointerMove(event: PointerEvent): void {
-      if (!this.dragging() || event.pointerId !== this.activePointerId) {
+      if (!this.dragging() || event.pointerId !== this._activePointerId) {
          return;
       }
-      const dx = event.clientX - this.lastX;
-      const dy = event.clientY - this.lastY;
-      this.lastX = event.clientX;
-      this.lastY = event.clientY;
-      if (!this.movedFar) {
-         const totalDx = event.clientX - this.downX;
-         const totalDy = event.clientY - this.downY;
+      const dx = event.clientX - this._lastX;
+      const dy = event.clientY - this._lastY;
+      this._lastX = event.clientX;
+      this._lastY = event.clientY;
+      if (!this._movedFar) {
+         const totalDx = event.clientX - this._downX;
+         const totalDy = event.clientY - this._downY;
          if (totalDx * totalDx + totalDy * totalDy > DRAG_PIXEL_THRESHOLD * DRAG_PIXEL_THRESHOLD) {
-            this.movedFar = true;
+            this._movedFar = true;
             // Past the drag threshold - capture so subsequent moves are
             // tracked even after the pointer leaves the SVG content area.
             try {
-               this.host.nativeElement.setPointerCapture(event.pointerId);
+               this._host.nativeElement.setPointerCapture(event.pointerId);
             } catch {
                /* element may already be released or detached */
             }
@@ -266,17 +266,17 @@ export class PanZoomDirective {
    @HostListener('pointercancel', ['$event'])
    @HostListener('pointerleave', ['$event'])
    onPointerUp(event: PointerEvent): void {
-      if (event.pointerId !== this.activePointerId) {
+      if (event.pointerId !== this._activePointerId) {
          return;
       }
-      this.releaseCapture();
+      this._releaseCapture();
    }
 
    @HostListener('dblclick', ['$event'])
    onDoubleClick(event: MouseEvent): void {
       event.preventDefault();
-      const rect = this.host.nativeElement.getBoundingClientRect();
-      this.scaleAt(BUTTON_STEP * BUTTON_STEP, event.clientX - rect.left, event.clientY - rect.top);
+      const rect = this._host.nativeElement.getBoundingClientRect();
+      this._scaleAt(BUTTON_STEP * BUTTON_STEP, event.clientX - rect.left, event.clientY - rect.top);
    }
 
    @HostListener('keydown', ['$event'])
@@ -313,37 +313,37 @@ export class PanZoomDirective {
       event.preventDefault();
    }
 
-   private releaseCapture(): void {
-      if (this.activePointerId !== null) {
+   private _releaseCapture(): void {
+      if (this._activePointerId !== null) {
          try {
-            this.host.nativeElement.releasePointerCapture(this.activePointerId);
+            this._host.nativeElement.releasePointerCapture(this._activePointerId);
          } catch {
             /* element already detached */
          }
       }
-      this.activePointerId = null;
+      this._activePointerId = null;
       this.dragging.set(false);
-      this.changeDector.markForCheck();
+      this._changeDector.markForCheck();
    }
 
-   private applyViewBox(): void {
-      const svg = this.host.nativeElement.querySelector('svg') as SVGSVGElement | null;
+   private _applyViewBox(): void {
+      const svg = this._host.nativeElement.querySelector('svg') as SVGSVGElement | null;
       if (!svg) {
          return;
       }
-      const orig = this.getOrCacheOriginalViewBox(svg);
+      const orig = this._getOrCacheOriginalViewBox(svg);
       if (!orig) {
          return;
       }
       // Map the SVG's target screen rect back to a viewBox. The SVG viewBox
       // matches the host aspect ratio, so SVG meet adds no extra bars.
-      const { ew, eh, cw0, ch0 } = this.geometry();
+      const { hostWidth, hostHeight, fitWidth, fitHeight } = this._geometry();
       const scale = this.scale();
-      const tx = (ew - cw0 * scale) / 2 + this.panX();
-      const ty = (eh - ch0 * scale) / 2 + this.panY();
-      const pxPerUnit = (cw0 / orig.w) * scale;
-      const vw = ew / pxPerUnit;
-      const vh = eh / pxPerUnit;
+      const tx = (hostWidth - fitWidth * scale) / 2 + this.panX();
+      const ty = (hostHeight - fitHeight * scale) / 2 + this.panY();
+      const pxPerUnit = (fitWidth / orig.w) * scale;
+      const vw = hostWidth / pxPerUnit;
+      const vh = hostHeight / pxPerUnit;
       const vx = orig.x - tx / pxPerUnit;
       const vy = orig.y - ty / pxPerUnit;
       svg.setAttribute('viewBox', `${vx} ${vy} ${vw} ${vh}`);

@@ -3,13 +3,13 @@
     <h1>Protocol Description (v7)</h1>
     <p>Quick Crypt implements the protocols below to encrypt, validate, and decrypt data.
       This information is provided to help you understand how Quick Crypt works and
-      allow you to assess its strength and trustworthiness. You
-      may also download a <a href="/assets/protocol7.pdf" download>pdf version</a> that is searchable.
-      If you believe the protocols can be improved, please
-      <a href="https://github.com/bschick/qcrypt/issues">
-        file a ticket.
-      </a>
+      allow you to assess its strength and trustworthiness. If you believe the protocols can be improved, please
+      <a href="https://github.com/bschick/qcrypt/issues">file a ticket.</a> Also see:
     </p>
+    <ul>
+      <li><a href="/assets/protocol7.pdf" download>Searchable pdf protocol notation</a></li>
+      <li><a href="/help/flow">Protocol flow diagrams</a></li>
+    </ul>
     <p>
       Quick Crypt uses WebAuthn (<span class="tip" matTooltip="You can create a
       passkey from a physical FIDO2
@@ -184,29 +184,17 @@
     <h2>Cipher Variables</h2>
     <img src="/assets/variables7.png" width="624" height="823" />
     <h2>Message Encryption by A</h2>
-    <div class="flow">
-      <img src="/assets/encrypt7.png" width="341" height="467" />
-      <img class="flow-img" (click)="openFlowImage('/assets/encrypt_flowb06.svg')"
-        src="/assets/encrypt_flowb06.svg" />
-      <img class="flow-img2" (click)="openFlowImage('/assets/encrypt_flowbN6.svg')"
-        src="/assets/encrypt_flowbN6.svg" />
-    </div>
+    <img src="/assets/encrypt7.png" width="341" height="467" />
     <h2>Block 0 Encryption by B</h2>
-    <img src="/assets/encrypt_b07.png" width="343" height="217" />
+    <img src="/assets/encrypt_b07.png" width="342" height="214" />
     <h2>Block N Encryption by B</h2>
-    <img src="/assets/encrypt_bN7.png" width="257" height="240" />
+    <img src="/assets/encrypt_bN7.png" width="254" height="235" />
     <h2>Message Decryption by A</h2>
-    <div class="flow">
-      <img src="/assets/decrypt7.png" width="340" height="509" />
-      <img class="flow-img" (click)="openFlowImage('/assets/decrypt_flowb06.svg')"
-        src="/assets/decrypt_flowb06.svg" />
-      <img class="flow-img2" (click)="openFlowImage('/assets/decrypt_flowbN6.svg')"
-        src="/assets/decrypt_flowbN6.svg" />
-    </div>
+    <img src="/assets/decrypt7.png" width="340" height="509" />
     <h2>Block 0 Decryption by B</h2>
     <img src="/assets/decrypt_b07.png" width="240" height="45" />
     <h2>Block N Decryption by B</h2>
-    <img src="/assets/decrypt_bN7.png" width="256" height="194" />
+    <img src="/assets/decrypt_bN7.png" width="255" height="189" />
     <h2><i>u<sub>c</sub></i> Encryption at Rest Variables</h2>
     <img src="/assets/atrest_variables7.png" width="565" height="654" />
     <h2><i>k<sub>L</sub></i> Derivation by B</h2>

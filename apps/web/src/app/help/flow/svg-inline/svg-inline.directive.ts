@@ -31,15 +31,18 @@ import {
 } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import DOMPurify from 'dompurify';
+import { bufferToBase64URLString } from '@qcrypt/crypto';
+import { FLOW_SVG_HASHES } from '../flow.config';
 
 @Directive({
    selector: '[svgInline]',
 })
 export class SvgInlineDirective {
-   private readonly host = inject(ElementRef<HTMLElement>);
-   private readonly renderer = inject(Renderer2);
-   private readonly http = inject(HttpClient);
-   private readonly destroyRef = inject(DestroyRef);
+   private readonly _host = inject(ElementRef<HTMLElement>);
+   private readonly _renderer = inject(Renderer2);
+   private readonly _http = inject(HttpClient);
+   private readonly _destroyRef = inject(DestroyRef);
 
    readonly svgInline = input.required<string>();
    readonly svgLoaded = output<SVGSVGElement>();
@@ -47,46 +50,70 @@ export class SvgInlineDirective {
    constructor() {
       effect(() => {
          const url = this.svgInline();
-         this.clearHost();
-         this.http
-            .get(url, { responseType: 'text' })
-            .pipe(takeUntilDestroyed(this.destroyRef))
+         this._clearHost();
+         this._http
+            .get(url, { responseType: 'arraybuffer' })
+            .pipe(takeUntilDestroyed(this._destroyRef))
             .subscribe({
-               next: text => this.insertSvg(text),
+               next: bytes => void this._verifyAndInsert(url, bytes),
                error: () => { /* same-origin static asset; failure is a deploy bug */ },
             });
       });
    }
 
-   private clearHost(): void {
-      const host = this.host.nativeElement;
-      while (host.firstChild) {
-         this.renderer.removeChild(host, host.firstChild);
+   // Refuse any asset whose bytes don't match the build-time hash, then strip
+   // active content before it reaches the DOM. Fails closed on any error.
+   private async _verifyAndInsert(url: string, bytes: ArrayBuffer): Promise<void> {
+      try {
+         const expected = FLOW_SVG_HASHES[url];
+         const digest = await crypto.subtle.digest('SHA-256', bytes);
+         if (!expected || `sha256-${bufferToBase64URLString(digest)}` !== expected) {
+            console.error(`flow: refusing SVG that failed its integrity check: ${url}`);
+            return;
+         }
+         this._insertSvg(new TextDecoder().decode(bytes));
+      } catch {
+         console.error(`flow: integrity check could not run for ${url}`);
       }
    }
 
-   private insertSvg(text: string): void {
-      const parsed = new DOMParser().parseFromString(text, 'image/svg+xml');
-      const root = parsed.documentElement;
+   private _clearHost(): void {
+      const host = this._host.nativeElement;
+      while (host.firstChild) {
+         this._renderer.removeChild(host, host.firstChild);
+      }
+   }
+
+   private _insertSvg(text: string): void {
+      const fragment = DOMPurify.sanitize(text, {
+         USE_PROFILES: { svg: true, svgFilters: true },
+         ADD_TAGS: ['use'],
+         ADD_ATTR: ['xlink:href'],
+         RETURN_DOM_FRAGMENT: true,
+      });
+      fragment.querySelectorAll('use').forEach((use: SVGElement) => {
+         const ref = use.getAttribute('xlink:href') ?? use.getAttribute('href') ?? '';
+         if (!ref.trim().startsWith('#')) {
+            use.remove();
+         }
+      });
+      const root = fragment.querySelector('svg');
       if (!(root instanceof SVGSVGElement)) {
          return;
       }
-      this.renderer.setAttribute(root, 'width', '100%');
-      this.renderer.setAttribute(root, 'height', '100%');
-      this.renderer.setAttribute(root, 'preserveAspectRatio', 'xMidYMid meet');
-      this.renderer.setStyle(root, 'display', 'block');
-      this.injectInteractionStyles(root);
-      this.renderer.appendChild(this.host.nativeElement, root);
+      this._renderer.setAttribute(root, 'width', '100%');
+      this._renderer.setAttribute(root, 'height', '100%');
+      this._renderer.setAttribute(root, 'preserveAspectRatio', 'xMidYMid meet');
+      this._renderer.setStyle(root, 'display', 'block');
+      this._injectInteractionStyles(root);
+      this._renderer.appendChild(this._host.nativeElement, root);
       this.svgLoaded.emit(root);
    }
 
-   private injectInteractionStyles(root: SVGSVGElement): void {
-      // The SVG carries its own styling for clickable boxes. This keeps the
-      // affordance self-contained (no Angular view-encapsulation gymnastics)
-      // and means any SVG inlined through this directive - D2-generated today,
-      // hand-crafted later - gets the same hover/focus behaviour from just
-      // declaring class="qc-clickable" on its boxes.
+   private _injectInteractionStyles(root: SVGSVGElement): void {
+
       const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+      // depends on properly setup SVG files
       style.textContent = `
          .qc-clickable { cursor: pointer; }
          .qc-clickable,
@@ -102,10 +129,9 @@ export class SvgInlineDirective {
          }
          .qc-clickable:focus { outline: none; }
          .qc-clickable:focus-visible { outline: none; }
-         /* Lucidchart renders text as <use> glyphs sibling to box paths; make
-            them transparent to pointer events so clicks reach the box. */
+         /* make use paths transparent to pointer events so clicks reach the box. */
          use { pointer-events: none; }
       `;
-      this.renderer.insertBefore(root, style, root.firstChild);
+      this._renderer.insertBefore(root, style, root.firstChild);
    }
 }

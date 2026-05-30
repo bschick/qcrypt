@@ -57,22 +57,18 @@ function lookupSegment(segment: string, index: number): FlowItem | null {
    ],
 })
 export class FlowComponent {
-   private readonly route = inject(ActivatedRoute);
-   private readonly router = inject(Router);
-   private readonly snackBar = inject(MatSnackBar);
-
-   private readonly params = toSignal(this.route.queryParamMap, { requireSync: true });
-
+   private readonly _route = inject(ActivatedRoute);
+   private readonly _router = inject(Router);
+   private readonly _snackBar = inject(MatSnackBar);
+   private readonly _params = toSignal(this._route.queryParamMap, { requireSync: true });
    readonly viewer = viewChild<PanZoomDirective>('viewer');
-
    readonly reducedMotion = signal(false);
-   private zoomFromRect: DOMRect | null = null;
-
+   private _zoomFromRect: DOMRect | null = null;
    readonly overviewEntries = Object.entries(FLOW_OVERVIEWS) as [string, FlowItem][];
 
    // Parses ?path=<seg0>,<seg1>,... and truncates to the longest valid prefix.
    readonly path = computed<string[]>(() => {
-      const raw = this.params().get('path');
+      const raw = this._params().get('path');
       if (!raw) {
          return [];
       }
@@ -88,39 +84,32 @@ export class FlowComponent {
    });
 
    readonly currentItem = computed<FlowItem | null>(() => {
-      const p = this.path();
-      if (p.length === 0) {
+      const path = this.path();
+      if (path.length === 0) {
          return null;
       }
-      return lookupSegment(p[p.length - 1], p.length - 1);
+      return lookupSegment(path[path.length - 1], path.length - 1);
    });
 
    readonly mode = computed<'grid' | 'node'>(() => (this.path().length === 0 ? 'grid' : 'node'));
 
-   readonly viewerKey = computed<string | null>(() => {
-      const p = this.path();
-      return p.length === 0 ? null : p.join(',');
-   });
-
-   readonly currentSvgUrl = computed<string | null>(() => this.currentItem()?.svg ?? null);
-
    readonly breadcrumbs = computed<BreadcrumbChip[]>(() => {
       const chips: BreadcrumbChip[] = [];
-      const p = this.path();
-      if (p.length === 0) {
+      const path = this.path();
+      if (path.length === 0) {
          chips.push({ label: 'Overview', queryParams: null });
          return chips;
       }
       chips.push({ label: 'Overview', queryParams: { path: null } });
-      for (let i = 0; i < p.length; i++) {
-         const item = lookupSegment(p[i], i);
+      for (let i = 0; i < path.length; i++) {
+         const item = lookupSegment(path[i], i);
          if (!item) {
             continue;
          }
-         const last = i === p.length - 1;
+         const last = i === path.length - 1;
          chips.push({
             label: item.label,
-            queryParams: last ? null : { path: p.slice(0, i + 1).join(',') },
+            queryParams: last ? null : { path: path.slice(0, i + 1).join(',') },
          });
       }
       return chips;
@@ -144,41 +133,41 @@ export class FlowComponent {
    selectOverview(overviewId: string, event: Event): void {
       const sourceRect = (event.currentTarget as HTMLElement | null)?.getBoundingClientRect();
       if (sourceRect) {
-         this.zoomFromRect = sourceRect;
+         this._zoomFromRect = sourceRect;
       }
-      this.navigateTo([overviewId]);
+      this._navigateTo([overviewId]);
    }
 
    onCrumbClick(event: MouseEvent, queryParams: Record<string, string | null>): void {
       event.preventDefault();
-      this.router.navigate([], {
-         relativeTo: this.route,
+      this._router.navigate([], {
+         relativeTo: this._route,
          queryParams,
          queryParamsHandling: 'merge',
       });
    }
 
    onSvgLoaded(svg: SVGSVGElement): void {
-      svg.querySelectorAll<SVGElement>('[data-target]').forEach(el => {
-         const target = el.getAttribute('data-target');
+      svg.querySelectorAll<SVGElement>('[data-target]').forEach(elem => {
+         const target = elem.getAttribute('data-target');
          if (!target || !FLOW_SUBSYSTEMS[target]) {
             return;
          }
-         el.setAttribute('tabindex', '0');
-         el.setAttribute('role', 'link');
-         el.setAttribute('aria-label', FLOW_SUBSYSTEMS[target].label);
-         el.addEventListener('keydown', event => {
+         elem.setAttribute('tabindex', '0');
+         elem.setAttribute('role', 'link');
+         elem.setAttribute('aria-label', FLOW_SUBSYSTEMS[target].label);
+         elem.addEventListener('keydown', event => {
             if (event.key === 'Enter' || event.key === ' ') {
                event.preventDefault();
                event.stopPropagation();
-               this.zoomFromRect = el.getBoundingClientRect();
-               this.navigateTo([...this.path(), target]);
+               this._zoomFromRect = elem.getBoundingClientRect();
+               this._navigateTo([...this.path(), target]);
             }
          });
       });
-      if (this.zoomFromRect) {
-         this.playZoomIn(svg, this.zoomFromRect);
-         this.zoomFromRect = null;
+      if (this._zoomFromRect) {
+         this._playZoomIn(svg, this._zoomFromRect);
+         this._zoomFromRect = null;
       }
    }
 
@@ -189,25 +178,25 @@ export class FlowComponent {
       const hit = (event.target as Element | null)?.closest('[data-target]') as SVGElement | null;
       const target = hit?.getAttribute('data-target');
       if (target && FLOW_SUBSYSTEMS[target]) {
-         this.zoomFromRect = hit!.getBoundingClientRect();
-         this.navigateTo([...this.path(), target]);
+         this._zoomFromRect = hit!.getBoundingClientRect();
+         this._navigateTo([...this.path(), target]);
       }
    }
 
-   private navigateTo(segments: string[]): void {
+   private _navigateTo(segments: string[]): void {
       if (segments.length > FLOW_MAX_DEPTH) {
-         this.snackBar.open('Maximum depth reached', '', { duration: 2000 });
+         this._snackBar.open('Maximum depth reached', '', { duration: 2000 });
          return;
       }
       const path = segments.length === 0 ? null : segments.join(',');
-      this.router.navigate([], {
-         relativeTo: this.route,
+      this._router.navigate([], {
+         relativeTo: this._route,
          queryParams: { path },
          queryParamsHandling: 'merge',
       });
    }
 
-   private playZoomIn(svg: SVGSVGElement, source: DOMRect): void {
+   private _playZoomIn(svg: SVGSVGElement, source: DOMRect): void {
       if (this.reducedMotion() || typeof svg.animate !== 'function') {
          return;
       }

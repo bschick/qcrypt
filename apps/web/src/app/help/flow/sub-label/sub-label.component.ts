@@ -55,11 +55,11 @@ export function parseSubscripts(text: string): LabelSegment[] {
 @Component({
    selector: 'sub-label',
    changeDetection: ChangeDetectionStrategy.OnPush,
-   template:
-      '@for (seg of segments(); track $index) {' +
-      '@if (seg.sub) {<sub>{{ seg.text }}</sub>}' +
-      '@else {<span>{{ seg.text }}</span>}' +
-      '}',
+   template:`
+      @for (seg of segments(); track $index) {
+      @if (seg.sub) {<sub>{{ seg.text }}</sub>}
+      @else {<span>{{ seg.text }}</span>}
+      }`,
    styles: `
       :host { white-space: nowrap; }
       sub {
