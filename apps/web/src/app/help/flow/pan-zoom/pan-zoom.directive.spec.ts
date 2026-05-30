@@ -24,8 +24,8 @@ describe('PanZoomDirective', () => {
 
    it('starts at identity transform', () => {
       expect(directive.scale()).toBe(1);
-      expect(directive.tx()).toBe(0);
-      expect(directive.ty()).toBe(0);
+      expect(directive.panX()).toBe(0);
+      expect(directive.panY()).toBe(0);
       expect(directive.dragging()).toBe(false);
    });
 
@@ -43,19 +43,24 @@ describe('PanZoomDirective', () => {
       directive.panBy(-30, -20);
       directive.reset();
       expect(directive.scale()).toBe(1);
-      expect(directive.tx()).toBe(0);
-      expect(directive.ty()).toBe(0);
+      expect(directive.panX()).toBe(0);
+      expect(directive.panY()).toBe(0);
    });
 
-   it('panBy is bounded so the SVG edges cannot move past the host edges', () => {
+   it('panBy is bounded by the max pan at the current zoom', () => {
       directive.zoomIn();
       const scale = directive.scale();
-      // At scale s in a 400-wide host, tx range is [400*(1-s), 0].
-      const minTx = 400 * (1 - scale);
+      // No <svg> present, so the SVG fills the 400x300 host at scale 1; max pan
+      // is then half the overhang past the fit rectangle: size * (scale - 1) / 2.
+      const maxPanX = (400 * (scale - 1)) / 2;
+      const maxPanY = (300 * (scale - 1)) / 2;
+
       directive.panBy(-9999, -9999);
-      expect(directive.tx()).toBe(minTx);
+      expect(directive.panX()).toBe(-maxPanX);
+      expect(directive.panY()).toBe(-maxPanY);
+
       directive.panBy(9999, 9999);
-      expect(directive.tx()).toBe(0);
-      expect(directive.ty()).toBe(0);
+      expect(directive.panX()).toBe(maxPanX);
+      expect(directive.panY()).toBe(maxPanY);
    });
 });
