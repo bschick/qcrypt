@@ -87,6 +87,11 @@ export class PanZoomDirective {
       const destroyRef = inject(DestroyRef);
       destroyRef.onDestroy(() => this._releaseCapture());
 
+      // Non-passive: required for Safari trackpad two-finger drag.
+      const host = this._host.nativeElement;
+      host.addEventListener('wheel', this._onWheel, { passive: false });
+      destroyRef.onDestroy(() => host.removeEventListener('wheel', this._onWheel));
+
       effect(() => {
          this.panZoomKey();
          untracked(() => {
@@ -216,13 +221,12 @@ export class PanZoomDirective {
       this._applyViewBox();
    }
 
-   @HostListener('wheel', ['$event'])
-   onWheel(event: WheelEvent): void {
+   private readonly _onWheel = (event: WheelEvent): void => {
       event.preventDefault();
       const rect = this._host.nativeElement.getBoundingClientRect();
       const factor = event.deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP;
       this._scaleAt(factor, event.clientX - rect.left, event.clientY - rect.top);
-   }
+   };
 
    @HostListener('pointerdown', ['$event'])
    onPointerDown(event: PointerEvent): void {
