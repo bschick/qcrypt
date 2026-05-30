@@ -20,6 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
+import { bufferToBase64URLString } from './lib/base64';
+
 
 // Utility functions and classes
 export {
@@ -51,6 +53,11 @@ export {
    streamFromBase64,
    concatArrays,
 } from './lib/utils';
+
+export {
+   bufferToBase64URLString,
+   base64URLStringToBuffer
+} from './lib/base64';
 
 // Cipher core types and classes
 export {
