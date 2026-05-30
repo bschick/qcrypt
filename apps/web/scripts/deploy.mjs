@@ -111,9 +111,10 @@
  * actions without performing them for every command.
  */
 
-import { readdirSync, statSync } from 'node:fs';
+import { readdirSync, statSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import {
@@ -372,51 +373,60 @@ function findExpiredOrphans(orphans, expirationDays, inScope) {
    return expired;
 }
 
-// Sequentially `aws s3 rm` each key, returning the subset that succeeded.
-// Failures are tolerated so one bad key doesn't abort the whole batch.
 // One `aws s3api delete-objects` call removes up to 1000 keys at a time
-// instead of one per CLI invocation, turning a per-file ~1-2s spawn cost
-// into a single batched request. Larger sets are chunked. The Delete spec
-// is piped via stdin to keep arbitrarily large key lists clear of ARG_MAX.
+// instead of one `s3 rm` per CLI invocation, turning a per-file ~1-2s spawn
+// cost into a single batched request. Larger sets are chunked. The Delete
+// spec is handed to aws via `--delete file://<tmp>`: a temp file rather
+// than inline JSON (Linux caps a single argv string at 128KB, which a
+// 1000-key spec can exceed) or stdin (aws fails to read file:///dev/stdin
+// from a spawned pipe). Failures are tolerated so one bad batch doesn't
+// abort the rest.
 function deleteKeys(argv, keys) {
    const deleted = [];
    const CHUNK_SIZE = 1000;
-   for (let offset = 0; offset < keys.length; offset += CHUNK_SIZE) {
-      const chunk = keys.slice(offset, offset + CHUNK_SIZE);
-      const payload = JSON.stringify({
-         Objects: chunk.map((key) => ({ Key: key })),
-         Quiet: true,
-      });
-      const r = aws(argv, [
-         's3api', 'delete-objects',
-         '--bucket', argv.bucket,
-         '--delete', 'file:///dev/stdin',
-      ], { input: payload, allowFailure: true });
-      if (r.status !== 0) {
-         // Whole-chunk failure (auth, network, etc.); leave none recorded.
-         continue;
-      }
-      // With Quiet=true, a successful response is either empty or contains
-      // only an Errors array for the keys that failed.
-      let errors = [];
-      try {
-         const parsed = JSON.parse(r.stdout || '{}');
-         errors = parsed.Errors ?? [];
-      } catch {
-         // Empty stdout is fine when Quiet=true and nothing errored.
-      }
-      const failed = new Set(errors.map((err) => err.Key));
-      for (const key of chunk) {
-         if (!failed.has(key)) {
-            deleted.push(key);
+   const tmpDir = mkdtempSync(join(tmpdir(), 'qc-delete-'));
+   try {
+      for (let offset = 0; offset < keys.length; offset += CHUNK_SIZE) {
+         const chunk = keys.slice(offset, offset + CHUNK_SIZE);
+         const payload = JSON.stringify({
+            Objects: chunk.map((key) => ({ Key: key })),
+            Quiet: true,
+         });
+         const specPath = join(tmpDir, `delete-${offset}.json`);
+         writeFileSync(specPath, payload);
+         const r = aws(argv, [
+            's3api', 'delete-objects',
+            '--bucket', argv.bucket,
+            '--delete', `file://${specPath}`,
+         ], { allowFailure: true });
+         if (r.status !== 0) {
+            // Whole-chunk failure (auth, network, etc.); leave none recorded.
+            continue;
+         }
+         // With Quiet=true, a successful response is either empty or contains
+         // only an Errors array for the keys that failed.
+         let errors = [];
+         try {
+            const parsed = JSON.parse(r.stdout || '{}');
+            errors = parsed.Errors ?? [];
+         } catch {
+            // Empty stdout is fine when Quiet=true and nothing errored.
+         }
+         const failed = new Set(errors.map((err) => err.Key));
+         for (const key of chunk) {
+            if (!failed.has(key)) {
+               deleted.push(key);
+            }
+         }
+         if (errors.length > 0) {
+            console.error(`Failed to delete ${errors.length} of ${chunk.length} keys in batch:`);
+            for (const err of errors.slice(0, argv.printLimit ?? 5)) {
+               console.error(`  ${err.Key}: ${err.Message ?? err.Code ?? ''}`);
+            }
          }
       }
-      if (errors.length > 0) {
-         console.error(`Failed to delete ${errors.length} of ${chunk.length} keys in batch:`);
-         for (const err of errors.slice(0, argv.printLimit ?? 5)) {
-            console.error(`  ${err.Key}: ${err.Message ?? err.Code ?? ''}`);
-         }
-      }
+   } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
    }
    return deleted;
 }
