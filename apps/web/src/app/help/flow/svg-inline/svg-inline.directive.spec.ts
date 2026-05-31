@@ -103,6 +103,22 @@ describe('SvgInlineDirective', () => {
       expect(host.querySelector('svg')).toBeNull();
    });
 
+   it('refuses to insert when the URL has no recorded hash', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      // Never registered in FLOW_SVG_HASHES.
+      fixture.componentInstance.url.set('/unregistered.svg');
+      fixture.detectChanges();
+
+      // Well-formed SVG, but the path has no hash on record.
+      httpController.expectOne('/unregistered.svg').flush(new TextEncoder().encode(SAMPLE_SVG).buffer);
+
+      await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled());
+      errorSpy.mockRestore();
+
+      const host: HTMLElement = fixture.nativeElement.querySelector('div');
+      expect(host.querySelector('svg')).toBeNull();
+   });
+
    it('strips active content and external <use>, keeps internal use/defs/data-target', async () => {
       const dirty =
          '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 10 10">' +
