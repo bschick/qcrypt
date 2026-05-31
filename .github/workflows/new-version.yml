@@ -21,8 +21,8 @@ jobs:
       run: pnpm install --frozen-lockfile
     - name: Install Playwright Browsers
       run: pnpm exec playwright install --with-deps
-    - name: Run vitest chrome & firefox unit tests
-      run: pnpm test:web:all
+    - name: Run vitest chrome & webkit unit tests
+      run: pnpm test:web:most
     - name: Run server unit tests
       run: pnpm test:server
     - name: Run library unit tests
