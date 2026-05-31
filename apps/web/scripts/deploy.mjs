@@ -113,7 +113,8 @@
 
 import { readdirSync, statSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
+import { join, resolve, relative, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
@@ -123,10 +124,21 @@ import {
    resolveAwsCreds,
    suggestCommandTypo,
 } from '../../../scripts/deploy-common.mjs';
+import { validateBuild } from './validate-build.mjs';
 
 // ---------------------------------------------------------------------------
 // Helpers (all take `argv` so they can be shared by every command)
 // ---------------------------------------------------------------------------
+
+// Project root, derived from this script's location (apps/web/scripts).
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+
+// Shorten a build-dir path for display: relative to the project root when it
+// sits under it (the common case), otherwise the path unchanged.
+function relToRoot(p) {
+   const rel = relative(REPO_ROOT, resolve(p));
+   return rel && !rel.startsWith('..') ? rel : p;
+}
 
 // --prod presence selects prod mode (QC_PROD_AWS_* env vars); absence
 // selects test mode (QC_TEST_AWS_* env vars). CLI --profile / --region
@@ -364,6 +376,36 @@ function getScope(argv) {
    };
 }
 
+// Files that must exist in the build dir for a given scope, independent of
+// index.html's internal validity. Catches a wrong --build-dir or a partial
+// build before anything is uploaded. `keys` are the in-scope relative keys.
+function checkEssentialFiles(scope, keys) {
+   const problems = [];
+   const hasMatch = (re) => [...keys].some((key) => re.test(key));
+   if (scope.label === 'aaguids') {
+      if (!keys.has('assets/aaguid/combined.json')) {
+         problems.push('missing assets/aaguid/combined.json');
+      }
+      if (!hasMatch(/^assets\/aaguid\/img\//)) {
+         problems.push('missing assets/aaguid/img/ (no files found)');
+      }
+      return problems;
+   }
+   if (!keys.has('index.html')) {
+      problems.push('missing index.html');
+   }
+   if (!hasMatch(/^main-[A-Za-z0-9_-]+\.js$/)) {
+      problems.push('missing main-*.js');
+   }
+   if (!hasMatch(/^polyfills-[A-Za-z0-9_-]+\.js$/)) {
+      problems.push('missing polyfills-*.js');
+   }
+   if (!hasMatch(/^styles-[A-Za-z0-9_-]+\.css$/)) {
+      problems.push('missing styles-*.css');
+   }
+   return problems;
+}
+
 function inScopeFor(argv) {
    return getScope(argv).inScope;
 }
@@ -467,7 +509,7 @@ function printUntracked(untracked, heading, limit) {
 // ---------------------------------------------------------------------------
 
 async function runDeploy(argv) {
-   await confirmProdAction(argv, 'deploy', `bucket: ${argv.bucket}`);
+   await confirmProdAction(argv, 'deploy', `bucket: ${argv.bucket}\n      from:   ${relToRoot(argv.buildDir)}`);
    const scope = getScope(argv);
    // 1. Enumerate the local build, filtered to the active scope.
    const files = collectLocalFiles(argv.buildDir, scope.recursive)
@@ -476,6 +518,39 @@ async function runDeploy(argv) {
    if (newKeys.size === 0) {
       console.error(`No files found under ${argv.buildDir} (scope=${scope.label})`);
       process.exit(1);
+   }
+
+   // Refuse before uploading if the build dir is missing files essential to
+   // this scope — a wrong --build-dir or a partial/broken build. A full site
+   // needs index.html + the entry bundles; --aaguids needs the aaguid data.
+   const missing = checkEssentialFiles(scope, newKeys);
+   if (missing.length > 0) {
+      console.error(`deploy: refusing to deploy — essential files missing under ${relToRoot(argv.buildDir)} (scope=${scope.label}):`);
+      for (const problem of missing) {
+         console.error(`  - ${problem}`);
+      }
+      console.error('Check --build-dir points at the build output directory (web: dist/web[-test]/browser).');
+      process.exit(1);
+   }
+
+   // Gate: never upload an index.html that would break under the deployed CSP
+   // (missing SRI, wrong nonce, un-collapsed chunks). Skipped for prefix
+   // scopes like --aaguids, which legitimately have no index.html.
+   if (newKeys.has('index.html')) {
+      if (argv.skipValidate) {
+         console.warn('⚠  deploy: build validation SKIPPED (--skip-validate)');
+      } else {
+         const problems = validateBuild(argv.buildDir);
+         if (problems.length > 0) {
+            console.error(`deploy: refusing to deploy — ${relToRoot(argv.buildDir)}/index.html failed validation:`);
+            for (const problem of problems) {
+               console.error(`  - ${problem}`);
+            }
+            console.error('Rebuild with `pnpm build:web:prod` (or `pnpm build:web`), or override with --skip-validate.');
+            process.exit(1);
+         }
+         console.log(`deploy: build validation passed (${relToRoot(argv.buildDir)}/index.html)`);
+      }
    }
 
    // 2. Upload everything except index.html, then index.html last.
@@ -505,7 +580,7 @@ async function runDeploy(argv) {
    if (!scope.recursive) {
       bulkArgs.push('--exclude', '*/*');
    }
-   console.log(`deploy: syncing ${newKeys.size} local files to ${s3Dest} (changed files upload)...`);
+   console.log(`deploy: syncing ${newKeys.size} local files from ${relToRoot(localSrc)} to ${s3Dest} (changed files upload)...`);
    const bulkResult = aws(argv, bulkArgs);
 
    // `aws s3 sync --no-progress` prints one line per transferred file:
@@ -554,7 +629,7 @@ async function runDeploy(argv) {
    //    leaks so untracked-in-bucket reports continue to surface.
    if (!argv.dryRun && totalUploads === 0) {
       const untracked = untrackedKeys(argv, manifest);
-      console.log(`deploy #${manifest.deployCount ?? 0}: no changes  untracked=${untracked.length}`);
+      console.log(`deploy #${manifest.deployCount ?? 0}: from=${relToRoot(localSrc)} no changes  untracked=${untracked.length}`);
       printUntracked(untracked, "untracked in bucket (use 'expect' or 'unexpect' to update, 'prune' to remove):", argv.printLimit);
       return;
    }
@@ -637,7 +712,7 @@ async function runDeploy(argv) {
    const newlyOrphaned = [...orphans.keys()].filter((k) => !manifestOrphans.has(k));
    const dryRunTag = argv.dryRun ? ' (DRY RUN — no writes)' : '';
    console.log(
-      `deploy #${deployCount}: uploaded=${totalUploads} newly-orphaned=${newlyOrphaned.length}` +
+      `deploy #${deployCount}: from=${relToRoot(localSrc)} uploaded=${totalUploads} newly-orphaned=${newlyOrphaned.length}` +
       ` tracked-orphans=${orphans.size} expired-deleted=${deletedFromS3.length}` +
       ` untracked=${untracked.length}${dryRunTag}`,
    );
@@ -658,7 +733,7 @@ async function runDeploy(argv) {
 // test), then defers to runDeploy with the same argv so all deploy
 // options (including --comment) flow through.
 async function runBdeploy(argv) {
-   await confirmProdAction(argv, 'bdeploy', `bucket: ${argv.bucket}`);
+   await confirmProdAction(argv, 'bdeploy', `bucket: ${argv.bucket}\n      from:   ${relToRoot(argv.buildDir)}`);
    const cmd = 'pnpm';
    const args = [argv.prod ? 'build:web:prod' : 'build:web'];
    if (argv.dryRun) {
@@ -1037,6 +1112,7 @@ const deployBuilder = (y) => addAaguidsOpt(addGlobalOpts(y))
    .option('expiration-days', { type: 'number', default: 30, describe: 'Days an orphan persists before deletion' })
    .option('cf-distribution', { type: 'string', describe: 'CloudFront distribution ID or ARN to invalidate (/*) after deploy. Omit to skip.' })
    .option('comment', { type: 'string', default: '', describe: 'Comment recorded in the manifest (only the latest is kept).' })
+   .option('skip-validate', { type: 'boolean', default: false, describe: 'Break-glass: skip the pre-upload index.html validation (SRI, nonce, chunk checks). Only when you know the build is good.' })
    .check((argv) => {
       checkScopeFlags(argv);
       if (!Number.isFinite(argv.expirationDays) || argv.expirationDays < 0) {
@@ -1056,13 +1132,13 @@ yargs(hideBin(process.argv))
    .scriptName('deploy.mjs')
    .command(
       '$0 <bucket>',
-      'Deploy the built SPA to S3 with orphan-based retention.',
+      'Build (production with --prod, else test) then deploy the SPA to S3 with orphan-based retention.',
       deployBuilder,
-      runDeploy,
+      runBdeploy,
    )
    .command(
       'deploy <bucket>',
-      'Deploy the built SPA (explicit form of the default command).',
+      'Deploy the already-built SPA without rebuilding (validation still runs unless --skip-validate).',
       deployBuilder,
       runDeploy,
    )

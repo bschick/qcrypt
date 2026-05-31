@@ -5,9 +5,9 @@
 # deploy.sh — thin wrapper that invokes deploy.mjs with this project's defaults.
 #
 # Typical usage (from the repo root):
-#   ./apps/web/scripts/deploy.sh                             # default deploy (test)
-#   ./apps/web/scripts/deploy.sh --prod prod                 # default deploy (prod)
-#   ./apps/web/scripts/deploy.sh bdeploy                     # build then deploy (test)
+#   ./apps/web/scripts/deploy.sh                             # build then deploy (test)
+#   ./apps/web/scripts/deploy.sh --prod prod                 # build then deploy (prod)
+#   ./apps/web/scripts/deploy.sh deploy                      # deploy already-built dir, no rebuild (test)
 #   ./apps/web/scripts/deploy.sh --prod prod prune           # subcommand (prod)
 #   ./apps/web/scripts/deploy.sh expect 'foo*'               # subcommand with extra args (test)
 #
@@ -90,7 +90,7 @@ remove_subcommand_from_args "$SUBCMD" "$@"
 # (or sum, for `type: number`) the two values.
 DEFAULTS=()
 default_unless_user_supplied --print-limit 150 "$@"
-case "${SUBCMD:-deploy}" in
+case "${SUBCMD:-bdeploy}" in
    deploy|bdeploy)
       default_unless_user_supplied --build-dir "$BUILD_DIR_DEFAULT" "$@"
       default_unless_user_supplied --cache-control "public, max-age=31536000, immutable" "$@"
@@ -113,12 +113,12 @@ case "${SUBCMD:-deploy}" in
 esac
 
 # Splice subcommand before bucket; user args last so user values show up
-# exactly once. Always pass an explicit subcommand (defaulting to "deploy"
-# when none was given) so suggestCommandTypo can distinguish "bucket
-# positional" from "typo'd subcommand" — without it, a bare `deploy:web
-# --bad-flag` would have the bucket name reported as the unknown command.
+# exactly once. Always pass an explicit subcommand (defaulting to "bdeploy"
+# — build-then-deploy — when none was given) so suggestCommandTypo can
+# distinguish "bucket positional" from "typo'd subcommand"; without it, a
+# bare `deploy:web --bad-flag` would have the bucket reported as the command.
 node "$SCRIPT_DIR/deploy.mjs" \
-   "${SUBCMD:-deploy}" \
+   "${SUBCMD:-bdeploy}" \
    "${!BUCKET_ENV_NAME}" \
    "${DEFAULTS[@]}" \
    "${ARGS_WITHOUT_SUBCMD[@]}"
