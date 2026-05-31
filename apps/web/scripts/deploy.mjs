@@ -351,8 +351,8 @@ function trackedMatcher(manifest) {
 }
 
 // Single source of truth for the active scope. Three modes:
-//   - default            top-level keys only
-//   - --subdirs          all keys (recursive)
+//   - default            all keys (recursive)
+//   - --no-subdirs       top-level keys only
 //   - --aaguids          only keys under the assets/aaguid/ prefix
 // Used by local file enumeration, bucket listing, manifest reconciliation,
 // and the deploy s3 sync source/destination.
@@ -635,9 +635,9 @@ async function runDeploy(argv) {
    }
 
    // 4. Reconcile the manifest. Only in-scope keys are reconciled — out-of-scope
-   //    entries (subdir files when --subdirs is off) are preserved
-   //    verbatim so a top-level deploy doesn't mis-orphan subdir state a
-   //    recursive bootstrap/deploy put there.
+   //    entries (subdir files under --no-subdirs, or non-aaguid files under
+   //    --aaguids) are preserved verbatim so a narrowed-scope deploy doesn't
+   //    mis-orphan state a wider deploy put there.
    const prevCurrent = manifest.current;
    const inScope = inScopeFor(argv);
 
@@ -1086,16 +1086,9 @@ const addGlobalOpts = (y) => y
 
 // Constrains the command to the assets/aaguid/ key prefix only — local
 // enumeration, bucket listing, and manifest reconciliation all skip
-// anything outside that subtree. Mutually exclusive with --subdirs.
+// anything outside that subtree. Takes precedence over --subdirs/--no-subdirs.
 const addAaguidsOpt = (y) => y
-   .option('aaguids', { type: 'boolean', default: false, describe: 'Limit scope to the assets/aaguid/ subtree (mutually exclusive with --subdirs)' });
-
-function checkScopeFlags(argv) {
-   if (argv.aaguids && argv.subdirs) {
-      throw new Error('--aaguids and --subdirs are mutually exclusive');
-   }
-   return true;
-}
+   .option('aaguids', { type: 'boolean', default: false, describe: 'Limit scope to the assets/aaguid/ subtree (takes precedence over --subdirs).' });
 
 // Used to detect typo'd commands that would otherwise be silently consumed by
 // the default `$0 <bucket>` positional.
@@ -1107,14 +1100,13 @@ const COMMANDS = [
 const deployBuilder = (y) => addAaguidsOpt(addGlobalOpts(y))
    .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
    .option('build-dir', { type: 'string', default: 'dist/web/browser', describe: 'Local directory to upload' })
-   .option('subdirs', { type: 'boolean', default: false, describe: 'Upload files in subdirectories (default: top-level only)' })
+   .option('subdirs', { type: 'boolean', default: true, describe: 'Upload files in subdirectories (default: true; use --no-subdirs for top-level only)' })
    .option('cache-control', { type: 'string', default: 'public, max-age=31536000, immutable', describe: 'Cache-Control header for uploaded files' })
    .option('expiration-days', { type: 'number', default: 30, describe: 'Days an orphan persists before deletion' })
    .option('cf-distribution', { type: 'string', describe: 'CloudFront distribution ID or ARN to invalidate (/*) after deploy. Omit to skip.' })
    .option('comment', { type: 'string', default: '', describe: 'Comment recorded in the manifest (only the latest is kept).' })
    .option('skip-validate', { type: 'boolean', default: false, describe: 'Break-glass: skip the pre-upload index.html validation (SRI, nonce, chunk checks). Only when you know the build is good.' })
    .check((argv) => {
-      checkScopeFlags(argv);
       if (!Number.isFinite(argv.expirationDays) || argv.expirationDays < 0) {
          throw new Error('--expiration-days must be a non-negative integer');
       }
@@ -1169,8 +1161,7 @@ yargs(hideBin(process.argv))
       'Seed manifest.current from the existing bucket contents (no deploy). Resets orphans; leaves expected alone.',
       (y) => addAaguidsOpt(addGlobalOpts(y))
          .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('subdirs', { type: 'boolean', default: false, describe: 'Include files in subdirectories (default: top-level only)' })
-         .check(checkScopeFlags),
+         .option('subdirs', { type: 'boolean', default: true, describe: 'Include files in subdirectories (default: true; use --no-subdirs for top-level only)' }),
       runBootstrap,
    )
    .command(
@@ -1185,8 +1176,7 @@ yargs(hideBin(process.argv))
       'List S3 files not tracked by the manifest (no deploy).',
       (y) => addAaguidsOpt(addGlobalOpts(y))
          .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('subdirs', { type: 'boolean', default: false, describe: 'Also consider files in subdirectories (default: top-level only)' })
-         .check(checkScopeFlags),
+         .option('subdirs', { type: 'boolean', default: true, describe: 'Consider files in subdirectories (default: true; use --no-subdirs for top-level only)' }),
       runLeaks,
    )
    .command(
@@ -1194,8 +1184,7 @@ yargs(hideBin(process.argv))
       'Print files counts and last deploy information (no deploy).',
       (y) => addAaguidsOpt(addGlobalOpts(y))
          .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('subdirs', { type: 'boolean', default: false, describe: 'Also count files in subdirectories (default: top-level only)' })
-         .check(checkScopeFlags),
+         .option('subdirs', { type: 'boolean', default: true, describe: 'Count files in subdirectories (default: true; use --no-subdirs for top-level only)' }),
       runInfo,
    )
    .command(
@@ -1203,8 +1192,7 @@ yargs(hideBin(process.argv))
       "Print the manifest's current files with their uploaded-at timestamps (no deploy).",
       (y) => addAaguidsOpt(addGlobalOpts(y))
          .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('subdirs', { type: 'boolean', default: false, describe: 'Also include files in subdirectories (default: top-level only)' })
-         .check(checkScopeFlags),
+         .option('subdirs', { type: 'boolean', default: true, describe: 'Include files in subdirectories (default: true; use --no-subdirs for top-level only)' }),
       runCurrent,
    )
    .command(
@@ -1228,10 +1216,9 @@ yargs(hideBin(process.argv))
       'Remove S3 files not tracked by the manifest, plus orphans past the retention window (no deploy).',
       (y) => addAaguidsOpt(addGlobalOpts(y))
          .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('subdirs', { type: 'boolean', default: false, describe: 'Also consider files in subdirectories (default: top-level only)' })
+         .option('subdirs', { type: 'boolean', default: true, describe: 'Consider files in subdirectories (default: true; use --no-subdirs for top-level only)' })
          .option('expiration-days', { type: 'number', default: 30, describe: 'Days an orphan persists before deletion' })
          .check((argv) => {
-            checkScopeFlags(argv);
             if (!Number.isFinite(argv.expirationDays) || argv.expirationDays < 0) {
                throw new Error('--expiration-days must be a non-negative integer');
             }
