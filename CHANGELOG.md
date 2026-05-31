@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-## 7.0.0 (TBD)
+## 7.0.0 (2026-05-30)
 
 #### Features
   - user information refreshed across browser tabs and windows in the same profile
