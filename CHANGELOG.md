@@ -5,15 +5,15 @@
 #### Features
   - user information refreshed across browser tabs and windows in the same profile
   - session state refreshed across browser tabs and windows in the same profile
-  - interactive protocol flow diagrams
+  - [interactive protocol flow diagrams](https://quickcrypt.org/help/flow)
 
 #### Changes
   - improved unit test coverage and e2e playwright coverage in several areas
   - more performance optimizations for web app load time and first render
-  - automatically generated test vectors (internal, and so helfpul)
+  - automatically generated test vectors (internal, but so helpful)
 
 #### Security
-  - [protocol version 7 released] (https://quickcrypt.org/help/protocol7)
+  - [protocol version 7 released](https://quickcrypt.org/help/protocol7)
     - improved domain isolation by adding context-specific input to key derivations
     - initialization vector no longer shared between hint and block0
     - cipher key hashes added to associated data to provide full key commitment
@@ -22,9 +22,8 @@
   - browser sessionstore used to persist encrypted userCred
   - versioned cross tab relay of encrypted userCred to prevent excess re-authentication
   - server binds and verifies requesting origin in jwt cookies
-  - server no longer returns userCred from GET /v1/sessoin for updated clients
+  - server no longer returns userCred from GET /v1/session for updated clients
   - updated packages
-
 
 ## 6.1.7 (2026-04-21)
 
