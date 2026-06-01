@@ -19,7 +19,7 @@ const importMetaPlugin = {
 const minify = process.argv.includes('--minify');
 
 await esbuild.build({
-  entryPoints: ['apps/cli/src/main.ts'],
+  entryPoints: ['apps/cli/src/cli.ts'],
   bundle: true,
   minify: minify,
   format: 'cjs',

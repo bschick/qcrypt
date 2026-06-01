@@ -42,7 +42,7 @@ const VALID_TRANSPORTS = new Set([
 const MIN_CRED_BYTES = 16;
 const MAX_CRED_BYTES = 96;
 
-// Must stay in sync with dummyAllowedCreds() in apps/server/src/index.ts.
+// Must stay in sync with dummyAllowedCreds() in apps/server/src/server.ts.
 // Transport ordering is significant — a mismatch with the real-path order
 // would itself leak information, so entries are compared positionally.
 const DUMMY_PROFILES: { len: number; transports: string[] }[] = [

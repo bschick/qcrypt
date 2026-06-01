@@ -8,10 +8,10 @@ This document provides instructions for AI agents working on the `server` codeba
 
 This `server` can be built locally but currently is not setup to run locally and must be deployed to AWS for testing and production. Separate test and production instances are deployed in AWS. Deployment to AWS is not yet well documented. The vast majority of dev/test work should be against the test server `https://test.quickcrypt.org`.
 
-- **Core Logic:** `apps/server/src/index.ts` contains the main application logic and handler functions for API endpoints.
+- **Core Logic:** `apps/server/src/server.ts` contains the main application logic and handler functions for API endpoints.
 - **URL Routing:** API URL routing is defined in `apps/server/src/urls.ts`.
 - **Technology Stack:** It uses AWS KMS for cryptographic operations and ElectroDB for DynamoDB access.
-- **API:** The server exposes HTTPS endpoints, which are defined in the `METHODMAP` object in `apps/server/src/index.ts` and described in `apps/server/API.md`
+- **API:** The server exposes HTTPS endpoints, which are defined in the `METHODMAP` object in `apps/server/src/server.ts` and described in `apps/server/API.md`
 
 ---
 
@@ -27,7 +27,7 @@ This `server` can be built locally but currently is not setup to run locally and
 
 ## 3. Important Files & Directories
 
-- `apps/server/src/index.ts`: The main file containing all API endpoint logic and handler functions.
+- `apps/server/src/server.ts`: The main file containing all API endpoint logic and handler functions.
 - `apps/server/src/urls.ts`: Defines the URL patterns and routing for all API endpoints.
 - `apps/server/src/models.ts`: Defines the ElectroDB models for all DynamoDB tables.
 - `apps/server/src/utils.ts`: Contains utility functions and custom error classes (`ParamError`, `AuthError`, `NotFoundError`).
@@ -62,7 +62,7 @@ The output will be placed in the `dist/server/` directory.
 
 ### c. Deployment
 
-The `dist/server/` directory will contain `index.mjs` and `index.zip`. To deploy, upload `index.zip` to the appropriate AWS Lambda function. This may be documented in detail later.
+The `dist/server/` directory will contain `server.mjs` and `server.zip`. To deploy, upload `server.zip` to the appropriate AWS Lambda function. This may be documented in detail later.
 
 ### d. Testing
 
@@ -87,7 +87,7 @@ Before submitting any changes, you must run the server tests (`pnpm test:server`
 
 ## 6. Key Patterns & Conventions
 
-- **Endpoint Logic:** All API logic is located in `apps/server/src/index.ts`. Each endpoint should have its own handler function.
+- **Endpoint Logic:** All API logic is located in `apps/server/src/server.ts`. Each endpoint should have its own handler function.
 - **Input Sanitization:** Always use the `sanitizeString` utility from `apps/server/src/utils.ts` for all user-provided input before processing or storing it.
 - **Database Updates:** Use the `.patch().set({...}).go()` pattern for updating records in DynamoDB.
 - **Security:** Never store plaintext secrets. Credentials and recovery IDs must be encrypted before being stored.

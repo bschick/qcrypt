@@ -34,7 +34,7 @@ import {
    kmsClient,
    lightFileDefault,
    type Response
-} from "./index";
+} from "./server";
 
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
