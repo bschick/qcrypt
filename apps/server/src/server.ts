@@ -261,7 +261,7 @@ async function getSession(
 
    // Default to returning userCred for backward compat with older clients;
    // newer clients pass ?usercred=false to opt out. Once all deployed clients
-   // pass false, drop this and stop returning userCred unconditionally.
+   // pass false, drop this and stop returning userCred entirely
    const includeUserCred = params.usercred !== 'false';
    const responseContent = await makeLoginUserInfoResponse(verifiedUser, includeUserCred, false);
 
