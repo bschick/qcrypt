@@ -23,12 +23,9 @@
 # CloudFront isn't invalidated. Pass --cf-distribution on the CLI to
 # override for one-off targets.
 #
-# Optional Chrome profile env var holds a profile directory name (BASENAME,
-# e.g. "Default" or "Profile 3" — NOT a full path; Chrome resolves it under
-# its own user-data-dir). When set, the wrapper prints a copy-pasteable
-# macOS `open -na "Google Chrome" ...` command alongside the SSO device URL
-# so the link opens in the right Identity Center user's profile (dodges the
-# "device flow silently re-uses the wrong user's session" trap).
+# AWS auth (and the optional QC_{PROD,TEST}_CHROME_PROFILE SSO-login hint)
+# is handled inside deploy.mjs, after the prod confirmation — see ensureAuth
+# in scripts/deploy-common.mjs. The wrapper no longer probes or logs in.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -53,16 +50,12 @@ fi
 # versa) — each mode reads from its own output directory.
 if [ "$(is_prod_mode "$@")" = "1" ]; then
    BUCKET_ENV_NAME="QC_PROD_BUCKET"
-   PROFILE_ENV_NAME="QC_PROD_AWS_PROFILE"
    CF_DIST_ENV_NAME="QC_PROD_CF_DISTRIBUTION"
-   CHROME_PROFILE_ENV_NAME="QC_PROD_CHROME_PROFILE"
    BUILD_DIR_DEFAULT="${QC_PROD_WEB_DIST:-$REPO_ROOT/dist/web/browser}"
    EXPIRATION_DAYS_DEFAULT=14
 else
    BUCKET_ENV_NAME="QC_TEST_BUCKET"
-   PROFILE_ENV_NAME="QC_TEST_AWS_PROFILE"
    CF_DIST_ENV_NAME="QC_TEST_CF_DISTRIBUTION"
-   CHROME_PROFILE_ENV_NAME="QC_TEST_CHROME_PROFILE"
    BUILD_DIR_DEFAULT="${QC_TEST_WEB_DIST:-$REPO_ROOT/dist/web-test/browser}"
    EXPIRATION_DAYS_DEFAULT=7
 fi
@@ -73,10 +66,9 @@ if [ -z "${!BUCKET_ENV_NAME:-}" ]; then
    exit 1
 fi
 
-# Resolve --profile for the SSO probe (CLI takes precedence over env).
-PROFILE="$(resolve_flag --profile "$@")"
-PROFILE="${PROFILE:-${!PROFILE_ENV_NAME:-}}"
-do_sso_check "$PROFILE" "${!CHROME_PROFILE_ENV_NAME:-}"
+# AWS auth (SSO login when the session is stale) now happens inside
+# deploy.mjs, after the prod confirmation, so the warning precedes any
+# login. It reads QC_{PROD,TEST}_AWS_PROFILE / _CHROME_PROFILE directly.
 
 # Subcommand drives DEFAULTS selection AND has to be spliced in front of
 # the hardcoded bucket positional in the deploy.mjs invocation.

@@ -21,13 +21,9 @@
 # for one-off targets. Wrapper errors out if neither the env var nor a
 # --lambda flag is provided for the active mode.
 #
-# Optional: set QC_PROD_CHROME_PROFILE / QC_TEST_CHROME_PROFILE to your
-# Chrome profile directory name (the BASENAME, e.g. "Default" or "Profile 3"
-# — NOT a full path; Chrome resolves it under its own user-data-dir). When
-# set, the wrapper prints a copy-pasteable macOS `open -na "Google Chrome"
-# ...` command alongside the SSO device URL so the link opens in the right
-# Identity Center user's profile (dodges the "device flow silently re-uses
-# the wrong user's session" trap).
+# AWS auth (and the optional QC_{PROD,TEST}_CHROME_PROFILE SSO-login hint)
+# is handled inside deploy.mjs, after the prod confirmation — see ensureAuth
+# in scripts/deploy-common.mjs. The wrapper no longer probes or logs in.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -49,13 +45,9 @@ fi
 # Pick env-var pair names per prod/test mode (--prod presence = prod-mode).
 if [ "$(is_prod_mode "$@")" = "1" ]; then
    LAMBDA_ENV_NAME="QC_PROD_LAMBDA"
-   PROFILE_ENV_NAME="QC_PROD_AWS_PROFILE"
-   CHROME_PROFILE_ENV_NAME="QC_PROD_CHROME_PROFILE"
    BUILD_DIR_DEFAULT="${QC_PROD_SERVER_DIST:-$REPO_ROOT/dist/server}"
 else
    LAMBDA_ENV_NAME="QC_TEST_LAMBDA"
-   PROFILE_ENV_NAME="QC_TEST_AWS_PROFILE"
-   CHROME_PROFILE_ENV_NAME="QC_TEST_CHROME_PROFILE"
    BUILD_DIR_DEFAULT="${QC_TEST_SERVER_DIST:-$REPO_ROOT/dist/server-test}"
 fi
 
@@ -69,10 +61,9 @@ if [ -z "$LAMBDA" ]; then
    exit 1
 fi
 
-# Resolve --profile for the SSO probe (CLI takes precedence over env).
-PROFILE="$(resolve_flag --profile "$@")"
-PROFILE="${PROFILE:-${!PROFILE_ENV_NAME:-}}"
-do_sso_check "$PROFILE" "${!CHROME_PROFILE_ENV_NAME:-}"
+# AWS auth (SSO login when the session is stale) now happens inside
+# deploy.mjs, after the prod confirmation, so the warning precedes any
+# login. It reads QC_{PROD,TEST}_AWS_PROFILE / _CHROME_PROFILE directly.
 
 # Subcommand drives DEFAULTS selection. Server's deploy.mjs has no
 # positional args, so we don't need to splice it back in — it can ride

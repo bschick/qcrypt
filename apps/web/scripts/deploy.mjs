@@ -120,6 +120,7 @@ import { hideBin } from 'yargs/helpers';
 import {
    aws,
    confirmProdAction,
+   ensureAuth,
    relToRoot,
    suggestCommandTypo,
 } from '../../../scripts/deploy-common.mjs';
@@ -482,7 +483,6 @@ function printUntracked(untracked, heading, limit) {
 // ---------------------------------------------------------------------------
 
 async function runDeploy(argv) {
-   await confirmProdAction(argv, 'deploy', `bucket: ${argv.bucket}\n      from:   ${relToRoot(argv.buildDir)}`);
    const scope = getScope(argv);
    // 1. Enumerate the local build, filtered to the active scope.
    const files = collectLocalFiles(argv.buildDir, scope.recursive)
@@ -706,7 +706,6 @@ async function runDeploy(argv) {
 // test), then defers to runDeploy with the same argv so all deploy
 // options (including --comment) flow through.
 async function runBdeploy(argv) {
-   await confirmProdAction(argv, 'bdeploy', `bucket: ${argv.bucket}\n      from:   ${relToRoot(argv.buildDir)}`);
    const cmd = 'pnpm';
    const args = [argv.prod ? 'build:web:prod' : 'build:web'];
    // QC_WEB_OUT forces the build to write into the exact dir the deploy step
@@ -728,8 +727,7 @@ async function runBdeploy(argv) {
          process.exit(r.status ?? 1);
       }
    }
-   // bdeploy already confirmed; suppress the redundant prompt inside runDeploy.
-   await runDeploy({ ...argv, yes: true });
+   await runDeploy(argv);
 }
 
 // ---------------------------------------------------------------------------
@@ -761,7 +759,6 @@ async function runBdeploy(argv) {
 // to refresh `deployDate` and `deployComment`, since the rule is that
 // deploy/bdeploy/rollback are the only commands that touch those fields.
 async function runRollback(argv) {
-   await confirmProdAction(argv, 'rollback', `bucket: ${argv.bucket}`);
    const key = 'index.html';
    const listResult = aws(argv, [
       's3api', 'list-object-versions',
@@ -993,7 +990,6 @@ function runUnexpect(argv) {
 // ---------------------------------------------------------------------------
 
 async function runPrune(argv) {
-   await confirmProdAction(argv, 'prune', `bucket: ${argv.bucket}`);
    const manifest = readManifest(argv);
    // readManifest always seeds `expected` with the manifest key, so check the
    // other buckets to decide whether this looks like a never-deployed bucket.
@@ -1099,8 +1095,29 @@ const deployBuilder = (y) => addAaguidsOpt(addGlobalOpts(y))
       return true;
    });
 
-yargs(hideBin(process.argv))
+// Commands that mutate prod and so require the confirmation gate. The bare
+// `$0 <bucket>` invocation runs bdeploy, so map an empty command to it.
+const DESTRUCTIVE_COMMANDS = new Set(['deploy', 'bdeploy', 'prune', 'rollback']);
+
+// Global middleware runs before the matched command handler. Order matters:
+// the prod confirmation (destructive + --prod only) comes first so the
+// warning precedes any AWS work, then ensureAuth handles SSO login. Both
+// previously lived in the bash wrapper / handlers; centralizing here keeps
+// "warn, then authenticate, then act" ordering in one place.
+async function preflight(argv) {
+   const command = String(argv._[0] ?? 'bdeploy');
+   if (argv.prod && DESTRUCTIVE_COMMANDS.has(command)) {
+      const from = (command === 'deploy' || command === 'bdeploy')
+         ? `\n      from:   ${relToRoot(argv.buildDir)}`
+         : '';
+      await confirmProdAction(argv, command, `bucket: ${argv.bucket}${from}`);
+   }
+   await ensureAuth(argv);
+}
+
+await yargs(hideBin(process.argv))
    .scriptName('deploy.mjs')
+   .middleware(preflight)
    .command(
       '$0 <bucket>',
       'Build (production with --prod, else test) then deploy the SPA to S3 with orphan-based retention.',
@@ -1224,4 +1241,4 @@ yargs(hideBin(process.argv))
    .strict()
    .help()
    .version(false)
-   .parse();
+   .parseAsync();

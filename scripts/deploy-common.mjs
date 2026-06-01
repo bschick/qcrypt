@@ -12,7 +12,7 @@
 //     / etc.) inside helpers that own the AWS resource — `aws()` here
 //     only emits hints that apply to *every* AWS call (auth/role).
 
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { resolve, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -74,6 +74,67 @@ export function resolveAwsCreds(argv, envProfileName, envRegionName) {
 export function resolveCreds(argv) {
    const prefix = argv.prod ? 'QC_PROD' : 'QC_TEST';
    return resolveAwsCreds(argv, `${prefix}_AWS_PROFILE`, `${prefix}_AWS_REGION`);
+}
+
+const AUTH_OK_KEY = Symbol('awsAuthOk');
+
+// Ensure the resolved profile has a live session before any AWS work. A
+// quick `sts get-caller-identity` probe; on failure, run the interactive
+// `aws sso login --use-device-code` and stream its output, injecting a
+// copy-pasteable macOS Chrome-profile launch command when the device URL
+// appears (QC_{PROD,TEST}_CHROME_PROFILE, picked by --prod) — the
+// wrong-Identity-Center-account guard. Memoized per argv so it runs once.
+// Lives here (not the bash wrapper) so the prod confirm can run first and
+// so bare `node deploy.mjs` gets the same login behavior.
+export async function ensureAuth(argv) {
+   if (argv[AUTH_OK_KEY]) {
+      return;
+   }
+   const creds = resolveCreds(argv);
+   const probe = spawnSync(
+      'aws',
+      ['--profile', creds.profile, '--region', creds.region, 'sts', 'get-caller-identity'],
+      { stdio: 'ignore' },
+   );
+   if (probe.status === 0) {
+      argv[AUTH_OK_KEY] = true;
+      return;
+   }
+
+   const chromeProfile = argv.prod ? process.env.QC_PROD_CHROME_PROFILE : process.env.QC_TEST_CHROME_PROFILE;
+   console.error(`AWS SSO session for profile '${creds.profile}' is not active; launching login...`);
+   await new Promise((resolveLogin, rejectLogin) => {
+      const child = spawn('aws', ['--profile', creds.profile, 'sso', 'login', '--use-device-code'], {
+         stdio: ['inherit', 'pipe', 'pipe'],
+      });
+      const relay = (buf) => {
+         const text = buf.toString();
+         process.stdout.write(text);
+         if (chromeProfile) {
+            const match = /(https:\/\/\S*device\S*)/.exec(text);
+            if (match) {
+               process.stdout.write(
+                  `\n  -> To open this URL in the right Chrome profile, run on your local macOS terminal:\n` +
+                  `       open -na "Google Chrome" --args --profile-directory='${chromeProfile}' '${match[1]}'\n\n`,
+               );
+            }
+         }
+      };
+      child.stdout.on('data', relay);
+      child.stderr.on('data', relay);
+      child.on('error', rejectLogin);
+      child.on('close', (code) => {
+         if (code === 0) {
+            resolveLogin();
+         } else {
+            rejectLogin(new Error(`aws sso login exited ${code}`));
+         }
+      });
+   }).catch((err) => {
+      console.error(`SSO login failed: ${err.message}`);
+      process.exit(1);
+   });
+   argv[AUTH_OK_KEY] = true;
 }
 
 // Run the aws CLI. Resolves --profile/--region via resolveCreds (memoized

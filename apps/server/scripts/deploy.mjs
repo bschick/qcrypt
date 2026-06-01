@@ -66,6 +66,7 @@ import { hideBin } from 'yargs/helpers';
 import {
    aws,
    confirmProdAction,
+   ensureAuth,
    relToRoot,
    suggestCommandTypo,
 } from '../../../scripts/deploy-common.mjs';
@@ -186,7 +187,6 @@ function runBuild(argv) {
 // ---------------------------------------------------------------------------
 
 async function runDeploy(argv) {
-   await confirmProdAction(argv, 'deploy', `lambda: ${argv.lambda}\n      from:   ${relToRoot(join(argv.buildDir, 'server.zip'))}`);
    const zipPath = join(argv.buildDir, 'server.zip');
    try {
       if (!statSync(zipPath).isFile()) {
@@ -284,10 +284,8 @@ async function runDeploy(argv) {
 // ---------------------------------------------------------------------------
 
 async function runBdeploy(argv) {
-   await confirmProdAction(argv, 'bdeploy', `lambda: ${argv.lambda}\n      from:   ${relToRoot(join(argv.buildDir, 'server.zip'))}`);
    runBuild(argv);
-   // bdeploy already confirmed; suppress the redundant prompt inside runDeploy.
-   await runDeploy({ ...argv, yes: true });
+   await runDeploy(argv);
 }
 
 // ---------------------------------------------------------------------------
@@ -305,7 +303,6 @@ async function runRollback(argv) {
       console.error('rollback: requires --prod <alias>.');
       process.exit(1);
    }
-   await confirmProdAction(argv, 'rollback', `lambda: ${argv.lambda}`);
    const alias = aliasName(argv);
    const versions = listVersions(argv);
    if (versions.length === 0) {
@@ -434,8 +431,29 @@ const bdeployBuilder = (y) => deployBuilder(y)
 const rollbackBuilder = (y) => addGlobalOpts(y)
    .option('version', { type: 'string', describe: 'Specific version to roll back to (default: version preceding current alias target)' });
 
-yargs(hideBin(process.argv))
+// Commands that mutate prod and so require the confirmation gate. The bare
+// `$0` invocation runs bdeploy, so map an empty command to it.
+const DESTRUCTIVE_COMMANDS = new Set(['deploy', 'bdeploy', 'rollback']);
+
+// Global middleware runs before the matched command handler. Order matters:
+// the prod confirmation (destructive + --prod only) comes first so the
+// warning precedes any AWS work, then ensureAuth handles SSO login. Both
+// previously lived in the bash wrapper / handlers; centralizing here keeps
+// "warn, then authenticate, then act" ordering in one place.
+async function preflight(argv) {
+   const command = String(argv._[0] ?? 'bdeploy');
+   if (argv.prod && DESTRUCTIVE_COMMANDS.has(command)) {
+      const from = command === 'rollback'
+         ? ''
+         : `\n      from:   ${relToRoot(join(argv.buildDir, 'server.zip'))}`;
+      await confirmProdAction(argv, command, `lambda: ${argv.lambda}${from}`);
+   }
+   await ensureAuth(argv);
+}
+
+await yargs(hideBin(process.argv))
    .scriptName('deploy.mjs')
+   .middleware(preflight)
    .command('$0', 'Build (`pnpm build:server:min`, or `build:server` with --no-min) then deploy the Lambda artifact to AWS.', bdeployBuilder, runBdeploy)
    .command('deploy', 'Deploy the already-built Lambda artifact without rebuilding.', deployBuilder, runDeploy)
    .command('bdeploy', 'Build (`pnpm build:server:min`, or `build:server` with --no-min) then deploy.', bdeployBuilder, runBdeploy)
@@ -456,4 +474,4 @@ yargs(hideBin(process.argv))
    .strict()
    .help()
    .version(false)
-   .parse();
+   .parseAsync();

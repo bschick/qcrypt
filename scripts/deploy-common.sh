@@ -128,25 +128,6 @@ remove_subcommand_from_args() {
    done
 }
 
-# Print a copy-pasteable macOS Chrome launch command alongside the SSO
-# device URL when chrome_profile is set. Pass-through everything else so
-# the user still sees aws's normal output.
-sso_login_with_chrome_hint() {
-   local profile=$1
-   local chrome_profile=$2
-   aws --profile "$profile" sso login --use-device-code 2>&1 | while IFS= read -r line; do
-      printf '%s\n' "$line"
-      if [ -n "$chrome_profile" ] && [[ "$line" =~ (https://[^[:space:]]*device[^[:space:]]*) ]]; then
-         local url="${BASH_REMATCH[1]}"
-         echo
-         echo "  -> To open this URL in the right Chrome profile, run on your"
-         echo "     local macOS terminal:"
-         echo "       open -na \"Google Chrome\" --args --profile-directory='$chrome_profile' '$url'"
-         echo
-      fi
-   done
-}
-
 # Echoes the most recent tag reachable from HEAD
 # (`git describe --tags --abbrev=0`), or empty if the working tree has no
 # tags or isn't a git repo.
@@ -198,17 +179,3 @@ default_unless_user_supplied() {
    fi
 }
 
-# Verify the SSO session for `profile` is live; trigger device-code login
-# (with optional chrome-profile hint) if not. No-op when profile is empty
-# — deploy.mjs will hard-error on its own with a clearer message in that
-# case.
-do_sso_check() {
-   local profile=$1
-   local chrome_profile=${2:-}
-   if [ -z "$profile" ]; then
-      return 0
-   fi
-   if ! aws --profile "$profile" sts get-caller-identity >/dev/null 2>&1; then
-      sso_login_with_chrome_hint "$profile" "$chrome_profile"
-   fi
-}
