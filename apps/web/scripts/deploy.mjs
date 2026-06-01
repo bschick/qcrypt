@@ -113,15 +113,14 @@
 
 import { readdirSync, statSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { join, resolve, relative, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import {
-   aws as awsBase,
+   aws,
    confirmProdAction,
-   resolveAwsCreds,
+   relToRoot,
    suggestCommandTypo,
 } from '../../../scripts/deploy-common.mjs';
 import { validateBuild } from './validate-build.mjs';
@@ -129,32 +128,6 @@ import { validateBuild } from './validate-build.mjs';
 // ---------------------------------------------------------------------------
 // Helpers (all take `argv` so they can be shared by every command)
 // ---------------------------------------------------------------------------
-
-// Project root, derived from this script's location (apps/web/scripts).
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-
-// Shorten a build-dir path for display: relative to the project root when it
-// sits under it (the common case), otherwise the path unchanged.
-function relToRoot(p) {
-   const rel = relative(REPO_ROOT, resolve(p));
-   return rel && !rel.startsWith('..') ? rel : p;
-}
-
-// --prod presence selects prod mode (QC_PROD_AWS_* env vars); absence
-// selects test mode (QC_TEST_AWS_* env vars). CLI --profile / --region
-// flags override either, via the shared resolver.
-function resolveCreds(argv) {
-   const profileEnv = argv.prod ? 'QC_PROD_AWS_PROFILE' : 'QC_TEST_AWS_PROFILE';
-   const regionEnv = argv.prod ? 'QC_PROD_AWS_REGION' : 'QC_TEST_AWS_REGION';
-   return resolveAwsCreds(argv, profileEnv, regionEnv);
-}
-
-// Wrapper around the shared aws() that ensures creds are resolved (so
-// every command path gets the always-prod check) before delegating.
-function aws(argv, args, opts) {
-   resolveCreds(argv);
-   return awsBase(argv, args, opts);
-}
 
 // Known OS/editor metadata files we don't want to upload, but without
 // blanket-skipping dotfiles (e.g. `.well-known/` is legitimate).
@@ -736,10 +709,16 @@ async function runBdeploy(argv) {
    await confirmProdAction(argv, 'bdeploy', `bucket: ${argv.bucket}\n      from:   ${relToRoot(argv.buildDir)}`);
    const cmd = 'pnpm';
    const args = [argv.prod ? 'build:web:prod' : 'build:web'];
+   // QC_WEB_OUT forces the build to write into the exact dir the deploy step
+   // reads from. argv.buildDir is the `…/browser` upload dir; Angular's
+   // output base is its parent, and it writes the browser files back under
+   // `<base>/browser`, so build output and deploy source can't diverge.
+   const outBase = relToRoot(dirname(argv.buildDir));
+   console.log(`bdeploy: building into ${outBase} via ${args[0]}...`);
    if (argv.dryRun) {
-      console.log(`[dry-run] ${cmd} ${args.join(' ')}`);
+      console.log(`[dry-run] QC_WEB_OUT=${outBase} ${cmd} ${args.join(' ')}`);
    } else {
-      const r = spawnSync(cmd, args, { stdio: 'inherit' });
+      const r = spawnSync(cmd, args, { stdio: 'inherit', env: { ...process.env, QC_WEB_OUT: outBase } });
       if (r.error) {
          console.error(`Failed to spawn ${cmd}: ${r.error.message}`);
          process.exit(1);

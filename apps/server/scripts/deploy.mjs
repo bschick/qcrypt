@@ -2,7 +2,7 @@
 /**
  * deploy.mjs
  *
- * Uploads a built Lambda function (dist/server/index.zip) to AWS, with
+ * Uploads a built Lambda function (dist/server/server.zip) to AWS, with
  * optional version-publish + alias bump for prod.
  *
  * ============================================================
@@ -64,32 +64,15 @@ import { join } from 'node:path';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import {
-   aws as awsBase,
+   aws,
    confirmProdAction,
-   resolveAwsCreds,
+   relToRoot,
    suggestCommandTypo,
 } from '../../../scripts/deploy-common.mjs';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-// Pick the env-var pair for AWS profile/region — prod-mode uses QC_PROD_*,
-// test-mode uses QC_TEST_*. The shared resolver enforces "explicit profile
-// / region required" semantics; this wrapper just hands it the names.
-function resolveCreds(argv) {
-   const prefix = isProd(argv) ? 'QC_PROD' : 'QC_TEST';
-   return resolveAwsCreds(argv, `${prefix}_AWS_PROFILE`, `${prefix}_AWS_REGION`);
-}
-
-// Wrapper around the shared aws() that ensures creds are resolved (and
-// memoized on argv) before the shared helper runs. Keeps every call path
-// honoring the prod/test env-var split without each runX needing to
-// remember to call resolveCreds first.
-function aws(argv, args, opts) {
-   resolveCreds(argv);
-   return awsBase(argv, args, opts);
-}
 
 function isProd(argv) {
    return Boolean(argv.prod);
@@ -178,11 +161,16 @@ function listVersions(argv) {
 function runBuild(argv) {
    const cmd = 'pnpm';
    const args = argv.min ? ['build:server:min'] : ['build:server'];
+   // QC_SERVER_OUT forces the build to write into the exact dir the deploy
+   // step reads from (argv.buildDir), so build output and deploy source can
+   // never diverge.
+   const outDir = argv.buildDir;
+   console.log(`bdeploy: building ${argv.min ? 'minified' : 'unminified'} into ${relToRoot(outDir)}...`);
    if (argv.dryRun) {
-      console.log(`[dry-run] ${cmd} ${args.join(' ')}`);
+      console.log(`[dry-run] QC_SERVER_OUT=${relToRoot(outDir)} ${cmd} ${args.join(' ')}`);
       return;
    }
-   const r = spawnSync(cmd, args, { stdio: 'inherit' });
+   const r = spawnSync(cmd, args, { stdio: 'inherit', env: { ...process.env, QC_SERVER_OUT: outDir } });
    if (r.error) {
       console.error(`Failed to spawn ${cmd}: ${r.error.message}`);
       process.exit(1);
@@ -198,8 +186,8 @@ function runBuild(argv) {
 // ---------------------------------------------------------------------------
 
 async function runDeploy(argv) {
-   await confirmProdAction(argv, 'deploy', `lambda: ${argv.lambda}`);
-   const zipPath = join(argv.buildDir, 'index.zip');
+   await confirmProdAction(argv, 'deploy', `lambda: ${argv.lambda}\n      from:   ${relToRoot(join(argv.buildDir, 'server.zip'))}`);
+   const zipPath = join(argv.buildDir, 'server.zip');
    try {
       if (!statSync(zipPath).isFile()) {
          throw new Error('not a file');
@@ -245,7 +233,7 @@ async function runDeploy(argv) {
 
    const dryRunTag = argv.dryRun ? ' (DRY RUN)' : '';
    if (!isProd(argv)) {
-      console.log(`deploy: lambda=${argv.lambda} code-sha=${codeSha}${dryRunTag}`);
+      console.log(`deploy: lambda=${argv.lambda} from=${relToRoot(zipPath)} code-sha=${codeSha}${dryRunTag}`);
       return;
    }
 
@@ -288,7 +276,7 @@ async function runDeploy(argv) {
       '--output', 'json',
    ]);
 
-   console.log(`deploy: lambda=${argv.lambda} code-sha=${codeSha} version=${newVersion || '<NEW>'} alias=${alias}${dryRunTag}`);
+   console.log(`deploy: lambda=${argv.lambda} from=${relToRoot(zipPath)} code-sha=${codeSha} version=${newVersion || '<NEW>'} alias=${alias}${dryRunTag}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -296,7 +284,7 @@ async function runDeploy(argv) {
 // ---------------------------------------------------------------------------
 
 async function runBdeploy(argv) {
-   await confirmProdAction(argv, 'bdeploy', `lambda: ${argv.lambda}`);
+   await confirmProdAction(argv, 'bdeploy', `lambda: ${argv.lambda}\n      from:   ${relToRoot(join(argv.buildDir, 'server.zip'))}`);
    runBuild(argv);
    // bdeploy already confirmed; suppress the redundant prompt inside runDeploy.
    await runDeploy({ ...argv, yes: true });
@@ -427,7 +415,7 @@ const addGlobalOpts = (y) => y
 const COMMANDS = ['deploy', 'bdeploy', 'rollback', 'info'];
 
 const deployBuilder = (y) => addGlobalOpts(y)
-   .option('build-dir', { type: 'string', default: 'dist/server', describe: 'Directory containing index.zip' })
+   .option('build-dir', { type: 'string', default: 'dist/server-test', describe: 'Directory containing server.zip' })
    .option('comment', { type: 'string', default: '', describe: 'Description recorded on the new published version (prod-mode only).' })
    .check((argv) => {
       try {

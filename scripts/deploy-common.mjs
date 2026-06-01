@@ -8,17 +8,26 @@
 //   - VALUE_FLAGS set (used with realPositionals to skip flag values
 //     when scanning argv — required because flags like `--profile foo`
 //     interleave the value as a positional-shaped token)
-//   - A small wrapper around resolveAwsCreds that picks the right env-var
-//     names (web → always QC_PROD_*; server → QC_PROD_* or QC_TEST_*
-//     based on argv.prod)
 //   - Resource-specific error hints (NoSuchBucket / ResourceNotFoundException
 //     / etc.) inside helpers that own the AWS resource — `aws()` here
 //     only emits hints that apply to *every* AWS call (auth/role).
 
 import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { resolve, relative, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { hideBin } from 'yargs/helpers';
 import { closest } from '../apps/web/src/app/services/levenshtein.ts';
+
+// Project root, derived from this module's location (repo-root/scripts).
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+// Shorten a path for display: relative to the project root when it sits
+// under it (the common case), otherwise the path unchanged.
+export function relToRoot(p) {
+   const rel = relative(REPO_ROOT, resolve(p));
+   return rel && !rel.startsWith('..') ? rel : p;
+}
 
 // POSIX single-quote a shell arg: safe wrap for anything containing spaces
 // or shell metachars. Used only for the --dry-run log so previewed commands
@@ -58,9 +67,18 @@ export function resolveAwsCreds(argv, envProfileName, envRegionName) {
    return argv[AWS_CREDS_KEY];
 }
 
-// Run the aws CLI. Always splices --profile/--region into the call (the
-// caller resolves these via resolveAwsCreds and stores them on argv via
-// the Symbol). Honors --dry-run by logging mutating calls instead of
+// Project policy for which env vars supply the AWS profile/region: --prod
+// presence selects QC_PROD_*, absence selects QC_TEST_*. CLI --profile /
+// --region still override via resolveAwsCreds. Both deploy.mjs scripts share
+// this rule; `aws()` calls it so callers never resolve creds by hand.
+export function resolveCreds(argv) {
+   const prefix = argv.prod ? 'QC_PROD' : 'QC_TEST';
+   return resolveAwsCreds(argv, `${prefix}_AWS_PROFILE`, `${prefix}_AWS_REGION`);
+}
+
+// Run the aws CLI. Resolves --profile/--region via resolveCreds (memoized
+// on argv) and splices them into the call. Honors --dry-run by logging
+// mutating calls instead of
 // running them; read-only calls always execute so dry-run diagnostics
 // stay accurate.
 //
@@ -71,10 +89,7 @@ export function resolveAwsCreds(argv, envProfileName, envRegionName) {
 // the caller's responsibility — they live in helpers like readManifest /
 // getFunctionConfig where the resource type is known.
 export function aws(argv, args, { input, allowFailure = false, readOnly = false } = {}) {
-   const creds = argv[AWS_CREDS_KEY];
-   if (!creds) {
-      throw new Error('aws(): caller must invoke resolveAwsCreds(argv, ...) first');
-   }
+   const creds = resolveCreds(argv);
    const full = ['--profile', creds.profile, '--region', creds.region, ...args];
 
    if (argv.dryRun && !readOnly) {

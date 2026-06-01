@@ -51,10 +51,12 @@ if [ "$(is_prod_mode "$@")" = "1" ]; then
    LAMBDA_ENV_NAME="QC_PROD_LAMBDA"
    PROFILE_ENV_NAME="QC_PROD_AWS_PROFILE"
    CHROME_PROFILE_ENV_NAME="QC_PROD_CHROME_PROFILE"
+   BUILD_DIR_DEFAULT="${QC_PROD_SERVER_DIST:-$REPO_ROOT/dist/server}"
 else
    LAMBDA_ENV_NAME="QC_TEST_LAMBDA"
    PROFILE_ENV_NAME="QC_TEST_AWS_PROFILE"
    CHROME_PROFILE_ENV_NAME="QC_TEST_CHROME_PROFILE"
+   BUILD_DIR_DEFAULT="${QC_TEST_SERVER_DIST:-$REPO_ROOT/dist/server-test}"
 fi
 
 # Resolve --lambda: CLI flag has precedence; otherwise fall back to the
@@ -85,7 +87,7 @@ SUBCMD="$(detect_subcommand "$@")"
 DEFAULTS=()
 case "${SUBCMD:-bdeploy}" in
    deploy|bdeploy)
-      default_unless_user_supplied --build-dir "$REPO_ROOT/dist/server" "$@"
+      default_unless_user_supplied --build-dir "$BUILD_DIR_DEFAULT" "$@"
       default_unless_user_supplied --lambda "$LAMBDA" "$@"
       default_comment_from_git_tag "$@"
       ;;
