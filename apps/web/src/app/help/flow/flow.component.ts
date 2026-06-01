@@ -19,13 +19,14 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { CopyrightComponent } from '../../ui/copyright/copyright.component';
 import { SubLabelComponent } from './sub-label/sub-label.component';
 import { PanZoomDirective } from './pan-zoom/pan-zoom.directive';
@@ -37,8 +38,35 @@ interface BreadcrumbChip {
    queryParams: Record<string, string | null> | null;
 }
 
+interface FlowSearchItem {
+   key: string;
+   label: string;
+   tokens: string;
+}
+
 function lookupSegment(segment: string, index: number): FlowItem | null {
    return index === 0 ? FLOW_OVERVIEWS[segment] ?? null : FLOW_SUBSYSTEMS[segment] ?? null;
+}
+
+// Searchable tokens: words from the label, the svg filename split on '_', and
+// the optional manual search keywords.
+function searchTokens(sub: FlowItem): string {
+   const file = sub.svg.slice(sub.svg.lastIndexOf('/') + 1).replace(/\.svg$/, '');
+   const parts = [...sub.label.split(/\s+/), ...file.split('_')];
+   if (sub.search) {
+      parts.push(...sub.search.split(/\s+/));
+   }
+   return parts.join(' ').toLowerCase();
+}
+
+function flowSearchItems(overview: string): FlowSearchItem[] {
+   const flow = FLOW_OVERVIEWS[overview];
+   const items: FlowSearchItem[] = [{ key: overview, label: flow.label, tokens: searchTokens(flow) }];
+   for (const key of flow.subsystems) {
+      const sub = FLOW_SUBSYSTEMS[key];
+      items.push({ key, label: sub.label, tokens: searchTokens(sub) });
+   }
+   return items;
 }
 
 @Component({
@@ -54,6 +82,7 @@ function lookupSegment(segment: string, index: number): FlowItem | null {
       MatIconModule,
       MatButtonModule,
       MatTooltipModule,
+      MatTableModule,
    ],
 })
 export class FlowComponent {
@@ -65,6 +94,14 @@ export class FlowComponent {
    readonly reducedMotion = signal(false);
    private _zoomFromRect: DOMRect | null = null;
    readonly overviewEntries = Object.entries(FLOW_OVERVIEWS) as [string, FlowItem][];
+
+   readonly searchData = new MatTableDataSource<FlowSearchItem>([]);
+   readonly searchColumns = ['label'];
+   readonly searchTerm = signal('');
+   readonly searchOpen = signal(false);
+   readonly searchResultCount = signal(0);
+   readonly searchActiveIndex = signal(-1);
+   private readonly _searchPanel = viewChild<ElementRef<HTMLElement>>('searchPanel');
 
    // Parses ?path=<seg0>,<seg1>,... and truncates to the longest valid prefix.
    readonly path = computed<string[]>(() => {
@@ -116,6 +153,32 @@ export class FlowComponent {
    });
 
    constructor() {
+      const origFilterPredicate = this.searchData.filterPredicate;
+      this.searchData.filterPredicate = (item, filter) =>
+         filter.split(',').some(part => {
+            const term = part.trim();
+            return term !== '' && origFilterPredicate(item, term);
+         });
+
+      const initialSearch = this._params().get('search');
+      if (initialSearch) {
+         this.searchTerm.set(initialSearch);
+         this.searchOpen.set(true);
+      }
+
+      effect(() => {
+         const overview = this.path()[0];
+         untracked(() => {
+            if (overview) {
+               this.searchData.data = flowSearchItems(overview);
+               this._applyFilter(this.searchTerm());
+            } else {
+               this.searchData.data = [];
+               this._resetSearch();
+            }
+         });
+      });
+
       effect(() => {
          const viewer = this.viewer();
          if (viewer && this.mode() !== 'grid') {
@@ -180,6 +243,96 @@ export class FlowComponent {
       if (target && FLOW_SUBSYSTEMS[target]) {
          this._zoomFromRect = hit!.getBoundingClientRect();
          this._navigateTo([...this.path(), target]);
+      }
+   }
+
+   onSearchInput(value: string): void {
+      this.searchTerm.set(value);
+      this.searchActiveIndex.set(-1);
+      this.searchOpen.set(value.trim() !== '');
+      this._applyFilter(value);
+   }
+
+   onSearchFocus(): void {
+      this.searchActiveIndex.set(-1);
+      this.searchOpen.set(this.searchTerm().trim() !== '');
+      this._applyFilter(this.searchTerm());
+   }
+
+   onSearchClick(): void {
+      this.searchOpen.set(this.searchTerm().trim() !== '');
+   }
+
+   clearSearch(input: HTMLInputElement): void {
+      this._resetSearch();
+      input.focus();
+   }
+
+   onSearchBlur(): void {
+      this.searchOpen.set(false);
+   }
+
+   onSearchKeydown(event: KeyboardEvent, input: HTMLInputElement): void {
+      const count = this.searchData.filteredData.length;
+      switch (event.key) {
+         case 'ArrowDown':
+            event.preventDefault();
+            if (this.searchOpen() && count) {
+               this._setActive(Math.min(this.searchActiveIndex() + 1, count - 1));
+            }
+            break;
+         case 'ArrowUp':
+            event.preventDefault();
+            if (this.searchOpen() && count) {
+               this._setActive(Math.max(this.searchActiveIndex() - 1, 0));
+            }
+            break;
+         case 'Enter': {
+            if (this.searchOpen() && count) {
+               // Default to the first result unless one is chosen with the arrows.
+               const index = this.searchActiveIndex() >= 0 ? this.searchActiveIndex() : 0;
+               this.selectSearchResult(this.searchData.filteredData[index].key, event);
+            }
+            break;
+         }
+         case 'Escape':
+            this.searchTerm.set('');
+            this.searchActiveIndex.set(-1);
+            this._applyFilter('');
+            this.searchOpen.set(false);
+            input.blur();
+            break;
+      }
+   }
+
+   selectSearchResult(key: string, event: Event): void {
+      event.preventDefault();
+      this.searchActiveIndex.set(-1);
+      this.searchOpen.set(false);
+      const path = this.path();
+      if (key !== path[path.length - 1]) {
+         this._navigateTo(FLOW_OVERVIEWS[key] ? [key] : [...path, key]);
+      }
+   }
+
+   private _resetSearch(): void {
+      this.searchTerm.set('');
+      this.searchActiveIndex.set(-1);
+      this.searchOpen.set(false);
+      this._applyFilter('');
+   }
+
+   private _applyFilter(term: string): void {
+      this.searchData.filter = term.trim().toLowerCase();
+      this.searchResultCount.set(this.searchData.filteredData.length);
+   }
+
+   private _setActive(index: number): void {
+      this.searchActiveIndex.set(index);
+      const panel = this._searchPanel();
+      if (panel) {
+         const rows = panel.nativeElement.querySelectorAll<HTMLElement>('tr.flow-search-row');
+         rows[index].scrollIntoView({ block: 'nearest' });
       }
    }
 

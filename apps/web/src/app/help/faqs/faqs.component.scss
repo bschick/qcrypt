@@ -1,5 +1,5 @@
 @use "../help.scss";
-@use '@angular/material' as mat;
+@use "../search-field" as search;
 
 // because we disable view encapsulation for innerHTML in answers
 .faq {
@@ -10,10 +10,17 @@
     justify-content: space-between;
   }
 
-  .filter {
-    max-width: 390px;
-    flex: 2;
-    @include mat.form-field-density(-3);
+  .search-field {
+    @include search.field;
+    margin-bottom: 20px;
+  }
+
+  .search-input {
+    @include search.input;
+  }
+
+  .search-clear {
+    @include search.clear;
   }
 
   .faq-table {
@@ -46,7 +53,7 @@
     }
   }
 
-  .header-data {
+  .header-row .header-data {
     color: white;
     background-color: #8a8fb2;
   }

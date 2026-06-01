@@ -1,4 +1,5 @@
 @use "../help.scss";
+@use "../search-field" as search;
 
 :host {
    display: block;
@@ -32,6 +33,14 @@
    min-width: 0;
 }
 
+.flow-controls {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   flex: 0 0 auto;
+   margin-left: auto;
+}
+
 .zoom-controls {
    display: flex;
    align-items: center;
@@ -39,6 +48,55 @@
    flex: 0 0 auto;
    // align icon with .full-svg right edge (offsets mat-icon-button padding)
    margin-right: -10px;
+}
+
+.flow-search {
+   @include search.field;
+   flex: 0 0 auto;
+}
+
+.flow-search-input {
+   @include search.input;
+}
+
+.flow-search-clear {
+   @include search.clear;
+}
+
+.flow-search-results {
+   position: absolute;
+   top: calc(100% + 4px);
+   left: 0;
+   right: 0;
+   z-index: 10;
+   max-height: 60vh;
+   overflow-y: auto;
+   background: white;
+   border: 1px solid #d0d7de;
+   border-radius: 8px;
+   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+
+   table {
+      width: 100%;
+      background: transparent;
+   }
+}
+
+.flow-search-row {
+   min-height: 0;
+   cursor: pointer;
+
+   &:hover,
+   &.flow-search-active {
+      background: #eef1f5;
+   }
+
+   td {
+      padding: 8px 12px;
+      font-size: 14px;
+      line-height: 18px;
+      border-bottom: 1px solid #f0f2f5;
+   }
 }
 
 .crumb-chip {

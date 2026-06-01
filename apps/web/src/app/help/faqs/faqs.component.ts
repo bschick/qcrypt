@@ -21,8 +21,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { AfterViewInit, Component, ViewEncapsulation } from '@angular/core';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
-import { MatInputModule } from '@angular/material/input';
-import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { HttpParams } from '@angular/common/http';
@@ -42,7 +40,7 @@ export interface FAQElement {
    styleUrl: './faqs.component.scss',
    encapsulation: ViewEncapsulation.None,
    imports: [
-      MatTableModule, MatInputModule, MatFormFieldModule, MatIconModule,
+      MatTableModule, MatIconModule,
       MatButtonModule, FormsModule,
       CopyrightComponent
    ]

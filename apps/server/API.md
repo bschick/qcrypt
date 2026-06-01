@@ -11,7 +11,7 @@ This document provides documentation for the passkey-based authentication server
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
 - **Authorization:** Not required
 - **Description:** Start registration of a new user and returns registration options for creating a passkey.
-- **Request Body:** A JSON object with a `userName` key. Example: `{"userName": "New User"}`. User name must greater than 5 and less than 32 characters and may not contain HTML tags.
+- **Request Body:** A JSON object with a `userName` key. Example: `{"userName": "New User"}`. User name must be greater than 5 and less than 32 characters and may not contain HTML tags.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server `PublicKeyCredentialCreationOptionsJSON` JSON object.
   - `400 Bad Request`: The request was malformed or the username is invalid.
@@ -39,7 +39,7 @@ This document provides documentation for the passkey-based authentication server
 - **Method:** `POST`
 - **Path:** `/v1/auth/options`
 - **Authorization:** Not required
-- **Description:** Retrieves authentication options for a user. If a `userid` is sent in the request body, the response will include a list of allowed credentials for that user only.
+- **Description:** Retrieves authentication options for a user. If a `userId` is sent in the request body, the response will include a list of allowed credentials for that user only.
 - **Request Body:** (optional) A JSON object with the `userId` of a user whose allowed credentials should be returned. Example: `{"userId": "base64id"}`.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server `PublicKeyCredentialRequestOptionsJSON` JSON object.
@@ -51,8 +51,8 @@ This document provides documentation for the passkey-based authentication server
 - **Path:** `/v1/auth/verify`
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
 - **Authorization:** Not required
-- **Description:** Verifies an authentication response from a client and established a new user session. Response contains a `csrf` token that must be sent in a `x-csrf-token` header for authorized requests.
-- **Request Body:** The SimpleWebAuthn/client `AuthenticationResponseJSON` JSON object response & `challenge` created by client from previous GET to `/v1/auth/options`.
+- **Description:** Verifies an authentication response from a client and establishes a new user session. Response contains a `csrf` token that must be sent in a `x-csrf-token` header for authorized requests.
+- **Request Body:** The SimpleWebAuthn/client `AuthenticationResponseJSON` JSON object response & `challenge` created by client from previous POST to `/v1/auth/options`.
 - **Query Parameters:**
   - `usercred` (optional, boolean): If `true`, the response will include the user credential in `userCred`.
   - `recovery` (optional, boolean): If `true`, the response will include the recovery id in `recoveryId`.
@@ -96,7 +96,7 @@ This document provides documentation for the passkey-based authentication server
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
 - **Authorization:** Required (cookie and x-csrf-token)
 - **Description:** Updates the description of the passkey specified by `credid` for the currently authenticated user.
-- **Request Body:** A JSON object with a `description` key. Example: `{"description": "My Yubikey"}`. Passkey description must greater than 5 and less than 43 characters and may not contain HTML tags.
+- **Request Body:** A JSON object with a `description` key. Example: `{"description": "My Yubikey"}`. Passkey description must be greater than 5 and less than 43 characters and may not contain HTML tags.
 - **Responses:**
   - `200 OK`: A `UserInfo` JSON object.
   - `400 Bad Request`: The request was malformed or the description is invalid.
@@ -133,7 +133,7 @@ This document provides documentation for the passkey-based authentication server
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
 - **Authorization:** Required (cookie and x-csrf-token)
 - **Description:** Updates the username of the currently authenticated user.
-- **Request Body:** A JSON object with a `userName` key. Example: `{"userName": "Some Name"}`. User name must greater than 5 and less than 32 characters and may not contain HTML tags.
+- **Request Body:** A JSON object with a `userName` key. Example: `{"userName": "Some Name"}`. User name must be greater than 5 and less than 32 characters and may not contain HTML tags.
 - **Responses:**
   - `200 OK`: A `UserInfo` JSON object.
   - `400 Bad Request`: The request was malformed or the request body is invalid.
@@ -174,7 +174,7 @@ This document provides documentation for the passkey-based authentication server
 - **Authorization:** Required (cookie only)
 - **Description:** If a session exists and is valid, returns information for the currently authenticated user which includes a `csrf` token that must be sent in a `x-csrf-token` header for all other authorized requests.
 - **Responses:**
-  - `200 OK`: A `LoginUserInfo` JSON object including `userCred` and `csrf`.
+  - `200 OK`: A `LoginUserInfo` JSON object including `csrf` but not `userCred` or `recoveryId`.
   - `400 Bad Request`: The request was malformed.
   - `401 Unauthorized`: The request is not authorized.
 
@@ -209,8 +209,8 @@ The `LoginUserInfo` object extends the `UserInfo` object with additional informa
 
 - All fields from `UserInfo`.
 - `pkId` (string, optional): The ID of the public key credential used for the last login.
-- `userCred` (string, optional): A user credential, only returned if requested.
-- `recoveryId` (string, optional): A recovery ID, only returned if requested.
+- `userCred` (string, optional): A user credential, only returned in a successful webauthn ceremony and if requested.
+- `recoveryId` (string, optional): A recovery ID, only returned in a successful webauthn ceremony and if requested.
 - `csrf` (string, optional): A Cross-Site Request Forgery (CSRF) token that must be sent in a `x-csrf-token` header for authorized requests.
 
 ### AuthenticatorInfo

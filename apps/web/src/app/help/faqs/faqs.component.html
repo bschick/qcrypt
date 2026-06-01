@@ -2,13 +2,15 @@
   <div class="content faq">
     <h1>Frequently Asked Questions</h1>
     <div class="control-host">
-      <mat-form-field class="filter">
-        <input matInput autofocus type="text" placeholder="search" [(ngModel)]="searchTerm"
-          (keyup)="applyFilter(filterInput.value)" #filterInput>
-        <mat-icon matSuffix aria-label="Clear" (click)="filterInput.value = ''; applyFilter(null)">
-          clear
-        </mat-icon>
-      </mat-form-field>
+      <div class="search-field">
+        <input class="search-input" #filterInput autofocus type="text" placeholder="search"
+          [(ngModel)]="searchTerm" (keyup)="applyFilter(filterInput.value)" />
+        @if (searchTerm) {
+        <button class="search-clear" type="button" aria-label="Clear" (click)="searchTerm = ''; applyFilter()">
+          <mat-icon>close</mat-icon>
+        </button>
+        }
+      </div>
       <button mat-icon-button aria-label="Expand Answers" (click)="onToggleExpand()">
         <mat-icon>{{ allExpanded ? 'unfold_less' : 'unfold_more' }}</mat-icon>
       </button>

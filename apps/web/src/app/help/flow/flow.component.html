@@ -18,17 +18,42 @@
     </div>
 
     @if (mode() !== 'grid') {
-    <div class="zoom-controls" role="group" aria-label="Zoom and pan controls">
-      <button mat-icon-button type="button" (click)="zoomOut()" matTooltip="Zoom out (- or _)" aria-label="Zoom out">
-        <mat-icon>remove</mat-icon>
-      </button>
-      <button mat-icon-button type="button" (click)="zoomIn()" matTooltip="Zoom in (+ or =)" aria-label="Zoom in">
-        <mat-icon>add</mat-icon>
-      </button>
-      <button mat-icon-button type="button" (click)="resetView()" matTooltip="Reset view (0 or Home)"
-        aria-label="Reset view">
-        <mat-icon>center_focus_strong</mat-icon>
-      </button>
+    <div class="flow-controls">
+      <div class="flow-search">
+        <input class="flow-search-input" #searchInput type="text" [value]="searchTerm()"
+          (input)="onSearchInput(searchInput.value)" (focus)="onSearchFocus()" (blur)="onSearchBlur()"
+          (click)="onSearchClick()" (keydown)="onSearchKeydown($event, searchInput)"
+          [placeholder]="'search ' + path()[0].toLowerCase()" aria-label="search" />
+        @if (searchTerm()) {
+        <button class="flow-search-clear" type="button" (mousedown)="$event.preventDefault()"
+          (click)="clearSearch(searchInput)" aria-label="Clear search">
+          <mat-icon>close</mat-icon>
+        </button>
+        }
+        @if (searchOpen() && searchResultCount() > 0) {
+        <div class="flow-search-results" #searchPanel>
+          <table mat-table [dataSource]="searchData">
+            <ng-container matColumnDef="label">
+              <td mat-cell *matCellDef="let item"><sub-label [text]="item.label" /></td>
+            </ng-container>
+            <tr mat-row *matRowDef="let row; columns: searchColumns; let i = index" class="flow-search-row"
+              [class.flow-search-active]="i === searchActiveIndex()" (mousedown)="selectSearchResult(row.key, $event)"></tr>
+          </table>
+        </div>
+        }
+      </div>
+      <div class="zoom-controls" role="group" aria-label="Zoom and pan controls">
+        <button mat-icon-button type="button" (click)="zoomOut()" matTooltip="Zoom out (- or _)" aria-label="Zoom out">
+          <mat-icon>remove</mat-icon>
+        </button>
+        <button mat-icon-button type="button" (click)="zoomIn()" matTooltip="Zoom in (+ or =)" aria-label="Zoom in">
+          <mat-icon>add</mat-icon>
+        </button>
+        <button mat-icon-button type="button" (click)="resetView()" matTooltip="Reset view (0 or Home)"
+          aria-label="Reset view">
+          <mat-icon>center_focus_strong</mat-icon>
+        </button>
+      </div>
     </div>
     }
   </nav>
