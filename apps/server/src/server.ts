@@ -533,7 +533,7 @@ async function _doPostRegVerify(
 
    // Registration-style challenges are always userId-bound at creation time.
    if (challenge.data.purpose !== expectedPurpose ||
-       challenge.data.userId !== unverifiedUser.userId) {
+      challenge.data.userId !== unverifiedUser.userId) {
       throw new AuthError('challenge not valid');
    }
 
@@ -650,7 +650,7 @@ async function _doPostRegVerify(
          // Loop in the very unlikley event that we randomly pick
          // a duplicate (out of 3.4e38 possible)
          let invId: string | undefined;
-         for(let i = 0; i < cc.RETRIES; ++i) {
+         for (let i = 0; i < cc.RETRIES; ++i) {
             const invIdBytes = randData.slice(randOffset, randOffset + cc.INVITABLEID_BYTES);
             randOffset += cc.INVITABLEID_BYTES;
 
@@ -763,7 +763,7 @@ async function dummyAllowedCreds(
    // exactly one credential, we return a single entry. Resample and retune
    // as the mix shifts.
    const profiles: { ceil: number; len: number; transports: AuthenticatorTransportFuture[] }[] = [
-      { ceil:  82, len: 16, transports: ['hybrid', 'internal'] },
+      { ceil: 82, len: 16, transports: ['hybrid', 'internal'] },
       { ceil: 124, len: 32, transports: ['internal'] },
       { ceil: 143, len: 20, transports: ['hybrid', 'internal'] },
       { ceil: 147, len: 16, transports: ['internal'] },
@@ -814,6 +814,10 @@ async function postAuthOptions(
             }));
          }
       } catch (err) {
+         // the userId itself was invalid, and we should fail rather return dummy
+         if (err instanceof ParamError) {
+            throw err;
+         }
          console.error(err);
       }
 
@@ -1594,8 +1598,10 @@ async function getUnverifiedUser(
    userId: string
 ): Promise<UnverifiedUserItem> {
 
-   if (!validB64(userId)) {
-      throw new ParamError('invalid user');
+   if (!validB64(userId)
+      || base64UrlDecode(userId)?.length !== cc.USERID_BYTES
+   ) {
+      throw new ParamError('invalid userid format');
    }
 
    // May not want to bring back all parameter (like recoveryIdEnc)
