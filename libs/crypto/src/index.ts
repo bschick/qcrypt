@@ -107,7 +107,9 @@ export { makeCipherArmor, parseCipherArmor } from './lib/armor';
 export { PWDKeyProvider, MasterKeyKeyProvider, type PWDProvider, type KeyProvider } from './lib/keys';
 
 // Lazy libsodium loader; callers must `await cryptoReady()` before invoking any other crypto export.
-export { cryptoReady } from './lib/sodium';
+export { cryptoReady } from './lib/crypto';
+
+export { getProofKeyPair, signProof, verifyProof } from './lib/proof';
 
 // Lazy zxcvbn loader; callers must `await zxcvbnReady()` before invoking any other zxcvbn export.
 export { zxcvbnReady, getZxcvbn, checkPwned, addMatcher, removeMatcher } from './lib/zxcvbn';

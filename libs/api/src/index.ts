@@ -20,6 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
+import { getProofKeyPair, signProof, verifyProof } from '@qcrypt/crypto';
+
 export namespace RequestTypes {
 }
 
@@ -56,3 +58,44 @@ export namespace ResponseTypes {
 
 export const TOPIC_USERS_MAX = 255;
 export const SESSION_TIMEOUT_SEC = 60 * 60 * 3;
+
+const USERCRED_SCHEME = 'qcrypt-usercred-v1';
+const USERCRED_KEY_CONTEXT = 'UCredKey';
+const USERCRED_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
+
+function buildUserCredMessage(method: string, path: string, timestampMs: string, bodyHashHex: string): Uint8Array<ArrayBuffer> {
+   const canonical = [USERCRED_SCHEME, method.toUpperCase(), path, timestampMs, bodyHashHex.toLowerCase()].join('\n');
+   return new TextEncoder().encode(canonical);
+}
+
+export function getUserCredProofPubKey(userCred: Uint8Array): Uint8Array<ArrayBuffer> {
+   const { pubKey, secKey } = getProofKeyPair(userCred, USERCRED_KEY_CONTEXT);
+   secKey.fill(0);
+   return pubKey;
+}
+
+export function signUserCredProof(
+   userCred: Uint8Array,
+   method: string,
+   path: string,
+   timestampMs: string,
+   bodyHashHex: string
+): Uint8Array<ArrayBuffer> {
+   const { secKey } = getProofKeyPair(userCred, USERCRED_KEY_CONTEXT);
+   try {
+      return signProof(secKey, buildUserCredMessage(method, path, timestampMs, bodyHashHex), USERCRED_SIG_CONTEXT);
+   } finally {
+      secKey.fill(0);
+   }
+}
+
+export function verifyUserCredProof(
+   pubKey: Uint8Array,
+   method: string,
+   path: string,
+   timestampMs: string,
+   bodyHashHex: string,
+   signature: Uint8Array
+): boolean {
+   return verifyProof(pubKey, buildUserCredMessage(method, path, timestampMs, bodyHashHex), signature, USERCRED_SIG_CONTEXT);
+}

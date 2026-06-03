@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { getSodium } from './sodium';
+import { getSodium } from './crypto';
 import { base64URLStringToBuffer, bufferToBase64URLString } from './base64';
 
 export function hasArrayBuffer(value: Uint8Array): value is Uint8Array<ArrayBuffer> {

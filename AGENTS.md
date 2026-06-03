@@ -76,6 +76,23 @@ The `pnpm` scripts in `package.json` call `nx` under the hood. You can use eithe
 | Server build (minified) | `pnpm build:server:min` | `pnpm nx build-min server` |
 | CLI build | `pnpm build:cli` | `pnpm nx build cli` |
 | CLI build (minified) | `pnpm build:cli:min` | `pnpm nx build-min cli` |
+| libcrux WASM (`crux`) rebuild | `pnpm build:libs:crux` | *(node + wasm-pack; see below — not part of any aggregate build)* |
+
+#### Rebuilding the libcrux WASM (`crux`)
+
+`libs/crypto/crux/` is a `wasm-bindgen` wrapper around [libcrux](https://github.com/cryspen/libcrux) (currently ML-DSA-65) compiled to WebAssembly. Its generated outputs are **committed** (`libs/crypto/src/lib/crux/{qc_crux.js,qc_crux.d.ts,wasm.ts}` — the glue, types, and base64-embedded wasm), so normal builds, tests, and CI need **no Rust toolchain**. Rebuild only when you change the Rust wrapper (`libs/crypto/crux/src/lib.rs`), bump the `libcrux-ml-dsa` version, or add a libcrux feature.
+
+**One-time prerequisites** — Rust toolchain + wasm target + wasm-pack:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && . "$HOME/.cargo/env"
+rustup target add wasm32-unknown-unknown
+curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+```
+
+**Rebuild:** `pnpm build:libs:crux` — runs `libs/crypto/crux/regen.mjs` (`wasm-pack build --target web`, then regenerates the committed TS). It is intentionally **not** wired into any `build:*` aggregate, since it requires Rust.
+
+**Commit after a rebuild:** the regenerated `libs/crypto/src/lib/crux/{qc_crux.js,qc_crux.d.ts,wasm.ts}`, plus `libs/crypto/crux/Cargo.lock` if dependency versions changed. **Do not commit** `libs/crypto/crux/pkg/` or `libs/crypto/crux/target/` (gitignored build outputs).
 
 ### Serve Commands
 

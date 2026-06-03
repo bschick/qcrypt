@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { getSodium } from './sodium';
+import { getSodium } from './crypto';
 import * as cc from './cipher.consts';
 import { CipherDataInfo, Ciphers } from './ciphers-current';
 import { ensureArrayBuffer, numToBytes, base64ToBytes, concatArrays } from './utils';
@@ -584,7 +584,8 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       if (!this._cdInfo) {
          throw new Error('Invalid state for key derivation');
       }
-      if (!purpose || purpose.length != 8) {
+      const sodium = getSodium();
+      if (!purpose || purpose.length != sodium.crypto_kdf_CONTEXTBYTES) {
          throw new Error('Invalid purpose length of: ' + purpose?.length);
       }
       if (!this._cdInfo.slt || this._cdInfo.slt.byteLength != cc.SLT_BYTES) {
@@ -599,7 +600,6 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
 
       // because crypto_kdf_derive_from_key does not take a salt, we first merge salt,
       // master, and extras into a cryptographic hash.
-      const sodium = getSodium();
       const state = sodium.crypto_generichash_init(master, cc.KEY_BYTES);
       sodium.crypto_generichash_update(state, this._cdInfo.slt);
       for (const extra of extraContext) {

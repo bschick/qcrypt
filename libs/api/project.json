@@ -3,5 +3,14 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "library",
   "sourceRoot": "libs/api/src",
-  "targets": {}
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec vitest run --config libs/api/vitest.config.ts {args.include}",
+        "cwd": "{workspaceRoot}",
+        "forwardAllArgs": false
+      }
+    }
+  }
 }
