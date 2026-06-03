@@ -97,6 +97,12 @@ export class SvgInlineDirective {
          USE_PROFILES: { svg: true, svgFilters: true },
          ADD_TAGS: ['use'],
          ADD_ATTR: ['xlink:href'],
+         FORBID_TAGS: [
+            'style', 'foreignObject', 'a', 'image',
+            'animate', 'animateTransform', 'animateMotion',
+            'animateColor', 'set', 'mpath', 'discard',
+         ],
+         FORBID_ATTR: ['style'],
          RETURN_DOM_FRAGMENT: true,
       });
       fragment.querySelectorAll('use').forEach((use: SVGElement) => {

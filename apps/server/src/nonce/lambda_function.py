@@ -18,7 +18,8 @@ nonce_replace = 'ew26COJKMG8qrA/bjTcl0w=='
 style_replace = '[style-hashes]'
 script_replace = '[script-hashes]'
 
-# CSP script-src has:
+# Fragile since this must be upudate when the Cloudfront QC-NoCORS-and-StrictSecurity policy changes.
+# script-src has:
 #   - Hashes of the inline <script> and the integrity attrs on <script src=...>
 #     (populated at runtime via the {script_replace} placeholder).
 #   - 'self' so dynamic import() of lazy chunks is authorized. Per CSP3 spec, hash-source only
@@ -26,7 +27,7 @@ script_replace = '[script-hashes]'
 #     can't carry integrity, so 'self' (URL-based) is how they get authorized. 'strict-dynamic'
 #     was tried but Chrome does not reliably propagate hash-based trust to dynamic imports.
 #   - 'wasm-unsafe-eval' for libsodium.
-csp_base = f"base-uri 'self'; default-src 'none'; style-src 'self' 'nonce-ew26COJKMG8qrA/bjTcl0w==' {style_replace}; script-src {script_replace} 'self' 'wasm-unsafe-eval'; img-src 'self'; object-src 'none'; font-src 'self' https://fonts.gstatic.com/; connect-src 'self' https://api.pwnedpasswords.com/; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; trusted-types angular angular#components; require-trusted-types-for 'script'; upgrade-insecure-requests; report-to csp-endpoint; report-uri https://o4511265226555392.ingest.us.sentry.io/api/4511265232650240/security/?sentry_key=a7be4684d4608abd82e299fea1b65927;"
+csp_base = f"base-uri 'self'; default-src 'none'; style-src 'self' 'nonce-ew26COJKMG8qrA/bjTcl0w==' 'sha384-vs+F4EXSC56upFqonhYE6vU0SibuBoCWHg/P3d9TuSiUX7xLz97dYJMUxibOoC6D' {style_replace}; script-src {script_replace} 'self' 'wasm-unsafe-eval'; img-src 'self'; object-src 'none'; font-src 'self' https://fonts.gstatic.com/; connect-src 'self' https://api.pwnedpasswords.com/; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; trusted-types angular angular#components dompurify; require-trusted-types-for 'script'; upgrade-insecure-requests; report-to csp-endpoint; report-uri https://o4511265226555392.ingest.us.sentry.io/api/4511265232650240/security/?sentry_key=a7be4684d4608abd82e299fea1b65927;"
 
 def lambda_handler(event, context):
     global stashed, style_hashes, script_hashes

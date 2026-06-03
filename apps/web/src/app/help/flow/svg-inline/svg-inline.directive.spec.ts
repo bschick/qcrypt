@@ -165,4 +165,48 @@ describe('SvgInlineDirective', () => {
       expect(rect).toBeTruthy();
       expect(rect?.hasAttribute('onload')).toBe(false);
    });
+
+   it('removes a <style> element and a style attribute', async () => {
+      const dirty =
+         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">' +
+         '<style>rect { fill: red; }</style>' +
+         '<rect width="10" height="10" style="fill: red"/>' +
+         '</svg>';
+      const buf = await registerHash('/style.svg', dirty);
+      fixture.componentInstance.url.set('/style.svg');
+      fixture.detectChanges();
+      httpController.expectOne('/style.svg').flush(buf);
+
+      const svg = await waitForSvg();
+      expect(svg.querySelector('style')).toBeNull();
+      // The drawing element survives but its inline style attribute is gone.
+      const rect = svg.querySelector('rect');
+      expect(rect).toBeTruthy();
+      expect(rect?.hasAttribute('style')).toBe(false);
+   });
+
+   it('removes animation, <a>, <image>, and <foreignObject> but keeps drawing elements', async () => {
+      const dirty =
+         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">' +
+         '<image href="http://evil.example/x.png" width="10" height="10"/>' +
+         '<a href="http://evil.example"><circle cx="5" cy="5" r="2"/></a>' +
+         '<foreignObject width="10" height="10"><div>pwn</div></foreignObject>' +
+         '<rect width="10" height="10" fill="#333"><animate attributeName="fill" to="#fff"/></rect>' +
+         '</svg>';
+      const buf = await registerHash('/active.svg', dirty);
+      fixture.componentInstance.url.set('/active.svg');
+      fixture.detectChanges();
+      httpController.expectOne('/active.svg').flush(buf);
+
+      const svg = await waitForSvg();
+      expect(svg.querySelector('image')).toBeNull();
+      expect(svg.querySelector('a')).toBeNull();
+      expect(svg.querySelector('foreignObject')).toBeNull();
+      expect(svg.querySelector('animate')).toBeNull();
+      expect(svg.outerHTML).not.toContain('evil.example');
+      expect(svg.outerHTML).not.toContain('<div');
+      // Drawing elements are untouched, including a child lifted out of a stripped <a>.
+      expect(svg.querySelector('rect')).toBeTruthy();
+      expect(svg.querySelector('circle')).toBeTruthy();
+   });
 });
