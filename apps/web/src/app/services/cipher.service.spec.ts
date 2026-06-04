@@ -31,7 +31,7 @@ import {
    getRandom,
    Encipher,
    Ciphers,
-   EContext,
+   type EContext,
    PWDKeyProvider,
    concatArrays,
 } from '@qcrypt/crypto';

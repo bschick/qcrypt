@@ -32,9 +32,9 @@ import {
    Decipher,
    CipherState,
    Extractor,
-   CipherDataInfo,
+   type CipherDataInfo,
 } from './ciphers-current';
-import { KeyProvider } from './keys';
+import type { KeyProvider } from './keys';
 
 
 export class DecipherV1 extends Decipher {

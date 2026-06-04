@@ -33,7 +33,7 @@ import type {
    PWDProvider,
    ReadOpts
 } from './ciphers';
-import { KeyProvider } from './keys';
+import type { KeyProvider } from './keys';
 import { browserSupportsBytesStream, streamWriteBYOD } from './utils';
 
 export type { CipherDataInfo, PWDProvider, ReadOpts };

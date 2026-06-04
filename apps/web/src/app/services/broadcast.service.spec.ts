@@ -22,9 +22,9 @@ SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
 import {
    BroadcastService,
-   CredentialPayload,
+   type CredentialPayload,
    MessageKind,
-   PeerMessage,
+   type PeerMessage,
 } from './broadcast.service';
 
 const TEST_PK_ID = 'pk-test-1234567890abcdef';

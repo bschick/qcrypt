@@ -21,8 +21,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import {
-   Component, EventEmitter, Inject, OnInit,
-   Output, effect, Renderer2, OnDestroy
+   Component, EventEmitter, Inject, type OnInit,
+   Output, effect, Renderer2, type OnDestroy
 } from '@angular/core';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -31,7 +31,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatInputModule } from '@angular/material/input';
-import { AuthenticatorService, AuthenticatorInfo, AuthEvent } from '../services/authenticator.service';
+import { AuthenticatorService, type AuthenticatorInfo, AuthEvent } from '../services/authenticator.service';
 import { EditableComponent } from '../ui/editable/editable.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';

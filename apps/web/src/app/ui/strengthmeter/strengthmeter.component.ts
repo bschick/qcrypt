@@ -23,9 +23,9 @@ import {
    Component,
    Output, Input, EventEmitter,
    ViewChild, ElementRef,
-   AfterViewInit,
-   OnInit,
-   OnDestroy
+   type AfterViewInit,
+   type OnInit,
+   type OnDestroy
 } from '@angular/core';
 
 import { MatIconModule } from '@angular/material/icon';

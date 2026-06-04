@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, type OnDestroy, type OnInit } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -28,7 +28,7 @@ import { Router, RouterOutlet, RouterLink } from '@angular/router';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSidenav, MatSidenavModule } from '@angular/material/sidenav';
 import { CredentialsComponent } from './credentials/credentials.component';
-import { AuthEvent, AuthEventData, AuthenticatorService } from './services/authenticator.service';
+import { AuthEvent, type AuthEventData, AuthenticatorService } from './services/authenticator.service';
 import { Subscription } from 'rxjs';
 
 

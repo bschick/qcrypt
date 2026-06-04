@@ -31,7 +31,7 @@ import { CopyrightComponent } from '../../ui/copyright/copyright.component';
 import { SubLabelComponent } from './sub-label/sub-label.component';
 import { PanZoomDirective } from './pan-zoom/pan-zoom.directive';
 import { SvgInlineDirective } from './svg-inline/svg-inline.directive';
-import { FLOW_ANIM_MS, FLOW_MAX_DEPTH, FLOW_OVERVIEWS, FLOW_SUBSYSTEMS, FlowItem } from './flow.config';
+import { FLOW_ANIM_MS, FLOW_MAX_DEPTH, FLOW_OVERVIEWS, FLOW_SUBSYSTEMS, type FlowItem } from './flow.config';
 
 interface BreadcrumbChip {
    label: string;

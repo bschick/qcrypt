@@ -23,10 +23,10 @@ SOFTWARE. */
 import { environment } from '../../environments/environment';
 import { Injectable, afterNextRender, signal } from '@angular/core';
 import {
-   PublicKeyCredentialCreationOptionsJSON,
-   PublicKeyCredentialRequestOptionsJSON,
-   AuthenticationResponseJSON,
-   RegistrationResponseJSON,
+   type PublicKeyCredentialCreationOptionsJSON,
+   type PublicKeyCredentialRequestOptionsJSON,
+   type AuthenticationResponseJSON,
+   type RegistrationResponseJSON,
    startRegistration, startAuthentication
 } from '@simplewebauthn/browser';
 import { Subject, Subscription, filter } from 'rxjs';
@@ -49,12 +49,12 @@ import { KeystoreService } from './keystore.service';
 import { CipherService } from './cipher.service';
 import {
    BroadcastService,
-   CredentialPayload,
-   LoginPayload,
-   LogoutPayload,
+   type CredentialPayload,
+   type LoginPayload,
+   type LogoutPayload,
    MessageKind,
-   PasskeyIdPayload,
-   PeerMessage,
+   type PasskeyIdPayload,
+   type PeerMessage,
 } from './broadcast.service';
 export type AuthenticatorInfo = ResponseTypes.AuthenticatorInfo;
 export type UserInfo = ResponseTypes.UserInfo;

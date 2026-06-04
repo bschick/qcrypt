@@ -6,7 +6,8 @@
       "types": ["node"],
       "noEmit": true,
       "skipLibCheck": true,
-      "allowImportingTsExtensions": true
+      "allowImportingTsExtensions": true,
+      "verbatimModuleSyntax": true
    },
    "include": ["**/*.ts"]
 }

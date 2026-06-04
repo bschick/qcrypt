@@ -22,8 +22,8 @@ SOFTWARE. */
 
 import {
    Component,
-   OnDestroy,
-   OnInit,
+   type OnDestroy,
+   type OnInit,
    Renderer2
 } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';

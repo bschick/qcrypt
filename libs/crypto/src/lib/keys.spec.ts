@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { cryptoReady } from './crypto';
 import * as cc from './cipher.consts';
-import { KeyProvider, MasterKeyKeyProvider, PWDKeyProvider } from './keys';
+import { type KeyProvider, MasterKeyKeyProvider, PWDKeyProvider } from './keys';
 import { Ciphers } from './ciphers';
 import { getRandom } from './utils';
 import { isEqualArray } from './utils.spec';

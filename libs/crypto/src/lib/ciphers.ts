@@ -30,8 +30,8 @@ import {
    EncipherV7,
    DecipherV67,
    CipherState,
-   CipherDataInfo,
-   ReadOpts,
+   type CipherDataInfo,
+   type ReadOpts,
 }  from "./ciphers-current"
 
 import {
@@ -39,7 +39,7 @@ import {
    DecipherV4,
    DecipherV5
 }  from "./deciphers-old"
-import { KeyProvider, PWDProvider } from './keys';
+import { type KeyProvider, type PWDProvider } from './keys';
 
 export {
    Ciphers,

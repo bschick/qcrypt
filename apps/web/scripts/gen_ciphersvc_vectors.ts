@@ -152,7 +152,7 @@ async function genCorruptCipherText(): Promise<void> {
    console.log();
 }
 
-async function genStreamManipulation(clearData: Uint8Array): Promise<void> {
+async function genStreamManipulation(clearData: Uint8Array<ArrayBuffer>): Promise<void> {
    const PWD = 'asdf';
    const HINT = '4321';
    const CRED = base64ToBytes('xhKm2Q404pGkqfWkTyT3UodUR-99bN0wibH6si9uF8I');
@@ -185,7 +185,7 @@ async function genStreamManipulation(clearData: Uint8Array): Promise<void> {
    console.log();
 }
 
-async function genBlockOrder(clearData: Uint8Array): Promise<void> {
+async function genBlockOrder(clearData: Uint8Array<ArrayBuffer>): Promise<void> {
    const PWD = 'asdf';
    const HINT = '4321';
    const CRED = base64ToBytes('xhKm2Q404pGkqfWkTyT3UodUR-99bN0wibH6si9uF8I');

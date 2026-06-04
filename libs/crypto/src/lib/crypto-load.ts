@@ -1,6 +1,5 @@
 import sodium from 'libsodium-wrappers';
-import { loadCrux } from './crux/load';
-import type { Crux } from './crux/load';
+import { loadCrux, type Crux } from './crux/load';
 
 export type Sodium = typeof sodium;
 export type { Crux };

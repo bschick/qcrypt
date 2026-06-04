@@ -51,7 +51,7 @@ to assert most of the meaninful actions in this table
 
 
 import { TestBed } from '@angular/core/testing';
-import { AuthenticatorService, AuthEvent, LoginUserInfo } from './authenticator.service';
+import { AuthenticatorService, AuthEvent, type LoginUserInfo } from './authenticator.service';
 import { BroadcastService } from './broadcast.service';
 import { KeystoreService } from './keystore.service';
 import * as cc from '@qcrypt/crypto/consts';

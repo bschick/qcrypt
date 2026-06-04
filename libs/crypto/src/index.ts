@@ -20,9 +20,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { bufferToBase64URLString } from './lib/base64';
-
-
 // Utility functions and classes
 export {
    hasArrayBuffer,
@@ -101,15 +98,16 @@ export type {
    ReadOpts,
 } from './lib/cipher-streams';
 
-// Armor functions
 export { makeCipherArmor, parseCipherArmor } from './lib/armor';
 
 export { PWDKeyProvider, MasterKeyKeyProvider, type PWDProvider, type KeyProvider } from './lib/keys';
 
-// Lazy libsodium loader; callers must `await cryptoReady()` before invoking any other crypto export.
+// Lazy libsodium and libcrux loader
+// Callers must `await cryptoReady()` before invoking any other crypto export.
 export { cryptoReady } from './lib/crypto';
 
 export { getProofKeyPair, signProof, verifyProof } from './lib/proof';
 
-// Lazy zxcvbn loader; callers must `await zxcvbnReady()` before invoking any other zxcvbn export.
+// Lazy zxcvbn loader
+// Callers must `await zxcvbnReady()` before invoking any other zxcvbn export.
 export { zxcvbnReady, getZxcvbn, checkPwned, addMatcher, removeMatcher } from './lib/zxcvbn';

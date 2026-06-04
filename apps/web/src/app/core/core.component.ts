@@ -24,8 +24,8 @@ import {
    Renderer2,
    ViewChild,
    ElementRef,
-   OnInit, AfterViewInit,
-   OnDestroy,
+   type OnInit, type AfterViewInit,
+   type OnDestroy,
    ChangeDetectorRef,
    HostListener,
    SecurityContext,
@@ -54,7 +54,7 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import { environment } from '../../environments/environment';
 import * as cc from '@qcrypt/crypto/consts';
-import { CipherService, CipherDataInfo } from '../services/cipher.service';
+import { CipherService, type CipherDataInfo } from '../services/cipher.service';
 import {
    browserSupportsFilePickers,
    readStreamAll,
@@ -68,7 +68,7 @@ import {
    ProcessCancelled,
    makeTookMsg
 } from '@qcrypt/crypto';
-import { AuthenticatorService, AuthEvent, AuthEventData } from '../services/authenticator.service';
+import { AuthenticatorService, AuthEvent, type AuthEventData } from '../services/authenticator.service';
 import {
    PasswordDialog,
    CipherInfoDialog,

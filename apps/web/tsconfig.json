@@ -9,7 +9,8 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
-    "useDefineForClassFields": false
+    "useDefineForClassFields": false,
+    "verbatimModuleSyntax": true
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

@@ -64,11 +64,11 @@ const USERCRED_KEY_CONTEXT = 'UCredKey';
 const USERCRED_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
 
 function buildUserCredMessage(method: string, path: string, timestampMs: string, bodyHashHex: string): Uint8Array<ArrayBuffer> {
-   const canonical = [USERCRED_SCHEME, method.toUpperCase(), path, timestampMs, bodyHashHex.toLowerCase()].join('\n');
-   return new TextEncoder().encode(canonical);
+   const message = [USERCRED_SCHEME, method.toUpperCase(), path, timestampMs, bodyHashHex.toLowerCase()].join('\n');
+   return new TextEncoder().encode(message);
 }
 
-export function getUserCredProofPubKey(userCred: Uint8Array): Uint8Array<ArrayBuffer> {
+export function getUserCredPubKey(userCred: Uint8Array): Uint8Array<ArrayBuffer> {
    const { pubKey, secKey } = getProofKeyPair(userCred, USERCRED_KEY_CONTEXT);
    secKey.fill(0);
    return pubKey;

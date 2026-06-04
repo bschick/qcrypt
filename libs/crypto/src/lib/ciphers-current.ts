@@ -33,7 +33,7 @@ import {
    clamp,
    concatArrays,
 } from './utils';
-import { KeyProvider, PWDKeyProvider } from './keys';
+import { type KeyProvider, PWDKeyProvider } from './keys';
 
 export enum CipherState {
    Error,

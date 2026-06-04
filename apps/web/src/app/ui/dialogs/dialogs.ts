@@ -25,8 +25,8 @@ import {
    Inject,
    ViewEncapsulation,
    ViewChild,
-   AfterViewInit,
-   OnDestroy,
+   type AfterViewInit,
+   type OnDestroy,
 } from '@angular/core';
 import {
    MAT_DIALOG_DATA,
@@ -42,12 +42,12 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { Router } from '@angular/router';
-import { AcceptableState, StrengthMeterComponent } from '../strengthmeter/strengthmeter.component';
+import { type AcceptableState, StrengthMeterComponent } from '../strengthmeter/strengthmeter.component';
 import { AuthenticatorService } from '../../services/authenticator.service';
 import { BubbleDirective } from '../bubble/bubble.directive';
 import * as cc from '@qcrypt/crypto/consts';
 import { bytesToBase64, Ciphers } from '@qcrypt/crypto';
-import { CipherService, CipherDataInfo } from '../../services/cipher.service';
+import { CipherService, type CipherDataInfo } from '../../services/cipher.service';
 
 
 const PWD_CLOSE_TIMEOUT = 1000 * 60 * 5;

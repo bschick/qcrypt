@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { getSodium } from './crypto';
 import * as cc from './cipher.consts';
-import { CipherDataInfo, Ciphers } from './ciphers-current';
+import { type CipherDataInfo, Ciphers } from './ciphers-current';
 import { ensureArrayBuffer, numToBytes, base64ToBytes, concatArrays } from './utils';
 
 // Contexts must be 8 bytes. Old v6 CTX had a bug of passing more that was
