@@ -29,6 +29,7 @@ import {
    getJson,
    patchJson,
    postJson,
+   setSessionUserCred,
    RP_ORIGIN
 } from "./common";
 import jwtPkg from 'jsonwebtoken';
@@ -62,6 +63,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
    let credId: string; // pkId
    let sessCookie: string = "";
    let csrfToken: string = "";
+   let userCred: string;
    let emulator: WebAuthnEmulator;
 
    beforeAll(async () => {
@@ -81,7 +83,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
       });
 
       const verifyRes = await postJson(
-         `/v1/reg/verify`,
+         `/v1/reg/verify?usercred=true`,
          { ...attestation, userId, challenge: regOpts.data.challenge },
          {},
          sessCookie
@@ -91,11 +93,14 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
       expect(verifyRes.data.verified).toBe(true);
       expect(verifyRes.data.csrf).toBeDefined();
       expect(verifyRes.data.pkId).toBeDefined();
+      expect(verifyRes.data.userCred).toBeDefined();
       expect(verifyRes.cookie).toBeTruthy();
 
       sessCookie = verifyRes.cookie;
       csrfToken = verifyRes.data.csrf;
       credId = verifyRes.data.pkId;
+      userCred = verifyRes.data.userCred;
+      setSessionUserCred(userCred);
    });
 
    describe("User & Session Management", () => {
@@ -400,6 +405,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          let attackerCredId: string | undefined;
          let attackerCookie = "";
          let attackerCsrf = "";
+         let attackerUserCred: string | undefined;
 
          try {
             const regOpts = await postJson("/v1/reg/options", { userName: attackerName }, {}, "");
@@ -413,7 +419,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
             });
 
             const regVerify = await postJson(
-               `/v1/reg/verify`,
+               `/v1/reg/verify?usercred=true`,
                { ...attestation, userId: attackerUserId, challenge: regOpts.data.challenge },
                {},
                "",
@@ -422,6 +428,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
             attackerCredId = regVerify.data.pkId;
             attackerCookie = regVerify.cookie;
             attackerCsrf = regVerify.data.csrf;
+            attackerUserCred = regVerify.data.userCred;
 
             // Self-login once so the credentialid-index GSI is certain to be consistent before the bypass attempt
             const selfOpts = await postJson(`/v1/auth/options`, { userId: attackerUserId }, {}, "");
@@ -485,11 +492,13 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
             expect(bypass2.rawText).toBe('not authorized');
          } finally {
             if (attackerCredId && attackerCookie) {
+               setSessionUserCred(attackerUserCred);
                await deleteJson(
                   `/v1/passkeys/${attackerCredId}`,
                   { "x-csrf-token": attackerCsrf },
                   attackerCookie,
                );
+               setSessionUserCred(userCred);
             }
          }
       });

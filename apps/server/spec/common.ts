@@ -22,6 +22,8 @@ SOFTWARE. */
 
 import crypto from "crypto";
 import { WebAuthnEmulator, AuthenticatorEmulator, PasskeysCredentialsFileRepository } from "nid-webauthn-emulator";
+import { signUserCredProof } from "@qcrypt/api";
+import { cryptoReady } from "@qcrypt/crypto";
 
 // ----- Setup -----
 export const API_SERVER = process.env.QC_ENV === 'prod' ? "https://quickcrypt.org" : "https://test.quickcrypt.org";
@@ -29,6 +31,39 @@ export const RP_ORIGIN = process.env.QC_ENV === 'prod' ? "https://quickcrypt.org
 
 // ----- Helpers -----
 export const sha256Hex = (buf: Buffer): string => crypto.createHash("sha256").update(buf).digest("hex");
+
+// Mirrors a browser that holds one userCred for the whole session.
+let sessionUserCred: string | undefined;
+
+export function setSessionUserCred(userCred: string | undefined): void {
+   sessionUserCred = userCred;
+}
+
+async function proofHeaders(
+   method: string,
+   path: string,
+   body: Buffer | undefined
+): Promise<Record<string, string>> {
+   let headers: Record<string, string> = {};
+   if (sessionUserCred) {
+      await cryptoReady();
+      const timestamp = String(Date.now());
+      const bodyHashHex = sha256Hex(body ?? Buffer.alloc(0));
+      const pathname = new URL(path, API_SERVER).pathname;
+      const signature = signUserCredProof(
+         Buffer.from(sessionUserCred, "base64url"),
+         method,
+         pathname,
+         timestamp,
+         bodyHashHex
+      );
+      headers = {
+         "x-proof-sig": Buffer.from(signature).toString("base64url"),
+         "x-proof-ts": timestamp
+      };
+   }
+   return headers;
+}
 
 
 export function getWebAuthnEmulator(persistent: boolean = false): WebAuthnEmulator {
@@ -64,6 +99,10 @@ async function request(
       body = Buffer.from(json, "utf8");
       headers["Content-Type"] = "application/json";
       headers["x-amz-content-sha256"] = sha256Hex(body);
+   }
+
+   if (cookie) {
+      Object.assign(headers, await proofHeaders(method, path, body));
    }
 
    const res = await fetch(`${API_SERVER}${path}`, { method, headers: headers, body });

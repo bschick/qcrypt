@@ -31,6 +31,7 @@ import {
 
 import {
    darkFileDefault,
+   decryptField,
    kmsClient,
    lightFileDefault,
    type Response
@@ -40,7 +41,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { base64UrlEncode, isReservedTestUserName } from "./utils";
-import { GenerateRandomCommand } from '@aws-sdk/client-kms';
+import { getUserCredPubKey } from '@qcrypt/api';
 
 export async function postLoadAAGUIDs(
    httpDetails: HttpDetails
@@ -391,24 +392,17 @@ export async function postMunge(
 
    const batchSize = 14;
 
-   const userAttrs = ["userId", "userName"] as const;
+   const userAttrs = ["userId", "verified", "userCredEnc", "userCredPubKey"] as const;
    let users = await Users.scan.go({
       attributes: userAttrs,
       limit: batchSize
    });
 
    let total = 0;
+   let updated = 0;
 
    while (users && users.data && users.data.length > 0) {
       total += users.data.length
-
-      // Reduce round-trips by getting enough data for 3 retries for each user in batch
-      const rparams = {
-         NumberOfBytes: users.data.length * cc.RETRIES * cc.INVITABLEID_BYTES
-      };
-      const rand = new GenerateRandomCommand(rparams);
-      const result = await kmsClient.send(rand);
-      let byteOffset = 0;
 
       for (let user of users.data) {
          // fake user to prevent Id use
@@ -416,44 +410,26 @@ export async function postMunge(
             continue;
          }
 
+         // only verified users have a userCred, and skip any already backfilled
+         if (!user.verified || !user.userCredEnc || user.userCredPubKey) {
+            continue;
+         }
+
          try {
-            let invId: string | undefined;
+            const userCred = await decryptField(
+               user.userCredEnc,
+               { userId: user.userId },
+               cc.USERCRED_BYTES
+            );
+            const userCredPubKey = base64UrlEncode(getUserCredPubKey(userCred))!;
 
-            const randData = result.Plaintext;
-            if (!randData || randData.byteLength != rparams.NumberOfBytes) {
-               throw new Error("GenerateRandomCommand failure");
-            }
-
-            for(let i = 0; i < cc.RETRIES; ++i) {
-               const invIdBytes = randData.slice(byteOffset, byteOffset + cc.INVITABLEID_BYTES);
-               byteOffset += cc.INVITABLEID_BYTES;
-
-               invId = base64UrlEncode(invIdBytes)!;
-               const invitable = await Invitables.query.byInvitableId({
-                  invitableId: invId
-               }).go();
-
-               if (!invitable || invitable.data.length == 0) {
-                  break;
-               } else {
-                  invId = undefined;
-               }
-            }
-
-            if (!invId) {
-               throw new Error('could not allocate invitableId');
-            }
-
-            const invitable = await Invitables.create({
-               userId: user.userId,
-               invitableId: invId,
-               description: user.userName
+            await Users.patch({
+               userId: user.userId
+            }).set({
+               userCredPubKey: userCredPubKey
             }).go();
 
-            if (!invitable || !invitable.data) {
-               throw new Error('invitable not created or found');
-            }
-
+            updated += 1;
          } catch (error) {
             console.error(`Error for ${user.userId}`, error);
          }
@@ -470,6 +446,6 @@ export async function postMunge(
       });
    }
 
-   console.log(`${total} users total`);
+   console.log(`${total} users total, ${updated} userCredPubKey backfilled`);
    return { content: { message: "done" } };
 }

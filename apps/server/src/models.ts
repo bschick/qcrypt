@@ -61,6 +61,10 @@ export const Users = new Entity(
             type: "string",
             required: false
          },
+         userCredPubKey: {
+            type: "string",
+            required: false
+         },
          verified: {
             type: "boolean",
             default: () => false,

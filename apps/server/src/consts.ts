@@ -43,3 +43,6 @@ export const NOUSER_ID = "AAAAAAAAAAAAAAAAAAAAAA";
 
 export const KMS_KEYID_NEW = process.env.KMSKeyId_New!;
 export const KMS_KEYID_BACKUP = process.env.KMSKeyId_Old!;
+
+export const PROOF_SKEW_MS = 60 * 1000;
+export const PROOF_ENFORCE = false;

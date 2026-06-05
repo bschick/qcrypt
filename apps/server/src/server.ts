@@ -20,7 +20,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-
 import * as cc from './consts';
 import {
    INTERNAL_VERSION,
@@ -71,7 +70,7 @@ import {
    type EncryptCommandOutput
 } from "@aws-sdk/client-kms";
 
-import { hkdfSync, randomInt, randomBytes } from 'node:crypto';
+import { hkdfSync, randomInt, randomBytes, createHash } from 'node:crypto';
 import { setTimeout } from 'node:timers/promises';
 import { sign, verify, decode, type JwtPayload } from 'jsonwebtoken';
 import { postCleanupTestUsers, postConsistency, postLoadAAGUIDs, postMunge } from './internal';
@@ -94,7 +93,9 @@ export type Response = {
    returnCsrf?: boolean;
 };
 
-import { SESSION_TIMEOUT_SEC, type ResponseTypes } from '@qcrypt/api';
+import { SESSION_TIMEOUT_SEC, getUserCredPubKey, verifyUserCredProof, type ResponseTypes } from '@qcrypt/api';
+import { cryptoReady } from '@qcrypt/crypto';
+
 type AuthenticatorInfo = ResponseTypes.AuthenticatorInfo;
 type UserInfo = ResponseTypes.UserInfo;
 type LoginUserInfo = ResponseTypes.LoginUserInfo;
@@ -135,6 +136,8 @@ enum EventNames {
 export const kmsClient = new KMSClient({ region: "us-east-1" });
 let jwtMaterial: Uint8Array | undefined;
 const INTERNAL_PHRASE = "Yup, I'm internal";
+
+await cryptoReady();
 
 
 function isVerified(unverifiedUser: UnverifiedUserItem, userId: string): unverifiedUser is VerifiedUserItem {
@@ -178,7 +181,7 @@ async function encryptField(
 }
 
 
-async function decryptField(
+export async function decryptField(
    fieldEnc: string,
    context: { [key: string]: string },
    expectedBytes: number,
@@ -640,6 +643,8 @@ async function _doPostRegVerify(
             cc.KMS_KEYID_BACKUP
          );
 
+         const userCredPubKey = base64UrlEncode(getUserCredPubKey(userCred))!;
+
          const recoveryId = randData.slice(randOffset, randOffset + cc.RECOVERYID_BYTES);
          randOffset += cc.RECOVERYID_BYTES;
          const recoveryIdEnc = await encryptField(
@@ -689,6 +694,7 @@ async function _doPostRegVerify(
             userCredEnc: userCredEnc,
             userCredEncOld: userCredEncBackup,
             recoveryIdEnc: recoveryIdEnc,
+            userCredPubKey: userCredPubKey,
             lastCredentialId: auth.data.credentialId,
             authCount: 1
          }).remove(['expiresAt']).go();
@@ -696,6 +702,7 @@ async function _doPostRegVerify(
          unverifiedUser.verified = true;
          unverifiedUser.userCredEnc = userCredEnc;
          unverifiedUser.recoveryIdEnc = recoveryIdEnc;
+         unverifiedUser.userCredPubKey = userCredPubKey;
          unverifiedUser.lastCredentialId = auth.data.credentialId;
          unverifiedUser.authCount = 1;
 
@@ -1752,6 +1759,43 @@ async function verifyCookie(
 }
 
 
+async function verifyProof(
+   verifiedUser: VerifiedUserItem,
+   httpDetails: HttpDetails
+): Promise<void> {
+   const timestampMs = Number(httpDetails.proofTimestamp);
+
+   let result: string;
+   if (!httpDetails.proofSignature || !httpDetails.proofTimestamp) {
+      result = 'absent';
+   } else if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > cc.PROOF_SKEW_MS) {
+      result = 'fail';
+   } else if (!verifiedUser.userCredPubKey) {
+      result = 'grace';
+   } else {
+      const pubKey = base64UrlDecode(verifiedUser.userCredPubKey);
+      const signature = base64UrlDecode(httpDetails.proofSignature);
+      if (!pubKey || !signature) {
+         result = 'fail';
+      } else {
+         const bodyHashHex = createHash('sha256').update(httpDetails.rawBody, 'utf8').digest('hex');
+         try {
+            verifyUserCredProof(pubKey, httpDetails.method, httpDetails.path, httpDetails.proofTimestamp, bodyHashHex, signature);
+            result = 'ok';
+         } catch (err) {
+            console.error(err);
+            result = 'fail';
+         }
+      }
+   }
+
+   console.log(`proof ${result} ${httpDetails.name} ${verifiedUser.userId}`);
+   if (cc.PROOF_ENFORCE && (result === 'fail' || result === 'absent')) {
+      throw new AuthError();
+   }
+}
+
+
 function makeResponse(content: string, status: number, cookie?: string): any {
    const resp = {
       statusCode: status,
@@ -1791,6 +1835,7 @@ export async function handler(event: any, context: any) {
          // these throw an exception if cookie or headerCsrf is invalid
          verifiedUser = await verifyCookie(httpDetails.cookie, httpDetails.rpID);
          await verifyCsrf(verifiedUser, httpDetails.checkCsrf, headerCsrf);
+         await verifyProof(verifiedUser, httpDetails);
       }
 
       if (httpDetails.version === INTERNAL_VERSION) {

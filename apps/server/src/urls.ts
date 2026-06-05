@@ -36,17 +36,21 @@ type HttpHandler = (
 export type HttpDetails = {
    name: string,
    method: Method,
+   path: string,
    rpID: string,
    rpOrigin: string,
    authorize: boolean,
    resources: Record<string, any>,
    params: QParams,
    body: Record<string, any>,
+   rawBody: string,
    handler: HttpHandler,
    version: Version,
    checkCsrf: boolean,
    cookie?: string,
-   userAgent?: string
+   userAgent?: string,
+   proofSignature?: string,
+   proofTimestamp?: string
 };
 
 type HandlerInfo = {
@@ -153,8 +157,9 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
       if (match && Number(match.pathname.groups.ver) === handerInfo.version) {
 
          let body: Record<string, any> = {};
+         let rawBody = '';
          if ('body' in event) {
-            let rawBody = event['body'];
+            rawBody = event['body'] ?? '';
             // Uncomment for debugging
             // console.log(`raw body: ${rawBody}`);
 
@@ -172,6 +177,8 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
          const params: QParams = event['queryStringParameters'] ?? {};
          const cookie: string | undefined = event['headers']['cookie'];
          const userAgent: string | undefined = event['headers']['user-agent'];
+         const proofSignature: string | undefined = event['headers']['x-proof-sig'];
+         const proofTimestamp: string | undefined = event['headers']['x-proof-ts'];
 
          // Uncomment for debugging
          // console.log('resources: ' + JSON.stringify(params));
@@ -181,6 +188,7 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
          return {
             name: handerInfo.name,
             method: method,
+            path: path,
             rpID: rpID,
             rpOrigin: rpOrigin,
             authorize: handerInfo.authorize,
@@ -190,8 +198,11 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
             version: handerInfo.version,
             params: params,
             body: body,
+            rawBody: rawBody,
             cookie: cookie,
-            userAgent: userAgent
+            userAgent: userAgent,
+            proofSignature: proofSignature,
+            proofTimestamp: proofTimestamp
          };
 
       }
