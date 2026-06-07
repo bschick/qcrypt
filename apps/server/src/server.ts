@@ -1780,7 +1780,15 @@ async function verifyProof(
       } else {
          const bodyHashHex = createHash('sha256').update(httpDetails.rawBody, 'utf8').digest('hex');
          try {
-            verifyUserCredProof(pubKey, httpDetails.method, httpDetails.path, httpDetails.proofTimestamp, bodyHashHex, signature);
+            verifyUserCredProof(
+               pubKey,
+               verifiedUser.userId,
+               httpDetails.method,
+               httpDetails.path,
+               httpDetails.proofTimestamp,
+               bodyHashHex,
+               signature
+            );
             result = 'ok';
          } catch (err) {
             console.error(err);

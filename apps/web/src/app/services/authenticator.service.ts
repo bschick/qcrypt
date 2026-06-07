@@ -34,6 +34,7 @@ import {
    base64ToBytes,
    bytesToBase64,
    bufferToHexString,
+   bufferToBase64URLString,
    expired,
    cryptoReady,
    zxcvbnReady,
@@ -44,7 +45,7 @@ import {
 import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 
-import { SESSION_TIMEOUT_SEC, type ResponseTypes } from '@qcrypt/api';
+import { SESSION_TIMEOUT_SEC, signUserCredProof, type ResponseTypes } from '@qcrypt/api';
 import { KeystoreService } from './keystore.service';
 import { CipherService } from './cipher.service';
 import {
@@ -83,6 +84,7 @@ type FetchArgs = {
    resourceId?: string;
    params?: string;
    bodyJSON?: string;
+   session?: SessionState;
 }
 
 type SessionState = Partial<CredentialPayload> & { userId: string };
@@ -116,7 +118,7 @@ export type AuthEventData = {
 export class AuthenticatorService {
 
    public userInfo = signal<VerifiedUserInfo | undefined>(undefined);
-   public ready: Promise<void>;
+   public ready: Promise<[void, void]>;
 
    private _subject = new Subject<AuthEventData>();
    private _intervalId: number = 0;
@@ -133,26 +135,25 @@ export class AuthenticatorService {
       this._broadcastSvc.setMessageHandler((msg) => this._handlePeerMessage(msg));
       this._broadcastSvc.start();
 
-      // Drop sessionStorage state left over from versions that didn't track userId.
-      // TODO: delete after backward compat perdio
-      const sessionState = this._getSessionState();
-      if (sessionState && !sessionState.userId) {
-         this.logout(false);
-      }
-
-      this.ready = new Promise<void>((resolve) => {
-         this._restoreSession().catch(
-            // just for debugging, remove
-            (err) => console.error(err)
-         ).finally(() => resolve());
+      let resolveCrypto!: () => void;
+      const cryptoLoaded = new Promise<void>((resolve) => {
+         resolveCrypto = resolve;
       });
 
-      // Warm crypto and zxcvbn after first render so their chunks don't
-      // compete with LCP. zxcvbn's dictionary ranking is expensive, so wait
-      // 4s after first idle to load
+      const loadCrypto = async () => {
+         try { await cryptoReady(); } finally { resolveCrypto(); }
+      };
+
+      const restore = this._restoreSession(loadCrypto).catch((err) => console.error(err));
+
+      // this allows either _restoreSession or the afterRender below to loadCrypto
+      this.ready = Promise.all([cryptoLoaded, restore]);
+
+      // Load crypto and zxcvbn after first render so their chunks don't
+      // compete with LCP. zxcvbn's is big, so wait 4s after first idle to load
       afterNextRender(() => {
          const kickoff = () => {
-            cryptoReady().catch((err) => console.error(err));
+            loadCrypto().catch((err) => console.error(err));
             setTimeout(() => {
                zxcvbnReady().catch((err) => console.error(err));
             }, 4000);
@@ -164,7 +165,6 @@ export class AuthenticatorService {
          }
       });
    }
-
 
    // it is possible for "hasSession" to be true and "potentialSession"
    // to be false. this happens when another tab logs out, or out then in,
@@ -249,20 +249,28 @@ export class AuthenticatorService {
       if (!session?.userCredEnc || !session.pkId) {
          throw new Error('no active user');
       }
+      return this._decryptUserCredEnc(session.userCredEnc, session.pkId, session.userId);
+   }
 
-      const { derivedKey } = await this._keystoreSvc.get(KEYSTORE_SLOT, session.pkId);
+   // The caller must overwrite the returned userCred ASAP.
+   private async _decryptUserCredEnc(
+      userCredEnc: string,
+      pkId: string,
+      userId: string
+   ): Promise<Uint8Array<ArrayBuffer>> {
+      const { derivedKey } = await this._keystoreSvc.get(KEYSTORE_SLOT, pkId);
       if (!derivedKey) {
          throw new Error('no active user');
       }
 
-      // The caller of getUserCred must overwrite the returned userCred ASAP
       // Keyprovider takes ownership of derivedKey and decryptStream takes ownership of keyProvider.
-      const keyProvider = new MasterKeyKeyProvider(derivedKey, this.userId);
+      const keyProvider = new MasterKeyKeyProvider(derivedKey, userId);
       try {
          // This will fail if another tab has logged in with a different pkID, and this tab has not updated
-         const clearStream = await this._cipherSvc.decryptStream(streamFromBase64(session.userCredEnc), keyProvider);
+         const clearStream = await this._cipherSvc.decryptStream(streamFromBase64(userCredEnc), keyProvider);
          return await readStreamAll(clearStream);
-      } catch {
+      } catch (err) {
+         console.error('userCredEnc decrypt failed', err);
          this.logout(false);
          throw new Error('credentials are stale');
       }
@@ -288,17 +296,19 @@ export class AuthenticatorService {
          params,
          bodyJSON
       } = args;
+      const session = args.session ?? this._getSessionState();
 
       const headers = new Headers({
          'Content-Type': 'application/json',
          'x-csrf-token': this._csrf!
       });
 
+      const bodyData = new TextEncoder().encode(bodyJSON ?? '');
+      const bodyHashHex = bufferToHexString(await crypto.subtle.digest("SHA-256", bodyData));
+
       // required for AWS OAC (access control to lambda).
       if (method === 'PUT' || method === 'POST' || method === 'PATCH') {
-         const bodyData = new TextEncoder().encode(bodyJSON ?? '');
-         const hash = await crypto.subtle.digest("SHA-256", bodyData);
-         headers.append('x-amz-content-sha256', bufferToHexString(hash));
+         headers.append('x-amz-content-sha256', bodyHashHex);
       }
 
       let path = `${environment.apiVersion}`;
@@ -308,6 +318,31 @@ export class AuthenticatorService {
       path += params ? `?${params}` : '';
 
       const url = new URL(path, baseUrl);
+
+      if (session && session.userCredEnc) {
+         const userCred = await this._decryptUserCredEnc(
+            session.userCredEnc,
+            session.pkId!,
+            session.userId
+         );
+
+         try {
+            const proofTs = String(Date.now());
+            const proofSig = signUserCredProof(
+               userCred,
+               session.userId,
+               method,
+               url.pathname,
+               proofTs,
+               bodyHashHex
+            );
+            headers.append('x-proof-sig', bufferToBase64URLString(proofSig.buffer));
+            headers.append('x-proof-ts', proofTs);
+         } finally {
+            userCred.fill(0);
+         }
+      }
+
       try {
          var response = await fetch(url, {
             method: method,
@@ -337,56 +372,69 @@ export class AuthenticatorService {
    }
 
    // public to simplify testing, normal clients shouldn't call
-   public async _restoreSession(): Promise<boolean> {
+   public async _restoreSession(loadCrypto: () => Promise<void>): Promise<void> {
       if (!this.potentialSession()) {
-         return false;
+         return;
       }
 
-      const session = this._getSessionState();
-      let userCredEnc = session?.userCredEnc;
-      let userCredExpiry = session?.userCredExpiry;
-      let version = session?.version ?? -1;
-      const targetPkId = session?.pkId ?? localStorage.getItem('pkid');
-      if (!targetPkId) {
-         return false;
+      let session = this._getSessionState();
+      const cryptoLoad = loadCrypto();
+
+      if (!session || !session.userCredEnc) {
+         const targetPkId = localStorage.getItem('pkid')
+         if (!targetPkId) {
+            return;
+         }
+         const relay = await this._broadcastSvc.requestCredential(targetPkId, true);
+         if (!relay) {
+            return;
+         }
+         const [userId] = this.loadKnownUser();
+         session = {
+            userId: userId!,
+            userCredEnc: relay.userCredEnc,
+            userCredExpiry: relay.userCredExpiry,
+            version: relay.version,
+            pkId: relay.pkId
+         }
       }
 
-      // under common conditions, these take about the same time to complete
-      const [relay, serverLoginUserInfo] = await Promise.all([
-         this._broadcastSvc.requestCredential(targetPkId, true),
-         this._doFetch<LoginUserInfo>({
-            method: 'GET',
-            resource: 'session',
-            params: 'usercred=false' // TODO: remove this after backward compat period
-         })
-      ]);
+      if (!session.userCredEnc || !session.userCredExpiry || (session.version ?? 0) < 1) {
+         return;
+      }
+
+      await cryptoLoad;
+
+      // pass session directly because it came from relay and is not yet in
+      // sessionStorage for _doFetch to load
+      const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
+         method: 'GET',
+         resource: 'session',
+         session
+      });
 
       if (!serverLoginUserInfo || !serverLoginUserInfo.verified) {
-         return false;
+         return;
       }
 
-      if (relay && relay.pkId === serverLoginUserInfo.pkId && relay.version > version) {
-         userCredEnc = relay.userCredEnc;
-         userCredExpiry = relay.userCredExpiry;
-         version = relay.version;
-      }
-
-      if (!userCredEnc || !userCredExpiry || version < 1) {
-         return false;
-      }
-
-      await this._loginRestore(serverLoginUserInfo, userCredEnc, userCredExpiry, version);
+      await this._loginRestore(
+         serverLoginUserInfo,
+         session.userCredEnc,
+         session.userCredExpiry,
+         session.version!
+      );
 
       // test decrypt to fail fast if userCredEnc is invalid
       try {
          const userCred = await this.getUserCred();
          userCred.fill(0);
       } catch {
+         // we could try a requestCredential here in case our version is just stale
+         // and we missed a broadcase message, but that seems rare and not worth the
+         // added code. Add if its more common than expected.
          this.logout(false);
-         return false;
+         return;
       }
-
-      return true;
    }
 
    // require reauthentication with passkey
@@ -605,10 +653,19 @@ export class AuthenticatorService {
    }
 
    private async _adoptPeerLogin(msg: LoginPayload): Promise<void> {
+      // must use new peer session state to access userCred and GET the session csrf
+      // from the server
+      const session: SessionState = {
+         userId: this.userId,
+         pkId: msg.pkId,
+         userCredEnc: msg.userCredEnc,
+         userCredExpiry: msg.userCredExpiry,
+         version: msg.version,
+      };
       const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
          method: 'GET',
          resource: 'session',
-         params: 'usercred=false' // TODO: remove this after backward compat period
+         session,
       });
       if (!serverLoginUserInfo || !serverLoginUserInfo.verified) {
          this.logout(false);

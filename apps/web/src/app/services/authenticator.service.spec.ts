@@ -68,6 +68,7 @@ describe('AuthenticatorService', () => {
    let originalFetch: typeof fetch;
    let fetchMock: ReturnType<typeof vi.fn>;
    const allAuthEvents = [AuthEvent.Login, AuthEvent.Logout, AuthEvent.Forget, AuthEvent.Delete];
+   const loadCrypto = () => cryptoReady();
 
    beforeEach(async () => {
       await cryptoReady();
@@ -130,7 +131,7 @@ describe('AuthenticatorService', () => {
       expect(service).toBeTruthy();
    });
 
-   it('restore returns false when no peer responds', async () => {
+   it('restore is a no-op when no peer responds and no local credential', async () => {
       primeLocalStorage();
 
       const keystoreSvc = TestBed.inject(KeystoreService);
@@ -139,14 +140,13 @@ describe('AuthenticatorService', () => {
       const events: AuthEvent[] = [];
       service.on(allAuthEvents, (ed) => events.push(ed.event));
 
-      const restored = await service._restoreSession();
+      await service._restoreSession(loadCrypto);
 
-      expect(restored).toBe(false);
+      // No userCredEnc (no peer, none in sessionStorage) means getSession cannot be
+      // signed, so it is never sent.
+      expect(fetchMock).not.toHaveBeenCalled();
       expect(createSpy).not.toHaveBeenCalled();
       expect(getSpy).not.toHaveBeenCalled();
-      expect(fetchMock).toHaveBeenCalled();
-      expect((fetchMock.mock.calls[0][0] as URL).pathname).toContain('/session');
-      expect((fetchMock.mock.calls[0][0] as URL).search).toContain('usercred=false');
       expect(service.hasSession()).toBe(false);
       expect(events).toEqual([]);
    });
@@ -154,29 +154,35 @@ describe('AuthenticatorService', () => {
    it('relay login with peer response', async () => {
       primeLocalStorage();
 
+      // A real login first, so the relayed userCredEnc is one this device can decrypt
+      // @ts-ignore — exercising private path
+      await service._loginUser(sessionResponse);
+      const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
+      sessionStorage.clear();
+      service.logout(false);
+
       peerResponder.setCredentialProvider(() => ({
          pkId: pkId,
-         userCredEnc: bytesToBase64(new Uint8Array([1, 2, 3, 4])),
+         userCredEnc: phase1.userCredEnc,
          userCredExpiry: peerExpiry,
-         version: 1,
+         version: phase1.version,
       }));
 
+      fetchMock.mockClear();
       const keystoreSvc = TestBed.inject(KeystoreService);
       const createSpy = vi.spyOn(keystoreSvc, 'create');
       const getSpy = vi.spyOn(keystoreSvc, 'get');
       const events: AuthEvent[] = [];
       service.on(allAuthEvents, (ed) => events.push(ed.event));
 
-      await service._restoreSession();
+      await service._restoreSession(loadCrypto);
 
       expect(createSpy).not.toHaveBeenCalled();
       expect(getSpy).toHaveBeenCalled();
       expect(fetchMock).toHaveBeenCalled();
       expect((fetchMock.mock.calls[0][0] as URL).pathname).toContain('/session');
-      // Only check first position due to test side-effect adding extra event
-      expect(events[0]).toBe(AuthEvent.Login);
-      // cannot test hasSession() because response userCredEnc was faked and won't
-      // decryt. see 'full login then relay login...' test for that
+      expect(service.hasSession()).toBe(true);
+      expect(events).toEqual([AuthEvent.Login]);
    });
 
    it('simulated tab refresh succeeds', async () => {
@@ -195,9 +201,8 @@ describe('AuthenticatorService', () => {
       const events: AuthEvent[] = [];
       service.on(allAuthEvents, (ed) => events.push(ed.event));
 
-      const restored = await service._restoreSession();
+      await service._restoreSession(loadCrypto);
 
-      expect(restored).toBe(true);
       expect(createSpy).not.toHaveBeenCalled();
       expect(getSpy).toHaveBeenCalled();
       expect(fetchMock).toHaveBeenCalled();
@@ -244,9 +249,8 @@ describe('AuthenticatorService', () => {
       }));
 
       service.logout(false);
-      const restored = await service._restoreSession();
+      await service._restoreSession(loadCrypto);
 
-      expect(restored).toBe(true);
       expect(getSpy).toHaveBeenCalled();
       expect(createSpy).not.toHaveBeenCalled();
       expect(fetchMock).toHaveBeenCalled();
@@ -258,34 +262,28 @@ describe('AuthenticatorService', () => {
       expect(events).toEqual([AuthEvent.Login, AuthEvent.Logout, AuthEvent.Login]);
    });
 
-   it('restore returns false when session pkId differs from local pkId', async () => {
+   it('restore fails when the server reports a pkId with no local key', async () => {
       primeLocalStorage();
-      const serverPkId = bytesToBase64(getRandom(cc.PKID_MIN_BYTES));
-      sessionResponse.pkId = serverPkId;
 
-      // Peer ready to respond, but has a different pkId so restore fails
+      // @ts-ignore — exercising private path
+      await service._loginUser(sessionResponse);
+      const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
+      sessionStorage.clear();
+      service.logout(false);
+
+      // The server reports a pkId this device has no keystore entry for, so the
+      // post-restore decrypt check fails and the session is not restored.
+      sessionResponse.pkId = bytesToBase64(getRandom(cc.PKID_MIN_BYTES));
       peerResponder.setCredentialProvider(() => ({
          pkId: pkId,
-         userCredEnc: bytesToBase64(new Uint8Array([5, 6, 7, 8])),
+         userCredEnc: phase1.userCredEnc,
          userCredExpiry: peerExpiry,
-         version: 1,
+         version: phase1.version,
       }));
 
-      const keystoreSvc = TestBed.inject(KeystoreService);
-      const createSpy = vi.spyOn(keystoreSvc, 'create');
-      const getSpy = vi.spyOn(keystoreSvc, 'get');
-      const events: AuthEvent[] = [];
-      service.on(allAuthEvents, (ed) => events.push(ed.event));
+      await service._restoreSession(loadCrypto);
 
-      const restored = await service._restoreSession();
-
-      expect(restored).toBe(false);
-      expect(createSpy).not.toHaveBeenCalled();
-      expect(getSpy).not.toHaveBeenCalled();
-      expect(fetchMock).toHaveBeenCalled();
-      expect((fetchMock.mock.calls[0][0] as URL).pathname).toContain('/session');
       expect(service.hasSession()).toBe(false);
-      expect(events).toEqual([]);
    });
 
    it('no restore attempt without a potential session', async () => {
@@ -297,7 +295,7 @@ describe('AuthenticatorService', () => {
       const events: AuthEvent[] = [];
       service.on(allAuthEvents, (ed) => events.push(ed.event));
 
-      await service._restoreSession();
+      await service._restoreSession(loadCrypto);
 
       expect(fetchMock).not.toHaveBeenCalled();
       expect(createSpy).not.toHaveBeenCalled();

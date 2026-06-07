@@ -100,7 +100,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
       csrfToken = verifyRes.data.csrf;
       credId = verifyRes.data.pkId;
       userCred = verifyRes.data.userCred;
-      setSessionUserCred(userCred);
+      setSessionUserCred(userCred, userId);
    });
 
    describe("User & Session Management", () => {
@@ -492,13 +492,13 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
             expect(bypass2.rawText).toBe('not authorized');
          } finally {
             if (attackerCredId && attackerCookie) {
-               setSessionUserCred(attackerUserCred);
+               setSessionUserCred(attackerUserCred, attackerUserId);
                await deleteJson(
                   `/v1/passkeys/${attackerCredId}`,
                   { "x-csrf-token": attackerCsrf },
                   attackerCookie,
                );
-               setSessionUserCred(userCred);
+               setSessionUserCred(userCred, userId);
             }
          }
       });

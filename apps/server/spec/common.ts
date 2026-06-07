@@ -34,9 +34,11 @@ export const sha256Hex = (buf: Buffer): string => crypto.createHash("sha256").up
 
 // Mirrors a browser that holds one userCred for the whole session.
 let sessionUserCred: string | undefined;
+let sessionUserId: string | undefined;
 
-export function setSessionUserCred(userCred: string | undefined): void {
+export function setSessionUserCred(userCred: string | undefined, userId?: string): void {
    sessionUserCred = userCred;
+   sessionUserId = userId;
 }
 
 async function proofHeaders(
@@ -45,13 +47,14 @@ async function proofHeaders(
    body: Buffer | undefined
 ): Promise<Record<string, string>> {
    let headers: Record<string, string> = {};
-   if (sessionUserCred) {
+   if (sessionUserCred && sessionUserId) {
       await cryptoReady();
       const timestamp = String(Date.now());
       const bodyHashHex = sha256Hex(body ?? Buffer.alloc(0));
       const pathname = new URL(path, API_SERVER).pathname;
       const signature = signUserCredProof(
          Buffer.from(sessionUserCred, "base64url"),
+         sessionUserId,
          method,
          pathname,
          timestamp,

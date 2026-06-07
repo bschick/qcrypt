@@ -156,6 +156,24 @@ type TrackedUser = {
 
 export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
   authFixture: async ({ page }, use, testInfo) => {
+    // Buffer browser console.error + uncaught page errors (across every tab,
+    // including ones a test opens later) and dump them only if the test fails, so
+    // a failure shows the client-side cause without spamming passing runs.
+    const browserErrors: string[] = [];
+    const watchConsole = (watched: Page) => {
+      watched.on('console', (msg) => {
+        // skip vite's HMR dev-server websocket noise
+        if (msg.type() === 'error' && !msg.text().includes('WebSocket connection to')) {
+          browserErrors.push(`[console.error] ${msg.text()}`);
+        }
+      });
+      watched.on('pageerror', (err) => {
+        browserErrors.push(`[pageerror] ${err.message}`);
+      });
+    };
+    page.context().pages().forEach(watchConsole);
+    page.context().on('page', watchConsole);
+
     const session = await page.context().newCDPSession(page);
     const authenticatorId1 = await setupAuthenticator(session, page, 'internal');
     const authenticatorId2 = await setupAuthenticator(session, page, 'usb');
@@ -259,6 +277,10 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       trackPasskey,
       addPasskey,
     });
+
+    if (testInfo.status !== testInfo.expectedStatus && browserErrors.length) {
+      console.log(`[browser errors] ${testInfo.title}\n${browserErrors.join('\n')}`);
+    }
 
     // Cleanup runs in two stages per user. Fast path: restore the
     // registration-time cookies+csrf, GET /user, DELETE each passkey
