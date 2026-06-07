@@ -24,7 +24,7 @@ import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { SESSION_TIMEOUT_SEC } from '@qcrypt/api';
 import { WebAuthnEmulator } from "nid-webauthn-emulator";
 import {
-   getWebAuthnEmulator,
+   registerTestUser,
    deleteJson,
    getJson,
    patchJson,
@@ -67,39 +67,8 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
    let emulator: WebAuthnEmulator;
 
    beforeAll(async () => {
-      // A. Options
-      const regOpts = await postJson("/v1/reg/options", { userName: testUser }, {}, "");
-      expect(regOpts.status).toBe(200);
-      expect(regOpts.data.user.name).toBe(testUser);
-
-      userId = regOpts.data.user.id;
-      emulator = getWebAuthnEmulator();
-
-      // B. Verify
-      const attestation = emulator.createJSON(RP_ORIGIN, {
-         ...regOpts.data,
-         user: { ...regOpts.data.user, id: userId },
-         challenge: regOpts.data.challenge,
-      });
-
-      const verifyRes = await postJson(
-         `/v1/reg/verify?usercred=true`,
-         { ...attestation, userId, challenge: regOpts.data.challenge },
-         {},
-         sessCookie
-      );
-
-      expect(verifyRes.status).toBe(200);
-      expect(verifyRes.data.verified).toBe(true);
-      expect(verifyRes.data.csrf).toBeDefined();
-      expect(verifyRes.data.pkId).toBeDefined();
-      expect(verifyRes.data.userCred).toBeDefined();
-      expect(verifyRes.cookie).toBeTruthy();
-
-      sessCookie = verifyRes.cookie;
-      csrfToken = verifyRes.data.csrf;
-      credId = verifyRes.data.pkId;
-      userCred = verifyRes.data.userCred;
+      ({ userId, userCred, cookie: sessCookie, csrf: csrfToken, credId, emulator } =
+         await registerTestUser(testUser));
       setSessionUserCred(userCred, userId);
    });
 
@@ -400,7 +369,6 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
 
       it("should reject auth/verify when challenge userId does not match credential owner", async () => {
          const attackerName = `PWTesty_atk_${Date.now()}`;
-         const attackerEmulator = getWebAuthnEmulator();
          let attackerUserId: string | undefined;
          let attackerCredId: string | undefined;
          let attackerCookie = "";
@@ -408,27 +376,13 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          let attackerUserCred: string | undefined;
 
          try {
-            const regOpts = await postJson("/v1/reg/options", { userName: attackerName }, {}, "");
-            expect(regOpts.status).toBe(200);
-            attackerUserId = regOpts.data.user.id;
-
-            const attestation = attackerEmulator.createJSON(RP_ORIGIN, {
-               ...regOpts.data,
-               user: { ...regOpts.data.user, id: attackerUserId },
-               challenge: regOpts.data.challenge,
-            });
-
-            const regVerify = await postJson(
-               `/v1/reg/verify?usercred=true`,
-               { ...attestation, userId: attackerUserId, challenge: regOpts.data.challenge },
-               {},
-               "",
-            );
-            expect(regVerify.status).toBe(200);
-            attackerCredId = regVerify.data.pkId;
-            attackerCookie = regVerify.cookie;
-            attackerCsrf = regVerify.data.csrf;
-            attackerUserCred = regVerify.data.userCred;
+            const attacker = await registerTestUser(attackerName);
+            attackerUserId = attacker.userId;
+            attackerCredId = attacker.credId;
+            attackerCookie = attacker.cookie;
+            attackerCsrf = attacker.csrf;
+            attackerUserCred = attacker.userCred;
+            const attackerEmulator = attacker.emulator;
 
             // Self-login once so the credentialid-index GSI is certain to be consistent before the bypass attempt
             const selfOpts = await postJson(`/v1/auth/options`, { userId: attackerUserId }, {}, "");
