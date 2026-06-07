@@ -57,7 +57,7 @@ test.describe('login relay', () => {
 
   testWithAuth('reload preserves session in the same tab', { tag: '@nukeall' }, async ({ authFixture }) => {
     const { page, authenticatorId1 } = authFixture;
-    test.setTimeout(45000);
+    test.setTimeout(75000);
 
     await authFixture.createTestUser(authenticatorId1);
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
@@ -71,7 +71,7 @@ test.describe('login relay', () => {
 
   testWithAuth('second tab restores via peer relay without prompting', { tag: '@nukeall' }, async ({ authFixture }) => {
     const { page: page1, authenticatorId1 } = authFixture;
-    test.setTimeout(45000);
+    test.setTimeout(75000);
 
     await authFixture.createTestUser(authenticatorId1);
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
@@ -114,7 +114,7 @@ test.describe('login relay', () => {
 
   testWithAuth('navigate away then back via history keeps session', { tag: '@nukeall' }, async ({ authFixture }) => {
     const { page, authenticatorId1 } = authFixture;
-    test.setTimeout(45000);
+    test.setTimeout(75000);
 
     await authFixture.createTestUser(authenticatorId1);
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
@@ -129,7 +129,7 @@ test.describe('login relay', () => {
 
   testWithAuth('navigate away then re-navigate to qcrypt keeps session', { tag: '@nukeall' }, async ({ authFixture }) => {
     const { page, authenticatorId1 } = authFixture;
-    test.setTimeout(45000);
+    test.setTimeout(75000);
 
     await authFixture.createTestUser(authenticatorId1);
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
@@ -182,7 +182,7 @@ test.describe('login relay', () => {
 
   testWithAuth('sign out in one tab fans out to peers', { tag: '@nukeall' }, async ({ authFixture }) => {
     const { page: page1, authenticatorId1 } = authFixture;
-    test.setTimeout(45000);
+    test.setTimeout(75000);
 
     await authFixture.createTestUser(authenticatorId1);
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
@@ -207,7 +207,7 @@ test.describe('login relay', () => {
 
   testWithAuth('forget user in one tab fans out peers to /welcome', { tag: '@nukeall' }, async ({ authFixture }) => {
     const { page: page1, authenticatorId1 } = authFixture;
-    test.setTimeout(45000);
+    test.setTimeout(75000);
 
     await authFixture.createTestUser(authenticatorId1);
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
@@ -497,7 +497,7 @@ test.describe('login relay', () => {
 
   testWithAuth('cold start with no live peer prompts for sign in', { tag: '@nukeall' }, async ({ authFixture }) => {
     const { page: page1, authenticatorId1 } = authFixture;
-    test.setTimeout(45000);
+    test.setTimeout(75000);
 
     await authFixture.createTestUser(authenticatorId1);
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();

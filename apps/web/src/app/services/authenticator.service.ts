@@ -378,7 +378,6 @@ export class AuthenticatorService {
       }
 
       let session = this._getSessionState();
-      const cryptoLoad = loadCrypto();
 
       if (!session || !session.userCredEnc) {
          const targetPkId = localStorage.getItem('pkid')
@@ -403,7 +402,9 @@ export class AuthenticatorService {
          return;
       }
 
-      await cryptoLoad;
+      // Load crypto after the relay, not before: the base64-WASM decode + init blocks
+      // the main thread, which would otherwise stall this tab's relay message handling.
+      await loadCrypto();
 
       // pass session directly because it came from relay and is not yet in
       // sessionStorage for _doFetch to load
@@ -414,6 +415,7 @@ export class AuthenticatorService {
       });
 
       if (!serverLoginUserInfo || !serverLoginUserInfo.verified) {
+         console.error('restore aborted: getSession returned unverified');
          return;
       }
 
