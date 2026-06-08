@@ -110,8 +110,8 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 | Web unit tests (all browsers) | `pnpm test:web:all` | `pnpm nx test web --runnerConfig=apps/web/vitest-all.config.ts` | |
 | Web E2E tests (local) | `pnpm test:e2e` | | *Playwright, requires `pnpm serve`* |
 | Web E2E tests (prod) | `pnpm test:e2e:prod` | | *Playwright against quickcrypt.org* |
-| API fuzz tests (local) | `pnpm test:fuzz` | | *Playwright, requires `pnpm serve`* |
-| API fuzz tests (prod) | `pnpm test:fuzz:prod` | | *Playwright against quickcrypt.org* |
+| API full fuzz tests (test) | `pnpm test:fuzz` | | *Vitest against test.quickcrypt.org (`QC_FULL_FUZZ=true`); the small fuzz also runs in every `pnpm test:server`* |
+| API full fuzz tests (prod) | `pnpm test:fuzz:prod` | | *Vitest against quickcrypt.org* |
 | Server unit tests | `pnpm test:server` | `pnpm nx test server` | |
 | Server unit tests (prod) | `pnpm test:server:prod` | `pnpm nx test-prod server` | |
 | All library unit tests | `pnpm test:lib` | | *runs test:lib:crypto* |

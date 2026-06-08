@@ -15,7 +15,7 @@ import {
 
 test.describe('creation', () => {
 
-  testWithAuth('full lifecycle', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('full lifecycle', async ({ authFixture }) => {
     const { page, session, authenticatorId1: authenticatorId1, authenticatorId2: authenticatorId2 } = authFixture;
     test.setTimeout(60000);
 
@@ -41,6 +41,7 @@ test.describe('creation', () => {
     authFixture.trackUser({
       userId: regBody.userId,
       userName,
+      userCred: regBody.userCred,
       passkey: { credentialId: regBody.pkId, authenticatorId: authenticatorId1, credential },
       fastSession: { cookies: await page.context().cookies(), csrf: regBody.csrf },
     });
@@ -116,7 +117,7 @@ test.describe('creation', () => {
 
   });
 
-  testWithAuth('delete active passkey signs out', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('delete active passkey signs out', async ({ authFixture }) => {
     const { page, session, authenticatorId1: authenticatorId1, authenticatorId2: authenticatorId2 } = authFixture;
     test.setTimeout(60000);
 
@@ -138,6 +139,7 @@ test.describe('creation', () => {
     authFixture.trackUser({
       userId: regBody.userId,
       userName,
+      userCred: regBody.userCred,
       passkey: { credentialId: regBody.pkId, authenticatorId: authenticatorId1, credential },
       fastSession: { cookies: await page.context().cookies(), csrf: regBody.csrf },
     });
@@ -208,7 +210,7 @@ test.describe('creation', () => {
 
 test.describe('sign on', () => {
 
-  testWithAuth('check show reocvery', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('check show reocvery', async ({ authFixture }) => {
     const { page, session, authenticatorId1: authenticatorId1 } = authFixture;
     test.setTimeout(45000);
 
@@ -230,7 +232,7 @@ test.describe('sign on', () => {
 
   });
 
-  testWithAuth('check usercred', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('check usercred', async ({ authFixture }) => {
     const { page, session, authenticatorId1: authenticatorId1 } = authFixture;
     test.setTimeout(45000);
 
@@ -252,7 +254,7 @@ test.describe('sign on', () => {
   // Also exercises full UI-driven user teardown (delete every passkey →
   // server removes the user) — the helper's after-test cleanup should find
   // nothing left to do.
-  testWithAuth('check usercred and add pk', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('check usercred and add pk', async ({ authFixture }) => {
     const { page, session, authenticatorId1: authenticatorId1, authenticatorId2: authenticatorId2 } = authFixture;
     test.setTimeout(45000);
 
@@ -286,7 +288,7 @@ test.describe('sign on', () => {
     await expect(page).toHaveURL(/\/welcome$/);
   });
 
-  testWithAuth('log in and out', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('log in and out', async ({ authFixture }) => {
     const { page, session, authenticatorId1: authenticatorId1 } = authFixture;
     test.setTimeout(45000);
 
@@ -319,9 +321,9 @@ test.describe('sign on', () => {
 
   });
 
-  testWithAuth('3 tabs logout and forget', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('3 tabs logout and forget', async ({ authFixture }) => {
     const { page, authenticatorId1: authenticatorId1 } = authFixture;
-    test.setTimeout(45000);
+    test.setTimeout(75000);
 
     const page1 = page;
     const testUser = await authFixture.createTestUser(authenticatorId1);
@@ -366,7 +368,7 @@ test.describe('sign on', () => {
 
   });
 
-  testWithAuth('3 tabs switch user', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('3 tabs switch user', async ({ authFixture }) => {
     const { page, session, authenticatorId1: authenticatorId1 } = authFixture;
     test.setTimeout(120000);
 

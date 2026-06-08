@@ -1,7 +1,35 @@
 import { test, expect, Page, CDPSession, type Cookie } from '@playwright/test';
 import { Protocol } from 'devtools-protocol';
+import { signUserCredProof } from '@qcrypt/api';
+import { cryptoReady } from '@qcrypt/crypto';
+import { createHash } from 'node:crypto';
 
 export type Credential = Protocol.WebAuthn.Credential;
+
+// Authorized API calls require a signed proof of userCred. Cleanup is bodiless
+// GET/DELETE, so the hashed body is empty.
+async function proofHeaders(
+  method: string,
+  url: string,
+  userCred: string,
+  userId: string
+): Promise<Record<string, string>> {
+  await cryptoReady();
+  const timestamp = String(Date.now());
+  const bodyHashHex = createHash('sha256').update('').digest('hex');
+  const signature = signUserCredProof(
+    Buffer.from(userCred, 'base64url'),
+    userId,
+    method,
+    new URL(url).pathname,
+    timestamp,
+    bodyHashHex
+  );
+  return {
+    'x-proof-sig': Buffer.from(signature).toString('base64url'),
+    'x-proof-ts': timestamp,
+  };
+}
 
 const keeper1_local: Credential = {
   credentialId: 'YpKdnBAh/1dsoA6FrdIbmAaGJU408ToZBeljHs9Qx78=',
@@ -110,6 +138,7 @@ export type TrackedPasskey = {
 export type TrackUserInfo = {
   userId: string;
   userName: string;
+  userCred: string;
   passkey: TrackedPasskey;
   fastSession?: { cookies: Cookie[]; csrf: string };
 };
@@ -145,6 +174,7 @@ export type AuthFixture = {
 type TrackedUser = {
   userId: string;
   userName: string;
+  userCred: string;
   // Passkeys we know belong to this user. Mutated as cleanup deletes them.
   // The first entry is the registration PK and is assumed to be the active
   // one for the fast-path session — fast-path delete sorts it last.
@@ -206,6 +236,7 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       trackedUsers.push({
         userId: body.userId,
         userName,
+        userCred: body.userCred,
         passkeys: [{
           credentialId: body.pkId,
           authenticatorId,
@@ -232,6 +263,7 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       trackedUsers.push({
         userId: info.userId,
         userName: info.userName,
+        userCred: info.userCred,
         passkeys: [info.passkey],
         fastSession: info.fastSession,
       });
@@ -296,11 +328,14 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
     const deleteAllPasskeys = async (
       csrf: string,
       currentPkId: string,
+      userCred: string,
+      userId: string,
       label: string
     ): Promise<boolean> => {
+      const userUrl = `${apiUrl}/user`;
       const userResp = await page.request.get(
-        `${apiUrl}/user`,
-        { headers: { 'x-csrf-token': csrf, 'Origin': baseURL } }
+        userUrl,
+        { headers: { 'x-csrf-token': csrf, 'Origin': baseURL, ...(await proofHeaders('GET', userUrl, userCred, userId)) } }
       );
       if (!userResp.ok()) {
         console.error(`${label}: GET /user failed (${userResp.status()})`);
@@ -312,9 +347,10 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       const auths: { credentialId: string }[] = user.authenticators ?? [];
       auths.sort((a, b) => Number(a.credentialId === currentPkId) - Number(b.credentialId === currentPkId));
       for (const auth of auths) {
+        const delUrl = `${apiUrl}/passkeys/${auth.credentialId}`;
         const delResp = await page.request.delete(
-          `${apiUrl}/passkeys/${auth.credentialId}`,
-          { headers: { 'x-csrf-token': csrf, 'Origin': baseURL } }
+          delUrl,
+          { headers: { 'x-csrf-token': csrf, 'Origin': baseURL, ...(await proofHeaders('DELETE', delUrl, userCred, userId)) } }
         );
         if (!delResp.ok()) {
           console.error(`${label}: DELETE /passkeys/${auth.credentialId} failed (${delResp.status()})`);
@@ -330,9 +366,10 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
           await page.context().clearCookies();
           await page.context().addCookies(user.fastSession.cookies);
 
+          const fastUserUrl = `${apiUrl}/user`;
           const fastResp = await page.request.get(
-            `${apiUrl}/user`,
-            { headers: { 'x-csrf-token': user.fastSession.csrf, 'Origin': baseURL } }
+            fastUserUrl,
+            { headers: { 'x-csrf-token': user.fastSession.csrf, 'Origin': baseURL, ...(await proofHeaders('GET', fastUserUrl, user.userCred, user.userId)) } }
           );
           if (fastResp.ok()) {
             const data = await fastResp.json();
@@ -343,9 +380,10 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
             const activePkId = user.passkeys[0]?.credentialId;
             auths.sort((a, b) => Number(a.credentialId === activePkId) - Number(b.credentialId === activePkId));
             for (const auth of auths) {
+              const fastDelUrl = `${apiUrl}/passkeys/${auth.credentialId}`;
               const delResp = await page.request.delete(
-                `${apiUrl}/passkeys/${auth.credentialId}`,
-                { headers: { 'x-csrf-token': user.fastSession.csrf, 'Origin': baseURL } }
+                fastDelUrl,
+                { headers: { 'x-csrf-token': user.fastSession.csrf, 'Origin': baseURL, ...(await proofHeaders('DELETE', fastDelUrl, user.userCred, user.userId)) } }
               );
               if (delResp.ok()) {
                 user.passkeys = user.passkeys.filter(p => p.credentialId !== auth.credentialId);
@@ -386,7 +424,7 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
           if (verifyResp.ok()) {
             const verifyBody = await verifyResp.json();
             if (verifyBody.csrf && verifyBody.pkId) {
-              await deleteAllPasskeys(verifyBody.csrf, verifyBody.pkId, `cleanup-fallback (${user.userId})`);
+              await deleteAllPasskeys(verifyBody.csrf, verifyBody.pkId, user.userCred, user.userId, `cleanup-fallback (${user.userId})`);
               cleaned = true;
             } else {
               console.error(`cleanup-fallback: missing csrf or pkId for ${user.userId}`);
@@ -409,36 +447,6 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
     await page.context().clearCookies();
     if (originalCookies.length > 0) {
       await page.context().addCookies(originalCookies);
-    }
-
-    // Leak alarm. If a PWTesty_ session is still authenticatable after
-    // cleanup, a test created a user/passkey without calling trackUser /
-    // trackPasskey / addPasskey. Log loudly and opportunistically clean up.
-    if (testInfo.tags.includes('@nukeall')) {
-      try {
-        const sessionResp = await page.request.get(`${apiUrl}/session`);
-        if (sessionResp.ok()) {
-          const sess = await sessionResp.json();
-          if (typeof sess.userName === 'string' && sess.userName.startsWith('PWTesty_')) {
-            console.error(`@nukeall LEAK ALARM: untracked PWTesty user ${sess.userName} (${sess.userId}) — tests must call trackUser/trackPasskey/addPasskey for users and passkeys created outside createTestUser`);
-            for (const auth of sess.authenticators ?? []) {
-              const delResp = await page.request.delete(
-                `${apiUrl}/passkeys/${auth.credentialId}`,
-                { headers: { 'x-csrf-token': sess.csrf, 'Origin': baseURL } }
-              );
-              if (!delResp.ok()) {
-                console.error(`@nukeall: DELETE /passkeys/${auth.credentialId} failed (${delResp.status()})`);
-              }
-            }
-          } else if (sess.userName) {
-            console.error(`@nukeall: refusing to nuke non-PWTesty_ user ${sess.userName}`);
-          }
-        } else if (sessionResp.status() !== 401) {
-          console.error(`@nukeall: GET /session failed (${sessionResp.status()})`);
-        }
-      } catch (err) {
-        console.error('@nukeall: cleanup threw', err);
-      }
     }
 
     await removeAuthenticator(session, authenticatorId1);

@@ -55,7 +55,7 @@ test.describe('errors', () => {
     expect(parent).toContainText(/Passkey not recognized/);
   });
 
-  testWithAuth('no passkey re-signin', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('no passkey re-signin', async ({ authFixture }) => {
     const { page, session, authenticatorId1 } = authFixture;
 
     const testUser = await authFixture.createTestUser(authenticatorId1);
@@ -73,7 +73,7 @@ test.describe('errors', () => {
   });
 
 
-  testWithAuth('edit errors', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('edit errors', async ({ authFixture }) => {
     const { page, authenticatorId1 } = authFixture;
     test.setTimeout(45000);
 
@@ -95,7 +95,7 @@ test.describe('errors', () => {
   });
 
 
-  testWithAuth('no recovery access', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('no recovery access', async ({ authFixture }) => {
     const { page, session, authenticatorId1 } = authFixture;
     test.setTimeout(45000);
 
@@ -116,7 +116,7 @@ test.describe('errors', () => {
 
   });
 
-  testWithAuth('no usercred access', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('no usercred access', async ({ authFixture }) => {
     const { page, session, authenticatorId1 } = authFixture;
     test.setTimeout(45000);
 

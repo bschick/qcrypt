@@ -80,6 +80,11 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
             sessCookie,
          );
          expect(res.status).toBe(200);
+         expect(res.data.verified).toBe(true);
+         expect(res.data.userId).toBe(userId);
+         expect(res.data.userName).toBe(testUser);
+         expect(res.data.hasRecoveryId).toBeTruthy();
+         expect(res.data.authenticators.length).toBe(1);
          expect(res.data.csrf).toBeDefined();
          // Backward-compat default: userCred is returned when ?usercred=false is not passed.
          expect(res.data.userCred).toBeDefined();
@@ -131,6 +136,57 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          expect(res.data.userName).toBe(testUser);
       });
 
+      it("should sanitize and bound username on PATCH", async () => {
+         // Markup is stripped, leaving the text content
+         let res = await patchJson(
+            `/v1/user`,
+            { userName: "<script>all</script> good" },
+            { "x-csrf-token": csrfToken },
+            sessCookie
+         );
+         expect(res.status).toBe(200);
+         expect(res.data.userName).toBe("all good");
+
+         // Over-length name is rejected
+         res = await patchJson(
+            `/v1/user`,
+            { userName: "as0df9ufwefowifljop20w934fsldfklsdjflasdfkasoifjw0f9jw9f" },
+            { "x-csrf-token": csrfToken },
+            sessCookie
+         );
+         expect(res.status).toBe(400);
+
+         res = await patchJson(
+            `/v1/user`,
+            { userName: testUser },
+            { "x-csrf-token": csrfToken },
+            sessCookie
+         );
+         expect(res.status).toBe(200);
+         expect(res.data.userName).toBe(testUser);
+      });
+
+      it("should sanitize and validate passkey description on PATCH", async () => {
+         // Markup is stripped from the description
+         let res = await patchJson(
+            `/v1/passkeys/${credId}`,
+            { description: "567345 <b>5 > <a a" },
+            { "x-csrf-token": csrfToken },
+            sessCookie
+         );
+         expect(res.status).toBe(200);
+         expect(res.data.authenticators[0].description).toBe("567345 5");
+
+         // Non-string description is rejected
+         res = await patchJson(
+            `/v1/passkeys/${credId}`,
+            { description: 5673455 },
+            { "x-csrf-token": csrfToken },
+            sessCookie
+         );
+         expect(res.status).toBe(400);
+      });
+
       it("should add and remove passkey", async () => {
 
          // Get passkey registration options
@@ -170,6 +226,72 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          expect(delRes.status).toBe(200);
 
       });
+
+      it("should 404 fetching an unknown user", async () => {
+         let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+         expect(res.status).toBe(200);
+
+         res = await getJson(
+            `/v1/users/42ebNajPIp3leX4K4a0qND`,
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(res.status).toBe(404);
+      });
+
+      it("should reject deleting an unknown passkey", async () => {
+         let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+         expect(res.status).toBe(200);
+
+         res = await deleteJson(
+            `/v1/passkeys/nfVho8Z8p3oEpOl8yvbh40`,
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(res.status).toBe(400);
+      });
+
+      it("should reject patching an unknown passkey", async () => {
+         let res = await patchJson(
+            `/v1/passkeys/${credId}`,
+            { description: "valid description" },
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(res.status).toBe(200);
+
+         res = await patchJson(
+            `/v1/passkeys/nfVho8Z8p3oEpOl8yvbh40`,
+            { description: "ignored" },
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(res.status).toBe(400);
+      });
+
+      it("should 404 fetching session for an unknown user", async () => {
+         let res = await getJson(`/v1/session`, { "x-csrf-token": csrfToken }, sessCookie);
+         expect(res.status).toBe(200);
+
+         res = await getJson(
+            `/v1/users/42ebNajPIp3leX4K4a0qND/session`,
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(res.status).toBe(404);
+      });
+
+      it("should 404 deleting session for an unknown user", async () => {
+         let res = await getJson(`/v1/session`, { "x-csrf-token": csrfToken }, sessCookie);
+         expect(res.status).toBe(200);
+
+         res = await deleteJson(
+            `/v1/users/42ebNajPIp3leX4K4a0qND/session`,
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(res.status).toBe(404);
+      });
    });
 
    describe("Logout & Re-Login", () => {
@@ -180,7 +302,37 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
             sessCookie,
          );
          expect(res.status).toBe(200);
-         // Cookie should be invalidated/expired now
+         // Every authorized operation with the now-stale cookie is rejected.
+
+         res = await patchJson(
+            `/v1/passkeys/${credId}`,
+            { description: "after logout" },
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(res.status).toBe(401);
+
+         res = await patchJson(
+            `/v1/user`,
+            { userName: testUser },
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(res.status).toBe(401);
+
+         res = await deleteJson(
+            `/v1/session`,
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(res.status).toBe(401);
+
+         res = await getJson(
+            `/v1/session`,
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(res.status).toBe(401);
 
          res = await getJson(
             `/v1/user`,
@@ -227,6 +379,19 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          // Restore session state
          sessCookie = verifyRes.cookie;
          csrfToken = verifyRes.data.csrf;
+
+         // The restored session works for a subsequent authorized read.
+         const restored = await getJson(
+            `/v1/user`,
+            { "x-csrf-token": csrfToken },
+            sessCookie,
+         );
+         expect(restored.status).toBe(200);
+         expect(restored.data.verified).toBeTruthy();
+         expect(restored.data.userName).toBe(testUser);
+         expect(restored.data.userId).toBe(userId);
+         expect(restored.data.hasRecoveryId).toBeTruthy();
+         expect(restored.data.authenticators.length).toBe(1);
       });
 
       it("should login without userId in options", async () => {
@@ -280,7 +445,10 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
 
    describe("Negative Tests", () => {
       it("should reject update user without cookie", async () => {
-         const res = await patchJson(
+         let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+         expect(res.status).toBe(200);
+
+         res = await patchJson(
             `/v1/user`,
             { userName: "hacker" },
             { "x-csrf-token": csrfToken },
@@ -290,7 +458,10 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
       });
 
       it("should reject update user without csrf", async () => {
-         const res = await patchJson(
+         let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+         expect(res.status).toBe(200);
+
+         res = await patchJson(
             `/v1/user`,
             { userName: "hacker" },
             {}, // No csrf
@@ -301,10 +472,13 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
 
 
       it("should reject manipulated cookie", async () => {
+         let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+         expect(res.status).toBe(200);
+
          const offset = 34;
          const badCookie = sessCookie.substring(0, offset) + (sessCookie[offset] === 'a' ? 'b' : 'a') + sessCookie.substring(offset + 1);
 
-         const res = await deleteJson(
+         res = await deleteJson(
             `/v1/passkeys/${credId}`,
             { "x-csrf-token": csrfToken },
             badCookie,
@@ -314,6 +488,8 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
       });
 
       it("should reject resigned cookie", async () => {
+         let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+         expect(res.status).toBe(200);
 
          const match = /^__Host-JWT=(.+)$/.exec(sessCookie);
 
@@ -345,7 +521,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
 
          const badCookie = `__Host-JWT=${newToken}`;
 
-         const res = await deleteJson(
+         res = await deleteJson(
             `/v1/passkeys/${credId}`,
             { "x-csrf-token": csrfToken },
             badCookie,
@@ -355,16 +531,38 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
       });
 
       it("should reject manipulated csrf", async () => {
+         let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+         expect(res.status).toBe(200);
+
          const offset = 6;
          const badCsrf = csrfToken.substring(0, offset) + (csrfToken[offset] === 'a' ? 'b' : 'a') + csrfToken.substring(offset + 1);
 
-         const res = await deleteJson(
+         res = await deleteJson(
             `/v1/passkeys/${credId}`,
             { "x-csrf-token": badCsrf },
             sessCookie,
          );
 
          expect(res.status).toEqual(401);
+      });
+
+      it("should reject missing or wrong csrf on reads and deletes", async () => {
+         const wrongCsrf = "uajbCCy0AeBW5WDEqbR9viY12HaQOiKlJcNSG8yaGT0";
+
+         let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+         expect(res.status).toBe(200);
+
+         res = await getJson(`/v1/user`, {}, sessCookie);
+         expect(res.status).toBe(401);
+
+         res = await deleteJson(`/v1/passkeys/${credId}`, {}, sessCookie);
+         expect(res.status).toBe(401);
+
+         res = await getJson(`/v1/user`, { "x-csrf-token": wrongCsrf }, sessCookie);
+         expect(res.status).toBe(401);
+
+         res = await deleteJson(`/v1/passkeys/${credId}`, { "x-csrf-token": wrongCsrf }, sessCookie);
+         expect(res.status).toBe(401);
       });
 
       it("should reject auth/verify when challenge userId does not match credential owner", async () => {

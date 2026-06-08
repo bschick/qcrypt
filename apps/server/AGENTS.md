@@ -69,11 +69,13 @@ The `dist/server/` directory will contain `server.mjs` and `server.zip`. To depl
 Server-specific tests can be run from the monorepo root:
 
 ```bash
-pnpm test:server        # run against test.quickcrypt.org
+pnpm test:server        # run against test.quickcrypt.org (includes the small input fuzz)
 pnpm test:server:prod   # run against quickcrypt.org
+pnpm test:fuzz          # full input fuzz against test.quickcrypt.org (sets QC_FULL_FUZZ=true)
+pnpm test:fuzz:prod     # full input fuzz against quickcrypt.org
 ```
 
-Unit and end-to-end tests for this API backend are also done through the client-side web application in `apps/web/`. See the root `AGENTS.md` for test execution instructions.
+Direct HTTP API tests — contract, negative, and input fuzzing — live in `apps/server/spec/` (`api.spec.ts`, `fuzz.spec.ts`). The full fuzz is gated behind `QC_FULL_FUZZ`; a small fuzz subset runs on every `pnpm test:server`. Backend behavior is also exercised end-to-end through the web client in `apps/web/`; see the root `AGENTS.md` for those.
 
 When adding or modifying an endpoint, you must also add corresponding tests.
 

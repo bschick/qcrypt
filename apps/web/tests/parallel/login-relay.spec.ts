@@ -55,7 +55,7 @@ import { testWithAuth, toggleCredentials, passkeyAuth, deleteFirstPasskey, delet
 
 test.describe('login relay', () => {
 
-  testWithAuth('reload preserves session in the same tab', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('reload preserves session in the same tab', async ({ authFixture }) => {
     const { page, authenticatorId1 } = authFixture;
     test.setTimeout(75000);
 
@@ -69,7 +69,7 @@ test.describe('login relay', () => {
     await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
   });
 
-  testWithAuth('second tab restores via peer relay without prompting', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('second tab restores via peer relay without prompting', async ({ authFixture }) => {
     const { page: page1, authenticatorId1 } = authFixture;
     test.setTimeout(75000);
 
@@ -87,7 +87,7 @@ test.describe('login relay', () => {
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
   });
 
-  testWithAuth('reloading either tab keeps both signed in', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('reloading either tab keeps both signed in', async ({ authFixture }) => {
     const { page: page1, authenticatorId1 } = authFixture;
     test.setTimeout(60000);
 
@@ -112,7 +112,7 @@ test.describe('login relay', () => {
     await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
   });
 
-  testWithAuth('navigate away then back via history keeps session', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('navigate away then back via history keeps session', async ({ authFixture }) => {
     const { page, authenticatorId1 } = authFixture;
     test.setTimeout(75000);
 
@@ -127,7 +127,7 @@ test.describe('login relay', () => {
     await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
   });
 
-  testWithAuth('navigate away then re-navigate to qcrypt keeps session', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('navigate away then re-navigate to qcrypt keeps session', async ({ authFixture }) => {
     const { page, authenticatorId1 } = authFixture;
     test.setTimeout(75000);
 
@@ -142,7 +142,7 @@ test.describe('login relay', () => {
     await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
   });
 
-  testWithAuth('peer fresh-login then tab reload restores via updated relay', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('peer fresh-login then tab reload restores via updated relay', async ({ authFixture }) => {
     const { page: page1, session, authenticatorId1 } = authFixture;
     test.setTimeout(60000);
 
@@ -180,7 +180,7 @@ test.describe('login relay', () => {
     await expectActiveServerSession(page2, testUser.userName);
   });
 
-  testWithAuth('sign out in one tab fans out to peers', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('sign out in one tab fans out to peers', async ({ authFixture }) => {
     const { page: page1, authenticatorId1 } = authFixture;
     test.setTimeout(75000);
 
@@ -205,7 +205,7 @@ test.describe('login relay', () => {
     await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
   });
 
-  testWithAuth('forget user in one tab fans out peers to /welcome', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('forget user in one tab fans out peers to /welcome', async ({ authFixture }) => {
     const { page: page1, authenticatorId1 } = authFixture;
     test.setTimeout(75000);
 
@@ -226,7 +226,7 @@ test.describe('login relay', () => {
     await expect(page1.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible();
   });
 
-  testWithAuth('sign in logs out tabs with a different user', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('sign in logs out tabs with a different user', async ({ authFixture }) => {
     const { page: page1, session, authenticatorId1 } = authFixture;
     test.setTimeout(75000);
 
@@ -286,7 +286,7 @@ test.describe('login relay', () => {
     await addCredential(session, authenticatorId1, userA.credential);
   });
 
-  testWithAuth('new passkey from peer refreshes credentials view', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('new passkey from peer refreshes credentials view', async ({ authFixture }) => {
     const { page: page1, session, authenticatorId1, authenticatorId2 } = authFixture;
     test.setTimeout(60000);
 
@@ -314,7 +314,7 @@ test.describe('login relay', () => {
     await expectActiveServerSession(page2);
   });
 
-  testWithAuth('deleted passkey from peer refreshes credentials view', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('deleted passkey from peer refreshes credentials view', async ({ authFixture }) => {
     const { page: page1, session, authenticatorId1, authenticatorId2 } = authFixture;
     test.setTimeout(60000);
 
@@ -346,7 +346,7 @@ test.describe('login relay', () => {
     await expectActiveServerSession(page2);
   });
 
-  testWithAuth('switch passkey within same user propagates to peer', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('switch passkey within same user propagates to peer', async ({ authFixture }) => {
     const { page: page1, session, authenticatorId1, authenticatorId2 } = authFixture;
     test.setTimeout(75000);
 
@@ -408,7 +408,7 @@ test.describe('login relay', () => {
     await addCredential(session, authenticatorId1, testUser.credential);
   });
 
-  testWithAuth('login as different user navigates peer sign-in dialog to /welcome', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('login as different user navigates peer sign-in dialog to /welcome', async ({ authFixture }) => {
     const { page: page1, session, authenticatorId1 } = authFixture;
     test.setTimeout(90000);
 
@@ -461,7 +461,7 @@ test.describe('login relay', () => {
     await addCredential(session, authenticatorId1, userA.credential);
   });
 
-  testWithAuth('peer at sign-in dialog ignores broadcasts from same user', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('peer at sign-in dialog ignores broadcasts from same user', async ({ authFixture }) => {
     const { page: page1, session, authenticatorId1 } = authFixture;
     test.setTimeout(60000);
 
@@ -495,7 +495,7 @@ test.describe('login relay', () => {
     await expect(page2.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) })).toBeVisible();
   });
 
-  testWithAuth('cold start with no live peer prompts for sign in', { tag: '@nukeall' }, async ({ authFixture }) => {
+  testWithAuth('cold start with no live peer prompts for sign in', async ({ authFixture }) => {
     const { page: page1, authenticatorId1 } = authFixture;
     test.setTimeout(75000);
 

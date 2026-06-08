@@ -67,7 +67,9 @@ export async function makeProofHeaders(
    await cryptoReady();
    const timestamp = opts.timestampMs ?? String(Date.now());
    const bodyHashHex = sha256Hex(body ?? Buffer.alloc(0));
-   const pathname = new URL(path, API_SERVER).pathname;
+   // Sign the decoded path the server verifies (event.requestContext.http.path), not the
+   // re-encoded URL pathname, so proofs still match when a path carries odd characters.
+   const pathname = path.split("?")[0];
    const signature = signUserCredProof(
       Buffer.from(userCred, "base64url"),
       userId,

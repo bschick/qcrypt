@@ -6,7 +6,7 @@ import {
 } from '.././common';
 
 
-testWithAuth('edit fields', { tag: '@nukeall' }, async ({ authFixture }) => {
+testWithAuth('edit fields', async ({ authFixture }) => {
   const { page, authenticatorId1: authauthenticatorId1 } = authFixture;
   test.setTimeout(60000);
   const rand = Math.floor(Math.random() * (99 - 0 + 1)) + 0;
@@ -72,7 +72,7 @@ testWithAuth('edit fields', { tag: '@nukeall' }, async ({ authFixture }) => {
 
 });
 
-testWithAuth('options persistence and defaults', { tag: '@nukeall' }, async ({ authFixture }) => {
+testWithAuth('options persistence and defaults', async ({ authFixture }) => {
   const { page, session, authenticatorId1: authenticatorId1 } = authFixture;
   test.setTimeout(60000);
 
