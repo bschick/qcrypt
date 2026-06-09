@@ -256,17 +256,11 @@ async function getSession(
    httpDetails: HttpDetails,
    verifiedUser?: VerifiedUserItem
 ): Promise<Response> {
-   const { params } = httpDetails;
-
    if (!verifiedUser) {
       throw new AuthError();
    }
 
-   // Default to returning userCred for backward compat with older clients;
-   // newer clients pass ?usercred=false to opt out. Once all deployed clients
-   // pass false, drop this and stop returning userCred entirely
-   const includeUserCred = params.usercred !== 'false';
-   const responseContent = await makeLoginUserInfoResponse(verifiedUser, includeUserCred, false);
+   const responseContent = await makeLoginUserInfoResponse(verifiedUser, false, false);
 
    // Return passed in csrf but don't start new session so that expiration is not reset
    return {

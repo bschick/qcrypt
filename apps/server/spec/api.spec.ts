@@ -86,22 +86,11 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          expect(res.data.hasRecoveryId).toBeTruthy();
          expect(res.data.authenticators.length).toBe(1);
          expect(res.data.csrf).toBeDefined();
-         // Backward-compat default: userCred is returned when ?usercred=false is not passed.
-         expect(res.data.userCred).toBeDefined();
-         // Update CSRF in case it rotated (though usually static per session)
-         if (res.data.csrf) csrfToken = res.data.csrf;
-      });
-
-      it("should omit userCred when ?usercred=false is passed", async () => {
-         const res = await getJson(
-            `/v1/session?usercred=false`,
-            { "x-csrf-token": csrfToken },
-            sessCookie,
-         );
-         expect(res.status).toBe(200);
-         expect(res.data.csrf).toBeDefined();
          expect(res.data.userCred).toBeUndefined();
-         if (res.data.csrf) csrfToken = res.data.csrf;
+         // Update CSRF in case it rotated (though usually static per session)
+         if (res.data.csrf) {
+            csrfToken = res.data.csrf;
+         }
       });
 
       it("should fetch user info", async () => {
