@@ -1,5 +1,15 @@
 # CHANGELOG.md
 
+## 7.1.0 (2026-06-08)
+
+#### Changes
+  - added [libcrux](https://github.com/cryspen/libcrux) for post-quantum algorithms
+  - added a new "proof of userCred" check based on ML-DSA for authenticated API calls
+  - GET session endpoint no longer returns userCred now that tabs relay encrypted credentials
+
+#### Security
+  - stricter protocol docs SVG filtering before injection
+
 ## 7.0.0 (2026-05-30)
 
 #### Features
