@@ -24,7 +24,7 @@ test.describe('errors', () => {
     }, false);
 
     const parent = page.locator('.error-msg p');
-    expect(parent).toContainText('User name must be 6 to 31 characters long');
+    await expect(parent).toContainText('User name must be 6 to 31 characters long');
   });
 
   testWithAuth('user too long', async ({ authFixture }) => {
@@ -40,7 +40,7 @@ test.describe('errors', () => {
     }, false);
 
     const parent = page.locator('.error-msg p');
-    expect(parent).toContainText('User name must be 6 to 31 characters long');
+    await expect(parent).toContainText('User name must be 6 to 31 characters long');
   });
 
   testWithAuth('no passkey cold', async ({ authFixture }) => {
@@ -52,7 +52,7 @@ test.describe('errors', () => {
       await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
     }, false);
     const parent = page.locator('p.error-msg');
-    expect(parent).toContainText(/Passkey not recognized/);
+    await expect(parent).toContainText(/Passkey not recognized/);
   });
 
   testWithAuth('no passkey re-signin', async ({ authFixture }) => {
@@ -69,7 +69,7 @@ test.describe('errors', () => {
       await page.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
     }, false);
 
-    expect(page.locator('div.button-host div.error-msg')).toContainText(/Sign in failed, try again or change users/);
+    await expect(page.locator('div.button-host div.error-msg')).toContainText(/Sign in failed, try again or change users/);
   });
 
 
@@ -85,13 +85,13 @@ test.describe('errors', () => {
     await page.locator('mat-sidenav input').first().fill('12345');
     await page.keyboard.press('Enter');
 
-    expect(page.locator('div.error-msg')).toContainText(/Name change failed, must be 6 to 31 characters/);
+    await expect(page.locator('div.error-msg')).toContainText(/Name change failed, must be 6 to 31 characters/);
 
     await page.locator('mat-sidenav input').nth(1).click();
     await page.locator('mat-sidenav input').nth(1).fill('12345');
     await page.keyboard.press('Enter');
 
-    expect(page.locator('div.error-msg')).toContainText(/Description change failed, must be 6 to 42 characters/);
+    await expect(page.locator('div.error-msg')).toContainText(/Description change failed, must be 6 to 42 characters/);
   });
 
 
@@ -112,7 +112,7 @@ test.describe('errors', () => {
     await expect(page).toHaveURL(/\/showrecovery$/);
     await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible({timeout:10000});
 
-    expect(page.locator('.error-msg p')).toContainText('Retrieval failed, try again', {timeout:10000});
+    await expect(page.locator('.error-msg p')).toContainText('Retrieval failed, try again', {timeout:10000});
 
   });
 
@@ -131,7 +131,7 @@ test.describe('errors', () => {
     await expect(page).toHaveURL(/\/cmdline$/);
     await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible({timeout:10000});
 
-    expect(page.locator('.error-msg p')).toContainText('Retrieval failed, try again', {timeout:10000});
+    await expect(page.locator('.error-msg p')).toContainText('Retrieval failed, try again', {timeout:10000});
   });
 
 

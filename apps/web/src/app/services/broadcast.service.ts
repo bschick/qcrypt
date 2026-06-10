@@ -23,7 +23,7 @@ import { Injectable } from '@angular/core';
 
 const CHANNEL_NAME = 'qcrypt-encrypted-credentials';
 const COLLECTION_WINDOW_MS = 120;
-const COLLECTION_MAX_STAGES = 3;
+const COLLECTION_MAX_STAGES = 6;
 const PROPAGATION_DELAY_MS = 10;
 
 export enum MessageKind {
@@ -79,6 +79,7 @@ type Responses = {
 export class BroadcastService {
    private _channel?: BroadcastChannel;
    private _pending = new Map<string, Responses>();
+   private _unfulfilledNonce?: string;
    private _credentialProvider?: () => CredentialPayload | undefined;
    private _messageHandler?: (msg: LoginMessage | LogoutMessage | ForgetMessage | UserInfoChangedMessage) => void;
 
@@ -131,6 +132,7 @@ export class BroadcastService {
                      pending.timer = startStage(count + 1)
                   } else {
                      this._pending.delete(nonce);
+                     this._unfulfilledNonce = pending.credentials.length === 0 ? nonce : undefined;
                      pending.resolve(this._getBestCredential(pending.credentials));
                   }
                }
@@ -199,6 +201,9 @@ export class BroadcastService {
 
    private _credentialResponse(response: CredentialResponseMessage) {
       const pending = this._pending.get(response.nonce);
+      if (response.nonce === this._unfulfilledNonce) {
+         console.error('credential response arrived after its collection window closed');
+      }
       if (pending && response.pkId === pending.pkId) {
          const { pkId, version, userCredEnc, userCredExpiry } = response;
          pending.credentials.push({ pkId, version, userCredEnc, userCredExpiry });

@@ -166,6 +166,73 @@ describe('BroadcastService', () => {
       }
    });
 
+   it('reports an error when a response arrives after the collection window closed', async () => {
+      let requestNonce: string | undefined;
+      const peer = new BroadcastChannel(CHANNEL_NAME);
+      peer.addEventListener('message', (event) => {
+         const data = event.data as { kind?: string; nonce?: string };
+         if (data && data.kind === MessageKind.CredentialRequest) {
+            requestNonce = data.nonce;
+         }
+      });
+
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+         const result = await requester.requestCredential(TEST_PK_ID);
+         expect(result).toBeUndefined();
+         await vi.waitFor(() => {
+            expect(requestNonce).toBeTruthy();
+         });
+
+         peer.postMessage({
+            kind: MessageKind.CredentialResponse,
+            ...TEST_CRED,
+            nonce: requestNonce,
+         });
+
+         await new Promise((resolve) => setTimeout(resolve, 50));
+         expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/collection window/));
+      } finally {
+         errorSpy.mockRestore();
+         peer.close();
+      }
+   });
+
+   it('does not report a late response after a fulfilled request', async () => {
+      let requestNonce: string | undefined;
+      const peer = new BroadcastChannel(CHANNEL_NAME);
+      peer.addEventListener('message', (event) => {
+         const data = event.data as { kind?: string; nonce?: string };
+         if (data && data.kind === MessageKind.CredentialRequest) {
+            requestNonce = data.nonce;
+            peer.postMessage({
+               kind: MessageKind.CredentialResponse,
+               ...TEST_CRED,
+               nonce: requestNonce,
+            });
+         }
+      });
+
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+         const result = await requester.requestCredential(TEST_PK_ID);
+         // a fulfilled result proves the peer listener ran, so requestNonce is set
+         expect(result).toEqual(TEST_CRED);
+
+         peer.postMessage({
+            kind: MessageKind.CredentialResponse,
+            ...TEST_CRED,
+            nonce: requestNonce,
+         });
+
+         await new Promise((resolve) => setTimeout(resolve, 50));
+         expect(errorSpy).not.toHaveBeenCalled();
+      } finally {
+         errorSpy.mockRestore();
+         peer.close();
+      }
+   });
+
    it('ignores ill-formed messages', async () => {
       const interloper = new BroadcastChannel(CHANNEL_NAME);
       try {

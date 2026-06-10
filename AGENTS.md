@@ -114,6 +114,7 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 | API full fuzz tests (prod) | `pnpm test:fuzz:prod` | | *Vitest against quickcrypt.org* |
 | Server unit tests | `pnpm test:server` | `pnpm nx test server` | |
 | Server unit tests (prod) | `pnpm test:server:prod` | `pnpm nx test-prod server` | |
+| Lint e2e specs | `pnpm lint:e2e` | | *ESLint `playwright/missing-playwright-await`; also runs first in `build:web` and `build:web:prod`* |
 | All library unit tests | `pnpm test:lib` | | *runs test:lib:crypto* |
 | Crypto library unit tests | `pnpm test:lib:crypto` | `pnpm nx test crypto` | |
 | CLI unit tests | `pnpm test:cli` | `pnpm nx test cli` | |

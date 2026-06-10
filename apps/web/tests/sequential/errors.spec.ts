@@ -30,10 +30,10 @@ test.describe('errors', () => {
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
 
     await page.getByRole('button', { name: 'Encrypt Text'}).click();
-    expect(page.locator('.errorBox').nth(1)).toContainText(/Missing clear text/);
+    await expect(page.locator('.errorBox').nth(1)).toContainText(/Missing clear text/);
 
     await page.getByRole('button', { name: 'Decrypt Text'}).click();
-    expect(page.locator('.errorBox').nth(0)).toContainText(/Missing cipher armor/);
+    await expect(page.locator('.errorBox').nth(0)).toContainText(/Missing cipher armor/);
 
   });
 
