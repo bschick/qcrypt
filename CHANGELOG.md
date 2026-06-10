@@ -8,7 +8,7 @@
   - GET session endpoint no longer returns userCred now that tabs relay encrypted credentials
 
 #### Security
-  - stricter protocol docs SVG filtering before injection
+  - stricter SVG filtering before protocol docs injection
 
 ## 7.0.0 (2026-05-30)
 
