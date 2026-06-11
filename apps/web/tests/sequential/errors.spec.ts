@@ -5,6 +5,7 @@ import {
   addCredential,
   hosts,
   credentials,
+  haveKeeperCreds,
 } from '.././common';
 
 
@@ -15,6 +16,7 @@ test.describe('errors', () => {
   // playwright's retry recovers. Single login + local-only operations after,
   // so retry is sufficient and we keep the shared user.
   testWithAuth('enc dec errors', async ({ authFixture }) => {
+    test.skip(!haveKeeperCreds, 'keeper credentials not provided (apps/web/tests/.creds.json)');
     const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
     test.setTimeout(45000);
 

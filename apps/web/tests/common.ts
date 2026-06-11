@@ -3,6 +3,9 @@ import { Protocol } from 'devtools-protocol';
 import { signUserCredProof } from '@qcrypt/api';
 import { cryptoReady } from '@qcrypt/crypto';
 import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 export type Credential = Protocol.WebAuthn.Credential;
 
@@ -31,85 +34,18 @@ async function proofHeaders(
   };
 }
 
-const keeper1_local: Credential = {
-  credentialId: 'YpKdnBAh/1dsoA6FrdIbmAaGJU408ToZBeljHs9Qx78=',
-  isResidentCredential: true,
-  rpId: 't1.quickcrypt.org',
-  privateKey: 'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgtU5Hu+SXiB2zVrByWMR3U1GozkxaHzYOAtf/fAkf0FShRANCAATnoR0vbf5IHoNi8TLrQabuQzwaILNShvd+ay47VfrJUgS2KN6VVzJib59Q6OTYVCcnEWLzbIteN/fcgZNEb0gG',
-  userHandle: 'VTFoZlFQcEx6akNYdmFSUS0yaFZEZw==',
-  signCount: 1,
-  backupEligibility: false,
-  backupState: false,
-  userName: 'KeeperOne'
-};
-const keeper1Recovery_local = "tool uniform squirrel melody lawn okay hazard work web middle desert modify culture cook advance enact soda lucky urge emerge autumn reflect feature six"
-
-const keeper2_local: Credential = {
-  credentialId: 'Ce7OGaF7BJD80YxFMKV/QeUU9P31T2RVihbM7m6VXoQ=',
-  isResidentCredential: true,
-  rpId: 't1.quickcrypt.org',
-  privateKey: 'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgSBrv0BJG5Z1sjMctzWTSTmu+UECFQ49ygT+KbXDo85GhRANCAAQ+gHUxJDGgCEQ+ABkWTarZkFqqoeovpFUra7r6LGIrhlYpweejncc+OQ390N3CogmaSdhJjZaVpZoe/45ARBU5',
-  userHandle: 'U0tIM0VZU0R5WXFEbWdIY3FiZEJlQQ==',
-  signCount: 0,
-  backupEligibility: false,
-  backupState: false,
-  userName: 'KeeperTwo'
-};
-const keeper2Recovery_local = "token force rigid turkey chunk detail erode badge album enlist manual pig meat wine ecology motor sister favorite track admit skin sweet album appear";
-
-const keeper1_prod: Credential = {
-  credentialId: 'Zti4nmkLHo/4rnNimBROJ7CgP0cAJbfCWGgVlXfsiS8=',
-  isResidentCredential: true,
-  rpId: 'quickcrypt.org',
-  privateKey: 'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgsSWkWH0RtGtqbDw2a2BomwIq/Xv95lt35Sk5iSXvb6ShRANCAAR9n7Ue93B2oXcj5grRlWm0y/KUNrKA7GtITw+XpKWGXWIrrAZD3WOXyeDRtChx2bk+GfBgsZGhDHbSWJkWySS2',
-  userHandle: 'am1GeGplTDg0UmdsUkpEVGtJeG56dw==',
-  signCount: 1,
-  backupEligibility: false,
-  backupState: false,
-  userName: 'KeeperOne'
-}
-const keeper1Recovery_prod = 'captain truly apology rude correct access above index cart save open home toward rhythm daring garbage three scorpion eye canvas decorate economy palace venture';
-
-const keeper2_prod: Credential = {
-  credentialId: 'JerYY/YvBC4SiQtBWx/4NMIvMrBH2S99hIRaXwCI+DA=',
-  isResidentCredential: true,
-  rpId: 'quickcrypt.org',
-  privateKey: 'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgt72ZEvhrD9O+H8hn/0pbBRScVHjPEMI6B3edO0piTaWhRANCAAQbVIDhQXmmMMNMry/G4XfRGdGdKHmbCb6NDNtQpzTKXxqj9GMlGoc709quv0C/t5UxrxefYb1mERc/+Pr1m/ej',
-  userHandle: 'MGxVaDd4SVZxY0tLSDdHcjZTVEFLZw==',
-  signCount: 1,
-  backupEligibility: false,
-  backupState: false,
-  userName: 'KeeperTwo'
-}
-const keeper2Recovery_prod = 'cable dismiss find crouch legend tourist fork caught gaze fragile opera moral census movie rough dress prefer begin margin globe salon mystery absent dwarf';
-
 export type hosts = 't1.quickcrypt.org' | 'quickcrypt.org';
-export const credentials= {
-  't1.quickcrypt.org': {
-    keeper1: {
-      id: keeper1_local,
-      words: keeper1Recovery_local,
-      userCred: "get when used"
-    },
-    keeper2: {
-      id: keeper2_local,
-      words: keeper2Recovery_local,
-      userCred: "otjn8rPDTFaJ_T-SwwfS6PeG6U_ffzsFdA_35ZeawSg"
-    }
-  },
-  'quickcrypt.org': {
-    keeper1: {
-      id: keeper1_prod,
-      words: keeper1Recovery_prod,
-      userCred: "get when used"
-    },
-    keeper2: {
-      id: keeper2_prod,
-      words: keeper2Recovery_prod,
-      userCred: "pQhdwd-e4LGH5BWi-nWaMalzARJ3bImx0SJgLV4Y9YI"
-    }
-  },
-};
+
+type KeeperEntry = { id: Credential; words: string; userCred: string };
+type KeeperCreds = Record<hosts, { keeper1: KeeperEntry; keeper2: KeeperEntry }>;
+
+// Keeper credentials live in a gitignored file so the public repo can't be used to
+// sign in to, recover, or wipe these persistent test accounts.
+const credsPath = join(dirname(fileURLToPath(import.meta.url)), '.creds.json');
+export const haveKeeperCreds = existsSync(credsPath);
+export const credentials: KeeperCreds = haveKeeperCreds
+  ? JSON.parse(readFileSync(credsPath, 'utf8'))
+  : ({} as KeeperCreds);
 
 export type CreatedTestUser = {
   userId: string;

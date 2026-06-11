@@ -60,6 +60,9 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 
+# E2E keeper credentials — private test accounts, never commit
+apps/web/tests/.creds.json
+
 # Log files
 serve.log
 

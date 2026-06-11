@@ -51,6 +51,18 @@ jobs:
           curl --insecure --fail https://t1.quickcrypt.org:4200 && echo "Server is up!" && break || echo "Waiting for server...";
           sleep 5;
         done
+    - name: Restore keeper credentials
+      env:
+        E2E_CREDS_B64: ${{ secrets.E2E_CREDS_B64 }}
+      run: |
+        # Forks and PRs from forks don't receive the secret; the keeper-dependent
+        # e2e tests detect the missing file and skip rather than fail.
+        if [ -n "$E2E_CREDS_B64" ]; then
+          echo "$E2E_CREDS_B64" | base64 -d > apps/web/tests/.creds.json
+          echo "Restored keeper credentials."
+        else
+          echo "No E2E_CREDS_B64 secret available; keeper tests will skip."
+        fi
     - name: Run Playwright e2e tests
       run: pnpm test:e2e
     - uses: actions/upload-artifact@v5

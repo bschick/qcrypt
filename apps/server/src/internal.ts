@@ -26,7 +26,8 @@ import {
    Users,
    Authenticators,
    AAGUIDs,
-   Invitables
+   Invitables,
+   type VerifiedUserItem
 } from "./models";
 
 import {
@@ -83,7 +84,9 @@ export async function postLoadAAGUIDs(
 
 
 export async function postConsistency(
-   httpDetails: HttpDetails
+   httpDetails: HttpDetails,
+   verifiedUser?: VerifiedUserItem,
+   userFilter: {userId: string}[] = []
 ): Promise<Response> {
    const {
       params
@@ -91,11 +94,12 @@ export async function postConsistency(
 
    const batchSize = 50;
    const maxScan = 1000;
-   const daysOld = 1;
+   const minAgeMs = 6 * 60 * 60 * 1000;
+   const minCreated = Date.now() - minAgeMs;
 
    if (!params['tables'] || params.tables.includes('authenticators')) {
 
-      const authAttrs = ["userId", "credentialId"] as const;
+      const authAttrs = ["userId", "credentialId", "createdAt"] as const;
       let auths = await Authenticators.scan.go({
          attributes: authAttrs,
          limit: batchSize
@@ -110,6 +114,14 @@ export async function postConsistency(
          total += auths.data.length;
 
          for (let auth of auths.data) {
+            if (userFilter.length > 0
+               && !userFilter.some((filter) => filter.userId === auth.userId)){
+               continue;
+            }
+            if (!auth.createdAt || auth.createdAt >= minCreated) {
+               continue;
+            }
+
             const user = await Users.get({
                userId: auth.userId
             }).go({ attributes: ['userId'] });
@@ -167,8 +179,6 @@ export async function postConsistency(
       let deleted = 0;
       let deleteBatch = [];
 
-      const olderThan = Date.now() - (daysOld * 24 * 60 * 60 * 1000);
-
       while (users && users.data && users.data.length > 0) {
          total += users.data.length;
 
@@ -177,11 +187,20 @@ export async function postConsistency(
             if (user.userId == 'AAAAAAAAAAAAAAAAAAAAAA') {
                continue;
             }
+            if (userFilter.length > 0
+               && !userFilter.some((filter) => filter.userId === user.userId)){
+               continue;
+            }
+            if (!user.createdAt || user.createdAt >= minCreated) {
+               continue;
+            }
 
             if (user.verified) {
+               // Strongly consistent so a just-inserted credential (e.g. recovery
+               // re-register) is visible and the user is not wrongly seen as orphaned.
                const auths = await Authenticators.query.byUserId({
                   userId: user.userId
-               }).go({ attributes: ['credentialId'] });
+               }).go({ attributes: ['credentialId'], consistent: true });
 
                if (!auths || auths.data.length === 0) {
                   console.log(`no credentials for user: ${user.userId}, ${user.userName}`);
@@ -196,14 +215,12 @@ export async function postConsistency(
                // This is for cleanup of records where something has gone wrong or left-over from
                // previous to the use of DynamoDB TTL automatic cleanup.
                unverified += 1;
-               if (user.createdAt && user.createdAt < olderThan) {
-                  console.log(`unverified user is expired: ${user.userId}, ${user.userName}`);
-                  expired += 1;
-                  if (params['cleanse'] === 'true') {
-                     deleteBatch.push({
-                        userId: user.userId
-                     });
-                  }
+               console.log(`unverified user is expired: ${user.userId}, ${user.userName}`);
+               expired += 1;
+               if (params['cleanse'] === 'true') {
+                  deleteBatch.push({
+                     userId: user.userId
+                  });
                }
             }
          }
@@ -234,7 +251,7 @@ export async function postConsistency(
    }
    if (params['tables'] && params.tables.includes('invitables')) {
 
-      const invAttrs = ["invitableId", "userId"] as const;
+      const invAttrs = ["invitableId", "userId", "createdAt"] as const;
       let invitables = await Invitables.scan.go({
          attributes: invAttrs,
          limit: batchSize
@@ -249,6 +266,14 @@ export async function postConsistency(
          total += invitables.data.length;
 
          for (let invitable of invitables.data) {
+            if (userFilter.length > 0
+               && !userFilter.some((filter) => filter.userId === invitable.userId)){
+               continue;
+            }
+            if (!invitable.createdAt || invitable.createdAt >= minCreated) {
+               continue;
+            }
+
             const user = await Users.get({
                userId: invitable.userId
             }).go({ attributes: ['userId'] });
@@ -307,7 +332,7 @@ export async function postCleanupTestUsers(
 
    const batchSize = 50;
    const maxScan = 1000;
-   const minAgeMs = 15 * 60 * 1000;
+   const minAgeMs = 6 * 60 * 60 * 1000;
    const minCreated = Date.now() - minAgeMs;
    // Per-call delete cap. Large cleanups need repeat invocations;
    const maxDeletes = 25;
@@ -379,7 +404,7 @@ export async function postCleanupTestUsers(
       // Sweep auths/invitables orphaned by the deletes above.
       httpDetails.params.tables = httpDetails.params.tables.replace('users', '');
       httpDetails.handler = postConsistency;
-      await postConsistency(httpDetails);
+      await postConsistency(httpDetails, undefined, deleteBatch);
    }
 
    console.log(`${total} users scanned, ${deleteBatch.length} matched, and ${deleted} deleted`);
@@ -436,7 +461,6 @@ export async function postMunge(
       }
 
       if (!users.cursor) {
-         console.log('breaking');
          break;
       }
       users = await Users.scan.go({
