@@ -36,7 +36,7 @@ async function proofHeaders(
 
 export type hosts = 't1.quickcrypt.org' | 'quickcrypt.org';
 
-type KeeperEntry = { id: Credential; words: string; userCred: string };
+type KeeperEntry = { id: Credential; words: string };
 type KeeperCreds = Record<hosts, { keeper1: KeeperEntry; keeper2: KeeperEntry }>;
 
 // Keeper credentials live in a gitignored file so the public repo can't be used to
