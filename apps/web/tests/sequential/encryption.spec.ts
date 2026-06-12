@@ -68,6 +68,7 @@ testWithAuth('encrypt decrypt', async ({ authFixture }) => {
 // playwright's retry recovers. Single login + local-only crypto after, so
 // retry is sufficient and we keep the shared user.
 testWithAuth('loop encrypt decrypt', async ({ authFixture }) => {
+  test.skip(!haveKeeperCreds, 'keeper credentials not provided (apps/web/tests/.creds.json)');
   const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
 
   await page.goto('/');
