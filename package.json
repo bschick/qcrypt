@@ -64,7 +64,7 @@
     "@zxcvbn-ts/language-en": "^3.0.2",
     "@zxcvbn-ts/language-es-es": "^3.0.2",
     "@zxcvbn-ts/matcher-pwned": "^3.0.4",
-    "dompurify": "^3.4.8",
+    "dompurify": "^3.4.11",
     "electrodb": "^3.9.0",
     "jsonwebtoken": "^9.0.3",
     "libsodium-wrappers": "^0.8.4",
