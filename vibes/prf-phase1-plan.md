@@ -50,6 +50,18 @@ Scratch app mirroring `apps/cli` tooling (esbuild via `build.js`, `vitest.config
 - Check sig size vs the live CloudFront + API Gateway header budget (ML-DSA-87 sig ≈6 KB base64url) [R6]; confirm the library is **Node-safe** (no browser-only globals at import) [R3].
 - **Output:** a short decision note (library, param set — leaning 65) feeding Step 2.
 
+**Benchmark results (captured — the throw-away `apps/pqbench/` app and its `RESULTS.md` were deleted on close, so these are recorded here).** Node v24.16.0, 200 iterations/op after 20 warmup, head-to-head `@noble/post-quantum` (pure JS) vs libcrux-WASM:
+
+| op (ML-DSA-65) | @noble (pure JS) | libcrux (WASM) | speedup |
+|---|---|---|---|
+| keygen | 1.68 ms | 0.16 ms | ~10× |
+| sign (client, per request) | 8.2 ms | 0.37 ms | ~22× |
+| verify (server, per request) | ~1.4 ms | ~0.11 ms | ~13× |
+
+Sizes are identical between the two libraries (same FIPS-204 params): ML-DSA-65 pubkey 1952 B, secret key 4032 B, signature 3309 B (4412 B as base64url for the header). Full param-set sizes — ML-DSA-44: pubkey 1312 B, sig 2420 B (3227 B b64url); ML-DSA-87: pubkey 2592 B, sig 4627 B (6170 B b64url).
+
+Takeaways: server-side **verify is already cheap** even on noble (≤2.2 ms across all param sets); the dominant per-request cost is **client-side sign** (~7–8 ms for ML-DSA-65 in pure JS). libcrux's edge is large on every op (~20× on sign) — well past the "skip the WASM complexity if the edge is small" bar — and it adds formal-verification assurance. **Decision: libcrux + ML-DSA-65.**
+
 ### Step 2 — Generic proof primitive in `libs/crypto`
 New Node-safe module exported from `libs/crypto/src/index.ts`, following the `sodium.ts` lazy-init pattern:
 - `deriveProofKeyPair(secret, domainTag) -> {pubKey, secKey}` — deterministic; **owns seed expansion** so results are identical across runtimes.
