@@ -34,7 +34,6 @@ import { Router, RouterLink } from '@angular/router';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { AuthEvent, AuthenticatorService } from '../services/authenticator.service';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Subscription } from 'rxjs';
 import { MatCardModule } from '@angular/material/card';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
@@ -45,14 +44,15 @@ import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
    templateUrl: './showrecovery.component.html',
    styleUrl: './showrecovery.component.scss',
    imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink,
-      MatInputModule, MatCardModule, MatProgressSpinnerModule, MatFormFieldModule,
+      MatInputModule, MatCardModule, MatFormFieldModule,
       FormsModule, ReactiveFormsModule
    ]
 })
 export class ShowRecoveryComponent implements OnInit, OnDestroy {
 
-   public showProgress = true;
    public error = '';
+   public replacedLink = false;
+   public replacedWords = false;
    private authSub!: Subscription;
    public recoveryWords = new FormControl<string>('');
 
@@ -64,6 +64,11 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
    }
 
    ngOnInit() {
+      // True when these recovery words just replaced an old recovery link or
+      // a previous set of recovery words.
+      this.replacedLink = !!history.state?.replacedLink;
+      this.replacedWords = !!history.state?.replacedWords;
+
       this.authSub = this.authSvc.on(
          [AuthEvent.Logout],
          () => {
@@ -76,11 +81,10 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
    }
 
    reloadData() {
-      this.showProgress = true;
       this.error = '';
 
-      this.authSvc.getRecoveryWords().then( (words) => {
-         this.recoveryWords.setValue(words);
+      if (this.authSvc.hasRecoveryWords()) {
+         this.recoveryWords.setValue(this.authSvc.consumeRecoveryWords());
 
          try {
             // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
@@ -90,16 +94,9 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
          } catch (err) {
             console.error(err);
          }
-      }).catch( (err) => {
-         console.error(err);
-         if(err instanceof Error && err.message.includes("fetch")) {
-            this.error = 'Retrieval failed, check your connection try again';
-         } else {
-            this.error = 'Retrieval failed, try again';
-         }
-      }).finally(
-        () => this.showProgress = false
-      );
+      } else {
+         this.router.navigateByUrl('/regenrecovery');
+      }
    }
 
    ngOnDestroy() {

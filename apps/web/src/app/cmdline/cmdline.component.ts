@@ -87,9 +87,7 @@ export class CmdLineComponent implements OnInit, OnDestroy {
       this.showProgress = true;
       this.error = '';
 
-      // Not actually using recovery words, just an existing way
-      // to force reauthentication
-      this.authSvc.getRecoveryWords().then( async () => {
+      this.authSvc.reauthenticate().then( async () => {
          const userCred = await this.authSvc.getUserCred();
          this.userCredential.setValue(bytesToBase64(userCred));
          userCred.fill(0);

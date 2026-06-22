@@ -20,7 +20,19 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { getProofKeyPair, signProof, verifyProof } from '@qcrypt/crypto';
+export {
+   getUserCredPubKey,
+   signUserCredProof,
+   verifyUserCredProof,
+   getRecoveryPubKey,
+   signRecoveryProof,
+   verifyRecoveryProof,
+   recoverySecret,
+   RECOVERYID_BYTES,
+   CHALLENGE_BYTES,
+   PROOF_PUBKEY_BYTES,
+   PROOF_SIG_BYTES
+} from './lib/proof';
 
 export namespace RequestTypes {
 }
@@ -58,68 +70,3 @@ export namespace ResponseTypes {
 
 export const TOPIC_USERS_MAX = 255;
 export const SESSION_TIMEOUT_SEC = 60 * 60 * 3;
-
-const USERCRED_SCHEME = 'qcrypt-usercred-v1';
-const USERCRED_KEY_CONTEXT = 'UCredKey';
-const USERCRED_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
-
-function buildUserCredMessage(
-   userId: string,
-   method: string,
-   path: string,
-   timestampMs: string,
-   bodyHashHex: string
-): Uint8Array<ArrayBuffer> {
-   const message = [
-      USERCRED_SCHEME,
-      userId,
-      method.toUpperCase(),
-      path,
-      timestampMs,
-      bodyHashHex.toLowerCase()
-   ].join('\n');
-   return new TextEncoder().encode(message);
-}
-
-export function getUserCredPubKey(userCred: Uint8Array): Uint8Array<ArrayBuffer> {
-   const { pubKey, secKey } = getProofKeyPair(userCred, USERCRED_KEY_CONTEXT);
-   secKey.fill(0);
-   return pubKey;
-}
-
-export function signUserCredProof(
-   userCred: Uint8Array,
-   userId: string,
-   method: string,
-   path: string,
-   timestampMs: string,
-   bodyHashHex: string
-): Uint8Array<ArrayBuffer> {
-   const { secKey } = getProofKeyPair(userCred, USERCRED_KEY_CONTEXT);
-   try {
-      return signProof(
-         secKey,
-         buildUserCredMessage(userId, method, path, timestampMs, bodyHashHex),
-         USERCRED_SIG_CONTEXT
-      );
-   } finally {
-      secKey.fill(0);
-   }
-}
-
-export function verifyUserCredProof(
-   pubKey: Uint8Array,
-   userId: string,
-   method: string,
-   path: string,
-   timestampMs: string,
-   bodyHashHex: string,
-   signature: Uint8Array
-): boolean {
-   return verifyProof(
-      pubKey,
-      buildUserCredMessage(userId, method, path, timestampMs, bodyHashHex),
-      signature,
-      USERCRED_SIG_CONTEXT
-   );
-}

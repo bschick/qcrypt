@@ -92,6 +92,12 @@ export const Patterns = {
    recover2: new URLPattern({
       pathname: `/v:ver/recover2`,
    }),
+   recover2Challenge: new URLPattern({
+      pathname: `/v:ver/recover2/challenge`,
+   }),
+   recover2Key: new URLPattern({
+      pathname: `/v:ver/recover2/key`,
+   }),
    session: new URLPattern({
       pathname: `/v:ver/session`,
    }),

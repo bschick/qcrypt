@@ -36,6 +36,7 @@ import { EditableComponent } from '../ui/editable/editable.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { Router, RouterLink, NavigationStart } from '@angular/router';
+import type { Event as RouterEvent } from '@angular/router';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { Subscription } from 'rxjs';
@@ -73,7 +74,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    }
 
    ngOnInit(): void {
-      this.routeSub = this.router.events.subscribe((event) => {
+      this.routeSub = this.router.events.subscribe((event: RouterEvent) => {
          if (event instanceof NavigationStart) {
             this.done.emit(true);
          }

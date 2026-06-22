@@ -105,14 +105,15 @@ test.describe('errors', () => {
 
     await clearCredentials(session, authenticatorId1);
 
+    await page.getByRole('button', { name: /Replace recovery words/ }).click();
+    await expect(page).toHaveURL(/\/regenrecovery$/);
+
     await passkeyAuth(page, session, authenticatorId1, async () => {
-      await page.getByRole('button', { name: /Show recovery link/ }).click();
+      await page.getByRole('button', { name: /Generate new recovery words/ }).click();
     }, false);
 
-    await expect(page).toHaveURL(/\/showrecovery$/);
-    await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible({timeout:10000});
-
-    await expect(page.locator('.error-msg p')).toContainText('Retrieval failed, try again', {timeout:10000});
+    await expect(page).toHaveURL(/\/regenrecovery$/);
+    await expect(page.locator('.error-msg p')).toContainText('Could not replace recovery words', {timeout:15000});
 
   });
 

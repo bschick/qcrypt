@@ -24,11 +24,12 @@ export const RETRIES = 3;
 export const RPNAME = 'Quick Crypt';
 export const ALGIDS = [24, 7, 3, 1, -7, -257];
 
+export { RECOVERYID_BYTES, CHALLENGE_BYTES } from '@qcrypt/api';
+
 export const USERID_BYTES = 16;
 export const INVITABLEID_BYTES = 16;
 export const USERCRED_BYTES = 32;
 export const JWTMATERIAL_BYTES = 32;
-export const RECOVERYID_BYTES = 16;
 export const LINKID_BYTES = 16;
 export const UNAME_LEN_BYTES = 1;
 export const UNAME_MIN_LEN = 6;

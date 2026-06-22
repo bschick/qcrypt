@@ -17,8 +17,8 @@ test('new user fill in', async ({ page }) => {
   // Expects page to have a heading with the name of Installation.
   await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible();
 
-  await page.locator('input#userName').fill('PWTesty_');
-  await expect(page.locator('input#userName')).toHaveValue('PWTesty_');
+  await page.locator('input#userName').fill('PWTesty_e2e_');
+  await expect(page.locator('input#userName')).toHaveValue('PWTesty_e2e_');
 
 });
 

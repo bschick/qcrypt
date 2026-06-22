@@ -32,6 +32,7 @@ export const routes: Routes = [
    { path: 'welcome', component: WelcomeComponent, canActivate: [welcomeGuard] },
    { path: 'newuser', loadComponent: () => guardedImport(() => import('./newuser/newuser.component').then(m => m.NewUserComponent)) },
    { path: 'showrecovery', loadComponent: () => guardedImport(() => import('./showrecovery/showrecovery.component').then(m => m.ShowRecoveryComponent)), canActivate: [showRecoveryGuard] },
+   { path: 'regenrecovery', loadComponent: () => guardedImport(() => import('./regenrecovery/regenrecovery.component').then(m => m.RegenrecoveryComponent)), canActivate: [showRecoveryGuard] },
    { path: 'recovery', loadComponent: () => guardedImport(() => import('./recovery/recovery.component').then(m => m.RecoveryComponent)) },
    { path: 'recovery2', loadComponent: () => guardedImport(() => import('./recovery2/recovery2.component').then(m => m.Recovery2Component)) },
    { path: 'cmdline', loadComponent: () => guardedImport(() => import('./cmdline/cmdline.component').then(m => m.CmdLineComponent)), canActivate: [cmdlineGuard] },

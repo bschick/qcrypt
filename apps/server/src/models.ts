@@ -65,6 +65,10 @@ export const Users = new Entity(
             type: "string",
             required: false
          },
+         recoveryPubKey: {
+            type: "string",
+            required: false
+         },
          verified: {
             type: "boolean",
             default: () => false,
@@ -278,7 +282,7 @@ export const Challenges = new Entity(
             required: true
          },
          purpose: {
-            type: ["reg", "add", "auth"] as const,
+            type: ["reg", "add", "auth", "recover"] as const,
             required: true,
             readOnly: true
          },

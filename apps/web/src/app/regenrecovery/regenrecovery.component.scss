@@ -1,0 +1,26 @@
+@use "../common.scss";
+
+.control-host {
+  margin-top: 50px;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+
+  .task-button {
+    @include common.strong-button;
+    height: 45px;
+    min-width: 280px;
+  }
+}
+
+.error-msg {
+  color: var(--mat-sys-error);
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+}
+
+.lower-spinner {
+  @extend .spinner;
+  top: 35%;
+}

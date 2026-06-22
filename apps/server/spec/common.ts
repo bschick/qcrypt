@@ -22,8 +22,8 @@ SOFTWARE. */
 
 import crypto from "crypto";
 import { WebAuthnEmulator, AuthenticatorEmulator, PasskeysCredentialsFileRepository } from "nid-webauthn-emulator";
-import { signUserCredProof } from "@qcrypt/api";
-import { cryptoReady } from "@qcrypt/crypto";
+import { signUserCredProof, getRecoveryPubKey, recoverySecret, RECOVERYID_BYTES } from "@qcrypt/api";
+import { cryptoReady, bytesToBase64, base64ToBytes, getRandom } from "@qcrypt/crypto";
 import { expect } from "vitest";
 
 // ----- Setup -----
@@ -146,20 +146,30 @@ async function request(
 
 export const postJson = (p: string, b: any, h: any, c: string) => request("POST", p, b, h, c);
 export const getJson = (p: string, h: any, c: string) => request("GET", p, null, h, c);
+export const putJson = (p: string, b: any, h: any, c: string) => request("PUT", p, b, h, c);
 export const patchJson = (p: string, b: any, h: any, c: string) => request("PATCH", p, b, h, c);
 export const deleteJson = (p: string, h: any, c: string) => request("DELETE", p, null, h, c);
 
-// Register a fresh user (reg/options + reg/verify with userCred) and return everything
-// needed to make authorized, proof-signed requests. The emulator is returned so callers
-// can drive later auth/assertion flows with the same credential.
-export async function registerTestUser(userName: string): Promise<{
+// Register a fresh user (reg/options + reg/verify) and return everything needed to make
+// authorized, proof-signed requests. Like the real client, the recovery secret is
+// generated here and only its public key is sent; the secret is returned for recovery
+// flows. The emulator is returned so callers can drive later auth/assertion flows.
+export async function registerTestUser(
+   userName: string,
+   // BACKWARD COMPAT: when set, the server generates the recovery key (recovery=true)
+   // instead of the client. Used by one test covering legacy server-provisioned accounts.
+   opts: { serverRecovery?: boolean } = {}
+): Promise<{
    userId: string;
    userCred: string;
    cookie: string;
    csrf: string;
    credId: string;
    emulator: WebAuthnEmulator;
+   recoverySecret: Uint8Array;
+   recoveryId: Uint8Array;
 }> {
+   await cryptoReady();
    const regOpts = await postJson("/v1/reg/options", { userName }, {}, "");
    expect(regOpts.status).toBe(200);
    expect(regOpts.data.user.name).toBe(userName);
@@ -173,18 +183,32 @@ export async function registerTestUser(userName: string): Promise<{
       challenge: regOpts.data.challenge,
    });
 
-   const verifyRes = await postJson(
-      "/v1/reg/verify?usercred=true",
-      { ...attestation, userId, challenge: regOpts.data.challenge },
-      {},
-      ""
-   );
+   let recoveryId = getRandom(RECOVERYID_BYTES);
+   let secret = recoverySecret(recoveryId, userId);
+   const verifyBody: Record<string, any> = { ...attestation, userId, challenge: regOpts.data.challenge };
+   let params = "usercred=true";
+   if (opts.serverRecovery) {
+      // BACKWARD COMPAT: ask the server to generate the recovery key and return its
+      // recoveryId so the secret can be reconstructed below.
+      params = "usercred=true&recovery=true";
+   } else {
+      verifyBody.recoveryPubKey = bytesToBase64(getRecoveryPubKey(secret));
+   }
+
+   const verifyRes = await postJson(`/v1/reg/verify?${params}`, verifyBody, {}, "");
    expect(verifyRes.status).toBe(200);
    expect(verifyRes.data.verified).toBe(true);
    expect(verifyRes.data.csrf).toBeDefined();
    expect(verifyRes.data.pkId).toBeDefined();
    expect(verifyRes.data.userCred).toBeDefined();
    expect(verifyRes.cookie).toBeTruthy();
+
+   if (opts.serverRecovery) {
+      // BACKWARD COMPAT: reconstruct the secret from the server-generated recoveryId.
+      expect(verifyRes.data.recoveryId).toBeDefined();
+      recoveryId = base64ToBytes(verifyRes.data.recoveryId);
+      secret = recoverySecret(recoveryId, userId);
+   }
 
    return {
       userId,
@@ -193,6 +217,8 @@ export async function registerTestUser(userName: string): Promise<{
       csrf: verifyRes.data.csrf,
       credId: verifyRes.data.pkId,
       emulator,
+      recoverySecret: secret,
+      recoveryId,
    };
 }
 

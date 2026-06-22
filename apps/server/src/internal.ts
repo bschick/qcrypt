@@ -42,7 +42,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { base64UrlEncode, isReservedTestUserName } from "./utils";
-import { getUserCredPubKey } from '@qcrypt/api';
+import { getRecoveryPubKey, recoverySecret } from '@qcrypt/api';
 
 export async function postLoadAAGUIDs(
    httpDetails: HttpDetails
@@ -417,7 +417,7 @@ export async function postMunge(
 
    const batchSize = 14;
 
-   const userAttrs = ["userId", "verified", "userCredEnc", "userCredPubKey"] as const;
+   const userAttrs = ["userId", "verified", "recoveryIdEnc", "recoveryPubKey"] as const;
    let users = await Users.scan.go({
       attributes: userAttrs,
       limit: batchSize
@@ -435,23 +435,26 @@ export async function postMunge(
             continue;
          }
 
-         // only verified users have a userCred, and skip any already backfilled
-         if (!user.verified || !user.userCredEnc || user.userCredPubKey) {
+         // recoveryPubKey can only be derived where a recoveryIdEnc exists, and skip
+         // any already backfilled
+         if (!user.verified || !user.recoveryIdEnc || user.recoveryPubKey) {
             continue;
          }
 
          try {
-            const userCred = await decryptField(
-               user.userCredEnc,
+            const recoveryId = await decryptField(
+               user.recoveryIdEnc,
                { userId: user.userId },
-               cc.USERCRED_BYTES
+               cc.RECOVERYID_BYTES
             );
-            const userCredPubKey = base64UrlEncode(getUserCredPubKey(userCred))!;
+            const recoveryPubKey = base64UrlEncode(
+               getRecoveryPubKey(recoverySecret(recoveryId, user.userId))
+            )!;
 
             await Users.patch({
                userId: user.userId
             }).set({
-               userCredPubKey: userCredPubKey
+               recoveryPubKey: recoveryPubKey
             }).go();
 
             updated += 1;
@@ -470,6 +473,6 @@ export async function postMunge(
       });
    }
 
-   console.log(`${total} users total, ${updated} userCredPubKey backfilled`);
+   console.log(`${total} users total, ${updated} recoveryPubKey backfilled`);
    return { content: { message: "done" } };
 }

@@ -1,0 +1,43 @@
+<div class="container">
+  <div class="content">
+    <mat-progress-spinner class="lower-spinner" color="primary" mode="indeterminate"
+      [style.visibility]="showProgress ? 'visible' : 'hidden'">
+    </mat-progress-spinner>
+    <h1>Replace Recovery Words</h1>
+    <p>
+      Recovery words allow you to recover your account and decrypt your data if you
+      lose access to all your Quick Crypt passkeys. After creation, recovery words
+      cannot be displayed again.
+    </p>
+    @if(authSvc.hasRecoveryId()) {
+      <p>
+        If you have lost your recovery words or are concerned they have been stolen, you
+        should regenerate them. <b>Once you click the button below, your current
+        recovery words will be invalid and no longer able to recover your account.</b> You
+        must replace all saved copies with the newly generated words that will be displayed
+        next.
+      </p>
+    } @else {
+      <mat-card appearance="outlined">
+        <mat-card-header>
+          <mat-card-title>⚠️ Attention</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p>
+            Your account is using Quick Crypt's original recovery link mechanism.
+            Click the button below to generate a secure recovery word
+            pattern that will replace your recovery link.
+          </p>
+        </mat-card-content>
+      </mat-card>
+    }
+    <div class="control-host">
+      <button class="task-button" mat-raised-button [disabled]="showProgress" (click)="onClickGenerate()">
+        Generate new recovery words
+      </button>
+    </div>
+    <div class="error-msg">
+      <p>{{error}}</p>
+    </div>
+  </div>
+</div>

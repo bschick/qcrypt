@@ -1,12 +1,10 @@
 <div class="container">
   <div class="content">
-    <mat-progress-spinner class="lower-spinner" color="primary" mode="indeterminate"
-      [style.visibility]="showProgress ? 'visible' : 'hidden'">
-    </mat-progress-spinner>
     <h1>Account Backup and Recovery</h1>
     <p>
-      <b>This is your account recovery word pattern.</b> It is the only way to
+      <b>This is your account recovery word pattern.</b> This pattern is the only way to
       recover your account and decrypt your data if you lose access to all your Quick Crypt passkeys.
+      <b>These words are shown only once and cannot be displayed again, so copy and store them now.</b>
     </p>
     <ol>
       <li>Save all of these words in the exact order they appear</li>
@@ -16,52 +14,62 @@
     <p>
       Although someone with access to your recovery words
       cannot decrypt your data, they could delete your Quick Crypt account. We
-      recommend printing a physical copy of your recovery words and storing it
-      in a lockbox or safe. If you lose both your passkeys and these
+      recommend printing a physical copy of your recovery words and storing the
+      printout in a lockbox or safe. If you lose both your passkeys and these
       recovery words, you will permanently lose access to your encrypted data.
     </p>
-    @if(!showProgress) {
-      @if(!authSvc.hasRecoveryId()) {
-        <mat-card appearance="outlined">
-          <mat-card-header>
-            <mat-card-title>⚠️ Attention</mat-card-title>
-          </mat-card-header>
-          <mat-card-content>
-            <p>
-              Your account was using Quick Crypt's old recovery link mechanism. You
-              must copy the recovery word pattern below and store it in a secure and durable
-              location. <b>Then delete your old recovery link, as it will no longer work.</b>
-            </p>
-          </mat-card-content>
-        </mat-card>
-      }
-      <div class="control-host">
-        @if(!error) {
-          <mat-form-field class="recovery" [cdkCopyToClipboard]="recoveryWords.value!" (click)="toastMessage('Copied to clipboard')">
-            <div class="toolbar">
-              <button mat-icon-button aria-label="Copy"
-                (click)="toastMessage('Copied to clipboard')"
-                [cdkCopyToClipboard]="recoveryWords.value!">
-                <mat-icon>content_copy</mat-icon>
-              </button>
-            </div>
-
-            <mat-label>Recovery Word Pattern</mat-label>
-            <textarea #wordsArea id="wordsArea" matInput autofocus type="text" [formControl]="recoveryWords"
-              readonly="true" class="words-area" (focus)="wordsArea.select();"></textarea>
-          </mat-form-field>
-          <a [routerLink]="'/'">
-            <button class="task-button" mat-raised-button (click)="onClickSaved()">
-              I saved my recovery words securely
-            </button>
-          </a>
-        } @else {
-          <button class="task-button" mat-raised-button (click)="reloadData()">
-            Try again
-          </button>
-        }
-      </div>
+    @if(replacedLink) {
+      <mat-card appearance="outlined">
+        <mat-card-header>
+          <mat-card-title>⚠️ Attention</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p>
+            These recovery words have replaced your account's old recovery link.
+            <b>Delete your recovery link and save the word pattern shown here.</b>
+          </p>
+        </mat-card-content>
+      </mat-card>
     }
+    @if(replacedWords) {
+      <mat-card appearance="outlined">
+        <mat-card-header>
+          <mat-card-title>⚠️ Attention</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p>
+            These recovery words replace your previous pattern.
+            <b>Replace all saved copies of your old pattern with the word pattern shown here.</b>
+          </p>
+        </mat-card-content>
+      </mat-card>
+    }
+    <div class="control-host">
+      @if(!error) {
+        <mat-form-field class="recovery" [cdkCopyToClipboard]="recoveryWords.value!" (click)="toastMessage('Copied to clipboard')">
+          <div class="toolbar">
+            <button mat-icon-button aria-label="Copy"
+              (click)="toastMessage('Copied to clipboard')"
+              [cdkCopyToClipboard]="recoveryWords.value!">
+              <mat-icon>content_copy</mat-icon>
+            </button>
+          </div>
+
+          <mat-label>Recovery Word Pattern</mat-label>
+          <textarea #wordsArea id="wordsArea" matInput autofocus type="text" [formControl]="recoveryWords"
+            readonly="true" class="words-area" (focus)="wordsArea.select();"></textarea>
+        </mat-form-field>
+        <a [routerLink]="'/'">
+          <button class="task-button" mat-raised-button (click)="onClickSaved()">
+            I saved my recovery words securely
+          </button>
+        </a>
+      } @else {
+        <button class="task-button" mat-raised-button (click)="reloadData()">
+          Try again
+        </button>
+      }
+    </div>
     <div class="error-msg">
       <p>{{error}}</p>
     </div>

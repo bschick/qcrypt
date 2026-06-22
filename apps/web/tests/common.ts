@@ -84,7 +84,7 @@ export type AuthFixture = {
   session: CDPSession;
   authenticatorId1: string;
   authenticatorId2: string;
-  // Creates a fresh PWTesty_<timestamp> user via the UI registration flow on
+  // Creates a fresh PWTesty_e2e_<timestamp> user via the UI registration flow on
   // `authenticatorId`. Returns signed-in on '/' (Encryption Mode visible).
   // The user and its initial passkey are auto-tracked.
   createTestUser: (authenticatorId: string) => Promise<CreatedTestUser>;
@@ -146,7 +146,7 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
     const trackedUsers: TrackedUser[] = [];
 
     const createTestUser = async (authenticatorId: string): Promise<CreatedTestUser> => {
-      const userName = `PWTesty_${Date.now()}`;
+      const userName = `PWTesty_e2e_${Date.now()}`;
       await page.goto('/');
 
       const verifyPromise = page.waitForResponse((r) =>

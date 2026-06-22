@@ -9,9 +9,9 @@ function paramsToQueryString(): string {
    return params.toString() ? `?${params.toString()}` : '';
 }
 
-export const coreGuard: CanActivateFn = async (route, state) => {
-   const authSvc = inject(AuthenticatorService);
-   const router = inject(Router);
+export const coreGuard: CanActivateFn = async () => {
+   const authSvc = inject<AuthenticatorService>(AuthenticatorService);
+   const router = inject<Router>(Router);
 
    await authSvc.ready;
    if (authSvc.validKnownUser()) {

@@ -50,9 +50,9 @@ export class RecoveryComponent implements OnInit {
    private recoveryUserId: string | null = null;
    private recoverUserCred: string | null = null;
 
-   private authSvc = inject(AuthenticatorService);
-   private router = inject(Router);
-   private activeRoute = inject(ActivatedRoute);
+   private authSvc = inject<AuthenticatorService>(AuthenticatorService);
+   private router = inject<Router>(Router);
+   private activeRoute = inject<ActivatedRoute>(ActivatedRoute);
 
    constructor() {
    }

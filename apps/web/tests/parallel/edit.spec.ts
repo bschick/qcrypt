@@ -31,14 +31,14 @@ testWithAuth('edit fields', async ({ authFixture }) => {
     response.request().method() === 'PATCH';
 
   await nameInput.click();
-  await nameInput.fill('PWTesty_<script>'+rand);
-  await expect(nameInput).toHaveValue('PWTesty_<script>'+rand);
+  await nameInput.fill('PWTesty_e2e_<script>'+rand);
+  await expect(nameInput).toHaveValue('PWTesty_e2e_<script>'+rand);
   let [resp] = await Promise.all([
     page.waitForResponse(userPatch),
     nameInput.press('Enter')
   ]);
   expect(resp.status()).toBe(200);
-  await expect(nameInput).toHaveValue('PWTesty_'+rand);
+  await expect(nameInput).toHaveValue('PWTesty_e2e_'+rand);
 
   await nameInput.click();
   await nameInput.fill(testUser.userName);

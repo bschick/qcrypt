@@ -21,10 +21,11 @@ test.describe('creation', () => {
 
     // Server strips <script> tags but keeps their content, so this fill
     // sanitizes to userName — exercises XSS sanitization on the create path.
-    // Short rand keeps the fill (incl. tags) under the 31-char input limit.
-    const rand = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-    const userName = `PWTesty_${rand}`;
-    const fillValue = `PWTesty<script>_${rand}</script>`;
+    // The e2e marker plus the <script> wrapper only leaves room for a 2-digit
+    // rand under the 31-char user-name limit.
+    const rand = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+    const userName = `PWTesty_e2e_${rand}`;
+    const fillValue = `PWTesty<script>_e2e_${rand}</script>`;
 
     await page.goto('/');
 
@@ -122,7 +123,7 @@ test.describe('creation', () => {
     test.setTimeout(60000);
 
     const rand = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-    const userName = `PWTesty_${rand}`;
+    const userName = `PWTesty_e2e_${rand}`;
 
     await page.goto('/');
 
@@ -210,9 +211,9 @@ test.describe('creation', () => {
 
 test.describe('sign on', () => {
 
-  testWithAuth('check show reocvery', async ({ authFixture }) => {
-    const { page, session, authenticatorId1: authenticatorId1 } = authFixture;
-    test.setTimeout(45000);
+  testWithAuth('regenerate recovery words', async ({ authFixture }) => {
+    const { page, session, authenticatorId1: authenticatorId1, authenticatorId2: authenticatorId2 } = authFixture;
+    test.setTimeout(60000);
 
     const testUser = await authFixture.createTestUser(authenticatorId1);
 
@@ -221,14 +222,47 @@ test.describe('sign on', () => {
     let tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
 
+    await page.getByRole('button', { name: /Replace recovery words/ }).click();
+    await expect(page).toHaveURL(/\/regenrecovery$/);
+
     await passkeyAuth(page, session, authenticatorId1, async () => {
-      await page.getByRole('button', { name: /Show recovery link/ }).click();
+      await page.getByRole('button', { name: /Generate new recovery words/ }).click();
     });
 
     await expect(page).toHaveURL(/\/showrecovery$/);
     await expect(page.getByRole('button', { name: /I saved my recovery words securely/ })).toBeVisible({timeout:10000});
 
-    await expect(page.locator('textarea#wordsArea')).toHaveValue(testUser.recoveryWords);
+    const newWords = await page.locator('textarea#wordsArea').inputValue();
+    expect(newWords.length).toBeGreaterThan(0);
+    expect(newWords).not.toBe(testUser.recoveryWords);
+    await expect(page.locator('mat-card-content')).toContainText('Replace all saved copies', {timeout:10000});
+
+    await page.getByRole('button', { name: /I saved my recovery words securely/ }).click();
+    await expect(page).toHaveURL(/\/$/);
+
+    // The replaced words can no longer recover the account.
+    await page.goto('/recovery2');
+    await expect(page).toHaveURL(/\/recovery2$/);
+    await page.locator('textarea#wordsArea').fill(testUser.recoveryWords);
+    await page.getByRole('button', { name: /Start Recovery/ }).click();
+    await expect(page.locator('.control-host .error-msg')).toContainText('recovery word pattern', {timeout:15000});
+    await expect(page).toHaveURL(/\/recovery2$/);
+
+    // The new words do. Recovery wipes the old passkey and creates a new one; track it.
+    await page.locator('textarea#wordsArea').fill(newWords);
+    await authFixture.addPasskey(testUser.userId, authenticatorId2, async () => {
+      await page.getByRole('button', { name: /Start Recovery/ }).click();
+    });
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
+
+    // Tear down through the post-recovery passkey: deleting the last one removes the
+    // user, proving cleanup still works after the passkey was swapped by recovery.
+    await toggleCredentials(page);
+    tableBody = page.locator('table.credtable tbody');
+    await expect(tableBody.locator('tr')).toHaveCount(1);
+    await deleteFirstPasskey(page, testUser.userName);
+    await expect(page).toHaveURL(/\/welcome$/);
 
   });
 

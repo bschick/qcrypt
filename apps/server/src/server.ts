@@ -93,7 +93,17 @@ export type Response = {
    returnCsrf?: boolean;
 };
 
-import { SESSION_TIMEOUT_SEC, getUserCredPubKey, verifyUserCredProof, type ResponseTypes } from '@qcrypt/api';
+import {
+   SESSION_TIMEOUT_SEC,
+   getUserCredPubKey,
+   verifyUserCredProof,
+   getRecoveryPubKey,
+   verifyRecoveryProof,
+   recoverySecret,
+   PROOF_PUBKEY_BYTES,
+   PROOF_SIG_BYTES,
+   type ResponseTypes
+} from '@qcrypt/api';
 import { cryptoReady } from '@qcrypt/crypto';
 
 type AuthenticatorInfo = ResponseTypes.AuthenticatorInfo;
@@ -128,6 +138,7 @@ enum EventNames {
    UserDelete = 'UserDelete',
    PutDescription = 'PutDescription',
    PutUserName = 'PutUserName',
+   PutRecover2Key = 'PutRecover2Key',
    Recover = 'Recover',
    GetRecovery = 'GetRecovery',
 }
@@ -323,12 +334,12 @@ async function postAuthVerify(
    }
 
    if ((Date.now() / 1000) > challenge.data.expiresAt) {
-      throw new AuthError('challenge not valid');
+      throw new AuthError();
    }
 
    // Refuse challenges that were issued for a different flow.
    if (challenge.data.purpose !== 'auth') {
-      throw new AuthError('challenge not valid');
+      throw new AuthError();
    }
 
    // Derive identity from the credential record via GSI, not from the
@@ -435,6 +446,10 @@ async function postAuthVerify(
    const includeUserCred = !!params.usercred;
    const includeRecovery = !!params.recovery;
 
+   // BACKWARD COMPATIBILITY (remove after client-update period): an account lacks
+   // recoveryIdEnc only if it predates the recovery-words system (recover2) and is
+   // still on the original recovery-link scheme. Old clients trigger this on-demand
+   // mint when showing recovery words; new clients migrate client-side instead.
    if (includeRecovery &&
       (!verifiedUser.recoveryIdEnc || verifiedUser.recoveryIdEnc.length == 0)) {
       const rand = new GenerateRandomCommand({
@@ -452,10 +467,15 @@ async function postAuthVerify(
          { userId: verifiedUser.userId }
       );
 
+      const recoveryPubKey = base64UrlEncode(
+         getRecoveryPubKey(recoverySecret(recoveryId, verifiedUser.userId))
+      )!;
+
       const patched = await Users.patch({
          userId: verifiedUser.userId,
       }).set({
-         recoveryIdEnc: recoveryIdEnc
+         recoveryIdEnc: recoveryIdEnc,
+         recoveryPubKey: recoveryPubKey
       }).go();
 
       if (!patched || !patched.data) {
@@ -463,6 +483,7 @@ async function postAuthVerify(
       }
 
       verifiedUser['recoveryIdEnc'] = recoveryIdEnc;
+      verifiedUser['recoveryPubKey'] = recoveryPubKey;
    }
 
    responseContent = await makeLoginUserInfoResponse(verifiedUser, includeUserCred, includeRecovery);
@@ -525,13 +546,13 @@ async function _doPostRegVerify(
 
    // Must use the last challenged within 1 minute or its rejected
    if ((Date.now() / 1000) > challenge.data.expiresAt) {
-      throw new AuthError('challenge not valid');
+      throw new AuthError();
    }
 
    // Registration-style challenges are always userId-bound at creation time.
    if (challenge.data.purpose !== expectedPurpose ||
       challenge.data.userId !== unverifiedUser.userId) {
-      throw new AuthError('challenge not valid');
+      throw new AuthError();
    }
 
    let verification: VerifiedRegistrationResponse;
@@ -602,6 +623,7 @@ async function _doPostRegVerify(
          throw new ParamError('credentail creation failed');
       }
 
+      // BACKWARD COMPATIBILITY, remove RECOVERYID_BYTES after clients update
       const rparams = {
          NumberOfBytes: cc.USERCRED_BYTES + cc.RECOVERYID_BYTES + (cc.INVITABLEID_BYTES * cc.RETRIES)
       };
@@ -639,12 +661,30 @@ async function _doPostRegVerify(
 
          const userCredPubKey = base64UrlEncode(getUserCredPubKey(userCred))!;
 
-         const recoveryId = randData.slice(randOffset, randOffset + cc.RECOVERYID_BYTES);
-         randOffset += cc.RECOVERYID_BYTES;
-         const recoveryIdEnc = await encryptField(
-            recoveryId,
-            { userId: unverifiedUser.userId }
-         );
+         // The client generates the recovery secret and sends only its public key, so
+         // the server never sees the secret. A recovery key is required at creation.
+         let recoveryIdEnc: string | undefined;
+         let recoveryPubKey: string;
+         if (body.recoveryPubKey) {
+            if (!validB64(body.recoveryPubKey) || base64UrlDecode(body.recoveryPubKey)!.length !== PROOF_PUBKEY_BYTES) {
+               throw new ParamError('invalid recovery public key');
+            }
+            recoveryPubKey = body.recoveryPubKey;
+         } else if (params.recovery) {
+            // BACKWARD COMPATIBILITY (remove after client-update period): old clients ask
+            // the server to create the recovery secret at registration (recovery=true).
+            const recoveryId = randData.slice(randOffset, randOffset + cc.RECOVERYID_BYTES);
+            randOffset += cc.RECOVERYID_BYTES;
+            recoveryIdEnc = await encryptField(
+               recoveryId,
+               { userId: unverifiedUser.userId }
+            );
+            recoveryPubKey = base64UrlEncode(
+               getRecoveryPubKey(recoverySecret(recoveryId, unverifiedUser.userId))
+            )!;
+         } else {
+            throw new ParamError('missing recovery key');
+         }
 
          // Loop in the very unlikley event that we randomly pick
          // a duplicate (out of 3.4e38 possible)
@@ -689,6 +729,7 @@ async function _doPostRegVerify(
             userCredEncOld: userCredEncBackup,
             recoveryIdEnc: recoveryIdEnc,
             userCredPubKey: userCredPubKey,
+            recoveryPubKey: recoveryPubKey,
             lastCredentialId: auth.data.credentialId,
             authCount: 1
          }).remove(['expiresAt']).go();
@@ -697,6 +738,7 @@ async function _doPostRegVerify(
          unverifiedUser.userCredEnc = userCredEnc;
          unverifiedUser.recoveryIdEnc = recoveryIdEnc;
          unverifiedUser.userCredPubKey = userCredPubKey;
+         unverifiedUser.recoveryPubKey = recoveryPubKey;
          unverifiedUser.lastCredentialId = auth.data.credentialId;
          unverifiedUser.authCount = 1;
 
@@ -1072,7 +1114,7 @@ async function makeUserInfoResponse(
       verified: verifiedUser.verified,
       userId: verifiedUser.userId,
       userName: verifiedUser.userName,
-      hasRecoveryId: !!verifiedUser.recoveryIdEnc && verifiedUser.recoveryIdEnc.length > 0,
+      hasRecoveryId: !!verifiedUser.recoveryPubKey || !!verifiedUser.recoveryIdEnc,
       authenticators: auths,
       invitables: invitables
    };
@@ -1195,6 +1237,43 @@ async function patchUser(
 
    // return with full UserInfo to make client side refresh simpler
    verifiedUser['userName'] = userName;
+   const response = await makeUserInfoResponse(verifiedUser);
+   return { content: response };
+}
+
+// Updates a user's recovery public key after they regenerate their recovery words.
+async function putRecover2Key(
+   httpDetails: HttpDetails,
+   verifiedUser?: VerifiedUserItem
+): Promise<Response> {
+   const {
+      body
+   } = httpDetails;
+
+   if (!verifiedUser) {
+      throw new AuthError();
+   }
+
+   const recoveryPubKey = body?.recoveryPubKey as string | undefined;
+   if (!validB64(recoveryPubKey) || base64UrlDecode(recoveryPubKey)!.length !== PROOF_PUBKEY_BYTES) {
+      throw new ParamError('invalid recovery public key');
+   }
+
+   const patched = await Users.patch({
+      userId: verifiedUser.userId
+   }).set({
+      recoveryPubKey: recoveryPubKey
+   }).remove(['recoveryIdEnc']).go();
+
+   if (!patched || !patched.data) {
+      throw new ParamError('recovery key update failed');
+   }
+
+   // Let this happen async
+   recordEvent(EventNames.PutRecover2Key, verifiedUser.userId, verifiedUser.lastCredentialId);
+
+   // return with full UserInfo to make client side refresh simpler
+   verifiedUser['recoveryPubKey'] = recoveryPubKey!;
    const response = await makeUserInfoResponse(verifiedUser);
    return { content: response };
 }
@@ -1427,6 +1506,41 @@ async function deletePasskey(
    return { content: response, endSession };
 }
 
+// Issues a single-use challenge for proving recovery-secret ownership. No user
+// validation is done so that the endpoint does not reveal whether a userId
+// exists
+async function postRecover2Challenge(
+   httpDetails: HttpDetails
+): Promise<Response> {
+   const {
+      body
+   } = httpDetails;
+
+   const userId = body?.userId;
+   if (!validB64(userId) || base64UrlDecode(userId)?.length !== cc.USERID_BYTES) {
+      throw new ParamError('invalid userid format');
+   }
+
+   const rand = new GenerateRandomCommand({
+      NumberOfBytes: cc.CHALLENGE_BYTES
+   });
+   const result = await kmsClient.send(rand);
+   const challengeBytes = result.Plaintext;
+
+   if (!challengeBytes || challengeBytes.byteLength != cc.CHALLENGE_BYTES) {
+      throw new Error("GenerateRandomCommand failure");
+   }
+
+   const challenge = base64UrlEncode(challengeBytes)!;
+   await Challenges.create({
+      challenge: challenge,
+      purpose: 'recover',
+      userId: userId
+   }).go();
+
+   return { content: { challenge: challenge } };
+}
+
 // recover removes all existing passkeys, then initiates the
 // process or creating a new passkey. Caller is expected to followup
 // with a call to verifyRegistration
@@ -1446,12 +1560,26 @@ async function postRecover(
       throw new ParamError('invalid user credential');
    }
 
-   // Require an existing verified user for recovery
-   const unverifiedUser = await getUnverifiedUser(userId);
-   const verifiedUser = checkVerified(unverifiedUser, userId);
+   let unverifiedUser: UnverifiedUserItem;
+   let verifiedUser: VerifiedUserItem;
 
-   if (verifiedUser.recoveryIdEnc && verifiedUser.recoveryIdEnc.length > 1) {
-      // vague error to make guessing harder
+   try {
+      // Require an existing verified user for recovery
+      unverifiedUser = await getUnverifiedUser(userId);
+      verifiedUser = checkVerified(unverifiedUser, userId);
+   } catch {
+      // Decryption and equality comparision can take a few MS to run on a warm server,
+      // so add delay to prevent detection of siming differences
+      await setTimeout(randomInt(2, 5));
+      throw new AuthError();
+   }
+
+   // An account with a recovery key has moved to recovery words, which disables the
+   // old recovery-link path.
+   // BACKWARD COMPATIBILITY (remove after client-update period): drop the recoveryIdEnc
+   // clause once every account has a recoveryPubKey.
+   if ((verifiedUser.recoveryIdEnc && verifiedUser.recoveryIdEnc.length > 1) ||
+      verifiedUser.recoveryPubKey) {
       console.error(`user account ${verifiedUser.userId} must use recovery words`);
       throw new AuthError();
    }
@@ -1518,36 +1646,101 @@ async function postRecover2(
       body
    } = httpDetails;
 
-   let recoveryId = body?.recoveryId;
-   let userId = body?.userId;
-
-   if (!validB64(recoveryId)) {
-      throw new ParamError('invalid recovery id');
+   if (!body) {
+      throw new ParamError('missing body');
    }
 
-   // Require an existing verified user for recovery
-   const unverifiedUser = await getUnverifiedUser(userId);
-   const verifiedUser = checkVerified(unverifiedUser, userId);
+   const userId = body.userId;
+   let unverifiedUser: UnverifiedUserItem;
+   let verifiedUser: VerifiedUserItem;
 
-   // due to switch from recover to recover2, not all verified users have recoveryIdEnc
-   if (!verifiedUser.recoveryIdEnc ||
-      verifiedUser.recoveryIdEnc.length < 10) {
-      // vague error on purpose to make guessing harder
-      console.error(`user account ${verifiedUser.userId} not using recovery words`);
-      throw new AuthError();
-   }
+   if (body.signature) {
+      const challenge = body.challenge;
+      const signature = body.signature;
+      if (!validB64(challenge) || !validB64(signature)) {
+         throw new ParamError('invalid recovery proof');
+      }
+      const challengeBytes = base64UrlDecode(challenge)!;
+      const signatureBytes = base64UrlDecode(signature)!;
+      if (challengeBytes.byteLength !== cc.CHALLENGE_BYTES ||
+         signatureBytes.byteLength !== PROOF_SIG_BYTES) {
+         throw new ParamError('invalid recovery proof');
+      }
 
-   const recoveryIdDecBytes = await decryptField(
-      verifiedUser.recoveryIdEnc,
-      { userId: verifiedUser.userId },
-      cc.RECOVERYID_BYTES
-   );
+      // Atomically consume the challenge, then check its validity
+      const consumed = await Challenges.delete({
+         challenge: challenge
+      }).go({ response: 'all_old' });
 
-   // Critical check to ensure we do not recover the wrong user
-   if (!knownLenTimingSafeEqual(recoveryIdDecBytes, base64UrlDecode(recoveryId)!)) {
-      // vague error on purpose to make guessing harder
-      console.error(`user account ${verifiedUser.userId} invalid recovery id`);
-      throw new AuthError();
+      if (!consumed || !consumed.data) {
+         throw new AuthError();
+      }
+      if ((Date.now() / 1000) > consumed.data.expiresAt) {
+         throw new AuthError();
+      }
+      if (consumed.data.purpose !== 'recover' || consumed.data.userId !== userId) {
+         throw new AuthError();
+      }
+
+      // Require an existing verified user for recovery
+      unverifiedUser = await getUnverifiedUser(userId);
+      verifiedUser = checkVerified(unverifiedUser, userId);
+
+      // ALL exceptions past this point must be AuthError to prevent
+      // leaking whether or not the userId was valid
+
+      if (!verifiedUser.recoveryPubKey) {
+         // vague error on purpose to make guessing harder
+         console.error(`user account ${verifiedUser.userId} has no recovery key`);
+         throw new AuthError();
+      }
+
+      try {
+         // This call takes < 1ms to run on a warm server, so detecting timing
+         // differences to guess valid userId is not practicle
+         verifyRecoveryProof(
+            base64UrlDecode(verifiedUser.recoveryPubKey)!,
+            userId,
+            challenge,
+            signatureBytes
+         );
+      } catch {
+         // vague error on purpose to make guessing harder
+         console.error(`user account ${verifiedUser.userId} invalid recovery proof`);
+         throw new AuthError();
+      }
+   } else {
+      // BACKWARD COMPATIBILITY (remove after client-update period): old clients send
+      // the raw recoveryId for comparison against the stored recoveryIdEnc.
+      const recoveryId = body.recoveryId;
+      if (!validB64(recoveryId)) {
+         throw new ParamError('invalid recovery id');
+      }
+
+      // Require an existing verified user for recovery
+      unverifiedUser = await getUnverifiedUser(userId);
+      verifiedUser = checkVerified(unverifiedUser, userId);
+
+      // ALL exceptions past this point must be AuthError to prevent
+      // leaking whether or not the userId was valid
+
+      if (!verifiedUser.recoveryIdEnc ||
+         verifiedUser.recoveryIdEnc.length < 10) {
+         console.error(`user account ${verifiedUser.userId} not using recovery words`);
+         throw new AuthError();
+      }
+
+      const recoveryIdDecBytes = await decryptField(
+         verifiedUser.recoveryIdEnc,
+         { userId: verifiedUser.userId },
+         cc.RECOVERYID_BYTES
+      );
+
+      // Critical check to ensure we do not recover the wrong user
+      if (!knownLenTimingSafeEqual(recoveryIdDecBytes, base64UrlDecode(recoveryId)!)) {
+         console.error(`user account ${verifiedUser.userId} invalid recovery id`);
+         throw new AuthError();
+      }
    }
 
    const auths = await Authenticators.query.byUserId({
@@ -1767,21 +1960,23 @@ async function verifyProof(
    } else if (!verifiedUser.userCredPubKey) {
       result = 'grace';
    } else {
-      const pubKey = base64UrlDecode(verifiedUser.userCredPubKey);
-      const signature = base64UrlDecode(httpDetails.proofSignature);
-      if (!pubKey || !signature) {
+      const pubKeyBytes = base64UrlDecode(verifiedUser.userCredPubKey);
+      const signatureBytes = base64UrlDecode(httpDetails.proofSignature);
+      if (!pubKeyBytes || pubKeyBytes.byteLength !== PROOF_PUBKEY_BYTES ||
+          !signatureBytes || signatureBytes.byteLength !== PROOF_SIG_BYTES
+      ) {
          result = 'fail';
       } else {
          const bodyHashHex = createHash('sha256').update(httpDetails.rawBody, 'utf8').digest('hex');
          try {
             verifyUserCredProof(
-               pubKey,
+               pubKeyBytes,
                verifiedUser.userId,
                httpDetails.method,
                httpDetails.path,
                httpDetails.proofTimestamp,
                bodyHashHex,
-               signature
+               signatureBytes
             );
             result = 'ok';
          } catch (err) {
@@ -1896,6 +2091,7 @@ const METHODMAP: MethodMap = {
       { name: 'postRegOptions', pattern: Patterns.regOptions, version: 1, authorize: false, handler: postRegOptions },
       { name: 'postRegVerify', pattern: Patterns.regVerify, version: 1, authorize: false, handler: postRegVerify },
       { name: 'postRecover', pattern: Patterns.recover, version: 1, authorize: false, handler: postRecover },
+      { name: 'postRecover2Challenge', pattern: Patterns.recover2Challenge, version: 1, authorize: false, handler: postRecover2Challenge },
       { name: 'postRecover2', pattern: Patterns.recover2, version: 1, authorize: false, handler: postRecover2 },
 
       // Internal only endpoints that are not exposed in cloudfront and require special auth
@@ -1905,6 +2101,7 @@ const METHODMAP: MethodMap = {
       { name: 'postCleanupTestUsers', pattern: Patterns.cleanuptestusers, version: INTERNAL_VERSION, authorize: false, handler: postCleanupTestUsers }
    ],
    PUT: [
+      { name: 'putRecover2Key', pattern: Patterns.recover2Key, version: 1, authorize: true, handler: putRecover2Key },
    ],
    PATCH: [
       { name: 'patchPasskey', pattern: Patterns.passkey, version: 1, authorize: true, handler: patchPasskey },

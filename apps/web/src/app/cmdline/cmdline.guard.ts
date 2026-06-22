@@ -3,9 +3,9 @@ import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthenticatorService } from '../services/authenticator.service';
 
-export const cmdlineGuard: CanActivateFn = async (route, state) => {
-   const authSvc = inject(AuthenticatorService);
-   const router = inject(Router);
+export const cmdlineGuard: CanActivateFn = async () => {
+   const authSvc = inject<AuthenticatorService>(AuthenticatorService);
+   const router = inject<Router>(Router);
 
    await authSvc.ready;
    if (authSvc.hasSession()) {

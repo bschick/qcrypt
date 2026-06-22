@@ -41,11 +41,21 @@ import {
    streamFromBase64,
    MasterKeyKeyProvider,
    readStreamAll,
-   concatArrays } from '@qcrypt/crypto';
+   getRandom } from '@qcrypt/crypto';
 import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
+import * as cc from '@qcrypt/crypto/consts';
 
-import { SESSION_TIMEOUT_SEC, signUserCredProof, type ResponseTypes } from '@qcrypt/api';
+import {
+   SESSION_TIMEOUT_SEC,
+   signUserCredProof,
+   signRecoveryProof,
+   getRecoveryPubKey,
+   recoverySecret,
+   RECOVERYID_BYTES,
+   CHALLENGE_BYTES,
+   type ResponseTypes
+} from '@qcrypt/api';
 import { KeystoreService } from './keystore.service';
 import { CipherService } from './cipher.service';
 import {
@@ -65,7 +75,6 @@ export type InvitableInfo = ResponseTypes.InvitableInfo;
 const baseUrl = environment.apiHost;
 export const ACTIVITY_TIMEOUT_SEC = 60 * 60 * 1.5;
 const EXPIRY_CHECK_INTERVAL_MS = 1000 * 60 * 2;
-const RECOVERID_BYTES = 16;
 const KEYSTORE_SLOT = 'user-cred-key';
 
 
@@ -123,7 +132,7 @@ export class AuthenticatorService {
    private _subject = new Subject<AuthEventData>();
    private _intervalId: number = 0;
    private _csrf?: string = undefined;
-   private _cachedRecoveryId?: string;
+   private _cachedRecoveryWords?: string;
    private _pendingLogout: Promise<unknown> = Promise.resolve();
 
    constructor(
@@ -439,39 +448,70 @@ export class AuthenticatorService {
       }
    }
 
-   // require reauthentication with passkey
-   public async getRecoveryWords(): Promise<string> {
-      await this.ready;
+   public hasRecoveryWords(): boolean {
+      return !!this._cachedRecoveryWords;
+   }
 
+   // Recovery words can only be shown once, right after they are generated. The
+   // server cannot reproduce them, so a later request must regenerate instead.
+   public consumeRecoveryWords(): string {
+      if (!this.hasSession()) {
+         throw new Error('no active user');
+      }
+      if (!this._cachedRecoveryWords) {
+         throw new Error('recovery words not available');
+      }
+
+      const words = this._cachedRecoveryWords;
+      this._cachedRecoveryWords = undefined;
+      return words;
+   }
+
+   // Generates a fresh recovery secret for userId and returns its public key (to
+   // store) and words (to show once).
+   private _newRecovery(userId: string): { recoveryPubKey: string, recoveryWords: string } {
+      const recoveryId = getRandom(RECOVERYID_BYTES);
+      const secret = recoverySecret(recoveryId, userId);
+      try {
+         return {
+            recoveryPubKey: bytesToBase64(getRecoveryPubKey(secret)),
+            recoveryWords: entropyToMnemonic(secret, wordlist)
+         };
+      } finally {
+         secret.fill(0);
+         recoveryId.fill(0);
+      }
+   }
+
+   // Generates fresh recovery words and replaces the server-stored public key. The
+   // words are cached for the one-time display that follows.
+   public async changeRecoveryWords(): Promise<void> {
       if (!this.hasSession()) {
          throw new Error('no active user');
       }
 
-      // only stored during user creation, clear after 1 use
-      let recoveryId = this._cachedRecoveryId;
-      this._cachedRecoveryId = undefined;
+      // Force another authentication
+      await this.reauthenticate();
 
-      if (!recoveryId) {
-         const serverLoginUserInfo = await this._createSessionImpl(true, true, this.userId);
-         if (!serverLoginUserInfo.recoveryId) {
-            throw new Error('authentication failed');
-         }
+      const { recoveryPubKey, recoveryWords } = this._newRecovery(this.userId);
+      const serverUserInfo = await this._doFetch<UserInfo>({
+         method: 'PUT',
+         resource: 'recover2/key',
+         bodyJSON: JSON.stringify({ recoveryPubKey: recoveryPubKey })
+      });
 
-         // must call loginUser since fetch above changes csrf
-         recoveryId = serverLoginUserInfo.recoveryId;
-         await this._loginUser(serverLoginUserInfo);
+      this._updateLoggedInUser(serverUserInfo);
+      this._cachedRecoveryWords = recoveryWords;
+   }
+
+   // Forces a passkey assertion for the active user, refreshing the cached userCred.
+   public async reauthenticate(): Promise<VerifiedUserInfo> {
+      if (!this.hasSession()) {
+         throw new Error('no active user');
       }
 
-      const recoveryIdBytes = base64ToBytes(recoveryId);
-      if (recoveryIdBytes.byteLength != RECOVERID_BYTES) {
-         throw new Error('invalid recovery id length');
-      }
-
-      const userIdBytes = base64ToBytes(this.userId);
-
-      const recoveryBytes = concatArrays([recoveryIdBytes, userIdBytes]);
-
-      return entropyToMnemonic(recoveryBytes, wordlist);
+      const serverLoginUserInfo = await this._createSessionImpl(this.userId);
+      return this._loginUser(serverLoginUserInfo);
    }
 
    on(events: AuthEvent[], action: (data: AuthEventData) => void): Subscription {
@@ -495,7 +535,7 @@ export class AuthenticatorService {
    private async _loginUser(
       serverLogin: LoginUserInfo
    ): Promise<VerifiedUserInfo> {
-      if (!serverLogin.userId || serverLogin.userId.length == 0) {
+      if (!serverLogin?.userId || serverLogin.userId.length == 0) {
          throw new Error('invalid user id')
       }
       if (!serverLogin.userCred || serverLogin.userCred.length == 0) {
@@ -630,7 +670,7 @@ export class AuthenticatorService {
       if(this.hasSession()) {
          const sessionState = this._getSessionState()!;
          if (msg.version > sessionState.version!) {
-            if (this.userInfo()!.authenticators.some((auth) => auth.credentialId === msg.pkId)) {
+            if (this.userInfo()!.authenticators.some((auth: AuthenticatorInfo) => auth.credentialId === msg.pkId)) {
                // We know the passkey, switch to it
                this._adoptPeerLogin(msg);
             } else if (this.validKnownUser()) {
@@ -649,7 +689,7 @@ export class AuthenticatorService {
 
    private _handlePeerUserInfoChanged(msg: PasskeyIdPayload): void {
       const userInfo = this.userInfo();
-      if (this.hasSession() && userInfo!.authenticators.some((auth) => auth.credentialId === msg.pkId)) {
+      if (this.hasSession() && userInfo!.authenticators.some((auth: AuthenticatorInfo) => auth.credentialId === msg.pkId)) {
          this.refreshUserInfo().catch((err) => console.error(err));
       }
    }
@@ -802,7 +842,7 @@ export class AuthenticatorService {
 
       // clear sensitive in-memory values
       this._csrf = undefined;
-      this._cachedRecoveryId = undefined;
+      this._cachedRecoveryWords = undefined;
 
       if (emit) {
          this._emit(eventData);
@@ -955,22 +995,15 @@ export class AuthenticatorService {
       }
 
       await this._pendingLogout;
-      const serverLoginUserInfo = await this._createSessionImpl(true, false, userId);
+      const serverLoginUserInfo = await this._createSessionImpl(userId);
       return this._loginUser(serverLoginUserInfo);
    }
 
    // If no userId is provided, will present all Passkeys for this domain
    private async _createSessionImpl(
-      includeUserCred: boolean,
-      includeRecovery: boolean,
       userId: string | null = null
    ): Promise<LoginUserInfo> {
-      const parts = includeUserCred ? ['usercred=true'] : [];
-      if (includeRecovery) {
-         parts.push('recovery=true');
-      }
-      const params = parts.join('&');
-
+      const params = 'usercred=true';
       const verifyBody = await this._startAuth(userId);
       const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
          method: 'POST',
@@ -1032,15 +1065,12 @@ export class AuthenticatorService {
       }
 
       const recoveryBytes = mnemonicToEntropy(recoveryWords, wordlist);
-      if (!recoveryBytes || recoveryBytes.byteLength < RECOVERID_BYTES + 1) {
-         throw new Error('invalid recovery id');
+      if (!recoveryBytes || recoveryBytes.byteLength !== RECOVERYID_BYTES + cc.USERID_BYTES) {
+         throw new Error('invalid recovery words');
       }
 
-      const recoveryIdBytes = new Uint8Array(recoveryBytes.buffer, 0, RECOVERID_BYTES);
-      const userIdBytes = new Uint8Array(recoveryBytes.buffer, RECOVERID_BYTES);
-      if (recoveryIdBytes.byteLength != RECOVERID_BYTES) {
-         throw new Error('invalid recovery id length ' + recoveryIdBytes.byteLength);
-      }
+      const recoveryIdBytes = new Uint8Array(recoveryBytes.buffer, 0, RECOVERYID_BYTES);
+      const userIdBytes = new Uint8Array(recoveryBytes.buffer, RECOVERYID_BYTES);
 
       const recoveryId = bytesToBase64(recoveryIdBytes);
       const userId = bytesToBase64(userIdBytes);
@@ -1050,16 +1080,36 @@ export class AuthenticatorService {
 
    async recover2(recoveryWords: string): Promise<VerifiedUserInfo> {
 
-      const [recoveryId, userId] = this.getRecoveryValues(recoveryWords);
+      const [, userId] = this.getRecoveryValues(recoveryWords);
+      const secret = mnemonicToEntropy(recoveryWords, wordlist);
       await this._pendingLogout;
-      const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
-         method: 'POST',
-         resource: 'recover2',
-         bodyJSON: JSON.stringify({ userId: userId, recoveryId: recoveryId })
-      });
 
-      const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, false);
-      return this._loginUser(serverLoginUserInfo);
+      try {
+         const { challenge } = await this._doFetch<{ challenge: string }>({
+            method: 'POST',
+            resource: 'recover2/challenge',
+            bodyJSON: JSON.stringify({ userId: userId })
+         });
+         if (!challenge || base64ToBytes(challenge).byteLength !== CHALLENGE_BYTES) {
+            throw new Error('invalid challenge');
+         }
+
+         const signature = signRecoveryProof(secret, userId, challenge);
+         const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
+            method: 'POST',
+            resource: 'recover2',
+            bodyJSON: JSON.stringify({
+               userId: userId,
+               challenge: challenge,
+               signature: bytesToBase64(signature)
+            })
+         });
+
+         const serverLoginUserInfo = await this._finishRegistration(optionsJson);
+         return this._loginUser(serverLoginUserInfo);
+      } finally {
+         secret.fill(0);
+      }
    }
 
    async recover(userId: string, userCred: string): Promise<VerifiedUserInfo> {
@@ -1075,7 +1125,7 @@ export class AuthenticatorService {
          bodyJSON: JSON.stringify({ userId: userId, userCred: userCred })
       });
 
-      const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, false);
+      const serverLoginUserInfo = await this._finishRegistration(optionsJson);
       return this._loginUser(serverLoginUserInfo);
    }
 
@@ -1092,16 +1142,14 @@ export class AuthenticatorService {
          bodyJSON: JSON.stringify({ userName: userName })
       });
 
-      const serverLoginUserInfo = await this._finishRegistration(optionsJson, true, true);
+      // Create the account with its recovery key in one step. The words are cached
+      // for the one-time display that follows creation.
+      const { recoveryPubKey, recoveryWords } = this._newRecovery(optionsJson.user.id);
 
-      // New user creation temporarily caches _recoveryId for use in the recovery word
-      // display page that immediately follows.
-      if (!serverLoginUserInfo || !serverLoginUserInfo.recoveryId) {
-         throw new Error('missing recoveryId');
-      }
-      this._cachedRecoveryId = serverLoginUserInfo.recoveryId;
-
-      return this._loginUser(serverLoginUserInfo);
+      const serverLoginUserInfo = await this._finishRegistration(optionsJson, recoveryPubKey);
+      const userInfo = await this._loginUser(serverLoginUserInfo);
+      this._cachedRecoveryWords = recoveryWords;
+      return userInfo;
    }
 
    // Adds passkey to current user
@@ -1115,7 +1163,7 @@ export class AuthenticatorService {
          resource: 'passkeys/options'
       });
 
-      const serverLoginUserInfo = await this._passkeyVerify(optionsJson, false, false);
+      const serverLoginUserInfo = await this._passkeyVerify(optionsJson, false);
       const userInfo = this._updateLoggedInUser(serverLoginUserInfo);
       this._broadcastSvc.sendUserInfoChanged({ pkId: userInfo.pkId });
       return userInfo;
@@ -1123,29 +1171,26 @@ export class AuthenticatorService {
 
    private async _passkeyVerify(
       optionsJson: PublicKeyCredentialCreationOptionsJSON,
-      includeUserCred: boolean,
-      includeRecovery: boolean
+      includeUserCred: boolean
    ): Promise<LoginUserInfo> {
 
       return this._doPasskeyVerify(
          'passkeys',
          optionsJson,
-         includeUserCred,
-         includeRecovery
+         includeUserCred
       );
    }
 
    private async _finishRegistration(
       optionsJson: PublicKeyCredentialCreationOptionsJSON,
-      includeUserCred: boolean,
-      includeRecovery: boolean
+      recoveryPubKey?: string
    ): Promise<LoginUserInfo> {
 
       return this._doPasskeyVerify(
          'reg',
          optionsJson,
-         includeUserCred,
-         includeRecovery
+         true,
+         recoveryPubKey
       );
    }
 
@@ -1153,7 +1198,7 @@ export class AuthenticatorService {
       base: string,
       optionsJson: PublicKeyCredentialCreationOptionsJSON,
       includeUserCred: boolean,
-      includeRecovery: boolean
+      recoveryPubKey?: string
    ): Promise<LoginUserInfo> {
 
       // SimpleWebAuthn v10 caused incompatibility with older versions by
@@ -1182,13 +1227,10 @@ export class AuthenticatorService {
          // UserId is ignored by server for passkeys/verify
          userId: actualB64UserId,
          challenge: optionsJson.challenge,
+         ...(recoveryPubKey ? { recoveryPubKey } : {})
       }
 
-      const parts = includeUserCred ? ['usercred=true'] : [];
-      if (includeRecovery) {
-         parts.push('recovery=true');
-      }
-      const params = parts.join('&');
+      const params = includeUserCred ? 'usercred=true' : '';
 
       const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
          method: 'POST',

@@ -4,6 +4,7 @@ export default defineConfig({
    resolve: {
       alias: {
          '@qcrypt/api': './libs/api/src/index.ts',
+         '@qcrypt/crypto/consts': './libs/crypto/src/lib/cipher.consts.ts',
          '@qcrypt/crypto': './libs/crypto/src/index.ts'
       }
    },

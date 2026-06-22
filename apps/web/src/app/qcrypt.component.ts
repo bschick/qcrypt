@@ -73,7 +73,9 @@ export class QCryptComponent implements OnInit, OnDestroy {
 
    toggleNav(nav: MatSidenav) {
       if (this.authSvc.hasSession()) {
-         nav.toggle();
+         // Open with a mouse focus origin so the focus restored to this toggle when the
+         // panel closes doesn't leave the keyboard-focus highlight on the button.
+         nav.toggle(!nav.opened, 'mouse');
       } else {
          nav.close();
       }

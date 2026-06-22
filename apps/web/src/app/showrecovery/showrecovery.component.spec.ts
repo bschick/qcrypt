@@ -9,7 +9,8 @@ describe('ShowRecoveryComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [ShowRecoveryComponent, NoopAnimationsModule, RouterModule.forRoot([]),]
+         imports: [ShowRecoveryComponent, NoopAnimationsModule,
+            RouterModule.forRoot([{ path: 'regenrecovery', children: [] }])]
       })
          .compileComponents();
 
