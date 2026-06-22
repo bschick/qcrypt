@@ -114,8 +114,8 @@ export async function ensureAuth(argv) {
             const match = /(https:\/\/\S*device\S*)/.exec(text);
             if (match) {
                process.stdout.write(
-                  `\n  -> To open this URL in the right Chrome profile, run on your local macOS terminal:\n` +
-                  `       open -na "Google Chrome" --args --profile-directory='${chromeProfile}' '${match[1]}'\n\n`,
+                  `\n-> To open this URL in the right Chrome profile, run on your local macOS terminal:\n` +
+                  `open -na "Google Chrome" --args --profile-directory='${chromeProfile}' '${match[1]}'\n\n`,
                );
             }
          }
