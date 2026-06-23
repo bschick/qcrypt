@@ -1946,26 +1946,24 @@ async function verifyCookie(
 }
 
 
-async function verifyProof(
+function verifyProof(
    verifiedUser: VerifiedUserItem,
    httpDetails: HttpDetails
-): Promise<void> {
+): void {
    const timestampMs = Number(httpDetails.proofTimestamp);
 
-   let result: string;
+   let result: 'absent' | 'timeout' | 'invalid' | 'failed' | 'ok';
    if (!httpDetails.proofSignature || !httpDetails.proofTimestamp) {
       result = 'absent';
    } else if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > cc.PROOF_SKEW_MS) {
-      result = 'fail';
-   } else if (!verifiedUser.userCredPubKey) {
-      result = 'grace';
+      result = 'timeout';
    } else {
       const pubKeyBytes = base64UrlDecode(verifiedUser.userCredPubKey);
       const signatureBytes = base64UrlDecode(httpDetails.proofSignature);
       if (!pubKeyBytes || pubKeyBytes.byteLength !== PROOF_PUBKEY_BYTES ||
           !signatureBytes || signatureBytes.byteLength !== PROOF_SIG_BYTES
       ) {
-         result = 'fail';
+         result = 'invalid';
       } else {
          const bodyHashHex = createHash('sha256').update(httpDetails.rawBody, 'utf8').digest('hex');
          try {
@@ -1980,14 +1978,13 @@ async function verifyProof(
             );
             result = 'ok';
          } catch (err) {
-            console.error(err);
-            result = 'fail';
+            result = 'failed';
          }
       }
    }
 
-   console.log(`proof ${result} ${httpDetails.name} ${verifiedUser.userId}`);
-   if (cc.PROOF_ENFORCE && (result === 'fail' || result === 'absent')) {
+   if (result !== 'ok') {
+      console.error(`proof ${result} ${httpDetails.name} ${verifiedUser.userId}`);
       throw new AuthError();
    }
 }
@@ -2032,7 +2029,7 @@ export async function handler(event: any, context: any) {
          // these throw an exception if cookie or headerCsrf is invalid
          verifiedUser = await verifyCookie(httpDetails.cookie, httpDetails.rpID);
          await verifyCsrf(verifiedUser, httpDetails.checkCsrf, headerCsrf);
-         await verifyProof(verifiedUser, httpDetails);
+         verifyProof(verifiedUser, httpDetails);
       }
 
       if (httpDetails.version === INTERNAL_VERSION) {

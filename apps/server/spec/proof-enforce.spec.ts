@@ -30,9 +30,7 @@ import {
    setSessionUserCred,
 } from "./common";
 
-// For backward compatibility the server can run observe-only (it logs but does not reject bad
-// proofs while old clients roll over), so these rejection assertions are gated to enforce mode.
-describe.skipIf(process.env.QC_PROOF_ENFORCE !== "true")("proof of userCred enforcement", () => {
+describe("proof of userCred enforcement", () => {
    const testUser = `PWTesty_enf_${Date.now()}`;
    let userId: string;
    let userCred: string;
