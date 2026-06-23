@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { execSync, spawnSync, SpawnSyncReturns } from 'child_process';
+import { execSync, spawnSync, type SpawnSyncReturns } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -15,13 +15,37 @@ describe('CLI App', () => {
     const decryptedFilePath = path.resolve(tmpDir, 'test-dec.txt');
     const infoFilePath = path.resolve(tmpDir, 'test-info.txt');
 
-    const execCli = (args: string[], input?: string): SpawnSyncReturns<string> => {
+    // A contention/OOM kill exits via signal with null status and empty stderr,
+    // so log signal and the spawn error too — stdout/stderr alone wouldn't explain it.
+    const logCliFailure = (args: string[], result: SpawnSyncReturns<string | Buffer>): void => {
+        const text = (value: string | Buffer | null) => (value == null ? '' : value.toString());
+        console.error(
+            `Command failed: node ${cliPath} ${args.join(' ')}\n` +
+            `status: ${result.status}, signal: ${result.signal}, error: ${result.error ?? 'none'}\n` +
+            `stdout: ${text(result.stdout)}\nstderr: ${text(result.stderr)}`
+        );
+    };
+
+    const execCli = (args: string[], input?: string | Buffer): SpawnSyncReturns<string> => {
         const result = spawnSync('node', [cliPath, ...args], {
             encoding: 'utf-8',
             input: input ?? ''
         });
         if (result.status !== 0) {
-            console.error(`Command failed: node ${cliPath} ${args.join(' ')}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+            logCliFailure(args, result);
+        }
+        return result;
+    };
+
+    // Returns stdout/stderr as raw Buffers so binary ciphertext survives intact;
+    // utf-8 decoding would corrupt the bytes.
+    const execCliBin = (args: string[], input?: string | Buffer): SpawnSyncReturns<Buffer> => {
+        const result = spawnSync('node', [cliPath, ...args], {
+            encoding: null,
+            input: input ?? ''
+        });
+        if (result.status !== 0) {
+            logCliFailure(args, result);
         }
         return result;
     };
@@ -264,10 +288,7 @@ describe('CLI App', () => {
             expect(enc.status).toBe(0);
 
             const binData = fs.readFileSync(binEnc);
-            const result = spawnSync('node', [cliPath, 'dec', '--cred', userCred, '--silent', '--outfile', dec, '--pwds', 'pass'], {
-                encoding: null,
-                input: binData
-            });
+            const result = execCliBin(['dec', '--cred', userCred, '--silent', '--outfile', dec, '--pwds', 'pass'], binData);
             expect(result.status).toBe(0);
             expect(fs.readFileSync(dec, 'utf-8')).toBe(clearText);
 
@@ -324,28 +345,18 @@ describe('CLI App', () => {
         });
 
         it('should pipe enc output to info', () => {
-            const enc = spawnSync('node', [cliPath, 'enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'], {
-                input: clearText,
-                encoding: null
-            });
-            const result = spawnSync('node', [cliPath, 'info', '--cred', userCred, '--silent'], {
-                input: enc.stdout,
-                encoding: 'utf-8'
-            });
+            const enc = execCliBin(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'], clearText);
+            expect(enc.status).toBe(0);
+            const result = execCli(['info', '--cred', userCred, '--silent'], enc.stdout);
             expect(result.status).toBe(0);
             expect(result.stdout).toContain('Cipher and Mode');
             expect(result.stdout).toContain('Loops');
         });
 
         it('should pipe enc output to dec', () => {
-            const enc = spawnSync('node', [cliPath, 'enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'], {
-                input: clearText,
-                encoding: null
-            });
-            const result = spawnSync('node', [cliPath, 'dec', '--cred', userCred, '--silent', '--pwds', 'pass'], {
-                input: enc.stdout,
-                encoding: 'utf-8'
-            });
+            const enc = execCliBin(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'], clearText);
+            expect(enc.status).toBe(0);
+            const result = execCli(['dec', '--cred', userCred, '--silent', '--pwds', 'pass'], enc.stdout);
             expect(result.status).toBe(0);
             expect(result.stdout.trim()).toBe(clearText);
         });
