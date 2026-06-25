@@ -33,6 +33,10 @@ $E_a$ & \textrm{ - Symmetric cipher using AEAD algorithm }$a$\textrm{. One of:}\
 & \hspace{23pt}\textrm{3. AEGIS 256 from libsodium} \\
 $G$ & \textrm{ - HMAC-SHA-512 key generator from SubtleCrypto}\\
 $H$ & \textrm{ - BLAKE2b keyed hash (MAC) generator from libsodium} \\
+$H_2$ & \textrm{ - SHA-256 from SubtleCrypto} \\
+$P_K$ & \textrm{ - ML-DSA-65 (FIPS 204) keypair generator from libcrux} \\
+$P_S$ & \textrm{ - ML-DSA-65 (FIPS 204) randomized signature generator from libcrux} \\
+$P_V$ & \textrm{ - ML-DSA-65 (FIPS 204) signature verifier from libcrux} \\
 $R$ & \textrm{ - Cryptographic pseudo-random generator from libsodium} \\
 $V$ & \textrm{ - Constant-time hash (MAC) validator from libsodium} \\
 \end{tabular}
@@ -49,6 +53,7 @@ $b$ & \textrm{ - Valid or invalid MAC tag}\\
 $cd$ & \textrm{ - Cipher data}\\
 $cd_0$ & \textrm{ - Cipher data block 0}\\
 $cd_N$ & \textrm{ - Cipher data block N}\\
+$cd_u$ & \textrm{ - Encrypted userCred at rest}\\
 $err$ & \textrm{ - Error message and exit}\\
 $f$ & \textrm{ - Block flags}\\
 $h$ & \textrm{ - Password hint text}\\
@@ -79,7 +84,7 @@ $p$ & \textrm{ - Password text}\\
 $r$ & \textrm{ - 384 bits of pseudo random data}\\
 $t$ & \textrm{ - 256 bit MAC tag}\\
 $t_L$ & \textrm{ - Last 256 bit MAC tag}\\
-$u_c$ & \textrm{ - 256 bit user credential}\\
+$u_c$ & \textrm{ - 256 bit user credential in memory}\\
 $v$ & \textrm{ - Cipher data version: 7}\\
 \end{tabular}
 
@@ -89,7 +94,7 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$A\overset{\textrm{webauthn}}{\leftrightarrow} B,M \overset{\textrm{webauthn}}{\leftrightarrow} S$}\\
-\multicolumn{2}{@{}l}{$B\leftarrow S: u_c$}\\
+\multicolumn{2}{@{}l}{$B\textrm{ obtain }u_c\textrm{ from }cd_u\textrm{ decryption}$}\\
 \multicolumn{2}{@{}l}{$A\rightarrow B: m,i,le$}\\
 \multicolumn{2}{@{}l}{$v = 7$}\\
 \multicolumn{2}{@{}l}{$lp = 1$}\\
@@ -117,14 +122,14 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 \underline{$cd_0$ Encryption by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
-\multicolumn{2}{@{}l}{$h_E = E_a(h,n_{IVH},k_H)$}\\
+\multicolumn{2}{@{}l}{$h_E = E_a(h,n_{IVH},\emptyset,k_H)$}\\
 \multicolumn{2}{@{}l}{$h_El = len(h_E)$}\\
 \multicolumn{2}{@{}l}{$f = \textrm{1 if \boxed{\text{TERM}} else 0}$}\\
 \multicolumn{2}{@{}l}{$ad_F = f \mathbin\Vert a \mathbin\Vert n_{IV} \mathbin\Vert n_S \mathbin\Vert i\mathbin\Vert le \mathbin\Vert lp \mathbin\Vert h_El \mathbin\Vert h_E$}\\
 \multicolumn{2}{@{}l}{$ad_X = ad_F \mathbin\Vert k_C$}\\
 \multicolumn{2}{@{}l}{$m_E = E_a(m_0,n_{IV},ad_X,k_{M0})$}\\
 \multicolumn{2}{@{}l}{$l = len(ad_F \mathbin\Vert m_E)$}\\
-\multicolumn{2}{@{}l}{$t = H(v, l, ad_F \mathbin\Vert m_E, t_L, k_S)$}\\
+\multicolumn{2}{@{}l}{$t = H(v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E \mathbin\Vert t_L, k_S)$}\\
 \multicolumn{2}{@{}l}{$t_L = t$}\\
 \multicolumn{2}{@{}l}{$cd_0 = t\mathbin\Vert v\mathbin\Vert l\mathbin\Vert ad_F \mathbin\Vert m_E$}\\
 \end{tabular}
@@ -143,7 +148,7 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 \multicolumn{2}{@{}l}{$ad_X = ad_F \mathbin\Vert k_C$}\\
 \multicolumn{2}{@{}l}{$m_E = E_a(m_N,n_{IV},ad_X,k_{MN})$}\\
 \multicolumn{2}{@{}l}{$l = len(ad_F \mathbin\Vert m_E)$}\\
-\multicolumn{2}{@{}l}{$t = H(v, l, ad_F \mathbin\Vert m_E, t_L, k_S)$}\\
+\multicolumn{2}{@{}l}{$t = H(v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E \mathbin\Vert t_L, k_S)$}\\
 \multicolumn{2}{@{}l}{$t_L = t$}\\
 \multicolumn{2}{@{}l}{$cd_N = t\mathbin\Vert v\mathbin\Vert l\mathbin\Vert ad_F\mathbin\Vert m_E$}\\
 \end{tabular}
@@ -155,7 +160,7 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$A \overset{\textrm{webauthn}}{\leftrightarrow} B, M \overset{\textrm{webauthn}}{\leftrightarrow} S$}\\
-\multicolumn{2}{@{}l}{$B \leftarrow S: u_c$}\\
+\multicolumn{2}{@{}l}{$B\textrm{ obtain }u_c\textrm{ from }cd_u\textrm{ decryption}$}\\
 \multicolumn{2}{@{}l}{$A \rightarrow B: cd$}\\
 \multicolumn{2}{@{}l}{$t_L = \mathtt{0x00}$}\\
 \multicolumn{2}{@{}l}{$LOOP: B\textrm{ compute} $}\\
@@ -163,13 +168,13 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 &$t,v,l,ad_F,m_E=cd_0$\\
 &$f,a,n_{IV},n_S,i,le,lp,h_El,h_E=ad_F$\\
 &$k_S = D_H(1,kp_S,H(n_S,a,v,lp,u_c))$\\
-&$b = V(v, l, ad_F \mathbin\Vert m_E, t_L, k_S, t)$\\
+&$b = V(v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E \mathbin\Vert t_L, k_S, t)$\\
 &$t_L = t$\\
 &$\textrm{if }!b:$\\
 &\hspace{15pt}$A \leftarrow B: err$\\
 &$n_{IVH} = D_H(2,kp_H,H(n_S,a,v,lp,n_{IV}))$\\
 &$k_H = D_H(1,kp_H,H(n_S,a,v,lp,u_c))$\\
-&$h = E_a^{-1}(h_E,n_{IVH},k_H)$\\
+&$h = E_a^{-1}(h_E,n_{IVH},\emptyset,k_H)$\\
 &$B \rightarrow A: h$\\
 &$B \leftarrow A: p$\\
 &$k_{M0} = D_P(p \mathbin\Vert u_c \mathbin\Vert a \mathbin\Vert v \mathbin\Vert lp,n_S,i)$\\
@@ -196,7 +201,7 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$t,v,l,ad_F,m_E=cd_N$}\\
 \multicolumn{2}{@{}l}{$f,a,n_{IV}=ad_F$}\\
-\multicolumn{2}{@{}l}{$b = V(v, l, ad_F \mathbin\Vert m_E, t_L, k_S, t)$}\\
+\multicolumn{2}{@{}l}{$b = V(v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E \mathbin\Vert t_L, k_S, t)$}\\
 \multicolumn{2}{@{}l}{$t_L = t$}\\
 \multicolumn{2}{@{}l}{$\textrm{if }!b:$}\\
 \multicolumn{2}{@{}l}{\hspace{15pt}$A \leftarrow B: err$}\\
@@ -214,7 +219,7 @@ $a$ & \textrm{ - Symmetric AEAD cipher and mode: 2}\\
 $ad_F$ & \textrm{ - Additional data included in ciphertext}\\
 $ad_X$ & \textrm{ - $ad_F$ with extended context}\\
 $b$ & \textrm{ - Valid or invalid MAC tag}\\
-$cd$ & \textrm{ - Cipher data}\\
+$cd_u$ & \textrm{ - Encrypted user credential cipher data}\\
 $err$ & \textrm{ - Error message and exit}\\
 $f$ & \textrm{ - Block flags: 1 (fixed)}\\
 $h_El$ & \textrm{ - Encrypted hint length: 0 (unused)}\\
@@ -270,8 +275,8 @@ h_El$}\\
 \multicolumn{2}{@{}l}{$ad_X = ad_F \mathbin\Vert u_i \mathbin\Vert k_C$}\\
 \multicolumn{2}{@{}l}{$m_E = E_a(u_c, n_{IV}, ad_X, k_M)$}\\
 \multicolumn{2}{@{}l}{$l = len(ad_F \mathbin\Vert m_E)$}\\
-\multicolumn{2}{@{}l}{$t = H(v, l, ad_F, m_E, \mathtt{0x00}, k_S)$}\\
-\multicolumn{2}{@{}l}{$cd = t \mathbin\Vert v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E$}\\
+\multicolumn{2}{@{}l}{$t = H(v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E \mathbin\Vert \mathtt{0x00}, k_S)$}\\
+\multicolumn{2}{@{}l}{$cd_u = t \mathbin\Vert v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E$}\\
 \end{tabular}
 
 \newpage
@@ -280,11 +285,11 @@ h_El$}\\
 
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$B \leftarrow S: u_i$}\\
-\multicolumn{2}{@{}l}{$B \leftarrow \textrm{session storage}: cd$}\\
-\multicolumn{2}{@{}l}{$t, v, l, ad_F, m_E = cd$}\\
+\multicolumn{2}{@{}l}{$B \leftarrow \textrm{session storage}: cd_u$}\\
+\multicolumn{2}{@{}l}{$t, v, l, ad_F, m_E = cd_u$}\\
 \multicolumn{2}{@{}l}{$f, a, n_{IV}, n_S, i, le, lp, h_El = ad_F$}\\
 \multicolumn{2}{@{}l}{$k_S = D_H(1, kp_S, H(n_S, a, v, lp, u_i, k_L))$}\\
-\multicolumn{2}{@{}l}{$b = V(v, l, ad_F, m_E, \mathtt{0x00}, k_S, t)$}\\
+\multicolumn{2}{@{}l}{$b = V(v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E \mathbin\Vert \mathtt{0x00}, k_S, t)$}\\
 \multicolumn{2}{@{}l}{$\textrm{if }!b:$}\\
 \multicolumn{2}{@{}l}{\hspace{15pt}$A \leftarrow B: err$}\\
 \multicolumn{2}{@{}l}{$k_M = D_H(0, kp_M, H(n_S, a, v, lp, u_i, k_L))$}\\
@@ -298,17 +303,41 @@ h_El$}\\
 \underline{Authentication Variables}\\
 
 \begin{tabular}{@{}p{2mm} l}
-$u_n$ & \textrm{ - A's chosen user name} \\
-$u_i$ & \textrm{ - 128 bit user id guaranteed to be unique} \\
-$u_r$ & \textrm{ - 128 bit recovery id} \\
-$u_c$ & \textrm{ - 256 bit user credential}\\
-$o$ & \textrm{ - Quick Crypt origin ``https://quickcrypt.org''} \\
-$ch$ & \textrm{ - 256 bit challenge value} \\
-$ro$ & \textrm{ - Registration options, including }$o, ch, u_i$\\
-$rr$ & \textrm{ - Registration response, including signed }$ch$\\
 $ao$ & \textrm{ - Authentication options, including }$o, ch$\\
+$\delta$ & \textrm{ - Delimiter byte: \texttt{\textbackslash n}}\\
 $ar$ & \textrm{ - Authentication response, including signed }$ch$\\
+$bd$ & \textrm{ - HTTP request body} \\
+$cd_u$ & \textrm{ - Encrypted userCred at rest}\\
+$ch$ & \textrm{ - 256 bit challenge value} \\
+$ch_R$ & \textrm{ - 256 bit recovery challenge value} \\
+$ck$ & \textrm{ - Session cookie, a signed JWT} \\
+$cs$ & \textrm{ - CSRF token} \\
 $cw$ & \textrm{ - Alice's webauthn authenticator credentials} \\
+$kp_R$ & \textrm{ - Key purpose text: ``RecovKey''} \\
+$kp_U$ & \textrm{ - Key purpose text: ``UCredKey''} \\
+$m_R$ & \textrm{ - Recovery proof message} \\
+$m_U$ & \textrm{ - userCred proof message} \\
+$mth$ & \textrm{ - HTTP request method} \\
+$n_P$ & \textrm{ - 256 bit proof nonce value} \\
+$o$ & \textrm{ - Quick Crypt origin ``https://quickcrypt.org''} \\
+$pk_R$ & \textrm{ - ML-DSA-65 recovery proof public key} \\
+$pk_U$ & \textrm{ - ML-DSA-65 userCred proof public key} \\
+$pth$ & \textrm{ - HTTP request path} \\
+$ro$ & \textrm{ - Registration options, including }$o, ch, u_i$\\
+$rq$ & \textrm{ - Authorized request, including }$mth, pth, bd$\\
+$rr$ & \textrm{ - Registration response, including signed }$ch$\\
+$sc_R$ & \textrm{ - Recovery signature context: ``qcrypt/recovery/proof/v1''} \\
+$sc_U$ & \textrm{ - userCred signature context: ``qcrypt/usercred/proof/v1''} \\
+$sk_R$ & \textrm{ - ML-DSA-65 recovery proof secret key} \\
+$sk_U$ & \textrm{ - ML-DSA-65 userCred proof secret key} \\
+$ts$ & \textrm{ - Request timestamp in milliseconds} \\
+$u_c$ & \textrm{ - 256 bit user credential in memory}\\
+$u_i$ & \textrm{ - 128 bit user id guaranteed to be unique} \\
+$u_n$ & \textrm{ - A's chosen user name} \\
+$u_r$ & \textrm{ - 128 bit recovery id} \\
+$\Delta$ & \textrm{ - Maximum request timestamp skew: 60 seconds} \\
+$\sigma_R$ & \textrm{ - ML-DSA-65 recovery proof signature} \\
+$\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \end{tabular}
 
 \hfill \break
@@ -318,19 +347,24 @@ $cw$ & \textrm{ - Alice's webauthn authenticator credentials} \\
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$A\rightarrow B : u_n$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow S : u_n, o$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ create and store}: $} \\
-& $u_i = R(128)$\\
-& $ch = R(256)$\\
+\multicolumn{2}{@{}l}{$S : u_i = R(128)$} \\
+\multicolumn{2}{@{}l}{$S : ch = R(256)$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ store }u_i, ch$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : ro$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow M : ro$} \\
 \multicolumn{2}{@{}l}{$A\rightarrow M : cw$} \\
 \multicolumn{2}{@{}l}{$M\textrm{ create and store passkey, sign }ch $} \\
 \multicolumn{2}{@{}l}{$B\leftarrow M : rr$} \\
-\multicolumn{2}{@{}l}{$B\rightarrow S : rr, u_i, ch$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ verify signature, store }rr \textrm{, generate }u_c \textrm{ and } u_r \textrm{, remove }ch $} \\
-& $u_c = R(256)$\\
-& $u_r = R(128)$\\
-\multicolumn{2}{@{}l}{$B\leftarrow S : u_i, u_n, u_r, u_c$} \\
+\multicolumn{2}{@{}l}{$B : u_r = R(128)$} \\
+\multicolumn{2}{@{}l}{$B : (pk_R, sk_R) = P_K(D_H(1, kp_R, u_r \mathbin\Vert u_i))$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : rr, u_i, ch, pk_R$} \\
+\multicolumn{2}{@{}l}{$S : u_c = R(256)$} \\
+\multicolumn{2}{@{}l}{$S\rightarrow KMS : cd_u \textrm{encrypt } uc \textrm{ with KMS}$ } \\
+\multicolumn{2}{@{}l}{$S : (pk_U, sk_U) = P_K(D_H(1, kp_U, u_c))$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ verify webauthn signature, store }rr, pk_R, pk_U \textrm{ and }cd_u \textrm{, remove }ch $} \\
+\multicolumn{2}{@{}l}{$S\textrm{ create }ck, cs$} \\
+\multicolumn{2}{@{}l}{$B\leftarrow S : u_i, u_n, u_c, cs, ck$} \\
+\multicolumn{2}{@{}l}{$B\textrm{ store }cd_u\textrm{ from }u_c\textrm{ encryption}$} \\
 \multicolumn{2}{@{}l}{$A\leftarrow B : u_r\mathbin\Vert u_i\textrm{ as BIP39}$} \\
 \end{tabular}
 
@@ -340,16 +374,42 @@ $cw$ & \textrm{ - Alice's webauthn authenticator credentials} \\
 
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$B\rightarrow S : o [,u_i]$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ create and store}: $} \\
-& $ch = R(256)$\\
+\multicolumn{2}{@{}l}{$S : ch = R(256)$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ store }ch$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : ao$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow M : ao$} \\
 \multicolumn{2}{@{}l}{$A\rightarrow M : cw$} \\
 \multicolumn{2}{@{}l}{$M\textrm{ sign }ch $} \\
 \multicolumn{2}{@{}l}{$B\leftarrow M : ar$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow S : ar, ch$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ verify signature} \textrm{, remove }ch $} \\
-\multicolumn{2}{@{}l}{$B\leftarrow S : u_i, u_n, u_c$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ verify webauthn signature} \textrm{, remove }ch $} \\
+\multicolumn{2}{@{}l}{$S\textrm{ create }ck, cs$} \\
+\multicolumn{2}{@{}l}{$B\leftarrow S : u_i, u_n, u_c, cs, ck$} \\
+\multicolumn{2}{@{}l}{$B\textrm{ store }cd_u\textrm{ from }u_c\textrm{ encryption}$} \\
+\end{tabular}
+
+\hfill \break
+
+\underline{Authorization of A}\\
+
+\begin{tabular}{@{}p{2mm} l}
+\multicolumn{2}{@{}l}{$B\textrm{ obtain }u_c\textrm{ from }cd_u\textrm{ decryption}$} \\
+\multicolumn{2}{@{}l}{$B : (pk_U, sk_U) = P_K(D_H(1, kp_U, u_c))$} \\
+\multicolumn{2}{@{}l}{$B : ts = \textrm{current time}$} \\
+\multicolumn{2}{@{}l}{$B : n_P = R(256)$} \\
+\multicolumn{2}{@{}l}{$B : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts \delta \mathbin\Vert n_P \delta \mathbin\Vert H_2(bd)$} \\
+\multicolumn{2}{@{}l}{$B : \sigma_U = P_S(sk_U, m_U, sc_U)$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : rq, ck, cs, ts, n_P, \sigma_U$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ verify }ck, cs$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ verify }ts\textrm{ within }\Delta$} \\
+\multicolumn{2}{@{}l}{$S : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts \delta \mathbin\Vert n_P \delta \mathbin\Vert H_2(bd)$} \\
+\multicolumn{2}{@{}l}{$S : b = P_V(pk_U, m_U, \sigma_U, sc_U)$} \\
+\multicolumn{2}{@{}l}{$\textrm{if }mth\textrm{ is state-changing:}$} \\
+\multicolumn{2}{@{}l}{\hspace{15pt}$S : b \mathrel{\&=} n_P\textrm{ is unique}$} \\
+\multicolumn{2}{@{}l}{$\textrm{if }!b:$} \\
+\multicolumn{2}{@{}l}{\hspace{15pt}$B \leftarrow S: err$} \\
+\multicolumn{2}{@{}l}{\hspace{15pt}$A \leftarrow B: err$} \\
+\multicolumn{2}{@{}l}{$B\leftarrow S : \textrm{rq response}$} \\
 \end{tabular}
 
 \newpage
@@ -358,17 +418,32 @@ $cw$ & \textrm{ - Alice's webauthn authenticator credentials} \\
 
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$A\rightarrow B : u_r\mathbin\Vert u_i\textrm{ as BIP39}$} \\
-\multicolumn{2}{@{}l}{$B\rightarrow S : u_i, u_r, o$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ verify } u_r \textrm{, delete existing }rr \textrm{, create and store}: $} \\
-& $ch = R(256)$\\
+\multicolumn{2}{@{}l}{$B\rightarrow S : u_i, o$} \\
+\multicolumn{2}{@{}l}{$S : ch_R = R(256)$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ store }ch_R$} \\
+\multicolumn{2}{@{}l}{$B\leftarrow S : ch_R$} \\
+\multicolumn{2}{@{}l}{$B : (pk_R, sk_R) = P_K(D_H(1, kp_R, u_r \mathbin\Vert u_i))$} \\
+\multicolumn{2}{@{}l}{$B : m_R = u_i \delta \mathbin\Vert ch_R$} \\
+\multicolumn{2}{@{}l}{$B : \sigma_R = P_S(sk_R, m_R, sc_R)$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : u_i, ch_R, \sigma_R$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ remove }ch_R $} \\
+\multicolumn{2}{@{}l}{$S : m_R = u_i \delta \mathbin\Vert ch_R$} \\
+\multicolumn{2}{@{}l}{$S : b = P_V(pk_R, m_R, \sigma_R, sc_R)$} \\
+\multicolumn{2}{@{}l}{$\textrm{if }!b:$} \\
+\multicolumn{2}{@{}l}{\hspace{15pt}$B \leftarrow S: err$} \\
+\multicolumn{2}{@{}l}{\hspace{15pt}$A \leftarrow B: err$} \\
+\multicolumn{2}{@{}l}{$S : ch = R(256)$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ delete existing }rr \textrm{, store }ch $} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : ro$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow M : ro$} \\
 \multicolumn{2}{@{}l}{$A\rightarrow M : cw$} \\
 \multicolumn{2}{@{}l}{$M\textrm{ create and store passkey, sign }ch $} \\
 \multicolumn{2}{@{}l}{$B\leftarrow M : rr$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow S : rr, u_i, ch$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ verify signature, store }rr \textrm{, remove }ch $} \\
-\multicolumn{2}{@{}l}{$B\leftarrow S : u_i, u_n, u_c$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ verify webauthn signature, store }rr \textrm{, remove }ch $} \\
+\multicolumn{2}{@{}l}{$S\textrm{ create }ck, cs$} \\
+\multicolumn{2}{@{}l}{$B\leftarrow S : u_i, u_n, u_c, cs, ck$} \\
+\multicolumn{2}{@{}l}{$B\textrm{ store }cd_u\textrm{ from }u_c\textrm{ encryption}$} \\
 \end{tabular}
 
 \end{document}
