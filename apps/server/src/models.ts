@@ -282,7 +282,7 @@ export const Challenges = new Entity(
             required: true
          },
          purpose: {
-            type: ["reg", "add", "auth", "recover"] as const,
+            type: ["reg", "add", "auth", "recover", "api"] as const,
             required: true,
             readOnly: true
          },
@@ -295,6 +295,7 @@ export const Challenges = new Entity(
             type: "number",
             // Needs unix time (convert from MS to S) and add 5 minutes after creation
             // Which is a 4 minute buffer since webauthn stuff defaults to 1 minute timeout
+            // Must exceed PROOF_SKEW_MS or proof nonces expire within the window and replay reopens
             default: () => (Math.floor(Date.now() / 1000) + 300),
             required: true,
             readOnly: true

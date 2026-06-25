@@ -23,11 +23,9 @@ SOFTWARE. */
 import { getProofKeyPair, signProof, verifyProof, base64ToBytes, concatArrays } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 
-const USERCRED_SCHEME = 'qcrypt-usercred-v1';
 const USERCRED_KEY_CONTEXT = 'UCredKey';
 const USERCRED_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
 
-const RECOVERY_SCHEME = 'qcrypt-recovery-v1';
 const RECOVERY_KEY_CONTEXT = 'RecovKey';
 const RECOVERY_SIG_CONTEXT = 'qcrypt/recovery/proof/v1';
 
@@ -44,17 +42,18 @@ function buildUserCredMessage(
    method: string,
    path: string,
    timestampMs: string,
+   nonce: string,
    bodyHashHex: string
 ): Uint8Array<ArrayBuffer> {
    if (base64ToBytes(userId).byteLength !== cc.USERID_BYTES) {
       throw new Error('invalid userId length');
    }
    const message = [
-      USERCRED_SCHEME,
       userId,
       method.toUpperCase(),
       path,
       timestampMs,
+      nonce,
       bodyHashHex.toLowerCase()
    ].join('\n');
    return new TextEncoder().encode(message);
@@ -72,13 +71,14 @@ export function signUserCredProof(
    method: string,
    path: string,
    timestampMs: string,
+   nonce: string,
    bodyHashHex: string
 ): Uint8Array<ArrayBuffer> {
    const { secKey } = getProofKeyPair(userCred, USERCRED_KEY_CONTEXT);
    try {
       return signProof(
          secKey,
-         buildUserCredMessage(userId, method, path, timestampMs, bodyHashHex),
+         buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex),
          USERCRED_SIG_CONTEXT
       );
    } finally {
@@ -92,12 +92,13 @@ export function verifyUserCredProof(
    method: string,
    path: string,
    timestampMs: string,
+   nonce: string,
    bodyHashHex: string,
    signature: Uint8Array
 ): boolean {
    return verifyProof(
       pubKey,
-      buildUserCredMessage(userId, method, path, timestampMs, bodyHashHex),
+      buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex),
       signature,
       USERCRED_SIG_CONTEXT
    );
@@ -120,7 +121,6 @@ function buildRecoveryMessage(
       throw new Error('invalid challenge length');
    }
    const message = [
-      RECOVERY_SCHEME,
       userId,
       challenge
    ].join('\n');

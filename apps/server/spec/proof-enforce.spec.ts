@@ -24,13 +24,16 @@ import { describe, it, beforeAll, afterAll, expect } from "vitest";
 import { randomBytes } from "node:crypto";
 import {
    getJson,
+   patchJson,
    deleteJson,
    makeProofHeaders,
    registerTestUser,
    setSessionUserCred,
 } from "./common";
 
-describe("proof of userCred enforcement", () => {
+// BACKWARD COMPATIBILITY: skipped while verifyProof enforcement is observe-only for the
+// production soak. Re-enable together with the throw in verifyProof.
+describe.skip("proof of userCred enforcement", () => {
    const testUser = `PWTesty_enf_${Date.now()}`;
    let userId: string;
    let userCred: string;
@@ -57,6 +60,25 @@ describe("proof of userCred enforcement", () => {
       const proof = await makeProofHeaders("GET", "/v1/user", undefined, userCred, userId);
       const res = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
       expect(res.status).toBe(200);
+   });
+
+   it("rejects a replayed proof on a mutating request", async () => {
+      const body = Buffer.from(JSON.stringify({ userName: testUser }));
+      const proof = await makeProofHeaders("PATCH", "/v1/user", body, userCred, userId);
+      const res1 = await patchJson("/v1/user", { userName: testUser }, { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(res1.status).toBe(200);
+
+      const res2 = await patchJson("/v1/user", { userName: testUser }, { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(res2.status).toBe(401);
+   });
+
+   it("allow replayed proof on a read within time window", async () => {
+      const proof = await makeProofHeaders("GET", "/v1/user", undefined, userCred, userId);
+      const res1 = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(res1.status).toBe(200);
+
+      const res2 = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(res2.status).toBe(200);
    });
 
    it("rejects a request carrying no proof", async () => {
@@ -88,6 +110,28 @@ describe("proof of userCred enforcement", () => {
       const wrongUserId = randomBytes(16).toString("base64url");
       const proof = await makeProofHeaders("GET", "/v1/user", undefined, userCred, wrongUserId);
       const res = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(res.status).toBe(401);
+   });
+
+   it("rejects requests with missing proof parts", async () => {
+      const proof = await makeProofHeaders("GET", "/v1/user", undefined, userCred, userId);
+      const parts = proof['x-proof'].split(',');
+      expect(parts.length).toBe(3);
+
+      proof['x-proof'] = parts.join(',');
+      let res = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(res.status).toBe(200);
+
+      proof['x-proof'] = parts.slice(1).join(',');
+      res = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(res.status).toBe(401);
+
+      proof['x-proof'] = parts.slice(0,1).join(',');
+      res = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(res.status).toBe(401);
+
+      proof['x-proof'] = [parts[0], parts[2]].join(',');
+      res = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
 

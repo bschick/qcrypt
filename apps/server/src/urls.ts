@@ -50,7 +50,8 @@ export type HttpDetails = {
    cookie?: string,
    userAgent?: string,
    proofSignature?: string,
-   proofTimestamp?: string
+   proofTimestamp?: string,
+   proofNonce?: string
 };
 
 type HandlerInfo = {
@@ -183,8 +184,19 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
          const params: QParams = event['queryStringParameters'] ?? {};
          const cookie: string | undefined = event['headers']['cookie'];
          const userAgent: string | undefined = event['headers']['user-agent'];
-         const proofSignature: string | undefined = event['headers']['x-proof-sig'];
-         const proofTimestamp: string | undefined = event['headers']['x-proof-ts'];
+         const proofHeader: string | undefined = event['headers']['x-proof'];
+         let proofSignature: string | undefined;
+         let proofTimestamp: string | undefined;
+         let proofNonce: string | undefined;
+
+         if (proofHeader) {
+            const parts = proofHeader.split(',');
+            if (parts.length === 3) {
+               proofSignature = parts[0].trim();
+               proofTimestamp = parts[1].trim();
+               proofNonce = parts[2].trim();
+            }
+         }
 
          // Uncomment for debugging
          // console.log('resources: ' + JSON.stringify(params));
@@ -208,7 +220,8 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
             cookie: cookie,
             userAgent: userAgent,
             proofSignature: proofSignature,
-            proofTimestamp: proofTimestamp
+            proofTimestamp: proofTimestamp,
+            proofNonce: proofNonce
          };
 
       }

@@ -1946,22 +1946,24 @@ async function verifyCookie(
 }
 
 
-function verifyProof(
+async function verifyProof(
    verifiedUser: VerifiedUserItem,
    httpDetails: HttpDetails
-): void {
+): Promise<void> {
    const timestampMs = Number(httpDetails.proofTimestamp);
 
-   let result: 'absent' | 'timeout' | 'invalid' | 'failed' | 'ok';
-   if (!httpDetails.proofSignature || !httpDetails.proofTimestamp) {
+   let result: 'absent' | 'timeout' | 'invalid' | 'failed' | 'replayed' | 'ok';
+   if (!httpDetails.proofSignature || !httpDetails.proofTimestamp || !httpDetails.proofNonce) {
       result = 'absent';
    } else if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > cc.PROOF_SKEW_MS) {
       result = 'timeout';
    } else {
       const pubKeyBytes = base64UrlDecode(verifiedUser.userCredPubKey);
       const signatureBytes = base64UrlDecode(httpDetails.proofSignature);
+      const nonceBytes = base64UrlDecode(httpDetails.proofNonce);
       if (!pubKeyBytes || pubKeyBytes.byteLength !== PROOF_PUBKEY_BYTES ||
-          !signatureBytes || signatureBytes.byteLength !== PROOF_SIG_BYTES
+          !signatureBytes || signatureBytes.byteLength !== PROOF_SIG_BYTES ||
+          !nonceBytes || nonceBytes.byteLength !== cc.CHALLENGE_BYTES
       ) {
          result = 'invalid';
       } else {
@@ -1973,6 +1975,7 @@ function verifyProof(
                httpDetails.method,
                httpDetails.path,
                httpDetails.proofTimestamp,
+               httpDetails.proofNonce,
                bodyHashHex,
                signatureBytes
             );
@@ -1980,12 +1983,35 @@ function verifyProof(
          } catch (err) {
             result = 'failed';
          }
+
+         // Replaying a GET has significantly less risk, so to reduce load enforce
+         // single-use of the nonce only for state-changing requests
+         // TODO: Consider moving this to AWS Elastic cache when usage increases
+         if (result === 'ok' && httpDetails.method !== 'GET') {
+            try {
+               const stored = await Challenges.create({
+                  challenge: httpDetails.proofNonce,
+                  purpose: 'api',
+                  userId: verifiedUser.userId
+               }).go({ returnOnConditionCheckFailure: true });
+
+               if (stored.rejected) {
+                  result = 'replayed';
+               }
+            } catch (err) {
+               // This is a DynamoDB error caused by something other than a duplicate record
+               // (likely load). Log the error, but do not block the request
+               console.error(`proof nonce store error, allowing ${httpDetails.name} ${verifiedUser.userId}`, err);
+            }
+         }
       }
    }
 
    if (result !== 'ok') {
       console.error(`proof ${result} ${httpDetails.name} ${verifiedUser.userId}`);
-      throw new AuthError();
+      // BACKWARD COMPATIBILITY: observe-only for the production soak. Re-enable this throw
+      // once userCredPubKey backfill is ~100%.
+      // throw new AuthError();
    }
 }
 
@@ -2029,7 +2055,7 @@ export async function handler(event: any, context: any) {
          // these throw an exception if cookie or headerCsrf is invalid
          verifiedUser = await verifyCookie(httpDetails.cookie, httpDetails.rpID);
          await verifyCsrf(verifiedUser, httpDetails.checkCsrf, headerCsrf);
-         verifyProof(verifiedUser, httpDetails);
+         await verifyProof(verifiedUser, httpDetails);
       }
 
       if (httpDetails.version === INTERNAL_VERSION) {

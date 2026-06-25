@@ -25,4 +25,4 @@ import { appConfig } from './app/qcrypt.config';
 import { QCryptComponent } from './app/qcrypt.component';
 
 bootstrapApplication(QCryptComponent, {...appConfig, providers: [provideZoneChangeDetection(), ...appConfig.providers]})
-   .catch((err) => console.error(err));
+   .catch((err: unknown) => console.error(err));

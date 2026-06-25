@@ -1,5 +1,14 @@
 # CHANGELOG.md
 
+## 7.2.0 (2026-06-23)
+
+#### Changes
+  - replay nonce added to "proof of userCred" for state-changing API calls
+  - moved account recovery word patterns to client-side only derivation and display
+
+#### Security
+  - updated packages
+
 ## 7.1.0 (2026-06-08)
 
 #### Changes

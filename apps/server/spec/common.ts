@@ -62,13 +62,15 @@ export async function makeProofHeaders(
    body: Buffer | undefined,
    userCred: string,
    userId: string,
-   opts: { timestampMs?: string; tamperSig?: boolean } = {}
+   opts: { timestampMs?: string; tamperSig?: boolean; nonce?: string } = {}
 ): Promise<Record<string, string>> {
    await cryptoReady();
    const timestamp = opts.timestampMs ?? String(Date.now());
+   const nonce = opts.nonce ?? Buffer.from(getRandom(32)).toString("base64url");
    const bodyHashHex = sha256Hex(body ?? Buffer.alloc(0));
-   // Sign the decoded path the server verifies (event.requestContext.http.path), not the
-   // re-encoded URL pathname, so proofs still match when a path carries odd characters.
+
+   // Sign the decoded path. The server verifies (event.requestContext.http.path), not the
+   // re-encoded URL pathname.
    const pathname = path.split("?")[0];
    const signature = signUserCredProof(
       Buffer.from(userCred, "base64url"),
@@ -76,15 +78,18 @@ export async function makeProofHeaders(
       method,
       pathname,
       timestamp,
+      nonce,
       bodyHashHex
    );
+
    const sigBytes = Buffer.from(signature);
    if (opts.tamperSig) {
       sigBytes[0] ^= 0x01;
    }
+   const sigStr = sigBytes.toString("base64url");
+
    return {
-      "x-proof-sig": sigBytes.toString("base64url"),
-      "x-proof-ts": timestamp
+      "x-proof": `${sigStr},${timestamp},${nonce}`
    };
 }
 

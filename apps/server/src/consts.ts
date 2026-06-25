@@ -45,4 +45,6 @@ export const NOUSER_ID = "AAAAAAAAAAAAAAAAAAAAAA";
 export const KMS_KEYID_NEW = process.env.KMSKeyId_New!;
 export const KMS_KEYID_BACKUP = process.env.KMSKeyId_Old!;
 
-export const PROOF_SKEW_MS = 60 * 1000;
+// Must stay below the Challenges TTL (models.ts expiresAt) or proof nonces expire within
+// the window and replay reopens.
+export const PROOF_SKEW_MS = 180 * 1000;

@@ -34,7 +34,6 @@ import {
    base64ToBytes,
    bytesToBase64,
    bufferToHexString,
-   bufferToBase64URLString,
    expired,
    cryptoReady,
    zxcvbnReady,
@@ -337,16 +336,18 @@ export class AuthenticatorService {
 
          try {
             const proofTs = String(Date.now());
+            const proofNonce = bytesToBase64(getRandom(CHALLENGE_BYTES));
             const proofSig = signUserCredProof(
                userCred,
                session.userId,
                method,
                url.pathname,
                proofTs,
+               proofNonce,
                bodyHashHex
             );
-            headers.append('x-proof-sig', bufferToBase64URLString(proofSig.buffer));
-            headers.append('x-proof-ts', proofTs);
+            const proofSigB64 = bytesToBase64(proofSig);
+            headers.append('x-proof', `${proofSigB64},${proofTs},${proofNonce}`);
          } finally {
             userCred.fill(0);
          }

@@ -25,8 +25,9 @@ describe('userCred proof', () => {
    it('sign request and verfiy with derived public key', () => {
       const userCred = getRandom(32);
       const pubKey = getUserCredPubKey(userCred);
-      const signature = signUserCredProof(userCred, userId, 'GET', '/v1/user', '1730000000000', 'abc');
-      expect(verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '1730000000000', 'abc', signature)).toBe(true);
+      const nonce = bytesToBase64(getRandom(32));
+      const signature = signUserCredProof(userCred, userId, 'GET', '/v1/user', '1730000000000', nonce, 'abc');
+      expect(verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '1730000000000', nonce, 'abc', signature)).toBe(true);
    });
 
    it('derives the pinned public key for a fixed secret', () => {
@@ -41,27 +42,32 @@ describe('userCred proof', () => {
    it('throw when signed fields differs', () => {
       const userCred = getRandom(32);
       const pubKey = getUserCredPubKey(userCred);
-      const signature = signUserCredProof(userCred, userId, 'POST', '/v1/passkeys', '100', 'aa');
+      const nonce = bytesToBase64(getRandom(32));
+      const signature = signUserCredProof(userCred, userId, 'POST', '/v1/passkeys', '100', nonce, 'aa');
       const otherUserId = bytesToBase64(getRandom(16));
-      expect(() => verifyUserCredProof(pubKey, otherUserId, 'POST', '/v1/passkeys', '100', 'aa', signature)).toThrow();
-      expect(() => verifyUserCredProof(pubKey, userId, 'DELETE', '/v1/passkeys', '100', 'aa', signature)).toThrow();
-      expect(() => verifyUserCredProof(pubKey, userId, 'POST', '/v1/other', '100', 'aa', signature)).toThrow();
-      expect(() => verifyUserCredProof(pubKey, userId, 'POST', '/v1/passkeys', '101', 'aa', signature)).toThrow();
-      expect(() => verifyUserCredProof(pubKey, userId, 'POST', '/v1/passkeys', '100', 'bb', signature)).toThrow();
+      expect(() => verifyUserCredProof(pubKey, otherUserId, 'POST', '/v1/passkeys', '100', nonce, 'aa', signature)).toThrow();
+      expect(() => verifyUserCredProof(pubKey, userId, 'DELETE', '/v1/passkeys', '100', nonce, 'aa', signature)).toThrow();
+      expect(() => verifyUserCredProof(pubKey, userId, 'POST', '/v1/other', '100', nonce, 'aa', signature)).toThrow();
+      expect(() => verifyUserCredProof(pubKey, userId, 'POST', '/v1/passkeys', '101', nonce, 'aa', signature)).toThrow();
+      const otherNonce = bytesToBase64(getRandom(32));
+      expect(() => verifyUserCredProof(pubKey, userId, 'POST', '/v1/passkeys', '100', otherNonce, 'aa', signature)).toThrow();
+      expect(() => verifyUserCredProof(pubKey, userId, 'POST', '/v1/passkeys', '100', nonce, 'bb', signature)).toThrow();
    });
 
    it('throw when a the wrong public key is used', () => {
-      const signature = signUserCredProof(getRandom(32), userId, 'GET', '/v1/user', '100', 'aa');
+      const nonce = bytesToBase64(getRandom(32));
+      const signature = signUserCredProof(getRandom(32), userId, 'GET', '/v1/user', '100', nonce, 'aa');
       const otherPubKey = getUserCredPubKey(getRandom(32));
-      expect(() => verifyUserCredProof(otherPubKey, userId, 'GET', '/v1/user', '100', 'aa', signature)).toThrow();
+      expect(() => verifyUserCredProof(otherPubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature)).toThrow();
    });
 
    it('thow when the signature is manipulated', () => {
       const userCred = getRandom(32);
       const pubKey = getUserCredPubKey(userCred);
-      const signature = signUserCredProof(userCred, userId, 'GET', '/v1/user', '100', 'aa');
+      const nonce = bytesToBase64(getRandom(32));
+      const signature = signUserCredProof(userCred, userId, 'GET', '/v1/user', '100', nonce, 'aa');
       signature[0] ^= 0x01;
-      expect(() => verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', 'aa', signature)).toThrow();
+      expect(() => verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature)).toThrow();
    });
 });
 

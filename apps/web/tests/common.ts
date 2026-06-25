@@ -2,7 +2,7 @@ import { test, expect, Page, CDPSession, type Cookie } from '@playwright/test';
 import { Protocol } from 'devtools-protocol';
 import { signUserCredProof } from '@qcrypt/api';
 import { cryptoReady } from '@qcrypt/crypto';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -19,6 +19,7 @@ async function proofHeaders(
 ): Promise<Record<string, string>> {
   await cryptoReady();
   const timestamp = String(Date.now());
+  const nonce = randomBytes(32).toString('base64url');
   const bodyHashHex = createHash('sha256').update('').digest('hex');
   const signature = signUserCredProof(
     Buffer.from(userCred, 'base64url'),
@@ -26,11 +27,12 @@ async function proofHeaders(
     method,
     new URL(url).pathname,
     timestamp,
+    nonce,
     bodyHashHex
   );
+  const sigB64 = Buffer.from(signature).toString('base64url');
   return {
-    'x-proof-sig': Buffer.from(signature).toString('base64url'),
-    'x-proof-ts': timestamp,
+    'x-proof': `${sigB64},${timestamp},${nonce}`
   };
 }
 
