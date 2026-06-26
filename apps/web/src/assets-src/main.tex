@@ -281,7 +281,7 @@ h_El$}\\
 
 \newpage
 
-\underline{$u_c$ Decryption by B}\\
+\underline{$cd_u$ Decryption by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$B \leftarrow S: u_i$}\\
@@ -298,13 +298,12 @@ h_El$}\\
 \multicolumn{2}{@{}l}{$u_c = E_a^{-1}(m_E, n_{IV}, ad_X, k_M)$}\\
 \end{tabular}
 
-\newpage
+\hfill \break
 
 \underline{Authentication Variables}\\
 
 \begin{tabular}{@{}p{2mm} l}
 $ao$ & \textrm{ - Authentication options, including }$o, ch$\\
-$\delta$ & \textrm{ - Delimiter byte: \texttt{\textbackslash n}}\\
 $ar$ & \textrm{ - Authentication response, including signed }$ch$\\
 $bd$ & \textrm{ - HTTP request body} \\
 $cd_u$ & \textrm{ - Encrypted userCred at rest}\\
@@ -336,11 +335,12 @@ $u_i$ & \textrm{ - 128 bit user id guaranteed to be unique} \\
 $u_n$ & \textrm{ - A's chosen user name} \\
 $u_r$ & \textrm{ - 128 bit recovery id} \\
 $\Delta$ & \textrm{ - Maximum request timestamp skew: 60 seconds} \\
+$\delta$ & \textrm{ - Delimiter byte: \texttt{\textbackslash n}}\\
 $\sigma_R$ & \textrm{ - ML-DSA-65 recovery proof signature} \\
 $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \end{tabular}
 
-\hfill \break
+\newpage
 
 \underline{Registration by A}\\
 
@@ -390,7 +390,7 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 
 \hfill \break
 
-\underline{Authorization of A}\\
+\underline{Authorization of B}\\
 
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$B\textrm{ obtain }u_c\textrm{ from }cd_u\textrm{ decryption}$} \\
@@ -405,14 +405,14 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \multicolumn{2}{@{}l}{$S : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts \delta \mathbin\Vert n_P \delta \mathbin\Vert H_2(bd)$} \\
 \multicolumn{2}{@{}l}{$S : b = P_V(pk_U, m_U, \sigma_U, sc_U)$} \\
 \multicolumn{2}{@{}l}{$\textrm{if }mth\textrm{ is state-changing:}$} \\
-\multicolumn{2}{@{}l}{\hspace{15pt}$S : b \mathrel{\&=} n_P\textrm{ is unique}$} \\
+\multicolumn{2}{@{}l}{\hspace{15pt}$S : b \text{ \&= } n_P\textrm{ is unique}$} \\
 \multicolumn{2}{@{}l}{$\textrm{if }!b:$} \\
 \multicolumn{2}{@{}l}{\hspace{15pt}$B \leftarrow S: err$} \\
 \multicolumn{2}{@{}l}{\hspace{15pt}$A \leftarrow B: err$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : \textrm{rq response}$} \\
 \end{tabular}
 
-\newpage
+\hfill \break
 
 \underline{Recovery from Lost Passkey by A}\\
 
