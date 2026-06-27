@@ -47,7 +47,7 @@ test.describe('creation', () => {
       fastSession: { cookies: await page.context().cookies(), csrf: regBody.csrf },
     });
 
-    await expect(page).toHaveURL(/\/showrecovery$/);
+    await expect(page).toHaveURL(/\/showrecovery$/, {timeout:10000});
     await expect(page.getByRole('heading', { name: 'Account Backup and Recovery' })).toBeVisible({timeout:10000});
 
     //save recovery pattern
@@ -145,7 +145,7 @@ test.describe('creation', () => {
       fastSession: { cookies: await page.context().cookies(), csrf: regBody.csrf },
     });
 
-    await expect(page).toHaveURL(/\/showrecovery$/);
+    await expect(page).toHaveURL(/\/showrecovery$/, {timeout:10000});
     await expect(page.getByRole('heading', { name: 'Account Backup and Recovery' })).toBeVisible({timeout:10000});
     await page.getByRole('button', { name: /I saved my/ }).click();
 
@@ -229,7 +229,7 @@ test.describe('sign on', () => {
       await page.getByRole('button', { name: /Generate new recovery words/ }).click();
     });
 
-    await expect(page).toHaveURL(/\/showrecovery$/);
+    await expect(page).toHaveURL(/\/showrecovery$/, {timeout:10000});
     await expect(page.getByRole('button', { name: /I saved my recovery words securely/ })).toBeVisible({timeout:10000});
 
     const newWords = await page.locator('textarea#wordsArea').inputValue();

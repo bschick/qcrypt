@@ -13,14 +13,14 @@ testWithAuth('account creation', async ({ authFixture }) => {
 
   const credential = await passkeyCreation(page, session, authenticatorId1, async () => {
     await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
-    await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Create A New user' })).toBeVisible({ timeout: 10000 });
     await page.locator('input#userName').fill('');
     await page.getByRole('button', { name: /Create new/ }).click();
   });
 
-  await expect(page).toHaveURL(/\/showrecovery$/);
+  await expect(page).toHaveURL(/\/showrecovery$/, { timeout: 10000 });
 
-  await expect(page.getByRole('heading', { name: 'Account Backup and Recovery' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Account Backup and Recovery' })).toBeVisible({ timeout: 10000 });
 
   //save recovery pattern
   const recoveryWords = await page.locator('textarea#wordsArea').inputValue();

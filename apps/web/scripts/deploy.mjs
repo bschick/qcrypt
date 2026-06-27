@@ -465,16 +465,16 @@ function deleteKeys(argv, keys) {
    return deleted;
 }
 
-function printUntracked(untracked, heading, limit) {
-   if (untracked.length === 0) {
+function printKeyList(keys, heading, limit) {
+   if (keys.length === 0) {
       return;
    }
    console.log(`  ${heading}`);
-   for (const k of untracked.slice(0, limit)) {
-      console.log(`    ${k}`);
+   for (const key of keys.slice(0, limit)) {
+      console.log(`    ${key}`);
    }
-   if (untracked.length > limit) {
-      console.log(`    ...and ${untracked.length - limit} more`);
+   if (keys.length > limit) {
+      console.log(`    ...and ${keys.length - limit} more`);
    }
 }
 
@@ -603,7 +603,7 @@ async function runDeploy(argv) {
    if (!argv.dryRun && totalUploads === 0) {
       const untracked = untrackedKeys(argv, manifest);
       console.log(`deploy #${manifest.deployCount ?? 0}: from=${relToRoot(localSrc)} no changes  untracked=${untracked.length}`);
-      printUntracked(untracked, "untracked in bucket (use 'expect' or 'unexpect' to update, 'prune' to remove):", argv.printLimit);
+      printKeyList(untracked, "untracked in bucket (use 'expect' or 'unexpect' to update, 'prune' to remove):", argv.printLimit);
       return;
    }
 
@@ -689,11 +689,9 @@ async function runDeploy(argv) {
       ` tracked-orphans=${orphans.size} expired-deleted=${deletedFromS3.length}` +
       ` untracked=${untracked.length}${dryRunTag}`,
    );
-   if (deletedFromS3.length > 0) {
-      console.log(`  deleted: ${deletedFromS3.join(', ')}`);
-   }
-   printUntracked(newlyOrphaned, 'newly orphaned (retention clock starts now):', argv.printLimit);
-   printUntracked(untracked, "untracked in bucket (use 'expect' or 'unexpect' to update, 'prune' to remove):", argv.printLimit);
+   printKeyList(deletedFromS3, 'deleted (expired orphans):', argv.printLimit);
+   printKeyList(newlyOrphaned, 'newly orphaned (retention clock starts now):', argv.printLimit);
+   printKeyList(untracked, "untracked in bucket (use 'expect' or 'unexpect' to update, 'prune' to remove):", argv.printLimit);
    invalidateCloudFront(argv);
 }
 
@@ -880,7 +878,7 @@ function runManifest(argv) {
 function runLeaks(argv) {
    const untracked = untrackedKeys(argv, readManifest(argv));
    console.log(`leaks: scope=${getScope(argv).label} untracked=${untracked.length}`);
-   printUntracked(untracked, 'untracked in bucket:', argv.printLimit);
+   printKeyList(untracked, 'untracked in bucket:', argv.printLimit);
 }
 
 // ---------------------------------------------------------------------------
@@ -1031,8 +1029,8 @@ async function runPrune(argv) {
       `prune: deleted-untracked=${deletedUntracked.length}/${untracked.length}` +
       ` deleted-orphans=${deletedOrphans.length}/${expired.length}${dryRunTag}`,
    );
-   printUntracked(deletedUntracked, 'deleted untracked:', argv.printLimit);
-   printUntracked(deletedOrphans, 'deleted orphans:', argv.printLimit);
+   printKeyList(deletedUntracked, 'deleted untracked:', argv.printLimit);
+   printKeyList(deletedOrphans, 'deleted orphans:', argv.printLimit);
 }
 
 // ---------------------------------------------------------------------------

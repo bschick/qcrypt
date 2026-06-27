@@ -164,13 +164,10 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       if (!body.userId || !body.userCred || !body.csrf || !body.pkId) {
         throw new Error('createTestUser: missing userId/userCred/csrf/pkId in /reg/verify response');
       }
-      await expect(page).toHaveURL(/\/showrecovery$/);
-      await expect(page.getByRole('heading', { name: 'Account Backup and Recovery' })).toBeVisible({ timeout: 10000 });
-      const recoveryWords = await page.locator('textarea#wordsArea').inputValue();
-      await page.getByRole('button', { name: /I saved my/ }).click();
-      await expect(page).toHaveURL(/\/$/);
-      await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({ timeout: 10000 });
 
+      // Track the user the moment it exists server-side, before the
+      // post-creation UI assertions — a slow-network failure in those would
+      // otherwise leak it past cleanup.
       trackedUsers.push({
         userId: body.userId,
         userName,
@@ -185,6 +182,15 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
           csrf: body.csrf,
         },
       });
+
+      // The URL only flips to /showrecovery once its lazy route chunk loads,
+      // which can exceed the 5s default on a slow link.
+      await expect(page).toHaveURL(/\/showrecovery$/, { timeout: 10000 });
+      await expect(page.getByRole('heading', { name: 'Account Backup and Recovery' })).toBeVisible({ timeout: 10000 });
+      const recoveryWords = await page.locator('textarea#wordsArea').inputValue();
+      await page.getByRole('button', { name: /I saved my/ }).click();
+      await expect(page).toHaveURL(/\/$/);
+      await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({ timeout: 10000 });
       return {
         userId: body.userId,
         userName,
