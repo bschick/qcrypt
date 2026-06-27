@@ -56,10 +56,13 @@ fi
 
 SERVE_URL="https://t1.quickcrypt.org:4200"
 SERVE_PID=""
-SERVE_LOG=""
+# When E2E_SERVE_LOG is set (e.g. CI wants to upload it as an artifact) the
+# serve log is written there and kept; otherwise a temp file is used and
+# removed on exit.
+SERVE_LOG="${E2E_SERVE_LOG:-}"
 
-# Kill the whole serve process group (nx spawns children) and drop its log,
-# preserving the script's exit status so cleanup can't mask a test failure.
+# Kill the whole serve process group (nx spawns children), preserving the
+# script's exit status so cleanup can't mask a test failure.
 stop_serve() {
    local rc=$?
    if [[ -n "$SERVE_PID" ]]; then
@@ -67,7 +70,7 @@ stop_serve() {
       kill -- -"$SERVE_PID" 2>/dev/null || true
       wait "$SERVE_PID" 2>/dev/null || true
    fi
-   if [[ -n "$SERVE_LOG" ]]; then
+   if [[ -n "$SERVE_LOG" && -z "${E2E_SERVE_LOG:-}" ]]; then
       rm -f "$SERVE_LOG"
    fi
    return $rc
@@ -87,7 +90,9 @@ serve_ready() {
 # can't reload the page and abort an in-flight request. setsid puts it in its
 # own process group so stop_serve can take down the whole tree.
 start_frozen_serve() {
-   SERVE_LOG="$(mktemp -t run_e2e_serve.XXXXXX.log)"
+   if [[ -z "$SERVE_LOG" ]]; then
+      SERVE_LOG="$(mktemp -t run_e2e_serve.XXXXXX.log)"
+   fi
    echo "run_e2e.sh: starting frozen serve (no watch, no live-reload); log: $SERVE_LOG"
    setsid pnpm exec nx serve web --hmr false --live-reload false --watch false \
       --host 0.0.0.0 --ssl \

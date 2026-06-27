@@ -42,15 +42,6 @@ jobs:
       run: |
         cd apps/web/localssl/
         ./localssl.sh
-    - name: Start server
-      run: pnpm serve > serve.log 2>&1 &
-    - name: Wait for the service to be ready
-      run: |
-        # Use a loop with `curl` to wait for the service to respond
-        for i in {1..10}; do
-          curl --insecure --fail https://t1.quickcrypt.org:4200 && echo "Server is up!" && break || echo "Waiting for server...";
-          sleep 5;
-        done
     - name: Restore keeper credentials
       env:
         E2E_CREDS_B64: ${{ secrets.E2E_CREDS_B64 }}
@@ -64,6 +55,10 @@ jobs:
           echo "No E2E_CREDS_B64 secret available; keeper tests will skip."
         fi
     - name: Run Playwright e2e tests
+      # run_e2e.sh owns a frozen dev serve (no watch/live-reload). E2E_SERVE_LOG
+      # makes it write the serve log to a known path for the artifact upload.
+      env:
+        E2E_SERVE_LOG: serve.log
       run: pnpm test:e2e
     - uses: actions/upload-artifact@v5
       if: ${{ !cancelled() }}
