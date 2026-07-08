@@ -172,10 +172,13 @@ export class ProcessCancelled extends Error {
    }
 }
 
-export function streamFromBase64(b64: string): ReadableStream<Uint8Array> {
-   const data = base64ToBytes(b64);
+export function streamFromBytes(data: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Array> {
    const blob = new Blob([data], { type: 'application/octet-stream' });
    return blob.stream();
+}
+
+export function streamFromBase64(b64: string): ReadableStream<Uint8Array> {
+   return streamFromBytes(base64ToBytes(b64));
 }
 
 export class BYOBStreamReader {

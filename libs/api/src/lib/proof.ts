@@ -29,13 +29,12 @@ const USERCRED_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
 const RECOVERY_KEY_CONTEXT = 'RecovKey';
 const RECOVERY_SIG_CONTEXT = 'qcrypt/recovery/proof/v1';
 
+export const RECOVERYID_BYTES = 16;
 export const CHALLENGE_BYTES = 32;
+
 // ML-DSA-65 public key and signature length in bytes.
 export const PROOF_PUBKEY_BYTES = 1952;
 export const PROOF_SIG_BYTES = 3309;
-
-// For backward compat only. After migration, this becomes a client only value
-export const RECOVERYID_BYTES = 16;
 
 function buildUserCredMessage(
    userId: string,
@@ -104,8 +103,7 @@ export function verifyUserCredProof(
    );
 }
 
-// Order must not change for recovery to function
-// For backward compat only. After migration, this becomes a client only function
+
 export function recoverySecret(recoveryId: Uint8Array, userId: string): Uint8Array<ArrayBuffer> {
    return concatArrays([recoveryId, base64ToBytes(userId)]);
 }

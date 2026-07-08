@@ -47,6 +47,7 @@ export {
    selectWriteableQQFile,
    selectWriteableTxtFile,
    bytesFromUTF8String,
+   streamFromBytes,
    streamFromBase64,
    concatArrays,
 } from './lib/utils';

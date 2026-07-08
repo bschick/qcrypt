@@ -55,15 +55,16 @@ export namespace ResponseTypes {
       verified: boolean;
       userId?: string;
       userName?: string;
-      hasRecoveryId?: boolean;
+      hasRecoveryKey?: boolean;
       authenticators?: AuthenticatorInfo[];
       invitables?: InvitableInfo[];
    };
 
    export type LoginUserInfo = UserInfo & {
       pkId?: string;
+      prf?: boolean;
       userCred?: string;
-      recoveryId?: string;
+      passkeyUserCredEnc?: string;
       csrf?: string;
    };
 }
