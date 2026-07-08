@@ -54,18 +54,12 @@ type RecoverySession = {
 // keepSession is set the new passkey is deleted before returning.
 async function recoverAccount(
    testUser: TestUser,
-   opts: { legacy?: boolean; keepSession?: boolean } = {}
+   opts: { keepSession?: boolean } = {}
 ): Promise<RecoverySession> {
    let recoverBody: Record<string, any>;
-   // BACKWARD COMPAT: pre-recovery-words accounts authorize with the raw recovery id
-   // instead of a challenge-signed proof.
-   if (opts.legacy) {
-      recoverBody = { userId: testUser.userId, recoveryId: bytesToBase64(testUser.recoveryId) };
-   } else {
-      const challenge = await issueChallenge(testUser.userId);
-      const signature = bytesToBase64(signRecoveryProof(testUser.recoverySecret, testUser.userId, challenge));
-      recoverBody = { userId: testUser.userId, challenge, signature };
-   }
+   const challenge = await issueChallenge(testUser.userId);
+   const signature = bytesToBase64(signRecoveryProof(testUser.recoverySecret, testUser.userId, challenge));
+   recoverBody = { userId: testUser.userId, challenge, signature };
 
    const recoverRes = await postJson("/v1/recover2", recoverBody, {}, "");
    expect(recoverRes.status).toBe(200);
@@ -141,7 +135,7 @@ describe("recovery proof", () => {
 
    it("rejects a challenge request with a malformed userId", async () => {
       const res = await postJson("/v1/recover2/challenge", { userId: "AAAA" }, {}, "");
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(401);
    });
 
    it("rejects a wrong signature", async () => {
@@ -177,7 +171,7 @@ describe("recovery proof", () => {
 
    it("rejects a recover2 request missing any recovery proof", async () => {
       const res = await postJson("/v1/recover2", { userId: user.userId }, {}, "");
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(401);
    });
 
    it("updates the recovery public key with the current key", async () => {
@@ -216,12 +210,6 @@ describe("recovery proof", () => {
       await recoverAccount(recoverUser);
    });
 
-   it("account recovery succeeds for a server-provisioned user", async () => {
-      // BACKWARD COMPAT: legacy accounts whose recovery key the server generated.
-      const recoverUser = await registerTestUser(`PWTesty_recbc_${Date.now()}`, { serverRecovery: true });
-      await recoverAccount(recoverUser, { legacy: true });
-   });
-
    // Replacing recovery words rotates the recovery key, which must retire the prior one.
    it("rejects the previous recovery key after it is replaced", async () => {
       const recoverUser = await registerTestUser(`PWTesty_regen_${Date.now()}`);
@@ -250,11 +238,10 @@ describe("recovery proof", () => {
    });
 
    it("rejects a previous recovery id after the key is replaced", async () => {
-      // BACKWARD COMPAT: a server-provisioned account starts out recoverable with a raw recovery id.
-      const recoverUser = await registerTestUser(`PWTesty_regenbc_${Date.now()}`, { serverRecovery: true });
+      const recoverUser = await registerTestUser(`PWTesty_regenbc_${Date.now()}`);
 
       // The original recovery id recovers the account before the key is replaced.
-      const session = await recoverAccount(recoverUser, { legacy: true, keepSession: true });
+      const session = await recoverAccount(recoverUser, { keepSession: true });
 
       const newSecret = recoverySecret(getRandom(RECOVERYID_BYTES), recoverUser.userId);
       setSessionUserCred(session.userCred, recoverUser.userId);

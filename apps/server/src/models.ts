@@ -57,16 +57,16 @@ export const Users = new Entity(
             type: "string",
             required: false
          },
-         recoveryIdEnc: {
-            type: "string",
-            required: false
-         },
          userCredPubKey: {
             type: "string",
             required: false
          },
          recoveryPubKey: {
             type: "string",
+            required: false
+         },
+         prf: {
+            type: "boolean",
             required: false
          },
          verified: {
@@ -163,6 +163,10 @@ export const Authenticators = new Entity(
             required: false
          },
          attestationObject: {
+            type: "string",
+            required: false
+         },
+         userCredEnc: {
             type: "string",
             required: false
          },
@@ -282,7 +286,7 @@ export const Challenges = new Entity(
             required: true
          },
          purpose: {
-            type: ["reg", "add", "auth", "recover", "api"] as const,
+            type: ["reg", "add", "auth", "recover", "api", "nonce"] as const,
             required: true,
             readOnly: true
          },
@@ -415,5 +419,4 @@ export type AuthItem = EntityItem<typeof Authenticators>;
 export type InvitableItem = EntityItem<typeof Invitables>;
 export type VerifiedUserItem = EntityRecord<typeof Users> & {
    lastCredentialId?: string;
-   recoveryIdEnc?: string;
 };

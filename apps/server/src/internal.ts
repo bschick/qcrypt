@@ -42,7 +42,6 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { base64UrlEncode, isReservedTestUserName } from "./utils";
-import { getRecoveryPubKey, recoverySecret } from '@qcrypt/api';
 
 export async function postLoadAAGUIDs(
    httpDetails: HttpDetails
@@ -417,62 +416,62 @@ export async function postMunge(
 
    const batchSize = 14;
 
-   const userAttrs = ["userId", "verified", "recoveryIdEnc", "recoveryPubKey"] as const;
-   let users = await Users.scan.go({
-      attributes: userAttrs,
-      limit: batchSize
-   });
+   // const userAttrs = ["userId", "verified", "recoveryIdEnc", "recoveryPubKey"] as const;
+   // let users = await Users.scan.go({
+   //    attributes: userAttrs,
+   //    limit: batchSize
+   // });
 
-   let total = 0;
-   let updated = 0;
+   // let total = 0;
+   // let updated = 0;
 
-   while (users && users.data && users.data.length > 0) {
-      total += users.data.length
+   // while (users && users.data && users.data.length > 0) {
+   //    total += users.data.length
 
-      for (let user of users.data) {
-         // fake user to prevent Id use
-         if (user.userId === 'AAAAAAAAAAAAAAAAAAAAAA') {
-            continue;
-         }
+   //    for (let user of users.data) {
+   //       // fake user to prevent Id use
+   //       if (user.userId === 'AAAAAAAAAAAAAAAAAAAAAA') {
+   //          continue;
+   //       }
 
-         // recoveryPubKey can only be derived where a recoveryIdEnc exists, and skip
-         // any already backfilled
-         if (!user.verified || !user.recoveryIdEnc || user.recoveryPubKey) {
-            continue;
-         }
+   //       // recoveryPubKey can only be derived where a recoveryIdEnc exists, and skip
+   //       // any already backfilled
+   //       if (!user.verified || !user.recoveryIdEnc || user.recoveryPubKey) {
+   //          continue;
+   //       }
 
-         try {
-            const recoveryId = await decryptField(
-               user.recoveryIdEnc,
-               { userId: user.userId },
-               cc.RECOVERYID_BYTES
-            );
-            const recoveryPubKey = base64UrlEncode(
-               getRecoveryPubKey(recoverySecret(recoveryId, user.userId))
-            )!;
+   //       try {
+   //          const recoveryId = await decryptField(
+   //             user.recoveryIdEnc,
+   //             { userId: user.userId },
+   //             cc.RECOVERYID_BYTES
+   //          );
+   //          const recoveryPubKey = base64UrlEncode(
+   //             getRecoveryPubKey(recoverySecret(recoveryId, user.userId))
+   //          )!;
 
-            await Users.patch({
-               userId: user.userId
-            }).set({
-               recoveryPubKey: recoveryPubKey
-            }).go();
+   //          await Users.patch({
+   //             userId: user.userId
+   //          }).set({
+   //             recoveryPubKey: recoveryPubKey
+   //          }).go();
 
-            updated += 1;
-         } catch (error) {
-            console.error(`Error for ${user.userId}`, error);
-         }
-      }
+   //          updated += 1;
+   //       } catch (error) {
+   //          console.error(`Error for ${user.userId}`, error);
+   //       }
+   //    }
 
-      if (!users.cursor) {
-         break;
-      }
-      users = await Users.scan.go({
-         attributes: userAttrs,
-         limit: batchSize,
-         cursor: users.cursor
-      });
-   }
+   //    if (!users.cursor) {
+   //       break;
+   //    }
+   //    users = await Users.scan.go({
+   //       attributes: userAttrs,
+   //       limit: batchSize,
+   //       cursor: users.cursor
+   //    });
+   // }
 
-   console.log(`${total} users total, ${updated} recoveryPubKey backfilled`);
+   // console.log(`${total} users total, ${updated} recoveryPubKey backfilled`);
    return { content: { message: "done" } };
 }

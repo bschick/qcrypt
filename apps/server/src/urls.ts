@@ -78,6 +78,9 @@ export const Patterns = {
    regVerify: new URLPattern({
       pathname: '/v:ver/reg/verify',
    }),
+   recoverVerify: new URLPattern({
+      pathname: '/v:ver/recover/verify',
+   }),
    authOptions: new URLPattern({
       pathname: '/v:ver/auth/options',
    }),

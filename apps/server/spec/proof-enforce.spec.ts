@@ -31,9 +31,7 @@ import {
    setSessionUserCred,
 } from "./common";
 
-// BACKWARD COMPATIBILITY: skipped while verifyProof enforcement is observe-only for the
-// production soak. Re-enable together with the throw in verifyProof.
-describe.skip("proof of userCred enforcement", () => {
+describe("proof of userCred enforcement", () => {
    const testUser = `PWTesty_enf_${Date.now()}`;
    let userId: string;
    let userCred: string;

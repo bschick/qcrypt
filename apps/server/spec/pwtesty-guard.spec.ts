@@ -47,17 +47,17 @@ describe('PWTesty_ prefix guard', () => {
 
    it('rejects PWTesty_ from a non-test client', async () => {
       const res = await postRegOptionsAsRealClient('PWTesty_');
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(401);
    });
 
    it('rejects pwtesty_ (lowercase) from a non-test client', async () => {
       const res = await postRegOptionsAsRealClient('pwtesty_');
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(401);
    });
 
    it('rejects PWTesty_<Date.now()> from a non-test client', async () => {
       const res = await postRegOptionsAsRealClient(`PWTesty_${Date.now()}`);
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(401);
    });
 
    // Sanity check that the rejections above are caused by the prefix guard,

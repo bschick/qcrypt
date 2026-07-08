@@ -1,0 +1,21 @@
+{
+  "name": "nid-webauthn-emulator",
+  "version": "0.2.14",
+  "description": "Vendored build of the bschick/nid-webauthn-emulator fork (feat/hmac-secret) adding CTAP2 hmac-secret / hmac-secret-mc (WebAuthn PRF) support. Built from commit 5ae7aef7ab6f22b819a2dff53b98343c3829d4c6.",
+  "keywords": [
+    "test",
+    "e2e",
+    "passkeys"
+  ],
+  "repository": "https://github.com/bschick/nid-webauthn-emulator.git",
+  "files": [
+    "dist"
+  ],
+  "author": "Nikkei Inc.",
+  "license": "MIT",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "dependencies": {
+    "tldts": "7.1.2"
+  }
+}

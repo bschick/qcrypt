@@ -22,7 +22,7 @@ SOFTWARE. */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { SESSION_TIMEOUT_SEC } from '@qcrypt/api';
-import { WebAuthnEmulator } from "nid-webauthn-emulator";
+import WebAuthnEmulator from "nid-webauthn-emulator";
 import {
    registerTestUser,
    deleteJson,
@@ -83,7 +83,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          expect(res.data.verified).toBe(true);
          expect(res.data.userId).toBe(userId);
          expect(res.data.userName).toBe(testUser);
-         expect(res.data.hasRecoveryId).toBeTruthy();
+         expect(res.data.hasRecoveryKey).toBeTruthy();
          expect(res.data.authenticators.length).toBe(1);
          expect(res.data.csrf).toBeDefined();
          expect(res.data.userCred).toBeUndefined();
@@ -379,7 +379,7 @@ describe("QuickCrypt WebAuthn Full API Suite", () => {
          expect(restored.data.verified).toBeTruthy();
          expect(restored.data.userName).toBe(testUser);
          expect(restored.data.userId).toBe(userId);
-         expect(restored.data.hasRecoveryId).toBeTruthy();
+         expect(restored.data.hasRecoveryKey).toBeTruthy();
          expect(restored.data.authenticators.length).toBe(1);
       });
 

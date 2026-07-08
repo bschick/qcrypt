@@ -21,9 +21,21 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import crypto from "crypto";
-import { WebAuthnEmulator, AuthenticatorEmulator, PasskeysCredentialsFileRepository } from "nid-webauthn-emulator";
-import { signUserCredProof, getRecoveryPubKey, recoverySecret, RECOVERYID_BYTES } from "@qcrypt/api";
-import { cryptoReady, bytesToBase64, base64ToBytes, getRandom } from "@qcrypt/crypto";
+import WebAuthnEmulator, { AuthenticatorEmulator, PasskeysCredentialsFileRepository, type HmacSecretMode } from "nid-webauthn-emulator";
+import { signUserCredProof, getUserCredPubKey, getRecoveryPubKey, recoverySecret, RECOVERYID_BYTES } from "@qcrypt/api";
+import {
+   cryptoReady,
+   bytesToBase64,
+   base64ToBytes,
+   getRandom,
+   MasterKeyKeyProvider,
+   encryptStream,
+   decryptStream,
+   streamFromBytes,
+   streamFromBase64,
+   readStreamAll,
+} from "@qcrypt/crypto";
+import * as cc from "@qcrypt/crypto/consts";
 import { expect } from "vitest";
 
 // ----- Setup -----
@@ -94,13 +106,84 @@ export async function makeProofHeaders(
 }
 
 
-export function getWebAuthnEmulator(persistent: boolean = false): WebAuthnEmulator {
-   const repo = new PasskeysCredentialsFileRepository("apps/server/spec/credentials");
-   const auth = new AuthenticatorEmulator({
-      credentialsRepository: repo,
-      transports: ['internal']
-   });
-   return persistent ? new WebAuthnEmulator(auth) : new WebAuthnEmulator();
+export function getWebAuthnEmulator(
+   persistent: boolean = false,
+   hmacSecret: HmacSecretMode = "none"
+): WebAuthnEmulator {
+   let emulator: WebAuthnEmulator;
+
+   if (!persistent && hmacSecret === "none") {
+      emulator = new WebAuthnEmulator();
+   } else {
+      const auth = new AuthenticatorEmulator({
+         transports: ['internal'],
+         hmacSecret,
+         ...(persistent
+            ? { credentialsRepository: new PasskeysCredentialsFileRepository("apps/server/spec/credentials") }
+            : {})
+      });
+      emulator = new WebAuthnEmulator(auth);
+   }
+
+   return emulator;
+}
+
+// Fixed PRF salt, mirrors apps/web/src/app/services/prf.ts (SHA-256 of "qcrypt/prf/v1").
+// Sent to the emulator as the WebAuthn PRF eval.first input; never change it.
+export const PRF_SALT = new Uint8Array([
+   135, 160, 31, 62, 121, 231, 107, 36, 153, 237, 167, 166, 197, 60, 242, 199,
+   130, 254, 201, 171, 58, 139, 70, 172, 87, 190, 17, 210, 6, 26, 99, 120,
+]);
+
+// The emulator's JSON API expects/returns PRF values as base64url text.
+const PRF_SALT_INPUT = bytesToBase64(PRF_SALT);
+export const PRF_EXTENSION = { prf: { eval: { first: PRF_SALT_INPUT } } };
+
+// Reads the PRF output (results.first) from a credential's client extension results,
+// which the emulator's JSON API base64url-encodes. Returns null when no output is
+// present (hmac-secret at registration time, before the Case B follow-up assertion).
+export function readPrfOutput(clientExtensionResults: any): Uint8Array<ArrayBuffer> | null {
+   const first = clientExtensionResults?.prf?.results?.first;
+   let output: Uint8Array<ArrayBuffer> | null = null;
+   if (first) {
+      output = base64ToBytes(first);
+      if (output.byteLength !== cc.KEY_BYTES) {
+         throw new Error('unexpected PRF output length: ' + output.byteLength);
+      }
+   }
+   return output;
+}
+
+// Encrypt a client-generated userCred under a 32-byte key (a PRF output or the recovery
+// secret), matching the web client's ciphertext construction. Takes ownership of and wipes key.
+export async function prfEncrypt(
+   plainText: Uint8Array<ArrayBuffer>,
+   key: Uint8Array<ArrayBuffer>,
+   userId: string
+): Promise<string> {
+   try {
+      const keyProvider = new MasterKeyKeyProvider(key, userId);
+      const cipherData = await readStreamAll(
+         await encryptStream(streamFromBytes(plainText), keyProvider, { algs: ['X20-PLY'] })
+      );
+      return bytesToBase64(cipherData);
+   } finally {
+      key.fill(0);
+   }
+}
+
+// Take ownership of and wipe key.
+export async function prfDecrypt(
+   cipherText: string,
+   key: Uint8Array<ArrayBuffer>,
+   userId: string
+): Promise<Uint8Array<ArrayBuffer>> {
+   try {
+      const keyProvider = new MasterKeyKeyProvider(key, userId);
+      return await readStreamAll(await decryptStream(streamFromBase64(cipherText), keyProvider));
+   } finally {
+      key.fill(0);
+   }
 }
 
 async function request(
@@ -160,10 +243,7 @@ export const deleteJson = (p: string, h: any, c: string) => request("DELETE", p,
 // generated here and only its public key is sent; the secret is returned for recovery
 // flows. The emulator is returned so callers can drive later auth/assertion flows.
 export async function registerTestUser(
-   userName: string,
-   // BACKWARD COMPAT: when set, the server generates the recovery key (recovery=true)
-   // instead of the client. Used by one test covering legacy server-provisioned accounts.
-   opts: { serverRecovery?: boolean } = {}
+   userName: string
 ): Promise<{
    userId: string;
    userCred: string;
@@ -192,13 +272,7 @@ export async function registerTestUser(
    let secret = recoverySecret(recoveryId, userId);
    const verifyBody: Record<string, any> = { ...attestation, userId, challenge: regOpts.data.challenge };
    let params = "usercred=true";
-   if (opts.serverRecovery) {
-      // BACKWARD COMPAT: ask the server to generate the recovery key and return its
-      // recoveryId so the secret can be reconstructed below.
-      params = "usercred=true&recovery=true";
-   } else {
-      verifyBody.recoveryPubKey = bytesToBase64(getRecoveryPubKey(secret));
-   }
+   verifyBody.recoveryPubKey = bytesToBase64(getRecoveryPubKey(secret));
 
    const verifyRes = await postJson(`/v1/reg/verify?${params}`, verifyBody, {}, "");
    expect(verifyRes.status).toBe(200);
@@ -207,13 +281,6 @@ export async function registerTestUser(
    expect(verifyRes.data.pkId).toBeDefined();
    expect(verifyRes.data.userCred).toBeDefined();
    expect(verifyRes.cookie).toBeTruthy();
-
-   if (opts.serverRecovery) {
-      // BACKWARD COMPAT: reconstruct the secret from the server-generated recoveryId.
-      expect(verifyRes.data.recoveryId).toBeDefined();
-      recoveryId = base64ToBytes(verifyRes.data.recoveryId);
-      secret = recoverySecret(recoveryId, userId);
-   }
 
    return {
       userId,
@@ -224,6 +291,103 @@ export async function registerTestUser(
       emulator,
       recoverySecret: secret,
       recoveryId,
+   };
+}
+
+// Register a fresh PRF account: the client generates userCred locally, obtains a PRF output
+// from the passkey, and sends only opaque ciphertexts (the server never sees plaintext userCred).
+// hmac-secret-mc returns the PRF output during registration; hmac-secret returns it only during
+// an assertion, so a local follow-up assertion reads it. Returns the known plaintext userCred so
+// callers can verify that a later login decrypts back to it.
+export async function registerPrfTestUser(
+   userName: string,
+   hmacSecret: "hmac-secret" | "hmac-secret-mc" = "hmac-secret-mc"
+): Promise<{
+   userId: string;
+   userCred: string;
+   cookie: string;
+   csrf: string;
+   credId: string;
+   emulator: WebAuthnEmulator;
+   recoverySecret: Uint8Array;
+   recoveryId: Uint8Array;
+   passkeyUserCredEnc: string;
+   prfCase: 'create' | 'assert';
+}> {
+   await cryptoReady();
+   const regOpts = await postJson("/v1/reg/options", { userName }, {}, "");
+   expect(regOpts.status).toBe(200);
+   expect(regOpts.data.user.name).toBe(userName);
+
+   const userId: string = regOpts.data.user.id;
+   const emulator = getWebAuthnEmulator(false, hmacSecret);
+
+   const userCred = getRandom(cc.USERCRED_BYTES);
+
+   const attestation = emulator.createJSON(RP_ORIGIN, {
+      ...regOpts.data,
+      user: { ...regOpts.data.user, id: userId },
+      challenge: regOpts.data.challenge,
+      extensions: PRF_EXTENSION,
+   });
+
+   let prfOutput = readPrfOutput(attestation.clientExtensionResults);
+   let prfCase: 'create' | 'assert' = 'create';
+   if (!prfOutput) {
+      // hmac-secret returns no output at registration, so read it with a local follow-up
+      // assertion on the just-created credential. This assertion is never sent to the server.
+      prfCase = 'assert';
+      const assertion = emulator.getJSON(RP_ORIGIN, {
+         challenge: bytesToBase64(getRandom(32)),
+         rpId: regOpts.data.rp.id,
+         allowCredentials: [{ type: 'public-key', id: attestation.id }],
+         extensions: PRF_EXTENSION,
+      });
+      prfOutput = readPrfOutput(assertion.clientExtensionResults);
+   }
+   if (!prfOutput) {
+      throw new Error('emulator returned no PRF output');
+   }
+
+   const recoveryId = getRandom(RECOVERYID_BYTES);
+   const secret = recoverySecret(recoveryId, userId);
+
+   const userCredPubKey = bytesToBase64(getUserCredPubKey(userCred));
+   const recoveryPubKey = bytesToBase64(getRecoveryPubKey(secret));
+   const passkeyUserCredEnc = await prfEncrypt(userCred.slice(0), prfOutput, userId);
+   const recoveryUserCredEnc = await prfEncrypt(userCred.slice(0), secret.slice(0), userId);
+
+   const verifyBody: Record<string, any> = {
+      ...attestation,
+      userId,
+      challenge: regOpts.data.challenge,
+      passkeyUserCredEnc,
+      recoveryUserCredEnc,
+      userCredPubKey,
+      recoveryPubKey,
+   };
+
+   const verifyRes = await postJson(`/v1/reg/verify?usercred=true`, verifyBody, {}, "");
+   expect(verifyRes.status).toBe(200);
+   expect(verifyRes.data.verified).toBe(true);
+   expect(verifyRes.data.prf).toBe(true);
+   expect(verifyRes.data.passkeyUserCredEnc).toBeDefined();
+   expect(verifyRes.data.userCred).toBeUndefined();
+   expect(verifyRes.data.csrf).toBeDefined();
+   expect(verifyRes.data.pkId).toBeDefined();
+   expect(verifyRes.cookie).toBeTruthy();
+
+   return {
+      userId,
+      userCred: bytesToBase64(userCred),
+      cookie: verifyRes.cookie,
+      csrf: verifyRes.data.csrf,
+      credId: verifyRes.data.pkId,
+      emulator,
+      recoverySecret: secret,
+      recoveryId,
+      passkeyUserCredEnc,
+      prfCase,
    };
 }
 
