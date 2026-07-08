@@ -1,0 +1,105 @@
+/* MIT License
+
+Copyright (c) 2026 Brad Schick
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. */
+
+import {
+   bytesToBase64,
+   streamFromBytes,
+   streamFromBase64,
+   readStreamAll,
+   encryptStream,
+   decryptStream,
+   MasterKeyKeyProvider,
+} from '@qcrypt/crypto';
+import * as cc from '@qcrypt/crypto/consts';
+import type {
+   PublicKeyCredentialCreationOptionsJSON,
+   PublicKeyCredentialRequestOptionsJSON,
+} from '@simplewebauthn/browser';
+
+// Fixed PRF salt (SHA-256 of "qcrypt/prf/v1"); never change or all decryption will fail
+export const PRF_SALT = new Uint8Array([
+   135, 160, 31, 62, 121, 231, 107, 36, 153, 237, 167, 166, 197, 60, 242, 199,
+   130, 254, 201, 171, 58, 139, 70, 172, 87, 190, 17, 210, 6, 26, 99, 120,
+]);
+
+// This function edits passed in optionsJson in place
+export function injectPrfExtension(
+   optionsJson: PublicKeyCredentialCreationOptionsJSON | PublicKeyCredentialRequestOptionsJSON
+): void {
+   // @simplewebauthn forwards extensions to the native call unchanged, so first must be a BufferSource
+   if (!optionsJson.extensions) {
+      optionsJson.extensions = {};
+   }
+   let extensions = optionsJson.extensions as { prf: {eval: {first: Uint8Array}} };
+   extensions.prf = { eval: { first: PRF_SALT } };
+}
+
+export function prfEnabled(clientExtensionResults: AuthenticationExtensionsClientOutputs): boolean {
+   return clientExtensionResults.prf?.enabled === true;
+}
+
+export function prfReadKey(
+   clientExtensionResults: AuthenticationExtensionsClientOutputs
+): Uint8Array<ArrayBuffer> | null {
+   const first = clientExtensionResults.prf?.results?.first;
+   let output: Uint8Array<ArrayBuffer> | null = null;
+
+   if (first instanceof ArrayBuffer) {
+      output = new Uint8Array(first);
+      if (output.byteLength !== cc.KEY_BYTES) {
+         throw new Error('unexpected PRF output length: ' + output.byteLength);
+      }
+   }
+   return output;
+}
+
+// This function takes ownership of and clears prfKey
+export async function prfEncrypt(
+   plainText: Uint8Array<ArrayBuffer>,
+   prfKey: Uint8Array<ArrayBuffer>,
+   userId: string
+): Promise<string> {
+   try {
+      const keyProvider = new MasterKeyKeyProvider(prfKey, userId);
+      const cipherData = await readStreamAll(
+         await encryptStream(streamFromBytes(plainText), keyProvider, { algs: ['X20-PLY'] })
+      );
+      return bytesToBase64(cipherData);
+   } finally {
+      prfKey.fill(0);
+   }
+}
+
+// This function takes ownership of and clears prfKey
+// Caller must overwrite the returned value ASAP if sensitve
+export async function prfDecrypt(
+   cipherText: string,
+   prfKey: Uint8Array<ArrayBuffer>,
+   userId: string
+): Promise<Uint8Array<ArrayBuffer>> {
+   try {
+      const keyProvider = new MasterKeyKeyProvider(prfKey, userId);
+      return await readStreamAll(await decryptStream(streamFromBase64(cipherText), keyProvider));
+   } finally {
+      prfKey.fill(0);
+   }
+}

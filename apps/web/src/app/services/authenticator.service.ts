@@ -734,7 +734,7 @@ export class AuthenticatorService {
       if (!serverUser.authenticators || serverUser.authenticators.length == 0) {
          throw new Error('missing authenticators');
       }
-      if (serverUser.hasRecoveryId === undefined) {
+      if (serverUser.hasRecoveryKey === undefined) {
          throw new Error('missing recovery id info');
       }
 
@@ -749,7 +749,7 @@ export class AuthenticatorService {
          userId: serverUser.userId!,
          userName: serverUser.userName!,
          pkId: session.pkId!,
-         hasRecoveryId: serverUser.hasRecoveryId!,
+         hasRecoveryId: serverUser.hasRecoveryKey!,
          authenticators: serverUser.authenticators!
       };
 
