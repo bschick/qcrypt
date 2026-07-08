@@ -121,6 +121,8 @@ Two realities force a **long dual-mode transition**:
 
 **Approach:** Wire the WebAuthn **PRF extension** into `startRegistration`/`startAuthentication` (`prf: { eval: { first: <salt> } }`; note PRF output often needs a follow-up assertion to read on some platforms). Client generates `userCred`, encrypts it under the PRF output (reuse the existing cipher service / `MasterKeyKeyProvider` pattern), stores the per-passkey blob (`Authenticators.userCredEnc`) and the recovery record (now carrying recovery-encrypted `userCred`), and supplies the **proof pubkey** at creation (server can't derive it post-PRF). Set account mode = post-PRF (new `Users` flag). **Rework `getSessionKey`** off `userCredEnc` → `lastCredentialId` (for all accounts). Detailed plan authored when Phase 2 completes.
 
+> **Status (2026-07-08):** Server **code-complete** on branch `prf-phase3` (models, shared types, `getSessionKey` cutover, and the `_doPostRegVerify` / `makeLoginUserInfoResponse` / `postRecover2` PRF branches). **Test infra ready:** the forked NID emulator (`feat/hmac-secret`) now has real CTAP2 `hmac-secret` / `hmac-secret-mc` PRF (143 tests green), so `apps/server/spec` can drive genuine PRF ceremonies. **Remaining:** server API specs, then the client (create / login / recover / add) + fallback UI. Full detail + next steps in `vibes/prf-phase3-plan.md` (Current status).
+
 ---
 
 ## Phase 4 — Migrate existing pre-PRF accounts to PRF (stand-alone)
