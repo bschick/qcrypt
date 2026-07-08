@@ -95,7 +95,7 @@
     "esbuild": "^0.28.1",
     "eslint": "^10.5.0",
     "eslint-plugin-playwright": "^2.10.4",
-    "nid-webauthn-emulator": "^0.2.14",
+    "nid-webauthn-emulator": "file:vendor/nid-webauthn-emulator",
     "nx": "^22.7.6",
     "svgo": "^4.0.1",
     "tsx": "^4.22.4",

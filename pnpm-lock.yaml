@@ -160,8 +160,8 @@ importers:
         specifier: ^2.10.4
         version: 2.10.4(eslint@10.5.0(jiti@2.7.0))
       nid-webauthn-emulator:
-        specifier: ^0.2.14
-        version: 0.2.14
+        specifier: file:vendor/nid-webauthn-emulator
+        version: file:vendor/nid-webauthn-emulator
       nx:
         specifier: ^22.7.6
         version: 22.7.6(debug@4.4.3)
@@ -5111,8 +5111,8 @@ packages:
   neo-async@2.6.2:
     resolution: {integrity: sha512-Yd3UES5mWCSqR+qNT93S3UoYUkqAZ9lLg8a7g9rimsWmYGK8cVToA4/sF3RrshdyV3sAGMXVUmpMYOw+dLpOuw==}
 
-  nid-webauthn-emulator@0.2.14:
-    resolution: {integrity: sha512-Ksaab2luPWtfuE/PV1b5ZZ2OUpClMGkJz8MEI6hbQO0Ttskk/Y/40bK5DQ0lmiaBcePnfozgP8Ky4dN1YQwGvw==}
+  nid-webauthn-emulator@file:vendor/nid-webauthn-emulator:
+    resolution: {directory: vendor/nid-webauthn-emulator, type: directory}
 
   node-abort-controller@3.1.1:
     resolution: {integrity: sha512-AGK2yQKIjRuqnc6VkX2Xj5d+QW8xZ87pa1UK6yA6ouUyuxfHuMP6umE5QK7UmTeOAymo+Zx1Fxiuw9rVx8taHQ==}
@@ -12523,7 +12523,7 @@ snapshots:
 
   neo-async@2.6.2: {}
 
-  nid-webauthn-emulator@0.2.14:
+  nid-webauthn-emulator@file:vendor/nid-webauthn-emulator:
     dependencies:
       tldts: 7.1.2
 
