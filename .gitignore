@@ -12,6 +12,7 @@
 /bazel-out
 apps/server/assets/aaguid
 apps/web/src/assets/aaguid
+apps/web/src/assets/prf-spike
 
 # Node
 /node_modules
