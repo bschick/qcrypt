@@ -509,13 +509,24 @@ async function postRegVerify(
       throw new ParamError(`unexpected user credential for ${unverifiedUser.userId}`);
    }
 
-   const auth = await _createAuthenticator(httpDetails, unverifiedUser, 'reg');
+   // Validate the client credential fields before creating the passkey so invalid input
+   // never leaves a passkey behind.
+   const hasPrf = !!body.recoveryUserCredEnc || !!body.passkeyUserCredEnc || !!body.userCredPubKey;
+   if (hasPrf) {
+      if (!validB64(body.recoveryUserCredEnc) || base64UrlDecode(body.recoveryUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
+         !validB64(body.passkeyUserCredEnc) || base64UrlDecode(body.passkeyUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
+         !validB64(body.userCredPubKey) || base64UrlDecode(body.userCredPubKey)!.length !== PROOF_PUBKEY_BYTES) {
+         throw new ParamError('invalid user credential data');
+      }
+   }
 
    // The client generates the recovery secret and sends only its public key
    if (!validB64(body.recoveryPubKey) || base64UrlDecode(body.recoveryPubKey)!.length !== PROOF_PUBKEY_BYTES) {
       throw new ParamError('invalid recovery public key');
    }
    const recoveryPubKey = body.recoveryPubKey;
+
+   const auth = await _createAuthenticator(httpDetails, unverifiedUser, 'reg');
 
    // To reduces calls to KMS when user creation
    // is abandonded, delay creation of random values unit here
@@ -535,15 +546,7 @@ async function postRegVerify(
    let userCredEncBackup: string | undefined = undefined;
    let userCredPubKey: string;
 
-   const hasPrf = !!body.recoveryUserCredEnc || !!body.passkeyUserCredEnc || !!body.userCredPubKey;
-
    if (hasPrf) {
-      if (!validB64(body.recoveryUserCredEnc) || base64UrlDecode(body.recoveryUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
-         !validB64(body.passkeyUserCredEnc) || base64UrlDecode(body.passkeyUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
-         !validB64(body.userCredPubKey) || base64UrlDecode(body.userCredPubKey)!.length !== PROOF_PUBKEY_BYTES) {
-         throw new ParamError('invalid user credential data');
-      }
-
       userCredEnc = body.recoveryUserCredEnc;
       userCredPubKey = body.userCredPubKey;
    } else {
