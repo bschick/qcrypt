@@ -40,7 +40,9 @@ describe("proof of userCred enforcement", () => {
    let credId: string;
 
    beforeAll(async () => {
-      ({ userId, userCred, cookie, csrf, credId } = await registerTestUser(testUser));
+      // A PRF account's proof public key is supplied by the client (not derived server-side), so
+      // enforce proof verification against that client-provisioned key.
+      ({ userId, userCred, cookie, csrf, credId } = await registerTestUser(testUser, true));
       // Each test crafts its own proof; disable the harness auto-signer.
       setSessionUserCred(undefined);
    });

@@ -141,7 +141,7 @@ export const PRF_EXTENSION = { prf: { eval: { first: PRF_SALT_INPUT } } };
 
 // Reads the PRF output (results.first) from a credential's client extension results,
 // which the emulator's JSON API base64url-encodes. Returns null when no output is
-// present (hmac-secret at registration time, before the Case B follow-up assertion).
+// present (hmac-secret at registration time, before a follow-up assertion reads it).
 export function readPrfOutput(clientExtensionResults: any): Uint8Array<ArrayBuffer> | null {
    const first = clientExtensionResults?.prf?.results?.first;
    let output: Uint8Array<ArrayBuffer> | null = null;
@@ -184,6 +184,42 @@ export async function prfDecrypt(
    } finally {
       key.fill(0);
    }
+}
+
+// createJSON returns RegistrationResponseJSON, which only becomes a DOM global in TypeScript 6
+// (this project is on 5.9). Track it through the emulator's method so it resolves under both.
+export type EmulatorAttestation = ReturnType<WebAuthnEmulator['createJSON']>;
+
+// Register a credential and, for PRF accounts, return its per-credential PRF output. The emulator
+// advertises hmac-secret-mc, so the output is present in the registration response (the server API
+// is oblivious to the create-vs-assert timing that a real client must handle).
+export function createCredential(
+   emulator: WebAuthnEmulator,
+   createOptions: PublicKeyCredentialCreationOptionsJSON,
+   prf: true
+): { attestation: EmulatorAttestation; prfOutput: Uint8Array<ArrayBuffer> };
+export function createCredential(
+   emulator: WebAuthnEmulator,
+   createOptions: PublicKeyCredentialCreationOptionsJSON,
+   prf: false
+): { attestation: EmulatorAttestation };
+export function createCredential(
+   emulator: WebAuthnEmulator,
+   createOptions: PublicKeyCredentialCreationOptionsJSON,
+   prf: boolean
+): { attestation: EmulatorAttestation; prfOutput?: Uint8Array<ArrayBuffer> } {
+   let created: { attestation: EmulatorAttestation; prfOutput?: Uint8Array<ArrayBuffer> };
+   if (prf) {
+      const attestation = emulator.createJSON(RP_ORIGIN, { ...createOptions, extensions: PRF_EXTENSION });
+      const prfOutput = readPrfOutput(attestation.clientExtensionResults);
+      if (!prfOutput) {
+         throw new Error('emulator returned no PRF output');
+      }
+      created = { attestation, prfOutput };
+   } else {
+      created = { attestation: emulator.createJSON(RP_ORIGIN, createOptions) };
+   }
+   return created;
 }
 
 async function request(
@@ -238,13 +274,7 @@ export const putJson = (p: string, b: any, h: any, c: string) => request("PUT", 
 export const patchJson = (p: string, b: any, h: any, c: string) => request("PATCH", p, b, h, c);
 export const deleteJson = (p: string, h: any, c: string) => request("DELETE", p, null, h, c);
 
-// Register a fresh user (reg/options + reg/verify) and return everything needed to make
-// authorized, proof-signed requests. Like the real client, the recovery secret is
-// generated here and only its public key is sent; the secret is returned for recovery
-// flows. The emulator is returned so callers can drive later auth/assertion flows.
-export async function registerTestUser(
-   userName: string
-): Promise<{
+interface TestUserBase {
    userId: string;
    userCred: string;
    cookie: string;
@@ -253,66 +283,138 @@ export async function registerTestUser(
    emulator: WebAuthnEmulator;
    recoverySecret: Uint8Array;
    recoveryId: Uint8Array;
-}> {
-   await cryptoReady();
-   const regOpts = await postJson("/v1/reg/options", { userName }, {}, "");
-   expect(regOpts.status).toBe(200);
-   expect(regOpts.data.user.name).toBe(userName);
-
-   const userId: string = regOpts.data.user.id;
-   const emulator = getWebAuthnEmulator();
-
-   const attestation = emulator.createJSON(RP_ORIGIN, {
-      ...regOpts.data,
-      user: { ...regOpts.data.user, id: userId },
-      challenge: regOpts.data.challenge,
-   });
-
-   let recoveryId = getRandom(RECOVERYID_BYTES);
-   let secret = recoverySecret(recoveryId, userId);
-   const verifyBody: Record<string, any> = { ...attestation, userId, challenge: regOpts.data.challenge };
-   let params = "usercred=true";
-   verifyBody.recoveryPubKey = bytesToBase64(getRecoveryPubKey(secret));
-
-   const verifyRes = await postJson(`/v1/reg/verify?${params}`, verifyBody, {}, "");
-   expect(verifyRes.status).toBe(200);
-   expect(verifyRes.data.verified).toBe(true);
-   expect(verifyRes.data.csrf).toBeDefined();
-   expect(verifyRes.data.pkId).toBeDefined();
-   expect(verifyRes.data.userCred).toBeDefined();
-   expect(verifyRes.cookie).toBeTruthy();
-
-   return {
-      userId,
-      userCred: verifyRes.data.userCred,
-      cookie: verifyRes.cookie,
-      csrf: verifyRes.data.csrf,
-      credId: verifyRes.data.pkId,
-      emulator,
-      recoverySecret: secret,
-      recoveryId,
-   };
 }
 
-// Register a fresh PRF account: the client generates userCred locally, obtains a PRF output
-// from the passkey, and sends only opaque ciphertexts (the server never sees plaintext userCred).
-// hmac-secret-mc returns the PRF output during registration; hmac-secret returns it only during
-// an assertion, so a local follow-up assertion reads it. Returns the known plaintext userCred so
-// callers can verify that a later login decrypts back to it.
-export async function registerPrfTestUser(
-   userName: string,
-   hmacSecret: "hmac-secret" | "hmac-secret-mc" = "hmac-secret-mc"
-): Promise<{
+// The prf discriminant narrows to the extra fields a PRF account carries.
+export interface NoPrfTestUser extends TestUserBase {
+   prf: false;
+}
+export interface PrfTestUser extends TestUserBase {
+   prf: true;
+   passkeyUserCredEnc: string;
+   prfOutput: Uint8Array;
+}
+export type TestUser = NoPrfTestUser | PrfTestUser;
+
+// Register a fresh account (reg/options + reg/verify) and return everything needed to make
+// authorized, proof-signed requests. The recovery secret is generated here as the real client
+// does and only its public key is sent; the secret is returned for recovery flows. When prf is
+// true the client generates userCred locally and sends only opaque ciphertexts (the server never
+// sees plaintext userCred); when false the server generates and returns userCred as before.
+export async function registerTestUser(userName: string, prf: boolean = false): Promise<TestUser> {
+   await cryptoReady();
+
+   let user: TestUser;
+   if (prf) {
+      const { userId, body, emulator, userCred, recoverySecret: secret, recoveryId, prfOutput } =
+         await buildPrfRegBody(userName);
+
+      const verifyRes = await postJson(`/v1/reg/verify?usercred=true`, body, {}, "");
+      expect(verifyRes.status).toBe(200);
+      expect(verifyRes.data.verified).toBe(true);
+      expect(verifyRes.data.prf).toBe(true);
+      expect(verifyRes.data.passkeyUserCredEnc).toBeDefined();
+      expect(verifyRes.data.userCred).toBeUndefined();
+      expect(verifyRes.data.csrf).toBeDefined();
+      expect(verifyRes.data.pkId).toBeDefined();
+      expect(verifyRes.cookie).toBeTruthy();
+
+      user = {
+         prf: true,
+         userId,
+         userCred: bytesToBase64(userCred),
+         cookie: verifyRes.cookie,
+         csrf: verifyRes.data.csrf,
+         credId: verifyRes.data.pkId,
+         emulator,
+         recoverySecret: secret,
+         recoveryId,
+         passkeyUserCredEnc: body.passkeyUserCredEnc,
+         prfOutput,
+      };
+   } else {
+      const regOpts = await postJson("/v1/reg/options", { userName }, {}, "");
+      expect(regOpts.status).toBe(200);
+      expect(regOpts.data.user.name).toBe(userName);
+
+      const userId: string = regOpts.data.user.id;
+      const recoveryId = getRandom(RECOVERYID_BYTES);
+      const secret = recoverySecret(recoveryId, userId);
+      const emulator = getWebAuthnEmulator();
+      const { attestation } = createCredential(emulator, {
+         ...regOpts.data,
+         user: { ...regOpts.data.user, id: userId },
+         challenge: regOpts.data.challenge,
+      }, false);
+
+      const verifyRes = await postJson(`/v1/reg/verify?usercred=true`, {
+         ...attestation,
+         userId,
+         challenge: regOpts.data.challenge,
+         recoveryPubKey: bytesToBase64(getRecoveryPubKey(secret)),
+      }, {}, "");
+      expect(verifyRes.status).toBe(200);
+      expect(verifyRes.data.verified).toBe(true);
+      expect(verifyRes.data.csrf).toBeDefined();
+      expect(verifyRes.data.pkId).toBeDefined();
+      expect(verifyRes.data.userCred).toBeDefined();
+      expect(verifyRes.cookie).toBeTruthy();
+
+      user = {
+         prf: false,
+         userId,
+         userCred: verifyRes.data.userCred,
+         cookie: verifyRes.cookie,
+         csrf: verifyRes.data.csrf,
+         credId: verifyRes.data.pkId,
+         emulator,
+         recoverySecret: secret,
+         recoveryId,
+      };
+   }
+
+   return user;
+}
+
+// Register an additional credential on the account and return its attestation. The emulator evicts
+// any stored credential sharing a userHandle, so a throwaway handle keeps the primary credential
+// intact; it stays invisible to the server, which binds the new credential to the session's account
+// (a registration response carries no userHandle). For a PRF account it also returns the new
+// credential's ciphertext of the account userCred; no-PRF returns only the attestation.
+export async function registerNewCredential(
+   user: TestUser,
+   optionsData: PublicKeyCredentialCreationOptionsJSON
+): Promise<{ attestation: EmulatorAttestation; passkeyUserCredEnc?: string }> {
+   const createOptions = {
+      ...optionsData,
+      user: { ...optionsData.user, id: bytesToBase64(getRandom(cc.USERID_BYTES)) },
+      challenge: optionsData.challenge,
+      excludeCredentials: [],
+   };
+
+   let result: { attestation: EmulatorAttestation; passkeyUserCredEnc?: string };
+   if (user.prf) {
+      const { attestation, prfOutput } = createCredential(user.emulator, createOptions, true);
+      const passkeyUserCredEnc = await prfEncrypt(base64ToBytes(user.userCred), prfOutput, user.userId);
+      result = { attestation, passkeyUserCredEnc };
+   } else {
+      const { attestation } = createCredential(user.emulator, createOptions, false);
+      result = { attestation };
+   }
+   return result;
+}
+
+// Run reg/options and build a valid PRF reg/verify body, returning it with the material behind it:
+// the plaintext userCred, the recovery secret and id, the primary credential's PRF output, and the
+// emulator holding that credential.
+export async function buildPrfRegBody(userName: string): Promise<{
    userId: string;
-   userCred: string;
-   cookie: string;
-   csrf: string;
-   credId: string;
+   body: Record<string, any>;
    emulator: WebAuthnEmulator;
+   userCred: Uint8Array<ArrayBuffer>;
    recoverySecret: Uint8Array;
    recoveryId: Uint8Array;
-   passkeyUserCredEnc: string;
-   prfCase: 'create' | 'assert';
+   prfOutput: Uint8Array<ArrayBuffer>;
 }> {
    await cryptoReady();
    const regOpts = await postJson("/v1/reg/options", { userName }, {}, "");
@@ -320,74 +422,25 @@ export async function registerPrfTestUser(
    expect(regOpts.data.user.name).toBe(userName);
 
    const userId: string = regOpts.data.user.id;
-   const emulator = getWebAuthnEmulator(false, hmacSecret);
-
+   const emulator = getWebAuthnEmulator(false, "hmac-secret-mc");
    const userCred = getRandom(cc.USERCRED_BYTES);
-
-   const attestation = emulator.createJSON(RP_ORIGIN, {
+   const { attestation, prfOutput } = createCredential(emulator, {
       ...regOpts.data,
       user: { ...regOpts.data.user, id: userId },
       challenge: regOpts.data.challenge,
-      extensions: PRF_EXTENSION,
-   });
-
-   let prfOutput = readPrfOutput(attestation.clientExtensionResults);
-   let prfCase: 'create' | 'assert' = 'create';
-   if (!prfOutput) {
-      // hmac-secret returns no output at registration, so read it with a local follow-up
-      // assertion on the just-created credential. This assertion is never sent to the server.
-      prfCase = 'assert';
-      const assertion = emulator.getJSON(RP_ORIGIN, {
-         challenge: bytesToBase64(getRandom(32)),
-         rpId: regOpts.data.rp.id,
-         allowCredentials: [{ type: 'public-key', id: attestation.id }],
-         extensions: PRF_EXTENSION,
-      });
-      prfOutput = readPrfOutput(assertion.clientExtensionResults);
-   }
-   if (!prfOutput) {
-      throw new Error('emulator returned no PRF output');
-   }
-
+   }, true);
    const recoveryId = getRandom(RECOVERYID_BYTES);
    const secret = recoverySecret(recoveryId, userId);
 
-   const userCredPubKey = bytesToBase64(getUserCredPubKey(userCred));
-   const recoveryPubKey = bytesToBase64(getRecoveryPubKey(secret));
-   const passkeyUserCredEnc = await prfEncrypt(userCred.slice(0), prfOutput, userId);
-   const recoveryUserCredEnc = await prfEncrypt(userCred.slice(0), secret.slice(0), userId);
-
-   const verifyBody: Record<string, any> = {
+   const body: Record<string, any> = {
       ...attestation,
       userId,
       challenge: regOpts.data.challenge,
-      passkeyUserCredEnc,
-      recoveryUserCredEnc,
-      userCredPubKey,
-      recoveryPubKey,
+      passkeyUserCredEnc: await prfEncrypt(userCred.slice(0), prfOutput.slice(0), userId),
+      recoveryUserCredEnc: await prfEncrypt(userCred.slice(0), secret.slice(0), userId),
+      userCredPubKey: bytesToBase64(getUserCredPubKey(userCred)),
+      recoveryPubKey: bytesToBase64(getRecoveryPubKey(secret)),
    };
-
-   const verifyRes = await postJson(`/v1/reg/verify?usercred=true`, verifyBody, {}, "");
-   expect(verifyRes.status).toBe(200);
-   expect(verifyRes.data.verified).toBe(true);
-   expect(verifyRes.data.prf).toBe(true);
-   expect(verifyRes.data.passkeyUserCredEnc).toBeDefined();
-   expect(verifyRes.data.userCred).toBeUndefined();
-   expect(verifyRes.data.csrf).toBeDefined();
-   expect(verifyRes.data.pkId).toBeDefined();
-   expect(verifyRes.cookie).toBeTruthy();
-
-   return {
-      userId,
-      userCred: bytesToBase64(userCred),
-      cookie: verifyRes.cookie,
-      csrf: verifyRes.data.csrf,
-      credId: verifyRes.data.pkId,
-      emulator,
-      recoverySecret: secret,
-      recoveryId,
-      passkeyUserCredEnc,
-      prfCase,
-   };
+   return { userId, body, emulator, userCred, recoverySecret: secret, recoveryId, prfOutput };
 }
 
