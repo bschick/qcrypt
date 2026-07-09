@@ -20,6 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
+import { PAYLOAD_SIZE_MIN, HEADER_BYTES_6P } from '@qcrypt/crypto/consts';
+
 export const RETRIES = 3;
 export const RPNAME = 'Quick Crypt';
 export const ALGIDS = [24, 7, 3, 1, -7, -257];
@@ -29,6 +31,7 @@ export { RECOVERYID_BYTES, CHALLENGE_BYTES } from '@qcrypt/api';
 export const USERID_BYTES = 16;
 export const INVITABLEID_BYTES = 16;
 export const USERCRED_BYTES = 32;
+export const USERCRED_ENC_MIN_BYTES = USERCRED_BYTES + PAYLOAD_SIZE_MIN + HEADER_BYTES_6P;
 export const JWTMATERIAL_BYTES = 32;
 export const LINKID_BYTES = 16;
 export const UNAME_LEN_BYTES = 1;

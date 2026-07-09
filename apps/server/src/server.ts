@@ -538,8 +538,8 @@ async function postRegVerify(
    const hasPrf = !!body.recoveryUserCredEnc || !!body.passkeyUserCredEnc || !!body.userCredPubKey;
 
    if (hasPrf) {
-      if (!validB64(body.recoveryUserCredEnc) ||
-         !validB64(body.passkeyUserCredEnc) ||
+      if (!validB64(body.recoveryUserCredEnc) || base64UrlDecode(body.recoveryUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
+         !validB64(body.passkeyUserCredEnc) || base64UrlDecode(body.passkeyUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
          !validB64(body.userCredPubKey) || base64UrlDecode(body.userCredPubKey)!.length !== PROOF_PUBKEY_BYTES) {
          throw new ParamError('invalid user credential data');
       }
@@ -711,7 +711,8 @@ async function _createAuthenticator(
    if (!validB64(body.challenge)) {
       throw new ParamError('invalid challenge format');
    }
-   if (body.passkeyUserCredEnc && !validB64(body.passkeyUserCredEnc)) {
+   if (body.passkeyUserCredEnc &&
+      (!validB64(body.passkeyUserCredEnc) || base64UrlDecode(body.passkeyUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES)) {
       throw new ParamError('invalid passkey userCred ciphertext');
    }
 
@@ -1297,7 +1298,7 @@ async function putRecover2Key(
    // recovery words re-encrypt and send it.
    if (verifiedUser.prf) {
       const userCredEnc: string = body?.userCredEnc;
-      if (!validB64(userCredEnc)) {
+      if (!validB64(userCredEnc) || base64UrlDecode(userCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES) {
          throw new ParamError('invalid user credential');
       }
       updates.userCredEnc = userCredEnc;
