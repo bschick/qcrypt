@@ -3,7 +3,23 @@
 > Detailed execution plan for **Phase 3** of the master plan (`vibes/prf-implementation-plan.md`, Phase 3 at ~`:118`), mirroring `vibes/prf-phase2-plan.md`.
 > Reuses the Phase 1/2 ML-DSA-65 proof primitive (`libs/crypto/src/lib/proof.ts`) and the proven `MasterKeyKeyProvider` + `cipherSvc.encryptStream/decryptStream` ciphertext pattern unchanged.
 
-## Current status (2026-07-09)
+## Current status (2026-07-11)
+
+**CLIENT Steps 5/9/10 CODE-COMPLETE (branch `prf-phase3`).** `apps/web/src/app/services/authenticator.service.ts` create/login/recover/add are all PRF-aware; **server tests green (136 passed / 4 skipped), client authenticator spec green (24).** Highlights:
+
+- **Login (Step 9):** `_startAuth`→`_startAuthentication` injects the PRF extension on every login assertion and reads the output; `_loginUser(serverLogin, userCred)` now takes the **resolved plaintext userCred** (from `_resolveUserCred(serverLogin, prfKey)` — PRF decrypts `passkeyUserCredEnc`, no-PRF reads `serverLogin.userCred`) and owns/wipes it. Create and recover pass the userCred they already hold (no server-echo round-trip).
+- **Create (Step 5):** `newUser(userName, allowNoPrf = false)` generates `userCred` client-side, runs the ceremony via `_startRegistration` (reads PRF at create, else a Case-B follow-up `_readPrfViaAssertion` local `get()`), and sends `passkeyUserCredEnc` + `recoveryUserCredEnc` + `userCredPubKey`. No PRF + `!allowNoPrf` → throws the exported **`PrfUnsupportedError`** (the fallback signal for the UI).
+- **Recover + add (Step 10):** `_finishRecovery` (both `recover2` and legacy `recover` route through it) posts recovery completion to the **new dedicated `POST /v1/recover/verify`** endpoint (`reg/verify` still delegates for backward-compat but will eventually refuse recovery posts); `addPasskey` re-encrypts userCred under the new passkey's PRF output and **rejects a non-PRF passkey on a PRF account** (`PrfUnsupportedError`, no downgrade); `changeRecoveryWords` re-encrypts `userCredEnc` under the new recovery secret for PRF accounts.
+
+**Shared-type refactor (owner-directed).** `prf` moved from `LoginUserInfo` → base `ResponseTypes.UserInfo` (account attribute on every user response). New **`RequestTypes.{RegVerify, RecoverVerify, AddVerify}`** (each `RegistrationResponseJSON & { … }` — the complete verify wire body; `AddVerify` omits `userId`, which `passkeys/verify` ignores) + a `PasskeyVerify` union, and **`ResponseTypes.RecoverInfo`** (`PublicKeyCredentialCreationOptionsJSON & { prf?, userCredEnc? }`). Webauthn types are imported **type-only** into `libs/api` (erased at runtime). **Both** client and server + specs reference these now — server handler bodies cast `const regVerify = body as RequestTypes.RegVerify` (keeping the shared destructure), specs annotate their producer bodies. `_postPasskeyVerify` → **`_passkeyVerify(resource, body)`** (3 args, typed body, greppable full resource strings).
+
+**Server `includeUserCred` param removed (owner) — verify responses are now FIXED per endpoint, not `?usercred=`-driven:** `auth/verify` **always** returns the credential (login must cache userCred); `passkeys/verify` **never** (add doesn't re-login); `reg/verify` **`!hasPrf`** (a PRF client already holds its own userCred); `recover/verify` **`!prf`** (a PRF client decrypts userCred from the recovery ciphertext). Verified correct against the client. The test server is running this (empirically: PRF `reg`/`recover` now return `undefined` for `passkeyUserCredEnc`), so **three spec assertions were adjusted** (`common.ts:314`, `recovery.suite:111` `.toBeDefined()`→`.toBeUndefined()`; `core.suite` add-passkey `prfDecrypt(undefined)` block removed).
+
+**Other this-session changes.** PRF salt changed to a fresh hardcoded random 32-byte constant (dropped the `SHA-256("qcrypt/prf/v1")` derivation — the `/v1` implied a `v2` for a value that must never change; synced in `prf.ts` + spec `common.ts`). Proof-fn renames `signUserCredProof`→`createUserCredProof`, `signRecoveryProof`→`createRecoveryProof`, `signProof`→`createProof` (libs + all consumers). nx test name-filtering: `--name="…"` now works on the `nx:run-commands` Vitest targets (web uses `--filter`), documented in `AGENTS.md`.
+
+**Next:** the **fallback UI** (newuser `PrfUnsupportedError` dialog, showrecovery permanent-data-loss warning, credentials add-passkey prompt) and the **real-Chromium E2E baseline**; then the protocol doc (Step 14) and the emulator fork's JA docs + upstream PR.
+
+## Earlier status (2026-07-09)
 
 **Server (Quick Crypt, branch `prf-phase3`) — code-complete + input hardening.** Steps 2, 3, 4, 6, 7, 8 done (see per-step `DONE` markers). Challenge-purpose refactor landed: `'recover'` for recovery WebAuthn reg challenges, `'nonce'` for the ML-DSA proof nonce. **Input hardening (2026-07-09):** reg/verify / `_createAuthenticator` / `putRecover2Key` now enforce a **minimum ciphertext length** on `recoveryUserCredEnc`/`passkeyUserCredEnc` — `USERCRED_ENC_MIN_BYTES = USERCRED_BYTES + PAYLOAD_SIZE_MIN + HEADER_BYTES_6P` (= 100; a real ciphertext is 134), defined in `apps/server/src/consts.ts` importing the two crypto consts from `@qcrypt/crypto/consts` — checked inline next to `validB64` (mirrors the existing `userCredPubKey` length check). And **all reg/verify credential-field validation (the PRF fields + `recoveryPubKey`) was moved ahead of `_createAuthenticator`** so invalid input rejects before any passkey is created (no orphaned authenticator/unverified user). The recovery-add / normal-add ciphertext storage + all-or-nothing guards remain DEFERRED to the client flows (Step 10). Server specs run against the **deployed** server, so redeploy before they validate.
 
@@ -196,7 +212,7 @@ Plain exported functions (not a service/class — no DI needed, only `authentica
 
 `getSessionKey` now derives from `base64UrlDecode(user.lastCredentialId)` for **all** accounts (was `userCredEnc`); salt/info unchanged. Added a fail-closed `if (!user.lastCredentialId) throw new AuthError()` before derivation (logout sets `lastCredentialId=''`, so this rejects stale-cookie/logged-out calls at the key layer; `verifyCookie`'s try/catch funnels it to a 401). Invalidates all live cookies/CSRFs at deploy — the only user-observable Deploy A change; sequence deliberately in rollout. Verified: `tsc --noEmit` exit 0.
 
-### Step 5 — Client account CREATE, PRF-aware with fallback — after Deploy B
+### Step 5 — Client account CREATE, PRF-aware with fallback — after Deploy B — DONE (ceremony logic; fallback UI still pending)
 
 Touch `newUser:1134`, `_finishRegistration:1185`, `_doPasskeyVerify:1198`:
 
@@ -249,13 +265,13 @@ Branch on `verifiedUser.prf`. **PRF:** do not `decryptField(userCredEnc)`; `Auth
 
 After a successful recovery proof, in the tail that returns `registrationOptions(...,'reg')`, **include the recovery ciphertext (`verifiedUser.userCredEnc`) + `prf:true` in the response content** for PRF accounts (so the client decrypts `userCred` with the recovery secret before re-provisioning a passkey — no extra round-trip). No-PRF accounts get `prf:false`/no ciphertext and recover as today. Keep the legacy `recoveryId` dual-mode branch untouched.
 
-### Step 9 — Client LOGIN (`_createSessionImpl:1004`, `_startAuth:1023`, `_loginUser:536`) — after Deploy B
+### Step 9 — Client LOGIN (`_createSessionImpl`, `_startAuthentication`, `_loginUser`) — after Deploy B — DONE
 
 - `_startAuth`: `injectPrfExtension(optionsJson)` before `startAuthentication` (`:1036`); read `prfOut = prfReadKey(startAuth.clientExtensionResults)` (single assertion, C2 only affects create). Thread `prfOut` → `_createSessionImpl` → `_loginUser`.
 - `_loginUser` (`:536-575`): branch on `serverLogin.prf`. **PRF:** `userCred = prfDecrypt(serverLogin.userCredEnc, prfOut, userId)`, then the existing keystore-encrypt-to-sessionStorage step (`:549-564`) unchanged; wipe `prfOut` + decrypted `userCred`. **No-PRF:** unchanged. Relax the `:542-544` guard to require **either** `userCred` (no-PRF) **or** `userCredEnc`+`prfOut` (PRF).
 - `_restoreSession:385` / `_adoptPeerLogin:698` / BroadcastChannel: **unchanged** — they relay the keystore-encrypted sessionStorage ciphertext, which already holds a usable `userCred`; PRF is never needed on restore (R-getSessionPrf).
 
-### Step 10 — Client RECOVER and ADD-PASSKEY — after Deploy B
+### Step 10 — Client RECOVER and ADD-PASSKEY — after Deploy B — DONE (recovery completes via new `POST /v1/recover/verify`)
 
 - **recover2 (`:1082`):** after `POST recover2` returns options + (PRF) `recoveryUserCredEnc`+`prf`, `userCred = prfDecrypt(recoveryUserCredEnc, secret, userId)` (the `secret` already in scope at `:1085`), then `_finishRegistration` with the PRF ceremony (Step 5: Case A or fallback) to build a **new** per-passkey ciphertext and send it (recovery-add expects it). The recovered account keeps the **same** `userCred` (master plan `:27`) — do not generate a new one. New recovery words as today. Wipe everything in `finally`.
 - **addPasskey (`:1157`, `_passkeyVerify:1173`):** for PRF, first `getUserCred()` from the current session (`:255`), run the PRF ceremony on the **new** passkey (Case A; **no PRF result → no downgrade**, prompt for a PRF-capable passkey), `userCredEnc = prfEncrypt(userCred, newPrfOut, userId)`, send it; server stores on the new auth row. Wipe `userCred`/`newPrfOut`.
