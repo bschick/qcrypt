@@ -55,7 +55,7 @@ import { AuthenticatorService, AuthEvent, type LoginUserInfo } from './authentic
 import { BroadcastService } from './broadcast.service';
 import { KeystoreService } from './keystore.service';
 import * as cc from '@qcrypt/crypto/consts';
-import { bytesToBase64, cryptoReady, getRandom } from '@qcrypt/crypto';
+import { base64ToBytes, bytesToBase64, cryptoReady, getRandom } from '@qcrypt/crypto';
 
 describe('AuthenticatorService', () => {
    let service: AuthenticatorService;
@@ -85,7 +85,7 @@ describe('AuthenticatorService', () => {
          pkId: pkId,
          userCred: userCred,
          csrf: 'csrf-token-from-test',
-         hasRecoveryId: true,
+         hasRecoveryKey: true,
          authenticators: [{
             credentialId: pkId,
             description: 'Test laptop authenticator',
@@ -156,7 +156,7 @@ describe('AuthenticatorService', () => {
 
       // A real login first, so the relayed userCredEnc is one this device can decrypt
       // @ts-ignore — exercising private path
-      await service._loginUser(sessionResponse);
+      await service._loginUser(sessionResponse, base64ToBytes(userCred));
       const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
       sessionStorage.clear();
       service.logout(false);
@@ -189,7 +189,7 @@ describe('AuthenticatorService', () => {
       primeLocalStorage();
 
       // @ts-ignore — exercising private path
-      await service._loginUser(sessionResponse);
+      await service._loginUser(sessionResponse, base64ToBytes(userCred));
       const restoredState1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
       const userCredEnc1: string = restoredState1.userCredEnc;
       expect(userCredEnc1).toBeTruthy();
@@ -224,7 +224,7 @@ describe('AuthenticatorService', () => {
       // Step 1: invoke _loginUser directly to populate IndexedDB and write
       // a userCredEnc to sessionStorage.
       // @ts-ignore — exercising private path
-      await service._loginUser(sessionResponse);
+      await service._loginUser(sessionResponse, base64ToBytes(userCred));
 
       const restoredState1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
       const userCredEnc1: string = restoredState1.userCredEnc;
@@ -266,7 +266,7 @@ describe('AuthenticatorService', () => {
       primeLocalStorage();
 
       // @ts-ignore — exercising private path
-      await service._loginUser(sessionResponse);
+      await service._loginUser(sessionResponse, base64ToBytes(userCred));
       const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
       sessionStorage.clear();
       service.logout(false);
@@ -308,7 +308,7 @@ describe('AuthenticatorService', () => {
       it('login with higher version and matching pkId adopts via relay', async () => {
          primeLocalStorage();
          // @ts-ignore — exercising private path
-         await service._loginUser(sessionResponse);
+         await service._loginUser(sessionResponse, base64ToBytes(userCred));
          const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
 
          fetchMock.mockClear();
@@ -343,7 +343,7 @@ describe('AuthenticatorService', () => {
       it('login with lower-or-equal version is ignored', async () => {
          primeLocalStorage();
          // @ts-ignore — exercising private path
-         await service._loginUser(sessionResponse);
+         await service._loginUser(sessionResponse, base64ToBytes(userCred));
          const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
 
          fetchMock.mockClear();
@@ -369,7 +369,7 @@ describe('AuthenticatorService', () => {
       it('login with unknown pkId for same user emits logout', async () => {
          primeLocalStorage();
          // @ts-ignore — exercising private path
-         await service._loginUser(sessionResponse);
+         await service._loginUser(sessionResponse, base64ToBytes(userCred));
          const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
          const strangerPkId = bytesToBase64(getRandom(cc.PKID_MIN_BYTES));
          const events: AuthEvent[] = [];
@@ -390,7 +390,7 @@ describe('AuthenticatorService', () => {
       it('login with unknown pkId for a different user emits forget', async () => {
          primeLocalStorage();
          // @ts-ignore — exercising private path
-         await service._loginUser(sessionResponse);
+         await service._loginUser(sessionResponse, base64ToBytes(userCred));
          const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
          const strangerPkId = bytesToBase64(getRandom(cc.PKID_MIN_BYTES));
          const events: AuthEvent[] = [];
@@ -414,7 +414,7 @@ describe('AuthenticatorService', () => {
       it('logout with version >= local triggers logout', async () => {
          primeLocalStorage();
          // @ts-ignore — exercising private path
-         await service._loginUser(sessionResponse);
+         await service._loginUser(sessionResponse, base64ToBytes(userCred));
          const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
          const events: AuthEvent[] = [];
          service.on(allAuthEvents, (ed) => events.push(ed.event));
@@ -429,7 +429,7 @@ describe('AuthenticatorService', () => {
       it('logout with version < local is ignored', async () => {
          primeLocalStorage();
          // @ts-ignore — exercising private path
-         await service._loginUser(sessionResponse);
+         await service._loginUser(sessionResponse, base64ToBytes(userCred));
          const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
          const events: AuthEvent[] = [];
          service.on(allAuthEvents, (ed) => events.push(ed.event));
@@ -446,7 +446,7 @@ describe('AuthenticatorService', () => {
       it('forget triggers local forget', async () => {
          primeLocalStorage();
          // @ts-ignore — exercising private path
-         await service._loginUser(sessionResponse);
+         await service._loginUser(sessionResponse, base64ToBytes(userCred));
          expect(service.hasSession()).toBe(true);
          const events: AuthEvent[] = [];
          service.on(allAuthEvents, (ed) => events.push(ed.event));
@@ -466,7 +466,7 @@ describe('AuthenticatorService', () => {
       it('userInfoChanged for matching pkId triggers refreshUserInfo', async () => {
          primeLocalStorage();
          // @ts-ignore — exercising private path
-         await service._loginUser(sessionResponse);
+         await service._loginUser(sessionResponse, base64ToBytes(userCred));
 
          fetchMock.mockClear();
 

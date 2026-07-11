@@ -35,10 +35,10 @@ import type {
    PublicKeyCredentialRequestOptionsJSON,
 } from '@simplewebauthn/browser';
 
-// Fixed PRF salt (SHA-256 of "qcrypt/prf/v1"); never change or all decryption will fail
+// Fixed random PRF salt; changing it orphans every existing PRF userCred ciphertext
 export const PRF_SALT = new Uint8Array([
-   135, 160, 31, 62, 121, 231, 107, 36, 153, 237, 167, 166, 197, 60, 242, 199,
-   130, 254, 201, 171, 58, 139, 70, 172, 87, 190, 17, 210, 6, 26, 99, 120,
+   79, 207, 95, 76, 134, 119, 236, 52, 72, 250, 231, 99, 35, 243, 1, 169,
+   205, 253, 35, 140, 130, 201, 98, 86, 30, 119, 75, 185, 138, 67, 243, 33,
 ]);
 
 // This function edits passed in optionsJson in place

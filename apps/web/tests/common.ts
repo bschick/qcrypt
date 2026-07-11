@@ -1,6 +1,6 @@
 import { test, expect, Page, CDPSession, type Cookie } from '@playwright/test';
 import { Protocol } from 'devtools-protocol';
-import { signUserCredProof } from '@qcrypt/api';
+import { createUserCredProof } from '@qcrypt/api';
 import { cryptoReady } from '@qcrypt/crypto';
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -21,7 +21,7 @@ async function proofHeaders(
   const timestamp = String(Date.now());
   const nonce = randomBytes(32).toString('base64url');
   const bodyHashHex = createHash('sha256').update('').digest('hex');
-  const signature = signUserCredProof(
+  const signature = createUserCredProof(
     Buffer.from(userCred, 'base64url'),
     userId,
     method,
