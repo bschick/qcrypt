@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { cryptoReady } from './crypto';
 import { getRandom } from './utils';
-import { getProofKeyPair, signProof, verifyProof } from './proof';
+import { getProofKeyPair, createProof, verifyProof } from './proof';
 
 const KEY_CONTEXT = 'ProofKey';
 const SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
@@ -34,7 +34,7 @@ describe('proof primitive', () => {
    it('signs and verifies, throwing on a tampered message, tampered signature, or wrong context', () => {
       const { pubKey, secKey } = getProofKeyPair(getRandom(32), KEY_CONTEXT);
       const message = new TextEncoder().encode('qcrypt-usercred-v1\nGET\n/v1/user\n1730000000000\nabc');
-      const signature = signProof(secKey, message, SIG_CONTEXT);
+      const signature = createProof(secKey, message, SIG_CONTEXT);
       expect(verifyProof(pubKey, message, signature, SIG_CONTEXT)).toBe(true);
 
       const tamperedMessage = message.slice();

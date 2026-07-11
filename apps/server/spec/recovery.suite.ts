@@ -23,7 +23,7 @@ SOFTWARE. */
 import { describe, it, beforeAll, beforeEach, afterAll, expect } from "vitest";
 import { cryptoReady, bytesToBase64, base64ToBytes, getRandom } from "@qcrypt/crypto";
 import * as cc from "@qcrypt/crypto/consts";
-import { getRecoveryPubKey, signRecoveryProof, recoverySecret, RECOVERYID_BYTES, CHALLENGE_BYTES } from "@qcrypt/api";
+import { getRecoveryPubKey, createRecoveryProof, recoverySecret, RECOVERYID_BYTES, CHALLENGE_BYTES, type RequestTypes } from "@qcrypt/api";
 import {
    postJson,
    putJson,
@@ -71,7 +71,7 @@ async function recoverAccount(
 ): Promise<RecoverySession> {
    const secret = user.recoverySecret;
    const challenge = await issueChallenge(user.userId);
-   const signature = bytesToBase64(signRecoveryProof(secret, user.userId, challenge));
+   const signature = bytesToBase64(createRecoveryProof(secret, user.userId, challenge));
 
    const recoverRes = await postJson("/v1/recover2", { userId: user.userId, challenge, signature }, {}, "");
    expect(recoverRes.status).toBe(200);
@@ -85,7 +85,7 @@ async function recoverAccount(
       challenge: recoverRes.data.challenge,
    };
 
-   let verifyBody: Record<string, any>;
+   let verifyBody: RequestTypes.RecoverVerify;
    if (user.prf) {
       expect(recoverRes.data.prf).toBe(true);
       expect(recoverRes.data.userCredEnc).toBeDefined();
@@ -108,7 +108,7 @@ async function recoverAccount(
    if (user.prf) {
       expect(verifyRes.data.prf).toBe(true);
       expect(verifyRes.data.userCred).toBeUndefined();
-      expect(verifyRes.data.passkeyUserCredEnc).toBeDefined();
+      expect(verifyRes.data.passkeyUserCredEnc).toBeUndefined();
    } else {
       expect(verifyRes.data.userCred).toBe(user.userCred);
    }
@@ -174,14 +174,14 @@ export function recoverySuite(prf: boolean): void {
       it("rejects a wrong signature", async () => {
          const challenge = await issueChallenge(user.userId);
          const wrongSecret = recoverySecret(getRandom(RECOVERYID_BYTES), user.userId);
-         const signature = bytesToBase64(signRecoveryProof(wrongSecret, user.userId, challenge));
+         const signature = bytesToBase64(createRecoveryProof(wrongSecret, user.userId, challenge));
          const res = await postJson("/v1/recover2", { userId: user.userId, challenge, signature }, {}, "");
          expect(res.status).toBe(401);
       });
 
       it("rejects a never-issued challenge", async () => {
          const challenge = bytesToBase64(getRandom(CHALLENGE_BYTES));
-         const signature = bytesToBase64(signRecoveryProof(user.recoverySecret, user.userId, challenge));
+         const signature = bytesToBase64(createRecoveryProof(user.recoverySecret, user.userId, challenge));
          const res = await postJson("/v1/recover2", { userId: user.userId, challenge, signature }, {}, "");
          expect(res.status).toBe(401);
       });
@@ -189,7 +189,7 @@ export function recoverySuite(prf: boolean): void {
       it("rejects a tampered challenge", async () => {
          const challenge = await issueChallenge(user.userId);
          const tampered = (challenge[0] === "A" ? "B" : "A") + challenge.slice(1);
-         const signature = bytesToBase64(signRecoveryProof(user.recoverySecret, user.userId, tampered));
+         const signature = bytesToBase64(createRecoveryProof(user.recoverySecret, user.userId, tampered));
          const res = await postJson("/v1/recover2", { userId: user.userId, challenge: tampered, signature }, {}, "");
          expect(res.status).toBe(401);
       });
@@ -197,7 +197,7 @@ export function recoverySuite(prf: boolean): void {
       it("rejects a challenge bound to a different userId", async () => {
          const otherUserId = bytesToBase64(getRandom(cc.USERID_BYTES));
          const challenge = await issueChallenge(otherUserId);
-         const signature = bytesToBase64(signRecoveryProof(user.recoverySecret, user.userId, challenge));
+         const signature = bytesToBase64(createRecoveryProof(user.recoverySecret, user.userId, challenge));
          const res = await postJson("/v1/recover2", { userId: user.userId, challenge, signature }, {}, "");
          expect(res.status).toBe(401);
       });
@@ -262,7 +262,7 @@ export function recoverySuite(prf: boolean): void {
 
          // The original key no longer recovers the account.
          const challenge = await issueChallenge(recoverUser.userId);
-         const signature = bytesToBase64(signRecoveryProof(recoverUser.recoverySecret, recoverUser.userId, challenge));
+         const signature = bytesToBase64(createRecoveryProof(recoverUser.recoverySecret, recoverUser.userId, challenge));
          const staleRes = await postJson("/v1/recover2", { userId: recoverUser.userId, challenge, signature }, {}, "");
          expect(staleRes.status).toBe(401);
 

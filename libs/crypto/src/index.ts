@@ -107,7 +107,7 @@ export { PWDKeyProvider, MasterKeyKeyProvider, type PWDProvider, type KeyProvide
 // Callers must `await cryptoReady()` before invoking any other crypto export.
 export { cryptoReady } from './lib/crypto';
 
-export { getProofKeyPair, signProof, verifyProof } from './lib/proof';
+export { getProofKeyPair, createProof, verifyProof } from './lib/proof';
 
 // Lazy zxcvbn loader
 // Callers must `await zxcvbnReady()` before invoking any other zxcvbn export.

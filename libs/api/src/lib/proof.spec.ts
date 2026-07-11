@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { cryptoReady, getRandom, bytesToBase64 } from '@qcrypt/crypto';
 import {
    getUserCredPubKey,
-   signUserCredProof,
+   createUserCredProof,
    verifyUserCredProof,
    getRecoveryPubKey,
-   signRecoveryProof,
+   createRecoveryProof,
    verifyRecoveryProof
 } from './proof';
 
@@ -26,7 +26,7 @@ describe('userCred proof', () => {
       const userCred = getRandom(32);
       const pubKey = getUserCredPubKey(userCred);
       const nonce = bytesToBase64(getRandom(32));
-      const signature = signUserCredProof(userCred, userId, 'GET', '/v1/user', '1730000000000', nonce, 'abc');
+      const signature = createUserCredProof(userCred, userId, 'GET', '/v1/user', '1730000000000', nonce, 'abc');
       expect(verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '1730000000000', nonce, 'abc', signature)).toBe(true);
    });
 
@@ -43,7 +43,7 @@ describe('userCred proof', () => {
       const userCred = getRandom(32);
       const pubKey = getUserCredPubKey(userCred);
       const nonce = bytesToBase64(getRandom(32));
-      const signature = signUserCredProof(userCred, userId, 'POST', '/v1/passkeys', '100', nonce, 'aa');
+      const signature = createUserCredProof(userCred, userId, 'POST', '/v1/passkeys', '100', nonce, 'aa');
       const otherUserId = bytesToBase64(getRandom(16));
       expect(() => verifyUserCredProof(pubKey, otherUserId, 'POST', '/v1/passkeys', '100', nonce, 'aa', signature)).toThrow();
       expect(() => verifyUserCredProof(pubKey, userId, 'DELETE', '/v1/passkeys', '100', nonce, 'aa', signature)).toThrow();
@@ -56,7 +56,7 @@ describe('userCred proof', () => {
 
    it('throw when a the wrong public key is used', () => {
       const nonce = bytesToBase64(getRandom(32));
-      const signature = signUserCredProof(getRandom(32), userId, 'GET', '/v1/user', '100', nonce, 'aa');
+      const signature = createUserCredProof(getRandom(32), userId, 'GET', '/v1/user', '100', nonce, 'aa');
       const otherPubKey = getUserCredPubKey(getRandom(32));
       expect(() => verifyUserCredProof(otherPubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature)).toThrow();
    });
@@ -65,7 +65,7 @@ describe('userCred proof', () => {
       const userCred = getRandom(32);
       const pubKey = getUserCredPubKey(userCred);
       const nonce = bytesToBase64(getRandom(32));
-      const signature = signUserCredProof(userCred, userId, 'GET', '/v1/user', '100', nonce, 'aa');
+      const signature = createUserCredProof(userCred, userId, 'GET', '/v1/user', '100', nonce, 'aa');
       signature[0] ^= 0x01;
       expect(() => verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature)).toThrow();
    });
@@ -84,7 +84,7 @@ describe('recovery proof', () => {
    it('sign challenge and verify with derived public key', () => {
       const secret = getRandom(32);
       const pubKey = getRecoveryPubKey(secret);
-      const signature = signRecoveryProof(secret, userId, challenge);
+      const signature = createRecoveryProof(secret, userId, challenge);
       expect(verifyRecoveryProof(pubKey, userId, challenge, signature)).toBe(true);
    });
 
@@ -100,7 +100,7 @@ describe('recovery proof', () => {
    it('throw when signed fields differ', () => {
       const secret = getRandom(32);
       const pubKey = getRecoveryPubKey(secret);
-      const signature = signRecoveryProof(secret, userId, challenge);
+      const signature = createRecoveryProof(secret, userId, challenge);
       const otherUserId = bytesToBase64(getRandom(16));
       const otherChallenge = bytesToBase64(getRandom(32));
       expect(() => verifyRecoveryProof(pubKey, otherUserId, challenge, signature)).toThrow();
@@ -108,7 +108,7 @@ describe('recovery proof', () => {
    });
 
    it('throw when the wrong public key is used', () => {
-      const signature = signRecoveryProof(getRandom(32), userId, challenge);
+      const signature = createRecoveryProof(getRandom(32), userId, challenge);
       const otherPubKey = getRecoveryPubKey(getRandom(32));
       expect(() => verifyRecoveryProof(otherPubKey, userId, challenge, signature)).toThrow();
    });
@@ -116,7 +116,7 @@ describe('recovery proof', () => {
    it('throw when the signature is manipulated', () => {
       const secret = getRandom(32);
       const pubKey = getRecoveryPubKey(secret);
-      const signature = signRecoveryProof(secret, userId, challenge);
+      const signature = createRecoveryProof(secret, userId, challenge);
       signature[0] ^= 0x01;
       expect(() => verifyRecoveryProof(pubKey, userId, challenge, signature)).toThrow();
    });

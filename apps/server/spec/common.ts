@@ -22,7 +22,7 @@ SOFTWARE. */
 
 import crypto from "crypto";
 import WebAuthnEmulator, { AuthenticatorEmulator, PasskeysCredentialsFileRepository, type HmacSecretMode } from "nid-webauthn-emulator";
-import { signUserCredProof, getUserCredPubKey, getRecoveryPubKey, recoverySecret, RECOVERYID_BYTES } from "@qcrypt/api";
+import { createUserCredProof, getUserCredPubKey, getRecoveryPubKey, recoverySecret, RECOVERYID_BYTES, type RequestTypes } from "@qcrypt/api";
 import {
    cryptoReady,
    bytesToBase64,
@@ -84,7 +84,7 @@ export async function makeProofHeaders(
    // Sign the decoded path. The server verifies (event.requestContext.http.path), not the
    // re-encoded URL pathname.
    const pathname = path.split("?")[0];
-   const signature = signUserCredProof(
+   const signature = createUserCredProof(
       Buffer.from(userCred, "base64url"),
       userId,
       method,
@@ -128,11 +128,10 @@ export function getWebAuthnEmulator(
    return emulator;
 }
 
-// Fixed PRF salt, mirrors apps/web/src/app/services/prf.ts (SHA-256 of "qcrypt/prf/v1").
-// Sent to the emulator as the WebAuthn PRF eval.first input; never change it.
+// Must match the fixed PRF salt in apps/web/src/app/services/prf.ts.
 export const PRF_SALT = new Uint8Array([
-   135, 160, 31, 62, 121, 231, 107, 36, 153, 237, 167, 166, 197, 60, 242, 199,
-   130, 254, 201, 171, 58, 139, 70, 172, 87, 190, 17, 210, 6, 26, 99, 120,
+   79, 207, 95, 76, 134, 119, 236, 52, 72, 250, 231, 99, 35, 243, 1, 169,
+   205, 253, 35, 140, 130, 201, 98, 86, 30, 119, 75, 185, 138, 67, 243, 33,
 ]);
 
 // The emulator's JSON API expects/returns PRF values as base64url text.
@@ -140,8 +139,7 @@ const PRF_SALT_INPUT = bytesToBase64(PRF_SALT);
 export const PRF_EXTENSION = { prf: { eval: { first: PRF_SALT_INPUT } } };
 
 // Reads the PRF output (results.first) from a credential's client extension results,
-// which the emulator's JSON API base64url-encodes. Returns null when no output is
-// present (hmac-secret at registration time, before a follow-up assertion reads it).
+// or null if not present
 export function readPrfOutput(clientExtensionResults: any): Uint8Array<ArrayBuffer> | null {
    const first = clientExtensionResults?.prf?.results?.first;
    let output: Uint8Array<ArrayBuffer> | null = null;
@@ -313,7 +311,7 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
       expect(verifyRes.status).toBe(200);
       expect(verifyRes.data.verified).toBe(true);
       expect(verifyRes.data.prf).toBe(true);
-      expect(verifyRes.data.passkeyUserCredEnc).toBeDefined();
+      expect(verifyRes.data.passkeyUserCredEnc).toBeUndefined();
       expect(verifyRes.data.userCred).toBeUndefined();
       expect(verifyRes.data.csrf).toBeDefined();
       expect(verifyRes.data.pkId).toBeDefined();
@@ -329,7 +327,7 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
          emulator,
          recoverySecret: secret,
          recoveryId,
-         passkeyUserCredEnc: body.passkeyUserCredEnc,
+         passkeyUserCredEnc: body.passkeyUserCredEnc!,
          prfOutput,
       };
    } else {
@@ -347,12 +345,13 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
          challenge: regOpts.data.challenge,
       }, false);
 
-      const verifyRes = await postJson(`/v1/reg/verify?usercred=true`, {
+      const body: RequestTypes.RegVerify = {
          ...attestation,
          userId,
          challenge: regOpts.data.challenge,
          recoveryPubKey: bytesToBase64(getRecoveryPubKey(secret)),
-      }, {}, "");
+      };
+      const verifyRes = await postJson(`/v1/reg/verify?usercred=true`, body, {}, "");
       expect(verifyRes.status).toBe(200);
       expect(verifyRes.data.verified).toBe(true);
       expect(verifyRes.data.csrf).toBeDefined();
@@ -409,7 +408,7 @@ export async function registerNewCredential(
 // emulator holding that credential.
 export async function buildPrfRegBody(userName: string): Promise<{
    userId: string;
-   body: Record<string, any>;
+   body: RequestTypes.RegVerify;
    emulator: WebAuthnEmulator;
    userCred: Uint8Array<ArrayBuffer>;
    recoverySecret: Uint8Array;
@@ -432,7 +431,7 @@ export async function buildPrfRegBody(userName: string): Promise<{
    const recoveryId = getRandom(RECOVERYID_BYTES);
    const secret = recoverySecret(recoveryId, userId);
 
-   const body: Record<string, any> = {
+   const body: RequestTypes.RegVerify = {
       ...attestation,
       userId,
       challenge: regOpts.data.challenge,

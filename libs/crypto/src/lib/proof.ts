@@ -41,7 +41,7 @@ export function getProofKeyPair(secret: Uint8Array, context: string): { pubKey: 
    }
 }
 
-export function signProof(secKey: Uint8Array, message: Uint8Array, context: string): Uint8Array<ArrayBuffer> {
+export function createProof(secKey: Uint8Array, message: Uint8Array, context: string): Uint8Array<ArrayBuffer> {
    return getCrux().ml_dsa_65_sign(secKey, message, new TextEncoder().encode(context), getRandom(32));
 }
 

@@ -100,6 +100,7 @@ import {
    verifyRecoveryProof,
    PROOF_PUBKEY_BYTES,
    PROOF_SIG_BYTES,
+   type RequestTypes,
    type ResponseTypes
 } from '@qcrypt/api';
 import { cryptoReady } from '@qcrypt/crypto';
@@ -308,7 +309,6 @@ async function postAuthVerify(
    const {
       rpID,
       rpOrigin,
-      params,
       body
    } = httpDetails;
 
@@ -441,9 +441,7 @@ async function postAuthVerify(
    verifiedUser.lastCredentialId = authenticator.credentialId;
    verifiedUser.authCount += 1;
 
-   const includeUserCred = !!params.usercred;
-
-   responseContent = await makeLoginUserInfoResponse(verifiedUser, includeUserCred);
+   responseContent = await makeLoginUserInfoResponse(verifiedUser, true);
 
    // Let this happen async
    recordEvent(EventNames.AuthVerify, unverifiedUser.userId, authenticator.credentialId);
@@ -460,16 +458,16 @@ async function postPasskeyVerify(
 ): Promise<Response> {
    const {
       body,
-      params
    } = httpDetails;
+   const addVerify = body as RequestTypes.AddVerify;
 
    if (!verifiedUser) {
       throw new AuthError();
    }
-   if (verifiedUser.prf && !body.passkeyUserCredEnc) {
+   if (verifiedUser.prf && !addVerify.passkeyUserCredEnc) {
       throw new ParamError(`missing passkey userCred ciphertext for ${verifiedUser.userId}`);
    }
-   if (!verifiedUser.prf && body.passkeyUserCredEnc) {
+   if (!verifiedUser.prf && addVerify.passkeyUserCredEnc) {
       throw new ParamError(`unexpected passkey userCred ciphertext ${verifiedUser.userId}`);
    }
 
@@ -477,11 +475,7 @@ async function postPasskeyVerify(
 
    // force consistent read to capture recent create authenticator
    const authenticators = await loadAuthenticators(verifiedUser, true);
-   const responseContent = await makeLoginUserInfoResponse(
-      verifiedUser,
-      !!params.usercred,
-      authenticators
-   );
+   const responseContent = await makeLoginUserInfoResponse(verifiedUser, false, authenticators);
 
    // Let this happen async
    recordEvent(EventNames.RegVerify, verifiedUser.userId, auth.credentialId);
@@ -493,11 +487,11 @@ async function postRegVerify(
    httpDetails: HttpDetails
 ): Promise<Response> {
    const {
-      body,
-      params
+      body
    } = httpDetails;
+   const regVerify = body as RequestTypes.RegVerify;
 
-   const unverifiedUser = await getUnverifiedUser(body.userId);
+   const unverifiedUser = await getUnverifiedUser(regVerify.userId);
 
    // BACKWARD COMPAT: until clients update to call postRecoverVerify directly
    // After BACKWARD COMPAT, this should change to `throw new ParamError() if verified is true`
@@ -511,20 +505,20 @@ async function postRegVerify(
 
    // Validate the client credential fields before creating the passkey so invalid input
    // never leaves a passkey behind.
-   const hasPrf = !!body.recoveryUserCredEnc || !!body.passkeyUserCredEnc || !!body.userCredPubKey;
+   const hasPrf = !!regVerify.recoveryUserCredEnc || !!regVerify.passkeyUserCredEnc || !!regVerify.userCredPubKey;
    if (hasPrf) {
-      if (!validB64(body.recoveryUserCredEnc) || base64UrlDecode(body.recoveryUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
-         !validB64(body.passkeyUserCredEnc) || base64UrlDecode(body.passkeyUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
-         !validB64(body.userCredPubKey) || base64UrlDecode(body.userCredPubKey)!.length !== PROOF_PUBKEY_BYTES) {
+      if (!validB64(regVerify.recoveryUserCredEnc) || base64UrlDecode(regVerify.recoveryUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
+         !validB64(regVerify.passkeyUserCredEnc) || base64UrlDecode(regVerify.passkeyUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
+         !validB64(regVerify.userCredPubKey) || base64UrlDecode(regVerify.userCredPubKey)!.length !== PROOF_PUBKEY_BYTES) {
          throw new ParamError('invalid user credential data');
       }
    }
 
    // The client generates the recovery secret and sends only its public key
-   if (!validB64(body.recoveryPubKey) || base64UrlDecode(body.recoveryPubKey)!.length !== PROOF_PUBKEY_BYTES) {
+   if (!validB64(regVerify.recoveryPubKey) || base64UrlDecode(regVerify.recoveryPubKey)!.length !== PROOF_PUBKEY_BYTES) {
       throw new ParamError('invalid recovery public key');
    }
-   const recoveryPubKey = body.recoveryPubKey;
+   const recoveryPubKey = regVerify.recoveryPubKey;
 
    const auth = await _createAuthenticator(httpDetails, unverifiedUser, 'reg');
 
@@ -547,8 +541,8 @@ async function postRegVerify(
    let userCredPubKey: string;
 
    if (hasPrf) {
-      userCredEnc = body.recoveryUserCredEnc;
-      userCredPubKey = body.userCredPubKey;
+      userCredEnc = regVerify.recoveryUserCredEnc;
+      userCredPubKey = regVerify.userCredPubKey!;
    } else {
       const userCred = randData.slice(randOffset, randOffset + cc.USERCRED_BYTES);
       randOffset += cc.USERCRED_BYTES;
@@ -629,11 +623,7 @@ async function postRegVerify(
 
    // force consistent read to capture recent create
    const authenticators = await loadAuthenticators(verifiedUser, true);
-   const responseContent = await makeLoginUserInfoResponse(
-      verifiedUser,
-      !!params.usercred,
-      authenticators
-   );
+   const responseContent = await makeLoginUserInfoResponse(verifiedUser, !hasPrf, authenticators);
 
    // Let this happen async
    recordEvent(EventNames.RegVerify, verifiedUser.userId, auth.credentialId);
@@ -648,11 +638,11 @@ async function postRecoverVerify(
    httpDetails: HttpDetails
 ): Promise<Response> {
    const {
-      body,
-      params
+      body
    } = httpDetails;
+   const recoverVerify = body as RequestTypes.RecoverVerify;
 
-   const unverifiedUser = await getUnverifiedUser(body.userId);
+   const unverifiedUser = await getUnverifiedUser(recoverVerify.userId);
 
    // should be empty for recovered account
    if (unverifiedUser.lastCredentialId) {
@@ -661,10 +651,10 @@ async function postRecoverVerify(
    if (!unverifiedUser.verified) {
       throw new ParamError(`cannot recover unverified account ${unverifiedUser.userId}`);
    }
-   if (unverifiedUser.prf && !body.passkeyUserCredEnc) {
+   if (unverifiedUser.prf && !recoverVerify.passkeyUserCredEnc) {
       throw new ParamError(`missing passkey userCred ciphertext for ${unverifiedUser.userId}`);
    }
-   if (!unverifiedUser.prf && body.passkeyUserCredEnc) {
+   if (!unverifiedUser.prf && recoverVerify.passkeyUserCredEnc) {
       throw new ParamError(`unexpected passkey userCred ciphertext ${unverifiedUser.userId}`);
    }
 
@@ -687,7 +677,7 @@ async function postRecoverVerify(
    const authenticators = await loadAuthenticators(verifiedUser, true);
    const responseContent = await makeLoginUserInfoResponse(
       verifiedUser,
-      !!params.usercred,
+      !verifiedUser.prf,
       authenticators
    );
 
@@ -710,18 +700,19 @@ async function _createAuthenticator(
       rpOrigin,
       body
    } = httpDetails;
+   const passkeyVerify = body as RequestTypes.PasskeyVerify;
 
-   if (!validB64(body.challenge)) {
+   if (!validB64(passkeyVerify.challenge)) {
       throw new ParamError('invalid challenge format');
    }
-   if (body.passkeyUserCredEnc &&
-      (!validB64(body.passkeyUserCredEnc) || base64UrlDecode(body.passkeyUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES)) {
+   if (passkeyVerify.passkeyUserCredEnc &&
+      (!validB64(passkeyVerify.passkeyUserCredEnc) || base64UrlDecode(passkeyVerify.passkeyUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES)) {
       throw new ParamError('invalid passkey userCred ciphertext');
    }
 
    // Atomically consume the challenge, then check its validity
    const challenge = await Challenges.delete({
-      challenge: body.challenge
+      challenge: passkeyVerify.challenge
    }).go({ response: 'all_old' });
 
    if (!challenge || !challenge.data) {
@@ -742,7 +733,7 @@ async function _createAuthenticator(
    let verification: VerifiedRegistrationResponse;
    try {
       verification = await verifyRegistrationResponse({
-         response: body as RegistrationResponseJSON,
+         response: passkeyVerify as RegistrationResponseJSON,
          expectedChallenge: challenge.data.challenge,
          expectedOrigin: rpOrigin,
          expectedRPID: rpID,
@@ -794,8 +785,8 @@ async function _createAuthenticator(
       credentialDeviceType: credentialDeviceType,
       userVerified: userVerified,
       credentialBackedUp: credentialBackedUp,
-      transports: body.response.transports,
-      userCredEnc: body.passkeyUserCredEnc,
+      transports: passkeyVerify.response.transports,
+      userCredEnc: passkeyVerify.passkeyUserCredEnc,
       origin: origin,
       aaguid: aaguid,
       attestationObject: base64UrlEncode(attestationObject),
@@ -1120,7 +1111,6 @@ async function makeLoginUserInfoResponse(
 
       return {
          ...userInfo,
-         prf: verifiedUser.prf,
          userCred: userCred,
          passkeyUserCredEnc: passkeyUserCredEnc,
          pkId: verifiedUser.lastCredentialId
@@ -1149,6 +1139,7 @@ async function makeUserInfoResponse(
       userId: verifiedUser.userId,
       userName: verifiedUser.userName,
       hasRecoveryKey: !!verifiedUser.recoveryPubKey,
+      prf: verifiedUser.prf,
       authenticators: auths,
       invitables: invitables
    };
@@ -1766,8 +1757,9 @@ async function postRecover2(
    // The client decrypts userCred from this ciphertext with the recovery secret,
    // which the server never holds.
    if (verifiedUser.prf) {
-      regResponse.content['prf'] = true;
-      regResponse.content['userCredEnc'] = verifiedUser.userCredEnc;
+      const recoverInfo = regResponse.content as ResponseTypes.RecoverInfo;
+      recoverInfo.prf = true;
+      recoverInfo.userCredEnc = verifiedUser.userCredEnc;
    }
 
    return regResponse;

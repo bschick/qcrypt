@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { getProofKeyPair, signProof, verifyProof, base64ToBytes, concatArrays } from '@qcrypt/crypto';
+import { getProofKeyPair, createProof, verifyProof, base64ToBytes, concatArrays } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 
 const USERCRED_KEY_CONTEXT = 'UCredKey';
@@ -64,7 +64,7 @@ export function getUserCredPubKey(userCred: Uint8Array): Uint8Array<ArrayBuffer>
    return pubKey;
 }
 
-export function signUserCredProof(
+export function createUserCredProof(
    userCred: Uint8Array,
    userId: string,
    method: string,
@@ -75,7 +75,7 @@ export function signUserCredProof(
 ): Uint8Array<ArrayBuffer> {
    const { secKey } = getProofKeyPair(userCred, USERCRED_KEY_CONTEXT);
    try {
-      return signProof(
+      return createProof(
          secKey,
          buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex),
          USERCRED_SIG_CONTEXT
@@ -131,14 +131,14 @@ export function getRecoveryPubKey(recoverySecret: Uint8Array): Uint8Array<ArrayB
    return pubKey;
 }
 
-export function signRecoveryProof(
+export function createRecoveryProof(
    recoverySecret: Uint8Array,
    userId: string,
    challenge: string
 ): Uint8Array<ArrayBuffer> {
    const { secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
    try {
-      return signProof(
+      return createProof(
          secKey,
          buildRecoveryMessage(userId, challenge),
          RECOVERY_SIG_CONTEXT

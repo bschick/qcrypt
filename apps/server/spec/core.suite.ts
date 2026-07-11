@@ -22,12 +22,10 @@ SOFTWARE. */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { SESSION_TIMEOUT_SEC } from '@qcrypt/api';
-import { bytesToBase64 } from '@qcrypt/crypto';
 import WebAuthnEmulator from "nid-webauthn-emulator";
 import {
    registerTestUser,
    registerNewCredential,
-   prfDecrypt,
    deleteJson,
    getJson,
    patchJson,
@@ -207,7 +205,7 @@ export function coreSuite(prf: boolean): void {
                verifyBody.passkeyUserCredEnc = passkeyUserCredEnc;
             }
             const verifyRes = await postJson(
-               `/v1/passkeys/verify?usercred=true`,
+               `/v1/passkeys/verify?usercred=true`, // old flag that should be ignored
                verifyBody,
                { "x-csrf-token": csrfToken },
                sessCookie,
@@ -217,15 +215,9 @@ export function coreSuite(prf: boolean): void {
             expect(verifyRes.data.verified).toBe(true);
             expect(verifyRes.data.userId).toBe(userId);
 
-            if (user.prf) {
-               expect(verifyRes.data.userCred).toBeUndefined();
-               expect(verifyRes.data.passkeyUserCredEnc).toBeDefined();
-               const decrypted = await prfDecrypt(verifyRes.data.passkeyUserCredEnc, user.prfOutput.slice(0), userId);
-               expect(bytesToBase64(decrypted)).toBe(userCred);
-            } else {
-               expect(verifyRes.data.passkeyUserCredEnc).toBeUndefined();
-               expect(verifyRes.data.userCred).toBe(userCred);
-            }
+            // An add does not re-login, so the response carries neither userCred nor its ciphertext.
+            expect(verifyRes.data.userCred).toBeUndefined();
+            expect(verifyRes.data.passkeyUserCredEnc).toBeUndefined();
 
             const delRes = await deleteJson(
                `/v1/passkeys/${attestation.id}`,
