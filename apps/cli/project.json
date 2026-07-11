@@ -31,7 +31,7 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm exec vitest run --config apps/cli/vitest.config.ts {args.include}",
+        "command": "pnpm exec vitest run --config apps/cli/vitest.config.ts {args.include} -t \"{args.name}\"",
         "cwd": "{workspaceRoot}",
         "forwardAllArgs": false
       }

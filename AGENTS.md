@@ -124,6 +124,10 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 >   - For `test:web` (Angular builder), `--include` expects a file glob. You must use the `**/` prefix to find nested files. Example: `pnpm test:web -- --include='**/keystore.service.spec.ts'`
 >   - For `test:e2e` which runs playwrigth you and pass any valid playwright filters. For matching specific regex of the test name use `-g`. Example: `pnpm test:e2e -g "sign in logs out tabs"`
 >   - For other projects (`test:libs`, `test:server`, `test:cli`), they invoke Vitest directly, which uses string/regex matching. **Do not use the `**/` prefix** for these. Example: `pnpm test:libs -- --include=ciphers.spec.ts`
+> **Note:** To run specific tests by **name** (the `describe`/`it` text, matched as a regex against the full suite + test name), the flag differs per runner:
+>   - For `test:web` (Angular builder), use `--filter`. Example: `pnpm test:web -- --include='**/prf.spec.ts' --filter="PRF_SALT is 32 bytes"`
+>   - For the Vitest projects (`test:server`, `test:cli`, `test:lib:crypto`, api), use `--name` (a placeholder each `nx test` target forwards to Vitest's `-t`). Example: `pnpm test:server -- --name="should reject manipulated csrf"` (combine with `--include` to also scope the file). **Do not use `-t`** through these wrappers — nx claims `-t` as its own `--targets` flag, so it never reaches Vitest. `-t` works only when calling Vitest directly: `pnpm exec vitest run --config apps/server/vitest.config.ts nonprf.spec.ts -t "manipulated csrf"`.
+>   - For `test:e2e` (Playwright), use `-g` (see the file-filter note above).
 
 ### Deploy Commands
 
