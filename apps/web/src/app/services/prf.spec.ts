@@ -31,7 +31,7 @@ import {
    prfDecrypt,
 } from './prf';
 
-function prfExtensionResults(first: ArrayBuffer): AuthenticationExtensionsClientOutputs {
+function prfExtensionResults(first: ArrayBuffer | Uint8Array | number[]): AuthenticationExtensionsClientOutputs {
    return { prf: { results: { first } } } as AuthenticationExtensionsClientOutputs;
 }
 
@@ -60,6 +60,24 @@ describe('prf helpers', () => {
    it('prfReadKey returns the 32-byte result', () => {
       const rawKey = getRandom(cc.KEY_BYTES);
       const output = prfReadKey(prfExtensionResults(rawKey.buffer));
+      expect(output).not.toBeNull();
+      expect([...output!]).toEqual([...rawKey]);
+   });
+
+   it('prfReadKey reads a typed-array view returned by some providers', () => {
+      const rawKey = getRandom(cc.KEY_BYTES);
+      // A partial view into a larger buffer, as an intercepting provider might return
+      const backing = new Uint8Array(cc.KEY_BYTES + 8);
+      backing.set(rawKey, 4);
+      const view = new Uint8Array(backing.buffer, 4, cc.KEY_BYTES);
+      const output = prfReadKey(prfExtensionResults(view));
+      expect(output).not.toBeNull();
+      expect([...output!]).toEqual([...rawKey]);
+   });
+
+   it('prfReadKey reads a plain number[] result (1Password on Chrome)', () => {
+      const rawKey = getRandom(cc.KEY_BYTES);
+      const output = prfReadKey(prfExtensionResults([...rawKey]));
       expect(output).not.toBeNull();
       expect([...output!]).toEqual([...rawKey]);
    });

@@ -118,7 +118,7 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
       // clicking, keeping showing to warning to encourage saving
       if(!this.authSvc.hasRecoveryId()) {
          // let this happen async
-         this.authSvc.refreshUserInfo();
+         this.authSvc.refreshUserInfo().catch((err) => console.error(err));
       }
    }
 }

@@ -269,7 +269,7 @@ export class AuthenticatorService {
       if (!session?.userCredEnc || !session.pkId) {
          throw new Error('no active user');
       }
-      return this._decryptUserCredEnc(session.userCredEnc, session.pkId, session.userId);
+      return await this._decryptUserCredEnc(session.userCredEnc, session.pkId, session.userId);
    }
 
    // The caller must overwrite the returned userCred ASAP.
@@ -439,7 +439,7 @@ export class AuthenticatorService {
          return;
       }
 
-      await this._loginRestore(
+      this._loginRestore(
          serverLoginUserInfo,
          session.userCredEnc,
          session.userCredExpiry,
@@ -541,7 +541,7 @@ export class AuthenticatorService {
 
       const { serverLoginUserInfo, prfKey } = await this._createSessionImpl(this.userId);
       const userCred = await this._resolveUserCred(serverLoginUserInfo, prfKey);
-      return this._loginUser(serverLoginUserInfo, userCred);
+      return await this._loginUser(serverLoginUserInfo, userCred);
    }
 
    on(events: AuthEvent[], action: (data: AuthEventData) => void): Subscription {
@@ -632,12 +632,12 @@ export class AuthenticatorService {
       }
    }
 
-   private async _loginRestore(
+   private _loginRestore(
       serverLogin: LoginUserInfo,
       userCredEnc: string,
       userCredExpiry: string,
       version: number
-   ): Promise<VerifiedUserInfo> {
+   ): VerifiedUserInfo {
       if (!serverLogin.userId || serverLogin.userId.length == 0) {
          throw new Error('invalid user id')
       }
@@ -724,7 +724,7 @@ export class AuthenticatorService {
          if (msg.version > sessionState.version!) {
             if (this.userInfo()!.authenticators.some((auth: AuthenticatorInfo) => auth.credentialId === msg.pkId)) {
                // We know the passkey, switch to it
-               this._adoptPeerLogin(msg);
+               this._adoptPeerLogin(msg).catch((err) => console.error(err));
             } else if (this.validKnownUser()) {
                // Same user, unknown passkey (rare), logout
                this.logout(false);
@@ -764,7 +764,7 @@ export class AuthenticatorService {
       if (!serverLoginUserInfo || !serverLoginUserInfo.verified) {
          this.logout(false);
       } else {
-         await this._loginRestore(
+         this._loginRestore(
             serverLoginUserInfo,
             msg.userCredEnc,
             msg.userCredExpiry,
@@ -1039,7 +1039,7 @@ export class AuthenticatorService {
          throw new Error('missing local userId, sign in as different user');
       }
 
-      return this.createSession(userId);
+      return await this.createSession(userId);
    }
 
    async createSession(userId: string | null = null): Promise<VerifiedUserInfo> {
@@ -1050,7 +1050,7 @@ export class AuthenticatorService {
       await this._pendingLogout;
       const { serverLoginUserInfo, prfKey } = await this._createSessionImpl(userId);
       const userCred = await this._resolveUserCred(serverLoginUserInfo, prfKey);
-      return this._loginUser(serverLoginUserInfo, userCred);
+      return await this._loginUser(serverLoginUserInfo, userCred);
    }
 
    // If no userId is provided, will present all Passkeys for this domain
@@ -1172,7 +1172,7 @@ export class AuthenticatorService {
             })
          });
 
-         return this._finishRecovery(recoverResp, userId, secret);
+         return await this._finishRecovery(recoverResp, userId, secret);
       } finally {
          secret.fill(0);
       }
@@ -1191,7 +1191,7 @@ export class AuthenticatorService {
          bodyJSON: JSON.stringify({ userId: userId, userCred: userCred })
       });
 
-      return this._finishRecovery(recoverResp, userId, null);
+      return await this._finishRecovery(recoverResp, userId, null);
    }
 
    // Re-provisions the recovered account's "first" passkey
@@ -1201,7 +1201,7 @@ export class AuthenticatorService {
       secret: Uint8Array<ArrayBuffer> | null
    ): Promise<VerifiedUserInfo> {
 
-      const { regResponse, prfKey } = await this._startRegistration(recoverResp);
+      const { regResponse, prfKey } = await this._startRegistration(recoverResp, !!recoverResp.prf);
       let userCred: Uint8Array<ArrayBuffer> | null = null;
 
       try {
@@ -1220,9 +1220,6 @@ export class AuthenticatorService {
             }
             userCred = await prfDecrypt(recoverResp.userCredEnc, secret.slice(0), userId);
             body.passkeyUserCredEnc = await prfEncrypt(userCred, prfKey, userId);
-         } else if (prfKey) {
-             // If the account was not PRF based, the authenticator may have still generated a key we didn't use
-           prfKey.fill(0);
          }
 
          const serverLoginUserInfo = await this._passkeyVerify('recover/verify', body);
@@ -1239,58 +1236,70 @@ export class AuthenticatorService {
          if (userCred) {
             userCred.fill(0);
          }
+         if (prfKey) {
+            prfKey.fill(0);
+         }
       }
    }
 
    // Creates new user and first passkey
-   // allowNoPrf allows non-prf user accounts to be created when true (not if false)
-   async newUser(userName: string, allowNoPrf: boolean = false): Promise<VerifiedUserInfo> {
+   // The passkey is always created with PRF requested. If the authenticator has no PRF, onPrfUnavailable
+   // chooses to either accept the non-prf passkey or leak it and try another passkey.
+   async newUser(
+      userName: string,
+      onPrfUnavailable: () => Promise<'standard' | 'different'>
+   ): Promise<VerifiedUserInfo> {
       if (!userName) {
          throw new Error('missing require userName');
       }
 
       await this._pendingLogout;
-      const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
-         method: 'POST',
-         resource: 'reg/options',
-         bodyJSON: JSON.stringify({ userName: userName })
-      });
 
-      const userId = optionsJson.user.id;
-      const { secret, recoveryPubKey, recoveryWords } = this._newRecoverySecret(userId);
-      let userCred: Uint8Array<ArrayBuffer> = getRandom(cc.USERCRED_BYTES);
+      while (true) {
+         const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
+            method: 'POST',
+            resource: 'reg/options',
+            bodyJSON: JSON.stringify({ userName: userName })
+         });
 
-      try {
-         const { regResponse, prfKey } = await this._startRegistration(optionsJson);
-
-         const body: RequestTypes.RegVerify = {
-            ...regResponse,
-            userId: userId,
-            challenge: optionsJson.challenge,
-            recoveryPubKey: recoveryPubKey
-         };
-         if (prfKey) {
-            body.passkeyUserCredEnc = await prfEncrypt(userCred, prfKey, userId);
-            body.recoveryUserCredEnc = await prfEncrypt(userCred, secret, userId);
-            body.userCredPubKey = bytesToBase64(getUserCredPubKey(userCred));
-         } else if (!allowNoPrf) {
-            throw new PrfUnsupportedError();
-         }
-
-         const serverLoginUserInfo = await this._passkeyVerify('reg/verify', body);
-         if (!serverLoginUserInfo.prf) {
-            if (!serverLoginUserInfo.userCred) {
-               throw new Error("invalid credential state");
-            }
-            userCred = base64ToBytes(serverLoginUserInfo.userCred);
-         }
-
+         const userId = optionsJson.user.id;
+         const { secret, recoveryPubKey, recoveryWords } = this._newRecoverySecret(userId);
          this._cachedRecoveryWords = recoveryWords;
-         return await this._loginUser(serverLoginUserInfo, userCred);
+         let userCred: Uint8Array<ArrayBuffer> = getRandom(cc.USERCRED_BYTES);
 
-      } finally {
-         userCred.fill(0);
-         secret.fill(0);
+         try {
+            const { regResponse, prfKey } = await this._startRegistration(optionsJson, true);
+
+            if (!prfKey && (await onPrfUnavailable()) === 'different') {
+               // discard the created passkey and register a fresh one
+               continue;
+            }
+
+            const body: RequestTypes.RegVerify = {
+               ...regResponse,
+               userId: userId,
+               challenge: optionsJson.challenge,
+               recoveryPubKey: recoveryPubKey
+            };
+            if (prfKey) {
+               body.passkeyUserCredEnc = await prfEncrypt(userCred, prfKey, userId);
+               body.recoveryUserCredEnc = await prfEncrypt(userCred, secret, userId);
+               body.userCredPubKey = bytesToBase64(getUserCredPubKey(userCred));
+            }
+
+            const serverLoginUserInfo = await this._passkeyVerify('reg/verify', body);
+            if (!serverLoginUserInfo.prf) {
+               if (!serverLoginUserInfo.userCred) {
+                  throw new Error("invalid credential state");
+               }
+               userCred = base64ToBytes(serverLoginUserInfo.userCred);
+            }
+
+            return await this._loginUser(serverLoginUserInfo, userCred);
+         } finally {
+            userCred.fill(0);
+            secret.fill(0);
+         }
       }
    }
 
@@ -1304,10 +1313,11 @@ export class AuthenticatorService {
          resource: 'passkeys/options'
       });
 
-      const { regResponse, prfKey } = await this._startRegistration(optionsJson);
+      const accountPrf = this.getUserInfo().prf;
+      const { regResponse, prfKey } = await this._startRegistration(optionsJson, accountPrf);
 
       const body: RequestTypes.AddVerify = { ...regResponse, challenge: optionsJson.challenge };
-      if (this.getUserInfo().prf) {
+      if (accountPrf) {
          // A PRF account requires all passkey to support PRF (no downgrade)
          if (!prfKey) {
             throw new PrfUnsupportedError();
@@ -1319,9 +1329,6 @@ export class AuthenticatorService {
          } finally {
             userCred.fill(0);
          }
-      } else if (prfKey) {
-         // If the account was not PRF based, the authenticator may have still generated a key we didn't use
-         prfKey.fill(0);
       }
 
       const serverLoginUserInfo = await this._passkeyVerify('passkeys/verify', body);
@@ -1330,9 +1337,10 @@ export class AuthenticatorService {
       return userInfo;
    }
 
-   // Starts the registration ceremony and reads the passkey's PRF output if supported
+   // Starts the registration ceremony, reading the passkey's PRF output only when tryPrf is set
    private async _startRegistration(
-      optionsJson: PublicKeyCredentialCreationOptionsJSON
+      optionsJson: PublicKeyCredentialCreationOptionsJSON,
+      tryPrf: boolean
    ): Promise<{ regResponse: RegistrationResponseJSON, prfKey: Uint8Array<ArrayBuffer> | null }> {
 
       // SimpleWebAuthn v10 caused incompatibility with older versions by
@@ -1341,7 +1349,9 @@ export class AuthenticatorService {
       const idBytes = new TextEncoder().encode(optionsJson.user.id);
       optionsJson.user.id = bytesToBase64(idBytes);
 
-      injectPrfExtension(optionsJson);
+      if (tryPrf) {
+         injectPrfExtension(optionsJson);
+      }
 
       let regResponse: RegistrationResponseJSON;
       try {
@@ -1351,19 +1361,23 @@ export class AuthenticatorService {
          throw err;
       }
 
-      // If the authenticator supports "hmac-secret", but not "hmac-secret-mc" we must run
-      // an extra user interactions to get the PRF output
-      let prfKey = prfReadKey(regResponse.clientExtensionResults);
-      if (!prfKey && prfEnabled(regResponse.clientExtensionResults)) {
-         prfKey = await this._readPrfViaAssertion(regResponse.id, optionsJson.rp.id);
+      let prfKey: Uint8Array<ArrayBuffer> | null = null;
+      if (tryPrf) {
+         // If the authenticator supports "hmac-secret", but not "hmac-secret-mc" we must run
+         // an extra user interactions to get the PRF output
+         prfKey = prfReadKey(regResponse.clientExtensionResults);
+         if (!prfKey && prfEnabled(regResponse.clientExtensionResults)) {
+            prfKey = await this._readPrfViaAssertion(regResponse.id, optionsJson.rp.id);
+         }
       }
 
       return { regResponse, prfKey };
    }
 
-   // Extra authenticator assertion is needed get PRF key when the authenticator supports "hmac-secret"
-   // but not "hmac-secret-mc". Hopefully most systems will add "-mc" support to avoid the additional
-   // user interaction (this assertion is local and should not be sent to the server)
+   // Extra authenticator assertion is needed get PRF key when the authenticator supports
+   // "hmac-secret" but not "hmac-secret-mc". Hopefully most systems will add "-mc" support
+   // to avoid the additional user interaction (this assertion is local and should not be
+   // sent to the server)
    private async _readPrfViaAssertion(
       credentialId: string,
       rpId?: string

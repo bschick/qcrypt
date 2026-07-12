@@ -22,6 +22,7 @@ SOFTWARE. */
 
 import {
    bytesToBase64,
+   getArrayBuffer,
    streamFromBytes,
    streamFromBase64,
    readStreamAll,
@@ -61,13 +62,13 @@ export function prfReadKey(
    clientExtensionResults: AuthenticationExtensionsClientOutputs
 ): Uint8Array<ArrayBuffer> | null {
    const first = clientExtensionResults.prf?.results?.first;
-   let output: Uint8Array<ArrayBuffer> | null = null;
-
-   if (first instanceof ArrayBuffer) {
-      output = new Uint8Array(first);
-      if (output.byteLength !== cc.KEY_BYTES) {
-         throw new Error('unexpected PRF output length: ' + output.byteLength);
-      }
+   if (!first) {
+      return null;
+   }
+   // The spec says `first` should be an ArrayBuffer, but often isn't so correct
+   const output = new Uint8Array(getArrayBuffer(first));
+   if (output.byteLength !== cc.KEY_BYTES) {
+      throw new Error('unexpected PRF output length: ' + output.byteLength);
    }
    return output;
 }

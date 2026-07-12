@@ -31,7 +31,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatInputModule } from '@angular/material/input';
-import { AuthenticatorService, type AuthenticatorInfo, AuthEvent } from '../services/authenticator.service';
+import { AuthenticatorService, type AuthenticatorInfo, AuthEvent, PrfUnsupportedError } from '../services/authenticator.service';
 import { EditableComponent } from '../ui/editable/editable.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -53,6 +53,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    private authSub!: Subscription;
    private routeSub!: Subscription;
    public error = '';
+   public prfUnsupported = false;
    public userName = '';
    public passKeys: AuthenticatorInfo[] = [];
    public showProgress = false;
@@ -103,6 +104,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
 
    onClickDelete(passkey: AuthenticatorInfo) {
       this.error = '';
+      this.prfUnsupported = false;
       let pkState = ConfirmDialog.NONE_PK;
       const userInfo = this.authSvc.userInfo();
       this.passKeys = userInfo ? userInfo.authenticators : [];
@@ -138,13 +140,18 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    async onClickAdd() {
       try {
          this.error = '';
+         this.prfUnsupported = false;
          await this.authSvc.addPasskey();
       } catch (err) {
-         console.error(err);
-         if (err instanceof Error && err.name === 'InvalidStateError') {
-            this.error = 'You passkey manager only allows one credential';
+         if (err instanceof PrfUnsupportedError) {
+            this.prfUnsupported = true;
          } else {
-            this.error = 'Passkey not created, try again';
+            console.error(err);
+            if (err instanceof Error && err.name === 'InvalidStateError') {
+               this.error = 'You passkey manager only allows one credential';
+            } else {
+               this.error = 'Passkey not created, try again';
+            }
          }
       }
    }
@@ -155,6 +162,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
 
    async refresh(): Promise<void> {
       this.error = '';
+      this.prfUnsupported = false;
       if (this.authSvc.hasSession()) {
          // This runs async handle updates in signal
          this.authSvc.refreshUserInfo().catch((err) => {
@@ -170,6 +178,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    async onUserNameChanged(component: EditableComponent): Promise<void> {
       try {
          this.error = '';
+         this.prfUnsupported = false;
          // change detection does work if before and after end up being the same,
          // so for the pre-server-cleaned version (may be a bug in 'editable')
          this.userName = component.value;
@@ -185,6 +194,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
 
    async onClickSignout(): Promise<void> {
       this.error = '';
+      this.prfUnsupported = false;
       this.authSvc.logout(true);
       this.refresh();
    }
@@ -192,6 +202,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    async onDescriptionChanged(component: EditableComponent, passkey: AuthenticatorInfo): Promise<void> {
       try {
          this.error = '';
+         this.prfUnsupported = false;
          await this.authSvc.setPasskeyDescription(passkey.credentialId, component.value);
          this.toastMessage('Passkey description updated');
       } catch (err) {
