@@ -3,7 +3,18 @@
 > Detailed execution plan for **Phase 3** of the master plan (`vibes/prf-implementation-plan.md`, Phase 3 at ~`:118`), mirroring `vibes/prf-phase2-plan.md`.
 > Reuses the Phase 1/2 ML-DSA-65 proof primitive (`libs/crypto/src/lib/proof.ts`) and the proven `MasterKeyKeyProvider` + `cipherSvc.encryptStream/decryptStream` ciphertext pattern unchanged.
 
-## Current status (2026-07-11)
+## Current status (2026-07-12)
+
+**ALL CLIENT PRF WORK CODE-COMPLETE + COMMITTED (branch `prf-phase3`).** Create / login / recover / add, the **fallback UI**, and the **PRF account indicator** are done and committed; server is deployed to test; **full test suite green.** The client is ready for the **real-Chromium E2E** pass (next session). This iteration's additions on top of the Steps 5/9/10 core below:
+
+- **1Password PRF bug (critical):** on Chrome, 1Password returns `clientExtensionResults.prf.results.first` as a plain **`number[]`** (not the spec's `ArrayBuffer`; other providers may return a typed-array view). The old `prfReadKey` used `first instanceof ArrayBuffer` → treated a working PRF passkey as no-PRF. Fixed by generalizing **`getArrayBuffer`** (`libs/crypto`) to accept `ArrayBufferView | ArrayBuffer | number[]` and normalize to an `ArrayBuffer`; `prfReadKey` routes `first` through it. Regression tests cover all three shapes.
+- **`tryPrf` gating:** `_startRegistration(optionsJson, tryPrf)` only injects PRF + does the Case-B follow-up `get()` when PRF is wanted, so adding to / recovering a **no-PRF** account no longer fires a spurious second passkey prompt.
+- **recover2 data-loss fix:** `return this._finishRecovery(...)` (missing `await`) inside a `try/finally` that wiped `secret` let the `finally` zero `secret` mid-flight → "Invalid masterKey: all zero bytes" → recovery aborted after the server had already cleared the old passkeys → an account with no authenticators. Fixed with `return await`; the whole service adopted a uniform "always `return await`" convention (and `_loginRestore` was made synchronous since it had no internal `await`).
+- **Fallback UI (decision-callback):** `newUser(userName, onPrfUnavailable: () => Promise<'standard'|'different'>)` runs a `while (true)` loop — create the passkey with PRF requested, and if the authenticator has no PRF, ask: **'standard' completes that same passkey** as a server-held account, **'different' discards it and registers a fresh one**. (This fixed a real defect where "continue standard" used to create a *second* passkey.) `PrfFallbackDialog` opens with `disableClose:true`; the component bridges its `afterClosed()` Observable to a Promise via `firstValueFrom`. The credentials add-passkey no-downgrade path shows an inline error + FAQ link.
+- **PRF indicator:** a `verified_user` Material Symbols glyph (added to the `index.html` icon allow-list), color `#005CBB` via a `.prf-badge` scss class (strict-CSP — no inline styles), top-aligned to the left of "Passkeys for:" for PRF accounts, linking to the PRF FAQ. The PRF FAQ ("What are Passkeys with PRF…") is written; all PRF links search `'Passkeys with PRF'`; the user-facing term is **"local key creation"**.
+- **showrecovery:** unchanged — the existing data-loss warning is already accurate for both modes.
+
+## Steps 5/9/10 core (2026-07-11)
 
 **CLIENT Steps 5/9/10 CODE-COMPLETE (branch `prf-phase3`).** `apps/web/src/app/services/authenticator.service.ts` create/login/recover/add are all PRF-aware; **server tests green (136 passed / 4 skipped), client authenticator spec green (24).** Highlights:
 
@@ -17,7 +28,7 @@
 
 **Other this-session changes.** PRF salt changed to a fresh hardcoded random 32-byte constant (dropped the `SHA-256("qcrypt/prf/v1")` derivation — the `/v1` implied a `v2` for a value that must never change; synced in `prf.ts` + spec `common.ts`). Proof-fn renames `signUserCredProof`→`createUserCredProof`, `signRecoveryProof`→`createRecoveryProof`, `signProof`→`createProof` (libs + all consumers). nx test name-filtering: `--name="…"` now works on the `nx:run-commands` Vitest targets (web uses `--filter`), documented in `AGENTS.md`.
 
-**Next:** the **fallback UI** (newuser `PrfUnsupportedError` dialog, showrecovery permanent-data-loss warning, credentials add-passkey prompt) and the **real-Chromium E2E baseline**; then the protocol doc (Step 14) and the emulator fork's JA docs + upstream PR.
+**Next (the upcoming session):** the **real-Chromium E2E test pass**. Drive the CDP virtual authenticator via `setupAuthenticator` (`apps/web/tests/common.ts`): **`hasPrf:true`→Case A** (PRF at create), **`hasHmacSecret:true` alone→Case B** (assert-only; client does the follow-up `get()`), **neither→no-PRF**; **avoid `hasHmacSecretMc`** (renderer crash in chromium-1228). Cover the full lifecycle × the three states — PRF create (Case A single ceremony, Case B +1 gesture), the fallback dialog ('standard' completes the same passkey / 'different' discards + recreates), login decrypting `passkeyUserCredEnc`, recover preserving `userCred` (via `/recover/verify`), add-passkey no-downgrade, and the PRF indicator — while keeping the no-PRF `lifecycle.spec.ts` green and honoring the user-tracking contract, `@nukeall` leak alarm, and keeper-creds guards. Then the protocol doc (Step 14) and the emulator fork's JA docs + upstream PR.
 
 ## Earlier status (2026-07-09)
 
