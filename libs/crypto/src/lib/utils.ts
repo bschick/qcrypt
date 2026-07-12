@@ -28,20 +28,39 @@ export function hasArrayBuffer(value: Uint8Array): value is Uint8Array<ArrayBuff
 }
 
 export function ensureArrayBuffer(value: Uint8Array): Uint8Array<ArrayBuffer> {
-   if (hasArrayBuffer(value)) {
-      return value;
+   if (value.buffer instanceof ArrayBuffer) {
+      return value as Uint8Array<ArrayBuffer>;
    } else {
-      return value.slice(0);
+      // safer than value.slice(0) if value is a subclass with an overridden
+      return new Uint8Array(value);
    }
 }
 
-export function getArrayBuffer(value: Uint8Array): ArrayBuffer {
-   if(!hasArrayBuffer(value) || value.byteOffset !== 0 || value.byteLength !== value.buffer.byteLength) {
-      return value.slice(0).buffer;
-   } else {
-      return value.buffer;
+
+export function getArrayBuffer(value: ArrayBufferView | ArrayBuffer | number[]): ArrayBuffer {
+   if (value instanceof ArrayBuffer) {
+      return value;
    }
+   if (Array.isArray(value)) {
+      return new Uint8Array(value).buffer;
+   }
+
+   const buffer = value.buffer;
+   if (!(buffer instanceof ArrayBuffer)) {
+      // Handles SharedArrayBuffer or other buffers that aren't standard ArrayBuffers.
+      const bytes = new Uint8Array(buffer, value.byteOffset, value.byteLength);
+      const temp = new Uint8Array(bytes.byteLength);
+      temp.set(bytes);
+      return temp.buffer;
+   }
+   if (value.byteOffset !== 0 || value.byteLength !== buffer.byteLength) {
+      // Slices the underlying ArrayBuffer directly. Avoids intermediates and works with Node.js Buffer.
+      return buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
+   }
+
+   return buffer;
 }
+
 
 // Returns base64Url text
 export function bytesToBase64(bytes: Uint8Array): string {
