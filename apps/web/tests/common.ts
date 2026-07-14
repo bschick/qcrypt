@@ -19,8 +19,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-// The fixed global PRF salt, mirrored from apps/web/src/app/services/prf.ts. Used to
-// drive the emulator when reconstructing a PRF account's userCred for cleanup.
+// Must match the fixed PRF salt in apps/web/src/app/services/prf.ts (NOT a secret).
 const PRF_SALT = new Uint8Array([
   79, 207, 95, 76, 134, 119, 236, 52, 72, 250, 231, 99, 35, 243, 1, 169,
   205, 253, 35, 140, 130, 201, 98, 86, 30, 119, 75, 185, 138, 67, 243, 33,

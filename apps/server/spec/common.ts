@@ -128,7 +128,7 @@ export function getWebAuthnEmulator(
    return emulator;
 }
 
-// Must match the fixed PRF salt in apps/web/src/app/services/prf.ts.
+// Must match the fixed PRF salt in apps/web/src/app/services/prf.ts (NOT a secret).
 export const PRF_SALT = new Uint8Array([
    79, 207, 95, 76, 134, 119, 236, 52, 72, 250, 231, 99, 35, 243, 1, 169,
    205, 253, 35, 140, 130, 201, 98, 86, 30, 119, 75, 185, 138, 67, 243, 33,

@@ -36,7 +36,9 @@ import type {
    PublicKeyCredentialRequestOptionsJSON,
 } from '@simplewebauthn/browser';
 
-// Fixed random PRF salt; changing it orphans every existing PRF userCred ciphertext
+// Fixed PRF salt. NOT a secret: a WebAuthn PRF salt is a public HMAC input; security
+// comes from the per-credential authenticator key, not this value. Never change it —
+// doing so orphans every existing PRF userCred ciphertext.
 export const PRF_SALT = new Uint8Array([
    79, 207, 95, 76, 134, 119, 236, 52, 72, 250, 231, 99, 35, 243, 1, 169,
    205, 253, 35, 140, 130, 201, 98, 86, 30, 119, 75, 185, 138, 67, 243, 33,
