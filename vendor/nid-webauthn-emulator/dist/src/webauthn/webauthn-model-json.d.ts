@@ -20,5 +20,10 @@ export declare function toPublicKeyCredentialDescriptorJSON(credential: PublicKe
 export declare function parsePublicKeyCredentialDescriptorFromJSON(credential: PublicKeyCredentialDescriptorJSON): PublicKeyCredentialDescriptor;
 export declare function toPublicKeyCredentialUserEntityJSON(user: PublicKeyCredentialUserEntity): PublicKeyCredentialUserEntityJSON;
 export declare function parsePublicKeyCredentialUserEntityFromJSON(user: PublicKeyCredentialUserEntityJSON): PublicKeyCredentialUserEntity;
+export declare function parsePRFValuesFromJSON(values: AuthenticationExtensionsPRFValuesJSON): AuthenticationExtensionsPRFValues;
+export declare function parseExtensionResultsFromJSON(resultsJSON: AuthenticationExtensionsClientOutputsJSON): AuthenticationExtensionsClientOutputs;
+export declare function toPRFValuesJSON(values: AuthenticationExtensionsPRFValues): AuthenticationExtensionsPRFValuesJSON;
+export declare function toPRFInputsJSON(prf: AuthenticationExtensionsPRFInputs): AuthenticationExtensionsPRFInputsJSON;
+export declare function toExtensionInputsJSON(extensions: AuthenticationExtensionsClientInputs | undefined): AuthenticationExtensionsClientInputsJSON | undefined;
 export declare function encodeBase64Url(buffer: BufferSource): string;
 export declare function decodeBase64Url(base64Url: string): ArrayBuffer;

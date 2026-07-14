@@ -13,6 +13,11 @@ exports.toPublicKeyCredentialDescriptorJSON = toPublicKeyCredentialDescriptorJSO
 exports.parsePublicKeyCredentialDescriptorFromJSON = parsePublicKeyCredentialDescriptorFromJSON;
 exports.toPublicKeyCredentialUserEntityJSON = toPublicKeyCredentialUserEntityJSON;
 exports.parsePublicKeyCredentialUserEntityFromJSON = parsePublicKeyCredentialUserEntityFromJSON;
+exports.parsePRFValuesFromJSON = parsePRFValuesFromJSON;
+exports.parseExtensionResultsFromJSON = parseExtensionResultsFromJSON;
+exports.toPRFValuesJSON = toPRFValuesJSON;
+exports.toPRFInputsJSON = toPRFInputsJSON;
+exports.toExtensionInputsJSON = toExtensionInputsJSON;
 exports.encodeBase64Url = encodeBase64Url;
 exports.decodeBase64Url = decodeBase64Url;
 /** @see https://www.w3.org/TR/webauthn-3/#sctn-parseCreationOptionsFromJSON */
@@ -93,7 +98,7 @@ function toCreationOptionsJSON(options) {
         excludeCredentials: options.excludeCredentials?.map(toPublicKeyCredentialDescriptorJSON),
         authenticatorSelection: options.authenticatorSelection,
         attestation: options.attestation,
-        extensions: options.extensions,
+        extensions: toExtensionInputsJSON(options.extensions),
     };
 }
 function toRequestOptionsJSON(options) {
@@ -103,7 +108,7 @@ function toRequestOptionsJSON(options) {
         rpId: options.rpId,
         allowCredentials: options.allowCredentials?.map(toPublicKeyCredentialDescriptorJSON),
         userVerification: options.userVerification,
-        extensions: options.extensions,
+        extensions: toExtensionInputsJSON(options.extensions),
     };
 }
 function parseRegistrationResponseFromJSON(options) {
@@ -119,7 +124,7 @@ function parseRegistrationResponseFromJSON(options) {
             attestationObject: decodeBase64Url(options.response.attestationObject),
         },
         authenticatorAttachment: options.authenticatorAttachment ?? null,
-        getClientExtensionResults: () => options.clientExtensionResults,
+        getClientExtensionResults: () => parseExtensionResultsFromJSON(options.clientExtensionResults),
         toJSON: () => options,
         type: options.type,
     };
@@ -135,7 +140,7 @@ function parseAuthenticationResponseFromJSON(options) {
             userHandle: options.response.userHandle ? decodeBase64Url(options.response.userHandle) : null,
         },
         authenticatorAttachment: options.authenticatorAttachment ?? null,
-        getClientExtensionResults: () => options.clientExtensionResults,
+        getClientExtensionResults: () => parseExtensionResultsFromJSON(options.clientExtensionResults),
         toJSON: () => options,
         type: options.type,
     };
@@ -178,7 +183,7 @@ function parsePRFInputsFromJSON(prf) {
     return parsed;
 }
 // Decodes each supported extension's JSON-encoded inputs into their non-json form.
-// Only prf is decoding today, future extension with encoded inputs should add code here
+// Only prf needs decoding today. A future extension with encoded inputs should add code here.
 function parseExtensionsFromJSON(extensionsJSON) {
     if (!extensionsJSON) {
         return undefined;
@@ -186,6 +191,15 @@ function parseExtensionsFromJSON(extensionsJSON) {
     const parsed = { ...extensionsJSON };
     if (extensionsJSON.prf) {
         parsed.prf = parsePRFInputsFromJSON(extensionsJSON.prf);
+    }
+    return parsed;
+}
+// Decodes each supported extension's JSON-encoded outputs into their non-json form.
+// Only prf needs decoding today. A future extension with encoded outputs should add code here.
+function parseExtensionResultsFromJSON(resultsJSON) {
+    const parsed = { ...resultsJSON };
+    if (resultsJSON.prf?.results) {
+        parsed.prf = { ...resultsJSON.prf, results: parsePRFValuesFromJSON(resultsJSON.prf.results) };
     }
     return parsed;
 }
@@ -197,11 +211,33 @@ function toPRFValuesJSON(values) {
     return json;
 }
 // Encodes each supported extension's outputs into their json form.
-// Only prf is encoding today, future extension with encoded outputs should add code here
+// Only prf needs encoding today. A future extension with encoded outputs should add code here.
 function toExtensionResultsJSON(results) {
     const json = { ...results };
     if (results.prf?.results) {
         json.prf = { ...results.prf, results: toPRFValuesJSON(results.prf.results) };
+    }
+    return json;
+}
+function toPRFInputsJSON(prf) {
+    const json = {};
+    if (prf.eval) {
+        json.eval = toPRFValuesJSON(prf.eval);
+    }
+    if (prf.evalByCredential) {
+        json.evalByCredential = Object.fromEntries(Object.entries(prf.evalByCredential).map(([credentialId, values]) => [credentialId, toPRFValuesJSON(values)]));
+    }
+    return json;
+}
+// Encodes each supported extension's inputs into their json form.
+// Only prf needs encoding today. A future extension with encoded inputs should add code here.
+function toExtensionInputsJSON(extensions) {
+    if (!extensions) {
+        return undefined;
+    }
+    const json = { ...extensions };
+    if (extensions.prf) {
+        json.prf = toPRFInputsJSON(extensions.prf);
     }
     return json;
 }
