@@ -99,8 +99,9 @@ the slice lands.
 - `parallel/prf-fallback.spec.ts` — `'standard'` completes the **same** passkey → no-PRF account (badge
   absent, plaintext userCred); `'different'` discards + recreates → PRF account (assert no leaked/dup
   passkey; `@nukeall` clean).
-- Existing specs migrate to injection; default PRF: `basics`, `edit`, `create.spec.ts`, `login-relay`,
-  `lazy-routes`. One Case-B create test to exercise `_readPrfViaAssertion`.
+- Existing specs migrate to injection; default PRF: `basics` (done), `edit`, `login-relay`, `lazy-routes`.
+  The `create.spec.ts` keeper tool is handled with the keeper work (see Keepers), not here. One Case-B create
+  test to exercise `_readPrfViaAssertion`.
 
 ## Keepers — keeper2 → PRF, keeper1 → no-PRF
 
@@ -110,16 +111,37 @@ through the injection create flow; `sequential/encryption.spec.ts` + `sequential
 saved credential into the emulator repo instead of `addCredential`. Keeper skip-guards (`haveKeeperCreds`)
 stay. **Owner must regenerate `E2E_CREDS_B64`** once the new `.creds.json` exists.
 
+**Keeper-provisioning tool (`apps/web/tests/create.spec.ts`).** This is the manual, run-by-hand tool that
+creates the persistent keeper accounts (deliberately untracked so they survive; `console.log`s the
+credential + recovery words to paste into `.creds.json`). It is NOT run by the e2e runner. It still uses the
+old CDP fixture and must be updated with the keeper work, since it needs the shared serialize/deserialize
+emulator-credential API (credential source + `credRandom`) that the keeper specs also use. Design that API
+once and use it in both the tool and the keeper specs. **TODO: rename `create.spec.ts` → `keeper.spec.ts`**
+so its purpose is obvious (it is neither the automated create-path test — that lives in
+`parallel/basics.spec.ts` — nor part of the run suite).
+
 ## Build order (vertical slice first)
 
-1. **Slice:** rewrite `common.ts` to injection + build `lifecycle.suite.ts`; get **`lifecycle.spec.ts`
-   (no-PRF) fully green** end-to-end. Validates harness shape (create+fallback, login, add, recover,
-   cleanup) with the least new surface.
-2. `prf-lifecycle.spec.ts` (PRF) green — badge, no-downgrade, recompute userCred, recompute-vs-`/cmdline`.
-3. `prf-fallback.spec.ts`.
-4. Migrate the remaining `parallel/` specs to injection (default PRF).
-5. Keepers last: regenerate `.creds.json` (keeper2 PRF / keeper1 no-PRF), port `sequential/` specs, hand off
-   `E2E_CREDS_B64` regen to owner.
+1. **Slice — DONE.** Rewrote `common.ts` to injection + built `lifecycle.suite.ts(prf)`. Full lifecycle
+   ported both modes (18 tests green): log in/out, check usercred (+ recompute-vs-`/cmdline`), check usercred
+   and add pk, full lifecycle, delete active passkey signs out, regenerate recovery words, 3 tabs logout and
+   forget, 3 tabs switch user, plus PRF add-passkey no-downgrade / no-PRF stays-non-PRF. The two-authenticator
+   model (`newAuthenticator(mode)`) replaces CDP credential-swapping.
+2. **`lifecycle.spec.ts` (no-PRF) + `prf-lifecycle.spec.ts` (PRF) — DONE**, thin clients of the suite.
+3. **XSS username-sanitization — DONE**, added to `parallel/basics.spec.ts` (mode-independent, one no-PRF
+   account). This is the automated create-path test; the `create.spec.ts` keeper tool is separate (see Keepers).
+4. **Remaining `parallel/` specs — DONE.** `edit` (2), `login-relay` (15, byte-identical assertions +
+   second-CDP-session collapsed to `passkeyAuth(auth, trigger, {page})`), `errors` (7 ported + 1 new
+   wrong-device case), `lazy-routes` (13, no migration needed). Full `parallel/` suite: **60 green**.
+   Error-path "no matching passkey" is simulated with a fresh empty `newAuthenticator()` (was
+   `clearCredentials`); the new `another account passkey on device` case covers a populated-but-wrong device.
+5. **`prf-fallback.spec.ts` — DONE.** `'standard'` completes the same passkey → no-PRF account (1 create,
+   badge absent); `'different'` discards + recreates on a PRF authenticator → PRF account (2 creates, badge
+   present). A `credentialCreateCount()` fixture counter is the regression signal; `createTestUser` gained an
+   optional `differentAuth` for the 'different' path.
+6. Keepers last: update the `create.spec.ts` provisioning tool + design the serialize/deserialize credential
+   API, regenerate `.creds.json` (keeper2 PRF / keeper1 no-PRF), port `sequential/` specs, rename
+   `create.spec.ts` → `keeper.spec.ts`, hand off `E2E_CREDS_B64` regen to owner.
 
 Run: `pnpm test:e2e -- --reporter=list` (`-g "<name>"` to focus). The runner owns a frozen serve; a
 watch-serve on :4200 blocks it, so stop that first or run `playwright test` directly against the running
