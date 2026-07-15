@@ -31,6 +31,10 @@ export function lifecycleSuite(prf: boolean): void {
     const authenticator = authFixture.newAuthenticator(mode);
     const testUser = await authFixture.createTestUser(authenticator);
 
+    // Creating the account is a single passkey ceremony — PRF at create, or the
+    // no-PRF fallback completing the same passkey.
+    expect(authFixture.credentialCreateCount()).toBe(1);
+
     await toggleCredentials(page);
     await expectPrfBadge(page);
     const tableBody = page.locator('table.credtable tbody');
@@ -78,6 +82,9 @@ export function lifecycleSuite(prf: boolean): void {
     const authenticator1 = authFixture.newAuthenticator(mode);
     const testUser = await authFixture.createTestUser(authenticator1);
 
+    // Each passkey the account gains — create, add, recovery — is one create ceremony.
+    expect(authFixture.credentialCreateCount()).toBe(1);
+
     await toggleCredentials(page);
     await expectPrfBadge(page);
     const tableBody = page.locator('table.credtable tbody');
@@ -90,6 +97,7 @@ export function lifecycleSuite(prf: boolean): void {
       await page.getByRole('button', { name: /New Passkey/ }).click();
     });
     await expect(tableBody.locator('tr')).toHaveCount(2);
+    expect(authFixture.credentialCreateCount()).toBe(2);
 
     await page.getByRole('button', { name: /Sign out/ }).click();
     await authFixture.passkeyAuth(authenticator1, async () => {
@@ -107,6 +115,7 @@ export function lifecycleSuite(prf: boolean): void {
     });
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({ timeout: 10000 });
+    expect(authFixture.credentialCreateCount()).toBe(3);
 
     await toggleCredentials(page);
     await expect(tableBody.locator('tr')).toHaveCount(1);
@@ -410,6 +419,9 @@ export function lifecycleSuite(prf: boolean): void {
       });
       await expect(page.getByText(/requires passkeys that support/)).toBeVisible({ timeout: 10000 });
       await expect(tableBody.locator('tr')).toHaveCount(1);
+      // The passkey was created locally (create at account + this attempt) then
+      // rejected client-side, so no second passkey reaches the server.
+      expect(authFixture.credentialCreateCount()).toBe(2);
     });
   } else {
     testWithAuth(`${label}: adding a PRF-capable passkey stays non-PRF`, async ({ authFixture }) => {

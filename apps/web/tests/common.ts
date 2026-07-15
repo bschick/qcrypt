@@ -118,6 +118,9 @@ export type TrackUserInfo = {
   userId: string;
   userName: string;
   userCred: string;
+  // The registration passkey, and the authenticator holding it, so cleanup can
+  // delete it and sign back in via the fallback path.
+  credentialId: string;
   authenticator: Authenticator;
   fastSession?: { cookies: Cookie[]; csrf: string };
 };
@@ -128,9 +131,13 @@ export type AuthFixture = {
   // ('hmac-secret-mc' → PRF, 'none' → no PRF, 'hmac-secret' → PRF at assertion only).
   newAuthenticator: (mode?: HmacSecretMode) => Authenticator;
   // Creates a fresh PWTesty_e2e_<timestamp> user on the authenticator via the UI
-  // registration flow. A 'none' authenticator completes the fallback dialog as a
-  // standard account. Returns signed-in on '/' (Encryption Mode visible).
-  createTestUser: (authenticator: Authenticator) => Promise<CreatedTestUser>;
+  // registration flow. A 'none' authenticator hits the fallback dialog: without
+  // differentAuth it takes 'standard' (same passkey, no-PRF account); with
+  // differentAuth it takes 'different', discarding that passkey and registering a
+  // fresh one on differentAuth. Returns signed-in on '/' (Encryption Mode visible).
+  createTestUser: (authenticator: Authenticator, differentAuth?: Authenticator) => Promise<CreatedTestUser>;
+  // Number of navigator.credentials.create calls the emulators have handled so far.
+  credentialCreateCount: () => number;
   // Register a user created outside createTestUser. Tests doing inline
   // UI registration or direct-API user creation MUST call this so cleanup
   // can find the user.
@@ -147,18 +154,23 @@ export type AuthFixture = {
   // reaches the server. Nothing is created or tracked; the caller asserts the error.
   expectPasskeyRejected: (authenticator: Authenticator, trigger: () => Promise<void>) => Promise<void>;
   // Runs a UI trigger that signs in using the authenticator and waits for the
-  // server to verify the assertion. Opt out of awaitVerify for error-path tests
-  // that never reach /auth/verify.
-  passkeyAuth: (authenticator: Authenticator, trigger: () => Promise<void>, awaitVerify?: boolean) => Promise<void>;
+  // server to verify the assertion. Pass opts.page for a sign-in driven from a tab
+  // other than the fixture page; opts.awaitVerify=false for error-path triggers that
+  // never reach /auth/verify.
+  passkeyAuth: (
+    authenticator: Authenticator,
+    trigger: () => Promise<void>,
+    opts?: { page?: Page; awaitVerify?: boolean }
+  ) => Promise<void>;
 };
 
 type TrackedUser = {
   userId: string;
   userName: string;
   userCred: string;
-  // The authenticator holding the registration passkey, used by the cleanup
-  // fallback to sign back in.
-  authenticator: Authenticator;
+  // The emulator holding the registration passkey, used by the cleanup fallback
+  // to sign back in.
+  emulator: WebAuthnEmulator;
   // Passkey credentialIds known to belong to this user. Mutated as cleanup
   // deletes them. The first entry is the registration PK.
   credentialIds: string[];
@@ -194,6 +206,7 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
     // Route navigator.credentials to whichever emulator the current operation
     // selected. Each operation sets `active` before triggering its ceremony.
     let active: WebAuthnEmulator | undefined;
+    let createCount = 0;
     const newAuthenticator = (mode: HmacSecretMode = 'hmac-secret-mc'): Authenticator => {
       const emulator = new WebAuthnEmulator(new AuthenticatorEmulator({
         hmacSecret: mode,
@@ -207,6 +220,7 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
     await context.exposeFunction(BrowserInjection.WebAuthnEmulatorCreate,
       (optionsJSON: Parameters<WebAuthnEmulator['createJSON']>[1]) => {
         if (!active) { throw new Error('no authenticator selected'); }
+        createCount++;
         return active.createJSON(origin, optionsJSON);
       });
     await context.exposeFunction(BrowserInjection.WebAuthnEmulatorGet,
@@ -220,7 +234,10 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
 
     const trackedUsers: TrackedUser[] = [];
 
-    const createTestUser = async (authenticator: Authenticator): Promise<CreatedTestUser> => {
+    const createTestUser = async (
+      authenticator: Authenticator,
+      differentAuth?: Authenticator
+    ): Promise<CreatedTestUser> => {
       active = authenticator.emulator;
       const userName = `PWTesty_e2e_${Date.now()}`;
       await page.goto('/');
@@ -234,8 +251,17 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       await page.getByRole('button', { name: /Create new/ }).click();
       if (authenticator.mode === 'none') {
         // No PRF from the authenticator → the client offers the fallback dialog.
-        await page.getByRole('button', { name: 'Continue with standard protection' }).click();
+        await expect(page.getByRole('heading', { name: /doesn't support local key creation/ })).toBeVisible({ timeout: 10000 });
+        if (differentAuth) {
+          active = differentAuth.emulator;
+          await page.getByRole('button', { name: 'Try a different passkey' }).click();
+        } else {
+          await page.getByRole('button', { name: 'Continue with standard protection' }).click();
+        }
       }
+      // The emulator that produced the account's passkey (differentAuth's after a
+      // 'different' fallback, otherwise the original).
+      const finalEmulator = active;
 
       const verifyResp = await verifyPromise;
       const reqBody = JSON.parse((await verifyResp.request().postData()) ?? '{}');
@@ -245,7 +271,7 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       }
 
       const userCred = body.prf
-        ? await recomputeUserCred(authenticator.emulator, origin, rpId, body.pkId, reqBody.passkeyUserCredEnc, body.userId)
+        ? await recomputeUserCred(finalEmulator, origin, rpId, body.pkId, reqBody.passkeyUserCredEnc, body.userId)
         : body.userCred;
       if (!userCred) {
         throw new Error('createTestUser: could not determine userCred');
@@ -258,7 +284,7 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
         userId: body.userId,
         userName,
         userCred,
-        authenticator,
+        emulator: finalEmulator,
         credentialIds: [body.pkId],
         fastSession: {
           cookies: await context.cookies(),
@@ -283,8 +309,8 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
         userId: info.userId,
         userName: info.userName,
         userCred: info.userCred,
-        authenticator: info.authenticator,
-        credentialIds: [],
+        emulator: info.authenticator.emulator,
+        credentialIds: [info.credentialId],
         fastSession: info.fastSession,
       });
     };
@@ -327,10 +353,12 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
     const passkeyAuth = async (
       authenticator: Authenticator,
       trigger: () => Promise<void>,
-      awaitVerify: boolean = true
+      opts: { page?: Page; awaitVerify?: boolean } = {}
     ): Promise<void> => {
+      const targetPage = opts.page ?? page;
+      const awaitVerify = opts.awaitVerify ?? true;
       active = authenticator.emulator;
-      const verifyPromise: Promise<unknown> = awaitVerify ? page.waitForResponse((r) =>
+      const verifyPromise: Promise<unknown> = awaitVerify ? targetPage.waitForResponse((r) =>
         r.url().includes('/v1/auth/verify') && r.request().method() === 'POST'
       ) : Promise.resolve();
       await trigger();
@@ -340,6 +368,7 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
     await use({
       page,
       newAuthenticator,
+      credentialCreateCount: () => createCount,
       createTestUser,
       trackUser,
       trackPasskey,
@@ -411,7 +440,7 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       // Fallback: sign in on the user's authenticator and delete with a fresh session.
       if (user.credentialIds.length > 0) {
         try {
-          active = user.authenticator.emulator;
+          active = user.emulator;
           await context.clearCookies();
           await page.goto('/');
           await page.evaluate(() => localStorage.clear());
