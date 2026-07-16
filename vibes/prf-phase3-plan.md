@@ -40,7 +40,7 @@ This iteration's additions on top of the Steps 5/9/10 core below:
 
 **NID emulator (`feat/hmac-secret`) — Step 11 DONE, consumed as a VENDORED build.** Real CTAP2 `hmac-secret` + `hmac-secret-mc`, selectable via `new AuthenticatorEmulator({ hmacSecret })`; per-credential `CredRandom`; `HMAC-SHA-256(CredRandom, salt)` in the signed authData; `prf` ⇄ `hmac-secret` salt map `SHA-256("WebAuthn PRF"‖0x00‖input)`; `createJSON`/`getJSON` base64url `prf` both directions. 143 emulator tests green. **A GitHub git-pin was ruled out** (the fork ships only pre-built `dist/`, which is gitignored, with no `prepare` script → a git install has no `dist`). Instead the built package was **vendored git-tracked to `vendor/nid-webauthn-emulator/`** (from commit `5ae7aef`; cleaned `package.json` keeps only the `tldts` dep) and `package.json` points at `file:vendor/nid-webauthn-emulator`. JA docs + upstream PR still deferred.
 
-**Step 12 server API specs — DONE (2026-07-09). Full server suite green: 7 files, 136 passed / 4 skipped.** Reuse architecture (owner-directed): shared FACTORY files `core.suite.ts` (was `api.spec.ts` body) + `recovery.suite.ts` (was `recovery.spec.ts`) each export `coreSuite(prf)`/`recoverySuite(prf)`; THIN CLIENTS `nonprf.spec.ts` (both, `false`) + `prf.spec.ts` (both, `true` + PRF-only block). Factory files are **`.suite.ts` not `.spec.ts`** (vitest's `**/*.spec.ts` glob would run a factory-only file and fail "No test suite found"; `.suite.ts` matches the `common.ts` shared-helper convention). `registerTestUser(userName, prf=false)` MERGED (`registerPrfTestUser` deleted) → discriminated union `TestUser = NoPrfTestUser{prf:false} | PrfTestUser{prf:true, passkeyUserCredEnc, prfOutput}`; suites branch on `user.prf`. `common.ts` helpers: `createCredential(emu, opts, prf)` (overloaded), `registerNewCredential` (add-passkey; random throwaway userHandle because the emulator evicts same-userHandle credentials), `buildPrfRegBody` (reused by `registerTestUser`'s PRF branch), `readPrfOutput`, `prfEncrypt`/`prfDecrypt`. **Server API is oblivious to create-vs-assert timing, and our emulator always advertises hmac-secret-mc, so server specs use `hmac-secret-mc` ONLY** — the hmac-secret (assert-only, "Case B") path is a client concern tested client-side, NOT here. All-or-nothing guards are **inline per client** (`prf.spec` rejects add w/o encrypted userCred; `nonprf.spec` rejects add WITH one). **`proof-enforce.spec` switched to a PRF account** (client-supplied proof pubkey; enforcement code is mode-blind). Bad-input coverage: `prf.spec` "PRF registration input validation" tampers each PRF field (empty / non-b64 / too-short / wrong-length) → reg/verify is unauthenticated so enumeration-hardening returns a uniform **401** (not 400); each test completes+deletes the untampered registration to avoid leaked users. **`EventNames.PrfCase` telemetry (Step 5b) is NOT implemented server-side** (no `PrfCase`/`prfAttempts` in `server.ts`, no `AuthEvents` read endpoint) → untestable/out of scope. `api.spec.ts` + `recovery.spec.ts` deleted (absorbed).
+**Step 12 server API specs — DONE (2026-07-09). Full server suite green: 7 files, 136 passed / 4 skipped.** Reuse architecture (owner-directed): shared FACTORY files `core.suite.ts` (was `api.spec.ts` body) + `recovery.suite.ts` (was `recovery.spec.ts`) each export `coreSuite(prf)`/`recoverySuite(prf)`; THIN CLIENTS `nonprf.spec.ts` (both, `false`) + `prf.spec.ts` (both, `true` + PRF-only block). Factory files are **`.suite.ts` not `.spec.ts`** (vitest's `**/*.spec.ts` glob would run a factory-only file and fail "No test suite found"; `.suite.ts` matches the `common.ts` shared-helper convention). `registerTestUser(userName, prf=false)` MERGED (`registerPrfTestUser` deleted) → discriminated union `TestUser = NoPrfTestUser{prf:false} | PrfTestUser{prf:true, passkeyUserCredEnc, prfOutput}`; suites branch on `user.prf`. `common.ts` helpers: `createCredential(emu, opts, prf)` (overloaded), `registerNewCredential` (add-passkey; random throwaway userHandle because the emulator evicts same-userHandle credentials), `buildPrfRegBody` (reused by `registerTestUser`'s PRF branch), `readPrfOutput`, `prfEncrypt`/`prfDecrypt`. **Server API is oblivious to create-vs-assert timing, and our emulator always advertises hmac-secret-mc, so server specs use `hmac-secret-mc` ONLY** — the hmac-secret (assert-only, "Case B") path is a client concern tested client-side, NOT here. All-or-nothing guards are **inline per client** (`prf.spec` rejects add w/o encrypted userCred; `nonprf.spec` rejects add WITH one). **`proof-enforce.spec` switched to a PRF account** (client-supplied proof pubkey; enforcement code is mode-blind). Bad-input coverage: `prf.spec` "PRF registration input validation" tampers each PRF field (empty / non-b64 / too-short / wrong-length) → reg/verify is unauthenticated so enumeration-hardening returns a uniform **401** (not 400); each test completes+deletes the untampered registration to avoid leaked users. **`EventNames.PrfCase` telemetry (Step 5b) is PUNTED (2026-07-16)** (won't build — see Step 5b) so there is nothing to test. `api.spec.ts` + `recovery.spec.ts` deleted (absorbed).
 
 **Next:** client Steps 5/9/10 + fallback UI; the E2E known-good baseline; JA docs + upstream PR for the emulator fork.
 
@@ -62,7 +62,7 @@ The existing **client sessionStorage-at-rest** encryption (`_loginUser:549-572`,
 3. **PRF salt:** a single **fixed global app constant** (not per-account).
 4. **getSessionKey:** switch key material from `Users.userCredEnc` → `lastCredentialId` **uniformly for all accounts**, accepting a one-time forced re-login at deploy.
 5. **Server-side test fidelity:** add real **PRF / CTAP2 `hmac-secret` and `hmac-secret-mc`** support to `nid-webauthn-emulator` (fork + upstream PR), caller-selectable per session, so server specs drive genuine PRF ceremonies — `hmac-secret-mc` for Case A (results at create), `hmac-secret` for Case B (assert-only) — not hand-built ciphertexts.
-6. **Build the two-ceremony path (Case B) — empirically required.** The research matrix said "reliable at create"; the first Step 0 device runs (2026-06-28) disproved it: 1Password gives PRF at `create()` (Case A) but Chrome's native authenticator and YubiKey give it only at assertion (Case B), because PRF rides CTAP2 `hmac-secret` which is assertion-only by spec. So creation runs the PRF ceremony as: use `create()` results if present (Case A optimization), else do a follow-up `get()` (Case B), else — genuinely no PRF — fall back (decision 2). We still **track which case occurred** on the final creation ceremony (Step 5b) for ongoing field telemetry.
+6. **Build the two-ceremony path (Case B) — empirically required.** The research matrix said "reliable at create"; the first Step 0 device runs (2026-06-28) disproved it: 1Password gives PRF at `create()` (Case A) but Chrome's native authenticator and YubiKey give it only at assertion (Case B), because PRF rides CTAP2 `hmac-secret` which is assertion-only by spec. So creation runs the PRF ceremony as: use `create()` results if present (Case A optimization), else do a follow-up `get()` (Case B), else — genuinely no PRF — fall back (decision 2). (Field telemetry of which case occurred — Step 5b — was **punted**; see that step for the cost/benefit reasoning.)
 
 ### Phase 1/2 foundation this builds on (verified)
 
@@ -232,36 +232,36 @@ Plain exported functions (not a service/class — no DI needed, only `authentica
 Touch `newUser:1134`, `_finishRegistration:1185`, `_doPasskeyVerify:1198`:
 
 1. `newUser` builds reg options + recovery (`_newRecovery:1148`) as today, and additionally generates `userCred = getRandom(USERCRED_BYTES)` client-side. Thread the recovery secret out of `_newRecovery` (currently wiped at `:482`) so the recovery ciphertext can be built.
-2. In `_doPasskeyVerify`, before `startRegistration` (`:1214`), `injectPrfExtension(optionsJson)`. After, read `startReg.clientExtensionResults.prf` and branch (record the case for Step 5b telemetry):
+2. In `_doPasskeyVerify`, before `startRegistration` (`:1214`), `injectPrfExtension(optionsJson)`. After, read `startReg.clientExtensionResults.prf` and branch (the case was to feed Step 5b telemetry, now punted):
    - **Case A — `prf.results.first` present:** `prfOut = results.first`. One ceremony. (Observed: 1Password, Apple Passwords on Chrome & Safari.)
    - **Case B — `prf.enabled === true` but no `prf.results`:** do a follow-up `get()` (`startAuthentication`) on the just-created credential — `injectPrfExtension(opts, startReg.id)`, `allowCredentials:[{id: startReg.id, type:'public-key'}]`, fresh random challenge — and read `prfOut` from its `clientExtensionResults.prf.results.first`. Same salt+credential → identical output to Case A (`create-vs-assert: equal`). Costs **+1 user gesture**. The assertion is **local-only**: its signature is never sent to or verified by the server; we use it solely to read PRF. (Observed: Chrome native/GPM, YubiKey.)
    - **No-PRF — `prf` absent / `enabled === false`:** decision-2 fallback — surface a typed result to the UI: switch passkey (abort → caller retries) or continue no-PRF (`prf:false`, send NO ciphertexts → server KMS path).
 3. **Cases A & B (`prfOut` obtained):** `userCredEnc = prfEncrypt(userCred, prfOut, userId)`, `userCredPubKey = bytesToBase64(getUserCredPubKey(userCred))`, `recoveryUserCredEnc = prfEncrypt(userCred, recoverySecret, userId)`; add `{userCredEnc, userCredPubKey, recoveryUserCredEnc}` to the `expanded` body (`:1224-1232`). Wipe `userCred`, `prfOut`, `recoverySecret` in `finally`.
 4. Server returns `{prf:true, userCredEnc:<perPasskeyCiphertext>, pkId, csrf, ...}` (no plaintext); `_loginUser` decrypts the ciphertext (Step 9).
 
-### Step 5b — PRF-case telemetry (carried on the final creation ceremony) — client + server, Deploy B
+### Step 5b — PRF-case telemetry — PUNTED (2026-07-16), will not build
 
-Track which PRF path produced every account/passkey so the live field distribution (Case A vs Case B
-vs no-PRF) is observable as it shifts — and so a _new_ Case B platform surfaces. The web app has **no
-client-side telemetry SDK** (the CSP `report-uri`/`report-to` is only the browser's native
-CSP-violation reporter), so the signal must reach the server. Per directive: **no new endpoint** —
-carry it on the **final creation ceremony** (`reg/verify` for new accounts, `passkeys/verify` for
-add-passkey).
+Originally: accumulate a per-passkey `prfAttempts` list (`{ case: 'create'|'assert'|'none', ua }`) on
+the final creation ceremony, record it server-side via `EventNames.PrfCase` + CloudWatch, and query
+`AuthEvents` for the live Case A / Case B / no-PRF mix.
 
-- **Client:** during the creation flow, accumulate a small `prfAttempts` list — one entry per passkey
-  tried — each `{ case: 'create' | 'assert' | 'none', ua: <coarse platform/browser> }` (`create` =
-  Case A, `assert` = Case B follow-up `get()`, `none` = no PRF). Include `prfAttempts` in the final
-  `reg/verify` / `passkeys/verify` body. This captures even **switch-passkey aborts** — they appear as
-  earlier `none`/`assert` entries before the successful one — with no extra round-trip.
-- **Server:** add `EventNames.PrfCase` (`server.ts:132-144`); on verify, `recordEvent(EventNames.PrfCase,
-userId, credId)` (durable + queryable in `AuthEvents`, `server.ts:244-260`) and
-  `console.error(\`prf case <create|assert|none> <ua> <userId>\`)`→ CloudWatch (the channel the proof
-rollout already watches,`server.ts:2011`). Payload is **non-identifying** — coarse UA + case only;
-never `userCred`, PRF output, or ciphertexts.
-- **Discovery:** query `AuthEvents` for `PrfCase` to see the live A/B/no-PRF mix; a `case:'assert'`
-  (Case B) on a previously-unseen platform, or a rising `none` rate, is the signal to revisit support
-  assumptions. (Case B is already expected for Chrome-GPM + hardware keys; this surfaces _new_ ones and
-  quantifies how often the +1-gesture path is hit.)
+**Decision: don't build it.** On a pre-deploy cost/benefit pass the value didn't justify the
+cross-cutting surface (client accumulation + shared `PrfAttempt` type + a new `AuthEvents.detail`
+attribute + server sanitization + tests). The reasoning:
+
+- **The only actionable signal is already available.** The one decision this telemetry could inform —
+  whether/when to flip the PRF default or eventually require PRF — is driven by the **no-PRF account
+  rate**, which we already have from the `Users.prf` flag. Step 5b doesn't improve that number.
+- **The Case A vs Case B split is non-actionable.** We can't force Case A; the +1-gesture follow-up
+  `get()` is inherent to `hmac-secret` being assertion-only. Knowing the ratio gives no lever.
+- **UA→no-PRF correlation mostly restates the known support matrix**, and if a fallback-abort rate is
+  ever wanted, counting fallback-dialog shows is far cheaper than a permanent telemetry channel.
+
+If a specific question arises later (e.g. "what fraction of PRF signups eat the extra gesture on
+platform X?"), build a **targeted** measurement then, with the exact question in hand. The reverted
+scaffolding (a `RequestTypes.PrfAttempt` type + `prfAttempts?` fields) is captured in git history if a
+starting point is needed. No `EventNames.PrfCase`, `prfAttempts`, or `AuthEvents.detail` exist in the
+codebase.
 
 ### Step 6 — Server `_doPostRegVerify` PRF branch (`server.ts`) — Deploy B — new-user branch DONE
 
@@ -343,7 +343,7 @@ Support **both** CTAP extensions and let the caller pick which the authenticator
 ### Step 12 — Tests
 
 - **Unit (`prf.spec.ts`):** ciphertext round-trip; salt length; reject all-zero master; C4 domain-separation assertion.
-- **Server (`apps/server/spec`) — DONE.** Driven through the real emulator with **`hmac-secret-mc` only** (the server API is oblivious to create-vs-assert timing; the assert-only path is a client concern, tested client-side). Covered, both modes via `core.suite`/`recovery.suite`: reg/verify with a real PRF ciphertext sets `prf:true`, stores `Authenticators.userCredEnc` (per-passkey) + `Users.userCredEnc` = recovery copy, never returns plaintext; auth/verify returns the per-passkey ciphertext + `prf:true` and the client decrypts it back to the known `userCred` (via `PrfTestUser.prfOutput`); **passkeys/verify?usercred=true** returns the primary passkey's ciphertext (add doesn't move `lastCredentialId`) and the add-passkey test decrypts it; passkeys/verify requires + stores a ciphertext and **rejects** an add without one (and no-PRF rejects one WITH); recover2 returns `recoveryUserCredEnc`+`prf` and recovery reconstructs the same `userCred`; `putRecover2Key` re-encrypts under new recovery words; no-PRF dual-mode intact; `getSessionKey` cutover round-trip; PRF-field input validation (empty/non-b64/too-short/wrong-length → uniform 401). **PRF-case telemetry (Step 5b) is NOT implemented server-side → not tested** (revisit if/when `EventNames.PrfCase` + a queryable path land).
+- **Server (`apps/server/spec`) — DONE.** Driven through the real emulator with **`hmac-secret-mc` only** (the server API is oblivious to create-vs-assert timing; the assert-only path is a client concern, tested client-side). Covered, both modes via `core.suite`/`recovery.suite`: reg/verify with a real PRF ciphertext sets `prf:true`, stores `Authenticators.userCredEnc` (per-passkey) + `Users.userCredEnc` = recovery copy, never returns plaintext; auth/verify returns the per-passkey ciphertext + `prf:true` and the client decrypts it back to the known `userCred` (via `PrfTestUser.prfOutput`); **passkeys/verify?usercred=true** returns the primary passkey's ciphertext (add doesn't move `lastCredentialId`) and the add-passkey test decrypts it; passkeys/verify requires + stores a ciphertext and **rejects** an add without one (and no-PRF rejects one WITH); recover2 returns `recoveryUserCredEnc`+`prf` and recovery reconstructs the same `userCred`; `putRecover2Key` re-encrypts under new recovery words; no-PRF dual-mode intact; `getSessionKey` cutover round-trip; PRF-field input validation (empty/non-b64/too-short/wrong-length → uniform 401). **PRF-case telemetry (Step 5b) is PUNTED (2026-07-16) → nothing to test** (see Step 5b for the cost/benefit reasoning; not "deferred," a decision not to build).
 - **E2E (`apps/web/tests`) — the known-good baseline, built FIRST (see build order above).** Confirmed: `setupAuthenticator` (`common.ts:411`) can pass `hasPrf:true` (Case A), `hasHmacSecret:true` alone (Case B), or neither (no-PRF) to `WebAuthn.addVirtualAuthenticator` — so a full create→login→recover→add PRF e2e covers all three paths and becomes the reference the emulator + server specs are validated against. Avoid `hasHmacSecretMc` (renderer crash in chromium-1228). No-PRF `lifecycle.spec.ts` must keep passing.
 - **Real-device must-verify:** create/login/recover/add on Apple/iCloud, Android/GPM, a hardware key (YubiKey), Windows Hello — confirming PRF-at-create (Case A) vs the fallback per platform and salt stability across logins.
 
@@ -369,7 +369,7 @@ Document client-generated `userCred`, the per-passkey PRF ciphertext + recovery 
 
 - `apps/web/src/app/services/authenticator.service.ts` — PRF ceremony in `_doPasskeyVerify`/`_startAuth`; ciphertext encrypt/decrypt threaded through create/login/recover/add; Case A + fallback signal.
 - `apps/web/src/app/services/prf.ts` (new) — `PRF_SALT`, `injectPrfExtension`, `prfReadKey`, ciphertext encrypt/decrypt helpers.
-- `apps/server/src/server.ts` — `_doPostRegVerify` PRF branch + per-passkey ciphertext on add/recovery-add; `makeLoginUserInfoResponse` PRF; `postRecover2` ciphertext+mode; `getSessionKey` cutover; `EventNames.PrfCase` + `recordEvent`/`console.error` PRF-case telemetry (Step 5b).
+- `apps/server/src/server.ts` — `_doPostRegVerify` PRF branch + per-passkey ciphertext on add/recovery-add; `makeLoginUserInfoResponse` PRF; `postRecover2` ciphertext+mode; `getSessionKey` cutover. (No PRF-case telemetry — Step 5b punted.)
 - `apps/server/src/models.ts` — `Users.prf`, `Authenticators.userCredEnc` (recovery ciphertext reuses `Users.userCredEnc`).
 - `libs/api/src/index.ts` — `LoginUserInfo += {prf?, userCredEnc?}`.
 - `apps/web/src/app/{newuser,showrecovery,credentials}/` — fallback prompt + PRF-account UX.
@@ -378,7 +378,7 @@ Document client-generated `userCred`, the per-passkey PRF ciphertext + recovery 
 
 ## Residual risks / explicit decisions
 
-- **R-twoCeremony (C2) — built, cost is +1 gesture (decision 6).** Step 0 showed Case B is common (Chrome-GPM, hardware keys), so we implement the follow-up `get()`. The residual cost is **one extra user gesture at signup/add-passkey** for Case-B authenticators (not Case-A ones: Apple Passwords, 1Password); login is always single-gesture. PRF output is read-time-independent, so A/B accounts interoperate. Open follow-up: check whether a platform allows the create→get pair to share one user-verification prompt (likely not for UV-required credentials — verify on-device). Step 5b telemetry quantifies how often the +1-gesture path is actually hit.
+- **R-twoCeremony (C2) — built, cost is +1 gesture (decision 6).** Step 0 showed Case B is common (Chrome-GPM, hardware keys), so we implement the follow-up `get()`. The residual cost is **one extra user gesture at signup/add-passkey** for Case-B authenticators (not Case-A ones: Apple Passwords, 1Password); login is always single-gesture. PRF output is read-time-independent, so A/B accounts interoperate. Open follow-up: check whether a platform allows the create→get pair to share one user-verification prompt (likely not for UV-required credentials — verify on-device). (How often the +1-gesture path is hit was to be a Step 5b telemetry signal, now punted — non-actionable, see that step.)
 - **R-unrecoverable (intended):** PRF, losing every passkey **and** the recovery words = permanently unrecoverable data. This is the design (master plan `:17,29`). Surface prominently in showrecovery.
 - **R-emulatorPRF (C3):** we add real PRF to the emulator (Step 11). Risks: maintaining a fork until the upstream PR merges (pin a commit); the in-process clientPin short-circuit must stay faithful enough that `prf.results` matches a real device (guarded by the salt-mapping vector + Step 0 device comparison). E2E PRF still depends on Chromium virtual-authenticator support (separate; VERIFY). Real-device manual verification remains mandatory.
 - **R-swaPassthrough (C1, verified):** PRF inputs must be BufferSources, outputs are ArrayBuffers; a base64 string silently no-ops PRF. Guarded by the spike + helpers + helper unit test.
