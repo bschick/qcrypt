@@ -5,7 +5,11 @@
 
 ## Current status (2026-07-12)
 
-**ALL CLIENT PRF WORK CODE-COMPLETE + COMMITTED (branch `prf-phase3`).** Create / login / recover / add, the **fallback UI**, and the **PRF account indicator** are done and committed; server is deployed to test; **full test suite green.** The client is ready for the **real-Chromium E2E** pass (next session). This iteration's additions on top of the Steps 5/9/10 core below:
+**ALL CLIENT PRF WORK CODE-COMPLETE + COMMITTED (branch `prf-phase3`).** Create / login / recover / add, the **fallback UI**, and the **PRF account indicator** are done and committed; server is deployed to test; **full test suite green.**
+
+> **E2E update (2026-07-15):** the E2E pass is done and tracked separately in `vibes/prf-phase3-e2e-plan.md`. It replaced the CDP virtual authenticator with the nid-webauthn-emulator BrowserInjection (CDP can't persist PRF `credRandom` across a reload); all `parallel/` specs migrated + green (62), keeper accounts moved to the emulator FileRepository and verified end-to-end. Owner TODO there: regen `E2E_CREDS_B64`, prod keepers, two upstream nid PRs.
+
+This iteration's additions on top of the Steps 5/9/10 core below:
 
 - **1Password PRF bug (critical):** on Chrome, 1Password returns `clientExtensionResults.prf.results.first` as a plain **`number[]`** (not the spec's `ArrayBuffer`; other providers may return a typed-array view). The old `prfReadKey` used `first instanceof ArrayBuffer` → treated a working PRF passkey as no-PRF. Fixed by generalizing **`getArrayBuffer`** (`libs/crypto`) to accept `ArrayBufferView | ArrayBuffer | number[]` and normalize to an `ArrayBuffer`; `prfReadKey` routes `first` through it. Regression tests cover all three shapes.
 - **`tryPrf` gating:** `_startRegistration(optionsJson, tryPrf)` only injects PRF + does the Case-B follow-up `get()` when PRF is wanted, so adding to / recovering a **no-PRF** account no longer fires a spurious second passkey prompt.

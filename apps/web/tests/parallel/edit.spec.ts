@@ -10,7 +10,7 @@ testWithAuth('edit fields', async ({ authFixture }) => {
   test.setTimeout(60000);
   const rand = Math.floor(Math.random() * (99 - 0 + 1)) + 0;
 
-  const authenticator = authFixture.newAuthenticator('hmac-secret-mc');
+  const authenticator = authFixture.memAuthenticator('hmac-secret-mc');
   const testUser = await authFixture.createTestUser(authenticator);
 
   await toggleCredentials(page);
@@ -76,7 +76,7 @@ testWithAuth('options persistence and defaults', async ({ authFixture }) => {
   const { page } = authFixture;
   test.setTimeout(60000);
 
-  const authenticator = authFixture.newAuthenticator('hmac-secret-mc');
+  const authenticator = authFixture.memAuthenticator('hmac-secret-mc');
   const testUser = await authFixture.createTestUser(authenticator);
 
   await page.locator('mat-expansion-panel-header').filter({ hasText: 'Encryption Mode' }).click();

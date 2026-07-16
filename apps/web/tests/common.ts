@@ -12,10 +12,11 @@ import {
   AuthenticatorEmulator,
   BrowserInjection,
   PasskeysCredentialsMemoryRepository,
+  PasskeysCredentialsFileRepository,
   type HmacSecretMode,
 } from 'nid-webauthn-emulator';
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -90,18 +91,16 @@ async function recomputeUserCred(
 
 export type hosts = 't1.quickcrypt.org' | 'quickcrypt.org';
 
-// `id` is the emulator credential serialized via serializeCredential (JSON string),
-// re-loadable into the emulator repository with deserializeCredential.
-type KeeperEntry = { id: string; words: string };
-type KeeperCreds = Record<hosts, { keeper1: KeeperEntry; keeper2: KeeperEntry }>;
+// Keeper passkeys live in a gitignored directory (one emulator credential file per
+// keeper per host) so the public repo can't be used to sign in to, recover, or wipe
+// these persistent test accounts.
+const keeperCredsDir = join(dirname(fileURLToPath(import.meta.url)), 'keeper-creds');
+export const haveKeeperCreds = existsSync(keeperCredsDir);
 
-// Keeper credentials live in a gitignored file so the public repo can't be used to
-// sign in to, recover, or wipe these persistent test accounts.
-const credsPath = join(dirname(fileURLToPath(import.meta.url)), '.creds.json');
-export const haveKeeperCreds = existsSync(credsPath);
-export const credentials: KeeperCreds = haveKeeperCreds
-  ? JSON.parse(readFileSync(credsPath, 'utf8'))
-  : ({} as KeeperCreds);
+// The credential-repository directory holding a keeper account's passkey.
+export function keeperDir(host: hosts, keeper: string): string {
+  return join(keeperCredsDir, host, keeper);
+}
 
 export type CreatedTestUser = {
   userId: string;
@@ -127,9 +126,14 @@ export type TrackUserInfo = {
 
 export type AuthFixture = {
   page: Page;
-  // Allocates a virtual authenticator fixed at the given hmac-secret behavior
-  // ('hmac-secret-mc' → PRF, 'none' → no PRF, 'hmac-secret' → PRF at assertion only).
-  newAuthenticator: (mode?: HmacSecretMode) => Authenticator;
+  // In-memory authenticator ('hmac-secret-mc' → PRF, 'none' → no PRF, 'hmac-secret'
+  // → PRF at assertion only).
+  memAuthenticator: (mode?: HmacSecretMode) => Authenticator;
+  // Authenticator whose newly created passkey persists to the credential directory.
+  provisionAuthenticator: (dir: string, mode: HmacSecretMode) => Authenticator;
+  // Authenticator loaded read-only from a credential directory, inferring PRF from the
+  // stored credential.
+  loadAuthenticator: (dir: string) => Authenticator;
   // Creates a fresh PWTesty_e2e_<timestamp> user on the authenticator via the UI
   // registration flow. A 'none' authenticator hits the fallback dialog: without
   // differentAuth it takes 'standard' (same passkey, no-PRF account); with
@@ -207,13 +211,29 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
     // selected. Each operation sets `active` before triggering its ceremony.
     let active: WebAuthnEmulator | undefined;
     let createCount = 0;
-    const newAuthenticator = (mode: HmacSecretMode = 'hmac-secret-mc'): Authenticator => {
-      const emulator = new WebAuthnEmulator(new AuthenticatorEmulator({
-        hmacSecret: mode,
-        credentialsRepository: new PasskeysCredentialsMemoryRepository(),
-      }));
+    const makeAuthenticator = (mode: HmacSecretMode, repo: PasskeysCredentialsMemoryRepository | PasskeysCredentialsFileRepository): Authenticator => {
+      const emulator = new WebAuthnEmulator(new AuthenticatorEmulator({ hmacSecret: mode, credentialsRepository: repo }));
       active ??= emulator;
       return { emulator, mode };
+    };
+    const memAuthenticator = (mode: HmacSecretMode = 'hmac-secret-mc'): Authenticator =>
+      makeAuthenticator(mode, new PasskeysCredentialsMemoryRepository());
+    const provisionAuthenticator = (dir: string, mode: HmacSecretMode): Authenticator =>
+      makeAuthenticator(mode, new PasskeysCredentialsFileRepository(dir));
+    // Runs against an in-memory copy of the stored credential to prevent sign-ins from
+    // updating the persisted keeper file, working around a nid FileRepository bug where
+    // its async unlink can race a sync write and drop the credential.
+    const loadAuthenticator = (dir: string): Authenticator => {
+      const stored = new PasskeysCredentialsFileRepository(dir).loadCredentials();
+      if (stored.length === 0) {
+        throw new Error(`loadAuthenticator: no credential in ${dir}`);
+      }
+      const repo = new PasskeysCredentialsMemoryRepository();
+      for (const cred of stored) {
+        repo.saveCredential(cred);
+      }
+      const mode: HmacSecretMode = stored.some(cred => cred.publicKeyCredentialSource.credRandom !== undefined) ? 'hmac-secret-mc' : 'none';
+      return makeAuthenticator(mode, repo);
     };
 
     const context: BrowserContext = page.context();
@@ -367,7 +387,9 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
 
     await use({
       page,
-      newAuthenticator,
+      memAuthenticator,
+      provisionAuthenticator,
+      loadAuthenticator,
       credentialCreateCount: () => createCount,
       createTestUser,
       trackUser,

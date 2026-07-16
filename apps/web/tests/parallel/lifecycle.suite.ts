@@ -28,7 +28,7 @@ export function lifecycleSuite(prf: boolean): void {
     const { page } = authFixture;
     test.setTimeout(45000);
 
-    const authenticator = authFixture.newAuthenticator(mode);
+    const authenticator = authFixture.memAuthenticator(mode);
     const testUser = await authFixture.createTestUser(authenticator);
 
     // Creating the account is a single passkey ceremony — PRF at create, or the
@@ -63,7 +63,7 @@ export function lifecycleSuite(prf: boolean): void {
     const { page } = authFixture;
     test.setTimeout(45000);
 
-    const authenticator = authFixture.newAuthenticator(mode);
+    const authenticator = authFixture.memAuthenticator(mode);
     const testUser = await authFixture.createTestUser(authenticator);
 
     await authFixture.passkeyAuth(authenticator, async () => {
@@ -79,7 +79,7 @@ export function lifecycleSuite(prf: boolean): void {
     const { page } = authFixture;
     test.setTimeout(60000);
 
-    const authenticator1 = authFixture.newAuthenticator(mode);
+    const authenticator1 = authFixture.memAuthenticator(mode);
     const testUser = await authFixture.createTestUser(authenticator1);
 
     // Each passkey the account gains — create, add, recovery — is one create ceremony.
@@ -92,7 +92,7 @@ export function lifecycleSuite(prf: boolean): void {
 
     // A second passkey needs a second authenticator (one credential per userId per
     // authenticator), standing in for a second device.
-    const authenticator2 = authFixture.newAuthenticator(mode);
+    const authenticator2 = authFixture.memAuthenticator(mode);
     await authFixture.addPasskey(testUser.userId, authenticator2, async () => {
       await page.getByRole('button', { name: /New Passkey/ }).click();
     });
@@ -133,7 +133,7 @@ export function lifecycleSuite(prf: boolean): void {
     const { page } = authFixture;
     test.setTimeout(45000);
 
-    const authenticator1 = authFixture.newAuthenticator(mode);
+    const authenticator1 = authFixture.memAuthenticator(mode);
     const testUser = await authFixture.createTestUser(authenticator1);
 
     await authFixture.passkeyAuth(authenticator1, async () => {
@@ -147,7 +147,7 @@ export function lifecycleSuite(prf: boolean): void {
     const tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
 
-    const authenticator2 = authFixture.newAuthenticator(mode);
+    const authenticator2 = authFixture.memAuthenticator(mode);
     await authFixture.addPasskey(testUser.userId, authenticator2, async () => {
       await page.getByRole('button', { name: /New Passkey/ }).click();
     });
@@ -165,14 +165,14 @@ export function lifecycleSuite(prf: boolean): void {
     const { page } = authFixture;
     test.setTimeout(60000);
 
-    const authenticator1 = authFixture.newAuthenticator(mode);
+    const authenticator1 = authFixture.memAuthenticator(mode);
     const testUser = await authFixture.createTestUser(authenticator1);
 
     await toggleCredentials(page);
     const tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
 
-    const authenticator2 = authFixture.newAuthenticator(mode);
+    const authenticator2 = authFixture.memAuthenticator(mode);
     await authFixture.addPasskey(testUser.userId, authenticator2, async () => {
       await page.getByRole('button', { name: /New Passkey/ }).click();
     });
@@ -220,7 +220,7 @@ export function lifecycleSuite(prf: boolean): void {
     const { page } = authFixture;
     test.setTimeout(60000);
 
-    const authenticator1 = authFixture.newAuthenticator(mode);
+    const authenticator1 = authFixture.memAuthenticator(mode);
     const testUser = await authFixture.createTestUser(authenticator1);
 
     await toggleCredentials(page);
@@ -256,7 +256,7 @@ export function lifecycleSuite(prf: boolean): void {
     // The new words do. Recovery wipes the old passkey and creates a new one on a
     // second authenticator.
     await page.locator('textarea#wordsArea').fill(newWords);
-    const authenticator2 = authFixture.newAuthenticator(mode);
+    const authenticator2 = authFixture.memAuthenticator(mode);
     await authFixture.addPasskey(testUser.userId, authenticator2, async () => {
       await page.getByRole('button', { name: /Start Recovery/ }).click();
     });
@@ -274,7 +274,7 @@ export function lifecycleSuite(prf: boolean): void {
     test.setTimeout(75000);
 
     const page1 = page;
-    const authenticator1 = authFixture.newAuthenticator(mode);
+    const authenticator1 = authFixture.memAuthenticator(mode);
     const testUser = await authFixture.createTestUser(authenticator1);
 
     const page2 = await page1.context().newPage();
@@ -320,7 +320,7 @@ export function lifecycleSuite(prf: boolean): void {
     test.setTimeout(120000);
 
     const page1 = page;
-    const authenticatorA = authFixture.newAuthenticator(mode);
+    const authenticatorA = authFixture.memAuthenticator(mode);
     const testUserA = await authFixture.createTestUser(authenticatorA);
 
     const page2 = await page1.context().newPage();
@@ -342,7 +342,7 @@ export function lifecycleSuite(prf: boolean): void {
     await expect(page1).toHaveURL(/\/welcome$/);
     await expect(page1.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({ timeout: 10000 });
 
-    const authenticatorB = authFixture.newAuthenticator(mode);
+    const authenticatorB = authFixture.memAuthenticator(mode);
     const testUserB = await authFixture.createTestUser(authenticatorB);
 
     await toggleCredentials(page1);
@@ -406,14 +406,14 @@ export function lifecycleSuite(prf: boolean): void {
       const { page } = authFixture;
       test.setTimeout(45000);
 
-      const prfAuthenticator = authFixture.newAuthenticator('hmac-secret-mc');
+      const prfAuthenticator = authFixture.memAuthenticator('hmac-secret-mc');
       await authFixture.createTestUser(prfAuthenticator);
       await toggleCredentials(page);
       const tableBody = page.locator('table.credtable tbody');
       await expect(tableBody.locator('tr')).toHaveCount(1);
 
       // A PRF account must refuse a no-PRF passkey rather than silently downgrade.
-      const noPrfAuthenticator = authFixture.newAuthenticator('none');
+      const noPrfAuthenticator = authFixture.memAuthenticator('none');
       await authFixture.expectPasskeyRejected(noPrfAuthenticator, async () => {
         await page.getByRole('button', { name: /New Passkey/ }).click();
       });
@@ -428,7 +428,7 @@ export function lifecycleSuite(prf: boolean): void {
       const { page } = authFixture;
       test.setTimeout(45000);
 
-      const noPrfAuthenticator = authFixture.newAuthenticator('none');
+      const noPrfAuthenticator = authFixture.memAuthenticator('none');
       const testUser = await authFixture.createTestUser(noPrfAuthenticator);
       await toggleCredentials(page);
       const tableBody = page.locator('table.credtable tbody');
@@ -436,7 +436,7 @@ export function lifecycleSuite(prf: boolean): void {
 
       // A no-PRF account never requests PRF, so even a PRF-capable authenticator
       // just adds a standard passkey and the account stays no-PRF.
-      const prfAuthenticator = authFixture.newAuthenticator('hmac-secret-mc');
+      const prfAuthenticator = authFixture.memAuthenticator('hmac-secret-mc');
       await authFixture.addPasskey(testUser.userId, prfAuthenticator, async () => {
         await page.getByRole('button', { name: /New Passkey/ }).click();
       });

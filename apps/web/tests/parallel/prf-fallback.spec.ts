@@ -11,7 +11,7 @@ test.describe('prf fallback', () => {
     const { page } = authFixture;
     test.setTimeout(45000);
 
-    const noPrfAuth = authFixture.newAuthenticator('none');
+    const noPrfAuth = authFixture.memAuthenticator('none');
     const testUser = await authFixture.createTestUser(noPrfAuth);
 
     expect(authFixture.credentialCreateCount()).toBe(1);
@@ -26,8 +26,8 @@ test.describe('prf fallback', () => {
     const { page } = authFixture;
     test.setTimeout(45000);
 
-    const noPrfAuth = authFixture.newAuthenticator('none');
-    const prfAuth = authFixture.newAuthenticator('hmac-secret-mc');
+    const noPrfAuth = authFixture.memAuthenticator('none');
+    const prfAuth = authFixture.memAuthenticator('hmac-secret-mc');
     const testUser = await authFixture.createTestUser(noPrfAuth, prfAuth);
 
     expect(authFixture.credentialCreateCount()).toBe(2);

@@ -103,22 +103,49 @@ the slice lands.
   The `create.spec.ts` keeper tool is handled with the keeper work (see Keepers), not here. One Case-B create
   test to exercise `_readPrfViaAssertion`.
 
-## Keepers — keeper2 → PRF, keeper1 → no-PRF
+## Keepers — keeper2 → PRF, keeper1 → no-PRF — CODE DONE + LOCAL KEEPERS VERIFIED
 
-Feasible now via the file repo. `.creds.json` changes from the CDP `Credential` to the emulator **credential
-source** (carries `credRandom`) + recovery words. Regenerate keeper2 as a PRF account and keeper1 as no-PRF
-through the injection create flow; `sequential/encryption.spec.ts` + `sequential/errors.spec.ts` load the
-saved credential into the emulator repo instead of `addCredential`. Keeper skip-guards (`haveKeeperCreds`)
-stay. **Owner must regenerate `E2E_CREDS_B64`** once the new `.creds.json` exists.
+Persistence switched from the single `.creds.json` (CDP `Credential`) to the emulator's own
+**`PasskeysCredentialsFileRepository`**: one dir per keeper per host at
+`apps/web/tests/keeper-creds/<host>/<keeper>/` (gitignored), holding one credential `.json` that carries
+`credRandom` for PRF. Separate dirs give unambiguous *discoverable* sign-in ("I have used Quick Crypt") — the
+dir name identifies the keeper, no credential→keeper map needed. Mode is **inferred** from `credRandom`
+presence, so no metadata file.
 
-**Keeper-provisioning tool (`apps/web/tests/create.spec.ts`).** This is the manual, run-by-hand tool that
-creates the persistent keeper accounts (deliberately untracked so they survive; `console.log`s the
-credential + recovery words to paste into `.creds.json`). It is NOT run by the e2e runner. It still uses the
-old CDP fixture and must be updated with the keeper work, since it needs the shared serialize/deserialize
-emulator-credential API (credential source + `credRandom`) that the keeper specs also use. Design that API
-once and use it in both the tool and the keeper specs. **TODO: rename `create.spec.ts` → `keeper.spec.ts`**
-so its purpose is obvious (it is neither the automated create-path test — that lives in
-`parallel/basics.spec.ts` — nor part of the run suite).
+- **`common.ts`:** `memAuthenticator(mode)` (was `newAuthenticator`, MemoryRepository) + two explicit file
+  helpers: **`provisionAuthenticator(dir, mode)`** (FileRepository; a created passkey persists to dir — for
+  the tool) and **`loadAuthenticator(dir)`** (reads the stored credential into an **in-memory copy**, infers
+  PRF — for the keeper specs). `keeperDir(host, keeper)` helper; `haveKeeperCreds` = the keeper-creds dir
+  exists. Removed `.creds.json`/`credentials`/`addCredential`.
+- **`sequential/encryption.spec.ts` + `sequential/errors.spec.ts`:** load via
+  `loadAuthenticator(keeperDir(host, keeper))` + `passkeyAuth`; skip-guards stay; **skip cleanly** with no creds.
+- **`create.spec.ts` → `keeper.spec.ts`** (renamed): manual provisioning tool, edit-the-config-object,
+  `provisionAuthenticator(dir, mode)` create → credential auto-persists; guards against overwriting a
+  non-empty dir. Not run by the e2e runner; run commands (needs `--config` + `--project` for baseURL) are in
+  its header. **Recovery words are discarded** — keeper specs never test recovery, and a lost passkey is
+  fixed by re-running the tool (capture code is commented out, one line to restore if that changes).
+- **CI workflows (`playwright.yml`, `new-version.yml`) already updated:** restore via
+  `base64 -d | tar -xzf - -C apps/web/tests`.
+
+**nid FileRepository race (found + worked around; separate upstream fix owed).** The emulator re-saves a
+credential on every assertion (signCount) via delete-then-write, and `PasskeysCredentialsFileRepository`'s
+`deleteCredential` uses **async `fs.unlink`** while `saveCredential` uses **sync `writeFileSync`** — the
+unlink races the write and intermittently drops the file. `loadAuthenticator`'s in-memory copy dodges it
+(disk never mutated on sign-in) and keeps keeper files immutable (stable `E2E_CREDS_B64`). Still owed: a
+**standalone upstream PR** fixing the FileRepository to unlink synchronously (independent of the hmac-secret PR).
+
+**Status:** local (`t1.quickcrypt.org`) keeper1 (no-PRF) + keeper2 (PRF) provisioned; the 3 sequential keeper
+specs pass and both keeper files survive the run — the FileRepository PRF round-trip (credRandom → PRF output
+→ decrypt `passkeyUserCredEnc`) is validated end-to-end.
+
+**Owner TODO:**
+1. Regenerate the CI secret: `tar -czf - -C apps/web/tests keeper-creds | base64 -w0` → replace `E2E_CREDS_B64`.
+2. If prod-release CI runs keeper tests, provision the `quickcrypt.org` keepers too (edit `keeper.spec.ts`
+   config `host` + run with `--project=prod`).
+3. Land the standalone upstream nid FileRepository fix.
+
+(Reprovision command, for reference:
+`NODE_EXTRA_CA_CERTS=./apps/web/localssl/qcrypt.pem pnpm exec playwright test --config apps/web/playwright.config.ts apps/web/tests/keeper.spec.ts --project=local`)
 
 ## Build order (vertical slice first)
 
@@ -126,22 +153,25 @@ so its purpose is obvious (it is neither the automated create-path test — that
    ported both modes (18 tests green): log in/out, check usercred (+ recompute-vs-`/cmdline`), check usercred
    and add pk, full lifecycle, delete active passkey signs out, regenerate recovery words, 3 tabs logout and
    forget, 3 tabs switch user, plus PRF add-passkey no-downgrade / no-PRF stays-non-PRF. The two-authenticator
-   model (`newAuthenticator(mode)`) replaces CDP credential-swapping.
+   model (`memAuthenticator(mode)`) replaces CDP credential-swapping.
 2. **`lifecycle.spec.ts` (no-PRF) + `prf-lifecycle.spec.ts` (PRF) — DONE**, thin clients of the suite.
 3. **XSS username-sanitization — DONE**, added to `parallel/basics.spec.ts` (mode-independent, one no-PRF
    account). This is the automated create-path test; the `create.spec.ts` keeper tool is separate (see Keepers).
 4. **Remaining `parallel/` specs — DONE.** `edit` (2), `login-relay` (15, byte-identical assertions +
    second-CDP-session collapsed to `passkeyAuth(auth, trigger, {page})`), `errors` (7 ported + 1 new
    wrong-device case), `lazy-routes` (13, no migration needed). Full `parallel/` suite: **60 green**.
-   Error-path "no matching passkey" is simulated with a fresh empty `newAuthenticator()` (was
+   Error-path "no matching passkey" is simulated with a fresh empty `memAuthenticator()` (was
    `clearCredentials`); the new `another account passkey on device` case covers a populated-but-wrong device.
+   With `prf-fallback` (step 5) the full `parallel/` suite is **62 green**.
 5. **`prf-fallback.spec.ts` — DONE.** `'standard'` completes the same passkey → no-PRF account (1 create,
    badge absent); `'different'` discards + recreates on a PRF authenticator → PRF account (2 creates, badge
    present). A `credentialCreateCount()` fixture counter is the regression signal; `createTestUser` gained an
    optional `differentAuth` for the 'different' path.
-6. Keepers last: update the `create.spec.ts` provisioning tool + design the serialize/deserialize credential
-   API, regenerate `.creds.json` (keeper2 PRF / keeper1 no-PRF), port `sequential/` specs, rename
-   `create.spec.ts` → `keeper.spec.ts`, hand off `E2E_CREDS_B64` regen to owner.
+6. **Keepers — DONE (code) + local verified.** Switched to the emulator `PasskeysCredentialsFileRepository`
+   (per-keeper dir, PRF inferred from `credRandom`), `provisionAuthenticator`/`loadAuthenticator` split,
+   worked around the nid FileRepository unlink/write race via in-memory load, renamed the tool to
+   `keeper.spec.ts`, updated CI to `tar -xzf`. Local keepers provisioned; sequential specs pass. See the
+   Keepers section above for the owner TODO (E2E_CREDS_B64 regen, prod keepers, upstream nid PR).
 
 Run: `pnpm test:e2e -- --reporter=list` (`-g "<name>"` to focus). The runner owns a frozen serve; a
 watch-serve on :4200 blocks it, so stop that first or run `playwright test` directly against the running
@@ -150,7 +180,7 @@ serve during iteration.
 ## Risks / open items
 
 - **Fork uncommitted** + upstream PR owed (owner).
-- **`E2E_CREDS_B64` regen** after keeper `.creds.json` reformat (owner) — else prod-release CI keeper tests fail.
+- **`E2E_CREDS_B64` regen** after the keeper-creds reformat (owner) — else prod-release CI keeper tests fail.
 - **Fidelity note:** injection replaces Chromium's WebAuthn stack with a JS shim. Still exercised: the app,
   `@simplewebauthn` option-encode / result-parse, and the real server. No longer exercised: Chromium's
   native WebAuthn plumbing (which the CDP virtual authenticator wasn't either).

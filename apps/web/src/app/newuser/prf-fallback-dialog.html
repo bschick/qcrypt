@@ -23,16 +23,16 @@ SOFTWARE. -->
 <span class="prf-fallback">
 <h1 mat-dialog-title>This passkey doesn't support local key creation</h1>
 <mat-dialog-content>
-  <p>Quick Crypt encourages your to use
+  <p>Quick Crypt encourages you to use
     <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'Passkeys with PRF'}" target="_blank">
     PRF-capable passkeys</a>
     for stronger protection of your data. While passkeys without PRF remain secure, PRF
     is a significant security upgrade.</p>
   <p>The PRF extension is widely supported, but not yet universal. The list of
   PRF-compatible systems is growing rapidly and includes: <b>1Password</b>,
-  <b>YubiKey</b>, <b>Apple Passwords</b>, <b>Windows Hello</b>, <b>Google/Chrome Password Sync</b>,
-  <b>Keeper</b>, <b>ProtonPass</b>, <b>SoloKeys</b>, and <b>Dashlane</b>. A notable exception is
-  <i>Bitwarden</i>, which does not yet support PRF for passkeys it manages (<a
+  <b>YubiKey</b>, <b>Apple Passwords</b>, <b>Windows Hello</b>, <b>Google Password Manager</b>,
+  <b>Keeper</b>, <b>Proton Pass</b>, <b>SoloKeys</b>, and <b>Dashlane</b>. A notable exception is
+  <b>Bitwarden</b>, which does not yet support PRF for the passkeys it manages (<a
   href="https://community.bitwarden.com/t/support-for-storing-prf-capable-passkeys-in-bitwarden-vault/82239"
   target="_blank">add your vote to the feature request</a>).</p>
   <p>You may select a different passkey or continue with standard protection.</p>

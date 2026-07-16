@@ -43,7 +43,7 @@ testWithAuth('username is sanitized on create', async ({ authFixture }) => {
   const rawName = `PWTesty<script>_e2e_${suffix}</script>`;
   const sanitizedName = `PWTesty_e2e_${suffix}`;
 
-  const authenticator = authFixture.newAuthenticator('none');
+  const authenticator = authFixture.memAuthenticator('none');
   await page.goto('/');
 
   const verifyPromise = page.waitForResponse((r) =>

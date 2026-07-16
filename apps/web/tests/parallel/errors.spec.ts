@@ -42,7 +42,7 @@ test.describe('errors', () => {
     await page.goto('/');
 
     // An authenticator with no credential fails the discoverable sign-in.
-    await authFixture.passkeyAuth(authFixture.newAuthenticator(), async () => {
+    await authFixture.passkeyAuth(authFixture.memAuthenticator(), async () => {
       await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
     }, { awaitVerify: false });
     const parent = page.locator('p.error-msg');
@@ -52,13 +52,13 @@ test.describe('errors', () => {
   testWithAuth('no passkey re-signin', async ({ authFixture }) => {
     const { page } = authFixture;
 
-    const testUser = await authFixture.createTestUser(authFixture.newAuthenticator());
+    const testUser = await authFixture.createTestUser(authFixture.memAuthenticator());
 
     await toggleCredentials(page);
     await page.getByRole('button', { name: /Sign out/ }).click();
 
     // Sign in from a device that lacks the passkey → an empty authenticator.
-    await authFixture.passkeyAuth(authFixture.newAuthenticator(), async () => {
+    await authFixture.passkeyAuth(authFixture.memAuthenticator(), async () => {
       await page.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
     }, { awaitVerify: false });
 
@@ -70,7 +70,7 @@ test.describe('errors', () => {
     const { page } = authFixture;
     test.setTimeout(45000);
 
-    await authFixture.createTestUser(authFixture.newAuthenticator());
+    await authFixture.createTestUser(authFixture.memAuthenticator());
 
     await toggleCredentials(page);
 
@@ -92,7 +92,7 @@ test.describe('errors', () => {
     const { page } = authFixture;
     test.setTimeout(45000);
 
-    await authFixture.createTestUser(authFixture.newAuthenticator());
+    await authFixture.createTestUser(authFixture.memAuthenticator());
 
     await toggleCredentials(page);
 
@@ -100,7 +100,7 @@ test.describe('errors', () => {
     await expect(page).toHaveURL(/\/regenrecovery$/);
 
     // Reauthenticating from a device without the passkey fails the replacement.
-    await authFixture.passkeyAuth(authFixture.newAuthenticator(), async () => {
+    await authFixture.passkeyAuth(authFixture.memAuthenticator(), async () => {
       await page.getByRole('button', { name: /Generate new recovery words/ }).click();
     }, { awaitVerify: false });
 
@@ -113,10 +113,10 @@ test.describe('errors', () => {
     const { page } = authFixture;
     test.setTimeout(45000);
 
-    await authFixture.createTestUser(authFixture.newAuthenticator());
+    await authFixture.createTestUser(authFixture.memAuthenticator());
 
     // Reauthenticating from a device without the passkey fails the userCred fetch.
-    await authFixture.passkeyAuth(authFixture.newAuthenticator(), async () => {
+    await authFixture.passkeyAuth(authFixture.memAuthenticator(), async () => {
       await page.goto('/cmdline');
     }, { awaitVerify: false });
 
@@ -131,14 +131,14 @@ test.describe('errors', () => {
     test.setTimeout(60000);
 
     // A separate account's device holds only userB's passkey.
-    const authB = authFixture.newAuthenticator();
+    const authB = authFixture.memAuthenticator();
     await authFixture.createTestUser(authB);
     await toggleCredentials(page);
     await page.getByRole('button', { name: /Sign out/ }).click();
     await page.getByRole('button', { name: /Sign in as a different user/ }).click();
     await expect(page).toHaveURL(/\/welcome$/);
 
-    const authA = authFixture.newAuthenticator();
+    const authA = authFixture.memAuthenticator();
     const userA = await authFixture.createTestUser(authA);
     await toggleCredentials(page);
     await page.getByRole('button', { name: /Sign out/ }).click();

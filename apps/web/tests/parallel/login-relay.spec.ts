@@ -59,7 +59,7 @@ test.describe('login relay', () => {
     const { page } = authFixture;
     test.setTimeout(75000);
 
-    await authFixture.createTestUser(authFixture.newAuthenticator());
+    await authFixture.createTestUser(authFixture.memAuthenticator());
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
     await page.reload();
@@ -73,7 +73,7 @@ test.describe('login relay', () => {
     const { page: page1 } = authFixture;
     test.setTimeout(75000);
 
-    await authFixture.createTestUser(authFixture.newAuthenticator());
+    await authFixture.createTestUser(authFixture.memAuthenticator());
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
     const page2 = await page1.context().newPage();
@@ -91,7 +91,7 @@ test.describe('login relay', () => {
     const { page: page1 } = authFixture;
     test.setTimeout(60000);
 
-    await authFixture.createTestUser(authFixture.newAuthenticator());
+    await authFixture.createTestUser(authFixture.memAuthenticator());
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
     const page2 = await page1.context().newPage();
@@ -116,7 +116,7 @@ test.describe('login relay', () => {
     const { page } = authFixture;
     test.setTimeout(75000);
 
-    await authFixture.createTestUser(authFixture.newAuthenticator());
+    await authFixture.createTestUser(authFixture.memAuthenticator());
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
     await page.goto('about:blank');
@@ -131,7 +131,7 @@ test.describe('login relay', () => {
     const { page } = authFixture;
     test.setTimeout(75000);
 
-    await authFixture.createTestUser(authFixture.newAuthenticator());
+    await authFixture.createTestUser(authFixture.memAuthenticator());
     await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
     await page.goto('about:blank');
@@ -146,7 +146,7 @@ test.describe('login relay', () => {
     const { page: page1 } = authFixture;
     test.setTimeout(60000);
 
-    const authenticator = authFixture.newAuthenticator();
+    const authenticator = authFixture.memAuthenticator();
     const testUser = await authFixture.createTestUser(authenticator);
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
@@ -185,7 +185,7 @@ test.describe('login relay', () => {
     const { page: page1 } = authFixture;
     test.setTimeout(75000);
 
-    await authFixture.createTestUser(authFixture.newAuthenticator());
+    await authFixture.createTestUser(authFixture.memAuthenticator());
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
     const page2 = await page1.context().newPage();
@@ -210,7 +210,7 @@ test.describe('login relay', () => {
     const { page: page1 } = authFixture;
     test.setTimeout(75000);
 
-    await authFixture.createTestUser(authFixture.newAuthenticator());
+    await authFixture.createTestUser(authFixture.memAuthenticator());
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
     const page2 = await page1.context().newPage();
@@ -231,7 +231,7 @@ test.describe('login relay', () => {
     const { page: page1 } = authFixture;
     test.setTimeout(75000);
 
-    const authA = authFixture.newAuthenticator();
+    const authA = authFixture.memAuthenticator();
     const userA = await authFixture.createTestUser(authA);
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
@@ -240,7 +240,7 @@ test.describe('login relay', () => {
     await page1.getByRole('button', { name: /Sign in as a different user/ }).click();
     await expect(page1).toHaveURL(/\/welcome$/);
 
-    const authB = authFixture.newAuthenticator();
+    const authB = authFixture.memAuthenticator();
     const userB = await authFixture.createTestUser(authB);
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
@@ -279,7 +279,7 @@ test.describe('login relay', () => {
     const { page: page1 } = authFixture;
     test.setTimeout(60000);
 
-    const testUser = await authFixture.createTestUser(authFixture.newAuthenticator());
+    const testUser = await authFixture.createTestUser(authFixture.memAuthenticator());
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
     await toggleCredentials(page1);
     const tableBody1 = page1.locator('table.credtable tbody');
@@ -294,7 +294,7 @@ test.describe('login relay', () => {
     const tableBody2 = page2.locator('table.credtable tbody');
     await expect(tableBody2.locator('tr')).toHaveCount(1);
 
-    await authFixture.addPasskey(testUser.userId, authFixture.newAuthenticator(), async () => {
+    await authFixture.addPasskey(testUser.userId, authFixture.memAuthenticator(), async () => {
       await page1.getByRole('button', { name: /New Passkey/ }).click();
     });
 
@@ -307,13 +307,13 @@ test.describe('login relay', () => {
     const { page: page1 } = authFixture;
     test.setTimeout(60000);
 
-    const testUser = await authFixture.createTestUser(authFixture.newAuthenticator());
+    const testUser = await authFixture.createTestUser(authFixture.memAuthenticator());
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
     await toggleCredentials(page1);
     const tableBody1 = page1.locator('table.credtable tbody');
     await expect(tableBody1.locator('tr')).toHaveCount(1);
 
-    await authFixture.addPasskey(testUser.userId, authFixture.newAuthenticator(), async () => {
+    await authFixture.addPasskey(testUser.userId, authFixture.memAuthenticator(), async () => {
       await page1.getByRole('button', { name: /New Passkey/ }).click();
     });
     await expect(tableBody1.locator('tr')).toHaveCount(2);
@@ -339,12 +339,12 @@ test.describe('login relay', () => {
     const { page: page1 } = authFixture;
     test.setTimeout(75000);
 
-    const auth1 = authFixture.newAuthenticator();
+    const auth1 = authFixture.memAuthenticator();
     const testUser = await authFixture.createTestUser(auth1);
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
     await toggleCredentials(page1);
-    const auth2 = authFixture.newAuthenticator();
+    const auth2 = authFixture.memAuthenticator();
     await authFixture.addPasskey(testUser.userId, auth2, async () => {
       await page1.getByRole('button', { name: /New Passkey/ }).click();
     });
@@ -390,7 +390,7 @@ test.describe('login relay', () => {
     const { page: page1 } = authFixture;
     test.setTimeout(90000);
 
-    const authA = authFixture.newAuthenticator();
+    const authA = authFixture.memAuthenticator();
     const userA = await authFixture.createTestUser(authA);
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
@@ -399,7 +399,7 @@ test.describe('login relay', () => {
     await page1.getByRole('button', { name: /Sign in as a different user/ }).click();
     await expect(page1).toHaveURL(/\/welcome$/);
 
-    const authB = authFixture.newAuthenticator();
+    const authB = authFixture.memAuthenticator();
     const userB = await authFixture.createTestUser(authB);
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
@@ -431,7 +431,7 @@ test.describe('login relay', () => {
     const { page: page1 } = authFixture;
     test.setTimeout(60000);
 
-    const authenticator = authFixture.newAuthenticator();
+    const authenticator = authFixture.memAuthenticator();
     const testUser = await authFixture.createTestUser(authenticator);
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
@@ -466,7 +466,7 @@ test.describe('login relay', () => {
     const { page: page1 } = authFixture;
     test.setTimeout(75000);
 
-    await authFixture.createTestUser(authFixture.newAuthenticator());
+    await authFixture.createTestUser(authFixture.memAuthenticator());
     await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
     // Unload qcrypt from page1 so it stops responding on the broadcast channel
