@@ -7,7 +7,24 @@
 %\setlength\parindent{0pt}
 \setlength\parindent{20pt}
 
+\newlength{\stanzagap}
+\setlength{\stanzagap}{2\baselineskip}  % <-- change this to adjust gap between stanzas
+
+\newlength{\stanzawidth}
+\setlength{\stanzawidth}{368pt}         % <-- max stanza width (1300px @ 255 PPI)
+
+\newlength{\stanzabox}
+
+\newenvironment{stanza}
+  {\par\addvspace{\stanzagap}%
+   \setlength{\stanzabox}{\dimexpr\linewidth-\parindent\relax}%
+   \ifdim\stanzabox>\stanzawidth\setlength{\stanzabox}{\stanzawidth}\fi
+   \noindent\hspace*{\parindent}\begin{minipage}{\stanzabox}}
+  {\end{minipage}\par\addvspace{\stanzagap}}
+
 \begin{document}
+
+\begin{stanza}
 \underline{Agents}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -16,11 +33,10 @@ $B$ & \textrm{ - Browser with Session storage, SubtleCrypto API, and libsodium l
 $M$ & \textrm{ - Webauthn authenticator (passkey manager)} \\
 $S$ & \textrm{ - Quick Crypt server} \\
 \end{tabular}
-
-\hfill \break
+\end{stanza}
 
 % Changed: cipher variables, functions, decrypt by a, block n by B
-
+\begin{stanza}
 \underline{Browser and Libsodium Functions}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -40,9 +56,10 @@ $P_V$ & \textrm{ - ML-DSA-65 (FIPS 204) signature verifier from libcrux} \\
 $R$ & \textrm{ - Cryptographic pseudo-random generator from libsodium} \\
 $V$ & \textrm{ - Constant-time hash (MAC) validator from libsodium} \\
 \end{tabular}
+\end{stanza}
 
-\newpage
 
+\begin{stanza}
 \underline{Cipher Variables}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -87,9 +104,9 @@ $t_L$ & \textrm{ - Last 256 bit MAC tag}\\
 $u_c$ & \textrm{ - 256 bit user credential in memory}\\
 $v$ & \textrm{ - Cipher data version: 7}\\
 \end{tabular}
+\end{stanza}
 
-\newpage
-
+\begin{stanza}
 \underline{Message Encryption by A}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -116,9 +133,9 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 &$\textrm{goto LOOP if lp} \leq le$\\
 \multicolumn{2}{@{}l}{$A\leftarrow B: cd$}\\
 \end{tabular}
+\end{stanza}
 
-\hfill \break
-
+\begin{stanza}
 \underline{$cd_0$ Encryption by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -133,9 +150,9 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 \multicolumn{2}{@{}l}{$t_L = t$}\\
 \multicolumn{2}{@{}l}{$cd_0 = t\mathbin\Vert v\mathbin\Vert l\mathbin\Vert ad_F \mathbin\Vert m_E$}\\
 \end{tabular}
+\end{stanza}
 
-\hfill \break
-
+\begin{stanza}
 \underline{$cd_N$ Encryption by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -152,10 +169,10 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 \multicolumn{2}{@{}l}{$t_L = t$}\\
 \multicolumn{2}{@{}l}{$cd_N = t\mathbin\Vert v\mathbin\Vert l\mathbin\Vert ad_F\mathbin\Vert m_E$}\\
 \end{tabular}
+\end{stanza}
 
 
-\newpage
-
+\begin{stanza}
 \underline{Message Decryption by A}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -184,18 +201,18 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 &$\textrm{goto LOOP if lp} > 1$\\
 \multicolumn{2}{@{}l}{$A\leftarrow B: m$}\\
 \end{tabular}
+\end{stanza}
 
-\hfill \break
-
+\begin{stanza}
 \underline{$m_0$ Decryption by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$ad_X = ad_F \mathbin\Vert k_C$}\\
 \multicolumn{2}{@{}l}{$m_0 = E_a^{-1}(m_E, n_{IV},ad_X,k_{M0})$}\\
 \end{tabular}
+\end{stanza}
 
-\hfill \break
-
+\begin{stanza}
 \underline{$m_N$ Decryption by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -209,9 +226,9 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 \multicolumn{2}{@{}l}{$ad_X = ad_F \mathbin\Vert k_C$}\\
 \multicolumn{2}{@{}l}{$m_N = E_a^{-1}(m_E, n_{IV},ad_X,k_{MN})$}\\
 \end{tabular}
+\end{stanza}
 
-\newpage
-
+\begin{stanza}
 \underline{$u_c$ Encryption at Rest Variables}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -253,9 +270,9 @@ $u_i$ & \textrm{ - User id}\\
 $u_r$ & \textrm{ - 128 bit recovery id}\\
 $v$ & \textrm{ - Cipher data version: 7}\\
 \end{tabular}
+\end{stanza}
 
-\hfill \break
-
+\begin{stanza}
 \underline{$k_L$ Derivation by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -263,9 +280,9 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 \multicolumn{2}{@{}l}{$k_{KS} = G()$}\\
 \multicolumn{2}{@{}l}{$k_L = D_S(s \mathbin\Vert pkId, k_{KS})[32:64]$}\\
 \end{tabular}
+\end{stanza}
 
-\hfill \break
-
+\begin{stanza}
 \underline{$u_c$ Encryption Under $k$ by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -284,9 +301,9 @@ h_El$}\\
 \multicolumn{2}{@{}l}{$t = H(v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E \mathbin\Vert \mathtt{0x00}, k_S)$}\\
 \multicolumn{2}{@{}l}{$cd_x = t \mathbin\Vert v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E$}\\
 \end{tabular}
+\end{stanza}
 
-\newpage
-
+\begin{stanza}
 \underline{$cd_x$ Decryption Under $k$ by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -303,9 +320,9 @@ h_El$}\\
 \multicolumn{2}{@{}l}{$ad_X = ad_F \mathbin\Vert u_i \mathbin\Vert k_C$}\\
 \multicolumn{2}{@{}l}{$u_c = E_a^{-1}(m_E, n_{IV}, ad_X, k_M)$}\\
 \end{tabular}
+\end{stanza}
 
-\hfill \break
-
+\begin{stanza}
 \underline{Authentication Variables}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -349,9 +366,9 @@ $\delta$ & \textrm{ - Delimiter byte: \texttt{\textbackslash n}}\\
 $\sigma_R$ & \textrm{ - ML-DSA-65 recovery proof signature} \\
 $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \end{tabular}
+\end{stanza}
 
-\newpage
-
+\begin{stanza}
 \underline{Registration by A}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -380,9 +397,9 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \hfill \break
 
 {\leftskip=\parindent\noindent\textit{No-PRF fallback:} If $M$ returns no $p_R$, $B$ sends $rr, u_i, ch, pk_R$ only; $S$ generates $u_c = R(256)$, stores it encrypted, derives $(pk_U, )$ from $u_c$, and returns $u_c$; $B$ creates and stores $cd_u$ from $u_c$.\par}
+\end{stanza}
 
-\hfill \break
-
+\begin{stanza}
 \underline{Authentication by A}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -404,10 +421,10 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \hfill \break
 
 {\leftskip=\parindent\noindent\textit{No-PRF fallback:} $S$ returns $u_c$ in place of $cd_p$; $B$ creates and stores $cd_u$ from $u_c$.\par}
+\end{stanza}
 
-\hfill \break
-
-\underline{Authorization of A}\\
+\begin{stanza}
+\underline{Authorization by B}\\
 
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$B : u_c = cd_u\textrm{ decryption under }k_L$} \\
@@ -430,9 +447,9 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \hfill \break
 
 {\leftskip=\parindent\noindent\textit{For state changing requests: } $S$ additionally requires $n_P$ to be unknown and stores it, rejecting replays.\par}
+\end{stanza}
 
-\hfill \break
-
+\begin{stanza}
 \underline{Add Passkey by A}\\
 
 {\leftskip=\parindent\noindent\textit{A is authenticated; requests authorized per Authorization of A}\par}
@@ -454,9 +471,9 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \hfill \break
 
 {\leftskip=\parindent\noindent\textit{No-PRF fallback:} $B$ omits $p_S$ and does not decrypt $u_c$ or send $cd_p$; $S$ stores the new passkey without encrypted $u_c$.\par}
+\end{stanza}
 
-\hfill \break
-
+\begin{stanza}
 \underline{Recovery from Lost Passkey by A}\\
 
 \begin{tabular}{@{}p{2mm} l}
@@ -493,5 +510,6 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \hfill \break
 
 {\leftskip=\parindent\noindent\textit{No-PRF fallback:} $S$ returns $ro$ without $cd_r$; $B$ omits $p_S$ and the $cd_r$ decryption. After the new passkey, $B$ sends $rr, u_i, ch$ only; $S$ stores the new passkey without encrypted $u_c$ and returns $u_c$; $B$ creates and stores $cd_u$ from $u_c$.\par}
+\end{stanza}
 
 \end{document}
