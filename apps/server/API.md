@@ -261,7 +261,7 @@ The `UserInfo` object contains public information about a user.
 - `verified` (boolean): Whether the user has been verified.
 - `userId` (string, optional): The unique identifier for the user.
 - `userName` (string, optional): The user's chosen name.
-- `hasRecoveryKey` (boolean, optional): Whether the user has a recovery key set up.
+- `hasRecoveryId` (boolean, optional): `true` for recovery words, `false` for the original recovery link.
 - `prf` (boolean, optional): Whether the account generated and encrypts the user credential locally.
 - `authenticators` (array of [`AuthenticatorInfo`](#authenticatorinfo) objects, optional): A list of the user's authenticators.
 

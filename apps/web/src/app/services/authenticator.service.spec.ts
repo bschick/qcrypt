@@ -85,7 +85,7 @@ describe('AuthenticatorService', () => {
          pkId: pkId,
          userCred: userCred,
          csrf: 'csrf-token-from-test',
-         hasRecoveryKey: true,
+         hasRecoveryId: true,
          authenticators: [{
             credentialId: pkId,
             description: 'Test laptop authenticator',

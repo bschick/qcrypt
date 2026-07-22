@@ -1140,7 +1140,7 @@ async function makeUserInfoResponse(
       verified: verifiedUser.verified,
       userId: verifiedUser.userId,
       userName: verifiedUser.userName,
-      hasRecoveryKey: !!verifiedUser.recoveryPubKey,
+      hasRecoveryId: !!verifiedUser.recoveryPubKey,
       prf: verifiedUser.prf,
       authenticators: auths,
       invitables: invitables

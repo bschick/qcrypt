@@ -75,7 +75,7 @@ export namespace ResponseTypes {
       verified: boolean;
       userId?: string;
       userName?: string;
-      hasRecoveryKey?: boolean;
+      hasRecoveryId?: boolean;
       prf?: boolean;
       authenticators?: AuthenticatorInfo[];
       invitables?: InvitableInfo[];
