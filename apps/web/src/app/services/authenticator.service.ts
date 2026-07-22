@@ -354,7 +354,8 @@ export class AuthenticatorService {
                url.pathname,
                proofTs,
                proofNonce,
-               bodyHashHex
+               bodyHashHex,
+               url.search.slice(1)
             );
             const proofSigB64 = bytesToBase64(proofSig);
             headers.append('x-proof', `${proofSigB64},${proofTs},${proofNonce}`);

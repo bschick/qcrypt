@@ -400,6 +400,7 @@ async function postAuthVerify(
          expectedChallenge: challenge.data.challenge,
          expectedOrigin: rpOrigin,
          expectedRPID: rpID,
+         requireUserVerification: true,
          credential: webAuthnCredential
       });
    } catch (error) {
@@ -737,6 +738,7 @@ async function _createAuthenticator(
          expectedChallenge: challenge.data.challenge,
          expectedOrigin: rpOrigin,
          expectedRPID: rpID,
+         requireUserVerification: true,
          supportedAlgorithmIDs: cc.ALGIDS
       });
    } catch (err) {
@@ -895,7 +897,7 @@ async function postAuthOptions(
       const options: PublicKeyCredentialRequestOptionsJSON = await generateAuthenticationOptions({
          allowCredentials: allowedCreds,
          rpID: rpID,
-         userVerification: 'preferred',
+         userVerification: 'required',
       });
 
       // Bind the challenge to its purpose, and to the userId. Note that userId
@@ -1051,7 +1053,7 @@ async function registrationOptions(
          excludeCredentials: excludeCreds, // prevent re-registering existing passkeys
          authenticatorSelection: {
             residentKey: 'required',
-            userVerification: 'preferred',
+            userVerification: 'required',
          },
          supportedAlgorithmIDs: cc.ALGIDS,
       });
@@ -1667,8 +1669,6 @@ async function postRecover2(
    }
 
    const userId = body.userId;
-   let unverifiedUser: UnverifiedUserItem;
-   let verifiedUser: VerifiedUserItem;
 
    const challenge = body.challenge;
    const signature = body.signature;
@@ -1698,8 +1698,8 @@ async function postRecover2(
    }
 
    // Require an existing verified user for recovery
-   unverifiedUser = await getUnverifiedUser(userId);
-   verifiedUser = checkVerified(unverifiedUser, userId);
+   const unverifiedUser = await getUnverifiedUser(userId);
+   const verifiedUser = checkVerified(unverifiedUser, userId);
 
    if (!verifiedUser.recoveryPubKey) {
       throw new ParamError(`user account ${verifiedUser.userId} has no recovery key`);
@@ -1789,8 +1789,6 @@ async function getUnverifiedUser(
    }).go();
 
    if (!unverifiedUser || !unverifiedUser.data) {
-      // Auth error are usually generic to attackers cannot use response to
-      // tell the difference between bad creds, incorrect userid, or no permission
       throw new AuthError();
    }
 
@@ -1804,12 +1802,8 @@ async function getSessionKey(user: UnverifiedUserItem, purpose: string): Promise
       jwtMaterial = await setupJwtMaterial();
    }
 
-   if (!user.lastCredentialId) {
-      throw new AuthError();
-   }
-
    const salt = base64UrlDecode(user.userId)!;
-   const userMaterial = base64UrlDecode(user.lastCredentialId)!;
+   const userMaterial = base64UrlDecode(user.userCredEnc)!;
    const combined = Buffer.concat([userMaterial, jwtMaterial]);
    const sessionVersion = process.env.SessionVersion ?? '0';
 
@@ -1966,7 +1960,8 @@ async function verifyProof(
                httpDetails.proofTimestamp,
                httpDetails.proofNonce,
                bodyHashHex,
-               signatureBytes
+               signatureBytes,
+               httpDetails.rawQueryString
             );
             result = 'ok';
          } catch (err) {
@@ -1988,9 +1983,10 @@ async function verifyProof(
                   result = 'replayed';
                }
             } catch (err) {
-               // This is a DynamoDB error caused by something other than a duplicate record
-               // (likely load). Log the error, but do not block the request
-               console.error(`proof nonce store error, allowing ${httpDetails.name} ${verifiedUser.userId}`, err);
+               // A DDB error here likely means the handler's own writes fail anyway; fail
+               // closed rather than pass a possibly-replayed mutating request.
+               console.error(`proof nonce store error, blocking ${httpDetails.name} ${verifiedUser.userId}`, err);
+               result = 'failed';
             }
          }
       }

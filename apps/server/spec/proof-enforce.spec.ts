@@ -140,4 +140,16 @@ describe("proof of userCred enforcement", () => {
       const res = await getJson("/v1/session", {}, cookie);
       expect(res.status).toBe(401);
    });
+
+   it("accepts a proof that binds a query string the handler ignores", async () => {
+      const proof = await makeProofHeaders("GET", "/v1/user?ignored=1", undefined, userCred, userId);
+      const res = await getJson("/v1/user?ignored=1", { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(res.status).toBe(200);
+   });
+
+   it("rejects when the request query differs from the signed query", async () => {
+      const proof = await makeProofHeaders("GET", "/v1/user?ignored=1", undefined, userCred, userId);
+      const res = await getJson("/v1/user?ignored=2", { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(res.status).toBe(401);
+   });
 });

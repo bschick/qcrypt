@@ -42,19 +42,24 @@ function buildUserCredMessage(
    path: string,
    timestampMs: string,
    nonce: string,
-   bodyHashHex: string
+   bodyHashHex: string,
+   queryString: string
 ): Uint8Array<ArrayBuffer> {
    if (base64ToBytes(userId).byteLength !== cc.USERID_BYTES) {
       throw new Error('invalid userId length');
    }
-   const message = [
+   const fields = [
       userId,
       method.toUpperCase(),
       path,
       timestampMs,
       nonce,
       bodyHashHex.toLowerCase()
-   ].join('\n');
+   ];
+   if (queryString) {
+      fields.push(queryString);
+   }
+   const message = fields.join('\n');
    return new TextEncoder().encode(message);
 }
 
@@ -71,13 +76,14 @@ export function createUserCredProof(
    path: string,
    timestampMs: string,
    nonce: string,
-   bodyHashHex: string
+   bodyHashHex: string,
+   queryString: string = ''
 ): Uint8Array<ArrayBuffer> {
    const { secKey } = getProofKeyPair(userCred, USERCRED_KEY_CONTEXT);
    try {
       return createProof(
          secKey,
-         buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex),
+         buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
          USERCRED_SIG_CONTEXT
       );
    } finally {
@@ -93,11 +99,12 @@ export function verifyUserCredProof(
    timestampMs: string,
    nonce: string,
    bodyHashHex: string,
-   signature: Uint8Array
+   signature: Uint8Array,
+   queryString: string = ''
 ): boolean {
    return verifyProof(
       pubKey,
-      buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex),
+      buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
       signature,
       USERCRED_SIG_CONTEXT
    );

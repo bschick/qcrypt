@@ -52,7 +52,8 @@ async function proofHeaders(
     new URL(url).pathname,
     timestamp,
     nonce,
-    bodyHashHex
+    bodyHashHex,
+    new URL(url).search.slice(1)
   );
   const sigB64 = Buffer.from(signature).toString('base64url');
   return {
@@ -148,6 +149,8 @@ export type AuthFixture = {
   trackUser: (info: TrackUserInfo) => void;
   // Register an already-created passkey on an already-tracked user.
   trackPasskey: (userId: string, credentialId: string) => void;
+  // Removes a tracked user so cleanup won't retry an account the test deleted itself.
+  untrackUser: (userId: string) => void;
   // Runs a UI trigger that creates a passkey on the authenticator for an
   // already-tracked user ("New Passkey", recovery, etc.) — the app calls
   // navigator.credentials.create, which the authenticator fulfills — then captures
@@ -343,6 +346,14 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       user.credentialIds.push(credentialId);
     };
 
+    const untrackUser = (userId: string): void => {
+      const index = trackedUsers.findIndex(tracked => tracked.userId === userId);
+      if (index === -1) {
+        throw new Error(`untrackUser: userId ${userId} not tracked`);
+      }
+      trackedUsers.splice(index, 1);
+    };
+
     const addPasskey = async (
       userId: string,
       authenticator: Authenticator,
@@ -394,6 +405,7 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
       createTestUser,
       trackUser,
       trackPasskey,
+      untrackUser,
       addPasskey,
       expectPasskeyRejected,
       passkeyAuth,
@@ -409,78 +421,87 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
     // and delete with the fresh session.
     const originalCookies = await context.cookies();
 
+    // Deletes every passkey the server lists for the user; the account is removed
+    // with its last passkey. Returns true only if it was fully removed.
     const deleteAllPasskeys = async (
       csrf: string,
       currentPkId: string | undefined,
       userCred: string,
-      userId: string,
-      label: string
-    ): Promise<string[]> => {
-      const userUrl = `${apiUrl}/user`;
-      const userResp = await page.request.get(
-        userUrl,
-        { headers: { 'x-csrf-token': csrf, 'Origin': origin, ...(await proofHeaders('GET', userUrl, userCred, userId)) } }
-      );
-      if (!userResp.ok()) {
-        return [];
-      }
-      const user = await userResp.json();
-      const auths: { credentialId: string }[] = user.authenticators ?? [];
-      // Delete the current passkey last — deleting it invalidates the session.
-      auths.sort((left, right) => Number(left.credentialId === currentPkId) - Number(right.credentialId === currentPkId));
-      const deleted: string[] = [];
-      for (const auth of auths) {
-        const delUrl = `${apiUrl}/passkeys/${auth.credentialId}`;
-        const delResp = await page.request.delete(
-          delUrl,
-          { headers: { 'x-csrf-token': csrf, 'Origin': origin, ...(await proofHeaders('DELETE', delUrl, userCred, userId)) } }
+      userId: string
+    ): Promise<boolean> => {
+      try {
+        const userUrl = `${apiUrl}/user`;
+        const userResp = await page.request.get(
+          userUrl,
+          { headers: { 'x-csrf-token': csrf, 'Origin': origin, ...(await proofHeaders('GET', userUrl, userCred, userId)) } }
         );
-        if (delResp.ok()) {
-          deleted.push(auth.credentialId);
-        } else {
-          console.error(`${label}: DELETE /passkeys/${auth.credentialId} failed (${delResp.status()})`);
+        if (!userResp.ok()) {
+          return false;
         }
+        const user = await userResp.json();
+        const auths: { credentialId: string }[] = user.authenticators ?? [];
+        // Delete the current passkey last — deleting it invalidates the session.
+        auths.sort((left, right) => Number(left.credentialId === currentPkId) - Number(right.credentialId === currentPkId));
+        for (const auth of auths) {
+          const delUrl = `${apiUrl}/passkeys/${auth.credentialId}`;
+          const delResp = await page.request.delete(
+            delUrl,
+            { headers: { 'x-csrf-token': csrf, 'Origin': origin, ...(await proofHeaders('DELETE', delUrl, userCred, userId)) } }
+          );
+          if (!delResp.ok()) {
+            return false;
+          }
+        }
+        return auths.length > 0;
+      } catch {
+        return false;
       }
-      return deleted;
     };
 
-    for (const user of trackedUsers) {
-      // Fast path. Best-effort; safe to skip on any failure.
-      if (user.fastSession) {
-        try {
-          await context.clearCookies();
-          await context.addCookies(user.fastSession.cookies);
-          const deleted = await deleteAllPasskeys(
-            user.fastSession.csrf, user.credentialIds[0], user.userCred, user.userId, `cleanup-fast (${user.userId})`
-          );
-          user.credentialIds = user.credentialIds.filter(id => !deleted.includes(id));
-        } catch (err) {
-          console.error(`cleanup: fast path threw for ${user.userId}`, err);
-        }
+    const fastDelete = async (user: TrackedUser): Promise<boolean> => {
+      if (!user.fastSession) {
+        return false;
       }
+      try {
+        await context.clearCookies();
+        await context.addCookies(user.fastSession.cookies);
+        return await deleteAllPasskeys(user.fastSession.csrf, user.credentialIds[0], user.userCred, user.userId);
+      } catch {
+        return false;
+      }
+    };
 
-      // Fallback: sign in on the user's authenticator and delete with a fresh session.
-      if (user.credentialIds.length > 0) {
-        try {
-          active = user.emulator;
-          await context.clearCookies();
-          await page.goto('/');
-          await page.evaluate(() => localStorage.clear());
-          await page.reload();
-          const verifyPromise = page.waitForResponse((r) =>
-            r.url().includes('/v1/auth/verify') && r.request().method() === 'POST'
-          );
-          await page.getByRole('button', { name: /I have used Quick Crypt/ }).click();
-          const verifyResp = await verifyPromise;
-          if (verifyResp.ok()) {
-            const verifyBody = await verifyResp.json();
-            if (verifyBody.csrf) {
-              await deleteAllPasskeys(verifyBody.csrf, verifyBody.pkId, user.userCred, user.userId, `cleanup-fallback (${user.userId})`);
-            }
-          }
-        } catch (err) {
-          console.error(`cleanup-fallback: failed for ${user.userId}`, err);
+    const fallbackDelete = async (user: TrackedUser): Promise<boolean> => {
+      try {
+        active = user.emulator;
+        await context.clearCookies();
+        await page.goto('/');
+        await page.evaluate(() => localStorage.clear());
+        await page.reload();
+        const verifyPromise = page.waitForResponse((r) =>
+          r.url().includes('/v1/auth/verify') && r.request().method() === 'POST'
+        );
+        await page.getByRole('button', { name: /I have used Quick Crypt/ }).click();
+        const verifyResp = await verifyPromise;
+        if (!verifyResp.ok()) {
+          return false;
         }
+        const verifyBody = await verifyResp.json();
+        if (!verifyBody.csrf) {
+          return false;
+        }
+        return await deleteAllPasskeys(verifyBody.csrf, verifyBody.pkId, user.userCred, user.userId);
+      } catch {
+        return false;
+      }
+    };
+
+    // A user still tracked here wasn't deleted by its test (that would have untracked
+    // it), so surviving both the fast and fallback delete is a real leak.
+    for (const user of trackedUsers) {
+      const cleaned = (await fastDelete(user)) || (await fallbackDelete(user));
+      if (!cleaned) {
+        console.error(`cleanup: leaked tracked user ${user.userId} (${user.userName}) — fast and fallback both failed`);
       }
     }
 

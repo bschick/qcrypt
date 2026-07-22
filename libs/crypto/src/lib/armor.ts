@@ -52,6 +52,8 @@ import {
  export function parseCipherArmor(
     cipherArmor: string
 ) : Uint8Array<ArrayBuffer> {
+    // cipherArmor is untrusted and parsed unbounded; a bad value can only exhaust the pasting
+    // user's own browser, so length limits are intentionally omitted.
     try {
        let trimmed = cipherArmor.trim();
        if (trimmed.startsWith('https://')) {

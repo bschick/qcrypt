@@ -124,6 +124,7 @@ export function lifecycleSuite(prf: boolean): void {
     await deleteFirstPasskey(page, testUser.userName);
     await expect(page).toHaveURL(/\/welcome$/);
     await expect(page.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({ timeout: 10000 });
+    authFixture.untrackUser(testUser.userId);
   });
 
   // Exercises the past bug where authenticated calls failed after a cmdline (or
@@ -159,6 +160,7 @@ export function lifecycleSuite(prf: boolean): void {
     await expect(tableBody.locator('tr')).toHaveCount(1);
     await deleteLastPasskey(page, testUser.userName);
     await expect(page).toHaveURL(/\/welcome$/);
+    authFixture.untrackUser(testUser.userId);
   });
 
   testWithAuth(`${label}: delete active passkey signs out`, async ({ authFixture }) => {
@@ -214,6 +216,7 @@ export function lifecycleSuite(prf: boolean): void {
     await deleteFirstPasskey(page, testUser.userName);
     await expect(page).toHaveURL(/\/welcome$/);
     await expect(page.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({ timeout: 10000 });
+    authFixture.untrackUser(testUser.userId);
   });
 
   testWithAuth(`${label}: regenerate recovery words`, async ({ authFixture }) => {
@@ -267,6 +270,7 @@ export function lifecycleSuite(prf: boolean): void {
     await expect(tableBody.locator('tr')).toHaveCount(1);
     await deleteFirstPasskey(page, testUser.userName);
     await expect(page).toHaveURL(/\/welcome$/);
+    authFixture.untrackUser(testUser.userId);
   });
 
   testWithAuth(`${label}: 3 tabs logout and forget`, async ({ authFixture }) => {

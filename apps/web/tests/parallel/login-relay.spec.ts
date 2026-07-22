@@ -270,9 +270,10 @@ test.describe('login relay', () => {
     await expect(page1.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible();
     await expectActiveServerSession(page2, userB.userName);
 
-    // page2 is signed in as userB. Delete userB's passkey explicitly so the
-    // fixture's tracked-user cleanup doesn't fall back to re-auth for a credential we no longer hold.
+    // Deleting userB's only passkey removes the account; untrack it so cleanup
+    // doesn't try to re-auth a credential we no longer hold.
     await deleteFirstPasskey(page2, userB.userName);
+    authFixture.untrackUser(userB.userId);
   });
 
   testWithAuth('new passkey from peer refreshes credentials view', async ({ authFixture }) => {

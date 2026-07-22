@@ -84,6 +84,7 @@ export async function makeProofHeaders(
    // Sign the decoded path. The server verifies (event.requestContext.http.path), not the
    // re-encoded URL pathname.
    const pathname = path.split("?")[0];
+   const queryString = path.split("?")[1] || '';
    const signature = createUserCredProof(
       Buffer.from(userCred, "base64url"),
       userId,
@@ -91,7 +92,8 @@ export async function makeProofHeaders(
       pathname,
       timestamp,
       nonce,
-      bodyHashHex
+      bodyHashHex,
+      queryString
    );
 
    const sigBytes = Buffer.from(signature);

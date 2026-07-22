@@ -30,6 +30,16 @@ describe('userCred proof', () => {
       expect(verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '1730000000000', nonce, 'abc', signature)).toBe(true);
    });
 
+   it('binds the query string when present', () => {
+      const userCred = getRandom(32);
+      const pubKey = getUserCredPubKey(userCred);
+      const nonce = bytesToBase64(getRandom(32));
+      const signature = createUserCredProof(userCred, userId, 'GET', '/v1/user', '100', nonce, 'aa', 'a=b');
+      expect(verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature, 'a=b')).toBe(true);
+      expect(() => verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature, 'a=c')).toThrow();
+      expect(() => verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature)).toThrow();
+   });
+
    it('derives the pinned public key for a fixed secret', () => {
       const secret = new Uint8Array(32);
       for (let pos = 0; pos < secret.length; pos++) {

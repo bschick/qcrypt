@@ -50,4 +50,4 @@ export const KMS_KEYID_BACKUP = process.env.KMSKeyId_Old!;
 
 // Must stay below the Challenges TTL (models.ts expiresAt) or proof nonces expire within
 // the window and replay reopens.
-export const PROOF_SKEW_MS = 180 * 1000;
+export const PROOF_SKEW_MS = 120 * 1000;
