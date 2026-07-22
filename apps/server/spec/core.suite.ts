@@ -27,6 +27,7 @@ import {
    registerTestUser,
    registerNewCredential,
    deleteJson,
+   expectPasskeyDeleted,
    getJson,
    patchJson,
    postJson,
@@ -645,11 +646,7 @@ export function coreSuite(prf: boolean): void {
             } finally {
                if (attackerCredId && attackerCookie) {
                   setSessionUserCred(attackerUserCred, attackerUserId);
-                  await deleteJson(
-                     `/v1/passkeys/${attackerCredId}`,
-                     { "x-csrf-token": attackerCsrf },
-                     attackerCookie,
-                  );
+                  await expectPasskeyDeleted(attackerCredId, attackerCsrf, attackerCookie);
                   setSessionUserCred(userCred, userId);
                }
             }
@@ -661,13 +658,7 @@ export function coreSuite(prf: boolean): void {
             return;
          }
 
-         const res = await deleteJson(
-            `/v1/passkeys/${credId}`,
-            { "x-csrf-token": csrfToken },
-            sessCookie,
-         );
-
-         expect(res.status).toBe(200);
+         await expectPasskeyDeleted(credId, csrfToken, sessCookie);
 
          // Confirm user is gone
          // Try to fetch session or user info, should fail

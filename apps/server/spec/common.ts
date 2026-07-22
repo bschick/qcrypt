@@ -274,6 +274,13 @@ export const putJson = (p: string, b: any, h: any, c: string) => request("PUT", 
 export const patchJson = (p: string, b: any, h: any, c: string) => request("PATCH", p, b, h, c);
 export const deleteJson = (p: string, h: any, c: string) => request("DELETE", p, null, h, c);
 
+// A swallowed cleanup-delete failure leaks a verified, no-TTL account permanently,
+// so assert success here instead of ignoring the result.
+export async function expectPasskeyDeleted(credId: string, csrf: string, cookie: string): Promise<void> {
+   const res = await deleteJson(`/v1/passkeys/${credId}`, { "x-csrf-token": csrf }, cookie);
+   expect(res.status).toBe(200);
+}
+
 interface TestUserBase {
    userId: string;
    userCred: string;

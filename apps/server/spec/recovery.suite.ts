@@ -27,7 +27,7 @@ import { getRecoveryPubKey, createRecoveryProof, recoverySecret, RECOVERYID_BYTE
 import {
    postJson,
    putJson,
-   deleteJson,
+   expectPasskeyDeleted,
    registerTestUser,
    setSessionUserCred,
    createCredential,
@@ -122,7 +122,7 @@ async function recoverAccount(
 
    if (!opts.keepSession) {
       setSessionUserCred(session.userCred, user.userId);
-      await deleteJson(`/v1/passkeys/${session.credId}`, { "x-csrf-token": session.csrf }, session.cookie);
+      await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
    }
 
    return session;
@@ -149,7 +149,7 @@ export function recoverySuite(prf: boolean): void {
       afterAll(async () => {
          if (user?.cookie && user?.credId) {
             setSessionUserCred(user.userCred, user.userId);
-            await deleteJson(`/v1/passkeys/${user.credId}`, { "x-csrf-token": user.csrf }, user.cookie);
+            await expectPasskeyDeleted(user.credId, user.csrf, user.cookie);
          }
          setSessionUserCred(undefined);
       });
@@ -207,6 +207,8 @@ export function recoverySuite(prf: boolean): void {
          expect(res.status).toBe(401);
       });
 
+      // Reuse a single user session across multiple recovery key change tests
+      // (instead of re-authenticating) to detect unintentional session invalidation
       it("updates the recovery public key with the current key", async () => {
          const body = await recoveryKeyBody(user, user.recoverySecret);
          const res = await putJson("/v1/recover2/key", body, { "x-csrf-token": user.csrf }, user.cookie);

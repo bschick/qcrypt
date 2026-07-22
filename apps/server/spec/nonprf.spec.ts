@@ -30,7 +30,7 @@ import {
    registerNewCredential,
    getJson,
    postJson,
-   deleteJson,
+   expectPasskeyDeleted,
    setSessionUserCred,
 } from './common';
 
@@ -55,7 +55,7 @@ describe('no-PRF account', () => {
       setSessionUserCred(account.userCred, account.userId);
       cleanup = async () => {
          setSessionUserCred(account.userCred, account.userId);
-         await deleteJson(`/v1/passkeys/${account.credId}`, auth, account.cookie);
+         await expectPasskeyDeleted(account.credId, account.csrf, account.cookie);
          setSessionUserCred(undefined);
       };
 
@@ -70,7 +70,7 @@ describe('no-PRF account', () => {
          account.cookie
       );
       expect(ok.status).toBe(200);
-      await deleteJson(`/v1/passkeys/${add.attestation.id}`, auth, account.cookie);
+      await expectPasskeyDeleted(add.attestation.id, account.csrf, account.cookie);
 
       // ...but the same add carrying a passkeyUserCredEnc ciphertext is rejected.
       const opts2 = await getJson('/v1/passkeys/options', auth, account.cookie);

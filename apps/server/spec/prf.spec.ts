@@ -31,7 +31,7 @@ import {
    buildPrfRegBody,
    getJson,
    postJson,
-   deleteJson,
+   expectPasskeyDeleted,
    setSessionUserCred,
    prfDecrypt,
    readPrfOutput,
@@ -59,7 +59,7 @@ describe('PRF account', () => {
       const account = await registerTestUser(`PWTesty_prf_${Date.now()}`, true);
       cleanup = async () => {
          setSessionUserCred(account.userCred, account.userId);
-         await deleteJson(`/v1/passkeys/${account.credId}`, { 'x-csrf-token': account.csrf }, account.cookie);
+         await expectPasskeyDeleted(account.credId, account.csrf, account.cookie);
          setSessionUserCred(undefined);
       };
 
@@ -82,7 +82,7 @@ describe('PRF account', () => {
       // The login supersedes the registration session, so clean up with the login session.
       cleanup = async () => {
          setSessionUserCred(account.userCred, account.userId);
-         await deleteJson(`/v1/passkeys/${account.credId}`, { 'x-csrf-token': verifyRes.data.csrf }, verifyRes.cookie);
+         await expectPasskeyDeleted(account.credId, verifyRes.data.csrf, verifyRes.cookie);
          setSessionUserCred(undefined);
       };
       expect(verifyRes.data.verified).toBe(true);
@@ -104,7 +104,7 @@ describe('PRF account', () => {
       setSessionUserCred(account.userCred, account.userId);
       cleanup = async () => {
          setSessionUserCred(account.userCred, account.userId);
-         await deleteJson(`/v1/passkeys/${account.credId}`, auth, account.cookie);
+         await expectPasskeyDeleted(account.credId, account.csrf, account.cookie);
          setSessionUserCred(undefined);
       };
 
@@ -119,7 +119,7 @@ describe('PRF account', () => {
          account.cookie
       );
       expect(ok.status).toBe(200);
-      await deleteJson(`/v1/passkeys/${add.attestation.id}`, auth, account.cookie);
+      await expectPasskeyDeleted(add.attestation.id, account.csrf, account.cookie);
 
       // ...but the same add with the passkeyUserCredEnc ciphertext omitted is rejected.
       const opts2 = await getJson('/v1/passkeys/options', auth, account.cookie);
@@ -152,7 +152,7 @@ describe('PRF registration input validation', () => {
       const ok = await postJson('/v1/reg/verify?usercred=true', body, {}, '');
       expect(ok.status).toBe(200);
       setSessionUserCred(bytesToBase64(userCred), userId);
-      await deleteJson(`/v1/passkeys/${ok.data.pkId}`, { 'x-csrf-token': ok.data.csrf }, ok.cookie);
+      await expectPasskeyDeleted(ok.data.pkId, ok.data.csrf, ok.cookie);
       setSessionUserCred(undefined);
    }
 

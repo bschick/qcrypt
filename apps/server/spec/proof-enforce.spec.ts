@@ -25,7 +25,7 @@ import { randomBytes } from "node:crypto";
 import {
    getJson,
    patchJson,
-   deleteJson,
+   expectPasskeyDeleted,
    makeProofHeaders,
    registerTestUser,
    setSessionUserCred,
@@ -51,7 +51,7 @@ describe("proof of userCred enforcement", () => {
       if (cookie && credId) {
          // Deleting under enforcement needs a valid proof, so re-enable auto-signing.
          setSessionUserCred(userCred, userId);
-         await deleteJson(`/v1/passkeys/${credId}`, { "x-csrf-token": csrf }, cookie);
+         await expectPasskeyDeleted(credId, csrf, cookie);
          setSessionUserCred(undefined);
       }
    });
