@@ -1802,8 +1802,14 @@ async function getSessionKey(user: UnverifiedUserItem, purpose: string): Promise
       jwtMaterial = await setupJwtMaterial();
    }
 
+   // Deriving the key from lastCredentialId is what invalidates prior cookies and csrf
+   // tokens on logout (which clears it) and on a passkey change (which rotates it).
+   if (!user.lastCredentialId) {
+      throw new AuthError();
+   }
+
    const salt = base64UrlDecode(user.userId)!;
-   const userMaterial = base64UrlDecode(user.userCredEnc)!;
+   const userMaterial = base64UrlDecode(user.lastCredentialId)!;
    const combined = Buffer.concat([userMaterial, jwtMaterial]);
    const sessionVersion = process.env.SessionVersion ?? '0';
 
@@ -1843,7 +1849,6 @@ async function createCookie(verifiedUser: VerifiedUserItem, rpID: string): Promi
    const jwtKey = await getSessionKey(verifiedUser, "jwt_key");
 
    const payload = {
-      pkId: verifiedUser.lastCredentialId,
       userId: verifiedUser.userId
    };
 
@@ -1911,10 +1916,7 @@ async function verifyCookie(
             complete: false
       }) as JwtPayload;
 
-      // lastCredentialId is cleared on logout so cookie is invalid after logout
       if (!verifiedPayload ||
-         !verifiedPayload.pkId ||
-         verifiedPayload.pkId !== unverifiedUser.lastCredentialId ||
          verifiedPayload.iss !== rpID
       ) {
          throw new Error('invalid cookie');
