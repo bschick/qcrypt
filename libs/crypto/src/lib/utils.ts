@@ -31,7 +31,6 @@ export function ensureArrayBuffer(value: Uint8Array): Uint8Array<ArrayBuffer> {
    if (value.buffer instanceof ArrayBuffer) {
       return value as Uint8Array<ArrayBuffer>;
    } else {
-      // safer than value.slice(0) if value is a subclass with an overridden
       return new Uint8Array(value);
    }
 }
