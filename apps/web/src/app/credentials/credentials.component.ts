@@ -148,7 +148,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
          } else {
             console.error(err);
             if (err instanceof Error && err.name === 'InvalidStateError') {
-               this.error = 'You passkey manager only allows one credential';
+               this.error = 'Your passkey manager only allows one credential';
             } else {
                this.error = 'Passkey not created, try again';
             }
