@@ -1,5 +1,7 @@
 # Quick Crypt — Phase 1 Detailed Plan: Proof of userCred
 
+> **STATUS UPDATE (2026-07-19) — the enforcement model below is superseded by the current code.** There is no longer a `PROOF_ENFORCE` constant and no observe-only or `grace` behavior: `verifyProof` (`apps/server/src/server.ts`) runs on every `authorize:true` route and **throws `AuthError`→401 unconditionally** when the result is not `ok` (result ∈ `absent|timeout|invalid|failed|replayed|ok`). The `grace` passthrough for un-backfilled accounts is gone, implying the backfill (Step 4/8) is complete. So **Step 5's observe-vs-enforce branch and Step 8's "flip `PROOF_ENFORCE=true`" no longer describe the code** — the flip is done. Per the owner, this **is** the enforce build and enforcement takes effect **when it deploys to production**; prod still runs the earlier observe-only version until then. The `x-proof` header format and behavior are documented in `apps/server/API.md`. Steps below are retained as the historical plan.
+
 > Detailed execution plan for Phase 1 of the master plan (`vibes/prf-implementation-plan.md`). Names/tags here are concrete proposals; refine for clarity during implementation.
 >
 > **Library-agnostic:** the ML-DSA library (libcrux-WASM vs `@noble/post-quantum`) and parameter set (44/65/87) are decided by Step 1's benchmark and isolated behind a stable `libs/crypto` interface. Nothing in Steps 2–8 depends on which is chosen.

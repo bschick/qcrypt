@@ -26,12 +26,14 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule } from '@angular/forms';
+import { firstValueFrom } from 'rxjs';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 
 
@@ -54,6 +56,7 @@ export class NewUserComponent implements OnInit, AfterViewInit {
       private r2: Renderer2,
       private authSvc: AuthenticatorService,
       private router: Router,
+      private dialog: MatDialog,
       private snackBar: MatSnackBar) {
    }
 
@@ -112,11 +115,11 @@ export class NewUserComponent implements OnInit, AfterViewInit {
          this.showProgress = true;
          // Session will be replaced, so don't need to kill direclty
          this.authSvc.forgetUser(false);
-         await this.authSvc.newUser(this.newUserName);
+         await this.authSvc.newUser(this.newUserName, () => this._decidePrfFallback());
          this.router.navigateByUrl('/showrecovery');
       } catch (err) {
          console.error(err);
-         if(err instanceof Error && err.message.includes("fetch")) {
+         if (err instanceof Error && err.message.includes("fetch")) {
             this.error = 'New user creation failed, check your internet connection';
          } else {
             this.error = 'New user creation failed, please try again';
@@ -125,4 +128,25 @@ export class NewUserComponent implements OnInit, AfterViewInit {
          this.showProgress = false;
       }
    }
+
+   // The dialog cannot be dismissed, so it always resolves to a definite choice.
+   private async _decidePrfFallback(): Promise<'standard' | 'different'> {
+      this.showProgress = false;
+      const choice = await firstValueFrom(
+         this.dialog.open(PrfFallbackDialog, { disableClose: true }).afterClosed()
+      );
+      if (choice !== 'standard' && choice !== 'different') {
+         throw new Error('PRF fallback dialog returned an invalid choice');
+      }
+      this.showProgress = true;
+      return choice;
+   }
 }
+
+@Component({
+   selector: 'prf-fallback-dialog',
+   templateUrl: './prf-fallback-dialog.html',
+   styleUrl: './prf-fallback-dialog.scss',
+   imports: [MatDialogModule, MatButtonModule, RouterLink]
+})
+export class PrfFallbackDialog { }

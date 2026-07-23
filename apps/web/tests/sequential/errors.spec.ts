@@ -1,10 +1,8 @@
-import { test, expect, Page, CDPSession } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
   testWithAuth,
-  passkeyAuth,
-  addCredential,
   hosts,
-  credentials,
+  keeperDir,
   haveKeeperCreds,
 } from '.././common';
 
@@ -16,16 +14,16 @@ test.describe('errors', () => {
   // playwright's retry recovers. Single login + local-only operations after,
   // so retry is sufficient and we keep the shared user.
   testWithAuth('enc dec errors', async ({ authFixture }) => {
-    test.skip(!haveKeeperCreds, 'keeper credentials not provided (apps/web/tests/.creds.json)');
-    const { page, session, authenticatorId1, authenticatorId2 } = authFixture;
+    test.skip(!haveKeeperCreds, 'keeper credentials not provided (apps/web/tests/keeper-creds)');
+    const { page } = authFixture;
     test.setTimeout(45000);
 
     await page.goto('/');
 
     const testHost = new URL(page.url()).hostname as hosts;
-    await addCredential(session, authenticatorId1, credentials[testHost]['keeper2']['id']);
+    const keeper = authFixture.loadAuthenticator(keeperDir(testHost, 'keeper2'));
 
-    await passkeyAuth(page, session, authenticatorId1, async () => {
+    await authFixture.passkeyAuth(keeper, async () => {
       await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
     });
     await expect(page).toHaveURL(/\/$/);

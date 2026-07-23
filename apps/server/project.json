@@ -29,7 +29,7 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm exec vitest run --config apps/server/vitest.config.ts {args.include}",
+        "command": "pnpm exec vitest run --config apps/server/vitest.config.ts {args.include} -t \"{args.name}\"",
         "cwd": "{workspaceRoot}",
         "forwardAllArgs": false
       }
@@ -37,7 +37,7 @@
     "test-prod": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "QC_ENV=prod pnpm exec vitest run --config apps/server/vitest.config.ts {args.include}",
+        "command": "QC_ENV=prod pnpm exec vitest run --config apps/server/vitest.config.ts {args.include} -t \"{args.name}\"",
         "cwd": "{workspaceRoot}",
         "forwardAllArgs": false
       }
@@ -45,7 +45,7 @@
     "test-timing": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "QC_TIMING=1 pnpm exec vitest run --config apps/server/vitest.config.ts apps/server/spec/dummy-auth.spec.ts {args.include}",
+        "command": "QC_TIMING=1 pnpm exec vitest run --config apps/server/vitest.config.ts apps/server/spec/dummy-auth.spec.ts {args.include} -t \"{args.name}\"",
         "cwd": "{workspaceRoot}",
         "forwardAllArgs": false
       }
@@ -53,7 +53,7 @@
     "test-timing-prod": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "QC_TIMING=1 QC_ENV=prod pnpm exec vitest run --config apps/server/vitest.config.ts apps/server/spec/dummy-auth.spec.ts {args.include}",
+        "command": "QC_TIMING=1 QC_ENV=prod pnpm exec vitest run --config apps/server/vitest.config.ts apps/server/spec/dummy-auth.spec.ts {args.include} -t \"{args.name}\"",
         "cwd": "{workspaceRoot}",
         "forwardAllArgs": false
       }

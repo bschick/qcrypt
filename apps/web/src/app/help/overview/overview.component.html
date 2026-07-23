@@ -2,12 +2,14 @@
   <div class="content">
     <h1>Quick Crypt: <i>Easy, Trustworthy Personal Encryption</i></h1>
     <p>We created Quick Crypt to make it safe and convenient to encrypt sensitive
-      data you want to store in insecure locations. Storing confidential information
+      data you want to store in insecure locations while remaining anonymous. Storing
+      confidential information
       in note taking applications, planning tools, online documents, or similar
       tools is convenient but risky. Quick Crypt's primary author wanted to store
       sensitive information in a note taking application and not be limited to the
       few services that provide end-to-end encryption. Even online tools that support
-      encryption often do not define their protocols, making them hard to trust.
+      encryption often do not define their protocols and track your identity, making
+      them hard to trust.
       Installable encryption tools like OpenSSL are powerful and trustworthy but
       tedious to use, upgrade, and remember. Strong encryption that you don't use
       isn't all that good in the end.
@@ -20,9 +22,12 @@
         reviewed protocols</a>.
       Encryption and decryption are performed by cryptographic functions available in
       modern browsers, ensuring your <b>confidential data never leaves your system</b>.
-      After sign-in, Quick Crypt works even with network access disabled. AEAD symmetric
+      Data protection even works with network access disabled. AEAD symmetric
       ciphers, passwords you supply, ephemeral keys, and passkey-protected credentials
-      deliver privacy, integrity, authenticity, and website forgery protection.
+      deliver confidentiality, integrity, authenticity, and website forgery protection.
+      A recent passkey enhancement strengthens this, keeping everything needed to
+      unlock your data on your device and your passkey. Quick Crypt's servers have
+      access to none of it.
     </p>
     <p>We designed Quick Crypt to make it easy to encrypt data and to decrypt that
       data days or years later without needing to remember or install complicated
@@ -43,6 +48,7 @@
       <li>Optimized for encrypting your own data rather than for sharing</li>
       <li>Nothing to install, and works on most devices</li>
       <li>Your unencrypted data and passwords never leave your system</li>
+      <li>Secure recovery from lost passkeys</li>
       <li>Encryption options constrained to secure values</li>
       <li>Follows current cryptographic best practices</li>
       <li>Well defined and <a [routerLink]="'/help/protocol'">documented protocols</a></li>

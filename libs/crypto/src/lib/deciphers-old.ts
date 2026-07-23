@@ -347,9 +347,8 @@ export class DecipherV4 extends Decipher {
          this._blockData.encryptedData = extractor.remainder('edata');
 
          // V4 additional data is the payload minus encrypted data
-         this._blockData.additionalData = new Uint8Array(
-            payload.buffer,
-            payload.byteOffset,
+         this._blockData.additionalData = payload.subarray(
+            0,
             extractor.offset - this._blockData.encryptedData.byteLength
          );
 
@@ -465,9 +464,8 @@ export class DecipherV4 extends Decipher {
          this._blockData.encryptedData = extractor.remainder('edata');
 
          // V4 additional data is payload - encrypted data
-         this._blockData.additionalData = new Uint8Array(
-            payload.buffer,
-            payload.byteOffset,
+         this._blockData.additionalData = payload.subarray(
+            0,
             extractor.offset - this._blockData.encryptedData.byteLength
          );
 

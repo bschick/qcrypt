@@ -20,12 +20,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
+import type { PublicKeyCredentialCreationOptionsJSON, RegistrationResponseJSON } from '@simplewebauthn/browser';
+
 export {
    getUserCredPubKey,
-   signUserCredProof,
+   createUserCredProof,
    verifyUserCredProof,
    getRecoveryPubKey,
-   signRecoveryProof,
+   createRecoveryProof,
    verifyRecoveryProof,
    recoverySecret,
    RECOVERYID_BYTES,
@@ -35,6 +37,24 @@ export {
 } from './lib/proof';
 
 export namespace RequestTypes {
+   export type RegVerify = RegistrationResponseJSON & {
+      userId: string;
+      challenge: string;
+      recoveryPubKey: string;
+      passkeyUserCredEnc?: string;
+      recoveryUserCredEnc?: string;
+      userCredPubKey?: string;
+   };
+   export type RecoverVerify = RegistrationResponseJSON & {
+      userId: string;
+      challenge: string;
+      passkeyUserCredEnc?: string;
+   };
+   export type AddVerify = RegistrationResponseJSON & {
+      challenge: string;
+      passkeyUserCredEnc?: string;
+   };
+   export type PasskeyVerify = RegVerify | RecoverVerify | AddVerify;
 }
 
 export namespace ResponseTypes {
@@ -56,6 +76,7 @@ export namespace ResponseTypes {
       userId?: string;
       userName?: string;
       hasRecoveryId?: boolean;
+      prf?: boolean;
       authenticators?: AuthenticatorInfo[];
       invitables?: InvitableInfo[];
    };
@@ -63,8 +84,13 @@ export namespace ResponseTypes {
    export type LoginUserInfo = UserInfo & {
       pkId?: string;
       userCred?: string;
-      recoveryId?: string;
+      passkeyUserCredEnc?: string;
       csrf?: string;
+   };
+
+   export type RecoverInfo = PublicKeyCredentialCreationOptionsJSON & {
+      prf?: boolean;
+      userCredEnc?: string;
    };
 }
 

@@ -12,6 +12,7 @@
 /bazel-out
 apps/server/assets/aaguid
 apps/web/src/assets/aaguid
+apps/web/src/assets/prf-spike
 
 # Node
 /node_modules
@@ -61,7 +62,7 @@ node_modules/
 /playwright/.cache/
 
 # E2E keeper credentials — private test accounts, never commit
-apps/web/tests/.creds.json
+apps/web/tests/keeper-creds/
 
 # Log files
 serve.log

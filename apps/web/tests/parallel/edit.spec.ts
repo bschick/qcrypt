@@ -1,17 +1,17 @@
 import { test, expect, Response } from '@playwright/test';
 import {
   testWithAuth,
-  passkeyAuth,
   toggleCredentials
 } from '.././common';
 
 
 testWithAuth('edit fields', async ({ authFixture }) => {
-  const { page, authenticatorId1: authauthenticatorId1 } = authFixture;
+  const { page } = authFixture;
   test.setTimeout(60000);
   const rand = Math.floor(Math.random() * (99 - 0 + 1)) + 0;
 
-  const testUser = await authFixture.createTestUser(authauthenticatorId1);
+  const authenticator = authFixture.memAuthenticator('hmac-secret-mc');
+  const testUser = await authFixture.createTestUser(authenticator);
 
   await toggleCredentials(page);
 
@@ -73,10 +73,11 @@ testWithAuth('edit fields', async ({ authFixture }) => {
 });
 
 testWithAuth('options persistence and defaults', async ({ authFixture }) => {
-  const { page, session, authenticatorId1: authenticatorId1 } = authFixture;
+  const { page } = authFixture;
   test.setTimeout(60000);
 
-  const testUser = await authFixture.createTestUser(authenticatorId1);
+  const authenticator = authFixture.memAuthenticator('hmac-secret-mc');
+  const testUser = await authFixture.createTestUser(authenticator);
 
   await page.locator('mat-expansion-panel-header').filter({ hasText: 'Encryption Mode' }).click();
   await expect(page.locator('text="XChaCha20 Poly1305"')).toHaveCount(1);
@@ -101,7 +102,7 @@ testWithAuth('options persistence and defaults', async ({ authFixture }) => {
   await page.getByRole('button', { name: /Sign out/ }).click();
   await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible({timeout:10000});
 
-  await passkeyAuth(page, session, authenticatorId1, async () => {
+  await authFixture.passkeyAuth(authenticator, async () => {
     await page.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
   });
   await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible({timeout:10000});
@@ -128,7 +129,7 @@ testWithAuth('options persistence and defaults', async ({ authFixture }) => {
   await page.getByRole('button', { name: /Sign out/ }).click();
   await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible({timeout:10000});
 
-  await passkeyAuth(page, session, authenticatorId1, async () => {
+  await authFixture.passkeyAuth(authenticator, async () => {
     await page.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
   });
   await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible({timeout:10000});

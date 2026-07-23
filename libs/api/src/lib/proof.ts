@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { getProofKeyPair, signProof, verifyProof, base64ToBytes, concatArrays } from '@qcrypt/crypto';
+import { getProofKeyPair, createProof, verifyProof, base64ToBytes, concatArrays } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 
 const USERCRED_KEY_CONTEXT = 'UCredKey';
@@ -29,13 +29,12 @@ const USERCRED_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
 const RECOVERY_KEY_CONTEXT = 'RecovKey';
 const RECOVERY_SIG_CONTEXT = 'qcrypt/recovery/proof/v1';
 
+export const RECOVERYID_BYTES = 16;
 export const CHALLENGE_BYTES = 32;
+
 // ML-DSA-65 public key and signature length in bytes.
 export const PROOF_PUBKEY_BYTES = 1952;
 export const PROOF_SIG_BYTES = 3309;
-
-// For backward compat only. After migration, this becomes a client only value
-export const RECOVERYID_BYTES = 16;
 
 function buildUserCredMessage(
    userId: string,
@@ -43,19 +42,24 @@ function buildUserCredMessage(
    path: string,
    timestampMs: string,
    nonce: string,
-   bodyHashHex: string
+   bodyHashHex: string,
+   queryString: string
 ): Uint8Array<ArrayBuffer> {
    if (base64ToBytes(userId).byteLength !== cc.USERID_BYTES) {
       throw new Error('invalid userId length');
    }
-   const message = [
+   const fields = [
       userId,
       method.toUpperCase(),
       path,
       timestampMs,
       nonce,
       bodyHashHex.toLowerCase()
-   ].join('\n');
+   ];
+   if (queryString) {
+      fields.push(queryString);
+   }
+   const message = fields.join('\n');
    return new TextEncoder().encode(message);
 }
 
@@ -65,20 +69,21 @@ export function getUserCredPubKey(userCred: Uint8Array): Uint8Array<ArrayBuffer>
    return pubKey;
 }
 
-export function signUserCredProof(
+export function createUserCredProof(
    userCred: Uint8Array,
    userId: string,
    method: string,
    path: string,
    timestampMs: string,
    nonce: string,
-   bodyHashHex: string
+   bodyHashHex: string,
+   queryString: string = ''
 ): Uint8Array<ArrayBuffer> {
    const { secKey } = getProofKeyPair(userCred, USERCRED_KEY_CONTEXT);
    try {
-      return signProof(
+      return createProof(
          secKey,
-         buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex),
+         buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
          USERCRED_SIG_CONTEXT
       );
    } finally {
@@ -94,18 +99,18 @@ export function verifyUserCredProof(
    timestampMs: string,
    nonce: string,
    bodyHashHex: string,
-   signature: Uint8Array
+   signature: Uint8Array,
+   queryString: string = ''
 ): boolean {
    return verifyProof(
       pubKey,
-      buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex),
+      buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
       signature,
       USERCRED_SIG_CONTEXT
    );
 }
 
-// Order must not change for recovery to function
-// For backward compat only. After migration, this becomes a client only function
+
 export function recoverySecret(recoveryId: Uint8Array, userId: string): Uint8Array<ArrayBuffer> {
    return concatArrays([recoveryId, base64ToBytes(userId)]);
 }
@@ -133,14 +138,14 @@ export function getRecoveryPubKey(recoverySecret: Uint8Array): Uint8Array<ArrayB
    return pubKey;
 }
 
-export function signRecoveryProof(
+export function createRecoveryProof(
    recoverySecret: Uint8Array,
    userId: string,
    challenge: string
 ): Uint8Array<ArrayBuffer> {
    const { secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
    try {
-      return signProof(
+      return createProof(
          secKey,
          buildRecoveryMessage(userId, challenge),
          RECOVERY_SIG_CONTEXT

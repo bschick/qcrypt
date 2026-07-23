@@ -71,7 +71,7 @@ async function peekBinary(source: Readable): Promise<{ pipedIn: ReadableStream<U
    const binary = firstChunk.length === 0 || !/^\s*\{/.test(firstChunk.subarray(0, 16).toString('utf-8'));
 
    async function* prependedStream() {
-      yield new Uint8Array(firstChunk.buffer, firstChunk.byteOffset, firstChunk.byteLength);
+      yield firstChunk.subarray(0);
       for await (const chunk of source) {
          yield chunk;
       }

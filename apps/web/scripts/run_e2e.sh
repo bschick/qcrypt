@@ -61,13 +61,29 @@ SERVE_PID=""
 # removed on exit.
 SERVE_LOG="${E2E_SERVE_LOG:-}"
 
-# Kill the whole serve process group (nx spawns children), preserving the
-# script's exit status so cleanup can't mask a test failure.
+# Kill a process and every descendant. Portable fallback for platforms without
+# setsid/process-group signaling: pgrep -P walks the child tree.
+kill_tree() {
+   local pid=$1
+   local child
+   for child in $(pgrep -P "$pid" 2>/dev/null); do
+      kill_tree "$child"
+   done
+   kill "$pid" 2>/dev/null || true
+}
+
+# Kill the whole serve tree (nx spawns children), preserving the script's exit
+# status so cleanup can't mask a test failure. Prefer the setsid process-group
+# kill; fall back to a tree kill where setsid was unavailable at start.
 stop_serve() {
    local rc=$?
    if [[ -n "$SERVE_PID" ]]; then
       echo "run_e2e.sh: stopping frozen serve"
-      kill -- -"$SERVE_PID" 2>/dev/null || true
+      if command -v setsid >/dev/null 2>&1; then
+         kill -- -"$SERVE_PID" 2>/dev/null || true
+      else
+         kill_tree "$SERVE_PID"
+      fi
       wait "$SERVE_PID" 2>/dev/null || true
    fi
    if [[ -n "$SERVE_LOG" && -z "${E2E_SERVE_LOG:-}" ]]; then
@@ -87,14 +103,19 @@ serve_ready() {
 }
 
 # Start a dev serve with watch and live-reload off, so a file save during a run
-# can't reload the page and abort an in-flight request. setsid puts it in its
-# own process group so stop_serve can take down the whole tree.
+# can't reload the page and abort an in-flight request. setsid isolates it in its
+# own process group so stop_serve can take down the whole tree; where setsid is
+# absent (e.g. macOS) it runs without it and stop_serve tree-kills instead.
 start_frozen_serve() {
    if [[ -z "$SERVE_LOG" ]]; then
       SERVE_LOG="$(mktemp -t run_e2e_serve.XXXXXX.log)"
    fi
    echo "run_e2e.sh: starting frozen serve (no watch, no live-reload); log: $SERVE_LOG"
-   setsid pnpm exec nx serve web --hmr false --live-reload false --watch false \
+   local setsid_prefix=""
+   if command -v setsid >/dev/null 2>&1; then
+      setsid_prefix="setsid"
+   fi
+   $setsid_prefix pnpm exec nx serve web --hmr false --live-reload false --watch false \
       --host 0.0.0.0 --ssl \
       --ssl-cert apps/web/localssl/localhost.crt \
       --ssl-key apps/web/localssl/localhost.key > "$SERVE_LOG" 2>&1 &

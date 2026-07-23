@@ -37,6 +37,7 @@ export type HttpDetails = {
    name: string,
    method: Method,
    path: string,
+   rawQueryString: string,
    rpID: string,
    rpOrigin: string,
    authorize: boolean,
@@ -66,17 +67,15 @@ type HandlerInfo = {
 export type MethodMap = Record<Method, HandlerInfo[]>;
 
 
-const hostname = '{*.}?quickcrypt.org'
-// Not using specific regext because we get no error information just
-// a failed match.
-//const b64Chars = '[A-Za-z0-9+/=_-]';
-
 export const Patterns = {
    regOptions: new URLPattern({
       pathname: '/v:ver/reg/options',
    }),
    regVerify: new URLPattern({
       pathname: '/v:ver/reg/verify',
+   }),
+   recoverVerify: new URLPattern({
+      pathname: '/v:ver/recover/verify',
    }),
    authOptions: new URLPattern({
       pathname: '/v:ver/auth/options',
@@ -155,6 +154,7 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
 
    const handlerInfos: HandlerInfo[] = methodMap[method];
 
+   // rpID and therefore hostname is constrained to *.quickcrypt.org by cloudfront
    for (let handerInfo of handlerInfos) {
       const match = handerInfo.pattern.exec({
          hostname: rpID,
@@ -207,6 +207,7 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
             name: handerInfo.name,
             method: method,
             path: path,
+            rawQueryString: event['rawQueryString'] || '',
             rpID: rpID,
             rpOrigin: rpOrigin,
             authorize: handerInfo.authorize,

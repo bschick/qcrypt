@@ -25,15 +25,13 @@ import { randomBytes } from "node:crypto";
 import {
    getJson,
    patchJson,
-   deleteJson,
+   expectPasskeyDeleted,
    makeProofHeaders,
    registerTestUser,
    setSessionUserCred,
 } from "./common";
 
-// BACKWARD COMPATIBILITY: skipped while verifyProof enforcement is observe-only for the
-// production soak. Re-enable together with the throw in verifyProof.
-describe.skip("proof of userCred enforcement", () => {
+describe("proof of userCred enforcement", () => {
    const testUser = `PWTesty_enf_${Date.now()}`;
    let userId: string;
    let userCred: string;
@@ -42,7 +40,9 @@ describe.skip("proof of userCred enforcement", () => {
    let credId: string;
 
    beforeAll(async () => {
-      ({ userId, userCred, cookie, csrf, credId } = await registerTestUser(testUser));
+      // A PRF account's proof public key is supplied by the client (not derived server-side), so
+      // enforce proof verification against that client-provisioned key.
+      ({ userId, userCred, cookie, csrf, credId } = await registerTestUser(testUser, true));
       // Each test crafts its own proof; disable the harness auto-signer.
       setSessionUserCred(undefined);
    });
@@ -51,7 +51,7 @@ describe.skip("proof of userCred enforcement", () => {
       if (cookie && credId) {
          // Deleting under enforcement needs a valid proof, so re-enable auto-signing.
          setSessionUserCred(userCred, userId);
-         await deleteJson(`/v1/passkeys/${credId}`, { "x-csrf-token": csrf }, cookie);
+         await expectPasskeyDeleted(credId, csrf, cookie);
          setSessionUserCred(undefined);
       }
    });
@@ -139,5 +139,59 @@ describe.skip("proof of userCred enforcement", () => {
       // getSession skips csrf but still gates CSRF issuance on proof of userCred.
       const res = await getJson("/v1/session", {}, cookie);
       expect(res.status).toBe(401);
+   });
+
+   it("accepts a proof that binds a query string the handler ignores", async () => {
+      const proof = await makeProofHeaders("GET", "/v1/user?ignored=1", undefined, userCred, userId);
+      const res = await getJson("/v1/user?ignored=1", { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(res.status).toBe(200);
+   });
+
+   it("rejects when the request query differs from the signed query", async () => {
+      const proof = await makeProofHeaders("GET", "/v1/user?ignored=1", undefined, userCred, userId);
+      const res = await getJson("/v1/user?ignored=2", { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(res.status).toBe(401);
+   });
+
+   it("rejects a proof reused on a different method or path", async () => {
+      // A GET proof replays within the skew window, so the nonce doesn't prevent reuse here — the
+      // signed method and path do.
+      const proof = await makeProofHeaders("GET", "/v1/user", undefined, userCred, userId);
+
+      const own = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(own.status).toBe(200);
+
+      const otherPath = await getJson("/v1/passkeys/options", { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(otherPath.status).toBe(401);
+
+      const otherMethod = await patchJson("/v1/user", null, { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(otherMethod.status).toBe(401);
+   });
+
+   it("rejects a mutating request whose body differs from the signed body", async () => {
+      const signed = { userName: testUser };
+      const signedBuf = Buffer.from(JSON.stringify(signed));
+
+      const good = await makeProofHeaders("PATCH", "/v1/user", signedBuf, userCred, userId);
+      const ok = await patchJson("/v1/user", signed, { "x-csrf-token": csrf, ...good }, cookie);
+      expect(ok.status).toBe(200);
+
+      // Fresh proof (the one above spent its nonce) so this 401 is the body mismatch, not a replay.
+      const proof = await makeProofHeaders("PATCH", "/v1/user", signedBuf, userCred, userId);
+      const res = await patchJson("/v1/user", { userName: `${testUser}_x` }, { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(res.status).toBe(401);
+   });
+
+   it("admits only one of several concurrent replays of one proof", async () => {
+      const body = Buffer.from(JSON.stringify({ userName: testUser }));
+      const proof = await makeProofHeaders("PATCH", "/v1/user", body, userCred, userId);
+
+      // The nonce store is a conditional insert, so racing the same proof still admits exactly one.
+      const results = await Promise.all(
+         Array.from({ length: 5 }, () =>
+            patchJson("/v1/user", { userName: testUser }, { "x-csrf-token": csrf, ...proof }, cookie))
+      );
+      expect(results.filter((r) => r.status === 200).length).toBe(1);
+      expect(results.filter((r) => r.status === 401).length).toBe(4);
    });
 });

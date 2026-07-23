@@ -1,0 +1,44 @@
+<!-- MIT License
+
+Copyright (c) 2026 Brad Schick
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. -->
+
+<div class="prf-fallback">
+<h1 mat-dialog-title>This passkey doesn't support local key creation</h1>
+<mat-dialog-content>
+  <p>Quick Crypt encourages you to use
+    <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'Passkeys with PRF'}" target="_blank">
+    PRF-capable passkeys</a>
+    for stronger protection of your data. While passkeys without PRF remain secure, PRF
+    is a significant security upgrade.</p>
+  <p>The PRF extension is widely supported, but not yet universal. The list of
+  PRF-compatible systems is growing rapidly and includes: <b>1Password</b>,
+  <b>YubiKey</b>, <b>Apple Passwords</b>, <b>Windows Hello</b>, <b>Google Password Manager</b>,
+  <b>Keeper</b>, <b>Proton Pass</b>, <b>SoloKeys</b>, and <b>Dashlane</b>. A notable exception is
+  <b>Bitwarden</b>, which does not yet support PRF for the passkeys it manages (<a
+  href="https://community.bitwarden.com/t/support-for-storing-prf-capable-passkeys-in-bitwarden-vault/82239"
+  target="_blank">add your vote to the feature request</a>).</p>
+  <p>You may select a different passkey or continue with standard protection.</p>
+</mat-dialog-content>
+<mat-dialog-actions>
+  <button mat-button [mat-dialog-close]="'different'">Try a different passkey</button>
+  <button mat-button [mat-dialog-close]="'standard'">Continue with standard protection</button>
+</mat-dialog-actions>
+</div>

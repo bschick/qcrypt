@@ -52,6 +52,8 @@ import {
  export function parseCipherArmor(
     cipherArmor: string
 ) : Uint8Array<ArrayBuffer> {
+    // cipherArmor is untrusted and parsed unbounded; a bad value can exhaust local resources
+    // (browser tab or CLI process), so callers should enforce size limits at input boundaries.
     try {
        let trimmed = cipherArmor.trim();
        if (trimmed.startsWith('https://')) {

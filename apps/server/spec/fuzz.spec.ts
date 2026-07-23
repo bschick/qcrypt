@@ -26,6 +26,7 @@ import {
    postJson,
    patchJson,
    deleteJson,
+   expectPasskeyDeleted,
    registerTestUser,
    setSessionUserCred,
 } from "./common";
@@ -222,7 +223,7 @@ describe("api fuzzing (authenticated)", () => {
 
    afterAll(async () => {
       if (cookie && credId) {
-         await deleteJson(`/v1/passkeys/${credId}`, { "x-csrf-token": csrf }, cookie);
+         await expectPasskeyDeleted(credId, csrf, cookie);
       }
       setSessionUserCred(undefined);
    });
