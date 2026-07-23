@@ -1137,8 +1137,8 @@ export class AuthenticatorService {
          throw new Error('invalid recovery words');
       }
 
-      const recoveryIdBytes = new Uint8Array(recoveryBytes.buffer, 0, RECOVERYID_BYTES);
-      const userIdBytes = new Uint8Array(recoveryBytes.buffer, RECOVERYID_BYTES);
+      const recoveryIdBytes = recoveryBytes.subarray(0, RECOVERYID_BYTES);
+      const userIdBytes = recoveryBytes.subarray(RECOVERYID_BYTES);
 
       const recoveryId = bytesToBase64(recoveryIdBytes);
       const userId = bytesToBase64(userIdBytes);

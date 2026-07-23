@@ -1059,9 +1059,8 @@ export class DecipherV67 extends Decipher {
          this._blockData.encryptedData = extractor.remainder('edata');
 
          // Since V4, additional data is the payload minus encrypted data
-         this._blockData.additionalData = new Uint8Array(
-            payload.buffer,
-            payload.byteOffset,
+         this._blockData.additionalData = payload.subarray(
+            0,
             extractor.offset - this._blockData.encryptedData.byteLength
          );
 
@@ -1193,9 +1192,8 @@ export class DecipherV67 extends Decipher {
          this._blockData.encryptedData = extractor.remainder('edata');
 
          // Since V4, additional data is the payload minus encrypted data
-         this._blockData.additionalData = new Uint8Array(
-            payload.buffer,
-            payload.byteOffset,
+         this._blockData.additionalData = payload.subarray(
+            0,
             extractor.offset - this._blockData.encryptedData.byteLength
          );
 
@@ -1264,8 +1262,7 @@ export class Extractor<T extends ArrayBufferLike> {
          throw new Error(`Invalid ${what}, length: ${len}`);
       }
 
-      const result = new Uint8Array(this._encoded.buffer,
-         this._encoded.byteOffset + this._offset, len);
+      const result = this._encoded.subarray(this._offset, this._offset + len);
 
       // shouldn't hit this given test above, but check anyway
       if (result.byteLength != len) {
@@ -1277,8 +1274,7 @@ export class Extractor<T extends ArrayBufferLike> {
    }
 
    remainder(what: string): Uint8Array<T> {
-      const result = new Uint8Array(this._encoded.buffer,
-         this._encoded.byteOffset + this._offset);
+      const result = this._encoded.subarray(this._offset);
       // happens if the encode data is not as long as expected
       if (result.byteLength == 0) {
          throw new Error(`Invalid ${what}, length: 0`);
@@ -1419,7 +1415,7 @@ export class Packer {
       if (!this._dest) {
          throw new Error('Packer was detached');
       }
-      return new Uint8Array(this._dest.buffer, this._dest.byteOffset, this._offset);
+      return this._dest.subarray(0, this._offset);
    }
 
    detach(): Uint8Array<ArrayBuffer> {

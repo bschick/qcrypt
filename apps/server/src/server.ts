@@ -834,7 +834,7 @@ async function dummyAllowedCreds(
 
    const pick = material.readUInt16BE(0) % 149;
    const profile = profiles.find(p => pick < p.ceil)!;
-   const id = new Uint8Array(material.subarray(2, 2 + profile.len));
+   const id = material.subarray(2, 2 + profile.len);
    return [{
       id: base64UrlEncode(id)!,
       type: 'public-key',

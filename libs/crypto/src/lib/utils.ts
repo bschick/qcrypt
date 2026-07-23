@@ -312,8 +312,8 @@ export class BYOBStreamReader {
          if (value) {
             const unfilledBytes = targetBytes - wroteBytes;
             if (value.byteLength > unfilledBytes) {
-               this._extra = new Uint8Array(value.buffer, value.byteOffset + unfilledBytes, value.byteLength - unfilledBytes);
-               value = new Uint8Array(value.buffer, value.byteOffset, unfilledBytes);
+               this._extra = value.subarray(unfilledBytes);
+               value = value.subarray(0, unfilledBytes);
                done = false;
             }
 
@@ -384,12 +384,12 @@ export function streamWriteBYOD(
       const byodView = controller.byobRequest.view;
       const byodBytes = Math.min(data.byteLength, byodView.byteLength);
       const writeableView = new Uint8Array(byodView.buffer, byodView.byteOffset, byodView.byteLength);
-      writeableView.set(new Uint8Array(data.buffer, 0, byodBytes));
+      writeableView.set(data.subarray(0, byodBytes));
       written += byodBytes;
       controller.byobRequest.respond(byodBytes);
 
       if (byodBytes < data.byteLength) {
-         const remainder = new Uint8Array(data.buffer, byodBytes)
+         const remainder = data.subarray(byodBytes)
          written += remainder.byteLength;
          controller.enqueue(ensureArrayBuffer(remainder));
       }
