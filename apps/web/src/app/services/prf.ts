@@ -93,7 +93,7 @@ export async function prfEncrypt(
 }
 
 // This function takes ownership of and clears prfKey
-// Caller must overwrite the returned value ASAP if sensitve
+// Caller must overwrite the returned value ASAP if sensitive
 export async function prfDecrypt(
    cipherText: string,
    prfKey: Uint8Array<ArrayBuffer>,
