@@ -1135,7 +1135,7 @@ async function makeUserInfoResponse(
    invitables = invitables ?? await loadInvitables(verifiedUser);
 
    // user explicit assignment rather than spread operator to prevent leaking information
-   // in UserItem table that is internal only or provided separatly (like recoveryId)
+   // in UserItem table that is internal only or provided separatly
    const userInfo: UserInfo = {
       verified: verifiedUser.verified,
       userId: verifiedUser.userId,
