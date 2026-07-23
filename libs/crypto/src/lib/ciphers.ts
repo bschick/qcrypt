@@ -100,7 +100,7 @@ export async function getStreamDecipher(
    // version in the middle of the encoding. So detect old version by the first 2 bytes
    // after MAC being < 4 (since encoded started with ALG and v1 max ALG was 3 and beyond v1
    // version is >=4). WARNING: Breaks if ALG_BYTES or VER_BYTES sizes changes.
-   const verOrAlg = bytesToNum(new Uint8Array(header.buffer, cc.MAC_BYTES, cc.VER_BYTES));
+   const verOrAlg = bytesToNum(header.subarray(cc.MAC_BYTES, cc.MAC_BYTES + cc.VER_BYTES));
 
    if (verOrAlg == cc.VERSION6 || verOrAlg == cc.VERSION7) {
       decipher = new DecipherV67(keyProvider, reader, header);
