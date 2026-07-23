@@ -207,6 +207,38 @@ export function recoverySuite(prf: boolean): void {
          expect(res.status).toBe(401);
       });
 
+      it("rejects a recover2 challenge reused after it is spent", async () => {
+         const challenge = await issueChallenge(user.userId);
+         // The challenge is consumed before the signature is checked and well before any passkey
+         // deletion, so a wrong-signature attempt spends it without wiping the shared account.
+         const wrongSecret = recoverySecret(getRandom(RECOVERYID_BYTES), user.userId);
+         const spent = await postJson(
+            "/v1/recover2",
+            { userId: user.userId, challenge, signature: bytesToBase64(createRecoveryProof(wrongSecret, user.userId, challenge)) },
+            {}, ""
+         );
+         expect(spent.status).toBe(401);
+
+         // Single-use: even a correct signature is rejected once the challenge is spent.
+         const reuse = await postJson(
+            "/v1/recover2",
+            { userId: user.userId, challenge, signature: bytesToBase64(createRecoveryProof(user.recoverySecret, user.userId, challenge)) },
+            {}, ""
+         );
+         expect(reuse.status).toBe(401);
+      });
+
+      it("rejects a recover2 challenge minted for another purpose", async () => {
+         // An auth-purpose challenge, correctly signed and bound to the same user, still must not
+         // satisfy recover2 — it requires a nonce-purpose challenge.
+         const authOpts = await postJson("/v1/auth/options", { userId: user.userId }, {}, "");
+         expect(authOpts.status).toBe(200);
+         const challenge = authOpts.data.challenge;
+         const signature = bytesToBase64(createRecoveryProof(user.recoverySecret, user.userId, challenge));
+         const res = await postJson("/v1/recover2", { userId: user.userId, challenge, signature }, {}, "");
+         expect(res.status).toBe(401);
+      });
+
       // Reuse a single user session across multiple recovery key change tests
       // (instead of re-authenticating) to detect unintentional session invalidation
       it("updates the recovery public key with the current key", async () => {

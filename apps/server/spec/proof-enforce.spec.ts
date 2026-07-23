@@ -152,4 +152,46 @@ describe("proof of userCred enforcement", () => {
       const res = await getJson("/v1/user?ignored=2", { "x-csrf-token": csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
+
+   it("rejects a proof reused on a different method or path", async () => {
+      // A GET proof replays within the skew window, so the nonce doesn't prevent reuse here — the
+      // signed method and path do.
+      const proof = await makeProofHeaders("GET", "/v1/user", undefined, userCred, userId);
+
+      const own = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(own.status).toBe(200);
+
+      const otherPath = await getJson("/v1/passkeys/options", { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(otherPath.status).toBe(401);
+
+      const otherMethod = await patchJson("/v1/user", null, { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(otherMethod.status).toBe(401);
+   });
+
+   it("rejects a mutating request whose body differs from the signed body", async () => {
+      const signed = { userName: testUser };
+      const signedBuf = Buffer.from(JSON.stringify(signed));
+
+      const good = await makeProofHeaders("PATCH", "/v1/user", signedBuf, userCred, userId);
+      const ok = await patchJson("/v1/user", signed, { "x-csrf-token": csrf, ...good }, cookie);
+      expect(ok.status).toBe(200);
+
+      // Fresh proof (the one above spent its nonce) so this 401 is the body mismatch, not a replay.
+      const proof = await makeProofHeaders("PATCH", "/v1/user", signedBuf, userCred, userId);
+      const res = await patchJson("/v1/user", { userName: `${testUser}_x` }, { "x-csrf-token": csrf, ...proof }, cookie);
+      expect(res.status).toBe(401);
+   });
+
+   it("admits only one of several concurrent replays of one proof", async () => {
+      const body = Buffer.from(JSON.stringify({ userName: testUser }));
+      const proof = await makeProofHeaders("PATCH", "/v1/user", body, userCred, userId);
+
+      // The nonce store is a conditional insert, so racing the same proof still admits exactly one.
+      const results = await Promise.all(
+         Array.from({ length: 5 }, () =>
+            patchJson("/v1/user", { userName: testUser }, { "x-csrf-token": csrf, ...proof }, cookie))
+      );
+      expect(results.filter((r) => r.status === 200).length).toBe(1);
+      expect(results.filter((r) => r.status === 401).length).toBe(4);
+   });
 });

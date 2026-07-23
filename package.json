@@ -21,6 +21,7 @@
     "lint:e2e": "eslint apps/web/tests",
     "test:e2e": "bash apps/web/scripts/run_e2e.sh --project local",
     "test:fuzz": "QC_FULL_FUZZ=true pnpm exec vitest run --config apps/server/vitest.config.ts apps/server/spec/fuzz.spec.ts",
+    "test:pentest": "QC_PENTEST=true pnpm exec vitest run --config apps/server/vitest.config.ts apps/server/spec/pentest.spec.ts",
     "test:e2e:prod": "bash apps/web/scripts/run_e2e.sh --project prod",
     "test:fuzz:prod": "QC_ENV=prod QC_FULL_FUZZ=true pnpm exec vitest run --config apps/server/vitest.config.ts apps/server/spec/fuzz.spec.ts",
     "build:cli": "nx build cli",

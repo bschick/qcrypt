@@ -531,6 +531,31 @@ export function coreSuite(prf: boolean): void {
             expect(res.status).toEqual(401);
          });
 
+         it("should reject a cookie signed with a forged algorithm", async () => {
+            let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+            expect(res.status).toBe(200);
+
+            const forged = { userId };
+
+            // Verification pins HS512, so neither an unsigned alg:none token nor an attacker-keyed
+            // HS256 token (algorithm confusion) is accepted.
+            const noneToken = jwtPkg.sign(forged, '', { algorithm: 'none', issuer: 'quickcrypt' });
+            res = await deleteJson(
+               `/v1/passkeys/${credId}`,
+               { "x-csrf-token": csrfToken },
+               `__Host-JWT=${noneToken}`,
+            );
+            expect(res.status).toEqual(401);
+
+            const hs256Token = jwtPkg.sign(forged, randomBytes(32), { algorithm: 'HS256', expiresIn: SESSION_TIMEOUT_SEC, issuer: 'quickcrypt' });
+            res = await deleteJson(
+               `/v1/passkeys/${credId}`,
+               { "x-csrf-token": csrfToken },
+               `__Host-JWT=${hs256Token}`,
+            );
+            expect(res.status).toEqual(401);
+         });
+
          it("should reject manipulated csrf", async () => {
             let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
             expect(res.status).toBe(200);
@@ -650,6 +675,23 @@ export function coreSuite(prf: boolean): void {
                   setSessionUserCred(userCred, userId);
                }
             }
+         });
+
+         it("should reject a replayed authentication assertion", async () => {
+            const optsRes = await postJson(`/v1/auth/options`, { userId }, {}, "");
+            expect(optsRes.status).toBe(200);
+            const assertion = emulator.getJSON(RP_ORIGIN, { ...optsRes.data, challenge: optsRes.data.challenge });
+            const body = { ...assertion, challenge: optsRes.data.challenge };
+
+            // A fresh assertion authenticates once and rotates the session.
+            const first = await postAuthVerifyWithRetry(body, "");
+            expect(first.status).toBe(200);
+            sessCookie = first.cookie;
+            csrfToken = first.data.csrf;
+
+            // Its single-use challenge is now spent, so replaying the same assertion is rejected.
+            const replay = await postJson(`/v1/auth/verify`, body, {}, "");
+            expect(replay.status).toBe(401);
          });
       });
 
