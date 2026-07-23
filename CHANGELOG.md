@@ -1,14 +1,22 @@
 # CHANGELOG.md
 
-## 7.3.0 (TBD)
+## 7.3.0 (2026-07-23)
+
+#### Features
+
+- added passkey PRF support and UI to encourage its use (migration coming next release)
+- with PRF passkeys, user credentials are created and encrypted locally, establishing zero-knowledge with servers
 
 #### Changes
 
-- added nonce to prevent "proof of userCred" replay for state changing API calls
-- changed account recovery to client-side ML-DSA based proof rather than a shared secret
+- extended upstream [nid-webauthn-emulator](https://github.com/Nikkei/nid-webauthn-emulator) to support PRF
+- switched internal e2e and unit passkey tests from `Chrome CDP` to `nid-webauthn-emulator`
 
 #### Security
 
+- enabled enforcement of "proof of userCred" now that clients have updated
+- added more adversarial server tests
+- several minor security improvements found by Claude Code
 - updated packages
 
 ## 7.2.0 (2026-06-26)
