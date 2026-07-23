@@ -218,9 +218,9 @@ const ELEMENT_DATA: FAQElement[] = [
       makes it infeasible for a rogue website to trick you into decrypting your
       data even if you exposed your encryption password.</p>
       <p><i>Third</i>, passkeys supporting the WebAuthn PRF extension enable
-      Quick Crypt to encrypt your user credential locally on your device so
+      Quick Crypt to create and encrypt your user credential locally on your device so
       that not even Quick Crypt's servers can retrieve it. This
-      creates a zero-knowledge setup between your browser and Quick Crypt's
+      establishes a zero-knowledge setup between your browser and Quick Crypt's
       servers, where not even a full compromise of the servers would expose
       any part of your cryptographic key material.</p>`
    },
