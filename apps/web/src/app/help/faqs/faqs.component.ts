@@ -19,7 +19,8 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { type AfterViewInit, Component, ViewEncapsulation } from '@angular/core';
+import { Component, ViewEncapsulation } from '@angular/core';
+import type { AfterViewInit } from '@angular/core';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -143,7 +144,7 @@ const ELEMENT_DATA: FAQElement[] = [
       and a user credential protected by your passkeys. Passkeys that support the WebAuthn PRF
       (Pseudo-Random Function) extension provide stronger protection by encrypting your
       user credential locally. This ensures no other systems, including Quick Crypt's
-      servers, can access your user credential, establishing a true "zero-trust"
+      servers, can access your user credential, establishing a zero-knowledge
       relationship between your browser and the server.</p>
       <p>PRF-capable passkeys achieve this by generating unique, repeatable cryptographic
       keys locally on your device. These local keys encrypt your user credential
@@ -219,7 +220,7 @@ const ELEMENT_DATA: FAQElement[] = [
       <p><i>Third</i>, passkeys supporting the WebAuthn PRF extension enable
       Quick Crypt to encrypt your user credential locally on your device so
       that not even Quick Crypt's servers can retrieve it. This
-      creates a full zero-trust setup between your browser and Quick Crypt's
+      creates a zero-knowledge setup between your browser and Quick Crypt's
       servers, where not even a full compromise of the servers would expose
       any part of your cryptographic key material.</p>`
    },
@@ -431,12 +432,6 @@ const ELEMENT_DATA: FAQElement[] = [
             "Sign in as a different user" button</td>
         </tr>
         <tr>
-          <td class="tg-0pky">Currently signed-in user credential</td>
-          <td class="tg-0pky">Browser memory, HTTPS transmission from server to browser</td>
-          <td class="tg-0pky">Close the Quick Crypt tab in your browser or navigate to another website.
-          Automatically flushed after 6 hours of inactivity</td>
-        </tr>
-        <tr>
           <td class="tg-0pky">Public-key portions of each passkey and description</td>
           <td class="tg-0pky">AWS storage service, HTTPS transmission from server to browser</td>
           <td class="tg-0pky">Within the side panel that shows passkeys, click the trash can icon for the passkey
@@ -449,11 +444,17 @@ const ELEMENT_DATA: FAQElement[] = [
           That triggers removal of server-side stored data</td>
         </tr>
         <tr>
+          <td class="tg-0pky">Unencrypted user credential</td>
+          <td class="tg-0pky">Browser memory during encrypt/decrypt, HTTPS transmission from server to browser
+            for non-PRF accounts</td>
+          <td class="tg-0pky">Close the Quick Crypt tab in your browser or navigate to another website.
+          Automatically flushed after 6 hours of inactivity</td>
+        </tr>
+        <tr>
           <td class="tg-0pky">Encrypted user credential and recovery public key</td>
-          <td class="tg-0pky">AWS storage service. For PRF accounts, the user
+          <td class="tg-0pky">AWS storage service, browser session storage. For PRF accounts, the user
             credential is encrypted locally on your device (via PRF or recovery
-            secret) before transmission, so the server only stores ciphertext
-            it cannot decrypt. For non-PRF accounts, the server encrypts the
+            secret) so the server cannot decrypt. For non-PRF accounts, the server encrypts the
             user credential using cloud key management.</td>
           <td class="tg-0pky">Within the side panel that shows passkeys, delete all passkeys.
           That triggers removal of server-side stored data</td>
