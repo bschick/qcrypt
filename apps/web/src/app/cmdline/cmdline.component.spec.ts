@@ -9,9 +9,8 @@ describe('CmdLineComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [CmdLineComponent, NoopAnimationsModule, RouterModule.forRoot([]),]
-      })
-         .compileComponents();
+         imports: [CmdLineComponent, NoopAnimationsModule, RouterModule.forRoot([])],
+      }).compileComponents();
 
       fixture = TestBed.createComponent(CmdLineComponent);
       component = fixture.componentInstance;

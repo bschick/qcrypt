@@ -28,11 +28,7 @@ import {
    type AfterViewInit,
    type OnDestroy,
 } from '@angular/core';
-import {
-   MAT_DIALOG_DATA,
-   MatDialogRef,
-   MatDialogModule,
-} from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
@@ -49,9 +45,7 @@ import * as cc from '@qcrypt/crypto/consts';
 import { bytesToBase64, Ciphers } from '@qcrypt/crypto';
 import { CipherService, type CipherDataInfo } from '../../services/cipher.service';
 
-
 const PWD_CLOSE_TIMEOUT = 1000 * 60 * 5;
-
 
 export type PwdDialogData = {
    message: string;
@@ -75,12 +69,20 @@ const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
    templateUrl: './password.dialog.html',
    styleUrl: './dialogs.scss',
    encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
-   imports: [MatDialogModule, MatFormFieldModule, MatInputModule, MatIconModule,
-      StrengthMeterComponent, FormsModule, ReactiveFormsModule, MatTooltipModule,
-      MatButtonModule, BubbleDirective]
+   imports: [
+      MatDialogModule,
+      MatFormFieldModule,
+      MatInputModule,
+      MatIconModule,
+      StrengthMeterComponent,
+      FormsModule,
+      ReactiveFormsModule,
+      MatTooltipModule,
+      MatButtonModule,
+      BubbleDirective,
+   ],
 })
 export class PasswordDialog implements AfterViewInit, OnDestroy {
-
    public hidePwd = false;
    public passwd = '';
    public hint = '';
@@ -100,13 +102,12 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    public usedPasswords: string[];
    public maxHintLen = cc.HINT_MAX_LEN;
 
-
    @ViewChild('bubbleTip') bubbleTip!: BubbleDirective;
 
    constructor(
       private r2: Renderer2,
       public dialogRef: MatDialogRef<PasswordDialog>,
-      @Inject(MAT_DIALOG_DATA) public data: PwdDialogData
+      @Inject(MAT_DIALOG_DATA) public data: PwdDialogData,
    ) {
       this.hint = data.hint;
       this.encrypting = data.encrypting;
@@ -150,10 +151,7 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
          window.clearTimeout(this.timerId);
       }
 
-      this.timerId = window.setTimeout(
-         () => this.dialogRef.close(),
-         PWD_CLOSE_TIMEOUT
-      );
+      this.timerId = window.setTimeout(() => this.dialogRef.close(), PWD_CLOSE_TIMEOUT);
    }
 
    onAcceptableChanged(state: AcceptableState) {
@@ -183,7 +181,7 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    selector: 'cipher-info.dialog',
    templateUrl: './cipher-info.dialog.html',
    styleUrl: './dialogs.scss',
-   imports: [MatDialogModule, MatIconModule, MatButtonModule]
+   imports: [MatDialogModule, MatIconModule, MatButtonModule],
 })
 export class CipherInfoDialog {
    public error;
@@ -198,7 +196,7 @@ export class CipherInfoDialog {
       private r2: Renderer2,
       private cipherSvc: CipherService,
       public dialogRef: MatDialogRef<CipherInfoDialog>,
-      @Inject(MAT_DIALOG_DATA) public data: CipherDataInfo
+      @Inject(MAT_DIALOG_DATA) public data: CipherDataInfo,
    ) {
       if (!data) {
          this.error = 'The wrong passkey was selected or the cipher armor is invalid';
@@ -216,15 +214,13 @@ export class CipherInfoDialog {
    }
 }
 
-
 @Component({
    selector: 'signin.dialog',
    templateUrl: './signin.dialog.html',
    styleUrl: './dialogs.scss',
-   imports: [MatDialogModule, MatProgressSpinnerModule, MatIconModule, MatTooltipModule, MatButtonModule]
+   imports: [MatDialogModule, MatProgressSpinnerModule, MatIconModule, MatTooltipModule, MatButtonModule],
 })
 export class SigninDialog {
-
    public userName: string | null;
    public userId: string | null;
    public error: string = '';
@@ -234,7 +230,7 @@ export class SigninDialog {
       private authSvc: AuthenticatorService,
       private router: Router,
       public dialogRef: MatDialogRef<SigninDialog>,
-      @Inject(MAT_DIALOG_DATA) public data: SigninDialog
+      @Inject(MAT_DIALOG_DATA) public data: SigninDialog,
    ) {
       dialogRef.disableClose = true;
       [this.userId, this.userName] = this.authSvc.loadKnownUser();
@@ -260,7 +256,7 @@ export class SigninDialog {
          }
       } catch (err) {
          console.error(err);
-         if (err instanceof Error && err.message.includes("fetch")) {
+         if (err instanceof Error && err.message.includes('fetch')) {
             this.error = 'Sign in failed, check your connection';
          } else {
             this.error = 'Sign in failed, try again or change users';
@@ -277,5 +273,4 @@ export class SigninDialog {
       this.router.navigateByUrl('/welcome');
       this.dialogRef.close('Forget');
    }
-
 }

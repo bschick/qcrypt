@@ -55,7 +55,7 @@ export function parseSubscripts(text: string): LabelSegment[] {
 @Component({
    selector: 'sub-label',
    changeDetection: ChangeDetectionStrategy.OnPush,
-   template:`
+   template: `
       @for (seg of segments(); track $index) {
       @if (seg.sub) {<sub>{{ seg.text }}</sub>}
       @else {<span>{{ seg.text }}</span>}

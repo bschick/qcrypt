@@ -50,434 +50,450 @@ to assert most of the meaninful actions in this table
 */
 
 import { test, expect } from '@playwright/test';
-import { testWithAuth, toggleCredentials, deleteFirstPasskey, deleteLastPasskey, expectActiveServerSession } from '.././common';
-
+import {
+   testWithAuth,
+   toggleCredentials,
+   deleteFirstPasskey,
+   deleteLastPasskey,
+   expectActiveServerSession,
+} from '.././common';
 
 test.describe('login relay', () => {
+   testWithAuth('reload preserves session in the same tab', async ({ authFixture }) => {
+      const { page } = authFixture;
+      test.setTimeout(75000);
 
-  testWithAuth('reload preserves session in the same tab', async ({ authFixture }) => {
-    const { page } = authFixture;
-    test.setTimeout(75000);
+      await authFixture.createTestUser(authFixture.memAuthenticator());
+      await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
-    await authFixture.createTestUser(authFixture.memAuthenticator());
-    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+      await page.reload();
+      await expect(page).toHaveURL(/\/$/);
 
-    await page.reload();
-    await expect(page).toHaveURL(/\/$/);
+      await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
+   });
 
-    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
-  });
+   testWithAuth('second tab restores via peer relay without prompting', async ({ authFixture }) => {
+      const { page: page1 } = authFixture;
+      test.setTimeout(75000);
 
-  testWithAuth('second tab restores via peer relay without prompting', async ({ authFixture }) => {
-    const { page: page1 } = authFixture;
-    test.setTimeout(75000);
+      await authFixture.createTestUser(authFixture.memAuthenticator());
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
-    await authFixture.createTestUser(authFixture.memAuthenticator());
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    const page2 = await page1.context().newPage();
-    await page2.goto('/');
-    await expect(page2).toHaveURL(/\/$/);
-
-    await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-    await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
-
-    // page1 should keep its session alive.
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-  });
-
-  testWithAuth('reloading either tab keeps both signed in', async ({ authFixture }) => {
-    const { page: page1 } = authFixture;
-    test.setTimeout(60000);
-
-    await authFixture.createTestUser(authFixture.memAuthenticator());
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    const page2 = await page1.context().newPage();
-    await page2.goto('/');
-    await expect(page2).toHaveURL(/\/$/);
-    await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await page1.reload();
-    await expect(page1).toHaveURL(/\/$/);
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-    await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
-
-    await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await page2.reload();
-    await expect(page2).toHaveURL(/\/$/);
-    await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-    await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
-  });
-
-  testWithAuth('navigate away then back via history keeps session', async ({ authFixture }) => {
-    const { page } = authFixture;
-    test.setTimeout(75000);
-
-    await authFixture.createTestUser(authFixture.memAuthenticator());
-    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await page.goto('about:blank');
-    await page.goBack();
-    await expect(page).toHaveURL(/\/$/);
-
-    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
-  });
-
-  testWithAuth('navigate away then re-navigate to qcrypt keeps session', async ({ authFixture }) => {
-    const { page } = authFixture;
-    test.setTimeout(75000);
-
-    await authFixture.createTestUser(authFixture.memAuthenticator());
-    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await page.goto('about:blank');
-    await page.goto('/');
-    await expect(page).toHaveURL(/\/$/);
-
-    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
-  });
-
-  testWithAuth('peer fresh-login then tab reload restores via updated relay', async ({ authFixture }) => {
-    const { page: page1 } = authFixture;
-    test.setTimeout(60000);
-
-    const authenticator = authFixture.memAuthenticator();
-    const testUser = await authFixture.createTestUser(authenticator);
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    const page2 = await page1.context().newPage();
-    await page2.goto('/');
-    await expect(page2).toHaveURL(/\/$/);
-    await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await toggleCredentials(page1);
-    await page1.getByRole('button', { name: /Sign out/ }).click();
-    await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
-
-    // page2 should have received logout message
-    await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
-
-    await authFixture.passkeyAuth(authenticator, async () => {
-      await page1.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
-    });
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    // page2 should not react to the login broadcast — it's the same user we already know.
-    await page2.waitForTimeout(500);
-    await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
-    await expect(page2.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) })).toBeVisible();
-
-    // page2 reload with same user — must restablish new session and relay creds from page1.
-    await page2.reload();
-    await expect(page2).toHaveURL(/\/$/);
-    await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-    await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
-    await expectActiveServerSession(page1, testUser.userName);
-    await expectActiveServerSession(page2, testUser.userName);
-  });
-
-  testWithAuth('sign out in one tab fans out to peers', async ({ authFixture }) => {
-    const { page: page1 } = authFixture;
-    test.setTimeout(75000);
-
-    await authFixture.createTestUser(authFixture.memAuthenticator());
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    const page2 = await page1.context().newPage();
-    await page2.goto('/');
-    await expect(page2).toHaveURL(/\/$/);
-    await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    const page3 = await page1.context().newPage();
-    await page3.goto('/');
-    await expect(page3).toHaveURL(/\/$/);
-    await expect(page3.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await toggleCredentials(page2);
-    await page2.getByRole('button', { name: /Sign out/ }).click();
-
-    await expect(page3.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
-    await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
-    await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
-  });
-
-  testWithAuth('forget user in one tab fans out peers to /welcome', async ({ authFixture }) => {
-    const { page: page1 } = authFixture;
-    test.setTimeout(75000);
-
-    await authFixture.createTestUser(authFixture.memAuthenticator());
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    const page2 = await page1.context().newPage();
-    await page2.goto('/');
-    await expect(page2).toHaveURL(/\/$/);
-    await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await toggleCredentials(page2);
-    await page2.getByRole('button', { name: /Sign out/ }).click();
-    await page2.getByRole('button', { name: /Sign in as a different user/ }).click();
-    await expect(page2).toHaveURL(/\/welcome$/);
-
-    await expect(page1).toHaveURL(/\/welcome$/);
-    await expect(page1.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible();
-  });
-
-  testWithAuth('sign in logs out tabs with a different user', async ({ authFixture }) => {
-    const { page: page1 } = authFixture;
-    test.setTimeout(75000);
-
-    const authA = authFixture.memAuthenticator();
-    const userA = await authFixture.createTestUser(authA);
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await toggleCredentials(page1);
-    await page1.getByRole('button', { name: /Sign out/ }).click();
-    await page1.getByRole('button', { name: /Sign in as a different user/ }).click();
-    await expect(page1).toHaveURL(/\/welcome$/);
-
-    const authB = authFixture.memAuthenticator();
-    const userB = await authFixture.createTestUser(authB);
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await toggleCredentials(page1);
-    await page1.getByRole('button', { name: /Sign out/ }).click();
-    await page1.getByRole('button', { name: /Sign in as a different user/ }).click();
-    await expect(page1).toHaveURL(/\/welcome$/);
-
-    // A second tab shares the same context-wide emulator; point each sign-in at the
-    // authenticator holding that user's passkey.
-    const page2 = await page1.context().newPage();
-    await page2.goto('/welcome', { waitUntil: 'domcontentloaded' });
-
-    // sign in page1 as userA
-    await authFixture.passkeyAuth(authA, async () => {
-      await page1.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-    });
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    // sign in page2 as userB
-    await authFixture.passkeyAuth(authB, async () => {
-      await page2.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-    }, { page: page2 });
-    await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await expect(page1).toHaveURL(/\/welcome$/, { timeout: 10000 });
-    await expect(page1.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible();
-    await expectActiveServerSession(page2, userB.userName);
-
-    // Deleting userB's only passkey removes the account; untrack it so cleanup
-    // doesn't try to re-auth a credential we no longer hold.
-    await deleteFirstPasskey(page2, userB.userName);
-    authFixture.untrackUser(userB.userId);
-  });
-
-  testWithAuth('new passkey from peer refreshes credentials view', async ({ authFixture }) => {
-    const { page: page1 } = authFixture;
-    test.setTimeout(60000);
-
-    const testUser = await authFixture.createTestUser(authFixture.memAuthenticator());
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-    await toggleCredentials(page1);
-    const tableBody1 = page1.locator('table.credtable tbody');
-    await expect(tableBody1.locator('tr')).toHaveCount(1);
-
-    const page2 = await page1.context().newPage();
-    await page2.goto('/');
-    await expect(page2).toHaveURL(/\/$/);
-    await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await toggleCredentials(page2);
-    const tableBody2 = page2.locator('table.credtable tbody');
-    await expect(tableBody2.locator('tr')).toHaveCount(1);
-
-    await authFixture.addPasskey(testUser.userId, authFixture.memAuthenticator(), async () => {
-      await page1.getByRole('button', { name: /New Passkey/ }).click();
-    });
-
-    await expect(tableBody1.locator('tr')).toHaveCount(2);
-    await expect(tableBody2.locator('tr')).toHaveCount(2);
-    await expectActiveServerSession(page2);
-  });
-
-  testWithAuth('deleted passkey from peer refreshes credentials view', async ({ authFixture }) => {
-    const { page: page1 } = authFixture;
-    test.setTimeout(60000);
-
-    const testUser = await authFixture.createTestUser(authFixture.memAuthenticator());
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-    await toggleCredentials(page1);
-    const tableBody1 = page1.locator('table.credtable tbody');
-    await expect(tableBody1.locator('tr')).toHaveCount(1);
-
-    await authFixture.addPasskey(testUser.userId, authFixture.memAuthenticator(), async () => {
-      await page1.getByRole('button', { name: /New Passkey/ }).click();
-    });
-    await expect(tableBody1.locator('tr')).toHaveCount(2);
-
-    const page2 = await page1.context().newPage();
-    await page2.goto('/');
-    await expect(page2).toHaveURL(/\/$/);
-    await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await toggleCredentials(page2);
-    const tableBody2 = page2.locator('table.credtable tbody');
-    await expect(tableBody2.locator('tr')).toHaveCount(2);
-
-    await deleteLastPasskey(page1);
-
-    await expect(tableBody1.locator('tr')).toHaveCount(1);
-    await expect(tableBody2.locator('tr')).toHaveCount(1);
-    await expectActiveServerSession(page1);
-    await expectActiveServerSession(page2);
-  });
-
-  testWithAuth('switch passkey within same user propagates to peer', async ({ authFixture }) => {
-    const { page: page1 } = authFixture;
-    test.setTimeout(75000);
-
-    const auth1 = authFixture.memAuthenticator();
-    const testUser = await authFixture.createTestUser(auth1);
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await toggleCredentials(page1);
-    const auth2 = authFixture.memAuthenticator();
-    await authFixture.addPasskey(testUser.userId, auth2, async () => {
-      await page1.getByRole('button', { name: /New Passkey/ }).click();
-    });
-    await expect(page1.locator('table.credtable tbody').locator('tr')).toHaveCount(2);
-
-    await page1.getByRole('button', { name: /Sign out/ }).click();
-    await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
-
-    const page2 = await page1.context().newPage();
-    await page2.goto('/');
-    await expect(page2).toHaveURL(/\/$/);
-    await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
-
-    // page2 signs in with the first passkey
-    await authFixture.passkeyAuth(auth1, async () => {
-      await page2.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
-    }, { page: page2 });
-    await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await toggleCredentials(page2);
-    const page2Rows = page2.locator('table.credtable tbody tr');
-    await expect(page2Rows).toHaveCount(2);
-    const page2HighlightedIndex = async () => page2.evaluate(() => {
-      const rows = Array.from(document.querySelectorAll('table.credtable tbody tr'));
-      return rows.findIndex((row) => row.querySelector('td.current-pk') !== null);
-    });
-    const firstHighlighted = await page2HighlightedIndex();
-    expect(firstHighlighted).toBeGreaterThanOrEqual(0);
-
-    // page1 signs in with the second passkey
-    await authFixture.passkeyAuth(auth2, async () => {
-      await page1.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
-    });
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await expect.poll(page2HighlightedIndex).not.toBe(firstHighlighted);
-    await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-    await expectActiveServerSession(page1, testUser.userName);
-    await expectActiveServerSession(page2, testUser.userName);
-  });
-
-  testWithAuth('login as different user navigates peer sign-in dialog to /welcome', async ({ authFixture }) => {
-    const { page: page1 } = authFixture;
-    test.setTimeout(90000);
-
-    const authA = authFixture.memAuthenticator();
-    const userA = await authFixture.createTestUser(authA);
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await toggleCredentials(page1);
-    await page1.getByRole('button', { name: /Sign out/ }).click();
-    await page1.getByRole('button', { name: /Sign in as a different user/ }).click();
-    await expect(page1).toHaveURL(/\/welcome$/);
-
-    const authB = authFixture.memAuthenticator();
-    const userB = await authFixture.createTestUser(authB);
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await toggleCredentials(page1);
-    await page1.getByRole('button', { name: /Sign out/ }).click();
-    await page1.getByRole('button', { name: /Sign in as a different user/ }).click();
-    await expect(page1).toHaveURL(/\/welcome$/);
-
-    const page2 = await page1.context().newPage();
-    await page2.goto('/welcome');
-    await authFixture.passkeyAuth(authB, async () => {
-      await page2.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-    }, { page: page2 });
-    await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await toggleCredentials(page2);
-    await page2.getByRole('button', { name: /Sign out/ }).click();
-    await expect(page2.getByRole('button', { name: new RegExp(`Sign in as ${userB.userName}`) })).toBeVisible();
-
-    await authFixture.passkeyAuth(authA, async () => {
-      await page1.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-    });
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    await expect(page2).toHaveURL(/\/welcome$/, { timeout: 15000 });
-  });
-
-  testWithAuth('peer at sign-in dialog ignores broadcasts from same user', async ({ authFixture }) => {
-    const { page: page1 } = authFixture;
-    test.setTimeout(60000);
-
-    const authenticator = authFixture.memAuthenticator();
-    const testUser = await authFixture.createTestUser(authenticator);
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    const page2 = await page1.context().newPage();
-    await page2.goto('/');
-    await expect(page2).toHaveURL(/\/$/);
-    await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    // page1 signs out → page2 opens sign-in dialog.
-    await toggleCredentials(page1);
-    await page1.getByRole('button', { name: /Sign out/ }).click();
-    await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
-    await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
-
-    // page1 signs back in → page2 at dialog should not react.
-    await authFixture.passkeyAuth(authenticator, async () => {
-      await page1.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
-    });
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-    await page2.waitForTimeout(500);
-    await expect(page2.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) })).toBeVisible();
-
-    // page1 signs out again → page2 still at dialog should not react.
-    await toggleCredentials(page1);
-    await page1.getByRole('button', { name: /Sign out/ }).click();
-    await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
-    await page2.waitForTimeout(500);
-    await expect(page2.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) })).toBeVisible();
-  });
-
-  testWithAuth('cold start with no live peer prompts for sign in', async ({ authFixture }) => {
-    const { page: page1 } = authFixture;
-    test.setTimeout(75000);
-
-    await authFixture.createTestUser(authFixture.memAuthenticator());
-    await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
-
-    // Unload qcrypt from page1 so it stops responding on the broadcast channel
-    await page1.goto('about:blank');
-
-    const page2 = await page1.context().newPage();
-    await page2.goto('/');
-    await expect(page2).toHaveURL(/\/$/);
-
-    await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
-  });
-
+      const page2 = await page1.context().newPage();
+      await page2.goto('/');
+      await expect(page2).toHaveURL(/\/$/);
+
+      await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+      await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
+
+      // page1 should keep its session alive.
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+   });
+
+   testWithAuth('reloading either tab keeps both signed in', async ({ authFixture }) => {
+      const { page: page1 } = authFixture;
+      test.setTimeout(60000);
+
+      await authFixture.createTestUser(authFixture.memAuthenticator());
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      const page2 = await page1.context().newPage();
+      await page2.goto('/');
+      await expect(page2).toHaveURL(/\/$/);
+      await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await page1.reload();
+      await expect(page1).toHaveURL(/\/$/);
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+      await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
+
+      await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await page2.reload();
+      await expect(page2).toHaveURL(/\/$/);
+      await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+      await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
+   });
+
+   testWithAuth('navigate away then back via history keeps session', async ({ authFixture }) => {
+      const { page } = authFixture;
+      test.setTimeout(75000);
+
+      await authFixture.createTestUser(authFixture.memAuthenticator());
+      await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await page.goto('about:blank');
+      await page.goBack();
+      await expect(page).toHaveURL(/\/$/);
+
+      await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
+   });
+
+   testWithAuth('navigate away then re-navigate to qcrypt keeps session', async ({ authFixture }) => {
+      const { page } = authFixture;
+      test.setTimeout(75000);
+
+      await authFixture.createTestUser(authFixture.memAuthenticator());
+      await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await page.goto('about:blank');
+      await page.goto('/');
+      await expect(page).toHaveURL(/\/$/);
+
+      await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
+   });
+
+   testWithAuth('peer fresh-login then tab reload restores via updated relay', async ({ authFixture }) => {
+      const { page: page1 } = authFixture;
+      test.setTimeout(60000);
+
+      const authenticator = authFixture.memAuthenticator();
+      const testUser = await authFixture.createTestUser(authenticator);
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      const page2 = await page1.context().newPage();
+      await page2.goto('/');
+      await expect(page2).toHaveURL(/\/$/);
+      await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await toggleCredentials(page1);
+      await page1.getByRole('button', { name: /Sign out/ }).click();
+      await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
+
+      // page2 should have received logout message
+      await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
+
+      await authFixture.passkeyAuth(authenticator, async () => {
+         await page1.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
+      });
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      // page2 should not react to the login broadcast — it's the same user we already know.
+      await page2.waitForTimeout(500);
+      await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
+      await expect(page2.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) })).toBeVisible();
+
+      // page2 reload with same user — must restablish new session and relay creds from page1.
+      await page2.reload();
+      await expect(page2).toHaveURL(/\/$/);
+      await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+      await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).not.toBeVisible();
+      await expectActiveServerSession(page1, testUser.userName);
+      await expectActiveServerSession(page2, testUser.userName);
+   });
+
+   testWithAuth('sign out in one tab fans out to peers', async ({ authFixture }) => {
+      const { page: page1 } = authFixture;
+      test.setTimeout(75000);
+
+      await authFixture.createTestUser(authFixture.memAuthenticator());
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      const page2 = await page1.context().newPage();
+      await page2.goto('/');
+      await expect(page2).toHaveURL(/\/$/);
+      await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      const page3 = await page1.context().newPage();
+      await page3.goto('/');
+      await expect(page3).toHaveURL(/\/$/);
+      await expect(page3.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await toggleCredentials(page2);
+      await page2.getByRole('button', { name: /Sign out/ }).click();
+
+      await expect(page3.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
+      await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
+      await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
+   });
+
+   testWithAuth('forget user in one tab fans out peers to /welcome', async ({ authFixture }) => {
+      const { page: page1 } = authFixture;
+      test.setTimeout(75000);
+
+      await authFixture.createTestUser(authFixture.memAuthenticator());
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      const page2 = await page1.context().newPage();
+      await page2.goto('/');
+      await expect(page2).toHaveURL(/\/$/);
+      await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await toggleCredentials(page2);
+      await page2.getByRole('button', { name: /Sign out/ }).click();
+      await page2.getByRole('button', { name: /Sign in as a different user/ }).click();
+      await expect(page2).toHaveURL(/\/welcome$/);
+
+      await expect(page1).toHaveURL(/\/welcome$/);
+      await expect(page1.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible();
+   });
+
+   testWithAuth('sign in logs out tabs with a different user', async ({ authFixture }) => {
+      const { page: page1 } = authFixture;
+      test.setTimeout(75000);
+
+      const authA = authFixture.memAuthenticator();
+      const userA = await authFixture.createTestUser(authA);
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await toggleCredentials(page1);
+      await page1.getByRole('button', { name: /Sign out/ }).click();
+      await page1.getByRole('button', { name: /Sign in as a different user/ }).click();
+      await expect(page1).toHaveURL(/\/welcome$/);
+
+      const authB = authFixture.memAuthenticator();
+      const userB = await authFixture.createTestUser(authB);
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await toggleCredentials(page1);
+      await page1.getByRole('button', { name: /Sign out/ }).click();
+      await page1.getByRole('button', { name: /Sign in as a different user/ }).click();
+      await expect(page1).toHaveURL(/\/welcome$/);
+
+      // A second tab shares the same context-wide emulator; point each sign-in at the
+      // authenticator holding that user's passkey.
+      const page2 = await page1.context().newPage();
+      await page2.goto('/welcome', { waitUntil: 'domcontentloaded' });
+
+      // sign in page1 as userA
+      await authFixture.passkeyAuth(authA, async () => {
+         await page1.getByRole('button', { name: 'I have used Quick Crypt' }).click();
+      });
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      // sign in page2 as userB
+      await authFixture.passkeyAuth(
+         authB,
+         async () => {
+            await page2.getByRole('button', { name: 'I have used Quick Crypt' }).click();
+         },
+         { page: page2 },
+      );
+      await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await expect(page1).toHaveURL(/\/welcome$/, { timeout: 10000 });
+      await expect(page1.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible();
+      await expectActiveServerSession(page2, userB.userName);
+
+      // Deleting userB's only passkey removes the account; untrack it so cleanup
+      // doesn't try to re-auth a credential we no longer hold.
+      await deleteFirstPasskey(page2, userB.userName);
+      authFixture.untrackUser(userB.userId);
+   });
+
+   testWithAuth('new passkey from peer refreshes credentials view', async ({ authFixture }) => {
+      const { page: page1 } = authFixture;
+      test.setTimeout(60000);
+
+      const testUser = await authFixture.createTestUser(authFixture.memAuthenticator());
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+      await toggleCredentials(page1);
+      const tableBody1 = page1.locator('table.credtable tbody');
+      await expect(tableBody1.locator('tr')).toHaveCount(1);
+
+      const page2 = await page1.context().newPage();
+      await page2.goto('/');
+      await expect(page2).toHaveURL(/\/$/);
+      await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await toggleCredentials(page2);
+      const tableBody2 = page2.locator('table.credtable tbody');
+      await expect(tableBody2.locator('tr')).toHaveCount(1);
+
+      await authFixture.addPasskey(testUser.userId, authFixture.memAuthenticator(), async () => {
+         await page1.getByRole('button', { name: /New Passkey/ }).click();
+      });
+
+      await expect(tableBody1.locator('tr')).toHaveCount(2);
+      await expect(tableBody2.locator('tr')).toHaveCount(2);
+      await expectActiveServerSession(page2);
+   });
+
+   testWithAuth('deleted passkey from peer refreshes credentials view', async ({ authFixture }) => {
+      const { page: page1 } = authFixture;
+      test.setTimeout(60000);
+
+      const testUser = await authFixture.createTestUser(authFixture.memAuthenticator());
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+      await toggleCredentials(page1);
+      const tableBody1 = page1.locator('table.credtable tbody');
+      await expect(tableBody1.locator('tr')).toHaveCount(1);
+
+      await authFixture.addPasskey(testUser.userId, authFixture.memAuthenticator(), async () => {
+         await page1.getByRole('button', { name: /New Passkey/ }).click();
+      });
+      await expect(tableBody1.locator('tr')).toHaveCount(2);
+
+      const page2 = await page1.context().newPage();
+      await page2.goto('/');
+      await expect(page2).toHaveURL(/\/$/);
+      await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await toggleCredentials(page2);
+      const tableBody2 = page2.locator('table.credtable tbody');
+      await expect(tableBody2.locator('tr')).toHaveCount(2);
+
+      await deleteLastPasskey(page1);
+
+      await expect(tableBody1.locator('tr')).toHaveCount(1);
+      await expect(tableBody2.locator('tr')).toHaveCount(1);
+      await expectActiveServerSession(page1);
+      await expectActiveServerSession(page2);
+   });
+
+   testWithAuth('switch passkey within same user propagates to peer', async ({ authFixture }) => {
+      const { page: page1 } = authFixture;
+      test.setTimeout(75000);
+
+      const auth1 = authFixture.memAuthenticator();
+      const testUser = await authFixture.createTestUser(auth1);
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await toggleCredentials(page1);
+      const auth2 = authFixture.memAuthenticator();
+      await authFixture.addPasskey(testUser.userId, auth2, async () => {
+         await page1.getByRole('button', { name: /New Passkey/ }).click();
+      });
+      await expect(page1.locator('table.credtable tbody').locator('tr')).toHaveCount(2);
+
+      await page1.getByRole('button', { name: /Sign out/ }).click();
+      await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
+
+      const page2 = await page1.context().newPage();
+      await page2.goto('/');
+      await expect(page2).toHaveURL(/\/$/);
+      await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
+
+      // page2 signs in with the first passkey
+      await authFixture.passkeyAuth(
+         auth1,
+         async () => {
+            await page2.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
+         },
+         { page: page2 },
+      );
+      await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await toggleCredentials(page2);
+      const page2Rows = page2.locator('table.credtable tbody tr');
+      await expect(page2Rows).toHaveCount(2);
+      const page2HighlightedIndex = async () =>
+         page2.evaluate(() => {
+            const rows = Array.from(document.querySelectorAll('table.credtable tbody tr'));
+            return rows.findIndex((row) => row.querySelector('td.current-pk') !== null);
+         });
+      const firstHighlighted = await page2HighlightedIndex();
+      expect(firstHighlighted).toBeGreaterThanOrEqual(0);
+
+      // page1 signs in with the second passkey
+      await authFixture.passkeyAuth(auth2, async () => {
+         await page1.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
+      });
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await expect.poll(page2HighlightedIndex).not.toBe(firstHighlighted);
+      await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+      await expectActiveServerSession(page1, testUser.userName);
+      await expectActiveServerSession(page2, testUser.userName);
+   });
+
+   testWithAuth('login as different user navigates peer sign-in dialog to /welcome', async ({ authFixture }) => {
+      const { page: page1 } = authFixture;
+      test.setTimeout(90000);
+
+      const authA = authFixture.memAuthenticator();
+      const userA = await authFixture.createTestUser(authA);
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await toggleCredentials(page1);
+      await page1.getByRole('button', { name: /Sign out/ }).click();
+      await page1.getByRole('button', { name: /Sign in as a different user/ }).click();
+      await expect(page1).toHaveURL(/\/welcome$/);
+
+      const authB = authFixture.memAuthenticator();
+      const userB = await authFixture.createTestUser(authB);
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await toggleCredentials(page1);
+      await page1.getByRole('button', { name: /Sign out/ }).click();
+      await page1.getByRole('button', { name: /Sign in as a different user/ }).click();
+      await expect(page1).toHaveURL(/\/welcome$/);
+
+      const page2 = await page1.context().newPage();
+      await page2.goto('/welcome');
+      await authFixture.passkeyAuth(
+         authB,
+         async () => {
+            await page2.getByRole('button', { name: 'I have used Quick Crypt' }).click();
+         },
+         { page: page2 },
+      );
+      await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await toggleCredentials(page2);
+      await page2.getByRole('button', { name: /Sign out/ }).click();
+      await expect(page2.getByRole('button', { name: new RegExp(`Sign in as ${userB.userName}`) })).toBeVisible();
+
+      await authFixture.passkeyAuth(authA, async () => {
+         await page1.getByRole('button', { name: 'I have used Quick Crypt' }).click();
+      });
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      await expect(page2).toHaveURL(/\/welcome$/, { timeout: 15000 });
+   });
+
+   testWithAuth('peer at sign-in dialog ignores broadcasts from same user', async ({ authFixture }) => {
+      const { page: page1 } = authFixture;
+      test.setTimeout(60000);
+
+      const authenticator = authFixture.memAuthenticator();
+      const testUser = await authFixture.createTestUser(authenticator);
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      const page2 = await page1.context().newPage();
+      await page2.goto('/');
+      await expect(page2).toHaveURL(/\/$/);
+      await expect(page2.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      // page1 signs out → page2 opens sign-in dialog.
+      await toggleCredentials(page1);
+      await page1.getByRole('button', { name: /Sign out/ }).click();
+      await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
+      await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
+
+      // page1 signs back in → page2 at dialog should not react.
+      await authFixture.passkeyAuth(authenticator, async () => {
+         await page1.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
+      });
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+      await page2.waitForTimeout(500);
+      await expect(page2.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) })).toBeVisible();
+
+      // page1 signs out again → page2 still at dialog should not react.
+      await toggleCredentials(page1);
+      await page1.getByRole('button', { name: /Sign out/ }).click();
+      await expect(page1.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
+      await page2.waitForTimeout(500);
+      await expect(page2.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) })).toBeVisible();
+   });
+
+   testWithAuth('cold start with no live peer prompts for sign in', async ({ authFixture }) => {
+      const { page: page1 } = authFixture;
+      test.setTimeout(75000);
+
+      await authFixture.createTestUser(authFixture.memAuthenticator());
+      await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
+
+      // Unload qcrypt from page1 so it stops responding on the broadcast channel
+      await page1.goto('about:blank');
+
+      const page2 = await page1.context().newPage();
+      await page2.goto('/');
+      await expect(page2).toHaveURL(/\/$/);
+
+      await expect(page2.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible();
+   });
 });

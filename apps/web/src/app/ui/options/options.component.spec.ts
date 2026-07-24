@@ -5,7 +5,6 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { RouterModule } from '@angular/router';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
-
 describe('OptionsComponent', () => {
    let component: OptionsComponent;
    let fixture: ComponentFixture<OptionsComponent>;
@@ -13,7 +12,7 @@ describe('OptionsComponent', () => {
    beforeEach(async () => {
       await TestBed.configureTestingModule({
          imports: [OptionsComponent, RouterModule.forRoot([]), NoopAnimationsModule],
-         providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
+         providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()],
       }).compileComponents();
 
       fixture = TestBed.createComponent(OptionsComponent);

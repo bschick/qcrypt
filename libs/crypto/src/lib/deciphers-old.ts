@@ -21,21 +21,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { getSodium } from './crypto';
 import * as cc from './cipher.consts';
-import {
-   numToBytes,
-   BYOBStreamReader,
-   ensureArrayBuffer,
-   concatArrays,
-} from './utils';
+import { numToBytes, BYOBStreamReader, ensureArrayBuffer, concatArrays } from './utils';
 
-import {
-   Decipher,
-   CipherState,
-   Extractor,
-   type CipherDataInfo,
-} from './ciphers-current';
+import { Decipher, CipherState, Extractor, type CipherDataInfo } from './ciphers-current';
 import type { KeyProvider } from './keys';
-
 
 export class DecipherV1 extends Decipher {
    /* V1 CipherData Layout (it was a bit brain-dead, but it wasn't written to files)
@@ -54,11 +43,7 @@ export class DecipherV1 extends Decipher {
 
    private _headerish?: Uint8Array;
 
-   constructor(
-      keyProvider: KeyProvider,
-      reader: BYOBStreamReader,
-      headerish?: Uint8Array
-   ) {
+   constructor(keyProvider: KeyProvider, reader: BYOBStreamReader, headerish?: Uint8Array) {
       super(keyProvider, reader);
 
       // V1 didn't really have a header, save the data to combine
@@ -72,7 +57,6 @@ export class DecipherV1 extends Decipher {
 
    // For V1, this should be the entire CipherData array
    protected override async _decodeBlock0Impl(): Promise<void> {
-
       try {
          // This isn't very efficient, but it simplifies object creation and V4 logic
          // (which are more important)
@@ -111,7 +95,7 @@ export class DecipherV1 extends Decipher {
             ver,
             ic,
             slt,
-            encryptedHint
+            encryptedHint,
          });
 
          this._blockData = {
@@ -122,8 +106,8 @@ export class DecipherV1 extends Decipher {
             alg: alg,
             iv: iv,
             encryptedData: encryptedData,
-            additionalData: fileAD
-         }
+            additionalData: fileAD,
+         };
 
          const cdInfo: CipherDataInfo = {
             ver,
@@ -131,7 +115,7 @@ export class DecipherV1 extends Decipher {
             ic,
             lp: 1,
             lpEnd: 1,
-            slt
+            slt,
          };
          this._keyProvider.setCipherDataInfo(cdInfo);
 
@@ -144,17 +128,11 @@ export class DecipherV1 extends Decipher {
 
          if (encryptedHint!.byteLength != 0) {
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(iv);
-            const hintBytes = await Decipher._doDecrypt(
-               alg,
-               hk,
-               hIV,
-               encryptedHint
-            );
+            const hintBytes = await Decipher._doDecrypt(alg, hk, hIV, encryptedHint);
             this._keyProvider.setHint(new TextDecoder().decode(hintBytes));
          }
 
          this._state = CipherState.Block0Decoded;
-
       } catch (err) {
          this.errorState();
          console.error(err);
@@ -165,7 +143,6 @@ export class DecipherV1 extends Decipher {
    }
 
    private async _verifyMAC(): Promise<boolean> {
-
       if (!this._blockData || !this._blockData.additionalData || !this._blockData.encryptedData || !this._blockData) {
          throw new Error('Invalid MAC data');
       }
@@ -180,7 +157,7 @@ export class DecipherV1 extends Decipher {
          sk,
          { name: 'HMAC', hash: 'SHA-256', length: 256 },
          false,
-         ['verify']
+         ['verify'],
       );
 
       const valid: boolean = await crypto.subtle.verify('HMAC', subtleSK, this._blockData.mac, data);
@@ -201,9 +178,7 @@ export class DecipherV1 extends Decipher {
       // This is the signal decrytion is done. V1 never has more than block0
       return new Uint8Array();
    }
-
 }
-
 
 export class DecipherV4 extends Decipher {
    /* V4 CipherData Layout (hopefully less brain dead). Tags are just notation...
@@ -254,11 +229,7 @@ export class DecipherV4 extends Decipher {
 
    private _header?: Uint8Array;
 
-   constructor(
-      keyProvider: KeyProvider,
-      reader: BYOBStreamReader,
-      header?: Uint8Array
-   ) {
+   constructor(keyProvider: KeyProvider, reader: BYOBStreamReader, header?: Uint8Array) {
       super(keyProvider, reader);
       this._header = header;
    }
@@ -268,7 +239,6 @@ export class DecipherV4 extends Decipher {
    }
 
    private async _decodeHeader(header?: Uint8Array): Promise<boolean> {
-
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated.
       let done: boolean = true;
@@ -309,7 +279,7 @@ export class DecipherV4 extends Decipher {
          ver: ver,
          payloadSize: payloadSize,
          flags: flags,
-      }
+      };
 
       return false;
    }
@@ -317,7 +287,6 @@ export class DecipherV4 extends Decipher {
    // Does not allow encoding with zero length encrypted text since that
    // is not needed.
    protected override async _decodeBlock0Impl(): Promise<void> {
-
       try {
          await this._decodeHeader(this._header);
          if (!this._blockData) {
@@ -349,7 +318,7 @@ export class DecipherV4 extends Decipher {
          // V4 additional data is the payload minus encrypted data
          this._blockData.additionalData = payload.subarray(
             0,
-            extractor.offset - this._blockData.encryptedData.byteLength
+            extractor.offset - this._blockData.encryptedData.byteLength,
          );
 
          const cdInfo: CipherDataInfo = {
@@ -358,7 +327,7 @@ export class DecipherV4 extends Decipher {
             ic: ic,
             lp: lp,
             lpEnd: lpEnd,
-            slt: slt
+            slt: slt,
          };
          this._keyProvider.setCipherDataInfo(cdInfo);
 
@@ -372,12 +341,7 @@ export class DecipherV4 extends Decipher {
          let hint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
          if (encryptedHint!.byteLength != 0) {
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(this._blockData.iv);
-            const hintBytes = await Decipher._doDecrypt(
-               this._blockData.alg,
-               hk,
-               hIV,
-               encryptedHint
-            );
+            const hintBytes = await Decipher._doDecrypt(this._blockData.alg, hk, hIV, encryptedHint);
             this._keyProvider.setHint(new TextDecoder().decode(hintBytes));
          }
 
@@ -391,9 +355,7 @@ export class DecipherV4 extends Decipher {
       }
    }
 
-   public override async decryptBlockN(
-   ): Promise<Uint8Array> {
-
+   public override async decryptBlockN(): Promise<Uint8Array> {
       try {
          if (this._state != CipherState.Block0Done) {
             throw new Error(`Decipher invalid state ${this._state}`);
@@ -434,7 +396,6 @@ export class DecipherV4 extends Decipher {
    // but it is public for unit testing. Does not allow encoding
    // with zero length encrypted text since that is not needed
    protected async _decodeBlockN(): Promise<void> {
-
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated, Extractor does test each value for valid ranges as we unpack
       try {
@@ -466,7 +427,7 @@ export class DecipherV4 extends Decipher {
          // V4 additional data is payload - encrypted data
          this._blockData.additionalData = payload.subarray(
             0,
-            extractor.offset - this._blockData.encryptedData.byteLength
+            extractor.offset - this._blockData.encryptedData.byteLength,
          );
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
@@ -483,9 +444,14 @@ export class DecipherV4 extends Decipher {
    }
 
    protected async _verifyMAC(): Promise<boolean> {
-
-      if (!this._blockData || !this._blockData.payloadSize || !this._blockData.ver || !this._blockData.additionalData ||
-          !this._blockData.encryptedData || !this._blockData.mac) {
+      if (
+         !this._blockData ||
+         !this._blockData.payloadSize ||
+         !this._blockData.ver ||
+         !this._blockData.additionalData ||
+         !this._blockData.encryptedData ||
+         !this._blockData.mac
+      ) {
          throw new Error('Data not initialized');
       }
 
@@ -512,7 +478,6 @@ export class DecipherV4 extends Decipher {
 }
 
 export class DecipherV5 extends DecipherV4 {
-
    private _lastMac?: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
    private _lastFlags = 0;
 
@@ -529,7 +494,6 @@ export class DecipherV5 extends DecipherV4 {
    }
 
    protected override async _decodeBlock0Impl(): Promise<void> {
-
       await super._decodeBlock0Impl();
 
       // Eventually flags may be a bitfield
@@ -543,7 +507,6 @@ export class DecipherV5 extends DecipherV4 {
    }
 
    protected override async _decodeBlockN(): Promise<void> {
-
       await super._decodeBlockN();
 
       // If we loaded more data, and lastFlags was 1 (change to bitfield someday)
@@ -563,9 +526,15 @@ export class DecipherV5 extends DecipherV4 {
    }
 
    protected override async _verifyMAC(): Promise<boolean> {
-
-      if (!this._blockData || !this._blockData.payloadSize || !this._blockData.ver || !this._blockData.additionalData ||
-         !this._blockData.encryptedData || !this._blockData.mac || !this._lastMac) {
+      if (
+         !this._blockData ||
+         !this._blockData.payloadSize ||
+         !this._blockData.ver ||
+         !this._blockData.additionalData ||
+         !this._blockData.encryptedData ||
+         !this._blockData.mac ||
+         !this._lastMac
+      ) {
          throw new Error('Data not initialized');
       }
 

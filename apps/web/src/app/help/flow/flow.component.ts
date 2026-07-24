@@ -19,7 +19,17 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import {
+   ChangeDetectionStrategy,
+   Component,
+   ElementRef,
+   computed,
+   effect,
+   inject,
+   signal,
+   untracked,
+   viewChild,
+} from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatIconModule } from '@angular/material/icon';
@@ -45,7 +55,7 @@ interface FlowSearchItem {
 }
 
 function lookupSegment(segment: string, index: number): FlowItem | null {
-   return index === 0 ? FLOW_OVERVIEWS[segment] ?? null : FLOW_SUBSYSTEMS[segment] ?? null;
+   return index === 0 ? (FLOW_OVERVIEWS[segment] ?? null) : (FLOW_SUBSYSTEMS[segment] ?? null);
 }
 
 // Searchable tokens: words from the label, the svg filename split on '_', and
@@ -155,7 +165,7 @@ export class FlowComponent {
    constructor() {
       const origFilterPredicate = this.searchData.filterPredicate;
       this.searchData.filterPredicate = (item, filter) =>
-         filter.split(',').some(part => {
+         filter.split(',').some((part) => {
             const term = part.trim();
             return term !== '' && origFilterPredicate(item, term);
          });
@@ -189,7 +199,7 @@ export class FlowComponent {
       if (typeof window !== 'undefined') {
          const query = window.matchMedia('(prefers-reduced-motion: reduce)');
          this.reducedMotion.set(query.matches);
-         query.addEventListener('change', event => this.reducedMotion.set(event.matches));
+         query.addEventListener('change', (event) => this.reducedMotion.set(event.matches));
       }
    }
 
@@ -211,7 +221,7 @@ export class FlowComponent {
    }
 
    onSvgLoaded(svg: SVGSVGElement): void {
-      svg.querySelectorAll<SVGElement>('[data-target]').forEach(elem => {
+      svg.querySelectorAll<SVGElement>('[data-target]').forEach((elem) => {
          const target = elem.getAttribute('data-target');
          if (!target || !FLOW_SUBSYSTEMS[target]) {
             return;
@@ -219,7 +229,7 @@ export class FlowComponent {
          elem.setAttribute('tabindex', '0');
          elem.setAttribute('role', 'link');
          elem.setAttribute('aria-label', FLOW_SUBSYSTEMS[target].label);
-         elem.addEventListener('keydown', event => {
+         elem.addEventListener('keydown', (event) => {
             if (event.key === 'Enter' || event.key === ' ') {
                event.preventDefault();
                event.stopPropagation();

@@ -21,18 +21,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import * as cc from './cipher.consts';
-import {
-   Ciphers,
-   CipherState,
-   getStreamDecipher,
-   getLatestEncipher
-} from './ciphers';
+import { Ciphers, CipherState, getStreamDecipher, getLatestEncipher } from './ciphers';
 
-import type {
-   CipherDataInfo,
-   PWDProvider,
-   ReadOpts
-} from './ciphers';
+import type { CipherDataInfo, PWDProvider, ReadOpts } from './ciphers';
 import type { KeyProvider } from './keys';
 import { browserSupportsBytesStream, streamWriteBYOD } from './utils';
 
@@ -44,7 +35,6 @@ export type EContext = {
    readonly readOpts?: ReadOpts | undefined;
 };
 
-
 // This method purges the passed in KeyProvider
 export async function encryptStream(
    clearStream: ReadableStream<Uint8Array>,
@@ -52,17 +42,11 @@ export async function encryptStream(
    econtext: EContext,
 ): Promise<ReadableStream<Uint8Array>> {
    try {
-      return await _encryptStreamImpl(
-         clearStream,
-         keyProvider,
-         econtext,
-         1
-      );
+      return await _encryptStreamImpl(clearStream, keyProvider, econtext, 1);
    } finally {
       keyProvider.purge();
    }
 }
-
 
 async function _encryptStreamImpl(
    clearStream: ReadableStream<Uint8Array>,
@@ -70,7 +54,6 @@ async function _encryptStreamImpl(
    econtext: EContext,
    lp: number,
 ): Promise<ReadableStream<Uint8Array>> {
-
    if (lp < 1 || lp > econtext.algs.length) {
       throw new Error('Invalid loop of: ' + lp);
    }
@@ -89,11 +72,11 @@ async function _encryptStreamImpl(
          lp,
          econtext.algs.length,
          econtext.ic,
-         econtext.readOpts
+         econtext.readOpts,
       );
 
       let cipherStream = new ReadableStream({
-         type: (browserSupportsBytesStream() ? 'bytes' : undefined),
+         type: browserSupportsBytesStream() ? 'bytes' : undefined,
 
          async pull(controller) {
             try {
@@ -114,7 +97,7 @@ async function _encryptStreamImpl(
                }
             } catch (err) {
                // Chrome throws an odd "network err" when files have errors, so replace with a consistent error
-               if(err instanceof Error && err.message.toLowerCase().includes("network")) {
+               if (err instanceof Error && err.message.toLowerCase().includes('network')) {
                   err = new Error('Error reading stream');
                }
                encipher.errorState();
@@ -124,7 +107,7 @@ async function _encryptStreamImpl(
          async cancel(reason) {
             encipher.errorState();
             await clearStream.cancel(reason);
-         }
+         },
       });
 
       if (lp < econtext.algs.length) {
@@ -137,7 +120,6 @@ async function _encryptStreamImpl(
       throw err;
    }
 }
-
 
 // This method purges the passed in KeyProvider
 export async function getCipherStreamInfo(
@@ -156,11 +138,10 @@ export async function getCipherStreamInfo(
    }
 }
 
-
 // This method purges the passed in KeyProvider
 export async function decryptStream(
    cipherStream: ReadableStream<Uint8Array>,
-   keyProvider: KeyProvider
+   keyProvider: KeyProvider,
 ): Promise<ReadableStream<Uint8Array>> {
    try {
       return await _decryptStreamImpl(cipherStream, keyProvider);
@@ -171,9 +152,8 @@ export async function decryptStream(
 
 async function _decryptStreamImpl(
    cipherStream: ReadableStream<Uint8Array>,
-   keyProvider: KeyProvider
+   keyProvider: KeyProvider,
 ): Promise<ReadableStream<Uint8Array>> {
-
    const keyProviderClone = keyProvider.clone();
    try {
       const decipher = await getStreamDecipher(cipherStream, keyProviderClone);
@@ -185,10 +165,9 @@ async function _decryptStreamImpl(
       }
 
       let readableStream = new ReadableStream({
-         type: (browserSupportsBytesStream() ? 'bytes' : undefined),
+         type: browserSupportsBytesStream() ? 'bytes' : undefined,
 
          async pull(controller) {
-
             try {
                // Decryption always returns data if any remains
                const decrypted = await decipher.decryptBlock();
@@ -202,10 +181,9 @@ async function _decryptStreamImpl(
                   //@ts-ignore
                   controller.byobRequest?.respond(0);
                }
-
             } catch (err) {
                // Chrome throws an odd "network err" when files have errors, so replace with a consistent error
-               if(err instanceof Error && err.message.toLowerCase().includes("network")) {
+               if (err instanceof Error && err.message.toLowerCase().includes('network')) {
                   err = new Error('Error reading stream');
                }
                decipher.errorState();
@@ -215,17 +193,16 @@ async function _decryptStreamImpl(
          async cancel(reason) {
             decipher.errorState();
             await cipherStream.cancel(reason);
-         }
+         },
       });
 
       if (cdInfo.lp > 1) {
          return await _decryptStreamImpl(readableStream, keyProvider);
       }
 
-      return readableStream
+      return readableStream;
    } catch (err) {
       keyProviderClone.purge();
       throw err;
    }
-
 }

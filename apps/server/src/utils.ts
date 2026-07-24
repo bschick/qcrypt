@@ -21,12 +21,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { FilterXSS } from 'xss';
-import { Buffer } from "node:buffer";
+import { Buffer } from 'node:buffer';
 import * as crypto from 'node:crypto';
 
-
-export class ParamError extends Error {
-}
+export class ParamError extends Error {}
 
 export class AuthError extends Error {
    constructor(msg: string = 'not authorized') {
@@ -34,16 +32,15 @@ export class AuthError extends Error {
    }
 }
 
-export class NotFoundError extends Error {
-}
+export class NotFoundError extends Error {}
 
 const filter = new FilterXSS({
    whiteList: {},
    stripIgnoreTag: true,
    // remove rather than escape stuff < and > (slight modification of original from github)
    escapeHtml: (html: string) => {
-      return html.replace(/</g, "").replace(/>/g, "");
-   }
+      return html.replace(/</g, '').replace(/>/g, '');
+   },
 });
 
 const sanitizeXSS = filter.process.bind(filter);
@@ -57,13 +54,11 @@ export const sanitizeString = (input: string): string => {
       throw new ParamError('empty string value');
    }
    return sanitized.trim();
-}
+};
 
 export const validB64 = (base64: string | null | undefined): boolean => {
-   return !!base64 &&
-      typeof base64 === 'string' &&
-      /^[A-Za-z0-9+/=_-]+$/.test(base64);
-}
+   return !!base64 && typeof base64 === 'string' && /^[A-Za-z0-9+/=_-]+$/.test(base64);
+};
 
 export function isReservedTestUserName(userName: string): boolean {
    return userName.toLowerCase().startsWith('pwtesty_');

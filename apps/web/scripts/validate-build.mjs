@@ -120,8 +120,8 @@ export function validateBuild(browserDir) {
    if (staticChunks.size > 0) {
       problems.push(
          `${staticChunks.size} chunk(s) statically imported by an entry script ` +
-         '(chunk optimizer did not run — expected NG_BUILD_OPTIMIZE_CHUNKS=1): ' +
-         [...staticChunks].sort().join(', '),
+            '(chunk optimizer did not run — expected NG_BUILD_OPTIMIZE_CHUNKS=1): ' +
+            [...staticChunks].sort().join(', '),
       );
    }
 

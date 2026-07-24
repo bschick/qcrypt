@@ -50,14 +50,7 @@ import {
    readAllStdin,
    resolveOpIndexes,
 } from './parser.ts';
-import type {
-   B64UrlMode,
-   Op,
-   Options,
-   ParsedBlock,
-   ParsedFile,
-   Slot,
-} from './parser.ts';
+import type { B64UrlMode, Op, Options, ParsedBlock, ParsedFile, Slot } from './parser.ts';
 
 // ---- Color / paint ----
 
@@ -211,23 +204,17 @@ export function renderSummary(parsed: ParsedFile): string {
          ['Version', versionCell],
          ['Blocks', String(parsed.blocks.length)],
          ['Valid parse', validCell],
-      ]
+      ],
    );
 }
 
 function renderBlocks(parsed: ParsedFile): string[] {
    return parsed.blocks.map((b) => {
       const headers = ['Field', 'Offset', 'Length', 'Value', 'Note'] as const;
-      const rows: Row[] = b.fields.map((f) => [
-         f.name,
-         String(f.offset),
-         String(f.length),
-         f.value,
-         noteCell(f.note),
-      ]);
+      const rows: Row[] = b.fields.map((f) => [f.name, String(f.offset), String(f.length), f.value, noteCell(f.note)]);
       const heading = paint(
          `── Block ${b.index} ── offset ${b.start}, ${b.end - b.start} bytes (payload ${b.payloadSize})`,
-         ANSI.boldCyan
+         ANSI.boldCyan,
       );
       return `${heading}\n${renderTable(headers, rows)}`;
    });
@@ -279,22 +266,22 @@ function renderMoves(slots: readonly Slot[], blocks: readonly ParsedBlock[]): st
       } else if (slot.count !== 1) {
          notes.push(`×${slot.count}`);
       }
-      const emitsLabel = slot.deleted || slot.count <= 0
-         ? '—'
-         : slot.count === 1
-           ? String(outIndex)
-           : `${outIndex}..${outIndex + slot.count - 1}`;
+      const emitsLabel =
+         slot.deleted || slot.count <= 0
+            ? '—'
+            : slot.count === 1
+              ? String(outIndex)
+              : `${outIndex}..${outIndex + slot.count - 1}`;
       if (!slot.deleted && slot.count > 0) {
          outIndex += slot.count;
       }
 
       const noteText = notes.join(', ');
-      const noteCellValue: Cell =
-         slot.deleted
-            ? { text: noteText || 'deleted', color: ANSI.red }
-            : slot.touched
-              ? { text: noteText, color: ANSI.yellow }
-              : noteText;
+      const noteCellValue: Cell = slot.deleted
+         ? { text: noteText || 'deleted', color: ANSI.red }
+         : slot.touched
+           ? { text: noteText, color: ANSI.yellow }
+           : noteText;
 
       return [
          String(slotPos),
@@ -307,10 +294,7 @@ function renderMoves(slots: readonly Slot[], blocks: readonly ParsedBlock[]): st
       ];
    });
 
-   const table = renderTable(
-      ['Slot', 'From', 'Output #', 'Count', 'Bytes', 'Emit bytes', 'Note'],
-      rows
-   );
+   const table = renderTable(['Slot', 'From', 'Output #', 'Count', 'Bytes', 'Emit bytes', 'Note'], rows);
    const footer = `Output: ${outIndex} block${outIndex === 1 ? '' : 's'}, ${totalBytes} bytes`;
    return `${heading}\n${table}\n${footer}`;
 }
@@ -324,9 +308,7 @@ function renderWrites(ops: readonly Op[], blocks: readonly ParsedBlock[]): strin
    const rows: Row[] = writes.map((op) => {
       const field = findFieldByDslId(blocks[op.n], op.field);
       const fileOffset = field !== null ? field.offset + op.offset : -1;
-      const valueStr = op.values
-         .map((v) => (v.kind === 'flip' ? '^' : v.byte.toString(16).padStart(2, '0')))
-         .join('');
+      const valueStr = op.values.map((v) => (v.kind === 'flip' ? '^' : v.byte.toString(16).padStart(2, '0'))).join('');
       return [
          `b${op.n}`,
          op.field,
@@ -381,10 +363,9 @@ async function main(): Promise<number> {
             'When no files are given, a single input is read from stdin.',
          (y) =>
             y.positional('files', {
-               describe:
-                  'Path(s) to Quick Crypt encrypted file(s); omit to read from stdin',
+               describe: 'Path(s) to Quick Crypt encrypted file(s); omit to read from stdin',
                type: 'string',
-            })
+            }),
       )
       .option('max-hex', {
          type: 'number',
@@ -441,7 +422,7 @@ async function main(): Promise<number> {
             'extend past the field’s on-disk length.\n\n' +
             'Quick Crypt files store all multi-byte integers little-endian, so ' +
             'e.g. version 7 is "0700" on disk and a payload length of 0x000094 is ' +
-            '"940000" — write the bytes in LE order.'
+            '"940000" — write the bytes in LE order.',
       )
       .strict()
       .help()
@@ -519,7 +500,7 @@ async function main(): Promise<number> {
                console.error(
                   `\n${paint('Aborting --morph:', ANSI.red)} input has ${fatal.length} fatal parse error${
                      fatal.length === 1 ? '' : 's'
-                  }; cannot reliably modify.\n${lines.join('\n')}`
+                  }; cannot reliably modify.\n${lines.join('\n')}`,
                );
                exitCode = 1;
                continue;
@@ -541,7 +522,7 @@ async function main(): Promise<number> {
             // (writing a byte to its own current value).
             if (outBytes.equals(parsed.buffer)) {
                console.log(
-                  `\n${paint('No-op:', ANSI.yellow)} operations net to zero changes; input unchanged. Not writing output.`
+                  `\n${paint('No-op:', ANSI.yellow)} operations net to zero changes; input unchanged. Not writing output.`,
                );
                continue;
             }
@@ -565,7 +546,7 @@ async function main(): Promise<number> {
             console.log(
                `\n${paint('Wrote', ANSI.green)} ${outPath} (${fileBytes.length} byte${fileBytes.length === 1 ? '' : 's'}` +
                   (encodesOutput(b64url) ? ', base64url' : '') +
-                  ')'
+                  ')',
             );
          } else {
             console.log(renderFile(parsed));
@@ -587,5 +568,5 @@ main().then(
    (err) => {
       console.error(err instanceof Error ? err.message : String(err));
       process.exit(1);
-   }
+   },
 );

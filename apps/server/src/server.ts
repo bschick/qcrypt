@@ -21,13 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import * as cc from './consts';
-import {
-   INTERNAL_VERSION,
-   matchEvent,
-   Patterns,
-   type HttpDetails,
-   type MethodMap,
-} from './urls';
+import { INTERNAL_VERSION, matchEvent, Patterns, type HttpDetails, type MethodMap } from './urls';
 
 import {
    generateAuthenticationOptions,
@@ -45,7 +39,7 @@ import type {
    AuthenticatorTransportFuture,
    PublicKeyCredentialDescriptorJSON,
    AuthenticationResponseJSON,
-   RegistrationResponseJSON
+   RegistrationResponseJSON,
 } from '@simplewebauthn/server';
 
 import {
@@ -59,7 +53,7 @@ import {
    type UnverifiedUserItem,
    type AuthItem,
    type InvitableItem,
-} from "./models";
+} from './models';
 
 import { ElectroError, type EntityItem, type EntityRecord } from 'electrodb';
 import {
@@ -67,8 +61,8 @@ import {
    EncryptCommand,
    DecryptCommand,
    GenerateRandomCommand,
-   type EncryptCommandOutput
-} from "@aws-sdk/client-kms";
+   type EncryptCommandOutput,
+} from '@aws-sdk/client-kms';
 
 import { hkdfSync, randomInt, randomBytes, createHash } from 'node:crypto';
 import { setTimeout } from 'node:timers/promises';
@@ -83,7 +77,7 @@ import {
    base64UrlEncode,
    base64UrlDecode,
    knownLenTimingSafeEqual,
-   isReservedTestUserName
+   isReservedTestUserName,
 } from './utils';
 
 export type Response = {
@@ -101,7 +95,7 @@ import {
    PROOF_PUBKEY_BYTES,
    PROOF_SIG_BYTES,
    type RequestTypes,
-   type ResponseTypes
+   type ResponseTypes,
 } from '@qcrypt/api';
 import { cryptoReady } from '@qcrypt/crypto';
 
@@ -109,7 +103,6 @@ type AuthenticatorInfo = ResponseTypes.AuthenticatorInfo;
 type UserInfo = ResponseTypes.UserInfo;
 type LoginUserInfo = ResponseTypes.LoginUserInfo;
 type InvitableInfo = ResponseTypes.InvitableInfo;
-
 
 type AAGUIDInfo = {
    data: {
@@ -120,8 +113,8 @@ type AAGUIDInfo = {
    timestamp: number;
 };
 
-export const lightFileDefault = 'assets/aaguid/img/default_light.svg'
-export const darkFileDefault = 'assets/aaguid/img/default_dark.svg'
+export const lightFileDefault = 'assets/aaguid/img/default_light.svg';
+export const darkFileDefault = 'assets/aaguid/img/default_dark.svg';
 
 const aaguidCache = new Map<string, AAGUIDInfo>();
 const AAGUID_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -142,21 +135,23 @@ enum EventNames {
    GetRecovery = 'GetRecovery',
 }
 
-
-export const kmsClient = new KMSClient({ region: "us-east-1" });
+export const kmsClient = new KMSClient({ region: 'us-east-1' });
 let jwtMaterial: Uint8Array | undefined;
 const INTERNAL_PHRASE = "Yup, I'm internal";
 
 await cryptoReady();
 
-
 function isVerified(unverifiedUser: UnverifiedUserItem, userId: string): unverifiedUser is VerifiedUserItem {
-   return unverifiedUser && unverifiedUser.verified &&
+   return (
+      unverifiedUser &&
+      unverifiedUser.verified &&
       unverifiedUser.userId === userId &&
       validB64(unverifiedUser.userId) &&
       validB64(unverifiedUser.userCredEnc) &&
-      unverifiedUser.userName !== undefined && unverifiedUser.userName.length > 0 &&
-      unverifiedUser.createdAt !== undefined;
+      unverifiedUser.userName !== undefined &&
+      unverifiedUser.userName.length > 0 &&
+      unverifiedUser.createdAt !== undefined
+   );
 }
 
 function checkVerified(unverifiedUser: UnverifiedUserItem, userId: string): VerifiedUserItem {
@@ -166,20 +161,19 @@ function checkVerified(unverifiedUser: UnverifiedUserItem, userId: string): Veri
    return unverifiedUser;
 }
 
-
 async function encryptField(
    field: Uint8Array,
    context: { [key: string]: string },
-   keyId: string = cc.KMS_KEYID_NEW
+   keyId: string = cc.KMS_KEYID_NEW,
 ): Promise<string> {
    if (!keyId) {
-      throw new Error('missing kms keyid')
+      throw new Error('missing kms keyid');
    }
 
    const enc = new EncryptCommand({
       Plaintext: field,
       KeyId: keyId,
-      EncryptionContext: context
+      EncryptionContext: context,
    });
 
    const result = await kmsClient.send(enc);
@@ -190,22 +184,21 @@ async function encryptField(
    return base64UrlEncode(result.CiphertextBlob)!;
 }
 
-
 export async function decryptField(
    fieldEnc: string,
    context: { [key: string]: string },
    expectedBytes: number,
-   keyId: string = cc.KMS_KEYID_NEW
+   keyId: string = cc.KMS_KEYID_NEW,
 ): Promise<Uint8Array> {
    if (!keyId) {
-      throw new Error('missing kms keyid')
+      throw new Error('missing kms keyid');
    }
 
    const fieldEncBytes = base64UrlDecode(fieldEnc);
    const dec = new DecryptCommand({
       CiphertextBlob: fieldEncBytes,
       KeyId: keyId,
-      EncryptionContext: context
+      EncryptionContext: context,
    });
 
    const result = await kmsClient.send(dec);
@@ -216,40 +209,30 @@ export async function decryptField(
    return result.Plaintext!;
 }
 
-
 async function setupJwtMaterial(): Promise<Uint8Array> {
    if (!process.env.EncMaterial) {
       throw new Error('missing environment value');
    }
 
    try {
-      const encodedMaterial = await decryptField(
-         process.env.EncMaterial,
-         { purpose: "jwt" },
-         cc.JWTMATERIAL_BYTES
-      );
+      const encodedMaterial = await decryptField(process.env.EncMaterial, { purpose: 'jwt' }, cc.JWTMATERIAL_BYTES);
 
       if (!encodedMaterial) {
          throw new Error('encoded material undefined');
       }
       return encodedMaterial;
    } catch (error) {
-      console.error("auth setup errror", error);
+      console.error('auth setup errror', error);
       throw new Error('auth setup error');
    }
 }
 
-
-async function recordEvent(
-   eventName: EventNames,
-   userId: string,
-   credentialId: string | undefined = undefined
-) {
+async function recordEvent(eventName: EventNames, userId: string, credentialId: string | undefined = undefined) {
    try {
       const event = await AuthEvents.create({
          event: eventName,
          userId: userId,
-         credentialId: credentialId
+         credentialId: credentialId,
       }).go();
 
       // record, but don't fail
@@ -262,10 +245,7 @@ async function recordEvent(
    }
 }
 
-async function getSession(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
+async function getSession(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
    if (!verifiedUser) {
       throw new AuthError();
    }
@@ -275,42 +255,32 @@ async function getSession(
    // Return passed in csrf but don't start new session so that expiration is not reset
    return {
       content: responseContent,
-      returnCsrf: true
+      returnCsrf: true,
    };
 }
 
-
-async function deleteSession(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
-
+async function deleteSession(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
    if (!verifiedUser) {
       throw new AuthError();
    }
 
    await Users.patch({
       userId: verifiedUser.userId,
-   }).set({
-      lastCredentialId: '',
-      authCount: verifiedUser.authCount + 1
-   }).go();
+   })
+      .set({
+         lastCredentialId: '',
+         authCount: verifiedUser.authCount + 1,
+      })
+      .go();
 
    return {
-      content: { message: "done" },
-      endSession: true
+      content: { message: 'done' },
+      endSession: true,
    };
 }
 
-
-async function postAuthVerify(
-   httpDetails: HttpDetails
-): Promise<Response> {
-   const {
-      rpID,
-      rpOrigin,
-      body
-   } = httpDetails;
+async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
+   const { rpID, rpOrigin, body } = httpDetails;
 
    if (!body.response || !body.response.userHandle) {
       throw new ParamError('missing userHandle');
@@ -324,14 +294,14 @@ async function postAuthVerify(
 
    // Atomically consume the challenge, then check its validity
    const challenge = await Challenges.delete({
-      challenge: body.challenge
+      challenge: body.challenge,
    }).go({ response: 'all_old' });
 
    if (!challenge || !challenge.data) {
       throw new ParamError('challenge not valid');
    }
 
-   if ((Date.now() / 1000) > challenge.data.expiresAt) {
+   if (Date.now() / 1000 > challenge.data.expiresAt) {
       throw new AuthError();
    }
 
@@ -342,15 +312,19 @@ async function postAuthVerify(
 
    // Derive identity from the credential record via GSI, not from the
    // unsigned userHandle field in the assertion response (which is fakeable)
-   const credResult = await Authenticators.query.byCredId({
-      credentialId: body.id
-   }).go();
+   const credResult = await Authenticators.query
+      .byCredId({
+         credentialId: body.id,
+      })
+      .go();
 
    if (!credResult || credResult.data.length === 0) {
       // Timing parity for the credential-not-found branch.
       try {
          await getUnverifiedUser('AAAAAAAAAAAAAAAAAAAAAA');
-      } catch { /* expected */ }
+      } catch {
+         /* expected */
+      }
       try {
          await verifyAuthenticationResponse({
             response: body as AuthenticationResponseJSON,
@@ -361,10 +335,12 @@ async function postAuthVerify(
                publicKey: randomBytes(77),
                id: 'AAAAAAAAAAAAAAAAAAAAAA',
                counter: 0,
-               transports: ['internal']
-            }
+               transports: ['internal'],
+            },
          });
-      } catch { /* expected */ }
+      } catch {
+         /* expected */
+      }
 
       // Jitter blurs the residual gap: empty vs populated DDB returns, etc
       await setTimeout(randomInt(5, 45));
@@ -390,7 +366,7 @@ async function postAuthVerify(
       publicKey: base64UrlDecode(authenticator.credentialPublicKey)!,
       id: authenticator.credentialId,
       counter: 0, // not using counters
-      transports: authenticator.transports as AuthenticatorTransportFuture[]
+      transports: authenticator.transports as AuthenticatorTransportFuture[],
    };
 
    let verification: VerifiedAuthenticationResponse;
@@ -401,7 +377,7 @@ async function postAuthVerify(
          expectedOrigin: rpOrigin,
          expectedRPID: rpID,
          requireUserVerification: true,
-         credential: webAuthnCredential
+         credential: webAuthnCredential,
       });
    } catch (error) {
       console.error(error);
@@ -416,26 +392,30 @@ async function postAuthVerify(
 
    let startSession: VerifiedUserItem | undefined;
    let responseContent: LoginUserInfo = {
-      verified: verification.verified
+      verified: verification.verified,
    };
 
    const verifiedUser = checkVerified(unverifiedUser, authenticator.userId);
-   startSession = verifiedUser
+   startSession = verifiedUser;
 
    // ok if this fails
    const patchAuths = Authenticators.patch({
       userId: authenticator.userId,
-      credentialId: authenticator.credentialId
-   }).set({
-      lastLogin: Date.now()
-   }).go();
+      credentialId: authenticator.credentialId,
+   })
+      .set({
+         lastLogin: Date.now(),
+      })
+      .go();
 
    const patchUsers = Users.patch({
       userId: verifiedUser.userId,
-   }).set({
-      lastCredentialId: authenticator.credentialId,
-      authCount: verifiedUser.authCount + 1
-   }).go();
+   })
+      .set({
+         lastCredentialId: authenticator.credentialId,
+         authCount: verifiedUser.authCount + 1,
+      })
+      .go();
 
    await Promise.all([patchAuths, patchUsers]);
 
@@ -449,17 +429,12 @@ async function postAuthVerify(
 
    return {
       content: responseContent,
-      startSession: startSession
+      startSession: startSession,
    };
 }
 
-async function postPasskeyVerify(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
-   const {
-      body,
-   } = httpDetails;
+async function postPasskeyVerify(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
+   const { body } = httpDetails;
    const addVerify = body as RequestTypes.AddVerify;
 
    if (!verifiedUser) {
@@ -483,13 +458,8 @@ async function postPasskeyVerify(
    return { content: responseContent };
 }
 
-
-async function postRegVerify(
-   httpDetails: HttpDetails
-): Promise<Response> {
-   const {
-      body
-   } = httpDetails;
+async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
+   const { body } = httpDetails;
    const regVerify = body as RequestTypes.RegVerify;
 
    const unverifiedUser = await getUnverifiedUser(regVerify.userId);
@@ -508,15 +478,23 @@ async function postRegVerify(
    // never leaves a passkey behind.
    const hasPrf = !!regVerify.recoveryUserCredEnc || !!regVerify.passkeyUserCredEnc || !!regVerify.userCredPubKey;
    if (hasPrf) {
-      if (!validB64(regVerify.recoveryUserCredEnc) || base64UrlDecode(regVerify.recoveryUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
-         !validB64(regVerify.passkeyUserCredEnc) || base64UrlDecode(regVerify.passkeyUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
-         !validB64(regVerify.userCredPubKey) || base64UrlDecode(regVerify.userCredPubKey)!.length !== PROOF_PUBKEY_BYTES) {
+      if (
+         !validB64(regVerify.recoveryUserCredEnc) ||
+         base64UrlDecode(regVerify.recoveryUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
+         !validB64(regVerify.passkeyUserCredEnc) ||
+         base64UrlDecode(regVerify.passkeyUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
+         !validB64(regVerify.userCredPubKey) ||
+         base64UrlDecode(regVerify.userCredPubKey)!.length !== PROOF_PUBKEY_BYTES
+      ) {
          throw new ParamError('invalid user credential data');
       }
    }
 
    // The client generates the recovery secret and sends only its public key
-   if (!validB64(regVerify.recoveryPubKey) || base64UrlDecode(regVerify.recoveryPubKey)!.length !== PROOF_PUBKEY_BYTES) {
+   if (
+      !validB64(regVerify.recoveryPubKey) ||
+      base64UrlDecode(regVerify.recoveryPubKey)!.length !== PROOF_PUBKEY_BYTES
+   ) {
       throw new ParamError('invalid recovery public key');
    }
    const recoveryPubKey = regVerify.recoveryPubKey;
@@ -526,15 +504,15 @@ async function postRegVerify(
    // To reduces calls to KMS when user creation
    // is abandonded, delay creation of random values unit here
    const rparams = {
-      NumberOfBytes: cc.USERCRED_BYTES + (cc.INVITABLEID_BYTES * cc.RETRIES)
+      NumberOfBytes: cc.USERCRED_BYTES + cc.INVITABLEID_BYTES * cc.RETRIES,
    };
    const rand = new GenerateRandomCommand(rparams);
    const result = await kmsClient.send(rand);
 
    const randData = result.Plaintext;
-   let randOffset = 0
+   let randOffset = 0;
    if (!randData || randData.byteLength != rparams.NumberOfBytes) {
-      throw new Error("GenerateRandomCommand failure");
+      throw new Error('GenerateRandomCommand failure');
    }
 
    let userCredEnc: string | undefined = undefined;
@@ -547,16 +525,9 @@ async function postRegVerify(
    } else {
       const userCred = randData.slice(randOffset, randOffset + cc.USERCRED_BYTES);
       randOffset += cc.USERCRED_BYTES;
-      userCredEnc = await encryptField(
-         userCred,
-         { userId: unverifiedUser.userId }
-      );
+      userCredEnc = await encryptField(userCred, { userId: unverifiedUser.userId });
 
-      userCredEncBackup = await encryptField(
-         userCred,
-         { userId: unverifiedUser.userId },
-         cc.KMS_KEYID_BACKUP
-      );
+      userCredEncBackup = await encryptField(userCred, { userId: unverifiedUser.userId }, cc.KMS_KEYID_BACKUP);
 
       userCredPubKey = base64UrlEncode(getUserCredPubKey(userCred))!;
    }
@@ -569,9 +540,11 @@ async function postRegVerify(
       randOffset += cc.INVITABLEID_BYTES;
 
       invId = base64UrlEncode(invIdBytes)!;
-      const invitable = await Invitables.query.byInvitableId({
-         invitableId: invId
-      }).go();
+      const invitable = await Invitables.query
+         .byInvitableId({
+            invitableId: invId,
+         })
+         .go();
 
       if (!invitable || invitable.data.length == 0) {
          break;
@@ -587,7 +560,7 @@ async function postRegVerify(
    const invitable = await Invitables.create({
       userId: unverifiedUser.userId,
       invitableId: invId,
-      description: unverifiedUser.userName
+      description: unverifiedUser.userName,
    }).go();
 
    if (!invitable || !invitable.data) {
@@ -600,16 +573,19 @@ async function postRegVerify(
    // and without it is server-side encrypted
    await Users.patch({
       userId: unverifiedUser.userId,
-   }).set({
-      verified: true,
-      prf: hasPrf,
-      userCredEnc: userCredEnc,
-      userCredEncOld: userCredEncBackup,
-      userCredPubKey: userCredPubKey,
-      recoveryPubKey: recoveryPubKey,
-      lastCredentialId: auth.credentialId,
-      authCount: 1
-   }).remove(['expiresAt']).go();
+   })
+      .set({
+         verified: true,
+         prf: hasPrf,
+         userCredEnc: userCredEnc,
+         userCredEncOld: userCredEncBackup,
+         userCredPubKey: userCredPubKey,
+         recoveryPubKey: recoveryPubKey,
+         lastCredentialId: auth.credentialId,
+         authCount: 1,
+      })
+      .remove(['expiresAt'])
+      .go();
 
    unverifiedUser.verified = true;
    unverifiedUser.prf = hasPrf;
@@ -630,17 +606,12 @@ async function postRegVerify(
    recordEvent(EventNames.RegVerify, verifiedUser.userId, auth.credentialId);
    return {
       content: responseContent,
-      startSession: verifiedUser
+      startSession: verifiedUser,
    };
 }
 
-
-async function postRecoverVerify(
-   httpDetails: HttpDetails
-): Promise<Response> {
-   const {
-      body
-   } = httpDetails;
+async function postRecoverVerify(httpDetails: HttpDetails): Promise<Response> {
+   const { body } = httpDetails;
    const recoverVerify = body as RequestTypes.RecoverVerify;
 
    const unverifiedUser = await getUnverifiedUser(recoverVerify.userId);
@@ -663,10 +634,12 @@ async function postRecoverVerify(
 
    await Users.patch({
       userId: unverifiedUser.userId,
-   }).set({
-      lastCredentialId: auth.credentialId,
-      authCount: unverifiedUser.authCount + 1
-   }).go();
+   })
+      .set({
+         lastCredentialId: auth.credentialId,
+         authCount: unverifiedUser.authCount + 1,
+      })
+      .go();
 
    unverifiedUser.lastCredentialId = auth.credentialId;
    unverifiedUser.authCount += 1;
@@ -676,44 +649,38 @@ async function postRecoverVerify(
 
    // force consistent read to capture recent create
    const authenticators = await loadAuthenticators(verifiedUser, true);
-   const responseContent = await makeLoginUserInfoResponse(
-      verifiedUser,
-      !verifiedUser.prf,
-      authenticators
-   );
+   const responseContent = await makeLoginUserInfoResponse(verifiedUser, !verifiedUser.prf, authenticators);
 
    // Let this happen async
    recordEvent(EventNames.RegVerify, verifiedUser.userId, auth.credentialId);
    return {
       content: responseContent,
-      startSession: verifiedUser
+      startSession: verifiedUser,
    };
 }
-
 
 async function _createAuthenticator(
    httpDetails: HttpDetails,
    unverifiedUser: UnverifiedUserItem,
-   expectedPurpose: 'reg' | 'add' | 'recover'
+   expectedPurpose: 'reg' | 'add' | 'recover',
 ): Promise<AuthItem> {
-   const {
-      rpID,
-      rpOrigin,
-      body
-   } = httpDetails;
+   const { rpID, rpOrigin, body } = httpDetails;
    const passkeyVerify = body as RequestTypes.PasskeyVerify;
 
    if (!validB64(passkeyVerify.challenge)) {
       throw new ParamError('invalid challenge format');
    }
-   if (passkeyVerify.passkeyUserCredEnc &&
-      (!validB64(passkeyVerify.passkeyUserCredEnc) || base64UrlDecode(passkeyVerify.passkeyUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES)) {
+   if (
+      passkeyVerify.passkeyUserCredEnc &&
+      (!validB64(passkeyVerify.passkeyUserCredEnc) ||
+         base64UrlDecode(passkeyVerify.passkeyUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES)
+   ) {
       throw new ParamError('invalid passkey userCred ciphertext');
    }
 
    // Atomically consume the challenge, then check its validity
    const challenge = await Challenges.delete({
-      challenge: passkeyVerify.challenge
+      challenge: passkeyVerify.challenge,
    }).go({ response: 'all_old' });
 
    if (!challenge || !challenge.data) {
@@ -721,13 +688,12 @@ async function _createAuthenticator(
    }
 
    // Must use the last challenged within 1 minute or its rejected
-   if ((Date.now() / 1000) > challenge.data.expiresAt) {
+   if (Date.now() / 1000 > challenge.data.expiresAt) {
       throw new AuthError();
    }
 
    // Registration-style challenges are always userId-bound at creation time.
-   if (challenge.data.purpose !== expectedPurpose ||
-      challenge.data.userId !== unverifiedUser.userId) {
+   if (challenge.data.purpose !== expectedPurpose || challenge.data.userId !== unverifiedUser.userId) {
       throw new AuthError();
    }
 
@@ -739,7 +705,7 @@ async function _createAuthenticator(
          expectedOrigin: rpOrigin,
          expectedRPID: rpID,
          requireUserVerification: true,
-         supportedAlgorithmIDs: cc.ALGIDS
+         supportedAlgorithmIDs: cc.ALGIDS,
       });
    } catch (err) {
       console.error(err);
@@ -750,23 +716,13 @@ async function _createAuthenticator(
       throw new AuthError();
    }
 
-   const {
-      aaguid,
-      credential,
-      attestationObject,
-      userVerified,
-      credentialDeviceType,
-      credentialBackedUp,
-      origin
-   } = verification.registrationInfo!;
+   const { aaguid, credential, attestationObject, userVerified, credentialDeviceType, credentialBackedUp, origin } =
+      verification.registrationInfo!;
 
-   const {
-      id,
-      publicKey,
-   } = credential;
+   const { id, publicKey } = credential;
 
    const aaguidDetails = await AAGUIDs.get({
-      aaguid: aaguid
+      aaguid: aaguid,
    }).go();
 
    let description = 'Passkey';
@@ -801,24 +757,15 @@ async function _createAuthenticator(
    return auth.data;
 }
 
-
 // Dummy allowCredentials list for unknown/invalid userIds to defeat
 // enumeration via /v1/auth/options. Determinism (seeded by jwtMaterial + inputUserId)
 // means repeat probes for the same bad userId return the same list
-async function dummyAllowedCreds(
-   inputUserId: string
-): Promise<PublicKeyCredentialDescriptorJSON[]> {
+async function dummyAllowedCreds(inputUserId: string): Promise<PublicKeyCredentialDescriptorJSON[]> {
    if (!jwtMaterial) {
       jwtMaterial = await setupJwtMaterial();
    }
 
-   const material = Buffer.from(hkdfSync(
-      'sha256',
-      jwtMaterial,
-      Buffer.from(inputUserId),
-      'dummy-auth-options',
-      64
-   ));
+   const material = Buffer.from(hkdfSync('sha256', jwtMaterial, Buffer.from(inputUserId), 'dummy-auth-options', 64));
 
    // Cumulative weights reflect the observed (len, transports) distribution
    // in the Authenticators table. Ceil is summed weights. Since 98% of users have
@@ -833,22 +780,19 @@ async function dummyAllowedCreds(
    ];
 
    const pick = material.readUInt16BE(0) % 149;
-   const profile = profiles.find(p => pick < p.ceil)!;
+   const profile = profiles.find((p) => pick < p.ceil)!;
    const id = material.subarray(2, 2 + profile.len);
-   return [{
-      id: base64UrlEncode(id)!,
-      type: 'public-key',
-      transports: profile.transports
-   }];
+   return [
+      {
+         id: base64UrlEncode(id)!,
+         type: 'public-key',
+         transports: profile.transports,
+      },
+   ];
 }
 
-async function postAuthOptions(
-   httpDetails: HttpDetails
-): Promise<Response> {
-   const {
-      rpID,
-      body
-   } = httpDetails;
+async function postAuthOptions(httpDetails: HttpDetails): Promise<Response> {
+   const { rpID, body } = httpDetails;
 
    let userId = UnknownUserId;
    let unverifiedUserId = body?.userId;
@@ -864,9 +808,11 @@ async function postAuthOptions(
       try {
          const unverifiedUser = await getUnverifiedUser(unverifiedUserId);
          userId = unverifiedUser.userId;
-         const auths = await Authenticators.query.byUserId({
-            userId
-         }).go();
+         const auths = await Authenticators.query
+            .byUserId({
+               userId,
+            })
+            .go();
 
          if (auths && auths.data.length > 0) {
             allowedCreds = auths.data.map((cred: AuthItem) => ({
@@ -905,7 +851,7 @@ async function postAuthOptions(
       await Challenges.create({
          challenge: options.challenge,
          purpose: 'auth',
-         userId
+         userId,
       }).go();
 
       // Let this happen async. Don't report a credentialId since
@@ -913,21 +859,14 @@ async function postAuthOptions(
       recordEvent(EventNames.AuthOptions, userId);
 
       return { content: options };
-
    } catch (err) {
       console.error(err);
       throw new Error('unable to generate authentication options');
    }
 }
 
-async function getPasskeyOptions(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
-   const {
-      rpID,
-      rpOrigin
-   } = httpDetails;
+async function getPasskeyOptions(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
+   const { rpID, rpOrigin } = httpDetails;
 
    if (!verifiedUser) {
       throw new AuthError();
@@ -936,15 +875,8 @@ async function getPasskeyOptions(
    return registrationOptions(rpID, rpOrigin, verifiedUser, 'add');
 }
 
-
-async function postRegOptions(
-   httpDetails: HttpDetails
-): Promise<Response> {
-   const {
-      rpID,
-      rpOrigin,
-      body,
-   } = httpDetails;
+async function postRegOptions(httpDetails: HttpDetails): Promise<Response> {
+   const { rpID, rpOrigin, body } = httpDetails;
 
    // Totally new user, must provide a username
    const userName = sanitizeString(body.userName);
@@ -963,14 +895,14 @@ async function postRegOptions(
    // Reduce round-trips by getting enough data for 3 x 16 bytes ID tries
    // and 1 x 32 bytes userCred
    const rparams = {
-      NumberOfBytes: cc.RETRIES * cc.USERID_BYTES
+      NumberOfBytes: cc.RETRIES * cc.USERID_BYTES,
    };
    const rand = new GenerateRandomCommand(rparams);
    const result = await kmsClient.send(rand);
 
    const randData = result.Plaintext;
    if (!randData || randData.byteLength != rparams.NumberOfBytes) {
-      throw new Error("GenerateRandomCommand failure");
+      throw new Error('GenerateRandomCommand failure');
    }
 
    let randOffset = 0;
@@ -983,9 +915,11 @@ async function postRegOptions(
 
       uId = base64UrlEncode(uIdBytes)!;
 
-      const users = await Users.query.byUserId({
-         userId: uId
-      }).go({ attributes: ['userId'] });
+      const users = await Users.query
+         .byUserId({
+            userId: uId,
+         })
+         .go({ attributes: ['userId'] });
 
       if (!users || users.data.length == 0) {
          break;
@@ -1006,7 +940,7 @@ async function postRegOptions(
       userId: uId,
       userName: userName,
       expiresAt: expires,
-      userCredEnc: undefined
+      userCredEnc: undefined,
    }).go();
 
    if (!user || !user.data) {
@@ -1020,17 +954,18 @@ async function registrationOptions(
    rpID: string,
    rpOrigin: string,
    unverifiedUser: UnverifiedUserItem,
-   purpose: 'reg' | 'add' | 'recover'
+   purpose: 'reg' | 'add' | 'recover',
 ): Promise<Response> {
-
    if (!unverifiedUser) {
-      throw new ParamError('invalid user')
+      throw new ParamError('invalid user');
    }
 
    try {
-      const auths = await Authenticators.query.byUserId({
-         userId: unverifiedUser.userId
-      }).go();
+      const auths = await Authenticators.query
+         .byUserId({
+            userId: unverifiedUser.userId,
+         })
+         .go();
 
       let excludeCreds: {
          id: string;
@@ -1040,7 +975,7 @@ async function registrationOptions(
       if (auths && auths.data) {
          excludeCreds = auths.data.map((cred: AuthItem) => ({
             id: cred.credentialId,
-            transports: cred.transports as AuthenticatorTransportFuture[]
+            transports: cred.transports as AuthenticatorTransportFuture[],
          }));
       }
 
@@ -1061,7 +996,7 @@ async function registrationOptions(
       await Challenges.create({
          challenge: options.challenge,
          purpose: purpose,
-         userId: unverifiedUser.userId
+         userId: unverifiedUser.userId,
       }).go();
 
       // Let this happen async
@@ -1073,14 +1008,13 @@ async function registrationOptions(
       console.error(err);
       throw new Error('unable to generate registration options');
    }
-};
+}
 
 async function makeLoginUserInfoResponse(
    verifiedUser: VerifiedUserItem,
    includeUserCred: boolean,
-   auths?: AuthenticatorInfo[]
+   auths?: AuthenticatorInfo[],
 ): Promise<LoginUserInfo> {
-
    const userInfo = await makeUserInfoResponse(verifiedUser, auths);
 
    try {
@@ -1093,7 +1027,7 @@ async function makeLoginUserInfoResponse(
          if (verifiedUser.prf) {
             const auth = await Authenticators.get({
                userId: verifiedUser.userId,
-               credentialId: verifiedUser.lastCredentialId!
+               credentialId: verifiedUser.lastCredentialId!,
             }).go();
 
             passkeyUserCredEnc = auth.data?.userCredEnc;
@@ -1104,7 +1038,7 @@ async function makeLoginUserInfoResponse(
             const decrypted = await decryptField(
                verifiedUser.userCredEnc,
                { userId: verifiedUser.userId },
-               cc.USERCRED_BYTES
+               cc.USERCRED_BYTES,
             );
 
             userCred = base64UrlEncode(decrypted);
@@ -1115,24 +1049,21 @@ async function makeLoginUserInfoResponse(
          ...userInfo,
          userCred: userCred,
          passkeyUserCredEnc: passkeyUserCredEnc,
-         pkId: verifiedUser.lastCredentialId
+         pkId: verifiedUser.lastCredentialId,
       };
-
    } catch (error) {
-      console.error("auth setup errror", error);
+      console.error('auth setup errror', error);
       throw new AuthError('auth setup error');
    }
 }
 
-
 async function makeUserInfoResponse(
    verifiedUser: VerifiedUserItem,
    auths?: AuthenticatorInfo[],
-   invitables?: InvitableInfo[]
+   invitables?: InvitableInfo[],
 ): Promise<UserInfo> {
-
-   auths = auths ?? await loadAuthenticators(verifiedUser);
-   invitables = invitables ?? await loadInvitables(verifiedUser);
+   auths = auths ?? (await loadAuthenticators(verifiedUser));
+   invitables = invitables ?? (await loadInvitables(verifiedUser));
 
    // user explicit assignment rather than spread operator to prevent leaking information
    // in UserItem table that is internal only or provided separatly
@@ -1143,33 +1074,23 @@ async function makeUserInfoResponse(
       hasRecoveryId: !!verifiedUser.recoveryPubKey,
       prf: verifiedUser.prf,
       authenticators: auths,
-      invitables: invitables
+      invitables: invitables,
    };
 
    return userInfo;
 }
 
-
-function makeInvitableResponse(
-   invitable: InvitableItem
-): InvitableInfo {
-
+function makeInvitableResponse(invitable: InvitableItem): InvitableInfo {
    const invitableInfo: InvitableInfo = {
       invitableId: invitable.invitableId,
-      description: invitable.description
+      description: invitable.description,
    };
 
    return invitableInfo;
 }
 
-async function patchPasskey(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
-   const {
-      resources,
-      body,
-   } = httpDetails;
+async function patchPasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
+   const { resources, body } = httpDetails;
 
    if (!verifiedUser) {
       throw new AuthError();
@@ -1190,10 +1111,12 @@ async function patchPasskey(
    try {
       const patched = await Authenticators.patch({
          userId: verifiedUser.userId,
-         credentialId: credId!
-      }).set({
-         description: description
-      }).go();
+         credentialId: credId!,
+      })
+         .set({
+            description: description,
+         })
+         .go();
 
       if (!patched || !patched.data) {
          throw new ParamError('description update failed');
@@ -1217,14 +1140,8 @@ async function patchPasskey(
    return { content: response };
 }
 
-
-async function patchUser(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
-   const {
-      body
-   } = httpDetails;
+async function patchUser(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
+   const { body } = httpDetails;
 
    if (!verifiedUser) {
       throw new AuthError();
@@ -1243,10 +1160,12 @@ async function patchUser(
 
    try {
       const patched = await Users.patch({
-         userId: verifiedUser.userId
-      }).set({
-         userName: userName
-      }).go();
+         userId: verifiedUser.userId,
+      })
+         .set({
+            userName: userName,
+         })
+         .go();
 
       if (!patched || !patched.data) {
          throw new ParamError('username update failed');
@@ -1269,13 +1188,8 @@ async function patchUser(
 }
 
 // Updates a user's recovery public key after they regenerate their recovery words.
-async function putRecover2Key(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
-   const {
-      body
-   } = httpDetails;
+async function putRecover2Key(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
+   const { body } = httpDetails;
 
    if (!verifiedUser) {
       throw new AuthError();
@@ -1287,7 +1201,7 @@ async function putRecover2Key(
    }
 
    const updates: { recoveryPubKey: string; userCredEnc?: string } = {
-      recoveryPubKey: recoveryPubKey!
+      recoveryPubKey: recoveryPubKey!,
    };
 
    // A PRF account keeps userCred encrypted with the recovery secret in userCredEnc, so new
@@ -1301,8 +1215,10 @@ async function putRecover2Key(
    }
 
    const patched = await Users.patch({
-      userId: verifiedUser.userId
-   }).set(updates).go();
+      userId: verifiedUser.userId,
+   })
+      .set(updates)
+      .go();
 
    if (!patched || !patched.data) {
       throw new ParamError('recovery key update failed');
@@ -1319,13 +1235,8 @@ async function putRecover2Key(
 
 // Not tracking events for this method since they are frequent and not particularly
 // interesting
-async function getInvitables(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
-   const {
-      resources
-   } = httpDetails;
+async function getInvitables(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
+   const { resources } = httpDetails;
 
    if (!verifiedUser) {
       throw new AuthError();
@@ -1337,9 +1248,11 @@ async function getInvitables(
    }
 
    // May not want to bring back all parameter
-   const invitables = await Invitables.query.byInvitableId({
-      invitableId
-   }).go();
+   const invitables = await Invitables.query
+      .byInvitableId({
+         invitableId,
+      })
+      .go();
 
    if (!invitables || invitables.data.length === 0) {
       throw new ParamError('invalid invitable id');
@@ -1351,11 +1264,7 @@ async function getInvitables(
 
 // Not tracking events for this method since they are frequent and not particlyarly
 // interesting
-async function getUser(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
-
+async function getUser(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
    if (!verifiedUser) {
       throw new AuthError();
    }
@@ -1364,18 +1273,18 @@ async function getUser(
    return { content: response };
 }
 
-
 async function loadAuthenticators(
    verifiedUser: VerifiedUserItem,
-   consistent: boolean = false
+   consistent: boolean = false,
 ): Promise<AuthenticatorInfo[]> {
-
-   const auths = await Authenticators.query.byUserId({
-      userId: verifiedUser.userId
-   }).go({
-      attributes: ['description', 'credentialId', 'aaguid', 'createdAt'],
-      consistent: consistent
-   });
+   const auths = await Authenticators.query
+      .byUserId({
+         userId: verifiedUser.userId,
+      })
+      .go({
+         attributes: ['description', 'credentialId', 'aaguid', 'createdAt'],
+         consistent: consistent,
+      });
 
    if (!auths || auths.data.length == 0) {
       return [];
@@ -1391,7 +1300,7 @@ async function loadAuthenticators(
 
    for (const aaguid of aaguids) {
       const cachedItem = aaguidCache.get(aaguid);
-      if (!cachedItem || (Date.now() - cachedItem.timestamp > AAGUID_CACHE_TTL_MS)) {
+      if (!cachedItem || Date.now() - cachedItem.timestamp > AAGUID_CACHE_TTL_MS) {
          aaguidsToGet.push(aaguid);
       }
    }
@@ -1405,9 +1314,9 @@ async function loadAuthenticators(
             data: {
                lightIcon: aaguidDetail.lightIcon,
                darkIcon: aaguidDetail.darkIcon,
-               name: aaguidDetail.name
+               name: aaguidDetail.name,
             },
-            timestamp: Date.now()
+            timestamp: Date.now(),
          });
       }
    }
@@ -1420,22 +1329,20 @@ async function loadAuthenticators(
          lightIcon: cachedItem?.data.lightIcon ?? lightFileDefault,
          darkIcon: cachedItem?.data.darkIcon ?? darkFileDefault,
          name: cachedItem?.data.name ?? 'Passkey',
-      }
+      };
    });
 
    return authenticators;
 }
 
-async function loadInvitables(
-   verifiedUser: VerifiedUserItem,
-   consistent: boolean = false
-): Promise<InvitableInfo[]> {
-
-   const invitableItems = await Invitables.query.byUserId({
-      userId: verifiedUser.userId
-   }).go({
-      consistent: consistent
-   });
+async function loadInvitables(verifiedUser: VerifiedUserItem, consistent: boolean = false): Promise<InvitableInfo[]> {
+   const invitableItems = await Invitables.query
+      .byUserId({
+         userId: verifiedUser.userId,
+      })
+      .go({
+         consistent: consistent,
+      });
 
    if (!invitableItems || invitableItems.data.length == 0) {
       return [];
@@ -1450,19 +1357,14 @@ async function loadInvitables(
       return {
          invitableId: item.invitableId,
          description: item.description || '',
-      }
+      };
    });
 
    return invitables;
 }
 
-async function deletePasskey(
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem
-): Promise<Response> {
-   const {
-      resources
-   } = httpDetails;
+async function deletePasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
+   const { resources } = httpDetails;
 
    if (!verifiedUser) {
       throw new AuthError();
@@ -1474,9 +1376,9 @@ async function deletePasskey(
 
    const deleted = await Authenticators.delete({
       userId: verifiedUser.userId,
-      credentialId: credId!
+      credentialId: credId!,
    }).go({
-      response: 'all_old' // needed to determine of anything was deleted
+      response: 'all_old', // needed to determine of anything was deleted
    });
 
    if (!deleted || !deleted.data) {
@@ -1487,7 +1389,7 @@ async function deletePasskey(
    const auths = await loadAuthenticators(verifiedUser, true);
 
    let response: UserInfo = {
-      verified: false
+      verified: false,
    };
    let endSession = false;
 
@@ -1495,9 +1397,11 @@ async function deletePasskey(
    // entire user identity and return unverified UserInfo object
    if (auths.length == 0) {
       // Delete all invitables for this user
-      const invitables = await Invitables.query.byUserId({
-         userId: verifiedUser.userId
-      }).go({ attributes: ['userId', 'invitableId'] });
+      const invitables = await Invitables.query
+         .byUserId({
+            userId: verifiedUser.userId,
+         })
+         .go({ attributes: ['userId', 'invitableId'] });
 
       if (invitables && invitables.data.length > 0) {
          const result = await Invitables.delete(invitables.data).go();
@@ -1507,9 +1411,9 @@ async function deletePasskey(
       }
 
       const deleted = await Users.delete({
-         userId: verifiedUser.userId
+         userId: verifiedUser.userId,
       }).go({
-         response: 'all_old' // needed to determine of anything was deleted
+         response: 'all_old', // needed to determine of anything was deleted
       });
 
       if (!deleted || !deleted.data) {
@@ -1533,12 +1437,8 @@ async function deletePasskey(
 // Issues a single-use challenge for proving recovery-secret ownership. No user
 // validation is done so that the endpoint does not reveal whether a userId
 // exists
-async function postRecover2Challenge(
-   httpDetails: HttpDetails
-): Promise<Response> {
-   const {
-      body
-   } = httpDetails;
+async function postRecover2Challenge(httpDetails: HttpDetails): Promise<Response> {
+   const { body } = httpDetails;
 
    const userId = body?.userId;
    if (!validB64(userId) || base64UrlDecode(userId)?.length !== cc.USERID_BYTES) {
@@ -1546,20 +1446,20 @@ async function postRecover2Challenge(
    }
 
    const rand = new GenerateRandomCommand({
-      NumberOfBytes: cc.CHALLENGE_BYTES
+      NumberOfBytes: cc.CHALLENGE_BYTES,
    });
    const result = await kmsClient.send(rand);
    const challengeBytes = result.Plaintext;
 
    if (!challengeBytes || challengeBytes.byteLength != cc.CHALLENGE_BYTES) {
-      throw new Error("GenerateRandomCommand failure");
+      throw new Error('GenerateRandomCommand failure');
    }
 
    const challenge = base64UrlEncode(challengeBytes)!;
    await Challenges.create({
       challenge: challenge,
       purpose: 'nonce',
-      userId: userId
+      userId: userId,
    }).go();
 
    return { content: { challenge: challenge } };
@@ -1568,14 +1468,8 @@ async function postRecover2Challenge(
 // recover removes all existing passkeys, then initiates the
 // process or creating a new passkey. Caller is expected to followup
 // with a call to verifyRegistration
-async function postRecover(
-   httpDetails: HttpDetails
-): Promise<Response> {
-   const {
-      rpID,
-      rpOrigin,
-      body,
-   } = httpDetails;
+async function postRecover(httpDetails: HttpDetails): Promise<Response> {
+   const { rpID, rpOrigin, body } = httpDetails;
 
    const userCred = body?.userCred;
    const userId = body?.userId;
@@ -1607,7 +1501,7 @@ async function postRecover(
    const userCredDecBytes = await decryptField(
       verifiedUser.userCredEnc,
       { userId: verifiedUser.userId },
-      cc.USERCRED_BYTES
+      cc.USERCRED_BYTES,
    );
 
    // Critical check to ensure we do not recover the wrong user
@@ -1615,9 +1509,11 @@ async function postRecover(
       throw new ParamError(`user account ${verifiedUser.userId} invalid user credential`);
    }
 
-   const auths = await Authenticators.query.byUserId({
-      userId: verifiedUser.userId
-   }).go({ attributes: ['userId', 'credentialId'] });
+   const auths = await Authenticators.query
+      .byUserId({
+         userId: verifiedUser.userId,
+      })
+      .go({ attributes: ['userId', 'credentialId'] });
 
    // Note that if the creation of a new passkey is aborted or cancels, the account
    // will be left with no passkeys. Recovery can be run again to create a new passkey.
@@ -1634,11 +1530,13 @@ async function postRecover(
    const rcount = verifiedUser.recovered ? verifiedUser.recovered + 1 : 1;
 
    const patched = await Users.patch({
-      userId: verifiedUser.userId
-   }).set({
-      recovered: rcount,
-      lastCredentialId: ''
-   }).go();
+      userId: verifiedUser.userId,
+   })
+      .set({
+         recovered: rcount,
+         lastCredentialId: '',
+      })
+      .go();
 
    // log but continue...
    if (!patched || !patched.data) {
@@ -1655,14 +1553,8 @@ async function postRecover(
 // recover removes all existing passkeys, then initiates the
 // process or creating a new passkey. Caller is expected to followup
 // with a call to verifyRegistration
-async function postRecover2(
-   httpDetails: HttpDetails
-): Promise<Response> {
-   const {
-      rpID,
-      rpOrigin,
-      body
-   } = httpDetails;
+async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
+   const { rpID, rpOrigin, body } = httpDetails;
 
    if (!body?.signature) {
       throw new ParamError('missing signature');
@@ -1677,20 +1569,19 @@ async function postRecover2(
    }
    const challengeBytes = base64UrlDecode(challenge)!;
    const signatureBytes = base64UrlDecode(signature)!;
-   if (challengeBytes.byteLength !== cc.CHALLENGE_BYTES ||
-      signatureBytes.byteLength !== PROOF_SIG_BYTES) {
+   if (challengeBytes.byteLength !== cc.CHALLENGE_BYTES || signatureBytes.byteLength !== PROOF_SIG_BYTES) {
       throw new ParamError('invalid recovery proof');
    }
 
    // Atomically consume the challenge, then check its validity
    const consumed = await Challenges.delete({
-      challenge: challenge
+      challenge: challenge,
    }).go({ response: 'all_old' });
 
    if (!consumed || !consumed.data) {
       throw new AuthError();
    }
-   if ((Date.now() / 1000) > consumed.data.expiresAt) {
+   if (Date.now() / 1000 > consumed.data.expiresAt) {
       throw new AuthError();
    }
    if (consumed.data.purpose !== 'nonce' || consumed.data.userId !== userId) {
@@ -1708,19 +1599,16 @@ async function postRecover2(
    try {
       // This call takes < 1ms to run on a warm server, so detecting timing
       // differences to guess valid userId is not practicle
-      verifyRecoveryProof(
-         base64UrlDecode(verifiedUser.recoveryPubKey)!,
-         userId,
-         challenge,
-         signatureBytes
-      );
+      verifyRecoveryProof(base64UrlDecode(verifiedUser.recoveryPubKey)!, userId, challenge, signatureBytes);
    } catch {
       throw new ParamError(`user account ${verifiedUser.userId} invalid recovery proof`);
    }
 
-   const auths = await Authenticators.query.byUserId({
-      userId: verifiedUser.userId
-   }).go({ attributes: ['userId', 'credentialId'] });
+   const auths = await Authenticators.query
+      .byUserId({
+         userId: verifiedUser.userId,
+      })
+      .go({ attributes: ['userId', 'credentialId'] });
 
    // Note that if the creation of a new passkey is aborted or cancels, the account
    // will be left with no passkeys. Recovery can be run again to create a new passkey.
@@ -1737,11 +1625,13 @@ async function postRecover2(
    const rcount = verifiedUser.recovered ? verifiedUser.recovered + 1 : 1;
 
    const patched = await Users.patch({
-      userId: verifiedUser.userId
-   }).set({
-      recovered: rcount,
-      lastCredentialId: ''
-   }).go();
+      userId: verifiedUser.userId,
+   })
+      .set({
+         recovered: rcount,
+         lastCredentialId: '',
+      })
+      .go();
 
    // log but continue...
    if (!patched || !patched.data) {
@@ -1773,19 +1663,14 @@ async function postRecover2(
 // If origin is moved to user, then we could add a test here to confirm the
 // original user origin is used for all following actions.
 //
-async function getUnverifiedUser(
-   userId: string
-): Promise<UnverifiedUserItem> {
-
-   if (!validB64(userId)
-      || base64UrlDecode(userId)?.length !== cc.USERID_BYTES
-   ) {
+async function getUnverifiedUser(userId: string): Promise<UnverifiedUserItem> {
+   if (!validB64(userId) || base64UrlDecode(userId)?.length !== cc.USERID_BYTES) {
       throw new ParamError('invalid userid format');
    }
 
    // May not want to bring back all parameter
    const unverifiedUser = await Users.get({
-      userId: userId
+      userId: userId,
    }).go();
 
    if (!unverifiedUser || !unverifiedUser.data) {
@@ -1794,7 +1679,6 @@ async function getUnverifiedUser(
 
    return unverifiedUser.data;
 }
-
 
 // User may be verified or unverified
 async function getSessionKey(user: UnverifiedUserItem, purpose: string): Promise<Buffer> {
@@ -1813,13 +1697,7 @@ async function getSessionKey(user: UnverifiedUserItem, purpose: string): Promise
    const combined = Buffer.concat([userMaterial, jwtMaterial]);
    const sessionVersion = process.env.SessionVersion ?? '0';
 
-   return Buffer.from(hkdfSync(
-      'sha512',
-      combined,
-      salt,
-      `${purpose}:${user.authCount}:${sessionVersion}`,
-      32
-   ));
+   return Buffer.from(hkdfSync('sha512', combined, salt, `${purpose}:${user.authCount}:${sessionVersion}`, 32));
 }
 
 function killCookie(): string {
@@ -1838,7 +1716,7 @@ async function createCsrf(verifiedUser: VerifiedUserItem): Promise<Uint8Array> {
       throw new AuthError();
    }
 
-   return await getSessionKey(verifiedUser, "csrf");
+   return await getSessionKey(verifiedUser, 'csrf');
 }
 
 async function createCookie(verifiedUser: VerifiedUserItem, rpID: string): Promise<string> {
@@ -1846,31 +1724,24 @@ async function createCookie(verifiedUser: VerifiedUserItem, rpID: string): Promi
       throw new AuthError();
    }
 
-   const jwtKey = await getSessionKey(verifiedUser, "jwt_key");
+   const jwtKey = await getSessionKey(verifiedUser, 'jwt_key');
 
    const payload = {
-      userId: verifiedUser.userId
+      userId: verifiedUser.userId,
    };
 
    const expiresIn = SESSION_TIMEOUT_SEC;
-   const token = sign(
-      payload,
-      jwtKey, {
-         algorithm: 'HS512',
-         expiresIn: expiresIn,
-         issuer: rpID
-      }
-   );
+   const token = sign(payload, jwtKey, {
+      algorithm: 'HS512',
+      expiresIn: expiresIn,
+      issuer: rpID,
+   });
 
-   const cookie = `__Host-JWT=${token}; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=${expiresIn}`
+   const cookie = `__Host-JWT=${token}; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=${expiresIn}`;
    return cookie;
 }
 
-async function verifyCsrf(
-   verifiedUser: VerifiedUserItem,
-   checkCsrf: boolean,
-   headerCsrf: string | undefined
-) {
+async function verifyCsrf(verifiedUser: VerifiedUserItem, checkCsrf: boolean, headerCsrf: string | undefined) {
    // Even if we don't check csrf, make sure we can create one
    const serverCsrfBytes = await createCsrf(verifiedUser);
 
@@ -1882,11 +1753,7 @@ async function verifyCsrf(
    }
 }
 
-async function verifyCookie(
-   cookie: string,
-   rpID: string
-): Promise<VerifiedUserItem> {
-
+async function verifyCookie(cookie: string, rpID: string): Promise<VerifiedUserItem> {
    try {
       const match = /^__Host-JWT=(.+)$/.exec(cookie);
       if (!match || !match[1] || match[1].length < 10) {
@@ -1894,10 +1761,9 @@ async function verifyCookie(
       }
       const token = match[1];
 
-      const unverifiedPayload = decode(
-         token, {
+      const unverifiedPayload = decode(token, {
          json: true,
-         complete: false
+         complete: false,
       });
 
       if (!unverifiedPayload || !unverifiedPayload.userId) {
@@ -1905,36 +1771,27 @@ async function verifyCookie(
       }
 
       const unverifiedUser = await getUnverifiedUser(unverifiedPayload.userId);
-      const jwtKey = await getSessionKey(unverifiedUser, "jwt_key");
+      const jwtKey = await getSessionKey(unverifiedUser, 'jwt_key');
 
       // Internally verifies exp date set with expiresIn during cookie creation
-      const verifiedPayload = verify(
-         token,
-         jwtKey, {
-            algorithms: ['HS512'],
-            issuer: rpID,
-            complete: false
+      const verifiedPayload = verify(token, jwtKey, {
+         algorithms: ['HS512'],
+         issuer: rpID,
+         complete: false,
       }) as JwtPayload;
 
-      if (!verifiedPayload ||
-         verifiedPayload.iss !== rpID
-      ) {
+      if (!verifiedPayload || verifiedPayload.iss !== rpID) {
          throw new Error('invalid cookie');
       }
 
       return checkVerified(unverifiedUser, verifiedPayload.userId);
-
    } catch (err) {
       console.error(err);
       throw new AuthError();
    }
 }
 
-
-async function verifyProof(
-   verifiedUser: VerifiedUserItem,
-   httpDetails: HttpDetails
-): Promise<void> {
+async function verifyProof(verifiedUser: VerifiedUserItem, httpDetails: HttpDetails): Promise<void> {
    const timestampMs = Number(httpDetails.proofTimestamp);
 
    let result: 'absent' | 'timeout' | 'invalid' | 'failed' | 'replayed' | 'ok';
@@ -1946,9 +1803,13 @@ async function verifyProof(
       const pubKeyBytes = base64UrlDecode(verifiedUser.userCredPubKey);
       const signatureBytes = base64UrlDecode(httpDetails.proofSignature);
       const nonceBytes = base64UrlDecode(httpDetails.proofNonce);
-      if (!pubKeyBytes || pubKeyBytes.byteLength !== PROOF_PUBKEY_BYTES ||
-          !signatureBytes || signatureBytes.byteLength !== PROOF_SIG_BYTES ||
-          !nonceBytes || nonceBytes.byteLength !== cc.CHALLENGE_BYTES
+      if (
+         !pubKeyBytes ||
+         pubKeyBytes.byteLength !== PROOF_PUBKEY_BYTES ||
+         !signatureBytes ||
+         signatureBytes.byteLength !== PROOF_SIG_BYTES ||
+         !nonceBytes ||
+         nonceBytes.byteLength !== cc.CHALLENGE_BYTES
       ) {
          result = 'invalid';
       } else {
@@ -1963,7 +1824,7 @@ async function verifyProof(
                httpDetails.proofNonce,
                bodyHashHex,
                signatureBytes,
-               httpDetails.rawQueryString
+               httpDetails.rawQueryString,
             );
             result = 'ok';
          } catch (err) {
@@ -1978,7 +1839,7 @@ async function verifyProof(
                const stored = await Challenges.create({
                   challenge: httpDetails.proofNonce,
                   purpose: 'api',
-                  userId: verifiedUser.userId
+                  userId: verifiedUser.userId,
                }).go({ returnOnConditionCheckFailure: true });
 
                if (stored.rejected) {
@@ -2000,18 +1861,17 @@ async function verifyProof(
    }
 }
 
-
 function makeResponse(content: string, status: number, cookie?: string): any {
    const resp = {
       statusCode: status,
       headers: {
          'Content-Type': 'application/json',
       } as { [key: string]: string },
-      body: content
+      body: content,
    };
 
    if (cookie) {
-      resp.headers["Set-Cookie"] = cookie;
+      resp.headers['Set-Cookie'] = cookie;
    }
 
    console.log(`status: ${status}, cookie: ${Boolean(cookie)} ${status != 200 ? ', error: ' + content : ''}`);
@@ -2019,7 +1879,6 @@ function makeResponse(content: string, status: number, cookie?: string): any {
 }
 
 export async function handler(event: any, context: any) {
-
    // Uncomment for temporary debuging only, since this logs user credentials
    // console.log(event);
 
@@ -2068,7 +1927,6 @@ export async function handler(event: any, context: any) {
          response.content['csrf'] = base64UrlEncode(await createCsrf(verifiedUser!));
       }
       return makeResponse(JSON.stringify(response.content), 200, respCookie);
-
    } catch (err) {
       console.error(err);
 
@@ -2085,38 +1943,92 @@ export async function handler(event: any, context: any) {
       } else if (err instanceof NotFoundError) {
          return makeResponse(err.message, 404);
       } else {
-         const msg = err instanceof Error ? err.name : "internal error";
+         const msg = err instanceof Error ? err.name : 'internal error';
          return makeResponse(msg, 500);
       }
    }
 }
 
-
 const METHODMAP: MethodMap = {
    GET: [
       { name: 'getUser', pattern: Patterns.user, version: 1, authorize: true, handler: getUser },
-      { name: 'getPasskeyOptions', pattern: Patterns.passkeyOptions, version: 1, authorize: true, handler: getPasskeyOptions },
+      {
+         name: 'getPasskeyOptions',
+         pattern: Patterns.passkeyOptions,
+         version: 1,
+         authorize: true,
+         handler: getPasskeyOptions,
+      },
       // Special case of an authenticated method that does not require csrf. Needed so GET session works in a fresh
       // tab/window, and is safe since csrf isn't technically needed for GET calls due to Same-Origin
-      { name: 'getSession', pattern: Patterns.session, version: 1, authorize: true, checkCsrf: false, handler: getSession },
+      {
+         name: 'getSession',
+         pattern: Patterns.session,
+         version: 1,
+         authorize: true,
+         checkCsrf: false,
+         handler: getSession,
+      },
       { name: 'getInvitables', pattern: Patterns.invitables, version: 1, authorize: true, handler: getInvitables },
    ],
    POST: [
-      { name: 'postAuthOptions', pattern: Patterns.authOptions, version: 1, authorize: false, handler: postAuthOptions },
+      {
+         name: 'postAuthOptions',
+         pattern: Patterns.authOptions,
+         version: 1,
+         authorize: false,
+         handler: postAuthOptions,
+      },
       { name: 'postAuthVerify', pattern: Patterns.authVerify, version: 1, authorize: false, handler: postAuthVerify },
-      { name: 'postPasskeyVerify', pattern: Patterns.passkeyVerify, version: 1, authorize: true, handler: postPasskeyVerify },
+      {
+         name: 'postPasskeyVerify',
+         pattern: Patterns.passkeyVerify,
+         version: 1,
+         authorize: true,
+         handler: postPasskeyVerify,
+      },
       { name: 'postRegOptions', pattern: Patterns.regOptions, version: 1, authorize: false, handler: postRegOptions },
       { name: 'postRegVerify', pattern: Patterns.regVerify, version: 1, authorize: false, handler: postRegVerify },
-      { name: 'postRecoverVerify', pattern: Patterns.recoverVerify, version: 1, authorize: false, handler: postRecoverVerify },
+      {
+         name: 'postRecoverVerify',
+         pattern: Patterns.recoverVerify,
+         version: 1,
+         authorize: false,
+         handler: postRecoverVerify,
+      },
       { name: 'postRecover', pattern: Patterns.recover, version: 1, authorize: false, handler: postRecover },
-      { name: 'postRecover2Challenge', pattern: Patterns.recover2Challenge, version: 1, authorize: false, handler: postRecover2Challenge },
+      {
+         name: 'postRecover2Challenge',
+         pattern: Patterns.recover2Challenge,
+         version: 1,
+         authorize: false,
+         handler: postRecover2Challenge,
+      },
       { name: 'postRecover2', pattern: Patterns.recover2, version: 1, authorize: false, handler: postRecover2 },
 
       // Internal only endpoints that are not exposed in cloudfront and require special auth
       { name: 'postMunge', pattern: Patterns.munge, version: INTERNAL_VERSION, authorize: false, handler: postMunge },
-      { name: 'postConsistency', pattern: Patterns.consistency, version: INTERNAL_VERSION, authorize: false, handler: postConsistency },
-      { name: 'postLoadAAGUIDs', pattern: Patterns.loadaaguids, version: INTERNAL_VERSION, authorize: false, handler: postLoadAAGUIDs },
-      { name: 'postCleanupTestUsers', pattern: Patterns.cleanuptestusers, version: INTERNAL_VERSION, authorize: false, handler: postCleanupTestUsers }
+      {
+         name: 'postConsistency',
+         pattern: Patterns.consistency,
+         version: INTERNAL_VERSION,
+         authorize: false,
+         handler: postConsistency,
+      },
+      {
+         name: 'postLoadAAGUIDs',
+         pattern: Patterns.loadaaguids,
+         version: INTERNAL_VERSION,
+         authorize: false,
+         handler: postLoadAAGUIDs,
+      },
+      {
+         name: 'postCleanupTestUsers',
+         pattern: Patterns.cleanuptestusers,
+         version: INTERNAL_VERSION,
+         authorize: false,
+         handler: postCleanupTestUsers,
+      },
    ],
    PUT: [
       { name: 'putRecover2Key', pattern: Patterns.recover2Key, version: 1, authorize: true, handler: putRecover2Key },
@@ -2130,4 +2042,3 @@ const METHODMAP: MethodMap = {
       { name: 'deleteSession', pattern: Patterns.session, version: 1, authorize: true, handler: deleteSession },
    ],
 };
-

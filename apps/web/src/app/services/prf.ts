@@ -40,19 +40,19 @@ import type {
 // comes from the per-credential authenticator key, not this value. Never change it —
 // doing so orphans every existing PRF userCred ciphertext.
 export const PRF_SALT = new Uint8Array([
-   79, 207, 95, 76, 134, 119, 236, 52, 72, 250, 231, 99, 35, 243, 1, 169,
-   205, 253, 35, 140, 130, 201, 98, 86, 30, 119, 75, 185, 138, 67, 243, 33,
+   79, 207, 95, 76, 134, 119, 236, 52, 72, 250, 231, 99, 35, 243, 1, 169, 205, 253, 35, 140, 130, 201, 98, 86, 30, 119,
+   75, 185, 138, 67, 243, 33,
 ]);
 
 // This function edits passed in optionsJson in place
 export function injectPrfExtension(
-   optionsJson: PublicKeyCredentialCreationOptionsJSON | PublicKeyCredentialRequestOptionsJSON
+   optionsJson: PublicKeyCredentialCreationOptionsJSON | PublicKeyCredentialRequestOptionsJSON,
 ): void {
    // @simplewebauthn forwards extensions to the native call unchanged, so first must be a BufferSource
    if (!optionsJson.extensions) {
       optionsJson.extensions = {};
    }
-   let extensions = optionsJson.extensions as { prf: {eval: {first: Uint8Array}} };
+   let extensions = optionsJson.extensions as { prf: { eval: { first: Uint8Array } } };
    extensions.prf = { eval: { first: PRF_SALT } };
 }
 
@@ -61,7 +61,7 @@ export function prfEnabled(clientExtensionResults: AuthenticationExtensionsClien
 }
 
 export function prfReadKey(
-   clientExtensionResults: AuthenticationExtensionsClientOutputs
+   clientExtensionResults: AuthenticationExtensionsClientOutputs,
 ): Uint8Array<ArrayBuffer> | null {
    const first = clientExtensionResults.prf?.results?.first;
    if (!first) {
@@ -79,12 +79,12 @@ export function prfReadKey(
 export async function prfEncrypt(
    plainText: Uint8Array<ArrayBuffer>,
    prfKey: Uint8Array<ArrayBuffer>,
-   userId: string
+   userId: string,
 ): Promise<string> {
    try {
       const keyProvider = new MasterKeyKeyProvider(prfKey, userId);
       const cipherData = await readStreamAll(
-         await encryptStream(streamFromBytes(plainText), keyProvider, { algs: ['X20-PLY'] })
+         await encryptStream(streamFromBytes(plainText), keyProvider, { algs: ['X20-PLY'] }),
       );
       return bytesToBase64(cipherData);
    } finally {
@@ -97,7 +97,7 @@ export async function prfEncrypt(
 export async function prfDecrypt(
    cipherText: string,
    prfKey: Uint8Array<ArrayBuffer>,
-   userId: string
+   userId: string,
 ): Promise<Uint8Array<ArrayBuffer>> {
    try {
       const keyProvider = new MasterKeyKeyProvider(prfKey, userId);

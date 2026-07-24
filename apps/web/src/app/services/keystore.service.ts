@@ -46,11 +46,8 @@ export class KeystoreService {
 
    // Uses an existing key. Returned key material should
    // be used immediately and then overwritten and discarded
-   async get(
-      slot: string,
-      pkId: Uint8Array<ArrayBuffer> | string
-   ): Promise<KeystoreResult> {
-      const pkIdBytes = (typeof pkId === 'string') ? base64ToBytes(pkId) : pkId;
+   async get(slot: string, pkId: Uint8Array<ArrayBuffer> | string): Promise<KeystoreResult> {
+      const pkIdBytes = typeof pkId === 'string' ? base64ToBytes(pkId) : pkId;
 
       const db = await this._db();
       const entry = await new Promise<KeystoreEntry | undefined>((resolve, reject) => {
@@ -69,11 +66,8 @@ export class KeystoreService {
    }
 
    // Create and replace the key in `slot`
-   async create(
-      slot: string,
-      pkId: Uint8Array<ArrayBuffer> | string
-   ): Promise<KeystoreResult> {
-      const pkIdBytes = (typeof pkId === 'string') ? base64ToBytes(pkId) : pkId;
+   async create(slot: string, pkId: Uint8Array<ArrayBuffer> | string): Promise<KeystoreResult> {
+      const pkIdBytes = typeof pkId === 'string' ? base64ToBytes(pkId) : pkId;
 
       const masterKey = await this._newMasterKey(slot);
       const version = await this._writeEntry(slot, masterKey);
@@ -110,10 +104,10 @@ export class KeystoreService {
          req.onsuccess = () => resolve();
          req.onerror = () => reject(req.error);
          req.onblocked = () => {
-             console.warn("Database deletion blocked by another open connection");
-             // Resolve anyway so the caller isn't permanently blocked.
-             // The browser will complete the deletion when other connections close.
-             resolve();
+            console.warn('Database deletion blocked by another open connection');
+            // Resolve anyway so the caller isn't permanently blocked.
+            // The browser will complete the deletion when other connections close.
+            resolve();
          };
       });
    }
@@ -121,9 +115,8 @@ export class KeystoreService {
    private async _deriveKey(
       masterKey: CryptoKey,
       purpose: string,
-      pkId: Uint8Array<ArrayBuffer>
+      pkId: Uint8Array<ArrayBuffer>,
    ): Promise<Uint8Array<ArrayBuffer>> {
-
       if (purpose.length < MIN_SLOT_LEN) {
          throw new Error('Slot must be at least ' + MIN_SLOT_LEN + ' characters');
       }
@@ -134,11 +127,7 @@ export class KeystoreService {
       const purposeBytes = new TextEncoder().encode(purpose);
       const data = concatArrays([purposeBytes, pkId]);
 
-      const derivedBytes = await crypto.subtle.sign(
-         "HMAC",
-         masterKey,
-         data
-      );
+      const derivedBytes = await crypto.subtle.sign('HMAC', masterKey, data);
       if (derivedBytes.byteLength !== cc.KEY_BYTES * 2) {
          throw new Error('Invalid derived key length: ' + derivedBytes.byteLength);
       }
@@ -147,7 +136,6 @@ export class KeystoreService {
    }
 
    private async _newMasterKey(slot: string): Promise<CryptoKey> {
-
       if (slot.length < MIN_SLOT_LEN) {
          throw new Error('Slot must be at least ' + MIN_SLOT_LEN + ' characters');
       }
@@ -157,11 +145,11 @@ export class KeystoreService {
       // key and bascially rebuild a KDF from that.
       return crypto.subtle.generateKey(
          {
-            name: "HMAC",
-            hash: { name: "SHA-512" },
+            name: 'HMAC',
+            hash: { name: 'SHA-512' },
          },
          false,
-         ["sign"]
+         ['sign'],
       );
    }
 

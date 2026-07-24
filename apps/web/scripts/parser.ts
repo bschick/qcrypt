@@ -247,19 +247,14 @@ type HeaderResult = {
 // carry a terminal-block bit. Records errors for unexpected reserved bits,
 // for early termination (terminal=1 mid-stream), and for missing termination
 // (last block has terminal=0).
-function flagsNote(
-   flags: number,
-   isLastBlock: boolean,
-   blockIndex: number,
-   errors: ErrorRecord[]
-): string {
+function flagsNote(flags: number, isLastBlock: boolean, blockIndex: number, errors: ErrorRecord[]): string {
    const where = `block ${blockIndex}`;
    const terminal = flags & 0x01;
-   const reserved = flags & 0xFE;
+   const reserved = flags & 0xfe;
    const parts: string[] = [`terminal=${terminal}`];
    if (reserved !== 0) {
       parts.push(
-         recordError(errors, where, `flags has unexpected bits set (0x${reserved.toString(16).padStart(2, '0')})`)
+         recordError(errors, where, `flags has unexpected bits set (0x${reserved.toString(16).padStart(2, '0')})`),
       );
    }
    if (isLastBlock && terminal === 0) {
@@ -277,7 +272,7 @@ function parseHeader(
    blockIndex: number,
    fields: Field[],
    errors: ErrorRecord[],
-   opts: Options
+   opts: Options,
 ): HeaderResult {
    const where = `block ${blockIndex}`;
 
@@ -295,11 +290,7 @@ function parseHeader(
    const ver = reader.readU16LE();
    let verNote = '';
    if (ver !== fileVersion) {
-      verNote = recordError(
-         errors,
-         where,
-         `header version ${ver} does not match file version ${fileVersion}`
-      );
+      verNote = recordError(errors, where, `header version ${ver} does not match file version ${fileVersion}`);
    }
    fields.push({
       name: 'version',
@@ -316,7 +307,7 @@ function parseHeader(
       sizeNote = recordError(
          errors,
          where,
-         `payload size ${payloadSize} out of range [${PAYLOAD_SIZE_MIN}, ${PAYLOAD_SIZE_MAX}]`
+         `payload size ${payloadSize} out of range [${PAYLOAD_SIZE_MIN}, ${PAYLOAD_SIZE_MAX}]`,
       );
    }
    fields.push({
@@ -368,7 +359,7 @@ function parseFlagsInPayload(
    blockIndex: number,
    isLastBlock: boolean,
    fields: Field[],
-   errors: ErrorRecord[]
+   errors: ErrorRecord[],
 ): number | null {
    if (!reader.canRead(FLAGS_BYTES)) {
       return null;
@@ -392,7 +383,7 @@ function parseAlgAndIv(
    blockIndex: number,
    fields: Field[],
    errors: ErrorRecord[],
-   opts: Options
+   opts: Options,
 ): AlgInfo | null {
    const where = `block ${blockIndex}`;
 
@@ -426,11 +417,7 @@ function parseAlgAndIv(
    const iv = reader.readBytes(ivAvailable);
    let ivNote = '';
    if (ivAvailable < alg.ivBytes) {
-      ivNote = recordFatal(
-         errors,
-         where,
-         `iv truncated: expected ${alg.ivBytes} bytes, only ${ivAvailable} available`
-      );
+      ivNote = recordFatal(errors, where, `iv truncated: expected ${alg.ivBytes} bytes, only ${ivAvailable} available`);
    }
    fields.push({
       name: 'iv',
@@ -454,7 +441,7 @@ function consumeRemainder(
    fields: Field[],
    errors: ErrorRecord[],
    reason: string,
-   opts: Options
+   opts: Options,
 ): void {
    const where = `block ${blockIndex}`;
    const claimedRemaining = payloadSize - (reader.pos - payloadStart);
@@ -471,8 +458,8 @@ function consumeRemainder(
          recordFatal(
             errors,
             where,
-            `payload truncated: claimed ${claimedRemaining} more bytes, only ${available} available`
-         )
+            `payload truncated: claimed ${claimedRemaining} more bytes, only ${available} available`,
+         ),
       );
    }
    fields.push({
@@ -492,7 +479,7 @@ function parseBlock(
    blockIndex: number,
    isFirst: boolean,
    opts: Options,
-   errors: ErrorRecord[]
+   errors: ErrorRecord[],
 ): ParsedBlock {
    const where = `block ${blockIndex}`;
    const blockStart = reader.pos;
@@ -505,7 +492,7 @@ function parseBlock(
       const note = recordFatal(
          errors,
          where,
-         `truncated header: needed ${headerBytes} bytes, only ${blob.length} available`
+         `truncated header: needed ${headerBytes} bytes, only ${blob.length} available`,
       );
       fields.push({
          name: 'truncated header',
@@ -534,7 +521,7 @@ function parseBlock(
       recordFatal(
          errors,
          where,
-         `payload claims ${payloadSize} bytes but only ${reader.data.length - payloadStart} remain in file`
+         `payload claims ${payloadSize} bytes but only ${reader.data.length - payloadStart} remain in file`,
       );
    }
 
@@ -557,7 +544,16 @@ function parseBlock(
 
    const alg = parseAlgAndIv(reader, blockIndex, fields, errors, opts);
    if (alg === null) {
-      consumeRemainder(reader, payloadStart, payloadSize, blockIndex, fields, errors, 'cannot parse without valid alg', opts);
+      consumeRemainder(
+         reader,
+         payloadStart,
+         payloadSize,
+         blockIndex,
+         fields,
+         errors,
+         'cannot parse without valid alg',
+         opts,
+      );
       return {
          index: blockIndex,
          start: blockStart,
@@ -591,7 +587,7 @@ function parseBlock0Tail(
    blockIndex: number,
    fields: Field[],
    errors: ErrorRecord[],
-   opts: Options
+   opts: Options,
 ): void {
    const where = `block ${blockIndex}`;
 
@@ -610,7 +606,16 @@ function parseBlock0Tail(
    });
 
    if (reader.remaining < IC_BYTES) {
-      consumeRemainder(reader, payloadStart, payloadSize, blockIndex, fields, errors, 'truncated before iterations', opts);
+      consumeRemainder(
+         reader,
+         payloadStart,
+         payloadSize,
+         blockIndex,
+         fields,
+         errors,
+         'truncated before iterations',
+         opts,
+      );
       return;
    }
    const icOffset = reader.pos;
@@ -618,12 +623,8 @@ function parseBlock0Tail(
    let icNote = '';
    if (ic === 0) {
       icNote = 'non-pdkf2 block';
-   } else if(ic < ICOUNT_MIN || ic > ICOUNT_MAX) {
-      icNote = recordError(
-         errors,
-         where,
-         `iterations ${ic} out of range [${ICOUNT_MIN}, ${ICOUNT_MAX}]`
-      );
+   } else if (ic < ICOUNT_MIN || ic > ICOUNT_MAX) {
+      icNote = recordError(errors, where, `iterations ${ic} out of range [${ICOUNT_MIN}, ${ICOUNT_MAX}]`);
    }
    fields.push({
       name: 'iterations',
@@ -634,13 +635,22 @@ function parseBlock0Tail(
    });
 
    if (reader.remaining < LPP_BYTES) {
-      consumeRemainder(reader, payloadStart, payloadSize, blockIndex, fields, errors, 'truncated before loop byte', opts);
+      consumeRemainder(
+         reader,
+         payloadStart,
+         payloadSize,
+         blockIndex,
+         fields,
+         errors,
+         'truncated before loop byte',
+         opts,
+      );
       return;
    }
    const lppOffset = reader.pos;
    const lppByte = reader.readU8();
-   const lp = (lppByte & 0x0F) + 1;
-   const lpEnd = ((lppByte >> 4) & 0x0F) + 1;
+   const lp = (lppByte & 0x0f) + 1;
+   const lpEnd = ((lppByte >> 4) & 0x0f) + 1;
    const noteParts: string[] = [`loop=${lp} loopEnd=${lpEnd}`];
    if (lpEnd < 1 || lpEnd > LP_MAX) {
       noteParts.push(recordError(errors, where, `loopEnd ${lpEnd} out of range [1, ${LP_MAX}]`));
@@ -657,7 +667,16 @@ function parseBlock0Tail(
    });
 
    if (reader.remaining < HINT_LEN_BYTES) {
-      consumeRemainder(reader, payloadStart, payloadSize, blockIndex, fields, errors, 'truncated before hint len', opts);
+      consumeRemainder(
+         reader,
+         payloadStart,
+         payloadSize,
+         blockIndex,
+         fields,
+         errors,
+         'truncated before hint len',
+         opts,
+      );
       return;
    }
    const hlenOffset = reader.pos;
@@ -670,7 +689,7 @@ function parseBlock0Tail(
       hlenNote = recordError(
          errors,
          where,
-         `hint len ${hintLen} would consume entire remaining payload of ${remainingPayload} bytes`
+         `hint len ${hintLen} would consume entire remaining payload of ${remainingPayload} bytes`,
       );
    }
    fields.push({
@@ -690,7 +709,7 @@ function parseBlock0Tail(
          hintNote = recordFatal(
             errors,
             where,
-            `hint truncated: expected ${hintLen} bytes, only ${hintAvailable} available`
+            `hint truncated: expected ${hintLen} bytes, only ${hintAvailable} available`,
          );
       }
       fields.push({
@@ -715,7 +734,7 @@ function parseBlockNTail(
    blockIndex: number,
    fields: Field[],
    errors: ErrorRecord[],
-   opts: Options
+   opts: Options,
 ): void {
    readEncryptedData(reader, payloadStart, payloadSize, blockIndex, fields, errors, opts);
 }
@@ -727,7 +746,7 @@ function readEncryptedData(
    blockIndex: number,
    fields: Field[],
    errors: ErrorRecord[],
-   opts: Options
+   opts: Options,
 ): void {
    const where = `block ${blockIndex}`;
    const consumed = reader.pos - payloadStart;
@@ -746,7 +765,7 @@ function readEncryptedData(
       note = recordFatal(
          errors,
          where,
-         `encrypted data truncated: expected ${claimed} bytes, only ${available} available`
+         `encrypted data truncated: expected ${claimed} bytes, only ${available} available`,
       );
    }
    fields.push({
@@ -760,12 +779,7 @@ function readEncryptedData(
 
 // V1 layout (the entire file is a single block):
 //   mac(32) alg(2) iv(var) slt(16) ic(4) ver(2) hint_len(1) hint encrypted_data
-function parseV1Document(
-   reader: Reader,
-   totalSize: number,
-   opts: Options,
-   errors: ErrorRecord[]
-): ParsedBlock {
+function parseV1Document(reader: Reader, totalSize: number, opts: Options, errors: ErrorRecord[]): ParsedBlock {
    const blockIndex = 0;
    const where = `block ${blockIndex}`;
    const blockStart = reader.pos;
@@ -821,7 +835,7 @@ function parseV1Document(
       const icOffset = reader.pos;
       const ic = reader.readU32LE();
       let icNote = '';
-      if(ic < ICOUNT_MIN || ic > ICOUNT_MAX) {
+      if (ic < ICOUNT_MIN || ic > ICOUNT_MAX) {
          icNote = recordError(errors, where, `iterations ${ic} out of range [${ICOUNT_MIN}, ${ICOUNT_MAX}]`);
       }
       fields.push({
@@ -874,7 +888,11 @@ function parseV1Document(
       const hint = reader.readBytes(hintAvailable);
       let hintNote = '';
       if (hintAvailable < hintLen) {
-         hintNote = recordFatal(errors, where, `hint truncated: expected ${hintLen} bytes, only ${hintAvailable} available`);
+         hintNote = recordFatal(
+            errors,
+            where,
+            `hint truncated: expected ${hintLen} bytes, only ${hintAvailable} available`,
+         );
       }
       fields.push({
          name: 'hint encrypted',
@@ -953,7 +971,7 @@ export function parseBuffer(buffer: Buffer, label: string, opts: Options): Parse
          recordFatal(
             errors,
             'file',
-            `parsed ${opts.maxBlocks} blocks but ${reader.remaining} bytes remain (raise --max-blocks to continue)`
+            `parsed ${opts.maxBlocks} blocks but ${reader.remaining} bytes remain (raise --max-blocks to continue)`,
          );
          break;
       }
@@ -1039,17 +1057,21 @@ const DSL_FIELD_TO_NAMES: Record<string, readonly string[]> = {
 
 export const DSL_FIELD_DOCS: readonly { id: string; description: string }[] = [
    { id: 'hmac', description: 'HMAC signature (32 bytes, every block)' },
-   { id: 'ver',  description: 'version number (2 bytes, every block)' },
+   { id: 'ver', description: 'version number (2 bytes, every block)' },
    { id: 'plen', description: 'payload length (3 bytes, every block; not in V1)' },
-   { id: 'flgs', description: 'flags byte; bit 0 = terminal-block (1 byte; V4 reserved, V5 in header, V6+ in payload AD; not in V1)' },
-   { id: 'alg',  description: 'algorithm id (2 bytes, every block)' },
-   { id: 'iv',   description: 'initialization vector (12/24/32 bytes by alg, every block)' },
-   { id: 'slt',  description: 'salt (16 bytes, block 0 only)' },
-   { id: 'ic',   description: 'iteration count (4 bytes, block 0 only)' },
-   { id: 'lpp',  description: 'loop/loop-end packed byte (1 byte, block 0 only; (lpe-1)<<4 | (lp-1))' },
+   {
+      id: 'flgs',
+      description:
+         'flags byte; bit 0 = terminal-block (1 byte; V4 reserved, V5 in header, V6+ in payload AD; not in V1)',
+   },
+   { id: 'alg', description: 'algorithm id (2 bytes, every block)' },
+   { id: 'iv', description: 'initialization vector (12/24/32 bytes by alg, every block)' },
+   { id: 'slt', description: 'salt (16 bytes, block 0 only)' },
+   { id: 'ic', description: 'iteration count (4 bytes, block 0 only)' },
+   { id: 'lpp', description: 'loop/loop-end packed byte (1 byte, block 0 only; (lpe-1)<<4 | (lp-1))' },
    { id: 'hlen', description: 'encrypted-hint length (1 byte, block 0 only)' },
-   { id: 'eh',   description: 'encrypted hint (hlen bytes, block 0 only)' },
-   { id: 'em',   description: 'encrypted message data (rest of payload, every block)' },
+   { id: 'eh', description: 'encrypted hint (hlen bytes, block 0 only)' },
+   { id: 'em', description: 'encrypted message data (rest of payload, every block)' },
 ];
 
 export type Slot = {
@@ -1094,7 +1116,7 @@ function parseSingleOp(raw: string): Op {
       };
    }
    throw new Error(
-      `Invalid op "${raw}". Expected bA^bB (swap), bN- (delete), bNxK (repeat), or bN!FIELD[OFFSET]=BYTES (write)`
+      `Invalid op "${raw}". Expected bA^bB (swap), bN- (delete), bNxK (repeat), or bN!FIELD[OFFSET]=BYTES (write)`,
    );
 }
 
@@ -1110,7 +1132,7 @@ export function resolveOpIndexes(ops: readonly Op[], blockCount: number): Op[] {
       const positive = n < 0 ? blockCount + n : n;
       if (positive < 0 || positive >= blockCount) {
          throw new Error(
-            `block ${n} out of range (file has ${blockCount} block${blockCount === 1 ? '' : 's'}) (op "${raw}")`
+            `block ${n} out of range (file has ${blockCount} block${blockCount === 1 ? '' : 's'}) (op "${raw}")`,
          );
       }
       return positive;
@@ -1175,9 +1197,7 @@ export function findFieldByDslId(block: ParsedBlock, dslId: string): Field | nul
 function findSlot(slots: readonly Slot[], origIdx: number): number {
    const i = slots.findIndex((s) => s.origIdx === origIdx);
    if (i < 0) {
-      throw new Error(
-         `block ${origIdx} not found (file has ${slots.length} block${slots.length === 1 ? '' : 's'})`
-      );
+      throw new Error(`block ${origIdx} not found (file has ${slots.length} block${slots.length === 1 ? '' : 's'})`);
    }
    return i;
 }
@@ -1204,9 +1224,7 @@ export function applyOps(blocks: readonly ParsedBlock[], ops: readonly Op[], buf
       } else if (op.kind === 'repeat') {
          const i = findSlot(slots, op.n);
          if (slots[i].deleted) {
-            throw new Error(
-               `cannot repeat block ${op.n}: it was already deleted by an earlier op (op "${op.raw}")`
-            );
+            throw new Error(`cannot repeat block ${op.n}: it was already deleted by an earlier op (op "${op.raw}")`);
          }
          slots[i].count *= op.count;
          slots[i].touched = true;
@@ -1224,18 +1242,16 @@ function applyWrite(
    blocks: readonly ParsedBlock[],
    slots: readonly Slot[],
    buffer: Buffer,
-   op: Op & { kind: 'write' }
+   op: Op & { kind: 'write' },
 ): void {
    if (op.n < 0 || op.n >= blocks.length) {
       throw new Error(
-         `block ${op.n} not found (file has ${blocks.length} block${blocks.length === 1 ? '' : 's'}) (op "${op.raw}")`
+         `block ${op.n} not found (file has ${blocks.length} block${blocks.length === 1 ? '' : 's'}) (op "${op.raw}")`,
       );
    }
    const slotIdx = findSlot(slots, op.n);
    if (slots[slotIdx].deleted) {
-      throw new Error(
-         `cannot modify block ${op.n}: it was already deleted by an earlier op (op "${op.raw}")`
-      );
+      throw new Error(`cannot modify block ${op.n}: it was already deleted by an earlier op (op "${op.raw}")`);
    }
    if (!(op.field in DSL_FIELD_TO_NAMES)) {
       const ids = Object.keys(DSL_FIELD_TO_NAMES).join(', ');
@@ -1246,23 +1262,21 @@ function applyWrite(
    if (!field) {
       throw new Error(
          `field "${op.field}" does not exist in block ${op.n} (op "${op.raw}"). ` +
-            `Some fields are block-0 only or are absent from certain versions.`
+            `Some fields are block-0 only or are absent from certain versions.`,
       );
    }
    if (field.length === 0) {
-      throw new Error(
-         `field "${op.field}" in block ${op.n} has length 0; nothing to write into (op "${op.raw}")`
-      );
+      throw new Error(`field "${op.field}" in block ${op.n} has length 0; nothing to write into (op "${op.raw}")`);
    }
    if (op.offset < 0 || op.offset >= field.length) {
       throw new Error(
-         `offset ${op.offset} out of range for field "${op.field}" (length ${field.length}) (op "${op.raw}")`
+         `offset ${op.offset} out of range for field "${op.field}" (length ${field.length}) (op "${op.raw}")`,
       );
    }
    if (op.offset + op.values.length > field.length) {
       throw new Error(
          `writing ${op.values.length} byte(s) at offset ${op.offset} would exceed ` +
-            `field "${op.field}" length ${field.length} (op "${op.raw}")`
+            `field "${op.field}" length ${field.length} (op "${op.raw}")`,
       );
    }
    const absStart = field.offset + op.offset;
@@ -1272,7 +1286,7 @@ function applyWrite(
       if (v.kind === 'hex') {
          buffer[absStart + i] = v.byte;
       } else {
-         buffer[absStart + i] ^= 0xFF;
+         buffer[absStart + i] ^= 0xff;
       }
    }
 }
@@ -1297,10 +1311,7 @@ export function buildOutputBytes(buffer: Buffer, blocks: readonly ParsedBlock[],
 // responsible for treating the result (write to disk, encode for tests).
 // Always works on a copy of the buffer so the caller's parsed.buffer stays
 // pristine.
-export function morphInMemory(
-   parsed: ParsedFile,
-   morphSpec: string
-): { bytes: Buffer; slots: Slot[]; ops: Op[] } {
+export function morphInMemory(parsed: ParsedFile, morphSpec: string): { bytes: Buffer; slots: Slot[]; ops: Op[] } {
    const ops = resolveOpIndexes(parseOpsString(morphSpec), parsed.blocks.length);
    const workingBuffer = Buffer.from(parsed.buffer);
    const slots = applyOps(parsed.blocks, ops, workingBuffer);

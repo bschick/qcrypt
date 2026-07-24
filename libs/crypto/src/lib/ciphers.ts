@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import * as cc from './cipher.consts';
-import { BYOBStreamReader, bytesToNum, getRandom } from "./utils";
+import { BYOBStreamReader, bytesToNum, getRandom } from './utils';
 
 import {
    Ciphers,
@@ -32,27 +32,14 @@ import {
    CipherState,
    type CipherDataInfo,
    type ReadOpts,
-}  from "./ciphers-current"
+} from './ciphers-current';
 
-import {
-   DecipherV1,
-   DecipherV4,
-   DecipherV5
-}  from "./deciphers-old"
+import { DecipherV1, DecipherV4, DecipherV5 } from './deciphers-old';
 import { type KeyProvider, type PWDProvider } from './keys';
 
-export {
-   Ciphers,
-   Encipher,
-   Decipher,
-   CipherState,
-};
+export { Ciphers, Encipher, Decipher, CipherState };
 
-export type {
-   PWDProvider,
-   CipherDataInfo,
-   ReadOpts
-};
+export type { PWDProvider, CipherDataInfo, ReadOpts };
 
 export function getLatestEncipher(
    clearStream: ReadableStream<Uint8Array>,
@@ -61,9 +48,8 @@ export function getLatestEncipher(
    lp: number,
    lpEnd: number,
    ic: number = 0,
-   readOpts?: ReadOpts
+   readOpts?: ReadOpts,
 ): Encipher {
-
    const slt = getRandom(cc.SLT_BYTES);
    keyProvider.setCipherDataInfo({
       ver: cc.CURRENT_VERSION,
@@ -71,21 +57,19 @@ export function getLatestEncipher(
       lp,
       lpEnd,
       slt,
-      ic
+      ic,
    });
 
    const reader = new BYOBStreamReader(clearStream);
    return new EncipherV7(keyProvider, reader, readOpts);
 }
 
-
 // Return appropriate version of Decipher. pwdProvider can be undefined when
 // only CipherDataInfo is needed
 export async function getStreamDecipher(
    cipherStream: ReadableStream<Uint8Array>,
-   keyProvider: KeyProvider
+   keyProvider: KeyProvider,
 ): Promise<Decipher> {
-
    let decipher: Decipher;
    const reader = new BYOBStreamReader(cipherStream);
 

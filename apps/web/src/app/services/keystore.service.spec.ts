@@ -170,7 +170,7 @@ describe('KeystoreService', () => {
       // Bypass private member checks by casting to any
       const srvAny = service as any;
       const db: IDBDatabase = await srvAny._db();
-      const entry = await new Promise<{ masterKey: CryptoKey, version: number }>((resolve, reject) => {
+      const entry = await new Promise<{ masterKey: CryptoKey; version: number }>((resolve, reject) => {
          const req = db.transaction(srvAny._storeName, 'readonly').objectStore(srvAny._storeName).get(slot);
          req.onsuccess = () => resolve(req.result);
          req.onerror = () => reject(req.error);
@@ -205,5 +205,4 @@ describe('KeystoreService', () => {
       expect(getMaterial.derivedKey).toBeInstanceOf(Uint8Array);
       expect(createMaterial).toEqual(getMaterial);
    });
-
 });

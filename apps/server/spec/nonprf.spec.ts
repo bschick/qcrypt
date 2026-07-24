@@ -67,7 +67,7 @@ describe('no-PRF account', () => {
          '/v1/passkeys/verify',
          { ...add.attestation, challenge: opts.data.challenge },
          auth,
-         account.cookie
+         account.cookie,
       );
       expect(ok.status).toBe(200);
       await expectPasskeyDeleted(add.attestation.id, account.csrf, account.cookie);
@@ -83,7 +83,7 @@ describe('no-PRF account', () => {
             passkeyUserCredEnc: bytesToBase64(getRandom(cc.USERCRED_BYTES)),
          },
          auth,
-         account.cookie
+         account.cookie,
       );
       expect(bad.status).toBe(400);
    });

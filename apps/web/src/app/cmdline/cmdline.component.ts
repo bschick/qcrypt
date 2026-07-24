@@ -20,11 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import {
-   Component,
-   type OnDestroy,
-   type OnInit
-} from '@angular/core';
+import { Component, type OnDestroy, type OnInit } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -40,18 +36,24 @@ import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { bytesToBase64 } from '@qcrypt/crypto';
 
-
 @Component({
    selector: 'app-cmd-line',
    templateUrl: './cmdline.component.html',
    styleUrl: './cmdline.component.scss',
-   imports: [MatIconModule, MatButtonModule, ClipboardModule,
-      MatInputModule, MatProgressSpinnerModule, MatFormFieldModule,
-      MatTooltipModule, FormsModule, ReactiveFormsModule, RouterLink
-   ]
+   imports: [
+      MatIconModule,
+      MatButtonModule,
+      ClipboardModule,
+      MatInputModule,
+      MatProgressSpinnerModule,
+      MatFormFieldModule,
+      MatTooltipModule,
+      FormsModule,
+      ReactiveFormsModule,
+      RouterLink,
+   ],
 })
 export class CmdLineComponent implements OnInit, OnDestroy {
-
    public showProgress = true;
    public hideCred = true;
    public error = '';
@@ -61,17 +63,14 @@ export class CmdLineComponent implements OnInit, OnDestroy {
    constructor(
       public authSvc: AuthenticatorService,
       private router: Router,
-      private snackBar: MatSnackBar) {
-   }
+      private snackBar: MatSnackBar,
+   ) {}
 
    ngOnInit() {
-      this.authSub = this.authSvc.on(
-         [AuthEvent.Logout],
-         () => {
-            this.error = '';
-            this.router.navigateByUrl('/');
-         }
-      );
+      this.authSub = this.authSvc.on([AuthEvent.Logout], () => {
+         this.error = '';
+         this.router.navigateByUrl('/');
+      });
 
       this.reloadData();
    }
@@ -87,20 +86,22 @@ export class CmdLineComponent implements OnInit, OnDestroy {
       this.showProgress = true;
       this.error = '';
 
-      this.authSvc.reauthenticate().then( async () => {
-         const userCred = await this.authSvc.getUserCred();
-         this.userCredential.setValue(bytesToBase64(userCred));
-         userCred.fill(0);
-      }).catch( (err) => {
-         console.error(err);
-         if(err instanceof Error && err.message.includes("fetch")) {
-            this.error = 'Retrieval failed, check your connection try again';
-         } else {
-            this.error = 'Retrieval failed, try again';
-         }
-      }).finally(
-        () => this.showProgress = false
-      );
+      this.authSvc
+         .reauthenticate()
+         .then(async () => {
+            const userCred = await this.authSvc.getUserCred();
+            this.userCredential.setValue(bytesToBase64(userCred));
+            userCred.fill(0);
+         })
+         .catch((err) => {
+            console.error(err);
+            if (err instanceof Error && err.message.includes('fetch')) {
+               this.error = 'Retrieval failed, check your connection try again';
+            } else {
+               this.error = 'Retrieval failed, try again';
+            }
+         })
+         .finally(() => (this.showProgress = false));
    }
 
    toastMessage(msg: string) {
@@ -108,5 +109,4 @@ export class CmdLineComponent implements OnInit, OnDestroy {
          duration: 2000,
       });
    }
-
 }

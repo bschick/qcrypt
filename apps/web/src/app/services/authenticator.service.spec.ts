@@ -49,7 +49,6 @@ to assert most of the meaninful actions in this table
 +-------------------------------------------------------+--------------------------+--------------------------------+-------------------------------------+------------------------------------------------+-------------------------------------------------------------------------------------+-----------------------------------------------+
 */
 
-
 import { TestBed } from '@angular/core/testing';
 import { AuthenticatorService, AuthEvent, type LoginUserInfo } from './authenticator.service';
 import { BroadcastService } from './broadcast.service';
@@ -86,19 +85,21 @@ describe('AuthenticatorService', () => {
          userCred: userCred,
          csrf: 'csrf-token-from-test',
          hasRecoveryId: true,
-         authenticators: [{
-            credentialId: pkId,
-            description: 'Test laptop authenticator',
-            lightIcon: 'laptop-light.svg',
-            darkIcon: 'laptop-dark.svg',
-            name: 'YubiKey 5 NFC'
-         }]
+         authenticators: [
+            {
+               credentialId: pkId,
+               description: 'Test laptop authenticator',
+               lightIcon: 'laptop-light.svg',
+               darkIcon: 'laptop-dark.svg',
+               name: 'YubiKey 5 NFC',
+            },
+         ],
       };
 
       originalFetch = window.fetch;
       fetchMock = vi.fn().mockResolvedValue({
          ok: true,
-         json: async () => sessionResponse
+         json: async () => sessionResponse,
       });
       window.fetch = fetchMock as typeof fetch;
 
@@ -304,7 +305,6 @@ describe('AuthenticatorService', () => {
    });
 
    describe('peer message handling', () => {
-
       it('login with higher version and matching pkId adopts via relay', async () => {
          primeLocalStorage();
          // @ts-ignore — exercising private path
@@ -502,9 +502,12 @@ describe('AuthenticatorService', () => {
 
       it('forget when not logged in - different user emits forget', async () => {
          primeLocalStorage();
-         sessionStorage.setItem('sessionstate', JSON.stringify({
-            userId: bytesToBase64(getRandom(cc.USERID_BYTES)),
-         }));
+         sessionStorage.setItem(
+            'sessionstate',
+            JSON.stringify({
+               userId: bytesToBase64(getRandom(cc.USERID_BYTES)),
+            }),
+         );
          const events: AuthEvent[] = [];
          service.on(allAuthEvents, (ed) => events.push(ed.event));
 
@@ -537,9 +540,12 @@ describe('AuthenticatorService', () => {
 
       it('logout when not logged in - different user is no action', async () => {
          primeLocalStorage();
-         sessionStorage.setItem('sessionstate', JSON.stringify({
-            userId: bytesToBase64(getRandom(cc.USERID_BYTES)),
-         }));
+         sessionStorage.setItem(
+            'sessionstate',
+            JSON.stringify({
+               userId: bytesToBase64(getRandom(cc.USERID_BYTES)),
+            }),
+         );
          const events: AuthEvent[] = [];
          service.on(allAuthEvents, (ed) => events.push(ed.event));
 
@@ -583,9 +589,12 @@ describe('AuthenticatorService', () => {
       it('login when not logged in - different user emits forget', async () => {
          primeLocalStorage();
          // Simulate sessionStorage preserved from a previous session as a different user.
-         sessionStorage.setItem('sessionstate', JSON.stringify({
-            userId: bytesToBase64(getRandom(cc.USERID_BYTES)),
-         }));
+         sessionStorage.setItem(
+            'sessionstate',
+            JSON.stringify({
+               userId: bytesToBase64(getRandom(cc.USERID_BYTES)),
+            }),
+         );
          const events: AuthEvent[] = [];
          service.on(allAuthEvents, (ed) => events.push(ed.event));
 

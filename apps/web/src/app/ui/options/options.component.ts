@@ -27,7 +27,7 @@ import {
    type OnInit,
    Input,
    Output,
-   ViewChild
+   ViewChild,
 } from '@angular/core';
 import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -54,7 +54,7 @@ function setIfBetween(
    check: number | string | null,
    min: number | null,
    max: number | null,
-   setter: (num: number) => void
+   setter: (num: number) => void,
 ): void {
    const num = Number(check);
    if (check != null && !Number.isNaN(num)) {
@@ -64,10 +64,7 @@ function setIfBetween(
    }
 }
 
-function setIfBoolean(
-   check: boolean | string | null,
-   setter: (bool: boolean) => void
-): void {
+function setIfBoolean(check: boolean | string | null, setter: (bool: boolean) => void): void {
    if (check != null) {
       if (typeof check === 'boolean') {
          setter(check);
@@ -81,16 +78,27 @@ function setIfBoolean(
 
 @Component({
    selector: 'enc-options',
-   imports: [CdkAccordionModule, MatExpansionModule, AlgorithmsComponent, MatRippleModule,
-      RouterLink, MatIconModule, MatInputModule, MatFormFieldModule, MatTooltipModule,
-      MatSelectModule, MatButtonToggleModule, MatSlideToggleModule, FormsModule,
-      MatButtonModule, ReactiveFormsModule
+   imports: [
+      CdkAccordionModule,
+      MatExpansionModule,
+      AlgorithmsComponent,
+      MatRippleModule,
+      RouterLink,
+      MatIconModule,
+      MatInputModule,
+      MatFormFieldModule,
+      MatTooltipModule,
+      MatSelectModule,
+      MatButtonToggleModule,
+      MatSlideToggleModule,
+      FormsModule,
+      MatButtonModule,
+      ReactiveFormsModule,
    ],
    templateUrl: './options.component.html',
-   styleUrl: './options.component.scss'
+   styleUrl: './options.component.scss',
 })
 export class OptionsComponent implements OnInit, AfterViewInit {
-
    public expandOptions = false;
    public cipherPanelExpanded = false;
    public hashTimeWarning = '';
@@ -133,8 +141,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    constructor(
       private authSvc: AuthenticatorService,
       private cipherSvc: CipherService,
-   ) {
-   }
+   ) {}
 
    @Input() set expand(expandOptions: boolean) {
       this.expandOptions = expandOptions;
@@ -159,14 +166,16 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       // This can be greatly delayed is there is a long running async benchmark or
       // encrpt or decrypt from a previous instance (tab that has not fully closed).
       // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
-      this.cipherSvc.benchmark(this.ICOUNT_MIN)
+      this.cipherSvc
+         .benchmark(this.ICOUNT_MIN)
          .then(([icount, icountMax, hashRate]) => {
             this.setIcount(icount);
             this.ICOUNT_DEFAULT = icount;
             this.ICOUNT_MAX = icountMax;
-         }).finally(() => {
+         })
+         .finally(() => {
             // load after benchmark to overwrite benchmarks with saved values
-            this.authSvc.ready.then( () => {
+            this.authSvc.ready.then(() => {
                if (this.authSvc.hasSession()) {
                   this.loadOptions(this.authSvc.userId);
                } else {
@@ -178,8 +187,8 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
    ngAfterViewInit() {
       // ugly hack to make angular not clip the label for dropdown select elements
-      this.formatLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.7)";
-      this.minStrLabel.nativeElement.parentElement.style.maxWidth = "calc(100%/0.7)";
+      this.formatLabel.nativeElement.parentElement.style.maxWidth = 'calc(100%/0.7)';
+      this.minStrLabel.nativeElement.parentElement.style.maxWidth = 'calc(100%/0.7)';
    }
 
    loadOptions(userId: string) {
@@ -209,7 +218,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          let params = new HttpParams({ fromString: window.location.search });
 
          // If there are customized options, expand the panel by default
-         if (params.keys().some(p => !['cipherarmor', 'cleartext'].includes(p))) {
+         if (params.keys().some((p) => !['cipherarmor', 'cleartext'].includes(p))) {
             this.expandOptions = true;
          }
 
@@ -232,7 +241,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    async optionsLoaded() {
-      while(!this._optionsLoaded) {
+      while (!this._optionsLoaded) {
          await new Promise((resolve) => setTimeout(resolve, 500));
       }
    }
@@ -341,7 +350,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       if (alg) {
          try {
             var algs = JSON.parse(alg);
-         } catch (err) { }
+         } catch (err) {}
 
          // transition from v4 and earlier
          if (!algs) {
@@ -418,7 +427,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          // if greater than 15 seconds show message
          if (hashMillis > 15 * 1000) {
             const takeMsg = makeTookMsg(0, hashMillis, 'take');
-            this.hashTimeWarning = `*password hash may ${takeMsg}`
+            this.hashTimeWarning = `*password hash may ${takeMsg}`;
          }
       }
    }
@@ -431,7 +440,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       // Note that modes length is the max number of modes that have
       // been set, which may be larger than the current # of loops
       // This is done to preserve default values
-      if (this.lsSet('algorithm', JSON.stringify(modes))){
+      if (this.lsSet('algorithm', JSON.stringify(modes))) {
          this._algorithmList = modes;
       }
    }
@@ -493,7 +502,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    onReminderChange(reminder: boolean | null) {
       // don't save reminder state if in link format (reminder is always false)
       if (this.formatSelect.value !== 'link') {
-         if (this.lsSet('reminder', reminder)){
+         if (this.lsSet('reminder', reminder)) {
             this._lastReminder = reminder!;
          }
          this.formatOptionsChange.emit(true);
@@ -523,7 +532,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    lsGet(key: string): string | null {
-      if(this._userId) {
+      if (this._userId) {
          return localStorage.getItem(this._userId + key);
       }
       return null;
@@ -538,7 +547,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    lsDel(key: string) {
-      if(this._userId) {
+      if (this._userId) {
          localStorage.removeItem(this._userId + key);
       }
    }

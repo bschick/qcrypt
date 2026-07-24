@@ -19,24 +19,15 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import {
-   Directive,
-   Input,
-   ComponentRef,
-   ElementRef,
-   Injector,
-   ViewContainerRef,
-   NgZone
-} from '@angular/core';
+import { Directive, Input, ComponentRef, ElementRef, Injector, ViewContainerRef, NgZone } from '@angular/core';
 import { BubbleComponent, BubblePosition } from './bubble.component';
 
 @Directive({
    selector: '[bubbleTip]',
    exportAs: 'bubbleTip',
-   standalone: true
+   standalone: true,
 })
 export class BubbleDirective {
-
    private bubbleIndex!: number;
 
    @Input() bubbleTip = 'this is a QC tip';
@@ -52,13 +43,12 @@ export class BubbleDirective {
    private initialScrollLeft = 0;
    private initialScrollTop = 0;
 
-   constructor(private elementRef: ElementRef,
+   constructor(
+      private elementRef: ElementRef,
       private viewContainerRef: ViewContainerRef,
       private injector: Injector,
-      private ngZone: NgZone
-   ) {
-
-   }
+      private ngZone: NgZone,
+   ) {}
 
    public show() {
       this.initializeBubble();
@@ -139,13 +129,13 @@ export class BubbleDirective {
       if (rect.left < margin) {
          adjustLeft = margin - rect.left;
       } else if (rect.right > vw - margin) {
-         adjustLeft = (vw - margin) - rect.right;
+         adjustLeft = vw - margin - rect.right;
       }
 
       if (rect.top < margin) {
          adjustTop = margin - rect.top;
       } else if (rect.bottom > vh - margin) {
-         adjustTop = (vh - margin) - rect.bottom;
+         adjustTop = vh - margin - rect.bottom;
       }
 
       if (adjustLeft !== 0 || adjustTop !== 0) {

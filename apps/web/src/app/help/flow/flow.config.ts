@@ -37,12 +37,16 @@ export interface FlowOverview extends FlowItem {
 // Top-level entry points shown in the initial grid view and as path[0] of the
 // route query string. Keys are the route segment values.
 export const FLOW_OVERVIEWS: Record<string, FlowOverview> = {
-   'encryption': {
-      label: 'Encryption', svg: '/assets/flow/v7/encryption.svg', search: "cipher data",
+   encryption: {
+      label: 'Encryption',
+      svg: '/assets/flow/v7/encryption.svg',
+      search: 'cipher data',
       subsystems: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '0a', '0b', '0c', '0d', '0e'],
    },
-   'decryption': {
-      label: 'Decryption', svg: '/assets/flow/v7/decryption.svg', search: "message",
+   decryption: {
+      label: 'Decryption',
+      svg: '/assets/flow/v7/decryption.svg',
+      search: 'message',
       subsystems: ['0f', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '1a', '1b', '1c'],
    },
 };
@@ -51,34 +55,58 @@ export const FLOW_OVERVIEWS: Record<string, FlowOverview> = {
 // of Lucidchart placeholder fill #f4d9NN. The same key is also the SVG
 // data-target attribute value and the URL path segment. 'ff' is reserved
 export const FLOW_SUBSYSTEMS: Record<string, FlowItem> = {
-   '01': { label: 'Sign Block0',         svg: '/assets/flow/v7/sign_cd0.svg' },
-   '02': { label: 'Sign BlockN',         svg: '/assets/flow/v7/sign_cdN.svg' },
-   '03': { label: 'Encrypt Block0',      svg: '/assets/flow/v7/encrypt_m0.svg', search: 'commit cipher key message symmetric km0 kc'},
-   '04': { label: 'Pack Block0 AD',      svg: '/assets/flow/v7/pack_ad0.svg' },
-   '05': { label: 'Derive Signing Key',   svg: '/assets/flow/v7/derive_enc_kS.svg' },
-   '06': { label: 'Encryption Input',     svg: '/assets/flow/v7/obtain_enc_input.svg', search: 'm mN m0 niv salt ns le loop end user credential algorithm iteration random passkey' },
-   '07': { label: 'Derive Block0 Key',   svg: '/assets/flow/v7/derive_enc_kM0.svg', search: 'password hint' },
-   '08': { label: 'Encrypt Hint',         svg: '/assets/flow/v7/encrypt_h.svg', search: 'key symmetric nivh kh' },
-   '09': { label: 'Derive Commit Key',    svg: '/assets/flow/v7/derive_enc_kC.svg' },
-   '0a': { label: 'Derive Hint Nonce',    svg: '/assets/flow/v7/derive_enc_nIVH.svg' },
-   '0b': { label: 'Derive Hint Key',      svg: '/assets/flow/v7/derive_enc_kH.svg' },
-   '0c': { label: 'Pack BlockN AD',      svg: '/assets/flow/v7/pack_adN.svg', search: 'random niv' },
-   '0d': { label: 'Encrypt BlockN',      svg: '/assets/flow/v7/encrypt_mN.svg', search: 'commit cipher key message symmetric kmn kc'},
-   '0e': { label: 'Derive BlockN Key',   svg: '/assets/flow/v7/derive_enc_kMN.svg' },
-   '0f': { label: 'Decryption Input',     svg: '/assets/flow/v7/obtain_dec_input.svg', search: 'cd cdN cd0 user credential passkey' },
-   '10': { label: 'Verify Block0',       svg: '/assets/flow/v7/verify_cd0.svg' },
-   '11': { label: 'Verify BlockN',       svg: '/assets/flow/v7/verify_cdN.svg' },
-   '12': { label: 'Unpack Block0 AD',    svg: '/assets/flow/v7/unpack_ad0.svg' },
-   '13': { label: 'Derive Signing Key',   svg: '/assets/flow/v7/derive_dec_kS.svg' },
-   '14': { label: 'Derive Hint Nonce',    svg: '/assets/flow/v7/derive_dec_nIVH.svg' },
-   '15': { label: 'Derive Hint Key',      svg: '/assets/flow/v7/derive_dec_kH.svg' },
-   '16': { label: 'Derive Block0 Key',   svg: '/assets/flow/v7/derive_dec_kM0.svg', search: 'password hint' },
-   '17': { label: 'Decrypt Hint',         svg: '/assets/flow/v7/decrypt_hE.svg', search: 'key symmetric nivh kh' },
-   '18': { label: 'Derive Commit Key',    svg: '/assets/flow/v7/derive_dec_kC.svg' },
-   '19': { label: 'Decrypt Block0',      svg: '/assets/flow/v7/decrypt_mE0.svg', search: 'commit cipher key message symmetric km0 kc' },
-   '1a': { label: 'Decrypt BlockN',      svg: '/assets/flow/v7/decrypt_mEN.svg', search: 'commit cipher key message symmetric kmn kc' },
-   '1b': { label: 'Unpack BlockN AD',    svg: '/assets/flow/v7/unpack_adN.svg' },
-   '1c': { label: 'Derive BlockN Key',   svg: '/assets/flow/v7/derive_dec_kMN.svg' },
+   '01': { label: 'Sign Block0', svg: '/assets/flow/v7/sign_cd0.svg' },
+   '02': { label: 'Sign BlockN', svg: '/assets/flow/v7/sign_cdN.svg' },
+   '03': {
+      label: 'Encrypt Block0',
+      svg: '/assets/flow/v7/encrypt_m0.svg',
+      search: 'commit cipher key message symmetric km0 kc',
+   },
+   '04': { label: 'Pack Block0 AD', svg: '/assets/flow/v7/pack_ad0.svg' },
+   '05': { label: 'Derive Signing Key', svg: '/assets/flow/v7/derive_enc_kS.svg' },
+   '06': {
+      label: 'Encryption Input',
+      svg: '/assets/flow/v7/obtain_enc_input.svg',
+      search: 'm mN m0 niv salt ns le loop end user credential algorithm iteration random passkey',
+   },
+   '07': { label: 'Derive Block0 Key', svg: '/assets/flow/v7/derive_enc_kM0.svg', search: 'password hint' },
+   '08': { label: 'Encrypt Hint', svg: '/assets/flow/v7/encrypt_h.svg', search: 'key symmetric nivh kh' },
+   '09': { label: 'Derive Commit Key', svg: '/assets/flow/v7/derive_enc_kC.svg' },
+   '0a': { label: 'Derive Hint Nonce', svg: '/assets/flow/v7/derive_enc_nIVH.svg' },
+   '0b': { label: 'Derive Hint Key', svg: '/assets/flow/v7/derive_enc_kH.svg' },
+   '0c': { label: 'Pack BlockN AD', svg: '/assets/flow/v7/pack_adN.svg', search: 'random niv' },
+   '0d': {
+      label: 'Encrypt BlockN',
+      svg: '/assets/flow/v7/encrypt_mN.svg',
+      search: 'commit cipher key message symmetric kmn kc',
+   },
+   '0e': { label: 'Derive BlockN Key', svg: '/assets/flow/v7/derive_enc_kMN.svg' },
+   '0f': {
+      label: 'Decryption Input',
+      svg: '/assets/flow/v7/obtain_dec_input.svg',
+      search: 'cd cdN cd0 user credential passkey',
+   },
+   '10': { label: 'Verify Block0', svg: '/assets/flow/v7/verify_cd0.svg' },
+   '11': { label: 'Verify BlockN', svg: '/assets/flow/v7/verify_cdN.svg' },
+   '12': { label: 'Unpack Block0 AD', svg: '/assets/flow/v7/unpack_ad0.svg' },
+   '13': { label: 'Derive Signing Key', svg: '/assets/flow/v7/derive_dec_kS.svg' },
+   '14': { label: 'Derive Hint Nonce', svg: '/assets/flow/v7/derive_dec_nIVH.svg' },
+   '15': { label: 'Derive Hint Key', svg: '/assets/flow/v7/derive_dec_kH.svg' },
+   '16': { label: 'Derive Block0 Key', svg: '/assets/flow/v7/derive_dec_kM0.svg', search: 'password hint' },
+   '17': { label: 'Decrypt Hint', svg: '/assets/flow/v7/decrypt_hE.svg', search: 'key symmetric nivh kh' },
+   '18': { label: 'Derive Commit Key', svg: '/assets/flow/v7/derive_dec_kC.svg' },
+   '19': {
+      label: 'Decrypt Block0',
+      svg: '/assets/flow/v7/decrypt_mE0.svg',
+      search: 'commit cipher key message symmetric km0 kc',
+   },
+   '1a': {
+      label: 'Decrypt BlockN',
+      svg: '/assets/flow/v7/decrypt_mEN.svg',
+      search: 'commit cipher key message symmetric kmn kc',
+   },
+   '1b': { label: 'Unpack BlockN AD', svg: '/assets/flow/v7/unpack_adN.svg' },
+   '1c': { label: 'Derive BlockN Key', svg: '/assets/flow/v7/derive_dec_kMN.svg' },
 };
 
 // === GENERATED by `pnpm svgo:flow` — do not edit by hand ===

@@ -21,13 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import type { Matcher } from '@zxcvbn-ts/core/dist/types';
-import {
-   zxcvbnReady,
-   getZxcvbn,
-   checkPwned,
-   addMatcher,
-   removeMatcher,
-} from './zxcvbn';
+import { zxcvbnReady, getZxcvbn, checkPwned, addMatcher, removeMatcher } from './zxcvbn';
 
 describe('zxcvbn lazy loader', function () {
    // The module caches its loaded state, so the "throws before ready" assertion
@@ -60,7 +54,9 @@ describe('zxcvbn lazy loader', function () {
       const { zxcvbnOptions } = await zxcvbnReady();
       const dummy: Matcher = {
          Matching: class {
-            match() { return []; }
+            match() {
+               return [];
+            }
          },
          feedback: () => null,
          scoring: () => 0,
@@ -98,16 +94,16 @@ describe('zxcvbn lazy loader', function () {
       await checkPwned(false);
 
       const cases: Array<{ pwd: string; score: number }> = [
-         { pwd: 'password',                  score: 0 },
-         { pwd: '12345678',                  score: 0 },
-         { pwd: 'qwerty',                    score: 0 },
-         { pwd: 'iloveyou',                  score: 0 },
-         { pwd: 'Password1!',                score: 0 },
-         { pwd: 'Tr0ub4dor&3',               score: 1 },
-         { pwd: 'jK4#mLp9',                  score: 2 },
-         { pwd: 'Bicycle$Maple',             score: 3 },
+         { pwd: 'password', score: 0 },
+         { pwd: '12345678', score: 0 },
+         { pwd: 'qwerty', score: 0 },
+         { pwd: 'iloveyou', score: 0 },
+         { pwd: 'Password1!', score: 0 },
+         { pwd: 'Tr0ub4dor&3', score: 1 },
+         { pwd: 'jK4#mLp9', score: 2 },
+         { pwd: 'Bicycle$Maple', score: 3 },
          { pwd: 'correcthorsebatterystaple', score: 4 },
-         { pwd: 'c#7vP!9eK@2nQ$5xR',         score: 4 },
+         { pwd: 'c#7vP!9eK@2nQ$5xR', score: 4 },
       ];
 
       for (const { pwd, score } of cases) {

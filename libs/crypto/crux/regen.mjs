@@ -14,7 +14,9 @@ fs.mkdirSync(outDir, { recursive: true });
 const assetLine = "module_or_path = new URL('qc_crux_bg.wasm', import.meta.url);";
 let glue = fs.readFileSync(path.join(pkgDir, 'qc_crux.js'), 'utf8');
 if (!glue.includes(assetLine)) {
-   throw new Error('regen: default-init asset line not found — wasm-bindgen glue format changed, update the neutering step');
+   throw new Error(
+      'regen: default-init asset line not found — wasm-bindgen glue format changed, update the neutering step',
+   );
 }
 glue = glue.replace(assetLine, "throw new Error('crux: call cruxReady() instead of the default init');");
 fs.writeFileSync(path.join(outDir, 'qc_crux.js'), glue);

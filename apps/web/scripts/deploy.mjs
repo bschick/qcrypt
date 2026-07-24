@@ -117,13 +117,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
-import {
-   aws,
-   confirmProdAction,
-   ensureAuth,
-   relToRoot,
-   suggestCommandTypo,
-} from '../../../scripts/deploy-common.mjs';
+import { aws, confirmProdAction, ensureAuth, relToRoot, suggestCommandTypo } from '../../../scripts/deploy-common.mjs';
 import { validateBuild } from './validate-build.mjs';
 
 // ---------------------------------------------------------------------------
@@ -186,7 +180,9 @@ function readManifest(argv) {
       if (!/NoSuchKey|Not Found|\b404\b/i.test(stderr)) {
          process.stderr.write(stderr);
          if (/NoSuchBucket/i.test(stderr)) {
-            console.error(`Error: bucket '${argv.bucket}' does not exist. Check the bucket name and your AWS account/profile.`);
+            console.error(
+               `Error: bucket '${argv.bucket}' does not exist. Check the bucket name and your AWS account/profile.`,
+            );
          } else {
             console.error(`Failed to read manifest at ${key}.`);
          }
@@ -215,11 +211,20 @@ function readManifest(argv) {
 
 function writeManifest(argv, m) {
    const body = JSON.stringify(m, null, 2);
-   aws(argv, [
-      's3', 'cp', '-', `s3://${argv.bucket}/${argv.manifestKey}`,
-      '--content-type', 'application/json',
-      '--cache-control', 'no-store',
-   ], { input: body });
+   aws(
+      argv,
+      [
+         's3',
+         'cp',
+         '-',
+         `s3://${argv.bucket}/${argv.manifestKey}`,
+         '--content-type',
+         'application/json',
+         '--cache-control',
+         'no-store',
+      ],
+      { input: body },
+   );
 }
 
 // Uses `aws s3api` rather than `aws s3 ls` because the high-level `s3`
@@ -275,11 +280,7 @@ function invalidateCloudFront(argv) {
       return;
    }
    const distId = cloudfrontDistributionId(argv.cfDistribution);
-   const r = aws(argv, [
-      'cloudfront', 'create-invalidation',
-      '--distribution-id', distId,
-      '--paths', '/*',
-   ]);
+   const r = aws(argv, ['cloudfront', 'create-invalidation', '--distribution-id', distId, '--paths', '/*']);
    let invalidationId;
    if (!argv.dryRun && r.stdout) {
       try {
@@ -289,7 +290,9 @@ function invalidateCloudFront(argv) {
       }
    }
    const idSuffix = invalidationId ? ` id=${invalidationId}` : '';
-   console.log(`  cloudfront: created /* invalidation for distribution ${distId}${idSuffix}${argv.dryRun ? ' (DRY RUN)' : ''}`);
+   console.log(
+      `  cloudfront: created /* invalidation for distribution ${distId}${idSuffix}${argv.dryRun ? ' (DRY RUN)' : ''}`,
+   );
 
    if (!invalidationId) {
       return;
@@ -300,15 +303,17 @@ function invalidateCloudFront(argv) {
    // upload + manifest already succeeded and the invalidation will still
    // finish on its own — surface it rather than aborting.
    console.log('  cloudfront: waiting for invalidation to complete...');
-   const waitResult = aws(argv, [
-      'cloudfront', 'wait', 'invalidation-completed',
-      '--distribution-id', distId,
-      '--id', invalidationId,
-   ], { allowFailure: true });
+   const waitResult = aws(
+      argv,
+      ['cloudfront', 'wait', 'invalidation-completed', '--distribution-id', distId, '--id', invalidationId],
+      { allowFailure: true },
+   );
    if (waitResult.status === 0) {
       console.log('  cloudfront: invalidation completed');
    } else {
-      console.error(`  cloudfront: wait did not confirm completion (invalidation ${invalidationId} is likely still in progress; check the AWS console)`);
+      console.error(
+         `  cloudfront: wait did not confirm completion (invalidation ${invalidationId} is likely still in progress; check the AWS console)`,
+      );
    }
 }
 
@@ -316,10 +321,7 @@ function invalidateCloudFront(argv) {
 // and the expected list (with glob support). readManifest guarantees the
 // manifest's own key is in expected, so no special case is needed here.
 function trackedMatcher(manifest) {
-   const literals = new Set([
-      ...Object.keys(manifest.current),
-      ...Object.keys(manifest.orphans),
-   ]);
+   const literals = new Set([...Object.keys(manifest.current), ...Object.keys(manifest.orphans)]);
    const expectedMatch = matcherFor(manifest.expected);
    return (key) => literals.has(key) || expectedMatch(key);
 }
@@ -428,11 +430,9 @@ function deleteKeys(argv, keys) {
          });
          const specPath = join(tmpDir, `delete-${offset}.json`);
          writeFileSync(specPath, payload);
-         const r = aws(argv, [
-            's3api', 'delete-objects',
-            '--bucket', argv.bucket,
-            '--delete', `file://${specPath}`,
-         ], { allowFailure: true });
+         const r = aws(argv, ['s3api', 'delete-objects', '--bucket', argv.bucket, '--delete', `file://${specPath}`], {
+            allowFailure: true,
+         });
          if (r.status !== 0) {
             // Whole-chunk failure (auth, network, etc.); leave none recorded.
             continue;
@@ -485,8 +485,7 @@ function printKeyList(keys, heading, limit) {
 async function runDeploy(argv) {
    const scope = getScope(argv);
    // 1. Enumerate the local build, filtered to the active scope.
-   const files = collectLocalFiles(argv.buildDir, scope.recursive)
-      .filter((f) => scope.inScope(f.relKey));
+   const files = collectLocalFiles(argv.buildDir, scope.recursive).filter((f) => scope.inScope(f.relKey));
    const newKeys = new Set(files.map((f) => f.relKey));
    if (newKeys.size === 0) {
       console.error(`No files found under ${argv.buildDir} (scope=${scope.label})`);
@@ -498,7 +497,9 @@ async function runDeploy(argv) {
    // needs index.html + the entry bundles; --aaguids needs the aaguid data.
    const missing = checkEssentialFiles(scope, newKeys);
    if (missing.length > 0) {
-      console.error(`deploy: refusing to deploy — essential files missing under ${relToRoot(argv.buildDir)} (scope=${scope.label}):`);
+      console.error(
+         `deploy: refusing to deploy — essential files missing under ${relToRoot(argv.buildDir)} (scope=${scope.label}):`,
+      );
       for (const problem of missing) {
          console.error(`  - ${problem}`);
       }
@@ -519,7 +520,9 @@ async function runDeploy(argv) {
             for (const problem of problems) {
                console.error(`  - ${problem}`);
             }
-            console.error('Rebuild with `pnpm build:web:prod` (or `pnpm build:web`), or override with --skip-validate.');
+            console.error(
+               'Rebuild with `pnpm build:web:prod` (or `pnpm build:web`), or override with --skip-validate.',
+            );
             process.exit(1);
          }
          console.log(`deploy: build validation passed (${relToRoot(argv.buildDir)}/index.html)`);
@@ -540,20 +543,39 @@ async function runDeploy(argv) {
    const localSrc = scope.localSubpath ? join(argv.buildDir, scope.localSubpath) : argv.buildDir;
    const s3Dest = `s3://${argv.bucket}/${scope.s3Prefix}`;
    const bulkArgs = [
-      's3', 'sync', localSrc, s3Dest,
+      's3',
+      'sync',
+      localSrc,
+      s3Dest,
       '--exact-timestamps',
       '--no-progress',
-      '--exclude', 'index.html',
-      '--exclude', '.DS_Store', '--exclude', '*/.DS_Store',
-      '--exclude', '._*', '--exclude', '*/._*',
-      '--exclude', 'Thumbs.db', '--exclude', '*/Thumbs.db',
-      '--exclude', 'desktop.ini', '--exclude', '*/desktop.ini',
-      '--cache-control', argv.cacheControl,
+      '--exclude',
+      'index.html',
+      '--exclude',
+      '.DS_Store',
+      '--exclude',
+      '*/.DS_Store',
+      '--exclude',
+      '._*',
+      '--exclude',
+      '*/._*',
+      '--exclude',
+      'Thumbs.db',
+      '--exclude',
+      '*/Thumbs.db',
+      '--exclude',
+      'desktop.ini',
+      '--exclude',
+      '*/desktop.ini',
+      '--cache-control',
+      argv.cacheControl,
    ];
    if (!scope.recursive) {
       bulkArgs.push('--exclude', '*/*');
    }
-   console.log(`deploy: syncing ${newKeys.size} local files from ${relToRoot(localSrc)} to ${s3Dest} (changed files upload)...`);
+   console.log(
+      `deploy: syncing ${newKeys.size} local files from ${relToRoot(localSrc)} to ${s3Dest} (changed files upload)...`,
+   );
    const bulkResult = aws(argv, bulkArgs);
 
    // `aws s3 sync --no-progress` prints one line per transferred file:
@@ -581,12 +603,18 @@ async function runDeploy(argv) {
    // (not cp) means it's skipped when unchanged.
    if (newKeys.has('index.html')) {
       const indexResult = aws(argv, [
-         's3', 'sync', argv.buildDir, `s3://${argv.bucket}/`,
+         's3',
+         'sync',
+         argv.buildDir,
+         `s3://${argv.bucket}/`,
          '--exact-timestamps',
          '--no-progress',
-         '--exclude', '*',
-         '--include', 'index.html',
-         '--cache-control', argv.cacheControl,
+         '--exclude',
+         '*',
+         '--include',
+         'index.html',
+         '--cache-control',
+         argv.cacheControl,
       ]);
       for (const k of parseUploadedKeys(indexResult.stdout)) {
          uploadedKeys.add(k);
@@ -602,8 +630,14 @@ async function runDeploy(argv) {
    //    leaks so untracked-in-bucket reports continue to surface.
    if (!argv.dryRun && totalUploads === 0) {
       const untracked = untrackedKeys(argv, manifest);
-      console.log(`deploy #${manifest.deployCount ?? 0}: from=${relToRoot(localSrc)} no changes  untracked=${untracked.length}`);
-      printKeyList(untracked, "untracked in bucket (use 'expect' or 'unexpect' to update, 'prune' to remove):", argv.printLimit);
+      console.log(
+         `deploy #${manifest.deployCount ?? 0}: from=${relToRoot(localSrc)} no changes  untracked=${untracked.length}`,
+      );
+      printKeyList(
+         untracked,
+         "untracked in bucket (use 'expect' or 'unexpect' to update, 'prune' to remove):",
+         argv.printLimit,
+      );
       return;
    }
 
@@ -686,12 +720,16 @@ async function runDeploy(argv) {
    const dryRunTag = argv.dryRun ? ' (DRY RUN — no writes)' : '';
    console.log(
       `deploy #${deployCount}: from=${relToRoot(localSrc)} uploaded=${totalUploads} newly-orphaned=${newlyOrphaned.length}` +
-      ` tracked-orphans=${orphans.size} expired-deleted=${deletedFromS3.length}` +
-      ` untracked=${untracked.length}${dryRunTag}`,
+         ` tracked-orphans=${orphans.size} expired-deleted=${deletedFromS3.length}` +
+         ` untracked=${untracked.length}${dryRunTag}`,
    );
    printKeyList(deletedFromS3, 'deleted (expired orphans):', argv.printLimit);
    printKeyList(newlyOrphaned, 'newly orphaned (retention clock starts now):', argv.printLimit);
-   printKeyList(untracked, "untracked in bucket (use 'expect' or 'unexpect' to update, 'prune' to remove):", argv.printLimit);
+   printKeyList(
+      untracked,
+      "untracked in bucket (use 'expect' or 'unexpect' to update, 'prune' to remove):",
+      argv.printLimit,
+   );
    invalidateCloudFront(argv);
 }
 
@@ -758,18 +796,17 @@ async function runBdeploy(argv) {
 // deploy/bdeploy/rollback are the only commands that touch those fields.
 async function runRollback(argv) {
    const key = 'index.html';
-   const listResult = aws(argv, [
-      's3api', 'list-object-versions',
-      '--bucket', argv.bucket,
-      '--prefix', key,
-      '--output', 'json',
-   ], { readOnly: true });
+   const listResult = aws(
+      argv,
+      ['s3api', 'list-object-versions', '--bucket', argv.bucket, '--prefix', key, '--output', 'json'],
+      { readOnly: true },
+   );
    const parsed = JSON.parse(listResult.stdout || '{}');
    const versions = (parsed.Versions ?? []).filter((v) => v.Key === key);
    if (versions.length < 2) {
       console.error(
          `rollback: need at least 2 versions of ${key} to roll back; found ${versions.length}.` +
-         ' Is bucket versioning enabled?',
+            ' Is bucket versioning enabled?',
       );
       process.exit(1);
    }
@@ -778,12 +815,7 @@ async function runRollback(argv) {
       console.error(`rollback: no current version found for ${key}.`);
       process.exit(1);
    }
-   aws(argv, [
-      's3api', 'delete-object',
-      '--bucket', argv.bucket,
-      '--key', key,
-      '--version-id', latest.VersionId,
-   ]);
+   aws(argv, ['s3api', 'delete-object', '--bucket', argv.bucket, '--key', key, '--version-id', latest.VersionId]);
 
    const manifest = readManifest(argv);
    writeManifest(argv, {
@@ -794,7 +826,7 @@ async function runRollback(argv) {
 
    console.log(
       `rollback: deleted ${key} version ${latest.VersionId};` +
-      ` previous version is now current${argv.dryRun ? ' (DRY RUN)' : ''}`,
+         ` previous version is now current${argv.dryRun ? ' (DRY RUN)' : ''}`,
    );
    console.log('  WARNING: This is not a permanent rollback. Fix issues and redeploy.');
    invalidateCloudFront(argv);
@@ -859,7 +891,7 @@ function runBootstrap(argv) {
    writeManifest(argv, next);
    console.log(
       `bootstrap: current=${keys.length} expected-retained=${manifest.expected.length}` +
-      `${argv.dryRun ? ' (DRY RUN)' : ''}`,
+         `${argv.dryRun ? ' (DRY RUN)' : ''}`,
    );
 }
 
@@ -917,7 +949,9 @@ function runInfo(argv) {
    const orphaned = Object.keys(manifest.orphans).filter(scope.inScope).length;
    const expected = manifest.expected.length;
    const untracked = untrackedKeys(argv, manifest).length;
-   console.log(`info: scope=${scope.label} current=${current} orphaned=${orphaned} expected=${expected} untracked=${untracked}`);
+   console.log(
+      `info: scope=${scope.label} current=${current} orphaned=${orphaned} expected=${expected} untracked=${untracked}`,
+   );
    if (manifest.deployDate) {
       console.log(`  last-deploy: ${manifest.deployDate}`);
       console.log(`  comment: ${manifest.deployComment ?? ''}`);
@@ -942,12 +976,8 @@ function runExpect(argv) {
    // orphans so a key is tracked via only one mechanism. Matching covers the
    // glob case: `expect .well-known/*` also drops .well-known/foo etc.
    const matchesNewlyExpected = matcherFor([...added]);
-   const current = Object.fromEntries(
-      Object.entries(manifest.current).filter(([k]) => !matchesNewlyExpected(k)),
-   );
-   const orphans = Object.fromEntries(
-      Object.entries(manifest.orphans).filter(([k]) => !matchesNewlyExpected(k)),
-   );
+   const current = Object.fromEntries(Object.entries(manifest.current).filter(([k]) => !matchesNewlyExpected(k)));
+   const orphans = Object.fromEntries(Object.entries(manifest.orphans).filter(([k]) => !matchesNewlyExpected(k)));
    const currentRemoved = Object.keys(manifest.current).length - Object.keys(current).length;
    const orphansRemoved = Object.keys(manifest.orphans).length - Object.keys(orphans).length;
 
@@ -959,8 +989,8 @@ function runExpect(argv) {
    });
    console.log(
       `expect: added=${added.size} total-expected=${expected.size}` +
-      ` removed-from-current=${currentRemoved} removed-from-orphans=${orphansRemoved}` +
-      `${argv.dryRun ? ' (DRY RUN)' : ''}`,
+         ` removed-from-current=${currentRemoved} removed-from-orphans=${orphansRemoved}` +
+         `${argv.dryRun ? ' (DRY RUN)' : ''}`,
    );
    if (added.size > 0) {
       console.log(`  added: ${[...added].join(', ')}`);
@@ -991,11 +1021,14 @@ async function runPrune(argv) {
    const manifest = readManifest(argv);
    // readManifest always seeds `expected` with the manifest key, so check the
    // other buckets to decide whether this looks like a never-deployed bucket.
-   const hasData = Object.keys(manifest.current).length > 0
-      || Object.keys(manifest.orphans).length > 0
-      || manifest.expected.length > 1;
+   const hasData =
+      Object.keys(manifest.current).length > 0 ||
+      Object.keys(manifest.orphans).length > 0 ||
+      manifest.expected.length > 1;
    if (!hasData) {
-      console.error('prune: manifest is empty or missing — refusing to run. Deploy first, or seed expected entries with `expect`.');
+      console.error(
+         'prune: manifest is empty or missing — refusing to run. Deploy first, or seed expected entries with `expect`.',
+      );
       process.exit(1);
    }
 
@@ -1027,7 +1060,7 @@ async function runPrune(argv) {
    const dryRunTag = argv.dryRun ? ' (DRY RUN)' : '';
    console.log(
       `prune: deleted-untracked=${deletedUntracked.length}/${untracked.length}` +
-      ` deleted-orphans=${deletedOrphans.length}/${expired.length}${dryRunTag}`,
+         ` deleted-orphans=${deletedOrphans.length}/${expired.length}${dryRunTag}`,
    );
    printKeyList(deletedUntracked, 'deleted untracked:', argv.printLimit);
    printKeyList(deletedOrphans, 'deleted orphans:', argv.printLimit);
@@ -1043,55 +1076,116 @@ async function runPrune(argv) {
 // past flag-value pairs when identifying a typo'd subcommand. Mirror any
 // new value-taking option here.
 const VALUE_FLAGS = new Set([
-   '--prod', '--profile', '--region', '--manifest-key', '--print-limit',
-   '--build-dir', '--cache-control', '--expiration-days', '--cf-distribution',
+   '--prod',
+   '--profile',
+   '--region',
+   '--manifest-key',
+   '--print-limit',
+   '--build-dir',
+   '--cache-control',
+   '--expiration-days',
+   '--cf-distribution',
    '--comment',
 ]);
 
-const addGlobalOpts = (y) => y
-   .option('prod', { type: 'string', describe: 'Presence selects prod mode (test mode otherwise). Alias-name value is unused on the web side; kept symmetric with server.' })
-   .option('profile', { type: 'string', describe: 'AWS CLI profile (falls back to QC_PROD_AWS_PROFILE; required)' })
-   .option('region', { type: 'string', describe: 'AWS region (falls back to QC_PROD_AWS_REGION; required)' })
-   .option('manifest-key', { type: 'string', default: '_build/manifest.json', describe: 'S3 key for the deploy manifest' })
-   .option('dry-run', { type: 'boolean', default: false, describe: 'Log actions without executing them' })
-   .option('print-limit', { type: 'number', default: 20, describe: 'Max file keys to print in listings (deploy, leaks, prune)' })
-   .option('yes', { type: 'boolean', alias: 'y', default: false, describe: 'Bypass the prod-action confirmation prompt for destructive commands (deploy, bdeploy, prune, rollback).' });
+const addGlobalOpts = (y) =>
+   y
+      .option('prod', {
+         type: 'string',
+         describe:
+            'Presence selects prod mode (test mode otherwise). Alias-name value is unused on the web side; kept symmetric with server.',
+      })
+      .option('profile', { type: 'string', describe: 'AWS CLI profile (falls back to QC_PROD_AWS_PROFILE; required)' })
+      .option('region', { type: 'string', describe: 'AWS region (falls back to QC_PROD_AWS_REGION; required)' })
+      .option('manifest-key', {
+         type: 'string',
+         default: '_build/manifest.json',
+         describe: 'S3 key for the deploy manifest',
+      })
+      .option('dry-run', { type: 'boolean', default: false, describe: 'Log actions without executing them' })
+      .option('print-limit', {
+         type: 'number',
+         default: 20,
+         describe: 'Max file keys to print in listings (deploy, leaks, prune)',
+      })
+      .option('yes', {
+         type: 'boolean',
+         alias: 'y',
+         default: false,
+         describe:
+            'Bypass the prod-action confirmation prompt for destructive commands (deploy, bdeploy, prune, rollback).',
+      });
 
 // Constrains the command to the assets/aaguid/ key prefix only — local
 // enumeration, bucket listing, and manifest reconciliation all skip
 // anything outside that subtree. Takes precedence over --subdirs/--no-subdirs.
-const addAaguidsOpt = (y) => y
-   .option('aaguids', { type: 'boolean', default: false, describe: 'Limit scope to the assets/aaguid/ subtree (takes precedence over --subdirs).' });
+const addAaguidsOpt = (y) =>
+   y.option('aaguids', {
+      type: 'boolean',
+      default: false,
+      describe: 'Limit scope to the assets/aaguid/ subtree (takes precedence over --subdirs).',
+   });
 
 // Used to detect typo'd commands that would otherwise be silently consumed by
 // the default `$0 <bucket>` positional.
 const COMMANDS = [
-   'deploy', 'bdeploy', 'rollback', 'reset', 'bootstrap', 'manifest',
-   'leaks', 'info', 'current', 'expect', 'unexpect', 'prune',
+   'deploy',
+   'bdeploy',
+   'rollback',
+   'reset',
+   'bootstrap',
+   'manifest',
+   'leaks',
+   'info',
+   'current',
+   'expect',
+   'unexpect',
+   'prune',
 ];
 
-const deployBuilder = (y) => addAaguidsOpt(addGlobalOpts(y))
-   .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-   .option('build-dir', { type: 'string', default: 'dist/web/browser', describe: 'Local directory to upload' })
-   .option('subdirs', { type: 'boolean', default: true, describe: 'Upload files in subdirectories (default: true; use --no-subdirs for top-level only)' })
-   .option('cache-control', { type: 'string', default: 'public, max-age=31536000, immutable', describe: 'Cache-Control header for uploaded files' })
-   .option('expiration-days', { type: 'number', default: 30, describe: 'Days an orphan persists before deletion' })
-   .option('cf-distribution', { type: 'string', describe: 'CloudFront distribution ID or ARN to invalidate (/*) after deploy. Omit to skip.' })
-   .option('comment', { type: 'string', default: '', describe: 'Comment recorded in the manifest (only the latest is kept).' })
-   .option('skip-validate', { type: 'boolean', default: false, describe: 'Break-glass: skip the pre-upload index.html validation (SRI, nonce, chunk checks). Only when you know the build is good.' })
-   .check((argv) => {
-      if (!Number.isFinite(argv.expirationDays) || argv.expirationDays < 0) {
-         throw new Error('--expiration-days must be a non-negative integer');
-      }
-      try {
-         if (!statSync(argv.buildDir).isDirectory()) {
-            throw new Error('not a directory');
+const deployBuilder = (y) =>
+   addAaguidsOpt(addGlobalOpts(y))
+      .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
+      .option('build-dir', { type: 'string', default: 'dist/web/browser', describe: 'Local directory to upload' })
+      .option('subdirs', {
+         type: 'boolean',
+         default: true,
+         describe: 'Upload files in subdirectories (default: true; use --no-subdirs for top-level only)',
+      })
+      .option('cache-control', {
+         type: 'string',
+         default: 'public, max-age=31536000, immutable',
+         describe: 'Cache-Control header for uploaded files',
+      })
+      .option('expiration-days', { type: 'number', default: 30, describe: 'Days an orphan persists before deletion' })
+      .option('cf-distribution', {
+         type: 'string',
+         describe: 'CloudFront distribution ID or ARN to invalidate (/*) after deploy. Omit to skip.',
+      })
+      .option('comment', {
+         type: 'string',
+         default: '',
+         describe: 'Comment recorded in the manifest (only the latest is kept).',
+      })
+      .option('skip-validate', {
+         type: 'boolean',
+         default: false,
+         describe:
+            'Break-glass: skip the pre-upload index.html validation (SRI, nonce, chunk checks). Only when you know the build is good.',
+      })
+      .check((argv) => {
+         if (!Number.isFinite(argv.expirationDays) || argv.expirationDays < 0) {
+            throw new Error('--expiration-days must be a non-negative integer');
          }
-      } catch {
-         throw new Error(`--build-dir does not exist or is not a directory: ${argv.buildDir}`);
-      }
-      return true;
-   });
+         try {
+            if (!statSync(argv.buildDir).isDirectory()) {
+               throw new Error('not a directory');
+            }
+         } catch {
+            throw new Error(`--build-dir does not exist or is not a directory: ${argv.buildDir}`);
+         }
+         return true;
+      });
 
 // Commands that mutate prod and so require the confirmation gate. The bare
 // `$0 <bucket>` invocation runs bdeploy, so map an empty command to it.
@@ -1105,9 +1199,7 @@ const DESTRUCTIVE_COMMANDS = new Set(['deploy', 'bdeploy', 'prune', 'rollback'])
 async function preflight(argv) {
    const command = String(argv._[0] ?? 'bdeploy');
    if (argv.prod && DESTRUCTIVE_COMMANDS.has(command)) {
-      const from = (command === 'deploy' || command === 'bdeploy')
-         ? `\n      from:   ${relToRoot(argv.buildDir)}`
-         : '';
+      const from = command === 'deploy' || command === 'bdeploy' ? `\n      from:   ${relToRoot(argv.buildDir)}` : '';
       await confirmProdAction(argv, command, `bucket: ${argv.bucket}${from}`);
    }
    await ensureAuth(argv);
@@ -1128,96 +1220,136 @@ await yargs(hideBin(process.argv))
       deployBuilder,
       runDeploy,
    )
-   .command(
-      'bdeploy <bucket>',
-      'Build either production (--prod) or test, then deploy.',
-      deployBuilder,
-      runBdeploy,
-   )
+   .command('bdeploy <bucket>', 'Build either production (--prod) or test, then deploy.', deployBuilder, runBdeploy)
    .command(
       'rollback <bucket>',
       'Break-glass: delete the current S3 version of index.html so the previous version becomes current. Requires bucket versioning.',
-      (y) => addGlobalOpts(y)
-         .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('cf-distribution', { type: 'string', describe: 'CloudFront distribution ID or ARN to invalidate (/*) after rollback. Omit to skip.' })
-         .option('comment', { type: 'string', default: '', describe: 'Comment recorded in the manifest (only the latest is kept).' }),
+      (y) =>
+         addGlobalOpts(y)
+            .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
+            .option('cf-distribution', {
+               type: 'string',
+               describe: 'CloudFront distribution ID or ARN to invalidate (/*) after rollback. Omit to skip.',
+            })
+            .option('comment', {
+               type: 'string',
+               default: '',
+               describe: 'Comment recorded in the manifest (only the latest is kept).',
+            }),
       runRollback,
    )
    .command(
       'reset <bucket>',
       'Clear the manifest (no file deletion in the bucket).',
-      (y) => addGlobalOpts(y)
-         .positional('bucket', { type: 'string', describe: 'Target S3 bucket' }),
+      (y) => addGlobalOpts(y).positional('bucket', { type: 'string', describe: 'Target S3 bucket' }),
       runReset,
    )
    .command(
       'bootstrap <bucket>',
       'Seed manifest.current from the existing bucket contents (no deploy). Resets orphans; leaves expected alone.',
-      (y) => addAaguidsOpt(addGlobalOpts(y))
-         .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('subdirs', { type: 'boolean', default: true, describe: 'Include files in subdirectories (default: true; use --no-subdirs for top-level only)' }),
+      (y) =>
+         addAaguidsOpt(addGlobalOpts(y))
+            .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
+            .option('subdirs', {
+               type: 'boolean',
+               default: true,
+               describe: 'Include files in subdirectories (default: true; use --no-subdirs for top-level only)',
+            }),
       runBootstrap,
    )
    .command(
       'manifest <bucket>',
       'Print the current deploy manifest as JSON.',
-      (y) => addGlobalOpts(y)
-         .positional('bucket', { type: 'string', describe: 'Target S3 bucket' }),
+      (y) => addGlobalOpts(y).positional('bucket', { type: 'string', describe: 'Target S3 bucket' }),
       runManifest,
    )
    .command(
       'leaks <bucket>',
       'List S3 files not tracked by the manifest (no deploy).',
-      (y) => addAaguidsOpt(addGlobalOpts(y))
-         .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('subdirs', { type: 'boolean', default: true, describe: 'Consider files in subdirectories (default: true; use --no-subdirs for top-level only)' }),
+      (y) =>
+         addAaguidsOpt(addGlobalOpts(y))
+            .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
+            .option('subdirs', {
+               type: 'boolean',
+               default: true,
+               describe: 'Consider files in subdirectories (default: true; use --no-subdirs for top-level only)',
+            }),
       runLeaks,
    )
    .command(
       'info <bucket>',
       'Print files counts and last deploy information (no deploy).',
-      (y) => addAaguidsOpt(addGlobalOpts(y))
-         .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('subdirs', { type: 'boolean', default: true, describe: 'Count files in subdirectories (default: true; use --no-subdirs for top-level only)' }),
+      (y) =>
+         addAaguidsOpt(addGlobalOpts(y))
+            .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
+            .option('subdirs', {
+               type: 'boolean',
+               default: true,
+               describe: 'Count files in subdirectories (default: true; use --no-subdirs for top-level only)',
+            }),
       runInfo,
    )
    .command(
       'current <bucket>',
       "Print the manifest's current files with their uploaded-at timestamps (no deploy).",
-      (y) => addAaguidsOpt(addGlobalOpts(y))
-         .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('subdirs', { type: 'boolean', default: true, describe: 'Include files in subdirectories (default: true; use --no-subdirs for top-level only)' }),
+      (y) =>
+         addAaguidsOpt(addGlobalOpts(y))
+            .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
+            .option('subdirs', {
+               type: 'boolean',
+               default: true,
+               describe: 'Include files in subdirectories (default: true; use --no-subdirs for top-level only)',
+            }),
       runCurrent,
    )
    .command(
       'expect <bucket> <patterns..>',
       "Add S3 keys or glob patterns to the manifest's expected list; also removes any matching entries from current/orphans (no deploy).",
-      (y) => addGlobalOpts(y)
-         .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .positional('patterns', { type: 'string', array: true, describe: "S3 keys or globs, e.g. 'foo.txt' or '.well-known/*' (quote to avoid shell expansion)" }),
+      (y) =>
+         addGlobalOpts(y)
+            .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
+            .positional('patterns', {
+               type: 'string',
+               array: true,
+               describe: "S3 keys or globs, e.g. 'foo.txt' or '.well-known/*' (quote to avoid shell expansion)",
+            }),
       runExpect,
    )
    .command(
       'unexpect <bucket> <patterns..>',
       "Remove keys or glob patterns from the manifest's expected list (no deploy). Does NOT repopulate current/orphans — run bootstrap if needed.",
-      (y) => addGlobalOpts(y)
-         .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .positional('patterns', { type: 'string', array: true, describe: 'S3 keys or globs to remove from expected (quote to avoid shell expansion)' }),
+      (y) =>
+         addGlobalOpts(y)
+            .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
+            .positional('patterns', {
+               type: 'string',
+               array: true,
+               describe: 'S3 keys or globs to remove from expected (quote to avoid shell expansion)',
+            }),
       runUnexpect,
    )
    .command(
       'prune <bucket>',
       'Remove S3 files not tracked by the manifest, plus orphans past the retention window (no deploy).',
-      (y) => addAaguidsOpt(addGlobalOpts(y))
-         .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
-         .option('subdirs', { type: 'boolean', default: true, describe: 'Consider files in subdirectories (default: true; use --no-subdirs for top-level only)' })
-         .option('expiration-days', { type: 'number', default: 30, describe: 'Days an orphan persists before deletion' })
-         .check((argv) => {
-            if (!Number.isFinite(argv.expirationDays) || argv.expirationDays < 0) {
-               throw new Error('--expiration-days must be a non-negative integer');
-            }
-            return true;
-         }),
+      (y) =>
+         addAaguidsOpt(addGlobalOpts(y))
+            .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
+            .option('subdirs', {
+               type: 'boolean',
+               default: true,
+               describe: 'Consider files in subdirectories (default: true; use --no-subdirs for top-level only)',
+            })
+            .option('expiration-days', {
+               type: 'number',
+               default: 30,
+               describe: 'Days an orphan persists before deletion',
+            })
+            .check((argv) => {
+               if (!Number.isFinite(argv.expirationDays) || argv.expirationDays < 0) {
+                  throw new Error('--expiration-days must be a non-negative integer');
+               }
+               return true;
+            }),
       runPrune,
    )
    .demandCommand(1)

@@ -19,16 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import {
-   DestroyRef,
-   Directive,
-   ElementRef,
-   Renderer2,
-   effect,
-   inject,
-   input,
-   output,
-} from '@angular/core';
+import { DestroyRef, Directive, ElementRef, Renderer2, effect, inject, input, output } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import DOMPurify from 'dompurify';
@@ -60,8 +51,10 @@ export class SvgInlineDirective {
             .get(url, { responseType: 'arraybuffer' })
             .pipe(takeUntilDestroyed(this._destroyRef))
             .subscribe({
-               next: bytes => void this._verifyAndInsert(url, bytes),
-               error: () => { /* same-origin static asset; failure is a deploy bug */ },
+               next: (bytes) => void this._verifyAndInsert(url, bytes),
+               error: () => {
+                  /* same-origin static asset; failure is a deploy bug */
+               },
             });
       });
    }
@@ -98,9 +91,17 @@ export class SvgInlineDirective {
          ADD_TAGS: ['use'],
          ADD_ATTR: ['xlink:href'],
          FORBID_TAGS: [
-            'style', 'foreignObject', 'a', 'image',
-            'animate', 'animateTransform', 'animateMotion',
-            'animateColor', 'set', 'mpath', 'discard',
+            'style',
+            'foreignObject',
+            'a',
+            'image',
+            'animate',
+            'animateTransform',
+            'animateMotion',
+            'animateColor',
+            'set',
+            'mpath',
+            'discard',
          ],
          FORBID_ATTR: ['style'],
          RETURN_DOM_FRAGMENT: true,

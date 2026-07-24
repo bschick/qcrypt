@@ -19,9 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import {
-   Component, Output, Input, EventEmitter
-} from '@angular/core';
+import { Component, Output, Input, EventEmitter } from '@angular/core';
 import { Ciphers } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import { MatTableModule } from '@angular/material/table';
@@ -37,10 +35,9 @@ export type LoopInfo = {
    selector: 'app-algorithms',
    imports: [MatTableModule, MatButtonToggleModule, FormsModule],
    templateUrl: './algorithms.component.html',
-   styleUrl: './algorithms.component.scss'
+   styleUrl: './algorithms.component.scss',
 })
 export class AlgorithmsComponent {
-
    public loopCount = 1;
    public displayedColumns: string[] = ['loop', 'algorithm'];
    public loops: LoopInfo[] = [];
@@ -49,7 +46,6 @@ export class AlgorithmsComponent {
    @Output() modesChange = new EventEmitter<cc.CipherAlgs[]>();
 
    @Input() set count(count: number) {
-
       this.loopCount = Math.max(1, count);
 
       this.displayedColumns = ['algorithm'];
@@ -64,13 +60,13 @@ export class AlgorithmsComponent {
          const alg = nextAlg;
          this.loops.push({
             loop: l + 1,
-            alg: alg
+            alg: alg,
          });
 
          this._defaultModes[l] = alg;
 
          // Use a default for next alg if we have one, else randomly pick
-         nextAlg = this._defaultModes[l + 1]
+         nextAlg = this._defaultModes[l + 1];
          if (!nextAlg) {
             const idx = this._allowedAlgs.indexOf(alg);
             nextAlg = this._allowedAlgs[(idx + 1) % this._allowedAlgs.length];
@@ -96,5 +92,4 @@ export class AlgorithmsComponent {
    algDescription(alg: string): string {
       return Ciphers.algDescription(alg);
    }
-
 }

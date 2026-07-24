@@ -40,7 +40,7 @@ export enum CipherState {
    Initialized,
    Block0Decoded,
    Block0Done,
-   Finished
+   Finished,
 }
 
 export type CipherDataBlock = {
@@ -64,12 +64,11 @@ export type CipherDataInfo = {
 };
 
 export abstract class Ciphers {
-
    protected _state: CipherState;
 
    protected constructor(
       protected _keyProvider: KeyProvider,
-      protected _reader: BYOBStreamReader
+      protected _reader: BYOBStreamReader,
    ) {
       this._state = CipherState.Initialized;
    }
@@ -94,20 +93,16 @@ export abstract class Ciphers {
    static async benchmark(
       testSize: number,
       targetMillis: number,
-      maxMillis: number
+      maxMillis: number,
    ): Promise<[number, number, number]> {
-
-      const keyProvider = new PWDKeyProvider(
-         crypto.getRandomValues(new Uint8Array(32)),
-         ['AVeryBogusPwd', '']
-      );
+      const keyProvider = new PWDKeyProvider(crypto.getRandomValues(new Uint8Array(32)), ['AVeryBogusPwd', '']);
       keyProvider.setCipherDataInfo({
          ver: cc.CURRENT_VERSION,
          alg: 'AES-GCM',
          ic: testSize,
          lp: 1,
          lpEnd: 1,
-         slt: crypto.getRandomValues(new Uint8Array(cc.SLT_BYTES))
+         slt: crypto.getRandomValues(new Uint8Array(cc.SLT_BYTES)),
       });
 
       const start = Date.now();
@@ -118,9 +113,7 @@ export abstract class Ciphers {
       const hashRate = testSize / test_millis;
 
       // Don't allow more then ~5 minutes of pwd hashing (rounded to millions)
-      const iCountMax =
-         Math.min(cc.ICOUNT_MAX,
-            Math.round((maxMillis * hashRate) / 1000000) * 1000000);
+      const iCountMax = Math.min(cc.ICOUNT_MAX, Math.round((maxMillis * hashRate) / 1000000) * 1000000);
 
       let targetICount = Math.round((hashRate * targetMillis) / 100000) * 100000;
       // Add ICOUNT_MIN to calculated target because benchmark is done during
@@ -129,7 +122,7 @@ export abstract class Ciphers {
 
       console.debug(
          `bench: ${testSize}i, in: ${test_millis}ms, rate: ${Math.round(hashRate)}i/ms,
-        ic: ${iCount}i, icm: ${iCountMax}i`
+        ic: ${iCount}i, icm: ${iCountMax}i`,
       );
 
       return [iCount, iCountMax, hashRate];
@@ -147,7 +140,7 @@ export abstract class Ciphers {
    }
 
    static validateAlgs(algs: string[]): cc.CipherAlgs[] {
-      return algs.map(alg => this.validateAlg(alg));
+      return algs.map((alg) => this.validateAlg(alg));
    }
 
    static algName(algId: number): cc.CipherAlgs {
@@ -177,19 +170,17 @@ export abstract class Ciphers {
 
    // Only useful for validating params before encoding. Decoded values are read with
    // expected sizes, so validity depends on signature validate rather than decoded lengths
-   public static validateAdditionalData(
-      args: {
-         alg: cc.CipherAlgs;
-         iv: Uint8Array;
-         term?: boolean;
-         ic?: number;
-         slt?: Uint8Array;
-         lp?: number;
-         lpEnd?: number;
-         ver?: number;
-         encryptedHint?: Uint8Array
-      }) {
-
+   public static validateAdditionalData(args: {
+      alg: cc.CipherAlgs;
+      iv: Uint8Array;
+      term?: boolean;
+      ic?: number;
+      slt?: Uint8Array;
+      lp?: number;
+      lpEnd?: number;
+      ver?: number;
+      encryptedHint?: Uint8Array;
+   }) {
       Ciphers.validateAlg(args.alg);
       const ivBytes = Number(Ciphers.algIVByteLength(args.alg));
       if (args.iv.byteLength != ivBytes) {
@@ -205,7 +196,7 @@ export abstract class Ciphers {
          if (args.slt.byteLength != cc.SLT_BYTES) {
             throw new Error('Invalid slt len: ' + args.slt.byteLength);
          }
-         if (args.ic === undefined || args.ic !== 0 && (args.ic < cc.ICOUNT_MIN || args.ic > cc.ICOUNT_MAX)) {
+         if (args.ic === undefined || (args.ic !== 0 && (args.ic < cc.ICOUNT_MIN || args.ic > cc.ICOUNT_MAX))) {
             throw new Error('Invalid ic: ' + args.ic);
          }
       }
@@ -238,24 +229,22 @@ export abstract class Ciphers {
          throw new Error('Unexpected version and lp');
       }
 
-      if (args.encryptedHint && (args.encryptedHint.byteLength > cc.ENCRYPTED_HINT_MAX_BYTES)) {
+      if (args.encryptedHint && args.encryptedHint.byteLength > cc.ENCRYPTED_HINT_MAX_BYTES) {
          throw new Error('Invalid encrypted hint length: ' + args.encryptedHint.byteLength);
       }
    }
 
-   protected static _encodeFileAD(
-      args: {
-         alg: cc.CipherAlgs;
-         iv: Uint8Array;
-         term?: boolean;
-         ic?: number;
-         slt?: Uint8Array;
-         lp?: number;
-         lpEnd?: number;
-         ver?: number;
-         encryptedHint?: Uint8Array
-      }): Uint8Array<ArrayBuffer> {
-
+   protected static _encodeFileAD(args: {
+      alg: cc.CipherAlgs;
+      iv: Uint8Array;
+      term?: boolean;
+      ic?: number;
+      slt?: Uint8Array;
+      lp?: number;
+      lpEnd?: number;
+      ver?: number;
+      encryptedHint?: Uint8Array;
+   }): Uint8Array<ArrayBuffer> {
       Ciphers.validateAdditionalData(args);
 
       // Packer validates ranges as values are added
@@ -293,7 +282,7 @@ export abstract class Ciphers {
 
    protected static async _packFullAD(
       baseAd: Uint8Array<ArrayBuffer>,
-      keyProvider: KeyProvider
+      keyProvider: KeyProvider,
    ): Promise<Uint8Array<ArrayBuffer>> {
       const parts: Uint8Array<ArrayBuffer>[] = [baseAd];
 
@@ -310,18 +299,13 @@ export abstract class Ciphers {
    }
 }
 
-
 export abstract class Encipher extends Ciphers {
-
    // Simple perf testing with Chrome 126 on MacOS result in
    // readAvailable with READ_SIZE_MAX of 4x to be the fastest
    protected static readonly READ_SIZE_START = 1048576; // 1 MiB
    protected static readonly READ_SIZE_MAX = Encipher.READ_SIZE_START * 4;
 
-   protected constructor(
-      keyProvider: KeyProvider,
-      reader: BYOBStreamReader
-   ) {
+   protected constructor(keyProvider: KeyProvider, reader: BYOBStreamReader) {
       super(keyProvider, reader);
    }
 
@@ -329,7 +313,6 @@ export abstract class Encipher extends Ciphers {
    // an opaque byte array to reduce copying (the caller must write
    // all the blocks in order)
    async encryptBlock(): Promise<CipherDataBlock> {
-
       if (this._state == CipherState.Initialized) {
          return this.encryptBlock0();
       } else if (this._state == CipherState.Block0Done) {
@@ -341,7 +324,7 @@ export abstract class Encipher extends Ciphers {
 
    public abstract encryptBlock0(): Promise<CipherDataBlock>;
    public abstract encryptBlockN(): Promise<CipherDataBlock>;
-};
+}
 
 // (exported for testing)
 export class EncipherV7 extends Encipher {
@@ -398,11 +381,7 @@ export class EncipherV7 extends Encipher {
    private readonly _readSizeMax: number;
    private _lastMac?: Uint8Array;
 
-   constructor(
-      keyProvider: KeyProvider,
-      reader: BYOBStreamReader,
-      readOpts?: ReadOpts
-   ) {
+   constructor(keyProvider: KeyProvider, reader: BYOBStreamReader, readOpts?: ReadOpts) {
       super(keyProvider, reader);
 
       // Assign in ctor to allow for monkey patching in tests
@@ -435,15 +414,12 @@ export class EncipherV7 extends Encipher {
    // 6. Return all the parts of the cipherdata
    //
    override async encryptBlock0(): Promise<CipherDataBlock> {
-
       try {
          if (this._state != CipherState.Initialized) {
             throw new Error(`Encipher invalid state ${this._state}`);
          }
 
-         const [clearBuffer, done] = await this._reader.readAvailable(
-            new ArrayBuffer(this._readTarget)
-         );
+         const [clearBuffer, done] = await this._reader.readAvailable(new ArrayBuffer(this._readTarget));
 
          if (clearBuffer.byteLength == 0) {
             if (done) {
@@ -456,7 +432,7 @@ export class EncipherV7 extends Encipher {
 
             return {
                parts: [],
-               state: this._state
+               state: this._state,
             };
          }
 
@@ -471,12 +447,7 @@ export class EncipherV7 extends Encipher {
             let hintBytes = bytesFromUTF8String(cdInfo.hint, maxHintBytes);
 
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(iv);
-            encryptedHint = await EncipherV7._doEncrypt(
-               cdInfo.alg,
-               hk,
-               hIV,
-               hintBytes
-            );
+            encryptedHint = await EncipherV7._doEncrypt(cdInfo.alg, hk, hIV, hintBytes);
          }
 
          const fileAD = Ciphers._encodeFileAD({
@@ -487,24 +458,15 @@ export class EncipherV7 extends Encipher {
             lp: cdInfo.lp,
             lpEnd: cdInfo.lpEnd,
             slt: cdInfo.slt,
-            encryptedHint
+            encryptedHint,
          });
 
          const fullAD = await Ciphers._packFullAD(fileAD, this._keyProvider);
 
          // Only block0 uses the root cipher key. Simplifies backward compat and is no less secure
-         const encryptedData = await EncipherV7._doEncrypt(
-            cdInfo.alg,
-            ek,
-            iv,
-            clearBuffer,
-            fullAD,
-         );
+         const encryptedData = await EncipherV7._doEncrypt(cdInfo.alg, ek, iv, clearBuffer, fullAD);
 
-         const headerData = await this._createHeader(
-            encryptedData,
-            fileAD
-         );
+         const headerData = await this._createHeader(encryptedData, fileAD);
 
          if (done) {
             this.finishedState();
@@ -513,12 +475,8 @@ export class EncipherV7 extends Encipher {
          }
 
          return {
-            parts: [
-               headerData,
-               fileAD,
-               encryptedData
-            ],
-            state: this._state
+            parts: [headerData, fileAD, encryptedData],
+            state: this._state,
          };
       } catch (err) {
          this.errorState();
@@ -528,7 +486,6 @@ export class EncipherV7 extends Encipher {
    }
 
    override async encryptBlockN(): Promise<CipherDataBlock> {
-
       try {
          if (this._state != CipherState.Block0Done) {
             throw new Error(`Encipher invalid state ${this._state}`);
@@ -539,9 +496,7 @@ export class EncipherV7 extends Encipher {
          let done: boolean;
 
          while (true) {
-            [clearBuffer, done] = await this._reader.readAvailable(
-               new ArrayBuffer(this._readTarget)
-            );
+            [clearBuffer, done] = await this._reader.readAvailable(new ArrayBuffer(this._readTarget));
 
             // There can be read stalls, if so we keep trying. If we received data or
             // are done, exist loop. Note that we can be done and get zero data due to
@@ -560,35 +515,22 @@ export class EncipherV7 extends Encipher {
          const fileAD = Ciphers._encodeFileAD({
             alg: cdInfo.alg,
             iv,
-            term: done
+            term: done,
          });
 
          const fullAD = await Ciphers._packFullAD(fileAD, this._keyProvider);
 
-         const encryptedData = await EncipherV7._doEncrypt(
-            cdInfo.alg,
-            bk,
-            iv,
-            clearBuffer,
-            fullAD,
-         );
+         const encryptedData = await EncipherV7._doEncrypt(cdInfo.alg, bk, iv, clearBuffer, fullAD);
 
-         const headerData = await this._createHeader(
-            encryptedData,
-            fileAD
-         );
+         const headerData = await this._createHeader(encryptedData, fileAD);
 
          if (done) {
             this.finishedState();
          }
 
          return {
-            parts: [
-               headerData,
-               fileAD,
-               encryptedData
-            ],
-            state: this._state
+            parts: [headerData, fileAD, encryptedData],
+            state: this._state,
          };
       } catch (err) {
          this.errorState();
@@ -603,9 +545,8 @@ export class EncipherV7 extends Encipher {
       key: Uint8Array,
       iv: Uint8Array,
       clear: Uint8Array,
-      additionalData?: Uint8Array
+      additionalData?: Uint8Array,
    ): Promise<Uint8Array> {
-
       const ivBytes = Number(Ciphers.algIVByteLength(alg));
       if (ivBytes != iv.byteLength) {
          throw new Error('incorrect iv length of: ' + iv.byteLength);
@@ -619,7 +560,7 @@ export class EncipherV7 extends Encipher {
                additionalData ?? null,
                null,
                iv,
-               key
+               key,
             );
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
@@ -628,35 +569,26 @@ export class EncipherV7 extends Encipher {
          }
       } else if (alg == 'AEGIS-256') {
          try {
-            encryptedBytes = getSodium().crypto_aead_aegis256_encrypt(
-               clear,
-               additionalData ?? null,
-               null,
-               iv,
-               key
-            );
+            encryptedBytes = getSodium().crypto_aead_aegis256_encrypt(clear, additionalData ?? null, null, iv, key);
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
             const msg = err instanceof Error ? err.message : '';
             throw new DOMException(msg, 'OperationError ');
          }
       } else {
-         let ek: CryptoKey | undefined = await crypto.subtle.importKey(
-            'raw',
-            getArrayBuffer(key),
-            'AES-GCM',
-            false,
-            ['encrypt']
-         );
+         let ek: CryptoKey | undefined = await crypto.subtle.importKey('raw', getArrayBuffer(key), 'AES-GCM', false, [
+            'encrypt',
+         ]);
 
-         const buffer = await crypto.subtle.encrypt({
+         const buffer = await crypto.subtle.encrypt(
+            {
                name: alg,
                iv: getArrayBuffer(iv),
                additionalData: additionalData ? getArrayBuffer(additionalData) : new ArrayBuffer(0),
-               tagLength: cc.AES_GCM_TAG_BYTES * 8
+               tagLength: cc.AES_GCM_TAG_BYTES * 8,
             },
             ek,
-            getArrayBuffer(clear)
+            getArrayBuffer(clear),
          );
 
          ek = undefined;
@@ -667,11 +599,7 @@ export class EncipherV7 extends Encipher {
    }
 
    // Seperated out and made public for testing, normal callers should not use this function
-   public async _createHeader(
-      encryptedData: Uint8Array,
-      additionalData: Uint8Array
-   ): Promise<Uint8Array> {
-
+   public async _createHeader(encryptedData: Uint8Array, additionalData: Uint8Array): Promise<Uint8Array> {
       if (!this._lastMac || !encryptedData || !additionalData) {
          throw new Error('Data not initialized');
       }
@@ -699,7 +627,6 @@ export class EncipherV7 extends Encipher {
    }
 }
 
-
 type BlockData = {
    readonly mac: Uint8Array<ArrayBuffer>;
    readonly ver: number;
@@ -712,15 +639,11 @@ type BlockData = {
 };
 
 export abstract class Decipher extends Ciphers {
-
    protected _blockNum;
    protected _blockData?: BlockData;
    private _decodeBlock0InFlight?: Promise<void>;
 
-   protected constructor(
-      keyProvider: KeyProvider,
-      reader: BYOBStreamReader
-   ) {
+   protected constructor(keyProvider: KeyProvider, reader: BYOBStreamReader) {
       super(keyProvider, reader);
 
       this._blockNum = 1;
@@ -759,9 +682,7 @@ export abstract class Decipher extends Ciphers {
    // 5. Decrypt encrypted text using cipher key and addtional data
    // 6. Return cleat text bytes
    //
-   public async decryptBlock0(
-   ): Promise<Uint8Array> {
-
+   public async decryptBlock0(): Promise<Uint8Array> {
       try {
          if (![CipherState.Initialized, CipherState.Block0Decoded].includes(this._state)) {
             throw new Error(`Decipher invalid state ${this._state}`);
@@ -769,7 +690,13 @@ export abstract class Decipher extends Ciphers {
 
          // This does MAC check
          await this._decodeBlock0();
-         if (!this._blockData || !this._blockData.alg || !this._blockData.iv || !this._blockData.encryptedData || !this._blockData.additionalData) {
+         if (
+            !this._blockData ||
+            !this._blockData.alg ||
+            !this._blockData.iv ||
+            !this._blockData.encryptedData ||
+            !this._blockData.additionalData
+         ) {
             throw new Error('Data not initialized');
          }
 
@@ -842,7 +769,6 @@ export abstract class Decipher extends Ciphers {
       encrypted: Uint8Array,
       additionalData?: Uint8Array,
    ): Promise<Uint8Array> {
-
       const ivBytes = Number(Ciphers.algIVByteLength(alg));
       if (ivBytes != iv.byteLength) {
          throw new Error('incorrect iv length of: ' + iv.byteLength);
@@ -850,7 +776,6 @@ export abstract class Decipher extends Ciphers {
 
       let decrypted: Uint8Array;
       if (alg == 'X20-PLY') {
-
          /* console.log('dxcha encrypted', encrypted.byteLength, encrypted);
             console.log('dxcha additionalData', additionalData.byteLength, additionalData);
             console.log('dxcha iv', iv.byteLength, iv);
@@ -862,7 +787,7 @@ export abstract class Decipher extends Ciphers {
                encrypted,
                additionalData ?? null,
                iv,
-               key
+               key,
             );
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
@@ -871,35 +796,26 @@ export abstract class Decipher extends Ciphers {
          }
       } else if (alg == 'AEGIS-256') {
          try {
-            decrypted = getSodium().crypto_aead_aegis256_decrypt(
-               null,
-               encrypted,
-               additionalData ?? null,
-               iv,
-               key
-            );
+            decrypted = getSodium().crypto_aead_aegis256_decrypt(null, encrypted, additionalData ?? null, iv, key);
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
             const msg = err instanceof Error ? err.message : '';
             throw new DOMException(msg, 'OperationError ');
          }
       } else {
-         let dk: CryptoKey | undefined = await crypto.subtle.importKey(
-            'raw',
-            getArrayBuffer(key),
-            'AES-GCM',
-            false,
-            ['decrypt']
-         );
+         let dk: CryptoKey | undefined = await crypto.subtle.importKey('raw', getArrayBuffer(key), 'AES-GCM', false, [
+            'decrypt',
+         ]);
 
-         const buffer = await crypto.subtle.decrypt({
+         const buffer = await crypto.subtle.decrypt(
+            {
                name: alg,
                iv: getArrayBuffer(iv),
                additionalData: additionalData ? getArrayBuffer(additionalData) : new ArrayBuffer(0),
-               tagLength: cc.AES_GCM_TAG_BYTES * 8
+               tagLength: cc.AES_GCM_TAG_BYTES * 8,
             },
             dk,
-            getArrayBuffer(encrypted)
+            getArrayBuffer(encrypted),
          );
 
          dk = undefined;
@@ -908,7 +824,7 @@ export abstract class Decipher extends Ciphers {
 
       return decrypted;
    }
-};
+}
 
 // Can handle version 6 and 7 (because the code is very similar)
 export class DecipherV67 extends Decipher {
@@ -964,11 +880,7 @@ export class DecipherV67 extends Decipher {
    private _lastMac?: Uint8Array;
    private _lastFlags: number;
 
-   constructor(
-      keyProvider: KeyProvider,
-      reader: BYOBStreamReader,
-      header?: Uint8Array
-   ) {
+   constructor(keyProvider: KeyProvider, reader: BYOBStreamReader, header?: Uint8Array) {
       super(keyProvider, reader);
       this._header = header;
 
@@ -1019,7 +931,7 @@ export class DecipherV67 extends Decipher {
          mac: ensureArrayBuffer(mac),
          ver: ver,
          payloadSize: payloadSize,
-      }
+      };
 
       return false;
    }
@@ -1061,7 +973,7 @@ export class DecipherV67 extends Decipher {
          // Since V4, additional data is the payload minus encrypted data
          this._blockData.additionalData = payload.subarray(
             0,
-            extractor.offset - this._blockData.encryptedData.byteLength
+            extractor.offset - this._blockData.encryptedData.byteLength,
          );
 
          const cdInfo: CipherDataInfo = {
@@ -1070,7 +982,7 @@ export class DecipherV67 extends Decipher {
             ic: ic,
             lp: lp,
             lpEnd: lpEnd,
-            slt: slt
+            slt: slt,
          };
 
          this._keyProvider.setCipherDataInfo(cdInfo);
@@ -1084,18 +996,12 @@ export class DecipherV67 extends Decipher {
 
          if (encryptedHint!.byteLength != 0) {
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(this._blockData.iv);
-            const hintBytes = await Decipher._doDecrypt(
-               this._blockData.alg,
-               hk,
-               hIV,
-               encryptedHint
-            );
+            const hintBytes = await Decipher._doDecrypt(this._blockData.alg, hk, hIV, encryptedHint);
             this._keyProvider.setHint(new TextDecoder().decode(hintBytes));
          }
 
          this._state = CipherState.Block0Decoded;
          this._lastFlags = this._blockData.flags;
-
       } catch (err) {
          this.errorState();
          console.error(err);
@@ -1105,9 +1011,7 @@ export class DecipherV67 extends Decipher {
       }
    }
 
-   public override async decryptBlockN(
-   ): Promise<Uint8Array> {
-
+   public override async decryptBlockN(): Promise<Uint8Array> {
       try {
          if (this._state != CipherState.Block0Done) {
             throw new Error(`Decipher invalid state ${this._state}`);
@@ -1121,7 +1025,13 @@ export class DecipherV67 extends Decipher {
             return new Uint8Array(0);
          }
 
-         if (!this._blockData || !this._blockData.alg || !this._blockData.iv || !this._blockData.encryptedData || !this._blockData.additionalData) {
+         if (
+            !this._blockData ||
+            !this._blockData.alg ||
+            !this._blockData.iv ||
+            !this._blockData.encryptedData ||
+            !this._blockData.additionalData
+         ) {
             throw new Error('Data not initialized');
          }
 
@@ -1152,7 +1062,6 @@ export class DecipherV67 extends Decipher {
    // but it is public for unit testing. Does not allow encoding
    // with zero length encrypted text since that is not needed
    protected async _decodeBlockN(): Promise<void> {
-
       // Need to treat all values an UNTRUSTED since the signature has not yet been
       // validated, Extractor does test each value for valid ranges as we unpack
       try {
@@ -1194,7 +1103,7 @@ export class DecipherV67 extends Decipher {
          // Since V4, additional data is the payload minus encrypted data
          this._blockData.additionalData = payload.subarray(
             0,
-            extractor.offset - this._blockData.encryptedData.byteLength
+            extractor.offset - this._blockData.encryptedData.byteLength,
          );
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
@@ -1205,7 +1114,6 @@ export class DecipherV67 extends Decipher {
          }
 
          this._lastFlags = this._blockData.flags;
-
       } catch (err) {
          this.errorState();
          console.error(err);
@@ -1214,9 +1122,15 @@ export class DecipherV67 extends Decipher {
    }
 
    private async _verifyMAC(): Promise<boolean> {
-
-      if (!this._blockData || !this._blockData.payloadSize || !this._blockData.ver || !this._blockData.additionalData ||
-        !this._blockData.encryptedData || !this._blockData.mac || !this._lastMac) {
+      if (
+         !this._blockData ||
+         !this._blockData.payloadSize ||
+         !this._blockData.ver ||
+         !this._blockData.additionalData ||
+         !this._blockData.encryptedData ||
+         !this._blockData.mac ||
+         !this._lastMac
+      ) {
          throw new Error('Data not initialized');
       }
 
@@ -1243,7 +1157,6 @@ export class DecipherV67 extends Decipher {
       throw new Error('Invalid MAC signature');
    }
 }
-
 
 export class Extractor<T extends ArrayBufferLike> {
    private _encoded: Uint8Array<T>;
@@ -1320,7 +1233,7 @@ export class Extractor<T extends ArrayBufferLike> {
 
    lpp(): [lp: number, lpEnd: number] {
       let lpp = bytesToNum(this.extract('lpp', cc.LPP_BYTES));
-      const lp = (lpp & 0x0F) + 1;
+      const lp = (lpp & 0x0f) + 1;
       const lpEnd = (lpp >> 4) + 1;
       // this can't happen... but... just check
       if (lpEnd < 1 || lpEnd > cc.LP_MAX) {
@@ -1365,7 +1278,6 @@ export class Extractor<T extends ArrayBufferLike> {
       return payloadSize;
    }
 }
-
 
 export class Packer {
    private _dest?: Uint8Array<ArrayBuffer>;
@@ -1462,7 +1374,7 @@ export class Packer {
    }
 
    set ic(iCount: number) {
-      if (iCount !==0 && (iCount < cc.ICOUNT_MIN || iCount > cc.ICOUNT_MAX)) {
+      if (iCount !== 0 && (iCount < cc.ICOUNT_MIN || iCount > cc.ICOUNT_MAX)) {
          throw new Error('Invalid ic of: ' + iCount);
       }
       this.pack('ic', numToBytes(iCount, cc.IC_BYTES));
@@ -1476,12 +1388,18 @@ export class Packer {
          throw new Error('Invalid lp of: ' + lp);
       }
       let lpp = (lpEnd - 1) << 4;
-      lpp += (lp - 1);
+      lpp += lp - 1;
       this.pack('lpp', numToBytes(lpp, cc.LPP_BYTES));
    }
 
    set ver(version: number) {
-      if (version != cc.VERSION1 && version != cc.VERSION4 && version != cc.VERSION5 && version != cc.VERSION6 && version != cc.VERSION7) {
+      if (
+         version != cc.VERSION1 &&
+         version != cc.VERSION4 &&
+         version != cc.VERSION5 &&
+         version != cc.VERSION6 &&
+         version != cc.VERSION7
+      ) {
          throw new Error('Invalid version of: ' + version);
       }
       this.pack('ver', numToBytes(version, cc.VER_BYTES));

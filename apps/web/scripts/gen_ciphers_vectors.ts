@@ -11,18 +11,9 @@
 //
 // Run with: pnpm vectors:ciphers
 
-import {
-   cryptoReady,
-   base64ToBytes,
-} from '@qcrypt/crypto';
+import { cryptoReady, base64ToBytes } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
-import {
-   streamFromStr,
-   withTermOverride,
-   encryptOneLoop,
-   toBase64,
-   printBanner,
-} from './gen_helpers.ts';
+import { streamFromStr, withTermOverride, encryptOneLoop, toBase64, printBanner } from './gen_helpers.ts';
 
 const VER = cc.CURRENT_VERSION;
 const PLAIN = 'A nice 🦫 came to say hello';
@@ -44,18 +35,10 @@ const CASES: Array<[string, boolean | null, boolean | null]> = [
 async function genCipherText(
    alg: cc.CipherAlgs,
    forceBlock0Term: boolean | null,
-   forceBlockNTerm: boolean | null
+   forceBlockNTerm: boolean | null,
 ): Promise<string> {
    return withTermOverride(forceBlock0Term, forceBlockNTerm, async () => {
-      const bytes = await encryptOneLoop(
-         streamFromStr(PLAIN),
-         CRED,
-         PWD,
-         HINT,
-         alg,
-         IC,
-         READ_OPTS
-      );
+      const bytes = await encryptOneLoop(streamFromStr(PLAIN), CRED, PWD, HINT, alg, IC, READ_OPTS);
       return toBase64(bytes);
    });
 }

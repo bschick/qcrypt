@@ -30,9 +30,8 @@ import {
    readStreamAll,
    cryptoReady,
    concatArrays,
-   ensureArrayBuffer
+   ensureArrayBuffer,
 } from '../index';
-
 
 // Faster than .toEqual, resulting in few timeouts
 export function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
@@ -48,8 +47,10 @@ export function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 // Faster than .toEqual, resulting in few timeouts
-export async function areEqual(a: Uint8Array | ReadableStream<Uint8Array>, b: Uint8Array | ReadableStream<Uint8Array>): Promise<boolean> {
-
+export async function areEqual(
+   a: Uint8Array | ReadableStream<Uint8Array>,
+   b: Uint8Array | ReadableStream<Uint8Array>,
+): Promise<boolean> {
    if (a instanceof ReadableStream) {
       a = await readStreamAll(a);
    }
@@ -69,57 +70,45 @@ export async function areEqual(a: Uint8Array | ReadableStream<Uint8Array>, b: Ui
    return true;
 }
 
-export function streamFromBytes(data: Uint8Array | Uint8Array[]): [
-   ReadableStream<Uint8Array>,
-   Uint8Array
-] {
+export function streamFromBytes(data: Uint8Array | Uint8Array[]): [ReadableStream<Uint8Array>, Uint8Array] {
    const merged = data instanceof Uint8Array ? ensureArrayBuffer(data) : concatArrays(data);
    const blob = new Blob([merged], { type: 'application/octet-stream' });
    return [blob.stream(), merged];
 }
 
-export function streamFromStr(str: string): [
-   ReadableStream<Uint8Array>,
-   Uint8Array
-] {
+export function streamFromStr(str: string): [ReadableStream<Uint8Array>, Uint8Array] {
    const data = new TextEncoder().encode(str);
    const blob = new Blob([data], { type: 'application/octet-stream' });
    return [blob.stream(), data];
 }
 
-export function streamFromBase64Url(b64Url: string): [
-   ReadableStream<Uint8Array>,
-   Uint8Array
-] {
+export function streamFromBase64Url(b64Url: string): [ReadableStream<Uint8Array>, Uint8Array] {
    const data = base64ToBytes(b64Url);
    const blob = new Blob([data], { type: 'application/octet-stream' });
    return [blob.stream(), data];
 }
-
 
 function randomBlob(byteLength: number): Blob {
    // Create on max-size array and repeate it
    const randData = crypto.getRandomValues(new Uint8Array(512));
    const count = Math.ceil(byteLength / 512);
 
-   let arr = new Array<Uint8Array<ArrayBuffer>>;
+   let arr = new Array<Uint8Array<ArrayBuffer>>();
    for (let i = 0; i < count; ++i) {
       arr.push(randData);
    }
    return new Blob(arr, { type: 'application/octet-stream' });
 }
 
-
-describe("Base64 encode decode", function () {
-
-   it("random bytes", function () {
+describe('Base64 encode decode', function () {
+   it('random bytes', function () {
       const rb = crypto.getRandomValues(new Uint8Array(43));
       const b64 = bytesToBase64(rb);
       expect(b64.length).toBeGreaterThanOrEqual(rb.byteLength);
       expect(isEqualArray(rb, base64ToBytes(b64))).toBe(true);
    });
 
-   it("detect bad encodings", function () {
+   it('detect bad encodings', function () {
       // correct values
       const correctBytes = new Uint8Array([0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x3e, 0x33]);
       const correctText = 'Hello>3';
@@ -149,12 +138,12 @@ describe("Base64 encode decode", function () {
    });
 });
 
-describe("getRandom48 tests", function () {
+describe('getRandom48 tests', function () {
    beforeEach(async () => {
       await cryptoReady();
    });
 
-   it("pseudo random", async function () {
+   it('pseudo random', async function () {
       const r1 = getRandom(48);
       const r2 = getRandom(48);
 
@@ -164,9 +153,8 @@ describe("getRandom48 tests", function () {
    });
 });
 
-describe("Number byte packing", function () {
-
-   it("one byte ok", function () {
+describe('Number byte packing', function () {
+   it('one byte ok', function () {
       let a1 = numToBytes(0, 1);
       expect(bytesToNum(a1)).toBe(0);
       expect(a1.byteLength).toBe(1);
@@ -180,7 +168,7 @@ describe("Number byte packing", function () {
       expect(a1.byteLength).toBe(1);
    });
 
-   it("detect overflow check", function () {
+   it('detect overflow check', function () {
       expect(() => numToBytes(256, 1)).toThrow();
       expect(() => numToBytes(2456, 1)).toThrow();
       expect(() => numToBytes(65536, 2)).toThrow();
@@ -188,7 +176,7 @@ describe("Number byte packing", function () {
       expect(() => numToBytes(187742949672967216, 4)).toThrow();
    });
 
-   it("other lengths ok", function () {
+   it('other lengths ok', function () {
       let a2 = numToBytes(567, 2);
       expect(bytesToNum(a2)).toBe(567);
       expect(a2.byteLength).toBe(2);
@@ -205,13 +193,10 @@ describe("Number byte packing", function () {
       expect(bytesToNum(a4)).toBe(4294000000);
       expect(a4.byteLength).toBe(4);
    });
-
 });
 
-describe("string byte truncation", function () {
-
-   it("ascii characters", function () {
-
+describe('string byte truncation', function () {
+   it('ascii characters', function () {
       const src = 'this c its encrypted';
 
       const underFit = bytesFromUTF8String(src, 50);
@@ -230,8 +215,7 @@ describe("string byte truncation", function () {
       expect(src.slice(0, -2)).toEqual(noFitStr);
    });
 
-   it("unicode characters", function () {
-
+   it('unicode characters', function () {
       // Oddly 🌧️ results in 7 bytes due to an extra "Zero Width Joiner ZWJ"
       const src = 'this 🌧️ its encrypted';
 
@@ -249,11 +233,9 @@ describe("string byte truncation", function () {
       const noFitStr = new TextDecoder().decode(noFit);
       expect(noFit.byteLength).toEqual(24);
       expect(src.slice(0, -2)).toEqual(noFitStr);
-
    });
 
    it("don't split unicode", function () {
-
       // Oddly 🌧️ results in 7 bytes due to an extra "Zero Width Joiner ZWJ"
       const src = 'this 🌧️ its 🌧️🌧️🌧️🌧️';
 
@@ -279,8 +261,8 @@ describe("string byte truncation", function () {
    });
 });
 
-describe("Stream reading", function () {
-   it("buffer matches", async function () {
+describe('Stream reading', function () {
+   it('buffer matches', async function () {
       let blob1k = randomBlob(1024);
       let buffer1k = new ArrayBuffer(blob1k.size);
 
@@ -303,7 +285,7 @@ describe("Stream reading", function () {
       expect(isEqualArray(new Uint8Array(await blob1k.arrayBuffer(), 0, readData.byteLength), readData)).toBe(true);
    });
 
-   it("larger stream", async function () {
+   it('larger stream', async function () {
       let blob4m = randomBlob(1024 * 1024 * 4);
       let buffer4m = new ArrayBuffer(blob4m.size);
       let stream4m = blob4m.stream();
@@ -325,7 +307,7 @@ describe("Stream reading", function () {
       expect(isEqualArray(new Uint8Array(await blob4m.arrayBuffer(), 0, readData.byteLength), readData)).toBe(true);
    });
 
-   it("under read stream", async function () {
+   it('under read stream', async function () {
       let blob3m = randomBlob(1024 * 1024 * 3);
       let buffer1m = new ArrayBuffer(1024 * 1024);
 
@@ -349,7 +331,7 @@ describe("Stream reading", function () {
       expect(isEqualArray(new Uint8Array(await blob3m.arrayBuffer(), 0, readData.byteLength), readData)).toBe(true);
    });
 
-   it("over read stream", async function () {
+   it('over read stream', async function () {
       let blob3m = randomBlob(1024 * 1024 * 3);
       let buffer4m = new ArrayBuffer(1024 * 1024 * 4);
       let stream3m = blob3m.stream();

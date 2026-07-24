@@ -33,7 +33,7 @@ export {
    RECOVERYID_BYTES,
    CHALLENGE_BYTES,
    PROOF_PUBKEY_BYTES,
-   PROOF_SIG_BYTES
+   PROOF_SIG_BYTES,
 } from './lib/proof';
 
 export namespace RequestTypes {

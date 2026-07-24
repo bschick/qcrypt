@@ -20,398 +20,394 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Entity, type EntityItem, type EntityRecord } from "electrodb";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-
+import { Entity, type EntityItem, type EntityRecord } from 'electrodb';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 
 const client = new DynamoDBClient({
-   region: "us-east-1",
+   region: 'us-east-1',
 });
-
 
 export const Users = new Entity(
    {
       model: {
-         entity: "user",
-         version: "1",
-         service: "quickcrypt"
+         entity: 'user',
+         version: '1',
+         service: 'quickcrypt',
       },
       attributes: {
          userId: {
-            type: "string",
-            required: true
+            type: 'string',
+            required: true,
          },
          userName: {
-            type: "string",
-            required: true
+            type: 'string',
+            required: true,
          },
          userCredEnc: {
-            type: "string",
-            required: false
+            type: 'string',
+            required: false,
          },
          userCredEncOld: {
-            type: "string",
-            required: false
+            type: 'string',
+            required: false,
          },
          lastCredentialId: {
-            type: "string",
-            required: false
+            type: 'string',
+            required: false,
          },
          userCredPubKey: {
-            type: "string",
-            required: false
+            type: 'string',
+            required: false,
          },
          recoveryPubKey: {
-            type: "string",
-            required: false
+            type: 'string',
+            required: false,
          },
          prf: {
-            type: "boolean",
-            required: false
+            type: 'boolean',
+            required: false,
          },
          verified: {
-            type: "boolean",
+            type: 'boolean',
             default: () => false,
-            required: true
+            required: true,
          },
          recovered: {
-            type: "number",
+            type: 'number',
             default: () => 0,
-            required: true
+            required: true,
          },
          authCount: {
-            type: "number",
+            type: 'number',
             default: () => 0,
-            required: true
+            required: true,
          },
          createdAt: {
-            type: "number",
+            type: 'number',
             default: () => Date.now(),
             // should not be modified after created
-            readOnly: true
+            readOnly: true,
          },
          expiresAt: {
-            type: "number",
-            required: false
-         }
+            type: 'number',
+            required: false,
+         },
       },
       indexes: {
          byUserId: {
             pk: {
-               field: "pk",
-               cast: "string",
-               composite: ["userId"],
-               casing: 'none'
-            }
+               field: 'pk',
+               cast: 'string',
+               composite: ['userId'],
+               casing: 'none',
+            },
          },
-      }
+      },
    },
    {
-      table: "Users",
-      client: client
-   }
+      table: 'Users',
+      client: client,
+   },
 );
 
 export const Authenticators = new Entity(
    {
       model: {
-         entity: "authenticator",
-         version: "1",
-         service: "quickcrypt"
+         entity: 'authenticator',
+         version: '1',
+         service: 'quickcrypt',
       },
       attributes: {
          userId: {
-            type: "string",
-            required: true
+            type: 'string',
+            required: true,
          },
          credentialId: {
-            type: "string",
-            required: true
+            type: 'string',
+            required: true,
          },
          description: {
-            type: "string",
-            required: false
+            type: 'string',
+            required: false,
          },
          credentialPublicKey: {
-            type: "string",
-            required: true
+            type: 'string',
+            required: true,
          },
          credentialDeviceType: {
-            type: "string",
-            required: true
+            type: 'string',
+            required: true,
          },
          credentialBackedUp: {
-            type: "boolean",
-            required: false
+            type: 'boolean',
+            required: false,
          },
          transports: {
-            type: "set",
-            items: "string",
+            type: 'set',
+            items: 'string',
             default: () => [],
-            required: false
+            required: false,
          },
          userVerified: {
-            type: "boolean",
-            required: false
+            type: 'boolean',
+            required: false,
          },
          origin: {
-            type: "string",
-            required: true
+            type: 'string',
+            required: true,
          },
          aaguid: {
-            type: "string",
-            required: false
+            type: 'string',
+            required: false,
          },
          attestationObject: {
-            type: "string",
-            required: false
+            type: 'string',
+            required: false,
          },
          userCredEnc: {
-            type: "string",
-            required: false
+            type: 'string',
+            required: false,
          },
          createdAt: {
-            type: "number",
+            type: 'number',
             default: () => Date.now(),
             // should not be modified after created
-            readOnly: true
+            readOnly: true,
          },
          lastLogin: {
-            type: "number",
-            required: false
-         }
+            type: 'number',
+            required: false,
+         },
       },
       indexes: {
          byUserId: {
             pk: {
-               field: "pk",
-               cast: "string",
-               composite: ["userId"],
-               casing: 'none'
+               field: 'pk',
+               cast: 'string',
+               composite: ['userId'],
+               casing: 'none',
             },
             sk: {
-               field: "sk",
-               cast: "string",
-               composite: ["credentialId"],
-               casing: 'none'
-            }
+               field: 'sk',
+               cast: 'string',
+               composite: ['credentialId'],
+               casing: 'none',
+            },
          },
          byCredId: {
-            index: "credentialid-index",
+            index: 'credentialid-index',
             pk: {
-               field: "credentialId",
-               cast: "string",
-               composite: ["credentialId"],
-               casing: 'none'
+               field: 'credentialId',
+               cast: 'string',
+               composite: ['credentialId'],
+               casing: 'none',
             },
-         }
-      }
+         },
+      },
    },
    {
-      table: "Authenticators",
-      client: client
-   }
+      table: 'Authenticators',
+      client: client,
+   },
 );
-
 
 export const Invitables = new Entity(
    {
       model: {
-         entity: "invitable",
-         version: "1",
-         service: "quickcrypt"
+         entity: 'invitable',
+         version: '1',
+         service: 'quickcrypt',
       },
       attributes: {
          invitableId: {
-            type: "string",
-            required: true
+            type: 'string',
+            required: true,
          },
          userId: {
-            type: "string",
-            required: true
+            type: 'string',
+            required: true,
          },
          description: {
-            type: "string",
-            required: false
+            type: 'string',
+            required: false,
          },
          createdAt: {
-            type: "number",
+            type: 'number',
             default: () => Date.now(),
             // should not be modified after created
-            readOnly: true
-         }
+            readOnly: true,
+         },
       },
       indexes: {
          byUserId: {
             pk: {
-               field: "pk",
-               cast: "string",
-               composite: ["userId"],
-               casing: 'none'
+               field: 'pk',
+               cast: 'string',
+               composite: ['userId'],
+               casing: 'none',
             },
             sk: {
-               field: "sk",
-               cast: "string",
-               composite: ["invitableId"],
-               casing: 'none'
+               field: 'sk',
+               cast: 'string',
+               composite: ['invitableId'],
+               casing: 'none',
             },
          },
          byInvitableId: {
-            index: "invitableid-index",
+            index: 'invitableid-index',
             pk: {
-               field: "invitableId",
-               composite: ["invitableId"],
-               cast: "string",
-               casing: 'none'
+               field: 'invitableId',
+               composite: ['invitableId'],
+               cast: 'string',
+               casing: 'none',
             },
-         }
-      }
+         },
+      },
    },
    {
-      table: "Invitables",
-      client: client
-   }
+      table: 'Invitables',
+      client: client,
+   },
 );
 
 export const Challenges = new Entity(
    {
       model: {
-         entity: "challenge",
-         version: "1",
-         service: "quickcrypt"
+         entity: 'challenge',
+         version: '1',
+         service: 'quickcrypt',
       },
       attributes: {
          challenge: {
-            type: "string",
-            required: true
+            type: 'string',
+            required: true,
          },
          purpose: {
-            type: ["reg", "add", "auth", "recover", "api", "nonce"] as const,
+            type: ['reg', 'add', 'auth', 'recover', 'api', 'nonce'] as const,
             required: true,
-            readOnly: true
+            readOnly: true,
          },
          userId: {
-            type: "string",
+            type: 'string',
             required: true,
-            readOnly: true
+            readOnly: true,
          },
          expiresAt: {
-            type: "number",
+            type: 'number',
             // Needs unix time (convert from MS to S) and add 5 minutes after creation
             // Which is a 4 minute buffer since webauthn stuff defaults to 1 minute timeout
             // Must exceed PROOF_SKEW_MS or proof nonces expire within the window and replay reopens
-            default: () => (Math.floor(Date.now() / 1000) + 300),
+            default: () => Math.floor(Date.now() / 1000) + 300,
             required: true,
-            readOnly: true
-         }
+            readOnly: true,
+         },
       },
       indexes: {
          byChallenge: {
             pk: {
-               field: "pk",
-               cast: "string",
-               composite: ["challenge"],
-               casing: 'none'
-            }
-         }
-      }
+               field: 'pk',
+               cast: 'string',
+               composite: ['challenge'],
+               casing: 'none',
+            },
+         },
+      },
    },
    {
-      table: "Challenges",
-      client: client
-   }
+      table: 'Challenges',
+      client: client,
+   },
 );
-
 
 export const AuthEvents = new Entity(
    {
       model: {
-         entity: "event",
-         version: "1",
-         service: "quickcrypt"
+         entity: 'event',
+         version: '1',
+         service: 'quickcrypt',
       },
       attributes: {
          event: {
-            type: "string",
-            required: true
+            type: 'string',
+            required: true,
          },
          userId: {
-            type: "string",
-            required: true
+            type: 'string',
+            required: true,
          },
          when: {
-            type: "number",
+            type: 'number',
             default: () => Date.now(),
             // should not be modified after created
-            readOnly: true
+            readOnly: true,
          },
          credentialId: {
-            type: "string",
-            required: false
+            type: 'string',
+            required: false,
          },
       },
       indexes: {
          byUser: {
             pk: {
-               field: "pk",
-               cast: "string",
-               composite: ["userId"],
-               casing: 'none'
+               field: 'pk',
+               cast: 'string',
+               composite: ['userId'],
+               casing: 'none',
             },
             sk: {
-               field: "sk",
-               cast: "number",
-               composite: ["when"]
-            }
-         }
-      }
+               field: 'sk',
+               cast: 'number',
+               composite: ['when'],
+            },
+         },
+      },
    },
    {
-      table: "Events",
-      client: client
-   }
+      table: 'Events',
+      client: client,
+   },
 );
 
 export const AAGUIDs = new Entity(
    {
       model: {
-         entity: "aaguid",
-         version: "1",
-         service: "quickcrypt"
+         entity: 'aaguid',
+         version: '1',
+         service: 'quickcrypt',
       },
       attributes: {
          aaguid: {
-            type: "string",
-            required: true
+            type: 'string',
+            required: true,
          },
          name: {
-            type: "string",
-            required: true
+            type: 'string',
+            required: true,
          },
          lightIcon: {
-            type: "string",
-            required: true
+            type: 'string',
+            required: true,
          },
          darkIcon: {
-            type: "string",
-            required: true
-         }
+            type: 'string',
+            required: true,
+         },
       },
       indexes: {
          byAAGUID: {
             pk: {
-               field: "pk",
-               cast: "string",
-               composite: ["aaguid"],
-               casing: 'none'
-            }
-         }
-      }
+               field: 'pk',
+               cast: 'string',
+               composite: ['aaguid'],
+               casing: 'none',
+            },
+         },
+      },
    },
    {
-      table: "AAGUIDs",
-      client: client
-   }
+      table: 'AAGUIDs',
+      client: client,
+   },
 );
 
 export type UnverifiedUserItem = EntityItem<typeof Users>;

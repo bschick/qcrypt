@@ -4,13 +4,8 @@
   "targetDefaults": {
     "build": {
       "cache": false,
-      "dependsOn": [
-        "^build"
-      ],
-      "inputs": [
-        "production",
-        "^production"
-      ]
+      "dependsOn": ["^build"],
+      "inputs": ["production", "^production"]
     },
     "build-min": {
       "cache": false
@@ -23,10 +18,7 @@
     },
     "test": {
       "cache": false,
-      "inputs": [
-        "default",
-        "^production"
-      ]
+      "inputs": ["default", "^production"]
     },
     "test-prod": {
       "cache": false
@@ -34,13 +26,8 @@
   },
   "namedInputs": {
     "sharedGlobals": [],
-    "default": [
-      "{projectRoot}/**/*",
-      "sharedGlobals"
-    ],
-    "production": [
-      "default"
-    ]
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "production": ["default"]
   },
   "analytics": true,
   "generators": {

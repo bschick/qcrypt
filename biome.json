@@ -1,0 +1,61 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.5/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!**/*.html",
+      "!vendor/**",
+      "!apps/server/assets/**",
+      "!libs/crypto/src/lib/crux/qc_crux.js",
+      "!libs/crypto/src/lib/crux/qc_crux.d.ts",
+      "!libs/crypto/src/lib/crux/wasm.ts"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 3,
+    "lineWidth": 120,
+    "lineEnding": "lf"
+  },
+  "linter": {
+    "enabled": false,
+    "rules": {
+      "recommended": true,
+      "complexity": {
+        "useOptionalChain": "off"
+      },
+      "style": {
+        "useBlockStatements": "error",
+        "noNonNullAssertion": "off"
+      }
+    }
+  },
+  "assist": {
+    "enabled": false
+  },
+  "javascript": {
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    },
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "arrowParentheses": "always"
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.json", "**/*.jsonc"],
+      "formatter": {
+        "indentWidth": 2
+      }
+    }
+  ]
+}

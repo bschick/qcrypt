@@ -3,14 +3,7 @@
 // Shared helpers for the cipher-vector generation scripts
 // (gen_ciphers_vectors.ts, gen_ciphersvc_vectors.ts).
 
-import {
-   PWDKeyProvider,
-   Ciphers,
-   getLatestEncipher,
-   bytesToBase64,
-   readStreamAll,
-   concatArrays,
-} from '@qcrypt/crypto';
+import { PWDKeyProvider, Ciphers, getLatestEncipher, bytesToBase64, readStreamAll, concatArrays } from '@qcrypt/crypto';
 import type { ReadOpts } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 
@@ -33,7 +26,7 @@ export function bytesFromStr(s: string): Uint8Array {
 export async function withTermOverride<T>(
    forceBlock0Term: boolean | null,
    forceBlockNTerm: boolean | null,
-   fn: () => Promise<T>
+   fn: () => Promise<T>,
 ): Promise<T> {
    const original = (Ciphers as any)._encodeFileAD.bind(Ciphers);
    let firstCall = true;
@@ -59,10 +52,7 @@ export async function withTermOverride<T>(
 
 // Like withTermOverride, but forces the same term value on every block.
 // Use to produce "All Term" (force=true) or "No Term" (force=false) corpora.
-export async function withTermOverrideEvery<T>(
-   force: boolean,
-   fn: () => Promise<T>
-): Promise<T> {
+export async function withTermOverrideEvery<T>(force: boolean, fn: () => Promise<T>): Promise<T> {
    const original = (Ciphers as any)._encodeFileAD.bind(Ciphers);
    (Ciphers as any)._encodeFileAD = (args: any) => {
       if ('term' in args) {
@@ -88,7 +78,7 @@ export async function encryptOneLoop(
    alg: cc.CipherAlgs,
    ic: number,
    readOpts?: ReadOpts,
-   customAd?: Uint8Array<ArrayBuffer>
+   customAd?: Uint8Array<ArrayBuffer>,
 ): Promise<Uint8Array> {
    const kp = new PWDKeyProvider(userCred.slice(0), [pwd, hint], customAd);
    const encipher = getLatestEncipher(clearStream, kp, alg, 1, 1, ic, readOpts);
@@ -110,7 +100,6 @@ export async function readAllBytes(stream: ReadableStream<Uint8Array>): Promise<
    const buf = await readStreamAll(stream);
    return buf instanceof Uint8Array ? buf : new TextEncoder().encode(buf as unknown as string);
 }
-
 
 // Formats a Uint8Array as a TS literal: `new Uint8Array([1, 2, 3, ...])`
 export function uint8ArrayLiteral(bytes: Uint8Array): string {

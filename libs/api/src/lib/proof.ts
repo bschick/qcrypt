@@ -43,19 +43,12 @@ function buildUserCredMessage(
    timestampMs: string,
    nonce: string,
    bodyHashHex: string,
-   queryString: string
+   queryString: string,
 ): Uint8Array<ArrayBuffer> {
    if (base64ToBytes(userId).byteLength !== cc.USERID_BYTES) {
       throw new Error('invalid userId length');
    }
-   const fields = [
-      userId,
-      method.toUpperCase(),
-      path,
-      timestampMs,
-      nonce,
-      bodyHashHex.toLowerCase()
-   ];
+   const fields = [userId, method.toUpperCase(), path, timestampMs, nonce, bodyHashHex.toLowerCase()];
    if (queryString) {
       fields.push(queryString);
    }
@@ -77,14 +70,14 @@ export function createUserCredProof(
    timestampMs: string,
    nonce: string,
    bodyHashHex: string,
-   queryString: string = ''
+   queryString: string = '',
 ): Uint8Array<ArrayBuffer> {
    const { secKey } = getProofKeyPair(userCred, USERCRED_KEY_CONTEXT);
    try {
       return createProof(
          secKey,
          buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
-         USERCRED_SIG_CONTEXT
+         USERCRED_SIG_CONTEXT,
       );
    } finally {
       secKey.fill(0);
@@ -100,35 +93,28 @@ export function verifyUserCredProof(
    nonce: string,
    bodyHashHex: string,
    signature: Uint8Array,
-   queryString: string = ''
+   queryString: string = '',
 ): boolean {
    return verifyProof(
       pubKey,
       buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
       signature,
-      USERCRED_SIG_CONTEXT
+      USERCRED_SIG_CONTEXT,
    );
 }
-
 
 export function recoverySecret(recoveryId: Uint8Array, userId: string): Uint8Array<ArrayBuffer> {
    return concatArrays([recoveryId, base64ToBytes(userId)]);
 }
 
-function buildRecoveryMessage(
-   userId: string,
-   challenge: string
-): Uint8Array<ArrayBuffer> {
+function buildRecoveryMessage(userId: string, challenge: string): Uint8Array<ArrayBuffer> {
    if (base64ToBytes(userId).byteLength !== cc.USERID_BYTES) {
       throw new Error('invalid userId length');
    }
    if (base64ToBytes(challenge).byteLength !== CHALLENGE_BYTES) {
       throw new Error('invalid challenge length');
    }
-   const message = [
-      userId,
-      challenge
-   ].join('\n');
+   const message = [userId, challenge].join('\n');
    return new TextEncoder().encode(message);
 }
 
@@ -141,15 +127,11 @@ export function getRecoveryPubKey(recoverySecret: Uint8Array): Uint8Array<ArrayB
 export function createRecoveryProof(
    recoverySecret: Uint8Array,
    userId: string,
-   challenge: string
+   challenge: string,
 ): Uint8Array<ArrayBuffer> {
    const { secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
    try {
-      return createProof(
-         secKey,
-         buildRecoveryMessage(userId, challenge),
-         RECOVERY_SIG_CONTEXT
-      );
+      return createProof(secKey, buildRecoveryMessage(userId, challenge), RECOVERY_SIG_CONTEXT);
    } finally {
       secKey.fill(0);
    }
@@ -159,12 +141,7 @@ export function verifyRecoveryProof(
    pubKey: Uint8Array,
    userId: string,
    challenge: string,
-   signature: Uint8Array
+   signature: Uint8Array,
 ): boolean {
-   return verifyProof(
-      pubKey,
-      buildRecoveryMessage(userId, challenge),
-      signature,
-      RECOVERY_SIG_CONTEXT
-   );
+   return verifyProof(pubKey, buildRecoveryMessage(userId, challenge), signature, RECOVERY_SIG_CONTEXT);
 }

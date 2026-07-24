@@ -22,7 +22,7 @@ SOFTWARE. */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { SESSION_TIMEOUT_SEC } from '@qcrypt/api';
-import WebAuthnEmulator from "nid-webauthn-emulator";
+import WebAuthnEmulator from 'nid-webauthn-emulator';
 import {
    registerTestUser,
    registerNewCredential,
@@ -33,19 +33,16 @@ import {
    postJson,
    setSessionUserCred,
    RP_ORIGIN,
-   type TestUser
-} from "./common";
+   type TestUser,
+} from './common';
 import jwtPkg from 'jsonwebtoken';
-import { randomBytes } from "node:crypto";
+import { randomBytes } from 'node:crypto';
 
 // postAuthVerify looks up the credential via the Authenticators GSI (credentialid-index),
 // which is eventually consistent. When this suite registers a user and then immediately logs in,
 // the GSI may not yet reflect the new Authenticator record. Retry to give the GSI time to catch
 // up before failing. Not needed for normal clients because the calls are split by user actions
-async function postAuthVerifyWithRetry(
-   body: Record<string, unknown>,
-   cookie: string,
-): ReturnType<typeof postJson> {
+async function postAuthVerifyWithRetry(body: Record<string, unknown>, cookie: string): ReturnType<typeof postJson> {
    const maxAttempts = 3;
    let res = await postJson(`/v1/auth/verify`, body, {}, cookie);
 
@@ -64,14 +61,13 @@ export function coreSuite(prf: boolean): void {
    const tag = prf ? 'pf' : 'np';
 
    describe(`QuickCrypt WebAuthn Full API Suite (${label})`, () => {
-
       // Shared state
       const testUser = `PWTesty_${tag}_${Date.now()}`;
       let user: TestUser;
       let userId: string;
       let credId: string; // pkId
-      let sessCookie: string = "";
-      let csrfToken: string = "";
+      let sessCookie: string = '';
+      let csrfToken: string = '';
       let userCred: string;
       let emulator: WebAuthnEmulator;
 
@@ -81,13 +77,9 @@ export function coreSuite(prf: boolean): void {
          setSessionUserCred(userCred, userId);
       });
 
-      describe("User & Session Management", () => {
-         it("should fetch current session details", async () => {
-            const res = await getJson(
-               `/v1/session`,
-               { "x-csrf-token": csrfToken },
-               sessCookie,
-            );
+      describe('User & Session Management', () => {
+         it('should fetch current session details', async () => {
+            const res = await getJson(`/v1/session`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
             expect(res.data.verified).toBe(true);
             expect(res.data.userId).toBe(userId);
@@ -101,97 +93,73 @@ export function coreSuite(prf: boolean): void {
             }
          });
 
-         it("should fetch user info", async () => {
-            const res = await getJson(
-               `/v1/user`,
-               { "x-csrf-token": csrfToken },
-               sessCookie,
-            );
+         it('should fetch user info', async () => {
+            const res = await getJson(`/v1/user`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
             expect(res.data.userName).toBe(testUser);
          });
 
-         it("should update username (PATCH)", async () => {
+         it('should update username (PATCH)', async () => {
             const newName = `${testUser}_upd`;
-            let res = await patchJson(
-               `/v1/user`,
-               { userName: newName },
-               { "x-csrf-token": csrfToken },
-               sessCookie
-            );
+            let res = await patchJson(`/v1/user`, { userName: newName }, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
             expect(res.data.userName).toBe(newName);
 
             // put it back
-            res = await patchJson(
-               `/v1/user`,
-               { userName: testUser },
-               { "x-csrf-token": csrfToken },
-               sessCookie
-            );
+            res = await patchJson(`/v1/user`, { userName: testUser }, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
             expect(res.data.userName).toBe(testUser);
          });
 
-         it("should sanitize and bound username on PATCH", async () => {
+         it('should sanitize and bound username on PATCH', async () => {
             // Markup is stripped, leaving the text content
             let res = await patchJson(
                `/v1/user`,
-               { userName: "<script>all</script> good" },
-               { "x-csrf-token": csrfToken },
-               sessCookie
+               { userName: '<script>all</script> good' },
+               { 'x-csrf-token': csrfToken },
+               sessCookie,
             );
             expect(res.status).toBe(200);
-            expect(res.data.userName).toBe("all good");
+            expect(res.data.userName).toBe('all good');
 
             // Over-length name is rejected
             res = await patchJson(
                `/v1/user`,
-               { userName: "as0df9ufwefowifljop20w934fsldfklsdjflasdfkasoifjw0f9jw9f" },
-               { "x-csrf-token": csrfToken },
-               sessCookie
+               { userName: 'as0df9ufwefowifljop20w934fsldfklsdjflasdfkasoifjw0f9jw9f' },
+               { 'x-csrf-token': csrfToken },
+               sessCookie,
             );
             expect(res.status).toBe(400);
 
-            res = await patchJson(
-               `/v1/user`,
-               { userName: testUser },
-               { "x-csrf-token": csrfToken },
-               sessCookie
-            );
+            res = await patchJson(`/v1/user`, { userName: testUser }, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
             expect(res.data.userName).toBe(testUser);
          });
 
-         it("should sanitize and validate passkey description on PATCH", async () => {
+         it('should sanitize and validate passkey description on PATCH', async () => {
             // Markup is stripped from the description
             let res = await patchJson(
                `/v1/passkeys/${credId}`,
-               { description: "567345 <b>5 > <a a" },
-               { "x-csrf-token": csrfToken },
-               sessCookie
+               { description: '567345 <b>5 > <a a' },
+               { 'x-csrf-token': csrfToken },
+               sessCookie,
             );
             expect(res.status).toBe(200);
-            expect(res.data.authenticators[0].description).toBe("567345 5");
+            expect(res.data.authenticators[0].description).toBe('567345 5');
 
             // Non-string description is rejected
             res = await patchJson(
                `/v1/passkeys/${credId}`,
                { description: 5673455 },
-               { "x-csrf-token": csrfToken },
-               sessCookie
+               { 'x-csrf-token': csrfToken },
+               sessCookie,
             );
             expect(res.status).toBe(400);
          });
 
-         it("should add and remove passkey", async () => {
-
+         it('should add and remove passkey', async () => {
             // Get passkey registration options
-            const optsRes = await getJson(
-               `/v1/passkeys/options`,
-               { "x-csrf-token": csrfToken },
-               sessCookie,
-            );
+            const optsRes = await getJson(`/v1/passkeys/options`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(optsRes.status).toBe(200);
 
             const { attestation, passkeyUserCredEnc } = await registerNewCredential(user, optsRes.data);
@@ -208,7 +176,7 @@ export function coreSuite(prf: boolean): void {
             const verifyRes = await postJson(
                `/v1/passkeys/verify?usercred=true`, // old flag that should be ignored
                verifyBody,
-               { "x-csrf-token": csrfToken },
+               { 'x-csrf-token': csrfToken },
                sessCookie,
             );
 
@@ -222,123 +190,93 @@ export function coreSuite(prf: boolean): void {
 
             const delRes = await deleteJson(
                `/v1/passkeys/${attestation.id}`,
-               { "x-csrf-token": csrfToken },
+               { 'x-csrf-token': csrfToken },
                sessCookie,
             );
             expect(delRes.status).toBe(200);
-
          });
 
-         it("should 404 fetching an unknown user", async () => {
-            let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+         it('should 404 fetching an unknown user', async () => {
+            let res = await getJson(`/v1/user`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
 
-            res = await getJson(
-               `/v1/users/42ebNajPIp3leX4K4a0qND`,
-               { "x-csrf-token": csrfToken },
-               sessCookie,
-            );
+            res = await getJson(`/v1/users/42ebNajPIp3leX4K4a0qND`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(404);
          });
 
-         it("should reject deleting an unknown passkey", async () => {
-            let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+         it('should reject deleting an unknown passkey', async () => {
+            let res = await getJson(`/v1/user`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
 
-            res = await deleteJson(
-               `/v1/passkeys/nfVho8Z8p3oEpOl8yvbh40`,
-               { "x-csrf-token": csrfToken },
-               sessCookie,
-            );
+            res = await deleteJson(`/v1/passkeys/nfVho8Z8p3oEpOl8yvbh40`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(400);
          });
 
-         it("should reject patching an unknown passkey", async () => {
+         it('should reject patching an unknown passkey', async () => {
             let res = await patchJson(
                `/v1/passkeys/${credId}`,
-               { description: "valid description" },
-               { "x-csrf-token": csrfToken },
+               { description: 'valid description' },
+               { 'x-csrf-token': csrfToken },
                sessCookie,
             );
             expect(res.status).toBe(200);
 
             res = await patchJson(
                `/v1/passkeys/nfVho8Z8p3oEpOl8yvbh40`,
-               { description: "ignored" },
-               { "x-csrf-token": csrfToken },
+               { description: 'ignored' },
+               { 'x-csrf-token': csrfToken },
                sessCookie,
             );
             expect(res.status).toBe(400);
          });
 
-         it("should 404 fetching session for an unknown user", async () => {
-            let res = await getJson(`/v1/session`, { "x-csrf-token": csrfToken }, sessCookie);
+         it('should 404 fetching session for an unknown user', async () => {
+            let res = await getJson(`/v1/session`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
 
-            res = await getJson(
-               `/v1/users/42ebNajPIp3leX4K4a0qND/session`,
-               { "x-csrf-token": csrfToken },
-               sessCookie,
-            );
+            res = await getJson(`/v1/users/42ebNajPIp3leX4K4a0qND/session`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(404);
          });
 
-         it("should 404 deleting session for an unknown user", async () => {
-            let res = await getJson(`/v1/session`, { "x-csrf-token": csrfToken }, sessCookie);
+         it('should 404 deleting session for an unknown user', async () => {
+            let res = await getJson(`/v1/session`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
 
             res = await deleteJson(
                `/v1/users/42ebNajPIp3leX4K4a0qND/session`,
-               { "x-csrf-token": csrfToken },
+               { 'x-csrf-token': csrfToken },
                sessCookie,
             );
             expect(res.status).toBe(404);
          });
       });
 
-      describe("Logout & Re-Login", () => {
-         it("should logout (DELETE session)", async () => {
-            let res = await deleteJson(
-               `/v1/session`,
-               { "x-csrf-token": csrfToken },
-               sessCookie,
-            );
+      describe('Logout & Re-Login', () => {
+         it('should logout (DELETE session)', async () => {
+            let res = await deleteJson(`/v1/session`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
             // Every authorized operation with the now-stale cookie is rejected.
 
             res = await patchJson(
                `/v1/passkeys/${credId}`,
-               { description: "after logout" },
-               { "x-csrf-token": csrfToken },
+               { description: 'after logout' },
+               { 'x-csrf-token': csrfToken },
                sessCookie,
             );
             expect(res.status).toBe(401);
 
-            res = await patchJson(
-               `/v1/user`,
-               { userName: testUser },
-               { "x-csrf-token": csrfToken },
-               sessCookie,
-            );
+            res = await patchJson(`/v1/user`, { userName: testUser }, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(401);
 
-            res = await deleteJson(
-               `/v1/session`,
-               { "x-csrf-token": csrfToken },
-               sessCookie,
-            );
+            res = await deleteJson(`/v1/session`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(401);
 
-            res = await getJson(
-               `/v1/session`,
-               { "x-csrf-token": csrfToken },
-               sessCookie,
-            );
+            res = await getJson(`/v1/session`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(401);
 
             res = await getJson(
                `/v1/user`,
-               { "x-csrf-token": csrfToken },
+               { 'x-csrf-token': csrfToken },
                sessCookie, // Sending old cookie
             );
 
@@ -347,18 +285,13 @@ export function coreSuite(prf: boolean): void {
 
             res = await getJson(
                `/v1/user`,
-               { "x-csrf-token": csrfToken },
+               { 'x-csrf-token': csrfToken },
                sessCookie, // no cookie
             );
             expect(res.status).toBe(401); // Expect Unauthorized
 
             // Get Auth Options
-            const optsRes = await postJson(
-               `/v1/auth/options`,
-               { userId },
-               {},
-               "",
-            );
+            const optsRes = await postJson(`/v1/auth/options`, { userId }, {}, '');
             expect(optsRes.status).toBe(200);
 
             // Sign Challenge
@@ -383,11 +316,7 @@ export function coreSuite(prf: boolean): void {
             csrfToken = verifyRes.data.csrf;
 
             // The restored session works for a subsequent authorized read.
-            const restored = await getJson(
-               `/v1/user`,
-               { "x-csrf-token": csrfToken },
-               sessCookie,
-            );
+            const restored = await getJson(`/v1/user`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(restored.status).toBe(200);
             expect(restored.data.verified).toBeTruthy();
             expect(restored.data.userName).toBe(testUser);
@@ -395,30 +324,21 @@ export function coreSuite(prf: boolean): void {
             expect(restored.data.authenticators.length).toBe(1);
          });
 
-         it("should login without userId in options", async () => {
-            let res = await deleteJson(
-               `/v1/session`,
-               { "x-csrf-token": csrfToken },
-               sessCookie,
-            );
+         it('should login without userId in options', async () => {
+            let res = await deleteJson(`/v1/session`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
             // Cookie should be invalidated/expired now
 
             res = await getJson(
                `/v1/user`,
-               { "x-csrf-token": csrfToken },
+               { 'x-csrf-token': csrfToken },
                sessCookie, // Sending old cookie
             );
 
             expect(res.status).toBe(401); // Expect Unauthorized
 
             // Get Auth Options
-            const optsRes = await postJson(
-               `/v1/auth/options`,
-               {},
-               {},
-               "",
-            );
+            const optsRes = await postJson(`/v1/auth/options`, {}, {}, '');
             expect(optsRes.status).toBe(200);
 
             // Sign Challenge
@@ -444,52 +364,50 @@ export function coreSuite(prf: boolean): void {
          });
       });
 
-      describe("Negative Tests", () => {
-         it("should reject update user without cookie", async () => {
-            let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+      describe('Negative Tests', () => {
+         it('should reject update user without cookie', async () => {
+            let res = await getJson(`/v1/user`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
 
             res = await patchJson(
                `/v1/user`,
-               { userName: "hacker" },
-               { "x-csrf-token": csrfToken },
-               "", // No cookies
+               { userName: 'hacker' },
+               { 'x-csrf-token': csrfToken },
+               '', // No cookies
             );
             expect(res.status).toBeGreaterThanOrEqual(401);
          });
 
-         it("should reject update user without csrf", async () => {
-            let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+         it('should reject update user without csrf', async () => {
+            let res = await getJson(`/v1/user`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
 
             res = await patchJson(
                `/v1/user`,
-               { userName: "hacker" },
+               { userName: 'hacker' },
                {}, // No csrf
                sessCookie,
             );
             expect(res.status).toBeGreaterThanOrEqual(401);
          });
 
-
-         it("should reject manipulated cookie", async () => {
-            let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+         it('should reject manipulated cookie', async () => {
+            let res = await getJson(`/v1/user`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
 
             const offset = 34;
-            const badCookie = sessCookie.substring(0, offset) + (sessCookie[offset] === 'a' ? 'b' : 'a') + sessCookie.substring(offset + 1);
+            const badCookie =
+               sessCookie.substring(0, offset) +
+               (sessCookie[offset] === 'a' ? 'b' : 'a') +
+               sessCookie.substring(offset + 1);
 
-            res = await deleteJson(
-               `/v1/passkeys/${credId}`,
-               { "x-csrf-token": csrfToken },
-               badCookie,
-            );
+            res = await deleteJson(`/v1/passkeys/${credId}`, { 'x-csrf-token': csrfToken }, badCookie);
 
             expect(res.status).toEqual(401);
          });
 
-         it("should reject resigned cookie", async () => {
-            let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+         it('should reject resigned cookie', async () => {
+            let res = await getJson(`/v1/user`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
 
             const match = /^__Host-JWT=(.+)$/.exec(sessCookie);
@@ -498,41 +416,34 @@ export function coreSuite(prf: boolean): void {
             expect(match![1]).toBeDefined();
             const oldToken = match![1];
 
-            const jwtPayload = jwtPkg.decode(
-               oldToken, {
+            const jwtPayload = jwtPkg.decode(oldToken, {
                json: true,
-               complete: false
+               complete: false,
             });
             expect(jwtPayload).toBeDefined();
 
             const newPayload = {
                pkId: jwtPayload!.pkId,
-               userId: jwtPayload!.userId
+               userId: jwtPayload!.userId,
             };
             const jwtKey = randomBytes(32);
             const expiresIn = SESSION_TIMEOUT_SEC;
 
-            const newToken = jwtPkg.sign(
-               newPayload,
-               jwtKey, {
+            const newToken = jwtPkg.sign(newPayload, jwtKey, {
                algorithm: 'HS512',
                expiresIn: expiresIn,
-               issuer: 'quickcrypt'
+               issuer: 'quickcrypt',
             });
 
             const badCookie = `__Host-JWT=${newToken}`;
 
-            res = await deleteJson(
-               `/v1/passkeys/${credId}`,
-               { "x-csrf-token": csrfToken },
-               badCookie,
-            );
+            res = await deleteJson(`/v1/passkeys/${credId}`, { 'x-csrf-token': csrfToken }, badCookie);
 
             expect(res.status).toEqual(401);
          });
 
-         it("should reject a cookie signed with a forged algorithm", async () => {
-            let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+         it('should reject a cookie signed with a forged algorithm', async () => {
+            let res = await getJson(`/v1/user`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
 
             const forged = { userId };
@@ -540,42 +451,37 @@ export function coreSuite(prf: boolean): void {
             // Verification pins HS512, so neither an unsigned alg:none token nor an attacker-keyed
             // HS256 token (algorithm confusion) is accepted.
             const noneToken = jwtPkg.sign(forged, '', { algorithm: 'none', issuer: 'quickcrypt' });
-            res = await deleteJson(
-               `/v1/passkeys/${credId}`,
-               { "x-csrf-token": csrfToken },
-               `__Host-JWT=${noneToken}`,
-            );
+            res = await deleteJson(`/v1/passkeys/${credId}`, { 'x-csrf-token': csrfToken }, `__Host-JWT=${noneToken}`);
             expect(res.status).toEqual(401);
 
-            const hs256Token = jwtPkg.sign(forged, randomBytes(32), { algorithm: 'HS256', expiresIn: SESSION_TIMEOUT_SEC, issuer: 'quickcrypt' });
-            res = await deleteJson(
-               `/v1/passkeys/${credId}`,
-               { "x-csrf-token": csrfToken },
-               `__Host-JWT=${hs256Token}`,
-            );
+            const hs256Token = jwtPkg.sign(forged, randomBytes(32), {
+               algorithm: 'HS256',
+               expiresIn: SESSION_TIMEOUT_SEC,
+               issuer: 'quickcrypt',
+            });
+            res = await deleteJson(`/v1/passkeys/${credId}`, { 'x-csrf-token': csrfToken }, `__Host-JWT=${hs256Token}`);
             expect(res.status).toEqual(401);
          });
 
-         it("should reject manipulated csrf", async () => {
-            let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+         it('should reject manipulated csrf', async () => {
+            let res = await getJson(`/v1/user`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
 
             const offset = 6;
-            const badCsrf = csrfToken.substring(0, offset) + (csrfToken[offset] === 'a' ? 'b' : 'a') + csrfToken.substring(offset + 1);
+            const badCsrf =
+               csrfToken.substring(0, offset) +
+               (csrfToken[offset] === 'a' ? 'b' : 'a') +
+               csrfToken.substring(offset + 1);
 
-            res = await deleteJson(
-               `/v1/passkeys/${credId}`,
-               { "x-csrf-token": badCsrf },
-               sessCookie,
-            );
+            res = await deleteJson(`/v1/passkeys/${credId}`, { 'x-csrf-token': badCsrf }, sessCookie);
 
             expect(res.status).toEqual(401);
          });
 
-         it("should reject missing or wrong csrf on reads and deletes", async () => {
-            const wrongCsrf = "uajbCCy0AeBW5WDEqbR9viY12HaQOiKlJcNSG8yaGT0";
+         it('should reject missing or wrong csrf on reads and deletes', async () => {
+            const wrongCsrf = 'uajbCCy0AeBW5WDEqbR9viY12HaQOiKlJcNSG8yaGT0';
 
-            let res = await getJson(`/v1/user`, { "x-csrf-token": csrfToken }, sessCookie);
+            let res = await getJson(`/v1/user`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
 
             res = await getJson(`/v1/user`, {}, sessCookie);
@@ -584,19 +490,19 @@ export function coreSuite(prf: boolean): void {
             res = await deleteJson(`/v1/passkeys/${credId}`, {}, sessCookie);
             expect(res.status).toBe(401);
 
-            res = await getJson(`/v1/user`, { "x-csrf-token": wrongCsrf }, sessCookie);
+            res = await getJson(`/v1/user`, { 'x-csrf-token': wrongCsrf }, sessCookie);
             expect(res.status).toBe(401);
 
-            res = await deleteJson(`/v1/passkeys/${credId}`, { "x-csrf-token": wrongCsrf }, sessCookie);
+            res = await deleteJson(`/v1/passkeys/${credId}`, { 'x-csrf-token': wrongCsrf }, sessCookie);
             expect(res.status).toBe(401);
          });
 
-         it("should reject auth/verify when challenge userId does not match credential owner", async () => {
+         it('should reject auth/verify when challenge userId does not match credential owner', async () => {
             const attackerName = `PWTesty_atk_${tag}_${Date.now()}`;
             let attackerUserId: string | undefined;
             let attackerCredId: string | undefined;
-            let attackerCookie = "";
-            let attackerCsrf = "";
+            let attackerCookie = '';
+            let attackerCsrf = '';
             let attackerUserCred: string | undefined;
 
             try {
@@ -609,7 +515,7 @@ export function coreSuite(prf: boolean): void {
                const attackerEmulator = attacker.emulator;
 
                // Self-login once so the credentialid-index GSI is certain to be consistent before the bypass attempt
-               const selfOpts = await postJson(`/v1/auth/options`, { userId: attackerUserId }, {}, "");
+               const selfOpts = await postJson(`/v1/auth/options`, { userId: attackerUserId }, {}, '');
                expect(selfOpts.status).toBe(200);
                const selfAssertion = attackerEmulator.getJSON(RP_ORIGIN, {
                   ...selfOpts.data,
@@ -617,7 +523,7 @@ export function coreSuite(prf: boolean): void {
                });
                const selfVerify = await postAuthVerifyWithRetry(
                   { ...selfAssertion, challenge: selfOpts.data.challenge },
-                  "",
+                  '',
                );
                expect(selfVerify.status).toBe(200);
                expect(selfVerify.data.userId).toBe(attackerUserId);
@@ -627,7 +533,7 @@ export function coreSuite(prf: boolean): void {
                }
 
                // Request an auth challenge bound to the victim (beforeAll user)
-               const optsRes = await postJson(`/v1/auth/options`, { userId }, {}, "");
+               const optsRes = await postJson(`/v1/auth/options`, { userId }, {}, '');
                expect(optsRes.status).toBe(200);
 
                // Set allowCredentials to be sure the emulator signs with the attacker's key
@@ -641,7 +547,7 @@ export function coreSuite(prf: boolean): void {
                   `/v1/auth/verify`,
                   { ...assertion, challenge: optsRes.data.challenge },
                   {},
-                  "",
+                  '',
                );
 
                expect(bypass.status).toBe(401);
@@ -649,7 +555,7 @@ export function coreSuite(prf: boolean): void {
 
                // Same attack, but also forge userHandle to the victim. The challenge-binding
                // check should still fires first since the credId resolves to the attacker.
-               const optsRes2 = await postJson(`/v1/auth/options`, { userId }, {}, "");
+               const optsRes2 = await postJson(`/v1/auth/options`, { userId }, {}, '');
                expect(optsRes2.status).toBe(200);
                const assertion2 = attackerEmulator.getJSON(RP_ORIGIN, {
                   ...optsRes2.data,
@@ -664,7 +570,7 @@ export function coreSuite(prf: boolean): void {
                      challenge: optsRes2.data.challenge,
                   },
                   {},
-                  "",
+                  '',
                );
                expect(bypass2.status).toBe(401);
                expect(bypass2.rawText).toBe('not authorized');
@@ -677,20 +583,20 @@ export function coreSuite(prf: boolean): void {
             }
          });
 
-         it("should reject a replayed authentication assertion", async () => {
-            const optsRes = await postJson(`/v1/auth/options`, { userId }, {}, "");
+         it('should reject a replayed authentication assertion', async () => {
+            const optsRes = await postJson(`/v1/auth/options`, { userId }, {}, '');
             expect(optsRes.status).toBe(200);
             const assertion = emulator.getJSON(RP_ORIGIN, { ...optsRes.data, challenge: optsRes.data.challenge });
             const body = { ...assertion, challenge: optsRes.data.challenge };
 
             // A fresh assertion authenticates once and rotates the session.
-            const first = await postAuthVerifyWithRetry(body, "");
+            const first = await postAuthVerifyWithRetry(body, '');
             expect(first.status).toBe(200);
             sessCookie = first.cookie;
             csrfToken = first.data.csrf;
 
             // Its single-use challenge is now spent, so replaying the same assertion is rejected.
-            const replay = await postJson(`/v1/auth/verify`, body, {}, "");
+            const replay = await postJson(`/v1/auth/verify`, body, {}, '');
             expect(replay.status).toBe(401);
          });
       });

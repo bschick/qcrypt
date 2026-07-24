@@ -16,9 +16,7 @@
         "outputPath": "dist/web",
         "index": "apps/web/src/index.html",
         "browser": "apps/web/src/main.ts",
-        "polyfills": [
-          "zone.js"
-        ],
+        "polyfills": ["zone.js"],
         "tsConfig": "apps/web/tsconfig.app.json",
         "assets": [
           "apps/web/src/favicon.ico",
@@ -28,9 +26,7 @@
           "apps/web/src/sitemap.xml",
           "apps/web/src/.well-known"
         ],
-        "styles": [
-          "apps/web/src/styles.scss"
-        ],
+        "styles": ["apps/web/src/styles.scss"],
         "scripts": [],
         "prerender": false,
         "ssr": false
@@ -88,9 +84,7 @@
         }
       },
       "defaultConfiguration": "production",
-      "outputs": [
-        "{options.outputPath}"
-      ]
+      "outputs": ["{options.outputPath}"]
     },
     "serve": {
       "executor": "@angular/build:dev-server",

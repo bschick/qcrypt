@@ -26,8 +26,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { HttpParams } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { CopyrightComponent } from "../../ui/copyright/copyright.component";
-
+import { CopyrightComponent } from '../../ui/copyright/copyright.component';
 
 export interface FAQElement {
    position: number;
@@ -40,14 +39,9 @@ export interface FAQElement {
    templateUrl: './faqs.component.html',
    styleUrl: './faqs.component.scss',
    encapsulation: ViewEncapsulation.None,
-   imports: [
-      MatTableModule, MatIconModule,
-      MatButtonModule, FormsModule,
-      CopyrightComponent
-   ]
+   imports: [MatTableModule, MatIconModule, MatButtonModule, FormsModule, CopyrightComponent],
 })
 export class FaqsComponent implements AfterViewInit {
-
    public allExpanded = false;
    public searchTerm = '';
    public expandedPositions = new Array();
@@ -63,16 +57,15 @@ export class FaqsComponent implements AfterViewInit {
 
    ngOnInit() {
       const origFilterPredicate = this.dataSource.filterPredicate;
-      this.dataSource.filterPredicate =
-         (data: FAQElement, filter: string): boolean => {
-            const elements = filter.split(',');
-            for (let element of elements) {
-               if (element && origFilterPredicate(data, element.trim())) {
-                  return true;
-               }
+      this.dataSource.filterPredicate = (data: FAQElement, filter: string): boolean => {
+         const elements = filter.split(',');
+         for (let element of elements) {
+            if (element && origFilterPredicate(data, element.trim())) {
+               return true;
             }
-            return false;
          }
+         return false;
+      };
    }
 
    ngAfterViewInit(): void {
@@ -92,7 +85,7 @@ export class FaqsComponent implements AfterViewInit {
 
    addOrRemove(position: number) {
       if (this.expandedPositions.includes(position)) {
-         this.expandedPositions = this.expandedPositions.filter(e => e !== position);
+         this.expandedPositions = this.expandedPositions.filter((e) => e !== position);
       } else {
          this.expandedPositions.push(position);
       }
@@ -107,14 +100,13 @@ export class FaqsComponent implements AfterViewInit {
       }
       this.allExpanded = !this.allExpanded;
    }
-
 }
 
 const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'Who created Quick Crypt and why?',
-      answer: `See the <a href="/help/overview">overview page</a>.`
+      answer: `See the <a href="/help/overview">overview page</a>.`,
    },
 
    {
@@ -134,7 +126,7 @@ const ELEMENT_DATA: FAQElement[] = [
       </ul>
       <p>If you continue to have trouble creating a user, please
       <a href="https://github.com/bschick/qcrypt/issues/new/choose" target="_blank">
-      report the issue on GitHub</a>.</p>`
+      report the issue on GitHub</a>.</p>`,
    },
 
    {
@@ -164,7 +156,7 @@ const ELEMENT_DATA: FAQElement[] = [
       <b>Dashlane</b>. A notable exception is <i>Bitwarden</i>, which
       does not yet support PRF for passkeys it manages (<a
       href="https://community.bitwarden.com/t/support-for-storing-prf-capable-passkeys-in-bitwarden-vault/82239"
-      target="_blank">add your vote to the feature request</a>).</p>`
+      target="_blank">add your vote to the feature request</a>).</p>`,
    },
 
    {
@@ -173,7 +165,7 @@ const ELEMENT_DATA: FAQElement[] = [
       answer: `Please report problems by <a href="https://github.com/bschick/qcrypt/issues/new/choose" target="_blank">
       creating an issue on GitHub</a>. A discussion forum is not yet
       available, but we may create one in the future. You can also try common sites
-      like Stack Overflow.`
+      like Stack Overflow.`,
    },
 
    {
@@ -185,7 +177,7 @@ const ELEMENT_DATA: FAQElement[] = [
       password with someone, only you can decrypt data that you have encrypted.
       Passkeys that support PRF provide even stronger security by encrypting
       your user credential locally so that not even a compromise of Quick
-      Crypt's servers could expose your information.`
+      Crypt's servers could expose your information.`,
       //      This is true for self-encrypted data and data encrypted for you through
       //      a sender link. The Quick Crypt web app does not store your passwords and
       //      therefore cannot decrypt your data. Do not forget the passwords you use
@@ -222,7 +214,7 @@ const ELEMENT_DATA: FAQElement[] = [
       that not even Quick Crypt's servers can retrieve it. This
       establishes a zero-knowledge setup between your browser and Quick Crypt's
       servers, where not even a full compromise of the servers would expose
-      any part of your cryptographic key material.</p>`
+      any part of your cryptographic key material.</p>`,
    },
 
    {
@@ -243,7 +235,7 @@ const ELEMENT_DATA: FAQElement[] = [
       multi-step process. If you want to be sure someone can recreate Quick Crypt's
       logic, the code is <a href="https://github.com/bschick/qcrypt" target="_blank">
       open source</a>, and you have the
-      <a href="/help/protocol">protocol description</a>.</p>`
+      <a href="/help/protocol">protocol description</a>.</p>`,
    },
 
    {
@@ -261,7 +253,7 @@ const ELEMENT_DATA: FAQElement[] = [
       <a href="https://github.com/bschick/qcrypt/releases/latest/download/qcrypt.zip" target="_blank">download the qcrypt.zip file</a>,
       extract it, and install <a href="https://nodejs.org/" target="_blank">Node.js</a>
       before going offline. Then run the script from the command-line and respond to the prompts:
-      <blockquote>> node qcrypt.cjs</blockquote>.</p>`
+      <blockquote>> node qcrypt.cjs</blockquote>.</p>`,
    },
 
    {
@@ -277,7 +269,7 @@ const ELEMENT_DATA: FAQElement[] = [
       download the qcrypt.zip file</a>, extract it, ensure you have
       <a href="https://nodejs.org/" target="_blank">Node.js</a> installed, and
       then run the tool from the command-line and respond to the prompts:
-      <blockquote>> node qcrypt.cjs</blockquote>.`
+      <blockquote>> node qcrypt.cjs</blockquote>.`,
    },
 
    {
@@ -288,7 +280,7 @@ const ELEMENT_DATA: FAQElement[] = [
       the password you used to encrypt the data and a passkey to access your user
       credential. Your recovery word pattern lets you create a new passkey, but there is
       no way to recover a lost password. Consider using a password hint
-      to help remember your password.`
+      to help remember your password.`,
    },
 
    {
@@ -296,7 +288,7 @@ const ELEMENT_DATA: FAQElement[] = [
       question: 'What should I do if I cannot locate my passkey but have my recovery word pattern?',
       answer: `Go to Quick Crypt's <a href="/recovery2">account recovery</a> page and
       enter your recovery word pattern. Start the recovery process and Quick
-      Crypt will delete all existing passkeys and create a new one for you.`
+      Crypt will delete all existing passkeys and create a new one for you.`,
    },
 
    {
@@ -307,7 +299,7 @@ const ELEMENT_DATA: FAQElement[] = [
       forgetting your encryption password for all previous encryptions. To continue using
       Quick Crypt, you may create a new user identity, but the new user cannot decrypt
       existing ciphertext. If you find your original recovery word pattern or passkey
-      later, you can use either to regain access to your original user identity.`
+      later, you can use either to regain access to your original user identity.`,
    },
    /*
       {
@@ -387,7 +379,7 @@ const ELEMENT_DATA: FAQElement[] = [
       for those values, but even if you use an email address or personal name, Quick Crypt
       treats that as an opaque value and will not contact you. If you change your user name
       or passkey descriptions, previous values are
-      not retained.`
+      not retained.`,
    },
 
    {
@@ -460,21 +452,21 @@ const ELEMENT_DATA: FAQElement[] = [
           That triggers removal of server-side stored data</td>
         </tr>
       </tbody>
-    </table>`
+    </table>`,
    },
 
    {
       position: 0,
       question: 'Does Quick Crypt store or upload the passwords I use for encryption?',
       answer: `No. See the previous question about the information Quick Crypt stores for
-      more detail.`
+      more detail.`,
    },
 
    {
       position: 0,
       question: 'Does Quick Crypt store or upload the unencrypted or encrypted data I enter?',
       answer: `No. See the previous question about the information Quick Crypt stores for
-      more detail.`
+      more detail.`,
    },
 
    {
@@ -502,7 +494,7 @@ const ELEMENT_DATA: FAQElement[] = [
          <li><b>Clean Logout: </b>The cookie is deleted from your browser and invalidated
          server-side when you log out or your session expires.
          </li>
-      </ul>`
+      </ul>`,
    },
 
    {
@@ -519,7 +511,7 @@ const ELEMENT_DATA: FAQElement[] = [
       <p>You can inspect the layout of encrypted data within a Quick Crypt file by
       adding this <a href="/assets/quickcrypt.tcl" download>template file</a> to the
       <a href='https://hexfiend.com/' target="_blank">Hex Fiend</a> macOS application.
-      </p>`
+      </p>`,
    },
 
    {
@@ -533,7 +525,7 @@ const ELEMENT_DATA: FAQElement[] = [
       not easy), and passkeys can be shared with a good management
       tool like Bitwarden or 1Password. If the recipient has both,
       they can decrypt cipher armor you copy from Quick Crypt and send to them.
-      But again, there are better ways to do this.</p>`
+      But again, there are better ways to do this.</p>`,
    },
 
    {
@@ -544,7 +536,7 @@ const ELEMENT_DATA: FAQElement[] = [
       Sign out from the slide-out panel to create a new user
       identity with a new passkey. To reduce the load on Quick Crypt servers,
       please add only as many passkeys and users
-      as needed. Identities that look like abuse may be purged.`
+      as needed. Identities that look like abuse may be purged.`,
    },
 
    {
@@ -554,7 +546,7 @@ const ELEMENT_DATA: FAQElement[] = [
       opened with the 3-line button in the toolbar. This will remove the
       public-key portion of the passkey from Quick Crypt servers. You must then
       use your local passkey management tool to delete the passkey from your
-      system.`
+      system.`,
    },
 
    {
@@ -566,25 +558,24 @@ const ELEMENT_DATA: FAQElement[] = [
       Once removed, you cannot use Quick Crypt to decrypt data
       with the removed user identity. This is not reversible, even with your recovery
       word pattern. Remember to also delete passkeys
-      from your system using your passkey management tool.`
+      from your system using your passkey management tool.`,
    },
-
 
    {
       position: 0,
-      question: 'What should I do if someone I don\'t trust obtained a password I used for encryption?',
+      question: "What should I do if someone I don't trust obtained a password I used for encryption?",
       answer: `Your data is still protected.
       The potential attacker also needs your encrypted data and your passkey or
       recovery word pattern to decrypt it.
       Without a passkey or recovery word pattern to access your user credential,
       an attacker cannot decrypt your data. Regardless, the best response to a stolen password
       is to re-encrypt your data with a new password and delete any cipher armor created with
-      the stolen password.`
+      the stolen password.`,
    },
 
    {
       position: 0,
-      question: 'What should I do if someone I don\'t trust obtained my passkey?',
+      question: "What should I do if someone I don't trust obtained my passkey?",
       answer: `Your data is still protected, but your Quick Crypt user account is at risk.
       The potential attacker would also need your encrypted data and the password you used
       during encryption to decrypt it. Without your encryption password, the attacker
@@ -594,12 +585,12 @@ const ELEMENT_DATA: FAQElement[] = [
       lost from Quick Crypt and from your passkey management tool. There is no need to
       re-encrypt your data unless someone may have used your
       passkey to sign in to Quick Crypt. If you believe someone used your passkey to sign
-      in, see the question about an untrusted person obtaining your recovery word pattern.`
+      in, see the question about an untrusted person obtaining your recovery word pattern.`,
    },
 
    {
       position: 0,
-      question: 'What should I do if someone I don\'t trust obtained my recovery word pattern?',
+      question: "What should I do if someone I don't trust obtained my recovery word pattern?",
       answer: `Your data is still protected, but your Quick Crypt user account is at risk.
       The potential attacker would also need your encrypted data and the password you used
       during encryption to decrypt it. Without your encryption password, the attacker cannot
@@ -608,18 +599,19 @@ const ELEMENT_DATA: FAQElement[] = [
       preventing you from decrypting your own data. The
       best response to a stolen recovery word pattern is to create a totally new Quick Crypt
       user, re-encrypt your data, and then delete the previous cipher armor and original user
-      identity.`
+      identity.`,
    },
 
    {
       position: 0,
-      question: 'What should I do if someone I don\'t trust obtained my recovery word pattern or passkey and a password I used for encryption?',
+      question:
+         "What should I do if someone I don't trust obtained my recovery word pattern or passkey and a password I used for encryption?",
       answer: `The potential attacker also needs your encrypted data to decrypt it.
       If the attacker has your encrypted data, your confidential information may be
       exposed. The best response to a stolen recovery word pattern or passkey along
       with an encryption password is to create a totally new Quick Crypt user, re-encrypt
       your data with a new password, and then delete
-      the previous cipher armor and your previous user identity.`
+      the previous cipher armor and your previous user identity.`,
    },
 
    {
@@ -687,7 +679,7 @@ const ELEMENT_DATA: FAQElement[] = [
          passkeys, recovery word pattern, or encryption passwords. Those questions describe
          the best response to each type of data exposure.
          </li>
-      </ol>`
+      </ol>`,
    },
 
    {
@@ -739,12 +731,12 @@ const ELEMENT_DATA: FAQElement[] = [
       by setting loop encrypt in the "Advanced Options" section to greater than 1.
       Each loop should use a different cipher mode and password. So rather than
       choosing between your browser's AES 256 GCM implementation and libsodium's
-      XChaCha20 Poly1305 or AEGIS 256, you could apply all three.</p>`
+      XChaCha20 Poly1305 or AEGIS 256, you could apply all three.</p>`,
    },
 
    {
       position: 0,
-      question: "How does Quick Crypt generate random values?",
+      question: 'How does Quick Crypt generate random values?',
       answer: `<p>Random values are input to cryptographic functions as salts and
       nonces/initialization vectors and must be generated in a manner
       <a href="https://en.wikipedia.org/wiki/Cryptographically_secure_pseudorandom_number_generator" target="_blank">
@@ -759,7 +751,7 @@ const ELEMENT_DATA: FAQElement[] = [
       meaning nonces and salts are never reused, and every encryption key will be
       unique. Refer to Quick
       Crypt's <a href="/help/protocol">protocol description</a> for details about
-      random value usage.</p>`
+      random value usage.</p>`,
    },
 
    {
@@ -783,7 +775,7 @@ const ELEMENT_DATA: FAQElement[] = [
       <a href="https://haveibeenpwned.com/API/v2#PwnedPasswords" target="_blank">https://haveibeenpwned.com</a>
       for passwords that have been leaked or stolen, and prevents you from using
       them for encryption. Attackers compile leaked passwords into lists to speed up
-      password guessing.</p>`
+      password guessing.</p>`,
    },
 
    {
@@ -795,7 +787,7 @@ const ELEMENT_DATA: FAQElement[] = [
       XFO, and Passkeys (WebAuthn and the PRF extension) make web applications
       trustworthy. Of course, web standards and tools are imperfect, but so are
       installed binary applications (see Linux xz). Perhaps a longer write-up is
-      warranted someday.`
+      warranted someday.`,
    },
 
    {
@@ -803,7 +795,7 @@ const ELEMENT_DATA: FAQElement[] = [
       question: 'Can Quick Crypt decrypt ciphertext created by other tools?',
       answer: `No, Quick Crypt was not designed to interoperate with ciphertext
       from other tools. Quick Crypt's goals are described on the
-      <a href="/help/overview">overview page</a>`
+      <a href="/help/overview">overview page</a>`,
    },
 
    {
@@ -812,7 +804,7 @@ const ELEMENT_DATA: FAQElement[] = [
       answer: `Yes, as long as you copy your user credential from
       https://quickcrypt.org/cmdline, remember your encryption password, and follow
       <a href="/help/protocol">Quick Crypt's protocol</a>, you could use other
-      tools to decrypt ciphertext created by Quick Crypt in a multi-step process.`
+      tools to decrypt ciphertext created by Quick Crypt in a multi-step process.`,
    },
 
    {
@@ -843,7 +835,7 @@ const ELEMENT_DATA: FAQElement[] = [
       navigating directly to Quick Crypt's website is the safest choice.
       The 'Link' format can be used when you are not concerned about anyone
       changing stored cipher armor. All three formats provide strong
-      privacy and authenticity.</p>`
+      privacy and authenticity.</p>`,
    },
 
    {
@@ -867,7 +859,7 @@ const ELEMENT_DATA: FAQElement[] = [
       you use a different cipher mode and password for each loop (other encryption
       options cannot yet be changed between loops). If you forget any of the
       passwords you used while looping, you will not be able to retrieve your
-      original data.</p>`
+      original data.</p>`,
    },
 
    {
@@ -912,7 +904,7 @@ const ELEMENT_DATA: FAQElement[] = [
          <li><b>BLAKE2b Keyed Hash:</b> libsodium <a href="https://doc.libsodium.org/hashing/generic_hashing"
          target="_blank">crypto_generichash()</a>
          </li>
-      </ol>`
+      </ol>`,
    },
 
    {
@@ -922,7 +914,7 @@ const ELEMENT_DATA: FAQElement[] = [
       configure the required password strength in "Advanced Options" to meet your needs.
       For the best security, always use a strong password with a hint that only helps
       you remember it instead of resorting to a weak password. To help, Quick Crypt
-      indicates the strength of each password you enter.`
+      indicates the strength of each password you enter.`,
    },
 
    {
@@ -932,7 +924,7 @@ const ELEMENT_DATA: FAQElement[] = [
       from the password you enter during encryption combined with your user
       credential which is accessed with passkey authentication. MAC keys
       are ephemeral, 256 bits long, derived from your user credential. For more details,
-      see the <a href="/help/protocol">protocol description</a> help page.`
+      see the <a href="/help/protocol">protocol description</a> help page.`,
    },
 
    {
@@ -945,7 +937,7 @@ const ELEMENT_DATA: FAQElement[] = [
       guess your passwords.
       The best password hints help only you remember your passwords. That way,
       your data is protected even if your passkey or recovery word pattern
-      is stolen.`
+      is stolen.`,
    },
 
    {
@@ -956,7 +948,7 @@ const ELEMENT_DATA: FAQElement[] = [
       (although since Quick Crypt never reuses nonce values or cipher keys, ChaCha20
       could still be suitable). IETF ChaCha20's one advantage is standardization,
       but since interoperability with other tools was not a Quick Crypt goal,
-      XChaCha20 was selected as a better overall cipher mode.`
+      XChaCha20 was selected as a better overall cipher mode.`,
    },
 
    {
@@ -975,12 +967,12 @@ const ELEMENT_DATA: FAQElement[] = [
       AES-GCM cipher. Although unlikely, this might allow an attacker to craft the
       ciphertext such that data is leaked when you decrypt it. The additional upfront
       MAC validation during decryption adds a layer atop all underlying AEAD ciphers
-      that further protects data security and system robustness.`
+      that further protects data security and system robustness.`,
    },
 
    {
       position: 0,
-      question: 'Is Quick Crypt\'s protocol key committing?',
+      question: "Is Quick Crypt's protocol key committing?",
       answer: `Yes, <a href="/help/protocol">Quick Crypt's protocol</a> is
       <a href="https://en.wikipedia.org/wiki/Authenticated_encryption#Key-committing_AEAD" target="_blank">
       key-committing</a> for all underlying AEAD cipher modes as of v7. Two features
@@ -993,12 +985,12 @@ const ELEMENT_DATA: FAQElement[] = [
       cleartexts under two different keys. Next, Quick Crypt creates cipher armor with a collision-
       resistant 256-bit BLAKE2b keyed hash covering metadata, additional data, and ciphertext. The
       hash is verified before decryption, creating an "Encrypt-then-MAC" protocol that rejects both
-      cipher key and additional data manipulation.`
+      cipher key and additional data manipulation.`,
    },
 
    {
       position: 0,
-      question: 'Are Quick Crypt\'s algorithms side-channel attack resistant?',
+      question: "Are Quick Crypt's algorithms side-channel attack resistant?",
       answer: `Quick Crypt uses algorithms implemented by the open-source
       <a href="https://doc.libsodium.org/" target="_blank">libsodium library</a> and
       your browser's <a href="https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto" target="_blank">
@@ -1007,12 +999,12 @@ const ELEMENT_DATA: FAQElement[] = [
       constant-time comparison functions test secure values. SubtleCrypto, however, makes
       no explicit claims about side-channel resistance. If this is a concern, you may
       choose either the XChaCha20 Poly1305 or AEGIS 256 modes implemented
-      in libsodium rather than the AES 256 GCM mode from SubtleCrypto.`
+      in libsodium rather than the AES 256 GCM mode from SubtleCrypto.`,
    },
 
    {
       position: 0,
-      question: 'Are Quick Crypt\'s algorithms quantum-resistant?',
+      question: "Are Quick Crypt's algorithms quantum-resistant?",
       answer: `<p>Quick Crypt's protocol is designed to be quantum-resistant against
       several attack vectors:</p>
       <ul>
@@ -1030,7 +1022,7 @@ const ELEMENT_DATA: FAQElement[] = [
          like Diffie-Hellman, which would be highly vulnerable to a future quantum computer
          capable of running Shor's algorithm.</li>
       </ul>
-      <p>Quantum cryptographic theory continues to evolve, however, and Quick Crypt will evolve with it.</p>`
+      <p>Quantum cryptographic theory continues to evolve, however, and Quick Crypt will evolve with it.</p>`,
    },
 
    {
@@ -1044,7 +1036,7 @@ const ELEMENT_DATA: FAQElement[] = [
       this site (remember we have no contact info) and recommend that you re-encrypt
       data using a different cipher mode. Such a weakness would be massive news
       since two modes are part of the TLS 1.3 standard used by most browsers,
-      and the third is proposed for a future TLS version.`
+      and the third is proposed for a future TLS version.`,
    },
 
    {
@@ -1052,7 +1044,7 @@ const ELEMENT_DATA: FAQElement[] = [
       question: "What does the 'Decryption Reminder' Advanced Option do?",
       answer: `When enabled, this option adds text to JSON cipher armor that reminds
       you where to decrypt the cipher armor. Quick Crypt does not use this text; it
-      is just a reminder for anyone who may have forgotten how the cipher armor was created.`
+      is just a reminder for anyone who may have forgotten how the cipher armor was created.`,
    },
 
    {
@@ -1072,7 +1064,6 @@ const ELEMENT_DATA: FAQElement[] = [
       "Cache Time" remaining.</p><p><b>Hide Passwords</b> obscures passwords as you type
       them. If you turn off this option, passwords are displayed in clear text when you
       enter them. You can switch password visibility on the fly regardless of this
-      setting.</p>`
+      setting.</p>`,
    },
-
 ];
