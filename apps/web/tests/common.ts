@@ -103,6 +103,12 @@ export function keeperDir(host: hosts, keeper: string): string {
   return join(keeperCredsDir, host, keeper);
 }
 
+// Intended PRF account mode per keeper.
+export const keeperPrf: Record<string, boolean> = {
+  keeper1: false,
+  keeper2: true,
+};
+
 export type CreatedTestUser = {
   userId: string;
   userName: string;
@@ -515,6 +521,17 @@ export const testWithAuth = test.extend<{authFixture: AuthFixture}>({
 export async function toggleCredentials(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Passkey information' }).click();
   await expect(page.locator('table.credtable tbody tr').first()).toBeVisible();
+}
+
+// Asserts the credentials sidenav PRF badge matches the account mode. Requires the
+// sidenav to be open.
+export async function expectPrfBadge(page: Page, prf: boolean): Promise<void> {
+  const badge = page.locator('.prf-badge');
+  if (prf) {
+    await expect(badge).toBeVisible();
+  } else {
+    await expect(badge).toHaveCount(0);
+  }
 }
 
 // Verifies the page's tab can complete an authenticated server call.

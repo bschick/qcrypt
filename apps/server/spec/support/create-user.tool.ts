@@ -51,7 +51,9 @@ function stringToUTF8Base64(str: string): string {
 
 function findCredentialValues(userName: string): any {
     const credsDir = path.join(process.cwd(), 'apps', 'server', 'spec', 'credentials');
-    if (!fs.existsSync(credsDir)) return null;
+    if (!fs.existsSync(credsDir)) {
+        return null;
+    }
 
     for (const file of fs.readdirSync(credsDir)) {
         if (!file.endsWith('.json')) continue;

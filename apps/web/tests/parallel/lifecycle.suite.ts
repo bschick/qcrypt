@@ -1,10 +1,11 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { HmacSecretMode } from 'nid-webauthn-emulator';
 import {
   testWithAuth,
   toggleCredentials,
   deleteFirstPasskey,
   deleteLastPasskey,
+  expectPrfBadge,
 } from '.././common';
 
 // Account lifecycle shared between a PRF account (hmac-secret-mc) and a no-PRF
@@ -14,15 +15,6 @@ import {
 export function lifecycleSuite(prf: boolean): void {
   const mode: HmacSecretMode = prf ? 'hmac-secret-mc' : 'none';
   const label = prf ? 'PRF' : 'no-PRF';
-
-  async function expectPrfBadge(page: Page): Promise<void> {
-    const badge = page.locator('.prf-badge');
-    if (prf) {
-      await expect(badge).toBeVisible();
-    } else {
-      await expect(badge).toHaveCount(0);
-    }
-  }
 
   testWithAuth(`${label}: log in and out`, async ({ authFixture }) => {
     const { page } = authFixture;
@@ -36,7 +28,7 @@ export function lifecycleSuite(prf: boolean): void {
     expect(authFixture.credentialCreateCount()).toBe(1);
 
     await toggleCredentials(page);
-    await expectPrfBadge(page);
+    await expectPrfBadge(page, prf);
     const tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
 
@@ -50,7 +42,7 @@ export function lifecycleSuite(prf: boolean): void {
 
     await toggleCredentials(page);
     await expect(tableBody.locator('tr')).toHaveCount(1);
-    await expectPrfBadge(page);
+    await expectPrfBadge(page, prf);
 
     await page.getByRole('button', { name: /Sign out/ }).click();
     await page.getByRole('button', { name: /Sign in as a different user/ }).click();
@@ -86,7 +78,7 @@ export function lifecycleSuite(prf: boolean): void {
     expect(authFixture.credentialCreateCount()).toBe(1);
 
     await toggleCredentials(page);
-    await expectPrfBadge(page);
+    await expectPrfBadge(page, prf);
     const tableBody = page.locator('table.credtable tbody');
     await expect(tableBody.locator('tr')).toHaveCount(1);
 
@@ -119,7 +111,7 @@ export function lifecycleSuite(prf: boolean): void {
 
     await toggleCredentials(page);
     await expect(tableBody.locator('tr')).toHaveCount(1);
-    await expectPrfBadge(page);
+    await expectPrfBadge(page, prf);
 
     await deleteFirstPasskey(page, testUser.userName);
     await expect(page).toHaveURL(/\/welcome$/);
@@ -445,7 +437,7 @@ export function lifecycleSuite(prf: boolean): void {
         await page.getByRole('button', { name: /New Passkey/ }).click();
       });
       await expect(tableBody.locator('tr')).toHaveCount(2);
-      await expectPrfBadge(page);
+      await expectPrfBadge(page, prf);
     });
   }
 }
