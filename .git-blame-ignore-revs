@@ -1,0 +1,9 @@
+# Revisions listed here are skipped by `git blame` so mass, non-semantic
+# changes don't obscure the real authorship of each line.
+#
+# Local setup (one-time, per clone):
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub applies this file automatically in its blame view.
+
+# Adopt Biome formatter across the codebase (whitespace/quotes/commas only).
+97fed459ec08ab94f4b7eae87c206ed7d762d1a8
