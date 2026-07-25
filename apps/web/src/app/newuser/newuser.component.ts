@@ -109,7 +109,7 @@ export class NewUserComponent implements OnInit, AfterViewInit {
       }
    }
 
-   async onClickNewUser(event: any): Promise<void> {
+   async onClickNewUser(_event: MouseEvent): Promise<void> {
       this.error = '';
 
       if (!this.newUserName || this.newUserName.length < 6 || this.newUserName.length > 31) {

@@ -70,7 +70,7 @@ export class EditableComponent {
       }
    }
 
-   cancelEdit(event: any) {
+   cancelEdit(event: Event) {
       event.stopPropagation();
       if (this.writing) {
          this.text = this._value;
@@ -78,7 +78,7 @@ export class EditableComponent {
       }
    }
 
-   acceptEdit(event: any) {
+   acceptEdit(event: Event) {
       event.stopPropagation();
       if (this.writing) {
          this.editInput.nativeElement.blur();

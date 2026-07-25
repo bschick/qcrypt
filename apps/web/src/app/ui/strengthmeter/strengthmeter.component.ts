@@ -75,7 +75,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
    private _usedPasswords: string[] = [];
    private _testQueue: string[] = [];
    private _processing = false;
-   private _processTimerId: any = undefined;
+   private _processTimerId: ReturnType<typeof setTimeout> | undefined = undefined;
    private _currentPassword = '';
    private _currentHint = '';
 
@@ -210,7 +210,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
             }
          },
 
-         feedback(match: MatchEstimated, isSoleMatch?: boolean) {
+         feedback(match: MatchEstimated, _isSoleMatch?: boolean) {
             if (match['isHint']) {
                return {
                   warning: `Your hint is similar to your password.`,
@@ -224,7 +224,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
             }
          },
 
-         scoring(match: MatchExtended) {
+         scoring(_match: MatchExtended) {
             return 0;
          },
       };
@@ -252,7 +252,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
       this.setMinStrength(this.strengthMin);
    }
 
-   onStrengthMinChange($event: Event) {
+   onStrengthMinChange(_$event: Event) {
       this.setMinStrength(this.strengthSlider.value! - 1);
    }
 

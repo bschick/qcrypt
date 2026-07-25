@@ -10,3 +10,6 @@
 
 # Adopt Biome linter: safe autofixes, ==/!= to ===/!==, plus small hand-fixes.
 f01dcdce5e0ae885117a929dc3bcf2729d6f6898
+
+# Enable useOptionalChain: collapse explicit guards to `?.` across the codebase.
+2039183ada7194ab269529d385a7b22d12a5e3ad

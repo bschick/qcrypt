@@ -206,7 +206,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       // This can be greatly delayed is there is a long running async benchmark or
       // encrpt or decrypt from a previous instance (tab that has not fully closed).
       // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
-      this.cipherSvc.benchmark(cc.ICOUNT_MIN).then(([icount, icountMax, hashRate]) => {
+      this.cipherSvc.benchmark(cc.ICOUNT_MIN).then(([_icount, _icountMax, hashRate]) => {
          // progress spinner about 1.25 secs of estimated delay
          const target_spinner_millis = 1250;
          this.spinnerAbove = Math.round(target_spinner_millis * hashRate);
@@ -951,9 +951,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   onClickFileUpload(event: any) {
+   onClickFileUpload(event: MouseEvent) {
       // needed to clear previous value so that onchange fires
-      event.target.value = '';
+      (event.target as HTMLInputElement).value = '';
    }
 
    async onLoadCipherFile() {
@@ -972,8 +972,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async cipherFileLoader() {
-      this.fileUpload.nativeElement.onchange = (event: any) => {
-         const file: File = event.target.files[0];
+      this.fileUpload.nativeElement.onchange = (event: Event) => {
+         const file = (event.target as HTMLInputElement).files?.[0];
          if (file) {
             this.setCipherFile(file);
          }
@@ -997,8 +997,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async clearFileLoader() {
-      this.fileUpload.nativeElement.onchange = (event: any) => {
-         const file: File = event.target.files[0];
+      this.fileUpload.nativeElement.onchange = (event: Event) => {
+         const file = (event.target as HTMLInputElement).files?.[0];
          if (file) {
             this.setClearFile(file);
          }
@@ -1044,7 +1044,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   onCacheTimeChange(cacheTime: number): void {
+   onCacheTimeChange(_cacheTime: number): void {
       if (this.pwdCached) {
          this.restartTimer();
       }

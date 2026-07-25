@@ -43,7 +43,7 @@ import { AuthenticatorService } from '../../services/authenticator.service';
 import { BubbleDirective } from '../bubble/bubble.directive';
 import * as cc from '@qcrypt/crypto/consts';
 import { bytesToBase64, Ciphers } from '@qcrypt/crypto';
-import { CipherService, type CipherDataInfo } from '../../services/cipher.service';
+import type { CipherDataInfo } from '../../services/cipher.service';
 
 const PWD_CLOSE_TIMEOUT = 1000 * 60 * 5;
 
@@ -193,8 +193,6 @@ export class CipherInfoDialog {
    public hint?: string;
 
    constructor(
-      private r2: Renderer2,
-      private cipherSvc: CipherService,
       public dialogRef: MatDialogRef<CipherInfoDialog>,
       @Inject(MAT_DIALOG_DATA) public data: CipherDataInfo,
    ) {
@@ -238,7 +236,7 @@ export class SigninDialog {
 
    // Would be cleaner to move navigation to core.component, but doing
    // it in the dialog gives us a good place to show errors.
-   async onClickSignin(event: any) {
+   async onClickSignin(_event: MouseEvent) {
       try {
          this.error = '';
 
@@ -266,7 +264,7 @@ export class SigninDialog {
       }
    }
 
-   onClickForget(event: any) {
+   onClickForget(_event: MouseEvent) {
       this.error = '';
       // kill other tab sessions
       this.authSvc.forgetUser(true);

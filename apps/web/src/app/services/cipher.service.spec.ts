@@ -133,7 +133,7 @@ describe('Stream encryption and decryption', () => {
    it('successful round trip, all algorithms, no pwd hint', async () => {
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦆';
-         const [clearStream, clearData] = streamFromStr(srcString);
+         const [clearStream, _clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const userCred = getRandom(cc.USERCRED_BYTES);
 
@@ -170,7 +170,7 @@ describe('Stream encryption and decryption', () => {
    it('successful round trip, all algorithms', async () => {
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦆';
-         const [clearStream, clearData] = streamFromStr(srcString);
+         const [clearStream, _clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = getRandom(cc.USERCRED_BYTES);
@@ -213,7 +213,7 @@ describe('Stream encryption and decryption', () => {
       const maxLps = 3;
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦆';
-         const [clearStream, clearData] = streamFromStr(srcString);
+         const [clearStream, _clearData] = streamFromStr(srcString);
          const userCred = getRandom(cc.USERCRED_BYTES);
 
          const econtext: EContext = {
@@ -470,7 +470,7 @@ describe('Stream encryption and decryption', () => {
 
       for (const ver of vers) {
          for (const ct of ver.cts) {
-            const [cipherStream, cipherData] = streamFromBase64(ct);
+            const [cipherStream, _cipherData] = streamFromBase64(ct);
             let expectedLp = 3;
 
             const userCred = new Uint8Array([
@@ -542,7 +542,7 @@ describe('Stream encryption and decryption', () => {
             ]),
          },
       ];
-      const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
+      const [_, _clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
       const userCred = new Uint8Array([
@@ -740,7 +740,7 @@ describe('Stream encryption and decryption', () => {
       for (const ver of vers) {
          for (const ct of ver.cts) {
             const [_, clearData] = streamFromStr('this 🐞 is encrypted');
-            const [cipherStream, cipherData] = streamFromBase64(ct);
+            const [cipherStream, _cipherData] = streamFromBase64(ct);
 
             // First ensure we can decrypt with valid inputs
             const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
@@ -816,7 +816,7 @@ describe('Stream encryption and decryption', () => {
       for (let badLp = 1; badLp <= maxLps; badLp++) {
          for (const alg of Ciphers.algs()) {
             const srcString = 'This is a secret 🦆';
-            const [clearStream, clearData] = streamFromStr(srcString);
+            const [clearStream, _clearData] = streamFromStr(srcString);
             const userCred = getRandom(cc.USERCRED_BYTES);
 
             const econtext: EContext = {
@@ -880,7 +880,7 @@ describe('Stream encryption and decryption', () => {
 
    it('detect corrupted MAC sig, all algorithms', async () => {
       for (const alg of Ciphers.algs()) {
-         const [clearStream, clearData] = streamFromStr('asefwlefj4oh09f jw90fu w09fu 9');
+         const [clearStream, _clearData] = streamFromStr('asefwlefj4oh09f jw90fu w09fu 9');
 
          const pwd = 'another good pwd';
          const hint = 'nope';
@@ -891,7 +891,7 @@ describe('Stream encryption and decryption', () => {
             ic: cc.ICOUNT_MIN,
          };
 
-         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
             return [pwd, hint];
          });
          const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
@@ -902,7 +902,7 @@ describe('Stream encryption and decryption', () => {
          const corruptData = pokeValue(cipherData, 3, -1);
          const [corruptStream] = streamFromBytes(corruptData);
 
-         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
             // should never execute
             expect(false, 'should not execute').toBe(true);
             return [pwd, undefined];
@@ -913,7 +913,7 @@ describe('Stream encryption and decryption', () => {
 
    it('detect crafted bad cipher text, all algorithms', async () => {
       for (const alg of Ciphers.algs()) {
-         const [clearStream, clearData] = streamFromStr('asdfh3roij 02f23kff 8u 3r90');
+         const [clearStream, _clearData] = streamFromStr('asdfh3roij 02f23kff 8u 3r90');
 
          const pwd = 'another good pwd';
          const hint = 'nope';
@@ -924,7 +924,7 @@ describe('Stream encryption and decryption', () => {
             ic: cc.ICOUNT_MIN,
          };
 
-         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
             return [pwd, hint];
          });
          const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
@@ -936,7 +936,7 @@ describe('Stream encryption and decryption', () => {
          let corruptData = pokeValue(cipherData, 100, -1);
          let [corruptStream] = streamFromBytes(corruptData);
 
-         const decKeyProvider1 = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         const decKeyProvider1 = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
             // should never execute
             expect(false, 'should not execute').toBe(true);
             return [pwd, undefined];
@@ -947,7 +947,7 @@ describe('Stream encryption and decryption', () => {
          corruptData = pokeValue(cipherData, cipherData.length - 30, 4);
          [corruptStream] = streamFromBytes(corruptData);
 
-         const decKeyProvider2 = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         const decKeyProvider2 = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
             // should never execute
             expect(false, 'should not execute').toBe(true);
             return [pwd, undefined];
@@ -968,7 +968,7 @@ describe('Stream encryption and decryption', () => {
          ic: cc.ICOUNT_MIN,
       };
 
-      const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+      const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
          return [pwd, hint];
       });
       let cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
@@ -978,7 +978,7 @@ describe('Stream encryption and decryption', () => {
       // empty pwd
       [clearStream] = streamFromBytes(clearData);
 
-      const emptyPwdKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+      const emptyPwdKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
          return ['', hint];
       });
       cipherStream = await cipherSvc.encryptStream(clearStream, emptyPwdKeyProvider, econtext);
@@ -988,7 +988,7 @@ describe('Stream encryption and decryption', () => {
       // hint too long
       [clearStream] = streamFromBytes(clearData);
 
-      const longHintKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+      const longHintKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
          return [pwd, 'this is too long'.repeat(8)];
       });
       cipherStream = await cipherSvc.encryptStream(clearStream, longHintKeyProvider, econtext);
@@ -1000,7 +1000,7 @@ describe('Stream encryption and decryption', () => {
 
       await expect(
          (async () => {
-            const noUcKeyProvider = new PWDKeyProvider(new Uint8Array(0), async (cdinfo) => {
+            const noUcKeyProvider = new PWDKeyProvider(new Uint8Array(0), async (_cdinfo) => {
                return [pwd, hint];
             });
             return cipherSvc.encryptStream(clearStream, noUcKeyProvider, econtext);
@@ -1012,7 +1012,7 @@ describe('Stream encryption and decryption', () => {
 
       await expect(
          (async () => {
-            const longUcKeyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES + 2), async (cdinfo) => {
+            const longUcKeyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES + 2), async (_cdinfo) => {
                return [pwd, hint];
             });
             return cipherSvc.encryptStream(clearStream, longUcKeyProvider, econtext);
@@ -1022,7 +1022,7 @@ describe('Stream encryption and decryption', () => {
       // empty clear data
       [clearStream] = streamFromBytes(new Uint8Array());
 
-      const emptyClearKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+      const emptyClearKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
          return [pwd, hint];
       });
       cipherStream = await cipherSvc.encryptStream(clearStream, emptyClearKeyProvider, econtext);
@@ -1037,7 +1037,7 @@ describe('Stream encryption and decryption', () => {
          ic: cc.ICOUNT_MIN - 1,
       };
 
-      const smallIcKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+      const smallIcKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
          return [pwd, hint];
       });
       await expect(cipherSvc.encryptStream(clearStream, smallIcKeyProvider, bcontext)).rejects.toThrow(/Invalid ic.+/);
@@ -1050,7 +1050,7 @@ describe('Stream encryption and decryption', () => {
          ic: cc.ICOUNT_MAX + 1,
       };
 
-      const bigIcKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+      const bigIcKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
          return [pwd, hint];
       });
       await expect(cipherSvc.encryptStream(clearStream, bigIcKeyProvider, bcontext)).rejects.toThrow(/Invalid ic.+/);
@@ -1063,7 +1063,7 @@ describe('Stream encryption and decryption', () => {
          algs: ['ABS-GCM'] as any,
       };
 
-      const badAlgKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+      const badAlgKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
          return [pwd, hint];
       });
       await expect(cipherSvc.encryptStream(clearStream, badAlgKeyProvider, bcontext)).rejects.toThrow(
@@ -1078,7 +1078,7 @@ describe('Stream encryption and decryption', () => {
          algs: ['asdfadfsk'] as any,
       };
 
-      const badAlg2KeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+      const badAlg2KeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
          return [pwd, hint];
       });
       await expect(cipherSvc.encryptStream(clearStream, badAlg2KeyProvider, bcontext)).rejects.toThrow(
@@ -1213,7 +1213,7 @@ describe('Stream encryption and decryption with customAd', () => {
    it('successful round trip, all algorithms, no pwd hint, with customAd', async () => {
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦆';
-         const [clearStream, clearData] = streamFromStr(srcString);
+         const [clearStream, _clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const userCred = getRandom(cc.USERCRED_BYTES);
          const customAd = bytesToBase64(getRandom(16));
@@ -1263,7 +1263,7 @@ describe('Stream encryption and decryption with customAd', () => {
    it('successful round trip, all algorithms, with customAd', async () => {
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦆';
-         const [clearStream, clearData] = streamFromStr(srcString);
+         const [clearStream, _clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = getRandom(cc.USERCRED_BYTES);
@@ -1314,7 +1314,7 @@ describe('Stream encryption and decryption with customAd', () => {
    it('successful cipherdatainfo, all algorithms, with customAd', async () => {
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦆';
-         const [clearStream, clearData] = streamFromStr(srcString);
+         const [clearStream, _clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = getRandom(cc.USERCRED_BYTES);
@@ -1355,7 +1355,7 @@ describe('Stream encryption and decryption with customAd', () => {
    it('failed round trip, all algorithms, missing customAd', async () => {
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦆';
-         const [clearStream, clearData] = streamFromStr(srcString);
+         const [clearStream, _clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = getRandom(cc.USERCRED_BYTES);
@@ -1399,7 +1399,7 @@ describe('Stream encryption and decryption with customAd', () => {
    it('failed round trip, all algorithms, added customAd', async () => {
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦆';
-         const [clearStream, clearData] = streamFromStr(srcString);
+         const [clearStream, _clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = getRandom(cc.USERCRED_BYTES);
@@ -1443,7 +1443,7 @@ describe('Stream encryption and decryption with customAd', () => {
    it('failed round trip, all algorithms, wrong customAd', async () => {
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦆';
-         const [clearStream, clearData] = streamFromStr(srcString);
+         const [clearStream, _clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = getRandom(cc.USERCRED_BYTES);
@@ -2154,7 +2154,7 @@ describe('Stream manipulation, multi-version', () => {
             ic: cc.ICOUNT_MIN,
          };
 
-         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
             return [pwd, hint];
          });
          const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
@@ -2168,7 +2168,7 @@ describe('Stream manipulation, multi-version', () => {
          const [corruptStream] = streamFromBytes(cipherData);
 
          // alg ${alg}, modLen ${modLen}, modPos ${modPos}
-         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
             // should never execute
             expect(false, 'should not execute').toBe(true);
             return [pwd, undefined];
@@ -2186,15 +2186,15 @@ describe('Stream manipulation, multi-version', () => {
       ];
 
       for (const range of ranges) {
-         for (const alg of Ciphers.algs()) {
+         for (const _alg of Ciphers.algs()) {
             const fuzzLen = randomInclusive(range[0], range[1]);
-            const [fuzzStream, fuzzData] = streamFromBytes(getRandom(fuzzLen));
+            const [fuzzStream, _fuzzData] = streamFromBytes(getRandom(fuzzLen));
 
             const pwd = 'another good pwd';
             const userCred = getRandom(cc.USERCRED_BYTES);
 
             // alg ${alg}, fuzzLen ${fuzzLen}
-            const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
+            const decKeyProvider = new PWDKeyProvider(userCred, async (_cdinfo) => {
                // should never execute
                expect(false, 'should not execute').toBe(true);
                return [pwd, undefined];
@@ -2206,7 +2206,7 @@ describe('Stream manipulation, multi-version', () => {
 
    it('detect removed bytes, all algorithms', async () => {
       for (const alg of Ciphers.algs()) {
-         const [clearStream, clearData] = streamFromBytes(new Uint8Array(20));
+         const [clearStream, _clearData] = streamFromBytes(new Uint8Array(20));
 
          const pwd = 'another good pwd';
          const hint = 'nope';
@@ -2217,7 +2217,7 @@ describe('Stream manipulation, multi-version', () => {
             ic: cc.ICOUNT_MIN,
          };
 
-         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
             return [pwd, hint];
          });
          const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
@@ -2230,7 +2230,7 @@ describe('Stream manipulation, multi-version', () => {
             const [corruptStream] = streamFromBytes(corruptData);
 
             // alg ${alg}, rmLen ${rmLen}, rmPos ${rmPos}
-            const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
                // should never execute
                expect(false, 'should not execute').toBe(true);
                return [pwd, undefined];
@@ -2242,7 +2242,7 @@ describe('Stream manipulation, multi-version', () => {
 
    it('detect added bytes, all algorithms', async () => {
       for (const alg of Ciphers.algs()) {
-         const [clearStream, clearData] = streamFromBytes(new Uint8Array(20));
+         const [clearStream, _clearData] = streamFromBytes(new Uint8Array(20));
 
          const pwd = 'another good pwd';
          const hint = 'nope';
@@ -2253,7 +2253,7 @@ describe('Stream manipulation, multi-version', () => {
             ic: cc.ICOUNT_MIN,
          };
 
-         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
             return [pwd, hint];
          });
          const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
@@ -2273,7 +2273,7 @@ describe('Stream manipulation, multi-version', () => {
             const [corruptStream] = streamFromBytes(corruptData);
 
             // alg ${alg}, addLen ${addLen}, addPos ${addPos}
-            const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
                // should never execute
                expect(false, 'should not execute').toBe(true);
                return [pwd, undefined];
@@ -2286,7 +2286,7 @@ describe('Stream manipulation, multi-version', () => {
          const corruptData = concatArrays([cipherData, addData]);
          const [corruptStream] = streamFromBytes(corruptData);
 
-         const corruptKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         const corruptKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
             return [pwd, undefined];
          });
          const corrupStream = await cipherSvc.decryptStream(corruptStream, corruptKeyProvider);
@@ -2459,9 +2459,9 @@ describe('Block order change and deletion detection, multi-version', () => {
 
    it('changed multi block ciphertext', async () => {
       for (const ver of vers) {
-         for (const [change, ct] of Object.entries(ver.badCts)) {
+         for (const [_change, ct] of Object.entries(ver.badCts)) {
             const [cipherStream] = streamFromBase64(ct);
-            const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
                return ['asdf', undefined];
             });
             await expect(
@@ -2494,11 +2494,11 @@ describe('Benchmark execution', () => {
 });
 
 describe('Cipher alg validate', () => {
-   let cipherSvc: CipherService;
+   let _cipherSvc: CipherService;
    beforeEach(async () => {
       await cryptoReady();
       TestBed.configureTestingModule({});
-      cipherSvc = TestBed.inject(CipherService);
+      _cipherSvc = TestBed.inject(CipherService);
    });
 
    it('detect invalid alg', async () => {
@@ -2525,7 +2525,7 @@ describe('Get cipherinfo from cipher text', () => {
    it('expected CipherInfo, all algorithms', async () => {
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦋';
-         const [clearStream, clearData] = streamFromStr(srcString);
+         const [clearStream, _clearData] = streamFromStr(srcString);
 
          const pwd = 'not good pwd';
          const hint = 'try a himt';
@@ -2556,7 +2556,7 @@ describe('Get cipherinfo from cipher text', () => {
 
    it('detect invalid userCred', async () => {
       const srcString = 'f';
-      const [clearStream, clearData] = streamFromStr(srcString);
+      const [clearStream, _clearData] = streamFromStr(srcString);
 
       const pwd = 'another good pwd';
       const hint = 'nope';
@@ -2567,7 +2567,7 @@ describe('Get cipherinfo from cipher text', () => {
          ic: cc.ICOUNT_MIN,
       };
 
-      const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+      const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
          return [pwd, hint];
       });
       const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);

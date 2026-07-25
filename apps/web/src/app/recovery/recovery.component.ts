@@ -111,7 +111,7 @@ export class RecoveryComponent implements OnInit {
       }
    }
 
-   async onClickStartRecovery(event: any) {
+   async onClickStartRecovery(_event: MouseEvent) {
       try {
          this.showProgress = true;
          await this.authSvc.recover(this.recoveryUserId!, this.recoverUserCred!);

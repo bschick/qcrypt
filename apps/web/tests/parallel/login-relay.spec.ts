@@ -236,7 +236,7 @@ test.describe('login relay', () => {
       test.setTimeout(75000);
 
       const authA = authFixture.memAuthenticator();
-      const userA = await authFixture.createTestUser(authA);
+      const _userA = await authFixture.createTestUser(authA);
       await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
       await toggleCredentials(page1);
@@ -405,7 +405,7 @@ test.describe('login relay', () => {
       test.setTimeout(90000);
 
       const authA = authFixture.memAuthenticator();
-      const userA = await authFixture.createTestUser(authA);
+      const _userA = await authFixture.createTestUser(authA);
       await expect(page1.getByRole('button', { name: 'Encryption Mode' })).toBeVisible();
 
       await toggleCredentials(page1);

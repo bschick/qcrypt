@@ -20,14 +20,16 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
+import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { base64Decode, NotFoundError, ParamError } from './utils';
 import type { VerifiedUserItem } from './models';
+import type { Response } from './server';
 export type QParams = Record<string, string>;
 export const INTERNAL_VERSION = 0;
 export type Method = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 export type Version = typeof INTERNAL_VERSION | 1;
 
-type HttpHandler = (httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem) => any;
+type HttpHandler = (httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem) => Promise<Response>;
 
 export type HttpDetails = {
    name: string;
@@ -37,8 +39,9 @@ export type HttpDetails = {
    rpID: string;
    rpOrigin: string;
    authorize: boolean;
-   resources: Record<string, any>;
+   resources: Record<string, string | undefined>;
    params: QParams;
+   // biome-ignore lint/suspicious/noExplicitAny: request bodies are arbitrary JSON
    body: Record<string, any>;
    rawBody: string;
    handler: HttpHandler;
@@ -127,7 +130,7 @@ export const Patterns = {
    }),
 };
 
-export function matchEvent(event: Record<string, any>, methodMap: MethodMap): HttpDetails {
+export function matchEvent(event: APIGatewayProxyEventV2, methodMap: MethodMap): HttpDetails {
    if (!event?.requestContext?.http || !event.headers?.['x-passkey-rpid']) {
       throw new ParamError('invalid request, missing context');
    }
@@ -138,7 +141,7 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
       rpOrigin += `:${event.headers['x-passkey-port']}`;
    }
 
-   const method: Method = event.requestContext.http.method.toUpperCase();
+   const method = event.requestContext.http.method.toUpperCase() as Method;
    const path = event.requestContext.http.path;
    // console.log(`${method} ${path}`);
 
@@ -152,6 +155,7 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
       });
 
       if (match && Number(match.pathname.groups.ver) === handerInfo.version) {
+         // biome-ignore lint/suspicious/noExplicitAny: request bodies are arbitrary JSON
          let body: Record<string, any> = {};
          let rawBody = '';
          if ('body' in event) {
@@ -170,7 +174,7 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
             }
          }
 
-         const params: QParams = event.queryStringParameters ?? {};
+         const params = (event.queryStringParameters ?? {}) as QParams;
          const cookie: string | undefined = event.headers.cookie;
          const userAgent: string | undefined = event.headers['user-agent'];
          const proofHeader: string | undefined = event.headers['x-proof'];

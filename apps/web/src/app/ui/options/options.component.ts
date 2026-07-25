@@ -168,7 +168,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
       this.cipherSvc
          .benchmark(this.ICOUNT_MIN)
-         .then(([icount, icountMax, hashRate]) => {
+         .then(([icount, icountMax, _hashRate]) => {
             this.setIcount(icount);
             this.ICOUNT_DEFAULT = icount;
             this.ICOUNT_MAX = icountMax;
@@ -348,19 +348,17 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
    private setAlgorithm(alg: string | null): void {
       if (alg) {
-         let algs: any;
+         let algs: string[] | undefined;
          try {
             algs = JSON.parse(alg);
-         } catch (err) {}
+         } catch {}
 
          // transition from v4 and earlier
          if (!algs) {
             algs = [alg];
          }
 
-         if (Ciphers.validateAlgs(algs)) {
-            this._algorithmList = algs;
-         }
+         this._algorithmList = Ciphers.validateAlgs(algs);
       }
    }
 

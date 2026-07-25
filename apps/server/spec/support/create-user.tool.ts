@@ -69,7 +69,7 @@ describe('Create a new user, normally do not run', () => {
    // Shared state
    const testUser = `KeeperNew${Date.now()}`;
    let userId: string;
-   let credId: string; // pkId
+   let _credId: string; // pkId
    let sessionCookie: string = '';
    let csrfToken: string = '';
    const emulator = getWebAuthnEmulator(true);
@@ -104,7 +104,7 @@ describe('Create a new user, normally do not run', () => {
 
       sessionCookie = verifyRes.cookie;
       csrfToken = verifyRes.data.csrf;
-      credId = verifyRes.data.pkId;
+      _credId = verifyRes.data.pkId;
 
       const { recoveryId, userCred } = verifyRes.data;
 

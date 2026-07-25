@@ -8,6 +8,7 @@
       "executor": "nx:run-commands",
       "options": {
         "commands": [
+          "pnpm exec tsc --noEmit -p apps/cli/tsconfig.json",
           "node apps/cli/build.js",
           "rm -f dist/cli/qcrypt.zip && zip -j dist/cli/qcrypt.zip dist/cli/qcrypt.cjs"
         ],
@@ -20,6 +21,7 @@
       "executor": "nx:run-commands",
       "options": {
         "commands": [
+          "pnpm exec tsc --noEmit -p apps/cli/tsconfig.json",
           "node apps/cli/build.js --minify",
           "rm -f dist/cli/qcrypt.zip && zip -j dist/cli/qcrypt.zip dist/cli/qcrypt.cjs"
         ],

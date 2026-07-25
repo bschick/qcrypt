@@ -28,6 +28,9 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
+      "complexity": {
+        "useLiteralKeys": "off"
+      },
       "style": {
         "useBlockStatements": "error",
         "noNonNullAssertion": "off",
@@ -61,11 +64,12 @@
       }
     },
     {
-      "includes": ["**/*.spec.ts", "**/*.suite.ts", "apps/server/spec/**", "apps/web/tests/**"],
+      "includes": ["**/*.spec.ts", "**/*.suite.ts", "apps/server/spec/**", "apps/web/tests/**", "apps/web/scripts/**"],
       "linter": {
         "rules": {
           "suspicious": {
-            "noExportsInTest": "off"
+            "noExportsInTest": "off",
+            "noExplicitAny": "off"
           }
         }
       }

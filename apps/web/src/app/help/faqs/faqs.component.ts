@@ -50,7 +50,7 @@ export class FaqsComponent implements AfterViewInit {
 
    constructor() {
       for (const [index, element] of ELEMENT_DATA.entries()) {
-         element['position'] = index + 1;
+         element.position = index + 1;
       }
       this.dataSource = new MatTableDataSource(ELEMENT_DATA);
    }

@@ -21,6 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import * as cc from './consts';
+import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2, Context } from 'aws-lambda';
 import { INTERNAL_VERSION, matchEvent, Patterns, type HttpDetails, type MethodMap } from './urls';
 
 import {
@@ -75,6 +76,7 @@ import {
 } from './utils';
 
 export type Response = {
+   // biome-ignore lint/suspicious/noExplicitAny: response bodies are arbitrary JSON
    content: Record<string, any>;
    startSession?: VerifiedUserItem;
    endSession?: boolean;
@@ -238,7 +240,7 @@ async function recordEvent(eventName: EventNames, userId: string, credentialId: 
    }
 }
 
-async function getSession(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
+async function getSession(_httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
    if (!verifiedUser) {
       throw new AuthError();
    }
@@ -252,7 +254,7 @@ async function getSession(httpDetails: HttpDetails, verifiedUser?: VerifiedUserI
    };
 }
 
-async function deleteSession(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
+async function deleteSession(_httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
    if (!verifiedUser) {
       throw new AuthError();
    }
@@ -383,13 +385,12 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
       throw new AuthError();
    }
 
-   let startSession: VerifiedUserItem | undefined;
    let responseContent: LoginUserInfo = {
       verified: verification.verified,
    };
 
    const verifiedUser = checkVerified(unverifiedUser, authenticator.userId);
-   startSession = verifiedUser;
+   const startSession = verifiedUser;
 
    // ok if this fails
    const patchAuths = Authenticators.patch({
@@ -1257,7 +1258,7 @@ async function getInvitables(httpDetails: HttpDetails, verifiedUser?: VerifiedUs
 
 // Not tracking events for this method since they are frequent and not particlyarly
 // interesting
-async function getUser(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
+async function getUser(_httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
    if (!verifiedUser) {
       throw new AuthError();
    }
@@ -1284,8 +1285,8 @@ async function loadAuthenticators(
    }
 
    // sort ascending (oldest to newest)
-   auths.data.sort((left: any, right: any) => {
-      return left.createdAt - right.createdAt;
+   auths.data.sort((left, right) => {
+      return (left.createdAt ?? 0) - (right.createdAt ?? 0);
    });
 
    const aaguids = new Set<string>(auths.data.map((cred) => cred.aaguid || ''));
@@ -1342,8 +1343,8 @@ async function loadInvitables(verifiedUser: VerifiedUserItem, consistent: boolea
    }
 
    // sort ascending (oldest to newest)
-   invitableItems.data.sort((left: any, right: any) => {
-      return left.createdAt - right.createdAt;
+   invitableItems.data.sort((left, right) => {
+      return (left.createdAt ?? 0) - (right.createdAt ?? 0);
    });
 
    const invitables: InvitableInfo[] = invitableItems.data.map((item) => {
@@ -1820,7 +1821,7 @@ async function verifyProof(verifiedUser: VerifiedUserItem, httpDetails: HttpDeta
                httpDetails.rawQueryString,
             );
             result = 'ok';
-         } catch (err) {
+         } catch {
             result = 'failed';
          }
 
@@ -1854,7 +1855,7 @@ async function verifyProof(verifiedUser: VerifiedUserItem, httpDetails: HttpDeta
    }
 }
 
-function makeResponse(content: string, status: number, cookie?: string): any {
+function makeResponse(content: string, status: number, cookie?: string): APIGatewayProxyStructuredResultV2 {
    const resp = {
       statusCode: status,
       headers: {
@@ -1871,7 +1872,7 @@ function makeResponse(content: string, status: number, cookie?: string): any {
    return resp;
 }
 
-export async function handler(event: any, context: any) {
+export async function handler(event: APIGatewayProxyEventV2, _context: Context) {
    // Uncomment for temporary debuging only, since this logs user credentials
    // console.log(event);
 

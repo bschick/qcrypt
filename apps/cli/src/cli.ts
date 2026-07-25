@@ -39,8 +39,12 @@ interface IO {
 // subsequent prompts and showAnswered calls.
 function iqOutput(io: IO): Writable {
    return new Writable({
-      write(chunk: any, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
-         io.ttyOut.write(chunk, encoding, callback);
+      write(chunk: string | Uint8Array, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
+         if (typeof chunk === 'string') {
+            io.ttyOut.write(chunk, encoding, callback);
+         } else {
+            io.ttyOut.write(chunk, callback);
+         }
       },
    });
 }
@@ -81,7 +85,11 @@ async function peekBinary(source: Readable): Promise<{ pipedIn: ReadableStream<U
       }
    }
 
-   return { pipedIn: (ReadableStream as any).from(prependedStream()), binaryIn: binary };
+   // ReadableStream.from is Node-only and absent from the DOM lib types
+   const nodeReadableStream = ReadableStream as unknown as {
+      from(iterable: AsyncIterable<Uint8Array>): ReadableStream<Uint8Array>;
+   };
+   return { pipedIn: nodeReadableStream.from(prependedStream()), binaryIn: binary };
 }
 
 function streamFromBytes(data: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Array> {
@@ -131,7 +139,7 @@ async function getUserCred(
 
    try {
       credText = new URL(credText).searchParams.get('usercred') ?? credText;
-   } catch (err) {}
+   } catch {}
 
    return base64ToBytes(credText.trim());
 }
@@ -437,7 +445,7 @@ async function decrypt(
 }
 
 function CoerceNumber(argName: string) {
-   return (val: any) => {
+   return (val: unknown) => {
       const num = Number(val);
       if (Number.isNaN(num)) {
          throw new Error(`${argName} is not a valid number`);
@@ -532,7 +540,8 @@ const args = yargs(hideBin(process.argv))
    .conflicts('infile', 'text')
    .version(false)
    .wrap(95)
-   .check((argv, options) => {
+   .check((argv, _options) => {
+      // biome-ignore lint/suspicious/noExplicitAny: yargs argv shape is built dynamically from the option chain
       const args = argv as any;
       if (args.algs && args.algs.length > args.loops) {
          throw new Error(`${args.algs.length} algs provided for ${args.loops} loops`);
@@ -549,15 +558,16 @@ const args = yargs(hideBin(process.argv))
       return true;
    })
    .demandCommand(1)
+   // biome-ignore lint/suspicious/noExplicitAny: yargs argv shape is built dynamically from the option chain
    .parseSync() as any;
 
 if (args.debug) {
    console.error('args ->', args);
 }
 
-function openTTY(kind: 'stdin' | 'stdout'): Promise<any> {
+function openTTY(kind: 'stdin' | 'stdout'): Promise<(fs.ReadStream & fs.WriteStream) | undefined> {
    return new Promise((resolve) => {
-      reopenTTY[kind]((err: any, stream: any) => {
+      reopenTTY[kind]((err: Error | null, stream: fs.ReadStream & fs.WriteStream) => {
          resolve(err ? undefined : stream);
       });
    });

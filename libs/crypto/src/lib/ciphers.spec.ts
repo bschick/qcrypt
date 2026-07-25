@@ -1007,7 +1007,7 @@ describe('Custom AD encryption and decryption', () => {
 
    it('round trip block0, all algorithms missing customAd', async () => {
       for (const alg of Ciphers.algs()) {
-         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
+         const [clearStream, _clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -1046,7 +1046,7 @@ describe('Custom AD encryption and decryption', () => {
 
    it('round trip block0, all algorithms added customAd', async () => {
       for (const alg of Ciphers.algs()) {
-         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
+         const [clearStream, _clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -1085,7 +1085,7 @@ describe('Custom AD encryption and decryption', () => {
 
    it('round trip block0, all algorithms changed customAd', async () => {
       for (const alg of Ciphers.algs()) {
-         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
+         const [clearStream, _clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -1130,7 +1130,7 @@ describe('Custom AD encryption and decryption', () => {
 
    it('round trip blockN, all algorithms missing customAd', async () => {
       for (const alg of Ciphers.algs()) {
-         const [clearStream, clearData] = streamFromStr('This is a secret 🦀');
+         const [clearStream, _clearData] = streamFromStr('This is a secret 🦀');
          const pwd = 'a not good pwd';
          const hint = 'sorta';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -1165,7 +1165,7 @@ describe('Custom AD encryption and decryption', () => {
 
    it('round trip blockN, all algorithms added customAd', async () => {
       for (const alg of Ciphers.algs()) {
-         const [clearStream, clearData] = streamFromStr('This is a secret 🦀');
+         const [clearStream, _clearData] = streamFromStr('This is a secret 🦀');
          const pwd = 'a not good pwd';
          const hint = 'sorta';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -1200,7 +1200,7 @@ describe('Custom AD encryption and decryption', () => {
 
    it('round trip blockN, all algorithms tampered customAd', async () => {
       for (const alg of Ciphers.algs()) {
-         const [clearStream, clearData] = streamFromStr('This is a secret 🦀');
+         const [clearStream, _clearData] = streamFromStr('This is a secret 🦀');
          const pwd = 'a not good pwd';
          const hint = 'sorta';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -1414,7 +1414,7 @@ describe('Detect changed cipher data', () => {
 
    it('detect changed additionalData, skip MAC verify', async () => {
       for (const alg of Ciphers.algs()) {
-         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
+         const [clearStream, _clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -1452,7 +1452,7 @@ describe('Detect changed cipher data', () => {
 
    it('detect changed encryptedData, skip MAC verify', async () => {
       for (const alg of Ciphers.algs()) {
-         const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
+         const [clearStream, _clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -1543,7 +1543,7 @@ describe('Detect block order changes', () => {
    });
 
    it('blockN bad order detected, all algorithms', async () => {
-      const clearData = new TextEncoder().encode(clearStr);
+      const _clearData = new TextEncoder().encode(clearStr);
 
       for (const alg of Ciphers.algs()) {
          const [block0, block1, block2] = await get_blocks(alg);
@@ -1568,7 +1568,7 @@ describe('Detect block order changes', () => {
    });
 
    it('block0 bad order detected, all algorithms', async () => {
-      const clearData = new TextEncoder().encode(clearStr);
+      const _clearData = new TextEncoder().encode(clearStr);
 
       for (const alg of Ciphers.algs()) {
          const [block0, block1, block2] = await get_blocks(alg);

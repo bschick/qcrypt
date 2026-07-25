@@ -46,7 +46,7 @@ testWithAuth('provision keeper', async ({ authFixture }) => {
    await expect(page).toHaveURL(/\/showrecovery$/, { timeout: 10000 });
    // Keeper accounts are never recovered (a lost passkey is fixed by re-running this
    // tool), so the recovery words are discarded. Uncomment to capture them if that changes.
-   const recoveryWords = await page.locator('textarea#wordsArea').inputValue();
+   const _recoveryWords = await page.locator('textarea#wordsArea').inputValue();
    await page.getByRole('button', { name: /I saved my/ }).click();
    await expect(page).toHaveURL(/\/$/);
    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({ timeout: 10000 });

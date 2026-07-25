@@ -56,7 +56,7 @@ export const sanitizeString = (input: string): string => {
    return sanitized.trim();
 };
 
-export const validB64 = (base64: string | null | undefined): boolean => {
+export const validB64 = (base64: string | null | undefined): base64 is string => {
    return !!base64 && typeof base64 === 'string' && /^[A-Za-z0-9+/=_-]+$/.test(base64);
 };
 

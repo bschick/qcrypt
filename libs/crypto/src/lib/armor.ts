@@ -48,6 +48,7 @@ export function makeCipherArmor(
 export function parseCipherArmor(cipherArmor: string): Uint8Array<ArrayBuffer> {
    // cipherArmor is untrusted and parsed unbounded; a bad value can exhaust local resources
    // (browser tab or CLI process), so callers should enforce size limits at input boundaries.
+   // biome-ignore lint/suspicious/noExplicitAny: untrusted JSON.parse result, shape validated below
    let jsonParts: any;
    try {
       let trimmed = cipherArmor.trim();

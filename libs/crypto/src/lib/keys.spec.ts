@@ -229,10 +229,10 @@ describe('Key generation', () => {
    it('PWDKeyProvider unsuable without cipherdatainfo', async () => {
       for (const alg of Ciphers.algs()) {
          const pwd = 'not a good pwd';
-         const ic = cc.ICOUNT_MIN;
+         const _ic = cc.ICOUNT_MIN;
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
          const randomArray = getRandom(48);
-         const slt = randomArray.slice(0, cc.SLT_BYTES);
+         const _slt = randomArray.slice(0, cc.SLT_BYTES);
          const iv = randomArray.slice(cc.SLT_BYTES, cc.SLT_BYTES + Ciphers.algIVByteLength(alg));
 
          const keyProvider = new PWDKeyProvider(userCred, [pwd, undefined]);

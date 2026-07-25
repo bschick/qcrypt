@@ -140,7 +140,7 @@ export class PrfUnsupportedError extends Error {
 })
 export class AuthenticatorService {
    public userInfo = signal<VerifiedUserInfo | undefined>(undefined);
-   public ready: Promise<[void, void]>;
+   public ready: Promise<unknown>;
 
    private _subject = new Subject<AuthEventData>();
    private _intervalId: number = 0;
@@ -1049,6 +1049,7 @@ export class AuthenticatorService {
 
    private async _startAuthentication(
       userId: string | null,
+      // biome-ignore lint/suspicious/noExplicitAny: request body is assembled dynamically per flow
    ): Promise<{ verifyBody: Record<string, any>; prfKey: Uint8Array<ArrayBuffer> | null }> {
       // Start the process without userId prevents limiting authenticator creds
       // so the user can look for an existing credential

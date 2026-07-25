@@ -22,7 +22,7 @@ SOFTWARE. */
 
 import { type AfterViewInit, Component, Inject, type OnDestroy, type OnInit, Renderer2 } from '@angular/core';
 import { AuthenticatorService } from '../services/authenticator.service';
-import { Router, RouterLink, ActivatedRoute } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -65,7 +65,6 @@ export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit {
       private authSvc: AuthenticatorService,
       private router: Router,
       private dialog: MatDialog,
-      private activeRoute: ActivatedRoute,
    ) {}
 
    ngOnInit() {
@@ -117,7 +116,7 @@ export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit {
       }
    }
 
-   async onClickStartRecovery(event: any) {
+   async onClickStartRecovery(_event: MouseEvent) {
       try {
          this.error = '';
          const rawString = this.recoveryWords.value?.trim();

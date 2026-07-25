@@ -315,7 +315,7 @@ async function main(): Promise<number> {
    const requestedIds = (argv.set as readonly (string | number)[]).map((s) => Number(s));
    const requested = requestedIds.map((id) => findTestSet(id)!);
    const wrap = argv.wrap as boolean;
-   const b64url = (argv['b64url'] as B64UrlMode | undefined) ?? null;
+   const b64url = (argv.b64url as B64UrlMode | undefined) ?? null;
    const format: OutputFormat = encodesOutput(b64url) ? 'b64url' : 'uint8';
 
    const opts: Options = {

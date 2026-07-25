@@ -148,7 +148,7 @@ export function browserSupportsBytesStream(): boolean {
    try {
       new ReadableStream({ type: 'bytes' });
       return true;
-   } catch (err) {
+   } catch {
       return false;
    }
 }
@@ -180,7 +180,7 @@ export class ProcessCancelled extends Error {
       this.name = this.constructor.name;
    }
 
-   static isProcessCancelled(err: any): boolean {
+   static isProcessCancelled(err: unknown): boolean {
       return err instanceof ProcessCancelled || (err instanceof Error && err.message.indexOf('ProcessCancelled') >= 0);
    }
 }
@@ -203,7 +203,7 @@ export class BYOBStreamReader {
       try {
          this._reader = stream.getReader({ mode: 'byob' });
          this._byob = true;
-      } catch (err) {
+      } catch {
          this._byob = false;
          this._reader = stream.getReader();
       }
@@ -429,7 +429,17 @@ export async function selectClearFile(): Promise<FileSystemFileHandle> {
    }
 }
 
-async function selectWriteableFileImpl(options: { [key: string]: any }): Promise<FileSystemFileHandle> {
+// Subset of the File System Access API's SaveFilePickerOptions, which the TS DOM lib does not declare.
+interface SaveFilePickerOptions {
+   id: string;
+   suggestedName: string;
+   types?: {
+      description: string;
+      accept: Record<string, string[]>;
+   }[];
+}
+
+async function selectWriteableFileImpl(options: SaveFilePickerOptions): Promise<FileSystemFileHandle> {
    try {
       //@ts-expect-error
       return await window.showSaveFilePicker(options);

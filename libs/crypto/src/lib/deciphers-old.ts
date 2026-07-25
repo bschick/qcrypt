@@ -338,7 +338,6 @@ export class DecipherV4 extends Decipher {
             throw new Error('Invalid MAC error');
          }
 
-         const hint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
          if (encryptedHint!.byteLength !== 0) {
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(this._blockData.iv);
             const hintBytes = await Decipher._doDecrypt(this._blockData.alg, hk, hIV, encryptedHint);

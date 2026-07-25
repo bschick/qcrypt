@@ -97,11 +97,12 @@ async function _encryptStreamImpl(
                }
             } catch (err) {
                // Chrome throws an odd "network err" when files have errors, so replace with a consistent error
+               let streamErr = err;
                if (err instanceof Error && err.message.toLowerCase().includes('network')) {
-                  err = new Error('Error reading stream');
+                  streamErr = new Error('Error reading stream');
                }
                encipher.errorState();
-               controller.error(err);
+               controller.error(streamErr);
             }
          },
          async cancel(reason) {
@@ -183,11 +184,12 @@ async function _decryptStreamImpl(
                }
             } catch (err) {
                // Chrome throws an odd "network err" when files have errors, so replace with a consistent error
+               let streamErr = err;
                if (err instanceof Error && err.message.toLowerCase().includes('network')) {
-                  err = new Error('Error reading stream');
+                  streamErr = new Error('Error reading stream');
                }
                decipher.errorState();
-               controller.error(err);
+               controller.error(streamErr);
             }
          },
          async cancel(reason) {

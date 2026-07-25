@@ -23,7 +23,7 @@ import { Component, Output, Input, EventEmitter } from '@angular/core';
 import { Ciphers } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import { MatTableModule } from '@angular/material/table';
-import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatButtonToggleModule, type MatButtonToggleChange } from '@angular/material/button-toggle';
 import { FormsModule } from '@angular/forms';
 
 export type LoopInfo = {
@@ -84,7 +84,7 @@ export class AlgorithmsComponent {
       return this._defaultModes;
    }
 
-   onAlgorithmChange(event: any, loop: number): void {
+   onAlgorithmChange(event: MatButtonToggleChange, loop: number): void {
       this._defaultModes[loop - 1] = event.value;
       this.modesChange.emit(this._defaultModes);
    }

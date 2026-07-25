@@ -30,7 +30,7 @@ import { resolve } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { isReservedTestUserName } from './utils';
 
-export async function postLoadAAGUIDs(httpDetails: HttpDetails): Promise<Response> {
+export async function postLoadAAGUIDs(_httpDetails: HttpDetails): Promise<Response> {
    try {
       const filePath = resolve('./combined.json');
       const contents = await readFile(filePath, { encoding: 'utf8' });
@@ -57,7 +57,7 @@ export async function postLoadAAGUIDs(httpDetails: HttpDetails): Promise<Respons
          }
       }
 
-      const results = await AAGUIDs.put(batch).go();
+      await AAGUIDs.put(batch).go();
       return { content: { message: `success: ${count} aaguids updated` } };
    } catch (err) {
       console.error(err);
@@ -67,7 +67,7 @@ export async function postLoadAAGUIDs(httpDetails: HttpDetails): Promise<Respons
 
 export async function postConsistency(
    httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem,
+   _verifiedUser?: VerifiedUserItem,
    userFilter: { userId: string }[] = [],
 ): Promise<Response> {
    const { params } = httpDetails;
@@ -382,9 +382,8 @@ export async function postCleanupTestUsers(httpDetails: HttpDetails): Promise<Re
    return { content: { message: 'done' } };
 }
 
-export async function postMunge(httpDetails: HttpDetails): Promise<Response> {
-   const batchSize = 14;
-
+export async function postMunge(_httpDetails: HttpDetails): Promise<Response> {
+   // const batchSize = 14;
    // const userAttrs = ["userId", "verified", "recoveryIdEnc", "recoveryPubKey"] as const;
    // let users = await Users.scan.go({
    //    attributes: userAttrs,

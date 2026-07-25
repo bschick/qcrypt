@@ -438,7 +438,7 @@ async function main(): Promise<number> {
 
    useColor = resolveColor(argv.color as ColorMode);
 
-   const b64url = (argv['b64url'] as B64UrlMode | undefined) ?? null;
+   const b64url = (argv.b64url as B64UrlMode | undefined) ?? null;
 
    const morphString = (argv.morph as string | undefined) ?? null;
    const ops = morphString !== null ? parseOpsString(morphString) : null;

@@ -51,8 +51,8 @@ function addViewBox(text: string): ParseResult {
    if ('viewBox' in attrs || 'viewbox' in attrs) {
       return { text, message: 'viewBox present' };
    }
-   const widthRaw = attrs['width'];
-   const heightRaw = attrs['height'];
+   const widthRaw = attrs.width;
+   const heightRaw = attrs.height;
    if (!widthRaw || !heightRaw) {
       throw new Error('root <svg> lacks width and/or height attributes');
    }

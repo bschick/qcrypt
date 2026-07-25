@@ -525,7 +525,7 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       return this._cachedExtraContext;
    }
 
-   protected override async _genCipherKey(encrypting: boolean): Promise<Uint8Array<ArrayBuffer>> {
+   protected override async _genCipherKey(_encrypting: boolean): Promise<Uint8Array<ArrayBuffer>> {
       if (!this._masterKey) {
          throw new Error('Invalid state, masterKey missing');
       }
@@ -947,7 +947,7 @@ export class PWDKeyProviderLegacy extends BasePWDKeyProvider {
       return new Uint8Array(exported);
    }
 
-   protected override async _genBlockCipherKey(blockNum: number): Promise<Uint8Array<ArrayBuffer>> {
+   protected override async _genBlockCipherKey(_blockNum: number): Promise<Uint8Array<ArrayBuffer>> {
       throw new Error('Block cipher keys not supported for this cipher version');
    }
 

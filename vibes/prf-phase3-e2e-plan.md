@@ -134,15 +134,23 @@ unlink races the write and intermittently drops the file. `loadAuthenticator`'s 
 (disk never mutated on sign-in) and keeps keeper files immutable (stable `E2E_CREDS_B64`). Still owed: a
 **standalone upstream PR** fixing the FileRepository to unlink synchronously (independent of the hmac-secret PR).
 
-**Status:** local (`t1.quickcrypt.org`) keeper1 (no-PRF) + keeper2 (PRF) provisioned; the 3 sequential keeper
-specs pass and both keeper files survive the run — the FileRepository PRF round-trip (credRandom → PRF output
-→ decrypt `passkeyUserCredEnc`) is validated end-to-end.
+**Status — E2E PHASE COMPLETE (2026-07-24).** Keepers are provisioned and e2e-verified on **both** hosts —
+local (`t1.quickcrypt.org`) and prod (`quickcrypt.org`) — the full suite passes including the new keeper
+PRF-badge check, and `E2E_CREDS_B64` has been regenerated. The FileRepository PRF round-trip (credRandom → PRF
+output → decrypt `passkeyUserCredEnc`) is validated end-to-end. No keeper/E2E TODOs remain.
 
-**Owner TODO:**
-1. Regenerate the CI secret: `tar -czf - -C apps/web/tests keeper-creds | base64 -w0` → replace `E2E_CREDS_B64`.
-2. If prod-release CI runs keeper tests, provision the `quickcrypt.org` keepers too (edit `keeper.spec.ts`
-   config `host` + run with `--project=prod`).
-3. Land the standalone upstream nid FileRepository fix.
+**PRF-mode validation added (2026-07-24).** A gap surfaced when prod keepers were provisioned: keeper mode was
+only inferred from `credRandom` and asserted nowhere at the app level, so a keeper made in the wrong mode passed
+every keeper spec (encrypt/decrypt works either way) — and prod **KeeperOne was created WITH PRF and still
+passed full e2e**. Closed it: `keeperPrf` map in `common.ts` (`{keeper1:false,keeper2:true}`) is the single
+source of truth; `sequential/keepers.spec.ts` signs in as each keeper and asserts the shared
+`expectPrfBadge(page,prf)` (credentials-drawer badge) every CI run; `keeper.spec.ts` now derives its `mode`
+from `keeperPrf` (no hand-set `mode`) and asserts the badge right after creation. **KeeperOne has since been
+re-provisioned no-PRF and the full suite (incl. the badge check) is green on both hosts.**
+
+**Upstream nid PRs — DONE:** nid accepted **both** PRs (hmac-secret feature + FileRepository sync-unlink race)
+**unchanged**, expected in the next nid release. Once released, `vendor/nid-webauthn-emulator` can be dropped
+for the published package (optional cleanup, not required for CI).
 
 (Reprovision command, for reference:
 `NODE_EXTRA_CA_CERTS=./apps/web/localssl/qcrypt.pem pnpm exec playwright test --config apps/web/playwright.config.ts apps/web/tests/keeper.spec.ts --project=local`)

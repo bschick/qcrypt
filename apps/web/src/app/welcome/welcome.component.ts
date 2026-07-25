@@ -52,7 +52,7 @@ export class WelcomeComponent {
       private router: Router,
    ) {}
 
-   async onClickExisting(event: any) {
+   async onClickExisting(_event: MouseEvent) {
       try {
          this.error = '';
          this.showProgress = true;
@@ -70,10 +70,10 @@ export class WelcomeComponent {
       }
    }
 
-   onClickNew(event: any) {}
+   onClickNew(_event: MouseEvent) {}
 
-   onClickRecovery(event: any) {
-      var dialogRef = this.dialog.open(RecoveryDialog);
+   onClickRecovery(_event: MouseEvent) {
+      this.dialog.open(RecoveryDialog);
    }
 }
 
