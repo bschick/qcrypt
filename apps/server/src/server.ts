@@ -137,8 +137,7 @@ await cryptoReady();
 
 function isVerified(unverifiedUser: UnverifiedUserItem, userId: string): unverifiedUser is VerifiedUserItem {
    return (
-      unverifiedUser &&
-      unverifiedUser.verified &&
+      unverifiedUser?.verified &&
       unverifiedUser.userId === userId &&
       validB64(unverifiedUser.userId) &&
       validB64(unverifiedUser.userCredEnc) &&
@@ -230,7 +229,7 @@ async function recordEvent(eventName: EventNames, userId: string, credentialId: 
       }).go();
 
       // record, but don't fail
-      if (!event || !event.data) {
+      if (!event?.data) {
          console.error('event not created');
       }
    } catch (error) {
@@ -276,7 +275,7 @@ async function deleteSession(httpDetails: HttpDetails, verifiedUser?: VerifiedUs
 async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
    const { rpID, rpOrigin, body } = httpDetails;
 
-   if (!body.response || !body.response.userHandle) {
+   if (!body.response?.userHandle) {
       throw new ParamError('missing userHandle');
    }
    if (!validB64(body.id)) {
@@ -291,7 +290,7 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
       challenge: body.challenge,
    }).go({ response: 'all_old' });
 
-   if (!challenge || !challenge.data) {
+   if (!challenge?.data) {
       throw new ParamError('challenge not valid');
    }
 
@@ -557,7 +556,7 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
       description: unverifiedUser.userName,
    }).go();
 
-   if (!invitable || !invitable.data) {
+   if (!invitable?.data) {
       throw new Error('invitable not created or found');
    }
 
@@ -677,7 +676,7 @@ async function _createAuthenticator(
       challenge: passkeyVerify.challenge,
    }).go({ response: 'all_old' });
 
-   if (!challenge || !challenge.data) {
+   if (!challenge?.data) {
       throw new ParamError('challenge not valid');
    }
 
@@ -721,7 +720,7 @@ async function _createAuthenticator(
 
    let description = 'Passkey';
 
-   if (aaguidDetails && aaguidDetails.data) {
+   if (aaguidDetails?.data) {
       description = aaguidDetails.data.name ?? 'Passkey';
       description = description.slice(0, 42);
    } else {
@@ -744,7 +743,7 @@ async function _createAuthenticator(
       attestationObject: base64UrlEncode(attestationObject),
    }).go();
 
-   if (!auth || !auth.data) {
+   if (!auth?.data) {
       throw new ParamError('credentail creation failed');
    }
 
@@ -937,7 +936,7 @@ async function postRegOptions(httpDetails: HttpDetails): Promise<Response> {
       userCredEnc: undefined,
    }).go();
 
-   if (!user || !user.data) {
+   if (!user?.data) {
       throw new ParamError('user not created or found');
    }
 
@@ -966,7 +965,7 @@ async function registrationOptions(
          transports?: AuthenticatorTransportFuture[];
       }[] = [];
 
-      if (auths && auths.data) {
+      if (auths?.data) {
          excludeCreds = auths.data.map((cred: AuthItem) => ({
             id: cred.credentialId,
             transports: cred.transports as AuthenticatorTransportFuture[],
@@ -1112,7 +1111,7 @@ async function patchPasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUse
          })
          .go();
 
-      if (!patched || !patched.data) {
+      if (!patched?.data) {
          throw new ParamError('description update failed');
       }
    } catch (err) {
@@ -1161,7 +1160,7 @@ async function patchUser(httpDetails: HttpDetails, verifiedUser?: VerifiedUserIt
          })
          .go();
 
-      if (!patched || !patched.data) {
+      if (!patched?.data) {
          throw new ParamError('username update failed');
       }
    } catch (err) {
@@ -1214,7 +1213,7 @@ async function putRecover2Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
       .set(updates)
       .go();
 
-   if (!patched || !patched.data) {
+   if (!patched?.data) {
       throw new ParamError('recovery key update failed');
    }
 
@@ -1375,7 +1374,7 @@ async function deletePasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUs
       response: 'all_old', // needed to determine of anything was deleted
    });
 
-   if (!deleted || !deleted.data) {
+   if (!deleted?.data) {
       throw new ParamError('authenticator not found');
    }
 
@@ -1399,7 +1398,7 @@ async function deletePasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUs
 
       if (invitables && invitables.data.length > 0) {
          const result = await Invitables.delete(invitables.data).go();
-         if (result && result.unprocessed && result.unprocessed.length > 0) {
+         if (result?.unprocessed && result.unprocessed.length > 0) {
             console.error(`failed to delete all invitables for user ${verifiedUser.userId}`);
          }
       }
@@ -1410,7 +1409,7 @@ async function deletePasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUs
          response: 'all_old', // needed to determine of anything was deleted
       });
 
-      if (!deleted || !deleted.data) {
+      if (!deleted?.data) {
          throw new AuthError();
       }
       // Let this happen async
@@ -1533,7 +1532,7 @@ async function postRecover(httpDetails: HttpDetails): Promise<Response> {
       .go();
 
    // log but continue...
-   if (!patched || !patched.data) {
+   if (!patched?.data) {
       console.error('recovered count update failed');
    }
 
@@ -1572,7 +1571,7 @@ async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
       challenge: challenge,
    }).go({ response: 'all_old' });
 
-   if (!consumed || !consumed.data) {
+   if (!consumed?.data) {
       throw new AuthError();
    }
    if (Date.now() / 1000 > consumed.data.expiresAt) {
@@ -1628,7 +1627,7 @@ async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
       .go();
 
    // log but continue...
-   if (!patched || !patched.data) {
+   if (!patched?.data) {
       console.error('recovered count update failed');
    }
 
@@ -1667,7 +1666,7 @@ async function getUnverifiedUser(userId: string): Promise<UnverifiedUserItem> {
       userId: userId,
    }).go();
 
-   if (!unverifiedUser || !unverifiedUser.data) {
+   if (!unverifiedUser?.data) {
       throw new AuthError();
    }
 
@@ -1750,7 +1749,7 @@ async function verifyCsrf(verifiedUser: VerifiedUserItem, checkCsrf: boolean, he
 async function verifyCookie(cookie: string, rpID: string): Promise<VerifiedUserItem> {
    try {
       const match = /^__Host-JWT=(.+)$/.exec(cookie);
-      if (!match || !match[1] || match[1].length < 10) {
+      if (!match?.[1] || match[1].length < 10) {
          throw new Error('invalid cookie');
       }
       const token = match[1];
@@ -1760,7 +1759,7 @@ async function verifyCookie(cookie: string, rpID: string): Promise<VerifiedUserI
          complete: false,
       });
 
-      if (!unverifiedPayload || !unverifiedPayload.userId) {
+      if (!unverifiedPayload?.userId) {
          throw new Error('invalid cookie');
       }
 

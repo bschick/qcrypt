@@ -264,7 +264,7 @@ async function encrypt(
       for (let l = 1; l <= args.loops; l++) {
          const lpMsg = args.loops > 1 ? ` for loop ${l} of ${args.loops}` : '';
          let alg: cc.CipherAlgs;
-         if (args.algs && args.algs[l - 1]) {
+         if (args.algs?.[l - 1]) {
             alg = Ciphers.validateAlg(args.algs[l - 1]);
             if (!args.silent) {
                showAnswered(`Select Cipher Mode${lpMsg}:`, Ciphers.algDescription(alg), io);

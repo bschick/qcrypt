@@ -89,7 +89,7 @@ export async function postConsistency(
       let deleted = 0;
       const deleteBatch = [];
 
-      while (auths && auths.data && auths.data.length > 0) {
+      while (auths?.data && auths.data.length > 0) {
          total += auths.data.length;
 
          for (const auth of auths.data) {
@@ -104,7 +104,7 @@ export async function postConsistency(
                userId: auth.userId,
             }).go({ attributes: ['userId'] });
 
-            if (!user || !user.data) {
+            if (!user?.data) {
                console.log(`missing userId ${auth.userId} for auth ${auth.credentialId}`);
                leaked += 1;
                if (params.cleanse === 'true') {
@@ -132,7 +132,7 @@ export async function postConsistency(
          const result = await Authenticators.delete(deleteBatch).go();
 
          // results are unprocessed records, meaning it didn't complete if they exist
-         if (result && result.unprocessed && result.unprocessed.length > 0) {
+         if (result?.unprocessed && result.unprocessed.length > 0) {
             console.error(`delete of all ${deleteBatch.length} authenticators failed`);
          } else {
             deleted = deleteBatch.length;
@@ -141,7 +141,7 @@ export async function postConsistency(
 
       console.log(`${total} authenticators scanned with ${leaked} leaked and ${deleted} deleted`);
    }
-   if (params.tables && params.tables.includes('users')) {
+   if (params.tables?.includes('users')) {
       const userAttrs = ['userId', 'verified', 'userName', 'createdAt'] as const;
       let users = await Users.scan.go({
          attributes: userAttrs,
@@ -155,7 +155,7 @@ export async function postConsistency(
       let deleted = 0;
       const deleteBatch = [];
 
-      while (users && users.data && users.data.length > 0) {
+      while (users?.data && users.data.length > 0) {
          total += users.data.length;
 
          for (const user of users.data) {
@@ -218,7 +218,7 @@ export async function postConsistency(
          const result = await Users.delete(deleteBatch).go();
 
          // results are unprocessed records, meaning it didn't complete if they exist
-         if (result && result.unprocessed && result.unprocessed.length > 0) {
+         if (result?.unprocessed && result.unprocessed.length > 0) {
             console.error(`delete of all ${deleteBatch.length} users failed`);
          } else {
             deleted = deleteBatch.length;
@@ -228,7 +228,7 @@ export async function postConsistency(
          `${total} users scanned with ${leaked} leaked, ${expired} expired, ${unverified} unverified, and ${deleted} deleted`,
       );
    }
-   if (params.tables && params.tables.includes('invitables')) {
+   if (params.tables?.includes('invitables')) {
       const invAttrs = ['invitableId', 'userId', 'createdAt'] as const;
       let invitables = await Invitables.scan.go({
          attributes: invAttrs,
@@ -240,7 +240,7 @@ export async function postConsistency(
       let deleted = 0;
       const deleteBatch = [];
 
-      while (invitables && invitables.data && invitables.data.length > 0) {
+      while (invitables?.data && invitables.data.length > 0) {
          total += invitables.data.length;
 
          for (const invitable of invitables.data) {
@@ -255,7 +255,7 @@ export async function postConsistency(
                userId: invitable.userId,
             }).go({ attributes: ['userId'] });
 
-            if (!user || !user.data) {
+            if (!user?.data) {
                console.log(`missing userId ${invitable.userId} for invitable ${invitable.invitableId}`);
                leaked += 1;
                if (params.cleanse === 'true') {
@@ -283,7 +283,7 @@ export async function postConsistency(
          const result = await Invitables.delete(deleteBatch).go();
 
          // results are unprocessed records, meaning it didn't complete if they exist
-         if (result && result.unprocessed && result.unprocessed.length > 0) {
+         if (result?.unprocessed && result.unprocessed.length > 0) {
             console.error(`delete of all ${deleteBatch.length} invitables failed`);
          } else {
             deleted = deleteBatch.length;
@@ -299,7 +299,7 @@ export async function postConsistency(
 export async function postCleanupTestUsers(httpDetails: HttpDetails): Promise<Response> {
    const { params } = httpDetails;
 
-   if (!params.tables || !params.tables.includes('users')) {
+   if (!params.tables?.includes('users')) {
       return { content: { message: 'skipped, missing users table' } };
    }
 
@@ -320,7 +320,7 @@ export async function postCleanupTestUsers(httpDetails: HttpDetails): Promise<Re
    let capReached = false;
    const candidates: { userId: string; userName: string }[] = [];
 
-   while (users && users.data && users.data.length > 0) {
+   while (users?.data && users.data.length > 0) {
       total += users.data.length;
 
       for (const user of users.data) {
@@ -366,7 +366,7 @@ export async function postCleanupTestUsers(httpDetails: HttpDetails): Promise<Re
       const result = await Users.delete(deleteBatch).go();
 
       // results are unprocessed records, meaning it didn't complete if they exist
-      if (result && result.unprocessed && result.unprocessed.length > 0) {
+      if (result?.unprocessed && result.unprocessed.length > 0) {
          console.error(`delete of all ${deleteBatch.length} users failed`);
       } else {
          deleted = deleteBatch.length;

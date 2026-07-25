@@ -271,7 +271,7 @@ async function request(
 
    let responseCookie = '';
    const match = /(__Host-JWT=.+?);/.exec(res.headers.getSetCookie()[0]);
-   if (match && match[1]) {
+   if (match?.[1]) {
       responseCookie = match[1];
    }
 

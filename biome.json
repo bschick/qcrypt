@@ -28,9 +28,6 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
-      "complexity": {
-        "useOptionalChain": "off"
-      },
       "style": {
         "useBlockStatements": "error",
         "noNonNullAssertion": "off",

@@ -691,8 +691,7 @@ export abstract class Decipher extends Ciphers {
          // This does MAC check
          await this._decodeBlock0();
          if (
-            !this._blockData ||
-            !this._blockData.alg ||
+            !this._blockData?.alg ||
             !this._blockData.iv ||
             !this._blockData.encryptedData ||
             !this._blockData.additionalData
@@ -750,7 +749,7 @@ export abstract class Decipher extends Ciphers {
    public async getCipherDataInfo(): Promise<CipherDataInfo> {
       // This does MAC check
       await this._decodeBlock0();
-      if (!this._blockData || !this._blockData.alg || !this._blockData.iv) {
+      if (!this._blockData?.alg || !this._blockData.iv) {
          throw new Error('Data not initialized');
       }
 
@@ -1026,8 +1025,7 @@ export class DecipherV67 extends Decipher {
          }
 
          if (
-            !this._blockData ||
-            !this._blockData.alg ||
+            !this._blockData?.alg ||
             !this._blockData.iv ||
             !this._blockData.encryptedData ||
             !this._blockData.additionalData
@@ -1123,8 +1121,7 @@ export class DecipherV67 extends Decipher {
 
    private async _verifyMAC(): Promise<boolean> {
       if (
-         !this._blockData ||
-         !this._blockData.payloadSize ||
+         !this._blockData?.payloadSize ||
          !this._blockData.ver ||
          !this._blockData.additionalData ||
          !this._blockData.encryptedData ||

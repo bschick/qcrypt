@@ -327,7 +327,7 @@ export class AuthenticatorService {
 
       const url = new URL(path, baseUrl);
 
-      if (session && session.userCredEnc) {
+      if (session?.userCredEnc) {
          const userCred = await this._decryptUserCredEnc(session.userCredEnc, session.pkId!, session.userId);
 
          try {
@@ -387,7 +387,7 @@ export class AuthenticatorService {
 
       let session = this._getSessionState();
 
-      if (!session || !session.userCredEnc) {
+      if (!session?.userCredEnc) {
          const targetPkId = localStorage.getItem('pkid');
          if (!targetPkId) {
             return;
@@ -422,7 +422,7 @@ export class AuthenticatorService {
          session,
       });
 
-      if (!serverLoginUserInfo || !serverLoginUserInfo.verified) {
+      if (!serverLoginUserInfo?.verified) {
          console.error('restore aborted: getSession returned unverified');
          return;
       }
@@ -689,7 +689,7 @@ export class AuthenticatorService {
 
    private _handlePeerLogout(msg: LogoutPayload): void {
       const sessionState = this._getSessionState();
-      if (sessionState && sessionState.version && msg.version >= sessionState.version) {
+      if (sessionState?.version && msg.version >= sessionState.version) {
          this.logout(false);
       }
    }
@@ -740,7 +740,7 @@ export class AuthenticatorService {
          resource: 'session',
          session,
       });
-      if (!serverLoginUserInfo || !serverLoginUserInfo.verified) {
+      if (!serverLoginUserInfo?.verified) {
          this.logout(false);
       } else {
          this._loginRestore(serverLoginUserInfo, msg.userCredEnc, msg.userCredExpiry, msg.version);

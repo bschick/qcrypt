@@ -128,13 +128,7 @@ export const Patterns = {
 };
 
 export function matchEvent(event: Record<string, any>, methodMap: MethodMap): HttpDetails {
-   if (
-      !event ||
-      !event.requestContext ||
-      !event.requestContext.http ||
-      !event.headers ||
-      !event.headers['x-passkey-rpid']
-   ) {
+   if (!event?.requestContext?.http || !event.headers?.['x-passkey-rpid']) {
       throw new ParamError('invalid request, missing context');
    }
 

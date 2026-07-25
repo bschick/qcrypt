@@ -158,7 +158,7 @@ export class BubbleDirective {
       }
 
       const container = this.getScrollContainer();
-      if (container && container.contains(this.elementRef.nativeElement)) {
+      if (container?.contains(this.elementRef.nativeElement)) {
          // Inside scroll container: track scroll to maintain page-relative position
          this.scrollHandler = () => {
             if (this.componentRef) {

@@ -727,10 +727,10 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       if (!master || master.byteLength < cc.IV_MIN_BYTES) {
          throw new Error(`Invalid master key length of: ${master?.byteLength}`);
       }
-      if (!this._cdInfo || !this._cdInfo.slt) {
+      if (!this._cdInfo?.slt) {
          throw new Error('Invalid state for key derivation');
       }
-      if (!purpose || purpose.length !== 8) {
+      if (purpose?.length !== 8) {
          throw new Error(`Invalid purpose length of: ${purpose?.length}`);
       }
       if (this._cdInfo.slt.byteLength !== cc.SLT_BYTES) {
@@ -840,10 +840,10 @@ export class PWDKeyProviderV6 extends BasePWDKeyProvider {
       if (!master || master.byteLength < cc.IV_MIN_BYTES) {
          throw new Error(`Invalid master key length of: ${master?.byteLength}`);
       }
-      if (!this._cdInfo || !this._cdInfo.slt) {
+      if (!this._cdInfo?.slt) {
          throw new Error('Invalid state for key derivation');
       }
-      if (!purpose || purpose.length !== 8) {
+      if (purpose?.length !== 8) {
          throw new Error(`Invalid purpose length of: ${purpose?.length}`);
       }
 

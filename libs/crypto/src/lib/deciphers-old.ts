@@ -143,7 +143,7 @@ export class DecipherV1 extends Decipher {
    }
 
    private async _verifyMAC(): Promise<boolean> {
-      if (!this._blockData || !this._blockData.additionalData || !this._blockData.encryptedData || !this._blockData) {
+      if (!this._blockData?.additionalData || !this._blockData.encryptedData || !this._blockData) {
          throw new Error('Invalid MAC data');
       }
 
@@ -369,7 +369,7 @@ export class DecipherV4 extends Decipher {
             return new Uint8Array(0);
          }
 
-         if (!this._blockData || !this._blockData.alg || !this._blockData.iv || !this._blockData.encryptedData) {
+         if (!this._blockData?.alg || !this._blockData.iv || !this._blockData.encryptedData) {
             throw new Error('Data not initialized');
          }
 
@@ -445,8 +445,7 @@ export class DecipherV4 extends Decipher {
 
    protected async _verifyMAC(): Promise<boolean> {
       if (
-         !this._blockData ||
-         !this._blockData.payloadSize ||
+         !this._blockData?.payloadSize ||
          !this._blockData.ver ||
          !this._blockData.additionalData ||
          !this._blockData.encryptedData ||
@@ -527,8 +526,7 @@ export class DecipherV5 extends DecipherV4 {
 
    protected override async _verifyMAC(): Promise<boolean> {
       if (
-         !this._blockData ||
-         !this._blockData.payloadSize ||
+         !this._blockData?.payloadSize ||
          !this._blockData.ver ||
          !this._blockData.additionalData ||
          !this._blockData.encryptedData ||
