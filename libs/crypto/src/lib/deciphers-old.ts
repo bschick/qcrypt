@@ -68,12 +68,12 @@ export class DecipherV1 extends Decipher {
 
          // V1 should test be larger, but this get simple cases
          if (payload.byteLength < cc.PAYLOAD_SIZE_MIN) {
-            throw new Error('Invalid paysload size1: ' + payload.byteLength);
+            throw new Error(`Invalid paysload size1: ${payload.byteLength}`);
          }
 
          // Need to treat all values an UNTRUSTED since the signature has not yet been
          // validated, Extractor does test each value for valid ranges as we unpack
-         let extractor = new Extractor(payload);
+         const extractor = new Extractor(payload);
 
          // Order must be invariant (as oringally laid out in v1)
          const mac = extractor.mac;
@@ -82,8 +82,8 @@ export class DecipherV1 extends Decipher {
          const slt = extractor.slt;
          const ic = extractor.ic;
          const ver = extractor.ver;
-         if (ver != cc.VERSION1) {
-            throw new Error('Invalid version of: ' + ver);
+         if (ver !== cc.VERSION1) {
+            throw new Error(`Invalid version of: ${ver}`);
          }
          const encryptedHint = extractor.hint;
          const encryptedData = extractor.remainder('edata');
@@ -126,7 +126,7 @@ export class DecipherV1 extends Decipher {
             throw new Error('Invalid MAC error');
          }
 
-         if (encryptedHint!.byteLength != 0) {
+         if (encryptedHint!.byteLength !== 0) {
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(iv);
             const hintBytes = await Decipher._doDecrypt(alg, hk, hIV, encryptedHint);
             this._keyProvider.setHint(new TextDecoder().decode(hintBytes));
@@ -170,7 +170,7 @@ export class DecipherV1 extends Decipher {
    }
 
    public override async decryptBlockN(): Promise<Uint8Array> {
-      if (this._state != CipherState.Block0Done) {
+      if (this._state !== CipherState.Block0Done) {
          throw new Error('Decipher block0 not complete');
       }
       this.finishedState();
@@ -253,7 +253,7 @@ export class DecipherV4 extends Decipher {
       }
 
       // This signals successful completion of block reads
-      if (header.byteLength == 0) {
+      if (header.byteLength === 0) {
          return true;
       }
       if (done || header.byteLength < cc.HEADER_BYTES_OLD) {
@@ -266,8 +266,8 @@ export class DecipherV4 extends Decipher {
       // Order must be invariant (extractor validates sizes and ranges)
       const mac = extractor.mac;
       const ver = extractor.ver;
-      if (ver != this.protocolVersion()) {
-         throw new Error('Invalid version of: ' + ver);
+      if (ver !== this.protocolVersion()) {
+         throw new Error(`Invalid version of: ${ver}`);
       }
       const payloadSize = extractor.size;
 
@@ -300,11 +300,11 @@ export class DecipherV4 extends Decipher {
             this._reader.cleanup();
          }
 
-         if (payload.byteLength != this._blockData.payloadSize) {
-            throw new Error('Cipher data length mismatch1: ' + payload.byteLength);
+         if (payload.byteLength !== this._blockData.payloadSize) {
+            throw new Error(`Cipher data length mismatch1: ${payload.byteLength}`);
          }
 
-         let extractor = new Extractor(payload);
+         const extractor = new Extractor(payload);
 
          // Order must be invariant
          this._blockData.alg = extractor.alg;
@@ -338,8 +338,8 @@ export class DecipherV4 extends Decipher {
             throw new Error('Invalid MAC error');
          }
 
-         let hint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
-         if (encryptedHint!.byteLength != 0) {
+         const hint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
+         if (encryptedHint!.byteLength !== 0) {
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(this._blockData.iv);
             const hintBytes = await Decipher._doDecrypt(this._blockData.alg, hk, hIV, encryptedHint);
             this._keyProvider.setHint(new TextDecoder().decode(hintBytes));
@@ -357,13 +357,13 @@ export class DecipherV4 extends Decipher {
 
    public override async decryptBlockN(): Promise<Uint8Array> {
       try {
-         if (this._state != CipherState.Block0Done) {
+         if (this._state !== CipherState.Block0Done) {
             throw new Error(`Decipher invalid state ${this._state}`);
          }
 
          // This does MAC check
          await this._decodeBlockN();
-         //@ts-ignore
+         //@ts-expect-error
          if (this._state === CipherState.Finished) {
             // this is the signal that decryption is complete
             return new Uint8Array(0);
@@ -413,11 +413,11 @@ export class DecipherV4 extends Decipher {
          // call and the next header will report done.
          const [payload] = await this._reader.readFill(new ArrayBuffer(this._blockData.payloadSize));
 
-         if (payload.byteLength != this._blockData.payloadSize) {
-            throw new Error('Cipher data length mismatch2: ' + payload.byteLength);
+         if (payload.byteLength !== this._blockData.payloadSize) {
+            throw new Error(`Cipher data length mismatch2: ${payload.byteLength}`);
          }
 
-         let extractor = new Extractor(payload);
+         const extractor = new Extractor(payload);
 
          // Order must be invariant
          this._blockData.alg = extractor.alg;

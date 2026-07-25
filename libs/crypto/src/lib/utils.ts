@@ -84,10 +84,10 @@ export function bufferToHexString(buffer: ArrayBuffer): string {
    and masking, so do this instead. Count is the number of bytes
    used to pack the number.  */
 export function numToBytes(num: number, count: number): Uint8Array<ArrayBuffer> {
-   if (count < 1 || num >= Math.pow(256, count)) {
+   if (count < 1 || num >= 256 ** count) {
       throw new Error(`Invalid arguments ${count} for ${num}`);
    }
-   let arr = new Uint8Array(count);
+   const arr = new Uint8Array(count);
    for (let i = 0; i < count; ++i) {
       arr[i] = num % 256;
       num = Math.floor(num / 256);
@@ -136,7 +136,7 @@ export function byteCount(num: number): number {
 }
 
 export function browserSupportsFilePickers(): boolean {
-   //@ts-ignore
+   //@ts-expect-error
    if (window.showSaveFilePicker) {
       return true;
    } else {
@@ -251,7 +251,7 @@ export class BYOBStreamReader {
       let streamDone = false;
 
       while (readBytes < targetBytes) {
-         let { done, value } = await reader.read(new Uint8Array(buffer, readBytes, targetBytes - readBytes));
+         const { done, value } = await reader.read(new Uint8Array(buffer, readBytes, targetBytes - readBytes));
 
          if (value) {
             readBytes += value.byteLength;
@@ -389,7 +389,7 @@ export function streamWriteBYOD(
 
 export async function selectCipherFile(): Promise<FileSystemFileHandle> {
    try {
-      //@ts-ignore
+      //@ts-expect-error
       const [fileHandle] = await window.showOpenFilePicker({
          id: 'quickcrypt_org',
          multiple: false,
@@ -417,7 +417,7 @@ export async function selectCipherFile(): Promise<FileSystemFileHandle> {
 
 export async function selectClearFile(): Promise<FileSystemFileHandle> {
    try {
-      //@ts-ignore
+      //@ts-expect-error
       const [fileHandle] = await window.showOpenFilePicker({
          id: 'quickcrypt_org',
          multiple: false,
@@ -431,7 +431,7 @@ export async function selectClearFile(): Promise<FileSystemFileHandle> {
 
 async function selectWriteableFileImpl(options: { [key: string]: any }): Promise<FileSystemFileHandle> {
    try {
-      //@ts-ignore
+      //@ts-expect-error
       return await window.showSaveFilePicker(options);
    } catch (err) {
       console.error(err);

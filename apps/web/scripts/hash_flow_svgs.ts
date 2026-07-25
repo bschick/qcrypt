@@ -38,8 +38,8 @@ const block = [
    END,
 ].join('\n');
 
-const escape = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const region = new RegExp(`${escape(BEGIN)}[\\s\\S]*?${escape(END)}`);
+const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const region = new RegExp(`${escapeRegex(BEGIN)}[\\s\\S]*?${escapeRegex(END)}`);
 
 let source = readFileSync(CONFIG, 'utf8');
 if (!region.test(source)) {

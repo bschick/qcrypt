@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { execSync, spawnSync, type SpawnSyncReturns } from 'child_process';
-import * as path from 'path';
-import * as fs from 'fs';
+import { execSync, spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 
 describe('CLI App', () => {
    const cliPath = path.resolve(__dirname, '../../../dist/cli/qcrypt.cjs');

@@ -49,7 +49,7 @@ export class FaqsComponent implements AfterViewInit {
    public dataSource: MatTableDataSource<FAQElement>;
 
    constructor() {
-      for (let [index, element] of ELEMENT_DATA.entries()) {
+      for (const [index, element] of ELEMENT_DATA.entries()) {
          element['position'] = index + 1;
       }
       this.dataSource = new MatTableDataSource(ELEMENT_DATA);
@@ -59,7 +59,7 @@ export class FaqsComponent implements AfterViewInit {
       const origFilterPredicate = this.dataSource.filterPredicate;
       this.dataSource.filterPredicate = (data: FAQElement, filter: string): boolean => {
          const elements = filter.split(',');
-         for (let element of elements) {
+         for (const element of elements) {
             if (element && origFilterPredicate(data, element.trim())) {
                return true;
             }

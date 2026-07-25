@@ -57,7 +57,7 @@ export class EditableComponent {
    }
 
    onFocusOut() {
-      if (!this.readonly && this._value != this.text) {
+      if (!this.readonly && this._value !== this.text) {
          this._value = this.text;
          this.valueChanged.emit(this);
       }

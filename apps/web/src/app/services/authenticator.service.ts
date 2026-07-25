@@ -350,8 +350,9 @@ export class AuthenticatorService {
          }
       }
 
+      let response: Response;
       try {
-         var response = await fetch(url, {
+         response = await fetch(url, {
             method: method,
             mode: 'cors',
             cache: 'no-store',
@@ -361,17 +362,17 @@ export class AuthenticatorService {
          });
       } catch (err) {
          console.error(err);
-         throw new Error('fetch error: ' + url);
+         throw new Error(`fetch error: ${url}`);
       }
 
       if (!response.ok) {
-         if (response.status == 401) {
+         if (response.status === 401) {
             // currently 401 only comes back when auth failed, so logout
             // make sure to pass false to deleteSession to avoid doFetch loop
             this.logout(false);
             throw new Error('logged out');
          } else {
-            throw new Error('response error: ' + (await response.text()));
+            throw new Error(`response error: ${await response.text()}`);
          }
       }
 
@@ -613,10 +614,10 @@ export class AuthenticatorService {
       userCredExpiry: string,
       version: number,
    ): VerifiedUserInfo {
-      if (!serverLogin.userId || serverLogin.userId.length == 0) {
+      if (!serverLogin.userId || serverLogin.userId.length === 0) {
          throw new Error('invalid user id');
       }
-      if (!serverLogin.pkId || serverLogin.pkId.length == 0) {
+      if (!serverLogin.pkId || serverLogin.pkId.length === 0) {
          throw new Error('invalid passkey id');
       }
       if (!userCredEnc) {
@@ -638,7 +639,7 @@ export class AuthenticatorService {
       };
       sessionStorage.setItem('sessionstate', JSON.stringify(sessionState));
 
-      if (!serverLogin.csrf || serverLogin.csrf.length == 0) {
+      if (!serverLogin.csrf || serverLogin.csrf.length === 0) {
          throw new Error('invalid csrf token');
       }
 
@@ -753,7 +754,7 @@ export class AuthenticatorService {
       if (!serverUser.userId || !serverUser.userName) {
          throw new Error('missing userId or userName');
       }
-      if (!serverUser.authenticators || serverUser.authenticators.length == 0) {
+      if (!serverUser.authenticators || serverUser.authenticators.length === 0) {
          throw new Error('missing authenticators');
       }
       if (serverUser.hasRecoveryId === undefined) {

@@ -98,10 +98,10 @@ export function knownLenTimingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
    and masking, so do this instead. Count is the number of bytes
    used to pack the number.  */
 export function numToBytes(num: number, count: number): Uint8Array<ArrayBuffer> {
-   if (count < 1 || num >= Math.pow(256, count)) {
+   if (count < 1 || num >= 256 ** count) {
       throw new Error(`Invalid arguments ${count} for ${num}`);
    }
-   let arr = new Uint8Array(count);
+   const arr = new Uint8Array(count);
    for (let i = 0; i < count; ++i) {
       arr[i] = num % 256;
       num = Math.floor(num / 256);

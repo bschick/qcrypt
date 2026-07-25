@@ -55,14 +55,8 @@ import {
    type InvitableItem,
 } from './models';
 
-import { ElectroError, type EntityItem, type EntityRecord } from 'electrodb';
-import {
-   KMSClient,
-   EncryptCommand,
-   DecryptCommand,
-   GenerateRandomCommand,
-   type EncryptCommandOutput,
-} from '@aws-sdk/client-kms';
+import { ElectroError } from 'electrodb';
+import { KMSClient, EncryptCommand, DecryptCommand, GenerateRandomCommand } from '@aws-sdk/client-kms';
 
 import { hkdfSync, randomInt, randomBytes, createHash } from 'node:crypto';
 import { setTimeout } from 'node:timers/promises';
@@ -202,7 +196,7 @@ export async function decryptField(
    });
 
    const result = await kmsClient.send(dec);
-   if (!result.Plaintext || result.Plaintext.byteLength != expectedBytes) {
+   if (!result.Plaintext || result.Plaintext.byteLength !== expectedBytes) {
       throw new Error('field decryption failed');
    }
 
@@ -511,12 +505,12 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
 
    const randData = result.Plaintext;
    let randOffset = 0;
-   if (!randData || randData.byteLength != rparams.NumberOfBytes) {
+   if (!randData || randData.byteLength !== rparams.NumberOfBytes) {
       throw new Error('GenerateRandomCommand failure');
    }
 
-   let userCredEnc: string | undefined = undefined;
-   let userCredEncBackup: string | undefined = undefined;
+   let userCredEnc: string | undefined;
+   let userCredEncBackup: string | undefined;
    let userCredPubKey: string;
 
    if (hasPrf) {
@@ -546,7 +540,7 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
          })
          .go();
 
-      if (!invitable || invitable.data.length == 0) {
+      if (!invitable || invitable.data.length === 0) {
          break;
       } else {
          invId = undefined;
@@ -795,12 +789,12 @@ async function postAuthOptions(httpDetails: HttpDetails): Promise<Response> {
    const { rpID, body } = httpDetails;
 
    let userId = UnknownUserId;
-   let unverifiedUserId = body?.userId;
+   const unverifiedUserId = body?.userId;
 
    // If no userid is provided, then we don't return allowed creds and
    // the user is forced to pick one on their own. That happens when the user is
    // linking a new device to a existing passkey or has fully signed out
-   let allowedCreds: PublicKeyCredentialDescriptorJSON[] | undefined = undefined;
+   let allowedCreds: PublicKeyCredentialDescriptorJSON[] | undefined;
 
    if (unverifiedUserId) {
       // To prevent callers from using this to guess userids, the "user not found"
@@ -901,7 +895,7 @@ async function postRegOptions(httpDetails: HttpDetails): Promise<Response> {
    const result = await kmsClient.send(rand);
 
    const randData = result.Plaintext;
-   if (!randData || randData.byteLength != rparams.NumberOfBytes) {
+   if (!randData || randData.byteLength !== rparams.NumberOfBytes) {
       throw new Error('GenerateRandomCommand failure');
    }
 
@@ -921,7 +915,7 @@ async function postRegOptions(httpDetails: HttpDetails): Promise<Response> {
          })
          .go({ attributes: ['userId'] });
 
-      if (!users || users.data.length == 0) {
+      if (!users || users.data.length === 0) {
          break;
       } else {
          uId = undefined;
@@ -1001,8 +995,8 @@ async function registrationOptions(
 
       // Let this happen async
       recordEvent(EventNames.RegOptions, unverifiedUser.userId);
-      //@ts-ignore
-      options.rp['origin'] = rpOrigin;
+      //@ts-expect-error
+      options.rp.origin = rpOrigin;
       return { content: options };
    } catch (err) {
       console.error(err);
@@ -1018,8 +1012,8 @@ async function makeLoginUserInfoResponse(
    const userInfo = await makeUserInfoResponse(verifiedUser, auths);
 
    try {
-      let userCred: string | undefined = undefined;
-      let passkeyUserCredEnc: string | undefined = undefined;
+      let userCred: string | undefined;
+      let passkeyUserCredEnc: string | undefined;
 
       if (includeUserCred) {
          // PRF accounts return the per-passkey userCred ciphertext
@@ -1102,7 +1096,7 @@ async function patchPasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUse
       throw new ParamError('description must more than 5 and less than 43 character');
    }
 
-   const credId = resources['credid'];
+   const credId = resources.credid;
    if (!validB64(credId)) {
       throw new ParamError('invalid credential id');
    }
@@ -1182,7 +1176,7 @@ async function patchUser(httpDetails: HttpDetails, verifiedUser?: VerifiedUserIt
    recordEvent(EventNames.PutUserName, verifiedUser.userId, verifiedUser.lastCredentialId);
 
    // return with full UserInfo to make client side refresh simpler
-   verifiedUser['userName'] = userName;
+   verifiedUser.userName = userName;
    const response = await makeUserInfoResponse(verifiedUser);
    return { content: response };
 }
@@ -1228,7 +1222,7 @@ async function putRecover2Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
    recordEvent(EventNames.PutRecover2Key, verifiedUser.userId, verifiedUser.lastCredentialId);
 
    // return with full UserInfo to make client side refresh simpler
-   verifiedUser['recoveryPubKey'] = recoveryPubKey!;
+   verifiedUser.recoveryPubKey = recoveryPubKey!;
    const response = await makeUserInfoResponse(verifiedUser);
    return { content: response };
 }
@@ -1242,7 +1236,7 @@ async function getInvitables(httpDetails: HttpDetails, verifiedUser?: VerifiedUs
       throw new AuthError();
    }
 
-   const invitableId = resources['invid'];
+   const invitableId = resources.invid;
    if (!validB64(invitableId)) {
       throw new ParamError('invalid invitable id');
    }
@@ -1286,7 +1280,7 @@ async function loadAuthenticators(
          consistent: consistent,
       });
 
-   if (!auths || auths.data.length == 0) {
+   if (!auths || auths.data.length === 0) {
       return [];
    }
 
@@ -1309,7 +1303,7 @@ async function loadAuthenticators(
       const getParams = aaguidsToGet.map((aaguid) => ({ aaguid: aaguid }));
       const aaguidsDetail = await AAGUIDs.get(getParams).go();
 
-      for (let aaguidDetail of aaguidsDetail.data) {
+      for (const aaguidDetail of aaguidsDetail.data) {
          aaguidCache.set(aaguidDetail.aaguid, {
             data: {
                lightIcon: aaguidDetail.lightIcon,
@@ -1344,7 +1338,7 @@ async function loadInvitables(verifiedUser: VerifiedUserItem, consistent: boolea
          consistent: consistent,
       });
 
-   if (!invitableItems || invitableItems.data.length == 0) {
+   if (!invitableItems || invitableItems.data.length === 0) {
       return [];
    }
 
@@ -1369,7 +1363,7 @@ async function deletePasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUs
    if (!verifiedUser) {
       throw new AuthError();
    }
-   const credId = resources['credid'];
+   const credId = resources.credid;
    if (!validB64(credId)) {
       throw new ParamError('invalid credential id');
    }
@@ -1395,7 +1389,7 @@ async function deletePasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUs
 
    // If there are no authenticators remaining, delete the
    // entire user identity and return unverified UserInfo object
-   if (auths.length == 0) {
+   if (auths.length === 0) {
       // Delete all invitables for this user
       const invitables = await Invitables.query
          .byUserId({
@@ -1451,7 +1445,7 @@ async function postRecover2Challenge(httpDetails: HttpDetails): Promise<Response
    const result = await kmsClient.send(rand);
    const challengeBytes = result.Plaintext;
 
-   if (!challengeBytes || challengeBytes.byteLength != cc.CHALLENGE_BYTES) {
+   if (!challengeBytes || challengeBytes.byteLength !== cc.CHALLENGE_BYTES) {
       throw new Error('GenerateRandomCommand failure');
    }
 
@@ -1519,7 +1513,7 @@ async function postRecover(httpDetails: HttpDetails): Promise<Response> {
    // will be left with no passkeys. Recovery can be run again to create a new passkey.
    // Could alternatively address this by marking passkey for deletion and cleaning
    // up after, but then recovery may be less certain in a security incident.
-   if (auths && auths.data.length != 0) {
+   if (auths && auths.data.length !== 0) {
       const deleted = await Authenticators.delete(auths.data).go();
       // log but continue... 'all_old' not needed because response is different
       if (!deleted) {
@@ -1614,7 +1608,7 @@ async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
    // will be left with no passkeys. Recovery can be run again to create a new passkey.
    // Could alternatively address this by marking passkey for deletion and cleaning
    // up after, but then recovery may be less certain in a security incident.
-   if (auths && auths.data.length != 0) {
+   if (auths && auths.data.length !== 0) {
       const deleted = await Authenticators.delete(auths.data).go();
       // log but continue... 'all_old' not needed because response is different
       if (!deleted) {
@@ -1874,7 +1868,7 @@ function makeResponse(content: string, status: number, cookie?: string): any {
       resp.headers['Set-Cookie'] = cookie;
    }
 
-   console.log(`status: ${status}, cookie: ${Boolean(cookie)} ${status != 200 ? ', error: ' + content : ''}`);
+   console.log(`status: ${status}, cookie: ${Boolean(cookie)} ${status !== 200 ? `, error: ${content}` : ''}`);
    return resp;
 }
 
@@ -1882,7 +1876,7 @@ export async function handler(event: any, context: any) {
    // Uncomment for temporary debuging only, since this logs user credentials
    // console.log(event);
 
-   let httpDetails: HttpDetails | undefined = undefined;
+   let httpDetails: HttpDetails | undefined;
 
    try {
       httpDetails = matchEvent(event, METHODMAP);
@@ -1896,7 +1890,7 @@ export async function handler(event: any, context: any) {
          if (!httpDetails.cookie) {
             throw new AuthError();
          }
-         const headerCsrf = event['headers']['x-csrf-token'];
+         const headerCsrf = event.headers['x-csrf-token'];
 
          // these throw an exception if cookie or headerCsrf is invalid
          verifiedUser = await verifyCookie(httpDetails.cookie, httpDetails.rpID);
@@ -1905,26 +1899,27 @@ export async function handler(event: any, context: any) {
       }
 
       if (httpDetails.version === INTERNAL_VERSION) {
-         let dbytes: Uint8Array | undefined = undefined;
+         let dbytes: Uint8Array | undefined;
          try {
             dbytes = await decryptField(httpDetails.params.testkey, { purpose: 'internal' }, INTERNAL_PHRASE.length);
-         } finally {
-            if (!dbytes || new TextDecoder().decode(dbytes) !== INTERNAL_PHRASE) {
-               throw new AuthError();
-            }
+         } catch {
+            throw new AuthError();
+         }
+         if (!dbytes || new TextDecoder().decode(dbytes) !== INTERNAL_PHRASE) {
+            throw new AuthError();
          }
       }
 
-      let response = await httpDetails.handler(httpDetails, verifiedUser);
+      const response = await httpDetails.handler(httpDetails, verifiedUser);
 
       let respCookie: string | undefined;
       if (response.startSession) {
          respCookie = await createCookie(response.startSession, httpDetails.rpID);
-         response.content['csrf'] = base64UrlEncode(await createCsrf(response.startSession));
+         response.content.csrf = base64UrlEncode(await createCsrf(response.startSession));
       } else if (response.endSession) {
          respCookie = killCookie();
       } else if (response.returnCsrf) {
-         response.content['csrf'] = base64UrlEncode(await createCsrf(verifiedUser!));
+         response.content.csrf = base64UrlEncode(await createCsrf(verifiedUser!));
       }
       return makeResponse(JSON.stringify(response.content), 200, respCookie);
    } catch (err) {

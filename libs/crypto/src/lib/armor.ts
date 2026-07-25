@@ -28,32 +28,33 @@ export function makeCipherArmor(
    host?: string,
 ): string {
    // Rebuild object to control ordering (better way to do this?)
-   let result: { [key: string]: string | number } = {};
+   const result: { [key: string]: string | number } = {};
    result['ct'] = bytesToBase64(cipherData);
 
-   if (format == 'link') {
+   if (format === 'link') {
       if (!host) {
          throw new Error('host is required for link format');
       }
       const ctParam = encodeURIComponent(JSON.stringify(result));
-      return host + '?cipherarmor=' + ctParam;
+      return `${host}?cipherarmor=${ctParam}`;
    } else {
       if (reminder) {
          result['reminder'] = 'decrypt with quick crypt';
       }
-      return JSON.stringify(result, null, format == 'indent' ? 3 : 0);
+      return JSON.stringify(result, null, format === 'indent' ? 3 : 0);
    }
 }
 
 export function parseCipherArmor(cipherArmor: string): Uint8Array<ArrayBuffer> {
    // cipherArmor is untrusted and parsed unbounded; a bad value can exhaust local resources
    // (browser tab or CLI process), so callers should enforce size limits at input boundaries.
+   let jsonParts: any;
    try {
       let trimmed = cipherArmor.trim();
       if (trimmed.startsWith('https://')) {
          const ct = new URL(trimmed).searchParams.get('cipherarmor');
          if (ct == null) {
-            let err = Error();
+            const err = Error();
             err.name = 'Url missing cipherarmor';
             throw err;
          }
@@ -71,11 +72,11 @@ export function parseCipherArmor(cipherArmor: string): Uint8Array<ArrayBuffer> {
       if (!trimmed.startsWith('{')) {
          trimmed = `{"ct":"${trimmed.replace(/[''"'"‚„\n\r\t\\ ]/g, '')}"}`;
       }
-      var jsonParts = JSON.parse(trimmed);
+      jsonParts = JSON.parse(trimmed);
    } catch (err) {
       console.error(err);
       if (err instanceof Error) {
-         throw new Error('Cipher armor text not formatted correctly. ' + err.name);
+         throw new Error(`Cipher armor text not formatted correctly. ${err.name}`);
       }
    }
    if (!('ct' in jsonParts)) {

@@ -55,10 +55,10 @@ async function _encryptStreamImpl(
    lp: number,
 ): Promise<ReadableStream<Uint8Array>> {
    if (lp < 1 || lp > econtext.algs.length) {
-      throw new Error('Invalid loop of: ' + lp);
+      throw new Error(`Invalid loop of: ${lp}`);
    }
    if (econtext.algs.length > cc.LP_MAX) {
-      throw new Error('Invalid loop end of: ' + econtext.algs.length);
+      throw new Error(`Invalid loop end of: ${econtext.algs.length}`);
    }
 
    const validatedAlg = Ciphers.validateAlg(econtext.algs[lp - 1]);
@@ -75,7 +75,7 @@ async function _encryptStreamImpl(
          econtext.readOpts,
       );
 
-      let cipherStream = new ReadableStream({
+      const cipherStream = new ReadableStream({
          type: browserSupportsBytesStream() ? 'bytes' : undefined,
 
          async pull(controller) {
@@ -84,7 +84,7 @@ async function _encryptStreamImpl(
                const cipherData = await encipher.encryptBlock();
 
                if (cipherData.parts.length) {
-                  for (let data of cipherData.parts) {
+                  for (const data of cipherData.parts) {
                      streamWriteBYOD(controller, data);
                   }
                }
@@ -92,7 +92,7 @@ async function _encryptStreamImpl(
                if (cipherData.state === CipherState.Finished) {
                   controller.close();
                   // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
-                  //@ts-ignore
+                  //@ts-expect-error
                   controller.byobRequest?.respond(0);
                }
             } catch (err) {
@@ -161,10 +161,10 @@ async function _decryptStreamImpl(
 
       if (cdInfo.lp < 1 || cdInfo.lp > cc.LP_MAX) {
          decipher.errorState();
-         throw new Error('Invalid loop of: ' + cdInfo.lp);
+         throw new Error(`Invalid loop of: ${cdInfo.lp}`);
       }
 
-      let readableStream = new ReadableStream({
+      const readableStream = new ReadableStream({
          type: browserSupportsBytesStream() ? 'bytes' : undefined,
 
          async pull(controller) {
@@ -178,7 +178,7 @@ async function _decryptStreamImpl(
                   // Reached the end of the stream peacefully...
                   controller.close();
                   // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
-                  //@ts-ignore
+                  //@ts-expect-error
                   controller.byobRequest?.respond(0);
                }
             } catch (err) {

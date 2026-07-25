@@ -90,7 +90,9 @@ export async function encryptOneLoop(
       }
       // CipherState.Finished is the terminal state. Use the numeric form to
       // avoid importing the enum (see ciphers-current.ts).
-      if (block.state === 4 /* CipherState.Finished */) break;
+      if (block.state === 4 /* CipherState.Finished */) {
+         break;
+      }
    }
    return concatArrays(parts);
 }

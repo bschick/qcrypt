@@ -57,7 +57,7 @@ export class WelcomeComponent {
          this.error = '';
          this.showProgress = true;
          await this.authSvc.createSession();
-         this.router.navigateByUrl('/' + paramsToQueryString());
+         this.router.navigateByUrl(`/${paramsToQueryString()}`);
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {

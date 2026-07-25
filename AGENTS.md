@@ -94,6 +94,28 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
 **Commit after a rebuild:** the regenerated `libs/crypto/src/lib/crux/{qc_crux.js,qc_crux.d.ts,wasm.ts}`, plus `libs/crypto/crux/Cargo.lock` if dependency versions changed. **Do not commit** `libs/crypto/crux/pkg/` or `libs/crypto/crux/target/` (gitignored build outputs).
 
+### Code Quality (Biome)
+
+Formatting and linting use [Biome](https://biomejs.dev) (config: `biome.json`). Biome covers **TS/JS/JSON only** — it does **not** format SCSS or Angular HTML templates (nothing in this repo does), and the e2e specs keep their own ESLint check (`lint:e2e`).
+
+| What | pnpm script | Notes |
+|------|------------|-------|
+| Check format + lint (read-only) | `pnpm check` | `biome check .`; exits non-zero only on **errors** — warnings/infos never fail |
+| Apply format + safe fixes | `pnpm check:fix` | `biome check --write .`; safe fixes only (unsafe fixes need an explicit `--write --unsafe`) |
+
+`pnpm check` gates `build:web`, `build:web:prod`, and `build:server` — it runs first, so a format or lint error blocks the build.
+
+**Style:** 3-space indent, 120 columns, single quotes, semicolons, trailing commas. JSON stays 2-space (nx/ng-managed). Excluded: `**/*.html`, `**/*.svg`, `vendor/`, `apps/server/assets/`, generated crux files.
+
+**Rules deliberately disabled** (they fight this codebase's patterns — do not re-enable without cause):
+
+| Rule | Why off |
+|------|---------|
+| `useImportType` | Angular constructor DI needs value imports; under `verbatimModuleSyntax` Biome's conversion erases injection tokens (`NG2003`) |
+| `noTsIgnore` | Config-dependent suppressions (e.g. Node vs DOM `setInterval`) require `@ts-ignore`; `@ts-expect-error` errors when the suppressed error is absent in the current config |
+| `useArrayLiterals` | `new Array()` → `[]` infers `never[]` on untyped class fields |
+| `useOptionalChain`, `noNonNullAssertion` | House style: explicit `if` guards and deliberate `!` |
+
 ### Serve Commands
 
 | What | pnpm script |

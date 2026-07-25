@@ -116,7 +116,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       const userInfo = this.authSvc.userInfo();
       this.passKeys = userInfo ? userInfo.authenticators : [];
 
-      if (this.passKeys.length == 1) {
+      if (this.passKeys.length === 1) {
          pkState = ConfirmDialog.LAST_PK;
       } else if (this.isCurrentPk(passkey.credentialId)) {
          pkState = ConfirmDialog.ACTIVE_PK;
@@ -130,10 +130,10 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       });
 
       dialogRef.afterClosed().subscribe(async (result: string) => {
-         if (result == 'Yes') {
+         if (result === 'Yes') {
             try {
                const remainingAuths = await this.authSvc.deletePasskey(passkey.credentialId);
-               if (remainingAuths == 0) {
+               if (remainingAuths === 0) {
                   this.router.navigateByUrl('/welcome');
                }
             } catch (err) {
@@ -276,7 +276,7 @@ export class ConfirmDialog {
    }
 
    onYesClicked() {
-      if (this.pkState != this.LAST_PK || (this.confirmInput.value && this.confirmInput.value === this.userName)) {
+      if (this.pkState !== this.LAST_PK || (this.confirmInput.value && this.confirmInput.value === this.userName)) {
          this.dialogRef.close('Yes');
       } else {
          try {

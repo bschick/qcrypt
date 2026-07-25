@@ -20,8 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { entropyToMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
@@ -33,7 +33,9 @@ function base64ToBytes(base64: string): Uint8Array {
 
 function base64UrlToBase64(base64Url: string): string {
    let b64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-   while (b64.length % 4 !== 0) b64 += '=';
+   while (b64.length % 4 !== 0) {
+      b64 += '=';
+   }
    return b64;
 }
 
@@ -52,7 +54,9 @@ function findCredentialValues(userName: string): any {
    }
 
    for (const file of fs.readdirSync(credsDir)) {
-      if (!file.endsWith('.json')) continue;
+      if (!file.endsWith('.json')) {
+         continue;
+      }
       const data = JSON.parse(fs.readFileSync(path.join(credsDir, file), 'utf8'));
       if (data.user?.name === userName) {
          return data.publicKeyCredentialSource;

@@ -1,5 +1,4 @@
-import * as fs from 'fs';
-import * as url from 'url';
+import * as fs from 'node:fs';
 import * as esbuild from 'esbuild';
 
 const importMetaPlugin = {

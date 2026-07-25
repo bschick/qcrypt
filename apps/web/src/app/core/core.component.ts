@@ -186,7 +186,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    ngAfterViewInit() {
       if (this.authSvc.hasSession()) {
          this.showTextFromParams();
-         if (localStorage.getItem(this.authSvc.userId + 'welcomed') != 'yup') {
+         if (localStorage.getItem(`${this.authSvc.userId}welcomed`) !== 'yup') {
             setTimeout(() => {
                this.welcomed = false;
                this.bubbleTip1.show();
@@ -248,7 +248,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.router.navigateByUrl('/welcome');
          }
       } else if (data.event === AuthEvent.Delete) {
-         localStorage.removeItem(data.userId + 'welcomed');
+         localStorage.removeItem(`${data.userId}welcomed`);
          this.options.nukeAllOptions();
       }
    }
@@ -291,7 +291,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.pwdCached) {
          result = Math.max(0, Math.round((this.cacheTimeout - Date.now()) / 1000));
       }
-      if (result != this.secondsRemaining) {
+      if (result !== this.secondsRemaining) {
          // Do this to avoid setting a template value after it has been checked,
          // which triggers an ExpressionChangedAfterItHasBeenCheckedError
          this.secondsRemaining = result;
@@ -300,7 +300,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    restartTimer() {
-      if (this.intervalId != 0) {
+      if (this.intervalId !== 0) {
          clearInterval(this.intervalId);
          this.intervalId = 0;
       }
@@ -322,7 +322,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.cachedHint.fill(0);
          this.cachedHint = undefined;
       }
-      if (this.intervalId != 0) {
+      if (this.intervalId !== 0) {
          clearInterval(this.intervalId);
          this.intervalId = 0;
       }
@@ -341,14 +341,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    onDraggerMouseMove(event: MouseEvent) {
       if (this.mouseDown) {
-         var pointerRelativeXpos = event.clientX - this.inputArea.nativeElement.offsetLeft;
+         const pointerRelativeXpos = event.clientX - this.inputArea.nativeElement.offsetLeft;
          const minWidth = 200;
 
          const areaWidth = this.inputArea.nativeElement.offsetWidth - 16; // 16 for the size of the drag area
          //      const clearWidth = this.clearField.nativeElement.offsetWidth;
          //      const cipherWidth = this.cipherField.nativeElement.offsetWidth;
 
-         var newclearWidth = Math.max(minWidth, pointerRelativeXpos - 8); // 8 to center in drag area
+         const newclearWidth = Math.max(minWidth, pointerRelativeXpos - 8); // 8 to center in drag area
 
          this.clearField.nativeElement.style.flexGrow = newclearWidth / areaWidth;
          this.cipherField.nativeElement.style.flexGrow = (areaWidth - newclearWidth) / areaWidth;
@@ -455,7 +455,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          // This can run outside of Angular's zone because the password callback
          // comes from within streem connections
          this.ngZone.run(() => {
-            let dialogRef = this.dialog.open(PasswordDialog, {
+            const dialogRef = this.dialog.open(PasswordDialog, {
                data: {
                   hint: cdInfo.hint,
                   encrypting: encrypting,
@@ -478,7 +478,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                   reject(new ProcessCancelled());
                } else {
                   this.clearPassword();
-                  if (this.options.cacheTime > 0 && result[0] && cdInfo.lpEnd == 1) {
+                  if (this.options.cacheTime > 0 && result[0] && cdInfo.lpEnd === 1) {
                      const encoder = new TextEncoder();
                      this.cachedPassword = encoder.encode(result[0]);
                      this.cachedHint = encoder.encode(result[1]);
@@ -495,15 +495,15 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    setCipherFile(cipherFile: File, saved: boolean = false) {
       this.onClearCipher();
       this.cipherFile = cipherFile;
-      let msg = saved ? 'file saved and ' : '';
-      this.showCipherFile(msg + 'selected for decryption', saved, cipherFile.name);
+      const msg = saved ? 'file saved and ' : '';
+      this.showCipherFile(`${msg}selected for decryption`, saved, cipherFile.name);
    }
 
    setClearFile(clearFile: File, saved: boolean = false) {
       this.onClearClear();
       this.clearFile = clearFile;
-      let msg = saved ? 'file saved and ' : '';
-      this.showClearFile(msg + 'selected for encryption', saved, clearFile.name);
+      const msg = saved ? 'file saved and ' : '';
+      this.showClearFile(`${msg}selected for encryption`, saved, clearFile.name);
 
       if (!this.welcomed) {
          this.bubbleTip1.hide();
@@ -556,7 +556,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
             // it worked, so stop showing tips (setting this before next loop)
             this.welcomed = true;
-            localStorage.setItem(this.authSvc.userId + 'welcomed', 'yup');
+            localStorage.setItem(`${this.authSvc.userId}welcomed`, 'yup');
          }
 
          /* A bit torn about always clearing this when not caching...
@@ -641,7 +641,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
                const response = new Response(cipherStream);
                const blob = await response.blob();
-               this.fileDownload(baseName + '.qq', blob);
+               this.fileDownload(`${baseName}.qq`, blob);
                this.showCipherFile('Encrypted file will be in your downloads folder', true);
                this.toastMessage('Data encrypted');
             }
@@ -649,7 +649,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
          // If the user got this far, stop showing tips
          this.welcomed = true;
-         localStorage.setItem(this.authSvc.userId + 'welcomed', 'yup');
+         localStorage.setItem(`${this.authSvc.userId}welcomed`, 'yup');
       } catch (something) {
          if (!ProcessCancelled.isProcessCancelled(something)) {
             console.error(something);
@@ -883,14 +883,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.clearMsg += safeMsg;
       }
       this.clearMsgClass = cls;
-      this.clearLabel = 'Clear Text ' + label;
+      this.clearLabel = `Clear Text ${label}`;
    }
 
    showClearText(clearText: string, extra: string = ''): void {
       this.clearText = clearText;
       this.clearFile = undefined;
       this.clearMsg = '';
-      this.clearLabel = 'Clear Text ' + extra;
+      this.clearLabel = `Clear Text ${extra}`;
    }
 
    showClearTextAndTime(clearText: string): void {
@@ -920,7 +920,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.cipherMsg += safeMsg;
       }
       this.cipherMsgClass = cls;
-      this.cipherLabel = 'Cipher Armor ' + label;
+      this.cipherLabel = `Cipher Armor ${label}`;
    }
 
    showCipherData(cipherData: Uint8Array, extra: string = ''): void {
@@ -928,7 +928,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cipherArmor = cipherArmor;
       this.cipherFile = undefined;
       this.cipherMsg = '';
-      this.cipherLabel = 'Cipher Armor ' + extra;
+      this.cipherLabel = `Cipher Armor ${extra}`;
    }
 
    showCipherDataAndTime(cipherData: Uint8Array): void {
@@ -1007,7 +1007,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    fileDownload(filename: string, blob: Blob): void {
-      let alink = document.createElement('a');
+      const alink = document.createElement('a');
       alink.style.display = 'none';
       document.body.appendChild(alink);
 

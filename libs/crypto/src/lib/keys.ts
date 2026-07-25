@@ -74,7 +74,7 @@ export abstract class BaseKeyProvider implements KeyProvider {
          customAd = base64ToBytes(customAd);
       }
       if (customAd && customAd.byteLength > cc.ADDIONTAL_DATA_MAX_BYTES) {
-         throw new Error('Custom AD too long: ' + customAd.byteLength + ' bytes');
+         throw new Error(`Custom AD too long: ${customAd.byteLength} bytes`);
       }
       this._customAd = customAd;
    }
@@ -88,19 +88,19 @@ export abstract class BaseKeyProvider implements KeyProvider {
          throw new Error('CipherDataInfo can only be set once');
       }
       if (!Ciphers.validateAlg(cdInfo.alg)) {
-         throw new Error('Invalid alg type of: ' + cdInfo.alg);
+         throw new Error(`Invalid alg type of: ${cdInfo.alg}`);
       }
       if (cdInfo.ic !== 0 && (cdInfo.ic < cc.ICOUNT_MIN || cdInfo.ic > cc.ICOUNT_MAX)) {
-         throw new Error('Invalid ic of: ' + cdInfo.ic);
+         throw new Error(`Invalid ic of: ${cdInfo.ic}`);
       }
       if (cdInfo.lpEnd < 1 || cdInfo.lpEnd > cc.LP_MAX) {
-         throw new Error('Invalid lpEnd: ' + cdInfo.lpEnd);
+         throw new Error(`Invalid lpEnd: ${cdInfo.lpEnd}`);
       }
       if (cdInfo.lp < 1 || cdInfo.lp > cdInfo.lpEnd) {
-         throw new Error('Invalid lp: ' + cdInfo.lp);
+         throw new Error(`Invalid lp: ${cdInfo.lp}`);
       }
-      if (cdInfo.slt.byteLength != cc.SLT_BYTES) {
-         throw new Error('Invalid salt length of: ' + cdInfo.slt.byteLength);
+      if (cdInfo.slt.byteLength !== cc.SLT_BYTES) {
+         throw new Error(`Invalid salt length of: ${cdInfo.slt.byteLength}`);
       }
       this._cdInfo = { ...cdInfo, hint: cdInfo.hint ?? '' };
    }
@@ -110,7 +110,7 @@ export abstract class BaseKeyProvider implements KeyProvider {
          throw new Error('CipherDataInfo not set');
       }
       if (hint && hint.length > cc.HINT_MAX_LEN) {
-         throw new Error('Hint length exceeds: ' + cc.HINT_MAX_LEN);
+         throw new Error(`Hint length exceeds: ${cc.HINT_MAX_LEN}`);
       }
       this._cdInfo.hint = hint;
    }
@@ -167,7 +167,7 @@ export abstract class BaseKeyProvider implements KeyProvider {
    public async getBlockCipherKey(blockNum: number): Promise<Uint8Array<ArrayBuffer>> {
       // expect blockNum >= 1
       if (blockNum < 1 || blockNum > cc.BLOCKS_MAX) {
-         throw new Error('Invalid block number: ' + blockNum);
+         throw new Error(`Invalid block number: ${blockNum}`);
       }
       if (!this._ek) {
          throw new Error('Invalid state, getCipherKey() must be called first');
@@ -198,7 +198,7 @@ export abstract class BaseKeyProvider implements KeyProvider {
       baseIV: Uint8Array<ArrayBuffer>,
    ): Promise<[Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>]> {
       if (baseIV.byteLength !== Ciphers.algIVByteLength(this._cdInfo!.alg)) {
-         throw new Error('Invalid base IV length: ' + baseIV.byteLength);
+         throw new Error(`Invalid base IV length: ${baseIV.byteLength}`);
       }
 
       // cache hint key primarily to overwrite at purge
@@ -254,8 +254,8 @@ export abstract class BasePWDKeyProvider extends BaseKeyProvider {
       pwdProvider: PWDProvider | undefined = undefined,
       customAd: Uint8Array<ArrayBuffer> | string | undefined = undefined,
    ) {
-      if (userCred.byteLength != cc.USERCRED_BYTES) {
-         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
+      if (userCred.byteLength !== cc.USERCRED_BYTES) {
+         throw new Error(`Invalid userCred length of: ${userCred.byteLength}`);
       }
       // To detect use-after-purge or uninitialized buffers, reject all-zero values
       // and accept the exceedingly rare error from a randomly generated all-zero buffer.
@@ -282,7 +282,7 @@ export abstract class BasePWDKeyProvider extends BaseKeyProvider {
          throw new Error('Invalid CipherDataInfo');
       }
       if (this._cdInfo.ic < cc.ICOUNT_MIN || this._cdInfo.ic > cc.ICOUNT_MAX) {
-         throw new Error('Invalid ic of: ' + this._cdInfo.ic);
+         throw new Error(`Invalid ic of: ${this._cdInfo.ic}`);
       }
 
       const ekMaterial = await crypto.subtle.importKey('raw', rawMaterial, 'PBKDF2', false, [
@@ -336,12 +336,12 @@ export class PWDKeyProvider implements KeyProvider {
          customAd = base64ToBytes(customAd);
       }
       if (customAd && customAd.byteLength > cc.ADDIONTAL_DATA_MAX_BYTES) {
-         throw new Error('Custom AD too long: ' + customAd.byteLength + ' bytes');
+         throw new Error(`Custom AD too long: ${customAd.byteLength} bytes`);
       }
       this._customAd = customAd;
 
-      if (userCred.byteLength != cc.USERCRED_BYTES) {
-         throw new Error('Invalid userCred length of: ' + userCred.byteLength);
+      if (userCred.byteLength !== cc.USERCRED_BYTES) {
+         throw new Error(`Invalid userCred length of: ${userCred.byteLength}`);
       }
       // To detect use-after-purge or uninitialized buffers reject all-zero values,
       // and accept the exceedingly rare error from a randomly generated all-zero buffer.
@@ -474,8 +474,8 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
     * because the buffer will be overwritten. Other values are just referenced.
     */
    constructor(masterKey: Uint8Array<ArrayBuffer>, customAd: Uint8Array<ArrayBuffer> | string | undefined = undefined) {
-      if (masterKey.byteLength != cc.KEY_BYTES) {
-         throw new Error('Invalid masterKey length of: ' + masterKey.byteLength);
+      if (masterKey.byteLength !== cc.KEY_BYTES) {
+         throw new Error(`Invalid masterKey length of: ${masterKey.byteLength}`);
       }
       // To detect use-after-purge or uninitialized buffers, reject all-zero values
       // and accept the exceedingly rare error from a randomly generated all-zero buffer.
@@ -568,20 +568,20 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       extraContext: Uint8Array<ArrayBuffer>[] = [],
    ): Uint8Array<ArrayBuffer> {
       if (!master || master.byteLength < cc.IV_MIN_BYTES) {
-         throw new Error('Invalid master key length of: ' + master?.byteLength);
+         throw new Error(`Invalid master key length of: ${master?.byteLength}`);
       }
       if (!this._cdInfo) {
          throw new Error('Invalid state for key derivation');
       }
       const sodium = getSodium();
-      if (!purpose || purpose.length != sodium.crypto_kdf_CONTEXTBYTES) {
-         throw new Error('Invalid purpose length of: ' + purpose?.length);
+      if (!purpose || purpose.length !== sodium.crypto_kdf_CONTEXTBYTES) {
+         throw new Error(`Invalid purpose length of: ${purpose?.length}`);
       }
-      if (!this._cdInfo.slt || this._cdInfo.slt.byteLength != cc.SLT_BYTES) {
-         throw new Error('Invalid salt length of: ' + this._cdInfo.slt?.byteLength);
+      if (!this._cdInfo.slt || this._cdInfo.slt.byteLength !== cc.SLT_BYTES) {
+         throw new Error(`Invalid salt length of: ${this._cdInfo.slt?.byteLength}`);
       }
       if (this._cdInfo.ver < cc.VERSION7 || this._cdInfo.ver > cc.CURRENT_VERSION) {
-         throw new Error('Invalid version: ' + this._cdInfo.ver);
+         throw new Error(`Invalid version: ${this._cdInfo.ver}`);
       }
       if (this._cdInfo.ic) {
          throw new Error('Invalid ic, not used by masterkey keyprovider');
@@ -664,14 +664,14 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
          throw new Error('User credential not set');
       }
       if (this._cdInfo.ver !== cc.VERSION7) {
-         throw new Error('Invalid version: ' + this._cdInfo.ver);
+         throw new Error(`Invalid version: ${this._cdInfo.ver}`);
       }
 
       const [pwd, hint] = Array.isArray(this._pwdProvider)
          ? this._pwdProvider
          : await this._pwdProvider(this._cdInfo, encrypting);
       if (hint && hint.length > cc.HINT_MAX_LEN) {
-         throw new Error('Hint length exceeds: ' + cc.HINT_MAX_LEN);
+         throw new Error(`Hint length exceeds: ${cc.HINT_MAX_LEN}`);
       }
       if (!pwd) {
          throw new Error('Missing password');
@@ -725,19 +725,19 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       extraContext: Uint8Array<ArrayBuffer>[] = [],
    ): Uint8Array<ArrayBuffer> {
       if (!master || master.byteLength < cc.IV_MIN_BYTES) {
-         throw new Error('Invalid master key length of: ' + master?.byteLength);
+         throw new Error(`Invalid master key length of: ${master?.byteLength}`);
       }
       if (!this._cdInfo || !this._cdInfo.slt) {
          throw new Error('Invalid state for key derivation');
       }
-      if (!purpose || purpose.length != 8) {
-         throw new Error('Invalid purpose length of: ' + purpose?.length);
+      if (!purpose || purpose.length !== 8) {
+         throw new Error(`Invalid purpose length of: ${purpose?.length}`);
       }
-      if (this._cdInfo.slt.byteLength != cc.SLT_BYTES) {
-         throw new Error('Invalid salt length of: ' + this._cdInfo.slt.byteLength);
+      if (this._cdInfo.slt.byteLength !== cc.SLT_BYTES) {
+         throw new Error(`Invalid salt length of: ${this._cdInfo.slt.byteLength}`);
       }
       if (this._cdInfo.ver !== cc.VERSION7) {
-         throw new Error('Invalid version: ' + this._cdInfo.ver);
+         throw new Error(`Invalid version: ${this._cdInfo.ver}`);
       }
 
       // because crypto_kdf_derive_from_key does not take a salt, we first merge salt,
@@ -789,14 +789,14 @@ export class PWDKeyProviderV6 extends BasePWDKeyProvider {
          throw new Error('User credential not set');
       }
       if (this._cdInfo.ver !== cc.VERSION6) {
-         throw new Error('Invalid version: ' + this._cdInfo.ver);
+         throw new Error(`Invalid version: ${this._cdInfo.ver}`);
       }
 
       const [pwd, hint] = Array.isArray(this._pwdProvider)
          ? this._pwdProvider
          : await this._pwdProvider(this._cdInfo, encrypting);
       if (hint && hint.length > cc.HINT_MAX_LEN) {
-         throw new Error('Hint length exceeds: ' + cc.HINT_MAX_LEN);
+         throw new Error(`Hint length exceeds: ${cc.HINT_MAX_LEN}`);
       }
       if (!pwd) {
          throw new Error('Missing password');
@@ -838,13 +838,13 @@ export class PWDKeyProviderV6 extends BasePWDKeyProvider {
 
    private _genDerivedKey(master: Uint8Array<ArrayBuffer>, purpose: string, instance: number): Uint8Array<ArrayBuffer> {
       if (!master || master.byteLength < cc.IV_MIN_BYTES) {
-         throw new Error('Invalid master key length of: ' + master?.byteLength);
+         throw new Error(`Invalid master key length of: ${master?.byteLength}`);
       }
       if (!this._cdInfo || !this._cdInfo.slt) {
          throw new Error('Invalid state for key derivation');
       }
-      if (!purpose || purpose.length != 8) {
-         throw new Error('Invalid purpose length of: ' + purpose?.length);
+      if (!purpose || purpose.length !== 8) {
+         throw new Error(`Invalid purpose length of: ${purpose?.length}`);
       }
 
       const sodium = getSodium();
@@ -888,14 +888,14 @@ export class PWDKeyProviderLegacy extends BasePWDKeyProvider {
          throw new Error('User credential not set');
       }
       if (![cc.VERSION5, cc.VERSION4, cc.VERSION1].includes(this._cdInfo.ver)) {
-         throw new Error('Invalid version: ' + this._cdInfo.ver);
+         throw new Error(`Invalid version: ${this._cdInfo.ver}`);
       }
 
       const [pwd, hint] = Array.isArray(this._pwdProvider)
          ? this._pwdProvider
          : await this._pwdProvider(this._cdInfo, encrypting);
       if (hint && hint.length > cc.HINT_MAX_LEN) {
-         throw new Error('Hint length exceeds: ' + cc.HINT_MAX_LEN);
+         throw new Error(`Hint length exceeds: ${cc.HINT_MAX_LEN}`);
       }
       if (!pwd) {
          throw new Error('Missing password');
@@ -919,7 +919,7 @@ export class PWDKeyProviderLegacy extends BasePWDKeyProvider {
          throw new Error('User credential not set');
       }
       if (![cc.VERSION5, cc.VERSION4, cc.VERSION1].includes(this._cdInfo.ver)) {
-         throw new Error('Invalid version: ' + this._cdInfo.ver);
+         throw new Error(`Invalid version: ${this._cdInfo.ver}`);
       }
 
       const skMaterial = await crypto.subtle.importKey('raw', this._userCred, 'HKDF', false, [
@@ -961,7 +961,7 @@ export class PWDKeyProviderLegacy extends BasePWDKeyProvider {
          throw new Error('User credential not set');
       }
       if (![cc.VERSION5, cc.VERSION4, cc.VERSION1].includes(this._cdInfo.ver)) {
-         throw new Error('Invalid version: ' + this._cdInfo.ver);
+         throw new Error(`Invalid version: ${this._cdInfo.ver}`);
       }
 
       const hkMaterial = await crypto.subtle.importKey('raw', this._userCred, 'HKDF', false, [

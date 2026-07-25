@@ -20,16 +20,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import * as cc from './consts';
 import type { HttpDetails } from './urls';
 import { Users, Authenticators, AAGUIDs, Invitables, type VerifiedUserItem } from './models';
 
-import { darkFileDefault, decryptField, kmsClient, lightFileDefault, type Response } from './server';
+import { darkFileDefault, lightFileDefault, type Response } from './server';
 
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
-import { base64UrlEncode, isReservedTestUserName } from './utils';
+import { isReservedTestUserName } from './utils';
 
 export async function postLoadAAGUIDs(httpDetails: HttpDetails): Promise<Response> {
    try {
@@ -41,14 +40,14 @@ export async function postLoadAAGUIDs(httpDetails: HttpDetails): Promise<Respons
 
       let count = 0;
       let batch = [];
-      for (let key of keys) {
+      for (const key of keys) {
          const details = aaguids[key];
 
          batch.push({
             aaguid: key,
-            name: details['name'],
-            lightIcon: details['light_file'] ?? lightFileDefault,
-            darkIcon: details['dark_file'] ?? darkFileDefault,
+            name: details.name,
+            lightIcon: details.light_file ?? lightFileDefault,
+            darkIcon: details.dark_file ?? darkFileDefault,
          });
 
          if (++count % 10 === 0) {
@@ -78,7 +77,7 @@ export async function postConsistency(
    const minAgeMs = 6 * 60 * 60 * 1000;
    const minCreated = Date.now() - minAgeMs;
 
-   if (!params['tables'] || params.tables.includes('authenticators')) {
+   if (!params.tables || params.tables.includes('authenticators')) {
       const authAttrs = ['userId', 'credentialId', 'createdAt'] as const;
       let auths = await Authenticators.scan.go({
          attributes: authAttrs,
@@ -88,12 +87,12 @@ export async function postConsistency(
       let total = 0;
       let leaked = 0;
       let deleted = 0;
-      let deleteBatch = [];
+      const deleteBatch = [];
 
       while (auths && auths.data && auths.data.length > 0) {
          total += auths.data.length;
 
-         for (let auth of auths.data) {
+         for (const auth of auths.data) {
             if (userFilter.length > 0 && !userFilter.some((filter) => filter.userId === auth.userId)) {
                continue;
             }
@@ -108,7 +107,7 @@ export async function postConsistency(
             if (!user || !user.data) {
                console.log(`missing userId ${auth.userId} for auth ${auth.credentialId}`);
                leaked += 1;
-               if (params['cleanse'] === 'true') {
+               if (params.cleanse === 'true') {
                   deleteBatch.push({
                      userId: auth.userId,
                      credentialId: auth.credentialId,
@@ -127,7 +126,7 @@ export async function postConsistency(
          });
       }
 
-      if (params['cleanse'] === 'true' && deleteBatch.length > 0) {
+      if (params.cleanse === 'true' && deleteBatch.length > 0) {
          // ElectroDB handles running this sequentially in groups of 25 for dynamoDB
          console.log(`deleting ${deleteBatch.length} authenticators`);
          const result = await Authenticators.delete(deleteBatch).go();
@@ -142,7 +141,7 @@ export async function postConsistency(
 
       console.log(`${total} authenticators scanned with ${leaked} leaked and ${deleted} deleted`);
    }
-   if (params['tables'] && params.tables.includes('users')) {
+   if (params.tables && params.tables.includes('users')) {
       const userAttrs = ['userId', 'verified', 'userName', 'createdAt'] as const;
       let users = await Users.scan.go({
          attributes: userAttrs,
@@ -154,14 +153,14 @@ export async function postConsistency(
       let leaked = 0;
       let expired = 0;
       let deleted = 0;
-      let deleteBatch = [];
+      const deleteBatch = [];
 
       while (users && users.data && users.data.length > 0) {
          total += users.data.length;
 
-         for (let user of users.data) {
+         for (const user of users.data) {
             // fake user to prevent Id use
-            if (user.userId == 'AAAAAAAAAAAAAAAAAAAAAA') {
+            if (user.userId === 'AAAAAAAAAAAAAAAAAAAAAA') {
                continue;
             }
             if (userFilter.length > 0 && !userFilter.some((filter) => filter.userId === user.userId)) {
@@ -183,7 +182,7 @@ export async function postConsistency(
                if (!auths || auths.data.length === 0) {
                   console.log(`no credentials for user: ${user.userId}, ${user.userName}`);
                   leaked += 1;
-                  if (params['cleanse'] === 'true') {
+                  if (params.cleanse === 'true') {
                      deleteBatch.push({
                         userId: user.userId,
                      });
@@ -195,7 +194,7 @@ export async function postConsistency(
                unverified += 1;
                console.log(`unverified user is expired: ${user.userId}, ${user.userName}`);
                expired += 1;
-               if (params['cleanse'] === 'true') {
+               if (params.cleanse === 'true') {
                   deleteBatch.push({
                      userId: user.userId,
                   });
@@ -213,7 +212,7 @@ export async function postConsistency(
          });
       }
 
-      if (params['cleanse'] === 'true' && deleteBatch.length > 0) {
+      if (params.cleanse === 'true' && deleteBatch.length > 0) {
          // ElectroDB handles running this sequentially in groups of 25 for dynamoDB
          console.log(`deleting ${deleteBatch.length} users`);
          const result = await Users.delete(deleteBatch).go();
@@ -229,7 +228,7 @@ export async function postConsistency(
          `${total} users scanned with ${leaked} leaked, ${expired} expired, ${unverified} unverified, and ${deleted} deleted`,
       );
    }
-   if (params['tables'] && params.tables.includes('invitables')) {
+   if (params.tables && params.tables.includes('invitables')) {
       const invAttrs = ['invitableId', 'userId', 'createdAt'] as const;
       let invitables = await Invitables.scan.go({
          attributes: invAttrs,
@@ -239,12 +238,12 @@ export async function postConsistency(
       let total = 0;
       let leaked = 0;
       let deleted = 0;
-      let deleteBatch = [];
+      const deleteBatch = [];
 
       while (invitables && invitables.data && invitables.data.length > 0) {
          total += invitables.data.length;
 
-         for (let invitable of invitables.data) {
+         for (const invitable of invitables.data) {
             if (userFilter.length > 0 && !userFilter.some((filter) => filter.userId === invitable.userId)) {
                continue;
             }
@@ -259,7 +258,7 @@ export async function postConsistency(
             if (!user || !user.data) {
                console.log(`missing userId ${invitable.userId} for invitable ${invitable.invitableId}`);
                leaked += 1;
-               if (params['cleanse'] === 'true') {
+               if (params.cleanse === 'true') {
                   deleteBatch.push({
                      userId: invitable.userId,
                      invitableId: invitable.invitableId,
@@ -278,7 +277,7 @@ export async function postConsistency(
          });
       }
 
-      if (params['cleanse'] === 'true' && deleteBatch.length > 0) {
+      if (params.cleanse === 'true' && deleteBatch.length > 0) {
          // ElectroDB handles running this sequentially in groups of 25 for dynamoDB
          console.log(`deleting ${deleteBatch.length} invitables`);
          const result = await Invitables.delete(deleteBatch).go();
@@ -300,7 +299,7 @@ export async function postConsistency(
 export async function postCleanupTestUsers(httpDetails: HttpDetails): Promise<Response> {
    const { params } = httpDetails;
 
-   if (!params['tables'] || !params.tables.includes('users')) {
+   if (!params.tables || !params.tables.includes('users')) {
       return { content: { message: 'skipped, missing users table' } };
    }
 
@@ -319,12 +318,12 @@ export async function postCleanupTestUsers(httpDetails: HttpDetails): Promise<Re
 
    let total = 0;
    let capReached = false;
-   let candidates: { userId: string; userName: string }[] = [];
+   const candidates: { userId: string; userName: string }[] = [];
 
    while (users && users.data && users.data.length > 0) {
       total += users.data.length;
 
-      for (let user of users.data) {
+      for (const user of users.data) {
          if (!isReservedTestUserName(user.userName)) {
             continue;
          }
@@ -361,7 +360,7 @@ export async function postCleanupTestUsers(httpDetails: HttpDetails): Promise<Re
    const deleteBatch = candidates.filter((c) => isReservedTestUserName(c.userName)).map((c) => ({ userId: c.userId }));
 
    let deleted = 0;
-   if (params['cleanse'] === 'true' && deleteBatch.length > 0) {
+   if (params.cleanse === 'true' && deleteBatch.length > 0) {
       // ElectroDB handles running this sequentially in groups of 25 for dynamoDB
       console.log(`deleting ${deleteBatch.length} users`);
       const result = await Users.delete(deleteBatch).go();

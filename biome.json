@@ -9,8 +9,9 @@
     "includes": [
       "**",
       "!**/*.html",
-      "!vendor/**",
-      "!apps/server/assets/**",
+      "!**/*.svg",
+      "!vendor",
+      "!apps/server/assets",
       "!libs/crypto/src/lib/crux/qc_crux.js",
       "!libs/crypto/src/lib/crux/qc_crux.d.ts",
       "!libs/crypto/src/lib/crux/wasm.ts"
@@ -24,15 +25,20 @@
     "lineEnding": "lf"
   },
   "linter": {
-    "enabled": false,
+    "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "complexity": {
         "useOptionalChain": "off"
       },
       "style": {
         "useBlockStatements": "error",
-        "noNonNullAssertion": "off"
+        "noNonNullAssertion": "off",
+        "useImportType": "off",
+        "useArrayLiterals": "off"
+      },
+      "suspicious": {
+        "noTsIgnore": "off"
       }
     }
   },
@@ -55,6 +61,16 @@
       "includes": ["**/*.json", "**/*.jsonc"],
       "formatter": {
         "indentWidth": 2
+      }
+    },
+    {
+      "includes": ["**/*.spec.ts", "**/*.suite.ts", "apps/server/spec/**", "apps/web/tests/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExportsInTest": "off"
+          }
+        }
       }
     }
   ]

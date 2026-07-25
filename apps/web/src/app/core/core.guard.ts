@@ -18,5 +18,5 @@ export const coreGuard: CanActivateFn = async () => {
       return true;
    }
 
-   return router.parseUrl('/welcome' + paramsToQueryString());
+   return router.parseUrl(`/welcome${paramsToQueryString()}`);
 };

@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import WebAuthnEmulator, {
    AuthenticatorEmulator,
    PasskeysCredentialsFileRepository,
@@ -154,7 +154,7 @@ export function readPrfOutput(clientExtensionResults: any): Uint8Array<ArrayBuff
    if (first) {
       output = base64ToBytes(first);
       if (output.byteLength !== cc.KEY_BYTES) {
-         throw new Error('unexpected PRF output length: ' + output.byteLength);
+         throw new Error(`unexpected PRF output length: ${output.byteLength}`);
       }
    }
    return output;
@@ -243,9 +243,11 @@ async function request(
       Origin: RP_ORIGIN,
    };
 
-   if (cookie) headers['Cookie'] = cookie;
+   if (cookie) {
+      headers['Cookie'] = cookie;
+   }
 
-   let body;
+   let body: Buffer | undefined;
    if (bodyObj) {
       const json = JSON.stringify(bodyObj);
       body = Buffer.from(json, 'utf8');

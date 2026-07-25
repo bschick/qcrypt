@@ -115,7 +115,7 @@ export abstract class Ciphers {
       // Don't allow more then ~5 minutes of pwd hashing (rounded to millions)
       const iCountMax = Math.min(cc.ICOUNT_MAX, Math.round((maxMillis * hashRate) / 1000000) * 1000000);
 
-      let targetICount = Math.round((hashRate * targetMillis) / 100000) * 100000;
+      const targetICount = Math.round((hashRate * targetMillis) / 100000) * 100000;
       // Add ICOUNT_MIN to calculated target because benchmark is done during
       // page load and tends to be too low.
       const iCount = Math.max(cc.ICOUNT_DEFAULT, targetICount + cc.ICOUNT_MIN);
@@ -133,14 +133,14 @@ export abstract class Ciphers {
    }
 
    static validateAlg(alg: string): cc.CipherAlgs {
-      if (!this.isValidAlg(alg)) {
-         throw new Error('Unsupported cipher mode: ' + alg + '.');
+      if (!Ciphers.isValidAlg(alg)) {
+         throw new Error(`Unsupported cipher mode: ${alg}.`);
       }
       return alg;
    }
 
    static validateAlgs(algs: string[]): cc.CipherAlgs[] {
-      return algs.map((alg) => this.validateAlg(alg));
+      return algs.map((alg) => Ciphers.validateAlg(alg));
    }
 
    static algName(algId: number): cc.CipherAlgs {
@@ -149,7 +149,7 @@ export abstract class Ciphers {
             return alg;
          }
       }
-      throw new Error('Unsupported cipher mode: ' + algId);
+      throw new Error(`Unsupported cipher mode: ${algId}`);
    }
 
    static algId(alg: cc.CipherAlgs): number {
@@ -165,7 +165,7 @@ export abstract class Ciphers {
    }
 
    static algDescription(alg: string): string {
-      return this.isValidAlg(alg) ? cc.AlgInfo[alg].description : 'Invalid';
+      return Ciphers.isValidAlg(alg) ? cc.AlgInfo[alg].description : 'Invalid';
    }
 
    // Only useful for validating params before encoding. Decoded values are read with
@@ -183,8 +183,8 @@ export abstract class Ciphers {
    }) {
       Ciphers.validateAlg(args.alg);
       const ivBytes = Number(Ciphers.algIVByteLength(args.alg));
-      if (args.iv.byteLength != ivBytes) {
-         throw new Error('Invalid iv size: ' + args.iv.byteLength);
+      if (args.iv.byteLength !== ivBytes) {
+         throw new Error(`Invalid iv size: ${args.iv.byteLength}`);
       }
 
       if (!args.slt) {
@@ -193,11 +193,11 @@ export abstract class Ciphers {
             throw new Error('Unexpected ic with slt');
          }
       } else {
-         if (args.slt.byteLength != cc.SLT_BYTES) {
-            throw new Error('Invalid slt len: ' + args.slt.byteLength);
+         if (args.slt.byteLength !== cc.SLT_BYTES) {
+            throw new Error(`Invalid slt len: ${args.slt.byteLength}`);
          }
          if (args.ic === undefined || (args.ic !== 0 && (args.ic < cc.ICOUNT_MIN || args.ic > cc.ICOUNT_MAX))) {
-            throw new Error('Invalid ic: ' + args.ic);
+            throw new Error(`Invalid ic: ${args.ic}`);
          }
       }
 
@@ -206,21 +206,21 @@ export abstract class Ciphers {
             throw new Error('Missing lp');
          }
          if (args.lpEnd < 1 || args.lpEnd > cc.LP_MAX) {
-            throw new Error('Invalid lpEnd: ' + args.lpEnd);
+            throw new Error(`Invalid lpEnd: ${args.lpEnd}`);
          }
          if (args.lp < 1 || args.lp > args.lpEnd) {
-            throw new Error('Invalid lp: ' + args.lp);
+            throw new Error(`Invalid lp: ${args.lp}`);
          }
       } else if (args.lp) {
          throw new Error('Missing lpEnd');
       }
 
       // Could move this to subclasses...
-      if (args.ver && args.ver != cc.VERSION1) {
+      if (args.ver && args.ver !== cc.VERSION1) {
          // Only V1 put version in additional data
-         throw new Error('Unexpected version: ' + args.ver);
+         throw new Error(`Unexpected version: ${args.ver}`);
       }
-      if (args.term != undefined && args.ver && args.ver < cc.VERSION6) {
+      if (args.term !== undefined && args.ver && args.ver < cc.VERSION6) {
          // Only V6+ put term in additional data
          throw new Error('Unexpected term flag');
       }
@@ -230,7 +230,7 @@ export abstract class Ciphers {
       }
 
       if (args.encryptedHint && args.encryptedHint.byteLength > cc.ENCRYPTED_HINT_MAX_BYTES) {
-         throw new Error('Invalid encrypted hint length: ' + args.encryptedHint.byteLength);
+         throw new Error(`Invalid encrypted hint length: ${args.encryptedHint.byteLength}`);
       }
    }
 
@@ -273,7 +273,7 @@ export abstract class Ciphers {
          packer.ver = args.ver;
       }
 
-      if (args.encryptedHint != undefined) {
+      if (args.encryptedHint !== undefined) {
          packer.hint = args.encryptedHint;
       }
 
@@ -313,9 +313,9 @@ export abstract class Encipher extends Ciphers {
    // an opaque byte array to reduce copying (the caller must write
    // all the blocks in order)
    async encryptBlock(): Promise<CipherDataBlock> {
-      if (this._state == CipherState.Initialized) {
+      if (this._state === CipherState.Initialized) {
          return this.encryptBlock0();
-      } else if (this._state == CipherState.Block0Done) {
+      } else if (this._state === CipherState.Block0Done) {
          return this.encryptBlockN();
       } else {
          throw new Error(`Encipher invalid state ${this._state}`);
@@ -415,13 +415,13 @@ export class EncipherV7 extends Encipher {
    //
    override async encryptBlock0(): Promise<CipherDataBlock> {
       try {
-         if (this._state != CipherState.Initialized) {
+         if (this._state !== CipherState.Initialized) {
             throw new Error(`Encipher invalid state ${this._state}`);
          }
 
          const [clearBuffer, done] = await this._reader.readAvailable(new ArrayBuffer(this._readTarget));
 
-         if (clearBuffer.byteLength == 0) {
+         if (clearBuffer.byteLength === 0) {
             if (done) {
                // must always have a block0
                throw new Error('Missing clear data');
@@ -444,7 +444,7 @@ export class EncipherV7 extends Encipher {
          let encryptedHint: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
          if (cdInfo.hint) {
             const maxHintBytes = cc.ENCRYPTED_HINT_MAX_BYTES - cc.AUTH_TAG_MAX_BYTES;
-            let hintBytes = bytesFromUTF8String(cdInfo.hint, maxHintBytes);
+            const hintBytes = bytesFromUTF8String(cdInfo.hint, maxHintBytes);
 
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(iv);
             encryptedHint = await EncipherV7._doEncrypt(cdInfo.alg, hk, hIV, hintBytes);
@@ -487,7 +487,7 @@ export class EncipherV7 extends Encipher {
 
    override async encryptBlockN(): Promise<CipherDataBlock> {
       try {
-         if (this._state != CipherState.Block0Done) {
+         if (this._state !== CipherState.Block0Done) {
             throw new Error(`Encipher invalid state ${this._state}`);
          }
 
@@ -548,12 +548,12 @@ export class EncipherV7 extends Encipher {
       additionalData?: Uint8Array,
    ): Promise<Uint8Array> {
       const ivBytes = Number(Ciphers.algIVByteLength(alg));
-      if (ivBytes != iv.byteLength) {
-         throw new Error('incorrect iv length of: ' + iv.byteLength);
+      if (ivBytes !== iv.byteLength) {
+         throw new Error(`incorrect iv length of: ${iv.byteLength}`);
       }
 
       let encryptedBytes: Uint8Array;
-      if (alg == 'X20-PLY') {
+      if (alg === 'X20-PLY') {
          try {
             encryptedBytes = getSodium().crypto_aead_xchacha20poly1305_ietf_encrypt(
                clear,
@@ -567,7 +567,7 @@ export class EncipherV7 extends Encipher {
             const msg = err instanceof Error ? err.message : '';
             throw new DOMException(msg, 'OperationError ');
          }
-      } else if (alg == 'AEGIS-256') {
+      } else if (alg === 'AEGIS-256') {
          try {
             encryptedBytes = getSodium().crypto_aead_aegis256_encrypt(clear, additionalData ?? null, null, iv, key);
          } catch (err) {
@@ -663,7 +663,7 @@ export abstract class Decipher extends Ciphers {
    async decryptBlock(): Promise<Uint8Array> {
       if ([CipherState.Initialized, CipherState.Block0Decoded].includes(this._state)) {
          return this.decryptBlock0();
-      } else if (this._state == CipherState.Block0Done) {
+      } else if (this._state === CipherState.Block0Done) {
          return this.decryptBlockN();
       } else {
          throw new Error(`Decipher invalid state ${this._state}`);
@@ -770,12 +770,12 @@ export abstract class Decipher extends Ciphers {
       additionalData?: Uint8Array,
    ): Promise<Uint8Array> {
       const ivBytes = Number(Ciphers.algIVByteLength(alg));
-      if (ivBytes != iv.byteLength) {
-         throw new Error('incorrect iv length of: ' + iv.byteLength);
+      if (ivBytes !== iv.byteLength) {
+         throw new Error(`incorrect iv length of: ${iv.byteLength}`);
       }
 
       let decrypted: Uint8Array;
-      if (alg == 'X20-PLY') {
+      if (alg === 'X20-PLY') {
          /* console.log('dxcha encrypted', encrypted.byteLength, encrypted);
             console.log('dxcha additionalData', additionalData.byteLength, additionalData);
             console.log('dxcha iv', iv.byteLength, iv);
@@ -794,7 +794,7 @@ export abstract class Decipher extends Ciphers {
             const msg = err instanceof Error ? err.message : '';
             throw new DOMException(msg, 'OperationError ');
          }
-      } else if (alg == 'AEGIS-256') {
+      } else if (alg === 'AEGIS-256') {
          try {
             decrypted = getSodium().crypto_aead_aegis256_decrypt(null, encrypted, additionalData ?? null, iv, key);
          } catch (err) {
@@ -913,7 +913,7 @@ export class DecipherV67 extends Decipher {
       }
 
       // This signals successful completion of block reads
-      if (header.byteLength == 0) {
+      if (header.byteLength === 0) {
          return true;
       }
 
@@ -922,8 +922,8 @@ export class DecipherV67 extends Decipher {
       // Order must be invariant (extractor validates sizes and ranges)
       const mac = extractor.mac;
       const ver = extractor.ver;
-      if (ver != cc.VERSION6 && ver != cc.VERSION7) {
-         throw new Error('Invalid version of: ' + ver);
+      if (ver !== cc.VERSION6 && ver !== cc.VERSION7) {
+         throw new Error(`Invalid version of: ${ver}`);
       }
       const payloadSize = extractor.size;
 
@@ -954,11 +954,11 @@ export class DecipherV67 extends Decipher {
             this._reader.cleanup();
          }
 
-         if (payload.byteLength != this._blockData.payloadSize) {
-            throw new Error('Cipher data length mismatch1: ' + payload.byteLength);
+         if (payload.byteLength !== this._blockData.payloadSize) {
+            throw new Error(`Cipher data length mismatch1: ${payload.byteLength}`);
          }
 
-         let extractor = new Extractor(payload);
+         const extractor = new Extractor(payload);
 
          // Order must be invariant
          this._blockData.flags = extractor.flags;
@@ -994,7 +994,7 @@ export class DecipherV67 extends Decipher {
             throw new Error('Invalid MAC error');
          }
 
-         if (encryptedHint!.byteLength != 0) {
+         if (encryptedHint!.byteLength !== 0) {
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(this._blockData.iv);
             const hintBytes = await Decipher._doDecrypt(this._blockData.alg, hk, hIV, encryptedHint);
             this._keyProvider.setHint(new TextDecoder().decode(hintBytes));
@@ -1013,13 +1013,13 @@ export class DecipherV67 extends Decipher {
 
    public override async decryptBlockN(): Promise<Uint8Array> {
       try {
-         if (this._state != CipherState.Block0Done) {
+         if (this._state !== CipherState.Block0Done) {
             throw new Error(`Decipher invalid state ${this._state}`);
          }
 
          // This does MAC check
          await this._decodeBlockN();
-         //@ts-ignore
+         //@ts-expect-error
          if (this._state === CipherState.Finished) {
             // this is the signal that decryption is complete
             return new Uint8Array(0);
@@ -1088,11 +1088,11 @@ export class DecipherV67 extends Decipher {
          // call and the next header will report done.
          const [payload] = await this._reader.readFill(new ArrayBuffer(this._blockData.payloadSize));
 
-         if (payload.byteLength != this._blockData.payloadSize) {
-            throw new Error('Cipher data length mismatch2: ' + payload.byteLength);
+         if (payload.byteLength !== this._blockData.payloadSize) {
+            throw new Error(`Cipher data length mismatch2: ${payload.byteLength}`);
          }
 
-         let extractor = new Extractor(payload);
+         const extractor = new Extractor(payload);
 
          // Order must be invariant
          this._blockData.flags = extractor.flags;
@@ -1178,7 +1178,7 @@ export class Extractor<T extends ArrayBufferLike> {
       const result = this._encoded.subarray(this._offset, this._offset + len);
 
       // shouldn't hit this given test above, but check anyway
-      if (result.byteLength != len) {
+      if (result.byteLength !== len) {
          throw new Error(`Invalid ${what}, length: ${result.byteLength}`);
       }
 
@@ -1189,7 +1189,7 @@ export class Extractor<T extends ArrayBufferLike> {
    remainder(what: string): Uint8Array<T> {
       const result = this._encoded.subarray(this._offset);
       // happens if the encode data is not as long as expected
-      if (result.byteLength == 0) {
+      if (result.byteLength === 0) {
          throw new Error(`Invalid ${what}, length: 0`);
       }
 
@@ -1226,30 +1226,36 @@ export class Extractor<T extends ArrayBufferLike> {
    get ic(): number {
       const ic = bytesToNum(this.extract('ic', cc.IC_BYTES));
       if (ic !== 0 && (ic < cc.ICOUNT_MIN || ic > cc.ICOUNT_MAX)) {
-         throw new Error('Invalid ic of: ' + ic);
+         throw new Error(`Invalid ic of: ${ic}`);
       }
       return ic;
    }
 
    lpp(): [lp: number, lpEnd: number] {
-      let lpp = bytesToNum(this.extract('lpp', cc.LPP_BYTES));
+      const lpp = bytesToNum(this.extract('lpp', cc.LPP_BYTES));
       const lp = (lpp & 0x0f) + 1;
       const lpEnd = (lpp >> 4) + 1;
       // this can't happen... but... just check
       if (lpEnd < 1 || lpEnd > cc.LP_MAX) {
-         throw new Error('Invalid lpEnd of: ' + lpEnd);
+         throw new Error(`Invalid lpEnd of: ${lpEnd}`);
       }
       // only lp > lpEnd could happen
       if (lp < 1 || lp > lpEnd) {
-         throw new Error('Invalid lp of: ' + lp);
+         throw new Error(`Invalid lp of: ${lp}`);
       }
       return [lp, lpEnd];
    }
 
    get ver(): number {
       const ver = bytesToNum(this.extract('ver', cc.VER_BYTES));
-      if (ver != cc.VERSION1 && ver != cc.VERSION4 && ver != cc.VERSION5 && ver != cc.VERSION6 && ver != cc.VERSION7) {
-         throw new Error('Invalid version of: ' + ver);
+      if (
+         ver !== cc.VERSION1 &&
+         ver !== cc.VERSION4 &&
+         ver !== cc.VERSION5 &&
+         ver !== cc.VERSION6 &&
+         ver !== cc.VERSION7
+      ) {
+         throw new Error(`Invalid version of: ${ver}`);
       }
       return ver;
    }
@@ -1257,8 +1263,8 @@ export class Extractor<T extends ArrayBufferLike> {
    get flags(): number {
       const flags = bytesToNum(this.extract('flags', cc.FLAGS_BYTES));
       // May be a bitfield later. For now, 0 or 1
-      if (flags != 0 && flags != 1) {
-         throw new Error('Invalid flags of: ' + flags);
+      if (flags !== 0 && flags !== 1) {
+         throw new Error(`Invalid flags of: ${flags}`);
       }
       return flags;
    }
@@ -1273,7 +1279,7 @@ export class Extractor<T extends ArrayBufferLike> {
    get size(): number {
       const payloadSize = bytesToNum(this.extract('size', cc.PAYLOAD_SIZE_BYTES));
       if (payloadSize < cc.PAYLOAD_SIZE_MIN || payloadSize > cc.PAYLOAD_SIZE_MAX) {
-         throw new Error('Invalid payload size3: ' + payloadSize);
+         throw new Error(`Invalid payload size3: ${payloadSize}`);
       }
       return payloadSize;
    }
@@ -1311,7 +1317,7 @@ export class Packer {
          throw new Error('Packer was detached');
       }
       if (value > this._dest.byteLength) {
-         throw new Error('Invalid offset: ' + value);
+         throw new Error(`Invalid offset: ${value}`);
       }
       this._offset = value;
    }
@@ -1344,8 +1350,8 @@ export class Packer {
    }
 
    set mac(sig: Uint8Array) {
-      if (sig.byteLength != cc.MAC_BYTES) {
-         throw new Error('Invalid MAC length: ' + sig.byteLength);
+      if (sig.byteLength !== cc.MAC_BYTES) {
+         throw new Error(`Invalid MAC length: ${sig.byteLength}`);
       }
       this.pack('mac', sig);
    }
@@ -1360,32 +1366,32 @@ export class Packer {
       if (!this._ivBytes) {
          throw new Error('IV length undefined, set packer.alg first');
       }
-      if (this._ivBytes != iVect.byteLength) {
-         throw new Error('Invalid IV length: ' + iVect.byteLength);
+      if (this._ivBytes !== iVect.byteLength) {
+         throw new Error(`Invalid IV length: ${iVect.byteLength}`);
       }
       this.pack('iv', iVect);
    }
 
    set slt(salt: Uint8Array) {
-      if (salt.byteLength != cc.SLT_BYTES) {
-         throw new Error('Invalid salt length: ' + salt.byteLength);
+      if (salt.byteLength !== cc.SLT_BYTES) {
+         throw new Error(`Invalid salt length: ${salt.byteLength}`);
       }
       this.pack('slt', salt);
    }
 
    set ic(iCount: number) {
       if (iCount !== 0 && (iCount < cc.ICOUNT_MIN || iCount > cc.ICOUNT_MAX)) {
-         throw new Error('Invalid ic of: ' + iCount);
+         throw new Error(`Invalid ic of: ${iCount}`);
       }
       this.pack('ic', numToBytes(iCount, cc.IC_BYTES));
    }
 
    lpp(lp: number, lpEnd: number) {
       if (lpEnd < 1 || lpEnd > cc.LP_MAX) {
-         throw new Error('Invalid lpEnd of: ' + lpEnd);
+         throw new Error(`Invalid lpEnd of: ${lpEnd}`);
       }
       if (lp < 1 || lp > lpEnd) {
-         throw new Error('Invalid lp of: ' + lp);
+         throw new Error(`Invalid lp of: ${lp}`);
       }
       let lpp = (lpEnd - 1) << 4;
       lpp += lp - 1;
@@ -1394,28 +1400,28 @@ export class Packer {
 
    set ver(version: number) {
       if (
-         version != cc.VERSION1 &&
-         version != cc.VERSION4 &&
-         version != cc.VERSION5 &&
-         version != cc.VERSION6 &&
-         version != cc.VERSION7
+         version !== cc.VERSION1 &&
+         version !== cc.VERSION4 &&
+         version !== cc.VERSION5 &&
+         version !== cc.VERSION6 &&
+         version !== cc.VERSION7
       ) {
-         throw new Error('Invalid version of: ' + version);
+         throw new Error(`Invalid version of: ${version}`);
       }
       this.pack('ver', numToBytes(version, cc.VER_BYTES));
    }
 
    set flags(flags: number) {
       // May be a bitfield later. For now, 0 or 1
-      if (flags != 0 && flags != 1) {
-         throw new Error('Invalid flags of: ' + flags);
+      if (flags !== 0 && flags !== 1) {
+         throw new Error(`Invalid flags of: ${flags}`);
       }
       this.pack('flags', numToBytes(flags, cc.FLAGS_BYTES));
    }
 
    set hint(encHint: Uint8Array) {
       if (encHint.byteLength > cc.ENCRYPTED_HINT_MAX_BYTES) {
-         throw new Error('Invalid hint length: ' + encHint.byteLength);
+         throw new Error(`Invalid hint length: ${encHint.byteLength}`);
       }
       this.pack('hlen', numToBytes(encHint.byteLength, cc.HINT_LEN_BYTES));
       this.pack('hint', encHint);
@@ -1423,7 +1429,7 @@ export class Packer {
 
    set size(payloadSize: number) {
       if (payloadSize < cc.PAYLOAD_SIZE_MIN || payloadSize > cc.PAYLOAD_SIZE_MAX) {
-         throw new Error('Invalid payload size4: ' + payloadSize);
+         throw new Error(`Invalid payload size4: ${payloadSize}`);
       }
       this.pack('size', numToBytes(payloadSize, cc.PAYLOAD_SIZE_BYTES));
    }

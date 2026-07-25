@@ -215,7 +215,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          this.setCTFormat(this.lsGet('ctformat'));
          this.setVisibilityClear(this.lsGet('vclear'));
 
-         let params = new HttpParams({ fromString: window.location.search });
+         const params = new HttpParams({ fromString: window.location.search });
 
          // If there are customized options, expand the panel by default
          if (params.keys().some((p) => !['cipherarmor', 'cleartext'].includes(p))) {
@@ -348,8 +348,9 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
    private setAlgorithm(alg: string | null): void {
       if (alg) {
+         let algs: any;
          try {
-            var algs = JSON.parse(alg);
+            algs = JSON.parse(alg);
          } catch (err) {}
 
          // transition from v4 and earlier
@@ -480,7 +481,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          cacheTime = Math.max(cacheTime, 0);
          cacheTime = Math.min(cacheTime, this.ACTIVITY_TIMEOUT);
 
-         if (cacheTime != this.cacheTimeInput.value) {
+         if (cacheTime !== this.cacheTimeInput.value) {
             this.setCacheTime(cacheTime);
          } else {
             this.lsSet('cachetime', cacheTime);
@@ -514,7 +515,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    onFormatChange(selected: string | null) {
-      if (selected == 'link') {
+      if (selected === 'link') {
          const saved = this.reminderToggle.value || false;
          this.setReminder(false);
          this.reminderToggle.disable();

@@ -135,7 +135,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
          (async () => {
             await zxcvbnReady();
             const { zxcvbnAsync } = getZxcvbn();
-            let results: ZxcvbnResult | undefined = undefined;
+            let results: ZxcvbnResult | undefined;
             while (this._testQueue.length > 0) {
                try {
                   // Use the last password in the queue and drop everything else before it

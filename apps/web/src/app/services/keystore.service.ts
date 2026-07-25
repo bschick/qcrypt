@@ -57,7 +57,7 @@ export class KeystoreService {
       });
 
       if (!entry) {
-         throw new Error('No key found for slot: ' + slot);
+         throw new Error(`No key found for slot: ${slot}`);
       }
 
       // Caller should overwrite the returned key immediately afer use
@@ -118,10 +118,10 @@ export class KeystoreService {
       pkId: Uint8Array<ArrayBuffer>,
    ): Promise<Uint8Array<ArrayBuffer>> {
       if (purpose.length < MIN_SLOT_LEN) {
-         throw new Error('Slot must be at least ' + MIN_SLOT_LEN + ' characters');
+         throw new Error(`Slot must be at least ${MIN_SLOT_LEN} characters`);
       }
       if (pkId.byteLength < cc.PKID_MIN_BYTES) {
-         throw new Error('Credential id is < ' + cc.PKID_MIN_BYTES + ' bytes');
+         throw new Error(`Credential id is < ${cc.PKID_MIN_BYTES} bytes`);
       }
 
       const purposeBytes = new TextEncoder().encode(purpose);
@@ -129,7 +129,7 @@ export class KeystoreService {
 
       const derivedBytes = await crypto.subtle.sign('HMAC', masterKey, data);
       if (derivedBytes.byteLength !== cc.KEY_BYTES * 2) {
-         throw new Error('Invalid derived key length: ' + derivedBytes.byteLength);
+         throw new Error(`Invalid derived key length: ${derivedBytes.byteLength}`);
       }
 
       return new Uint8Array(derivedBytes.slice(cc.KEY_BYTES));
@@ -137,7 +137,7 @@ export class KeystoreService {
 
    private async _newMasterKey(slot: string): Promise<CryptoKey> {
       if (slot.length < MIN_SLOT_LEN) {
-         throw new Error('Slot must be at least ' + MIN_SLOT_LEN + ' characters');
+         throw new Error(`Slot must be at least ${MIN_SLOT_LEN} characters`);
       }
 
       // SubtleCrypto is lame... It will not let you generate CryptoKey for

@@ -75,9 +75,9 @@ export async function getStreamDecipher(
 
    const [header, done] = await reader.readFill(new ArrayBuffer(cc.HEADER_BYTES_6P));
 
-   if (header.byteLength != cc.HEADER_BYTES_6P || done) {
+   if (header.byteLength !== cc.HEADER_BYTES_6P || done) {
       reader.cleanup();
-      throw new Error('Invalid cipher header length: ' + header.byteLength);
+      throw new Error(`Invalid cipher header length: ${header.byteLength}`);
    }
 
    // This is rather ugly, but the original CiphersV1 encoding stupidly had the
@@ -86,17 +86,17 @@ export async function getStreamDecipher(
    // version is >=4). WARNING: Breaks if ALG_BYTES or VER_BYTES sizes changes.
    const verOrAlg = bytesToNum(header.subarray(cc.MAC_BYTES, cc.MAC_BYTES + cc.VER_BYTES));
 
-   if (verOrAlg == cc.VERSION6 || verOrAlg == cc.VERSION7) {
+   if (verOrAlg === cc.VERSION6 || verOrAlg === cc.VERSION7) {
       decipher = new DecipherV67(keyProvider, reader, header);
    } else {
-      if (verOrAlg == cc.VERSION5) {
+      if (verOrAlg === cc.VERSION5) {
          decipher = new DecipherV5(keyProvider, reader, header);
-      } else if (verOrAlg == cc.VERSION4) {
+      } else if (verOrAlg === cc.VERSION4) {
          decipher = new DecipherV4(keyProvider, reader, header);
       } else if (verOrAlg < cc.V1_BELOW && verOrAlg > 0) {
          decipher = new DecipherV1(keyProvider, reader, header);
       } else {
-         throw new Error('Invalid version: ' + verOrAlg);
+         throw new Error(`Invalid version: ${verOrAlg}`);
       }
    }
    return decipher;

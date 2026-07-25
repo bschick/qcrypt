@@ -135,7 +135,7 @@ describe('BroadcastService', () => {
    });
 
    it('reflects live credential changes via the callback', async () => {
-      let credential: CredentialPayload | undefined = undefined;
+      let credential: CredentialPayload | undefined;
       responder.setCredentialProvider(() => credential);
 
       const firstAttempt = await requester.requestCredential(TEST_PK_ID);

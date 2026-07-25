@@ -214,7 +214,7 @@ function stripCamelCaseDuplicates(msg) {
       return msg;
    }
    const args = m[1].split(/,\s*/);
-   const toKebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
+   const toKebab = (s) => s.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
    const seen = new Set();
    const unique = [];
    for (const a of args) {

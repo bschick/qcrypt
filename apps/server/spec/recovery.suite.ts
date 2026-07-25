@@ -40,7 +40,6 @@ import {
    createCredential,
    prfEncrypt,
    prfDecrypt,
-   RP_ORIGIN,
    type TestUser,
 } from './common';
 

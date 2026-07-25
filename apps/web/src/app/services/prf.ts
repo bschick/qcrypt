@@ -52,7 +52,7 @@ export function injectPrfExtension(
    if (!optionsJson.extensions) {
       optionsJson.extensions = {};
    }
-   let extensions = optionsJson.extensions as { prf: { eval: { first: Uint8Array } } };
+   const extensions = optionsJson.extensions as { prf: { eval: { first: Uint8Array } } };
    extensions.prf = { eval: { first: PRF_SALT } };
 }
 
@@ -70,7 +70,7 @@ export function prfReadKey(
    // The spec says `first` should be an ArrayBuffer, but often isn't so correct
    const output = new Uint8Array(getArrayBuffer(first));
    if (output.byteLength !== cc.KEY_BYTES) {
-      throw new Error('unexpected PRF output length: ' + output.byteLength);
+      throw new Error(`unexpected PRF output length: ${output.byteLength}`);
    }
    return output;
 }

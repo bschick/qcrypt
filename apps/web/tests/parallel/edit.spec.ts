@@ -26,11 +26,11 @@ testWithAuth('edit fields', async ({ authFixture }) => {
       response.url().includes('/passkeys') && response.request().method() === 'PATCH';
 
    await nameInput.click();
-   await nameInput.fill('PWTesty_e2e_<script>' + rand);
-   await expect(nameInput).toHaveValue('PWTesty_e2e_<script>' + rand);
+   await nameInput.fill(`PWTesty_e2e_<script>${rand}`);
+   await expect(nameInput).toHaveValue(`PWTesty_e2e_<script>${rand}`);
    let [resp] = await Promise.all([page.waitForResponse(userPatch), nameInput.press('Enter')]);
    expect(resp.status()).toBe(200);
-   await expect(nameInput).toHaveValue('PWTesty_e2e_' + rand);
+   await expect(nameInput).toHaveValue(`PWTesty_e2e_${rand}`);
 
    await nameInput.click();
    await nameInput.fill(testUser.userName);
@@ -40,11 +40,11 @@ testWithAuth('edit fields', async ({ authFixture }) => {
    await expect(nameInput).toHaveValue(testUser.userName);
 
    await descInput.click();
-   await descInput.fill('VirtualPK' + rand);
-   await expect(descInput).toHaveValue('VirtualPK' + rand);
+   await descInput.fill(`VirtualPK${rand}`);
+   await expect(descInput).toHaveValue(`VirtualPK${rand}`);
    [resp] = await Promise.all([page.waitForResponse(passkeyPatch), descInput.press('Enter')]);
    expect(resp.status()).toBe(200);
-   await expect(descInput).toHaveValue('VirtualPK' + rand);
+   await expect(descInput).toHaveValue(`VirtualPK${rand}`);
 
    await descInput.click();
    await descInput.fill('Passkey');

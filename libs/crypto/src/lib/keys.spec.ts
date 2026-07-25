@@ -45,7 +45,7 @@ async function deriveAllKeys(
    return { ek, sk, hk, hIV, bk, commit };
 }
 
-describe('Key generation', function () {
+describe('Key generation', () => {
    beforeEach(async () => {
       await cryptoReady();
    });
@@ -121,7 +121,7 @@ describe('Key generation', function () {
       await expect(keyProvider.getHintCipherKeyAndIV(iv)).rejects.toThrow();
    }
 
-   it('PWDKeyProvider successful and not equivalent key generation', async function () {
+   it('PWDKeyProvider successful and not equivalent key generation', async () => {
       for (const alg of Ciphers.algs()) {
          const pwd = 'not a good pwd';
          const ic = cc.ICOUNT_MIN;
@@ -145,7 +145,7 @@ describe('Key generation', function () {
       }
    });
 
-   it('PWDKeyProvider key are stable', async function () {
+   it('PWDKeyProvider key are stable', async () => {
       for (const alg of Ciphers.algs()) {
          const pwd = 'not a good pwd';
          const ic = cc.ICOUNT_MIN;
@@ -169,7 +169,7 @@ describe('Key generation', function () {
       }
    });
 
-   it('PWDKeyProvider unsuable after purge', async function () {
+   it('PWDKeyProvider unsuable after purge', async () => {
       for (const alg of Ciphers.algs()) {
          const pwd = 'not a good pwd';
          const ic = cc.ICOUNT_MIN;
@@ -192,7 +192,7 @@ describe('Key generation', function () {
       }
    });
 
-   it('PWDKeyProvider clone after purge throws', function () {
+   it('PWDKeyProvider clone after purge throws', () => {
       const userCred = getRandom(cc.USERCRED_BYTES);
       const keyProvider = new PWDKeyProvider(userCred, ['a pwd', undefined]);
       keyProvider.purge();
@@ -200,7 +200,7 @@ describe('Key generation', function () {
       expect(() => keyProvider.clone()).toThrow(/Cannot clone a purged keyProvider/);
    });
 
-   it('PWDKeyProvider clone derives same keys after original is purged', async function () {
+   it('PWDKeyProvider clone derives same keys after original is purged', async () => {
       const userCred = getRandom(cc.USERCRED_BYTES);
       const slt = getRandom(cc.SLT_BYTES);
       const cdInfo = {
@@ -226,7 +226,7 @@ describe('Key generation', function () {
       expect(isEqualArray(cloneKey, originalKey)).toBe(true);
    });
 
-   it('PWDKeyProvider unsuable without cipherdatainfo', async function () {
+   it('PWDKeyProvider unsuable without cipherdatainfo', async () => {
       for (const alg of Ciphers.algs()) {
          const pwd = 'not a good pwd';
          const ic = cc.ICOUNT_MIN;
@@ -246,7 +246,7 @@ describe('Key generation', function () {
       }
    });
 
-   it('PWDKeyProvider setCipherDataInfo rejects second call', function () {
+   it('PWDKeyProvider setCipherDataInfo rejects second call', () => {
       const userCred = getRandom(cc.USERCRED_BYTES);
       const slt = getRandom(cc.SLT_BYTES);
       const keyProvider = new PWDKeyProvider(userCred, ['a pwd', undefined]);
@@ -274,7 +274,7 @@ describe('Key generation', function () {
       keyProvider.purge();
    });
 
-   it('PWDKeyProvider setCipherDataInfo validates lp/lpEnd bounds', async function () {
+   it('PWDKeyProvider setCipherDataInfo validates lp/lpEnd bounds', async () => {
       const userCred = getRandom(cc.USERCRED_BYTES);
       const slt = getRandom(cc.SLT_BYTES);
       const baseInfo = {
@@ -314,7 +314,7 @@ describe('Key generation', function () {
       keyProvider.purge();
    });
 
-   it('PWDKeyProvider rejects unknown versions', async function () {
+   it('PWDKeyProvider rejects unknown versions', async () => {
       const slt = getRandom(cc.SLT_BYTES);
       const baseInfo = {
          alg: 'AES-GCM' as cc.CipherAlgs,
@@ -340,7 +340,7 @@ describe('Key generation', function () {
       keyProvider.purge();
    });
 
-   it('setCipherDataInfo validates ic bounds', function () {
+   it('setCipherDataInfo validates ic bounds', () => {
       const slt = getRandom(cc.SLT_BYTES);
       const baseInfo = {
          ver: cc.CURRENT_VERSION,
@@ -364,7 +364,7 @@ describe('Key generation', function () {
       keyProvider.purge();
    });
 
-   it('MasterKeyKeyProvider successful and not equivalent key generation', async function () {
+   it('MasterKeyKeyProvider successful and not equivalent key generation', async () => {
       for (const alg of Ciphers.algs()) {
          const master = crypto.getRandomValues(new Uint8Array(cc.KEY_BYTES));
          const randomArray = getRandom(48);
@@ -386,7 +386,7 @@ describe('Key generation', function () {
       }
    });
 
-   it('MasterKeyKeyProvider key are stable', async function () {
+   it('MasterKeyKeyProvider key are stable', async () => {
       for (const alg of Ciphers.algs()) {
          const master = crypto.getRandomValues(new Uint8Array(cc.KEY_BYTES));
          const randomArray = getRandom(48);
@@ -408,7 +408,7 @@ describe('Key generation', function () {
       }
    });
 
-   it('MasterKeyKeyProvider unsuable without cipherdatainfo', async function () {
+   it('MasterKeyKeyProvider unsuable without cipherdatainfo', async () => {
       for (const alg of Ciphers.algs()) {
          const master = crypto.getRandomValues(new Uint8Array(cc.KEY_BYTES));
          const randomArray = getRandom(48);
@@ -425,7 +425,7 @@ describe('Key generation', function () {
       }
    });
 
-   it('MasterKeyKeyProvider setCipherDataInfo rejects second call', function () {
+   it('MasterKeyKeyProvider setCipherDataInfo rejects second call', () => {
       const master = getRandom(cc.KEY_BYTES);
       const slt = getRandom(cc.SLT_BYTES);
       const keyProvider = new MasterKeyKeyProvider(master);
@@ -453,7 +453,7 @@ describe('Key generation', function () {
       keyProvider.purge();
    });
 
-   it('MasterKeyKeyProvider setCipherDataInfo validates lp/lpEnd bounds', async function () {
+   it('MasterKeyKeyProvider setCipherDataInfo validates lp/lpEnd bounds', async () => {
       const slt = getRandom(cc.SLT_BYTES);
       const baseInfo = {
          ver: cc.CURRENT_VERSION,
@@ -492,7 +492,7 @@ describe('Key generation', function () {
       keyProvider.purge();
    });
 
-   it('MasterKeyKeyProvider rejects unknown versions', async function () {
+   it('MasterKeyKeyProvider rejects unknown versions', async () => {
       const slt = getRandom(cc.SLT_BYTES);
       const baseInfo = {
          alg: 'AES-GCM' as cc.CipherAlgs,
@@ -518,14 +518,14 @@ describe('Key generation', function () {
       keyProvider.purge();
    });
 
-   it('MasterKeyKeyProvider rejects invalid masterKey', function () {
+   it('MasterKeyKeyProvider rejects invalid masterKey', () => {
       expect(() => new MasterKeyKeyProvider(new Uint8Array(0))).toThrow(/Invalid masterKey length/);
       expect(() => new MasterKeyKeyProvider(getRandom(cc.KEY_BYTES - 1))).toThrow(/Invalid masterKey length/);
       expect(() => new MasterKeyKeyProvider(getRandom(cc.KEY_BYTES + 1))).toThrow(/Invalid masterKey length/);
       expect(() => new MasterKeyKeyProvider(new Uint8Array(cc.KEY_BYTES))).toThrow(/Invalid masterKey: all zero bytes/);
    });
 
-   it('MasterKeyKeyProvider unsuable after purge', async function () {
+   it('MasterKeyKeyProvider unsuable after purge', async () => {
       for (const alg of Ciphers.algs()) {
          const master = crypto.getRandomValues(new Uint8Array(cc.KEY_BYTES));
          const randomArray = getRandom(48);
@@ -546,7 +546,7 @@ describe('Key generation', function () {
       }
    });
 
-   it('MasterKeyKeyProvider clone after purge throws', function () {
+   it('MasterKeyKeyProvider clone after purge throws', () => {
       const master = getRandom(cc.KEY_BYTES);
       const keyProvider = new MasterKeyKeyProvider(master);
       keyProvider.purge();
@@ -554,7 +554,7 @@ describe('Key generation', function () {
       expect(() => keyProvider.clone()).toThrow(/Cannot clone a purged keyProvider/);
    });
 
-   it('MasterKeyKeyProvider clone derives same keys after original is purged', async function () {
+   it('MasterKeyKeyProvider clone derives same keys after original is purged', async () => {
       const master = getRandom(cc.KEY_BYTES);
       const slt = getRandom(cc.SLT_BYTES);
       const cdInfo = {
@@ -580,7 +580,7 @@ describe('Key generation', function () {
       expect(isEqualArray(cloneKey, originalKey)).toBe(true);
    });
 
-   it('PWDKeyProvider keys match expected values', async function () {
+   it('PWDKeyProvider keys match expected values', async () => {
       const expected: [number, Record<cc.CipherAlgs, Record<string, Uint8Array<ArrayBuffer>>>][] = [
          [
             cc.VERSION4,
@@ -989,7 +989,7 @@ describe('Key generation', function () {
       }
    });
 
-   it('PWDKeyProvider getBlockCipherKey block number range', async function () {
+   it('PWDKeyProvider getBlockCipherKey block number range', async () => {
       const slt = getRandom(cc.SLT_BYTES);
       const baseInfo = {
          ver: cc.CURRENT_VERSION,
@@ -1019,7 +1019,7 @@ describe('Key generation', function () {
       keyProvider.purge();
    });
 
-   it('PWDKeyProvider getBlockCipherKey enforces version', async function () {
+   it('PWDKeyProvider getBlockCipherKey enforces version', async () => {
       const slt = getRandom(cc.SLT_BYTES);
       const keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd', undefined]);
       keyProvider.setCipherDataInfo({
@@ -1035,7 +1035,7 @@ describe('Key generation', function () {
       keyProvider.purge();
    });
 
-   it('MasterKeyKeyProvider getBlockCipherKey block number range', async function () {
+   it('MasterKeyKeyProvider getBlockCipherKey block number range', async () => {
       const slt = getRandom(cc.SLT_BYTES);
       const baseInfo = {
          ver: cc.CURRENT_VERSION,
@@ -1065,7 +1065,7 @@ describe('Key generation', function () {
       keyProvider.purge();
    });
 
-   it('MasterKeyKeyProvider keys match expected values', async function () {
+   it('MasterKeyKeyProvider keys match expected values', async () => {
       // generated by: pnpm vectors:keys
       const expected: [number, Record<cc.CipherAlgs, Record<string, Uint8Array<ArrayBuffer>>>][] = [
          [
@@ -1257,12 +1257,12 @@ describe('Key generation', function () {
                lp: 1,
                lpEnd: 1,
             });
-            let ek = await keyProvider.getCipherKey(false);
-            let sk = await keyProvider.getSigningKey();
-            let [hk, hIV] = await keyProvider.getHintCipherKeyAndIV(iv.slice(0, Ciphers.algIVByteLength(alg)));
+            const ek = await keyProvider.getCipherKey(false);
+            const sk = await keyProvider.getSigningKey();
+            const [hk, hIV] = await keyProvider.getHintCipherKeyAndIV(iv.slice(0, Ciphers.algIVByteLength(alg)));
             await expect(keyProvider.getBlockCipherKey(0)).rejects.toThrow(/Invalid block number: 0/);
-            let bk = await keyProvider.getBlockCipherKey(1);
-            let commit = await keyProvider.getKeyCommitment();
+            const bk = await keyProvider.getBlockCipherKey(1);
+            const commit = await keyProvider.getKeyCommitment();
 
             expect(isEqualArray(ek, algExpected.ek)).toBe(true);
             expect(isEqualArray(sk, algExpected.sk)).toBe(true);
@@ -1281,7 +1281,7 @@ describe('Key generation', function () {
       }
    });
 
-   it('PWDKeyProvider keys match expected values, multi-loop with customAd', async function () {
+   it('PWDKeyProvider keys match expected values, multi-loop with customAd', async () => {
       // generated by: pnpm vectors:keys
       const expected: [number, number, Record<cc.CipherAlgs, Record<string, Uint8Array<ArrayBuffer>>>][] = [
          [
@@ -1490,7 +1490,7 @@ describe('Key generation', function () {
       }
    });
 
-   it('MasterKeyKeyProvider keys match expected values, multi-loop with customAd', async function () {
+   it('MasterKeyKeyProvider keys match expected values, multi-loop with customAd', async () => {
       // generated by: pnpm vectors:keys
       const expected: [number, number, Record<cc.CipherAlgs, Record<string, Uint8Array<ArrayBuffer>>>][] = [
          [
@@ -1698,7 +1698,7 @@ describe('Key generation', function () {
       }
    });
 
-   it('PWDKeyProvider supportsCommitment per version', async function () {
+   it('PWDKeyProvider supportsCommitment per version', async () => {
       const userCred = getRandom(cc.USERCRED_BYTES);
       const slt = getRandom(cc.SLT_BYTES);
       const base = { alg: 'AES-GCM' as cc.CipherAlgs, ic: cc.ICOUNT_MIN, slt, lp: 1, lpEnd: 1 };
@@ -1726,7 +1726,7 @@ describe('Key generation', function () {
       v7.purge();
    });
 
-   it('MasterKeyKeyProvider supportsCommitment succeeds', async function () {
+   it('MasterKeyKeyProvider supportsCommitment succeeds', async () => {
       const master = getRandom(cc.KEY_BYTES);
       const slt = getRandom(cc.SLT_BYTES);
       const keyProvider = new MasterKeyKeyProvider(master);
@@ -1738,7 +1738,7 @@ describe('Key generation', function () {
       keyProvider.purge();
    });
 
-   it('getKeyCommitment requires getCipherKey to have been called', async function () {
+   it('getKeyCommitment requires getCipherKey to have been called', async () => {
       const slt = getRandom(cc.SLT_BYTES);
       const pwdProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['p', undefined]);
       pwdProvider.setCipherDataInfo({
@@ -1758,7 +1758,7 @@ describe('Key generation', function () {
       masterProvider.purge();
    });
 
-   it('derived keys change with cipher info (alg, lp, slt, customAd)', async function () {
+   it('derived keys change with cipher info (alg, lp, slt, customAd)', async () => {
       const userCred = getRandom(cc.USERCRED_BYTES);
       const master = getRandom(cc.KEY_BYTES);
       const customAd = getRandom(16);
@@ -1815,7 +1815,7 @@ describe('Key generation', function () {
       }
    });
 
-   it('PWDKeyProvider derived keys change with pwd and userCred', async function () {
+   it('PWDKeyProvider derived keys change with pwd and userCred', async () => {
       const userCred = getRandom(cc.USERCRED_BYTES);
       const otherCred = getRandom(cc.USERCRED_BYTES);
       const slt = getRandom(cc.SLT_BYTES);
@@ -1851,7 +1851,7 @@ describe('Key generation', function () {
       expect(isEqualArray(baseline.hIV, diffCred.hIV)).toBe(true);
    });
 
-   it('MasterKeyKeyProvider derived keys change with masterKey', async function () {
+   it('MasterKeyKeyProvider derived keys change with masterKey', async () => {
       const master = getRandom(cc.KEY_BYTES);
       const otherMaster = getRandom(cc.KEY_BYTES);
       const slt = getRandom(cc.SLT_BYTES);
@@ -1877,7 +1877,7 @@ describe('Key generation', function () {
       expect(isEqualArray(baseline.hIV, diffMaster.hIV)).toBe(true);
    });
 
-   it('getKeyCommitment is stable across other key derivations', async function () {
+   it('getKeyCommitment is stable across other key derivations', async () => {
       const slt = getRandom(cc.SLT_BYTES);
       const providers = [
          {
@@ -1916,7 +1916,7 @@ describe('Key generation', function () {
       }
    });
 
-   it('purge zeroes the commitment key', async function () {
+   it('purge zeroes the commitment key', async () => {
       const slt = getRandom(cc.SLT_BYTES);
       const providers = [
          {

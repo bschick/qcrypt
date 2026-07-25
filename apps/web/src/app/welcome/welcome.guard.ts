@@ -18,5 +18,5 @@ export const welcomeGuard: CanActivateFn = async () => {
       return true;
    }
 
-   return router.parseUrl('/' + paramsToQueryString());
+   return router.parseUrl(`/${paramsToQueryString()}`);
 };

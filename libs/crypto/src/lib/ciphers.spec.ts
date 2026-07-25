@@ -31,7 +31,7 @@ function streamFromCipherBlock(cdBlocks: CipherDataBlock[]): [ReadableStream<Uin
    return streamFromBytes(concatArrays(parts));
 }
 
-describe('Encryption and decryption', function () {
+describe('Encryption and decryption', () => {
    beforeEach(async () => {
       await cryptoReady();
    });
@@ -72,7 +72,7 @@ describe('Encryption and decryption', function () {
    // evil site does not have access to Alice's userCredA which is
    // combined with her password to generate the cipher key.
 
-   it('decryption should fail with replaced valid signature', async function () {
+   it('decryption should fail with replaced valid signature', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🐓');
          const pwd = 'a good pwd';
@@ -141,7 +141,7 @@ describe('Encryption and decryption', function () {
       }
    });
 
-   it('round trip block0, all algorithms', async function () {
+   it('round trip block0, all algorithms', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
@@ -176,7 +176,7 @@ describe('Encryption and decryption', function () {
       }
    });
 
-   it('concurrent getCipherDataInfo and decryptBlock0 share one decode', async function () {
+   it('concurrent getCipherDataInfo and decryptBlock0 share one decode', async () => {
       // This tests _decodeBlock0 serialization by calling getCipherDataInfo() and
       // decryptBlock0() without awaiting between calls.
       for (const alg of Ciphers.algs()) {
@@ -219,7 +219,7 @@ describe('Encryption and decryption', function () {
       }
    });
 
-   it('getCipherDataInfo is safe to call concurrently after first decode', async function () {
+   it('getCipherDataInfo is safe to call concurrently after first decode', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
@@ -247,7 +247,7 @@ describe('Encryption and decryption', function () {
       }
    });
 
-   it('round trip blockN, all algorithms', async function () {
+   it('round trip blockN, all algorithms', async () => {
       for (const alg of Ciphers.algs()) {
          let [clearStream, clearData] = streamFromStr('This is a secret 🦀');
          const pwd = 'a not good pwd';
@@ -263,7 +263,7 @@ describe('Encryption and decryption', function () {
          await expect(latest.encryptBlockN()).rejects.toThrow(/Encipher invalid state/);
 
          // once invalidated, it stays that way...
-         await expect(latest.encryptBlock0()).rejects.toThrow(new RegExp('Encipher invalid state.+'));
+         await expect(latest.encryptBlock0()).rejects.toThrow(/Encipher invalid state.+/);
 
          [clearStream, clearData] = streamFromStr('This is a secret 🦀');
          encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
@@ -308,7 +308,7 @@ describe('Encryption and decryption', function () {
    });
 });
 
-describe('Decryption known values', function () {
+describe('Decryption known values', () => {
    const userCredBytes = [
       58, 28, 170, 106, 54, 250, 156, 83, 166, 217, 142, 101, 57, 57, 8, 146, 23, 55, 184, 6, 133, 242, 197, 43, 98,
       180, 61, 166, 219, 54, 164, 55,
@@ -320,7 +320,7 @@ describe('Decryption known values', function () {
       userCred = new Uint8Array(userCredBytes);
    });
 
-   it('correct cipherdata info and decryption, v4', async function () {
+   it('correct cipherdata info and decryption, v4', async () => {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
@@ -368,7 +368,7 @@ describe('Decryption known values', function () {
       await expect(decipher.decryptBlock0()).resolves.toEqual(clearData);
    });
 
-   it('correct cipherdata info and decryption, v5', async function () {
+   it('correct cipherdata info and decryption, v5', async () => {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
@@ -418,7 +418,7 @@ describe('Decryption known values', function () {
       await expect(decipher.decryptBlockN()).resolves.toEqual(new Uint8Array(0));
    });
 
-   it('correct cipherdata info and decryption, multi version', async function () {
+   it('correct cipherdata info and decryption, multi version', async () => {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
@@ -484,7 +484,7 @@ describe('Decryption known values', function () {
       }
    });
 
-   it('missing terminal block indicator, v5', async function () {
+   it('missing terminal block indicator, v5', async () => {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
@@ -535,7 +535,7 @@ describe('Decryption known values', function () {
       await expect(decipher.decryptBlockN()).rejects.toThrow(/Missing terminal/);
    });
 
-   it('missing terminal block indicator, multi version', async function () {
+   it('missing terminal block indicator, multi version', async () => {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
@@ -599,7 +599,7 @@ describe('Decryption known values', function () {
       }
    });
 
-   it('extra terminal block indicator, multi version', async function () {
+   it('extra terminal block indicator, multi version', async () => {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
@@ -660,7 +660,7 @@ describe('Decryption known values', function () {
       }
    });
 
-   it('flipped terminal block indicator, multi version', async function () {
+   it('flipped terminal block indicator, multi version', async () => {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwd = 'a 🌲 of course';
       const hint = '🌧️';
@@ -721,7 +721,7 @@ describe('Decryption known values', function () {
       }
    });
 
-   it('bad pwd to cipherdata info and decrypt, v4', async function () {
+   it('bad pwd to cipherdata info and decrypt, v4', async () => {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwdGood = 'a 🌲 of course';
       const pwdBad = 'a 🌵 of course';
@@ -774,17 +774,17 @@ describe('Decryption known values', function () {
       await expect(decipher.getCipherDataInfo()).rejects.toThrow(/Invalid MAC/);
 
       // decipher now in invalid state from prevous getCipherDataInfo call
-      await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('Decipher invalid.+'));
+      await expect(decipher.decryptBlock0()).rejects.toThrow(/Decipher invalid.+/);
 
       // Test wrong userCred with block decrypt first (error msg is different)
       [cipherStream] = streamFromBytes(cipherData);
       keyProvider = new PWDKeyProvider(userCredBad.slice(0), [pwdGood, undefined]);
       decipher = await getStreamDecipher(cipherStream, keyProvider);
 
-      await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('Invalid MAC.+'));
+      await expect(decipher.decryptBlock0()).rejects.toThrow(/Invalid MAC.+/);
    });
 
-   it('bad pwd to cipherdata info and decrypt, v5', async function () {
+   it('bad pwd to cipherdata info and decrypt, v5', async () => {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwdGood = 'a 🌲 of course';
       const pwdBad = 'a 🌵 of course';
@@ -838,10 +838,10 @@ describe('Decryption known values', function () {
 
       // Does not get MAC error because the decipher instance is now in a
       // bad state and will remain so... forever...
-      await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('Decipher invalid state.+'));
+      await expect(decipher.decryptBlock0()).rejects.toThrow(/Decipher invalid state.+/);
    });
 
-   it('bad pwd to cipherdata info and decrypt, multi version', async function () {
+   it('bad pwd to cipherdata info and decrypt, multi version', async () => {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwdGood = 'a 🌲 of course';
       const pwdBad = 'a 🌵 of course';
@@ -905,18 +905,18 @@ describe('Decryption known values', function () {
 
             // Does not get MAC error because the decipher instance is now in a
             // bad state and will remain so... forever...
-            await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('Decipher invalid state.+'));
+            await expect(decipher.decryptBlock0()).rejects.toThrow(/Decipher invalid state.+/);
          }
       }
    });
 });
 
-describe('Custom AD encryption and decryption', function () {
+describe('Custom AD encryption and decryption', () => {
    beforeEach(async () => {
       await cryptoReady();
    });
 
-   it('round trip block0, all algorithms with customAd', async function () {
+   it('round trip block0, all algorithms with customAd', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
@@ -960,9 +960,9 @@ describe('Custom AD encryption and decryption', function () {
       }
    });
 
-   it('round trip blockN, all algorithms with customAd', async function () {
+   it('round trip blockN, all algorithms with customAd', async () => {
       for (const alg of Ciphers.algs()) {
-         let [clearStream, clearData] = streamFromStr('This is a secret 🦀');
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦀');
          const pwd = 'a not good pwd';
          const hint = 'sorta';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -985,7 +985,7 @@ describe('Custom AD encryption and decryption', function () {
          const block0 = await latest.encryptBlock0();
          const blockN = await latest.encryptBlockN();
 
-         let [cipherStream] = streamFromCipherBlock([block0, blockN]);
+         const [cipherStream] = streamFromCipherBlock([block0, blockN]);
          const decKeyProvider = new PWDKeyProvider(
             userCred,
             async (cdinfo) => {
@@ -995,9 +995,9 @@ describe('Custom AD encryption and decryption', function () {
             },
             customAd,
          );
-         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
-         let decb0 = await decipher.decryptBlock0();
+         const decb0 = await decipher.decryptBlock0();
          await expect(areEqual(decb0, clearData.slice(0, readStart))).resolves.toEqual(true);
 
          const decb1 = await decipher.decryptBlockN();
@@ -1005,7 +1005,7 @@ describe('Custom AD encryption and decryption', function () {
       }
    });
 
-   it('round trip block0, all algorithms missing customAd', async function () {
+   it('round trip block0, all algorithms missing customAd', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
@@ -1044,7 +1044,7 @@ describe('Custom AD encryption and decryption', function () {
       }
    });
 
-   it('round trip block0, all algorithms added customAd', async function () {
+   it('round trip block0, all algorithms added customAd', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
@@ -1083,7 +1083,7 @@ describe('Custom AD encryption and decryption', function () {
       }
    });
 
-   it('round trip block0, all algorithms changed customAd', async function () {
+   it('round trip block0, all algorithms changed customAd', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
@@ -1128,9 +1128,9 @@ describe('Custom AD encryption and decryption', function () {
       }
    });
 
-   it('round trip blockN, all algorithms missing customAd', async function () {
+   it('round trip blockN, all algorithms missing customAd', async () => {
       for (const alg of Ciphers.algs()) {
-         let [clearStream, clearData] = streamFromStr('This is a secret 🦀');
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦀');
          const pwd = 'a not good pwd';
          const hint = 'sorta';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -1150,22 +1150,22 @@ describe('Custom AD encryption and decryption', function () {
          const block0 = await latest.encryptBlock0();
          const blockN = await latest.encryptBlockN();
 
-         let [cipherStream] = streamFromCipherBlock([block0, blockN]);
+         const [cipherStream] = streamFromCipherBlock([block0, blockN]);
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
-         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          await expect(decipher.decryptBlock0()).rejects.toThrow(/Invalid MAC/);
          await expect(decipher.decryptBlockN()).rejects.toThrow(/Decipher invalid state/);
       }
    });
 
-   it('round trip blockN, all algorithms added customAd', async function () {
+   it('round trip blockN, all algorithms added customAd', async () => {
       for (const alg of Ciphers.algs()) {
-         let [clearStream, clearData] = streamFromStr('This is a secret 🦀');
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦀');
          const pwd = 'a not good pwd';
          const hint = 'sorta';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -1181,7 +1181,7 @@ describe('Custom AD encryption and decryption', function () {
          const block0 = await latest.encryptBlock0();
          const blockN = await latest.encryptBlockN();
 
-         let [cipherStream] = streamFromCipherBlock([block0, blockN]);
+         const [cipherStream] = streamFromCipherBlock([block0, blockN]);
          const decKeyProvider = new PWDKeyProvider(
             userCred,
             async (cdinfo) => {
@@ -1191,16 +1191,16 @@ describe('Custom AD encryption and decryption', function () {
             },
             customAd,
          );
-         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          await expect(decipher.decryptBlock0()).rejects.toThrow(/Invalid MAC/);
          await expect(decipher.decryptBlockN()).rejects.toThrow(/Decipher invalid state/);
       }
    });
 
-   it('round trip blockN, all algorithms tampered customAd', async function () {
+   it('round trip blockN, all algorithms tampered customAd', async () => {
       for (const alg of Ciphers.algs()) {
-         let [clearStream, clearData] = streamFromStr('This is a secret 🦀');
+         const [clearStream, clearData] = streamFromStr('This is a secret 🦀');
          const pwd = 'a not good pwd';
          const hint = 'sorta';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -1222,7 +1222,7 @@ describe('Custom AD encryption and decryption', function () {
 
          // modify customAd so it doesn't match what was used for encryption
          customAd[customAd.length - 1] ^= 1;
-         let [cipherStream] = streamFromCipherBlock([block0, blockN]);
+         const [cipherStream] = streamFromCipherBlock([block0, blockN]);
          const decKeyProvider = new PWDKeyProvider(
             userCred,
             async (cdinfo) => {
@@ -1232,7 +1232,7 @@ describe('Custom AD encryption and decryption', function () {
             },
             customAd,
          );
-         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          await expect(decipher.decryptBlock0()).rejects.toThrow(/Invalid MAC/);
          await expect(decipher.decryptBlockN()).rejects.toThrow(/Decipher invalid state/);
@@ -1240,12 +1240,12 @@ describe('Custom AD encryption and decryption', function () {
    });
 });
 
-describe('Detect changed cipher data', function () {
+describe('Detect changed cipher data', () => {
    beforeEach(async () => {
       await cryptoReady();
    });
 
-   it('detect changed headerData', async function () {
+   it('detect changed headerData', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
@@ -1268,7 +1268,7 @@ describe('Detect changed cipher data', function () {
          const makeDecKP = () => new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
 
          // set byte in MAC
-         block0.parts[0][12] = block0.parts[0][12] == 123 ? 124 : 123;
+         block0.parts[0][12] = block0.parts[0][12] === 123 ? 124 : 123;
          let [cipherStream] = streamFromCipherBlock([block0]);
          let decipher = await getStreamDecipher(cipherStream, makeDecKP());
 
@@ -1281,7 +1281,7 @@ describe('Detect changed cipher data', function () {
          await expect(decipher.decryptBlock0()).resolves.toEqual(clearData);
 
          // set version
-         block0.parts[0][33] = block0.parts[0][33] == 43 ? 45 : 43;
+         block0.parts[0][33] = block0.parts[0][33] === 43 ? 45 : 43;
          [cipherStream] = streamFromCipherBlock([block0]);
 
          await expect(
@@ -1290,7 +1290,7 @@ describe('Detect changed cipher data', function () {
 
          // set length
          block0.parts[0] = new Uint8Array(savedHeader);
-         block0.parts[0][36] = block0.parts[0][36] == 43 ? 45 : 43;
+         block0.parts[0][36] = block0.parts[0][36] === 43 ? 45 : 43;
          [cipherStream] = streamFromCipherBlock([block0]);
          decipher = await getStreamDecipher(cipherStream, makeDecKP());
 
@@ -1298,7 +1298,7 @@ describe('Detect changed cipher data', function () {
       }
    });
 
-   it('detect changed additionalData', async function () {
+   it('detect changed additionalData', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
@@ -1322,11 +1322,11 @@ describe('Detect changed cipher data', function () {
                return [pwd, undefined];
             });
 
-         block0.parts[1][12] = block0.parts[1][12] == 123 ? 124 : 123;
+         block0.parts[1][12] = block0.parts[1][12] === 123 ? 124 : 123;
          let [cipherStream] = streamFromCipherBlock([block0]);
          let decipher = await getStreamDecipher(cipherStream, makeDecKP());
 
-         await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('.+MAC.+'));
+         await expect(decipher.decryptBlock0()).rejects.toThrow(/.+MAC.+/);
 
          // Confirm we're back to good state
          block0.parts[1] = new Uint8Array(savedAD);
@@ -1337,15 +1337,15 @@ describe('Detect changed cipher data', function () {
 
          // set byte near end
          const back = block0.parts[1].byteLength - 4;
-         block0.parts[1][back] = block0.parts[1][back] == 43 ? 45 : 43;
+         block0.parts[1][back] = block0.parts[1][back] === 43 ? 45 : 43;
          [cipherStream] = streamFromCipherBlock([block0]);
          decipher = await getStreamDecipher(cipherStream, makeDecKP());
 
-         await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('.+MAC.+'));
+         await expect(decipher.decryptBlock0()).rejects.toThrow(/.+MAC.+/);
       }
    });
 
-   it('detect changed encryptedData', async function () {
+   it('detect changed encryptedData', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
@@ -1360,20 +1360,20 @@ describe('Detect changed cipher data', function () {
          const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
          const block0 = await latest.encryptBlock0();
 
-         block0.parts[2][12] = block0.parts[2][12] == 123 ? 124 : 123;
-         let [cipherStream] = streamFromCipherBlock([block0]);
+         block0.parts[2][12] = block0.parts[2][12] === 123 ? 124 : 123;
+         const [cipherStream] = streamFromCipherBlock([block0]);
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
-         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
-         await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('.+MAC.+'));
+         await expect(decipher.decryptBlock0()).rejects.toThrow(/.+MAC.+/);
       }
    });
 
-   it('does not detect changed headerData, skip MAC verify', async function () {
+   it('does not detect changed headerData, skip MAC verify', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
@@ -1391,17 +1391,17 @@ describe('Detect changed cipher data', function () {
          const block0 = await latest.encryptBlock0();
 
          // set byte in MAC
-         block0.parts[0][12] = block0.parts[0][12] == 123 ? 124 : 123;
-         let [cipherStream] = streamFromCipherBlock([block0]);
+         block0.parts[0][12] = block0.parts[0][12] === 123 ? 124 : 123;
+         const [cipherStream] = streamFromCipherBlock([block0]);
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
-         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          // Monkey patch to skip MAC validation
-         //@ts-ignore
+         //@ts-expect-error
          decipher['_verifyMAC'] = (): Promise<boolean> => {
             return Promise.resolve(true);
          };
@@ -1412,7 +1412,7 @@ describe('Detect changed cipher data', function () {
       }
    });
 
-   it('detect changed additionalData, skip MAC verify', async function () {
+   it('detect changed additionalData, skip MAC verify', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
@@ -1428,17 +1428,17 @@ describe('Detect changed cipher data', function () {
          const block0 = await latest.encryptBlock0();
 
          // set byte in additional data
-         block0.parts[1][12] = block0.parts[1][12] == 123 ? 124 : 123;
-         let [cipherStream] = streamFromCipherBlock([block0]);
+         block0.parts[1][12] = block0.parts[1][12] === 123 ? 124 : 123;
+         const [cipherStream] = streamFromCipherBlock([block0]);
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
-         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          // Monkey patch to skip MAC validation
-         //@ts-ignore
+         //@ts-expect-error
          decipher['_verifyMAC'] = (): Promise<boolean> => {
             return Promise.resolve(true);
          };
@@ -1450,7 +1450,7 @@ describe('Detect changed cipher data', function () {
       }
    });
 
-   it('detect changed encryptedData, skip MAC verify', async function () {
+   it('detect changed encryptedData, skip MAC verify', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
@@ -1466,17 +1466,17 @@ describe('Detect changed cipher data', function () {
          const block0 = await latest.encryptBlock0();
 
          // set byte in encrypted data
-         block0.parts[2][12] = block0.parts[2][12] == 123 ? 124 : 123;
-         let [cipherStream] = streamFromCipherBlock([block0]);
+         block0.parts[2][12] = block0.parts[2][12] === 123 ? 124 : 123;
+         const [cipherStream] = streamFromCipherBlock([block0]);
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
-         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          // Monkey patch to skip MAC validation
-         //@ts-ignore
+         //@ts-expect-error
          decipher['_verifyMAC'] = (): Promise<boolean> => {
             return Promise.resolve(true);
          };
@@ -1489,7 +1489,7 @@ describe('Detect changed cipher data', function () {
    });
 });
 
-describe('Detect block order changes', function () {
+describe('Detect block order changes', () => {
    const pwd = 'a not good pwd';
    const hint = 'sorta';
    let userCred: Uint8Array<ArrayBuffer>;
@@ -1517,45 +1517,45 @@ describe('Detect block order changes', function () {
       return [block0, block1, block2];
    }
 
-   it('block order good, all algorithms', async function () {
+   it('block order good, all algorithms', async () => {
       const clearData = new TextEncoder().encode(clearStr);
 
       for (const alg of Ciphers.algs()) {
          const [block0, block1, block2] = await get_blocks(alg);
 
          // First make sure we can decrypt in the proper order
-         let [cipherStream] = streamFromCipherBlock([block0, block1, block2]);
+         const [cipherStream] = streamFromCipherBlock([block0, block1, block2]);
          const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
-         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          const decb0 = await decipher.decryptBlock0();
          const decb1 = await decipher.decryptBlockN();
          const decb2 = await decipher.decryptBlockN();
 
-         let [decrypted] = streamFromBytes([decb0, decb1, decb2]);
+         const [decrypted] = streamFromBytes([decb0, decb1, decb2]);
 
          await expect(areEqual(decrypted, clearData)).resolves.toEqual(true);
       }
    });
 
-   it('blockN bad order detected, all algorithms', async function () {
+   it('blockN bad order detected, all algorithms', async () => {
       const clearData = new TextEncoder().encode(clearStr);
 
       for (const alg of Ciphers.algs()) {
          const [block0, block1, block2] = await get_blocks(alg);
 
          // Order of block N+ changed
-         let [cipherStream] = streamFromCipherBlock([block0, block2, block1]);
+         const [cipherStream] = streamFromCipherBlock([block0, block2, block1]);
          const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
-         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          const decb0 = await decipher.decryptBlock0();
 
@@ -1567,30 +1567,30 @@ describe('Detect block order changes', function () {
       }
    });
 
-   it('block0 bad order detected, all algorithms', async function () {
+   it('block0 bad order detected, all algorithms', async () => {
       const clearData = new TextEncoder().encode(clearStr);
 
       for (const alg of Ciphers.algs()) {
          const [block0, block1, block2] = await get_blocks(alg);
 
-         let [cipherStream] = streamFromCipherBlock([block1, block0, block2]);
+         const [cipherStream] = streamFromCipherBlock([block1, block0, block2]);
          const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, undefined];
          });
-         let decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          // Will fail in V4 and later because block0 format or MAC is invalid.
          // Failure detection can happen at different spots while data is unpacked
          // since random values may look valid. MAC will alsways be
          // invalid if we get that far.
-         await expect(decipher.decryptBlock0()).rejects.toThrow(new RegExp('Invalid.+'));
+         await expect(decipher.decryptBlock0()).rejects.toThrow(/Invalid.+/);
       }
    });
 });
 
-describe('Inter-block MAC chaining', function () {
+describe('Inter-block MAC chaining', () => {
    const pwd = 'a not good pwd';
    const clearStr = 'This is a secret 🦀 with extra wording for more blocks';
 
@@ -1626,7 +1626,7 @@ describe('Inter-block MAC chaining', function () {
    }
 
    // Validates the splice test approach before it's used to assert failures.
-   it('extract and concat round-trip succeeds, all algorithms', async function () {
+   it('extract and concat round-trip succeeds, all algorithms', async () => {
       const clearData = new TextEncoder().encode(clearStr);
       for (const alg of Ciphers.algs()) {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
@@ -1649,7 +1649,7 @@ describe('Inter-block MAC chaining', function () {
 
    // Verifies MAC chain detects swapped blocks even with the same signing key
    // (derviced from matching userCred + slt + alg + lp + ver)
-   it('block spliced from a parallel stream fails MAC, all algorithms', async function () {
+   it('block spliced from a parallel stream fails MAC, all algorithms', async () => {
       for (const alg of Ciphers.algs()) {
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
          const slt = crypto.getRandomValues(new Uint8Array(cc.SLT_BYTES));
@@ -1669,7 +1669,7 @@ describe('Inter-block MAC chaining', function () {
    });
 });
 
-describe('Key commitment is enforced by AEAD', function () {
+describe('Key commitment is enforced by AEAD', () => {
    beforeEach(async () => {
       await cryptoReady();
    });
@@ -1693,7 +1693,7 @@ describe('Key commitment is enforced by AEAD', function () {
       return baseKeyProvider;
    }
 
-   it('block0 decryption fails when commitment is tampered', async function () {
+   it('block0 decryption fails when commitment is tampered', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('A block0 secret 🦫');
 
@@ -1713,7 +1713,7 @@ describe('Key commitment is enforced by AEAD', function () {
       }
    });
 
-   it('blockN decryption fails when commitment is tampered', async function () {
+   it('blockN decryption fails when commitment is tampered', async () => {
       for (const alg of Ciphers.algs()) {
          // Enough plaintext to produce a block1
          const plaintext = 'x'.repeat(2048);
@@ -1738,7 +1738,7 @@ describe('Key commitment is enforced by AEAD', function () {
          const tamperedDec = await getStreamDecipher(cipherStream, normalKeyProvider());
          await expect(tamperedDec.decryptBlock0()).resolves.not.toThrow();
 
-         // @ts-ignore — inject tampering keyProvider for blockN only
+         // @ts-expect-error — inject tampering keyProvider for blockN only
          tamperedDec._keyProvider = tamperingKeyProvider(tamperedDec._keyProvider);
          await expect(tamperedDec.decryptBlockN()).rejects.toThrow(DOMException);
       }

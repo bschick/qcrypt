@@ -130,28 +130,28 @@ export const Patterns = {
 export function matchEvent(event: Record<string, any>, methodMap: MethodMap): HttpDetails {
    if (
       !event ||
-      !event['requestContext'] ||
-      !event['requestContext']['http'] ||
-      !event['headers'] ||
-      !event['headers']['x-passkey-rpid']
+      !event.requestContext ||
+      !event.requestContext.http ||
+      !event.headers ||
+      !event.headers['x-passkey-rpid']
    ) {
       throw new ParamError('invalid request, missing context');
    }
 
-   const rpID = event['headers']['x-passkey-rpid'];
+   const rpID = event.headers['x-passkey-rpid'];
    let rpOrigin = `https://${rpID}`;
-   if (event['headers']['x-passkey-port']) {
-      rpOrigin += `:${event['headers']['x-passkey-port']}`;
+   if (event.headers['x-passkey-port']) {
+      rpOrigin += `:${event.headers['x-passkey-port']}`;
    }
 
-   const method: Method = event['requestContext']['http']['method'].toUpperCase();
-   const path = event['requestContext']['http']['path'];
+   const method: Method = event.requestContext.http.method.toUpperCase();
+   const path = event.requestContext.http.path;
    // console.log(`${method} ${path}`);
 
    const handlerInfos: HandlerInfo[] = methodMap[method];
 
    // rpID and therefore hostname is constrained to *.quickcrypt.org by cloudfront
-   for (let handerInfo of handlerInfos) {
+   for (const handerInfo of handlerInfos) {
       const match = handerInfo.pattern.exec({
          hostname: rpID,
          pathname: path,
@@ -161,7 +161,7 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
          let body: Record<string, any> = {};
          let rawBody = '';
          if ('body' in event) {
-            rawBody = event['body'] ?? '';
+            rawBody = event.body ?? '';
             // Uncomment for debugging
             // console.log(`raw body: ${rawBody}`);
 
@@ -176,10 +176,10 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
             }
          }
 
-         const params: QParams = event['queryStringParameters'] ?? {};
-         const cookie: string | undefined = event['headers']['cookie'];
-         const userAgent: string | undefined = event['headers']['user-agent'];
-         const proofHeader: string | undefined = event['headers']['x-proof'];
+         const params: QParams = event.queryStringParameters ?? {};
+         const cookie: string | undefined = event.headers.cookie;
+         const userAgent: string | undefined = event.headers['user-agent'];
+         const proofHeader: string | undefined = event.headers['x-proof'];
          let proofSignature: string | undefined;
          let proofTimestamp: string | undefined;
          let proofNonce: string | undefined;
@@ -202,7 +202,7 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
             name: handerInfo.name,
             method: method,
             path: path,
-            rawQueryString: event['rawQueryString'] || '',
+            rawQueryString: event.rawQueryString || '',
             rpID: rpID,
             rpOrigin: rpOrigin,
             authorize: handerInfo.authorize,

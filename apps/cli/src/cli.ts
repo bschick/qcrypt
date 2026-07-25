@@ -13,7 +13,7 @@ import {
    PWDKeyProvider,
 } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
-import fs from 'fs';
+import fs from 'node:fs';
 import { Readable, Writable } from 'node:stream';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
@@ -137,7 +137,7 @@ async function getUserCred(
 }
 
 async function getCipherStream(io: IO, silent?: boolean): Promise<ReadableStream<Uint8Array>> {
-   let stream;
+   let stream: ReadableStream<Uint8Array>;
    if (io.pipedIn && io.b64urlIn) {
       const text = await readStreamAll(io.pipedIn, true);
       if (!text) {
@@ -168,7 +168,7 @@ async function getCipherStream(io: IO, silent?: boolean): Promise<ReadableStream
 }
 
 async function getClearStream(io: IO, silent?: boolean): Promise<ReadableStream<Uint8Array>> {
-   let stream;
+   let stream: ReadableStream<Uint8Array>;
    if (io.pipedIn && io.b64urlIn) {
       const text = await readStreamAll(io.pipedIn, true);
       if (!text) {
@@ -226,7 +226,7 @@ Version           : ${cdInfo.ver}\n`);
 
 async function getSensitiveInput(msg: string, io: IO): Promise<string> {
    const val = await password(
-      { message: msg + ':', mask: '*', validate: (v) => (!v ? `${msg} is required` : true) },
+      { message: `${msg}:`, mask: '*', validate: (v) => (!v ? `${msg} is required` : true) },
       { input: io.ttyIn, output: iqOutput(io) },
    );
    // inquirer's answered render leaves the cursor on the same line; ensure the
@@ -255,11 +255,11 @@ async function encrypt(
 
       let nextAlg: cc.CipherAlgs = 'X20-PLY';
       const keys = Ciphers.algs();
-      let choices = keys.map((key) => {
+      const choices = keys.map((key) => {
          return { name: Ciphers.algDescription(key), value: key };
       });
 
-      let algs: cc.CipherAlgs[] = [];
+      const algs: cc.CipherAlgs[] = [];
 
       for (let l = 1; l <= args.loops; l++) {
          const lpMsg = args.loops > 1 ? ` for loop ${l} of ${args.loops}` : '';
@@ -354,12 +354,12 @@ async function encrypt(
 
       if (io.b64urlOut) {
          const cipherData = await readStreamAll(cipherStream);
-         io.pipedOut.write(bytesToBase64(cipherData) + '\n');
+         io.pipedOut.write(`${bytesToBase64(cipherData)}\n`);
       } else if (io.binaryOut) {
          await writeAndCloseStream(cipherStream, io.pipedOut);
       } else {
          const cipherData = await readStreamAll(cipherStream);
-         io.pipedOut.write(makeCipherArmor(cipherData, 'compact') + '\n');
+         io.pipedOut.write(`${makeCipherArmor(cipherData, 'compact')}\n`);
       }
    } catch (err) {
       if (args.debug) {
@@ -419,12 +419,12 @@ async function decrypt(
 
       if (io.b64urlOut) {
          const clearData = await readStreamAll(clearStream);
-         io.pipedOut.write(bytesToBase64(clearData) + '\n');
+         io.pipedOut.write(`${bytesToBase64(clearData)}\n`);
       } else if (io.binaryOut) {
          await writeAndCloseStream(clearStream, io.pipedOut);
       } else {
          const clearText = await readStreamAll(clearStream, true);
-         io.pipedOut.write(clearText + '\n');
+         io.pipedOut.write(`${clearText}\n`);
       }
    } catch (err) {
       if (args.debug) {
@@ -438,8 +438,8 @@ async function decrypt(
 
 function CoerceNumber(argName: string) {
    return (val: any) => {
-      let num = Number(val);
-      if (isNaN(num)) {
+      const num = Number(val);
+      if (Number.isNaN(num)) {
          throw new Error(`${argName} is not a valid number`);
       }
       return num;

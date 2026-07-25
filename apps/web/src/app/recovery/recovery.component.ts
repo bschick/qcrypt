@@ -51,8 +51,6 @@ export class RecoveryComponent implements OnInit {
    private router = inject<Router>(Router);
    private activeRoute = inject<ActivatedRoute>(ActivatedRoute);
 
-   constructor() {}
-
    ngOnInit() {
       const [userId, userName] = this.authSvc.loadKnownUser();
       if (userId && userName) {
@@ -73,7 +71,7 @@ export class RecoveryComponent implements OnInit {
                   this.recoverUserCred = this.activeRoute.snapshot.queryParamMap.get('usercred');
                   if (!this.recoveryUserId || !this.recoverUserCred) {
                      throw new Error(
-                        'recovery link missing userid or usercred: ' + this.activeRoute.snapshot.toString(),
+                        `recovery link missing userid or usercred: ${this.activeRoute.snapshot.toString()}`,
                      );
                   }
                   this.validRecoveryLink = true;
