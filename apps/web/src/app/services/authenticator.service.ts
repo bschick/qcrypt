@@ -27,7 +27,8 @@ import {
    type PublicKeyCredentialRequestOptionsJSON,
    type AuthenticationResponseJSON,
    type RegistrationResponseJSON,
-   startRegistration, startAuthentication
+   startRegistration,
+   startAuthentication,
 } from '@simplewebauthn/browser';
 import { Subject, Subscription, filter } from 'rxjs';
 import {
@@ -41,7 +42,8 @@ import {
    streamFromBytes,
    MasterKeyKeyProvider,
    readStreamAll,
-   getRandom } from '@qcrypt/crypto';
+   getRandom,
+} from '@qcrypt/crypto';
 import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 import * as cc from '@qcrypt/crypto/consts';
@@ -56,7 +58,7 @@ import {
    RECOVERYID_BYTES,
    CHALLENGE_BYTES,
    type RequestTypes,
-   type ResponseTypes
+   type ResponseTypes,
 } from '@qcrypt/api';
 import { KeystoreService } from './keystore.service';
 import { CipherService } from './cipher.service';
@@ -81,7 +83,6 @@ export const ACTIVITY_TIMEOUT_SEC = 60 * 60 * 1.5;
 const EXPIRY_CHECK_INTERVAL_MS = 1000 * 60 * 2;
 const KEYSTORE_SLOT = 'user-cred-key';
 
-
 export type VerifiedUserInfo = {
    userId: string;
    userName: string;
@@ -99,7 +100,7 @@ type FetchArgs = {
    params?: string;
    bodyJSON?: string;
    session?: SessionState;
-}
+};
 
 type SessionState = Partial<CredentialPayload> & { userId: string };
 
@@ -117,13 +118,13 @@ export enum AuthEvent {
    Login,
    Logout,
    Forget,
-   Delete
-};
+   Delete,
+}
 
 export type AuthEventData = {
-   readonly event: AuthEvent,
-   readonly userId: string | null,
-   readonly userName: string | null,
+   readonly event: AuthEvent;
+   readonly userId: string | null;
+   readonly userName: string | null;
 };
 
 // Signals a passkey ceremony produced no PRF output where the flow required one.
@@ -135,12 +136,11 @@ export class PrfUnsupportedError extends Error {
 }
 
 @Injectable({
-   providedIn: 'root'
+   providedIn: 'root',
 })
 export class AuthenticatorService {
-
    public userInfo = signal<VerifiedUserInfo | undefined>(undefined);
-   public ready: Promise<[void, void]>;
+   public ready: Promise<unknown>;
 
    private _subject = new Subject<AuthEventData>();
    private _intervalId: number = 0;
@@ -163,7 +163,11 @@ export class AuthenticatorService {
       });
 
       const loadCrypto = async () => {
-         try { await cryptoReady(); } finally { resolveCrypto(); }
+         try {
+            await cryptoReady();
+         } finally {
+            resolveCrypto();
+         }
       };
 
       const restore = this._restoreSession(loadCrypto).catch((err) => console.error(err));
@@ -193,12 +197,9 @@ export class AuthenticatorService {
    // using a different Pk until this tab detects it
    public hasSession(): boolean {
       const session = this._getSessionState();
-      return !!session
-         && !!session.pkId
-         && !!session.userCredEnc
-         && !!session.version
-         && !!this._csrf
-         && !!this.userInfo();
+      return (
+         !!session && !!session.pkId && !!session.userCredEnc && !!session.version && !!this._csrf && !!this.userInfo()
+      );
    }
 
    public potentialSession(): boolean {
@@ -212,10 +213,11 @@ export class AuthenticatorService {
 
       const valid = !(
          !globalPKId ||
-         (myUserId && (userId !== myUserId)) ||
+         (myUserId && userId !== myUserId) ||
          sessionExpired ||
          activityExpired ||
-         !userId || !userName
+         !userId ||
+         !userName
       );
       return valid;
    }
@@ -232,10 +234,7 @@ export class AuthenticatorService {
    }
 
    public loadKnownUser(): [string | null, string | null] {
-      return [
-         localStorage.getItem('userid'),
-         localStorage.getItem('username')
-      ];
+      return [localStorage.getItem('userid'), localStorage.getItem('username')];
    }
 
    private _getSessionState(): SessionState | null {
@@ -276,7 +275,7 @@ export class AuthenticatorService {
    private async _decryptUserCredEnc(
       userCredEnc: string,
       pkId: string,
-      userId: string
+      userId: string,
    ): Promise<Uint8Array<ArrayBuffer>> {
       const { derivedKey } = await this._keystoreSvc.get(KEYSTORE_SLOT, pkId);
       if (!derivedKey) {
@@ -303,26 +302,17 @@ export class AuthenticatorService {
       return this.userInfo()!;
    }
 
-   private async _doFetch<T>(
-      args: FetchArgs
-   ): Promise<T> {
-      const {
-         method,
-         userId,
-         resource,
-         resourceId,
-         params,
-         bodyJSON
-      } = args;
+   private async _doFetch<T>(args: FetchArgs): Promise<T> {
+      const { method, userId, resource, resourceId, params, bodyJSON } = args;
       const session = args.session ?? this._getSessionState();
 
       const headers = new Headers({
          'Content-Type': 'application/json',
-         'x-csrf-token': this._csrf!
+         'x-csrf-token': this._csrf!,
       });
 
       const bodyData = new TextEncoder().encode(bodyJSON ?? '');
-      const bodyHashHex = bufferToHexString(await crypto.subtle.digest("SHA-256", bodyData));
+      const bodyHashHex = bufferToHexString(await crypto.subtle.digest('SHA-256', bodyData));
 
       // required for AWS OAC (access control to lambda).
       if (method === 'PUT' || method === 'POST' || method === 'PATCH') {
@@ -337,12 +327,8 @@ export class AuthenticatorService {
 
       const url = new URL(path, baseUrl);
 
-      if (session && session.userCredEnc) {
-         const userCred = await this._decryptUserCredEnc(
-            session.userCredEnc,
-            session.pkId!,
-            session.userId
-         );
+      if (session?.userCredEnc) {
+         const userCred = await this._decryptUserCredEnc(session.userCredEnc, session.pkId!, session.userId);
 
          try {
             const proofTs = String(Date.now());
@@ -355,7 +341,7 @@ export class AuthenticatorService {
                proofTs,
                proofNonce,
                bodyHashHex,
-               url.search.slice(1)
+               url.search.slice(1),
             );
             const proofSigB64 = bytesToBase64(proofSig);
             headers.append('x-proof', `${proofSigB64},${proofTs},${proofNonce}`);
@@ -364,28 +350,29 @@ export class AuthenticatorService {
          }
       }
 
+      let response: Response;
       try {
-         var response = await fetch(url, {
+         response = await fetch(url, {
             method: method,
             mode: 'cors',
             cache: 'no-store',
             credentials: 'include',
             body: bodyJSON,
-            headers: headers
+            headers: headers,
          });
       } catch (err) {
          console.error(err);
-         throw new Error('fetch error: ' + url);
+         throw new Error(`fetch error: ${url}`);
       }
 
       if (!response.ok) {
-         if (response.status == 401) {
+         if (response.status === 401) {
             // currently 401 only comes back when auth failed, so logout
             // make sure to pass false to deleteSession to avoid doFetch loop
             this.logout(false);
             throw new Error('logged out');
          } else {
-            throw new Error('response error: ' + await response.text());
+            throw new Error(`response error: ${await response.text()}`);
          }
       }
 
@@ -400,8 +387,8 @@ export class AuthenticatorService {
 
       let session = this._getSessionState();
 
-      if (!session || !session.userCredEnc) {
-         const targetPkId = localStorage.getItem('pkid')
+      if (!session?.userCredEnc) {
+         const targetPkId = localStorage.getItem('pkid');
          if (!targetPkId) {
             return;
          }
@@ -415,8 +402,8 @@ export class AuthenticatorService {
             userCredEnc: relay.userCredEnc,
             userCredExpiry: relay.userCredExpiry,
             version: relay.version,
-            pkId: relay.pkId
-         }
+            pkId: relay.pkId,
+         };
       }
 
       if (!session.userCredEnc || !session.userCredExpiry || (session.version ?? 0) < 1) {
@@ -432,20 +419,15 @@ export class AuthenticatorService {
       const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
          method: 'GET',
          resource: 'session',
-         session
+         session,
       });
 
-      if (!serverLoginUserInfo || !serverLoginUserInfo.verified) {
+      if (!serverLoginUserInfo?.verified) {
          console.error('restore aborted: getSession returned unverified');
          return;
       }
 
-      this._loginRestore(
-         serverLoginUserInfo,
-         session.userCredEnc,
-         session.userCredExpiry,
-         session.version!
-      );
+      this._loginRestore(serverLoginUserInfo, session.userCredEnc, session.userCredExpiry, session.version!);
 
       // test decrypt to fail fast if userCredEnc is invalid
       try {
@@ -481,16 +463,18 @@ export class AuthenticatorService {
 
    // Generates a fresh recovery secret for userId and returns its public key (to store), words
    // (to show once), and the raw secret. The caller takes ownership of and must wipe secret.
-   private _newRecoverySecret(
-      userId: string
-   ): { secret: Uint8Array<ArrayBuffer> , recoveryPubKey: string, recoveryWords: string } {
+   private _newRecoverySecret(userId: string): {
+      secret: Uint8Array<ArrayBuffer>;
+      recoveryPubKey: string;
+      recoveryWords: string;
+   } {
       const recoveryId = getRandom(RECOVERYID_BYTES);
       const secret = recoverySecret(recoveryId, userId);
       try {
          return {
             secret,
             recoveryPubKey: bytesToBase64(getRecoveryPubKey(secret)),
-            recoveryWords: entropyToMnemonic(secret, wordlist)
+            recoveryWords: entropyToMnemonic(secret, wordlist),
          };
       } finally {
          recoveryId.fill(0);
@@ -524,7 +508,7 @@ export class AuthenticatorService {
          const serverUserInfo = await this._doFetch<UserInfo>({
             method: 'PUT',
             resource: 'recover2/key',
-            bodyJSON: JSON.stringify(body)
+            bodyJSON: JSON.stringify(body),
          });
 
          this._updateLoggedInUser(serverUserInfo);
@@ -546,16 +530,14 @@ export class AuthenticatorService {
    }
 
    on(events: AuthEvent[], action: (data: AuthEventData) => void): Subscription {
-      return this._subject.pipe(
-         filter((ed: AuthEventData) => events.includes(ed.event))
-      ).subscribe(action);
+      return this._subject.pipe(filter((ed: AuthEventData) => events.includes(ed.event))).subscribe(action);
    }
 
    private _captureEventData(event: AuthEvent): AuthEventData {
       return {
          event: event,
          userId: this.hasSession() ? this.userId : null,
-         userName: this.hasSession() ? this.userName : null
+         userName: this.hasSession() ? this.userName : null,
       };
    }
 
@@ -566,7 +548,7 @@ export class AuthenticatorService {
    // Takes ownership of and wipes prfKey. The caller must overwrite the returned value promptly.
    private async _resolveUserCred(
       serverLogin: LoginUserInfo,
-      prfKey: Uint8Array<ArrayBuffer> | null
+      prfKey: Uint8Array<ArrayBuffer> | null,
    ): Promise<Uint8Array<ArrayBuffer>> {
       try {
          if (serverLogin.prf) {
@@ -586,19 +568,16 @@ export class AuthenticatorService {
    }
 
    // Takes ownership of and wipes userCred
-   private async _loginUser(
-      serverLogin: LoginUserInfo,
-      userCred: Uint8Array<ArrayBuffer>
-   ): Promise<VerifiedUserInfo> {
+   private async _loginUser(serverLogin: LoginUserInfo, userCred: Uint8Array<ArrayBuffer>): Promise<VerifiedUserInfo> {
       try {
          if (!serverLogin.userId?.length) {
-            throw new Error('invalid user id')
+            throw new Error('invalid user id');
          }
          if (!serverLogin.pkId?.length) {
-            throw new Error('invalid passkey id')
+            throw new Error('invalid passkey id');
          }
          if (userCred?.byteLength !== cc.USERCRED_BYTES) {
-            throw new Error('invalid user credential')
+            throw new Error('invalid user credential');
          }
 
          const { derivedKey, version } = await this._keystoreSvc.create(KEYSTORE_SLOT, serverLogin.pkId);
@@ -609,11 +588,7 @@ export class AuthenticatorService {
          // Keyprovider takes ownership of derivedKey and encryptStream takes ownership of keyprovider
          const keyProvider = new MasterKeyKeyProvider(derivedKey, serverLogin.userId);
          const cipherData = await readStreamAll(
-            await this._cipherSvc.encryptStream(
-               streamFromBytes(userCred),
-               keyProvider,
-               { algs: ['X20-PLY'] }
-            )
+            await this._cipherSvc.encryptStream(streamFromBytes(userCred), keyProvider, { algs: ['X20-PLY'] }),
          );
 
          const userCredEnc = bytesToBase64(cipherData);
@@ -637,22 +612,22 @@ export class AuthenticatorService {
       serverLogin: LoginUserInfo,
       userCredEnc: string,
       userCredExpiry: string,
-      version: number
+      version: number,
    ): VerifiedUserInfo {
-      if (!serverLogin.userId || serverLogin.userId.length == 0) {
-         throw new Error('invalid user id')
+      if (!serverLogin.userId || serverLogin.userId.length === 0) {
+         throw new Error('invalid user id');
       }
-      if (!serverLogin.pkId || serverLogin.pkId.length == 0) {
-         throw new Error('invalid passkey id')
+      if (!serverLogin.pkId || serverLogin.pkId.length === 0) {
+         throw new Error('invalid passkey id');
       }
       if (!userCredEnc) {
-         throw new Error('missing encrypted credential')
+         throw new Error('missing encrypted credential');
       }
       if (!userCredExpiry) {
-         throw new Error('missing credential expiry')
+         throw new Error('missing credential expiry');
       }
       if (version < 1) {
-         throw new Error('invalid version number')
+         throw new Error('invalid version number');
       }
 
       const sessionState: SessionState = {
@@ -664,8 +639,8 @@ export class AuthenticatorService {
       };
       sessionStorage.setItem('sessionstate', JSON.stringify(sessionState));
 
-      if (!serverLogin.csrf || serverLogin.csrf.length == 0) {
-         throw new Error('invalid csrf token')
+      if (!serverLogin.csrf || serverLogin.csrf.length === 0) {
+         throw new Error('invalid csrf token');
       }
 
       this._csrf = serverLogin.csrf;
@@ -714,13 +689,13 @@ export class AuthenticatorService {
 
    private _handlePeerLogout(msg: LogoutPayload): void {
       const sessionState = this._getSessionState();
-      if (sessionState && sessionState.version && msg.version >= sessionState.version) {
+      if (sessionState?.version && msg.version >= sessionState.version) {
          this.logout(false);
       }
    }
 
    private _handlePeerLogin(msg: LoginPayload): void {
-      if(this.hasSession()) {
+      if (this.hasSession()) {
          const sessionState = this._getSessionState()!;
          if (msg.version > sessionState.version!) {
             if (this.userInfo()!.authenticators.some((auth: AuthenticatorInfo) => auth.credentialId === msg.pkId)) {
@@ -742,7 +717,10 @@ export class AuthenticatorService {
 
    private _handlePeerUserInfoChanged(msg: PasskeyIdPayload): void {
       const userInfo = this.userInfo();
-      if (this.hasSession() && userInfo!.authenticators.some((auth: AuthenticatorInfo) => auth.credentialId === msg.pkId)) {
+      if (
+         this.hasSession() &&
+         userInfo!.authenticators.some((auth: AuthenticatorInfo) => auth.credentialId === msg.pkId)
+      ) {
          this.refreshUserInfo().catch((err) => console.error(err));
       }
    }
@@ -762,28 +740,21 @@ export class AuthenticatorService {
          resource: 'session',
          session,
       });
-      if (!serverLoginUserInfo || !serverLoginUserInfo.verified) {
+      if (!serverLoginUserInfo?.verified) {
          this.logout(false);
       } else {
-         this._loginRestore(
-            serverLoginUserInfo,
-            msg.userCredEnc,
-            msg.userCredExpiry,
-            msg.version,
-         );
+         this._loginRestore(serverLoginUserInfo, msg.userCredEnc, msg.userCredExpiry, msg.version);
       }
    }
 
-   private _updateLoggedInUser(
-      serverUser: UserInfo
-   ): VerifiedUserInfo {
+   private _updateLoggedInUser(serverUser: UserInfo): VerifiedUserInfo {
       if (!serverUser.verified) {
          throw new Error('unverified user');
       }
       if (!serverUser.userId || !serverUser.userName) {
          throw new Error('missing userId or userName');
       }
-      if (!serverUser.authenticators || serverUser.authenticators.length == 0) {
+      if (!serverUser.authenticators || serverUser.authenticators.length === 0) {
          throw new Error('missing authenticators');
       }
       if (serverUser.hasRecoveryId === undefined) {
@@ -803,7 +774,7 @@ export class AuthenticatorService {
          pkId: session.pkId!,
          hasRecoveryId: serverUser.hasRecoveryId!,
          prf: serverUser.prf ?? false,
-         authenticators: serverUser.authenticators!
+         authenticators: serverUser.authenticators!,
       };
 
       this.userInfo.set(userInfo);
@@ -868,7 +839,7 @@ export class AuthenticatorService {
       if (global && this.hasSession()) {
          this._pendingLogout = this._doFetch<string>({
             method: 'DELETE',
-            resource: 'session'
+            resource: 'session',
          }).catch(() => undefined);
 
          // rather than clear values, which can trigger error in other tabs,
@@ -903,10 +874,7 @@ export class AuthenticatorService {
       }
    }
 
-   async setPasskeyDescription(
-      credentialId: string,
-      description: string
-   ): Promise<VerifiedUserInfo> {
+   async setPasskeyDescription(credentialId: string, description: string): Promise<VerifiedUserInfo> {
       if (!description) {
          throw new Error('missing description');
       }
@@ -924,7 +892,7 @@ export class AuthenticatorService {
          method: 'PATCH',
          resource: 'passkeys',
          resourceId: credentialId,
-         bodyJSON: JSON.stringify({ description: description })
+         bodyJSON: JSON.stringify({ description: description }),
       });
 
       if (!serverUserInfo) {
@@ -950,7 +918,7 @@ export class AuthenticatorService {
       const serverUserInfo = await this._doFetch<UserInfo>({
          method: 'PATCH',
          resource: 'user',
-         bodyJSON: JSON.stringify({ userName: userName })
+         bodyJSON: JSON.stringify({ userName: userName }),
       });
 
       if (!serverUserInfo) {
@@ -975,7 +943,7 @@ export class AuthenticatorService {
       const serverUserInfo = await this._doFetch<UserInfo>({
          method: 'DELETE',
          resource: 'passkeys',
-         resourceId: credentialId
+         resourceId: credentialId,
       });
 
       if (!serverUserInfo) {
@@ -1023,7 +991,7 @@ export class AuthenticatorService {
       const invitableInfo = await this._doFetch<InvitableInfo>({
          method: 'GET',
          resource: 'invitables',
-         resourceId: invitableId
+         resourceId: invitableId,
       });
 
       if (!invitableInfo) {
@@ -1056,14 +1024,14 @@ export class AuthenticatorService {
 
    // If no userId is provided, will present all Passkeys for this domain
    private async _createSessionImpl(
-      userId: string | null = null
-   ): Promise<{ serverLoginUserInfo: LoginUserInfo, prfKey: Uint8Array<ArrayBuffer> | null }> {
+      userId: string | null = null,
+   ): Promise<{ serverLoginUserInfo: LoginUserInfo; prfKey: Uint8Array<ArrayBuffer> | null }> {
       const { verifyBody, prfKey } = await this._startAuthentication(userId);
       try {
          const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
             method: 'POST',
             resource: 'auth/verify',
-            bodyJSON: JSON.stringify(verifyBody)
+            bodyJSON: JSON.stringify(verifyBody),
          });
 
          if (!serverLoginUserInfo) {
@@ -1080,14 +1048,15 @@ export class AuthenticatorService {
    }
 
    private async _startAuthentication(
-      userId: string | null
-   ): Promise<{ verifyBody: Record<string, any>, prfKey: Uint8Array<ArrayBuffer> | null }> {
+      userId: string | null,
+      // biome-ignore lint/suspicious/noExplicitAny: request body is assembled dynamically per flow
+   ): Promise<{ verifyBody: Record<string, any>; prfKey: Uint8Array<ArrayBuffer> | null }> {
       // Start the process without userId prevents limiting authenticator creds
       // so the user can look for an existing credential
       const optionsJson = await this._doFetch<PublicKeyCredentialRequestOptionsJSON>({
          method: 'POST',
          resource: 'auth/options',
-         bodyJSON: JSON.stringify({ userId: userId })
+         bodyJSON: JSON.stringify({ userId: userId }),
       });
 
       // The account mode is unknown until auth/verify returns, so request PRF output from
@@ -1098,7 +1067,7 @@ export class AuthenticatorService {
       try {
          startAuth = await startAuthentication({
             optionsJSON: optionsJson,
-            useBrowserAutofill: false
+            useBrowserAutofill: false,
          });
       } catch (err) {
          console.error('startAuthentication', err);
@@ -1110,20 +1079,19 @@ export class AuthenticatorService {
       // decoding credential user.id to b64 rather than utf as older versions
       // We therefore need to translate.
       const handleBytes = base64ToBytes(startAuth.response.userHandle!);
-      startAuth.response.userHandle = new TextDecoder("utf-8").decode(handleBytes);
+      startAuth.response.userHandle = new TextDecoder('utf-8').decode(handleBytes);
 
       // Need to return challenge for server lookup w/o userId
       return {
          verifyBody: {
             ...startAuth,
-            challenge: optionsJson.challenge
+            challenge: optionsJson.challenge,
          },
-         prfKey
+         prfKey,
       };
    }
 
    getRecoveryValues(recoveryWords: string): [string, string] {
-
       if (!recoveryWords?.length) {
          throw new Error('missing recovery words');
       }
@@ -1147,7 +1115,6 @@ export class AuthenticatorService {
    }
 
    async recover2(recoveryWords: string): Promise<VerifiedUserInfo> {
-
       const [, userId] = this.getRecoveryValues(recoveryWords);
       const secret = mnemonicToEntropy(recoveryWords, wordlist);
       await this._pendingLogout;
@@ -1156,7 +1123,7 @@ export class AuthenticatorService {
          const { challenge } = await this._doFetch<{ challenge: string }>({
             method: 'POST',
             resource: 'recover2/challenge',
-            bodyJSON: JSON.stringify({ userId: userId })
+            bodyJSON: JSON.stringify({ userId: userId }),
          });
          if (!challenge || base64ToBytes(challenge).byteLength !== CHALLENGE_BYTES) {
             throw new Error('invalid challenge');
@@ -1169,8 +1136,8 @@ export class AuthenticatorService {
             bodyJSON: JSON.stringify({
                userId: userId,
                challenge: challenge,
-               signature: bytesToBase64(signature)
-            })
+               signature: bytesToBase64(signature),
+            }),
          });
 
          return await this._finishRecovery(recoverResp, userId, secret);
@@ -1180,7 +1147,6 @@ export class AuthenticatorService {
    }
 
    async recover(userId: string, userCred: string): Promise<VerifiedUserInfo> {
-
       if (!userId || !userCred) {
          throw new Error('missing userid or usercred');
       }
@@ -1189,7 +1155,7 @@ export class AuthenticatorService {
       const recoverResp = await this._doFetch<RecoverInfo>({
          method: 'POST',
          resource: 'recover',
-         bodyJSON: JSON.stringify({ userId: userId, userCred: userCred })
+         bodyJSON: JSON.stringify({ userId: userId, userCred: userCred }),
       });
 
       return await this._finishRecovery(recoverResp, userId, null);
@@ -1199,9 +1165,8 @@ export class AuthenticatorService {
    private async _finishRecovery(
       recoverResp: RecoverInfo,
       userId: string,
-      secret: Uint8Array<ArrayBuffer> | null
+      secret: Uint8Array<ArrayBuffer> | null,
    ): Promise<VerifiedUserInfo> {
-
       const { regResponse, prfKey } = await this._startRegistration(recoverResp, !!recoverResp.prf);
       let userCred: Uint8Array<ArrayBuffer> | null = null;
 
@@ -1209,7 +1174,7 @@ export class AuthenticatorService {
          const body: RequestTypes.RecoverVerify = {
             ...regResponse,
             userId: userId,
-            challenge: recoverResp.challenge
+            challenge: recoverResp.challenge,
          };
 
          if (recoverResp.prf) {
@@ -1227,12 +1192,11 @@ export class AuthenticatorService {
 
          if (!serverLoginUserInfo.prf) {
             if (!serverLoginUserInfo.userCred) {
-               throw new Error("invalid credential state");
+               throw new Error('invalid credential state');
             }
             userCred = base64ToBytes(serverLoginUserInfo.userCred);
          }
          return await this._loginUser(serverLoginUserInfo, userCred!);
-
       } finally {
          if (userCred) {
             userCred.fill(0);
@@ -1248,7 +1212,7 @@ export class AuthenticatorService {
    // chooses to either accept the non-prf passkey or leak it and try another passkey.
    async newUser(
       userName: string,
-      onPrfUnavailable: () => Promise<'standard' | 'different'>
+      onPrfUnavailable: () => Promise<'standard' | 'different'>,
    ): Promise<VerifiedUserInfo> {
       if (!userName) {
          throw new Error('missing require userName');
@@ -1260,7 +1224,7 @@ export class AuthenticatorService {
          const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
             method: 'POST',
             resource: 'reg/options',
-            bodyJSON: JSON.stringify({ userName: userName })
+            bodyJSON: JSON.stringify({ userName: userName }),
          });
 
          const userId = optionsJson.user.id;
@@ -1280,7 +1244,7 @@ export class AuthenticatorService {
                ...regResponse,
                userId: userId,
                challenge: optionsJson.challenge,
-               recoveryPubKey: recoveryPubKey
+               recoveryPubKey: recoveryPubKey,
             };
             if (prfKey) {
                body.passkeyUserCredEnc = await prfEncrypt(userCred, prfKey, userId);
@@ -1291,7 +1255,7 @@ export class AuthenticatorService {
             const serverLoginUserInfo = await this._passkeyVerify('reg/verify', body);
             if (!serverLoginUserInfo.prf) {
                if (!serverLoginUserInfo.userCred) {
-                  throw new Error("invalid credential state");
+                  throw new Error('invalid credential state');
                }
                userCred = base64ToBytes(serverLoginUserInfo.userCred);
             }
@@ -1311,7 +1275,7 @@ export class AuthenticatorService {
 
       const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
          method: 'GET',
-         resource: 'passkeys/options'
+         resource: 'passkeys/options',
       });
 
       const accountPrf = this.getUserInfo().prf;
@@ -1341,9 +1305,8 @@ export class AuthenticatorService {
    // Starts the registration ceremony, reading the passkey's PRF output only when tryPrf is set
    private async _startRegistration(
       optionsJson: PublicKeyCredentialCreationOptionsJSON,
-      tryPrf: boolean
-   ): Promise<{ regResponse: RegistrationResponseJSON, prfKey: Uint8Array<ArrayBuffer> | null }> {
-
+      tryPrf: boolean,
+   ): Promise<{ regResponse: RegistrationResponseJSON; prfKey: Uint8Array<ArrayBuffer> | null }> {
       // SimpleWebAuthn v10 caused incompatibility with older versions by
       // encoding credential user.id as b64 rather than utf as older versions
       // We therefore need to translate.
@@ -1379,15 +1342,12 @@ export class AuthenticatorService {
    // "hmac-secret" but not "hmac-secret-mc". Hopefully most systems will add "-mc" support
    // to avoid the additional user interaction (this assertion is local and should not be
    // sent to the server)
-   private async _readPrfViaAssertion(
-      credentialId: string,
-      rpId?: string
-   ): Promise<Uint8Array<ArrayBuffer> | null> {
+   private async _readPrfViaAssertion(credentialId: string, rpId?: string): Promise<Uint8Array<ArrayBuffer> | null> {
       const optionsJson: PublicKeyCredentialRequestOptionsJSON = {
          challenge: bytesToBase64(getRandom(CHALLENGE_BYTES)),
          allowCredentials: [{ id: credentialId, type: 'public-key' }],
          userVerification: 'preferred',
-         ...(rpId ? { rpId: rpId } : {})
+         ...(rpId ? { rpId: rpId } : {}),
       };
       injectPrfExtension(optionsJson);
 
@@ -1401,15 +1361,11 @@ export class AuthenticatorService {
       return prfReadKey(startAuth.clientExtensionResults);
    }
 
-   private async _passkeyVerify(
-      resource: string,
-      body: RequestTypes.PasskeyVerify
-   ): Promise<LoginUserInfo> {
-
+   private async _passkeyVerify(resource: string, body: RequestTypes.PasskeyVerify): Promise<LoginUserInfo> {
       const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
          method: 'POST',
          resource: resource,
-         bodyJSON: JSON.stringify(body)
+         bodyJSON: JSON.stringify(body),
       });
 
       if (!serverLoginUserInfo) {

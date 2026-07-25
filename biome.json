@@ -1,0 +1,78 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.5/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!**/*.html",
+      "!**/*.svg",
+      "!vendor",
+      "!apps/server/assets",
+      "!libs/crypto/src/lib/crux/qc_crux.js",
+      "!libs/crypto/src/lib/crux/qc_crux.d.ts",
+      "!libs/crypto/src/lib/crux/wasm.ts"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 3,
+    "lineWidth": 120,
+    "lineEnding": "lf"
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "complexity": {
+        "useLiteralKeys": "off"
+      },
+      "style": {
+        "useBlockStatements": "error",
+        "noNonNullAssertion": "off",
+        "useImportType": "off",
+        "useArrayLiterals": "off"
+      },
+      "suspicious": {
+        "noTsIgnore": "off"
+      }
+    }
+  },
+  "assist": {
+    "enabled": false
+  },
+  "javascript": {
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    },
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "arrowParentheses": "always"
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.json", "**/*.jsonc"],
+      "formatter": {
+        "indentWidth": 2
+      }
+    },
+    {
+      "includes": ["**/*.spec.ts", "**/*.suite.ts", "apps/server/spec/**", "apps/web/tests/**", "apps/web/scripts/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExportsInTest": "off",
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -5,7 +5,12 @@ import { ensureArrayBuffer } from '../utils';
 
 export interface Crux {
    ml_dsa_65_keygen(seed: Uint8Array): { pubKey: Uint8Array<ArrayBuffer>; secKey: Uint8Array<ArrayBuffer> };
-   ml_dsa_65_sign(sk: Uint8Array, message: Uint8Array, context: Uint8Array, randomness: Uint8Array): Uint8Array<ArrayBuffer>;
+   ml_dsa_65_sign(
+      sk: Uint8Array,
+      message: Uint8Array,
+      context: Uint8Array,
+      randomness: Uint8Array,
+   ): Uint8Array<ArrayBuffer>;
    ml_dsa_65_verify(pk: Uint8Array, message: Uint8Array, context: Uint8Array, signature: Uint8Array): boolean;
 }
 
@@ -21,7 +26,8 @@ export async function loadCrux(): Promise<Crux> {
             pair.free();
          }
       },
-      ml_dsa_65_sign: (sk, message, context, randomness) => ensureArrayBuffer(crux.ml_dsa_65_sign(sk, message, context, randomness)),
+      ml_dsa_65_sign: (sk, message, context, randomness) =>
+         ensureArrayBuffer(crux.ml_dsa_65_sign(sk, message, context, randomness)),
       ml_dsa_65_verify: crux.ml_dsa_65_verify,
    };
 }

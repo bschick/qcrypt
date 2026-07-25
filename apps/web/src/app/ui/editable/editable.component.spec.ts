@@ -7,9 +7,8 @@ describe('EditableComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [EditableComponent]
-      })
-         .compileComponents();
+         imports: [EditableComponent],
+      }).compileComponents();
 
       fixture = TestBed.createComponent(EditableComponent);
       component = fixture.componentInstance;

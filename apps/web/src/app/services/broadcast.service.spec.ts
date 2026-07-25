@@ -20,12 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
-import {
-   BroadcastService,
-   type CredentialPayload,
-   MessageKind,
-   type PeerMessage,
-} from './broadcast.service';
+import { BroadcastService, type CredentialPayload, MessageKind, type PeerMessage } from './broadcast.service';
 
 const TEST_PK_ID = 'pk-test-1234567890abcdef';
 const ALT_PK_ID = 'pk-test-fedcba0987654321';
@@ -140,7 +135,7 @@ describe('BroadcastService', () => {
    });
 
    it('reflects live credential changes via the callback', async () => {
-      let credential: CredentialPayload | undefined = undefined;
+      let credential: CredentialPayload | undefined;
       responder.setCredentialProvider(() => credential);
 
       const firstAttempt = await requester.requestCredential(TEST_PK_ID);
@@ -307,13 +302,15 @@ describe('BroadcastService', () => {
       });
 
       await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(received).toEqual([{
-         kind: MessageKind.Login,
-         pkId: TEST_PK_ID,
-         version: 7,
-         userCredEnc: USER_CRED_ENC,
-         userCredExpiry: TEST_EXPIRY,
-      }]);
+      expect(received).toEqual([
+         {
+            kind: MessageKind.Login,
+            pkId: TEST_PK_ID,
+            version: 7,
+            userCredEnc: USER_CRED_ENC,
+            userCredExpiry: TEST_EXPIRY,
+         },
+      ]);
    });
 
    it('handler receives logout messages', async () => {
@@ -323,11 +320,13 @@ describe('BroadcastService', () => {
       responder.sendLogout({ pkId: TEST_PK_ID, version: 4 });
 
       await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(received).toEqual([{
-         kind: MessageKind.Logout,
-         pkId: TEST_PK_ID,
-         version: 4,
-      }]);
+      expect(received).toEqual([
+         {
+            kind: MessageKind.Logout,
+            pkId: TEST_PK_ID,
+            version: 4,
+         },
+      ]);
    });
 
    it('handler receives forget messages', async () => {

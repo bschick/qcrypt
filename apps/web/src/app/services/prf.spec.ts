@@ -22,14 +22,7 @@ SOFTWARE. */
 
 import { cryptoReady, getRandom, bytesToBase64 } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
-import {
-   PRF_SALT,
-   injectPrfExtension,
-   prfEnabled,
-   prfReadKey,
-   prfEncrypt,
-   prfDecrypt,
-} from './prf';
+import { PRF_SALT, injectPrfExtension, prfEnabled, prfReadKey, prfEncrypt, prfDecrypt } from './prf';
 
 function prfExtensionResults(first: ArrayBuffer | Uint8Array | number[]): AuthenticationExtensionsClientOutputs {
    return { prf: { results: { first } } } as AuthenticationExtensionsClientOutputs;

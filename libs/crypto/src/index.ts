@@ -54,7 +54,7 @@ export {
 
 export {
    bufferToBase64URLString,
-   base64URLStringToBuffer
+   base64URLStringToBuffer,
 } from './lib/base64';
 
 // Cipher core types and classes
@@ -84,7 +84,7 @@ export {
 export {
    DecipherV1,
    DecipherV4,
-   DecipherV5
+   DecipherV5,
 } from './lib/deciphers-old';
 
 // Cipher streams

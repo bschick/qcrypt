@@ -71,25 +71,23 @@ const TEST_SETS: readonly TestSet[] = [
    {
       id: 1,
       description: 'Unchanged',
-      morphs: [
-         { name: 'noop', morph: '' },
-      ],
+      morphs: [{ name: 'noop', morph: '' }],
    },
    {
       id: 2,
       description: 'Encryption and decryption (ciphers.spec.ts)',
       morphs: [
-         { name: 'correct cipherdata info and decryption',     morph: '' },
-         { name: 'missing terminal block indicator',           morph: 'b-1-' },
+         { name: 'correct cipherdata info and decryption', morph: '' },
+         { name: 'missing terminal block indicator', morph: 'b-1-' },
       ],
    },
    {
       id: 3,
       description: 'Block ordering and counts',
       morphs: [
-         { name: 'swap b0 and b1',  morph: 'b0^b1' },
-         { name: 'duplicate b1',    morph: 'b1x2' },
-         { name: 'delete b0',       morph: 'b0-' },
+         { name: 'swap b0 and b1', morph: 'b0^b1' },
+         { name: 'duplicate b1', morph: 'b1x2' },
+         { name: 'delete b0', morph: 'b0-' },
       ],
    },
 ];
@@ -178,11 +176,11 @@ function renderFileHeader(parsed: ParsedFile, position: number, total: number): 
 
 function renderSummary(parsed: ParsedFile, requested: readonly TestSet[]): string {
    const rows: [string, string][] = [
-      ['File',        parsed.path],
-      ['Size',        `${parsed.size} bytes (${fmtBytes(parsed.size)})`],
-      ['Version',     String(parsed.version)],
-      ['Blocks',      String(parsed.blocks.length)],
-      ['Test sets',   requested.map((s) => `${s.id} (${s.description})`).join('\n            ')],
+      ['File', parsed.path],
+      ['Size', `${parsed.size} bytes (${fmtBytes(parsed.size)})`],
+      ['Version', String(parsed.version)],
+      ['Blocks', String(parsed.blocks.length)],
+      ['Test sets', requested.map((s) => `${s.id} (${s.description})`).join('\n            ')],
    ];
    const labelW = Math.max(...rows.map((r) => r[0].length));
    const valueW = Math.max(...rows.flatMap((r) => r[1].split('\n').map((s) => s.length)));
@@ -235,8 +233,8 @@ function buildEpilogue(): string {
    lines.push('');
    lines.push(
       'Quick Crypt files are little-endian: V7 = "0700" on disk, plen 0x94 ' +
-      '= "940000". Write bytes in LE order when adding morphs that touch ' +
-      'multi-byte integer fields (ver, plen, alg, ic).'
+         '= "940000". Write bytes in LE order when adding morphs that touch ' +
+         'multi-byte integer fields (ver, plen, alg, ic).',
    );
    lines.push('');
    lines.push('Edit TEST_SETS in testgen.ts to add or modify cases.');
@@ -259,10 +257,9 @@ async function main(): Promise<number> {
             'When no files are given, a single input is read from stdin.',
          (y) =>
             y.positional('files', {
-               describe:
-                  'Path(s) to source Quick Crypt encrypted file(s); omit to read from stdin',
+               describe: 'Path(s) to source Quick Crypt encrypted file(s); omit to read from stdin',
                type: 'string',
-            })
+            }),
       )
       .option('set', {
          type: 'array',
@@ -318,7 +315,7 @@ async function main(): Promise<number> {
    const requestedIds = (argv.set as readonly (string | number)[]).map((s) => Number(s));
    const requested = requestedIds.map((id) => findTestSet(id)!);
    const wrap = argv.wrap as boolean;
-   const b64url = (argv['b64url'] as B64UrlMode | undefined) ?? null;
+   const b64url = (argv.b64url as B64UrlMode | undefined) ?? null;
    const format: OutputFormat = encodesOutput(b64url) ? 'b64url' : 'uint8';
 
    const opts: Options = {
@@ -354,7 +351,7 @@ async function main(): Promise<number> {
          if (fatal.length > 0) {
             console.log(renderFileHeader(parsed, i + 1, sources.length));
             console.error(
-               `${useStdin ? source : basename(source)}: input has ${fatal.length} fatal parse error${fatal.length === 1 ? '' : 's'}; cannot generate fixtures.`
+               `${useStdin ? source : basename(source)}: input has ${fatal.length} fatal parse error${fatal.length === 1 ? '' : 's'}; cannot generate fixtures.`,
             );
             for (const e of fatal) {
                console.error(`  ${e.where}: ${e.message}`);
@@ -384,5 +381,5 @@ main().then(
    (err) => {
       console.error(err instanceof Error ? err.message : String(err));
       process.exit(1);
-   }
+   },
 );

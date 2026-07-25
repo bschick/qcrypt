@@ -21,11 +21,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import {
    Component,
-   Output, Input, EventEmitter,
-   ViewChild, ElementRef,
+   Output,
+   Input,
+   EventEmitter,
+   ViewChild,
+   ElementRef,
    type AfterViewInit,
    type OnInit,
-   type OnDestroy
+   type OnDestroy,
 } from '@angular/core';
 
 import { MatIconModule } from '@angular/material/icon';
@@ -36,29 +39,28 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { zxcvbnReady, getZxcvbn, checkPwned, addMatcher, removeMatcher } from '@qcrypt/crypto';
 import type { ZxcvbnResult } from '@zxcvbn-ts/core';
 import * as lev from '../../services/levenshtein';
-import type {
-   MatchEstimated,
-   MatchExtended,
-   Match,
-   MatchOptions,
-   Matcher,
-} from '@zxcvbn-ts/core/dist/types';
+import type { MatchEstimated, MatchExtended, Match, MatchOptions, Matcher } from '@zxcvbn-ts/core/dist/types';
 
-const COLORS = ['var(--red-pwd-color)', 'var(--red-pwd-color)', 'var(--yellow-pwd-color)', 'var(--green-pwd-color)', 'var(--green-pwd-color)'];
+const COLORS = [
+   'var(--red-pwd-color)',
+   'var(--red-pwd-color)',
+   'var(--yellow-pwd-color)',
+   'var(--green-pwd-color)',
+   'var(--green-pwd-color)',
+];
 
 export type AcceptableState = {
    acceptable: boolean;
    strength: number;
-}
+};
 
 @Component({
    selector: 'app-strengthmeter',
    imports: [MatIconModule, MatButtonModule, MatSliderModule, ReactiveFormsModule, MatTooltipModule],
    templateUrl: './strengthmeter.component.html',
-   styleUrl: './strengthmeter.component.scss'
+   styleUrl: './strengthmeter.component.scss',
 })
 export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy {
-
    public strength = -1;
    public strengthMin = 0;
 
@@ -73,7 +75,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
    private _usedPasswords: string[] = [];
    private _testQueue: string[] = [];
    private _processing = false;
-   private _processTimerId: any = undefined;
+   private _processTimerId: ReturnType<typeof setTimeout> | undefined = undefined;
    private _currentPassword = '';
    private _currentHint = '';
 
@@ -127,15 +129,13 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
       }
    }
 
-
    private processZxcvbn() {
-
       if (!this._processing) {
          this._processing = true;
          (async () => {
             await zxcvbnReady();
             const { zxcvbnAsync } = getZxcvbn();
-            let results: ZxcvbnResult | undefined = undefined;
+            let results: ZxcvbnResult | undefined;
             while (this._testQueue.length > 0) {
                try {
                   // Use the last password in the queue and drop everything else before it
@@ -145,8 +145,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
                   // Loop because new items could be added while we await zxcvbnAsync
                   results = await zxcvbnAsync(testPwd);
                   this.setStrength(results.score);
-               }
-               catch (err) {
+               } catch (err) {
                   console.error(err);
                }
             }
@@ -158,9 +157,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
 
                // Ugly, but zxcvbn puts its own suggestion first so detect our match and pick #2
                let suggestionIndex = 0;
-               const qqMatch = results.sequence.find(
-                  match => 'qqMatcher' === match.pattern
-               );
+               const qqMatch = results.sequence.find((match) => 'qqMatcher' === match.pattern);
                if (qqMatch) {
                   suggestionIndex = 1;
                }
@@ -190,21 +187,21 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
                         i: 0,
                         j: password.length - 1,
                         exact: result.dist === 0,
-                        isHint: false
+                        isHint: false,
                      });
                   }
                }
 
                if (matches.length === 0 && parent._currentHint) {
                   const result = lev.match(password.toLowerCase(), parent._currentHint.toLowerCase());
-                  if (result.norm >= 0.70) {
+                  if (result.norm >= 0.7) {
                      matches.push({
                         pattern: 'qqMatcher',
                         token: password,
                         i: 0,
                         j: password.length - 1,
                         exact: result.dist === 0,
-                        isHint: true
+                        isHint: true,
                      });
                   }
                }
@@ -213,24 +210,24 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
             }
          },
 
-         feedback(match: MatchEstimated, isSoleMatch?: boolean) {
+         feedback(match: MatchEstimated, _isSoleMatch?: boolean) {
             if (match['isHint']) {
                return {
                   warning: `Your hint is similar to your password.`,
                   suggestions: ['Use a hint that helps only you remember the password.'],
-               }
+               };
             } else {
                return {
                   warning: `You already used ${match['exact'] ? 'the same' : 'a similar'} password in a previous loop.`,
                   suggestions: ['For better security, choose a unique password for each loop.'],
-               }
+               };
             }
          },
 
-         scoring(match: MatchExtended) {
+         scoring(_match: MatchExtended) {
             return 0;
-         }
-      }
+         },
+      };
 
       addMatcher('qqMatcher', qqMatcher);
    }
@@ -248,20 +245,14 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
             ripple[0].remove();
          }
 
-         parent.style.setProperty(
-            '--mat-slider-active-track-color',
-            'transparent'
-         );
-         parent.style.setProperty(
-            '--mat-slider-inactive-track-color',
-            'transparent'
-         );
+         parent.style.setProperty('--mat-slider-active-track-color', 'transparent');
+         parent.style.setProperty('--mat-slider-inactive-track-color', 'transparent');
       }
 
       this.setMinStrength(this.strengthMin);
    }
 
-   onStrengthMinChange($event: Event) {
+   onStrengthMinChange(_$event: Event) {
       this.setMinStrength(this.strengthSlider.value! - 1);
    }
 
@@ -294,7 +285,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
          setTimeout(() => {
             this.acceptableChanged.emit({
                acceptable: !!acceptable,
-               strength: this.strength
+               strength: this.strength,
             });
          });
       }
@@ -303,5 +294,4 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
    segmentColor(segment: number): string {
       return this.strength >= segment ? this.segmentOnColor : this.segmentOffColor;
    }
-
 }

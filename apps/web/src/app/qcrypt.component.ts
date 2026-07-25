@@ -31,17 +31,22 @@ import { CredentialsComponent } from './credentials/credentials.component';
 import { AuthEvent, type AuthEventData, AuthenticatorService } from './services/authenticator.service';
 import { Subscription } from 'rxjs';
 
-
 @Component({
-    selector: 'qcrypt-root',
-    templateUrl: './qcrypt.component.html',
-    styleUrl: './qcrypt.component.scss',
-    imports: [RouterOutlet, MatToolbarModule, MatIconModule, MatButtonModule,
-        RouterLink, MatMenuModule, MatSidenavModule, CredentialsComponent
-    ]
+   selector: 'qcrypt-root',
+   templateUrl: './qcrypt.component.html',
+   styleUrl: './qcrypt.component.scss',
+   imports: [
+      RouterOutlet,
+      MatToolbarModule,
+      MatIconModule,
+      MatButtonModule,
+      RouterLink,
+      MatMenuModule,
+      MatSidenavModule,
+      CredentialsComponent,
+   ],
 })
 export class QCryptComponent implements OnInit, OnDestroy {
-
    private authSub!: Subscription;
    public bgColorDefault = '';
    public bgColorFocus = 'color-mix(in srgb,var(--mat-sys-primary) 10%,transparent)';
@@ -49,16 +54,12 @@ export class QCryptComponent implements OnInit, OnDestroy {
 
    constructor(
       public router: Router,
-      public authSvc: AuthenticatorService
-   ) {
-   }
+      public authSvc: AuthenticatorService,
+   ) {}
 
    ngOnInit(): void {
       this.showPKButton = this.authSvc.hasSession();
-      this.authSub = this.authSvc.on(
-         [AuthEvent.Logout, AuthEvent.Login],
-         this.onAuthEvent.bind(this)
-      );
+      this.authSub = this.authSvc.on([AuthEvent.Logout, AuthEvent.Login], this.onAuthEvent.bind(this));
    }
 
    onAuthEvent(data: AuthEventData) {
@@ -66,7 +67,7 @@ export class QCryptComponent implements OnInit, OnDestroy {
    }
 
    ngOnDestroy(): void {
-      if( this.authSub) {
+      if (this.authSub) {
          this.authSub.unsubscribe();
       }
    }
@@ -86,7 +87,9 @@ export class QCryptComponent implements OnInit, OnDestroy {
       if (test) {
          return location.pathname.startsWith(test) ? this.bgColorFocus : this.bgColorDefault;
       } else {
-         return ['', '/newuser', '/welcome', '/', undefined].includes(location.pathname) ? this.bgColorFocus : this.bgColorDefault;
+         return ['', '/newuser', '/welcome', '/', undefined].includes(location.pathname)
+            ? this.bgColorFocus
+            : this.bgColorDefault;
       }
    }
 
@@ -94,6 +97,5 @@ export class QCryptComponent implements OnInit, OnDestroy {
       return this.router.url.startsWith('/welcome');
    }
 
-   onOpenedCredentials() {
-   }
+   onOpenedCredentials() {}
 }

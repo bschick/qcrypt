@@ -59,9 +59,9 @@ export function base64URLStringToBuffer(base64URLString: string): ArrayBuffer {
 }
 
 /**
-* Convert the given array buffer into a Base64URL-encoded string. Ideal for converting various
-* credential response ArrayBuffers to string for sending back to the server as JSON.
-*/
+ * Convert the given array buffer into a Base64URL-encoded string. Ideal for converting various
+ * credential response ArrayBuffers to string for sending back to the server as JSON.
+ */
 export function bufferToBase64URLString(buffer: ArrayBuffer): string {
    const bytes = new Uint8Array(buffer);
    let str = '';

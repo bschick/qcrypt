@@ -33,12 +33,9 @@ import { bytesToBase64 } from '@qcrypt/crypto';
    selector: 'app-recovery',
    templateUrl: './recovery.component.html',
    styleUrl: './recovery.component.scss',
-   imports: [MatIconModule, MatButtonModule, RouterLink,
-      MatProgressSpinnerModule, MatCardModule
-   ]
+   imports: [MatIconModule, MatButtonModule, RouterLink, MatProgressSpinnerModule, MatCardModule],
 })
 export class RecoveryComponent implements OnInit {
-
    public validRecoveryLink = false;
    public error = '';
    public hasRecoveryWords = false;
@@ -54,9 +51,6 @@ export class RecoveryComponent implements OnInit {
    private router = inject<Router>(Router);
    private activeRoute = inject<ActivatedRoute>(ActivatedRoute);
 
-   constructor() {
-   }
-
    ngOnInit() {
       const [userId, userName] = this.authSvc.loadKnownUser();
       if (userId && userName) {
@@ -65,35 +59,38 @@ export class RecoveryComponent implements OnInit {
 
       this.showProgress = true;
 
-      this.authSvc.ready.then( async () => {
-         this.authenticated = this.authSvc.hasSession();
+      this.authSvc.ready
+         .then(async () => {
+            this.authenticated = this.authSvc.hasSession();
 
-         if (this.authenticated && this.authSvc.hasRecoveryId()) {
-             this.router.navigateByUrl('/recovery2');
-         } else {
-            try {
-               this.recoveryUserId = this.activeRoute.snapshot.queryParamMap.get('userid');
-               this.recoverUserCred = this.activeRoute.snapshot.queryParamMap.get('usercred');
-               if (!this.recoveryUserId || !this.recoverUserCred) {
-                  throw new Error("recovery link missing userid or usercred: " + this.activeRoute.snapshot.toString());
+            if (this.authenticated && this.authSvc.hasRecoveryId()) {
+               this.router.navigateByUrl('/recovery2');
+            } else {
+               try {
+                  this.recoveryUserId = this.activeRoute.snapshot.queryParamMap.get('userid');
+                  this.recoverUserCred = this.activeRoute.snapshot.queryParamMap.get('usercred');
+                  if (!this.recoveryUserId || !this.recoverUserCred) {
+                     throw new Error(
+                        `recovery link missing userid or usercred: ${this.activeRoute.snapshot.toString()}`,
+                     );
+                  }
+                  this.validRecoveryLink = true;
+                  if (this.authenticated) {
+                     const userCred = await this.authSvc.getUserCred();
+                     this.selfRecovery = this.recoverUserCred === bytesToBase64(userCred);
+                     userCred.fill(0);
+                  }
+               } catch (err) {
+                  console.error(err);
+                  this.error = 'Recovery link is invalid';
+                  this.validRecoveryLink = false;
                }
-               this.validRecoveryLink = true;
-               if (this.authenticated) {
-                  const userCred = await this.authSvc.getUserCred()
-                  this.selfRecovery = this.recoverUserCred === bytesToBase64(userCred);
-                  userCred.fill(0);
-               }
-            } catch (err) {
-               console.error(err);
-               this.error = 'Recovery link is invalid';
-               this.validRecoveryLink = false;
             }
-         }
-      }).finally( () => {
-         this.ready = true;
-         this.showProgress = false;
-      });
-
+         })
+         .finally(() => {
+            this.ready = true;
+            this.showProgress = false;
+         });
    }
 
    async onClickSignin(): Promise<void> {
@@ -104,7 +101,7 @@ export class RecoveryComponent implements OnInit {
          this.router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
-         if (err instanceof Error && err.message.includes("fetch")) {
+         if (err instanceof Error && err.message.includes('fetch')) {
             this.error = 'Sign in failed, check your connection';
          } else {
             this.error = 'Sign in failed, try again or change users';
@@ -114,7 +111,7 @@ export class RecoveryComponent implements OnInit {
       }
    }
 
-   async onClickStartRecovery(event: any) {
+   async onClickStartRecovery(_event: MouseEvent) {
       try {
          this.showProgress = true;
          await this.authSvc.recover(this.recoveryUserId!, this.recoverUserCred!);
@@ -129,7 +126,6 @@ export class RecoveryComponent implements OnInit {
             console.error(err);
             this.error = 'The operation was not allowed or timed out';
          }
-
       } finally {
          this.showProgress = false;
       }

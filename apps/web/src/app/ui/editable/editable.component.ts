@@ -19,9 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import {
-   Component, Output, Input, EventEmitter, ViewChild, ElementRef
-} from '@angular/core';
+import { Component, Output, Input, EventEmitter, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatInputModule } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
@@ -30,17 +28,13 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 
-
 @Component({
-    selector: 'app-editable',
-    imports: [CommonModule, MatInputModule, FormsModule,
-        MatFormFieldModule, MatIconModule, MatButtonModule
-    ],
-    templateUrl: './editable.component.html',
-    styleUrl: './editable.component.scss'
+   selector: 'app-editable',
+   imports: [CommonModule, MatInputModule, FormsModule, MatFormFieldModule, MatIconModule, MatButtonModule],
+   templateUrl: './editable.component.html',
+   styleUrl: './editable.component.scss',
 })
 export class EditableComponent {
-
    @Input() id = '';
    @Input() minlength = '0';
    @Input() maxlength = '50';
@@ -63,7 +57,7 @@ export class EditableComponent {
    }
 
    onFocusOut() {
-      if (!this.readonly && this._value != this.text) {
+      if (!this.readonly && this._value !== this.text) {
          this._value = this.text;
          this.valueChanged.emit(this);
       }
@@ -76,7 +70,7 @@ export class EditableComponent {
       }
    }
 
-   cancelEdit(event: any) {
+   cancelEdit(event: Event) {
       event.stopPropagation();
       if (this.writing) {
          this.text = this._value;
@@ -84,7 +78,7 @@ export class EditableComponent {
       }
    }
 
-   acceptEdit(event: any) {
+   acceptEdit(event: Event) {
       event.stopPropagation();
       if (this.writing) {
          this.editInput.nativeElement.blur();

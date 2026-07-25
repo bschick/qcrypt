@@ -94,6 +94,50 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
 **Commit after a rebuild:** the regenerated `libs/crypto/src/lib/crux/{qc_crux.js,qc_crux.d.ts,wasm.ts}`, plus `libs/crypto/crux/Cargo.lock` if dependency versions changed. **Do not commit** `libs/crypto/crux/pkg/` or `libs/crypto/crux/target/` (gitignored build outputs).
 
+### Code Quality (Biome)
+
+Formatting and linting use [Biome](https://biomejs.dev) (config: `biome.json`). Biome covers **TS/JS/JSON only** — it does **not** format SCSS or Angular HTML templates (nothing in this repo does), and the e2e specs keep their own ESLint check (`lint:e2e`).
+
+| What | pnpm script | Notes |
+|------|------------|-------|
+| Check format + lint (read-only) | `pnpm check` | runs with `--error-on-warnings`, so **any** diagnostic fails |
+| Apply format + safe fixes | `pnpm check:fix` | safe fixes only; unsafe fixes need `pnpm exec biome check --write --unsafe <path>` |
+
+The repo sits at **zero** Biome diagnostics. `--error-on-warnings` is what keeps it there: a new warning blocks the build instead of quietly accumulating. When a rule genuinely can't be satisfied, add an inline `biome-ignore` with a real reason rather than lowering the rule's severity.
+
+**Scoping:** both scripts take an optional path — with no argument they cover the whole repo; pass a file or directory to narrow. The `--` separator is optional.
+
+```bash
+pnpm check                                   # whole repo (this is what gates builds)
+pnpm check apps/web/src/app/core             # review one directory
+pnpm check:fix libs/crypto/src/lib/keys.ts   # auto-fix one file
+```
+
+`pnpm check` (no path) gates `build:web`, `build:web:prod`, and `build:server` — it runs first, so a format or lint error blocks the build.
+
+**Style:** 3-space indent, 120 columns, single quotes, semicolons, trailing commas. JSON stays 2-space (nx/ng-managed). Excluded: `**/*.html`, `**/*.svg`, `vendor/`, `apps/server/assets/`, generated crux files.
+
+**Rules deliberately disabled** (they fight this codebase's patterns — do not re-enable without cause):
+
+| Rule | Why off |
+|------|---------|
+| `useImportType` | Angular constructor DI needs value imports; under `verbatimModuleSyntax` Biome's conversion erases injection tokens (`NG2003`) |
+| `noTsIgnore` | Config-dependent suppressions (e.g. Node vs DOM `setInterval`) require `@ts-ignore`; `@ts-expect-error` errors when the suppressed error is absent in the current config |
+| `useArrayLiterals` | `new Array()` → `[]` infers `never[]` on untyped class fields |
+| `useLiteralKeys` | `apps/web/tsconfig.json` sets `noPropertyAccessFromIndexSignature`, which *requires* bracket access on index-signature types (`TS4111`) |
+| `noNonNullAssertion` | House style: deliberate `!` non-null assertions |
+
+`noExplicitAny` is enforced. Lambda handlers use real `@types/aws-lambda` types (`APIGatewayProxyEventV2`, `Context`, `APIGatewayProxyStructuredResultV2`); the few remaining `any` uses carry an inline `biome-ignore` naming the reason (yargs' dynamically-built argv, arbitrary JSON request/response bodies, untrusted `JSON.parse` output).
+
+### Type checking
+
+`tsc --noEmit` runs as the first step of the `server` and `cli` build targets — esbuild only transpiles, so without it a type error would ship silently. `build:web` type-checks through the Angular compiler. Type-check a project directly with:
+
+```bash
+pnpm exec tsc --noEmit -p apps/server/tsconfig.json   # src + spec
+pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
+```
+
 ### Serve Commands
 
 | What | pnpm script |

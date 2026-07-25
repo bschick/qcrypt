@@ -24,7 +24,7 @@ import { getSodium } from './crypto';
 import { base64URLStringToBuffer, bufferToBase64URLString } from './base64';
 
 export function hasArrayBuffer(value: Uint8Array): value is Uint8Array<ArrayBuffer> {
-  return value.buffer instanceof ArrayBuffer;
+   return value.buffer instanceof ArrayBuffer;
 }
 
 export function ensureArrayBuffer(value: Uint8Array): Uint8Array<ArrayBuffer> {
@@ -34,7 +34,6 @@ export function ensureArrayBuffer(value: Uint8Array): Uint8Array<ArrayBuffer> {
       return new Uint8Array(value);
    }
 }
-
 
 export function getArrayBuffer(value: ArrayBufferView | ArrayBuffer | number[]): ArrayBuffer {
    if (value instanceof ArrayBuffer) {
@@ -59,7 +58,6 @@ export function getArrayBuffer(value: ArrayBufferView | ArrayBuffer | number[]):
 
    return buffer;
 }
-
 
 // Returns base64Url text
 export function bytesToBase64(bytes: Uint8Array): string {
@@ -86,10 +84,10 @@ export function bufferToHexString(buffer: ArrayBuffer): string {
    and masking, so do this instead. Count is the number of bytes
    used to pack the number.  */
 export function numToBytes(num: number, count: number): Uint8Array<ArrayBuffer> {
-   if (count < 1 || num >= Math.pow(256, count)) {
+   if (count < 1 || num >= 256 ** count) {
       throw new Error(`Invalid arguments ${count} for ${num}`);
    }
-   let arr = new Uint8Array(count);
+   const arr = new Uint8Array(count);
    for (let i = 0; i < count; ++i) {
       arr[i] = num % 256;
       num = Math.floor(num / 256);
@@ -104,7 +102,6 @@ export function bytesToNum(arr: Uint8Array): number {
    }
    return num;
 }
-
 
 export function clamp(n: number, min: number, max: number): number {
    return Math.min(max, Math.max(min, n));
@@ -130,7 +127,7 @@ export function concatArrays(arrays: Uint8Array[]): Uint8Array<ArrayBuffer> {
 
 export function byteCount(num: number): number {
    if (num < 0) {
-      throw new Error("Value must be an unsigned integer (non-negative).");
+      throw new Error('Value must be an unsigned integer (non-negative).');
    }
    if (num === 0) {
       return 1;
@@ -138,9 +135,8 @@ export function byteCount(num: number): number {
    return Math.ceil(Math.log2(num + 1) / 8);
 }
 
-
 export function browserSupportsFilePickers(): boolean {
-   //@ts-ignore
+   //@ts-expect-error
    if (window.showSaveFilePicker) {
       return true;
    } else {
@@ -150,9 +146,9 @@ export function browserSupportsFilePickers(): boolean {
 
 export function browserSupportsBytesStream(): boolean {
    try {
-      new ReadableStream({ type: "bytes" });
+      new ReadableStream({ type: 'bytes' });
       return true;
-   } catch (err) {
+   } catch {
       return false;
    }
 }
@@ -170,7 +166,7 @@ export function makeTookMsg(start: number, end: number, word: string = 'took'): 
 }
 
 // important to note that a missing key is considered expired
-export function expired(storage: Storage, key: string) : boolean {
+export function expired(storage: Storage, key: string): boolean {
    const value = storage.getItem(key);
    if (!value) {
       return true;
@@ -184,9 +180,8 @@ export class ProcessCancelled extends Error {
       this.name = this.constructor.name;
    }
 
-   static isProcessCancelled(err: any): boolean {
-      return (err instanceof ProcessCancelled) ||
-         (err instanceof Error && err.message.indexOf('ProcessCancelled') >= 0);
+   static isProcessCancelled(err: unknown): boolean {
+      return err instanceof ProcessCancelled || (err instanceof Error && err.message.indexOf('ProcessCancelled') >= 0);
    }
 }
 
@@ -200,16 +195,15 @@ export function streamFromBase64(b64: string): ReadableStream<Uint8Array> {
 }
 
 export class BYOBStreamReader {
-
    private _reader: ReadableStreamBYOBReader | ReadableStreamDefaultReader;
    private _extra?: Uint8Array<ArrayBuffer>;
    private _byob: boolean;
 
    constructor(stream: ReadableStream<Uint8Array>) {
       try {
-         this._reader = stream.getReader({ mode: "byob" });
+         this._reader = stream.getReader({ mode: 'byob' });
          this._byob = true;
-      } catch (err) {
+      } catch {
          this._byob = false;
          this._reader = stream.getReader();
       }
@@ -220,23 +214,20 @@ export class BYOBStreamReader {
    }
 
    // Use when the reader cannot accept less then the size of output (or stream done)
-   async readFill(buffer: ArrayBuffer)
-      : Promise<[data: Uint8Array<ArrayBuffer>, done: boolean]> {
+   async readFill(buffer: ArrayBuffer): Promise<[data: Uint8Array<ArrayBuffer>, done: boolean]> {
       try {
          if (this._byob) {
             return this._readBYOB(buffer, false);
          } else {
             return this._readStupidSafari(buffer, false);
          }
-      }
-      catch (err) {
+      } catch (err) {
          this.cleanup();
          throw err;
       }
    }
 
-   async readAvailable(buffer: ArrayBuffer)
-      : Promise<[data: Uint8Array<ArrayBuffer>, done: boolean]> {
+   async readAvailable(buffer: ArrayBuffer): Promise<[data: Uint8Array<ArrayBuffer>, done: boolean]> {
       try {
          if (this._byob) {
             return this._readBYOB(buffer, true);
@@ -251,9 +242,8 @@ export class BYOBStreamReader {
 
    private async _readBYOB(
       buffer: ArrayBuffer,
-      breakOnStall: boolean
+      breakOnStall: boolean,
    ): Promise<[data: Uint8Array<ArrayBuffer>, done: boolean]> {
-
       const reader = this._reader as ReadableStreamBYOBReader;
 
       const targetBytes = buffer.byteLength;
@@ -261,9 +251,7 @@ export class BYOBStreamReader {
       let streamDone = false;
 
       while (readBytes < targetBytes) {
-         let { done, value } = await reader.read(
-            new Uint8Array(buffer, readBytes, targetBytes - readBytes)
-         );
+         const { done, value } = await reader.read(new Uint8Array(buffer, readBytes, targetBytes - readBytes));
 
          if (value) {
             readBytes += value.byteLength;
@@ -280,9 +268,8 @@ export class BYOBStreamReader {
 
    private async _readStupidSafari(
       buffer: ArrayBuffer,
-      breakOnStall: boolean
+      breakOnStall: boolean,
    ): Promise<[data: Uint8Array<ArrayBuffer>, done: boolean]> {
-
       const reader = this._reader as ReadableStreamDefaultReader;
 
       const targetBytes = buffer.byteLength;
@@ -330,17 +317,19 @@ export class BYOBStreamReader {
    }
 }
 
-
 type TrueType = true;
 type FalseType = false;
 
-export async function readStreamAll(stream: ReadableStream<Uint8Array>): Promise<Uint8Array<ArrayBuffer>>
-export async function readStreamAll(stream: ReadableStream<Uint8Array>, decode: FalseType): Promise<Uint8Array<ArrayBuffer>>
-export async function readStreamAll(stream: ReadableStream<Uint8Array>, decode: TrueType): Promise<string>
+export async function readStreamAll(stream: ReadableStream<Uint8Array>): Promise<Uint8Array<ArrayBuffer>>;
 export async function readStreamAll(
-   stream: ReadableStream<Uint8Array>, decode: TrueType | FalseType = false
+   stream: ReadableStream<Uint8Array>,
+   decode: FalseType,
+): Promise<Uint8Array<ArrayBuffer>>;
+export async function readStreamAll(stream: ReadableStream<Uint8Array>, decode: TrueType): Promise<string>;
+export async function readStreamAll(
+   stream: ReadableStream<Uint8Array>,
+   decode: TrueType | FalseType = false,
 ): Promise<string | Uint8Array<ArrayBuffer>> {
-
    let result: string | Uint8Array<ArrayBuffer>;
    const reader = stream.getReader();
    try {
@@ -367,16 +356,17 @@ export async function readStreamAll(
    return result;
 }
 
-
 export function streamWriteBYOD(
    controller: ReadableByteStreamController | ReadableStreamDefaultController<Uint8Array>,
-   data: Uint8Array
+   data: Uint8Array,
 ): number {
    let written = 0;
 
-   if (!browserSupportsBytesStream() ||
+   if (
+      !browserSupportsBytesStream() ||
       controller instanceof ReadableStreamDefaultController ||
-      !controller.byobRequest?.view) {
+      !controller.byobRequest?.view
+   ) {
       written += data.byteLength;
       controller.enqueue(ensureArrayBuffer(data));
    } else {
@@ -388,7 +378,7 @@ export function streamWriteBYOD(
       controller.byobRequest.respond(byodBytes);
 
       if (byodBytes < data.byteLength) {
-         const remainder = data.subarray(byodBytes)
+         const remainder = data.subarray(byodBytes);
          written += remainder.byteLength;
          controller.enqueue(ensureArrayBuffer(remainder));
       }
@@ -399,37 +389,38 @@ export function streamWriteBYOD(
 
 export async function selectCipherFile(): Promise<FileSystemFileHandle> {
    try {
-      //@ts-ignore
+      //@ts-expect-error
       const [fileHandle] = await window.showOpenFilePicker({
          id: 'quickcrypt_org',
          multiple: false,
-         types: [{
-            description: 'Encrypted files',
-            accept: {
-               'application/octet-stream': ['.qq', '.json'],
-            }
-         }, {
-            description: 'JSON file',
-            accept: {
-               'application/json': ['.json'],
-            }
-         },
-         ]
+         types: [
+            {
+               description: 'Encrypted files',
+               accept: {
+                  'application/octet-stream': ['.qq', '.json'],
+               },
+            },
+            {
+               description: 'JSON file',
+               accept: {
+                  'application/json': ['.json'],
+               },
+            },
+         ],
       });
       return fileHandle;
    } catch (err) {
       console.error(err);
       throw new ProcessCancelled();
    }
-
 }
 
 export async function selectClearFile(): Promise<FileSystemFileHandle> {
    try {
-      //@ts-ignore
+      //@ts-expect-error
       const [fileHandle] = await window.showOpenFilePicker({
          id: 'quickcrypt_org',
-         multiple: false
+         multiple: false,
       });
       return fileHandle;
    } catch (err) {
@@ -438,9 +429,19 @@ export async function selectClearFile(): Promise<FileSystemFileHandle> {
    }
 }
 
-async function selectWriteableFileImpl(options: { [key: string]: any }): Promise<FileSystemFileHandle> {
+// Subset of the File System Access API's SaveFilePickerOptions, which the TS DOM lib does not declare.
+interface SaveFilePickerOptions {
+   id: string;
+   suggestedName: string;
+   types?: {
+      description: string;
+      accept: Record<string, string[]>;
+   }[];
+}
+
+async function selectWriteableFileImpl(options: SaveFilePickerOptions): Promise<FileSystemFileHandle> {
    try {
-      //@ts-ignore
+      //@ts-expect-error
       return await window.showSaveFilePicker(options);
    } catch (err) {
       console.error(err);
@@ -452,7 +453,7 @@ export async function selectWriteableFile(baseName?: string): Promise<FileSystem
    const suggested = baseName ?? '';
    const options = {
       id: 'quickcrypt_org',
-      suggestedName: suggested
+      suggestedName: suggested,
    };
 
    return selectWriteableFileImpl(options);
@@ -463,12 +464,14 @@ export async function selectWriteableJsonFile(baseName?: string): Promise<FileSy
    const options = {
       id: 'quickcrypt_org_json',
       suggestedName: suggested,
-      types: [{
-         description: 'JSON file',
-         accept: {
-            'application/json': ['.json'],
-         }
-      }]
+      types: [
+         {
+            description: 'JSON file',
+            accept: {
+               'application/json': ['.json'],
+            },
+         },
+      ],
    };
 
    return selectWriteableFileImpl(options);
@@ -479,12 +482,14 @@ export async function selectWriteableQQFile(baseName?: string): Promise<FileSyst
    const options = {
       id: 'quickcrypt_org_qq',
       suggestedName: suggested,
-      types: [{
-         description: 'Encrypted files',
-         accept: {
-            'application/octet-stream': ['.qq'],
-         }
-      }]
+      types: [
+         {
+            description: 'Encrypted files',
+            accept: {
+               'application/octet-stream': ['.qq'],
+            },
+         },
+      ],
    };
 
    return selectWriteableFileImpl(options);
@@ -495,12 +500,14 @@ export async function selectWriteableTxtFile(baseName?: string): Promise<FileSys
    const options = {
       id: 'quickcrypt_org_txt',
       suggestedName: suggested,
-      types: [{
-         description: 'Text file',
-         accept: {
-            'text/plain': ['.txt'],
-         }
-      }]
+      types: [
+         {
+            description: 'Text file',
+            accept: {
+               'text/plain': ['.txt'],
+            },
+         },
+      ],
    };
 
    return selectWriteableFileImpl(options);

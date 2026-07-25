@@ -34,7 +34,7 @@ async function postRegOptionsAsRealClient(userName: string) {
       method: 'POST',
       headers: {
          'User-Agent': REAL_CLIENT_UA,
-         'Origin': RP_ORIGIN,
+         Origin: RP_ORIGIN,
          'Content-Type': 'application/json',
          'x-amz-content-sha256': sha256Hex(body),
       },
@@ -44,7 +44,6 @@ async function postRegOptionsAsRealClient(userName: string) {
 }
 
 describe('PWTesty_ prefix guard', () => {
-
    it('rejects PWTesty_ from a non-test client', async () => {
       const res = await postRegOptionsAsRealClient('PWTesty_');
       expect(res.status).toBe(401);

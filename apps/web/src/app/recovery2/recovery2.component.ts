@@ -22,12 +22,12 @@ SOFTWARE. */
 
 import { type AfterViewInit, Component, Inject, type OnDestroy, type OnInit, Renderer2 } from '@angular/core';
 import { AuthenticatorService } from '../services/authenticator.service';
-import { Router, RouterLink, ActivatedRoute } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
-import { MatCardModule}  from '@angular/material/card';
+import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { validateMnemonic } from '@scure/bip39';
@@ -36,15 +36,22 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angu
 import { firstValueFrom } from 'rxjs';
 
 @Component({
-    selector: 'app-recovery',
-    templateUrl: './recovery2.component.html',
-    styleUrl: './recovery2.component.scss',
-    imports: [MatIconModule, MatButtonModule, RouterLink, FormsModule, ReactiveFormsModule,
-      MatProgressSpinnerModule, MatCardModule, MatFormFieldModule, MatInputModule
-    ]
+   selector: 'app-recovery',
+   templateUrl: './recovery2.component.html',
+   styleUrl: './recovery2.component.scss',
+   imports: [
+      MatIconModule,
+      MatButtonModule,
+      RouterLink,
+      FormsModule,
+      ReactiveFormsModule,
+      MatProgressSpinnerModule,
+      MatCardModule,
+      MatFormFieldModule,
+      MatInputModule,
+   ],
 })
-export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit{
-
+export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit {
    public validRecoveryWords = false;
    public error = '';
    public ready = false;
@@ -58,31 +65,30 @@ export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit{
       private authSvc: AuthenticatorService,
       private router: Router,
       private dialog: MatDialog,
-      private activeRoute: ActivatedRoute) {
-   }
+   ) {}
 
    ngOnInit() {
       const [userId, userName] = this.authSvc.loadKnownUser();
-      if(userId && userName) {
+      if (userId && userName) {
          this.currentUserName = userName;
       }
 
       this.showProgress = true;
 
-      this.authSvc.ready.then( () => {
-         this.authenticated = this.authSvc.hasSession();
-      }).finally( () => {
-         this.ready = true;
-         this.showProgress = false;
-      });
+      this.authSvc.ready
+         .then(() => {
+            this.authenticated = this.authSvc.hasSession();
+         })
+         .finally(() => {
+            this.ready = true;
+            this.showProgress = false;
+         });
    }
 
    ngAfterViewInit(): void {
       try {
          // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
-         setTimeout(
-            () => this.r2.selectRootElement('#wordsArea').focus(), 0
-         );
+         setTimeout(() => this.r2.selectRootElement('#wordsArea').focus(), 0);
       } catch (err) {
          console.error(err);
       }
@@ -100,7 +106,7 @@ export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit{
          this.router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
-         if(err instanceof Error && err.message.includes("fetch")) {
+         if (err instanceof Error && err.message.includes('fetch')) {
             this.error = 'Sign in failed, check your connection';
          } else {
             this.error = 'Sign in failed, try again or change users';
@@ -110,18 +116,17 @@ export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit{
       }
    }
 
-   async onClickStartRecovery(event: any) {
-
+   async onClickStartRecovery(_event: MouseEvent) {
       try {
          this.error = '';
          const rawString = this.recoveryWords.value?.trim();
 
-         if(!rawString) {
+         if (!rawString) {
             this.error = 'No recovery words were entered.';
          } else {
             const words = rawString.split(/\s+/);
             const cleanedWords = words.join(' ');
-            if(!validateMnemonic(cleanedWords, wordlist)) {
+            if (!validateMnemonic(cleanedWords, wordlist)) {
                this.error = 'The recovery pattern contains incorrect words.';
             } else {
                const proceed = await this._checkProceed(cleanedWords);
@@ -130,7 +135,6 @@ export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit{
                   await this.authSvc.recover2(cleanedWords);
                   this.router.navigateByUrl('/');
                }
-
             }
          }
       } catch (err) {
@@ -138,21 +142,21 @@ export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit{
          this.error = 'The operation was not allowed or timed out.';
       } finally {
          this.showProgress = false;
-         if(this.error) {
-            this.error += ' Ensure you are using the recovery word pattern provided when you created your account, then try again.'
+         if (this.error) {
+            this.error +=
+               ' Ensure you are using the recovery word pattern provided when you created your account, then try again.';
          }
       }
    }
 
    private async _checkProceed(recoveryWords: string): Promise<boolean> {
-
       const [_, userId] = this.authSvc.getRecoveryValues(recoveryWords);
       if (!this.authSvc.hasSession() || userId === this.authSvc.userId) {
          return true;
       }
 
       const dialogRef = this.dialog.open(ConfirmDialog, {
-         data: { userName: this.authSvc.userName }
+         data: { userName: this.authSvc.userName },
       });
       return await firstValueFrom(dialogRef.afterClosed());
    }
@@ -162,21 +166,18 @@ export interface ConfirmData {
    userName: string;
 }
 
-
 @Component({
    selector: 'confirm-dialog',
    templateUrl: 'confirm-dialog.html',
    styleUrl: './recovery2.component.scss',
-   imports: [MatDialogModule, MatIconModule, MatButtonModule
-   ]
+   imports: [MatDialogModule, MatIconModule, MatButtonModule],
 })
 export class ConfirmDialog {
-
    public currentUserName: string;
 
    constructor(
       public dialogRef: MatDialogRef<ConfirmDialog>,
-      @Inject(MAT_DIALOG_DATA) public data: ConfirmData
+      @Inject(MAT_DIALOG_DATA) public data: ConfirmData,
    ) {
       this.currentUserName = data.userName;
    }

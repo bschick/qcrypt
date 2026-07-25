@@ -76,7 +76,7 @@ describe('PRF account', () => {
          '/v1/auth/verify?usercred=true',
          { ...assertion, challenge: optsRes.data.challenge },
          {},
-         ''
+         '',
       );
       expect(verifyRes.status).toBe(200);
       // The login supersedes the registration session, so clean up with the login session.
@@ -116,7 +116,7 @@ describe('PRF account', () => {
          '/v1/passkeys/verify',
          { ...add.attestation, challenge: opts.data.challenge, passkeyUserCredEnc: add.passkeyUserCredEnc },
          auth,
-         account.cookie
+         account.cookie,
       );
       expect(ok.status).toBe(200);
       await expectPasskeyDeleted(add.attestation.id, account.csrf, account.cookie);
@@ -128,7 +128,7 @@ describe('PRF account', () => {
          '/v1/passkeys/verify',
          { ...add2.attestation, challenge: opts2.data.challenge },
          auth,
-         account.cookie
+         account.cookie,
       );
       expect(bad.status).toBe(400);
    });
@@ -156,11 +156,32 @@ describe('PRF registration input validation', () => {
       setSessionUserCred(undefined);
    }
 
-   it('rejects an empty passkeyUserCredEnc', () => rejectsRegBody(b => { b.passkeyUserCredEnc = ''; }));
-   it('rejects an empty recoveryUserCredEnc', () => rejectsRegBody(b => { b.recoveryUserCredEnc = ''; }));
-   it('rejects a non-base64 passkeyUserCredEnc', () => rejectsRegBody(b => { b.passkeyUserCredEnc = 'not b64 $$$'; }));
-   it('rejects a too-short passkeyUserCredEnc', () => rejectsRegBody(b => { b.passkeyUserCredEnc = bytesToBase64(getRandom(minEncBytes - 1)); }));
-   it('rejects a too-short recoveryUserCredEnc', () => rejectsRegBody(b => { b.recoveryUserCredEnc = bytesToBase64(getRandom(minEncBytes - 1)); }));
-   it('rejects a wrong-length userCredPubKey', () => rejectsRegBody(b => { b.userCredPubKey = bytesToBase64(getRandom(cc.USERCRED_BYTES)); }));
-   it('rejects a non-base64 userCredPubKey', () => rejectsRegBody(b => { b.userCredPubKey = 'not b64 $$$'; }));
+   it('rejects an empty passkeyUserCredEnc', () =>
+      rejectsRegBody((b) => {
+         b.passkeyUserCredEnc = '';
+      }));
+   it('rejects an empty recoveryUserCredEnc', () =>
+      rejectsRegBody((b) => {
+         b.recoveryUserCredEnc = '';
+      }));
+   it('rejects a non-base64 passkeyUserCredEnc', () =>
+      rejectsRegBody((b) => {
+         b.passkeyUserCredEnc = 'not b64 $$$';
+      }));
+   it('rejects a too-short passkeyUserCredEnc', () =>
+      rejectsRegBody((b) => {
+         b.passkeyUserCredEnc = bytesToBase64(getRandom(minEncBytes - 1));
+      }));
+   it('rejects a too-short recoveryUserCredEnc', () =>
+      rejectsRegBody((b) => {
+         b.recoveryUserCredEnc = bytesToBase64(getRandom(minEncBytes - 1));
+      }));
+   it('rejects a wrong-length userCredPubKey', () =>
+      rejectsRegBody((b) => {
+         b.userCredPubKey = bytesToBase64(getRandom(cc.USERCRED_BYTES));
+      }));
+   it('rejects a non-base64 userCredPubKey', () =>
+      rejectsRegBody((b) => {
+         b.userCredPubKey = 'not b64 $$$';
+      }));
 });

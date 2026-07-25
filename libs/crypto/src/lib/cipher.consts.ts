@@ -51,16 +51,24 @@ export const HEADER_BYTES_OLD = MAC_BYTES + VER_BYTES + PAYLOAD_SIZE_BYTES + FLA
 export const HEADER_BYTES_6P = MAC_BYTES + VER_BYTES + PAYLOAD_SIZE_BYTES;
 
 export const PAYLOAD_SIZE_MIN = IV_MIN_BYTES + ALG_BYTES + AUTH_TAG_MIN_BYTES + 1;
-export const PAYLOAD_SIZE_MAX = 16777215;  // limited to 3 byte max value
+export const PAYLOAD_SIZE_MAX = 16777215; // limited to 3 byte max value
 
-export const ADDIONTAL_DATA_MAX_BYTES = FLAGS_BYTES + ALG_BYTES + IV_MAX_BYTES + IC_BYTES + SLT_BYTES + LPP_BYTES + HINT_LEN_BYTES + ENCRYPTED_HINT_MAX_BYTES;
+export const ADDIONTAL_DATA_MAX_BYTES =
+   FLAGS_BYTES +
+   ALG_BYTES +
+   IV_MAX_BYTES +
+   IC_BYTES +
+   SLT_BYTES +
+   LPP_BYTES +
+   HINT_LEN_BYTES +
+   ENCRYPTED_HINT_MAX_BYTES;
 export const CLEAR_DATA_MAX_BYTES = PAYLOAD_SIZE_MAX - ADDIONTAL_DATA_MAX_BYTES;
 
 export const LP_MAX = 16;
 export const ICOUNT_MIN = 420000;
 export const ICOUNT_DEFAULT = 1000000;
 export const ICOUNT_MAX = 4294000000; // limited to 4 bytes unsigned rounded to millions
-export const BLOCKS_MAX = 2 ** 31 -1;
+export const BLOCKS_MAX = 2 ** 31 - 1;
 
 // Change version number when the encoding format changes or we add a new
 // cipher algorithm
@@ -70,12 +78,12 @@ export const VERSION5 = 5;
 export const VERSION6 = 6;
 export const VERSION7 = 7;
 export const CURRENT_VERSION = VERSION7;
-export const V1_BELOW = VERSION4 // leave fixed at 4
+export const V1_BELOW = VERSION4; // leave fixed at 4
 
 // needs to fit into 255 bytes encypted... this allows for all double byte + max auth tag
 export const HINT_MAX_LEN = Math.trunc(ENCRYPTED_HINT_MAX_BYTES / 2 - AUTH_TAG_MAX_BYTES);
 
-export type CipherAlgs = "AES-GCM" | "X20-PLY" | "AEGIS-256";
+export type CipherAlgs = 'AES-GCM' | 'X20-PLY' | 'AEGIS-256';
 
 export const AlgInfo: Readonly<Record<CipherAlgs, { id: number; description: string; ivBytes: number }>> = {
    'AES-GCM': { id: 1, description: 'AES 256 GCM', ivBytes: 12 },

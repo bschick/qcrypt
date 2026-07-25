@@ -1,13 +1,13 @@
 {
-   "extends": "../../../tsconfig.base.json",
-   "compilerOptions": {
-      "module": "esnext",
-      "moduleResolution": "bundler",
-      "types": ["node"],
-      "noEmit": true,
-      "skipLibCheck": true,
-      "allowImportingTsExtensions": true,
-      "verbatimModuleSyntax": true
-   },
-   "include": ["**/*.ts"]
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["**/*.ts"]
 }

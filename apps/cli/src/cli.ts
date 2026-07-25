@@ -1,13 +1,19 @@
 import './setup-color';
 import {
    cryptoReady,
-   decryptStream, encryptStream, getCipherStreamInfo,
-   makeCipherArmor, parseCipherArmor,
-   base64ToBytes, bytesToBase64, readStreamAll, Ciphers,
+   decryptStream,
+   encryptStream,
+   getCipherStreamInfo,
+   makeCipherArmor,
+   parseCipherArmor,
+   base64ToBytes,
+   bytesToBase64,
+   readStreamAll,
+   Ciphers,
    PWDKeyProvider,
 } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
-import fs from 'fs';
+import fs from 'node:fs';
 import { Readable, Writable } from 'node:stream';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
@@ -33,9 +39,13 @@ interface IO {
 // subsequent prompts and showAnswered calls.
 function iqOutput(io: IO): Writable {
    return new Writable({
-      write(chunk: any, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
-         io.ttyOut.write(chunk, encoding, callback);
-      }
+      write(chunk: string | Uint8Array, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
+         if (typeof chunk === 'string') {
+            io.ttyOut.write(chunk, encoding, callback);
+         } else {
+            io.ttyOut.write(chunk, callback);
+         }
+      },
    });
 }
 
@@ -51,13 +61,11 @@ class ParamError extends Error {
 const iqTheme = makeTheme();
 function showAnswered(message: string, answer: string, io: IO): void {
    const prefixDone = typeof iqTheme.prefix === 'string' ? iqTheme.prefix : iqTheme.prefix.done;
-   io.ttyOut.write(
-      `${prefixDone} ${iqTheme.style.message(message, 'done')} ${iqTheme.style.answer(answer)}\n`
-   );
+   io.ttyOut.write(`${prefixDone} ${iqTheme.style.message(message, 'done')} ${iqTheme.style.answer(answer)}\n`);
 }
 
-async function peekBinary(source: Readable): Promise<{ pipedIn: ReadableStream<Uint8Array>, binaryIn: boolean }> {
-   const firstChunk: Buffer = await new Promise(resolve => {
+async function peekBinary(source: Readable): Promise<{ pipedIn: ReadableStream<Uint8Array>; binaryIn: boolean }> {
+   const firstChunk: Buffer = await new Promise((resolve) => {
       const tryRead = () => {
          const chunk = source.read(16);
          if (chunk) {
@@ -77,7 +85,11 @@ async function peekBinary(source: Readable): Promise<{ pipedIn: ReadableStream<U
       }
    }
 
-   return { pipedIn: (ReadableStream as any).from(prependedStream()), binaryIn: binary };
+   // ReadableStream.from is Node-only and absent from the DOM lib types
+   const nodeReadableStream = ReadableStream as unknown as {
+      from(iterable: AsyncIterable<Uint8Array>): ReadableStream<Uint8Array>;
+   };
+   return { pipedIn: nodeReadableStream.from(prependedStream()), binaryIn: binary };
 }
 
 function streamFromBytes(data: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Array> {
@@ -85,14 +97,11 @@ function streamFromBytes(data: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Arr
       start(controller) {
          controller.enqueue(data);
          controller.close();
-      }
+      },
    });
 }
 
-async function writeAndCloseStream(
-   readableStream: ReadableStream<Uint8Array>,
-   writeableStream: NodeJS.WritableStream
-) {
+async function writeAndCloseStream(readableStream: ReadableStream<Uint8Array>, writeableStream: NodeJS.WritableStream) {
    const reader = readableStream.getReader();
 
    while (true) {
@@ -108,12 +117,14 @@ async function writeAndCloseStream(
    }
 }
 
-async function getUserCred(args: {
-   cred?: string,
-   silent?: boolean,
-   debug?: boolean
-}, io: IO): Promise<Uint8Array<ArrayBuffer>> {
-
+async function getUserCred(
+   args: {
+      cred?: string;
+      silent?: boolean;
+      debug?: boolean;
+   },
+   io: IO,
+): Promise<Uint8Array<ArrayBuffer>> {
    let credText: string;
    if (args.cred) {
       credText = args.cred;
@@ -128,16 +139,13 @@ async function getUserCred(args: {
 
    try {
       credText = new URL(credText).searchParams.get('usercred') ?? credText;
-   } catch (err) { }
+   } catch {}
 
    return base64ToBytes(credText.trim());
 }
 
-async function getCipherStream(
-   io: IO,
-   silent?: boolean
-): Promise<ReadableStream<Uint8Array>> {
-   let stream;
+async function getCipherStream(io: IO, silent?: boolean): Promise<ReadableStream<Uint8Array>> {
+   let stream: ReadableStream<Uint8Array>;
    if (io.pipedIn && io.b64urlIn) {
       const text = await readStreamAll(io.pipedIn, true);
       if (!text) {
@@ -157,23 +165,18 @@ async function getCipherStream(
    } else {
       const text = await input(
          { message: io.b64urlIn ? 'Cipher (b64url):' : 'Cipher Armor:', required: true },
-         { input: io.ttyIn, output: iqOutput(io) }
+         { input: io.ttyIn, output: iqOutput(io) },
       );
       if (!text) {
          throw new Error('Cipher text is empty (use positional arg, --infile, or stdin)');
       }
-      stream = io.b64urlIn
-         ? streamFromBytes(base64ToBytes(text.trim()))
-         : streamFromBytes(parseCipherArmor(text));
+      stream = io.b64urlIn ? streamFromBytes(base64ToBytes(text.trim())) : streamFromBytes(parseCipherArmor(text));
    }
    return stream;
 }
 
-async function getClearStream(
-   io: IO,
-   silent?: boolean
-): Promise<ReadableStream<Uint8Array>> {
-   let stream;
+async function getClearStream(io: IO, silent?: boolean): Promise<ReadableStream<Uint8Array>> {
+   let stream: ReadableStream<Uint8Array>;
    if (io.pipedIn && io.b64urlIn) {
       const text = await readStreamAll(io.pipedIn, true);
       if (!text) {
@@ -187,7 +190,7 @@ async function getClearStream(
    } else {
       const text = await input(
          { message: io.b64urlIn ? 'Clear (b64url):' : 'Clear Text:', required: true },
-         { input: io.ttyIn, output: iqOutput(io) }
+         { input: io.ttyIn, output: iqOutput(io) },
       );
       if (!text) {
          throw new Error('Clear text is empty (use positional arg, --infile, or stdin)');
@@ -201,21 +204,17 @@ async function getClearStream(
 
 async function info(
    args: {
-      cred?: string,
-      silent?: boolean,
-      debug?: boolean
+      cred?: string;
+      silent?: boolean;
+      debug?: boolean;
    },
-   io: IO
+   io: IO,
 ): Promise<void> {
-
    try {
       const cipherStream = await getCipherStream(io, args.silent);
       const userCred = await getUserCred(args, io);
 
-      const cdInfo = await getCipherStreamInfo(
-         cipherStream,
-         new PWDKeyProvider(userCred, undefined)
-      );
+      const cdInfo = await getCipherStreamInfo(cipherStream, new PWDKeyProvider(userCred, undefined));
 
       io.pipedOut.write(`Cipher and Mode   : ${Ciphers.algDescription(cdInfo.alg)}
 PBKDF2 Iterations : ${cdInfo.ic}
@@ -223,8 +222,7 @@ Salt (b64Url)     : ${bytesToBase64(cdInfo.slt)}
 Password Hint     : ${cdInfo.hint}
 Loops             : ${cdInfo.lpEnd}
 Version           : ${cdInfo.ver}\n`);
-   }
-   catch (err) {
+   } catch (err) {
       if (args.debug) {
          console.error(err);
       } else {
@@ -236,8 +234,8 @@ Version           : ${cdInfo.ver}\n`);
 
 async function getSensitiveInput(msg: string, io: IO): Promise<string> {
    const val = await password(
-      { message: msg + ':', mask: '*', validate: (v) => !v ? `${msg} is required` : true },
-      { input: io.ttyIn, output: iqOutput(io) }
+      { message: `${msg}:`, mask: '*', validate: (v) => (!v ? `${msg} is required` : true) },
+      { input: io.ttyIn, output: iqOutput(io) },
    );
    // inquirer's answered render leaves the cursor on the same line; ensure the
    // next direct write to ttyOut/pipedOut starts on a fresh line.
@@ -247,35 +245,34 @@ async function getSensitiveInput(msg: string, io: IO): Promise<string> {
 
 async function encrypt(
    args: {
-      cred?: string,
-      pwds?: string[],
-      hints?: string[],
-      iters?: number,
-      algs?: string,
-      loops: number,
-      readStart?: number,
-      readMax?: number,
-      silent?: boolean,
-      debug?: boolean
+      cred?: string;
+      pwds?: string[];
+      hints?: string[];
+      iters?: number;
+      algs?: string;
+      loops: number;
+      readStart?: number;
+      readMax?: number;
+      silent?: boolean;
+      debug?: boolean;
    },
-   io: IO
+   io: IO,
 ): Promise<void> {
-
    try {
       args.loops = Math.max(Math.min(args.loops, 6), 1);
 
       let nextAlg: cc.CipherAlgs = 'X20-PLY';
       const keys = Ciphers.algs();
-      let choices = keys.map((key) => {
+      const choices = keys.map((key) => {
          return { name: Ciphers.algDescription(key), value: key };
       });
 
-      let algs: cc.CipherAlgs[] = [];
+      const algs: cc.CipherAlgs[] = [];
 
       for (let l = 1; l <= args.loops; l++) {
          const lpMsg = args.loops > 1 ? ` for loop ${l} of ${args.loops}` : '';
          let alg: cc.CipherAlgs;
-         if (args.algs && args.algs[l - 1]) {
+         if (args.algs?.[l - 1]) {
             alg = Ciphers.validateAlg(args.algs[l - 1]);
             if (!args.silent) {
                showAnswered(`Select Cipher Mode${lpMsg}:`, Ciphers.algDescription(alg), io);
@@ -283,12 +280,13 @@ async function encrypt(
          } else {
             alg = nextAlg;
             if (!args.silent) {
-               alg = await select({
+               alg = await select(
+                  {
                      message: `Select Cipher Mode${lpMsg}:`,
                      choices: choices,
-                     default: nextAlg
+                     default: nextAlg,
                   },
-                  { input: io.ttyIn, output: iqOutput(io) }
+                  { input: io.ttyIn, output: iqOutput(io) },
                );
             }
          }
@@ -308,19 +306,20 @@ async function encrypt(
       } else if (args.silent) {
          iters = cc.ICOUNT_DEFAULT;
       } else {
-         iters = await number({
+         iters = await number(
+            {
                message: 'Password Hash Iterations:',
                default: cc.ICOUNT_DEFAULT,
                min: cc.ICOUNT_MIN,
-               required: true
+               required: true,
             },
-            { input: io.ttyIn, output: iqOutput(io) }
+            { input: io.ttyIn, output: iqOutput(io) },
          );
       }
 
       if (args.silent && (!args.pwds || args.pwds.length < args.loops)) {
          throw new ParamError(
-            `${args.loops} password(s) required in silent mode but ${args.pwds?.length ?? 0} provided (use --pwds)`
+            `${args.loops} password(s) required in silent mode but ${args.pwds?.length ?? 0} provided (use --pwds)`,
          );
       }
 
@@ -330,7 +329,7 @@ async function encrypt(
       const keyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
          const pos = cdinfo.lp - 1;
          const lpMsg = cdinfo.lpEnd > 1 ? ` for loop ${cdinfo.lp} of ${cdinfo.lpEnd}` : '';
-         const argHint = (args.hints && pos < args.hints.length) ? args.hints[pos] : undefined;
+         const argHint = args.hints && pos < args.hints.length ? args.hints[pos] : undefined;
          if (args.pwds && pos < args.pwds.length) {
             if (!args.silent) {
                showAnswered(`Password${lpMsg}:`, '******', io);
@@ -350,33 +349,27 @@ async function encrypt(
             } else {
                hint = await input(
                   { message: `Password Hint${lpMsg}:`, required: false },
-                  { input: io.ttyIn, output: iqOutput(io) }
+                  { input: io.ttyIn, output: iqOutput(io) },
                );
             }
             return [pwd, hint];
          }
       });
 
-      const readOpts = (args.readStart || args.readMax)
-         ? { startSize: args.readStart, maxSize: args.readMax }
-         : undefined;
-      const cipherStream = await encryptStream(
-         clearStream,
-         keyProvider,
-         { algs, ic: iters!, readOpts }
-      );
+      const readOpts =
+         args.readStart || args.readMax ? { startSize: args.readStart, maxSize: args.readMax } : undefined;
+      const cipherStream = await encryptStream(clearStream, keyProvider, { algs, ic: iters!, readOpts });
 
       if (io.b64urlOut) {
          const cipherData = await readStreamAll(cipherStream);
-         io.pipedOut.write(bytesToBase64(cipherData) + '\n');
+         io.pipedOut.write(`${bytesToBase64(cipherData)}\n`);
       } else if (io.binaryOut) {
          await writeAndCloseStream(cipherStream, io.pipedOut);
       } else {
          const cipherData = await readStreamAll(cipherStream);
-         io.pipedOut.write(makeCipherArmor(cipherData, 'compact') + '\n');
+         io.pipedOut.write(`${makeCipherArmor(cipherData, 'compact')}\n`);
       }
-   }
-   catch (err) {
+   } catch (err) {
       if (args.debug) {
          console.error(err);
       } else {
@@ -388,14 +381,13 @@ async function encrypt(
 
 async function decrypt(
    args: {
-      cred?: string,
-      pwds?: string[],
-      silent?: boolean,
-      debug?: boolean
+      cred?: string;
+      pwds?: string[];
+      silent?: boolean;
+      debug?: boolean;
    },
-   io: IO
+   io: IO,
 ): Promise<void> {
-
    try {
       const rawStream = await getCipherStream(io, args.silent);
       const userCred = await getUserCred(args, io);
@@ -408,7 +400,7 @@ async function decrypt(
          if (!args.pwds || args.pwds.length < cdInfo.lpEnd) {
             await mainStream.cancel();
             throw new ParamError(
-               `${cdInfo.lpEnd} password(s) required in silent mode but ${args.pwds?.length ?? 0} provided (use --pwds)`
+               `${cdInfo.lpEnd} password(s) required in silent mode but ${args.pwds?.length ?? 0} provided (use --pwds)`,
             );
          }
          cipherStream = mainStream;
@@ -435,15 +427,14 @@ async function decrypt(
 
       if (io.b64urlOut) {
          const clearData = await readStreamAll(clearStream);
-         io.pipedOut.write(bytesToBase64(clearData) + '\n');
+         io.pipedOut.write(`${bytesToBase64(clearData)}\n`);
       } else if (io.binaryOut) {
          await writeAndCloseStream(clearStream, io.pipedOut);
       } else {
          const clearText = await readStreamAll(clearStream, true);
-         io.pipedOut.write(clearText + '\n');
+         io.pipedOut.write(`${clearText}\n`);
       }
-   }
-   catch (err) {
+   } catch (err) {
       if (args.debug) {
          console.error(err);
       } else {
@@ -454,9 +445,9 @@ async function decrypt(
 }
 
 function CoerceNumber(argName: string) {
-   return (val: any) => {
-      let num = Number(val);
-      if (isNaN(num)) {
+   return (val: unknown) => {
+      const num = Number(val);
+      if (Number.isNaN(num)) {
          throw new Error(`${argName} is not a valid number`);
       }
       return num;
@@ -479,30 +470,44 @@ const args = yargs(hideBin(process.argv))
       aliases: ['dec'],
       describe: 'decrypt cipher data',
       builder: (yargs) => {
-         return yargs.positional('text', { desc: 'cipher armor to decrypt (or use -f or stdin)' })
+         return yargs
+            .positional('text', { desc: 'cipher armor to decrypt (or use -f or stdin)' })
             .example('$0 -c 97jQeo8N16L4vhKzWy7ys -f doc.qq', ': prints decrypted text of doc.qq');
       },
-      handler: () => {}
+      handler: () => {},
    })
    .command({
       command: 'info [text] [options]',
       describe: 'show information about cipher data',
       builder: (yargs) => {
-         return yargs.positional('text', { desc: 'cipher armor to describe (or use -f or stdin)' })
+         return yargs
+            .positional('text', { desc: 'cipher armor to describe (or use -f or stdin)' })
             .example('$0 info -c 97jQeo8N16L4vhKzWy7ys -f doc.qq', ': prints encryption params for doc.qq');
       },
-      handler: () => {}
+      handler: () => {},
    })
    .command({
       command: 'enc [text] [options]',
       describe: 'encrypt clear text',
       builder: (yargs) => {
-         return yargs.positional('text', { desc: 'clear text to encrypt (or use -f or stdin)' })
+         return yargs
+            .positional('text', { desc: 'clear text to encrypt (or use -f or stdin)' })
             .options({
-               'iters': { alias: 'i', desc: `password hash iterations (min ${cc.ICOUNT_MIN})`, type: 'number' },
-               'algs': { alias: 'a', desc: 'encryption cipher mode(s)', type: 'string', array: true, choices: Object.keys(cc.AlgInfo) },
-               'hints': { alias: 'H', desc: 'password hint(s), aligned by position with --pwds', type: 'string', array: true },
-               'loops': { alias: 'l', desc: 'nested encryption loops (max 6)', type: 'number', default: 1 },
+               iters: { alias: 'i', desc: `password hash iterations (min ${cc.ICOUNT_MIN})`, type: 'number' },
+               algs: {
+                  alias: 'a',
+                  desc: 'encryption cipher mode(s)',
+                  type: 'string',
+                  array: true,
+                  choices: Object.keys(cc.AlgInfo),
+               },
+               hints: {
+                  alias: 'H',
+                  desc: 'password hint(s), aligned by position with --pwds',
+                  type: 'string',
+                  array: true,
+               },
+               loops: { alias: 'l', desc: 'nested encryption loops (max 6)', type: 'number', default: 1 },
                'read-start': { desc: 'initial read chunk size in bytes (testing only)', type: 'number', hidden: true },
                'read-max': { desc: 'maximum read chunk size in bytes (testing only)', type: 'number', hidden: true },
             })
@@ -511,34 +516,40 @@ const args = yargs(hideBin(process.argv))
                iters: CoerceNumber('iters'),
                loops: CoerceNumber('loops'),
                'read-start': CoerceNumber('read-start'),
-               'read-max': CoerceNumber('read-max')
+               'read-max': CoerceNumber('read-max'),
             })
             .example('$0 enc -c 97jQeo8N16L4vhKzWy7ys -f doc.txt', ': prints encrypted text of doc.txt');
       },
-      handler: () => {}
+      handler: () => {},
    })
    .options({
-      'cred': { alias: 'c', desc: 'user credential from https://quickcrypt.org/cmdline', type: 'string', nargs: 1 },
-      'infile': { alias: 'f', desc: 'read input from file', type: 'string' },
-      'outfile': { alias: 'o', desc: 'save output to file', type: 'string' },
-      'pwds': { alias: 'p', desc: 'password(s)', type: 'string', array: true },
-      'b64url': { alias: 'b', desc: 'base64url-encode input, output, or both', type: 'string', choices: ['in', 'out', 'both'] },
-      'silent': { alias: 's', desc: 'ask for only required input and show fewer messages', boolean: true },
-      'debug': { alias: 'd', desc: 'show debug info', boolean: true },
-      'nocolor': { desc: 'disable colored output', boolean: true }
+      cred: { alias: 'c', desc: 'user credential from https://quickcrypt.org/cmdline', type: 'string', nargs: 1 },
+      infile: { alias: 'f', desc: 'read input from file', type: 'string' },
+      outfile: { alias: 'o', desc: 'save output to file', type: 'string' },
+      pwds: { alias: 'p', desc: 'password(s)', type: 'string', array: true },
+      b64url: {
+         alias: 'b',
+         desc: 'base64url-encode input, output, or both',
+         type: 'string',
+         choices: ['in', 'out', 'both'],
+      },
+      silent: { alias: 's', desc: 'ask for only required input and show fewer messages', boolean: true },
+      debug: { alias: 'd', desc: 'show debug info', boolean: true },
+      nocolor: { desc: 'disable colored output', boolean: true },
    })
    .conflicts('infile', 'text')
    .version(false)
    .wrap(95)
-   .check((argv, options) => {
+   .check((argv, _options) => {
+      // biome-ignore lint/suspicious/noExplicitAny: yargs argv shape is built dynamically from the option chain
       const args = argv as any;
-      if (args.algs && (args.algs.length > args.loops)) {
+      if (args.algs && args.algs.length > args.loops) {
          throw new Error(`${args.algs.length} algs provided for ${args.loops} loops`);
       }
-      if (args.pwds && (args.pwds.length > args.loops)) {
+      if (args.pwds && args.pwds.length > args.loops) {
          throw new Error(`${args.pwds.length} pwds provided for ${args.loops} loops`);
       }
-      if (args.hints && (args.hints.length > args.loops)) {
+      if (args.hints && args.hints.length > args.loops) {
          throw new Error(`${args.hints.length} hints provided for ${args.loops} loops`);
       }
       if (args._[0] === 'info' && args.b64url && args.b64url !== 'in') {
@@ -546,15 +557,17 @@ const args = yargs(hideBin(process.argv))
       }
       return true;
    })
-   .demandCommand(1).parseSync() as any;
+   .demandCommand(1)
+   // biome-ignore lint/suspicious/noExplicitAny: yargs argv shape is built dynamically from the option chain
+   .parseSync() as any;
 
 if (args.debug) {
    console.error('args ->', args);
 }
 
-function openTTY(kind: 'stdin' | 'stdout'): Promise<any> {
-   return new Promise(resolve => {
-      reopenTTY[kind]((err: any, stream: any) => {
+function openTTY(kind: 'stdin' | 'stdout'): Promise<(fs.ReadStream & fs.WriteStream) | undefined> {
+   return new Promise((resolve) => {
+      reopenTTY[kind]((err: Error | null, stream: fs.ReadStream & fs.WriteStream) => {
          resolve(err ? undefined : stream);
       });
    });
@@ -574,8 +587,7 @@ async function main() {
    }
 
    const reopenedIn: fs.ReadStream | undefined = await openTTY('stdin');
-   const reopenedOut: fs.WriteStream | undefined = !process.stdout.isTTY
-      ? await openTTY('stdout') : undefined;
+   const reopenedOut: fs.WriteStream | undefined = !process.stdout.isTTY ? await openTTY('stdout') : undefined;
 
    if (!reopenedIn) {
       console.warn('Warning: no TTY available. All values must be passed via command-line options.');

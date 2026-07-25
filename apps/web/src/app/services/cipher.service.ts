@@ -20,26 +20,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Injectable } from "@angular/core";
+import { Injectable } from '@angular/core';
 import * as cc from '@qcrypt/crypto/consts';
-import {
-   Ciphers,
-   encryptStream,
-   decryptStream,
-   getCipherStreamInfo,
-   cryptoReady,
-} from '@qcrypt/crypto';
-import type {
-   EContext,
-   CipherDataInfo,
-   KeyProvider,
-} from '@qcrypt/crypto';
+import { Ciphers, encryptStream, decryptStream, getCipherStreamInfo, cryptoReady } from '@qcrypt/crypto';
+import type { EContext, CipherDataInfo, KeyProvider } from '@qcrypt/crypto';
 
 export type { EContext, CipherDataInfo };
 
 const TARGET_HASH_MILLIS = 500;
 const MAX_HASH_MILLIS = 5 * 60 * 1000; //5 minutes
-
 
 /* Thin wrapper around Ciphers and cipher stream functions to create
 an Angular service. Must of that functionality was previously in this
@@ -47,7 +36,7 @@ class directly, and perhaps this class could now be removed, but keeping
 it for now to avoid having to update other code and many tests */
 
 @Injectable({
-   providedIn: "root",
+   providedIn: 'root',
 })
 export class CipherService {
    private _iCount = 0;
@@ -59,14 +48,13 @@ export class CipherService {
    }
 
    async benchmark(testSize: number): Promise<[number, number, number]> {
-
       await navigator.locks.request('benchmark', async () => {
          if (this._iCount === 0) {
             await cryptoReady();
             [this._iCount, this._iCountMax, this._hashRate] = await Ciphers.benchmark(
                testSize,
                TARGET_HASH_MILLIS,
-               MAX_HASH_MILLIS
+               MAX_HASH_MILLIS,
             );
          }
       });

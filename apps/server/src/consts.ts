@@ -43,7 +43,7 @@ export const UNAME_MAX_LEN = 31;
 // export const CERT_KEY_BYTES = 32; // crypto_sign_PUBLICKEYBYTES, but sodium global consts are not ready yet
 // export const CERT_MAX_BYTES = CERT_VERSION_BYTES + CERT_KEY_BYTES + USERID_BYTES + UNAME_LEN_BYTES + Math.pow(2, UNAME_LEN_BYTES * 8);
 
-export const NOUSER_ID = "AAAAAAAAAAAAAAAAAAAAAA";
+export const NOUSER_ID = 'AAAAAAAAAAAAAAAAAAAAAA';
 
 export const KMS_KEYID_NEW = process.env.KMSKeyId_New!;
 export const KMS_KEYID_BACKUP = process.env.KMSKeyId_Old!;

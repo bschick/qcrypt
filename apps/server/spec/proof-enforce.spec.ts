@@ -20,8 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { describe, it, beforeAll, afterAll, expect } from "vitest";
-import { randomBytes } from "node:crypto";
+import { describe, it, beforeAll, afterAll, expect } from 'vitest';
+import { randomBytes } from 'node:crypto';
 import {
    getJson,
    patchJson,
@@ -29,9 +29,9 @@ import {
    makeProofHeaders,
    registerTestUser,
    setSessionUserCred,
-} from "./common";
+} from './common';
 
-describe("proof of userCred enforcement", () => {
+describe('proof of userCred enforcement', () => {
    const testUser = `PWTesty_enf_${Date.now()}`;
    let userId: string;
    let userCred: string;
@@ -56,140 +56,146 @@ describe("proof of userCred enforcement", () => {
       }
    });
 
-   it("accepts a valid proof", async () => {
-      const proof = await makeProofHeaders("GET", "/v1/user", undefined, userCred, userId);
-      const res = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+   it('accepts a valid proof', async () => {
+      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId);
+      const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(200);
    });
 
-   it("rejects a replayed proof on a mutating request", async () => {
+   it('rejects a replayed proof on a mutating request', async () => {
       const body = Buffer.from(JSON.stringify({ userName: testUser }));
-      const proof = await makeProofHeaders("PATCH", "/v1/user", body, userCred, userId);
-      const res1 = await patchJson("/v1/user", { userName: testUser }, { "x-csrf-token": csrf, ...proof }, cookie);
+      const proof = await makeProofHeaders('PATCH', '/v1/user', body, userCred, userId);
+      const res1 = await patchJson('/v1/user', { userName: testUser }, { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res1.status).toBe(200);
 
-      const res2 = await patchJson("/v1/user", { userName: testUser }, { "x-csrf-token": csrf, ...proof }, cookie);
+      const res2 = await patchJson('/v1/user', { userName: testUser }, { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res2.status).toBe(401);
    });
 
-   it("allow replayed proof on a read within time window", async () => {
-      const proof = await makeProofHeaders("GET", "/v1/user", undefined, userCred, userId);
-      const res1 = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+   it('allow replayed proof on a read within time window', async () => {
+      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId);
+      const res1 = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res1.status).toBe(200);
 
-      const res2 = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+      const res2 = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res2.status).toBe(200);
    });
 
-   it("rejects a request carrying no proof", async () => {
-      const res = await getJson("/v1/user", { "x-csrf-token": csrf }, cookie);
+   it('rejects a request carrying no proof', async () => {
+      const res = await getJson('/v1/user', { 'x-csrf-token': csrf }, cookie);
       expect(res.status).toBe(401);
    });
 
-   it("rejects a tampered signature", async () => {
-      const proof = await makeProofHeaders("GET", "/v1/user", undefined, userCred, userId, { tamperSig: true });
-      const res = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+   it('rejects a tampered signature', async () => {
+      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId, { tamperSig: true });
+      const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
 
-   it("rejects a proof timestamp outside the skew window", async () => {
+   it('rejects a proof timestamp outside the skew window', async () => {
       const expired = String(Date.now() - 10 * 60 * 1000);
-      const proof = await makeProofHeaders("GET", "/v1/user", undefined, userCred, userId, { timestampMs: expired });
-      const res = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId, { timestampMs: expired });
+      const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
 
-   it("rejects a proof signed with the wrong userCred", async () => {
-      const wrongCred = randomBytes(32).toString("base64url");
-      const proof = await makeProofHeaders("GET", "/v1/user", undefined, wrongCred, userId);
-      const res = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+   it('rejects a proof signed with the wrong userCred', async () => {
+      const wrongCred = randomBytes(32).toString('base64url');
+      const proof = await makeProofHeaders('GET', '/v1/user', undefined, wrongCred, userId);
+      const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
 
-   it("rejects a proof bound to a different userId", async () => {
-      const wrongUserId = randomBytes(16).toString("base64url");
-      const proof = await makeProofHeaders("GET", "/v1/user", undefined, userCred, wrongUserId);
-      const res = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+   it('rejects a proof bound to a different userId', async () => {
+      const wrongUserId = randomBytes(16).toString('base64url');
+      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, wrongUserId);
+      const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
 
-   it("rejects requests with missing proof parts", async () => {
-      const proof = await makeProofHeaders("GET", "/v1/user", undefined, userCred, userId);
+   it('rejects requests with missing proof parts', async () => {
+      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId);
       const parts = proof['x-proof'].split(',');
       expect(parts.length).toBe(3);
 
       proof['x-proof'] = parts.join(',');
-      let res = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+      let res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(200);
 
       proof['x-proof'] = parts.slice(1).join(',');
-      res = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+      res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
 
-      proof['x-proof'] = parts.slice(0,1).join(',');
-      res = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+      proof['x-proof'] = parts.slice(0, 1).join(',');
+      res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
 
       proof['x-proof'] = [parts[0], parts[2]].join(',');
-      res = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+      res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
 
-   it("requires a proof on getSession", async () => {
+   it('requires a proof on getSession', async () => {
       // getSession skips csrf but still gates CSRF issuance on proof of userCred.
-      const res = await getJson("/v1/session", {}, cookie);
+      const res = await getJson('/v1/session', {}, cookie);
       expect(res.status).toBe(401);
    });
 
-   it("accepts a proof that binds a query string the handler ignores", async () => {
-      const proof = await makeProofHeaders("GET", "/v1/user?ignored=1", undefined, userCred, userId);
-      const res = await getJson("/v1/user?ignored=1", { "x-csrf-token": csrf, ...proof }, cookie);
+   it('accepts a proof that binds a query string the handler ignores', async () => {
+      const proof = await makeProofHeaders('GET', '/v1/user?ignored=1', undefined, userCred, userId);
+      const res = await getJson('/v1/user?ignored=1', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(200);
    });
 
-   it("rejects when the request query differs from the signed query", async () => {
-      const proof = await makeProofHeaders("GET", "/v1/user?ignored=1", undefined, userCred, userId);
-      const res = await getJson("/v1/user?ignored=2", { "x-csrf-token": csrf, ...proof }, cookie);
+   it('rejects when the request query differs from the signed query', async () => {
+      const proof = await makeProofHeaders('GET', '/v1/user?ignored=1', undefined, userCred, userId);
+      const res = await getJson('/v1/user?ignored=2', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
 
-   it("rejects a proof reused on a different method or path", async () => {
+   it('rejects a proof reused on a different method or path', async () => {
       // A GET proof replays within the skew window, so the nonce doesn't prevent reuse here — the
       // signed method and path do.
-      const proof = await makeProofHeaders("GET", "/v1/user", undefined, userCred, userId);
+      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId);
 
-      const own = await getJson("/v1/user", { "x-csrf-token": csrf, ...proof }, cookie);
+      const own = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(own.status).toBe(200);
 
-      const otherPath = await getJson("/v1/passkeys/options", { "x-csrf-token": csrf, ...proof }, cookie);
+      const otherPath = await getJson('/v1/passkeys/options', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(otherPath.status).toBe(401);
 
-      const otherMethod = await patchJson("/v1/user", null, { "x-csrf-token": csrf, ...proof }, cookie);
+      const otherMethod = await patchJson('/v1/user', null, { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(otherMethod.status).toBe(401);
    });
 
-   it("rejects a mutating request whose body differs from the signed body", async () => {
+   it('rejects a mutating request whose body differs from the signed body', async () => {
       const signed = { userName: testUser };
       const signedBuf = Buffer.from(JSON.stringify(signed));
 
-      const good = await makeProofHeaders("PATCH", "/v1/user", signedBuf, userCred, userId);
-      const ok = await patchJson("/v1/user", signed, { "x-csrf-token": csrf, ...good }, cookie);
+      const good = await makeProofHeaders('PATCH', '/v1/user', signedBuf, userCred, userId);
+      const ok = await patchJson('/v1/user', signed, { 'x-csrf-token': csrf, ...good }, cookie);
       expect(ok.status).toBe(200);
 
       // Fresh proof (the one above spent its nonce) so this 401 is the body mismatch, not a replay.
-      const proof = await makeProofHeaders("PATCH", "/v1/user", signedBuf, userCred, userId);
-      const res = await patchJson("/v1/user", { userName: `${testUser}_x` }, { "x-csrf-token": csrf, ...proof }, cookie);
+      const proof = await makeProofHeaders('PATCH', '/v1/user', signedBuf, userCred, userId);
+      const res = await patchJson(
+         '/v1/user',
+         { userName: `${testUser}_x` },
+         { 'x-csrf-token': csrf, ...proof },
+         cookie,
+      );
       expect(res.status).toBe(401);
    });
 
-   it("admits only one of several concurrent replays of one proof", async () => {
+   it('admits only one of several concurrent replays of one proof', async () => {
       const body = Buffer.from(JSON.stringify({ userName: testUser }));
-      const proof = await makeProofHeaders("PATCH", "/v1/user", body, userCred, userId);
+      const proof = await makeProofHeaders('PATCH', '/v1/user', body, userCred, userId);
 
       // The nonce store is a conditional insert, so racing the same proof still admits exactly one.
       const results = await Promise.all(
          Array.from({ length: 5 }, () =>
-            patchJson("/v1/user", { userName: testUser }, { "x-csrf-token": csrf, ...proof }, cookie))
+            patchJson('/v1/user', { userName: testUser }, { 'x-csrf-token': csrf, ...proof }, cookie),
+         ),
       );
       expect(results.filter((r) => r.status === 200).length).toBe(1);
       expect(results.filter((r) => r.status === 401).length).toBe(4);

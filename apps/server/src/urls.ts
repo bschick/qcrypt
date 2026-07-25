@@ -20,52 +20,50 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { base64Decode, NotFoundError, ParamError } from "./utils";
-import type { VerifiedUserItem } from "./models";
+import type { APIGatewayProxyEventV2 } from 'aws-lambda';
+import { base64Decode, NotFoundError, ParamError } from './utils';
+import type { VerifiedUserItem } from './models';
+import type { Response } from './server';
 export type QParams = Record<string, string>;
 export const INTERNAL_VERSION = 0;
 export type Method = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 export type Version = typeof INTERNAL_VERSION | 1;
 
-
-type HttpHandler = (
-   httpDetails: HttpDetails,
-   verifiedUser?: VerifiedUserItem,
-) => any
+type HttpHandler = (httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem) => Promise<Response>;
 
 export type HttpDetails = {
-   name: string,
-   method: Method,
-   path: string,
-   rawQueryString: string,
-   rpID: string,
-   rpOrigin: string,
-   authorize: boolean,
-   resources: Record<string, any>,
-   params: QParams,
-   body: Record<string, any>,
-   rawBody: string,
-   handler: HttpHandler,
-   version: Version,
-   checkCsrf: boolean,
-   cookie?: string,
-   userAgent?: string,
-   proofSignature?: string,
-   proofTimestamp?: string,
-   proofNonce?: string
+   name: string;
+   method: Method;
+   path: string;
+   rawQueryString: string;
+   rpID: string;
+   rpOrigin: string;
+   authorize: boolean;
+   resources: Record<string, string | undefined>;
+   params: QParams;
+   // biome-ignore lint/suspicious/noExplicitAny: request bodies are arbitrary JSON
+   body: Record<string, any>;
+   rawBody: string;
+   handler: HttpHandler;
+   version: Version;
+   checkCsrf: boolean;
+   cookie?: string;
+   userAgent?: string;
+   proofSignature?: string;
+   proofTimestamp?: string;
+   proofNonce?: string;
 };
 
 type HandlerInfo = {
-   name: string,
-   pattern: URLPattern,
-   version: Version,
-   authorize: boolean,
-   checkCsrf?: boolean,
-   handler: HttpHandler
+   name: string;
+   pattern: URLPattern;
+   version: Version;
+   authorize: boolean;
+   checkCsrf?: boolean;
+   handler: HttpHandler;
 };
 
 export type MethodMap = Record<Method, HandlerInfo[]>;
-
 
 export const Patterns = {
    regOptions: new URLPattern({
@@ -110,63 +108,58 @@ export const Patterns = {
       pathname: `/v:ver/passkeys/verify`,
    }),
    passkey: new URLPattern({
-      pathname: `/v:ver/passkeys/:credid`
+      pathname: `/v:ver/passkeys/:credid`,
    }),
 
    // Sender Link patterns
    invitables: new URLPattern({
-      pathname: `/v:ver/invitables/:invid`
+      pathname: `/v:ver/invitables/:invid`,
    }),
    // Internal only URLS (not allowed through Cloudfront)
    munge: new URLPattern({
-      pathname: '/v:ver/munge'
+      pathname: '/v:ver/munge',
    }),
    loadaaguids: new URLPattern({
-      pathname: '/v:ver/loadaaguids'
+      pathname: '/v:ver/loadaaguids',
    }),
    consistency: new URLPattern({
-      pathname: '/v:ver/consistency'
+      pathname: '/v:ver/consistency',
    }),
    cleanuptestusers: new URLPattern({
-      pathname: '/v:ver/cleanuptestusers'
-   })
+      pathname: '/v:ver/cleanuptestusers',
+   }),
 };
 
-
-export function matchEvent(event: Record<string, any>, methodMap: MethodMap): HttpDetails {
-
-   if (!event || !event['requestContext'] ||
-      !event['requestContext']['http'] || !event['headers'] ||
-      !event['headers']['x-passkey-rpid']
-   ) {
-      throw new ParamError("invalid request, missing context");
+export function matchEvent(event: APIGatewayProxyEventV2, methodMap: MethodMap): HttpDetails {
+   if (!event?.requestContext?.http || !event.headers?.['x-passkey-rpid']) {
+      throw new ParamError('invalid request, missing context');
    }
 
-   const rpID = event['headers']['x-passkey-rpid'];
+   const rpID = event.headers['x-passkey-rpid'];
    let rpOrigin = `https://${rpID}`;
-   if (event['headers']['x-passkey-port']) {
-      rpOrigin += `:${event['headers']['x-passkey-port']}`;
+   if (event.headers['x-passkey-port']) {
+      rpOrigin += `:${event.headers['x-passkey-port']}`;
    }
 
-   const method: Method = event['requestContext']['http']['method'].toUpperCase();
-   const path = event['requestContext']['http']['path'];
+   const method = event.requestContext.http.method.toUpperCase() as Method;
+   const path = event.requestContext.http.path;
    // console.log(`${method} ${path}`);
 
    const handlerInfos: HandlerInfo[] = methodMap[method];
 
    // rpID and therefore hostname is constrained to *.quickcrypt.org by cloudfront
-   for (let handerInfo of handlerInfos) {
+   for (const handerInfo of handlerInfos) {
       const match = handerInfo.pattern.exec({
          hostname: rpID,
-         pathname: path
+         pathname: path,
       });
 
       if (match && Number(match.pathname.groups.ver) === handerInfo.version) {
-
+         // biome-ignore lint/suspicious/noExplicitAny: request bodies are arbitrary JSON
          let body: Record<string, any> = {};
          let rawBody = '';
          if ('body' in event) {
-            rawBody = event['body'] ?? '';
+            rawBody = event.body ?? '';
             // Uncomment for debugging
             // console.log(`raw body: ${rawBody}`);
 
@@ -181,10 +174,10 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
             }
          }
 
-         const params: QParams = event['queryStringParameters'] ?? {};
-         const cookie: string | undefined = event['headers']['cookie'];
-         const userAgent: string | undefined = event['headers']['user-agent'];
-         const proofHeader: string | undefined = event['headers']['x-proof'];
+         const params = (event.queryStringParameters ?? {}) as QParams;
+         const cookie: string | undefined = event.headers.cookie;
+         const userAgent: string | undefined = event.headers['user-agent'];
+         const proofHeader: string | undefined = event.headers['x-proof'];
          let proofSignature: string | undefined;
          let proofTimestamp: string | undefined;
          let proofNonce: string | undefined;
@@ -207,7 +200,7 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
             name: handerInfo.name,
             method: method,
             path: path,
-            rawQueryString: event['rawQueryString'] || '',
+            rawQueryString: event.rawQueryString || '',
             rpID: rpID,
             rpOrigin: rpOrigin,
             authorize: handerInfo.authorize,
@@ -222,9 +215,8 @@ export function matchEvent(event: Record<string, any>, methodMap: MethodMap): Ht
             userAgent: userAgent,
             proofSignature: proofSignature,
             proofTimestamp: proofTimestamp,
-            proofNonce: proofNonce
+            proofNonce: proofNonce,
          };
-
       }
    }
 

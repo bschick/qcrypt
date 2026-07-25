@@ -8,9 +8,8 @@ describe('ProtocolComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [ProtocolComponent, RouterModule.forRoot([])]
-      })
-         .compileComponents();
+         imports: [ProtocolComponent, RouterModule.forRoot([])],
+      }).compileComponents();
 
       fixture = TestBed.createComponent(ProtocolComponent);
       component = fixture.componentInstance;

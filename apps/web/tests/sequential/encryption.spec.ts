@@ -1,114 +1,106 @@
 import { test, expect } from '@playwright/test';
-import {
-  hosts,
-  keeperDir,
-  haveKeeperCreds,
-  testWithAuth,
-  fillPwdAndAccept
-} from '.././common';
-
+import { hosts, keeperDir, haveKeeperCreds, testWithAuth, fillPwdAndAccept } from '.././common';
 
 // Uses shared KeeperOne. A parallel sign-in (other test in another session or
 // another runner) can invalidate this session before the test finishes —
 // playwright's retry recovers. Single login + local-only crypto after, so
 // retry is sufficient and we keep the shared user.
 testWithAuth('encrypt decrypt', async ({ authFixture }) => {
-  test.skip(!haveKeeperCreds, 'keeper credentials not provided (apps/web/tests/keeper-creds)');
-  const { page } = authFixture;
+   test.skip(!haveKeeperCreds, 'keeper credentials not provided (apps/web/tests/keeper-creds)');
+   const { page } = authFixture;
 
-  await page.goto('/');
+   await page.goto('/');
 
-  const testHost = new URL(page.url()).hostname as hosts;
-  const keeper = authFixture.loadAuthenticator(keeperDir(testHost, 'keeper1'));
+   const testHost = new URL(page.url()).hostname as hosts;
+   const keeper = authFixture.loadAuthenticator(keeperDir(testHost, 'keeper1'));
 
-  await authFixture.passkeyAuth(keeper, async () => {
-    await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-  });
-  await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({timeout:10000});
-  await page.getByRole('button', { name: 'Advanced Options' }).click();
-  await page.getByRole('switch', { name: 'Hide Password' }).uncheck();
-  await page.locator('mat-select#pwdStrength').click();
-  await page.locator('mat-option').filter({ hasText: 'Terrible' }).click();
+   await authFixture.passkeyAuth(keeper, async () => {
+      await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
+   });
+   await expect(page).toHaveURL(/\/$/);
+   await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({ timeout: 10000 });
+   await page.getByRole('button', { name: 'Advanced Options' }).click();
+   await page.getByRole('switch', { name: 'Hide Password' }).uncheck();
+   await page.locator('mat-select#pwdStrength').click();
+   await page.locator('mat-option').filter({ hasText: 'Terrible' }).click();
 
-  const clearText = 'this is very secret, do not 🦜';
-  const pwd = "you'll never know";
-  const hint = "🚔";
-  await page.locator('textarea#clearInput').fill(clearText);
-  await page.getByRole('button', { name: 'Encrypt Text' }).click();
+   const clearText = 'this is very secret, do not 🦜';
+   const pwd = "you'll never know";
+   const hint = '🚔';
+   await page.locator('textarea#clearInput').fill(clearText);
+   await page.getByRole('button', { name: 'Encrypt Text' }).click();
 
-  await expect(page.getByRole('heading', { name: "KeeperOne" })).toBeVisible({timeout:10000});
-  await fillPwdAndAccept(page, /KeeperOne/, pwd, hint, 'enc', async () => {
-    await expect(page.getByText(/KeeperOne/)).toBeVisible({timeout:10000});
-  });
+   await expect(page.getByRole('heading', { name: 'KeeperOne' })).toBeVisible({ timeout: 10000 });
+   await fillPwdAndAccept(page, /KeeperOne/, pwd, hint, 'enc', async () => {
+      await expect(page.getByText(/KeeperOne/)).toBeVisible({ timeout: 10000 });
+   });
 
-  await expect(page.locator('textarea#cipherInput')).not.toBeEmpty();
-  await page.getByRole('button', { name: 'Info', exact: true }).click();
+   await expect(page.locator('textarea#cipherInput')).not.toBeEmpty();
+   await page.getByRole('button', { name: 'Info', exact: true }).click();
 
-  await expect(page.getByLabel('Decryption Parameters').getByText('XChaCha20 Poly1305')).toBeVisible({timeout:10000});
-  await expect(page.getByLabel('Decryption Parameters').getByText(hint)).toBeVisible({timeout:10000});
-  await page.keyboard.press('Escape');
+   await expect(page.getByLabel('Decryption Parameters').getByText('XChaCha20 Poly1305')).toBeVisible({
+      timeout: 10000,
+   });
+   await expect(page.getByLabel('Decryption Parameters').getByText(hint)).toBeVisible({ timeout: 10000 });
+   await page.keyboard.press('Escape');
 
-  await page.getByRole('button', { name: 'Decrypt Text' }).click();
-  await expect(page.getByRole('heading', { name: "KeeperOne" })).toBeVisible({timeout:10000});
-  await fillPwdAndAccept(page, /KeeperOne/, pwd, hint, 'dec', async () => {
-    await expect(page.getByText(/KeeperOne/)).toBeVisible({timeout:10000});
-  });
+   await page.getByRole('button', { name: 'Decrypt Text' }).click();
+   await expect(page.getByRole('heading', { name: 'KeeperOne' })).toBeVisible({ timeout: 10000 });
+   await fillPwdAndAccept(page, /KeeperOne/, pwd, hint, 'dec', async () => {
+      await expect(page.getByText(/KeeperOne/)).toBeVisible({ timeout: 10000 });
+   });
 
-  await expect(page.locator('textarea#clearInput')).not.toBeEmpty();
-  await expect(page.locator('textarea#clearInput')).toHaveValue(clearText);
-
+   await expect(page.locator('textarea#clearInput')).not.toBeEmpty();
+   await expect(page.locator('textarea#clearInput')).toHaveValue(clearText);
 });
-
 
 // Uses shared KeeperTwo. A parallel sign-in (other test in another session or
 // another runner) can invalidate this session before the test finishes —
 // playwright's retry recovers. Single login + local-only crypto after, so
 // retry is sufficient and we keep the shared user.
 testWithAuth('loop encrypt decrypt', async ({ authFixture }) => {
-  test.skip(!haveKeeperCreds, 'keeper credentials not provided (apps/web/tests/keeper-creds)');
-  const { page } = authFixture;
+   test.skip(!haveKeeperCreds, 'keeper credentials not provided (apps/web/tests/keeper-creds)');
+   const { page } = authFixture;
 
-  await page.goto('/');
+   await page.goto('/');
 
-  const testHost = new URL(page.url()).hostname as hosts;
-  const keeper = authFixture.loadAuthenticator(keeperDir(testHost, 'keeper2'));
+   const testHost = new URL(page.url()).hostname as hosts;
+   const keeper = authFixture.loadAuthenticator(keeperDir(testHost, 'keeper2'));
 
-  const loops = 3
-  const clearText = 'this is another 🚧';
+   const loops = 3;
+   const clearText = 'this is another 🚧';
 
-  await authFixture.passkeyAuth(keeper, async () => {
-    await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
-  });
-  await expect(page).toHaveURL(/\/$/);
-  await page.getByRole('button', { name: 'Encryption Mode' }).click();
-  await page.getByRole('button', { name: 'Advanced Options' }).click();
-  await page.getByRole('switch', { name: 'Hide Password' }).uncheck();
-  await page.locator('mat-select#pwdStrength').click();
-  await page.locator('mat-option').filter({ hasText: 'Terrible' }).click();
+   await authFixture.passkeyAuth(keeper, async () => {
+      await page.getByRole('button', { name: 'I have used Quick Crypt' }).click();
+   });
+   await expect(page).toHaveURL(/\/$/);
+   await page.getByRole('button', { name: 'Encryption Mode' }).click();
+   await page.getByRole('button', { name: 'Advanced Options' }).click();
+   await page.getByRole('switch', { name: 'Hide Password' }).uncheck();
+   await page.locator('mat-select#pwdStrength').click();
+   await page.locator('mat-option').filter({ hasText: 'Terrible' }).click();
 
-  await page.locator('input[name="loops"]').fill(`${loops}`);
-  await page.keyboard.press('Tab');
+   await page.locator('input[name="loops"]').fill(`${loops}`);
+   await page.keyboard.press('Tab');
 
-  await page.locator('textarea#clearInput').fill(clearText);
-  await page.getByRole('button', { name: 'Encrypt Text' }).click();
+   await page.locator('textarea#clearInput').fill(clearText);
+   await page.getByRole('button', { name: 'Encrypt Text' }).click();
 
-  for (let l = 1; l <= loops; l++) {
-    await fillPwdAndAccept(page, /KeeperTwo/, `${l}+foie F2]43$Rad`, `${l}`, 'enc', async () => {
-      await expect(page.getByText(`loop ${l} of ${loops}`)).toBeVisible({timeout:10000});
-    });
-  }
+   for (let l = 1; l <= loops; l++) {
+      await fillPwdAndAccept(page, /KeeperTwo/, `${l}+foie F2]43$Rad`, `${l}`, 'enc', async () => {
+         await expect(page.getByText(`loop ${l} of ${loops}`)).toBeVisible({ timeout: 10000 });
+      });
+   }
 
-  await expect(page.locator('textarea#cipherInput')).not.toBeEmpty();
-  await page.getByRole('button', { name: 'Decrypt Text' }).click();
+   await expect(page.locator('textarea#cipherInput')).not.toBeEmpty();
+   await page.getByRole('button', { name: 'Decrypt Text' }).click();
 
-  for (let l = loops; l >= 1; l--) {
-    await fillPwdAndAccept(page, /KeeperTwo/, `${l}+foie F2]43$Rad`, `${l}`, 'dec', async () => {
-      await expect(page.getByText(`loop ${l} of ${loops}`)).toBeVisible({timeout:10000});
-    });
-  }
+   for (let l = loops; l >= 1; l--) {
+      await fillPwdAndAccept(page, /KeeperTwo/, `${l}+foie F2]43$Rad`, `${l}`, 'dec', async () => {
+         await expect(page.getByText(`loop ${l} of ${loops}`)).toBeVisible({ timeout: 10000 });
+      });
+   }
 
-  await expect(page.locator('textarea#clearInput')).not.toBeEmpty();
-  await expect(page.locator('textarea#clearInput')).toHaveValue(clearText);
-
+   await expect(page.locator('textarea#clearInput')).not.toBeEmpty();
+   await expect(page.locator('textarea#clearInput')).toHaveValue(clearText);
 });

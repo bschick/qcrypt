@@ -51,12 +51,12 @@ export type CredentialPayload = PasskeyIdPayload & {
 
 export type LoginPayload = CredentialPayload;
 
-export type LoginMessage = LoginPayload & {kind: MessageKind.Login};
-export type LogoutMessage = LogoutPayload & {kind: MessageKind.Logout};
-export type ForgetMessage = {kind: MessageKind.Forget};
-export type UserInfoChangedMessage = PasskeyIdPayload & {kind: MessageKind.UserInfoChanged};
-type CredentialRequestMessage = PasskeyIdPayload & {kind: MessageKind.CredentialRequest; nonce: string};
-type CredentialResponseMessage = CredentialPayload & {kind: MessageKind.CredentialResponse; nonce: string};
+export type LoginMessage = LoginPayload & { kind: MessageKind.Login };
+export type LogoutMessage = LogoutPayload & { kind: MessageKind.Logout };
+export type ForgetMessage = { kind: MessageKind.Forget };
+export type UserInfoChangedMessage = PasskeyIdPayload & { kind: MessageKind.UserInfoChanged };
+type CredentialRequestMessage = PasskeyIdPayload & { kind: MessageKind.CredentialRequest; nonce: string };
+type CredentialResponseMessage = CredentialPayload & { kind: MessageKind.CredentialResponse; nonce: string };
 
 export type PeerMessage =
    | LoginMessage
@@ -116,7 +116,7 @@ export class BroadcastService {
    // contention and additional time may be needed for response collection
    public async requestCredential(
       pkId: string,
-      extendIfEmpty: boolean = false
+      extendIfEmpty: boolean = false,
    ): Promise<CredentialPayload | undefined> {
       this._requireStarted();
       const nonce = crypto.randomUUID();
@@ -129,7 +129,7 @@ export class BroadcastService {
                const pending = this._pending.get(nonce);
                if (pending) {
                   if (pending.credentials.length === 0 && extendIfEmpty && count < COLLECTION_MAX_STAGES) {
-                     pending.timer = startStage(count + 1)
+                     pending.timer = startStage(count + 1);
                   } else {
                      this._pending.delete(nonce);
                      this._unfulfilledNonce = pending.credentials.length === 0 ? nonce : undefined;
@@ -139,7 +139,7 @@ export class BroadcastService {
             }, COLLECTION_WINDOW_MS);
          };
 
-         this._pending.set(nonce, { pkId, credentials: [], timer:  startStage(1), resolve });
+         this._pending.set(nonce, { pkId, credentials: [], timer: startStage(1), resolve });
          this._channel!.postMessage({ kind: MessageKind.CredentialRequest, pkId, nonce });
       });
    }
@@ -186,7 +186,7 @@ export class BroadcastService {
                setTimeout(() => this._messageHandler?.(msg), PROPAGATION_DELAY_MS);
          }
       }
-   }
+   };
 
    private _credentialRequest(request: CredentialRequestMessage) {
       const myCredential = this._credentialProvider?.();
@@ -194,7 +194,7 @@ export class BroadcastService {
          this._channel!.postMessage({
             kind: MessageKind.CredentialResponse,
             nonce: request.nonce,
-            ...myCredential
+            ...myCredential,
          });
       }
    }
@@ -228,35 +228,40 @@ export function decodeMessage(raw: unknown): PeerMessage | undefined {
       return undefined;
    }
    const candidate = raw as Partial<PeerMessage>;
-   if (candidate.kind === MessageKind.Login
-      && typeof candidate.pkId === 'string'
-      && typeof candidate.version === 'number'
-      && typeof candidate.userCredEnc === 'string'
-      && typeof candidate.userCredExpiry === 'string') {
+   if (
+      candidate.kind === MessageKind.Login &&
+      typeof candidate.pkId === 'string' &&
+      typeof candidate.version === 'number' &&
+      typeof candidate.userCredEnc === 'string' &&
+      typeof candidate.userCredExpiry === 'string'
+   ) {
       return candidate as PeerMessage;
-   } else if (candidate.kind === MessageKind.Logout
-      && typeof candidate.pkId === 'string'
-      && typeof candidate.version === 'number') {
+   } else if (
+      candidate.kind === MessageKind.Logout &&
+      typeof candidate.pkId === 'string' &&
+      typeof candidate.version === 'number'
+   ) {
       return candidate as PeerMessage;
    } else if (candidate.kind === MessageKind.Forget) {
       return candidate as PeerMessage;
-   } else if (candidate.kind === MessageKind.UserInfoChanged
-      && typeof candidate.pkId === 'string') {
+   } else if (candidate.kind === MessageKind.UserInfoChanged && typeof candidate.pkId === 'string') {
       return candidate as PeerMessage;
-   } else if (candidate.kind === MessageKind.CredentialRequest
-      && typeof candidate.pkId === 'string'
-      && typeof (candidate as { nonce?: unknown }).nonce === 'string') {
+   } else if (
+      candidate.kind === MessageKind.CredentialRequest &&
+      typeof candidate.pkId === 'string' &&
+      typeof (candidate as { nonce?: unknown }).nonce === 'string'
+   ) {
       return candidate as PeerMessage;
-   } else if (candidate.kind === MessageKind.CredentialResponse
-      && typeof candidate.pkId === 'string'
-      && typeof candidate.version === 'number'
-      && typeof candidate.userCredEnc === 'string'
-      && typeof candidate.userCredExpiry === 'string'
-      && typeof (candidate as { nonce?: unknown }).nonce === 'string') {
+   } else if (
+      candidate.kind === MessageKind.CredentialResponse &&
+      typeof candidate.pkId === 'string' &&
+      typeof candidate.version === 'number' &&
+      typeof candidate.userCredEnc === 'string' &&
+      typeof candidate.userCredExpiry === 'string' &&
+      typeof (candidate as { nonce?: unknown }).nonce === 'string'
+   ) {
       return candidate as PeerMessage;
    }
 
    return undefined;
 }
-
-

@@ -51,8 +51,8 @@ function addViewBox(text: string): ParseResult {
    if ('viewBox' in attrs || 'viewbox' in attrs) {
       return { text, message: 'viewBox present' };
    }
-   const widthRaw = attrs['width'];
-   const heightRaw = attrs['height'];
+   const widthRaw = attrs.width;
+   const heightRaw = attrs.height;
    if (!widthRaw || !heightRaw) {
       throw new Error('root <svg> lacks width and/or height attributes');
    }
@@ -85,10 +85,7 @@ function tagClickables(text: string, fileLabel: string): ParseResult {
          return full;
       }
       tagged++;
-      const newAttrs = attrs.replace(
-         /\sfill\s*=\s*"#[fF]4[dD]9[0-9a-fA-F]{2}"/,
-         ` fill="${CANONICAL_FILL}"`,
-      );
+      const newAttrs = attrs.replace(/\sfill\s*=\s*"#[fF]4[dD]9[0-9a-fA-F]{2}"/, ` fill="${CANONICAL_FILL}"`);
       return `<${tag}${newAttrs} class="qc-clickable" data-target="${byte}"${slash}>`;
    });
    const parts: string[] = [`tagged ${tagged}`];

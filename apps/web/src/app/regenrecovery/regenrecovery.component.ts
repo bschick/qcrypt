@@ -33,27 +33,23 @@ import { Subscription } from 'rxjs';
    selector: 'app-regenrecovery',
    templateUrl: './regenrecovery.component.html',
    styleUrl: './regenrecovery.component.scss',
-   imports: [MatIconModule, MatButtonModule, MatProgressSpinnerModule, MatCardModule]
+   imports: [MatIconModule, MatButtonModule, MatProgressSpinnerModule, MatCardModule],
 })
 export class RegenrecoveryComponent implements OnInit, OnDestroy {
-
    public showProgress = false;
    public error = '';
    private _authSub!: Subscription;
 
    constructor(
       public authSvc: AuthenticatorService,
-      private router: Router) {
-   }
+      private router: Router,
+   ) {}
 
    ngOnInit() {
-      this._authSub = this.authSvc.on(
-         [AuthEvent.Logout],
-         () => {
-            this.error = '';
-            this.router.navigateByUrl('/');
-         }
-      );
+      this._authSub = this.authSvc.on([AuthEvent.Logout], () => {
+         this.error = '';
+         this.router.navigateByUrl('/');
+      });
    }
 
    ngOnDestroy() {
@@ -72,17 +68,19 @@ export class RegenrecoveryComponent implements OnInit, OnDestroy {
       const replacedLink = !this.authSvc.hasRecoveryId();
       const replacedWords = !replacedLink;
 
-      this.authSvc.changeRecoveryWords().then(() => {
-         this.router.navigateByUrl('/showrecovery', { state: { replacedLink, replacedWords } });
-      }).catch((err) => {
-         console.error(err);
-         if (err instanceof Error && err.message.includes("fetch")) {
-            this.error = 'Could not replace recovery words, check your connection and try again';
-         } else {
-            this.error = 'Could not replace recovery words, try again';
-         }
-      }).finally(
-         () => this.showProgress = false
-      );
+      this.authSvc
+         .changeRecoveryWords()
+         .then(() => {
+            this.router.navigateByUrl('/showrecovery', { state: { replacedLink, replacedWords } });
+         })
+         .catch((err) => {
+            console.error(err);
+            if (err instanceof Error && err.message.includes('fetch')) {
+               this.error = 'Could not replace recovery words, check your connection and try again';
+            } else {
+               this.error = 'Could not replace recovery words, try again';
+            }
+         })
+         .finally(() => (this.showProgress = false));
    }
 }

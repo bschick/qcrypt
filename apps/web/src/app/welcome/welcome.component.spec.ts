@@ -11,10 +11,9 @@ describe('WelcomeComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-    imports: [WelcomeComponent, NoopAnimationsModule, RouterModule.forRoot([])],
-    providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()]
-})
-         .compileComponents();
+         imports: [WelcomeComponent, NoopAnimationsModule, RouterModule.forRoot([])],
+         providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()],
+      }).compileComponents();
 
       fixture = TestBed.createComponent(WelcomeComponent);
       component = fixture.componentInstance;

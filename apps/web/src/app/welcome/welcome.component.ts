@@ -37,34 +37,30 @@ function paramsToQueryString(): string {
 }
 
 @Component({
-    selector: 'app-welcome',
-    templateUrl: './welcome.component.html',
-    styleUrl: './welcome.component.scss',
-    imports: [MatButtonModule,
-        MatProgressSpinnerModule, MatIconModule, MatDividerModule, RouterLink
-    ]
+   selector: 'app-welcome',
+   templateUrl: './welcome.component.html',
+   styleUrl: './welcome.component.scss',
+   imports: [MatButtonModule, MatProgressSpinnerModule, MatIconModule, MatDividerModule, RouterLink],
 })
 export class WelcomeComponent {
-
    public error: string = '';
    public showProgress: boolean = false;
 
    constructor(
       private dialog: MatDialog,
       private authSvc: AuthenticatorService,
-      private router: Router
-   ) {
-   }
+      private router: Router,
+   ) {}
 
-   async onClickExisting(event: any) {
+   async onClickExisting(_event: MouseEvent) {
       try {
          this.error = '';
          this.showProgress = true;
          await this.authSvc.createSession();
-         this.router.navigateByUrl('/' + paramsToQueryString());
+         this.router.navigateByUrl(`/${paramsToQueryString()}`);
       } catch (err) {
          console.error(err);
-         if (err instanceof Error && err.message.includes("fetch")) {
+         if (err instanceof Error && err.message.includes('fetch')) {
             this.error = 'Sign in failed, check your internet connection';
          } else {
             this.error = 'Passkey not recognized. Either try again or select another option above.';
@@ -72,29 +68,26 @@ export class WelcomeComponent {
       } finally {
          this.showProgress = false;
       }
-
    }
 
-   onClickNew(event: any) {
-   }
+   onClickNew(_event: MouseEvent) {}
 
-   onClickRecovery(event: any) {
-      var dialogRef = this.dialog.open(RecoveryDialog);
+   onClickRecovery(_event: MouseEvent) {
+      this.dialog.open(RecoveryDialog);
    }
 }
 
-
 @Component({
-    selector: 'recovery-dialog',
-    templateUrl: './recovery-dialog.html',
-    styleUrl: './welcome.component.scss',
-    imports: [MatDialogModule, MatIconModule, MatTooltipModule, MatButtonModule, RouterLink]
+   selector: 'recovery-dialog',
+   templateUrl: './recovery-dialog.html',
+   styleUrl: './welcome.component.scss',
+   imports: [MatDialogModule, MatIconModule, MatTooltipModule, MatButtonModule, RouterLink],
 })
 export class RecoveryDialog {
    constructor(
       public dialogRef: MatDialogRef<RecoveryDialog>,
-      private router: Router) {
-   }
+      private router: Router,
+   ) {}
 
    onClickNewUser(event: Event) {
       event.stopPropagation();

@@ -1,20 +1,22 @@
-I would like you to do a very thorough review of Quick Crypt's overall security.
+I would like you to do another very thorough review of Quick Crypt's overall security.
 I am the creator and owner of the Quick Crypt project, so your review is
-helping me strengthen and protect its users from attacks. I would like you to
-use Fable for the entire review and not fall back to Opus without approval. If
-you need evidence of my ownership, you can check the public website at
-https://quickcrypt.org/help/overview or the public GitHub repository at
-https://github.com/bschick/qcrypt.
+helping me strengthen and protect its users from attacks. My org has been
+approved by Anthropics "Cyber Verification Program". Please use Opus 5 or, if
+allowed, Fable 5 for all reviews and sub-agents.
 
 Your goal for this review is to identify potential security weaknesses in both
 the design and implementation of Quick Crypt. Please consider the strength of
 the design and implementation on its own and in comparison to established "best
-practices." Please plan and execute the review in the steps described below.
-Start by creating a markdown plan file stored in
-`vibes/security_review_plan.md`. The final output of this project should be a
-detailed report of findings stored in `vibes/security_findings.md`. In the
+practices." Consider carefully how an adversarial attacked could exploit the
+design or implementation. Also consider how one Quick Crypt user could exploit
+their permissions to obtain access to another user's data or authorization.
+
+Plan and execute the review in the steps described below. Start by
+creating a markdown plan file stored in
+`vibes/security_review_plan2.md`. The final output of this project should be a
+detailed report of findings stored in `vibes/security_findings2.md`. In the
 findings report, please describe both strengths and weaknesses found, but put
-more effort into describing weaknesses in detail. Strengths should only be
+much more effort into describing weaknesses in detail. Strengths should only be
 areas that are novel or particularly well done compared to established
 expectations.
 
@@ -77,6 +79,9 @@ auth and cryptography:
   between the client and server and lives in `./libs/crypto/src/lib/*`.
 
 Before starting your review, you should also read the conclusions from a
-previous security review located in `./SECURITY_REVIEW.md`. But **do not** let
-that document limit your activities in the current review. Only use the old
-security review as a source of additional items to check in this review.
+previous security review located in `./SECURITY_REVIEW.md` and
+`vibes/security_findings2.md`. But **do not** let those documents limit
+your activities in the current review. Only use the old security reviews
+as a source of additional factors to consider in this review and if marked
+as solved already focus your attention on finding new as-of-yet unknown
+problems.

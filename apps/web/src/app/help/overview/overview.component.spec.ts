@@ -9,9 +9,8 @@ describe('OverviewComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [OverviewComponent, NoopAnimationsModule, RouterModule.forRoot([]),]
-      })
-         .compileComponents();
+         imports: [OverviewComponent, NoopAnimationsModule, RouterModule.forRoot([])],
+      }).compileComponents();
 
       fixture = TestBed.createComponent(OverviewComponent);
       component = fixture.componentInstance;

@@ -20,10 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import {
-   Component, EventEmitter, Inject, type OnInit,
-   Output, effect, Renderer2, type OnDestroy
-} from '@angular/core';
+import { Component, EventEmitter, Inject, type OnInit, Output, effect, Renderer2, type OnDestroy } from '@angular/core';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
@@ -31,7 +28,12 @@ import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatInputModule } from '@angular/material/input';
-import { AuthenticatorService, type AuthenticatorInfo, AuthEvent, PrfUnsupportedError } from '../services/authenticator.service';
+import {
+   AuthenticatorService,
+   type AuthenticatorInfo,
+   AuthEvent,
+   PrfUnsupportedError,
+} from '../services/authenticator.service';
 import { EditableComponent } from '../ui/editable/editable.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -46,10 +48,19 @@ import { MatCardModule } from '@angular/material/card';
    selector: 'app-credentials',
    templateUrl: './credentials.component.html',
    styleUrl: './credentials.component.scss',
-   imports: [MatDividerModule, MatTableModule, MatIconModule, MatButtonModule, MatInputModule, EditableComponent, MatTooltipModule, RouterLink, MatCardModule]
+   imports: [
+      MatDividerModule,
+      MatTableModule,
+      MatIconModule,
+      MatButtonModule,
+      MatInputModule,
+      EditableComponent,
+      MatTooltipModule,
+      RouterLink,
+      MatCardModule,
+   ],
 })
 export class CredentialsComponent implements OnInit, OnDestroy {
-
    private authSub!: Subscription;
    private routeSub!: Subscription;
    public error = '';
@@ -60,12 +71,11 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    public displayedColumns: string[] = ['image', 'description', 'delete'];
    @Output() done = new EventEmitter<boolean>();
 
-
    constructor(
       public authSvc: AuthenticatorService,
       public dialog: MatDialog,
       private router: Router,
-      private snackBar: MatSnackBar
+      private snackBar: MatSnackBar,
    ) {
       effect(() => {
          const userInfo = this.authSvc.userInfo();
@@ -81,10 +91,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
          }
       });
 
-      this.authSub = this.authSvc.on(
-         [AuthEvent.Logout],
-         () => this.refresh()
-      );
+      this.authSub = this.authSvc.on([AuthEvent.Logout], () => this.refresh());
    }
 
    ngOnDestroy(): void {
@@ -109,7 +116,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       const userInfo = this.authSvc.userInfo();
       this.passKeys = userInfo ? userInfo.authenticators : [];
 
-      if (this.passKeys.length == 1) {
+      if (this.passKeys.length === 1) {
          pkState = ConfirmDialog.LAST_PK;
       } else if (this.isCurrentPk(passkey.credentialId)) {
          pkState = ConfirmDialog.ACTIVE_PK;
@@ -118,15 +125,15 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       var dialogRef = this.dialog.open(ConfirmDialog, {
          data: {
             pkState: pkState,
-            userName: this.userName
+            userName: this.userName,
          },
       });
 
       dialogRef.afterClosed().subscribe(async (result: string) => {
-         if (result == 'Yes') {
+         if (result === 'Yes') {
             try {
                const remainingAuths = await this.authSvc.deletePasskey(passkey.credentialId);
-               if (remainingAuths == 0) {
+               if (remainingAuths === 0) {
                   this.router.navigateByUrl('/welcome');
                }
             } catch (err) {
@@ -214,7 +221,6 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    }
 }
 
-
 export interface ConfirmData {
    pkState: number;
    userName: string;
@@ -229,10 +235,18 @@ https://angular.dev/guide/forms/reactive-forms
    selector: 'confirm-dialog',
    templateUrl: 'confirm-dialog.html',
    styleUrl: './credentials.component.scss',
-   imports: [MatDialogModule, MatIconModule, MatTooltipModule, MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule, ReactiveFormsModule]
+   imports: [
+      MatDialogModule,
+      MatIconModule,
+      MatTooltipModule,
+      MatButtonModule,
+      MatFormFieldModule,
+      MatInputModule,
+      FormsModule,
+      ReactiveFormsModule,
+   ],
 })
 export class ConfirmDialog {
-
    public pkState = 0;
    public userName = '';
    public confirmInput = new FormControl('');
@@ -255,16 +269,14 @@ export class ConfirmDialog {
    constructor(
       public dialogRef: MatDialogRef<ConfirmDialog>,
       private r2: Renderer2,
-      @Inject(MAT_DIALOG_DATA) public data: ConfirmData
+      @Inject(MAT_DIALOG_DATA) public data: ConfirmData,
    ) {
       this.pkState = data.pkState;
       this.userName = data.userName;
    }
 
    onYesClicked() {
-      if (this.pkState != this.LAST_PK ||
-         (this.confirmInput.value && this.confirmInput.value === this.userName)
-      ) {
+      if (this.pkState !== this.LAST_PK || (this.confirmInput.value && this.confirmInput.value === this.userName)) {
          this.dialogRef.close('Yes');
       } else {
          try {

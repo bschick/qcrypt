@@ -33,9 +33,9 @@ export const appConfig: ApplicationConfig = {
          useValue: {
             // This forces CDK to use standard DOM elements instead of the Top Layer,
             // TODO: Remove this once 1Password/extensions support browser Top Layer API
-            usePopover: false
-         }
-    },
+            usePopover: false,
+         },
+      },
       provideRouter(routes),
       provideHttpClient(),
       provideAppInitializer(() => {

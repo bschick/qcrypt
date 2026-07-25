@@ -32,9 +32,7 @@ type AllowCred = {
 
 // WebAuthn AuthenticatorTransport values (W3C + CTAP). Any transport outside
 // this set is itself a shape failure.
-const VALID_TRANSPORTS = new Set([
-   'usb', 'nfc', 'ble', 'internal', 'hybrid', 'cable', 'smart-card'
-]);
+const VALID_TRANSPORTS = new Set(['usb', 'nfc', 'ble', 'internal', 'hybrid', 'cable', 'smart-card']);
 
 // Loose credentialId byte-length bounds. MIN is 16 to cover the observed
 // minimum in the Authenticators table (also the smallest DUMMY_PROFILES entry)
@@ -68,12 +66,12 @@ const PINNED_UNKNOWN_USER_ID = 'dGVzdC1waW5uZWQtdXNyMQ';
 const EXPECTED_PINNED_CRED_TEST: AllowCred = {
    id: 'mNcU4fpleZNUSgbS3pSfnQ',
    type: 'public-key',
-   transports: ['hybrid', 'internal']
+   transports: ['hybrid', 'internal'],
 };
 const EXPECTED_PINNED_CRED_PROD: AllowCred = {
    id: '-UKU3OnG2DtIBmROhlNLug',
    type: 'public-key',
-   transports: ['hybrid', 'internal']
+   transports: ['hybrid', 'internal'],
 };
 
 function unknownUserId(): string {
@@ -81,9 +79,7 @@ function unknownUserId(): string {
    return randomBytes(16).toString('base64url');
 }
 
-function assertValidCredentialShape(
-   cred: Record<string, unknown>
-): asserts cred is AllowCred {
+function assertValidCredentialShape(cred: Record<string, unknown>): asserts cred is AllowCred {
    // Exact key set — an extra field would itself be a tell.
    expect(Object.keys(cred).sort()).toEqual(['id', 'transports', 'type']);
 
@@ -107,10 +103,11 @@ function assertValidCredentialShape(
 function matchesAnyDummyProfile(cred: Record<string, unknown>): boolean {
    assertValidCredentialShape(cred);
    const bytes = base64UrlDecode(cred.id)!;
-   return DUMMY_PROFILES.some(p =>
-      p.len === bytes.byteLength &&
-      p.transports.length === cred.transports.length &&
-      p.transports.every((t, i) => t === cred.transports[i])
+   return DUMMY_PROFILES.some(
+      (p) =>
+         p.len === bytes.byteLength &&
+         p.transports.length === cred.transports.length &&
+         p.transports.every((t, i) => t === cred.transports[i]),
    );
 }
 
@@ -138,8 +135,8 @@ afterAll(() => {
    if (!process.env.QC_TIMING) {
       return;
    }
-   const avg = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : NaN;
-   const fmt = (v: number) => Number.isNaN(v) ? 'n/a' : `${v.toFixed(2)}ms`;
+   const avg = (arr: number[]) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : NaN);
+   const fmt = (v: number) => (Number.isNaN(v) ? 'n/a' : `${v.toFixed(2)}ms`);
    for (const name of ['options', 'verify'] as const) {
       const inv = avg(timings[name].invalid);
       const val = avg(timings[name].valid);
@@ -159,27 +156,20 @@ async function getAllowCredentials(userId: string, label: TimingLabel | 'warmup'
 }
 
 describe('auth/options credential shape', () => {
-
-   it.skipIf(process.env.QC_ENV === 'prod')(
-      'real registered user returns credentials with valid shape',
-      async () => {
-         const creds = await getAllowCredentials(REAL_TEST_USER_ID, 'valid');
-         expect(creds.length).toBeGreaterThan(0);
-         for (const c of creds) {
-            assertValidCredentialShape(c);
-         }
+   it.skipIf(process.env.QC_ENV === 'prod')('real registered user returns credentials with valid shape', async () => {
+      const creds = await getAllowCredentials(REAL_TEST_USER_ID, 'valid');
+      expect(creds.length).toBeGreaterThan(0);
+      for (const c of creds) {
+         assertValidCredentialShape(c);
       }
-   );
+   });
 
    it('multiple unknown userIds each return a dummy credential matching a known profile', async () => {
       for (let i = 0; i < 5; i++) {
          const creds = await getAllowCredentials(unknownUserId(), 'invalid');
          expect(creds.length).toBe(1);
          const cred = creds[0];
-         expect(
-            matchesAnyDummyProfile(cred),
-            `unexpected dummy cred: ${JSON.stringify(cred)}`
-         ).toBe(true);
+         expect(matchesAnyDummyProfile(cred), `unexpected dummy cred: ${JSON.stringify(cred)}`).toBe(true);
       }
    });
 
@@ -270,7 +260,6 @@ beforeAll(async () => {
 });
 
 describe('auth/verify response parity', () => {
-
    it('two different unknown userIds return indistinguishable 401 responses', async () => {
       const a = await forgeAndVerify(unknownUserId(), 'invalid');
       const b = await forgeAndVerify(unknownUserId(), 'invalid');
@@ -287,7 +276,7 @@ describe('auth/verify response parity', () => {
          expect(real.status).toBe(401);
          expect(dummy.status).toBe(401);
          expect(real.rawText).toBe(dummy.rawText);
-      }
+      },
    );
 });
 
@@ -300,15 +289,23 @@ describe.skipIf(!process.env.QC_TIMING)('timing samples', () => {
    const SAMPLES = 15;
    const TIMEOUT_MS = 60_000;
 
-   it('invalid userId samples', async () => {
-      for (let i = 0; i < SAMPLES; i++) {
-         await forgeAndVerify(unknownUserId(), 'invalid');
-      }
-   }, TIMEOUT_MS);
+   it(
+      'invalid userId samples',
+      async () => {
+         for (let i = 0; i < SAMPLES; i++) {
+            await forgeAndVerify(unknownUserId(), 'invalid');
+         }
+      },
+      TIMEOUT_MS,
+   );
 
-   it.skipIf(process.env.QC_ENV === 'prod')('valid userId samples', async () => {
-      for (let i = 0; i < SAMPLES; i++) {
-         await forgeAndVerify(REAL_TEST_USER_ID, 'valid');
-      }
-   }, TIMEOUT_MS);
+   it.skipIf(process.env.QC_ENV === 'prod')(
+      'valid userId samples',
+      async () => {
+         for (let i = 0; i < SAMPLES; i++) {
+            await forgeAndVerify(REAL_TEST_USER_ID, 'valid');
+         }
+      },
+      TIMEOUT_MS,
+   );
 });

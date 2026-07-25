@@ -21,30 +21,24 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import type { Matcher } from '@zxcvbn-ts/core/dist/types';
-import {
-   zxcvbnReady,
-   getZxcvbn,
-   checkPwned,
-   addMatcher,
-   removeMatcher,
-} from './zxcvbn';
+import { zxcvbnReady, getZxcvbn, checkPwned, addMatcher, removeMatcher } from './zxcvbn';
 
-describe('zxcvbn lazy loader', function () {
+describe('zxcvbn lazy loader', () => {
    // The module caches its loaded state, so the "throws before ready" assertion
    // must run before any other test triggers zxcvbnReady().
 
-   it('getZxcvbn throws before zxcvbnReady is awaited', function () {
+   it('getZxcvbn throws before zxcvbnReady is awaited', () => {
       expect(() => getZxcvbn()).toThrow(/not awaited/);
    });
 
-   it('zxcvbnReady resolves with a bundle exposing zxcvbnAsync and zxcvbnOptions', async function () {
+   it('zxcvbnReady resolves with a bundle exposing zxcvbnAsync and zxcvbnOptions', async () => {
       const bundle = await zxcvbnReady();
       expect(typeof bundle.zxcvbnAsync).toBe('function');
       expect(bundle.zxcvbnOptions).toBeDefined();
       expect(bundle.zxcvbnOptions.matchers).toBeDefined();
    });
 
-   it('getZxcvbn returns the cached bundle once ready', async function () {
+   it('getZxcvbn returns the cached bundle once ready', async () => {
       await zxcvbnReady();
       const a = getZxcvbn();
       const b = getZxcvbn();
@@ -52,15 +46,17 @@ describe('zxcvbn lazy loader', function () {
       expect(a).toBe(await zxcvbnReady());
    });
 
-   it('repeated zxcvbnReady calls share a single promise', function () {
+   it('repeated zxcvbnReady calls share a single promise', () => {
       expect(zxcvbnReady()).toBe(zxcvbnReady());
    });
 
-   it('addMatcher / removeMatcher manipulate the matchers map', async function () {
+   it('addMatcher / removeMatcher manipulate the matchers map', async () => {
       const { zxcvbnOptions } = await zxcvbnReady();
       const dummy: Matcher = {
          Matching: class {
-            match() { return []; }
+            match() {
+               return [];
+            }
          },
          feedback: () => null,
          scoring: () => 0,
@@ -72,7 +68,7 @@ describe('zxcvbn lazy loader', function () {
       expect(zxcvbnOptions.matchers['zxcvbn_spec_test']).toBeUndefined();
    });
 
-   it('checkPwned toggles the pwned matcher', async function () {
+   it('checkPwned toggles the pwned matcher', async () => {
       const { zxcvbnOptions } = await zxcvbnReady();
 
       await checkPwned(true);
@@ -82,7 +78,7 @@ describe('zxcvbn lazy loader', function () {
       expect(zxcvbnOptions.matchers['pwned']).toBeUndefined();
    });
 
-   it('zxcvbnAsync scores a sample password', async function () {
+   it('zxcvbnAsync scores a sample password', async () => {
       const { zxcvbnAsync } = await zxcvbnReady();
       // Don't include pwned matcher — that hits the network.
       await checkPwned(false);
@@ -92,22 +88,22 @@ describe('zxcvbn lazy loader', function () {
       expect(result.score).toBeLessThanOrEqual(4);
    });
 
-   it('scores representative passwords with the expected score', async function () {
+   it('scores representative passwords with the expected score', async () => {
       const { zxcvbnAsync } = await zxcvbnReady();
       // Skip pwned to keep the test offline and deterministic.
       await checkPwned(false);
 
       const cases: Array<{ pwd: string; score: number }> = [
-         { pwd: 'password',                  score: 0 },
-         { pwd: '12345678',                  score: 0 },
-         { pwd: 'qwerty',                    score: 0 },
-         { pwd: 'iloveyou',                  score: 0 },
-         { pwd: 'Password1!',                score: 0 },
-         { pwd: 'Tr0ub4dor&3',               score: 1 },
-         { pwd: 'jK4#mLp9',                  score: 2 },
-         { pwd: 'Bicycle$Maple',             score: 3 },
+         { pwd: 'password', score: 0 },
+         { pwd: '12345678', score: 0 },
+         { pwd: 'qwerty', score: 0 },
+         { pwd: 'iloveyou', score: 0 },
+         { pwd: 'Password1!', score: 0 },
+         { pwd: 'Tr0ub4dor&3', score: 1 },
+         { pwd: 'jK4#mLp9', score: 2 },
+         { pwd: 'Bicycle$Maple', score: 3 },
          { pwd: 'correcthorsebatterystaple', score: 4 },
-         { pwd: 'c#7vP!9eK@2nQ$5xR',         score: 4 },
+         { pwd: 'c#7vP!9eK@2nQ$5xR', score: 4 },
       ];
 
       for (const { pwd, score } of cases) {

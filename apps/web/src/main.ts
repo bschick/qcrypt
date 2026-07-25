@@ -1,4 +1,4 @@
-import { provideZoneChangeDetection } from "@angular/core";
+import { provideZoneChangeDetection } from '@angular/core';
 /* MIT License
 
 Copyright (c) 2025 Brad Schick
@@ -24,5 +24,7 @@ import { bootstrapApplication } from '@angular/platform-browser';
 import { appConfig } from './app/qcrypt.config';
 import { QCryptComponent } from './app/qcrypt.component';
 
-bootstrapApplication(QCryptComponent, {...appConfig, providers: [provideZoneChangeDetection(), ...appConfig.providers]})
-   .catch((err: unknown) => console.error(err));
+bootstrapApplication(QCryptComponent, {
+   ...appConfig,
+   providers: [provideZoneChangeDetection(), ...appConfig.providers],
+}).catch((err: unknown) => console.error(err));

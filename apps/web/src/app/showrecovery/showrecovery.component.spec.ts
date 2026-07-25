@@ -9,10 +9,12 @@ describe('ShowRecoveryComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [ShowRecoveryComponent, NoopAnimationsModule,
-            RouterModule.forRoot([{ path: 'regenrecovery', children: [] }])]
-      })
-         .compileComponents();
+         imports: [
+            ShowRecoveryComponent,
+            NoopAnimationsModule,
+            RouterModule.forRoot([{ path: 'regenrecovery', children: [] }]),
+         ],
+      }).compileComponents();
 
       fixture = TestBed.createComponent(ShowRecoveryComponent);
       component = fixture.componentInstance;

@@ -115,7 +115,7 @@ export async function ensureAuth(argv) {
             if (match) {
                process.stdout.write(
                   `\n-> To open this URL in the right Chrome profile, run on your local macOS terminal:\n` +
-                  `open -na "Google Chrome" --args --profile-directory='${chromeProfile}' '${match[1]}'\n\n`,
+                     `open -na "Google Chrome" --args --profile-directory='${chromeProfile}' '${match[1]}'\n\n`,
                );
             }
          }
@@ -173,7 +173,7 @@ export function aws(argv, args, { input, allowFailure = false, readOnly = false 
       if (/AccessDenied|Access Denied|ForbiddenException/i.test(combined)) {
          console.error(
             '  - Verify your AWS profile / SSO session is authenticated to the right account.\n' +
-            '  - Verify the role has the permissions this command needs.',
+               '  - Verify the role has the permissions this command needs.',
          );
       }
       console.error(`aws ${args.join(' ')} failed (exit ${r.status})`);
@@ -214,7 +214,7 @@ function stripCamelCaseDuplicates(msg) {
       return msg;
    }
    const args = m[1].split(/,\s*/);
-   const toKebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
+   const toKebab = (s) => s.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
    const seen = new Set();
    const unique = [];
    for (const a of args) {

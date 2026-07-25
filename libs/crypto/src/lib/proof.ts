@@ -23,7 +23,10 @@ SOFTWARE. */
 import { getCrux, getSodium } from './crypto';
 import { getRandom } from './utils';
 
-export function getProofKeyPair(secret: Uint8Array, context: string): { pubKey: Uint8Array<ArrayBuffer>; secKey: Uint8Array<ArrayBuffer> } {
+export function getProofKeyPair(
+   secret: Uint8Array,
+   context: string,
+): { pubKey: Uint8Array<ArrayBuffer>; secKey: Uint8Array<ArrayBuffer> } {
    const sodium = getSodium();
    if (secret.byteLength < sodium.crypto_kdf_KEYBYTES) {
       throw new Error('proof secret too short');

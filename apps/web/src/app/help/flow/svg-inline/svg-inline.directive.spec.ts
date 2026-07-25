@@ -24,7 +24,7 @@ const SAMPLE_SVG =
 async function registerHash(url: string, svg: string): Promise<ArrayBuffer> {
    const bytes = new TextEncoder().encode(svg);
    const digest = await crypto.subtle.digest('SHA-256', bytes);
-   FLOW_SVG_HASHES[url] = 'sha256-' + bufferToBase64URLString(digest);
+   FLOW_SVG_HASHES[url] = `sha256-${bufferToBase64URLString(digest)}`;
    return bytes.buffer;
 }
 

@@ -20,12 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import {
-   Component,
-   type OnDestroy,
-   type OnInit,
-   Renderer2
-} from '@angular/core';
+import { Component, type OnDestroy, type OnInit, Renderer2 } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -38,18 +33,23 @@ import { Subscription } from 'rxjs';
 import { MatCardModule } from '@angular/material/card';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 
-
 @Component({
    selector: 'app-show-recovery',
    templateUrl: './showrecovery.component.html',
    styleUrl: './showrecovery.component.scss',
-   imports: [MatIconModule, MatButtonModule, ClipboardModule, RouterLink,
-      MatInputModule, MatCardModule, MatFormFieldModule,
-      FormsModule, ReactiveFormsModule
-   ]
+   imports: [
+      MatIconModule,
+      MatButtonModule,
+      ClipboardModule,
+      RouterLink,
+      MatInputModule,
+      MatCardModule,
+      MatFormFieldModule,
+      FormsModule,
+      ReactiveFormsModule,
+   ],
 })
 export class ShowRecoveryComponent implements OnInit, OnDestroy {
-
    public error = '';
    public replacedLink = false;
    public replacedWords = false;
@@ -60,8 +60,8 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
       public authSvc: AuthenticatorService,
       private r2: Renderer2,
       private router: Router,
-      private snackBar: MatSnackBar) {
-   }
+      private snackBar: MatSnackBar,
+   ) {}
 
    ngOnInit() {
       // True when these recovery words just replaced an old recovery link or
@@ -69,13 +69,10 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
       this.replacedLink = !!history.state?.replacedLink;
       this.replacedWords = !!history.state?.replacedWords;
 
-      this.authSub = this.authSvc.on(
-         [AuthEvent.Logout],
-         () => {
-            this.error = '';
-            this.router.navigateByUrl('/');
-         }
-      );
+      this.authSub = this.authSvc.on([AuthEvent.Logout], () => {
+         this.error = '';
+         this.router.navigateByUrl('/');
+      });
 
       this.reloadData();
    }
@@ -88,9 +85,7 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
 
          try {
             // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
-            setTimeout(
-               () => this.r2.selectRootElement('#wordsArea').focus(), 0
-            );
+            setTimeout(() => this.r2.selectRootElement('#wordsArea').focus(), 0);
          } catch (err) {
             console.error(err);
          }
@@ -116,7 +111,7 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
       // If the user previous didn't have a recoveryId, refresh the user
       // so the warning doesn't show. If the user refreshes the page without
       // clicking, keeping showing to warning to encourage saving
-      if(!this.authSvc.hasRecoveryId()) {
+      if (!this.authSvc.hasRecoveryId()) {
          // let this happen async
          this.authSvc.refreshUserInfo().catch((err) => console.error(err));
       }

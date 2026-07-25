@@ -24,7 +24,8 @@ import {
    Renderer2,
    ViewChild,
    ElementRef,
-   type OnInit, type AfterViewInit,
+   type OnInit,
+   type AfterViewInit,
    type OnDestroy,
    ChangeDetectorRef,
    HostListener,
@@ -66,40 +67,48 @@ import {
    selectClearFile,
    browserSupportsBytesStream,
    ProcessCancelled,
-   makeTookMsg
+   makeTookMsg,
 } from '@qcrypt/crypto';
 import { AuthenticatorService, AuthEvent, type AuthEventData } from '../services/authenticator.service';
-import {
-   PasswordDialog,
-   CipherInfoDialog,
-   SigninDialog,
-} from '../ui/dialogs/dialogs';
+import { PasswordDialog, CipherInfoDialog, SigninDialog } from '../ui/dialogs/dialogs';
 import { BubbleDirective } from '../ui/bubble/bubble.directive';
 import { OptionsComponent } from '../ui/options/options.component';
 import { Subscription } from 'rxjs';
-import { CopyrightComponent } from "../ui/copyright/copyright.component";
+import { CopyrightComponent } from '../ui/copyright/copyright.component';
 import { Router } from '@angular/router';
-
 
 @Component({
    selector: 'app-core',
    templateUrl: './core.component.html',
    styleUrl: './core.component.scss',
-   imports: [MatProgressSpinnerModule, MatMenuModule, MatIconModule,
-      MatButtonModule, MatFormFieldModule, MatInputModule, FormsModule,
-      ClipboardModule, CdkAccordionModule, MatSlideToggleModule,
-      MatExpansionModule, MatSelectModule, MatButtonToggleModule,
-      MatTooltipModule, CommonModule, BubbleDirective,
-      OptionsComponent, CopyrightComponent]
+   imports: [
+      MatProgressSpinnerModule,
+      MatMenuModule,
+      MatIconModule,
+      MatButtonModule,
+      MatFormFieldModule,
+      MatInputModule,
+      FormsModule,
+      ClipboardModule,
+      CdkAccordionModule,
+      MatSlideToggleModule,
+      MatExpansionModule,
+      MatSelectModule,
+      MatButtonToggleModule,
+      MatTooltipModule,
+      CommonModule,
+      BubbleDirective,
+      OptionsComponent,
+      CopyrightComponent,
+   ],
 })
 export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
-
    protected clearFile?: File;
    protected cipherFile?: File;
    protected readonly useFilePicker = browserSupportsFilePickers();
    protected readonly useByteStream = browserSupportsBytesStream();
 
-   private signinDialogRef?: MatDialogRef<SigninDialog>
+   private signinDialogRef?: MatDialogRef<SigninDialog>;
    private mouseDown = false;
    private cachedPassword?: Uint8Array;
    private cachedHint?: Uint8Array;
@@ -144,25 +153,18 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       private changeRef: ChangeDetectorRef,
       private ngZone: NgZone,
       private router: Router,
-
    ) {
       this.matIconRegistry.addSvgIcon(
          'github',
-         this.domSanitizer.bypassSecurityTrustResourceUrl(
-            '../assets/github-circle-white-transparent.svg'
-         )
+         this.domSanitizer.bypassSecurityTrustResourceUrl('../assets/github-circle-white-transparent.svg'),
       );
       this.matIconRegistry.addSvgIcon(
          'encrypted_add',
-         this.domSanitizer.bypassSecurityTrustResourceUrl(
-            '../assets/encrypted_add_circle.svg'
-         )
+         this.domSanitizer.bypassSecurityTrustResourceUrl('../assets/encrypted_add_circle.svg'),
       );
       this.matIconRegistry.addSvgIcon(
          'encrypted_minus',
-         this.domSanitizer.bypassSecurityTrustResourceUrl(
-            '../assets/encrypted_minus_circle.svg'
-         )
+         this.domSanitizer.bypassSecurityTrustResourceUrl('../assets/encrypted_minus_circle.svg'),
       );
    }
 
@@ -184,7 +186,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    ngAfterViewInit() {
       if (this.authSvc.hasSession()) {
          this.showTextFromParams();
-         if (localStorage.getItem(this.authSvc.userId + "welcomed") != 'yup') {
+         if (localStorage.getItem(`${this.authSvc.userId}welcomed`) !== 'yup') {
             setTimeout(() => {
                this.welcomed = false;
                this.bubbleTip1.show();
@@ -194,9 +196,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
       try {
          // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
-         setTimeout(
-            () => this.r2.selectRootElement('#clearInput').focus(), 0
-         );
+         setTimeout(() => this.r2.selectRootElement('#clearInput').focus(), 0);
       } catch (err) {
          console.error(err);
       }
@@ -206,17 +206,15 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       // This can be greatly delayed is there is a long running async benchmark or
       // encrpt or decrypt from a previous instance (tab that has not fully closed).
       // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
-      this.cipherSvc.benchmark(cc.ICOUNT_MIN)
-         .then(([icount, icountMax, hashRate]) => {
-            // progress spinner about 1.25 secs of estimated delay
-            const target_spinner_millis = 1250;
-            this.spinnerAbove = Math.round(target_spinner_millis * hashRate)
-         });
+      this.cipherSvc.benchmark(cc.ICOUNT_MIN).then(([_icount, _icountMax, hashRate]) => {
+         // progress spinner about 1.25 secs of estimated delay
+         const target_spinner_millis = 1250;
+         this.spinnerAbove = Math.round(target_spinner_millis * hashRate);
+      });
 
       // subscribe to auth events
-      this.authSub = this.authSvc.on(
-         [AuthEvent.Logout, AuthEvent.Forget, AuthEvent.Login, AuthEvent.Delete],
-         (data) => this.onAuthEvent(data)
+      this.authSub = this.authSvc.on([AuthEvent.Logout, AuthEvent.Forget, AuthEvent.Login, AuthEvent.Delete], (data) =>
+         this.onAuthEvent(data),
       );
 
       // core.guard doesn't allow reaching this point if the
@@ -242,7 +240,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       } else if (data.event === AuthEvent.Logout || data.event === AuthEvent.Forget) {
          this.privacyClear();
          this.onClearCipher();
-         if(data.event === AuthEvent.Logout) {
+         if (data.event === AuthEvent.Logout) {
             this.options.detachOptions();
             this.trySigninDialog();
          } else {
@@ -250,7 +248,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.router.navigateByUrl('/welcome');
          }
       } else if (data.event === AuthEvent.Delete) {
-         localStorage.removeItem(data.userId + "welcomed");
+         localStorage.removeItem(`${data.userId}welcomed`);
          this.options.nukeAllOptions();
       }
    }
@@ -259,7 +257,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this.signinDialogRef) {
          // This check prevents showing progreess when there is no
          // valid session, aka nothing to wait for (like when a new tab is opened)
-         if(this.authSvc.potentialSession()) {
+         if (this.authSvc.potentialSession()) {
             // no-op if ready is resolved
             this.showProgress = true;
             await this.authSvc.ready;
@@ -267,15 +265,15 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          }
 
          // happens when another tab does forget or changes passkey
-         if(!this.authSvc.validKnownUser()) {
+         if (!this.authSvc.validKnownUser()) {
             this.router.navigateByUrl('/welcome');
-         } else if(!this.authSvc.hasSession()) {
+         } else if (!this.authSvc.hasSession()) {
             this.signinDialogRef = this.dialog.open(SigninDialog, {
                backdropClass: 'signinBackdrop',
-               closeOnNavigation: true
+               closeOnNavigation: true,
             });
 
-            this.signinDialogRef.afterClosed().subscribe((result:string) => {
+            this.signinDialogRef.afterClosed().subscribe((result: string) => {
                this.signinDialogRef = undefined;
                if (result === 'Login') {
                   this.r2.selectRootElement('#clearInput').focus();
@@ -293,7 +291,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.pwdCached) {
          result = Math.max(0, Math.round((this.cacheTimeout - Date.now()) / 1000));
       }
-      if (result != this.secondsRemaining) {
+      if (result !== this.secondsRemaining) {
          // Do this to avoid setting a template value after it has been checked,
          // which triggers an ExpressionChangedAfterItHasBeenCheckedError
          this.secondsRemaining = result;
@@ -302,7 +300,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    restartTimer() {
-      if (this.intervalId != 0) {
+      if (this.intervalId !== 0) {
          clearInterval(this.intervalId);
          this.intervalId = 0;
       }
@@ -324,7 +322,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.cachedHint.fill(0);
          this.cachedHint = undefined;
       }
-      if (this.intervalId != 0) {
+      if (this.intervalId !== 0) {
          clearInterval(this.intervalId);
          this.intervalId = 0;
       }
@@ -343,19 +341,17 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    onDraggerMouseMove(event: MouseEvent) {
       if (this.mouseDown) {
-         var pointerRelativeXpos =
-            event.clientX - this.inputArea.nativeElement.offsetLeft;
+         const pointerRelativeXpos = event.clientX - this.inputArea.nativeElement.offsetLeft;
          const minWidth = 200;
 
          const areaWidth = this.inputArea.nativeElement.offsetWidth - 16; // 16 for the size of the drag area
          //      const clearWidth = this.clearField.nativeElement.offsetWidth;
          //      const cipherWidth = this.cipherField.nativeElement.offsetWidth;
 
-         var newclearWidth = Math.max(minWidth, pointerRelativeXpos - 8); // 8 to center in drag area
+         const newclearWidth = Math.max(minWidth, pointerRelativeXpos - 8); // 8 to center in drag area
 
          this.clearField.nativeElement.style.flexGrow = newclearWidth / areaWidth;
-         this.cipherField.nativeElement.style.flexGrow =
-            (areaWidth - newclearWidth) / areaWidth;
+         this.cipherField.nativeElement.style.flexGrow = (areaWidth - newclearWidth) / areaWidth;
       }
    }
 
@@ -414,10 +410,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.onClearClear();
    }
 
-   async passwordProvider(
-      cdInfo: CipherDataInfo,
-      encrypting: boolean
-   ): Promise<[string, string | undefined]> {
+   async passwordProvider(cdInfo: CipherDataInfo, encrypting: boolean): Promise<[string, string | undefined]> {
       if (cdInfo.ic === undefined) {
          throw new Error('Missing CipherDataInfo iter count');
       }
@@ -425,7 +418,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       let pwd: string;
       let hint: string | undefined;
 
-      if (cdInfo.lp === 1)  {
+      if (cdInfo.lp === 1) {
          this.usedPasswords = [];
       }
 
@@ -446,7 +439,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          }
       });
 
-      if (cdInfo.lp === cdInfo.lpEnd)  {
+      if (cdInfo.lp === cdInfo.lpEnd) {
          this.usedPasswords = [];
       } else {
          this.usedPasswords.push(pwd);
@@ -456,17 +449,13 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       return [pwd, hint];
    }
 
-   async askForPassword(
-      cdInfo: CipherDataInfo,
-      encrypting: boolean
-   ): Promise<[string, string]> {
-
+   async askForPassword(cdInfo: CipherDataInfo, encrypting: boolean): Promise<[string, string]> {
       this.clearPassword();
       return new Promise((resolve, reject) => {
          // This can run outside of Angular's zone because the password callback
          // comes from within streem connections
          this.ngZone.run(() => {
-            let dialogRef = this.dialog.open(PasswordDialog, {
+            const dialogRef = this.dialog.open(PasswordDialog, {
                data: {
                   hint: cdInfo.hint,
                   encrypting: encrypting,
@@ -478,7 +467,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                   welcomed: this.welcomed,
                   userName: this.authSvc.userName,
                   cipherMode: cdInfo.alg,
-                  usedPasswords: [...this.usedPasswords]
+                  usedPasswords: [...this.usedPasswords],
                },
             });
 
@@ -489,7 +478,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                   reject(new ProcessCancelled());
                } else {
                   this.clearPassword();
-                  if (this.options.cacheTime > 0 && result[0] && cdInfo.lpEnd == 1) {
+                  if (this.options.cacheTime > 0 && result[0] && cdInfo.lpEnd === 1) {
                      const encoder = new TextEncoder();
                      this.cachedPassword = encoder.encode(result[0]);
                      this.cachedHint = encoder.encode(result[1]);
@@ -506,15 +495,15 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    setCipherFile(cipherFile: File, saved: boolean = false) {
       this.onClearCipher();
       this.cipherFile = cipherFile;
-      let msg = saved ? 'file saved and ' : '';
-      this.showCipherFile(msg + 'selected for decryption', saved, cipherFile.name);
+      const msg = saved ? 'file saved and ' : '';
+      this.showCipherFile(`${msg}selected for decryption`, saved, cipherFile.name);
    }
 
    setClearFile(clearFile: File, saved: boolean = false) {
       this.onClearClear();
       this.clearFile = clearFile;
-      let msg = saved ? 'file saved and ' : '';
-      this.showClearFile(msg + 'selected for encryption', saved, clearFile.name);
+      const msg = saved ? 'file saved and ' : '';
+      this.showClearFile(`${msg}selected for encryption`, saved, clearFile.name);
 
       if (!this.welcomed) {
          this.bubbleTip1.hide();
@@ -523,7 +512,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async onEncrypt(): Promise<void> {
-      if ((!this.clearFile && this.clearText.length < 1)) {
+      if (!this.clearFile && this.clearText.length < 1) {
          this.onClearClear();
          this.showCipherError('Missing clear text. Enter clear text or select a file, then encrypt');
          this.r2.selectRootElement('#clearInput').focus();
@@ -554,7 +543,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          if (streamSize > cc.CLEAR_DATA_MAX_BYTES) {
             this.showCipherError(
                `Clear data must be smaller than ${Math.round(cc.CLEAR_DATA_MAX_BYTES / 1024 / 1024)} MB to display`,
-               'Try Encrypt to File');
+               'Try Encrypt to File',
+            );
             return;
          }
 
@@ -566,7 +556,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
             // it worked, so stop showing tips (setting this before next loop)
             this.welcomed = true;
-            localStorage.setItem(this.authSvc.userId + "welcomed", "yup");
+            localStorage.setItem(`${this.authSvc.userId}welcomed`, 'yup');
          }
 
          /* A bit torn about always clearing this when not caching...
@@ -593,7 +583,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async onEncryptToFile(): Promise<void> {
-      if ((!this.clearFile && this.clearText.length < 1)) {
+      if (!this.clearFile && this.clearText.length < 1) {
          this.onClearClear();
          this.showCipherError('Missing clear text.  Enter clear text or select a file, then encrypt');
          this.r2.selectRootElement('#clearInput').focus();
@@ -643,13 +633,15 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          } else {
             // Safari doesn't support byte steam or > 2G downloads
             if (!this.useByteStream && streamSize > 2 * 1024 * 1024 * 1024) {
-               this.showCipherError('Your browser does not support files larger than 2 GB. Try Chrome, Firefox, or Edge.');
+               this.showCipherError(
+                  'Your browser does not support files larger than 2 GB. Try Chrome, Firefox, or Edge.',
+               );
             } else {
                const cipherStream = await this.makeCipherStream(clearStream);
 
                const response = new Response(cipherStream);
                const blob = await response.blob();
-               this.fileDownload(baseName + '.qq', blob);
+               this.fileDownload(`${baseName}.qq`, blob);
                this.showCipherFile('Encrypted file will be in your downloads folder', true);
                this.toastMessage('Data encrypted');
             }
@@ -657,8 +649,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
          // If the user got this far, stop showing tips
          this.welcomed = true;
-         localStorage.setItem(this.authSvc.userId + "welcomed", "yup");
-
+         localStorage.setItem(`${this.authSvc.userId}welcomed`, 'yup');
       } catch (something) {
          if (!ProcessCancelled.isProcessCancelled(something)) {
             console.error(something);
@@ -696,25 +687,21 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    // Return value is false if the process was aborted
-   async makeCipherStream(
-      clearStream: ReadableStream<Uint8Array>
-   ): Promise<ReadableStream<Uint8Array>> {
-
+   async makeCipherStream(clearStream: ReadableStream<Uint8Array>): Promise<ReadableStream<Uint8Array>> {
       const econtext = {
          algs: this.options.algorithms,
-         ic: this.options.icount
+         ic: this.options.icount,
       };
 
       // PWDKeyProvider takes ownershp of userCred
-      const keyProvider = new PWDKeyProvider(
-         await this.authSvc.getUserCred(),
-         (cdInfo, encrypting) => this.passwordProvider(cdInfo, encrypting)
+      const keyProvider = new PWDKeyProvider(await this.authSvc.getUserCred(), (cdInfo, encrypting) =>
+         this.passwordProvider(cdInfo, encrypting),
       );
       return this.cipherSvc.encryptStream(clearStream, keyProvider, econtext);
    }
 
    async onDecrypt(): Promise<void> {
-      if ((!this.cipherFile && this.cipherArmor.length < (cc.HEADER_BYTES_6P + cc.PAYLOAD_SIZE_MIN))) {
+      if (!this.cipherFile && this.cipherArmor.length < cc.HEADER_BYTES_6P + cc.PAYLOAD_SIZE_MIN) {
          this.onClearCipher();
          this.showClearError('Missing cipher armor. Enter cipher armor text or select a file, then decrypt');
          this.r2.selectRootElement('#cipherInput').focus();
@@ -734,7 +721,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          if (size > cc.CLEAR_DATA_MAX_BYTES) {
             this.showClearError(
                `Cipher data must be smaller than ${Math.round(cc.CLEAR_DATA_MAX_BYTES / 1024 / 1024)} MB to display`,
-               'Try Decrypt to File');
+               'Try Decrypt to File',
+            );
             return;
          }
 
@@ -748,7 +736,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             console.error(something);
             this.clearPassword();
             this.showClearError(
-               'Could not decrypt cipher armor text. You may be using the wrong password or passkey, or the cipher armor is invalid'
+               'Could not decrypt cipher armor text. You may be using the wrong password or passkey, or the cipher armor is invalid',
             );
          }
       } finally {
@@ -758,7 +746,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async onDecryptToFile(): Promise<void> {
-      if ((!this.cipherFile && this.cipherArmor.length < 1)) {
+      if (!this.cipherFile && this.cipherArmor.length < 1) {
          this.onClearCipher();
          this.showClearError('Missing cipher armor. Enter cipher armor text or select a file, then decrypt');
          this.r2.selectRootElement('#cipherInput').focus();
@@ -807,11 +795,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             await clearStream.pipeTo(writeable);
             this.setClearFile(await saveFile.getFile(), true);
             this.toastMessage('Data decrypted');
-
          } else {
             // This indicates Safari, which also doesn't support > 2G downloads
             if (!this.useByteStream && streamSize > 2 * 1024 * 1024 * 1024) {
-               this.showClearError('Your browser does not support files larger than 2 GB. Try Chrome, Firefox, or Edge.');
+               this.showClearError(
+                  'Your browser does not support files larger than 2 GB. Try Chrome, Firefox, or Edge.',
+               );
             } else {
                const clearStream = await this.makeClearStream(cipherStream);
 
@@ -827,7 +816,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             console.error(something);
             this.clearPassword();
             this.showClearError(
-               'Could not decrypt cipher armor text. You may be using the wrong password or passkey, or the cipher armor is invalid'
+               'Could not decrypt cipher armor text. You may be using the wrong password or passkey, or the cipher armor is invalid',
             );
          }
       } finally {
@@ -837,7 +826,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async getCipherStream(): Promise<[ReadableStream<Uint8Array>, number]> {
-
       let size = 0;
       let cipherStream: ReadableStream<Uint8Array>;
 
@@ -864,14 +852,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       return [cipherStream, size];
    }
 
-   async makeClearStream(
-      cipherStream: ReadableStream<Uint8Array>
-   ): Promise<ReadableStream<Uint8Array>> {
-
+   async makeClearStream(cipherStream: ReadableStream<Uint8Array>): Promise<ReadableStream<Uint8Array>> {
       // PWDKeyProvider takes ownershp of userCred
-      const keyProvider = new PWDKeyProvider(
-         await this.authSvc.getUserCred(),
-         (cdInfo, encrypting) => this.passwordProvider(cdInfo, encrypting)
+      const keyProvider = new PWDKeyProvider(await this.authSvc.getUserCred(), (cdInfo, encrypting) =>
+         this.passwordProvider(cdInfo, encrypting),
       );
       return await this.cipherSvc.decryptStream(cipherStream, keyProvider);
    }
@@ -899,14 +883,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.clearMsg += safeMsg;
       }
       this.clearMsgClass = cls;
-      this.clearLabel = 'Clear Text ' + label;
+      this.clearLabel = `Clear Text ${label}`;
    }
 
    showClearText(clearText: string, extra: string = ''): void {
       this.clearText = clearText;
       this.clearFile = undefined;
       this.clearMsg = '';
-      this.clearLabel = 'Clear Text ' + extra;
+      this.clearLabel = `Clear Text ${extra}`;
    }
 
    showClearTextAndTime(clearText: string): void {
@@ -936,7 +920,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.cipherMsg += safeMsg;
       }
       this.cipherMsgClass = cls;
-      this.cipherLabel = 'Cipher Armor ' + label;
+      this.cipherLabel = `Cipher Armor ${label}`;
    }
 
    showCipherData(cipherData: Uint8Array, extra: string = ''): void {
@@ -944,7 +928,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cipherArmor = cipherArmor;
       this.cipherFile = undefined;
       this.cipherMsg = '';
-      this.cipherLabel = 'Cipher Armor ' + extra;
+      this.cipherLabel = `Cipher Armor ${extra}`;
    }
 
    showCipherDataAndTime(cipherData: Uint8Array): void {
@@ -967,9 +951,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   onClickFileUpload(event: any) {
+   onClickFileUpload(event: MouseEvent) {
       // needed to clear previous value so that onchange fires
-      event.target.value = '';
+      (event.target as HTMLInputElement).value = '';
    }
 
    async onLoadCipherFile() {
@@ -988,8 +972,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async cipherFileLoader() {
-      this.fileUpload.nativeElement.onchange = (event: any) => {
-         const file: File = event.target.files[0];
+      this.fileUpload.nativeElement.onchange = (event: Event) => {
+         const file = (event.target as HTMLInputElement).files?.[0];
          if (file) {
             this.setCipherFile(file);
          }
@@ -1013,8 +997,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async clearFileLoader() {
-      this.fileUpload.nativeElement.onchange = (event: any) => {
-         const file: File = event.target.files[0];
+      this.fileUpload.nativeElement.onchange = (event: Event) => {
+         const file = (event.target as HTMLInputElement).files?.[0];
          if (file) {
             this.setClearFile(file);
          }
@@ -1023,7 +1007,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    fileDownload(filename: string, blob: Blob): void {
-      let alink = document.createElement('a');
+      const alink = document.createElement('a');
       alink.style.display = 'none';
       document.body.appendChild(alink);
 
@@ -1036,7 +1020,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    async onSaveCipherFile(): Promise<void> {
       if (this.useFilePicker) {
-         const saveFile = await selectWriteableJsonFile("armor");
+         const saveFile = await selectWriteableJsonFile('armor');
          const writeable = await saveFile.createWritable();
          await writeable.write(this.cipherArmor);
          writeable.close();
@@ -1049,7 +1033,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    async onSaveClearFile(): Promise<void> {
       if (this.useFilePicker) {
-         const saveFile = await selectWriteableTxtFile("clear");
+         const saveFile = await selectWriteableTxtFile('clear');
          const writeable = await saveFile.createWritable();
          await writeable.write(this.clearText);
          writeable.close();
@@ -1060,7 +1044,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   onCacheTimeChange(cacheTime: number): void {
+   onCacheTimeChange(_cacheTime: number): void {
       if (this.pwdCached) {
          this.restartTimer();
       }
@@ -1069,7 +1053,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    async onCipherTextInfo(): Promise<void> {
       try {
          if (!this.authSvc.hasSession()) {
-            throw new Error('User not authenticated, try refreshing this page')
+            throw new Error('User not authenticated, try refreshing this page');
          }
 
          const cdInfo = await this.getCipherDataInfo();
@@ -1084,7 +1068,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    // it was never used in the wild
    async getCipherDataInfo(): Promise<CipherDataInfo> {
       if (!this.authSvc.hasSession()) {
-      throw new Error('User not authenticated, try refreshing this page')
+         throw new Error('User not authenticated, try refreshing this page');
       }
 
       const [cipherStream, size] = await this.getCipherStream();

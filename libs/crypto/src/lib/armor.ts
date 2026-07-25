@@ -19,77 +19,73 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import {
-    base64ToBytes,
-    bytesToBase64
- } from './utils';
+import { base64ToBytes, bytesToBase64 } from './utils';
 
+export function makeCipherArmor(
+   cipherData: Uint8Array,
+   format: string,
+   reminder: boolean = false,
+   host?: string,
+): string {
+   // Rebuild object to control ordering (better way to do this?)
+   const result: { [key: string]: string | number } = {};
+   result['ct'] = bytesToBase64(cipherData);
 
- export function makeCipherArmor(
-    cipherData: Uint8Array,
-    format: string,
-    reminder: boolean = false,
-    host?: string,
-) : string {
-    // Rebuild object to control ordering (better way to do this?)
-    let result: { [key: string]: string | number } = {};
-    result['ct'] = bytesToBase64(cipherData);
+   if (format === 'link') {
+      if (!host) {
+         throw new Error('host is required for link format');
+      }
+      const ctParam = encodeURIComponent(JSON.stringify(result));
+      return `${host}?cipherarmor=${ctParam}`;
+   } else {
+      if (reminder) {
+         result['reminder'] = 'decrypt with quick crypt';
+      }
+      return JSON.stringify(result, null, format === 'indent' ? 3 : 0);
+   }
+}
 
-    if (format == 'link') {
-       if (!host) {
-          throw new Error('host is required for link format');
-       }
-       const ctParam = encodeURIComponent(JSON.stringify(result));
-       return host + '?cipherarmor=' + ctParam;
-    } else {
-       if (reminder) {
-          result['reminder'] = 'decrypt with quick crypt';
-       }
-       return JSON.stringify(result, null, format == 'indent' ? 3 : 0);
-    }
- }
+export function parseCipherArmor(cipherArmor: string): Uint8Array<ArrayBuffer> {
+   // cipherArmor is untrusted and parsed unbounded; a bad value can exhaust local resources
+   // (browser tab or CLI process), so callers should enforce size limits at input boundaries.
+   // biome-ignore lint/suspicious/noExplicitAny: untrusted JSON.parse result, shape validated below
+   let jsonParts: any;
+   try {
+      let trimmed = cipherArmor.trim();
+      if (trimmed.startsWith('https://')) {
+         const ct = new URL(trimmed).searchParams.get('cipherarmor');
+         if (ct == null) {
+            const err = Error();
+            err.name = 'Url missing cipherarmor';
+            throw err;
+         }
+         trimmed = ct;
+      } else if (trimmed.startsWith('cipherarmor=')) {
+         trimmed = trimmed.slice('cipherarmor='.length);
+      }
 
- export function parseCipherArmor(
-    cipherArmor: string
-) : Uint8Array<ArrayBuffer> {
-    // cipherArmor is untrusted and parsed unbounded; a bad value can exhaust local resources
-    // (browser tab or CLI process), so callers should enforce size limits at input boundaries.
-    try {
-       let trimmed = cipherArmor.trim();
-       if (trimmed.startsWith('https://')) {
-          const ct = new URL(trimmed).searchParams.get('cipherarmor');
-          if (ct == null) {
-             let err = Error();
-             err.name = 'Url missing cipherarmor';
-             throw err;
-          }
-          trimmed = ct;
-       } else if (trimmed.startsWith('cipherarmor=')) {
-          trimmed = trimmed.slice('cipherarmor='.length);
-       }
+      // %7B is urlencoded '{' character, so decode
+      if (trimmed.startsWith('%7B')) {
+         trimmed = decodeURIComponent(trimmed);
+      }
 
-       // %7B is urlencoded '{' character, so decode
-       if (trimmed.startsWith('%7B')) {
-          trimmed = decodeURIComponent(trimmed);
-       }
+      // turn baseUrl encoded CT w/o json into json
+      if (!trimmed.startsWith('{')) {
+         trimmed = `{"ct":"${trimmed.replace(/[''"'"‚„\n\r\t\\ ]/g, '')}"}`;
+      }
+      jsonParts = JSON.parse(trimmed);
+   } catch (err) {
+      console.error(err);
+      if (err instanceof Error) {
+         throw new Error(`Cipher armor text not formatted correctly. ${err.name}`);
+      }
+   }
+   if (!('ct' in jsonParts)) {
+      throw new Error('Missing ct in cipher armor text');
+   }
+   const ct = jsonParts.ct;
 
-       // turn baseUrl encoded CT w/o json into json
-       if (!trimmed.startsWith('{')) {
-          trimmed = `{"ct":"${trimmed.replace(/[''"'"‚„\n\r\t\\ ]/g, '')}"}`;
-       }
-       var jsonParts = JSON.parse(trimmed);
-    } catch (err) {
-       console.error(err);
-       if (err instanceof Error) {
-          throw new Error('Cipher armor text not formatted correctly. ' + err.name);
-       }
-    }
-    if (!('ct' in jsonParts)) {
-       throw new Error('Missing ct in cipher armor text');
-    }
-    const ct = jsonParts.ct;
-
-    // note that we ignore lps in the original V1 cipher armor since it was
-    // never used in the wild
-    return base64ToBytes(ct);
- }
+   // note that we ignore lps in the original V1 cipher armor since it was
+   // never used in the wild
+   return base64ToBytes(ct);
+}

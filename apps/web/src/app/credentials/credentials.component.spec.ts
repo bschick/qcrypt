@@ -9,9 +9,8 @@ describe('CredentialsComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [CredentialsComponent,RouterModule.forRoot([]),NoopAnimationsModule]
-      })
-         .compileComponents();
+         imports: [CredentialsComponent, RouterModule.forRoot([]), NoopAnimationsModule],
+      }).compileComponents();
 
       fixture = TestBed.createComponent(CredentialsComponent);
       component = fixture.componentInstance;

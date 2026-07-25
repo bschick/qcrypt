@@ -23,7 +23,7 @@ describe('RegenrecoveryComponent', () => {
    beforeEach(async () => {
       await TestBed.configureTestingModule({
          imports: [RegenrecoveryComponent, RouterModule.forRoot([]), NoopAnimationsModule],
-         providers: [{ provide: AuthenticatorService, useValue: authStub }]
+         providers: [{ provide: AuthenticatorService, useValue: authStub }],
       }).compileComponents();
 
       fixture = TestBed.createComponent(RegenrecoveryComponent);

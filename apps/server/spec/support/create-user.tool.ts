@@ -20,25 +20,23 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { entropyToMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
-import {
-    postJson,
-    getWebAuthnEmulator,
-    RP_ORIGIN,
-} from "../common";
+import { postJson, getWebAuthnEmulator, RP_ORIGIN } from '../common';
 
 function base64ToBytes(base64: string): Uint8Array {
-    return new Uint8Array(Buffer.from(base64, 'base64'));
+   return new Uint8Array(Buffer.from(base64, 'base64'));
 }
 
 function base64UrlToBase64(base64Url: string): string {
-    let b64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    while (b64.length % 4 !== 0) b64 += '=';
-    return b64;
+   let b64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+   while (b64.length % 4 !== 0) {
+      b64 += '=';
+   }
+   return b64;
 }
 
 // Playwright's CDP virtual authenticator expects standard Base64 encoding. While standard
@@ -46,82 +44,86 @@ function base64UrlToBase64(base64Url: string): string {
 // decodes the userHandle bytes as UTF-8 string bytes to maintain backward compatibility with older
 // simplewebauthn versions.
 function stringToUTF8Base64(str: string): string {
-    return Buffer.from(str, 'utf8').toString('base64');
+   return Buffer.from(str, 'utf8').toString('base64');
 }
 
 function findCredentialValues(userName: string): any {
-    const credsDir = path.join(process.cwd(), 'apps', 'server', 'spec', 'credentials');
-    if (!fs.existsSync(credsDir)) {
-        return null;
-    }
+   const credsDir = path.join(process.cwd(), 'apps', 'server', 'spec', 'credentials');
+   if (!fs.existsSync(credsDir)) {
+      return null;
+   }
 
-    for (const file of fs.readdirSync(credsDir)) {
-        if (!file.endsWith('.json')) continue;
-        const data = JSON.parse(fs.readFileSync(path.join(credsDir, file), 'utf8'));
-        if (data.user?.name === userName) {
-            return data.publicKeyCredentialSource;
-        }
-    }
-    return null;
+   for (const file of fs.readdirSync(credsDir)) {
+      if (!file.endsWith('.json')) {
+         continue;
+      }
+      const data = JSON.parse(fs.readFileSync(path.join(credsDir, file), 'utf8'));
+      if (data.user?.name === userName) {
+         return data.publicKeyCredentialSource;
+      }
+   }
+   return null;
 }
 
-describe("Create a new user, normally do not run", () => {
+describe('Create a new user, normally do not run', () => {
+   // Shared state
+   const testUser = `KeeperNew${Date.now()}`;
+   let userId: string;
+   let _credId: string; // pkId
+   let sessionCookie: string = '';
+   let csrfToken: string = '';
+   const emulator = getWebAuthnEmulator(true);
 
-    // Shared state
-    const testUser = `KeeperNew${Date.now()}`;
-    let userId: string;
-    let credId: string; // pkId
-    let sessionCookie: string = "";
-    let csrfToken: string = "";
-    const emulator = getWebAuthnEmulator(true);
+   it('should create and persist a new user', async () => {
+      const regOpts = await postJson('/v1/reg/options', { userName: testUser }, {}, '');
+      expect(regOpts.status).toBe(200);
+      expect(regOpts.data.user.name).toBe(testUser);
 
-    it("should create and persist a new user", async () => {
-        const regOpts = await postJson("/v1/reg/options", { userName: testUser }, {}, "");
-        expect(regOpts.status).toBe(200);
-        expect(regOpts.data.user.name).toBe(testUser);
+      userId = regOpts.data.user.id;
+      sessionCookie = regOpts.cookie;
+      csrfToken = regOpts.data.csrf;
 
-        userId = regOpts.data.user.id;
-        sessionCookie = regOpts.cookie;
-        csrfToken = regOpts.data.csrf;
+      const attestation = emulator.createJSON(RP_ORIGIN, {
+         ...regOpts.data,
+         user: { ...regOpts.data.user, id: userId },
+         challenge: regOpts.data.challenge,
+      });
 
-        const attestation = emulator.createJSON(RP_ORIGIN, {
-            ...regOpts.data,
-            user: { ...regOpts.data.user, id: userId },
-            challenge: regOpts.data.challenge,
-        });
+      // The backend recognizes this as an 'internal' transport
+      // as configured in the emulator via getWebAuthnEmulator.
 
-        // The backend recognizes this as an 'internal' transport
-        // as configured in the emulator via getWebAuthnEmulator.
+      const verifyRes = await postJson(
+         `/v1/reg/verify?usercred=true&recovery=true`,
+         { ...attestation, userId, challenge: regOpts.data.challenge },
+         { 'x-csrf-token': csrfToken },
+         sessionCookie,
+      );
 
-        const verifyRes = await postJson(
-            `/v1/reg/verify?usercred=true&recovery=true`,
-            { ...attestation, userId, challenge: regOpts.data.challenge },
-            { "x-csrf-token": csrfToken },
-            sessionCookie,
-        );
+      expect(verifyRes.status).toBe(200);
+      expect(verifyRes.data.verified).toBe(true);
 
-        expect(verifyRes.status).toBe(200);
-        expect(verifyRes.data.verified).toBe(true);
+      sessionCookie = verifyRes.cookie;
+      csrfToken = verifyRes.data.csrf;
+      _credId = verifyRes.data.pkId;
 
-        sessionCookie = verifyRes.cookie;
-        csrfToken = verifyRes.data.csrf;
-        credId = verifyRes.data.pkId;
+      const { recoveryId, userCred } = verifyRes.data;
 
-        const { recoveryId, userCred } = verifyRes.data;
+      const recoveryIdBytes = base64ToBytes(recoveryId);
+      const userIdBytes = base64ToBytes(userId);
+      const recoveryBytes = new Uint8Array(recoveryIdBytes.byteLength + userIdBytes.byteLength);
+      recoveryBytes.set(recoveryIdBytes, 0);
+      recoveryBytes.set(userIdBytes, recoveryIdBytes.byteLength);
 
-        const recoveryIdBytes = base64ToBytes(recoveryId);
-        const userIdBytes = base64ToBytes(userId);
-        const recoveryBytes = new Uint8Array(recoveryIdBytes.byteLength + userIdBytes.byteLength);
-        recoveryBytes.set(recoveryIdBytes, 0);
-        recoveryBytes.set(userIdBytes, recoveryIdBytes.byteLength);
+      const words = entropyToMnemonic(recoveryBytes, wordlist);
 
-        const words = entropyToMnemonic(recoveryBytes, wordlist);
+      const credValues = findCredentialValues(testUser) || {
+         id: 'NOT_FOUND',
+         rpId: 'NOT_FOUND',
+         privateKey: 'NOT_FOUND',
+         userHandle: 'NOT_FOUND',
+      };
 
-        const credValues = findCredentialValues(testUser) || {
-            id: "NOT_FOUND", rpId: "NOT_FOUND", privateKey: "NOT_FOUND", userHandle: "NOT_FOUND"
-        };
-
-        const block = `
+      const block = `
 const NEW_CRED_local: Credential = {
   credentialId: '${base64UrlToBase64(credValues.id)}',
   isResidentCredential: true,
@@ -142,8 +144,8 @@ const NEW_CRED_Recovery_local = "${words}";
       userCred: "${userCred}"
     }
 `;
-        console.log("================ REQUIRED VALUES FOR common.ts ================");
-        console.log(block);
-        console.log("===============================================================");
-    });
+      console.log('================ REQUIRED VALUES FOR common.ts ================');
+      console.log(block);
+      console.log('===============================================================');
+   });
 });

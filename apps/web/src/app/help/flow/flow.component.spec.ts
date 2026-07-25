@@ -15,17 +15,15 @@ const subsystemEntries = Object.entries(FLOW_SUBSYSTEMS);
 describe('FlowComponent', () => {
    let queryParamMap: BehaviorSubject<ParamMap>;
 
-   async function createFixture(initialPath: string | null = null):
-      Promise<{ fixture: ComponentFixture<FlowComponent>; component: FlowComponent }> {
+   async function createFixture(
+      initialPath: string | null = null,
+   ): Promise<{ fixture: ComponentFixture<FlowComponent>; component: FlowComponent }> {
       queryParamMap = new BehaviorSubject<ParamMap>(
          convertToParamMap(initialPath === null ? {} : { path: initialPath }),
       );
       await TestBed.configureTestingModule({
          imports: [FlowComponent, NoopAnimationsModule],
-         providers: [
-            provideRouter([]),
-            { provide: ActivatedRoute, useValue: { queryParamMap } },
-         ],
+         providers: [provideRouter([]), { provide: ActivatedRoute, useValue: { queryParamMap } }],
       }).compileComponents();
       const fixture = TestBed.createComponent(FlowComponent);
       fixture.detectChanges();
@@ -59,7 +57,7 @@ describe('FlowComponent', () => {
       expect(component.path()).toEqual([overviewId, subId]);
       expect(component.currentItem()?.label).toBe(sub.label);
       const crumbs = component.breadcrumbs();
-      expect(crumbs.map(c => c.label)).toEqual(['Overview', overview.label, sub.label]);
+      expect(crumbs.map((c) => c.label)).toEqual(['Overview', overview.label, sub.label]);
       expect(crumbs[0].queryParams).toEqual({ path: null });
       expect(crumbs[1].queryParams).toEqual({ path: overviewId });
       expect(crumbs[2].queryParams).toBeNull();
@@ -76,9 +74,7 @@ describe('FlowComponent', () => {
 
 describe('parseSubscripts', () => {
    it('returns a single non-subscript segment when no underscores', () => {
-      expect(parseSubscripts('Verify MAC tag')).toEqual([
-         { text: 'Verify MAC tag', sub: false },
-      ]);
+      expect(parseSubscripts('Verify MAC tag')).toEqual([{ text: 'Verify MAC tag', sub: false }]);
    });
 
    it('treats _X as a subscript', () => {
@@ -104,8 +100,6 @@ describe('parseSubscripts', () => {
    });
 
    it('treats an underscore at end of string as literal', () => {
-      expect(parseSubscripts('lonely_')).toEqual([
-         { text: 'lonely_', sub: false },
-      ]);
+      expect(parseSubscripts('lonely_')).toEqual([{ text: 'lonely_', sub: false }]);
    });
 });

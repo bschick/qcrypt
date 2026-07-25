@@ -63,13 +63,7 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
-import {
-   aws,
-   confirmProdAction,
-   ensureAuth,
-   relToRoot,
-   suggestCommandTypo,
-} from '../../../scripts/deploy-common.mjs';
+import { aws, confirmProdAction, ensureAuth, relToRoot, suggestCommandTypo } from '../../../scripts/deploy-common.mjs';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -93,12 +87,10 @@ function aliasName(argv) {
 // AliasArn, ...}), or null if the alias doesn't exist (first-time deploy).
 // Other failures bubble up.
 function getAlias(argv, alias) {
-   const r = aws(argv, [
-      'lambda', 'get-alias',
-      '--function-name', argv.lambda,
-      '--name', alias,
-      '--output', 'json',
-   ], { readOnly: true, allowFailure: true });
+   const r = aws(argv, ['lambda', 'get-alias', '--function-name', argv.lambda, '--name', alias, '--output', 'json'], {
+      readOnly: true,
+      allowFailure: true,
+   });
    if (r.status !== 0) {
       const stderr = r.stderr ?? '';
       if (/ResourceNotFoundException/i.test(stderr)) {
@@ -126,11 +118,10 @@ function getAliasVersion(argv, alias) {
 // name itself is wrong — a common first-time-misconfig case. Other
 // failures bubble through with the shared aws()'s generic auth hints.
 function getFunctionConfig(argv) {
-   const r = aws(argv, [
-      'lambda', 'get-function-configuration',
-      '--function-name', argv.lambda,
-      '--output', 'json',
-   ], { readOnly: true, allowFailure: true });
+   const r = aws(argv, ['lambda', 'get-function-configuration', '--function-name', argv.lambda, '--output', 'json'], {
+      readOnly: true,
+      allowFailure: true,
+   });
    if (r.status !== 0) {
       process.stderr.write(r.stderr);
       if (/ResourceNotFoundException/i.test(r.stderr ?? '')) {
@@ -147,11 +138,9 @@ function getFunctionConfig(argv) {
 // default so a single call suffices. `$LATEST` is filtered out — it's
 // always present but isn't a publishable version that the alias can target.
 function listVersions(argv) {
-   const r = aws(argv, [
-      'lambda', 'list-versions-by-function',
-      '--function-name', argv.lambda,
-      '--output', 'json',
-   ], { readOnly: true });
+   const r = aws(argv, ['lambda', 'list-versions-by-function', '--function-name', argv.lambda, '--output', 'json'], {
+      readOnly: true,
+   });
    const parsed = JSON.parse(r.stdout || '{}');
    const versions = parsed.Versions ?? [];
    return versions
@@ -200,10 +189,14 @@ async function runDeploy(argv) {
    // 1. Upload code. Captures CodeSha256 for the summary line so it's easy
    // to confirm the artifact actually changed on the function.
    const updateResult = aws(argv, [
-      'lambda', 'update-function-code',
-      '--function-name', argv.lambda,
-      '--zip-file', `fileb://${zipPath}`,
-      '--output', 'json',
+      'lambda',
+      'update-function-code',
+      '--function-name',
+      argv.lambda,
+      '--zip-file',
+      `fileb://${zipPath}`,
+      '--output',
+      'json',
    ]);
    let codeSha = '';
    if (!argv.dryRun) {
@@ -226,10 +219,7 @@ async function runDeploy(argv) {
    if (!argv.dryRun) {
       console.log(`deploy: waiting for ${argv.lambda} to finish updating...`);
    }
-   aws(argv, [
-      'lambda', 'wait', 'function-updated',
-      '--function-name', argv.lambda,
-   ]);
+   aws(argv, ['lambda', 'wait', 'function-updated', '--function-name', argv.lambda]);
 
    const dryRunTag = argv.dryRun ? ' (DRY RUN)' : '';
    if (!isProd(argv)) {
@@ -242,10 +232,14 @@ async function runDeploy(argv) {
    // 2. Publish the just-uploaded code as a numbered version. The
    // --description IS the comment we surface in `info` listings.
    const publishResult = aws(argv, [
-      'lambda', 'publish-version',
-      '--function-name', argv.lambda,
-      '--description', argv.comment,
-      '--output', 'json',
+      'lambda',
+      'publish-version',
+      '--function-name',
+      argv.lambda,
+      '--description',
+      argv.comment,
+      '--output',
+      'json',
    ]);
    let newVersion = '';
    if (!argv.dryRun) {
@@ -268,15 +262,23 @@ async function runDeploy(argv) {
    // the same text. The alias-level description tracks what kind of move
    // was last made ("new deploy" vs "rolled back").
    aws(argv, [
-      'lambda', 'update-alias',
-      '--function-name', argv.lambda,
-      '--name', alias,
-      '--function-version', newVersion || '<NEW>',
-      '--description', 'new deploy',
-      '--output', 'json',
+      'lambda',
+      'update-alias',
+      '--function-name',
+      argv.lambda,
+      '--name',
+      alias,
+      '--function-version',
+      newVersion || '<NEW>',
+      '--description',
+      'new deploy',
+      '--output',
+      'json',
    ]);
 
-   console.log(`deploy: lambda=${argv.lambda} from=${relToRoot(zipPath)} code-sha=${codeSha} version=${newVersion || '<NEW>'} alias=${alias}${dryRunTag}`);
+   console.log(
+      `deploy: lambda=${argv.lambda} from=${relToRoot(zipPath)} code-sha=${codeSha} version=${newVersion || '<NEW>'} alias=${alias}${dryRunTag}`,
+   );
 }
 
 // ---------------------------------------------------------------------------
@@ -332,12 +334,18 @@ async function runRollback(argv) {
    }
 
    aws(argv, [
-      'lambda', 'update-alias',
-      '--function-name', argv.lambda,
-      '--name', alias,
-      '--function-version', target,
-      '--description', 'rolled back',
-      '--output', 'json',
+      'lambda',
+      'update-alias',
+      '--function-name',
+      argv.lambda,
+      '--name',
+      alias,
+      '--function-version',
+      target,
+      '--description',
+      'rolled back',
+      '--output',
+      'json',
    ]);
 
    const dryRunTag = argv.dryRun ? ' (DRY RUN)' : '';
@@ -394,42 +402,78 @@ function runInfo(argv) {
 // past flag-value pairs when identifying a typo'd subcommand. Mirror any
 // new value-taking option here.
 const VALUE_FLAGS = new Set([
-   '--prod', '--lambda', '--profile', '--region', '--print-limit',
-   '--build-dir', '--comment', '--version',
+   '--prod',
+   '--lambda',
+   '--profile',
+   '--region',
+   '--print-limit',
+   '--build-dir',
+   '--comment',
+   '--version',
 ]);
 
-const addGlobalOpts = (y) => y
-   .option('prod', { type: 'string', describe: 'Enable prod-mode targeting <alias> (e.g. --prod prod). Absent ⇒ test-mode.' })
-   .option('lambda', { type: 'string', demandOption: true, describe: 'Lambda function name or ARN' })
-   .option('profile', { type: 'string', describe: 'AWS CLI profile (falls back to QC_{PROD,TEST}_AWS_PROFILE; required)' })
-   .option('region', { type: 'string', describe: 'AWS region (falls back to QC_{PROD,TEST}_AWS_REGION; required)' })
-   .option('dry-run', { type: 'boolean', default: false, alias: 'dryrun', describe: 'Log actions without executing them' })
-   .option('print-limit', { type: 'number', default: 10, describe: 'Max version rows to print (info)' })
-   .option('yes', { type: 'boolean', alias: 'y', default: false, describe: 'Bypass the prod-action confirmation prompt for destructive commands (deploy, bdeploy, rollback).' });
+const addGlobalOpts = (y) =>
+   y
+      .option('prod', {
+         type: 'string',
+         describe: 'Enable prod-mode targeting <alias> (e.g. --prod prod). Absent ⇒ test-mode.',
+      })
+      .option('lambda', { type: 'string', demandOption: true, describe: 'Lambda function name or ARN' })
+      .option('profile', {
+         type: 'string',
+         describe: 'AWS CLI profile (falls back to QC_{PROD,TEST}_AWS_PROFILE; required)',
+      })
+      .option('region', { type: 'string', describe: 'AWS region (falls back to QC_{PROD,TEST}_AWS_REGION; required)' })
+      .option('dry-run', {
+         type: 'boolean',
+         default: false,
+         alias: 'dryrun',
+         describe: 'Log actions without executing them',
+      })
+      .option('print-limit', { type: 'number', default: 10, describe: 'Max version rows to print (info)' })
+      .option('yes', {
+         type: 'boolean',
+         alias: 'y',
+         default: false,
+         describe: 'Bypass the prod-action confirmation prompt for destructive commands (deploy, bdeploy, rollback).',
+      });
 
 // Used to detect typo'd commands so the fail handler can suggest the
 // closest match.
 const COMMANDS = ['deploy', 'bdeploy', 'rollback', 'info'];
 
-const deployBuilder = (y) => addGlobalOpts(y)
-   .option('build-dir', { type: 'string', default: 'dist/server-test', describe: 'Directory containing server.zip' })
-   .option('comment', { type: 'string', default: '', describe: 'Description recorded on the new published version (prod-mode only).' })
-   .check((argv) => {
-      try {
-         if (!statSync(argv.buildDir).isDirectory()) {
-            throw new Error('not a directory');
+const deployBuilder = (y) =>
+   addGlobalOpts(y)
+      .option('build-dir', { type: 'string', default: 'dist/server-test', describe: 'Directory containing server.zip' })
+      .option('comment', {
+         type: 'string',
+         default: '',
+         describe: 'Description recorded on the new published version (prod-mode only).',
+      })
+      .check((argv) => {
+         try {
+            if (!statSync(argv.buildDir).isDirectory()) {
+               throw new Error('not a directory');
+            }
+         } catch {
+            throw new Error(`--build-dir does not exist or is not a directory: ${argv.buildDir}`);
          }
-      } catch {
-         throw new Error(`--build-dir does not exist or is not a directory: ${argv.buildDir}`);
-      }
-      return true;
+         return true;
+      });
+
+const bdeployBuilder = (y) =>
+   deployBuilder(y).option('min', {
+      type: 'boolean',
+      default: true,
+      describe:
+         'Minify the build via `pnpm build:server:min` (default). Pass `--no-min` to use `pnpm build:server` instead.',
    });
 
-const bdeployBuilder = (y) => deployBuilder(y)
-   .option('min', { type: 'boolean', default: true, describe: 'Minify the build via `pnpm build:server:min` (default). Pass `--no-min` to use `pnpm build:server` instead.' });
-
-const rollbackBuilder = (y) => addGlobalOpts(y)
-   .option('version', { type: 'string', describe: 'Specific version to roll back to (default: version preceding current alias target)' });
+const rollbackBuilder = (y) =>
+   addGlobalOpts(y).option('version', {
+      type: 'string',
+      describe: 'Specific version to roll back to (default: version preceding current alias target)',
+   });
 
 // Commands that mutate prod and so require the confirmation gate. The bare
 // `$0` invocation runs bdeploy, so map an empty command to it.
@@ -443,9 +487,7 @@ const DESTRUCTIVE_COMMANDS = new Set(['deploy', 'bdeploy', 'rollback']);
 async function preflight(argv) {
    const command = String(argv._[0] ?? 'bdeploy');
    if (argv.prod && DESTRUCTIVE_COMMANDS.has(command)) {
-      const from = command === 'rollback'
-         ? ''
-         : `\n      from:   ${relToRoot(join(argv.buildDir, 'server.zip'))}`;
+      const from = command === 'rollback' ? '' : `\n      from:   ${relToRoot(join(argv.buildDir, 'server.zip'))}`;
       await confirmProdAction(argv, command, `lambda: ${argv.lambda}${from}`);
    }
    await ensureAuth(argv);
@@ -454,11 +496,31 @@ async function preflight(argv) {
 await yargs(hideBin(process.argv))
    .scriptName('deploy.mjs')
    .middleware(preflight)
-   .command('$0', 'Build (`pnpm build:server:min`, or `build:server` with --no-min) then deploy the Lambda artifact to AWS.', bdeployBuilder, runBdeploy)
+   .command(
+      '$0',
+      'Build (`pnpm build:server:min`, or `build:server` with --no-min) then deploy the Lambda artifact to AWS.',
+      bdeployBuilder,
+      runBdeploy,
+   )
    .command('deploy', 'Deploy the already-built Lambda artifact without rebuilding.', deployBuilder, runDeploy)
-   .command('bdeploy', 'Build (`pnpm build:server:min`, or `build:server` with --no-min) then deploy.', bdeployBuilder, runBdeploy)
-   .command('rollback', 'Move the prod alias to a previous version. Requires --prod <alias>.', rollbackBuilder, runRollback)
-   .command('info', 'Show $LATEST modification time + code sha. With --prod <alias>, also list published versions and the current alias target.', addGlobalOpts, runInfo)
+   .command(
+      'bdeploy',
+      'Build (`pnpm build:server:min`, or `build:server` with --no-min) then deploy.',
+      bdeployBuilder,
+      runBdeploy,
+   )
+   .command(
+      'rollback',
+      'Move the prod alias to a previous version. Requires --prod <alias>.',
+      rollbackBuilder,
+      runRollback,
+   )
+   .command(
+      'info',
+      'Show $LATEST modification time + code sha. With --prod <alias>, also list published versions and the current alias target.',
+      addGlobalOpts,
+      runInfo,
+   )
    .demandCommand(0)
    .fail((msg, err) => {
       if (err) {

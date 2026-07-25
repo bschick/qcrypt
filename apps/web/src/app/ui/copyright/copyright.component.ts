@@ -23,13 +23,11 @@ import { Component } from '@angular/core';
 import { environment } from '../../../environments/environment';
 
 @Component({
-  selector: 'app-copyright',
-  imports: [],
-  templateUrl: './copyright.component.html',
-  styleUrl: './copyright.component.scss'
+   selector: 'app-copyright',
+   imports: [],
+   templateUrl: './copyright.component.html',
+   styleUrl: './copyright.component.scss',
 })
 export class CopyrightComponent {
-
-  public copyright = environment.copyright;
-
+   public copyright = environment.copyright;
 }

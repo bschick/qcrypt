@@ -36,15 +36,23 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 
-
 @Component({
-    selector: 'app-newuser',
-    templateUrl: './newuser.component.html',
-    styleUrl: './newuser.component.scss',
-    imports: [MatIconModule, MatButtonModule, RouterLink, MatProgressSpinnerModule, MatInputModule, MatFormFieldModule, FormsModule, ClipboardModule, MatTooltipModule]
+   selector: 'app-newuser',
+   templateUrl: './newuser.component.html',
+   styleUrl: './newuser.component.scss',
+   imports: [
+      MatIconModule,
+      MatButtonModule,
+      RouterLink,
+      MatProgressSpinnerModule,
+      MatInputModule,
+      MatFormFieldModule,
+      FormsModule,
+      ClipboardModule,
+      MatTooltipModule,
+   ],
 })
 export class NewUserComponent implements OnInit, AfterViewInit {
-
    public showProgress = false;
    public error = '';
    public newUserName = '';
@@ -57,8 +65,8 @@ export class NewUserComponent implements OnInit, AfterViewInit {
       private authSvc: AuthenticatorService,
       private router: Router,
       private dialog: MatDialog,
-      private snackBar: MatSnackBar) {
-   }
+      private snackBar: MatSnackBar,
+   ) {}
 
    ngOnInit() {
       const [userId, userName] = this.authSvc.loadKnownUser();
@@ -71,9 +79,7 @@ export class NewUserComponent implements OnInit, AfterViewInit {
    ngAfterViewInit(): void {
       try {
          // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
-         setTimeout(
-            () => this.r2.selectRootElement('#userName').focus(), 0
-         );
+         setTimeout(() => this.r2.selectRootElement('#userName').focus(), 0);
       } catch (err) {
          console.error(err);
       }
@@ -93,7 +99,7 @@ export class NewUserComponent implements OnInit, AfterViewInit {
          this.router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
-         if(err instanceof Error && err.message.includes("fetch")) {
+         if (err instanceof Error && err.message.includes('fetch')) {
             this.error = 'Sign in failed, check your connection';
          } else {
             this.error = 'Sign in failed, try again or change users';
@@ -103,7 +109,7 @@ export class NewUserComponent implements OnInit, AfterViewInit {
       }
    }
 
-   async onClickNewUser(event: any): Promise<void> {
+   async onClickNewUser(_event: MouseEvent): Promise<void> {
       this.error = '';
 
       if (!this.newUserName || this.newUserName.length < 6 || this.newUserName.length > 31) {
@@ -119,7 +125,7 @@ export class NewUserComponent implements OnInit, AfterViewInit {
          this.router.navigateByUrl('/showrecovery');
       } catch (err) {
          console.error(err);
-         if (err instanceof Error && err.message.includes("fetch")) {
+         if (err instanceof Error && err.message.includes('fetch')) {
             this.error = 'New user creation failed, check your internet connection';
          } else {
             this.error = 'New user creation failed, please try again';
@@ -132,9 +138,7 @@ export class NewUserComponent implements OnInit, AfterViewInit {
    // The dialog cannot be dismissed, so it always resolves to a definite choice.
    private async _decidePrfFallback(): Promise<'standard' | 'different'> {
       this.showProgress = false;
-      const choice = await firstValueFrom(
-         this.dialog.open(PrfFallbackDialog, { disableClose: true }).afterClosed()
-      );
+      const choice = await firstValueFrom(this.dialog.open(PrfFallbackDialog, { disableClose: true }).afterClosed());
       if (choice !== 'standard' && choice !== 'different') {
          throw new Error('PRF fallback dialog returned an invalid choice');
       }
@@ -147,6 +151,6 @@ export class NewUserComponent implements OnInit, AfterViewInit {
    selector: 'prf-fallback-dialog',
    templateUrl: './prf-fallback-dialog.html',
    styleUrl: './prf-fallback-dialog.scss',
-   imports: [MatDialogModule, MatButtonModule, RouterLink]
+   imports: [MatDialogModule, MatButtonModule, RouterLink],
 })
-export class PrfFallbackDialog { }
+export class PrfFallbackDialog {}
