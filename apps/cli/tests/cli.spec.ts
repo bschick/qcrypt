@@ -591,6 +591,112 @@ describe('CLI App', () => {
          expect(result.status).toBe(1);
          expect(result.stderr).toContain('decryption failed');
       });
+
+      it('should fail when given fewer passwords than loops', () => {
+         const rtEnc = path.resolve(tmpDir, 'test-fewpwds.bin');
+         const rtDec = path.resolve(tmpDir, 'test-fewpwds.txt');
+         const enc = execCli(
+            [
+               'enc',
+               '--cred',
+               userCred,
+               '--silent',
+               '--iters',
+               '1000000',
+               '--loops',
+               '2',
+               '--outfile',
+               rtEnc,
+               '--pwds',
+               'A',
+               'B',
+            ],
+            clearText,
+         );
+         expect(enc.status).toBe(0);
+
+         const ok = execCli([
+            'dec',
+            '--cred',
+            userCred,
+            '--silent',
+            '--infile',
+            rtEnc,
+            '--outfile',
+            rtDec,
+            '--pwds',
+            'B',
+            'A',
+         ]);
+         expect(ok.status).toBe(0);
+
+         const result = execCli([
+            'dec',
+            '--cred',
+            userCred,
+            '--silent',
+            '--infile',
+            rtEnc,
+            '--outfile',
+            rtDec,
+            '--pwds',
+            'B',
+         ]);
+         expect(result.status).toBe(1);
+         expect(result.stderr).toContain('2 password(s) required in silent mode but 1 provided');
+
+         fs.unlinkSync(rtEnc);
+         fs.unlinkSync(rtDec);
+      });
+
+      // Asserts bytes as well as exit code: a truncated decrypt that still exits 0
+      // reads as success to an automation pipeline that then deletes the cipher text
+      it('should round trip a multi-megabyte payload in silent mode', () => {
+         const bigIn = path.resolve(tmpDir, 'test-big-in.bin');
+         const bigEnc = path.resolve(tmpDir, 'test-big-enc.bin');
+         const bigDec = path.resolve(tmpDir, 'test-big-dec.bin');
+
+         const bigData = Buffer.alloc(2 * 1024 * 1024 + 1000);
+         for (let pos = 0; pos < bigData.length; pos++) {
+            bigData[pos] = pos % 251;
+         }
+         fs.writeFileSync(bigIn, bigData);
+
+         const enc = execCli([
+            'enc',
+            '--cred',
+            userCred,
+            '--silent',
+            '--iters',
+            '1000000',
+            '--infile',
+            bigIn,
+            '--outfile',
+            bigEnc,
+            '--pwds',
+            'pass',
+         ]);
+         expect(enc.status).toBe(0);
+
+         const dec = execCli([
+            'dec',
+            '--cred',
+            userCred,
+            '--silent',
+            '--infile',
+            bigEnc,
+            '--outfile',
+            bigDec,
+            '--pwds',
+            'pass',
+         ]);
+         expect(dec.status).toBe(0);
+         expect(fs.readFileSync(bigDec).equals(bigData)).toBe(true);
+
+         fs.unlinkSync(bigIn);
+         fs.unlinkSync(bigEnc);
+         fs.unlinkSync(bigDec);
+      });
    });
 
    describe('input formats', () => {

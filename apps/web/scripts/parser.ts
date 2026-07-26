@@ -58,7 +58,7 @@ const HEADER_BYTES_OLD = MAC_BYTES + VER_BYTES + PAYLOAD_SIZE_BYTES + FLAGS_BYTE
 const HEADER_BYTES_V6PLUS = MAC_BYTES + VER_BYTES + PAYLOAD_SIZE_BYTES;
 
 // Validation ranges from libs/crypto/src/lib/cipher.consts.ts
-const ICOUNT_MIN = 420000;
+const ICOUNT_MIN_V4 = 400000;
 const ICOUNT_MAX = 4294000000;
 const LP_MAX = 16;
 const PAYLOAD_SIZE_MIN = 31;
@@ -623,8 +623,8 @@ function parseBlock0Tail(
    let icNote = '';
    if (ic === 0) {
       icNote = 'non-pdkf2 block';
-   } else if (ic < ICOUNT_MIN || ic > ICOUNT_MAX) {
-      icNote = recordError(errors, where, `iterations ${ic} out of range [${ICOUNT_MIN}, ${ICOUNT_MAX}]`);
+   } else if (ic < ICOUNT_MIN_V4 || ic > ICOUNT_MAX) {
+      icNote = recordError(errors, where, `iterations ${ic} out of range [${ICOUNT_MIN_V4}, ${ICOUNT_MAX}]`);
    }
    fields.push({
       name: 'iterations',
@@ -835,8 +835,8 @@ function parseV1Document(reader: Reader, totalSize: number, opts: Options, error
       const icOffset = reader.pos;
       const ic = reader.readU32LE();
       let icNote = '';
-      if (ic < ICOUNT_MIN || ic > ICOUNT_MAX) {
-         icNote = recordError(errors, where, `iterations ${ic} out of range [${ICOUNT_MIN}, ${ICOUNT_MAX}]`);
+      if (ic < ICOUNT_MIN_V4 || ic > ICOUNT_MAX) {
+         icNote = recordError(errors, where, `iterations ${ic} out of range [${ICOUNT_MIN_V4}, ${ICOUNT_MAX}]`);
       }
       fields.push({
          name: 'iterations',

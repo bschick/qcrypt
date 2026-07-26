@@ -90,7 +90,7 @@ export abstract class BaseKeyProvider implements KeyProvider {
       if (!Ciphers.validateAlg(cdInfo.alg)) {
          throw new Error(`Invalid alg type of: ${cdInfo.alg}`);
       }
-      if (cdInfo.ic !== 0 && (cdInfo.ic < cc.ICOUNT_MIN || cdInfo.ic > cc.ICOUNT_MAX)) {
+      if (cdInfo.ic !== 0 && (cdInfo.ic < Ciphers.getICountMin(cdInfo.ver) || cdInfo.ic > cc.ICOUNT_MAX)) {
          throw new Error(`Invalid ic of: ${cdInfo.ic}`);
       }
       if (cdInfo.lpEnd < 1 || cdInfo.lpEnd > cc.LP_MAX) {
@@ -108,9 +108,6 @@ export abstract class BaseKeyProvider implements KeyProvider {
    public setHint(hint: string | undefined): void {
       if (!this._cdInfo) {
          throw new Error('CipherDataInfo not set');
-      }
-      if (hint && hint.length > cc.HINT_MAX_LEN) {
-         throw new Error(`Hint length exceeds: ${cc.HINT_MAX_LEN}`);
       }
       this._cdInfo.hint = hint;
    }
@@ -281,7 +278,7 @@ export abstract class BasePWDKeyProvider extends BaseKeyProvider {
       if (!this._cdInfo || this._cdInfo.ic === undefined || !this._cdInfo.slt) {
          throw new Error('Invalid CipherDataInfo');
       }
-      if (this._cdInfo.ic < cc.ICOUNT_MIN || this._cdInfo.ic > cc.ICOUNT_MAX) {
+      if (this._cdInfo.ic < Ciphers.getICountMin(this._cdInfo.ver) || this._cdInfo.ic > cc.ICOUNT_MAX) {
          throw new Error(`Invalid ic of: ${this._cdInfo.ic}`);
       }
 
@@ -670,7 +667,8 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       const [pwd, hint] = Array.isArray(this._pwdProvider)
          ? this._pwdProvider
          : await this._pwdProvider(this._cdInfo, encrypting);
-      if (hint && hint.length > cc.HINT_MAX_LEN) {
+
+      if (encrypting && hint && hint.length > cc.HINT_MAX_LEN) {
          throw new Error(`Hint length exceeds: ${cc.HINT_MAX_LEN}`);
       }
       if (!pwd) {
@@ -795,7 +793,8 @@ export class PWDKeyProviderV6 extends BasePWDKeyProvider {
       const [pwd, hint] = Array.isArray(this._pwdProvider)
          ? this._pwdProvider
          : await this._pwdProvider(this._cdInfo, encrypting);
-      if (hint && hint.length > cc.HINT_MAX_LEN) {
+
+      if (encrypting && hint && hint.length > cc.HINT_MAX_LEN) {
          throw new Error(`Hint length exceeds: ${cc.HINT_MAX_LEN}`);
       }
       if (!pwd) {
@@ -894,7 +893,8 @@ export class PWDKeyProviderLegacy extends BasePWDKeyProvider {
       const [pwd, hint] = Array.isArray(this._pwdProvider)
          ? this._pwdProvider
          : await this._pwdProvider(this._cdInfo, encrypting);
-      if (hint && hint.length > cc.HINT_MAX_LEN) {
+
+      if (encrypting && hint && hint.length > cc.HINT_MAX_LEN) {
          throw new Error(`Hint length exceeds: ${cc.HINT_MAX_LEN}`);
       }
       if (!pwd) {

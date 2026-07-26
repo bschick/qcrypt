@@ -101,13 +101,18 @@ function streamFromBytes(data: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Arr
    });
 }
 
-async function writeAndCloseStream(readableStream: ReadableStream<Uint8Array>, writeableStream: NodeJS.WritableStream) {
+async function writeAndCloseStream(
+   readableStream: ReadableStream<Uint8Array>,
+   writeableStream: NodeJS.WritableStream,
+): Promise<number> {
    const reader = readableStream.getReader();
+   let written = 0;
 
    while (true) {
       const { done, value } = await reader.read();
       if (value) {
          writeableStream.write(value);
+         written += value.byteLength;
       }
       if (done) {
          writeableStream.end();
@@ -115,6 +120,8 @@ async function writeAndCloseStream(readableStream: ReadableStream<Uint8Array>, w
          break;
       }
    }
+
+   return written;
 }
 
 async function getUserCred(
@@ -389,24 +396,8 @@ async function decrypt(
    io: IO,
 ): Promise<void> {
    try {
-      const rawStream = await getCipherStream(io, args.silent);
+      const cipherStream = await getCipherStream(io, args.silent);
       const userCred = await getUserCred(args, io);
-
-      let cipherStream: ReadableStream<Uint8Array>;
-      if (args.silent) {
-         const [infoStream, mainStream] = rawStream.tee();
-         const cdInfo = await getCipherStreamInfo(infoStream, new PWDKeyProvider(userCred.slice(0), undefined));
-         await infoStream.cancel();
-         if (!args.pwds || args.pwds.length < cdInfo.lpEnd) {
-            await mainStream.cancel();
-            throw new ParamError(
-               `${cdInfo.lpEnd} password(s) required in silent mode but ${args.pwds?.length ?? 0} provided (use --pwds)`,
-            );
-         }
-         cipherStream = mainStream;
-      } else {
-         cipherStream = rawStream;
-      }
 
       const keyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
          const pos = cdinfo.lpEnd - cdinfo.lp;
@@ -416,6 +407,10 @@ async function decrypt(
                showAnswered(`Password${lpMsg}:`, '******', io);
             }
             return [args.pwds[pos]!, undefined];
+         } else if (args.silent) {
+            throw new ParamError(
+               `${cdinfo.lpEnd} password(s) required in silent mode but ${args.pwds?.length ?? 0} provided (use --pwds)`,
+            );
          } else {
             const hintMsg = lpMsg + (cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '');
             const pwd = await getSensitiveInput(`Password${hintMsg}`, io);
@@ -425,14 +420,23 @@ async function decrypt(
 
       const clearStream = await decryptStream(cipherStream, keyProvider);
 
+      let clearLen: number;
       if (io.b64urlOut) {
          const clearData = await readStreamAll(clearStream);
+         clearLen = clearData.byteLength;
          io.pipedOut.write(`${bytesToBase64(clearData)}\n`);
       } else if (io.binaryOut) {
-         await writeAndCloseStream(clearStream, io.pipedOut);
+         clearLen = await writeAndCloseStream(clearStream, io.pipedOut);
       } else {
          const clearText = await readStreamAll(clearStream, true);
+         clearLen = clearText.length;
          io.pipedOut.write(`${clearText}\n`);
+      }
+
+      // Encryption rejects empty input, so every valid cipher text decrypts to at
+      // least one byte. Empty output means the stream was lost, not decrypted
+      if (clearLen === 0) {
+         throw new Error('decrypted output was empty');
       }
    } catch (err) {
       if (args.debug) {

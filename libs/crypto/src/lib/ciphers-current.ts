@@ -168,6 +168,10 @@ export abstract class Ciphers {
       return Ciphers.isValidAlg(alg) ? cc.AlgInfo[alg].description : 'Invalid';
    }
 
+   static getICountMin(ver: number): number {
+      return ver < cc.VERSION5 ? cc.ICOUNT_MIN_V4 : cc.ICOUNT_MIN;
+   }
+
    // Only useful for validating params before encoding. Decoded values are read with
    // expected sizes, so validity depends on signature validate rather than decoded lengths
    public static validateAdditionalData(args: {
@@ -196,7 +200,8 @@ export abstract class Ciphers {
          if (args.slt.byteLength !== cc.SLT_BYTES) {
             throw new Error(`Invalid slt len: ${args.slt.byteLength}`);
          }
-         if (args.ic === undefined || (args.ic !== 0 && (args.ic < cc.ICOUNT_MIN || args.ic > cc.ICOUNT_MAX))) {
+         // Sanity range only. The version-aware floor is applied by the key provider
+         if (args.ic === undefined || (args.ic !== 0 && (args.ic < cc.ICOUNT_MIN_V4 || args.ic > cc.ICOUNT_MAX))) {
             throw new Error(`Invalid ic: ${args.ic}`);
          }
       }
@@ -1222,7 +1227,8 @@ export class Extractor<T extends ArrayBufferLike> {
 
    get ic(): number {
       const ic = bytesToNum(this.extract('ic', cc.IC_BYTES));
-      if (ic !== 0 && (ic < cc.ICOUNT_MIN || ic > cc.ICOUNT_MAX)) {
+      // Sanity range only. The version-aware floor is applied by the key provider
+      if (ic !== 0 && (ic < cc.ICOUNT_MIN_V4 || ic > cc.ICOUNT_MAX)) {
          throw new Error(`Invalid ic of: ${ic}`);
       }
       return ic;
@@ -1377,7 +1383,8 @@ export class Packer {
    }
 
    set ic(iCount: number) {
-      if (iCount !== 0 && (iCount < cc.ICOUNT_MIN || iCount > cc.ICOUNT_MAX)) {
+      // Sanity range only. The version-aware floor is applied by the key provider
+      if (iCount !== 0 && (iCount < cc.ICOUNT_MIN_V4 || iCount > cc.ICOUNT_MAX)) {
          throw new Error(`Invalid ic of: ${iCount}`);
       }
       this.pack('ic', numToBytes(iCount, cc.IC_BYTES));

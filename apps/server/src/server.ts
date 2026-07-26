@@ -69,6 +69,7 @@ import {
    NotFoundError,
    sanitizeString,
    validB64,
+   validUserCredEnc,
    base64UrlEncode,
    base64UrlDecode,
    knownLenTimingSafeEqual,
@@ -116,6 +117,11 @@ const aaguidCache = new Map<string, AAGUIDInfo>();
 const AAGUID_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 const UnknownUserId = 'unknown';
+
+// The WebAuthn spec keeps adding transports, so bound the shape rather than enumerate
+// values and reject an authenticator newer than this code
+const TRANSPORT_MAX_COUNT = 8;
+const TRANSPORT_PATTERN = /^[a-z-]{1,16}$/;
 
 enum EventNames {
    AuthOptions = 'AuthOptions',
@@ -289,6 +295,7 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
 
    // Atomically consume the challenge, then check its validity
    const challenge = await Challenges.delete({
+      purpose: 'auth',
       challenge: body.challenge,
    }).go({ response: 'all_old' });
 
@@ -297,11 +304,6 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
    }
 
    if (Date.now() / 1000 > challenge.data.expiresAt) {
-      throw new AuthError();
-   }
-
-   // Refuse challenges that were issued for a different flow.
-   if (challenge.data.purpose !== 'auth') {
       throw new AuthError();
    }
 
@@ -473,10 +475,8 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
    const hasPrf = !!regVerify.recoveryUserCredEnc || !!regVerify.passkeyUserCredEnc || !!regVerify.userCredPubKey;
    if (hasPrf) {
       if (
-         !validB64(regVerify.recoveryUserCredEnc) ||
-         base64UrlDecode(regVerify.recoveryUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
-         !validB64(regVerify.passkeyUserCredEnc) ||
-         base64UrlDecode(regVerify.passkeyUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES ||
+         !validUserCredEnc(regVerify.recoveryUserCredEnc) ||
+         !validUserCredEnc(regVerify.passkeyUserCredEnc) ||
          !validB64(regVerify.userCredPubKey) ||
          base64UrlDecode(regVerify.userCredPubKey)!.length !== PROOF_PUBKEY_BYTES
       ) {
@@ -664,16 +664,20 @@ async function _createAuthenticator(
    if (!validB64(passkeyVerify.challenge)) {
       throw new ParamError('invalid challenge format');
    }
-   if (
-      passkeyVerify.passkeyUserCredEnc &&
-      (!validB64(passkeyVerify.passkeyUserCredEnc) ||
-         base64UrlDecode(passkeyVerify.passkeyUserCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES)
-   ) {
+   if (passkeyVerify.passkeyUserCredEnc && !validUserCredEnc(passkeyVerify.passkeyUserCredEnc)) {
       throw new ParamError('invalid passkey userCred ciphertext');
+   }
+
+   const transports = passkeyVerify.response.transports;
+   if (transports) {
+      if (transports.length > TRANSPORT_MAX_COUNT || !transports.every((tport) => TRANSPORT_PATTERN.test(tport))) {
+         throw new ParamError('invalid transports');
+      }
    }
 
    // Atomically consume the challenge, then check its validity
    const challenge = await Challenges.delete({
+      purpose: expectedPurpose,
       challenge: passkeyVerify.challenge,
    }).go({ response: 'all_old' });
 
@@ -687,7 +691,7 @@ async function _createAuthenticator(
    }
 
    // Registration-style challenges are always userId-bound at creation time.
-   if (challenge.data.purpose !== expectedPurpose || challenge.data.userId !== unverifiedUser.userId) {
+   if (challenge.data.userId !== unverifiedUser.userId) {
       throw new AuthError();
    }
 
@@ -737,7 +741,7 @@ async function _createAuthenticator(
       credentialDeviceType: credentialDeviceType,
       userVerified: userVerified,
       credentialBackedUp: credentialBackedUp,
-      transports: passkeyVerify.response.transports,
+      transports: transports,
       userCredEnc: passkeyVerify.passkeyUserCredEnc,
       origin: origin,
       aaguid: aaguid,
@@ -1202,7 +1206,7 @@ async function putRecover2Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
    // recovery words re-encrypt and send it.
    if (verifiedUser.prf) {
       const userCredEnc: string = body?.userCredEnc;
-      if (!validB64(userCredEnc) || base64UrlDecode(userCredEnc)!.length < cc.USERCRED_ENC_MIN_BYTES) {
+      if (!validUserCredEnc(userCredEnc)) {
          throw new ParamError('invalid user credential');
       }
       updates.userCredEnc = userCredEnc;
@@ -1267,6 +1271,27 @@ async function getUser(_httpDetails: HttpDetails, verifiedUser?: VerifiedUserIte
    return { content: response };
 }
 
+// Ensures every passkey is deleted, raising an exception to abort the caller if any survive.
+// Reads 'all' pages because the 1MB query budget is charged against full items
+async function deleteAllAuthenticators(verifiedUser: VerifiedUserItem): Promise<void> {
+   const auths = await Authenticators.query
+      .byUserId({
+         userId: verifiedUser.userId,
+      })
+      .go({ attributes: ['userId', 'credentialId'], pages: 'all' });
+
+   let pending = auths?.data ?? [];
+   for (let attempt = 0; pending.length !== 0 && attempt < cc.RETRIES; attempt++) {
+      // A batch delete skips items rather than failing, reporting them as unprocessed
+      const deleted = await Authenticators.delete(pending).go();
+      pending = deleted?.unprocessed ?? [];
+   }
+
+   if (pending.length !== 0) {
+      throw new Error(`failed to delete all passkeys for ${verifiedUser.userId}`);
+   }
+}
+
 async function loadAuthenticators(
    verifiedUser: VerifiedUserItem,
    consistent: boolean = false,
@@ -1278,6 +1303,7 @@ async function loadAuthenticators(
       .go({
          attributes: ['description', 'credentialId', 'aaguid', 'createdAt'],
          consistent: consistent,
+         pages: 'all',
       });
 
    if (!auths || auths.data.length === 0) {
@@ -1503,23 +1529,11 @@ async function postRecover(httpDetails: HttpDetails): Promise<Response> {
       throw new ParamError(`user account ${verifiedUser.userId} invalid user credential`);
    }
 
-   const auths = await Authenticators.query
-      .byUserId({
-         userId: verifiedUser.userId,
-      })
-      .go({ attributes: ['userId', 'credentialId'] });
-
    // Note that if the creation of a new passkey is aborted or cancels, the account
    // will be left with no passkeys. Recovery can be run again to create a new passkey.
    // Could alternatively address this by marking passkey for deletion and cleaning
    // up after, but then recovery may be less certain in a security incident.
-   if (auths && auths.data.length !== 0) {
-      const deleted = await Authenticators.delete(auths.data).go();
-      // log but continue... 'all_old' not needed because response is different
-      if (!deleted) {
-         console.error('authenticator delete failed');
-      }
-   }
+   await deleteAllAuthenticators(verifiedUser);
 
    const rcount = verifiedUser.recovered ? verifiedUser.recovered + 1 : 1;
 
@@ -1569,6 +1583,7 @@ async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
 
    // Atomically consume the challenge, then check its validity
    const consumed = await Challenges.delete({
+      purpose: 'nonce',
       challenge: challenge,
    }).go({ response: 'all_old' });
 
@@ -1578,7 +1593,7 @@ async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
    if (Date.now() / 1000 > consumed.data.expiresAt) {
       throw new AuthError();
    }
-   if (consumed.data.purpose !== 'nonce' || consumed.data.userId !== userId) {
+   if (consumed.data.userId !== userId) {
       throw new AuthError();
    }
 
@@ -1598,23 +1613,11 @@ async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
       throw new ParamError(`user account ${verifiedUser.userId} invalid recovery proof`);
    }
 
-   const auths = await Authenticators.query
-      .byUserId({
-         userId: verifiedUser.userId,
-      })
-      .go({ attributes: ['userId', 'credentialId'] });
-
    // Note that if the creation of a new passkey is aborted or cancels, the account
    // will be left with no passkeys. Recovery can be run again to create a new passkey.
    // Could alternatively address this by marking passkey for deletion and cleaning
    // up after, but then recovery may be less certain in a security incident.
-   if (auths && auths.data.length !== 0) {
-      const deleted = await Authenticators.delete(auths.data).go();
-      // log but continue... 'all_old' not needed because response is different
-      if (!deleted) {
-         console.error('authenticator delete failed');
-      }
-   }
+   await deleteAllAuthenticators(verifiedUser);
 
    const rcount = verifiedUser.recovered ? verifiedUser.recovered + 1 : 1;
 
@@ -1860,6 +1863,8 @@ function makeResponse(content: string, status: number, cookie?: string): APIGate
       statusCode: status,
       headers: {
          'Content-Type': 'application/json',
+         'Cache-Control': 'no-store',
+         Pragma: 'no-cache',
       } as { [key: string]: string },
       body: content,
    };

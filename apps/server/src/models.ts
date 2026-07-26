@@ -307,7 +307,7 @@ export const Challenges = new Entity(
             pk: {
                field: 'pk',
                cast: 'string',
-               composite: ['challenge'],
+               composite: ['purpose', 'challenge'],
                casing: 'none',
             },
          },

@@ -23,6 +23,7 @@ SOFTWARE. */
 import { FilterXSS } from 'xss';
 import { Buffer } from 'node:buffer';
 import * as crypto from 'node:crypto';
+import { USERCRED_ENC_MIN_BYTES, USERCRED_ENC_MAX_BYTES } from './consts';
 
 export class ParamError extends Error {}
 
@@ -62,6 +63,14 @@ export const validB64 = (base64: string | null | undefined): base64 is string =>
 
 export function isReservedTestUserName(userName: string): boolean {
    return userName.toLowerCase().startsWith('pwtesty_');
+}
+
+export function validUserCredEnc(userCredEnc: string | null | undefined): userCredEnc is string {
+   if (!validB64(userCredEnc)) {
+      return false;
+   }
+   const encLen = base64UrlDecode(userCredEnc)!.length;
+   return encLen >= USERCRED_ENC_MIN_BYTES && encLen <= USERCRED_ENC_MAX_BYTES;
 }
 
 export function base64UrlEncode(bytes: Uint8Array | undefined): string | undefined {
