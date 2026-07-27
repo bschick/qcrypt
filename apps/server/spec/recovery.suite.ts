@@ -26,20 +26,25 @@ import * as cc from '@qcrypt/crypto/consts';
 import {
    getRecoveryPubKey,
    createRecoveryProof,
+   createRecoveryProofBackwardCompat,
    recoverySecret,
    RECOVERYID_BYTES,
    CHALLENGE_BYTES,
    type RequestTypes,
+   type ResponseTypes,
 } from '@qcrypt/api';
 import {
    postJson,
    putJson,
+   getJson,
    expectPasskeyDeleted,
    registerTestUser,
    setSessionUserCred,
    createCredential,
    prfEncrypt,
    prfDecrypt,
+   loginWithPasskey,
+   addPasskey,
    type TestUser,
 } from './common';
 
@@ -74,7 +79,7 @@ type RecoverySession = {
 async function recoverAccount(user: TestUser, opts: { keepSession?: boolean } = {}): Promise<RecoverySession> {
    const secret = user.recoverySecret;
    const challenge = await issueChallenge(user.userId);
-   const signature = bytesToBase64(createRecoveryProof(secret, user.userId, challenge));
+   const signature = bytesToBase64(createRecoveryProofBackwardCompat(secret, user.userId, challenge));
 
    const recoverRes = await postJson('/v1/recover2', { userId: user.userId, challenge, signature }, {}, '');
    expect(recoverRes.status).toBe(200);
@@ -111,7 +116,7 @@ async function recoverAccount(user: TestUser, opts: { keepSession?: boolean } = 
    if (user.prf) {
       expect(verifyRes.data.prf).toBe(true);
       expect(verifyRes.data.userCred).toBeUndefined();
-      expect(verifyRes.data.passkeyUserCredEnc).toBeUndefined();
+      expect(verifyRes.data.userCredEnc).toBeUndefined();
    } else {
       expect(verifyRes.data.userCred).toBe(user.userCred);
    }
@@ -122,6 +127,157 @@ async function recoverAccount(user: TestUser, opts: { keepSession?: boolean } = 
       csrf: verifyRes.data.csrf,
       credId: verifyRes.data.pkId,
    };
+
+   if (!opts.keepSession) {
+      setSessionUserCred(session.userCred, user.userId);
+      await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
+   }
+
+   return session;
+}
+
+// Signs the recover3 proof over a caller-chosen timestamp and nonce. opts let tests forge a
+// stale timestamp or reuse a nonce without reaching into the proof internals.
+function recover3Body(
+   user: TestUser,
+   opts: { secret?: Uint8Array; timestamp?: string; nonce?: string } = {},
+): RequestTypes.Recover3 {
+   const secret = opts.secret ?? user.recoverySecret;
+   const timestamp = opts.timestamp ?? String(Date.now());
+   const nonce = opts.nonce ?? bytesToBase64(getRandom(CHALLENGE_BYTES));
+   return {
+      userId: user.userId,
+      timestamp,
+      nonce,
+      signature: bytesToBase64(createRecoveryProof(secret, user.userId, timestamp, nonce)),
+   };
+}
+
+// A successful recover3 revokes whatever session the account held and issues a new one, so
+// rebind the caller to it or every later call with that account is unauthorized.
+async function postRecover3(user: TestUser, body: RequestTypes.Recover3 = recover3Body(user)): Promise<RecoverStart> {
+   const res = await postJson('/v1/recover3', body, {}, '');
+   if (res.status === 200) {
+      user.cookie = res.cookie;
+      user.csrf = res.data.csrf;
+   }
+   return res;
+}
+
+// Counts the account's passkeys using the mid-recovery session recover3 hands back.
+async function passkeyCount(userId: string, userCred: string, csrf: string, cookie: string): Promise<number> {
+   setSessionUserCred(userCred, userId);
+   const res = await getJson('/v1/user', { 'x-csrf-token': csrf }, cookie);
+   expect(res.status).toBe(200);
+   return res.data.authenticators.length;
+}
+
+type RecoverStart = {
+   status: number;
+   data: ResponseTypes.LoginUserInfo;
+   cookie: string;
+};
+
+// Spends the mid-recovery session on confirm, which deletes the old passkeys, then registers
+// the replacement that recovery promises.
+async function finishRecovery3(
+   user: TestUser,
+   startRes: RecoverStart,
+   recoveredUserCred: Uint8Array<ArrayBuffer>,
+): Promise<RecoverySession> {
+   setSessionUserCred(user.userCred, user.userId);
+   const confirmRes = await postJson(
+      '/v1/recover/confirm',
+      null,
+      { 'x-csrf-token': startRes.data.csrf },
+      startRes.cookie,
+   );
+   expect(confirmRes.status).toBe(200);
+   expect(confirmRes.data.challenge).toBeDefined();
+
+   // Recovery replaces the account's credential, so it reuses the real userHandle.
+   const createOptions = {
+      ...confirmRes.data,
+      user: { ...confirmRes.data.user, id: user.userId },
+      challenge: confirmRes.data.challenge,
+   };
+
+   let verifyBody: RequestTypes.RecoverVerify;
+   if (user.prf) {
+      const { attestation, prfOutput } = createCredential(user.emulator, createOptions, true);
+      const passkeyUserCredEnc = await prfEncrypt(recoveredUserCred, prfOutput, user.userId);
+      verifyBody = { ...attestation, userId: user.userId, challenge: confirmRes.data.challenge, passkeyUserCredEnc };
+   } else {
+      const { attestation } = createCredential(user.emulator, createOptions, false);
+      verifyBody = { ...attestation, userId: user.userId, challenge: confirmRes.data.challenge };
+   }
+
+   const verifyRes = await postJson('/v1/recover/verify', verifyBody, {}, '');
+   expect(verifyRes.status).toBe(200);
+   expect(verifyRes.data.verified).toBe(true);
+   expect(verifyRes.data.pkId).toBeDefined();
+   expect(verifyRes.data.csrf).toBeDefined();
+   if (user.prf) {
+      expect(verifyRes.data.userCred).toBeUndefined();
+   } else {
+      expect(verifyRes.data.userCred).toBe(user.userCred);
+   }
+
+   // Recovery replaced both the session and the passkey, so rebind the account to them.
+   user.cookie = verifyRes.cookie;
+   user.csrf = verifyRes.data.csrf;
+   user.credId = verifyRes.data.pkId;
+
+   return {
+      userCred: user.userCred,
+      cookie: verifyRes.cookie,
+      csrf: verifyRes.data.csrf,
+      credId: verifyRes.data.pkId,
+   };
+}
+
+// Starts recovery and rebuilds userCred from what recover3 returns, asserting the account is
+// untouched at that point.
+async function startRecovery3(
+   user: TestUser,
+   existingPasskeys: number = 1,
+): Promise<{ startRes: RecoverStart; recoveredUserCred: Uint8Array<ArrayBuffer> }> {
+   const startRes = await postRecover3(user);
+   expect(startRes.status).toBe(200);
+   expect(startRes.data.userId).toBe(user.userId);
+   expect(startRes.data.pkId).toBeDefined();
+   expect(startRes.data.csrf).toBeDefined();
+   expect(startRes.cookie).toBeTruthy();
+
+   let recoveredUserCred: Uint8Array<ArrayBuffer>;
+   if (user.prf) {
+      expect(startRes.data.prf).toBe(true);
+      expect(startRes.data.userCredEnc).toBeDefined();
+      expect(startRes.data.userCred).toBeUndefined();
+      recoveredUserCred = await prfDecrypt(startRes.data.userCredEnc!, user.recoverySecret.slice(0), user.userId);
+   } else {
+      expect(startRes.data.prf).toBe(false);
+      expect(startRes.data.userCredEnc).toBeUndefined();
+      recoveredUserCred = base64ToBytes(startRes.data.userCred!);
+   }
+   expect(bytesToBase64(recoveredUserCred)).toBe(user.userCred);
+
+   // Nothing is destroyed until confirm, so the account still has every passkey it started with.
+   expect(await passkeyCount(user.userId, user.userCred, startRes.data.csrf!, startRes.cookie)).toBe(
+      existingPasskeys,
+   );
+
+   return { startRes, recoveredUserCred };
+}
+
+// Drives the whole two-phase recovery and returns the resulting session; unless keepSession is
+// set the new passkey is deleted before returning.
+async function recoverAccount3(
+   user: TestUser,
+   opts: { keepSession?: boolean; existingPasskeys?: number } = {},
+): Promise<RecoverySession> {
+   const { startRes, recoveredUserCred } = await startRecovery3(user, opts.existingPasskeys);
+   const session = await finishRecovery3(user, startRes, recoveredUserCred);
 
    if (!opts.keepSession) {
       setSessionUserCred(session.userCred, user.userId);
@@ -177,14 +333,16 @@ export function recoverySuite(prf: boolean): void {
       it('rejects a wrong signature', async () => {
          const challenge = await issueChallenge(user.userId);
          const wrongSecret = recoverySecret(getRandom(RECOVERYID_BYTES), user.userId);
-         const signature = bytesToBase64(createRecoveryProof(wrongSecret, user.userId, challenge));
+         const signature = bytesToBase64(createRecoveryProofBackwardCompat(wrongSecret, user.userId, challenge));
          const res = await postJson('/v1/recover2', { userId: user.userId, challenge, signature }, {}, '');
          expect(res.status).toBe(401);
       });
 
       it('rejects a never-issued challenge', async () => {
          const challenge = bytesToBase64(getRandom(CHALLENGE_BYTES));
-         const signature = bytesToBase64(createRecoveryProof(user.recoverySecret, user.userId, challenge));
+         const signature = bytesToBase64(
+            createRecoveryProofBackwardCompat(user.recoverySecret, user.userId, challenge),
+         );
          const res = await postJson('/v1/recover2', { userId: user.userId, challenge, signature }, {}, '');
          expect(res.status).toBe(401);
       });
@@ -192,7 +350,7 @@ export function recoverySuite(prf: boolean): void {
       it('rejects a tampered challenge', async () => {
          const challenge = await issueChallenge(user.userId);
          const tampered = (challenge[0] === 'A' ? 'B' : 'A') + challenge.slice(1);
-         const signature = bytesToBase64(createRecoveryProof(user.recoverySecret, user.userId, tampered));
+         const signature = bytesToBase64(createRecoveryProofBackwardCompat(user.recoverySecret, user.userId, tampered));
          const res = await postJson('/v1/recover2', { userId: user.userId, challenge: tampered, signature }, {}, '');
          expect(res.status).toBe(401);
       });
@@ -200,7 +358,9 @@ export function recoverySuite(prf: boolean): void {
       it('rejects a challenge bound to a different userId', async () => {
          const otherUserId = bytesToBase64(getRandom(cc.USERID_BYTES));
          const challenge = await issueChallenge(otherUserId);
-         const signature = bytesToBase64(createRecoveryProof(user.recoverySecret, user.userId, challenge));
+         const signature = bytesToBase64(
+            createRecoveryProofBackwardCompat(user.recoverySecret, user.userId, challenge),
+         );
          const res = await postJson('/v1/recover2', { userId: user.userId, challenge, signature }, {}, '');
          expect(res.status).toBe(401);
       });
@@ -220,7 +380,7 @@ export function recoverySuite(prf: boolean): void {
             {
                userId: user.userId,
                challenge,
-               signature: bytesToBase64(createRecoveryProof(wrongSecret, user.userId, challenge)),
+               signature: bytesToBase64(createRecoveryProofBackwardCompat(wrongSecret, user.userId, challenge)),
             },
             {},
             '',
@@ -233,7 +393,7 @@ export function recoverySuite(prf: boolean): void {
             {
                userId: user.userId,
                challenge,
-               signature: bytesToBase64(createRecoveryProof(user.recoverySecret, user.userId, challenge)),
+               signature: bytesToBase64(createRecoveryProofBackwardCompat(user.recoverySecret, user.userId, challenge)),
             },
             {},
             '',
@@ -247,7 +407,9 @@ export function recoverySuite(prf: boolean): void {
          const authOpts = await postJson('/v1/auth/options', { userId: user.userId }, {}, '');
          expect(authOpts.status).toBe(200);
          const challenge = authOpts.data.challenge;
-         const signature = bytesToBase64(createRecoveryProof(user.recoverySecret, user.userId, challenge));
+         const signature = bytesToBase64(
+            createRecoveryProofBackwardCompat(user.recoverySecret, user.userId, challenge),
+         );
          const res = await postJson('/v1/recover2', { userId: user.userId, challenge, signature }, {}, '');
          expect(res.status).toBe(401);
       });
@@ -261,9 +423,13 @@ export function recoverySuite(prf: boolean): void {
       });
 
       it('updates the recovery public key with a new key', async () => {
-         const body = await recoveryKeyBody(user, recoverySecret(getRandom(RECOVERYID_BYTES), user.userId));
+         const newSecret = recoverySecret(getRandom(RECOVERYID_BYTES), user.userId);
+         const body = await recoveryKeyBody(user, newSecret);
          const res = await putJson('/v1/recover2/key', body, { 'x-csrf-token': user.csrf }, user.cookie);
          expect(res.status).toBe(200);
+
+         // Later tests sign with this secret, so it has to track what the server now stores
+         user.recoverySecret = newSecret;
       });
 
       it('rejects a recovery public key of the wrong length', async () => {
@@ -320,13 +486,203 @@ export function recoverySuite(prf: boolean): void {
          // The original key no longer recovers the account.
          const challenge = await issueChallenge(recoverUser.userId);
          const signature = bytesToBase64(
-            createRecoveryProof(recoverUser.recoverySecret, recoverUser.userId, challenge),
+            createRecoveryProofBackwardCompat(recoverUser.recoverySecret, recoverUser.userId, challenge),
          );
          const staleRes = await postJson('/v1/recover2', { userId: recoverUser.userId, challenge, signature }, {}, '');
          expect(staleRes.status).toBe(401);
 
          // The replacement key recovers it.
          await recoverAccount({ ...recoverUser, recoverySecret: newSecret });
+      });
+
+      it('recover3 account recovery succeeds', async () => {
+         const recoverUser = await registerTestUser(`PWTesty_r3ok${tag}_${Date.now()}`, prf);
+         await recoverAccount3(recoverUser);
+      });
+
+      // The point of splitting recovery in two: proving the recovery secret alone must not
+      // cost the user their passkeys, so an account that never confirms is left intact.
+      it('recover3 leaves passkeys in place until confirm', async () => {
+         const recoverUser = await registerTestUser(`PWTesty_r3ka${tag}_${Date.now()}`, prf);
+
+         const startRes = await postRecover3(recoverUser);
+         expect(startRes.status).toBe(200);
+
+         // Abandon the recovery here, then sign in with the original passkey to show it survived.
+         const session = await loginWithPasskey(recoverUser);
+         setSessionUserCred(recoverUser.userCred, recoverUser.userId);
+         const userRes = await getJson('/v1/user', { 'x-csrf-token': session.csrf }, session.cookie);
+         expect(userRes.status).toBe(200);
+         expect(userRes.data.authenticators.length).toBe(1);
+         expect(userRes.data.authenticators[0].credentialId).toBe(recoverUser.credId);
+
+         await expectPasskeyDeleted(recoverUser.credId, session.csrf, session.cookie);
+      });
+
+      it('confirm recover3 deletes every passkey', async () => {
+         const recoverUser = await registerTestUser(`PWTesty_r3del${tag}_${Date.now()}`, prf);
+
+         // Recovery must clear the whole list, so give the account more than one to clear.
+         const originalCredId = recoverUser.credId;
+         const addedCredId = await addPasskey(recoverUser, recoverUser.csrf, recoverUser.cookie);
+         expect(
+            await passkeyCount(recoverUser.userId, recoverUser.userCred, recoverUser.csrf, recoverUser.cookie),
+         ).toBe(2);
+
+         const session = await recoverAccount3(recoverUser, { keepSession: true, existingPasskeys: 2 });
+
+         // Both originals are gone and only the replacement remains.
+         setSessionUserCred(session.userCred, recoverUser.userId);
+         const userRes = await getJson('/v1/user', { 'x-csrf-token': session.csrf }, session.cookie);
+         expect(userRes.status).toBe(200);
+         expect(userRes.data.authenticators.length).toBe(1);
+         expect(userRes.data.authenticators[0].credentialId).toBe(session.credId);
+         expect(session.credId).not.toBe(originalCredId);
+         expect(session.credId).not.toBe(addedCredId);
+
+         await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
+      });
+
+      it('rejects a recover3 proof signed with the wrong secret', async () => {
+         const good = await postRecover3(user);
+         expect(good.status).toBe(200);
+
+         const wrongSecret = recoverySecret(getRandom(RECOVERYID_BYTES), user.userId);
+         const res = await postJson('/v1/recover3', recover3Body(user, { secret: wrongSecret }), {}, '');
+         expect(res.status).toBe(401);
+      });
+
+      it('rejects a replayed recover3 nonce', async () => {
+         const body = recover3Body(user);
+         const good = await postRecover3(user, body);
+         expect(good.status).toBe(200);
+
+         const res = await postJson('/v1/recover3', body, {}, '');
+         expect(res.status).toBe(401);
+      });
+
+      it('rejects a recover3 timestamp outside the skew window', async () => {
+         const good = await postRecover3(user);
+         expect(good.status).toBe(200);
+
+         const stale = String(Date.now() - 10 * 60 * 1000);
+         const res = await postJson('/v1/recover3', recover3Body(user, { timestamp: stale }), {}, '');
+         expect(res.status).toBe(401);
+      });
+
+      it('rejects a recover3 nonce of the wrong length', async () => {
+         const good = await postRecover3(user);
+         expect(good.status).toBe(200);
+
+         const shortNonce = bytesToBase64(getRandom(CHALLENGE_BYTES - 1));
+         const res = await postJson('/v1/recover3', { ...recover3Body(user), nonce: shortNonce }, {}, '');
+         expect(res.status).toBe(401);
+      });
+
+      it('rejects a recover3 proof signed by another account', async () => {
+         const good = await postRecover3(user);
+         expect(good.status).toBe(200);
+
+         const other = await registerTestUser(`PWTesty_r3ot${tag}_${Date.now()}`, prf);
+         try {
+            // A real recovery key, just not this account's
+            const res = await postJson('/v1/recover3', recover3Body(user, { secret: other.recoverySecret }), {}, '');
+            expect(res.status).toBe(401);
+         } finally {
+            setSessionUserCred(other.userCred, other.userId);
+            await expectPasskeyDeleted(other.credId, other.csrf, other.cookie);
+         }
+      });
+
+      it('rejects a recover3 proof bound to a different userId', async () => {
+         const good = await postRecover3(user);
+         expect(good.status).toBe(200);
+
+         const otherUserId = bytesToBase64(getRandom(cc.USERID_BYTES));
+         const res = await postJson('/v1/recover3', { ...recover3Body(user), userId: otherUserId }, {}, '');
+         expect(res.status).toBe(401);
+      });
+
+      it('rejects confirm without a session', async () => {
+         const startRes = await postRecover3(user);
+         expect(startRes.status).toBe(200);
+
+         const res = await postJson('/v1/recover/confirm', null, {}, '');
+         expect(res.status).toBe(401);
+
+         expect(await passkeyCount(user.userId, user.userCred, user.csrf, user.cookie)).toBe(1);
+      });
+
+      it('rejects confirm carrying a session but no userCred proof', async () => {
+         const recoverUser = await registerTestUser(`PWTesty_r3np${tag}_${Date.now()}`, prf);
+
+         const startRes = await postRecover3(recoverUser);
+         expect(startRes.status).toBe(200);
+
+         // An unset signer omits x-proof, leaving only the cookie and csrf token.
+         setSessionUserCred(undefined);
+         const res = await postJson(
+            '/v1/recover/confirm',
+            null,
+            { 'x-csrf-token': startRes.data.csrf },
+            startRes.cookie,
+         );
+         expect(res.status).toBe(401);
+
+         setSessionUserCred(recoverUser.userCred, recoverUser.userId);
+         await expectPasskeyDeleted(recoverUser.credId, recoverUser.csrf, recoverUser.cookie);
+      });
+
+      // A caller that cannot rebuild userCred signs with the wrong key, and the account must
+      // come through that untouched.
+      it('rejects confirm proved with the wrong userCred and keeps the passkeys', async () => {
+         const recoverUser = await registerTestUser(`PWTesty_r3wc${tag}_${Date.now()}`, prf);
+
+         const startRes = await postRecover3(recoverUser);
+         expect(startRes.status).toBe(200);
+
+         const wrongUserCred = bytesToBase64(getRandom(cc.USERCRED_BYTES));
+         setSessionUserCred(wrongUserCred, recoverUser.userId);
+         const res = await postJson(
+            '/v1/recover/confirm',
+            null,
+            { 'x-csrf-token': startRes.data.csrf },
+            startRes.cookie,
+         );
+         expect(res.status).toBe(401);
+
+         // Confirm the original credential still works
+         expect(
+            await passkeyCount(recoverUser.userId, recoverUser.userCred, recoverUser.csrf, recoverUser.cookie),
+         ).toBe(1);
+
+         await expectPasskeyDeleted(recoverUser.credId, recoverUser.csrf, recoverUser.cookie);
+      });
+
+      it('recover3 invalidates previous session', async () => {
+         const recoverUser = await registerTestUser(`PWTesty_r3rev${tag}_${Date.now()}`, prf);
+
+         // Recovery rebinds the account to its own session, so hold on to the original.
+         const priorCsrf = recoverUser.csrf;
+         const priorCookie = recoverUser.cookie;
+
+         setSessionUserCred(recoverUser.userCred, recoverUser.userId);
+         const before = await getJson('/v1/user', { 'x-csrf-token': priorCsrf }, priorCookie);
+         expect(before.status).toBe(200);
+
+         const { startRes, recoveredUserCred } = await startRecovery3(recoverUser);
+
+         const after = await getJson('/v1/user', { 'x-csrf-token': priorCsrf }, priorCookie);
+         expect(after.status).toBe(401);
+
+         const session = await finishRecovery3(recoverUser, startRes, recoveredUserCred);
+
+         // Completing recovery retires the mid-recovery session along with the pre-recovery one.
+         const spent = await getJson('/v1/user', { 'x-csrf-token': startRes.data.csrf }, startRes.cookie);
+         expect(spent.status).toBe(401);
+
+         setSessionUserCred(session.userCred, recoverUser.userId);
+         await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
       });
 
       it('rejects a previous recovery id after the key is replaced', async () => {

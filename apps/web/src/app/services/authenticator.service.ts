@@ -552,10 +552,10 @@ export class AuthenticatorService {
    ): Promise<Uint8Array<ArrayBuffer>> {
       try {
          if (serverLogin.prf) {
-            if (!prfKey || !serverLogin.passkeyUserCredEnc) {
+            if (!prfKey || !serverLogin.userCredEnc) {
                throw new Error('missing PRF user credential');
             }
-            return await prfDecrypt(serverLogin.passkeyUserCredEnc, prfKey, serverLogin.userId!);
+            return await prfDecrypt(serverLogin.userCredEnc, prfKey, serverLogin.userId!);
          } else if (!serverLogin.userCred) {
             throw new Error('missing non-PRF user credential');
          }
@@ -1114,33 +1114,48 @@ export class AuthenticatorService {
       return [recoveryId, userId];
    }
 
-   async recover2(recoveryWords: string): Promise<VerifiedUserInfo> {
+   async recover3(recoveryWords: string): Promise<VerifiedUserInfo> {
       const [, userId] = this.getRecoveryValues(recoveryWords);
       const secret = mnemonicToEntropy(recoveryWords, wordlist);
       await this._pendingLogout;
 
       try {
-         const { challenge } = await this._doFetch<{ challenge: string }>({
+         const timestamp = String(Date.now());
+         const nonce = bytesToBase64(getRandom(CHALLENGE_BYTES));
+         const body: RequestTypes.Recover3 = {
+            userId: userId,
+            timestamp: timestamp,
+            nonce: nonce,
+            signature: bytesToBase64(createRecoveryProof(secret, userId, timestamp, nonce)),
+         };
+
+         const startResp = await this._doFetch<LoginUserInfo>({
             method: 'POST',
-            resource: 'recover2/challenge',
-            bodyJSON: JSON.stringify({ userId: userId }),
+            resource: 'recover3',
+            bodyJSON: JSON.stringify(body),
          });
-         if (!challenge || base64ToBytes(challenge).byteLength !== CHALLENGE_BYTES) {
-            throw new Error('invalid challenge');
+
+         let userCred: Uint8Array<ArrayBuffer>;
+         if (startResp.prf) {
+            if (!startResp.userCredEnc) {
+               throw new Error('missing recovery user credential');
+            }
+            userCred = await prfDecrypt(startResp.userCredEnc, secret.slice(0), userId);
+         } else {
+            if (!startResp.userCred) {
+               throw new Error('missing user credential');
+            }
+            userCred = base64ToBytes(startResp.userCred);
          }
 
-         const signature = createRecoveryProof(secret, userId, challenge);
-         const recoverResp = await this._doFetch<RecoverInfo>({
+         await this._loginUser(startResp, userCred.slice(0));
+
+         const confirmResp = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
             method: 'POST',
-            resource: 'recover2',
-            bodyJSON: JSON.stringify({
-               userId: userId,
-               challenge: challenge,
-               signature: bytesToBase64(signature),
-            }),
+            resource: 'recover/confirm',
          });
 
-         return await this._finishRecovery(recoverResp, userId, secret);
+         return await this._finishRecovery(confirmResp, userId, !!startResp.prf, userCred);
       } finally {
          secret.fill(0);
       }
@@ -1158,33 +1173,33 @@ export class AuthenticatorService {
          bodyJSON: JSON.stringify({ userId: userId, userCred: userCred }),
       });
 
-      return await this._finishRecovery(recoverResp, userId, null);
+      return await this._finishRecovery(recoverResp, userId, !!recoverResp.prf, undefined);
    }
 
    // Re-provisions the recovered account's "first" passkey
+   // Takes ownership of userCred, which must not be read after this returns
    private async _finishRecovery(
-      recoverResp: RecoverInfo,
+      regOptions: PublicKeyCredentialCreationOptionsJSON,
       userId: string,
-      secret: Uint8Array<ArrayBuffer> | null,
+      prf: boolean,
+      userCred: Uint8Array<ArrayBuffer> | undefined,
    ): Promise<VerifiedUserInfo> {
-      const { regResponse, prfKey } = await this._startRegistration(recoverResp, !!recoverResp.prf);
-      let userCred: Uint8Array<ArrayBuffer> | null = null;
+      const { regResponse, prfKey } = await this._startRegistration(regOptions, prf);
 
       try {
          const body: RequestTypes.RecoverVerify = {
             ...regResponse,
             userId: userId,
-            challenge: recoverResp.challenge,
+            challenge: regOptions.challenge,
          };
 
-         if (recoverResp.prf) {
-            if (!recoverResp.userCredEnc || !secret) {
+         if (prf) {
+            if (!userCred) {
                throw new Error('missing recovery user credential');
             }
             if (!prfKey) {
                throw new PrfUnsupportedError();
             }
-            userCred = await prfDecrypt(recoverResp.userCredEnc, secret.slice(0), userId);
             body.passkeyUserCredEnc = await prfEncrypt(userCred, prfKey, userId);
          }
 

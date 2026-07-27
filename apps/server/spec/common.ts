@@ -342,7 +342,7 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
       expect(verifyRes.status).toBe(200);
       expect(verifyRes.data.verified).toBe(true);
       expect(verifyRes.data.prf).toBe(true);
-      expect(verifyRes.data.passkeyUserCredEnc).toBeUndefined();
+      expect(verifyRes.data.userCredEnc).toBeUndefined();
       expect(verifyRes.data.userCred).toBeUndefined();
       expect(verifyRes.data.csrf).toBeDefined();
       expect(verifyRes.data.pkId).toBeDefined();
@@ -415,6 +415,26 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
 // intact; it stays invisible to the server, which binds the new credential to the session's account
 // (a registration response carries no userHandle). For a PRF account it also returns the new
 // credential's ciphertext of the account userCred; no-PRF returns only the attestation.
+// Signs in with an account's existing passkey. auth/verify resolves the credential through an
+// eventually consistent index, so a login soon after registration can miss; each retry needs a
+// fresh challenge because the failed attempt already spent the previous one.
+export async function loginWithPasskey(user: TestUser): Promise<{ cookie: string; csrf: string }> {
+   for (let attempt = 1; ; attempt++) {
+      const optsRes = await postJson('/v1/auth/options', { userId: user.userId }, {}, '');
+      expect(optsRes.status).toBe(200);
+
+      const assertion = user.emulator.getJSON(RP_ORIGIN, { ...optsRes.data, challenge: optsRes.data.challenge });
+      const verifyRes = await postJson('/v1/auth/verify', { ...assertion, challenge: optsRes.data.challenge }, {}, '');
+
+      if (verifyRes.status === 200 || attempt >= 3) {
+         expect(verifyRes.status).toBe(200);
+         expect(verifyRes.data.verified).toBe(true);
+         return { cookie: verifyRes.cookie, csrf: verifyRes.data.csrf };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+   }
+}
+
 export async function registerNewCredential(
    user: TestUser,
    optionsData: PublicKeyCredentialCreationOptionsJSON,
@@ -436,6 +456,25 @@ export async function registerNewCredential(
       result = { attestation };
    }
    return result;
+}
+
+// Adds a passkey to an account holding a live session, returning the new credential id.
+export async function addPasskey(user: TestUser, csrf: string, cookie: string): Promise<string> {
+   setSessionUserCred(user.userCred, user.userId);
+   const optsRes = await getJson('/v1/passkeys/options', { 'x-csrf-token': csrf }, cookie);
+   expect(optsRes.status).toBe(200);
+
+   const { attestation, passkeyUserCredEnc } = await registerNewCredential(user, optsRes.data);
+   const body: Record<string, any> = { ...attestation, challenge: optsRes.data.challenge };
+   if (passkeyUserCredEnc) {
+      body.passkeyUserCredEnc = passkeyUserCredEnc;
+   }
+
+   const verifyRes = await postJson('/v1/passkeys/verify', body, { 'x-csrf-token': csrf }, cookie);
+   expect(verifyRes.status).toBe(200);
+   expect(verifyRes.data.verified).toBe(true);
+
+   return attestation.id;
 }
 
 // Run reg/options and build a valid PRF reg/verify body, returning it with the material behind it:

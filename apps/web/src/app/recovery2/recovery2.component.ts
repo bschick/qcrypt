@@ -132,7 +132,7 @@ export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit {
                const proceed = await this._checkProceed(cleanedWords);
                if (proceed) {
                   this.showProgress = true;
-                  await this.authSvc.recover2(cleanedWords);
+                  await this.authSvc.recover3(cleanedWords);
                   this.router.navigateByUrl('/');
                }
             }

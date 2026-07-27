@@ -89,6 +89,7 @@ import {
    getUserCredPubKey,
    verifyUserCredProof,
    verifyRecoveryProof,
+   verifyRecoveryProofBackwardCompat,
    PROOF_PUBKEY_BYTES,
    PROOF_SIG_BYTES,
    type RequestTypes,
@@ -230,16 +231,11 @@ async function setupJwtMaterial(): Promise<Uint8Array> {
 
 async function recordEvent(eventName: EventNames, userId: string, credentialId: string | undefined = undefined) {
    try {
-      const event = await AuthEvents.create({
+      await AuthEvents.create({
          event: eventName,
          userId: userId,
          credentialId: credentialId,
       }).go();
-
-      // record, but don't fail
-      if (!event?.data) {
-         console.error('event not created');
-      }
    } catch (error) {
       // log but eat the error
       console.error(error);
@@ -251,7 +247,7 @@ async function getSession(_httpDetails: HttpDetails, verifiedUser?: VerifiedUser
       throw new AuthError();
    }
 
-   const responseContent = await makeLoginUserInfoResponse(verifiedUser, false);
+   const responseContent = await makeLoginUserInfoResponse(verifiedUser, 'none');
 
    // Return passed in csrf but don't start new session so that expiration is not reset
    return {
@@ -418,7 +414,7 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
    verifiedUser.lastCredentialId = authenticator.credentialId;
    verifiedUser.authCount += 1;
 
-   responseContent = await makeLoginUserInfoResponse(verifiedUser, true);
+   responseContent = await makeLoginUserInfoResponse(verifiedUser, 'passkey');
 
    // Let this happen async
    recordEvent(EventNames.AuthVerify, unverifiedUser.userId, authenticator.credentialId);
@@ -447,7 +443,7 @@ async function postPasskeyVerify(httpDetails: HttpDetails, verifiedUser?: Verifi
 
    // force consistent read to capture recent create authenticator
    const authenticators = await loadAuthenticators(verifiedUser, true);
-   const responseContent = await makeLoginUserInfoResponse(verifiedUser, false, authenticators);
+   const responseContent = await makeLoginUserInfoResponse(verifiedUser, 'none', authenticators);
 
    // Let this happen async
    recordEvent(EventNames.RegVerify, verifiedUser.userId, auth.credentialId);
@@ -551,15 +547,11 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
       throw new Error('could not allocate invitableId');
    }
 
-   const invitable = await Invitables.create({
+   await Invitables.create({
       userId: unverifiedUser.userId,
       invitableId: invId,
       description: unverifiedUser.userName,
    }).go();
-
-   if (!invitable?.data) {
-      throw new Error('invitable not created or found');
-   }
 
    // Very important that we remove the expiresAt attribute so that the
    // record is not automatically cleaned up by dynamoDB. Note that userCredEnc
@@ -594,7 +586,7 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
 
    // force consistent read to capture recent create
    const authenticators = await loadAuthenticators(verifiedUser, true);
-   const responseContent = await makeLoginUserInfoResponse(verifiedUser, !hasPrf, authenticators);
+   const responseContent = await makeLoginUserInfoResponse(verifiedUser, hasPrf ? 'none' : 'passkey', authenticators);
 
    // Let this happen async
    recordEvent(EventNames.RegVerify, verifiedUser.userId, auth.credentialId);
@@ -643,7 +635,11 @@ async function postRecoverVerify(httpDetails: HttpDetails): Promise<Response> {
 
    // force consistent read to capture recent create
    const authenticators = await loadAuthenticators(verifiedUser, true);
-   const responseContent = await makeLoginUserInfoResponse(verifiedUser, !verifiedUser.prf, authenticators);
+   const responseContent = await makeLoginUserInfoResponse(
+      verifiedUser,
+      verifiedUser.prf ? 'none' : 'passkey',
+      authenticators,
+   );
 
    // Let this happen async
    recordEvent(EventNames.RegVerify, verifiedUser.userId, auth.credentialId);
@@ -747,10 +743,6 @@ async function _createAuthenticator(
       aaguid: aaguid,
       attestationObject: base64UrlEncode(attestationObject),
    }).go();
-
-   if (!auth?.data) {
-      throw new ParamError('credentail creation failed');
-   }
 
    return auth.data;
 }
@@ -941,10 +933,6 @@ async function postRegOptions(httpDetails: HttpDetails): Promise<Response> {
       userCredEnc: undefined,
    }).go();
 
-   if (!user?.data) {
-      throw new ParamError('user not created or found');
-   }
-
    return registrationOptions(rpID, rpOrigin, user.data, 'reg');
 }
 
@@ -1010,29 +998,33 @@ async function registrationOptions(
 
 async function makeLoginUserInfoResponse(
    verifiedUser: VerifiedUserItem,
-   includeUserCred: boolean,
+   includeUserCred: 'none' | 'passkey' | 'recover',
    auths?: AuthenticatorInfo[],
 ): Promise<LoginUserInfo> {
    const userInfo = await makeUserInfoResponse(verifiedUser, auths);
 
    try {
       let userCred: string | undefined;
-      let passkeyUserCredEnc: string | undefined;
+      let userCredEnc: string | undefined;
 
-      if (includeUserCred) {
-         // PRF accounts return the per-passkey userCred ciphertext
-         // Non-PRF returns the KMS-decrypted userCred plaintext
+      if (includeUserCred !== 'none') {
          if (verifiedUser.prf) {
-            const auth = await Authenticators.get({
-               userId: verifiedUser.userId,
-               credentialId: verifiedUser.lastCredentialId!,
-            }).go();
+            if (includeUserCred === 'passkey') {
+               const auth = await Authenticators.get({
+                  userId: verifiedUser.userId,
+                  credentialId: verifiedUser.lastCredentialId!,
+               }).go();
 
-            passkeyUserCredEnc = auth.data?.userCredEnc;
-            if (!passkeyUserCredEnc) {
-               throw new Error('missing passkey user credential');
+               userCredEnc = auth.data?.userCredEnc;
+            } else {
+               userCredEnc = verifiedUser.userCredEnc;
+            }
+
+            if (!userCredEnc) {
+               throw new Error('missing encrypted user credential');
             }
          } else {
+            // 'passkey' and 'recover' are the same for no-PRF accounts
             const decrypted = await decryptField(
                verifiedUser.userCredEnc,
                { userId: verifiedUser.userId },
@@ -1046,7 +1038,7 @@ async function makeLoginUserInfoResponse(
       return {
          ...userInfo,
          userCred: userCred,
-         passkeyUserCredEnc: passkeyUserCredEnc,
+         userCredEnc: userCredEnc,
          pkId: verifiedUser.lastCredentialId,
       };
    } catch (error) {
@@ -1107,7 +1099,7 @@ async function patchPasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUse
 
    // This will raise if credId is invalid, catch to return a consistend error
    try {
-      const patched = await Authenticators.patch({
+      await Authenticators.patch({
          userId: verifiedUser.userId,
          credentialId: credId!,
       })
@@ -1115,10 +1107,6 @@ async function patchPasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUse
             description: description,
          })
          .go();
-
-      if (!patched?.data) {
-         throw new ParamError('description update failed');
-      }
    } catch (err) {
       if (err instanceof ElectroError) {
          console.error(err);
@@ -1157,17 +1145,13 @@ async function patchUser(httpDetails: HttpDetails, verifiedUser?: VerifiedUserIt
    }
 
    try {
-      const patched = await Users.patch({
+      await Users.patch({
          userId: verifiedUser.userId,
       })
          .set({
             userName: userName,
          })
          .go();
-
-      if (!patched?.data) {
-         throw new ParamError('username update failed');
-      }
    } catch (err) {
       if (err instanceof ElectroError) {
          console.error(err);
@@ -1186,7 +1170,7 @@ async function patchUser(httpDetails: HttpDetails, verifiedUser?: VerifiedUserIt
 }
 
 // Updates a user's recovery public key after they regenerate their recovery words.
-async function putRecover2Key(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
+async function putRecover3Key(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
    const { body } = httpDetails;
 
    if (!verifiedUser) {
@@ -1212,15 +1196,11 @@ async function putRecover2Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
       updates.userCredEnc = userCredEnc;
    }
 
-   const patched = await Users.patch({
+   await Users.patch({
       userId: verifiedUser.userId,
    })
       .set(updates)
       .go();
-
-   if (!patched?.data) {
-      throw new ParamError('recovery key update failed');
-   }
 
    // Let this happen async
    recordEvent(EventNames.PutRecover2Key, verifiedUser.userId, verifiedUser.lastCredentialId);
@@ -1457,6 +1437,8 @@ async function deletePasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUs
 // Issues a single-use challenge for proving recovery-secret ownership. No user
 // validation is done so that the endpoint does not reveal whether a userId
 // exists
+// BACKWARD COMPAT: until clients update to call postRecover3 directly. postRecover3 needs
+// no issued challenge, so removing this also removes an unauthenticated unmetered write
 async function postRecover2Challenge(httpDetails: HttpDetails): Promise<Response> {
    const { body } = httpDetails;
 
@@ -1478,7 +1460,7 @@ async function postRecover2Challenge(httpDetails: HttpDetails): Promise<Response
    const challenge = base64UrlEncode(challengeBytes)!;
    await Challenges.create({
       challenge: challenge,
-      purpose: 'nonce',
+      purpose: 'noncebackwardcompat',
       userId: userId,
    }).go();
 
@@ -1529,15 +1511,15 @@ async function postRecover(httpDetails: HttpDetails): Promise<Response> {
       throw new ParamError(`user account ${verifiedUser.userId} invalid user credential`);
    }
 
-   // Note that if the creation of a new passkey is aborted or cancels, the account
-   // will be left with no passkeys. Recovery can be run again to create a new passkey.
-   // Could alternatively address this by marking passkey for deletion and cleaning
-   // up after, but then recovery may be less certain in a security incident.
+   // Note that if the follow up creation of a new passkey is aborted or cancels, the
+   // account will be left with no passkeys. Recovery can be run again to create a new
+   // passkey. Could alternatively address this by marking passkey for deletion and
+   // cleaning up after, but then recovery may be less certain in a security incident.
    await deleteAllAuthenticators(verifiedUser);
 
    const rcount = verifiedUser.recovered ? verifiedUser.recovered + 1 : 1;
 
-   const patched = await Users.patch({
+   await Users.patch({
       userId: verifiedUser.userId,
    })
       .set({
@@ -1545,11 +1527,6 @@ async function postRecover(httpDetails: HttpDetails): Promise<Response> {
          lastCredentialId: '',
       })
       .go();
-
-   // log but continue...
-   if (!patched?.data) {
-      console.error('recovered count update failed');
-   }
 
    // Let this happen async
    recordEvent(EventNames.Recover, verifiedUser.userId);
@@ -1561,6 +1538,9 @@ async function postRecover(httpDetails: HttpDetails): Promise<Response> {
 // recover removes all existing passkeys, then initiates the
 // process or creating a new passkey. Caller is expected to followup
 // with a call to verifyRegistration
+// BACKWARD COMPAT: until clients update to call postRecover3 directly. This destroys
+// passkeys before the caller has shown it can rebuild userCred, which postRecover3 and
+// postRecoverConfirm split apart so nothing is destroyed until that is proven
 async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
    const { rpID, rpOrigin, body } = httpDetails;
 
@@ -1583,7 +1563,7 @@ async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
 
    // Atomically consume the challenge, then check its validity
    const consumed = await Challenges.delete({
-      purpose: 'nonce',
+      purpose: 'noncebackwardcompat',
       challenge: challenge,
    }).go({ response: 'all_old' });
 
@@ -1608,7 +1588,12 @@ async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
    try {
       // This call takes < 1ms to run on a warm server, so detecting timing
       // differences to guess valid userId is not practicle
-      verifyRecoveryProof(base64UrlDecode(verifiedUser.recoveryPubKey)!, userId, challenge, signatureBytes);
+      verifyRecoveryProofBackwardCompat(
+         base64UrlDecode(verifiedUser.recoveryPubKey)!,
+         userId,
+         challenge,
+         signatureBytes,
+      );
    } catch {
       throw new ParamError(`user account ${verifiedUser.userId} invalid recovery proof`);
    }
@@ -1621,7 +1606,7 @@ async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
 
    const rcount = verifiedUser.recovered ? verifiedUser.recovered + 1 : 1;
 
-   const patched = await Users.patch({
+   await Users.patch({
       userId: verifiedUser.userId,
    })
       .set({
@@ -1629,11 +1614,6 @@ async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
          lastCredentialId: '',
       })
       .go();
-
-   // log but continue...
-   if (!patched?.data) {
-      console.error('recovered count update failed');
-   }
 
    // Let this happen async
    recordEvent(EventNames.Recover, verifiedUser.userId);
@@ -1650,6 +1630,120 @@ async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
    }
 
    return regResponse;
+}
+
+// Calling client must prove ownership of the recovery secret with a signed nonce. We
+// then create a temporary login only valid mid-recovery that clients must use to
+// progress recovery by calling POST recover/confirm with that session
+async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
+   const { body } = httpDetails;
+   const recover3 = body as RequestTypes.Recover3;
+
+   const { userId, timestamp, nonce, signature } = recover3;
+   if (!validB64(userId) || !validB64(nonce) || !validB64(signature)) {
+      throw new ParamError('invalid recovery proof');
+   }
+   const nonceBytes = base64UrlDecode(nonce)!;
+   const signatureBytes = base64UrlDecode(signature)!;
+   if (nonceBytes.byteLength !== cc.CHALLENGE_BYTES || signatureBytes.byteLength !== PROOF_SIG_BYTES) {
+      throw new ParamError('invalid recovery proof');
+   }
+
+   const timestampMs = Number(timestamp);
+   if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > cc.PROOF_SKEW_MS) {
+      throw new ParamError('invalid recovery proof');
+   }
+
+   const unverifiedUser = await getUnverifiedUser(userId);
+   const verifiedUser = checkVerified(unverifiedUser, userId);
+
+   if (!verifiedUser.recoveryPubKey) {
+      throw new ParamError(`user account ${verifiedUser.userId} has no recovery key`);
+   }
+
+   try {
+      // This call takes < 1ms to run on a warm server, so detecting timing
+      // differences to guess valid userId is not practicle
+      verifyRecoveryProof(base64UrlDecode(verifiedUser.recoveryPubKey)!, userId, timestamp, nonce, signatureBytes);
+   } catch {
+      throw new ParamError(`user account ${verifiedUser.userId} invalid recovery proof`);
+   }
+
+   // Retaining the caller nonce to prevent replay during timestamp window
+   const stored = await Challenges.create({
+      challenge: nonce,
+      purpose: 'nonce',
+      userId: userId,
+   }).go({ returnOnConditionCheckFailure: true });
+
+   if (stored.rejected) {
+      throw new ParamError(`user account ${verifiedUser.userId} replayed recovery proof`);
+   }
+
+   const rand = new GenerateRandomCommand({
+      NumberOfBytes: cc.USERID_BYTES,
+   });
+   const result = await kmsClient.send(rand);
+   const recoverCredentialBytes = result.Plaintext;
+
+   if (!recoverCredentialBytes || recoverCredentialBytes.byteLength !== cc.USERID_BYTES) {
+      throw new Error('GenerateRandomCommand failure');
+   }
+
+   // Revokes any existing sessions
+   const recoverCredentialId = base64UrlEncode(recoverCredentialBytes)!;
+   await Users.patch({
+      userId: verifiedUser.userId,
+   })
+      .set({
+         lastCredentialId: recoverCredentialId,
+         authCount: verifiedUser.authCount + 1,
+      })
+      .go();
+
+   verifiedUser.lastCredentialId = recoverCredentialId;
+   verifiedUser.authCount += 1;
+
+   const content = await makeLoginUserInfoResponse(verifiedUser, 'recover');
+
+   return {
+      content: content,
+      startSession: verifiedUser,
+   };
+}
+
+// Completes the recovery process started by postRecover3. This is an authenticated call so
+// proof of userCred has already succeeded. At this point we know the caller has both the
+// correct recovery words and can decrypt its own userCredentials
+async function postRecoverConfirm(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
+   const { rpID, rpOrigin } = httpDetails;
+
+   if (!verifiedUser) {
+      throw new AuthError();
+   }
+
+   // Note that if the follow up creation of a new passkey is aborted or cancels, the
+   // account will be left with no passkeys. Recovery can be run again to create a new
+   // passkey. Could alternatively address this by marking passkey for deletion and
+   // cleaning up after, but then recovery may be less certain in a security incident.
+   await deleteAllAuthenticators(verifiedUser);
+
+   const rcount = verifiedUser.recovered ? verifiedUser.recovered + 1 : 1;
+
+   await Users.patch({
+      userId: verifiedUser.userId,
+   })
+      .set({
+         recovered: rcount,
+         lastCredentialId: '',
+      })
+      .go();
+
+   // Let this happen async
+   recordEvent(EventNames.Recover, verifiedUser.userId);
+
+   // caller should followup with call to POST /recovery/verify
+   return registrationOptions(rpID, rpOrigin, verifiedUser, 'recover');
 }
 
 // Currently origin is stored on each Authenticator, but it isn't used (other
@@ -1990,6 +2084,13 @@ const METHODMAP: MethodMap = {
       { name: 'postRegOptions', pattern: Patterns.regOptions, version: 1, authorize: false, handler: postRegOptions },
       { name: 'postRegVerify', pattern: Patterns.regVerify, version: 1, authorize: false, handler: postRegVerify },
       {
+         name: 'postRecoverConfirm',
+         pattern: Patterns.recoverConfirm,
+         version: 1,
+         authorize: true,
+         handler: postRecoverConfirm,
+      },
+      {
          name: 'postRecoverVerify',
          pattern: Patterns.recoverVerify,
          version: 1,
@@ -1997,6 +2098,8 @@ const METHODMAP: MethodMap = {
          handler: postRecoverVerify,
       },
       { name: 'postRecover', pattern: Patterns.recover, version: 1, authorize: false, handler: postRecover },
+      { name: 'postRecover3', pattern: Patterns.recover3, version: 1, authorize: false, handler: postRecover3 },
+      // BACKWARD COMPAT: until clients update to call postRecover3 directly
       {
          name: 'postRecover2Challenge',
          pattern: Patterns.recover2Challenge,
@@ -2031,7 +2134,9 @@ const METHODMAP: MethodMap = {
       },
    ],
    PUT: [
-      { name: 'putRecover2Key', pattern: Patterns.recover2Key, version: 1, authorize: true, handler: putRecover2Key },
+      { name: 'putRecover3Key', pattern: Patterns.recover3Key, version: 1, authorize: true, handler: putRecover3Key },
+      // BACKWARD COMPAT: until clients update to call recover3/key directly
+      { name: 'putRecover2Key', pattern: Patterns.recover2Key, version: 1, authorize: true, handler: putRecover3Key },
    ],
    PATCH: [
       { name: 'patchPasskey', pattern: Patterns.passkey, version: 1, authorize: true, handler: patchPasskey },

@@ -5,8 +5,8 @@ import {
    createUserCredProof,
    verifyUserCredProof,
    getRecoveryPubKey,
-   createRecoveryProof,
-   verifyRecoveryProof,
+   createRecoveryProofBackwardCompat,
+   verifyRecoveryProofBackwardCompat,
 } from './proof';
 
 // Public keys derived from the fixed secret bytes 0..31, pinned to catch any
@@ -112,8 +112,8 @@ describe('recovery proof', () => {
    it('sign challenge and verify with derived public key', () => {
       const secret = getRandom(32);
       const pubKey = getRecoveryPubKey(secret);
-      const signature = createRecoveryProof(secret, userId, challenge);
-      expect(verifyRecoveryProof(pubKey, userId, challenge, signature)).toBe(true);
+      const signature = createRecoveryProofBackwardCompat(secret, userId, challenge);
+      expect(verifyRecoveryProofBackwardCompat(pubKey, userId, challenge, signature)).toBe(true);
    });
 
    it('derives the pinned public key for a fixed secret', () => {
@@ -128,25 +128,25 @@ describe('recovery proof', () => {
    it('throw when signed fields differ', () => {
       const secret = getRandom(32);
       const pubKey = getRecoveryPubKey(secret);
-      const signature = createRecoveryProof(secret, userId, challenge);
+      const signature = createRecoveryProofBackwardCompat(secret, userId, challenge);
       const otherUserId = bytesToBase64(getRandom(16));
       const otherChallenge = bytesToBase64(getRandom(32));
-      expect(() => verifyRecoveryProof(pubKey, otherUserId, challenge, signature)).toThrow();
-      expect(() => verifyRecoveryProof(pubKey, userId, otherChallenge, signature)).toThrow();
+      expect(() => verifyRecoveryProofBackwardCompat(pubKey, otherUserId, challenge, signature)).toThrow();
+      expect(() => verifyRecoveryProofBackwardCompat(pubKey, userId, otherChallenge, signature)).toThrow();
    });
 
    it('throw when the wrong public key is used', () => {
-      const signature = createRecoveryProof(getRandom(32), userId, challenge);
+      const signature = createRecoveryProofBackwardCompat(getRandom(32), userId, challenge);
       const otherPubKey = getRecoveryPubKey(getRandom(32));
-      expect(() => verifyRecoveryProof(otherPubKey, userId, challenge, signature)).toThrow();
+      expect(() => verifyRecoveryProofBackwardCompat(otherPubKey, userId, challenge, signature)).toThrow();
    });
 
    it('throw when the signature is manipulated', () => {
       const secret = getRandom(32);
       const pubKey = getRecoveryPubKey(secret);
-      const signature = createRecoveryProof(secret, userId, challenge);
+      const signature = createRecoveryProofBackwardCompat(secret, userId, challenge);
       signature[0] ^= 0x01;
-      expect(() => verifyRecoveryProof(pubKey, userId, challenge, signature)).toThrow();
+      expect(() => verifyRecoveryProofBackwardCompat(pubKey, userId, challenge, signature)).toThrow();
    });
 
    it('does not collide with the userCred proof for the same secret', () => {

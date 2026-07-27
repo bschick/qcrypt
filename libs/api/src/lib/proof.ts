@@ -27,7 +27,9 @@ const USERCRED_KEY_CONTEXT = 'UCredKey';
 const USERCRED_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
 
 const RECOVERY_KEY_CONTEXT = 'RecovKey';
-const RECOVERY_SIG_CONTEXT = 'qcrypt/recovery/proof/v1';
+// BACKWARD COMPAT: until clients update to call postRecover3 directly
+const RECOVERY_BACKWARD_COMPAT_SIG_CONTEXT = 'qcrypt/recovery/proof/v1';
+const RECOVERY_SIG_CONTEXT = 'qcrypt/recovery/nonce/v1';
 
 export const RECOVERYID_BYTES = 16;
 export const CHALLENGE_BYTES = 32;
@@ -107,7 +109,8 @@ export function recoverySecret(recoveryId: Uint8Array, userId: string): Uint8Arr
    return concatArrays([recoveryId, base64ToBytes(userId)]);
 }
 
-function buildRecoveryMessage(userId: string, challenge: string): Uint8Array<ArrayBuffer> {
+// BACKWARD COMPAT: until clients update to call postRecover3 directly
+function buildRecoveryMessageBackwardCompat(userId: string, challenge: string): Uint8Array<ArrayBuffer> {
    if (base64ToBytes(userId).byteLength !== cc.USERID_BYTES) {
       throw new Error('invalid userId length');
    }
@@ -118,20 +121,65 @@ function buildRecoveryMessage(userId: string, challenge: string): Uint8Array<Arr
    return new TextEncoder().encode(message);
 }
 
+function buildRecoveryMessage(userId: string, timestampMs: string, nonce: string): Uint8Array<ArrayBuffer> {
+   if (base64ToBytes(userId).byteLength !== cc.USERID_BYTES) {
+      throw new Error('invalid userId length');
+   }
+   if (base64ToBytes(nonce).byteLength !== CHALLENGE_BYTES) {
+      throw new Error('invalid nonce length');
+   }
+   const message = [userId, timestampMs, nonce].join('\n');
+   return new TextEncoder().encode(message);
+}
+
 export function getRecoveryPubKey(recoverySecret: Uint8Array): Uint8Array<ArrayBuffer> {
    const { pubKey, secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
    secKey.fill(0);
    return pubKey;
 }
 
-export function createRecoveryProof(
+// BACKWARD COMPAT: until clients update to call postRecover3 directly
+export function createRecoveryProofBackwardCompat(
    recoverySecret: Uint8Array,
    userId: string,
    challenge: string,
 ): Uint8Array<ArrayBuffer> {
    const { secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
    try {
-      return createProof(secKey, buildRecoveryMessage(userId, challenge), RECOVERY_SIG_CONTEXT);
+      return createProof(
+         secKey,
+         buildRecoveryMessageBackwardCompat(userId, challenge),
+         RECOVERY_BACKWARD_COMPAT_SIG_CONTEXT,
+      );
+   } finally {
+      secKey.fill(0);
+   }
+}
+
+// BACKWARD COMPAT: until clients update to call postRecover3 directly
+export function verifyRecoveryProofBackwardCompat(
+   pubKey: Uint8Array,
+   userId: string,
+   challenge: string,
+   signature: Uint8Array,
+): boolean {
+   return verifyProof(
+      pubKey,
+      buildRecoveryMessageBackwardCompat(userId, challenge),
+      signature,
+      RECOVERY_BACKWARD_COMPAT_SIG_CONTEXT,
+   );
+}
+
+export function createRecoveryProof(
+   recoverySecret: Uint8Array,
+   userId: string,
+   timestampMs: string,
+   nonce: string,
+): Uint8Array<ArrayBuffer> {
+   const { secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
+   try {
+      return createProof(secKey, buildRecoveryMessage(userId, timestampMs, nonce), RECOVERY_SIG_CONTEXT);
    } finally {
       secKey.fill(0);
    }
@@ -140,8 +188,9 @@ export function createRecoveryProof(
 export function verifyRecoveryProof(
    pubKey: Uint8Array,
    userId: string,
-   challenge: string,
+   timestampMs: string,
+   nonce: string,
    signature: Uint8Array,
 ): boolean {
-   return verifyProof(pubKey, buildRecoveryMessage(userId, challenge), signature, RECOVERY_SIG_CONTEXT);
+   return verifyProof(pubKey, buildRecoveryMessage(userId, timestampMs, nonce), signature, RECOVERY_SIG_CONTEXT);
 }

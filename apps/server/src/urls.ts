@@ -72,9 +72,6 @@ export const Patterns = {
    regVerify: new URLPattern({
       pathname: '/v:ver/reg/verify',
    }),
-   recoverVerify: new URLPattern({
-      pathname: '/v:ver/recover/verify',
-   }),
    authOptions: new URLPattern({
       pathname: '/v:ver/auth/options',
    }),
@@ -93,8 +90,21 @@ export const Patterns = {
    recover2Challenge: new URLPattern({
       pathname: `/v:ver/recover2/challenge`,
    }),
+   // BACKWARD COMPAT: until clients update to call recover3/key directly
    recover2Key: new URLPattern({
       pathname: `/v:ver/recover2/key`,
+   }),
+   recover3: new URLPattern({
+      pathname: `/v:ver/recover3`,
+   }),
+   recover3Key: new URLPattern({
+      pathname: `/v:ver/recover3/key`,
+   }),
+   recoverConfirm: new URLPattern({
+      pathname: `/v:ver/recover/confirm`,
+   }),
+   recoverVerify: new URLPattern({
+      pathname: '/v:ver/recover/verify',
    }),
    session: new URLPattern({
       pathname: `/v:ver/session`,

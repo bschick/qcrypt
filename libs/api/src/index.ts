@@ -29,6 +29,9 @@ export {
    getRecoveryPubKey,
    createRecoveryProof,
    verifyRecoveryProof,
+   // BACKWARD COMPAT: until clients update to call postRecover3 directly
+   createRecoveryProofBackwardCompat,
+   verifyRecoveryProofBackwardCompat,
    recoverySecret,
    RECOVERYID_BYTES,
    CHALLENGE_BYTES,
@@ -55,6 +58,13 @@ export namespace RequestTypes {
       passkeyUserCredEnc?: string;
    };
    export type PasskeyVerify = RegVerify | RecoverVerify | AddVerify;
+
+   export type Recover3 = {
+      userId: string;
+      timestamp: string;
+      nonce: string;
+      signature: string;
+   };
 }
 
 export namespace ResponseTypes {
@@ -84,7 +94,7 @@ export namespace ResponseTypes {
    export type LoginUserInfo = UserInfo & {
       pkId?: string;
       userCred?: string;
-      passkeyUserCredEnc?: string;
+      userCredEnc?: string;
       csrf?: string;
    };
 
