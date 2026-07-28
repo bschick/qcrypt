@@ -37,8 +37,8 @@ import { firstValueFrom } from 'rxjs';
 
 @Component({
    selector: 'app-recovery',
-   templateUrl: './recovery2.component.html',
-   styleUrl: './recovery2.component.scss',
+   templateUrl: './recovery3.component.html',
+   styleUrl: './recovery3.component.scss',
    imports: [
       MatIconModule,
       MatButtonModule,
@@ -51,7 +51,7 @@ import { firstValueFrom } from 'rxjs';
       MatInputModule,
    ],
 })
-export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit {
+export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
    public validRecoveryWords = false;
    public error = '';
    public ready = false;
@@ -169,7 +169,7 @@ export interface ConfirmData {
 @Component({
    selector: 'confirm-dialog',
    templateUrl: 'confirm-dialog.html',
-   styleUrl: './recovery2.component.scss',
+   styleUrl: './recovery3.component.scss',
    imports: [MatDialogModule, MatIconModule, MatButtonModule],
 })
 export class ConfirmDialog {

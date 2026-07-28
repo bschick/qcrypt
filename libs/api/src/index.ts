@@ -59,11 +59,19 @@ export namespace RequestTypes {
    };
    export type PasskeyVerify = RegVerify | RecoverVerify | AddVerify;
 
-   export type Recover3 = {
-      userId: string;
+   export type RecoverProof = {
       timestamp: string;
       nonce: string;
       signature: string;
+   };
+
+   export type Recover3 = RecoverProof & {
+      userId: string;
+   };
+
+   export type Recover3Key = RecoverProof & {
+      recoveryPubKey: string;
+      userCredEnc?: string;
    };
 }
 

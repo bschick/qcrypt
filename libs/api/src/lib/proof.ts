@@ -106,6 +106,9 @@ export function verifyUserCredProof(
 }
 
 export function recoverySecret(recoveryId: Uint8Array, userId: string): Uint8Array<ArrayBuffer> {
+   if (recoveryId.every((b) => b === 0)) {
+      throw new Error('Invalid recoveryId: all zero bytes');
+   }
    return concatArrays([recoveryId, base64ToBytes(userId)]);
 }
 

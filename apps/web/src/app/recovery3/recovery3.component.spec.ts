@@ -1,21 +1,21 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { Recovery2Component } from './recovery2.component';
+import { Recovery3Component } from './recovery3.component';
 import { RouterModule } from '@angular/router';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 describe('RecoveryComponent', () => {
-   let component: Recovery2Component;
-   let fixture: ComponentFixture<Recovery2Component>;
+   let component: Recovery3Component;
+   let fixture: ComponentFixture<Recovery3Component>;
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [Recovery2Component, RouterModule.forRoot([]), NoopAnimationsModule],
+         imports: [Recovery3Component, RouterModule.forRoot([]), NoopAnimationsModule],
          providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()],
       }).compileComponents();
 
-      fixture = TestBed.createComponent(Recovery2Component);
+      fixture = TestBed.createComponent(Recovery3Component);
       component = fixture.componentInstance;
       fixture.detectChanges();
    });

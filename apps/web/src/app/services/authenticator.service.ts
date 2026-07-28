@@ -493,13 +493,24 @@ export class AuthenticatorService {
 
       const { secret, recoveryPubKey, recoveryWords } = this._newRecoverySecret(this.userId);
       try {
-         const body: Record<string, string> = { recoveryPubKey: recoveryPubKey };
+         const timestamp = String(Date.now());
+         const nonce = bytesToBase64(getRandom(CHALLENGE_BYTES));
+
+         // Proves to the server that the uploaded key has a secret behind it
+         const signature = createRecoveryProof(secret, this.userId, timestamp, nonce);
+
+         const body: RequestTypes.Recover3Key = {
+            recoveryPubKey: recoveryPubKey,
+            timestamp: timestamp,
+            nonce: nonce,
+            signature: bytesToBase64(signature),
+         };
 
          // A PRF account keeps userCred encrypted under the recovery secret
          if (this.getUserInfo().prf) {
             const userCred = await this.getUserCred();
             try {
-               body['userCredEnc'] = await prfEncrypt(userCred, secret, this.userId);
+               body.userCredEnc = await prfEncrypt(userCred, secret, this.userId);
             } finally {
                userCred.fill(0);
             }
@@ -507,7 +518,7 @@ export class AuthenticatorService {
 
          const serverUserInfo = await this._doFetch<UserInfo>({
             method: 'PUT',
-            resource: 'recover2/key',
+            resource: 'recover3/key',
             bodyJSON: JSON.stringify(body),
          });
 

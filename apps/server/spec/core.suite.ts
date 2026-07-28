@@ -31,7 +31,7 @@ import {
    getJson,
    patchJson,
    postJson,
-   setSessionUserCred,
+   setSessionSigner,
    RP_ORIGIN,
    type TestUser,
 } from './common';
@@ -88,7 +88,6 @@ export function coreSuite(prf: boolean): void {
       beforeAll(async () => {
          user = await registerTestUser(testUser, prf);
          ({ userId, userCred, cookie: sessCookie, csrf: csrfToken, credId, emulator } = user);
-         setSessionUserCred(userCred, userId);
       });
 
       describe('User & Session Management', () => {
@@ -559,9 +558,9 @@ export function coreSuite(prf: boolean): void {
                expect(bypass2.rawText).toBe('not authorized');
             } finally {
                if (attackerCredId && attackerCookie) {
-                  setSessionUserCred(attackerUserCred, attackerUserId);
+                  setSessionSigner(attackerUserId, attackerUserCred);
                   await expectPasskeyDeleted(attackerCredId, attackerCsrf, attackerCookie);
-                  setSessionUserCred(userCred, userId);
+                  setSessionSigner(userId, userCred);
                }
             }
          });

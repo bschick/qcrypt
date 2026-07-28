@@ -23,7 +23,9 @@ SOFTWARE. */
 import { FilterXSS } from 'xss';
 import { Buffer } from 'node:buffer';
 import * as crypto from 'node:crypto';
-import { USERCRED_ENC_MIN_BYTES, USERCRED_ENC_MAX_BYTES } from './consts';
+import { verifyRecoveryProof, PROOF_SIG_BYTES, type RequestTypes } from '@qcrypt/api';
+import { Challenges } from './models';
+import { USERCRED_ENC_MIN_BYTES, USERCRED_ENC_MAX_BYTES, CHALLENGE_BYTES, PROOF_SKEW_MS } from './consts';
 
 export class ParamError extends Error {}
 
@@ -63,6 +65,46 @@ export const validB64 = (base64: string | null | undefined): base64 is string =>
 
 export function isReservedTestUserName(userName: string): boolean {
    return userName.toLowerCase().startsWith('pwtesty_');
+}
+
+// Throws unless the proof is well formed, within the skew window, verifies, and its nonce has
+// not been seen before. Retaining the nonce is what bounds replay to the skew window.
+export async function verifyRecoverProof(
+   recoveryPubKey: string,
+   userId: string,
+   proof: RequestTypes.RecoverProof,
+): Promise<void> {
+   const { timestamp, nonce, signature } = proof;
+   if (!validB64(nonce) || !validB64(signature)) {
+      throw new ParamError('invalid recovery proof');
+   }
+
+   const nonceBytes = base64UrlDecode(nonce)!;
+   const signatureBytes = base64UrlDecode(signature)!;
+   if (nonceBytes.byteLength !== CHALLENGE_BYTES || signatureBytes.byteLength !== PROOF_SIG_BYTES) {
+      throw new ParamError('invalid recovery proof');
+   }
+
+   const timestampMs = Number(timestamp);
+   if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > PROOF_SKEW_MS) {
+      throw new ParamError('invalid recovery proof');
+   }
+
+   try {
+      verifyRecoveryProof(base64UrlDecode(recoveryPubKey)!, userId, timestamp, nonce, signatureBytes);
+   } catch {
+      throw new ParamError(`user account ${userId} invalid recovery proof`);
+   }
+
+   const stored = await Challenges.create({
+      challenge: nonce,
+      purpose: 'nonce',
+      userId: userId,
+   }).go({ returnOnConditionCheckFailure: true });
+
+   if (stored.rejected) {
+      throw new ParamError(`user account ${userId} replayed recovery proof`);
+   }
 }
 
 export function validUserCredEnc(userCredEnc: string | null | undefined): userCredEnc is string {

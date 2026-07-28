@@ -70,6 +70,7 @@ import {
    sanitizeString,
    validB64,
    validUserCredEnc,
+   verifyRecoverProof,
    base64UrlEncode,
    base64UrlDecode,
    knownLenTimingSafeEqual,
@@ -88,7 +89,6 @@ import {
    SESSION_TIMEOUT_SEC,
    getUserCredPubKey,
    verifyUserCredProof,
-   verifyRecoveryProof,
    verifyRecoveryProofBackwardCompat,
    PROOF_PUBKEY_BYTES,
    PROOF_SIG_BYTES,
@@ -133,7 +133,7 @@ enum EventNames {
    UserDelete = 'UserDelete',
    PutDescription = 'PutDescription',
    PutUserName = 'PutUserName',
-   PutRecover2Key = 'PutRecover2Key',
+   PutRecover3Key = 'PutRecover3Key',
    Recover = 'Recover',
    GetRecovery = 'GetRecovery',
 }
@@ -1177,13 +1177,18 @@ async function putRecover3Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
       throw new AuthError();
    }
 
-   const recoveryPubKey = body?.recoveryPubKey as string | undefined;
+   const recover3Key = body as RequestTypes.Recover3Key;
+
+   const recoveryPubKey = recover3Key?.recoveryPubKey;
    if (!validB64(recoveryPubKey) || base64UrlDecode(recoveryPubKey)!.length !== PROOF_PUBKEY_BYTES) {
       throw new ParamError('invalid recovery public key');
    }
 
+   // Verified against the submitted key, so the caller must hold its secret
+   await verifyRecoverProof(recoveryPubKey, verifiedUser.userId, recover3Key);
+
    const updates: { recoveryPubKey: string; userCredEnc?: string } = {
-      recoveryPubKey: recoveryPubKey!,
+      recoveryPubKey: recoveryPubKey,
    };
 
    // A PRF account keeps userCred encrypted with the recovery secret in userCredEnc, so new
@@ -1203,7 +1208,7 @@ async function putRecover3Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
       .go();
 
    // Let this happen async
-   recordEvent(EventNames.PutRecover2Key, verifiedUser.userId, verifiedUser.lastCredentialId);
+   recordEvent(EventNames.PutRecover3Key, verifiedUser.userId, verifiedUser.lastCredentialId);
 
    // return with full UserInfo to make client side refresh simpler
    verifiedUser.recoveryPubKey = recoveryPubKey!;
@@ -1633,24 +1638,15 @@ async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
 }
 
 // Calling client must prove ownership of the recovery secret with a signed nonce. We
-// then create a temporary login only valid mid-recovery that clients must use to
-// progress recovery by calling POST recover/confirm with that session
+// then create a login only that clients must use to progress recovery when calling
+// POST recover/confirm with that session. Could be used as a normal login, but
+// the web client doesn't do that.
 async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
    const { body } = httpDetails;
    const recover3 = body as RequestTypes.Recover3;
 
-   const { userId, timestamp, nonce, signature } = recover3;
-   if (!validB64(userId) || !validB64(nonce) || !validB64(signature)) {
-      throw new ParamError('invalid recovery proof');
-   }
-   const nonceBytes = base64UrlDecode(nonce)!;
-   const signatureBytes = base64UrlDecode(signature)!;
-   if (nonceBytes.byteLength !== cc.CHALLENGE_BYTES || signatureBytes.byteLength !== PROOF_SIG_BYTES) {
-      throw new ParamError('invalid recovery proof');
-   }
-
-   const timestampMs = Number(timestamp);
-   if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > cc.PROOF_SKEW_MS) {
+   const { userId } = recover3;
+   if (!validB64(userId)) {
       throw new ParamError('invalid recovery proof');
    }
 
@@ -1661,24 +1657,9 @@ async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
       throw new ParamError(`user account ${verifiedUser.userId} has no recovery key`);
    }
 
-   try {
-      // This call takes < 1ms to run on a warm server, so detecting timing
-      // differences to guess valid userId is not practicle
-      verifyRecoveryProof(base64UrlDecode(verifiedUser.recoveryPubKey)!, userId, timestamp, nonce, signatureBytes);
-   } catch {
-      throw new ParamError(`user account ${verifiedUser.userId} invalid recovery proof`);
-   }
-
-   // Retaining the caller nonce to prevent replay during timestamp window
-   const stored = await Challenges.create({
-      challenge: nonce,
-      purpose: 'nonce',
-      userId: userId,
-   }).go({ returnOnConditionCheckFailure: true });
-
-   if (stored.rejected) {
-      throw new ParamError(`user account ${verifiedUser.userId} replayed recovery proof`);
-   }
+   // This call takes < 1ms to run on a warm server, so detecting timing
+   // differences to guess valid userId is not practicle
+   await verifyRecoverProof(verifiedUser.recoveryPubKey, userId, recover3);
 
    const rand = new GenerateRandomCommand({
       NumberOfBytes: cc.USERID_BYTES,
@@ -1690,7 +1671,8 @@ async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
       throw new Error('GenerateRandomCommand failure');
    }
 
-   // Revokes any existing sessions
+   // Revokes any existing session and marks this as a recovery session that will be
+   // checked in POST /recover/confirm
    const recoverCredentialId = base64UrlEncode(recoverCredentialBytes)!;
    await Users.patch({
       userId: verifiedUser.userId,
@@ -1704,6 +1686,12 @@ async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
    verifiedUser.lastCredentialId = recoverCredentialId;
    verifiedUser.authCount += 1;
 
+   await Challenges.create({
+      challenge: recoverCredentialId,
+      purpose: 'confirm',
+      userId: userId,
+   }).go();
+
    const content = await makeLoginUserInfoResponse(verifiedUser, 'recover');
 
    return {
@@ -1712,13 +1700,26 @@ async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
    };
 }
 
-// Completes the recovery process started by postRecover3. This is an authenticated call so
-// proof of userCred has already succeeded. At this point we know the caller has both the
-// correct recovery words and can decrypt its own userCredentials
+// Completes the recovery process started by postRecover3 and kills it session. This is an
+// authenticated call so proof of userCred has already succeeded. At this point we know the
+// caller has both the correct recovery words and can decrypt its own userCredentials
 async function postRecoverConfirm(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
    const { rpID, rpOrigin } = httpDetails;
 
    if (!verifiedUser) {
+      throw new AuthError();
+   }
+
+   // Only a session postRecover3 started will have a matching challenge
+   const consumed = await Challenges.delete({
+      purpose: 'confirm',
+      challenge: verifiedUser.lastCredentialId,
+   }).go({ response: 'all_old' });
+
+   if (!consumed?.data || consumed.data.userId !== verifiedUser.userId) {
+      throw new AuthError();
+   }
+   if (Date.now() / 1000 > consumed.data.expiresAt) {
       throw new AuthError();
    }
 

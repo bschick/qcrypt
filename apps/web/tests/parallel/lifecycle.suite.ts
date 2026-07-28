@@ -93,8 +93,8 @@ export function lifecycleSuite(prf: boolean): void {
 
       // Recovery wipes the server passkeys and provisions a new one while preserving
       // userCred, so the account keeps its mode.
-      await page.goto('/recovery2');
-      await expect(page).toHaveURL(/\/recovery2$/);
+      await page.goto('/recovery3');
+      await expect(page).toHaveURL(/\/recovery3$/);
       await page.locator('textarea#wordsArea').fill(testUser.recoveryWords);
       await authFixture.addPasskey(testUser.userId, authenticator2, async () => {
          await page.getByRole('button', { name: /Start Recovery/ }).click();
@@ -237,12 +237,12 @@ export function lifecycleSuite(prf: boolean): void {
       await expect(page).toHaveURL(/\/$/);
 
       // The replaced words can no longer recover the account.
-      await page.goto('/recovery2');
-      await expect(page).toHaveURL(/\/recovery2$/);
+      await page.goto('/recovery3');
+      await expect(page).toHaveURL(/\/recovery3$/);
       await page.locator('textarea#wordsArea').fill(testUser.recoveryWords);
       await page.getByRole('button', { name: /Start Recovery/ }).click();
       await expect(page.locator('.control-host .error-msg')).toContainText('recovery word pattern', { timeout: 15000 });
-      await expect(page).toHaveURL(/\/recovery2$/);
+      await expect(page).toHaveURL(/\/recovery3$/);
 
       // The new words do. Recovery wipes the old passkey and creates a new one on a
       // second authenticator.

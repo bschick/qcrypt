@@ -60,9 +60,9 @@ export const sha256Hex = (buf: Buffer): string => crypto.createHash('sha256').up
 let sessionUserCred: string | undefined;
 let sessionUserId: string | undefined;
 
-export function setSessionUserCred(userCred: string | undefined, userId?: string): void {
-   sessionUserCred = userCred;
+export function setSessionSigner(userId: string | undefined, userCred?: string): void {
    sessionUserId = userId;
+   sessionUserCred = userCred;
 }
 
 async function proofHeaders(method: string, path: string, body: Buffer | undefined): Promise<Record<string, string>> {
@@ -407,6 +407,9 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
       };
    }
 
+   // Make this user the current session signer
+   setSessionSigner(user.userId, user.userCred);
+
    return user;
 }
 
@@ -460,7 +463,7 @@ export async function registerNewCredential(
 
 // Adds a passkey to an account holding a live session, returning the new credential id.
 export async function addPasskey(user: TestUser, csrf: string, cookie: string): Promise<string> {
-   setSessionUserCred(user.userCred, user.userId);
+   setSessionSigner(user.userId, user.userCred);
    const optsRes = await getJson('/v1/passkeys/options', { 'x-csrf-token': csrf }, cookie);
    expect(optsRes.status).toBe(200);
 

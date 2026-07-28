@@ -286,7 +286,7 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'What should I do if I cannot locate my passkey but have my recovery word pattern?',
-      answer: `Go to Quick Crypt's <a href="/recovery2">account recovery</a> page and
+      answer: `Go to Quick Crypt's <a href="/recovery3">account recovery</a> page and
       enter your recovery word pattern. Start the recovery process and Quick
       Crypt will delete all existing passkeys and create a new one for you.`,
    },

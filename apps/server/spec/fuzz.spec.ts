@@ -28,7 +28,7 @@ import {
    deleteJson,
    expectPasskeyDeleted,
    registerTestUser,
-   setSessionUserCred,
+   setSessionSigner,
 } from './common';
 
 // Full fuzz is hundreds of live requests; gate it so normal runs stay quick.
@@ -173,6 +173,20 @@ async function fullFuzz(cookie: string, csrf: string, userId: string) {
 
    await fuzzPost(cookie, csrf, `/v1/recover2/`, [[...badIdsSmall, userId], badIds], ['userId', 'recoveryId']);
 
+   await fuzzPost(
+      cookie,
+      csrf,
+      `/v1/recover3/`,
+      [[...badIdsSmall, userId], badIds, badIds, badIds],
+      ['userId', 'timestamp', 'nonce', 'signature'],
+   );
+
+   // confirm reads nothing from its body, so this fuzzes the session it runs under: an
+   // ordinary login must not complete a recovery it never started
+   await fuzzPost(cookie, csrf, `/v1/recover/confirm`, [badIds], ['userId']);
+
+   await fuzzPost(cookie, csrf, `/v1/recover/verify`, [[...badIdsSmall, userId], badIds], ['userId', 'challenge']);
+
    await fuzzGet(cookie, csrf, `/v1/{0}`, [['fl2i4bNajPIp3leX4K4a0qND', '']]);
 }
 
@@ -183,16 +197,14 @@ describe('api fuzzing (authenticated)', () => {
    let credId: string;
 
    beforeAll(async () => {
-      let userCred: string;
-      ({ userId, userCred, cookie, csrf, credId } = await registerTestUser(`PWTesty_fuzz_${Date.now()}`));
-      setSessionUserCred(userCred, userId);
+      ({ userId, cookie, csrf, credId } = await registerTestUser(`PWTesty_fuzz_${Date.now()}`));
    });
 
    afterAll(async () => {
       if (cookie && credId) {
          await expectPasskeyDeleted(credId, csrf, cookie);
       }
-      setSessionUserCred(undefined);
+      setSessionSigner(undefined);
    });
 
    it('small fuzz', async () => {

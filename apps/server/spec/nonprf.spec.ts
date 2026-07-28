@@ -31,7 +31,7 @@ import {
    getJson,
    postJson,
    expectPasskeyDeleted,
-   setSessionUserCred,
+   setSessionSigner,
 } from './common';
 
 // The full authorized-API and recovery contract against a server-side (no-PRF) userCred account.
@@ -52,11 +52,10 @@ describe('no-PRF account', () => {
    it('rejects a passkey added with an encrypted userCred', async () => {
       const account = await registerTestUser(`PWTesty_gn_${Date.now()}`, false);
       const auth = { 'x-csrf-token': account.csrf };
-      setSessionUserCred(account.userCred, account.userId);
       cleanup = async () => {
-         setSessionUserCred(account.userCred, account.userId);
+         setSessionSigner(account.userId, account.userCred);
          await expectPasskeyDeleted(account.credId, account.csrf, account.cookie);
-         setSessionUserCred(undefined);
+         setSessionSigner(undefined);
       };
 
       // A valid add (no ciphertext) succeeds...

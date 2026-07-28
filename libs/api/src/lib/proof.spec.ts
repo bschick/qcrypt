@@ -5,6 +5,8 @@ import {
    createUserCredProof,
    verifyUserCredProof,
    getRecoveryPubKey,
+   createRecoveryProof,
+   verifyRecoveryProof,
    createRecoveryProofBackwardCompat,
    verifyRecoveryProofBackwardCompat,
 } from './proof';
@@ -154,5 +156,72 @@ describe('recovery proof', () => {
       const recoveryPubKey = bytesToBase64(getRecoveryPubKey(secret));
       const userCredPubKey = bytesToBase64(getUserCredPubKey(secret));
       expect(recoveryPubKey).not.toBe(userCredPubKey);
+   });
+});
+
+describe('recovery nonce proof', () => {
+   let userId: string;
+   let timestamp: string;
+   let nonce: string;
+
+   beforeEach(async () => {
+      await cryptoReady();
+      userId = bytesToBase64(getRandom(16));
+      timestamp = String(Date.now());
+      nonce = bytesToBase64(getRandom(32));
+   });
+
+   it('sign nonce and verify with derived public key', () => {
+      const secret = getRandom(32);
+      const pubKey = getRecoveryPubKey(secret);
+      const signature = createRecoveryProof(secret, userId, timestamp, nonce);
+      expect(verifyRecoveryProof(pubKey, userId, timestamp, nonce, signature)).toBe(true);
+   });
+
+   it('throw when signed fields differ', () => {
+      const secret = getRandom(32);
+      const pubKey = getRecoveryPubKey(secret);
+      const signature = createRecoveryProof(secret, userId, timestamp, nonce);
+      const otherUserId = bytesToBase64(getRandom(16));
+      const otherTimestamp = String(Number(timestamp) + 1);
+      const otherNonce = bytesToBase64(getRandom(32));
+      expect(() => verifyRecoveryProof(pubKey, otherUserId, timestamp, nonce, signature)).toThrow();
+      expect(() => verifyRecoveryProof(pubKey, userId, otherTimestamp, nonce, signature)).toThrow();
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, otherNonce, signature)).toThrow();
+   });
+
+   it('throw when the wrong public key is used', () => {
+      const signature = createRecoveryProof(getRandom(32), userId, timestamp, nonce);
+      const otherPubKey = getRecoveryPubKey(getRandom(32));
+      expect(() => verifyRecoveryProof(otherPubKey, userId, timestamp, nonce, signature)).toThrow();
+   });
+
+   it('throw when the signature is manipulated', () => {
+      const secret = getRandom(32);
+      const pubKey = getRecoveryPubKey(secret);
+      const signature = createRecoveryProof(secret, userId, timestamp, nonce);
+      signature[0] ^= 0x01;
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, signature)).toThrow();
+   });
+
+   it('throw when the nonce is not the expected length', () => {
+      const secret = getRandom(32);
+      const shortNonce = bytesToBase64(getRandom(31));
+      expect(() => createRecoveryProof(secret, userId, timestamp, shortNonce)).toThrow();
+   });
+
+   it('throw when the userId is not the expected length', () => {
+      const secret = getRandom(32);
+      const shortUserId = bytesToBase64(getRandom(15));
+      expect(() => createRecoveryProof(secret, shortUserId, timestamp, nonce)).toThrow();
+   });
+
+   // A signature over the old message must not verify under the new one, or a captured
+   // challenge-signed proof could be redeemed as a nonce-signed one.
+   it('does not accept a proof made for the challenge message', () => {
+      const secret = getRandom(32);
+      const pubKey = getRecoveryPubKey(secret);
+      const signature = createRecoveryProofBackwardCompat(secret, userId, nonce);
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, signature)).toThrow();
    });
 });

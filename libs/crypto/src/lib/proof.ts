@@ -31,6 +31,9 @@ export function getProofKeyPair(
    if (secret.byteLength < sodium.crypto_kdf_KEYBYTES) {
       throw new Error('proof secret too short');
    }
+   if (secret.every((b) => b === 0)) {
+      throw new Error('Invalid proof secret: all zero bytes');
+   }
    if (context.length !== sodium.crypto_kdf_CONTEXTBYTES) {
       throw new Error('proof context must be 8 bytes');
    }

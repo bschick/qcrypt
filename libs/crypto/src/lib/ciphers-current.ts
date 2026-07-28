@@ -556,6 +556,9 @@ export class EncipherV7 extends Encipher {
       if (ivBytes !== iv.byteLength) {
          throw new Error(`incorrect iv length of: ${iv.byteLength}`);
       }
+      if (key.every((b) => b === 0)) {
+         throw new Error('Invalid key: all zero bytes');
+      }
 
       let encryptedBytes: Uint8Array;
       if (alg === 'X20-PLY') {
@@ -776,6 +779,9 @@ export abstract class Decipher extends Ciphers {
       const ivBytes = Number(Ciphers.algIVByteLength(alg));
       if (ivBytes !== iv.byteLength) {
          throw new Error(`incorrect iv length of: ${iv.byteLength}`);
+      }
+      if (key.every((b) => b === 0)) {
+         throw new Error('Invalid key: all zero bytes');
       }
 
       let decrypted: Uint8Array;
