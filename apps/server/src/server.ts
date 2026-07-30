@@ -75,6 +75,7 @@ import {
    base64UrlDecode,
    knownLenTimingSafeEqual,
    isReservedTestUserName,
+   consumeChallenge,
 } from './utils';
 
 export type Response = {
@@ -285,23 +286,8 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
    if (!validB64(body.id)) {
       throw new ParamError('invalid authenticatorId');
    }
-   if (!validB64(body.challenge)) {
-      throw new ParamError('invalid challenge format');
-   }
-
-   // Atomically consume the challenge, then check its validity
-   const challenge = await Challenges.delete({
-      purpose: 'auth',
-      challenge: body.challenge,
-   }).go({ response: 'all_old' });
-
-   if (!challenge?.data) {
-      throw new ParamError('challenge not valid');
-   }
-
-   if (Date.now() / 1000 > challenge.data.expiresAt) {
-      throw new AuthError();
-   }
+   // Bound to a userId only when auth/options named one, so the match happens below
+   const challenge = await consumeChallenge(body.challenge, 'auth');
 
    // Derive identity from the credential record via GSI, not from the
    // unsigned userHandle field in the assertion response (which is fakeable)
@@ -321,7 +307,7 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
       try {
          await verifyAuthenticationResponse({
             response: body as AuthenticationResponseJSON,
-            expectedChallenge: challenge.data.challenge,
+            expectedChallenge: challenge.challenge,
             expectedOrigin: rpOrigin,
             expectedRPID: rpID,
             credential: {
@@ -345,7 +331,7 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
 
    // If the auth challenge was bound to a specific user at creation, the verify must match.
    // Unbound auth challenges are allowed for discoverable credential flow.
-   if (challenge.data.userId !== UnknownUserId && challenge.data.userId !== unverifiedUser.userId) {
+   if (challenge.userId !== UnknownUserId && challenge.userId !== unverifiedUser.userId) {
       throw new AuthError();
    }
 
@@ -366,7 +352,7 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
    try {
       verification = await verifyAuthenticationResponse({
          response: body as AuthenticationResponseJSON,
-         expectedChallenge: challenge.data.challenge,
+         expectedChallenge: challenge.challenge,
          expectedOrigin: rpOrigin,
          expectedRPID: rpID,
          requireUserVerification: true,
@@ -455,12 +441,10 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
    const regVerify = body as RequestTypes.RegVerify;
 
    const unverifiedUser = await getUnverifiedUser(regVerify.userId);
-
-   // BACKWARD COMPAT: until clients update to call postRecoverVerify directly
-   // After BACKWARD COMPAT, this should change to `throw new ParamError() if verified is true`
    if (unverifiedUser.verified) {
-      return postRecoverVerify(httpDetails);
+      throw new ParamError();
    }
+
    // Careful to never overwrite userCredEnc (due to a bug or whatever)
    if (unverifiedUser.userCredEnc) {
       throw new ParamError(`unexpected user credential for ${unverifiedUser.userId}`);
@@ -519,7 +503,7 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
 
       userCredEncBackup = await encryptField(userCred, { userId: unverifiedUser.userId }, cc.KMS_KEYID_BACKUP);
 
-      userCredPubKey = base64UrlEncode(getUserCredPubKey(userCred))!;
+      userCredPubKey = getUserCredPubKey(userCred);
    }
 
    // Loop in the very unlikley event that we randomly pick
@@ -630,7 +614,7 @@ async function postRecoverVerify(httpDetails: HttpDetails): Promise<Response> {
    unverifiedUser.lastCredentialId = auth.credentialId;
    unverifiedUser.authCount += 1;
 
-   // should now be verified
+   // now be verified
    const verifiedUser = checkVerified(unverifiedUser, auth.userId);
 
    // force consistent read to capture recent create
@@ -671,31 +655,13 @@ async function _createAuthenticator(
       }
    }
 
-   // Atomically consume the challenge, then check its validity
-   const challenge = await Challenges.delete({
-      purpose: expectedPurpose,
-      challenge: passkeyVerify.challenge,
-   }).go({ response: 'all_old' });
-
-   if (!challenge?.data) {
-      throw new ParamError('challenge not valid');
-   }
-
-   // Must use the last challenged within 1 minute or its rejected
-   if (Date.now() / 1000 > challenge.data.expiresAt) {
-      throw new AuthError();
-   }
-
-   // Registration-style challenges are always userId-bound at creation time.
-   if (challenge.data.userId !== unverifiedUser.userId) {
-      throw new AuthError();
-   }
+   const challenge = await consumeChallenge(passkeyVerify.challenge, expectedPurpose, unverifiedUser.userId);
 
    let verification: VerifiedRegistrationResponse;
    try {
       verification = await verifyRegistrationResponse({
          response: passkeyVerify as RegistrationResponseJSON,
-         expectedChallenge: challenge.data.challenge,
+         expectedChallenge: challenge.challenge,
          expectedOrigin: rpOrigin,
          expectedRPID: rpID,
          requireUserVerification: true,
@@ -1529,15 +1495,16 @@ async function postRecover(httpDetails: HttpDetails): Promise<Response> {
    })
       .set({
          recovered: rcount,
-         lastCredentialId: '',
       })
       .go();
 
    // Let this happen async
    recordEvent(EventNames.Recover, verifiedUser.userId);
 
-   // caller should followup with call to verifyRegistration
-   return registrationOptions(rpID, rpOrigin, verifiedUser, 'recover');
+   const response = await deleteSession(httpDetails, verifiedUser);
+   const regResponse = await registrationOptions(rpID, rpOrigin, verifiedUser, 'recover');
+   response.content = regResponse.content;
+   return response;
 }
 
 // recover removes all existing passkeys, then initiates the
@@ -1566,21 +1533,7 @@ async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
       throw new ParamError('invalid recovery proof');
    }
 
-   // Atomically consume the challenge, then check its validity
-   const consumed = await Challenges.delete({
-      purpose: 'noncebackwardcompat',
-      challenge: challenge,
-   }).go({ response: 'all_old' });
-
-   if (!consumed?.data) {
-      throw new AuthError();
-   }
-   if (Date.now() / 1000 > consumed.data.expiresAt) {
-      throw new AuthError();
-   }
-   if (consumed.data.userId !== userId) {
-      throw new AuthError();
-   }
+   await consumeChallenge(challenge, 'noncebackwardcompat', userId);
 
    // Require an existing verified user for recovery
    const unverifiedUser = await getUnverifiedUser(userId);
@@ -1593,12 +1546,7 @@ async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
    try {
       // This call takes < 1ms to run on a warm server, so detecting timing
       // differences to guess valid userId is not practicle
-      verifyRecoveryProofBackwardCompat(
-         base64UrlDecode(verifiedUser.recoveryPubKey)!,
-         userId,
-         challenge,
-         signatureBytes,
-      );
+      verifyRecoveryProofBackwardCompat(verifiedUser.recoveryPubKey, userId, challenge, signature);
    } catch {
       throw new ParamError(`user account ${verifiedUser.userId} invalid recovery proof`);
    }
@@ -1616,31 +1564,25 @@ async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
    })
       .set({
          recovered: rcount,
-         lastCredentialId: '',
       })
       .go();
 
    // Let this happen async
    recordEvent(EventNames.Recover, verifiedUser.userId);
 
-   // caller should followup with call to verifyRegistration
+   const response = await deleteSession(httpDetails, verifiedUser);
    const regResponse = await registrationOptions(rpID, rpOrigin, verifiedUser, 'recover');
 
-   // The client decrypts userCred from this ciphertext with the recovery secret,
-   // which the server never holds.
    if (verifiedUser.prf) {
       const recoverInfo = regResponse.content as ResponseTypes.RecoverInfo;
       recoverInfo.prf = true;
       recoverInfo.userCredEnc = verifiedUser.userCredEnc;
    }
 
-   return regResponse;
+   response.content = regResponse.content;
+   return response;
 }
 
-// Calling client must prove ownership of the recovery secret with a signed nonce. We
-// then create a login only that clients must use to progress recovery when calling
-// POST recover/confirm with that session. Could be used as a normal login, but
-// the web client doesn't do that.
 async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
    const { body } = httpDetails;
    const recover3 = body as RequestTypes.Recover3;
@@ -1651,77 +1593,101 @@ async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
    }
 
    const unverifiedUser = await getUnverifiedUser(userId);
-   const verifiedUser = checkVerified(unverifiedUser, userId);
 
-   if (!verifiedUser.recoveryPubKey) {
-      throw new ParamError(`user account ${verifiedUser.userId} has no recovery key`);
+   if (!unverifiedUser.recoveryPubKey) {
+      throw new ParamError(`user account ${unverifiedUser.userId} has no recovery key`);
    }
 
    // This call takes < 1ms to run on a warm server, so detecting timing
    // differences to guess valid userId is not practicle
-   await verifyRecoverProof(verifiedUser.recoveryPubKey, userId, recover3);
+   await verifyRecoverProof(unverifiedUser.recoveryPubKey, userId, recover3);
+
+   // Now the user is confirmed
+   const verifiedUser = checkVerified(unverifiedUser, userId);
 
    const rand = new GenerateRandomCommand({
-      NumberOfBytes: cc.USERID_BYTES,
+      NumberOfBytes: cc.CHALLENGE_BYTES,
    });
    const result = await kmsClient.send(rand);
-   const recoverCredentialBytes = result.Plaintext;
+   const challengeBytes = result.Plaintext;
 
-   if (!recoverCredentialBytes || recoverCredentialBytes.byteLength !== cc.USERID_BYTES) {
+   if (!challengeBytes || challengeBytes.byteLength !== cc.CHALLENGE_BYTES) {
       throw new Error('GenerateRandomCommand failure');
    }
 
-   // Revokes any existing session and marks this as a recovery session that will be
-   // checked in POST /recover/confirm
-   const recoverCredentialId = base64UrlEncode(recoverCredentialBytes)!;
-   await Users.patch({
-      userId: verifiedUser.userId,
-   })
-      .set({
-         lastCredentialId: recoverCredentialId,
-         authCount: verifiedUser.authCount + 1,
-      })
-      .go();
-
-   verifiedUser.lastCredentialId = recoverCredentialId;
-   verifiedUser.authCount += 1;
-
+   // Redeemed by POST /recover/confirm
+   const challenge = base64UrlEncode(challengeBytes)!;
    await Challenges.create({
-      challenge: recoverCredentialId,
+      challenge,
       purpose: 'confirm',
-      userId: userId,
+      userId,
    }).go();
 
-   const content = await makeLoginUserInfoResponse(verifiedUser, 'recover');
+   const response = await deleteSession(httpDetails, verifiedUser);
+   let content: ResponseTypes.RecoverStart;
 
-   return {
-      content: content,
-      startSession: verifiedUser,
-   };
+   if (verifiedUser.prf) {
+      content = { prf: true, challenge, userCredEnc: verifiedUser.userCredEnc };
+   } else {
+      const decrypted = await decryptField(
+         verifiedUser.userCredEnc,
+         { userId: verifiedUser.userId },
+         cc.USERCRED_BYTES,
+      );
+      content = { prf: false, challenge, userCred: base64UrlEncode(decrypted)! };
+   }
+
+   response.content = content;
+   return response;
 }
 
-// Completes the recovery process started by postRecover3 and kills it session. This is an
-// authenticated call so proof of userCred has already succeeded. At this point we know the
-// caller has both the correct recovery words and can decrypt its own userCredentials
-async function postRecoverConfirm(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
-   const { rpID, rpOrigin } = httpDetails;
+async function postRecoverConfirm(httpDetails: HttpDetails): Promise<Response> {
+   const { rpID, rpOrigin, body } = httpDetails;
+   const confirm = body as RequestTypes.RecoverConfirm;
 
-   if (!verifiedUser) {
+   const { userId, challenge, timestamp, signature } = confirm;
+   if (!validB64(userId) || !validB64(signature)) {
+      throw new ParamError('invalid confirmation');
+   }
+
+   const signatureBytes = base64UrlDecode(signature)!;
+   if (signatureBytes.byteLength !== PROOF_SIG_BYTES) {
+      throw new ParamError('invalid confirmation');
+   }
+
+   const timestampMs = Number(timestamp);
+   if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > cc.PROOF_SKEW_MS) {
+      throw new ParamError('invalid confirmation');
+   }
+
+   // No exception confirms recovery started with a correct proof of recovery secret
+   // for this user and purpose
+   await consumeChallenge(challenge, 'confirm', userId);
+
+   const unverifiedUser = await getUnverifiedUser(userId);
+   if (!unverifiedUser.verified || !validB64(unverifiedUser.userCredPubKey)) {
       throw new AuthError();
    }
 
-   // Only a session postRecover3 started will have a matching challenge
-   const consumed = await Challenges.delete({
-      purpose: 'confirm',
-      challenge: verifiedUser.lastCredentialId,
-   }).go({ response: 'all_old' });
+   // There is no body beyond the signature fields, so hash is for empty string
+   const bodyHashHex = createHash('sha256').update('', 'utf8').digest('hex');
+   try {
+      verifyUserCredProof(
+         unverifiedUser.userCredPubKey,
+         userId,
+         httpDetails.method,
+         httpDetails.path,
+         timestamp,
+         challenge,
+         bodyHashHex,
+         signature,
+         httpDetails.rawQueryString,
+      );
+   } catch {
+      throw new ParamError(`user account ${userId} invalid reconstruction proof`);
+   }
 
-   if (!consumed?.data || consumed.data.userId !== verifiedUser.userId) {
-      throw new AuthError();
-   }
-   if (Date.now() / 1000 > consumed.data.expiresAt) {
-      throw new AuthError();
-   }
+   const verifiedUser = checkVerified(unverifiedUser, userId);
 
    // Note that if the follow up creation of a new passkey is aborted or cancels, the
    // account will be left with no passkeys. Recovery can be run again to create a new
@@ -1736,15 +1702,15 @@ async function postRecoverConfirm(httpDetails: HttpDetails, verifiedUser?: Verif
    })
       .set({
          recovered: rcount,
-         lastCredentialId: '',
       })
       .go();
 
-   // Let this happen async
    recordEvent(EventNames.Recover, verifiedUser.userId);
 
-   // caller should followup with call to POST /recovery/verify
-   return registrationOptions(rpID, rpOrigin, verifiedUser, 'recover');
+   const response = await deleteSession(httpDetails, verifiedUser);
+   const regResponse = await registrationOptions(rpID, rpOrigin, verifiedUser, 'recover');
+   response.content = regResponse.content;
+   return response;
 }
 
 // Currently origin is stored on each Authenticator, but it isn't used (other
@@ -1754,7 +1720,6 @@ async function postRecoverConfirm(httpDetails: HttpDetails, verifiedUser?: Verif
 // development if a real users data was used in a test region.
 // If origin is moved to user, then we could add a test here to confirm the
 // original user origin is used for all following actions.
-//
 async function getUnverifiedUser(userId: string): Promise<UnverifiedUserItem> {
    if (!validB64(userId) || base64UrlDecode(userId)?.length !== cc.USERID_BYTES) {
       throw new ParamError('invalid userid format');
@@ -1908,14 +1873,14 @@ async function verifyProof(verifiedUser: VerifiedUserItem, httpDetails: HttpDeta
          const bodyHashHex = createHash('sha256').update(httpDetails.rawBody, 'utf8').digest('hex');
          try {
             verifyUserCredProof(
-               pubKeyBytes,
+               verifiedUser.userCredPubKey,
                verifiedUser.userId,
                httpDetails.method,
                httpDetails.path,
                httpDetails.proofTimestamp,
                httpDetails.proofNonce,
                bodyHashHex,
-               signatureBytes,
+               httpDetails.proofSignature,
                httpDetails.rawQueryString,
             );
             result = 'ok';
@@ -2088,7 +2053,7 @@ const METHODMAP: MethodMap = {
          name: 'postRecoverConfirm',
          pattern: Patterns.recoverConfirm,
          version: 1,
-         authorize: true,
+         authorize: false,
          handler: postRecoverConfirm,
       },
       {

@@ -76,6 +76,7 @@ export type AuthenticatorInfo = ResponseTypes.AuthenticatorInfo;
 export type UserInfo = ResponseTypes.UserInfo;
 export type LoginUserInfo = ResponseTypes.LoginUserInfo;
 export type RecoverInfo = ResponseTypes.RecoverInfo;
+export type RecoverStart = ResponseTypes.RecoverStart;
 export type InvitableInfo = ResponseTypes.InvitableInfo;
 
 const baseUrl = environment.apiHost;
@@ -343,8 +344,7 @@ export class AuthenticatorService {
                bodyHashHex,
                url.search.slice(1),
             );
-            const proofSigB64 = bytesToBase64(proofSig);
-            headers.append('x-proof', `${proofSigB64},${proofTs},${proofNonce}`);
+            headers.append('x-proof', `${proofSig},${proofTs},${proofNonce}`);
          } finally {
             userCred.fill(0);
          }
@@ -473,7 +473,7 @@ export class AuthenticatorService {
       try {
          return {
             secret,
-            recoveryPubKey: bytesToBase64(getRecoveryPubKey(secret)),
+            recoveryPubKey: getRecoveryPubKey(secret),
             recoveryWords: entropyToMnemonic(secret, wordlist),
          };
       } finally {
@@ -500,10 +500,10 @@ export class AuthenticatorService {
          const signature = createRecoveryProof(secret, this.userId, timestamp, nonce);
 
          const body: RequestTypes.Recover3Key = {
-            recoveryPubKey: recoveryPubKey,
-            timestamp: timestamp,
-            nonce: nonce,
-            signature: bytesToBase64(signature),
+            recoveryPubKey,
+            timestamp,
+            nonce,
+            signature,
          };
 
          // A PRF account keeps userCred encrypted under the recovery secret
@@ -1131,19 +1131,19 @@ export class AuthenticatorService {
       await this._pendingLogout;
 
       try {
-         const timestamp = String(Date.now());
+         const timestamp1 = String(Date.now());
          const nonce = bytesToBase64(getRandom(CHALLENGE_BYTES));
-         const body: RequestTypes.Recover3 = {
+         const startBody: RequestTypes.Recover3 = {
             userId: userId,
-            timestamp: timestamp,
+            timestamp: timestamp1,
             nonce: nonce,
-            signature: bytesToBase64(createRecoveryProof(secret, userId, timestamp, nonce)),
+            signature: createRecoveryProof(secret, userId, timestamp1, nonce),
          };
 
-         const startResp = await this._doFetch<LoginUserInfo>({
+         const startResp = await this._doFetch<RecoverStart>({
             method: 'POST',
             resource: 'recover3',
-            bodyJSON: JSON.stringify(body),
+            bodyJSON: JSON.stringify(startBody),
          });
 
          let userCred: Uint8Array<ArrayBuffer>;
@@ -1151,7 +1151,7 @@ export class AuthenticatorService {
             if (!startResp.userCredEnc) {
                throw new Error('missing recovery user credential');
             }
-            userCred = await prfDecrypt(startResp.userCredEnc, secret.slice(0), userId);
+            userCred = await prfDecrypt(startResp.userCredEnc, secret, userId);
          } else {
             if (!startResp.userCred) {
                throw new Error('missing user credential');
@@ -1159,14 +1159,35 @@ export class AuthenticatorService {
             userCred = base64ToBytes(startResp.userCred);
          }
 
-         await this._loginUser(startResp, userCred.slice(0));
+         const timestamp2 = String(Date.now());
+         const confirmPath = new URL(`${environment.apiVersion}/recover/confirm`, baseUrl).pathname;
+
+         // No body beyond the signature fields, so hash empty string
+         const bodyHashHex = bufferToHexString(await crypto.subtle.digest('SHA-256', new Uint8Array(0)));
+         const signature = createUserCredProof(
+            userCred,
+            userId,
+            'POST',
+            confirmPath,
+            timestamp2,
+            startResp.challenge,
+            bodyHashHex,
+         );
+
+         const confirmBody: RequestTypes.RecoverConfirm = {
+            userId,
+            challenge: startResp.challenge,
+            timestamp: timestamp2,
+            signature,
+         };
 
          const confirmResp = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
             method: 'POST',
             resource: 'recover/confirm',
+            bodyJSON: JSON.stringify(confirmBody),
          });
 
-         return await this._finishRecovery(confirmResp, userId, !!startResp.prf, userCred);
+         return await this._finishRecovery(confirmResp, userId, startResp.prf, userCred);
       } finally {
          secret.fill(0);
       }
@@ -1275,7 +1296,7 @@ export class AuthenticatorService {
             if (prfKey) {
                body.passkeyUserCredEnc = await prfEncrypt(userCred, prfKey, userId);
                body.recoveryUserCredEnc = await prfEncrypt(userCred, secret, userId);
-               body.userCredPubKey = bytesToBase64(getUserCredPubKey(userCred));
+               body.userCredPubKey = getUserCredPubKey(userCred);
             }
 
             const serverLoginUserInfo = await this._passkeyVerify('reg/verify', body);

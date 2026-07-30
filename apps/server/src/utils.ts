@@ -24,7 +24,7 @@ import { FilterXSS } from 'xss';
 import { Buffer } from 'node:buffer';
 import * as crypto from 'node:crypto';
 import { verifyRecoveryProof, PROOF_SIG_BYTES, type RequestTypes } from '@qcrypt/api';
-import { Challenges } from './models';
+import { Challenges, type ChallengeItem } from './models';
 import { USERCRED_ENC_MIN_BYTES, USERCRED_ENC_MAX_BYTES, CHALLENGE_BYTES, PROOF_SKEW_MS } from './consts';
 
 export class ParamError extends Error {}
@@ -67,6 +67,34 @@ export function isReservedTestUserName(userName: string): boolean {
    return userName.toLowerCase().startsWith('pwtesty_');
 }
 
+// When userId is given the challenge must also be bound to it, otherwise any binding is accepted
+export async function consumeChallenge(
+   challenge: string,
+   purpose: ChallengeItem['purpose'],
+   userId?: string,
+): Promise<ChallengeItem> {
+   if (!validB64(challenge)) {
+      throw new ParamError('challenge not valid');
+   }
+
+   const consumed = await Challenges.delete({
+      purpose,
+      challenge,
+   }).go({ response: 'all_old' });
+
+   if (!consumed?.data) {
+      throw new ParamError('challenge not valid');
+   }
+   if (Date.now() / 1000 > consumed.data.expiresAt) {
+      throw new AuthError();
+   }
+   if (userId !== undefined && consumed.data.userId !== userId) {
+      throw new AuthError();
+   }
+
+   return consumed.data;
+}
+
 // Throws unless the proof is well formed, within the skew window, verifies, and its nonce has
 // not been seen before. Retaining the nonce is what bounds replay to the skew window.
 export async function verifyRecoverProof(
@@ -91,7 +119,7 @@ export async function verifyRecoverProof(
    }
 
    try {
-      verifyRecoveryProof(base64UrlDecode(recoveryPubKey)!, userId, timestamp, nonce, signatureBytes);
+      verifyRecoveryProof(recoveryPubKey, userId, timestamp, nonce, signature);
    } catch {
       throw new ParamError(`user account ${userId} invalid recovery proof`);
    }

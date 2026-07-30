@@ -49,9 +49,8 @@ async function proofHeaders(
       bodyHashHex,
       new URL(url).search.slice(1),
    );
-   const sigB64 = Buffer.from(signature).toString('base64url');
    return {
-      'x-proof': `${sigB64},${timestamp},${nonce}`,
+      'x-proof': `${signature},${timestamp},${nonce}`,
    };
 }
 

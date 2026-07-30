@@ -412,6 +412,7 @@ export const AAGUIDs = new Entity(
 );
 
 export type UnverifiedUserItem = EntityItem<typeof Users>;
+export type ChallengeItem = EntityItem<typeof Challenges>;
 export type AuthItem = EntityItem<typeof Authenticators>;
 export type InvitableItem = EntityItem<typeof Invitables>;
 export type VerifiedUserItem = EntityRecord<typeof Users> & {

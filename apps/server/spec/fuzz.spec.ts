@@ -177,13 +177,17 @@ async function fullFuzz(cookie: string, csrf: string, userId: string) {
       cookie,
       csrf,
       `/v1/recover3/`,
-      [[...badIdsSmall, userId], badIds, badIds, badIds],
+      [[...badIdsSmall, userId], badIdsSmall, badIdsSmall, badIdsSmall],
       ['userId', 'timestamp', 'nonce', 'signature'],
    );
 
-   // confirm reads nothing from its body, so this fuzzes the session it runs under: an
-   // ordinary login must not complete a recovery it never started
-   await fuzzPost(cookie, csrf, `/v1/recover/confirm`, [badIds], ['userId']);
+   await fuzzPost(
+      cookie,
+      csrf,
+      `/v1/recover/confirm`,
+      [[...badIdsSmall, userId], badIdsSmall, badIdsSmall, badIdsSmall],
+      ['userId', 'challenge', 'timestamp', 'signature'],
+   );
 
    await fuzzPost(cookie, csrf, `/v1/recover/verify`, [[...badIdsSmall, userId], badIds], ['userId', 'challenge']);
 

@@ -103,11 +103,12 @@ export async function makeProofHeaders(
       queryString,
    );
 
-   const sigBytes = Buffer.from(signature);
+   let sigStr = signature;
    if (opts.tamperSig) {
+      const sigBytes = base64ToBytes(signature);
       sigBytes[0] ^= 0x01;
+      sigStr = bytesToBase64(sigBytes);
    }
-   const sigStr = sigBytes.toString('base64url');
 
    return {
       'x-proof': `${sigStr},${timestamp},${nonce}`,
@@ -384,7 +385,7 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
          ...attestation,
          userId,
          challenge: regOpts.data.challenge,
-         recoveryPubKey: bytesToBase64(getRecoveryPubKey(secret)),
+         recoveryPubKey: getRecoveryPubKey(secret),
       };
       const verifyRes = await postJson(`/v1/reg/verify?usercred=true`, body, {}, '');
       expect(verifyRes.status).toBe(200);
@@ -518,8 +519,8 @@ export async function buildPrfRegBody(userName: string): Promise<{
       challenge: regOpts.data.challenge,
       passkeyUserCredEnc: await prfEncrypt(userCred.slice(0), prfOutput.slice(0), userId),
       recoveryUserCredEnc: await prfEncrypt(userCred.slice(0), secret.slice(0), userId),
-      userCredPubKey: bytesToBase64(getUserCredPubKey(userCred)),
-      recoveryPubKey: bytesToBase64(getRecoveryPubKey(secret)),
+      userCredPubKey: getUserCredPubKey(userCred),
+      recoveryPubKey: getRecoveryPubKey(secret),
    };
    return { userId, body, emulator, userCred, recoverySecret: secret, recoveryId, prfOutput };
 }
