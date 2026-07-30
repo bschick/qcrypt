@@ -73,6 +73,13 @@ export namespace RequestTypes {
       recoveryPubKey: string;
       userCredEnc?: string;
    };
+
+   export type RecoverConfirm = {
+      userId: string;
+      challenge: string;
+      timestamp: string;
+      signature: string;
+   };
 }
 
 export namespace ResponseTypes {
@@ -110,6 +117,10 @@ export namespace ResponseTypes {
       prf?: boolean;
       userCredEnc?: string;
    };
+
+   export type RecoverStart =
+      | { prf: true; challenge: string; userCredEnc: string }
+      | { prf: false; challenge: string; userCred: string };
 }
 
 export const TOPIC_USERS_MAX = 255;

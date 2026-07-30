@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { getProofKeyPair, createProof, verifyProof, base64ToBytes, concatArrays } from '@qcrypt/crypto';
+import { getProofKeyPair, createProof, verifyProof, base64ToBytes, bytesToBase64, concatArrays } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 
 const USERCRED_KEY_CONTEXT = 'UCredKey';
@@ -58,10 +58,10 @@ function buildUserCredMessage(
    return new TextEncoder().encode(message);
 }
 
-export function getUserCredPubKey(userCred: Uint8Array): Uint8Array<ArrayBuffer> {
+export function getUserCredPubKey(userCred: Uint8Array): string {
    const { pubKey, secKey } = getProofKeyPair(userCred, USERCRED_KEY_CONTEXT);
    secKey.fill(0);
-   return pubKey;
+   return bytesToBase64(pubKey);
 }
 
 export function createUserCredProof(
@@ -73,13 +73,15 @@ export function createUserCredProof(
    nonce: string,
    bodyHashHex: string,
    queryString: string = '',
-): Uint8Array<ArrayBuffer> {
+): string {
    const { secKey } = getProofKeyPair(userCred, USERCRED_KEY_CONTEXT);
    try {
-      return createProof(
-         secKey,
-         buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
-         USERCRED_SIG_CONTEXT,
+      return bytesToBase64(
+         createProof(
+            secKey,
+            buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
+            USERCRED_SIG_CONTEXT,
+         ),
       );
    } finally {
       secKey.fill(0);
@@ -87,20 +89,20 @@ export function createUserCredProof(
 }
 
 export function verifyUserCredProof(
-   pubKey: Uint8Array,
+   pubKey: string,
    userId: string,
    method: string,
    path: string,
    timestampMs: string,
    nonce: string,
    bodyHashHex: string,
-   signature: Uint8Array,
+   signature: string,
    queryString: string = '',
 ): boolean {
    return verifyProof(
-      pubKey,
+      base64ToBytes(pubKey),
       buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
-      signature,
+      base64ToBytes(signature),
       USERCRED_SIG_CONTEXT,
    );
 }
@@ -135,10 +137,10 @@ function buildRecoveryMessage(userId: string, timestampMs: string, nonce: string
    return new TextEncoder().encode(message);
 }
 
-export function getRecoveryPubKey(recoverySecret: Uint8Array): Uint8Array<ArrayBuffer> {
+export function getRecoveryPubKey(recoverySecret: Uint8Array): string {
    const { pubKey, secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
    secKey.fill(0);
-   return pubKey;
+   return bytesToBase64(pubKey);
 }
 
 // BACKWARD COMPAT: until clients update to call postRecover3 directly
@@ -146,13 +148,15 @@ export function createRecoveryProofBackwardCompat(
    recoverySecret: Uint8Array,
    userId: string,
    challenge: string,
-): Uint8Array<ArrayBuffer> {
+): string {
    const { secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
    try {
-      return createProof(
-         secKey,
-         buildRecoveryMessageBackwardCompat(userId, challenge),
-         RECOVERY_BACKWARD_COMPAT_SIG_CONTEXT,
+      return bytesToBase64(
+         createProof(
+            secKey,
+            buildRecoveryMessageBackwardCompat(userId, challenge),
+            RECOVERY_BACKWARD_COMPAT_SIG_CONTEXT,
+         ),
       );
    } finally {
       secKey.fill(0);
@@ -161,15 +165,15 @@ export function createRecoveryProofBackwardCompat(
 
 // BACKWARD COMPAT: until clients update to call postRecover3 directly
 export function verifyRecoveryProofBackwardCompat(
-   pubKey: Uint8Array,
+   pubKey: string,
    userId: string,
    challenge: string,
-   signature: Uint8Array,
+   signature: string,
 ): boolean {
    return verifyProof(
-      pubKey,
+      base64ToBytes(pubKey),
       buildRecoveryMessageBackwardCompat(userId, challenge),
-      signature,
+      base64ToBytes(signature),
       RECOVERY_BACKWARD_COMPAT_SIG_CONTEXT,
    );
 }
@@ -179,21 +183,28 @@ export function createRecoveryProof(
    userId: string,
    timestampMs: string,
    nonce: string,
-): Uint8Array<ArrayBuffer> {
+): string {
    const { secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
    try {
-      return createProof(secKey, buildRecoveryMessage(userId, timestampMs, nonce), RECOVERY_SIG_CONTEXT);
+      return bytesToBase64(
+         createProof(secKey, buildRecoveryMessage(userId, timestampMs, nonce), RECOVERY_SIG_CONTEXT),
+      );
    } finally {
       secKey.fill(0);
    }
 }
 
 export function verifyRecoveryProof(
-   pubKey: Uint8Array,
+   pubKey: string,
    userId: string,
    timestampMs: string,
    nonce: string,
-   signature: Uint8Array,
+   signature: string,
 ): boolean {
-   return verifyProof(pubKey, buildRecoveryMessage(userId, timestampMs, nonce), signature, RECOVERY_SIG_CONTEXT);
+   return verifyProof(
+      base64ToBytes(pubKey),
+      buildRecoveryMessage(userId, timestampMs, nonce),
+      base64ToBytes(signature),
+      RECOVERY_SIG_CONTEXT,
+   );
 }
