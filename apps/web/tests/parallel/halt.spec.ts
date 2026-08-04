@@ -7,7 +7,7 @@ import { testWithAuth, toggleCredentials, prfEncryptForPasskey } from '.././comm
 type LoginBody = { prf: boolean; userId: string; pkId: string; userCred?: string; userCredEnc?: string };
 
 async function expectStopped(page: Page): Promise<void> {
-   await expect(page.getByText('Quick Crypt has stopped')).toBeVisible({ timeout: 10000 });
+   await expect(page.getByText('Quick Crypt detected a problem')).toBeVisible({ timeout: 10000 });
    await expect(page.getByText('Quick Crypt Sign In')).toBeHidden();
    await expect(page.getByRole('button', { name: 'Sign in as a different user' })).toBeHidden();
    await expect(page.getByRole('button', { name: 'Encrypt Text' })).toBeHidden();
@@ -50,7 +50,7 @@ testWithAuth('stops when a PRF account is reported as no-PRF at sign in', async 
    await page.getByRole('button', { name: 'Help' }).click();
    await page.getByRole('menuitem', { name: 'Overview' }).click();
    await expect(page).toHaveURL(/\/help\/overview$/);
-   await expect(page.getByText('Quick Crypt has stopped')).toBeHidden();
+   await expect(page.getByText('Quick Crypt detected a problem')).toBeHidden();
 
    await restoreApp(page);
 });
