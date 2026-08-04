@@ -96,15 +96,17 @@ export namespace ResponseTypes {
       description?: string;
    };
 
-   export type UserInfo = {
-      verified: boolean;
-      userId?: string;
-      userName?: string;
-      hasRecoveryId?: boolean;
-      prf?: boolean;
-      authenticators?: AuthenticatorInfo[];
-      invitables?: InvitableInfo[];
-   };
+   export type UserInfo =
+      | { verified: false }
+      | {
+           verified: true;
+           userId: string;
+           userName: string;
+           hasRecoveryId: boolean;
+           prf: boolean;
+           authenticators: AuthenticatorInfo[];
+           invitables?: InvitableInfo[];
+        };
 
    export type LoginUserInfo = UserInfo & {
       pkId?: string;

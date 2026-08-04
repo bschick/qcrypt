@@ -83,6 +83,7 @@ const baseUrl = environment.apiHost;
 export const ACTIVITY_TIMEOUT_SEC = 60 * 60 * 1.5;
 const EXPIRY_CHECK_INTERVAL_MS = 1000 * 60 * 2;
 const KEYSTORE_SLOT = 'user-cred-key';
+const ACCOUNTPIN_KEY = 'accountpin';
 
 export type VerifiedUserInfo = {
    userId: string;
@@ -104,6 +105,12 @@ type FetchArgs = {
 };
 
 type SessionState = Partial<CredentialPayload> & { userId: string };
+
+// Account values recorded at registration or first login, which no endpoint later changes
+type AccountPin = {
+   prf: boolean;
+   userCredPubKey: string;
+};
 
 export type SenderLinkInfo = {
    linkId: string;
@@ -148,6 +155,7 @@ export class AuthenticatorService {
    private _csrf?: string = undefined;
    private _cachedRecoveryWords?: string;
    private _pendingLogout: Promise<unknown> = Promise.resolve();
+   private _halted = false;
 
    constructor(
       private _keystoreSvc: KeystoreService,
@@ -241,6 +249,45 @@ export class AuthenticatorService {
    private _getSessionState(): SessionState | null {
       const raw = sessionStorage.getItem('sessionstate');
       return raw ? JSON.parse(raw) : null;
+   }
+
+   private _loadAccountPin(userId: string): AccountPin | null {
+      const raw = localStorage.getItem(`${userId}${ACCOUNTPIN_KEY}`);
+      return raw ? JSON.parse(raw) : null;
+   }
+
+   public get halted(): boolean {
+      return this._halted;
+   }
+
+   private _halt(reason: string): never {
+      console.error(`halted: ${reason}`);
+      this._halted = true;
+      this.logout(true);
+      throw new Error('halted');
+   }
+
+   private _checkAccountPinPrf(userId: string, prf: boolean | undefined): AccountPin | null {
+      if (prf === undefined) {
+         throw new Error('missing account mode');
+      }
+
+      const pin = this._loadAccountPin(userId);
+      if (pin?.prf && !prf) {
+         this._halt(`prf downgrade for ${userId}`);
+      }
+      return pin;
+   }
+
+   private _applyAccountPin(userId: string, prf: boolean | undefined, userCred: Uint8Array): void {
+      const pin = this._checkAccountPinPrf(userId, prf);
+      const userCredPubKey = getUserCredPubKey(userCred);
+
+      if (pin && pin.userCredPubKey !== userCredPubKey) {
+         this._halt(`userCred mismatch for ${userId}`);
+      }
+
+      localStorage.setItem(`${userId}${ACCOUNTPIN_KEY}`, JSON.stringify({ prf, userCredPubKey }));
    }
 
    public isCurrentPk(testPK: string): boolean {
@@ -562,15 +609,28 @@ export class AuthenticatorService {
       prfKey: Uint8Array<ArrayBuffer> | null,
    ): Promise<Uint8Array<ArrayBuffer>> {
       try {
+         if (!serverLogin.verified) {
+            throw new Error('unverified user');
+         }
+         if (!serverLogin.userId) {
+            throw new Error('invalid user id');
+         }
+         this._checkAccountPinPrf(serverLogin.userId, serverLogin.prf);
+
+         let userCred: Uint8Array<ArrayBuffer>;
          if (serverLogin.prf) {
             if (!prfKey || !serverLogin.userCredEnc) {
                throw new Error('missing PRF user credential');
             }
-            return await prfDecrypt(serverLogin.userCredEnc, prfKey, serverLogin.userId!);
-         } else if (!serverLogin.userCred) {
-            throw new Error('missing non-PRF user credential');
+            userCred = await prfDecrypt(serverLogin.userCredEnc, prfKey, serverLogin.userId);
+         } else {
+            if (!serverLogin.userCred) {
+               throw new Error('missing non-PRF user credential');
+            }
+            userCred = base64ToBytes(serverLogin.userCred);
          }
-         return base64ToBytes(serverLogin.userCred);
+
+         return userCred;
       } finally {
          if (prfKey) {
             prfKey.fill(0);
@@ -581,6 +641,9 @@ export class AuthenticatorService {
    // Takes ownership of and wipes userCred
    private async _loginUser(serverLogin: LoginUserInfo, userCred: Uint8Array<ArrayBuffer>): Promise<VerifiedUserInfo> {
       try {
+         if (!serverLogin.verified) {
+            throw new Error('unverified user');
+         }
          if (!serverLogin.userId?.length) {
             throw new Error('invalid user id');
          }
@@ -590,6 +653,7 @@ export class AuthenticatorService {
          if (userCred?.byteLength !== cc.USERCRED_BYTES) {
             throw new Error('invalid user credential');
          }
+         this._applyAccountPin(serverLogin.userId, serverLogin.prf, userCred);
 
          const { derivedKey, version } = await this._keystoreSvc.create(KEYSTORE_SLOT, serverLogin.pkId);
          if (!derivedKey) {
@@ -625,6 +689,9 @@ export class AuthenticatorService {
       userCredExpiry: string,
       version: number,
    ): VerifiedUserInfo {
+      if (!serverLogin.verified) {
+         throw new Error('unverified user');
+      }
       if (!serverLogin.userId || serverLogin.userId.length === 0) {
          throw new Error('invalid user id');
       }
@@ -656,8 +723,8 @@ export class AuthenticatorService {
 
       this._csrf = serverLogin.csrf;
       localStorage.setItem('sessionexpiry', userCredExpiry);
-      localStorage.setItem('userid', serverLogin.userId!);
-      localStorage.setItem('pkid', serverLogin.pkId!);
+      localStorage.setItem('userid', serverLogin.userId);
+      localStorage.setItem('pkid', serverLogin.pkId);
 
       const userInfo = this._updateLoggedInUser(serverLogin);
       this._emit(this._captureEventData(AuthEvent.Login));
@@ -776,16 +843,17 @@ export class AuthenticatorService {
       if (!session) {
          throw new Error('no active user');
       }
+      this._checkAccountPinPrf(session.userId, serverUser.prf);
 
       localStorage.setItem('username', serverUser.userName);
 
       const userInfo: VerifiedUserInfo = {
-         userId: serverUser.userId!,
-         userName: serverUser.userName!,
+         userId: serverUser.userId,
+         userName: serverUser.userName,
          pkId: session.pkId!,
-         hasRecoveryId: serverUser.hasRecoveryId!,
-         prf: serverUser.prf ?? false,
-         authenticators: serverUser.authenticators!,
+         hasRecoveryId: serverUser.hasRecoveryId,
+         prf: serverUser.prf,
+         authenticators: serverUser.authenticators,
       };
 
       this.userInfo.set(userInfo);
@@ -974,7 +1042,7 @@ export class AuthenticatorService {
          this._broadcastSvc.sendUserInfoChanged({ pkId: userInfo.pkId });
       }
 
-      return serverUserInfo.authenticators!.length;
+      return serverUserInfo.authenticators.length;
    }
 
    async refreshUserInfo(): Promise<VerifiedUserInfo> {
@@ -1146,6 +1214,9 @@ export class AuthenticatorService {
             bodyJSON: JSON.stringify(startBody),
          });
 
+         // server ends the session, so drop local session state to match
+         this.logout(true);
+
          let userCred: Uint8Array<ArrayBuffer>;
          if (startResp.prf) {
             if (!startResp.userCredEnc) {
@@ -1158,6 +1229,8 @@ export class AuthenticatorService {
             }
             userCred = base64ToBytes(startResp.userCred);
          }
+
+         this._applyAccountPin(userId, startResp.prf, userCred);
 
          const timestamp2 = String(Date.now());
          const confirmPath = new URL(`${environment.apiVersion}/recover/confirm`, baseUrl).pathname;
@@ -1205,7 +1278,7 @@ export class AuthenticatorService {
          bodyJSON: JSON.stringify({ userId: userId, userCred: userCred }),
       });
 
-      return await this._finishRecovery(recoverResp, userId, !!recoverResp.prf, undefined);
+      return await this._finishRecovery(recoverResp, userId, !!recoverResp.prf, base64ToBytes(userCred));
    }
 
    // Re-provisions the recovered account's "first" passkey
@@ -1214,8 +1287,13 @@ export class AuthenticatorService {
       regOptions: PublicKeyCredentialCreationOptionsJSON,
       userId: string,
       prf: boolean,
-      userCred: Uint8Array<ArrayBuffer> | undefined,
+      userCred: Uint8Array<ArrayBuffer>,
    ): Promise<VerifiedUserInfo> {
+      if (userCred.byteLength !== cc.USERCRED_BYTES) {
+         userCred.fill(0);
+         throw new Error('invalid user credential');
+      }
+
       const { regResponse, prfKey } = await this._startRegistration(regOptions, prf);
 
       try {
@@ -1226,9 +1304,6 @@ export class AuthenticatorService {
          };
 
          if (prf) {
-            if (!userCred) {
-               throw new Error('missing recovery user credential');
-            }
             if (!prfKey) {
                throw new PrfUnsupportedError();
             }
@@ -1236,18 +1311,11 @@ export class AuthenticatorService {
          }
 
          const serverLoginUserInfo = await this._passkeyVerify('recover/verify', body);
+         this._checkAccountPinPrf(userId, serverLoginUserInfo.prf);
 
-         if (!serverLoginUserInfo.prf) {
-            if (!serverLoginUserInfo.userCred) {
-               throw new Error('invalid credential state');
-            }
-            userCred = base64ToBytes(serverLoginUserInfo.userCred);
-         }
-         return await this._loginUser(serverLoginUserInfo, userCred!);
+         return await this._loginUser(serverLoginUserInfo, userCred);
       } finally {
-         if (userCred) {
-            userCred.fill(0);
-         }
+         userCred.fill(0);
          if (prfKey) {
             prfKey.fill(0);
          }
@@ -1283,7 +1351,8 @@ export class AuthenticatorService {
             const { regResponse, prfKey } = await this._startRegistration(optionsJson, true);
 
             if (!prfKey && (await onPrfUnavailable()) === 'different') {
-               // discard the created passkey and register a fresh one
+               // discard the created passkey and register a fresh one. Note that this leaks a
+               // passkey in the user's authenticator
                continue;
             }
 
@@ -1300,8 +1369,12 @@ export class AuthenticatorService {
             }
 
             const serverLoginUserInfo = await this._passkeyVerify('reg/verify', body);
-            if (!serverLoginUserInfo.prf) {
-               if (!serverLoginUserInfo.userCred) {
+            if (prfKey) {
+               if (!serverLoginUserInfo.prf) {
+                  this._halt(`server rejected PRF for ${userId}`);
+               }
+            } else {
+               if (serverLoginUserInfo.prf || !serverLoginUserInfo.userCred) {
                   throw new Error('invalid credential state');
                }
                userCred = base64ToBytes(serverLoginUserInfo.userCred);
@@ -1408,7 +1481,10 @@ export class AuthenticatorService {
       return prfReadKey(startAuth.clientExtensionResults);
    }
 
-   private async _passkeyVerify(resource: string, body: RequestTypes.PasskeyVerify): Promise<LoginUserInfo> {
+   private async _passkeyVerify(
+      resource: string,
+      body: RequestTypes.PasskeyVerify,
+   ): Promise<Extract<LoginUserInfo, { verified: true }>> {
       const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
          method: 'POST',
          resource: resource,
@@ -1417,6 +1493,9 @@ export class AuthenticatorService {
 
       if (!serverLoginUserInfo) {
          throw new Error('registration failed');
+      }
+      if (!serverLoginUserInfo.verified) {
+         throw new Error('unverified user');
       }
 
       return serverLoginUserInfo;

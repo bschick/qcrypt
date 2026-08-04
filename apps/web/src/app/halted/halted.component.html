@@ -1,0 +1,28 @@
+<div class="halted-overlay">
+  <mat-card class="halted-card" appearance="outlined">
+    <mat-card-header>
+      <mat-card-title>⚠️ Quick Crypt detected a problem</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p>
+        The account details returned by the Quick Crypt server are less secure
+        than the previously stored account information. Quick Crypt stopped to
+        prevent this error from causing problems.
+      </p>
+      <p>
+        <a
+          [routerLink]="'/help/faqs'"
+          [queryParams]="{ search: 'detected problem' }"
+        >
+          Read more about why this happens</a
+        >, and please
+        <a
+          href="https://github.com/bschick/qcrypt/issues/new/choose"
+          target="_blank"
+        >
+          report the issue on GitHub</a
+        >.
+      </p>
+    </mat-card-content>
+  </mat-card>
+</div>

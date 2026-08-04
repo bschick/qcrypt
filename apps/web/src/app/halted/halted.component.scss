@@ -1,0 +1,21 @@
+@use "../common.scss";
+
+.halted-overlay {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 20px;
+  min-width: 400px;
+}
+
+.halted-card {
+  max-width: 620px;
+
+  p {
+    margin-top: 16px;
+  }
+
+  a {
+    color: var(--mat-sys-primary);
+  }
+}

@@ -1,6 +1,14 @@
 import { test, expect, Page, BrowserContext, type Cookie } from '@playwright/test';
 import { createUserCredProof } from '@qcrypt/api';
-import { cryptoReady, MasterKeyKeyProvider, decryptStream, streamFromBase64, readStreamAll } from '@qcrypt/crypto';
+import {
+   cryptoReady,
+   MasterKeyKeyProvider,
+   decryptStream,
+   encryptStream,
+   streamFromBase64,
+   streamFromBytes,
+   readStreamAll,
+} from '@qcrypt/crypto';
 import {
    WebAuthnEmulator,
    AuthenticatorEmulator,
@@ -66,6 +74,18 @@ async function recomputeUserCred(
    userId: string,
 ): Promise<string> {
    await cryptoReady();
+   const prfKey = readPrfKey(emulator, origin, rpId, credentialId);
+   const keyProvider = new MasterKeyKeyProvider(prfKey, userId);
+   const userCredBytes = await readStreamAll(await decryptStream(streamFromBase64(passkeyUserCredEnc), keyProvider));
+   return Buffer.from(userCredBytes).toString('base64url');
+}
+
+function readPrfKey(
+   emulator: WebAuthnEmulator,
+   origin: string,
+   rpId: string,
+   credentialId: string,
+): Uint8Array<ArrayBuffer> {
    const assertion = emulator.getJSON(origin, {
       rpId,
       challenge: randomBytes(32).toString('base64url'),
@@ -76,12 +96,27 @@ async function recomputeUserCred(
    const prfFirst = (assertion.clientExtensionResults as { prf?: { results?: { first?: string } } }).prf?.results
       ?.first;
    if (!prfFirst) {
-      throw new Error('recomputeUserCred: emulator returned no PRF output');
+      throw new Error('readPrfKey: emulator returned no PRF output');
    }
-   const prfKey = new Uint8Array(Buffer.from(prfFirst, 'base64url'));
-   const keyProvider = new MasterKeyKeyProvider(prfKey, userId);
-   const userCredBytes = await readStreamAll(await decryptStream(streamFromBase64(passkeyUserCredEnc), keyProvider));
-   return Buffer.from(userCredBytes).toString('base64url');
+   return new Uint8Array(Buffer.from(prfFirst, 'base64url'));
+}
+
+// Encrypts arbitrary bytes the way the client encrypts userCred for a passkey, so a test
+// can hand a PRF account a credential that decrypts correctly but is not its own.
+export async function prfEncryptForPasskey(
+   emulator: WebAuthnEmulator,
+   origin: string,
+   rpId: string,
+   credentialId: string,
+   userId: string,
+   plainText: Uint8Array<ArrayBuffer>,
+): Promise<string> {
+   await cryptoReady();
+   const keyProvider = new MasterKeyKeyProvider(readPrfKey(emulator, origin, rpId, credentialId), userId);
+   const cipherData = await readStreamAll(
+      await encryptStream(streamFromBytes(plainText), keyProvider, { algs: ['X20-PLY'] }),
+   );
+   return Buffer.from(cipherData).toString('base64url');
 }
 
 export type hosts = 't1.quickcrypt.org' | 'quickcrypt.org';

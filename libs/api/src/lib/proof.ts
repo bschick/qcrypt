@@ -186,9 +186,8 @@ export function createRecoveryProof(
 ): string {
    const { secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
    try {
-      return bytesToBase64(
-         createProof(secKey, buildRecoveryMessage(userId, timestampMs, nonce), RECOVERY_SIG_CONTEXT),
-      );
+      const message = buildRecoveryMessage(userId, timestampMs, nonce);
+      return bytesToBase64(createProof(secKey, message, RECOVERY_SIG_CONTEXT));
    } finally {
       secKey.fill(0);
    }

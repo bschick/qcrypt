@@ -151,6 +151,7 @@ function isVerified(unverifiedUser: UnverifiedUserItem, userId: string): unverif
       unverifiedUser.userId === userId &&
       validB64(unverifiedUser.userId) &&
       validB64(unverifiedUser.userCredEnc) &&
+      unverifiedUser.prf !== undefined &&
       unverifiedUser.userName !== undefined &&
       unverifiedUser.userName.length > 0 &&
       unverifiedUser.createdAt !== undefined
@@ -369,10 +370,6 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
       throw new AuthError();
    }
 
-   let responseContent: LoginUserInfo = {
-      verified: verification.verified,
-   };
-
    const verifiedUser = checkVerified(unverifiedUser, authenticator.userId);
    const startSession = verifiedUser;
 
@@ -400,7 +397,7 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
    verifiedUser.lastCredentialId = authenticator.credentialId;
    verifiedUser.authCount += 1;
 
-   responseContent = await makeLoginUserInfoResponse(verifiedUser, 'passkey');
+   const responseContent = await makeLoginUserInfoResponse(verifiedUser, 'passkey');
 
    // Let this happen async
    recordEvent(EventNames.AuthVerify, unverifiedUser.userId, authenticator.credentialId);

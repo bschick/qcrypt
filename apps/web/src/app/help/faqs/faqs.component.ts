@@ -604,6 +604,23 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
+      question: 'What does it mean that Quick Crypt has detected a problem and stopped?',
+      answer: `Quick Crypt remembers a few details about each account the first time it
+      is used on a system, including whether the account uses the WebAuthn PRF
+      (Pseudo-Random Function) extension and a public key derived from your user credential.
+      The Quick Crypt server set both when your account was created and never changes them.
+      If the server later reports something different, Quick Crypt stops because that may
+      indicate a bug or security issue. Continuing could encrypt your data with a user credential
+      that is not yours, which would leave that data unreadable.
+      <p>Nothing you have already encrypted is affected, and your recovery word pattern and
+      passkeys are unchanged, but this problem must be resolved before you can continue using
+      Quick Crypt. Please
+      <a href="https://github.com/bschick/qcrypt/issues/new/choose" target="_blank">
+      report the issue on GitHub</a> so it can be investigated.</p>`,
+   },
+
+   {
+      position: 0,
       question:
          "What should I do if someone I don't trust obtained my recovery word pattern or passkey and a password I used for encryption?",
       answer: `The potential attacker also needs your encrypted data to decrypt it.
