@@ -29,6 +29,29 @@ body {
   background: rgba(0, 0, 0, 0.32);
 }
 
+// Printing anywhere in the app yields only the backup sheet, never the surrounding chrome
+@media print {
+  @page {
+    margin: 15mm;
+  }
+
+  // Dropped from layout rather than hidden: anything still occupying space keeps the
+  // page as wide as the on-screen app, which crops the sheet at the paper edge
+  body *:not(.print-sheet, .print-sheet *, :has(.print-sheet)) {
+    display: none !important;
+  }
+
+  .qcrypt,
+  .router-content,
+  mat-sidenav-content {
+    position: static !important;
+    overflow: visible !important;
+    height: auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+  }
+}
+
 // Add class="filled" to a <mat-icon> to override the default outlined look.
 .material-symbols-rounded.filled {
   font-variation-settings: 'FILL' 1;
