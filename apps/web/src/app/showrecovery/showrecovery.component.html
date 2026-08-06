@@ -85,12 +85,10 @@
             #wordsArea
             id="wordsArea"
             matInput
-            autofocus
             type="text"
             [formControl]="recoveryWords"
             readonly="true"
             class="words-area"
-            (focus)="wordsArea.select()"
           ></textarea>
         </mat-form-field>
         <div class="button-stack">
@@ -128,12 +126,11 @@
     <p>
       The information below is needed to recover your account and decrypt your
       data if you lose access to your Quick Crypt passkeys.
-      <b>Print and store this sheet offline</b> somewhere that is physically
-      secure and durable, such as a lockbox.
-      <b
-        >It is imperative that you store this sheet separately from your
-        passkeys and do not allow others to access it.</b
-      >
+      <b>
+        Print and store this sheet offline separately from your passkeys
+        somewhere that is physically secure and durable, such as a lockbox. Do
+        not allow others to access your recovery sheet.
+      </b>
     </p>
 
     <h2>Recovery Word Pattern:</h2>
@@ -142,8 +139,16 @@
       This word pattern allows you to restore your account if you lose access to
       all your Quick Crypt passkeys. To restore your account, go to
       https://quickcrypt.org/recovery3 and enter the words in the exact order
-      they appear above. If someone you do not trust gains access to your
-      recovery words, go to https://quickcrypt.org/regenrecovery to change them.
+      they appear above.
+    </p>
+    <p>
+      If someone you do not trust gains access to your recovery words but has
+      not used them, go to https://quickcrypt.org/regenrecovery and change your
+      recovery word pattern. If an untrusted party has used or changed your
+      recovery words, your encrypted data is still protected by encryption
+      passwords, but your account's overall security is permanently weakened. We
+      recommend creating a new Quick Crypt account, re-encrypting your data, and
+      then deleting your previous account.
     </p>
 
     <h2>User Credential:</h2>
@@ -157,12 +162,12 @@
       command-line tool to decrypt your data.
     </p>
     <p>
-      <b>
-        Unlike the recovery word pattern, your user credential can never be
-        changed. If this sheet is ever exposed to untrusted parties, your
-        account and data security are permanently weakened and we recommend
-        creating a new Quick Crypt account and re-encrypting your data.
-      </b>
+      Unlike the recovery word pattern, your user credential can never be
+      changed. If this sheet is ever exposed to untrusted parties, your
+      encrypted data is still protected by encryption passwords, but your
+      account's overall security is permanently weakened. We recommend creating
+      a new Quick Crypt account, re-encrypting your data, and then deleting your
+      previous account.
     </p>
   </div>
 }

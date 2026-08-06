@@ -88,13 +88,6 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
 
       if (this.authSvc.hasRecoveryWords()) {
          this.recoveryWords.setValue(this.authSvc.consumeRecoveryWords());
-
-         try {
-            // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
-            setTimeout(() => this.r2.selectRootElement('#wordsArea').focus(), 0);
-         } catch (err) {
-            console.error(err);
-         }
       } else {
          this.router.navigateByUrl('/regenrecovery');
       }
