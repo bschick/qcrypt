@@ -1147,8 +1147,13 @@ async function putRecover3Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
       throw new ParamError('invalid recovery public key');
    }
 
-   // Verified against the submitted key, so the caller must hold its secret
-   await verifyRecoverProof(recoveryPubKey, verifiedUser.userId, recover3Key);
+   // Verified against the submitted key, so the caller must hold its secret.
+   // BACKWARD COMPAT: until clients update to send a proof. A caller that omits one does
+   // not show it holds the secret behind recoveryPubKey, so the key is taken on trust and a
+   // wrong one leaves the account unrecoverable. Require the proof once clients send it.
+   if (recover3Key?.signature) {
+      await verifyRecoverProof(recoveryPubKey, verifiedUser.userId, recover3Key);
+   }
 
    const updates: { recoveryPubKey: string; userCredEnc?: string } = {
       recoveryPubKey: recoveryPubKey,
@@ -2060,8 +2065,20 @@ const METHODMAP: MethodMap = {
          authorize: false,
          handler: postRecoverVerify,
       },
-      { name: 'postRecover', pattern: Patterns.recover, version: 1, authorize: false, handler: postRecover },
-      { name: 'postRecover3', pattern: Patterns.recover3, version: 1, authorize: false, handler: postRecover3 },
+      {
+         name: 'postRecover',
+         pattern: Patterns.recover,
+         version: 1,
+         authorize: false,
+         handler: postRecover,
+      },
+      {
+         name: 'postRecover3',
+         pattern: Patterns.recover3,
+         version: 1,
+         authorize: false,
+         handler: postRecover3,
+      },
       // BACKWARD COMPAT: until clients update to call postRecover3 directly
       {
          name: 'postRecover2Challenge',
@@ -2070,10 +2087,21 @@ const METHODMAP: MethodMap = {
          authorize: false,
          handler: postRecover2Challenge,
       },
-      { name: 'postRecover2', pattern: Patterns.recover2, version: 1, authorize: false, handler: postRecover2 },
-
+      {
+         name: 'postRecover2',
+         pattern: Patterns.recover2,
+         version: 1,
+         authorize: false,
+         handler: postRecover2,
+      },
       // Internal only endpoints that are not exposed in cloudfront and require special auth
-      { name: 'postMunge', pattern: Patterns.munge, version: INTERNAL_VERSION, authorize: false, handler: postMunge },
+      {
+         name: 'postMunge',
+         pattern: Patterns.munge,
+         version: INTERNAL_VERSION,
+         authorize: false,
+         handler: postMunge,
+      },
       {
          name: 'postConsistency',
          pattern: Patterns.consistency,

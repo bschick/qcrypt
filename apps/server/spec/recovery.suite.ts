@@ -474,16 +474,27 @@ export function recoverySuite(prf: boolean): void {
          expect(res.status).toBe(400);
       });
 
-      it('rejects a recovery public key with no proof of its secret', async () => {
+      // BACKWARD COMPAT: deployed clients send no proof, so their key is taken on trust.
+      // Once clients have updated, this becomes 'rejects a recovery public key with no proof
+      // of its secret' expecting 400. The body is otherwise complete so that only the absent
+      // proof is under test.
+      it('accepts a recovery public key with no proof of its secret', async () => {
          const newSecret = recoverySecret(getRandom(RECOVERYID_BYTES), user.userId);
          const good = await recoveryKeyBody(user, newSecret);
          const okRes = await putJson('/v1/recover3/key', good, { 'x-csrf-token': user.csrf }, user.cookie);
          expect(okRes.status).toBe(200);
          user.recoverySecret = newSecret;
 
-         const unproven = { recoveryPubKey: getRecoveryPubKey(user.recoverySecret) };
+         const unproven: Record<string, string> = { recoveryPubKey: getRecoveryPubKey(user.recoverySecret) };
+         if (user.prf) {
+            unproven['userCredEnc'] = await prfEncrypt(
+               base64ToBytes(user.userCred),
+               user.recoverySecret.slice(0),
+               user.userId,
+            );
+         }
          const res = await putJson('/v1/recover3/key', unproven, { 'x-csrf-token': user.csrf }, user.cookie);
-         expect(res.status).toBe(400);
+         expect(res.status).toBe(200);
       });
 
       it('rejects a recovery public key proved with the wrong secret', async () => {

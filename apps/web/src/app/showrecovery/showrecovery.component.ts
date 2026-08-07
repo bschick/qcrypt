@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnDestroy, type OnInit, Renderer2 } from '@angular/core';
+import { Component, type OnDestroy, type OnInit } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -64,7 +64,6 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
 
    constructor(
       public authSvc: AuthenticatorService,
-      private r2: Renderer2,
       private router: Router,
       private snackBar: MatSnackBar,
    ) {}

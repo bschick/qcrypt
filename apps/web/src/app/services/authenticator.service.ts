@@ -1016,6 +1016,9 @@ export class AuthenticatorService {
       if (!this.hasSession()) {
          throw new Error('no active user');
       }
+      if (this.userInfo()?.authenticators.length === 1) {
+         await this.reauthenticate();
+      }
 
       const wasCurrentPk = this.isCurrentPk(credentialId);
 
