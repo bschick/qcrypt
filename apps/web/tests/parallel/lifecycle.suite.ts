@@ -107,7 +107,7 @@ export function lifecycleSuite(prf: boolean): void {
       await expect(tableBody.locator('tr')).toHaveCount(1);
       await expectPrfBadge(page, prf);
 
-      await deleteFirstPasskey(page, testUser.userName);
+      await deleteFirstPasskey(page, testUser.userName, (trigger) => authFixture.passkeyAuth(authenticator2, trigger));
       await expect(page).toHaveURL(/\/welcome$/);
       await expect(page.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({ timeout: 10000 });
       authFixture.untrackUser(testUser.userId);
@@ -144,7 +144,7 @@ export function lifecycleSuite(prf: boolean): void {
       // confirmation and redirects to /welcome once the server removes the user.
       await deleteLastPasskey(page);
       await expect(tableBody.locator('tr')).toHaveCount(1);
-      await deleteLastPasskey(page, testUser.userName);
+      await deleteLastPasskey(page, testUser.userName, (trigger) => authFixture.passkeyAuth(authenticator1, trigger));
       await expect(page).toHaveURL(/\/welcome$/);
       authFixture.untrackUser(testUser.userId);
    });
@@ -199,7 +199,7 @@ export function lifecycleSuite(prf: boolean): void {
       await toggleCredentials(page);
       await expect(tableBody.locator('tr')).toHaveCount(1);
 
-      await deleteFirstPasskey(page, testUser.userName);
+      await deleteFirstPasskey(page, testUser.userName, (trigger) => authFixture.passkeyAuth(authenticator2, trigger));
       await expect(page).toHaveURL(/\/welcome$/);
       await expect(page.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({ timeout: 10000 });
       authFixture.untrackUser(testUser.userId);
@@ -256,7 +256,7 @@ export function lifecycleSuite(prf: boolean): void {
 
       await toggleCredentials(page);
       await expect(tableBody.locator('tr')).toHaveCount(1);
-      await deleteFirstPasskey(page, testUser.userName);
+      await deleteFirstPasskey(page, testUser.userName, (trigger) => authFixture.passkeyAuth(authenticator2, trigger));
       await expect(page).toHaveURL(/\/welcome$/);
       authFixture.untrackUser(testUser.userId);
    });

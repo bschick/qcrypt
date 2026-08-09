@@ -613,41 +613,52 @@ export async function expectActiveServerSession(page: Page, expectedUserName?: s
    }
 }
 
-export async function deleteFirstPasskey(page: Page, userName?: string): Promise<void> {
+export type PasskeyReauth = (trigger: () => Promise<void>) => Promise<void>;
+
+// The client re-authenticates before deleting an account's final passkey, so that delete only
+// reaches the server when reauth runs the confirmation inside a ceremony the emulator answers.
+async function confirmPasskeyDelete(
+   page: Page,
+   isLast: boolean,
+   userName?: string,
+   reauth?: PasskeyReauth,
+): Promise<void> {
+   if (isLast && userName) {
+      await page.locator('input#confirmInput').fill(userName);
+   }
+
+   const deleted = page.waitForResponse(
+      (response) => response.url().includes('/passkeys') && response.request().method() === 'DELETE',
+   );
+   const confirm = async () => {
+      await page.getByRole('button', { name: 'Yes' }).click();
+   };
+
+   if (reauth) {
+      await reauth(confirm);
+   } else {
+      await confirm();
+   }
+
+   const deleteResponse = await deleted;
+   expect(deleteResponse.status()).toBe(200);
+}
+
+export async function deleteFirstPasskey(page: Page, userName?: string, reauth?: PasskeyReauth): Promise<void> {
    const tableBody = page.locator('table.credtable tbody');
    const count = await tableBody.locator('tr').count();
 
    await page.getByRole('button', { name: 'Delete' }).first().click();
-   if (count === 1 && userName) {
-      await page.locator('input#confirmInput').fill(userName);
-   }
-
-   const [deleteResponse] = await Promise.all([
-      page.waitForResponse(
-         (response) => response.url().includes('/passkeys') && response.request().method() === 'DELETE',
-      ),
-      page.getByRole('button', { name: 'Yes' }).click(),
-   ]);
-   expect(deleteResponse.status()).toBe(200);
+   await confirmPasskeyDelete(page, count === 1, userName, reauth);
 }
 
 // Does not handle removal of last Passkey
-export async function deleteLastPasskey(page: Page, userName?: string): Promise<void> {
+export async function deleteLastPasskey(page: Page, userName?: string, reauth?: PasskeyReauth): Promise<void> {
    const tableBody = page.locator('table.credtable tbody');
    const count = await tableBody.locator('tr').count();
 
    await page.getByRole('button', { name: 'Delete' }).last().click();
-   if (count === 1 && userName) {
-      await page.locator('input#confirmInput').fill(userName);
-   }
-
-   const [deleteResponse] = await Promise.all([
-      page.waitForResponse(
-         (response) => response.url().includes('/passkeys') && response.request().method() === 'DELETE',
-      ),
-      page.getByRole('button', { name: 'Yes' }).click(),
-   ]);
-   expect(deleteResponse.status()).toBe(200);
+   await confirmPasskeyDelete(page, count === 1, userName, reauth);
 }
 
 export async function fillPwdAndAccept(

@@ -290,6 +290,15 @@ export const putJson = (p: string, b: any, h: any, c: string) => request('PUT', 
 export const patchJson = (p: string, b: any, h: any, c: string) => request('PATCH', p, b, h, c);
 export const deleteJson = (p: string, h: any, c: string) => request('DELETE', p, null, h, c);
 
+// The session key is derived from lastCredentialId and authCount, which are read back
+// eventually consistent. An authorized call made before that read settles derives a different
+// key and gets a 401, which real use rarely hits because it is not this rapid fire.
+const SESSION_SETTLE_MS = 300;
+
+function settleSession(): Promise<void> {
+   return new Promise((resolve) => setTimeout(resolve, SESSION_SETTLE_MS));
+}
+
 // A swallowed cleanup-delete failure leaks a verified, no-TTL account permanently,
 // so assert success here instead of ignoring the result.
 export async function expectPasskeyDeleted(credId: string, csrf: string, cookie: string): Promise<void> {
@@ -411,6 +420,7 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
    // Make this user the current session signer
    setSessionSigner(user.userId, user.userCred);
 
+   await settleSession();
    return user;
 }
 
@@ -433,6 +443,7 @@ export async function loginWithPasskey(user: TestUser): Promise<{ cookie: string
       if (verifyRes.status === 200 || attempt >= 3) {
          expect(verifyRes.status).toBe(200);
          expect(verifyRes.data.verified).toBe(true);
+         await settleSession();
          return { cookie: verifyRes.cookie, csrf: verifyRes.data.csrf };
       }
       await new Promise((resolve) => setTimeout(resolve, 5000));
