@@ -199,7 +199,7 @@ export function coreSuite(prf: boolean): void {
 
             // An add does not re-login, so the response carries neither userCred nor its ciphertext.
             expect(verifyRes.data.userCred).toBeUndefined();
-            expect(verifyRes.data.userCredEnc).toBeUndefined();
+            expect(verifyRes.data.passkeyUserCredEnc).toBeUndefined();
 
             const delRes = await deleteJson(
                `/v1/passkeys/${attestation.id}`,

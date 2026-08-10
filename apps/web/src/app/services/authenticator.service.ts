@@ -619,10 +619,10 @@ export class AuthenticatorService {
 
          let userCred: Uint8Array<ArrayBuffer>;
          if (serverLogin.prf) {
-            if (!prfKey || !serverLogin.userCredEnc) {
+            if (!prfKey || !serverLogin.passkeyUserCredEnc) {
                throw new Error('missing PRF user credential');
             }
-            userCred = await prfDecrypt(serverLogin.userCredEnc, prfKey, serverLogin.userId);
+            userCred = await prfDecrypt(serverLogin.passkeyUserCredEnc, prfKey, serverLogin.userId);
          } else {
             if (!serverLogin.userCred) {
                throw new Error('missing non-PRF user credential');

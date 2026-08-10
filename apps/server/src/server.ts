@@ -961,33 +961,27 @@ async function registrationOptions(
 
 async function makeLoginUserInfoResponse(
    verifiedUser: VerifiedUserItem,
-   includeUserCred: 'none' | 'passkey' | 'recover',
+   includeUserCred: 'none' | 'passkey',
    auths?: AuthenticatorInfo[],
 ): Promise<LoginUserInfo> {
    const userInfo = await makeUserInfoResponse(verifiedUser, auths);
 
    try {
       let userCred: string | undefined;
-      let userCredEnc: string | undefined;
+      let passkeyUserCredEnc: string | undefined;
 
       if (includeUserCred !== 'none') {
          if (verifiedUser.prf) {
-            if (includeUserCred === 'passkey') {
-               const auth = await Authenticators.get({
-                  userId: verifiedUser.userId,
-                  credentialId: verifiedUser.lastCredentialId!,
-               }).go();
+            const auth = await Authenticators.get({
+               userId: verifiedUser.userId,
+               credentialId: verifiedUser.lastCredentialId!,
+            }).go();
 
-               userCredEnc = auth.data?.userCredEnc;
-            } else {
-               userCredEnc = verifiedUser.userCredEnc;
-            }
-
-            if (!userCredEnc) {
+            passkeyUserCredEnc = auth.data?.userCredEnc;
+            if (!passkeyUserCredEnc) {
                throw new Error('missing encrypted user credential');
             }
          } else {
-            // 'passkey' and 'recover' are the same for no-PRF accounts
             const decrypted = await decryptField(
                verifiedUser.userCredEnc,
                { userId: verifiedUser.userId },
@@ -1001,7 +995,7 @@ async function makeLoginUserInfoResponse(
       return {
          ...userInfo,
          userCred: userCred,
-         userCredEnc: userCredEnc,
+         passkeyUserCredEnc: passkeyUserCredEnc,
          pkId: verifiedUser.lastCredentialId,
       };
    } catch (error) {

@@ -88,13 +88,13 @@ describe('PRF account', () => {
       expect(verifyRes.data.verified).toBe(true);
       expect(verifyRes.data.prf).toBe(true);
       expect(verifyRes.data.userCred).toBeUndefined();
-      expect(verifyRes.data.userCredEnc).toBeDefined();
+      expect(verifyRes.data.passkeyUserCredEnc).toBeDefined();
 
       // The login assertion reproduces the registration PRF output, so it decrypts the
       // server-stored per-passkey ciphertext back to the userCred the client generated.
       const prfOutput = readPrfOutput(assertion.clientExtensionResults);
       expect(prfOutput).not.toBeNull();
-      const decrypted = await prfDecrypt(verifyRes.data.userCredEnc, prfOutput!, account.userId);
+      const decrypted = await prfDecrypt(verifyRes.data.passkeyUserCredEnc, prfOutput!, account.userId);
       expect(bytesToBase64(decrypted)).toBe(account.userCred);
    });
 

@@ -111,7 +111,7 @@ export namespace ResponseTypes {
    export type LoginUserInfo = UserInfo & {
       pkId?: string;
       userCred?: string;
-      userCredEnc?: string;
+      passkeyUserCredEnc?: string;
       csrf?: string;
    };
 

@@ -4,7 +4,7 @@ import { testWithAuth, toggleCredentials, prfEncryptForPasskey } from '.././comm
 
 // A response body is rewritten mid-flight to stand in for a server that contradicts what
 // the browser recorded when it first signed in to the account.
-type LoginBody = { prf: boolean; userId: string; pkId: string; userCred?: string; userCredEnc?: string };
+type LoginBody = { prf: boolean; userId: string; pkId: string; userCred?: string; passkeyUserCredEnc?: string };
 
 async function expectStopped(page: Page): Promise<void> {
    await expect(page.getByText('Quick Crypt detected a problem')).toBeVisible({ timeout: 10000 });
@@ -36,7 +36,7 @@ testWithAuth('stops when a PRF account is reported as no-PRF at sign in', async 
       const body = (await response.json()) as LoginBody;
       body.prf = false;
       body.userCred = randomBytes(32).toString('base64url');
-      body.userCredEnc = undefined;
+      body.passkeyUserCredEnc = undefined;
       await route.fulfill({ response: response, json: body });
    });
 
@@ -74,7 +74,7 @@ testWithAuth('stops when a PRF account returns a substituted credential', async 
    await page.route('**/v1/auth/verify', async (route) => {
       const response = await route.fetch();
       const body = (await response.json()) as LoginBody;
-      body.userCredEnc = await prfEncryptForPasskey(
+      body.passkeyUserCredEnc = await prfEncryptForPasskey(
          authenticator.emulator,
          origin,
          rpId,

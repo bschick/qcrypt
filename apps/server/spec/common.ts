@@ -352,7 +352,7 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
       expect(verifyRes.status).toBe(200);
       expect(verifyRes.data.verified).toBe(true);
       expect(verifyRes.data.prf).toBe(true);
-      expect(verifyRes.data.userCredEnc).toBeUndefined();
+      expect(verifyRes.data.passkeyUserCredEnc).toBeUndefined();
       expect(verifyRes.data.userCred).toBeUndefined();
       expect(verifyRes.data.csrf).toBeDefined();
       expect(verifyRes.data.pkId).toBeDefined();

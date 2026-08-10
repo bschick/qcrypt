@@ -133,7 +133,7 @@ async function recoverAccount(user: TestUser, opts: { keepSession?: boolean } = 
    if (user.prf) {
       expect(verifyRes.data.prf).toBe(true);
       expect(verifyRes.data.userCred).toBeUndefined();
-      expect(verifyRes.data.userCredEnc).toBeUndefined();
+      expect(verifyRes.data.passkeyUserCredEnc).toBeUndefined();
    } else {
       expect(verifyRes.data.userCred).toBe(user.userCred);
    }
