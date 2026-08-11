@@ -1,57 +1,69 @@
 <div class="container fat">
   <div class="content">
     <h1>Protocol Description (v7)</h1>
-    <p>Quick Crypt implements the protocols below to encrypt, validate, and decrypt data.
-      This information is provided to help you understand how Quick Crypt works and
-      allow you to assess its strength and trustworthiness. If you believe the protocols can be improved, please
-      <a href="https://github.com/bschick/qcrypt/issues">file a ticket.</a> Also see:
+    <p>
+      Quick Crypt implements the protocols below to encrypt, validate, and
+      decrypt data. This information is provided to help you understand how
+      Quick Crypt works and allow you to assess its strength and
+      trustworthiness. If you believe the protocols can be improved, please
+      <a href="https://github.com/bschick/qcrypt/issues">file a ticket.</a> Also
+      see:
     </p>
     <ul>
-      <li><a href="/assets/protocol7.pdf" download>Searchable pdf protocol notation</a></li>
+      <li>
+        <a href="/assets/protocol7.pdf" download
+          >Searchable pdf protocol notation</a
+        >
+      </li>
       <li><a href="/help/flow">Cipher flow diagrams</a></li>
     </ul>
     <p>
-      Quick Crypt uses WebAuthn (<span class="tip" matTooltip="You can create a
+      Quick Crypt uses WebAuthn (<span
+        class="tip"
+        matTooltip="You can create a
       passkey from a physical FIDO2
       device, a mobile phone, a browser based password manager, or a dedicated password
       manager. Dedicated password managers like Bitwarden and 1Password are
-      the easiest to use, work consistently across devices, and support backup.">Passkeys</span>)
-      to create and authenticate user
-      identities. Since this is a standard protocol described in detail elsewhere,
-      including the
-      <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API">
-        Mozilla developer network</a>,
-      WebAuthn is described only at a high level
-      to illustrate how user IDs and credentials are created and retrieved for
-      cryptographic functions.
+      the easiest to use, work consistently across devices, and support backup."
+        >Passkeys</span
+      >) to create and authenticate user identities. Since this is a standard
+      protocol described in detail elsewhere, including the
+      <a
+        href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API"
+      >
+        Mozilla developer network</a
+      >, WebAuthn is described only at a high level to illustrate how user IDs
+      and credentials are created and retrieved for cryptographic functions.
     </p>
     <h1 class="section">Cipher Data Structure</h1>
     <p>
-      The table below illustrates the byte-level structure of cipher data created by Quick
-      Crypt's version 7 protocol. When output to the browser UI, this data is base64url
-      encoded and displayed as JSON or a URL. When saved to a file, the binary structure is
-      streamed directly to the file. The subscript values below indicate which fields are
-      used to generate and validate the MAC tags.
+      The table below illustrates the byte-level structure of cipher data
+      created by Quick Crypt's version 7 protocol. When output to the browser
+      UI, this data is base64url encoded and displayed as JSON or a URL. When
+      saved to a file, the binary structure is streamed directly to the file.
+      The subscript values below indicate which fields are used to generate and
+      validate the MAC tags.
     </p>
     <p>
-      This structure enables support for file encryption in version 4+. To be compatible with
-      version 1 data, the starting fixed length 256-bit MAC was preserved. If future versions
-      create larger MACs, they may need to be split across the header and payload sections
-      to keep the header length consistent across versions.
+      This structure enables support for file encryption in version 4+. To be
+      compatible with version 1 data, the starting fixed length 256-bit MAC was
+      preserved. If future versions create larger MACs, they may need to be
+      split across the header and payload sections to keep the header length
+      consistent across versions.
     </p>
 
     <table class="bytes">
       <thead>
         <tr>
           <th class="tableheader" colspan="4">Description</th>
-          <th class="tableheader">Variable<br>Length</th>
+          <th class="tableheader">Variable<br />Length</th>
           <th class="tableheader">Format</th>
-          <th class="tableheader">Byte<br>Length</th>
+          <th class="tableheader">Byte<br />Length</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td class="block" rowspan="12">Block0 <br>(one always)</td>
+          <td class="block" rowspan="12">Block0 <br />(one always)</td>
           <td class="header" colspan="2" rowspan="3">Header</td>
           <td class="header">MAC<sub> 0</sub></td>
           <td class="header">no</td>
@@ -72,7 +84,7 @@
         </tr>
         <tr>
           <td class="payload" rowspan="9">Payload</td>
-          <td class="adata" rowspan="8">Additional<br>Data</td>
+          <td class="adata" rowspan="8">Additional<br />Data</td>
           <td class="adata">Flags<sub> 0</sub></td>
           <td class="adata">no</td>
           <td class="adata">bitfield</td>
@@ -128,7 +140,7 @@
           <td class="message">31 - 16777215</td>
         </tr>
         <tr>
-          <td class="block last-row" rowspan="7">BlockN<br>(zero or more)</td>
+          <td class="block last-row" rowspan="7">BlockN<br />(zero or more)</td>
           <td class="header" colspan="2" rowspan="3">Header</td>
           <td class="header">MAC<sub> N</sub></td>
           <td class="header">no</td>
@@ -149,7 +161,7 @@
         </tr>
         <tr>
           <td class="payload last-row" rowspan="4">Payload</td>
-          <td class="adata" rowspan="3">Additional<br>Data</td>
+          <td class="adata" rowspan="3">Additional<br />Data</td>
           <td class="adata">Flags<sub> N</sub></td>
           <td class="adata">no</td>
           <td class="adata">bitfield</td>
@@ -195,16 +207,24 @@
     <img src="/assets/decrypt_b07.png" width="240" height="45" />
     <h2>Block N Decryption by B</h2>
     <img src="/assets/decrypt_bN7.png" width="255" height="187" />
-    <h2><i>u<sub>c</sub></i> Encryption at Rest Variables</h2>
+    <h2>
+      <i>u<sub>c</sub></i> Encryption at Rest Variables
+    </h2>
     <img src="/assets/atrest_variables7.png" width="565" height="779" />
-    <h2><i>k<sub>L</sub></i> Derivation by B</h2>
+    <h2>
+      <i>k<sub>L</sub></i> Derivation by B
+    </h2>
     <img src="/assets/atrest_derivation7.png" width="245" height="66" />
-    <h2><i>u<sub>c</sub></i> Encryption under k by B</h2>
+    <h2>
+      <i>u<sub>c</sub></i> Encryption under k by B
+    </h2>
     <img src="/assets/atrest_encrypt7.png" width="393" height="273" />
-    <h2><i>cd<sub>x</sub></i> Decryption under k by B</h2>
+    <h2>
+      <i>cd<sub>x</sub></i> Decryption under k by B
+    </h2>
     <img src="/assets/atrest_decrypt7.png" width="393" height="252" />
     <h2>Authentication Variables</h2>
-    <img src="/assets/webauthn_variables7.png" width="485" height="822" />
+    <img src="/assets/webauthn_variables7.png" width="485" height="843" />
     <h2>Registration by A</h2>
     <img src="/assets/webauthn_registration7.png" width="649" height="512" />
     <h2>Authentication by A</h2>
@@ -213,8 +233,10 @@
     <img src="/assets/webauthn_authorization7.png" width="649" height="385" />
     <h2>Add Passkey by A</h2>
     <img src="/assets/webauthn_addpk7.png" width="650" height="321" />
+    <h2>Replace Recovery Words by A</h2>
+    <img src="/assets/webauthn_newwords7.png" width="620" height="469" />
     <h2>Recovery from Lost Passkey by A</h2>
-    <img src="/assets/webauthn_recovery7.png" width="649" height="682" />
+    <img src="/assets/webauthn_recovery7.png" width="648" height="937" />
     <app-proto-versions></app-proto-versions>
   </div>
 </div>
