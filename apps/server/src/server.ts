@@ -1722,6 +1722,7 @@ async function getUnverifiedUser(userId: string): Promise<UnverifiedUserItem> {
    }
 
    // May not want to bring back all parameter
+   // Eventually consistent by choice; revisit if stale fields cause 401s outside tests.
    const unverifiedUser = await Users.get({
       userId: userId,
    }).go();
@@ -1824,6 +1825,7 @@ async function verifyCookie(cookie: string, rpID: string): Promise<VerifiedUserI
       }
 
       const unverifiedUser = await getUnverifiedUser(unverifiedPayload.userId);
+      // A stale read of the derivation fields surfaces here as a spurious 401.
       const jwtKey = await getSessionKey(unverifiedUser, 'jwt_key');
 
       // Internally verifies exp date set with expiresIn during cookie creation
@@ -1853,6 +1855,7 @@ async function verifyProof(verifiedUser: VerifiedUserItem, httpDetails: HttpDeta
    } else if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > cc.PROOF_SKEW_MS) {
       result = 'timeout';
    } else {
+      // A stale userCredPubKey after rotation surfaces here as a spurious 401.
       const pubKeyBytes = base64UrlDecode(verifiedUser.userCredPubKey);
       const signatureBytes = base64UrlDecode(httpDetails.proofSignature);
       const nonceBytes = base64UrlDecode(httpDetails.proofNonce);
