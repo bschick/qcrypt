@@ -46,23 +46,42 @@ Follow the setup instructions in the root [`AGENTS.md`](../../AGENTS.md#2-one-ti
 
 ### b. Building the Project
 
-To create a non-minimized build for debugging, run from the monorepo root:
+To create a test build, run from the monorepo root:
 
 ```bash
 pnpm build:server
 ```
 
-For production builds, use the following command to create a minimized version:
+That writes an unminified build to `dist/server-test/`. For production:
 
 ```bash
-pnpm build:server:min
+pnpm build:server:prod
 ```
 
-The output will be placed in the `dist/server/` directory.
+That writes a minified build to `dist/server/`. Either command takes `--min` or `--no-min` to
+override the minification default, and reads `QC_SERVER_OUT` to override the output directory.
+Both run `pnpm check` first, so a lint or format error blocks the build.
 
 ### c. Deployment
 
-The `dist/server/` directory will contain `server.mjs` and `server.zip`. To deploy, upload `server.zip` to the appropriate AWS Lambda function. This may be documented in detail later.
+Each build directory contains `server.mjs` and `server.zip`. Deploy with the project scripts rather
+than uploading by hand:
+
+```bash
+pnpm deploy:server                      # build + upload to the test function ($LATEST)
+pnpm deploy:server:prod                 # build + upload, publish a version, move the prod alias
+
+pnpm deploy:server:prod --no-alias      # publish the version, leave the alias where it is
+pnpm deploy:server:prod deploy          # upload an existing build without rebuilding
+pnpm deploy:server:prod version 42      # point the prod alias at version 42
+pnpm rollback:server:prod               # move the prod alias back one version
+```
+
+Both `deploy:server` scripts default to `bdeploy`, which builds and then deploys. Name a command
+explicitly to do otherwise.
+
+`--no-alias` is how a new version goes live only after something else has run against it — a data
+migration, for example. See the flag notes in the root [`AGENTS.md`](../../AGENTS.md#notable-behavior).
 
 ### d. Testing
 
