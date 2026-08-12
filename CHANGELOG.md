@@ -1,5 +1,27 @@
 # CHANGELOG.md
 
+## 7.4.0 (2026-08-12)
+
+#### Features
+
+- added a printable emergency recovery sheet when recovery words are created
+
+#### Changes
+
+- recovery now confirms recovery words reconstruct the user credential before removing passkeys, preventing account lockout
+- replacing recovery words now requires a signature proving possession of the new recovery secret
+- removing the last passkey (and the user identity) requires reauthentication
+- enforced a maximum size for PRF encrypted user credentials to prevent DoS
+- updated protocol notation for recovery flow and recovery word change
+- fixed silent truncation of large decrypt output in the cli
+
+#### Security
+
+- refuse to run known PRF accounts as no-PRF or accept a substituted user credential in the web client
+- prevent unauthenticated callers from erasing a tracked replay-nonce
+- fixed various smaller security and robustness issues found by Claude Code
+- updated packages
+
 ## 7.3.0 (2026-07-23)
 
 #### Features
