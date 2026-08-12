@@ -21,6 +21,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
+import { CHALLENGE_BYTES, PROOF_SIG_BYTES } from '@qcrypt/api';
+import { USERCRED_BYTES } from '@qcrypt/crypto/consts';
 import {
    getJson,
    postJson,
@@ -141,24 +143,17 @@ async function fuzzPost(
 }
 
 async function smallFuzz(cookie: string, csrf: string, userId: string) {
-   await fuzzPatch(
-      cookie,
-      csrf,
-      `/v1/passkeys/{1}`,
-      [[...badIdsSmall, userId], badIdsSmall],
-      'description',
-      badNamesSmall,
-   );
+   await fuzzPatch(cookie, csrf, `/v1/passkeys/{0}`, [[...badIdsSmall, userId]], 'description', badNamesSmall);
 
    await fuzzPost(cookie, csrf, `/v1/auth/verify`, [badNamesSmall], ['authenticator']);
 }
 
 async function fullFuzz(cookie: string, csrf: string, userId: string) {
-   await fuzzPatch(cookie, csrf, `/v1/user`, [badIds], 'userName', badNames);
+   await fuzzPatch(cookie, csrf, `/v1/user`, [], 'userName', badNames);
 
-   await fuzzPatch(cookie, csrf, `/v1/passkeys/{1}`, [[...badIdsSmall, userId], badIds], 'description', badNames);
+   await fuzzPatch(cookie, csrf, `/v1/passkeys/{0}`, [[...badIds, userId]], 'description', badNames);
 
-   await fuzzDelete(cookie, csrf, `/v1/passkeys/{1}`, [[...badIdsSmall, userId], badIds]);
+   await fuzzDelete(cookie, csrf, `/v1/passkeys/{0}`, [[...badIds, userId]]);
 
    let res = await deleteJson(`/v1/user`, { 'x-csrf-token': csrf }, cookie);
    expect(res.status).toBeGreaterThanOrEqual(400);
@@ -169,27 +164,38 @@ async function fullFuzz(cookie: string, csrf: string, userId: string) {
 
    await fuzzPost(cookie, csrf, `/v1/auth/verify`, [badNames], ['authenticator']);
 
-   await fuzzPost(cookie, csrf, `/v1/users/{0}/recover/{1}`, [[...badIdsSmall, userId], badIds]);
+   // These handlers reject on the first bad field, so fuzzing all four at once
+   // mostly re-tests the same early exit. Vary one field per call instead, and
+   // keep the held fields well-formed so the varied one is what gets rejected.
+   const heldTimestamp = String(Date.now());
+   const heldNonce = Buffer.alloc(CHALLENGE_BYTES).toString('base64url');
+   const heldSignature = Buffer.alloc(PROOF_SIG_BYTES).toString('base64url');
+   const heldUserCred = Buffer.alloc(USERCRED_BYTES).toString('base64url');
+   const recover3Keys = ['userId', 'timestamp', 'nonce', 'signature'];
+   const confirmKeys = ['userId', 'challenge', 'timestamp', 'signature'];
 
-   await fuzzPost(cookie, csrf, `/v1/recover2/`, [[...badIdsSmall, userId], badIds], ['userId', 'recoveryId']);
+   const recover3Held = [[userId], [heldTimestamp], [heldNonce], [heldSignature]];
+   for (let field = 0; field < recover3Held.length; ++field) {
+      const values = recover3Held.map((held, pos) => (pos === field ? badIdsSmall : held));
+      await fuzzPost(cookie, csrf, `/v1/recover3/`, values, recover3Keys);
+   }
 
-   await fuzzPost(
-      cookie,
-      csrf,
-      `/v1/recover3/`,
-      [[...badIdsSmall, userId], badIdsSmall, badIdsSmall, badIdsSmall],
-      ['userId', 'timestamp', 'nonce', 'signature'],
-   );
+   const confirmHeld = [[userId], [heldNonce], [heldTimestamp], [heldSignature]];
+   for (let field = 0; field < confirmHeld.length; ++field) {
+      const values = confirmHeld.map((held, pos) => (pos === field ? badIdsSmall : held));
+      await fuzzPost(cookie, csrf, `/v1/recover/confirm`, values, confirmKeys);
+   }
 
-   await fuzzPost(
-      cookie,
-      csrf,
-      `/v1/recover/confirm`,
-      [[...badIdsSmall, userId], badIdsSmall, badIdsSmall, badIdsSmall],
-      ['userId', 'challenge', 'timestamp', 'signature'],
-   );
+   const recoverHeld = [[userId], [heldUserCred]];
+   const recoverKeys = ['userId', 'userCred'];
+   for (let field = 0; field < recoverHeld.length; ++field) {
+      const values = recoverHeld.map((held, pos) => (pos === field ? badIdsSmall : held));
+      await fuzzPost(cookie, csrf, `/v1/recover`, values, recoverKeys);
+   }
 
-   await fuzzPost(cookie, csrf, `/v1/recover/verify`, [[...badIdsSmall, userId], badIds], ['userId', 'challenge']);
+   // A signed-in user still has lastCredentialId, which is rejected before any
+   // later field is read, so userId is the only one reachable here.
+   await fuzzPost(cookie, csrf, `/v1/recover/verify`, [[...badIdsSmall, userId]], ['userId']);
 
    await fuzzGet(cookie, csrf, `/v1/{0}`, [['fl2i4bNajPIp3leX4K4a0qND', '']]);
 }
