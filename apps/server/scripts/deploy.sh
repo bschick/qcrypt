@@ -65,9 +65,8 @@ fi
 # deploy.mjs, after the prod confirmation, so the warning precedes any
 # login. It reads QC_{PROD,TEST}_AWS_PROFILE / _CHROME_PROFILE directly.
 
-# Subcommand drives DEFAULTS selection. Server's deploy.mjs has no
-# positional args, so we don't need to splice it back in — it can ride
-# through "$@" untouched.
+# Subcommand drives DEFAULTS selection. Nothing is spliced out of "$@", so the
+# subcommand and any positional after it (`version <n>`) ride through untouched.
 SUBCMD="$(detect_subcommand "$@")"
 
 # Per-subcommand project defaults. Each command in deploy.mjs only accepts
@@ -82,7 +81,7 @@ case "${SUBCMD:-bdeploy}" in
       default_unless_user_supplied --lambda "$LAMBDA" "$@"
       default_comment_from_git_tag "$@"
       ;;
-   rollback)
+   rollback|version)
       default_unless_user_supplied --lambda "$LAMBDA" "$@"
       ;;
    info)
