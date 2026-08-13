@@ -60,9 +60,9 @@ export const sha256Hex = (buf: Buffer): string => crypto.createHash('sha256').up
 let sessionUserCred: string | undefined;
 let sessionUserId: string | undefined;
 
-export function setSessionUserCred(userCred: string | undefined, userId?: string): void {
-   sessionUserCred = userCred;
+export function setSessionSigner(userId: string | undefined, userCred?: string): void {
    sessionUserId = userId;
+   sessionUserCred = userCred;
 }
 
 async function proofHeaders(method: string, path: string, body: Buffer | undefined): Promise<Record<string, string>> {
@@ -103,11 +103,12 @@ export async function makeProofHeaders(
       queryString,
    );
 
-   const sigBytes = Buffer.from(signature);
+   let sigStr = signature;
    if (opts.tamperSig) {
+      const sigBytes = base64ToBytes(signature);
       sigBytes[0] ^= 0x01;
+      sigStr = bytesToBase64(sigBytes);
    }
-   const sigStr = sigBytes.toString('base64url');
 
    return {
       'x-proof': `${sigStr},${timestamp},${nonce}`,
@@ -289,6 +290,15 @@ export const putJson = (p: string, b: any, h: any, c: string) => request('PUT', 
 export const patchJson = (p: string, b: any, h: any, c: string) => request('PATCH', p, b, h, c);
 export const deleteJson = (p: string, h: any, c: string) => request('DELETE', p, null, h, c);
 
+// The session key is derived from lastCredentialId and authCount, which are read back
+// eventually consistent. An authorized call made before that read settles derives a different
+// key and gets a 401, which real use rarely hits because it is not this rapid fire.
+const SESSION_SETTLE_MS = 300;
+
+function settleSession(): Promise<void> {
+   return new Promise((resolve) => setTimeout(resolve, SESSION_SETTLE_MS));
+}
+
 // A swallowed cleanup-delete failure leaks a verified, no-TTL account permanently,
 // so assert success here instead of ignoring the result.
 export async function expectPasskeyDeleted(credId: string, csrf: string, cookie: string): Promise<void> {
@@ -384,7 +394,7 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
          ...attestation,
          userId,
          challenge: regOpts.data.challenge,
-         recoveryPubKey: bytesToBase64(getRecoveryPubKey(secret)),
+         recoveryPubKey: getRecoveryPubKey(secret),
       };
       const verifyRes = await postJson(`/v1/reg/verify?usercred=true`, body, {}, '');
       expect(verifyRes.status).toBe(200);
@@ -407,6 +417,10 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
       };
    }
 
+   // Make this user the current session signer
+   setSessionSigner(user.userId, user.userCred);
+
+   await settleSession();
    return user;
 }
 
@@ -415,6 +429,27 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
 // intact; it stays invisible to the server, which binds the new credential to the session's account
 // (a registration response carries no userHandle). For a PRF account it also returns the new
 // credential's ciphertext of the account userCred; no-PRF returns only the attestation.
+// Signs in with an account's existing passkey. auth/verify resolves the credential through an
+// eventually consistent index, so a login soon after registration can miss; each retry needs a
+// fresh challenge because the failed attempt already spent the previous one.
+export async function loginWithPasskey(user: TestUser): Promise<{ cookie: string; csrf: string }> {
+   for (let attempt = 1; ; attempt++) {
+      const optsRes = await postJson('/v1/auth/options', { userId: user.userId }, {}, '');
+      expect(optsRes.status).toBe(200);
+
+      const assertion = user.emulator.getJSON(RP_ORIGIN, { ...optsRes.data, challenge: optsRes.data.challenge });
+      const verifyRes = await postJson('/v1/auth/verify', { ...assertion, challenge: optsRes.data.challenge }, {}, '');
+
+      if (verifyRes.status === 200 || attempt >= 3) {
+         expect(verifyRes.status).toBe(200);
+         expect(verifyRes.data.verified).toBe(true);
+         await settleSession();
+         return { cookie: verifyRes.cookie, csrf: verifyRes.data.csrf };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+   }
+}
+
 export async function registerNewCredential(
    user: TestUser,
    optionsData: PublicKeyCredentialCreationOptionsJSON,
@@ -436,6 +471,25 @@ export async function registerNewCredential(
       result = { attestation };
    }
    return result;
+}
+
+// Adds a passkey to an account holding a live session, returning the new credential id.
+export async function addPasskey(user: TestUser, csrf: string, cookie: string): Promise<string> {
+   setSessionSigner(user.userId, user.userCred);
+   const optsRes = await getJson('/v1/passkeys/options', { 'x-csrf-token': csrf }, cookie);
+   expect(optsRes.status).toBe(200);
+
+   const { attestation, passkeyUserCredEnc } = await registerNewCredential(user, optsRes.data);
+   const body: Record<string, any> = { ...attestation, challenge: optsRes.data.challenge };
+   if (passkeyUserCredEnc) {
+      body.passkeyUserCredEnc = passkeyUserCredEnc;
+   }
+
+   const verifyRes = await postJson('/v1/passkeys/verify', body, { 'x-csrf-token': csrf }, cookie);
+   expect(verifyRes.status).toBe(200);
+   expect(verifyRes.data.verified).toBe(true);
+
+   return attestation.id;
 }
 
 // Run reg/options and build a valid PRF reg/verify body, returning it with the material behind it:
@@ -476,8 +530,8 @@ export async function buildPrfRegBody(userName: string): Promise<{
       challenge: regOpts.data.challenge,
       passkeyUserCredEnc: await prfEncrypt(userCred.slice(0), prfOutput.slice(0), userId),
       recoveryUserCredEnc: await prfEncrypt(userCred.slice(0), secret.slice(0), userId),
-      userCredPubKey: bytesToBase64(getUserCredPubKey(userCred)),
-      recoveryPubKey: bytesToBase64(getRecoveryPubKey(secret)),
+      userCredPubKey: getUserCredPubKey(userCred),
+      recoveryPubKey: getRecoveryPubKey(secret),
    };
    return { userId, body, emulator, userCred, recoverySecret: secret, recoveryId, prfOutput };
 }

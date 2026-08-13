@@ -1,6 +1,14 @@
 import { test, expect, Page, BrowserContext, type Cookie } from '@playwright/test';
 import { createUserCredProof } from '@qcrypt/api';
-import { cryptoReady, MasterKeyKeyProvider, decryptStream, streamFromBase64, readStreamAll } from '@qcrypt/crypto';
+import {
+   cryptoReady,
+   MasterKeyKeyProvider,
+   decryptStream,
+   encryptStream,
+   streamFromBase64,
+   streamFromBytes,
+   readStreamAll,
+} from '@qcrypt/crypto';
 import {
    WebAuthnEmulator,
    AuthenticatorEmulator,
@@ -49,9 +57,8 @@ async function proofHeaders(
       bodyHashHex,
       new URL(url).search.slice(1),
    );
-   const sigB64 = Buffer.from(signature).toString('base64url');
    return {
-      'x-proof': `${sigB64},${timestamp},${nonce}`,
+      'x-proof': `${signature},${timestamp},${nonce}`,
    };
 }
 
@@ -67,6 +74,18 @@ async function recomputeUserCred(
    userId: string,
 ): Promise<string> {
    await cryptoReady();
+   const prfKey = readPrfKey(emulator, origin, rpId, credentialId);
+   const keyProvider = new MasterKeyKeyProvider(prfKey, userId);
+   const userCredBytes = await readStreamAll(await decryptStream(streamFromBase64(passkeyUserCredEnc), keyProvider));
+   return Buffer.from(userCredBytes).toString('base64url');
+}
+
+function readPrfKey(
+   emulator: WebAuthnEmulator,
+   origin: string,
+   rpId: string,
+   credentialId: string,
+): Uint8Array<ArrayBuffer> {
    const assertion = emulator.getJSON(origin, {
       rpId,
       challenge: randomBytes(32).toString('base64url'),
@@ -77,12 +96,27 @@ async function recomputeUserCred(
    const prfFirst = (assertion.clientExtensionResults as { prf?: { results?: { first?: string } } }).prf?.results
       ?.first;
    if (!prfFirst) {
-      throw new Error('recomputeUserCred: emulator returned no PRF output');
+      throw new Error('readPrfKey: emulator returned no PRF output');
    }
-   const prfKey = new Uint8Array(Buffer.from(prfFirst, 'base64url'));
-   const keyProvider = new MasterKeyKeyProvider(prfKey, userId);
-   const userCredBytes = await readStreamAll(await decryptStream(streamFromBase64(passkeyUserCredEnc), keyProvider));
-   return Buffer.from(userCredBytes).toString('base64url');
+   return new Uint8Array(Buffer.from(prfFirst, 'base64url'));
+}
+
+// Encrypts arbitrary bytes the way the client encrypts userCred for a passkey, so a test
+// can hand a PRF account a credential that decrypts correctly but is not its own.
+export async function prfEncryptForPasskey(
+   emulator: WebAuthnEmulator,
+   origin: string,
+   rpId: string,
+   credentialId: string,
+   userId: string,
+   plainText: Uint8Array<ArrayBuffer>,
+): Promise<string> {
+   await cryptoReady();
+   const keyProvider = new MasterKeyKeyProvider(readPrfKey(emulator, origin, rpId, credentialId), userId);
+   const cipherData = await readStreamAll(
+      await encryptStream(streamFromBytes(plainText), keyProvider, { algs: ['X20-PLY'] }),
+   );
+   return Buffer.from(cipherData).toString('base64url');
 }
 
 export type hosts = 't1.quickcrypt.org' | 'quickcrypt.org';
@@ -579,41 +613,52 @@ export async function expectActiveServerSession(page: Page, expectedUserName?: s
    }
 }
 
-export async function deleteFirstPasskey(page: Page, userName?: string): Promise<void> {
+export type PasskeyReauth = (trigger: () => Promise<void>) => Promise<void>;
+
+// The client re-authenticates before deleting an account's final passkey, so that delete only
+// reaches the server when reauth runs the confirmation inside a ceremony the emulator answers.
+async function confirmPasskeyDelete(
+   page: Page,
+   isLast: boolean,
+   userName?: string,
+   reauth?: PasskeyReauth,
+): Promise<void> {
+   if (isLast && userName) {
+      await page.locator('input#confirmInput').fill(userName);
+   }
+
+   const deleted = page.waitForResponse(
+      (response) => response.url().includes('/passkeys') && response.request().method() === 'DELETE',
+   );
+   const confirm = async () => {
+      await page.getByRole('button', { name: 'Yes' }).click();
+   };
+
+   if (reauth) {
+      await reauth(confirm);
+   } else {
+      await confirm();
+   }
+
+   const deleteResponse = await deleted;
+   expect(deleteResponse.status()).toBe(200);
+}
+
+export async function deleteFirstPasskey(page: Page, userName?: string, reauth?: PasskeyReauth): Promise<void> {
    const tableBody = page.locator('table.credtable tbody');
    const count = await tableBody.locator('tr').count();
 
    await page.getByRole('button', { name: 'Delete' }).first().click();
-   if (count === 1 && userName) {
-      await page.locator('input#confirmInput').fill(userName);
-   }
-
-   const [deleteResponse] = await Promise.all([
-      page.waitForResponse(
-         (response) => response.url().includes('/passkeys') && response.request().method() === 'DELETE',
-      ),
-      page.getByRole('button', { name: 'Yes' }).click(),
-   ]);
-   expect(deleteResponse.status()).toBe(200);
+   await confirmPasskeyDelete(page, count === 1, userName, reauth);
 }
 
 // Does not handle removal of last Passkey
-export async function deleteLastPasskey(page: Page, userName?: string): Promise<void> {
+export async function deleteLastPasskey(page: Page, userName?: string, reauth?: PasskeyReauth): Promise<void> {
    const tableBody = page.locator('table.credtable tbody');
    const count = await tableBody.locator('tr').count();
 
    await page.getByRole('button', { name: 'Delete' }).last().click();
-   if (count === 1 && userName) {
-      await page.locator('input#confirmInput').fill(userName);
-   }
-
-   const [deleteResponse] = await Promise.all([
-      page.waitForResponse(
-         (response) => response.url().includes('/passkeys') && response.request().method() === 'DELETE',
-      ),
-      page.getByRole('button', { name: 'Yes' }).click(),
-   ]);
-   expect(deleteResponse.status()).toBe(200);
+   await confirmPasskeyDelete(page, count === 1, userName, reauth);
 }
 
 export async function fillPwdAndAccept(

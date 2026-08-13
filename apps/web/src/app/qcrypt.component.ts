@@ -28,6 +28,7 @@ import { Router, RouterOutlet, RouterLink } from '@angular/router';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSidenav, MatSidenavModule } from '@angular/material/sidenav';
 import { CredentialsComponent } from './credentials/credentials.component';
+import { HaltedComponent } from './halted/halted.component';
 import { AuthEvent, type AuthEventData, AuthenticatorService } from './services/authenticator.service';
 import { Subscription } from 'rxjs';
 
@@ -44,6 +45,7 @@ import { Subscription } from 'rxjs';
       MatMenuModule,
       MatSidenavModule,
       CredentialsComponent,
+      HaltedComponent,
    ],
 })
 export class QCryptComponent implements OnInit, OnDestroy {
@@ -70,6 +72,11 @@ export class QCryptComponent implements OnInit, OnDestroy {
       if (this.authSub) {
          this.authSub.unsubscribe();
       }
+   }
+
+   // Help stays readable so the user can look up what the halt means
+   showHalted(): boolean {
+      return this.authSvc.halted && !window.location.pathname.startsWith('/help');
    }
 
    toggleNav(nav: MatSidenav) {

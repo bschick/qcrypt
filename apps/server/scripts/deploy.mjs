@@ -25,8 +25,10 @@
  * to point <alias> at the new version. Prod traffic flows through the
  * alias, so the bump is what actually swaps the live code.
  *
- * `bdeploy` is `pnpm build:server:min` (or `build:server` with --no-min)
- * followed by `deploy`, so a one-liner can build and ship.
+ * `bdeploy` is `pnpm build:server` (test) or `pnpm build:server:prod` (prod)
+ * followed by `deploy`, so a one-liner can build and ship. Those scripts pick
+ * the output directory and whether to minify; --min/--no-min overrides the
+ * latter.
  *
  * ============================================================
  * AWS auth
@@ -51,7 +53,8 @@
  *   deploy.mjs [options]                    deploy (default)
  *   deploy.mjs deploy [options]             same as above (explicit)
  *   deploy.mjs bdeploy [options]            build then deploy
- *   deploy.mjs rollback [options]           bump alias back a version (--prod only)
+ *   deploy.mjs rollback [options]           bump alias back one version (--prod only)
+ *   deploy.mjs version <n> [options]        point alias at version <n> (--prod only)
  *   deploy.mjs info [options]               show $LATEST status; with --prod, also list versions + alias
  *
  * Run any subcommand with --help for its option list. --dry-run logs
@@ -150,12 +153,17 @@ function listVersions(argv) {
 
 function runBuild(argv) {
    const cmd = 'pnpm';
-   const args = argv.min ? ['build:server:min'] : ['build:server'];
+   // Only forward an explicit choice so the build script stays the one place
+   // that decides the per-mode default.
+   const args = [isProd(argv) ? 'build:server:prod' : 'build:server'];
+   if (argv.min !== undefined) {
+      args.push(argv.min ? '--min' : '--no-min');
+   }
    // QC_SERVER_OUT forces the build to write into the exact dir the deploy
    // step reads from (argv.buildDir), so build output and deploy source can
    // never diverge.
    const outDir = argv.buildDir;
-   console.log(`bdeploy: building ${argv.min ? 'minified' : 'unminified'} into ${relToRoot(outDir)}...`);
+   console.log(`bdeploy: building into ${relToRoot(outDir)}...`);
    if (argv.dryRun) {
       console.log(`[dry-run] QC_SERVER_OUT=${relToRoot(outDir)} ${cmd} ${args.join(' ')}`);
       return;
@@ -182,7 +190,7 @@ async function runDeploy(argv) {
          throw new Error('not a file');
       }
    } catch {
-      console.error(`Deploy artifact not found: ${zipPath}. Did you build first (pnpm build:server[:min])?`);
+      console.error(`Deploy artifact not found: ${zipPath}. Did you build first (pnpm build:server[:prod])?`);
       process.exit(1);
    }
 
@@ -255,7 +263,19 @@ async function runDeploy(argv) {
       process.exit(1);
    }
 
-   // 3. Bump the alias. Dry-run uses <NEW> as a placeholder so the logged
+   // 3. Bump the alias, unless --no-alias asked for the version to be published
+   // and left unreferenced. That leaves prod traffic on the previous version
+   // while the new one is reachable by version number, which is what a
+   // migration that must run before its own cutover needs. Point the alias at
+   // it afterwards with `version <n>`.
+   if (argv.alias === false) {
+      console.log(
+         `deploy: lambda=${argv.lambda} from=${relToRoot(zipPath)} code-sha=${codeSha} version=${newVersion || '<NEW>'} alias=${alias} unchanged${dryRunTag}`,
+      );
+      return;
+   }
+
+   // Dry-run uses <NEW> as a placeholder so the logged
    // command is readable rather than `--function-version ` with an empty arg.
    // Alias description is hard-coded — argv.comment is recorded on the
    // version (above), and copying it onto the alias would just duplicate
@@ -300,38 +320,9 @@ async function runBdeploy(argv) {
 //
 // Doesn't delete or modify any version — only moves the alias. Re-deploy or
 // a forward `update-alias` reverses the rollback at any time.
-async function runRollback(argv) {
-   if (!isProd(argv)) {
-      console.error('rollback: requires --prod <alias>.');
-      process.exit(1);
-   }
+function moveAlias(argv, command, target, description) {
    const alias = aliasName(argv);
-   const versions = listVersions(argv);
-   if (versions.length === 0) {
-      console.error(`rollback: function ${argv.lambda} has no published versions.`);
-      process.exit(1);
-   }
-
    const oldVersion = getAliasVersion(argv, alias);
-   let target;
-   if (argv.version) {
-      target = argv.version;
-      if (!versions.some((v) => v.Version === target)) {
-         console.error(`rollback: version ${target} not found for function ${argv.lambda}.`);
-         process.exit(1);
-      }
-   } else {
-      if (!oldVersion) {
-         console.error(`rollback: alias ${alias} doesn't exist on ${argv.lambda}; pass --version explicitly.`);
-         process.exit(1);
-      }
-      const idx = versions.findIndex((v) => v.Version === oldVersion);
-      if (idx < 0 || idx >= versions.length - 1) {
-         console.error(`rollback: no version older than ${oldVersion}; nothing to roll back to.`);
-         process.exit(1);
-      }
-      target = versions[idx + 1].Version;
-   }
 
    aws(argv, [
       'lambda',
@@ -343,13 +334,57 @@ async function runRollback(argv) {
       '--function-version',
       target,
       '--description',
-      'rolled back',
+      description,
       '--output',
       'json',
    ]);
 
    const dryRunTag = argv.dryRun ? ' (DRY RUN)' : '';
-   console.log(`rollback: alias=${alias} from=${oldVersion ?? '(none)'} to=${target}${dryRunTag}`);
+   console.log(`${command}: alias=${alias} from=${oldVersion ?? '(none)'} to=${target}${dryRunTag}`);
+}
+
+// Returns published versions newest-first, exiting when prod-mode is off or
+// the function has none.
+function requireVersions(argv, command) {
+   if (!isProd(argv)) {
+      console.error(`${command}: requires --prod <alias>.`);
+      process.exit(1);
+   }
+   const versions = listVersions(argv);
+   if (versions.length === 0) {
+      console.error(`${command}: function ${argv.lambda} has no published versions.`);
+      process.exit(1);
+   }
+   return versions;
+}
+
+async function runRollback(argv) {
+   const versions = requireVersions(argv, 'rollback');
+   const alias = aliasName(argv);
+   const oldVersion = getAliasVersion(argv, alias);
+   if (!oldVersion) {
+      console.error(`rollback: alias ${alias} doesn't exist on ${argv.lambda}; use \`version <n>\` instead.`);
+      process.exit(1);
+   }
+
+   const idx = versions.findIndex((v) => v.Version === oldVersion);
+   if (idx < 0 || idx >= versions.length - 1) {
+      console.error(`rollback: no version older than ${oldVersion}; nothing to roll back to.`);
+      process.exit(1);
+   }
+
+   moveAlias(argv, 'rollback', versions[idx + 1].Version, 'rolled back');
+}
+
+async function runVersion(argv) {
+   const versions = requireVersions(argv, 'version');
+   const target = String(argv.version);
+   if (!versions.some((v) => v.Version === target)) {
+      console.error(`version: version ${target} not found for function ${argv.lambda}.`);
+      process.exit(1);
+   }
+
+   moveAlias(argv, 'version', target, `set to version ${target}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -440,7 +475,7 @@ const addGlobalOpts = (y) =>
 
 // Used to detect typo'd commands so the fail handler can suggest the
 // closest match.
-const COMMANDS = ['deploy', 'bdeploy', 'rollback', 'info'];
+const COMMANDS = ['deploy', 'bdeploy', 'rollback', 'version', 'info'];
 
 const deployBuilder = (y) =>
    addGlobalOpts(y)
@@ -449,6 +484,12 @@ const deployBuilder = (y) =>
          type: 'string',
          default: '',
          describe: 'Description recorded on the new published version (prod-mode only).',
+      })
+      .option('alias', {
+         type: 'boolean',
+         default: true,
+         describe:
+            'Point the alias at the newly published version (prod-mode only, default). Pass `--no-alias` to publish the version and leave the alias where it is; move it later with `version <n>`.',
       })
       .check((argv) => {
          try {
@@ -464,20 +505,20 @@ const deployBuilder = (y) =>
 const bdeployBuilder = (y) =>
    deployBuilder(y).option('min', {
       type: 'boolean',
-      default: true,
-      describe:
-         'Minify the build via `pnpm build:server:min` (default). Pass `--no-min` to use `pnpm build:server` instead.',
+      describe: 'Force a minified (--min) or unminified (--no-min) build. Defaults to minified for prod, not for test.',
    });
 
-const rollbackBuilder = (y) =>
-   addGlobalOpts(y).option('version', {
+const rollbackBuilder = (y) => addGlobalOpts(y);
+
+const versionBuilder = (y) =>
+   addGlobalOpts(y).positional('version', {
       type: 'string',
-      describe: 'Specific version to roll back to (default: version preceding current alias target)',
+      describe: 'Published version number to point the alias at',
    });
 
 // Commands that mutate prod and so require the confirmation gate. The bare
 // `$0` invocation runs bdeploy, so map an empty command to it.
-const DESTRUCTIVE_COMMANDS = new Set(['deploy', 'bdeploy', 'rollback']);
+const DESTRUCTIVE_COMMANDS = new Set(['deploy', 'bdeploy', 'rollback', 'version']);
 
 // Global middleware runs before the matched command handler. Order matters:
 // the prod confirmation (destructive + --prod only) comes first so the
@@ -487,7 +528,8 @@ const DESTRUCTIVE_COMMANDS = new Set(['deploy', 'bdeploy', 'rollback']);
 async function preflight(argv) {
    const command = String(argv._[0] ?? 'bdeploy');
    if (argv.prod && DESTRUCTIVE_COMMANDS.has(command)) {
-      const from = command === 'rollback' ? '' : `\n      from:   ${relToRoot(join(argv.buildDir, 'server.zip'))}`;
+      // Alias-only commands are given no --build-dir, so there is no artifact to name.
+      const from = argv.buildDir ? `\n      from:   ${relToRoot(join(argv.buildDir, 'server.zip'))}` : '';
       await confirmProdAction(argv, command, `lambda: ${argv.lambda}${from}`);
    }
    await ensureAuth(argv);
@@ -498,22 +540,28 @@ await yargs(hideBin(process.argv))
    .middleware(preflight)
    .command(
       '$0',
-      'Build (`pnpm build:server:min`, or `build:server` with --no-min) then deploy the Lambda artifact to AWS.',
+      'Build (prod minified, test unminified; override with --min/--no-min) then deploy the Lambda artifact to AWS. In prod mode, publishes a version and moves the alias to it unless --no-alias.',
       bdeployBuilder,
       runBdeploy,
    )
-   .command('deploy', 'Deploy the already-built Lambda artifact without rebuilding.', deployBuilder, runDeploy)
+   .command(
+      'deploy',
+      'Deploy the already-built Lambda artifact without rebuilding. In prod mode, publishes a version and moves the alias to it unless --no-alias.',
+      deployBuilder,
+      runDeploy,
+   )
    .command(
       'bdeploy',
-      'Build (`pnpm build:server:min`, or `build:server` with --no-min) then deploy.',
+      'Build (prod minified, test unminified; override with --min/--no-min) then deploy. In prod mode, publishes a version and moves the alias to it unless --no-alias.',
       bdeployBuilder,
       runBdeploy,
    )
+   .command('rollback', 'Move the prod alias back one version. Requires --prod <alias>.', rollbackBuilder, runRollback)
    .command(
-      'rollback',
-      'Move the prod alias to a previous version. Requires --prod <alias>.',
-      rollbackBuilder,
-      runRollback,
+      'version <version>',
+      'Move the prod alias to a specific published version. Requires --prod <alias>.',
+      versionBuilder,
+      runVersion,
    )
    .command(
       'info',

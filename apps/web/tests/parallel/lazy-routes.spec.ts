@@ -4,7 +4,7 @@ test.describe('lazy routes render', () => {
    const smokeRoutes = [
       '/newuser',
       '/recovery',
-      '/recovery2',
+      '/recovery3',
       '/help/overview',
       '/help/faqs',
       '/help/protocol',

@@ -23,6 +23,9 @@ SOFTWARE. */
 import { FilterXSS } from 'xss';
 import { Buffer } from 'node:buffer';
 import * as crypto from 'node:crypto';
+import { verifyRecoveryProof, PROOF_SIG_BYTES, type RequestTypes } from '@qcrypt/api';
+import { Challenges, type ChallengeItem } from './models';
+import { USERCRED_ENC_MIN_BYTES, USERCRED_ENC_MAX_BYTES, CHALLENGE_BYTES, PROOF_SKEW_MS } from './consts';
 
 export class ParamError extends Error {}
 
@@ -62,6 +65,82 @@ export const validB64 = (base64: string | null | undefined): base64 is string =>
 
 export function isReservedTestUserName(userName: string): boolean {
    return userName.toLowerCase().startsWith('pwtesty_');
+}
+
+// When userId is given the challenge must also be bound to it, otherwise any binding is accepted
+export async function consumeChallenge(
+   challenge: string,
+   purpose: ChallengeItem['purpose'],
+   userId?: string,
+): Promise<ChallengeItem> {
+   if (!validB64(challenge)) {
+      throw new ParamError('challenge not valid');
+   }
+
+   const consumed = await Challenges.delete({
+      purpose,
+      challenge,
+   }).go({ response: 'all_old' });
+
+   if (!consumed?.data) {
+      throw new ParamError('challenge not valid');
+   }
+   if (Date.now() / 1000 > consumed.data.expiresAt) {
+      throw new AuthError();
+   }
+   if (userId !== undefined && consumed.data.userId !== userId) {
+      throw new AuthError();
+   }
+
+   return consumed.data;
+}
+
+// Throws unless the proof is well formed, within the skew window, verifies, and its nonce has
+// not been seen before. Retaining the nonce is what bounds replay to the skew window.
+export async function verifyRecoverProof(
+   recoveryPubKey: string,
+   userId: string,
+   proof: RequestTypes.RecoverProof,
+): Promise<void> {
+   const { timestamp, nonce, signature } = proof;
+   if (!validB64(nonce) || !validB64(signature)) {
+      throw new ParamError('invalid recovery proof');
+   }
+
+   const nonceBytes = base64UrlDecode(nonce)!;
+   const signatureBytes = base64UrlDecode(signature)!;
+   if (nonceBytes.byteLength !== CHALLENGE_BYTES || signatureBytes.byteLength !== PROOF_SIG_BYTES) {
+      throw new ParamError('invalid recovery proof');
+   }
+
+   const timestampMs = Number(timestamp);
+   if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > PROOF_SKEW_MS) {
+      throw new ParamError('invalid recovery proof');
+   }
+
+   try {
+      verifyRecoveryProof(recoveryPubKey, userId, timestamp, nonce, signature);
+   } catch {
+      throw new ParamError(`user account ${userId} invalid recovery proof`);
+   }
+
+   const stored = await Challenges.create({
+      challenge: nonce,
+      purpose: 'nonce',
+      userId: userId,
+   }).go({ returnOnConditionCheckFailure: true });
+
+   if (stored.rejected) {
+      throw new ParamError(`user account ${userId} replayed recovery proof`);
+   }
+}
+
+export function validUserCredEnc(userCredEnc: string | null | undefined): userCredEnc is string {
+   if (!validB64(userCredEnc)) {
+      return false;
+   }
+   const encLen = base64UrlDecode(userCredEnc)!.length;
+   return encLen >= USERCRED_ENC_MIN_BYTES && encLen <= USERCRED_ENC_MAX_BYTES;
 }
 
 export function base64UrlEncode(bytes: Uint8Array | undefined): string | undefined {

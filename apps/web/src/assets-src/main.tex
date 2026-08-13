@@ -356,7 +356,8 @@ $sc_R$ & \textrm{ - Recovery signature context: ``qcrypt/recovery/proof/v1''} \\
 $sc_U$ & \textrm{ - userCred signature context: ``qcrypt/usercred/proof/v1''} \\
 $sk_R$ & \textrm{ - ML-DSA-65 recovery proof secret key} \\
 $sk_U$ & \textrm{ - ML-DSA-65 userCred proof secret key} \\
-$ts$ & \textrm{ - Request timestamp in milliseconds} \\
+$ts_R$ & \textrm{ - Recovery proof timestamp in milliseconds} \\
+$ts_U$ & \textrm{ - userCred proof timestamp in milliseconds} \\
 $u_c$ & \textrm{ - 256 bit user credential in memory}\\
 $u_i$ & \textrm{ - 128 bit user id guaranteed to be unique} \\
 $u_n$ & \textrm{ - A's chosen user name} \\
@@ -429,14 +430,14 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$B : u_c = cd_u\textrm{ decryption under }k_L$} \\
 \multicolumn{2}{@{}l}{$B : (pk_U, sk_U) = P_K(D_H(1, kp_U, u_c))$} \\
-\multicolumn{2}{@{}l}{$B : ts = \textrm{current time}$} \\
+\multicolumn{2}{@{}l}{$B : ts_U = \textrm{current time}$} \\
 \multicolumn{2}{@{}l}{$B : n_P = R(256)$} \\
-\multicolumn{2}{@{}l}{$B : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts \delta \mathbin\Vert n_P \delta \mathbin\Vert H_2(bd)$} \\
+\multicolumn{2}{@{}l}{$B : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert n_P \delta \mathbin\Vert H_2(bd)$} \\
 \multicolumn{2}{@{}l}{$B : \sigma_U = P_S(sk_U, m_U, sc_U)$} \\
-\multicolumn{2}{@{}l}{$B\rightarrow S : rq, ck, cs, ts, n_P, \sigma_U$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : rq, ck, cs, ts_U, n_P, \sigma_U$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ verify }ck, cs$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ verify }ts\textrm{ within }\Delta$} \\
-\multicolumn{2}{@{}l}{$S : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts \delta \mathbin\Vert n_P \delta \mathbin\Vert H_2(bd)$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ verify }ts_U\textrm{ within }\Delta$} \\
+\multicolumn{2}{@{}l}{$S : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert n_P \delta \mathbin\Vert H_2(bd)$} \\
 \multicolumn{2}{@{}l}{$S : b = P_V(pk_U, m_U, \sigma_U, sc_U)$} \\
 \multicolumn{2}{@{}l}{$\textrm{if }!b:$} \\
 \multicolumn{2}{@{}l}{\hspace{15pt}$B \leftarrow S: err$} \\
@@ -474,27 +475,72 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \end{stanza}
 
 \begin{stanza}
+\underline{Replace Recovery Words by A}\\
+
+{\leftskip=\parindent\noindent\textit{A is authenticated; requests authorized per Authorization of A}\par}
+
+\begin{tabular}{@{}p{2mm} l}
+\multicolumn{2}{@{}l}{$B\textrm{ repeat Authentication of A}$} \\
+\multicolumn{2}{@{}l}{$B : u_r = R(128)$} \\
+\multicolumn{2}{@{}l}{$B : (pk_R, sk_R) = P_K(D_H(1, kp_R, u_r \mathbin\Vert u_i))$} \\
+\multicolumn{2}{@{}l}{$B : ts_R = \textrm{current time}$} \\
+\multicolumn{2}{@{}l}{$B : n_P = R(256)$} \\
+\multicolumn{2}{@{}l}{$B : m_R = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert n_P$} \\
+\multicolumn{2}{@{}l}{$B : \sigma_R = P_S(sk_R, m_R, sc_R)$} \\
+\multicolumn{2}{@{}l}{$B : u_c = cd_u\textrm{ decryption under }k_L$} \\
+\multicolumn{2}{@{}l}{$B : cd_r = u_c\textrm{ encryption under }u_r \mathbin\Vert u_i$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : pk_R, ts_R, n_P, \sigma_R, cd_r$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ verify }ts_R\textrm{ within }\Delta$} \\
+\multicolumn{2}{@{}l}{$S : m_R = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert n_P$} \\
+\multicolumn{2}{@{}l}{$S : b = P_V(pk_R, m_R, \sigma_R, sc_R)$} \\
+\multicolumn{2}{@{}l}{$\textrm{if }!b:$} \\
+\multicolumn{2}{@{}l}{\hspace{15pt}$B \leftarrow S: err$} \\
+\multicolumn{2}{@{}l}{\hspace{15pt}$A \leftarrow B: err$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ verify }n_P\textrm{ unknown};\ \textrm{store }n_P$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ store }pk_R, cd_r$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow A : u_r\mathbin\Vert u_i\textrm{ as BIP39}$} \\
+\end{tabular}
+
+\hfill \break
+
+{\leftskip=\parindent\noindent\textit{No-PRF fallback:} $B$ does not decrypt $cd_u$ or send $cd_r$; $S$ stores $pk_R$ without $cd_r$.\par}
+\end{stanza}
+
+\begin{stanza}
 \underline{Recovery from Lost Passkey by A}\\
 
 \begin{tabular}{@{}p{2mm} l}
 \multicolumn{2}{@{}l}{$A\rightarrow B : u_r\mathbin\Vert u_i\textrm{ as BIP39}$} \\
-\multicolumn{2}{@{}l}{$B\rightarrow S : u_i, o$} \\
-\multicolumn{2}{@{}l}{$S : ch_R = R(256);\ \textrm{store }ch_R$} \\
-\multicolumn{2}{@{}l}{$B\leftarrow S : ch_R$} \\
 \multicolumn{2}{@{}l}{$B : (pk_R, sk_R) = P_K(D_H(1, kp_R, u_r \mathbin\Vert u_i))$} \\
-\multicolumn{2}{@{}l}{$B : m_R = u_i \delta \mathbin\Vert ch_R$} \\
+\multicolumn{2}{@{}l}{$B : ts_R = \textrm{current time}$} \\
+\multicolumn{2}{@{}l}{$B : n_P = R(256)$} \\
+\multicolumn{2}{@{}l}{$B : m_R = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert n_P$} \\
 \multicolumn{2}{@{}l}{$B : \sigma_R = P_S(sk_R, m_R, sc_R)$} \\
-\multicolumn{2}{@{}l}{$B\rightarrow S : u_i, ch_R, \sigma_R$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ remove }ch_R $} \\
-\multicolumn{2}{@{}l}{$S : m_R = u_i \delta \mathbin\Vert ch_R$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : u_i, ts_R, n_P, \sigma_R$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ verify }ts_R\textrm{ within }\Delta$} \\
+\multicolumn{2}{@{}l}{$S : m_R = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert n_P$} \\
 \multicolumn{2}{@{}l}{$S : b = P_V(pk_R, m_R, \sigma_R, sc_R)$} \\
+\multicolumn{2}{@{}l}{$\textrm{if }!b:$} \\
+\multicolumn{2}{@{}l}{\hspace{15pt}$B \leftarrow S: err$} \\
+\multicolumn{2}{@{}l}{\hspace{15pt}$A \leftarrow B: err$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ verify }n_P\textrm{ unknown};\ \textrm{store }n_P$} \\
+\multicolumn{2}{@{}l}{$S : ch_R = R(256);\ \textrm{store }ch_R$} \\
+\multicolumn{2}{@{}l}{$B\leftarrow S : ch_R, cd_r$} \\
+\multicolumn{2}{@{}l}{$B : u_c = cd_r\textrm{ decryption under }u_r \mathbin\Vert u_i$} \\
+\multicolumn{2}{@{}l}{$B : (pk_U, sk_U) = P_K(D_H(1, kp_U, u_c))$} \\
+\multicolumn{2}{@{}l}{$B : ts_U = \textrm{current time}$} \\
+\multicolumn{2}{@{}l}{$B : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert ch_R \delta \mathbin\Vert H_2(\emptyset)$} \\
+\multicolumn{2}{@{}l}{$B : \sigma_U = P_S(sk_U, m_U, sc_U)$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : u_i, o, ch_R, ts_U, \sigma_U$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ verify }ts_U\textrm{ within }\Delta;\ \textrm{remove }ch_R $} \\
+\multicolumn{2}{@{}l}{$S : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert ch_R \delta \mathbin\Vert H_2(\emptyset)$} \\
+\multicolumn{2}{@{}l}{$S : b = P_V(pk_U, m_U, \sigma_U, sc_U)$} \\
 \multicolumn{2}{@{}l}{$\textrm{if }!b:$} \\
 \multicolumn{2}{@{}l}{\hspace{15pt}$B \leftarrow S: err$} \\
 \multicolumn{2}{@{}l}{\hspace{15pt}$A \leftarrow B: err$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ delete existing }rr$} \\
 \multicolumn{2}{@{}l}{$S : ch = R(256);\ \textrm{store }ch $} \\
-\multicolumn{2}{@{}l}{$B\leftarrow S : ro, cd_r$} \\
-\multicolumn{2}{@{}l}{$B : u_c = cd_r\textrm{ decryption under }u_r \mathbin\Vert u_i$} \\
+\multicolumn{2}{@{}l}{$B\leftarrow S : ro$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow M : ro, p_S$} \\
 \multicolumn{2}{@{}l}{$A\rightarrow M : cw$} \\
 \multicolumn{2}{@{}l}{$M\textrm{ create and store passkey, sign }ch $} \\
@@ -509,7 +555,7 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 
 \hfill \break
 
-{\leftskip=\parindent\noindent\textit{No-PRF fallback:} $S$ returns $ro$ without $cd_r$; $B$ omits $p_S$ and the $cd_r$ decryption. After the new passkey, $B$ sends $rr, u_i, ch$ only; $S$ stores the new passkey without encrypted $u_c$ and returns $u_c$; $B$ creates and stores $cd_u$ from $u_c$.\par}
+{\leftskip=\parindent\noindent\textit{No-PRF fallback:} $S$ returns $u_c$ in place of $cd_r$; $B$ omits $p_S$ and the $cd_r$ decryption. After the new passkey, $B$ sends $rr, u_i, ch$ only and $S$ stores it without encrypted $u_c$.\par}
 \end{stanza}
 
 \end{document}

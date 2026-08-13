@@ -93,8 +93,8 @@ export function lifecycleSuite(prf: boolean): void {
 
       // Recovery wipes the server passkeys and provisions a new one while preserving
       // userCred, so the account keeps its mode.
-      await page.goto('/recovery2');
-      await expect(page).toHaveURL(/\/recovery2$/);
+      await page.goto('/recovery3');
+      await expect(page).toHaveURL(/\/recovery3$/);
       await page.locator('textarea#wordsArea').fill(testUser.recoveryWords);
       await authFixture.addPasskey(testUser.userId, authenticator2, async () => {
          await page.getByRole('button', { name: /Start Recovery/ }).click();
@@ -107,7 +107,7 @@ export function lifecycleSuite(prf: boolean): void {
       await expect(tableBody.locator('tr')).toHaveCount(1);
       await expectPrfBadge(page, prf);
 
-      await deleteFirstPasskey(page, testUser.userName);
+      await deleteFirstPasskey(page, testUser.userName, (trigger) => authFixture.passkeyAuth(authenticator2, trigger));
       await expect(page).toHaveURL(/\/welcome$/);
       await expect(page.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({ timeout: 10000 });
       authFixture.untrackUser(testUser.userId);
@@ -144,7 +144,7 @@ export function lifecycleSuite(prf: boolean): void {
       // confirmation and redirects to /welcome once the server removes the user.
       await deleteLastPasskey(page);
       await expect(tableBody.locator('tr')).toHaveCount(1);
-      await deleteLastPasskey(page, testUser.userName);
+      await deleteLastPasskey(page, testUser.userName, (trigger) => authFixture.passkeyAuth(authenticator1, trigger));
       await expect(page).toHaveURL(/\/welcome$/);
       authFixture.untrackUser(testUser.userId);
    });
@@ -199,7 +199,7 @@ export function lifecycleSuite(prf: boolean): void {
       await toggleCredentials(page);
       await expect(tableBody.locator('tr')).toHaveCount(1);
 
-      await deleteFirstPasskey(page, testUser.userName);
+      await deleteFirstPasskey(page, testUser.userName, (trigger) => authFixture.passkeyAuth(authenticator2, trigger));
       await expect(page).toHaveURL(/\/welcome$/);
       await expect(page.getByText('Easy, Trustworthy Personal Encryption')).toBeVisible({ timeout: 10000 });
       authFixture.untrackUser(testUser.userId);
@@ -237,12 +237,12 @@ export function lifecycleSuite(prf: boolean): void {
       await expect(page).toHaveURL(/\/$/);
 
       // The replaced words can no longer recover the account.
-      await page.goto('/recovery2');
-      await expect(page).toHaveURL(/\/recovery2$/);
+      await page.goto('/recovery3');
+      await expect(page).toHaveURL(/\/recovery3$/);
       await page.locator('textarea#wordsArea').fill(testUser.recoveryWords);
       await page.getByRole('button', { name: /Start Recovery/ }).click();
       await expect(page.locator('.control-host .error-msg')).toContainText('recovery word pattern', { timeout: 15000 });
-      await expect(page).toHaveURL(/\/recovery2$/);
+      await expect(page).toHaveURL(/\/recovery3$/);
 
       // The new words do. Recovery wipes the old passkey and creates a new one on a
       // second authenticator.
@@ -256,7 +256,7 @@ export function lifecycleSuite(prf: boolean): void {
 
       await toggleCredentials(page);
       await expect(tableBody.locator('tr')).toHaveCount(1);
-      await deleteFirstPasskey(page, testUser.userName);
+      await deleteFirstPasskey(page, testUser.userName, (trigger) => authFixture.passkeyAuth(authenticator2, trigger));
       await expect(page).toHaveURL(/\/welcome$/);
       authFixture.untrackUser(testUser.userId);
    });

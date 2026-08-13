@@ -55,6 +55,9 @@ import { BroadcastService } from './broadcast.service';
 import { KeystoreService } from './keystore.service';
 import * as cc from '@qcrypt/crypto/consts';
 import { base64ToBytes, bytesToBase64, cryptoReady, getRandom } from '@qcrypt/crypto';
+import { CHALLENGE_BYTES, RECOVERYID_BYTES, getUserCredPubKey, recoverySecret } from '@qcrypt/api';
+import { entropyToMnemonic } from '@scure/bip39';
+import { wordlist } from '@scure/bip39/wordlists/english.js';
 
 describe('AuthenticatorService', () => {
    let service: AuthenticatorService;
@@ -85,6 +88,7 @@ describe('AuthenticatorService', () => {
          userCred: userCred,
          csrf: 'csrf-token-from-test',
          hasRecoveryId: true,
+         prf: false,
          authenticators: [
             {
                credentialId: pkId,
@@ -302,6 +306,150 @@ describe('AuthenticatorService', () => {
       expect(createSpy).not.toHaveBeenCalled();
       expect(getSpy).not.toHaveBeenCalled();
       expect(events).toEqual([]);
+   });
+
+   describe('account pin', () => {
+      async function login(prf: boolean, credB64: string): Promise<void> {
+         const response = { ...sessionResponse, prf: prf, userCred: credB64 };
+         // @ts-expect-error — exercising private path
+         await service._loginUser(response, base64ToBytes(credB64));
+      }
+
+      function readPin(): { prf: boolean; userCredPubKey: string } {
+         return JSON.parse(localStorage.getItem(`${userId}accountpin`)!);
+      }
+
+      it('records the account on first login', async () => {
+         primeLocalStorage();
+         await login(false, userCred);
+         expect(readPin().prf).toBe(false);
+         expect(readPin().userCredPubKey).toBe(getUserCredPubKey(base64ToBytes(userCred)));
+         expect(service.halted).toBe(false);
+      });
+
+      it('halts when a PRF account is later reported as no-PRF', async () => {
+         primeLocalStorage();
+         await login(true, userCred);
+         expect(service.hasSession()).toBe(true);
+         expect(service.halted).toBe(false);
+
+         await expect(login(false, userCred)).rejects.toThrow();
+         expect(service.halted).toBe(true);
+         expect(service.hasSession()).toBe(false);
+      });
+
+      it('halts when the account returns a different user credential', async () => {
+         primeLocalStorage();
+         await login(false, userCred);
+         expect(service.halted).toBe(false);
+
+         // Same account and mode, a well formed credential that is not this account's
+         const otherCred = bytesToBase64(getRandom(cc.USERCRED_BYTES));
+         await expect(login(false, otherCred)).rejects.toThrow();
+         expect(service.halted).toBe(true);
+      });
+
+      it('halts before adopting a credential offered by a downgraded response', async () => {
+         primeLocalStorage();
+         await login(true, userCred);
+         expect(service.halted).toBe(false);
+
+         const substitute = { ...sessionResponse, prf: false, userCred: bytesToBase64(getRandom(cc.USERCRED_BYTES)) };
+         // @ts-expect-error — exercising private path
+         await expect(service._resolveUserCred(substitute, null)).rejects.toThrow();
+         expect(service.halted).toBe(true);
+      });
+
+      it('halts when a user info response flips the account mode', async () => {
+         primeLocalStorage();
+         await login(true, userCred);
+         expect(service.halted).toBe(false);
+
+         const flipped = { ...sessionResponse, prf: false };
+         // @ts-expect-error — exercising private path
+         expect(() => service._updateLoggedInUser(flipped)).toThrow();
+         expect(service.halted).toBe(true);
+      });
+
+      it('allows a no-PRF account to gain PRF', async () => {
+         primeLocalStorage();
+         await login(false, userCred);
+         expect(readPin().prf).toBe(false);
+
+         await login(true, userCred);
+         expect(service.halted).toBe(false);
+         expect(service.hasSession()).toBe(true);
+         expect(readPin().prf).toBe(true);
+      });
+
+      it('resolves the credential when the account matches', async () => {
+         primeLocalStorage();
+         await login(false, userCred);
+
+         const response = { ...sessionResponse, prf: false, userCred: userCred };
+         // @ts-expect-error — exercising private path
+         const resolved = await service._resolveUserCred(response, null);
+         expect(bytesToBase64(resolved)).toBe(userCred);
+         expect(service.halted).toBe(false);
+      });
+
+      it('continues recovery when the account matches', async () => {
+         primeLocalStorage();
+         await login(false, userCred);
+
+         const recoveryWords = entropyToMnemonic(recoverySecret(getRandom(RECOVERYID_BYTES), userId), wordlist);
+         const startResp = {
+            prf: false,
+            challenge: bytesToBase64(getRandom(CHALLENGE_BYTES)),
+            userCred: userCred,
+         };
+         fetchMock.mockImplementation((url: URL) => ({
+            ok: true,
+            json: async () => (url.pathname.endsWith('/recover3') ? startResp : sessionResponse),
+         }));
+
+         // Recovery still fails, because the passkey ceremony that follows cannot run
+         // here, but only after reaching the step that replaces the passkeys
+         await expect(service.recover3(recoveryWords)).rejects.toThrow();
+         expect(service.halted).toBe(false);
+         const paths = fetchMock.mock.calls.map((call) => (call[0] as URL).pathname);
+         expect(paths.some((path) => path.endsWith('/recover/confirm'))).toBe(true);
+      });
+
+      it('halts when account is downgraded during recovery', async () => {
+         primeLocalStorage();
+         await login(true, userCred);
+         expect(service.halted).toBe(false);
+
+         const recoveryWords = entropyToMnemonic(recoverySecret(getRandom(RECOVERYID_BYTES), userId), wordlist);
+         const startResp = {
+            prf: false,
+            challenge: bytesToBase64(getRandom(CHALLENGE_BYTES)),
+            userCred: bytesToBase64(getRandom(cc.USERCRED_BYTES)),
+         };
+         fetchMock.mockImplementation((url: URL) => ({
+            ok: true,
+            json: async () => (url.pathname.endsWith('/recover3') ? startResp : sessionResponse),
+         }));
+
+         await expect(service.recover3(recoveryWords)).rejects.toThrow();
+         expect(service.halted).toBe(true);
+         const paths = fetchMock.mock.calls.map((call) => (call[0] as URL).pathname);
+         expect(paths.some((path) => path.endsWith('/recover3'))).toBe(true);
+         expect(paths.some((path) => path.endsWith('/recover/confirm'))).toBe(false);
+      });
+
+      it('fails without halting when the account mode is absent', async () => {
+         primeLocalStorage();
+         await login(false, userCred);
+         expect(service.halted).toBe(false);
+
+         const noMode: Record<string, unknown> = { ...sessionResponse, userCred: userCred };
+         delete noMode['prf'];
+         // @ts-expect-error — exercising private path
+         await expect(service._loginUser(noMode, base64ToBytes(userCred))).rejects.toThrow();
+         expect(service.halted).toBe(false);
+      });
    });
 
    describe('peer message handling', () => {

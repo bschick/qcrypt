@@ -65,7 +65,11 @@ SOFTWARE.
       <app-credentials (done)="sideNav.close()"></app-credentials>
     </mat-sidenav>
     <mat-sidenav-content id="scrollContent" role="main">
-      <router-outlet />
+      @if (showHalted()) {
+        <app-halted />
+      } @else {
+        <router-outlet />
+      }
     </mat-sidenav-content>
   </mat-sidenav-container>
 </div>

@@ -32,7 +32,7 @@ import {
    getJson,
    postJson,
    expectPasskeyDeleted,
-   setSessionUserCred,
+   setSessionSigner,
    prfDecrypt,
    readPrfOutput,
    PRF_EXTENSION,
@@ -58,9 +58,9 @@ describe('PRF account', () => {
    it('logs in and decrypts the per-passkey ciphertext back to userCred', async () => {
       const account = await registerTestUser(`PWTesty_prf_${Date.now()}`, true);
       cleanup = async () => {
-         setSessionUserCred(account.userCred, account.userId);
+         setSessionSigner(account.userId, account.userCred);
          await expectPasskeyDeleted(account.credId, account.csrf, account.cookie);
-         setSessionUserCred(undefined);
+         setSessionSigner(undefined);
       };
 
       const optsRes = await postJson('/v1/auth/options', { userId: account.userId }, {}, '');
@@ -81,9 +81,9 @@ describe('PRF account', () => {
       expect(verifyRes.status).toBe(200);
       // The login supersedes the registration session, so clean up with the login session.
       cleanup = async () => {
-         setSessionUserCred(account.userCred, account.userId);
+         setSessionSigner(account.userId, account.userCred);
          await expectPasskeyDeleted(account.credId, verifyRes.data.csrf, verifyRes.cookie);
-         setSessionUserCred(undefined);
+         setSessionSigner(undefined);
       };
       expect(verifyRes.data.verified).toBe(true);
       expect(verifyRes.data.prf).toBe(true);
@@ -101,11 +101,10 @@ describe('PRF account', () => {
    it('rejects a passkey added without an encrypted userCred', async () => {
       const account = await registerTestUser(`PWTesty_gp_${Date.now()}`, true);
       const auth = { 'x-csrf-token': account.csrf };
-      setSessionUserCred(account.userCred, account.userId);
       cleanup = async () => {
-         setSessionUserCred(account.userCred, account.userId);
+         setSessionSigner(account.userId, account.userCred);
          await expectPasskeyDeleted(account.credId, account.csrf, account.cookie);
-         setSessionUserCred(undefined);
+         setSessionSigner(undefined);
       };
 
       // A valid add (carrying the passkeyUserCredEnc ciphertext) succeeds...
@@ -151,9 +150,9 @@ describe('PRF registration input validation', () => {
       // completes registration (proving the tamper was the only cause); delete it to leave no account.
       const ok = await postJson('/v1/reg/verify?usercred=true', body, {}, '');
       expect(ok.status).toBe(200);
-      setSessionUserCred(bytesToBase64(userCred), userId);
+      setSessionSigner(userId, bytesToBase64(userCred));
       await expectPasskeyDeleted(ok.data.pkId, ok.data.csrf, ok.cookie);
-      setSessionUserCred(undefined);
+      setSessionSigner(undefined);
    }
 
    it('rejects an empty passkeyUserCredEnc', () =>

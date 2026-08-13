@@ -2,68 +2,113 @@
   <div class="content">
     <h1>Account Backup and Recovery</h1>
     <p>
-      <b>This is your account recovery word pattern.</b> This pattern is the only way to
-      recover your account and decrypt your data if you lose access to all your Quick Crypt passkeys.
-      <b>These words are shown only once and cannot be displayed again, so copy and store them now.</b>
+      The recovery word pattern below is needed to recover your account and
+      decrypt your data if you lose access to all your Quick Crypt passkeys. If
+      you lose both your passkeys and your recovery sheet, you will permanently
+      lose access to your encrypted data. Because these words can only be
+      displayed once, please follow these steps carefully:
     </p>
-    <ol>
-      <li>Save all of these words in the exact order they appear</li>
-      <li>Store this pattern in a secure and durable location, <b>separate from your passkeys</b></li>
-      <li>Do not allow untrusted parties to access your recovery pattern</li>
+    <ol class="instructions">
+      <li>
+        Print your emergency recovery sheet now, which includes your word
+        pattern.
+      </li>
+      <li>
+        Store the printout in a secure and durable location,
+        <b>separate from your passkeys.</b>
+      </li>
+      <li>
+        Optionally, also store just the recovery word pattern in a password
+        manager.
+      </li>
+      <li>
+        Do not allow untrusted parties to access any of your recovery
+        information.
+      </li>
     </ol>
     <p>
-      Although someone with access to only your recovery words
-      cannot decrypt your data, they could delete your Quick Crypt account. We
-      recommend printing a physical copy of your recovery words and storing the
-      printout in a lockbox or safe. If you lose both your passkeys and these
-      recovery words, you will permanently lose access to your encrypted data.
+      We recommend printing a physical copy of your emergency recovery sheet and
+      storing the printout offline because someone with access to your recovery
+      words and your user credential could delete your Quick Crypt account and
+      weaken your encryption strength.
     </p>
-    @if(replacedLink) {
+    @if (replacedLink) {
       <mat-card appearance="outlined">
         <mat-card-header>
           <mat-card-title>⚠️ Attention</mat-card-title>
         </mat-card-header>
         <mat-card-content>
           <p>
-            These recovery words have replaced your account's old recovery link.
-            <b>Delete your recovery link and save the word pattern shown here.</b>
+            These recovery words and the emergency recovery sheet have now
+            replaced your old recovery link.
+            <b
+              >Delete your old recovery link and replace it with the word
+              pattern and emergency sheet provided below.</b
+            >
           </p>
         </mat-card-content>
       </mat-card>
     }
-    @if(replacedWords) {
+    @if (replacedWords) {
       <mat-card appearance="outlined">
         <mat-card-header>
           <mat-card-title>⚠️ Attention</mat-card-title>
         </mat-card-header>
         <mat-card-content>
           <p>
-            These recovery words replace your previous pattern.
-            <b>Replace all saved copies of your old pattern with the word pattern shown here.</b>
+            These recovery words and the emergency recovery sheet have now
+            replaced your previous information.
+            <b
+              >Replace all saved copies of your old recovery information with
+              the word pattern and emergency sheet provided below.</b
+            >
           </p>
         </mat-card-content>
       </mat-card>
     }
     <div class="control-host">
-      @if(!error) {
-        <mat-form-field class="recovery" [cdkCopyToClipboard]="recoveryWords.value!" (click)="toastMessage('Copied to clipboard')">
+      @if (!error) {
+        <mat-form-field class="recovery">
           <div class="toolbar">
-            <button mat-icon-button aria-label="Copy"
+            <button
+              mat-icon-button
+              aria-label="Copy"
               (click)="toastMessage('Copied to clipboard')"
-              [cdkCopyToClipboard]="recoveryWords.value!">
+              [cdkCopyToClipboard]="recoveryWords.value!"
+            >
               <mat-icon>content_copy</mat-icon>
             </button>
           </div>
 
           <mat-label>Recovery Word Pattern</mat-label>
-          <textarea #wordsArea id="wordsArea" matInput autofocus type="text" [formControl]="recoveryWords"
-            readonly="true" class="words-area" (focus)="wordsArea.select();"></textarea>
+          <textarea
+            #wordsArea
+            id="wordsArea"
+            matInput
+            type="text"
+            [formControl]="recoveryWords"
+            readonly="true"
+            class="words-area"
+          ></textarea>
         </mat-form-field>
-        <a [routerLink]="'/'">
-          <button class="task-button" mat-raised-button (click)="onClickSaved()">
-            I saved my recovery words securely
+        <div class="button-stack">
+          <button
+            class="task-button"
+            mat-raised-button
+            (click)="onClickPrint()"
+          >
+            Print an emergency recovery sheet
           </button>
-        </a>
+          <a [routerLink]="'/'">
+            <button
+              class="task-button"
+              mat-raised-button
+              (click)="onClickSaved()"
+            >
+              I saved my recovery words securely
+            </button>
+          </a>
+        </div>
       } @else {
         <button class="task-button" mat-raised-button (click)="reloadData()">
           Try again
@@ -71,7 +116,58 @@
       }
     </div>
     <div class="error-msg">
-      <p>{{error}}</p>
+      <p>{{ error }}</p>
     </div>
   </div>
 </div>
+@if (sheetUserCred) {
+  <div class="print-sheet">
+    <h1>Quick Crypt Recovery Information</h1>
+    <p>
+      The information below is needed to recover your account and decrypt your
+      data if you lose access to your Quick Crypt passkeys.
+      <b>
+        Print and store this sheet offline separately from your passkeys
+        somewhere that is physically secure and durable, such as a lockbox. Do
+        not allow others to access your recovery sheet.
+      </b>
+    </p>
+
+    <h2>Recovery Word Pattern:</h2>
+    <p class="sheet-value">{{ recoveryWords.value }}</p>
+    <p>
+      This word pattern allows you to restore your account if you lose access to
+      all your Quick Crypt passkeys. To restore your account, go to
+      https://quickcrypt.org/recovery3 and enter the words in the exact order
+      they appear above.
+    </p>
+    <p>
+      If someone you do not trust gains access to your recovery words but has
+      not used them, go to https://quickcrypt.org/regenrecovery and change your
+      recovery word pattern. If an untrusted party has used or changed your
+      recovery words, your encrypted data is still protected by encryption
+      passwords, but your account's overall security is permanently weakened. We
+      recommend creating a new Quick Crypt account, re-encrypting your data, and
+      then deleting your previous account.
+    </p>
+
+    <h2>User Credential:</h2>
+    <p class="sheet-value">{{ sheetUserCred }}</p>
+    <p>
+      Your user credential, along with your encryption passwords, is used to
+      create the keys that encrypt and decrypt your data. Normally you do not
+      need to know your user credential, but it is provided here for offline
+      storage in case your Quick Crypt account is unintentionally deleted. If
+      that ever happens, you can use the credential above with the Quick Crypt
+      command-line tool to decrypt your data.
+    </p>
+    <p>
+      Unlike the recovery word pattern, your user credential can never be
+      changed. If this sheet is ever exposed to untrusted parties, your
+      encrypted data is still protected by encryption passwords, but your
+      account's overall security is permanently weakened. We recommend creating
+      a new Quick Crypt account, re-encrypting your data, and then deleting your
+      previous account.
+    </p>
+  </div>
+}

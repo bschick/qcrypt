@@ -1,6 +1,15 @@
 @use "../common.scss";
 @use "@angular/material" as mat;
 
+ol.instructions {
+  line-height: 1.1;
+
+  li {
+    font-weight: bold;
+    margin-bottom: 8px;
+  }
+}
+
 .control-host {
   margin-top: 50px;
   display: flex;
@@ -25,6 +34,32 @@
     resize: none;
     margin-top: 20px;
     min-height: 120px;
+  }
+
+  .button-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+.print-sheet {
+  display: none;
+}
+
+@media print {
+  .print-sheet {
+    display: block;
+    padding: 0 12px;
+  }
+
+  .sheet-value {
+    font-family: monospace;
+    font-size: 12pt;
+    // Breaks the credential without splitting hand-transcribed recovery words
+    overflow-wrap: anywhere;
+    border: 1px solid #000;
+    padding: 8px;
   }
 }
 

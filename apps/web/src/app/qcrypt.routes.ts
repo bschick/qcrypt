@@ -29,7 +29,11 @@ import { welcomeGuard } from './welcome/welcome.guard';
 import { guardedImport } from './reloader';
 
 export const routes: Routes = [
-   { path: 'welcome', component: WelcomeComponent, canActivate: [welcomeGuard] },
+   {
+      path: 'welcome',
+      component: WelcomeComponent,
+      canActivate: [welcomeGuard],
+   },
    {
       path: 'newuser',
       loadComponent: () => guardedImport(() => import('./newuser/newuser.component').then((m) => m.NewUserComponent)),
@@ -52,16 +56,33 @@ export const routes: Routes = [
          guardedImport(() => import('./recovery/recovery.component').then((m) => m.RecoveryComponent)),
    },
    {
-      path: 'recovery2',
+      path: 'recovery3',
       loadComponent: () =>
-         guardedImport(() => import('./recovery2/recovery2.component').then((m) => m.Recovery2Component)),
+         guardedImport(() => import('./recovery3/recovery3.component').then((m) => m.Recovery3Component)),
+   },
+   // Help pages and saved recovery-word instructions have pointed people at this path
+   {
+      path: 'recovery2',
+      redirectTo: 'recovery3',
+      pathMatch: 'full',
    },
    {
       path: 'cmdline',
       loadComponent: () => guardedImport(() => import('./cmdline/cmdline.component').then((m) => m.CmdLineComponent)),
       canActivate: [cmdlineGuard],
    },
-   { path: 'help', loadChildren: () => guardedImport(() => import('./help/help.routes').then((m) => m.helpRoutes)) },
-   { path: '', component: CoreComponent, canActivate: [coreGuard] },
-   { path: '**', redirectTo: '', pathMatch: 'full' },
+   {
+      path: 'help',
+      loadChildren: () => guardedImport(() => import('./help/help.routes').then((m) => m.helpRoutes)),
+   },
+   {
+      path: '',
+      component: CoreComponent,
+      canActivate: [coreGuard],
+   },
+   {
+      path: '**',
+      redirectTo: '',
+      pathMatch: 'full',
+   },
 ];

@@ -28,7 +28,7 @@ import {
    expectPasskeyDeleted,
    makeProofHeaders,
    registerTestUser,
-   setSessionUserCred,
+   setSessionSigner,
 } from './common';
 
 describe('proof of userCred enforcement', () => {
@@ -44,15 +44,15 @@ describe('proof of userCred enforcement', () => {
       // enforce proof verification against that client-provisioned key.
       ({ userId, userCred, cookie, csrf, credId } = await registerTestUser(testUser, true));
       // Each test crafts its own proof; disable the harness auto-signer.
-      setSessionUserCred(undefined);
+      setSessionSigner(undefined);
    });
 
    afterAll(async () => {
       if (cookie && credId) {
          // Deleting under enforcement needs a valid proof, so re-enable auto-signing.
-         setSessionUserCred(userCred, userId);
+         setSessionSigner(userId, userCred);
          await expectPasskeyDeleted(credId, csrf, cookie);
-         setSessionUserCred(undefined);
+         setSessionSigner(undefined);
       }
    });
 

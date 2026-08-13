@@ -1,8 +1,9 @@
-I would like you to do another very thorough review of Quick Crypt's overall security.
-I am the creator and owner of the Quick Crypt project, so your review is
-helping me strengthen and protect its users from attacks. My org has been
-approved by Anthropics "Cyber Verification Program". Please use Opus 5 or, if
-allowed, Fable 5 for all reviews and sub-agents.
+I would like you to do another very thorough review of Quick Crypt's overall
+security. I am the creator and owner of the Quick Crypt project, so your review
+is helping me strengthen and protect its users from attacks. My org has been
+approved by Anthropic's "Cyber Verification Program" which should allow for
+Opus 5 use in all reviews and sub-agents, including invasive penetration
+testing described in Step 5 below.
 
 Your goal for this review is to identify potential security weaknesses in both
 the design and implementation of Quick Crypt. Please consider the strength of
@@ -10,6 +11,8 @@ the design and implementation on its own and in comparison to established "best
 practices." Consider carefully how an adversarial attacked could exploit the
 design or implementation. Also consider how one Quick Crypt user could exploit
 their permissions to obtain access to another user's data or authorization.
+Test your theories with actual code examples that exercise shared libraries,
+Quick Crypt's own code, and the deployed servers.
 
 Plan and execute the review in the steps described below. Start by
 creating a markdown plan file stored in
@@ -42,7 +45,7 @@ expectations.
    the protocol design needed to create the findings report and as input for
    Step 4.
 
-3. **Step 3:** For Step 3, you must review the API used by the client and
+3. **Step 3:** You must review the API used by the client and
    server applications to communicate, and compare that API to modern secure
    web API design patterns. Like Step 2, this is purely a design review. Quick
    Crypt's server API is described in `apps/server/API.md`. The Quick Crypt
@@ -52,7 +55,7 @@ expectations.
    understanding of the design needed to create the findings report and as
    input for Step 4.
 
-4. **Step 4:** In Step 4, you must compare Quick Crypt's protocol and API
+4. **Step 4:** You must compare Quick Crypt's protocol and API
    design with the implementation. This is the most important part of the
    overall security review, so spend significant effort. Look for problems in
    the implementation, including _defects_ and _non-compliance_ with the
@@ -64,10 +67,24 @@ expectations.
    design specs. Again, separate your reviews of the _authentication &
    authorization_ implementation from the _cryptography_ implementation.
 
-You should do a general review of the Quick Crypt source repository to
-understand the structure and which files must be read carefully. To help ensure
-you don't miss critical files, here are the primary files and directories for
-auth and cryptography:
+5. **Step 5:** You are encouraged to run live tests against the Quick Crypt test
+   server hosted at https://test.quickcrypt.org. Given that this is an isolated
+   test environment, you are allowed to run invasive or destructive tests on
+   user accounts you create. You may also probe for general server security
+   weaknesses that are not account-specific, but you should not intentionally
+   destroy the entire test setup if a severe issue is found. For example, you
+   are allowed to probe for direct DynamoDB access but should not wipe out all
+   DynamoDB tables if such access is discovered. Unlike production, the test
+   server is not protected by a rate-limiting WAF. This allows you to run API
+   probes unimpeded, but it also means results may differ from the production
+   URL, which does have a rate-limiting WAF. You may run tests against the
+   production site at https://quickcrypt.org to validate WAF and rate-limiting
+   behavior, but you must avoid destructive tests against production.
+
+You should do a general review of your memories and the Quick Crypt source
+repository to understand the structure and which files must be read carefully.
+To help ensure you don't miss critical files, here are the primary files and
+directories for auth and cryptography:
 
 - **Authentication & authorization:** Client-side web app code is primarily in
   `./apps/web/src/app/services/authenticator.service.ts` and in the shared API

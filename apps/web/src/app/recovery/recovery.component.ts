@@ -64,7 +64,7 @@ export class RecoveryComponent implements OnInit {
             this.authenticated = this.authSvc.hasSession();
 
             if (this.authenticated && this.authSvc.hasRecoveryId()) {
-               this.router.navigateByUrl('/recovery2');
+               this.router.navigateByUrl('/recovery3');
             } else {
                try {
                   this.recoveryUserId = this.activeRoute.snapshot.queryParamMap.get('userid');

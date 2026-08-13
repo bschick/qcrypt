@@ -283,7 +283,8 @@ export const Challenges = new Entity(
             required: true,
          },
          purpose: {
-            type: ['reg', 'add', 'auth', 'recover', 'api', 'nonce'] as const,
+            // BACKWARD COMPAT: 'noncebackwardcompat' until clients update to call postRecover3 directly
+            type: ['reg', 'add', 'auth', 'recover', 'confirm', 'api', 'nonce', 'noncebackwardcompat'] as const,
             required: true,
             readOnly: true,
          },
@@ -307,7 +308,7 @@ export const Challenges = new Entity(
             pk: {
                field: 'pk',
                cast: 'string',
-               composite: ['challenge'],
+               composite: ['purpose', 'challenge'],
                casing: 'none',
             },
          },
@@ -411,6 +412,7 @@ export const AAGUIDs = new Entity(
 );
 
 export type UnverifiedUserItem = EntityItem<typeof Users>;
+export type ChallengeItem = EntityItem<typeof Challenges>;
 export type AuthItem = EntityItem<typeof Authenticators>;
 export type InvitableItem = EntityItem<typeof Invitables>;
 export type VerifiedUserItem = EntityRecord<typeof Users> & {

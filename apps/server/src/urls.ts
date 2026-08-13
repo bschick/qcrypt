@@ -72,9 +72,6 @@ export const Patterns = {
    regVerify: new URLPattern({
       pathname: '/v:ver/reg/verify',
    }),
-   recoverVerify: new URLPattern({
-      pathname: '/v:ver/recover/verify',
-   }),
    authOptions: new URLPattern({
       pathname: '/v:ver/auth/options',
    }),
@@ -93,8 +90,21 @@ export const Patterns = {
    recover2Challenge: new URLPattern({
       pathname: `/v:ver/recover2/challenge`,
    }),
+   // BACKWARD COMPAT: until clients update to call recover3/key directly
    recover2Key: new URLPattern({
       pathname: `/v:ver/recover2/key`,
+   }),
+   recover3: new URLPattern({
+      pathname: `/v:ver/recover3`,
+   }),
+   recover3Key: new URLPattern({
+      pathname: `/v:ver/recover3/key`,
+   }),
+   recoverConfirm: new URLPattern({
+      pathname: `/v:ver/recover/confirm`,
+   }),
+   recoverVerify: new URLPattern({
+      pathname: '/v:ver/recover/verify',
    }),
    session: new URLPattern({
       pathname: `/v:ver/session`,
@@ -154,7 +164,8 @@ export function matchEvent(event: APIGatewayProxyEventV2, methodMap: MethodMap):
          pathname: path,
       });
 
-      if (match && Number(match.pathname.groups.ver) === handerInfo.version) {
+      // Compared as a canonical string because Number() accepts non-canonical spellings
+      if (match && match.pathname.groups.ver === String(handerInfo.version)) {
          // biome-ignore lint/suspicious/noExplicitAny: request bodies are arbitrary JSON
          let body: Record<string, any> = {};
          let rawBody = '';

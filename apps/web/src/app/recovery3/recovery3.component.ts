@@ -36,9 +36,9 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angu
 import { firstValueFrom } from 'rxjs';
 
 @Component({
-   selector: 'app-recovery',
-   templateUrl: './recovery2.component.html',
-   styleUrl: './recovery2.component.scss',
+   selector: 'app-recovery3',
+   templateUrl: './recovery3.component.html',
+   styleUrl: './recovery3.component.scss',
    imports: [
       MatIconModule,
       MatButtonModule,
@@ -51,7 +51,7 @@ import { firstValueFrom } from 'rxjs';
       MatInputModule,
    ],
 })
-export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit {
+export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
    public validRecoveryWords = false;
    public error = '';
    public ready = false;
@@ -132,7 +132,7 @@ export class Recovery2Component implements OnInit, OnDestroy, AfterViewInit {
                const proceed = await this._checkProceed(cleanedWords);
                if (proceed) {
                   this.showProgress = true;
-                  await this.authSvc.recover2(cleanedWords);
+                  await this.authSvc.recover3(cleanedWords);
                   this.router.navigateByUrl('/');
                }
             }
@@ -167,9 +167,9 @@ export interface ConfirmData {
 }
 
 @Component({
-   selector: 'confirm-dialog',
+   selector: 'recovery-confirm-dialog',
    templateUrl: 'confirm-dialog.html',
-   styleUrl: './recovery2.component.scss',
+   styleUrl: './recovery3.component.scss',
    imports: [MatDialogModule, MatIconModule, MatButtonModule],
 })
 export class ConfirmDialog {

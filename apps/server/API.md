@@ -130,43 +130,36 @@ This document provides documentation for the passkey-based authentication server
   - `400 Bad Request`: The request was malformed or the request body is invalid.
   - `401 Unauthorized`: The request is not authorized.
 
-### POST /v1/recover
+## Recovery Endpoints
+
+Recovery takes three calls. `/v1/recover3` verifies the account's recovery secret and returns the
+user credential, `/v1/recover/confirm` verifies that a client has that credential and deletes the
+account's passkeys, and `/v1/recover/verify` registers the replacement passkey and starts a
+session. The first two calls end an existing session.
+
+### POST /v1/recover3
 
 - **Method:** `POST`
-- **Path:** `/v1/recover`
+- **Path:** `/v1/recover3`
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
 - **Authorization:** Not required
-- **Description:** DEPRECATED. Upgrade account and use `/v1/recover2` instead. Initiates the account recovery process for the user Id and user credential sent in the request body. This will delete all existing passkeys for the user and return registration options to create a new passkey.
-- **Request Body:** A JSON object with `userId` and `userCred` keys. Example: `{"userId": "base64id", "userCred": "base64usercred"}`.
+- **Description:** Starts account recovery by verifying a signature created by the client, using a key derived from the account's recovery secret, over `userId` and a timestamp and nonce the client chooses. Returns the user credential previously encrypted under that secret, or the user credential itself for no-PRF accounts, along with the challenge for `/v1/recover/confirm`.
+- **Request Body:** A [`Recover3`](#recover3) object.
+- **Responses:**
+  - `200 OK`: A [`RecoverStart`](#recoverstart) JSON object.
+  - `400 Bad Request`: The request was malformed, or the recovery signature is invalid, replayed, or outside the timestamp skew window.
+
+### POST /v1/recover/confirm
+
+- **Method:** `POST`
+- **Path:** `/v1/recover/confirm`
+- **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
+- **Authorization:** Not required
+- **Description:** Confirms that a client has the expected user credential by verifying a signature over the challenge returned by `/v1/recover3`, created by the client with a key derived from that credential. On success the server deletes all existing passkeys for the account and returns registration options to create a new passkey.
+- **Request Body:** A [`RecoverConfirm`](#recoverconfirm) object.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
-  - `400 Bad Request`: The user credential is not valid.
-  - `401 Unauthorized`: The request is not authorized.
-
-### POST /v1/recover2/challenge
-
-- **Method:** `POST`
-- **Path:** `/v1/recover2/challenge`
-- **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
-- **Authorization:** Not required
-- **Description:** Returns a single-use challenge for the user to sign with their recovery key, proving possession before calling `/v1/recover2`.
-- **Request Body:** A JSON object with a `userId` key. Example: `{"userId": "base64id"}`.
-- **Responses:**
-  - `200 OK`: A JSON object with a `challenge` key.
-  - `400 Bad Request`: The request was malformed or the userId is invalid.
-
-### POST /v1/recover2
-
-- **Method:** `POST`
-- **Path:** `/v1/recover2`
-- **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
-- **Authorization:** Not required
-- **Description:** Initiates account recovery by verifying a recovery proof: a signature, made with the account's recovery key, over the challenge from `/v1/recover2/challenge`. On success it deletes all existing passkeys for the user and returns registration options to create a replacement passkey.
-- **Request Body:** A JSON object with `userId`, `challenge`, and `signature` keys, where `challenge` is the value from `/v1/recover2/challenge` and `signature` is the recovery proof over it. Example: `{"userId": "base64id", "challenge": "base64challenge", "signature": "base64signature"}`.
-- **Responses:**
-  - `200 OK`: A [`RecoverInfo`](#recoverinfo) JSON object.
-  - `400 Bad Request`: The request was malformed or the recovery proof is invalid.
-  - `401 Unauthorized`: The request is not authorized.
+  - `400 Bad Request`: The request was malformed, the challenge is unknown or already spent, or the signature is invalid.
 
 ### POST /v1/recover/verify
 
@@ -174,24 +167,37 @@ This document provides documentation for the passkey-based authentication server
 - **Path:** `/v1/recover/verify`
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
 - **Authorization:** Not required
-- **Description:** Completes account recovery by verifying the registration response for the replacement passkey created after `/v1/recover2` (or the deprecated `/v1/recover`), and establishes a new session. Response contains a `csrf` token that must be sent in the `x-csrf-token` header for authorized requests.
+- **Description:** Completes account recovery by verifying the registration of the new passkey created from the registration options returned by `/v1/recover/confirm`, and establishes a new session.
 - **Request Body:** A [`RecoverVerify`](#recoververify) object: the SimpleWebAuthn/client `RegistrationResponseJSON` response, `userId`, `challenge`, and the client-encrypted credential field `passkeyUserCredEnc`.
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object including `csrf` and session cookie.
   - `400 Bad Request`: The request was malformed or the request body is invalid.
   - `401 Unauthorized`: The recovery challenge has expired or is invalid.
 
-### PUT /v1/recover2/key
+### PUT /v1/recover3/key
 
 - **Method:** `PUT`
-- **Path:** `/v1/recover2/key`
+- **Path:** `/v1/recover3/key`
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
 - **Authorization:** Required (cookie, x-csrf-token, and x-proof)
-- **Description:** Replaces the recovery key generated from new recovery words for the authenticated user. For accounts where `prf` is true, the user credential re-encrypted under the new recovery secret must also be supplied.
-- **Request Body:** A JSON object with a `recoveryPubKey` key, and a `userCredEnc` key when `prf` is true. Example: `{"recoveryPubKey": "base64pubkey", "userCredEnc": "base64usercredenc"}`.
+- **Description:** Replaces the account's recovery key with a new public key derived by the client app from new recovery words. The caller must also include a signature, created with the new keypair, over the authenticated `userId` and a timestamp and nonce it chooses. For PRF accounts, the user credential re-encrypted under the new recovery secret must also be supplied.
+- **Request Body:** A [`Recover3Key`](#recover3key) object.
 - **Responses:**
   - `200 OK`: A [`UserInfo`](#userinfo) JSON object.
-  - `400 Bad Request`: The request was malformed or the request body is invalid.
+  - `400 Bad Request`: The request was malformed, or the recovery signature is invalid, replayed, or outside the timestamp skew window.
+  - `401 Unauthorized`: The request is not authorized.
+
+### POST /v1/recover
+
+- **Method:** `POST`
+- **Path:** `/v1/recover`
+- **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
+- **Authorization:** Not required
+- **Description:** DEPRECATED. Upgrade account and use `/v1/recover3` instead. Initiates the account recovery process for the user Id and user credential sent in the request body. This will delete all existing passkeys for the user and return registration options to create a new passkey. Accounts that have moved to recovery words are refused.
+- **Request Body:** A JSON object with `userId` and `userCred` keys.
+- **Responses:**
+  - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
+  - `400 Bad Request`: The user credential is not valid, or the account must use recovery words.
   - `401 Unauthorized`: The request is not authorized.
 
 ## Session Endpoints
@@ -228,12 +234,12 @@ Sent to `POST /v1/reg/verify` to create a new user and passkey.
 
 - `userId` (string): The unique identifier for the user.
 - `challenge` (string): A string that must be sent back to the server for verification.
-- `recoveryPubKey` (string): The recovery proof public key derived from the client's recovery secret.
+- `recoveryPubKey` (string): The public key derived from the client's recovery secret.
 - `passkeyUserCredEnc` (string): The user credential encrypted under the new passkey's key.
 - `recoveryUserCredEnc` (string): The user credential encrypted under the recovery secret.
-- `userCredPubKey` (string): The proof public key derived from the client-generated user credential.
+- `userCredPubKey` (string): The public key derived from the client-generated user credential.
 
-The three credential fields are all-or-nothing: send all three to create a `prf` account, or none to have the server generate and hold the credential.
+The three credential fields are all-or-nothing: send all three to create a PRF account, or none to have the server generate and hold the credential.
 
 ### RecoverVerify
 
@@ -241,14 +247,42 @@ Sent to `POST /v1/recover/verify` to complete account recovery.
 
 - `userId` (string): The unique identifier for the user.
 - `challenge` (string): A string that must be sent back to the server for verification.
-- `passkeyUserCredEnc` (string): The user credential re-encrypted under the new passkey's key. Required when `prf` is true, rejected otherwise.
+- `passkeyUserCredEnc` (string): The user credential re-encrypted under the new passkey's key. Required for PRF accounts, rejected otherwise.
 
 ### AddVerify
 
 Sent to `POST /v1/passkeys/verify` to add a passkey to the authenticated user.
 
 - `challenge` (string): A string that must be sent back to the server for verification.
-- `passkeyUserCredEnc` (string): The user credential re-encrypted under the new passkey's key. Required when `prf` is true, rejected otherwise.
+- `passkeyUserCredEnc` (string): The user credential re-encrypted under the new passkey's key. Required for PRF accounts, rejected otherwise.
+
+### Recover3
+
+Sent to `POST /v1/recover3` to start account recovery.
+
+- `userId` (string): The unique identifier for the user.
+- `timestamp` (string): Milliseconds since the epoch, as a decimal string, when the signature was made.
+- `nonce` (string): A caller-chosen single-use value.
+- `signature` (string): An ML-DSA signature over `userId`, `timestamp`, and `nonce`, made with a key derived from the account's recovery secret.
+
+### RecoverConfirm
+
+Sent to `POST /v1/recover/confirm` to show the caller has the user credential.
+
+- `userId` (string): The unique identifier for the user.
+- `challenge` (string): The challenge returned by `/v1/recover3`, which also serves as the signature nonce.
+- `timestamp` (string): Milliseconds since the epoch, as a decimal string, when the signature was made.
+- `signature` (string): An ML-DSA signature over this request, made with a key derived from the user credential.
+
+### Recover3Key
+
+Sent to `PUT /v1/recover3/key` to replace the account's recovery key.
+
+- `recoveryPubKey` (string): The public key derived from the new recovery secret.
+- `timestamp` (string): Milliseconds since the epoch, as a decimal string, when the signature was made.
+- `nonce` (string): A caller-chosen single-use value.
+- `signature` (string): An ML-DSA signature over the authenticated `userId`, `timestamp`, and `nonce`, made with a key derived from the new recovery secret.
+- `userCredEnc` (string): The user credential encrypted under the new recovery secret. Required for PRF accounts.
 
 ## Response Data Models
 
@@ -259,11 +293,16 @@ These are the objects that are returned to the client in API responses.
 The `UserInfo` object contains public information about a user.
 
 - `verified` (boolean): Whether the user has been verified.
-- `userId` (string, optional): The unique identifier for the user.
-- `userName` (string, optional): The user's chosen name.
-- `hasRecoveryId` (boolean, optional): `true` for recovery words, `false` for the original recovery link.
-- `prf` (boolean, optional): Whether the account generated and encrypts the user credential locally.
-- `authenticators` (array of [`AuthenticatorInfo`](#authenticatorinfo) objects, optional): A list of the user's authenticators.
+
+The remaining fields are present when `verified` is true. A response with `verified` false carries
+that field alone, which is what `DELETE /v1/passkeys/{credid}` returns once the last passkey is
+removed and the account with it.
+
+- `userId` (string): The unique identifier for the user.
+- `userName` (string): The user's chosen name.
+- `hasRecoveryId` (boolean): `true` for recovery words, `false` for the original recovery link.
+- `prf` (boolean): Whether the account generated and encrypts the user credential locally.
+- `authenticators` (array of [`AuthenticatorInfo`](#authenticatorinfo) objects): A list of the user's authenticators.
 
 ### LoginUserInfo
 
@@ -271,17 +310,18 @@ The `LoginUserInfo` object extends the [`UserInfo`](#userinfo) object with addit
 
 - All fields from [`UserInfo`](#userinfo).
 - `pkId` (string, optional): The ID of the public key credential used for the last login.
-- `userCred` (string, optional): The plaintext user credential, returned only when `prf` is false.
-- `passkeyUserCredEnc` (string, optional): The user credential encrypted under the last passkey, returned when `prf` is true.
+- `userCred` (string, optional): The plaintext user credential, returned only for no-PRF accounts.
+- `passkeyUserCredEnc` (string, optional): The user credential encrypted under the last passkey, returned for PRF accounts.
 - `csrf` (string, optional): A Cross-Site Request Forgery (CSRF) token that must be sent in a `x-csrf-token` header for authorized requests.
 
-### RecoverInfo
+### RecoverStart
 
-The `RecoverInfo` object is a [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) object with two additional recovery fields.
+The `RecoverStart` object carries the account's user credential and the challenge for `/v1/recover/confirm`.
 
-- All fields from [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson).
-- `prf` (boolean, optional): Whether the account generated and encrypts the user credential locally.
-- `userCredEnc` (string, optional): When `prf` is true, the user credential encrypted under the recovery secret.
+- `prf` (boolean): Whether the account generated and encrypts the user credential locally.
+- `challenge` (string): A single-use value to be signed for `/v1/recover/confirm`.
+- `userCredEnc` (string): The user credential encrypted under the recovery secret. Present for PRF accounts.
+- `userCred` (string): The plaintext user credential. Present for no-PRF accounts.
 
 ### AuthenticatorInfo
 
@@ -315,6 +355,11 @@ The SimpleWebAuthn/server `PublicKeyCredentialRequestOptionsJSON` object contain
 - `rpId`: The ID of the Relying Party (your website).
 - `allowCredentials`: An array of credentials that are allowed to be used for authentication.
 - `userVerification`: The user verification requirement.
+
+## Caching
+
+Every response carries `Cache-Control: no-store` and `Pragma: no-cache`, so a client, proxy, or
+browser back/forward navigation always reaches the server rather than a stored copy.
 
 ## Authorization
 

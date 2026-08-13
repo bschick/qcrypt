@@ -29,6 +29,9 @@ export {
    getRecoveryPubKey,
    createRecoveryProof,
    verifyRecoveryProof,
+   // BACKWARD COMPAT: until clients update to call postRecover3 directly
+   createRecoveryProofBackwardCompat,
+   verifyRecoveryProofBackwardCompat,
    recoverySecret,
    RECOVERYID_BYTES,
    CHALLENGE_BYTES,
@@ -55,6 +58,28 @@ export namespace RequestTypes {
       passkeyUserCredEnc?: string;
    };
    export type PasskeyVerify = RegVerify | RecoverVerify | AddVerify;
+
+   export type RecoverProof = {
+      timestamp: string;
+      nonce: string;
+      signature: string;
+   };
+
+   export type Recover3 = RecoverProof & {
+      userId: string;
+   };
+
+   export type Recover3Key = RecoverProof & {
+      recoveryPubKey: string;
+      userCredEnc?: string;
+   };
+
+   export type RecoverConfirm = {
+      userId: string;
+      challenge: string;
+      timestamp: string;
+      signature: string;
+   };
 }
 
 export namespace ResponseTypes {
@@ -71,15 +96,17 @@ export namespace ResponseTypes {
       description?: string;
    };
 
-   export type UserInfo = {
-      verified: boolean;
-      userId?: string;
-      userName?: string;
-      hasRecoveryId?: boolean;
-      prf?: boolean;
-      authenticators?: AuthenticatorInfo[];
-      invitables?: InvitableInfo[];
-   };
+   export type UserInfo =
+      | { verified: false }
+      | {
+           verified: true;
+           userId: string;
+           userName: string;
+           hasRecoveryId: boolean;
+           prf: boolean;
+           authenticators: AuthenticatorInfo[];
+           invitables?: InvitableInfo[];
+        };
 
    export type LoginUserInfo = UserInfo & {
       pkId?: string;
@@ -92,6 +119,10 @@ export namespace ResponseTypes {
       prf?: boolean;
       userCredEnc?: string;
    };
+
+   export type RecoverStart =
+      | { prf: true; challenge: string; userCredEnc: string }
+      | { prf: false; challenge: string; userCred: string };
 }
 
 export const TOPIC_USERS_MAX = 255;

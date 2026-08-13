@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnDestroy, type OnInit, Renderer2 } from '@angular/core';
+import { Component, type OnDestroy, type OnInit } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -32,6 +32,10 @@ import { AuthEvent, AuthenticatorService } from '../services/authenticator.servi
 import { Subscription } from 'rxjs';
 import { MatCardModule } from '@angular/material/card';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
+import { bytesToBase64 } from '@qcrypt/crypto';
+
+// Browsers name a "Save as PDF" print after the document title
+const SHEET_TITLE = 'quick_crypt_emergency_backup';
 
 @Component({
    selector: 'app-show-recovery',
@@ -53,12 +57,13 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
    public error = '';
    public replacedLink = false;
    public replacedWords = false;
+   public sheetUserCred = '';
    private authSub!: Subscription;
+   private _priorTitle?: string;
    public recoveryWords = new FormControl<string>('');
 
    constructor(
       public authSvc: AuthenticatorService,
-      private r2: Renderer2,
       private router: Router,
       private snackBar: MatSnackBar,
    ) {}
@@ -82,13 +87,6 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
 
       if (this.authSvc.hasRecoveryWords()) {
          this.recoveryWords.setValue(this.authSvc.consumeRecoveryWords());
-
-         try {
-            // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
-            setTimeout(() => this.r2.selectRootElement('#wordsArea').focus(), 0);
-         } catch (err) {
-            console.error(err);
-         }
       } else {
          this.router.navigateByUrl('/regenrecovery');
       }
@@ -96,10 +94,46 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
 
    ngOnDestroy() {
       this.recoveryWords.setValue('');
+      this._clearSheet();
       if (this.authSub) {
          this.authSub.unsubscribe();
       }
    }
+
+   async onClickPrint(): Promise<void> {
+      this.error = '';
+
+      try {
+         const userCred = await this.authSvc.getUserCred();
+         try {
+            this.sheetUserCred = bytesToBase64(userCred);
+         } finally {
+            userCred.fill(0);
+         }
+      } catch (err) {
+         console.error(err);
+         this.error = 'Could not build the backup sheet, try again';
+      }
+
+      if (this.sheetUserCred) {
+         this._priorTitle = document.title;
+         document.title = SHEET_TITLE;
+
+         window.addEventListener('afterprint', this._clearSheet, { once: true });
+
+         // Let the sheet render before the print dialog samples the page
+         setTimeout(() => window.print(), 0);
+      }
+   }
+
+   private _clearSheet = (): void => {
+      this.sheetUserCred = '';
+      if (this._priorTitle !== undefined) {
+         document.title = this._priorTitle;
+         this._priorTitle = undefined;
+      }
+      window.removeEventListener('afterprint', this._clearSheet);
+   };
 
    toastMessage(msg: string) {
       this.snackBar.open(msg, '', {

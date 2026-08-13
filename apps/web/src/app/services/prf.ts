@@ -82,6 +82,9 @@ export async function prfEncrypt(
    userId: string,
 ): Promise<string> {
    try {
+      if (plainText.every((b) => b === 0)) {
+         throw new Error('Invalid plainText: all zero bytes');
+      }
       const keyProvider = new MasterKeyKeyProvider(prfKey, userId);
       const cipherData = await readStreamAll(
          await encryptStream(streamFromBytes(plainText), keyProvider, { algs: ['X20-PLY'] }),

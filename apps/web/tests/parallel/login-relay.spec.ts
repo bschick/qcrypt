@@ -280,7 +280,9 @@ test.describe('login relay', () => {
 
       // Deleting userB's only passkey removes the account; untrack it so cleanup
       // doesn't try to re-auth a credential we no longer hold.
-      await deleteFirstPasskey(page2, userB.userName);
+      await deleteFirstPasskey(page2, userB.userName, (trigger) =>
+         authFixture.passkeyAuth(authB, trigger, { page: page2 }),
+      );
       authFixture.untrackUser(userB.userId);
    });
 

@@ -31,7 +31,7 @@ import {
    getJson,
    patchJson,
    postJson,
-   setSessionUserCred,
+   setSessionSigner,
    RP_ORIGIN,
    type TestUser,
 } from './common';
@@ -41,16 +41,30 @@ import { randomBytes } from 'node:crypto';
 // postAuthVerify looks up the credential via the Authenticators GSI (credentialid-index),
 // which is eventually consistent. When this suite registers a user and then immediately logs in,
 // the GSI may not yet reflect the new Authenticator record. Retry to give the GSI time to catch
-// up before failing. Not needed for normal clients because the calls are split by user actions
-async function postAuthVerifyWithRetry(body: Record<string, unknown>, cookie: string): ReturnType<typeof postJson> {
+// up before failing. Not needed for normal clients because the calls are split by user actions.
+// Each attempt mints its own challenge, because postAuthVerify consumes the challenge before it
+// reaches the credential lookup and a spent one can never verify. Returns the assertion that was
+// sent so a caller can replay it.
+async function postAuthVerifyWithRetry(
+   emulator: WebAuthnEmulator,
+   optionsBody: Record<string, unknown>,
+   cookie: string,
+): Promise<{ res: Awaited<ReturnType<typeof postJson>>; body: Record<string, unknown> }> {
    const maxAttempts = 3;
-   let res = await postJson(`/v1/auth/verify`, body, {}, cookie);
 
-   for (let attempt = 2; res.status !== 200 && attempt <= maxAttempts; attempt++) {
+   for (let attempt = 1; ; attempt++) {
+      const optsRes = await postJson(`/v1/auth/options`, optionsBody, {}, '');
+      expect(optsRes.status).toBe(200);
+
+      const assertion = emulator.getJSON(RP_ORIGIN, { ...optsRes.data, challenge: optsRes.data.challenge });
+      const body = { ...assertion, challenge: optsRes.data.challenge };
+      const res = await postJson(`/v1/auth/verify`, body, {}, cookie);
+
+      if (res.status === 200 || attempt >= maxAttempts) {
+         return { res, body };
+      }
       await new Promise((r) => setTimeout(r, 10000));
-      res = await postJson(`/v1/auth/verify`, body, {}, cookie);
    }
-   return res;
 }
 
 // The full authorized-API contract, run against a PRF or a no-PRF account. Only the parts that
@@ -74,7 +88,6 @@ export function coreSuite(prf: boolean): void {
       beforeAll(async () => {
          user = await registerTestUser(testUser, prf);
          ({ userId, userCred, cookie: sessCookie, csrf: csrfToken, credId, emulator } = user);
-         setSessionUserCred(userCred, userId);
       });
 
       describe('User & Session Management', () => {
@@ -290,21 +303,8 @@ export function coreSuite(prf: boolean): void {
             );
             expect(res.status).toBe(401); // Expect Unauthorized
 
-            // Get Auth Options
-            const optsRes = await postJson(`/v1/auth/options`, { userId }, {}, '');
-            expect(optsRes.status).toBe(200);
-
-            // Sign Challenge
-            const assertion = emulator.getJSON(RP_ORIGIN, {
-               ...optsRes.data,
-               challenge: optsRes.data.challenge,
-            });
-
-            // Verify Auth
-            const verifyRes = await postAuthVerifyWithRetry(
-               { ...assertion, challenge: optsRes.data.challenge },
-               sessCookie,
-            );
+            // Sign a fresh challenge and verify
+            const { res: verifyRes } = await postAuthVerifyWithRetry(emulator, { userId }, sessCookie);
 
             expect(verifyRes.status).toBe(200);
             expect(verifyRes.data.verified).toBe(true);
@@ -337,21 +337,8 @@ export function coreSuite(prf: boolean): void {
 
             expect(res.status).toBe(401); // Expect Unauthorized
 
-            // Get Auth Options
-            const optsRes = await postJson(`/v1/auth/options`, {}, {}, '');
-            expect(optsRes.status).toBe(200);
-
-            // Sign Challenge
-            const assertion = emulator.getJSON(RP_ORIGIN, {
-               ...optsRes.data,
-               challenge: optsRes.data.challenge,
-            });
-
-            // Verify Auth
-            const verifyRes = await postAuthVerifyWithRetry(
-               { ...assertion, challenge: optsRes.data.challenge },
-               sessCookie,
-            );
+            // Options carry no userId, exercising the discoverable credential flow
+            const { res: verifyRes } = await postAuthVerifyWithRetry(emulator, {}, sessCookie);
 
             expect(verifyRes.status).toBe(200);
             expect(verifyRes.data.verified).toBe(true);
@@ -515,14 +502,9 @@ export function coreSuite(prf: boolean): void {
                const attackerEmulator = attacker.emulator;
 
                // Self-login once so the credentialid-index GSI is certain to be consistent before the bypass attempt
-               const selfOpts = await postJson(`/v1/auth/options`, { userId: attackerUserId }, {}, '');
-               expect(selfOpts.status).toBe(200);
-               const selfAssertion = attackerEmulator.getJSON(RP_ORIGIN, {
-                  ...selfOpts.data,
-                  challenge: selfOpts.data.challenge,
-               });
-               const selfVerify = await postAuthVerifyWithRetry(
-                  { ...selfAssertion, challenge: selfOpts.data.challenge },
+               const { res: selfVerify } = await postAuthVerifyWithRetry(
+                  attackerEmulator,
+                  { userId: attackerUserId },
                   '',
                );
                expect(selfVerify.status).toBe(200);
@@ -576,21 +558,16 @@ export function coreSuite(prf: boolean): void {
                expect(bypass2.rawText).toBe('not authorized');
             } finally {
                if (attackerCredId && attackerCookie) {
-                  setSessionUserCred(attackerUserCred, attackerUserId);
+                  setSessionSigner(attackerUserId, attackerUserCred);
                   await expectPasskeyDeleted(attackerCredId, attackerCsrf, attackerCookie);
-                  setSessionUserCred(userCred, userId);
+                  setSessionSigner(userId, userCred);
                }
             }
          });
 
          it('should reject a replayed authentication assertion', async () => {
-            const optsRes = await postJson(`/v1/auth/options`, { userId }, {}, '');
-            expect(optsRes.status).toBe(200);
-            const assertion = emulator.getJSON(RP_ORIGIN, { ...optsRes.data, challenge: optsRes.data.challenge });
-            const body = { ...assertion, challenge: optsRes.data.challenge };
-
             // A fresh assertion authenticates once and rotates the session.
-            const first = await postAuthVerifyWithRetry(body, '');
+            const { res: first, body } = await postAuthVerifyWithRetry(emulator, { userId }, '');
             expect(first.status).toBe(200);
             sessCookie = first.cookie;
             csrfToken = first.data.csrf;

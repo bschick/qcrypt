@@ -238,6 +238,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.options.loadOptions(data.userId!);
          this.showTextFromParams();
       } else if (data.event === AuthEvent.Logout || data.event === AuthEvent.Forget) {
+         // Dismiss first, so nothing failing below can leave a dialog over the stop page
+         if (this.authSvc.halted) {
+            this.dialog.closeAll();
+         }
          this.privacyClear();
          this.onClearCipher();
          if (data.event === AuthEvent.Logout) {
@@ -254,7 +258,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async trySigninDialog(): Promise<void> {
-      if (!this.signinDialogRef) {
+      // Signing in again would only repeat whatever caused the halt
+      if (!this.signinDialogRef && !this.authSvc.halted) {
          // This check prevents showing progreess when there is no
          // valid session, aka nothing to wait for (like when a new tab is opened)
          if (this.authSvc.potentialSession()) {

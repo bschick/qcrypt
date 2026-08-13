@@ -220,9 +220,11 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'Can I decrypt my data if the Quick Crypt site goes offline?',
-      answer: `Yes, as long as you have your user credential and the password
-      you used during encryption. You can get your user credential by
-      navigating to https://quickcrypt.org/cmdline. The user credential and the
+      answer: `Yes, as long as you have your user credential and the password you
+      used during encryption. You can obtain your user credential from the emergency
+      recovery sheet you should have printed during Quick Crypt account creation, or by
+      navigating to https://quickcrypt.org/cmdline while the site is
+      reachable. The user credential and the
       password you used during encryption are the only inputs
       needed to decrypt Quick Crypt ciphertext. The website is not
       required. There is a
@@ -286,7 +288,7 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'What should I do if I cannot locate my passkey but have my recovery word pattern?',
-      answer: `Go to Quick Crypt's <a href="/recovery2">account recovery</a> page and
+      answer: `Go to Quick Crypt's <a href="/recovery3">account recovery</a> page and
       enter your recovery word pattern. Start the recovery process and Quick
       Crypt will delete all existing passkeys and create a new one for you.`,
    },
@@ -294,12 +296,19 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       position: 0,
       question: 'What happens if I cannot locate my passkey or my recovery word pattern?',
-      answer: `If you lost both your Quick Crypt passkeys and recovery word pattern, you cannot
-      access your existing user identity to decrypt or encrypt data. This is similar to
+      answer: `First, look for the emergency recovery sheet you should have printed when
+      you created a Quick Crypt account. The sheet lists your recovery words. If you lost
+      your passkey, recovery words, and recovery sheet, you cannot access your existing
+      user identity to decrypt or encrypt data. This is similar to
       forgetting your encryption password for all previous encryptions. To continue using
       Quick Crypt, you may create a new user identity, but the new user cannot decrypt
       existing ciphertext. If you find your original recovery word pattern or passkey
-      later, you can use either to regain access to your original user identity.`,
+      later, you can use either to regain access to your original user identity.<p>
+      If you have an old copy of your recovery sheet with outdated recovery words, you
+      can still use the user credential printed on it with the Quick Crypt
+      <a href="https://github.com/bschick/qcrypt/releases/latest/download/qcrypt.zip" target="_blank">
+      command-line tool</a> to decrypt your data offline. That works without your
+      passkeys, your recovery words, or the Quick Crypt website.</p>`,
    },
    /*
       {
@@ -415,13 +424,18 @@ const ELEMENT_DATA: FAQElement[] = [
           <td class="tg-0pky">Encryption and decryption preferences such as symmetric cipher choice</td>
           <td class="tg-0pky">Browser local storage, not transmitted</td>
           <td class="tg-0pky">Within the "Advanced Options" section on the main page, click the
-            "Reset To Defaults" button<br> </td>
+            "Reset To Defaults" button</td>
         </tr>
         <tr>
           <td class="tg-0pky">Last signed-in user name and user ID</td>
           <td class="tg-0pky">Browser local storage, HTTPS transmission from server to browser</td>
           <td class="tg-0pky">Within the side panel that shows passkeys, click the "Sign Out" button, then click the
             "Sign in as a different user" button</td>
+        </tr>
+        <tr>
+          <td class="tg-0pky">PRF status and a public key derived from your user credential</td>
+          <td class="tg-0pky">Browser local storage, not transmitted</td>
+          <td class="tg-0pky">Clear your browser's site data for quickcrypt.org</td>
         </tr>
         <tr>
           <td class="tg-0pky">Public-key portions of each passkey and description</td>
@@ -440,7 +454,7 @@ const ELEMENT_DATA: FAQElement[] = [
           <td class="tg-0pky">Browser memory during encrypt/decrypt, HTTPS transmission from server to browser
             for non-PRF accounts</td>
           <td class="tg-0pky">Close the Quick Crypt tab in your browser or navigate to another website.
-          Automatically flushed after 6 hours of inactivity</td>
+          Automatically flushed after 1.5 hours of inactivity or 3 hours of elapsed time</td>
         </tr>
         <tr>
           <td class="tg-0pky">Encrypted user credential and recovery public key</td>
@@ -553,12 +567,13 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'How do I delete my Quick Crypt user identity entirely?',
       answer: `Once signed in, delete all passkeys from the slide-out panel opened
-      with the 3-line button in the toolbar. Deleting your last passkey will also
-      delete your entire Quick Crypt user identity.
+      with the 3-line button in the toolbar. Deleting the last passkey will delete
+      your entire Quick Crypt user identity.
       Once removed, you cannot use Quick Crypt to decrypt data
       with the removed user identity. This is not reversible, even with your recovery
       word pattern. Remember to also delete passkeys
-      from your system using your passkey management tool.`,
+      from your system using your passkey management tool and destroy your emergency
+      recovery sheet.`,
    },
 
    {
@@ -577,9 +592,8 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: "What should I do if someone I don't trust obtained my passkey?",
       answer: `Your data is still protected, but your Quick Crypt user account is at risk.
-      The potential attacker would also need your encrypted data and the password you used
-      during encryption to decrypt it. Without your encryption password, the attacker
-      cannot decrypt your data. Since your passkey allows access to your user credential,
+      A potential attacker would also need your encrypted data and the password you used
+      during encryption to decrypt it. Since your passkey allows access to your user credential,
       you should replace the lost passkey. Within Quick Crypt, open the side panel and create
       a new passkey. After confirming that your new passkey works, delete the passkey you
       lost from Quick Crypt and from your passkey management tool. There is no need to
@@ -590,16 +604,19 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: "What should I do if someone I don't trust obtained my recovery word pattern?",
-      answer: `Your data is still protected, but your Quick Crypt user account is at risk.
-      The potential attacker would also need your encrypted data and the password you used
-      during encryption to decrypt it. Without your encryption password, the attacker cannot
-      decrypt your data. However, the person with your recovery word pattern could cause you
-      grief by replacing your passkeys or deleting your entire Quick Crypt user account,
-      preventing you from decrypting your own data. The
-      best response to a stolen recovery word pattern is to create a totally new Quick Crypt
-      user, re-encrypt your data, and then delete the previous cipher armor and original user
-      identity.`,
+      question:
+         "What should I do if someone I don't trust obtained my recovery word pattern or my emergency recovery sheet?",
+      answer: `Your data is still protected by your encryption passwords, but your
+      Quick Crypt user account is at risk.
+      <p>If someone you do not trust gained access to your recovery words but has
+      not used them, then just <a href="/regenrecovery">change your recovery word
+      pattern</a>. Your recovery words have not been used
+      if your passkeys are unchanged.</p><p>If an untrusted party has used or
+      changed your recovery words or has access to your recovery sheet, your encrypted
+      data is still protected by
+      your encryption passwords, but your account's overall security is permanently
+      weakened. We recommend creating a new Quick Crypt account, re-encrypting your
+      data, and then deleting your previous account.</p>`,
    },
 
    {
@@ -612,6 +629,22 @@ const ELEMENT_DATA: FAQElement[] = [
       with an encryption password is to create a totally new Quick Crypt user, re-encrypt
       your data with a new password, and then delete
       the previous cipher armor and your previous user identity.`,
+   },
+
+   {
+      position: 0,
+      question: 'What does it mean that Quick Crypt has detected a problem and stopped?',
+      answer: `Quick Crypt remembers a few details about your account the first time it
+      is used on a system, including whether the account uses the WebAuthn PRF
+      (Pseudo-Random Function) extension and a public key derived from your user credential.
+      If the server later reports a change that should not be possible, Quick Crypt stops
+      because that may indicate a bug or security issue. Continuing could encrypt your data
+      with a user credential that is not yours, which would leave that data unreadable.
+      <p>If you see a stop error, nothing you have already encrypted is affected and your
+      recovery word pattern and passkeys are unchanged, but the problem must be resolved
+      before you can continue using the Quick Crypt website. Please
+      <a href="https://github.com/bschick/qcrypt/issues/new/choose" target="_blank">
+      report the issue on GitHub</a> so it can be investigated.</p>`,
    },
 
    {

@@ -72,11 +72,16 @@ The `pnpm` scripts in `package.json` call `nx` under the hood. You can use eithe
 | What | pnpm script | Direct Nx equivalent |
 |------|------------|---------------------|
 | Web build (production + SRI) | `pnpm build:web` | `pnpm nx build web --configuration production --subresource-integrity` |
-| Server build | `pnpm build:server` | `pnpm nx build server` |
-| Server build (minified) | `pnpm build:server:min` | `pnpm nx build-min server` |
+| Server build (test) | `pnpm build:server` | `pnpm nx build server` |
+| Server build (prod) | `pnpm build:server:prod` | `pnpm nx build-min server` |
 | CLI build | `pnpm build:cli` | `pnpm nx build cli` |
 | CLI build (minified) | `pnpm build:cli:min` | `pnpm nx build-min cli` |
 | libcrux WASM (`crux`) rebuild | `pnpm build:libs:crux` | *(node + wasm-pack; see below — not part of any aggregate build)* |
+
+`build:server` writes `dist/server-test` unminified; `build:server:prod` writes `dist/server` minified.
+Either takes `--min` or `--no-min` to override the minification default, and `QC_SERVER_OUT` to
+override the directory. Do not call the Nx targets directly — the pnpm scripts are what run
+`pnpm check` and pick the output directory.
 
 #### Rebuilding the libcrux WASM (`crux`)
 
@@ -113,7 +118,7 @@ pnpm check apps/web/src/app/core             # review one directory
 pnpm check:fix libs/crypto/src/lib/keys.ts   # auto-fix one file
 ```
 
-`pnpm check` (no path) gates `build:web`, `build:web:prod`, and `build:server` — it runs first, so a format or lint error blocks the build.
+`pnpm check` (no path) gates `build:web`, `build:web:prod`, `build:server`, and `build:server:prod` — it runs first, so a format or lint error blocks the build. `bdeploy` builds through those same scripts, so a deploy is gated too.
 
 **Style:** 3-space indent, 120 columns, single quotes, semicolons, trailing commas. JSON stays 2-space (nx/ng-managed). Excluded: `**/*.html`, `**/*.svg`, `vendor/`, `apps/server/assets/`, generated crux files.
 
@@ -179,11 +184,11 @@ Both apps deploy through wrapper shell scripts (`apps/<app>/scripts/deploy.sh`) 
 
 | Command | Description |
 |---------|-------------|
-| `pnpm deploy:web [command] [flags]` | Defaults to `deploy` command for web test AWS upload |
-| `pnpm deploy:web:prod [command] [flags]` | Defaults to `deploy` command for web prod AWS upload |
+| `pnpm deploy:web [command] [flags]` | Defaults to `bdeploy` (build then upload) for web test AWS upload |
+| `pnpm deploy:web:prod [command] [flags]` | Defaults to `bdeploy` (build then upload) for web prod AWS upload |
 | `pnpm rollback:web:prod` | Shortcut for `pnpm deploy:web:prod rollback` |
-| `pnpm deploy:server [command] [flags]` | Defaults to `deploy` command for test server |
-| `pnpm deploy:server:prod [command] [flags]` | Defaults to `deploy` command for prod server |
+| `pnpm deploy:server [command] [flags]` | Defaults to `bdeploy` (build then upload) for test server |
+| `pnpm deploy:server:prod [command] [flags]` | Defaults to `bdeploy` (build then upload) for prod server |
 | `pnpm rollback:server:prod` | Shortcut for `pnpm deploy:server:prod rollback` |
 
 Examples:
@@ -196,9 +201,9 @@ pnpm deploy:web:prod prune --expiration-days 7 --dry-run
 
 Run any command with `--help` to see the full subcommand list and per-flag docs.
 
-**Web commands (`apps/web/scripts/deploy.mjs`):** `deploy` (default), `bdeploy`, `rollback`, `bootstrap`, `manifest`, `leaks`, `info`, `expect`, `unexpect`, `prune`, `reset`.
+**Web commands (`apps/web/scripts/deploy.mjs`):** `bdeploy` (default), `deploy`, `rollback`, `bootstrap`, `manifest`, `leaks`, `info`, `expect`, `unexpect`, `prune`, `reset`.
 
-**Server commands (`apps/server/scripts/deploy.mjs`):** `deploy` (default), `bdeploy`, `rollback`, `info`.
+**Server commands (`apps/server/scripts/deploy.mjs`):** `bdeploy` (default), `deploy`, `rollback`, `version <n>`, `info`.
 
 `bdeploy` runs the project build then executes `deploy`. `info` is read-only and shows current state. The header docstring at the top of each `deploy.mjs` explains design rationale, retention semantics (web), and version/alias semantics (server).
 
@@ -230,6 +235,9 @@ The wrappers exit with a clear error when a required var is missing. The AWS CLI
 - **`--dry-run`** (alias `--dryrun`) — logs every mutating `aws` call as `[dry-run] aws ...` instead of executing it. Read-only AWS calls (manifest fetch, list-versions, etc.) still run so the diagnostic output is accurate.
 - **Web requires `--prod <alias>`** — single-environment design. Pass any alias name; the value isn't currently used by the web `deploy.mjs` but is kept symmetric with the server.
 - **Server `--prod <alias>`** — optional. Presence enables prod-mode (publish-version + alias bump); the value is the alias name to point at (typically `prod`). Without `--prod`, server deploy hits `$LATEST` only (test mode).
+- **Server `--no-alias`** (prod-mode `deploy` / `bdeploy`) — publishes the version but leaves the alias pointing where it was, so prod traffic stays on the old code while the new version is reachable by number. Move the alias afterwards with `pnpm deploy:server:prod version <n>`. This is what a migration that must run before its own cutover needs.
+- **Server `version <n>` vs `rollback`** — both only call `update-alias`. `version <n>` points the alias at a specific published version (validated against the function's versions); `rollback` takes no argument and moves back exactly one version from the current target.
+- **Server `--min` / `--no-min`** (`bdeploy`) — forces a minified or unminified build. Omit it and the build script's per-mode default applies: minified for prod, unminified for test.
 
 ---
 
