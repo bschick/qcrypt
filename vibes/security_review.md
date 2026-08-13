@@ -11,7 +11,7 @@ the design and implementation on its own and in comparison to established "best
 practices." Consider carefully how an adversarial attacked could exploit the
 design or implementation. Also consider how one Quick Crypt user could exploit
 their permissions to obtain access to another user's data or authorization.
-Test your theories with actual code examples that exercising shared libraries,
+Test your theories with actual code examples that exercise shared libraries,
 Quick Crypt's own code, and the deployed servers.
 
 Plan and execute the review in the steps described below. Start by

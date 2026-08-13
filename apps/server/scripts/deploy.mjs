@@ -267,7 +267,7 @@ async function runDeploy(argv) {
    // and left unreferenced. That leaves prod traffic on the previous version
    // while the new one is reachable by version number, which is what a
    // migration that must run before its own cutover needs. Point the alias at
-   // it afterwards with `rollback --version <n>`.
+   // it afterwards with `version <n>`.
    if (argv.alias === false) {
       console.log(
          `deploy: lambda=${argv.lambda} from=${relToRoot(zipPath)} code-sha=${codeSha} version=${newVersion || '<NEW>'} alias=${alias} unchanged${dryRunTag}`,
@@ -489,7 +489,7 @@ const deployBuilder = (y) =>
          type: 'boolean',
          default: true,
          describe:
-            'Point the alias at the newly published version (prod-mode only, default). Pass `--no-alias` to publish the version and leave the alias where it is; move it later with `rollback --version <n>`.',
+            'Point the alias at the newly published version (prod-mode only, default). Pass `--no-alias` to publish the version and leave the alias where it is; move it later with `version <n>`.',
       })
       .check((argv) => {
          try {

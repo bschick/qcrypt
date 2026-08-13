@@ -36,7 +36,7 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angu
 import { firstValueFrom } from 'rxjs';
 
 @Component({
-   selector: 'app-recovery',
+   selector: 'app-recovery3',
    templateUrl: './recovery3.component.html',
    styleUrl: './recovery3.component.scss',
    imports: [
@@ -167,7 +167,7 @@ export interface ConfirmData {
 }
 
 @Component({
-   selector: 'confirm-dialog',
+   selector: 'recovery-confirm-dialog',
    templateUrl: 'confirm-dialog.html',
    styleUrl: './recovery3.component.scss',
    imports: [MatDialogModule, MatIconModule, MatButtonModule],
