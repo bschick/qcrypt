@@ -235,8 +235,8 @@ async function recordEvent(eventName: EventNames, userId: string, credentialId: 
    try {
       await AuthEvents.create({
          event: eventName,
-         userId: userId,
-         credentialId: credentialId,
+         userId,
+         credentialId,
       }).go();
    } catch (error) {
       // log but eat the error
@@ -404,7 +404,7 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
 
    return {
       content: responseContent,
-      startSession: startSession,
+      startSession,
    };
 }
 
@@ -544,10 +544,10 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
       .set({
          verified: true,
          prf: hasPrf,
-         userCredEnc: userCredEnc,
+         userCredEnc,
          userCredEncOld: userCredEncBackup,
-         userCredPubKey: userCredPubKey,
-         recoveryPubKey: recoveryPubKey,
+         userCredPubKey,
+         recoveryPubKey,
          lastCredentialId: auth.credentialId,
          authCount: 1,
       })
@@ -679,7 +679,7 @@ async function _createAuthenticator(
    const { id, publicKey } = credential;
 
    const aaguidDetails = await AAGUIDs.get({
-      aaguid: aaguid,
+      aaguid,
    }).go();
 
    let description = 'Passkey';
@@ -694,16 +694,16 @@ async function _createAuthenticator(
    // SimpleWebAuthen renamed these to WebAuthnCredential, now we have a missmatch
    const auth = await Authenticators.create({
       userId: unverifiedUser.userId,
-      description: description,
+      description,
       credentialId: id,
       credentialPublicKey: base64UrlEncode(publicKey)!,
-      credentialDeviceType: credentialDeviceType,
-      userVerified: userVerified,
-      credentialBackedUp: credentialBackedUp,
-      transports: transports,
+      credentialDeviceType,
+      userVerified,
+      credentialBackedUp,
+      transports,
       userCredEnc: passkeyVerify.passkeyUserCredEnc,
-      origin: origin,
-      aaguid: aaguid,
+      origin,
+      aaguid,
       attestationObject: base64UrlEncode(attestationObject),
    }).go();
 
@@ -795,7 +795,7 @@ async function postAuthOptions(httpDetails: HttpDetails): Promise<Response> {
    try {
       const options: PublicKeyCredentialRequestOptionsJSON = await generateAuthenticationOptions({
          allowCredentials: allowedCreds,
-         rpID: rpID,
+         rpID,
          userVerification: 'required',
       });
 
@@ -891,7 +891,7 @@ async function postRegOptions(httpDetails: HttpDetails): Promise<Response> {
 
    const user = await Users.create({
       userId: uId,
-      userName: userName,
+      userName,
       expiresAt: expires,
       userCredEnc: undefined,
    }).go();
@@ -930,7 +930,7 @@ async function registrationOptions(
 
       const options: PublicKeyCredentialCreationOptionsJSON = await generateRegistrationOptions({
          rpName: cc.RPNAME,
-         rpID: rpID,
+         rpID,
          userID: base64UrlDecode(unverifiedUser.userId),
          userName: unverifiedUser.userName,
          attestationType: 'none',
@@ -944,7 +944,7 @@ async function registrationOptions(
 
       await Challenges.create({
          challenge: options.challenge,
-         purpose: purpose,
+         purpose,
          userId: unverifiedUser.userId,
       }).go();
 
@@ -994,8 +994,8 @@ async function makeLoginUserInfoResponse(
 
       return {
          ...userInfo,
-         userCred: userCred,
-         passkeyUserCredEnc: passkeyUserCredEnc,
+         userCred,
+         passkeyUserCredEnc,
          pkId: verifiedUser.lastCredentialId,
       };
    } catch (error) {
@@ -1021,7 +1021,7 @@ async function makeUserInfoResponse(
       hasRecoveryId: !!verifiedUser.recoveryPubKey,
       prf: verifiedUser.prf,
       authenticators: auths,
-      invitables: invitables,
+      invitables,
    };
 
    return userInfo;
@@ -1061,7 +1061,7 @@ async function patchPasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUse
          credentialId: credId!,
       })
          .set({
-            description: description,
+            description,
          })
          .go();
    } catch (err) {
@@ -1106,7 +1106,7 @@ async function patchUser(httpDetails: HttpDetails, verifiedUser?: VerifiedUserIt
          userId: verifiedUser.userId,
       })
          .set({
-            userName: userName,
+            userName,
          })
          .go();
    } catch (err) {
@@ -1150,7 +1150,7 @@ async function putRecover3Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
    }
 
    const updates: { recoveryPubKey: string; userCredEnc?: string } = {
-      recoveryPubKey: recoveryPubKey,
+      recoveryPubKey,
    };
 
    // A PRF account keeps userCred encrypted with the recovery secret in userCredEnc, so new
@@ -1249,7 +1249,7 @@ async function loadAuthenticators(
       })
       .go({
          attributes: ['description', 'credentialId', 'aaguid', 'createdAt'],
-         consistent: consistent,
+         consistent,
          pages: 'all',
       });
 
@@ -1273,7 +1273,7 @@ async function loadAuthenticators(
    }
 
    if (aaguidsToGet.length > 0) {
-      const getParams = aaguidsToGet.map((aaguid) => ({ aaguid: aaguid }));
+      const getParams = aaguidsToGet.map((aaguid) => ({ aaguid }));
       const aaguidsDetail = await AAGUIDs.get(getParams).go();
 
       for (const aaguidDetail of aaguidsDetail.data) {
@@ -1308,7 +1308,7 @@ async function loadInvitables(verifiedUser: VerifiedUserItem, consistent: boolea
          userId: verifiedUser.userId,
       })
       .go({
-         consistent: consistent,
+         consistent,
       });
 
    if (!invitableItems || invitableItems.data.length === 0) {
@@ -1426,12 +1426,12 @@ async function postRecover2Challenge(httpDetails: HttpDetails): Promise<Response
 
    const challenge = base64UrlEncode(challengeBytes)!;
    await Challenges.create({
-      challenge: challenge,
+      challenge,
       purpose: 'noncebackwardcompat',
-      userId: userId,
+      userId,
    }).go();
 
-   return { content: { challenge: challenge } };
+   return { content: { challenge } };
 }
 
 // recover removes all existing passkeys, then initiates the
@@ -1724,7 +1724,7 @@ async function getUnverifiedUser(userId: string): Promise<UnverifiedUserItem> {
    // May not want to bring back all parameter
    // Eventually consistent by choice; revisit if stale fields cause 401s outside tests.
    const unverifiedUser = await Users.get({
-      userId: userId,
+      userId,
    }).go();
 
    if (!unverifiedUser?.data) {
@@ -1787,7 +1787,7 @@ async function createCookie(verifiedUser: VerifiedUserItem, rpID: string): Promi
    const expiresIn = SESSION_TIMEOUT_SEC;
    const token = sign(payload, jwtKey, {
       algorithm: 'HS512',
-      expiresIn: expiresIn,
+      expiresIn,
       issuer: rpID,
    });
 

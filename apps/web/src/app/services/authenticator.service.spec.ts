@@ -82,10 +82,10 @@ describe('AuthenticatorService', () => {
 
       sessionResponse = {
          verified: true,
-         userId: userId,
+         userId,
          userName: 'test-user',
-         pkId: pkId,
-         userCred: userCred,
+         pkId,
+         userCred,
          csrf: 'csrf-token-from-test',
          hasRecoveryId: true,
          prf: false,
@@ -167,7 +167,7 @@ describe('AuthenticatorService', () => {
       service.logout(false);
 
       peerResponder.setCredentialProvider(() => ({
-         pkId: pkId,
+         pkId,
          userCredEnc: phase1.userCredEnc,
          userCredExpiry: peerExpiry,
          version: phase1.version,
@@ -247,7 +247,7 @@ describe('AuthenticatorService', () => {
       getSpy.mockClear();
 
       peerResponder.setCredentialProvider(() => ({
-         pkId: pkId,
+         pkId,
          userCredEnc: userCredEnc1,
          userCredExpiry: peerExpiry,
          version: version1,
@@ -280,7 +280,7 @@ describe('AuthenticatorService', () => {
       // post-restore decrypt check fails and the session is not restored.
       sessionResponse.pkId = bytesToBase64(getRandom(cc.PKID_MIN_BYTES));
       peerResponder.setCredentialProvider(() => ({
-         pkId: pkId,
+         pkId,
          userCredEnc: phase1.userCredEnc,
          userCredExpiry: peerExpiry,
          version: phase1.version,
@@ -310,7 +310,7 @@ describe('AuthenticatorService', () => {
 
    describe('account pin', () => {
       async function login(prf: boolean, credB64: string): Promise<void> {
-         const response = { ...sessionResponse, prf: prf, userCred: credB64 };
+         const response = { ...sessionResponse, prf, userCred: credB64 };
          // @ts-expect-error — exercising private path
          await service._loginUser(response, base64ToBytes(credB64));
       }
@@ -386,7 +386,7 @@ describe('AuthenticatorService', () => {
          primeLocalStorage();
          await login(false, userCred);
 
-         const response = { ...sessionResponse, prf: false, userCred: userCred };
+         const response = { ...sessionResponse, prf: false, userCred };
          // @ts-expect-error — exercising private path
          const resolved = await service._resolveUserCred(response, null);
          expect(bytesToBase64(resolved)).toBe(userCred);
@@ -401,7 +401,7 @@ describe('AuthenticatorService', () => {
          const startResp = {
             prf: false,
             challenge: bytesToBase64(getRandom(CHALLENGE_BYTES)),
-            userCred: userCred,
+            userCred,
          };
          fetchMock.mockImplementation((url: URL) => ({
             ok: true,
@@ -444,7 +444,7 @@ describe('AuthenticatorService', () => {
          await login(false, userCred);
          expect(service.halted).toBe(false);
 
-         const noMode: Record<string, unknown> = { ...sessionResponse, userCred: userCred };
+         const noMode: Record<string, unknown> = { ...sessionResponse, userCred };
          delete noMode['prf'];
          // @ts-expect-error — exercising private path
          await expect(service._loginUser(noMode, base64ToBytes(userCred))).rejects.toThrow();
@@ -466,13 +466,13 @@ describe('AuthenticatorService', () => {
          service.on(allAuthEvents, (ed) => events.push(ed.event));
 
          peerResponder.setCredentialProvider(() => ({
-            pkId: pkId,
+            pkId,
             userCredEnc: phase1.userCredEnc,
             userCredExpiry: peerExpiry,
             version: phase1.version + 5,
          }));
          peerResponder.sendLogin({
-            pkId: pkId,
+            pkId,
             userCredEnc: phase1.userCredEnc,
             userCredExpiry: peerExpiry,
             version: phase1.version + 5,
@@ -499,7 +499,7 @@ describe('AuthenticatorService', () => {
          service.on(allAuthEvents, (ed) => events.push(ed.event));
 
          peerResponder.sendLogin({
-            pkId: pkId,
+            pkId,
             userCredEnc: 'stale',
             userCredExpiry: peerExpiry,
             version: phase1.version,
@@ -567,7 +567,7 @@ describe('AuthenticatorService', () => {
          const events: AuthEvent[] = [];
          service.on(allAuthEvents, (ed) => events.push(ed.event));
 
-         peerResponder.sendLogout({ pkId: pkId, version: phase1.version });
+         peerResponder.sendLogout({ pkId, version: phase1.version });
 
          await new Promise((resolve) => setTimeout(resolve, 50));
          expect(service.hasSession()).toBe(false);
@@ -583,7 +583,7 @@ describe('AuthenticatorService', () => {
          service.on(allAuthEvents, (ed) => events.push(ed.event));
 
          fetchMock.mockClear();
-         peerResponder.sendLogout({ pkId: pkId, version: phase1.version - 1 });
+         peerResponder.sendLogout({ pkId, version: phase1.version - 1 });
 
          await new Promise((resolve) => setTimeout(resolve, 50));
          expect(fetchMock).not.toHaveBeenCalled();
@@ -618,7 +618,7 @@ describe('AuthenticatorService', () => {
 
          fetchMock.mockClear();
 
-         peerResponder.sendUserInfoChanged({ pkId: pkId });
+         peerResponder.sendUserInfoChanged({ pkId });
 
          await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -669,7 +669,7 @@ describe('AuthenticatorService', () => {
          const events: AuthEvent[] = [];
          service.on(allAuthEvents, (ed) => events.push(ed.event));
 
-         peerResponder.sendLogout({ pkId: pkId, version: 1 });
+         peerResponder.sendLogout({ pkId, version: 1 });
 
          await new Promise((resolve) => setTimeout(resolve, 50));
          expect(events).toEqual([]);
@@ -680,7 +680,7 @@ describe('AuthenticatorService', () => {
          const events: AuthEvent[] = [];
          service.on(allAuthEvents, (ed) => events.push(ed.event));
 
-         peerResponder.sendLogout({ pkId: pkId, version: 1 });
+         peerResponder.sendLogout({ pkId, version: 1 });
 
          await new Promise((resolve) => setTimeout(resolve, 50));
          expect(events).toEqual([]);
@@ -697,7 +697,7 @@ describe('AuthenticatorService', () => {
          const events: AuthEvent[] = [];
          service.on(allAuthEvents, (ed) => events.push(ed.event));
 
-         peerResponder.sendLogout({ pkId: pkId, version: 1 });
+         peerResponder.sendLogout({ pkId, version: 1 });
 
          await new Promise((resolve) => setTimeout(resolve, 50));
          expect(events).toEqual([]);
@@ -708,7 +708,7 @@ describe('AuthenticatorService', () => {
          service.on(allAuthEvents, (ed) => events.push(ed.event));
 
          peerResponder.sendLogin({
-            pkId: pkId,
+            pkId,
             userCredEnc: 'enc',
             userCredExpiry: peerExpiry,
             version: 1,
@@ -724,7 +724,7 @@ describe('AuthenticatorService', () => {
          service.on(allAuthEvents, (ed) => events.push(ed.event));
 
          peerResponder.sendLogin({
-            pkId: pkId,
+            pkId,
             userCredEnc: 'enc',
             userCredExpiry: peerExpiry,
             version: 1,
@@ -747,7 +747,7 @@ describe('AuthenticatorService', () => {
          service.on(allAuthEvents, (ed) => events.push(ed.event));
 
          peerResponder.sendLogin({
-            pkId: pkId,
+            pkId,
             userCredEnc: 'enc',
             userCredExpiry: peerExpiry,
             version: 1,

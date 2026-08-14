@@ -418,7 +418,7 @@ export function coreSuite(prf: boolean): void {
 
             const newToken = jwtPkg.sign(newPayload, jwtKey, {
                algorithm: 'HS512',
-               expiresIn: expiresIn,
+               expiresIn,
                issuer: 'quickcrypt',
             });
 

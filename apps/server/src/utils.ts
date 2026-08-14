@@ -127,7 +127,7 @@ export async function verifyRecoverProof(
    const stored = await Challenges.create({
       challenge: nonce,
       purpose: 'nonce',
-      userId: userId,
+      userId,
    }).go({ returnOnConditionCheckFailure: true });
 
    if (stored.rejected) {

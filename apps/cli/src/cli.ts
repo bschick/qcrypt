@@ -290,7 +290,7 @@ async function encrypt(
                alg = await select(
                   {
                      message: `Select Cipher Mode${lpMsg}:`,
-                     choices: choices,
+                     choices,
                      default: nextAlg,
                   },
                   { input: io.ttyIn, output: iqOutput(io) },

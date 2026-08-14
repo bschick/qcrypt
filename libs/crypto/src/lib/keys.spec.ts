@@ -949,7 +949,7 @@ describe('Key generation', () => {
 
             const keyProvider = new PWDKeyProvider(userCred, [pwd, undefined], algExpected.customAd);
             keyProvider.setCipherDataInfo({
-               ver: ver,
+               ver,
                alg,
                ic,
                slt,
@@ -1250,7 +1250,7 @@ describe('Key generation', () => {
 
             const keyProvider = new MasterKeyKeyProvider(master, algExpected.customAd);
             keyProvider.setCipherDataInfo({
-               ver: ver,
+               ver,
                alg,
                ic: 0,
                slt,

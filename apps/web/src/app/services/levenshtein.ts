@@ -155,7 +155,7 @@ export const match = (a: string, b: string): { dist: number; norm: number } => {
    const dist = distance(a, b);
    const len = Math.max(a.length, b.length);
    return {
-      dist: dist,
+      dist,
       norm: 1 - dist / len,
    };
 };

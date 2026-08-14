@@ -37,7 +37,7 @@ testWithAuth('stops when a PRF account is reported as no-PRF at sign in', async 
       body.prf = false;
       body.userCred = randomBytes(32).toString('base64url');
       body.passkeyUserCredEnc = undefined;
-      await route.fulfill({ response: response, json: body });
+      await route.fulfill({ response, json: body });
    });
 
    await authFixture.passkeyAuth(authenticator, async () => {
@@ -82,7 +82,7 @@ testWithAuth('stops when a PRF account returns a substituted credential', async 
          body.userId,
          new Uint8Array(randomBytes(32)),
       );
-      await route.fulfill({ response: response, json: body });
+      await route.fulfill({ response, json: body });
    });
 
    await authFixture.passkeyAuth(authenticator, async () => {

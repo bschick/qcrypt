@@ -60,7 +60,7 @@ export class AlgorithmsComponent {
          const alg = nextAlg;
          this.loops.push({
             loop: l + 1,
-            alg: alg,
+            alg,
          });
 
          this._defaultModes[l] = alg;

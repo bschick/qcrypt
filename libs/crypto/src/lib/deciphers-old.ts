@@ -99,13 +99,13 @@ export class DecipherV1 extends Decipher {
          });
 
          this._blockData = {
-            mac: mac,
-            ver: ver,
+            mac,
+            ver,
             payloadSize: payload.byteLength,
             flags: 0,
-            alg: alg,
-            iv: iv,
-            encryptedData: encryptedData,
+            alg,
+            iv,
+            encryptedData,
             additionalData: fileAD,
          };
 
@@ -276,9 +276,9 @@ export class DecipherV4 extends Decipher {
 
       this._blockData = {
          mac: ensureArrayBuffer(mac),
-         ver: ver,
-         payloadSize: payloadSize,
-         flags: flags,
+         ver,
+         payloadSize,
+         flags,
       };
 
       return false;
@@ -324,10 +324,10 @@ export class DecipherV4 extends Decipher {
          const cdInfo: CipherDataInfo = {
             ver: this._blockData.ver,
             alg: this._blockData.alg,
-            ic: ic,
-            lp: lp,
-            lpEnd: lpEnd,
-            slt: slt,
+            ic,
+            lp,
+            lpEnd,
+            slt,
          };
          this._keyProvider.setCipherDataInfo(cdInfo);
 
