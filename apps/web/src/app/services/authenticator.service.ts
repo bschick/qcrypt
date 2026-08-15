@@ -279,7 +279,7 @@ export class AuthenticatorService {
       return pin;
    }
 
-   private _applyAccountPin(userId: string, prf: boolean | undefined, userCred: Uint8Array): void {
+   private _pinAccount(userId: string, prf: boolean | undefined, userCred: Uint8Array): void {
       const pin = this._checkAccountPinPrf(userId, prf);
       const userCredPubKey = getUserCredPubKey(userCred);
 
@@ -653,7 +653,7 @@ export class AuthenticatorService {
          if (userCred?.byteLength !== cc.USERCRED_BYTES) {
             throw new Error('invalid user credential');
          }
-         this._applyAccountPin(serverLogin.userId, serverLogin.prf, userCred);
+         this._pinAccount(serverLogin.userId, serverLogin.prf, userCred);
 
          const { derivedKey, version } = await this._keystoreSvc.create(KEYSTORE_SLOT, serverLogin.pkId);
          if (!derivedKey) {
@@ -1199,6 +1199,7 @@ export class AuthenticatorService {
    async recover3(recoveryWords: string): Promise<VerifiedUserInfo> {
       const [, userId] = this.getRecoveryValues(recoveryWords);
       const secret = mnemonicToEntropy(recoveryWords, wordlist);
+      let userCred: Uint8Array<ArrayBuffer> | undefined;
       await this._pendingLogout;
 
       try {
@@ -1220,7 +1221,6 @@ export class AuthenticatorService {
          // server ends the session, so drop local session state to match
          this.logout(true);
 
-         let userCred: Uint8Array<ArrayBuffer>;
          if (startResp.prf) {
             if (!startResp.userCredEnc) {
                throw new Error('missing recovery user credential');
@@ -1233,7 +1233,7 @@ export class AuthenticatorService {
             userCred = base64ToBytes(startResp.userCred);
          }
 
-         this._applyAccountPin(userId, startResp.prf, userCred);
+         this._pinAccount(userId, startResp.prf, userCred);
 
          const timestamp2 = String(Date.now());
          const confirmPath = new URL(`${environment.apiVersion}/recover/confirm`, baseUrl).pathname;
@@ -1266,6 +1266,9 @@ export class AuthenticatorService {
          return await this._finishRecovery(confirmResp, userId, startResp.prf, userCred);
       } finally {
          secret.fill(0);
+         if (userCred) {
+            userCred.fill(0);
+         }
       }
    }
 

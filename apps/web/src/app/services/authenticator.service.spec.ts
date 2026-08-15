@@ -52,7 +52,7 @@ to assert most of the meaninful actions in this table
 import { TestBed } from '@angular/core/testing';
 import { AuthenticatorService, AuthEvent, type LoginUserInfo } from './authenticator.service';
 import { BroadcastService } from './broadcast.service';
-import { KeystoreService } from './keystore.service';
+import { KEYSTORE_DB_NAME, KeystoreService } from './keystore.service';
 import * as cc from '@qcrypt/crypto/consts';
 import { base64ToBytes, bytesToBase64, cryptoReady, getRandom } from '@qcrypt/crypto';
 import { CHALLENGE_BYTES, RECOVERYID_BYTES, getUserCredPubKey, recoverySecret } from '@qcrypt/api';
@@ -107,6 +107,9 @@ describe('AuthenticatorService', () => {
       });
       window.fetch = fetchMock as typeof fetch;
 
+      TestBed.configureTestingModule({
+         providers: [{ provide: KEYSTORE_DB_NAME, useValue: 'quickcrypt-authenticator-spec' }],
+      });
       service = TestBed.inject(AuthenticatorService);
       await service.ready;
       peerResponder = new BroadcastService();

@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { TestBed } from '@angular/core/testing';
-import { KeystoreService } from './keystore.service';
+import { KEYSTORE_DB_NAME, KeystoreService } from './keystore.service';
 import * as cc from '@qcrypt/crypto/consts';
 import { bytesToBase64, cryptoReady, getRandom } from '@qcrypt/crypto';
 
@@ -29,7 +29,9 @@ describe('KeystoreService', () => {
 
    beforeEach(async () => {
       await cryptoReady();
-      TestBed.configureTestingModule({});
+      TestBed.configureTestingModule({
+         providers: [{ provide: KEYSTORE_DB_NAME, useValue: 'quickcrypt-keystore-spec' }],
+      });
       service = TestBed.inject(KeystoreService);
    });
 
@@ -181,7 +183,7 @@ describe('KeystoreService', () => {
       await expect(crypto.subtle.exportKey('raw', entry.masterKey)).rejects.toThrow();
    });
 
-   it('flush should destroy database and prevent lookups', async () => {
+   it('flush should wipe stored keys and prevent lookups', async () => {
       const slot = 'test-flush-slot';
       const pkId = getRandom(cc.PKID_MIN_BYTES);
 
@@ -191,6 +193,26 @@ describe('KeystoreService', () => {
 
       await service.flush();
       await expect(service.get(slot, pkId)).rejects.toThrow(/No key found for slot/);
+   });
+
+   it('flush should wipe stored keys while another connection is open', async () => {
+      const slot = 'test-shared-slot';
+      const pkId = getRandom(cc.PKID_MIN_BYTES);
+
+      await service.create(slot, pkId);
+
+      const holder = await new Promise<IDBDatabase>((resolve, reject) => {
+         const req = indexedDB.open('quickcrypt-keystore-spec');
+         req.onsuccess = () => resolve(req.result);
+         req.onerror = () => reject(req.error);
+      });
+
+      await service.flush();
+      await expect(service.get(slot, pkId)).rejects.toThrow(/No key found for slot/);
+
+      // A second open connection must not stall the next use of the keystore
+      await service.create(slot, pkId);
+      holder.close();
    });
 
    it('supports base64 string for pkId', async () => {
