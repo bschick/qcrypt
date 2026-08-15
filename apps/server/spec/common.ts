@@ -263,7 +263,7 @@ async function request(
    // Node's Buffer isn't assignable to the DOM BodyInit type, so hand fetch a plain view of the same bytes
    const res = await fetch(`${API_SERVER}${path}`, {
       method,
-      headers: headers,
+      headers,
       body: body ? new Uint8Array(body) : undefined,
    });
    const raw = await res.text();

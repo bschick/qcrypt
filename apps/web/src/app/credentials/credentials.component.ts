@@ -124,7 +124,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
 
       var dialogRef = this.dialog.open(ConfirmDialog, {
          data: {
-            pkState: pkState,
+            pkState,
             userName: this.userName,
          },
       });

@@ -106,7 +106,7 @@ export const Users = new Entity(
    },
    {
       table: 'Users',
-      client: client,
+      client,
    },
 );
 
@@ -207,7 +207,7 @@ export const Authenticators = new Entity(
    },
    {
       table: 'Authenticators',
-      client: client,
+      client,
    },
 );
 
@@ -266,7 +266,7 @@ export const Invitables = new Entity(
    },
    {
       table: 'Invitables',
-      client: client,
+      client,
    },
 );
 
@@ -316,7 +316,7 @@ export const Challenges = new Entity(
    },
    {
       table: 'Challenges',
-      client: client,
+      client,
    },
 );
 
@@ -365,7 +365,7 @@ export const AuthEvents = new Entity(
    },
    {
       table: 'Events',
-      client: client,
+      client,
    },
 );
 
@@ -407,7 +407,7 @@ export const AAGUIDs = new Entity(
    },
    {
       table: 'AAGUIDs',
-      client: client,
+      client,
    },
 );
 

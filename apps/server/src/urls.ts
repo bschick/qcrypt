@@ -209,24 +209,24 @@ export function matchEvent(event: APIGatewayProxyEventV2, methodMap: MethodMap):
 
          return {
             name: handerInfo.name,
-            method: method,
-            path: path,
+            method,
+            path,
             rawQueryString: event.rawQueryString || '',
-            rpID: rpID,
-            rpOrigin: rpOrigin,
+            rpID,
+            rpOrigin,
             authorize: handerInfo.authorize,
             checkCsrf: !(handerInfo.checkCsrf === false), // true or undefined make it required
             resources: match.pathname.groups,
             handler: handerInfo.handler,
             version: handerInfo.version,
-            params: params,
-            body: body,
-            rawBody: rawBody,
-            cookie: cookie,
-            userAgent: userAgent,
-            proofSignature: proofSignature,
-            proofTimestamp: proofTimestamp,
-            proofNonce: proofNonce,
+            params,
+            body,
+            rawBody,
+            cookie,
+            userAgent,
+            proofSignature,
+            proofTimestamp,
+            proofNonce,
          };
       }
    }

@@ -19,12 +19,19 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Injectable } from '@angular/core';
+import { InjectionToken, Injectable, inject } from '@angular/core';
 import * as cc from '@qcrypt/crypto/consts';
 import { base64ToBytes, concatArrays } from '@qcrypt/crypto';
 
 const DB_VERSION = 1;
 const MIN_SLOT_LEN = 4;
+
+// Names the IndexedDB database backing the keystore. Spec files override it so
+// that concurrently running files do not wipe each other's keys.
+export const KEYSTORE_DB_NAME = new InjectionToken<string>('keystore db name', {
+   providedIn: 'root',
+   factory: () => 'quickcrypt',
+});
 
 type KeystoreEntry = {
    masterKey: CryptoKey;
@@ -41,7 +48,7 @@ export type KeystoreResult = {
 })
 export class KeystoreService {
    private _dbPromise?: Promise<IDBDatabase>;
-   private _dbName: string = 'quickcrypt';
+   private _dbName: string = inject(KEYSTORE_DB_NAME);
    private _storeName: string = 'keys';
 
    // Uses an existing key. Returned key material should
@@ -87,29 +94,22 @@ export class KeystoreService {
       });
    }
 
-   // Destroys the entire database, wiping all keys and schema
+   // Wipes every stored key, leaving the database and its schema in place. A
+   // blocked deleteDatabase stays queued and stalls every later open, so the
+   // store is emptied instead.
    async flush(): Promise<void> {
-      if (this._dbPromise) {
-         const p = this._dbPromise;
+      const db = await this._db();
+      try {
+         await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(this._storeName, 'readwrite');
+            tx.objectStore(this._storeName).clear();
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+         });
+      } finally {
          this._dbPromise = undefined;
-         try {
-            (await p).close();
-         } catch (err) {
-            console.error(err);
-         }
+         db.close();
       }
-
-      return new Promise<void>((resolve, reject) => {
-         const req = indexedDB.deleteDatabase(this._dbName);
-         req.onsuccess = () => resolve();
-         req.onerror = () => reject(req.error);
-         req.onblocked = () => {
-            console.warn('Database deletion blocked by another open connection');
-            // Resolve anyway so the caller isn't permanently blocked.
-            // The browser will complete the deletion when other connections close.
-            resolve();
-         };
-      });
    }
 
    private async _deriveKey(

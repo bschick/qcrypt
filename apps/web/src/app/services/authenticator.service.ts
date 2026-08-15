@@ -279,7 +279,7 @@ export class AuthenticatorService {
       return pin;
    }
 
-   private _applyAccountPin(userId: string, prf: boolean | undefined, userCred: Uint8Array): void {
+   private _pinAccount(userId: string, prf: boolean | undefined, userCred: Uint8Array): void {
       const pin = this._checkAccountPinPrf(userId, prf);
       const userCredPubKey = getUserCredPubKey(userCred);
 
@@ -400,12 +400,12 @@ export class AuthenticatorService {
       let response: Response;
       try {
          response = await fetch(url, {
-            method: method,
+            method,
             mode: 'cors',
             cache: 'no-store',
             credentials: 'include',
             body: bodyJSON,
-            headers: headers,
+            headers,
          });
       } catch (err) {
          console.error(err);
@@ -593,7 +593,7 @@ export class AuthenticatorService {
 
    private _captureEventData(event: AuthEvent): AuthEventData {
       return {
-         event: event,
+         event,
          userId: this.hasSession() ? this.userId : null,
          userName: this.hasSession() ? this.userName : null,
       };
@@ -653,7 +653,7 @@ export class AuthenticatorService {
          if (userCred?.byteLength !== cc.USERCRED_BYTES) {
             throw new Error('invalid user credential');
          }
-         this._applyAccountPin(serverLogin.userId, serverLogin.prf, userCred);
+         this._pinAccount(serverLogin.userId, serverLogin.prf, userCred);
 
          const { derivedKey, version } = await this._keystoreSvc.create(KEYSTORE_SLOT, serverLogin.pkId);
          if (!derivedKey) {
@@ -711,9 +711,9 @@ export class AuthenticatorService {
       const sessionState: SessionState = {
          pkId: serverLogin.pkId,
          userId: serverLogin.userId,
-         userCredEnc: userCredEnc,
-         userCredExpiry: userCredExpiry,
-         version: version,
+         userCredEnc,
+         userCredExpiry,
+         version,
       };
       sessionStorage.setItem('sessionstate', JSON.stringify(sessionState));
 
@@ -971,7 +971,7 @@ export class AuthenticatorService {
          method: 'PATCH',
          resource: 'passkeys',
          resourceId: credentialId,
-         bodyJSON: JSON.stringify({ description: description }),
+         bodyJSON: JSON.stringify({ description }),
       });
 
       if (!serverUserInfo) {
@@ -997,7 +997,7 @@ export class AuthenticatorService {
       const serverUserInfo = await this._doFetch<UserInfo>({
          method: 'PATCH',
          resource: 'user',
-         bodyJSON: JSON.stringify({ userName: userName }),
+         bodyJSON: JSON.stringify({ userName }),
       });
 
       if (!serverUserInfo) {
@@ -1138,7 +1138,7 @@ export class AuthenticatorService {
       const optionsJson = await this._doFetch<PublicKeyCredentialRequestOptionsJSON>({
          method: 'POST',
          resource: 'auth/options',
-         bodyJSON: JSON.stringify({ userId: userId }),
+         bodyJSON: JSON.stringify({ userId }),
       });
 
       // The account mode is unknown until auth/verify returns, so request PRF output from
@@ -1199,15 +1199,16 @@ export class AuthenticatorService {
    async recover3(recoveryWords: string): Promise<VerifiedUserInfo> {
       const [, userId] = this.getRecoveryValues(recoveryWords);
       const secret = mnemonicToEntropy(recoveryWords, wordlist);
+      let userCred: Uint8Array<ArrayBuffer> | undefined;
       await this._pendingLogout;
 
       try {
          const timestamp1 = String(Date.now());
          const nonce = bytesToBase64(getRandom(CHALLENGE_BYTES));
          const startBody: RequestTypes.Recover3 = {
-            userId: userId,
+            userId,
             timestamp: timestamp1,
-            nonce: nonce,
+            nonce,
             signature: createRecoveryProof(secret, userId, timestamp1, nonce),
          };
 
@@ -1220,7 +1221,6 @@ export class AuthenticatorService {
          // server ends the session, so drop local session state to match
          this.logout(true);
 
-         let userCred: Uint8Array<ArrayBuffer>;
          if (startResp.prf) {
             if (!startResp.userCredEnc) {
                throw new Error('missing recovery user credential');
@@ -1233,7 +1233,7 @@ export class AuthenticatorService {
             userCred = base64ToBytes(startResp.userCred);
          }
 
-         this._applyAccountPin(userId, startResp.prf, userCred);
+         this._pinAccount(userId, startResp.prf, userCred);
 
          const timestamp2 = String(Date.now());
          const confirmPath = new URL(`${environment.apiVersion}/recover/confirm`, baseUrl).pathname;
@@ -1266,6 +1266,9 @@ export class AuthenticatorService {
          return await this._finishRecovery(confirmResp, userId, startResp.prf, userCred);
       } finally {
          secret.fill(0);
+         if (userCred) {
+            userCred.fill(0);
+         }
       }
    }
 
@@ -1278,7 +1281,7 @@ export class AuthenticatorService {
       const recoverResp = await this._doFetch<RecoverInfo>({
          method: 'POST',
          resource: 'recover',
-         bodyJSON: JSON.stringify({ userId: userId, userCred: userCred }),
+         bodyJSON: JSON.stringify({ userId, userCred }),
       });
 
       return await this._finishRecovery(recoverResp, userId, !!recoverResp.prf, base64ToBytes(userCred));
@@ -1302,7 +1305,7 @@ export class AuthenticatorService {
       try {
          const body: RequestTypes.RecoverVerify = {
             ...regResponse,
-            userId: userId,
+            userId,
             challenge: regOptions.challenge,
          };
 
@@ -1342,7 +1345,7 @@ export class AuthenticatorService {
          const optionsJson = await this._doFetch<PublicKeyCredentialCreationOptionsJSON>({
             method: 'POST',
             resource: 'reg/options',
-            bodyJSON: JSON.stringify({ userName: userName }),
+            bodyJSON: JSON.stringify({ userName }),
          });
 
          const userId = optionsJson.user.id;
@@ -1361,9 +1364,9 @@ export class AuthenticatorService {
 
             const body: RequestTypes.RegVerify = {
                ...regResponse,
-               userId: userId,
+               userId,
                challenge: optionsJson.challenge,
-               recoveryPubKey: recoveryPubKey,
+               recoveryPubKey,
             };
             if (prfKey) {
                body.passkeyUserCredEnc = await prfEncrypt(userCred, prfKey, userId);
@@ -1470,7 +1473,7 @@ export class AuthenticatorService {
          challenge: bytesToBase64(getRandom(CHALLENGE_BYTES)),
          allowCredentials: [{ id: credentialId, type: 'public-key' }],
          userVerification: 'preferred',
-         ...(rpId ? { rpId: rpId } : {}),
+         ...(rpId ? { rpId } : {}),
       };
       injectPrfExtension(optionsJson);
 
@@ -1490,7 +1493,7 @@ export class AuthenticatorService {
    ): Promise<Extract<LoginUserInfo, { verified: true }>> {
       const serverLoginUserInfo = await this._doFetch<LoginUserInfo>({
          method: 'POST',
-         resource: resource,
+         resource,
          bodyJSON: JSON.stringify(body),
       });
 

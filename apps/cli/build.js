@@ -24,7 +24,7 @@ await esbuild
    .build({
       entryPoints: ['apps/cli/src/cli.ts'],
       bundle: true,
-      minify: minify,
+      minify,
       format: 'cjs',
       platform: 'node',
       target: 'es2022',

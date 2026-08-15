@@ -35,7 +35,8 @@
         "useBlockStatements": "error",
         "noNonNullAssertion": "off",
         "useImportType": "off",
-        "useArrayLiterals": "off"
+        "useArrayLiterals": "off",
+        "useConsistentObjectDefinitions": "error"
       },
       "suspicious": {
         "noTsIgnore": "off"

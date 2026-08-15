@@ -463,7 +463,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             const dialogRef = this.dialog.open(PasswordDialog, {
                data: {
                   hint: cdInfo.hint,
-                  encrypting: encrypting,
+                  encrypting,
                   minStrength: +this.options.minPwdStrength,
                   hidePwd: this.options.hidePwd,
                   loopCount: cdInfo.lp,

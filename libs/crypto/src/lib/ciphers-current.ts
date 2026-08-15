@@ -457,7 +457,7 @@ export class EncipherV7 extends Encipher {
 
          const fileAD = Ciphers._encodeFileAD({
             alg: cdInfo.alg,
-            iv: iv,
+            iv,
             term: done,
             ic: cdInfo.ic,
             lp: cdInfo.lp,
@@ -939,8 +939,8 @@ export class DecipherV67 extends Decipher {
 
       this._blockData = {
          mac: ensureArrayBuffer(mac),
-         ver: ver,
-         payloadSize: payloadSize,
+         ver,
+         payloadSize,
       };
 
       return false;
@@ -989,10 +989,10 @@ export class DecipherV67 extends Decipher {
          const cdInfo: CipherDataInfo = {
             ver: this._blockData.ver,
             alg: this._blockData.alg,
-            ic: ic,
-            lp: lp,
-            lpEnd: lpEnd,
-            slt: slt,
+            ic,
+            lp,
+            lpEnd,
+            slt,
          };
 
          this._keyProvider.setCipherDataInfo(cdInfo);
