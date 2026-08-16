@@ -9,7 +9,7 @@ import { VersionsComponent } from './versions.component';
 
 @Component({
    selector: 'app-protocol',
-   imports: [MatTooltipModule, RouterLink, CopyrightComponent, VersionsComponent],
+   imports: [MatTooltipModule, RouterLink, CopyrightComponent],
    templateUrl: './protocol.component.html',
    styleUrl: './protocol.component.scss',
 })
@@ -23,7 +23,7 @@ export class ProtocolComponent {
 
 @Component({
    selector: 'app-protocol4',
-   imports: [MatTooltipModule, RouterLink, CopyrightComponent, VersionsComponent],
+   imports: [MatTooltipModule, RouterLink, CopyrightComponent],
    templateUrl: './protocol4.component.html',
    styleUrl: './protocol.component.scss',
 })
@@ -37,7 +37,7 @@ export class Protocol4Component {
 
 @Component({
    selector: 'app-protocol5',
-   imports: [MatTooltipModule, RouterLink, CopyrightComponent, VersionsComponent],
+   imports: [MatTooltipModule, RouterLink, CopyrightComponent],
    templateUrl: './protocol5.component.html',
    styleUrl: './protocol.component.scss',
 })
@@ -51,7 +51,7 @@ export class Protocol5Component {
 
 @Component({
    selector: 'app-protocol6',
-   imports: [MatTooltipModule, RouterLink, CopyrightComponent, VersionsComponent],
+   imports: [MatTooltipModule, RouterLink, CopyrightComponent],
    templateUrl: './protocol6.component.html',
    styleUrl: './protocol.component.scss',
 })
