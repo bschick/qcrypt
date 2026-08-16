@@ -95,6 +95,7 @@ export {
 } from './lib/cipher-streams';
 
 export type {
+   CipherDone,
    EContext,
    ReadOpts,
 } from './lib/cipher-streams';

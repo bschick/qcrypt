@@ -190,7 +190,16 @@ describe('Stream encryption and decryption', () => {
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             return [pwd, hint];
          });
-         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+         // Short clear text fits in block0, so no terminal block is appended
+         const cipherStream = await cipherSvc.encryptStream(
+            clearStream,
+            encKeyProvider,
+            econtext,
+            (ver, multiBlock) => {
+               expect(ver).toEqual(cc.CURRENT_VERSION);
+               expect(multiBlock).toBe(false);
+            },
+         );
 
          const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
@@ -202,7 +211,10 @@ describe('Stream encryption and decryption', () => {
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
             return [pwd, undefined];
          });
-         const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+         const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider, (ver, multiBlock) => {
+            expect(ver).toEqual(cc.CURRENT_VERSION);
+            expect(multiBlock).toBe(false);
+         });
 
          const resString = await readStreamAll(decrypted, true);
          expect(resString).toEqual(srcString);
@@ -408,7 +420,10 @@ describe('Stream encryption and decryption', () => {
                expect(cdinfo.ver).toEqual(ver.ver);
                return [pwd, undefined];
             });
-            const clearStream = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+            const clearStream = await cipherSvc.decryptStream(cipherStream, decKeyProvider, (doneVer, multiBlock) => {
+               expect(doneVer).toEqual(ver.ver);
+               expect(multiBlock).toBe(false);
+            });
 
             // version ${ver.ver}
             await expect(areEqual(clearStream, clearCheck)).resolves.toBe(true);
@@ -1667,18 +1682,32 @@ describe('Read block size bugs check', () => {
                ic: cc.ICOUNT_MIN,
             };
 
+            // Only a read larger than the clear text lets block0 terminate the document
+            const expectMulti = adjust < 1;
+
             const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                expect(cdinfo.alg).toEqual(alg);
                return [pwd, hint];
             });
-            const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+            const cipherStream = await cipherSvc.encryptStream(
+               clearStream,
+               encKeyProvider,
+               econtext,
+               (ver, multiBlock) => {
+                  expect(ver).toEqual(cc.CURRENT_VERSION);
+                  expect(multiBlock).toBe(expectMulti);
+               },
+            );
 
             const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                expect(cdinfo.hint).toEqual(hint);
                expect(cdinfo.alg).toEqual(alg);
                return [pwd, undefined];
             });
-            const dec = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+            const dec = await cipherSvc.decryptStream(cipherStream, decKeyProvider, (ver, multiBlock) => {
+               expect(ver).toEqual(cc.CURRENT_VERSION);
+               expect(multiBlock).toBe(expectMulti);
+            });
 
             // This previously failed due to missing term block
             await expect(areEqual(dec, clearData)).resolves.toEqual(true);
@@ -2164,6 +2193,12 @@ describe('Stream manipulation, multi-version', () => {
          const modData = getRandom(modLen);
          const modPos = randomInclusive(0, cipherData.byteLength - modLen);
 
+         for (let i = 0; i < modLen; i++) {
+            if (modData[i] === cipherData[modPos + i]) {
+               modData[i] = (modData[i] + 1) % 256;
+            }
+         }
+
          cipherData.set(modData, modPos);
          const [corruptStream] = streamFromBytes(cipherData);
 
@@ -2452,7 +2487,10 @@ describe('Block order change and deletion detection, multi-version', () => {
             expect(Boolean(cdinfo.hint)).toBe(true);
             return ['asdf', undefined];
          });
-         const dec = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+         const dec = await cipherSvc.decryptStream(cipherStream, decKeyProvider, (doneVer, multiBlock) => {
+            expect(doneVer).toBe(ver.ver);
+            expect(multiBlock).toBe(true);
+         });
          await expect(areEqual(dec, clearData)).resolves.toEqual(true);
       }
    });

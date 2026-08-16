@@ -23,9 +23,9 @@ SOFTWARE. */
 import { Injectable } from '@angular/core';
 import * as cc from '@qcrypt/crypto/consts';
 import { Ciphers, encryptStream, decryptStream, getCipherStreamInfo, cryptoReady } from '@qcrypt/crypto';
-import type { EContext, CipherDataInfo, KeyProvider } from '@qcrypt/crypto';
+import type { EContext, CipherDataInfo, CipherDone, KeyProvider } from '@qcrypt/crypto';
 
-export type { EContext, CipherDataInfo };
+export type { EContext, CipherDataInfo, CipherDone };
 
 const TARGET_HASH_MILLIS = 500;
 const MAX_HASH_MILLIS = 5 * 60 * 1000; //5 minutes
@@ -67,9 +67,10 @@ export class CipherService {
       clearStream: ReadableStream<Uint8Array>,
       keyProvider: KeyProvider,
       econtext: EContext,
+      onDone?: CipherDone,
    ): Promise<ReadableStream<Uint8Array>> {
       await cryptoReady();
-      return encryptStream(clearStream, keyProvider, econtext);
+      return encryptStream(clearStream, keyProvider, econtext, onDone);
    }
 
    // This method purges the passed in KeyProvider
@@ -85,8 +86,9 @@ export class CipherService {
    async decryptStream(
       cipherStream: ReadableStream<Uint8Array>,
       keyProvider: KeyProvider,
+      onDone?: CipherDone,
    ): Promise<ReadableStream<Uint8Array>> {
       await cryptoReady();
-      return decryptStream(cipherStream, keyProvider);
+      return decryptStream(cipherStream, keyProvider, onDone);
    }
 }

@@ -843,6 +843,10 @@ export class AuthenticatorService {
       if (!session) {
          throw new Error('no active user');
       }
+      // an account userId is invariant and must match active session
+      if (serverUser.userId !== session.userId) {
+         throw new Error('user id mismatch');
+      }
       this._checkAccountPinPrf(session.userId, serverUser.prf);
 
       localStorage.setItem('username', serverUser.userName);

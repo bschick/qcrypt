@@ -21,7 +21,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { cryptoReady } from './crypto';
 import * as cc from './cipher.consts';
-import { BYOBStreamReader, getStreamDecipher, getLatestEncipher, EncipherV7, Ciphers, concatArrays } from '../index';
+import {
+   BYOBStreamReader,
+   getStreamDecipher,
+   getLatestEncipher,
+   EncipherV7,
+   Ciphers,
+   concatArrays,
+   getRandom,
+   CipherState,
+} from '../index';
 import type { CipherDataBlock } from '../index';
 import { PWDKeyProvider } from './keys';
 import { isEqualArray, streamFromBytes, streamFromStr, areEqual, streamFromBase64Url } from './utils.spec';
@@ -1741,6 +1750,168 @@ describe('Key commitment is enforced by AEAD', () => {
          // @ts-expect-error — inject tampering keyProvider for blockN only
          tamperedDec._keyProvider = tamperingKeyProvider(tamperedDec._keyProvider);
          await expect(tamperedDec.decryptBlockN()).rejects.toThrow(DOMException);
+      }
+   });
+});
+
+describe('Cipher internal state validation', () => {
+   beforeEach(async () => {
+      await cryptoReady();
+   });
+
+   it('less than one block of cleartext state check', async () => {
+      for (const alg of Ciphers.algs()) {
+         const readStart = 25;
+
+         const [clearStream, clearData] = streamFromBytes(getRandom(readStart - 5));
+         const pwd = 'a not good pwd';
+         const userCred = getRandom(cc.USERCRED_BYTES);
+
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
+            startSize: readStart,
+         });
+
+         //@ts-expect-error
+         expect(latest._state).toBe(CipherState.Initialized);
+
+         const block0 = await latest.encryptBlock0();
+
+         //@ts-expect-error
+         expect(latest._state).toBe(CipherState.Finished);
+         expect(latest.multiBlock).toBe(false);
+
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+
+         const [cipherStream] = streamFromCipherBlock([block0]);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+
+         //@ts-expect-error
+         expect(decipher._state).toBe(CipherState.Initialized);
+
+         const decb0 = await decipher.decryptBlock0();
+         await expect(areEqual(decb0, clearData)).resolves.toEqual(true);
+
+         // Even though there are no more blocks, decryption doesn't detect until you read past the end
+         //@ts-expect-error
+         expect(decipher._state).toBe(CipherState.Block0Done);
+         expect(() => decipher.multiBlock).toThrow(/not finished/);
+
+         const decb1 = await decipher.decryptBlockN();
+         await expect(areEqual(decb1, new Uint8Array(0))).resolves.toEqual(true);
+
+         //@ts-expect-error
+         expect(decipher._state).toBe(CipherState.Finished);
+         expect(decipher.multiBlock).toBe(false);
+      }
+   });
+
+   it('exactly one block of cleartext state check', async () => {
+      for (const alg of Ciphers.algs()) {
+         const readStart = 25;
+
+         const [clearStream, clearData] = streamFromBytes(getRandom(readStart));
+         const pwd = 'a not good pwd';
+         const userCred = getRandom(cc.USERCRED_BYTES);
+
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
+            startSize: readStart,
+         });
+
+         //@ts-expect-error
+         expect(latest._state).toBe(CipherState.Initialized);
+
+         const block0 = await latest.encryptBlock0();
+
+         // Exactly 1 block of cleartext results in two blocks due to terminal block addition
+         //@ts-expect-error
+         expect(latest._state).toBe(CipherState.Block0Done);
+
+         const blockN = await latest.encryptBlockN();
+         //@ts-expect-error
+         expect(latest._state).toBe(CipherState.Finished);
+         expect(latest.multiBlock).toBe(true);
+
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+
+         const [cipherStream] = streamFromCipherBlock([block0, blockN]);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+
+         //@ts-expect-error
+         expect(decipher._state).toBe(CipherState.Initialized);
+
+         const decb0 = await decipher.decryptBlock0();
+         await expect(areEqual(decb0, clearData)).resolves.toEqual(true);
+
+         //@ts-expect-error
+         expect(decipher._state).toBe(CipherState.Block0Done);
+         expect(() => decipher.multiBlock).toThrow(/not finished/);
+
+         const decb1 = await decipher.decryptBlockN();
+         await expect(areEqual(decb1, new Uint8Array(0))).resolves.toEqual(true);
+
+         //@ts-expect-error
+         expect(decipher._state).toBe(CipherState.Finished);
+         // The terminal block carries no clear text, but it is still a second block
+         expect(decipher.multiBlock).toBe(true);
+      }
+   });
+
+   it('greater than one block of cleartext state check', async () => {
+      for (const alg of Ciphers.algs()) {
+         const readStart = 25;
+
+         const [clearStream, clearData] = streamFromBytes(getRandom(readStart + 5));
+         const pwd = 'a not good pwd';
+         const userCred = getRandom(cc.USERCRED_BYTES);
+
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
+            startSize: readStart,
+         });
+
+         //@ts-expect-error
+         expect(latest._state).toBe(CipherState.Initialized);
+
+         const block0 = await latest.encryptBlock0();
+
+         //@ts-expect-error
+         expect(latest._state).toBe(CipherState.Block0Done);
+
+         const blockN = await latest.encryptBlockN();
+         //@ts-expect-error
+         expect(latest._state).toBe(CipherState.Finished);
+         expect(latest.multiBlock).toBe(true);
+
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+
+         const [cipherStream] = streamFromCipherBlock([block0, blockN]);
+         const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+
+         //@ts-expect-error
+         expect(decipher._state).toBe(CipherState.Initialized);
+
+         const decb0 = await decipher.decryptBlock0();
+         await expect(areEqual(decb0, clearData.slice(0, readStart))).resolves.toEqual(true);
+
+         //@ts-expect-error
+         expect(decipher._state).toBe(CipherState.Block0Done);
+         expect(() => decipher.multiBlock).toThrow(/not finished/);
+
+         const decb1 = await decipher.decryptBlockN();
+         await expect(areEqual(decb1, clearData.slice(readStart))).resolves.toEqual(true);
+
+         // Even though there are no more blocks, decryption doesn't detect until you read past the end
+         //@ts-expect-error
+         expect(decipher._state).toBe(CipherState.Block0Done);
+
+         const decb2 = await decipher.decryptBlockN();
+         await expect(areEqual(decb2, new Uint8Array(0))).resolves.toEqual(true);
+
+         //@ts-expect-error
+         expect(decipher._state).toBe(CipherState.Finished);
+         expect(decipher.multiBlock).toBe(true);
       }
    });
 });

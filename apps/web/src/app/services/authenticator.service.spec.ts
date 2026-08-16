@@ -455,6 +455,27 @@ describe('AuthenticatorService', () => {
       });
    });
 
+   describe('session user binding', () => {
+      it('refuses a user info response with a different account', async () => {
+         primeLocalStorage();
+         // @ts-expect-error — exercising private path
+         await service._loginUser(sessionResponse, base64ToBytes(userCred));
+
+         const refreshed = await service.refreshUserInfo();
+         expect(refreshed.userId).toBe(userId);
+
+         const otherUserId = bytesToBase64(getRandom(cc.USERID_BYTES));
+         fetchMock.mockResolvedValue({
+            ok: true,
+            json: async () => ({ ...sessionResponse, userId: otherUserId }),
+         });
+
+         await expect(service.refreshUserInfo()).rejects.toThrow();
+         expect(service.userId).toBe(userId);
+         expect(service.halted).toBe(false);
+      });
+   });
+
    describe('peer message handling', () => {
       it('login with higher version and matching pkId adopts via relay', async () => {
          primeLocalStorage();

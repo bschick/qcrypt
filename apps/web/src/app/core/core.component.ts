@@ -77,6 +77,10 @@ import { Subscription } from 'rxjs';
 import { CopyrightComponent } from '../ui/copyright/copyright.component';
 import { Router } from '@angular/router';
 
+const INJECTED_WARNING = 'Content was copied from the address bar. Please confirm its validity.';
+const BLOCK_ORDER_WARNING =
+   'Protocol version 4 does not detect block manipulation. Please confirm the result is correct and re-encrypt with the current version.';
+
 @Component({
    selector: 'app-core',
    templateUrl: './core.component.html',
@@ -131,8 +135,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    public clearMsgClass = 'errorBox';
    public secondsRemaining = 0;
    public welcomed: boolean = true;
-   public clearInjected = false;
-   public cipherInjected = false;
+   public clearWarning = '';
+   public cipherWarning = '';
 
    @ViewChild('clearField') clearField!: ElementRef;
    @ViewChild('cipherField') cipherField!: ElementRef;
@@ -174,11 +178,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       const params = new HttpParams({ fromString: window.location.search });
       if (params.get('cipherarmor')) {
          const cipherData = parseCipherArmor(params.get('cipherarmor')!);
-         this.cipherInjected = true;
+         this.cipherWarning = INJECTED_WARNING;
          this.showCipherData(cipherData);
       }
       if (params.get('cleartext')) {
-         this.clearInjected = true;
+         this.clearWarning = INJECTED_WARNING;
          this.showClearText(decodeURIComponent(params.get('cleartext')!));
       }
    }
@@ -379,7 +383,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cipherFile = undefined;
       this.cipherArmor = '';
       this.cipherLabel = 'Cipher Armor';
-      this.cipherInjected = false;
+      this.cipherWarning = '';
    }
 
    onClearClear() {
@@ -387,7 +391,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.clearFile = undefined;
       this.clearText = '';
       this.clearLabel = 'Clear Text';
-      this.clearInjected = false;
+      this.clearWarning = '';
       if (!this.welcomed && this.authSvc.hasSession()) {
          this.bubbleTip1.show();
          this.bubbleTip2.hide();
@@ -396,7 +400,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    onClearInput() {
       if (!this.clearText) {
-         this.clearInjected = false;
+         this.clearWarning = '';
       }
       if (!this.welcomed && this.authSvc.hasSession()) {
          this.bubbleTip1.hide();
@@ -406,7 +410,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    onCipherInput() {
       if (!this.cipherArmor) {
-         this.cipherInjected = false;
+         this.cipherWarning = '';
       }
    }
 
@@ -505,7 +509,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    setClearFile(clearFile: File, saved: boolean = false) {
-      this.onClearClear();
       this.clearFile = clearFile;
       const msg = saved ? 'file saved and ' : '';
       this.showClearFile(`${msg}selected for encryption`, saved, clearFile.name);
@@ -862,7 +865,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       const keyProvider = new PWDKeyProvider(await this.authSvc.getUserCred(), (cdInfo, encrypting) =>
          this.passwordProvider(cdInfo, encrypting),
       );
-      return await this.cipherSvc.decryptStream(cipherStream, keyProvider);
+      return await this.cipherSvc.decryptStream(cipherStream, keyProvider, (ver, multiBlock) => {
+         if (ver === cc.VERSION4 && multiBlock) {
+            this.clearWarning = BLOCK_ORDER_WARNING;
+         }
+      });
    }
 
    showClearError(msg: string, hdr: string | null = null): void {
@@ -997,6 +1004,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    async clearFilePicker() {
       const fileHandle = await selectClearFile();
       if (fileHandle) {
+         this.onClearClear();
          this.setClearFile(await fileHandle.getFile());
       }
    }
@@ -1005,6 +1013,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.fileUpload.nativeElement.onchange = (event: Event) => {
          const file = (event.target as HTMLInputElement).files?.[0];
          if (file) {
+            this.onClearClear();
             this.setClearFile(file);
          }
       };

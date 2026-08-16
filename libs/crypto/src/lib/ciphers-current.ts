@@ -65,12 +65,20 @@ export type CipherDataInfo = {
 
 export abstract class Ciphers {
    protected _state: CipherState;
+   protected _multiBlock = false;
 
    protected constructor(
       protected _keyProvider: KeyProvider,
       protected _reader: BYOBStreamReader,
    ) {
       this._state = CipherState.Initialized;
+   }
+
+   public get multiBlock(): boolean {
+      if (this._state !== CipherState.Finished) {
+         throw new Error(`Cipher not finished ${this._state}`);
+      }
+      return this._multiBlock;
    }
 
    public finishedState() {
@@ -496,6 +504,8 @@ export class EncipherV7 extends Encipher {
             throw new Error(`Encipher invalid state ${this._state}`);
          }
 
+         this._multiBlock = true;
+
          this._readTarget = Math.min(this._readTarget * 2, this._readSizeMax);
          let clearBuffer: Uint8Array;
          let done: boolean;
@@ -524,9 +534,7 @@ export class EncipherV7 extends Encipher {
          });
 
          const fullAD = await Ciphers._packFullAD(fileAD, this._keyProvider);
-
          const encryptedData = await EncipherV7._doEncrypt(cdInfo.alg, bk, iv, clearBuffer, fullAD);
-
          const headerData = await this._createHeader(encryptedData, fileAD);
 
          if (done) {
@@ -649,7 +657,7 @@ type BlockData = {
 export abstract class Decipher extends Ciphers {
    protected _blockNum;
    protected _blockData?: BlockData;
-   private _decodeBlock0InFlight?: Promise<void>;
+   private _decodeBlock0Result?: Promise<void>;
 
    protected constructor(keyProvider: KeyProvider, reader: BYOBStreamReader) {
       super(keyProvider, reader);
@@ -733,21 +741,14 @@ export abstract class Decipher extends Ciphers {
    // Public only for testing. Subclasses implement _decodeBlock0Impl;
    // This wrapper exists to serialize concurrent callers.
    public async _decodeBlock0(): Promise<void> {
-      if (this._decodeBlock0InFlight) {
-         return this._decodeBlock0InFlight;
+      if (![CipherState.Initialized, CipherState.Block0Decoded].includes(this._state)) {
+         throw new Error(`Decode invalid state ${this._state}`);
       }
-      if (this._state === CipherState.Block0Decoded) {
-         return;
-      }
-      if (this._state !== CipherState.Initialized) {
-         throw new Error(`Decipher invalid state ${this._state}`);
-      }
-
-      this._decodeBlock0InFlight = this._decodeBlock0Impl();
-      try {
-         await this._decodeBlock0InFlight;
-      } finally {
-         this._decodeBlock0InFlight = undefined;
+      if (this._decodeBlock0Result) {
+         return this._decodeBlock0Result;
+      } else {
+         this._decodeBlock0Result = this._decodeBlock0Impl();
+         return this._decodeBlock0Result;
       }
    }
 
@@ -761,12 +762,7 @@ export abstract class Decipher extends Ciphers {
          throw new Error('Data not initialized');
       }
 
-      const cdInfo = this._keyProvider.getCipherDataInfo();
-      return {
-         ...cdInfo,
-         ver: this._blockData.ver,
-         alg: this._blockData.alg,
-      };
+      return { ...this._keyProvider.getCipherDataInfo() };
    }
 
    protected static async _doDecrypt(
@@ -1029,11 +1025,14 @@ export class DecipherV67 extends Decipher {
 
          // This does MAC check
          await this._decodeBlockN();
+
          //@ts-expect-error
          if (this._state === CipherState.Finished) {
             // this is the signal that decryption is complete
             return new Uint8Array(0);
          }
+
+         this._multiBlock = true;
 
          if (
             !this._blockData?.alg ||
@@ -1056,6 +1055,11 @@ export class DecipherV67 extends Decipher {
             this._blockData.encryptedData,
             fullAD,
          );
+
+         // Occurs when the last block was only present to mark termination (in v5+)
+         if (decrypted.byteLength === 0) {
+            this.finishedState();
+         }
 
          return decrypted;
       } catch (err) {
