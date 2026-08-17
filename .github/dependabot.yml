@@ -1,0 +1,8 @@
+version: 2
+updates:
+  # Actions are pinned to commit SHAs, which Dependabot rewrites in place and annotates with the
+  # matching version. Without this, a pinned SHA never moves and silently ages.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
