@@ -566,7 +566,14 @@ const args = yargs(hideBin(process.argv))
    .parseSync() as any;
 
 if (args.debug) {
-   console.error('args ->', args);
+   // Both the long name and the alias carry the value, so each has to be masked
+   const shown = { ...args };
+   for (const key of ['cred', 'c', 'pwds', 'p']) {
+      if (shown[key] !== undefined) {
+         shown[key] = Array.isArray(shown[key]) ? shown[key].map(() => '******') : '******';
+      }
+   }
+   console.error('args ->', shown);
 }
 
 function openTTY(kind: 'stdin' | 'stdout'): Promise<(fs.ReadStream & fs.WriteStream) | undefined> {

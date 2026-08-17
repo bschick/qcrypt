@@ -361,6 +361,8 @@ describe('CLI App', () => {
       });
 
       it('should handle debug flag properly', () => {
+         const tmpEnc = path.resolve(tmpDir, 'test-debug.bin');
+         const secretPwd = 'SUPER_SECRET_PASSWORD_1';
          const result = execCli(
             [
                'enc',
@@ -372,14 +374,19 @@ describe('CLI App', () => {
                '--algs',
                'AES-GCM',
                '--outfile',
-               encryptedFilePath,
+               tmpEnc,
                '--pwds',
-               'pass',
+               secretPwd,
             ],
             clearText,
          );
          expect(result.status).toBe(0);
          expect(result.stderr).toContain('args ->'); // debug output goes to stderr
+
+         // Debug output is routinely pasted into bug reports and captured by CI logs
+         expect(result.stderr).not.toContain(userCred);
+         expect(result.stderr).not.toContain(secretPwd);
+         fs.unlinkSync(tmpEnc);
       });
 
       it('should encrypt using files', () => {
