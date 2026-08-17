@@ -157,7 +157,11 @@ describe('Encryption and decryption', () => {
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
+         // Counted because assertions inside a provider that is never asked for a password
+         // would silently pass
+         let encPwdCount = 0;
          const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            encPwdCount += 1;
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
@@ -170,7 +174,9 @@ describe('Encryption and decryption', () => {
          const block0 = await latest.encryptBlock0();
 
          const [cipherStream] = streamFromCipherBlock([block0]);
+         let decPwdCount = 0;
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
+            decPwdCount += 1;
             expect(cdinfo.alg).toEqual(alg);
             expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
             expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
@@ -182,6 +188,8 @@ describe('Encryption and decryption', () => {
 
          const decrypted = await decipher.decryptBlock0();
          await expect(areEqual(decrypted, clearData)).resolves.toEqual(true);
+         expect(encPwdCount).toBe(1);
+         expect(decPwdCount).toBe(1);
       }
    });
 
@@ -275,7 +283,11 @@ describe('Encryption and decryption', () => {
          await expect(latest.encryptBlock0()).rejects.toThrow(/Encipher invalid state.+/);
 
          [clearStream, clearData] = streamFromStr('This is a secret 🦀');
+         // Counted because assertions inside a provider that is never asked for a password
+         // would silently pass
+         let encPwdCount = 0;
          encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            encPwdCount += 1;
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
             return [pwd, hint];
@@ -284,9 +296,12 @@ describe('Encryption and decryption', () => {
 
          const block0 = await latest.encryptBlock0();
          const blockN = await latest.encryptBlockN();
+         expect(encPwdCount).toBe(1);
 
+         let decPwdCount = 0;
          const makeDecKP = () =>
             new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+               decPwdCount += 1;
                expect(cdinfo.lp).toEqual(1);
                expect(cdinfo.lpEnd).toEqual(1);
                return [pwd, undefined];
@@ -300,6 +315,8 @@ describe('Encryption and decryption', () => {
 
          const decb1 = await decipher.decryptBlockN();
          await expect(areEqual(decb1, clearData.slice(readStart))).resolves.toEqual(true);
+         // Only block0 needs a password, so blockN must not have asked again
+         expect(decPwdCount).toBe(1);
 
          // Try again, but copy block0 head to block N
          const badBlockN = {
@@ -313,6 +330,7 @@ describe('Encryption and decryption', () => {
          decb0 = await decipher.decryptBlock0();
          await expect(areEqual(decb0, clearData.slice(0, readStart))).resolves.toEqual(true);
          await expect(decipher.decryptBlockN()).rejects.toThrow(/Cipher data length mismatch2/);
+         expect(decPwdCount).toBe(2);
       }
    });
 });

@@ -121,7 +121,7 @@ async function _encryptStreamImpl(
       });
 
       if (lp < econtext.algs.length) {
-         return await _encryptStreamImpl(cipherStream, keyProvider, econtext, lp + 1);
+         return await _encryptStreamImpl(cipherStream, keyProvider, econtext, lp + 1, onDone);
       }
 
       return cipherStream;
