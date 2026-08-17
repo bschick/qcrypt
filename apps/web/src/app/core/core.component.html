@@ -92,9 +92,8 @@ SOFTWARE. -->
         bubbleWidth="250px" [style.width.%]="100" [style.height.%]="100" spellcheck="false">
         <mat-label>{{clearLabel}}</mat-label>
         <div class="toolbar">
-          <button [hidden]="!clearInjected" mat-icon-button class="warn-icon" aria-label="Warning"
-            matTooltip="Content was copied from the address bar, please confirm its validity"
-            (click)="toastMessage('Content was copied from the address bar, please confirm its validity')">
+          <button [hidden]="!clearWarning" mat-icon-button class="warn-icon" aria-label="Warning"
+            [matTooltip]="clearWarning" (click)="toastMessage(clearWarning)">
             <mat-icon>warning</mat-icon>
           </button>
           <button [hidden]="!clearText || showProgress" mat-icon-button aria-label="Copy"
@@ -124,9 +123,8 @@ SOFTWARE. -->
       <mat-form-field [style.width.%]="100" [style.height.%]="100" spellcheck="false">
         <mat-label>{{cipherLabel}}</mat-label>
         <div class="toolbar">
-          <button [hidden]="!cipherInjected" mat-icon-button class="warn-icon" aria-label="Warning"
-            matTooltip="Content was copied from the address bar, please confirm its validity"
-            (click)="toastMessage('Content was copied from the address bar, please confirm its validity')">
+          <button [hidden]="!cipherWarning" mat-icon-button class="warn-icon" aria-label="Warning"
+            [matTooltip]="cipherWarning" (click)="toastMessage(cipherWarning)">
             <mat-icon>warning</mat-icon>
           </button>
           <button [hidden]="!cipherArmor || showProgress" mat-icon-button aria-label="Copy"

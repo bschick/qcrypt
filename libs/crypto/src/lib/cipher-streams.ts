@@ -35,14 +35,18 @@ export type EContext = {
    readonly readOpts?: ReadOpts | undefined;
 };
 
+// Reports the stored cipher data once the stream completes without error
+export type CipherDone = (ver: number, multiBlock: boolean) => void;
+
 // This method purges the passed in KeyProvider
 export async function encryptStream(
    clearStream: ReadableStream<Uint8Array>,
    keyProvider: KeyProvider,
    econtext: EContext,
+   onDone?: CipherDone,
 ): Promise<ReadableStream<Uint8Array>> {
    try {
-      return await _encryptStreamImpl(clearStream, keyProvider, econtext, 1);
+      return await _encryptStreamImpl(clearStream, keyProvider, econtext, 1, onDone);
    } finally {
       keyProvider.purge();
    }
@@ -53,6 +57,7 @@ async function _encryptStreamImpl(
    keyProvider: KeyProvider,
    econtext: EContext,
    lp: number,
+   onDone?: CipherDone,
 ): Promise<ReadableStream<Uint8Array>> {
    if (lp < 1 || lp > econtext.algs.length) {
       throw new Error(`Invalid loop of: ${lp}`);
@@ -80,9 +85,9 @@ async function _encryptStreamImpl(
 
          async pull(controller) {
             try {
-               // Encryption may return zero data and not be Finished
                const cipherData = await encipher.encryptBlock();
 
+               // encryptBlock may return zero data and not be Finished
                if (cipherData.parts.length) {
                   for (const data of cipherData.parts) {
                      streamWriteBYOD(controller, data);
@@ -90,6 +95,10 @@ async function _encryptStreamImpl(
                }
 
                if (cipherData.state === CipherState.Finished) {
+                  // The outermost loop produces the bytes that get stored
+                  if (lp === econtext.algs.length) {
+                     onDone?.(encipher.protocolVersion(), encipher.multiBlock);
+                  }
                   controller.close();
                   // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
                   //@ts-expect-error
@@ -112,7 +121,7 @@ async function _encryptStreamImpl(
       });
 
       if (lp < econtext.algs.length) {
-         return await _encryptStreamImpl(cipherStream, keyProvider, econtext, lp + 1);
+         return await _encryptStreamImpl(cipherStream, keyProvider, econtext, lp + 1, onDone);
       }
 
       return cipherStream;
@@ -143,9 +152,10 @@ export async function getCipherStreamInfo(
 export async function decryptStream(
    cipherStream: ReadableStream<Uint8Array>,
    keyProvider: KeyProvider,
+   onDone?: CipherDone,
 ): Promise<ReadableStream<Uint8Array>> {
    try {
-      return await _decryptStreamImpl(cipherStream, keyProvider);
+      return await _decryptStreamImpl(cipherStream, keyProvider, onDone);
    } finally {
       keyProvider.purge();
    }
@@ -154,6 +164,7 @@ export async function decryptStream(
 async function _decryptStreamImpl(
    cipherStream: ReadableStream<Uint8Array>,
    keyProvider: KeyProvider,
+   onDone?: CipherDone,
 ): Promise<ReadableStream<Uint8Array>> {
    const keyProviderClone = keyProvider.clone();
    try {
@@ -177,6 +188,7 @@ async function _decryptStreamImpl(
                   streamWriteBYOD(controller, decrypted);
                } else {
                   // Reached the end of the stream peacefully...
+                  onDone?.(cdInfo.ver, decipher.multiBlock);
                   controller.close();
                   // See: https://stackoverflow.com/questions/78804588/why-does-read-not-return-in-byob-mode-when-stream-is-closed/
                   //@ts-expect-error

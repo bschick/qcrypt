@@ -362,11 +362,14 @@ export class DecipherV4 extends Decipher {
 
          // This does MAC check
          await this._decodeBlockN();
+
          //@ts-expect-error
          if (this._state === CipherState.Finished) {
             // this is the signal that decryption is complete
             return new Uint8Array(0);
          }
+
+         this._multiBlock = true;
 
          if (!this._blockData?.alg || !this._blockData.iv || !this._blockData.encryptedData) {
             throw new Error('Data not initialized');
@@ -380,6 +383,11 @@ export class DecipherV4 extends Decipher {
             this._blockData.encryptedData,
             this._blockData.additionalData,
          );
+
+         // Occurs when the last block was only present to mark termination (in v5+)
+         if (decrypted.byteLength === 0) {
+            this.finishedState();
+         }
 
          return decrypted;
       } catch (err) {

@@ -2,31 +2,35 @@
   <div class="content">
     <h1>Protocol Description (v4)</h1>
     <p class="notice">
-      This version is no longer created. <a [routerLink]="'/help/protocol'">See the current version</a>
-    </p>
-    <p>Quick Crypt implements the protocols below to encrypt, validate, and decrypt data.
-      This information is provided to help you understand how Quick Crypt works and
-      allow you to make your own assessment of its strength and trustworthiness. You
-      may also download a <a href="/assets/protocol4.pdf" download>pdf version</a> that is searchable.
-      If you believe the protocols can be improved, please
-      <a href="https://github.com/bschick/qcrypt/issues">
-        file a ticket.
-      </a>
+      This version is no longer created.
+      <a [routerLink]="'/help/protocol'">See the current version</a>
     </p>
     <p>
-      Quick Crypt uses WebAuthn (<span class="tip" matTooltip="You can create a
+      Quick Crypt implements the protocols below to encrypt, validate, and
+      decrypt data. This information is provided to help you understand how
+      Quick Crypt works and allow you to make your own assessment of its
+      strength and trustworthiness. You may also download a
+      <a href="/assets/protocol4.pdf" download>pdf version</a> that is
+      searchable. If you believe the protocols can be improved, please
+      <a href="https://github.com/bschick/qcrypt/issues"> file a ticket. </a>
+    </p>
+    <p>
+      Quick Crypt uses WebAuthn (<span
+        class="tip"
+        matTooltip="You can create a
       passkey from a physical FIDO2
       device, a mobile phone, a browser based password manager, or a dedicated password
       manager. Dedicated password managers like Bitwarden and 1Password are
-      the easiest to use, work consistently across devices, and support backup.">Passkeys</span>)
-      to create and authenticate user
-      identities. Since this is a standard protocol described in detail elsewhere,
-      including the
-      <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API">
-        Mozilla developer network</a>,
-      webauthn is described only at a high level
-      to illustrate how user IDs and credentials are created and retrieved for
-      cryptographic functions.
+      the easiest to use, work consistently across devices, and support backup."
+        >Passkeys</span
+      >) to create and authenticate user identities. Since this is a standard
+      protocol described in detail elsewhere, including the
+      <a
+        href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API"
+      >
+        Mozilla developer network</a
+      >, webauthn is described only at a high level to illustrate how user IDs
+      and credentials are created and retrieved for cryptographic functions.
     </p>
 
     <h2>Agents</h2>
@@ -38,8 +42,11 @@
     <h2>Message Encryption by A</h2>
     <div class="flow">
       <img src="/assets/encrypt4.png" width="231" height="367" />
-      <img class="flow-img" (click)="openFlowImage('/assets/encrypt_flow4.svg')"
-        src="/assets/encrypt_flow4.svg" />
+      <img
+        class="flow-img"
+        (click)="openFlowImage('/assets/encrypt_flow4.svg')"
+        src="/assets/encrypt_flow4.svg"
+      />
     </div>
     <h2>Block 0 Encryption by B</h2>
     <img src="/assets/encrypt_b04.png" width="305" height="171" />
@@ -52,8 +59,11 @@
     <h2>Message Decryption by A</h2>
     <div class="flow">
       <img src="/assets/decrypt4.png" width="274" height="446" />
-      <img class="flow-img" (click)="openFlowImage('/assets/decrypt_flow4.svg')"
-        src="/assets/decrypt_flow4.svg" />
+      <img
+        class="flow-img"
+        (click)="openFlowImage('/assets/decrypt_flow4.svg')"
+        src="/assets/decrypt_flow4.svg"
+      />
     </div>
     <h2>Block 0 Decryption by B</h2>
     <img src="/assets/decrypt_b04.png" width="218" height="23" />
@@ -67,33 +77,35 @@
     <img src="/assets/authentication4.png" width="228" height="233" />
     <h2>Recovery from Lost Passkey by A</h2>
     <img src="/assets/recovery4.png" width="299" height="253" />
-    <h1 class="section">Cipher Data Structure (v4) </h1>
+    <h1 class="section">Cipher Data Structure (v4)</h1>
     <p>
-      The table below illustrates the byte-level structure of cipher data created by Quick
-      Crypt's version 4 protocol. When output to the browser UI, this data is base64url
-      encoded and displayed as JSON or a URL. When saved to a file, the binary structure is
-      streamed directly to the file. The subscript values below indicate which fields are
-      used to generate and validate the MAC tags.
+      The table below illustrates the byte-level structure of cipher data
+      created by Quick Crypt's version 4 protocol. When output to the browser
+      UI, this data is base64url encoded and displayed as JSON or a URL. When
+      saved to a file, the binary structure is streamed directly to the file.
+      The subscript values below indicate which fields are used to generate and
+      validate the MAC tags.
     </p>
     <p>
-      This structure enables support for file encryption in version 4. To be compatible with
-      version 1 data, the starting fixed length 256-bit MAC was preserved. If future versions
-      create larger MACs, they may need to be split across the header and payload sections
-      to keep the header length consistent across versions.
+      This structure enables support for file encryption in version 4. To be
+      compatible with version 1 data, the starting fixed length 256-bit MAC was
+      preserved. If future versions create larger MACs, they may need to be
+      split across the header and payload sections to keep the header length
+      consistent across versions.
     </p>
 
     <table class="bytes">
       <thead>
         <tr>
           <th class="tableheader" colspan="4">Description</th>
-          <th class="tableheader">Variable<br>Length</th>
+          <th class="tableheader">Variable<br />Length</th>
           <th class="tableheader">Format</th>
-          <th class="tableheader">Byte<br>Length</th>
+          <th class="tableheader">Byte<br />Length</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td class="block" rowspan="11">Block0 <br>(one always)</td>
+          <td class="block" rowspan="11">Block0 <br />(one always)</td>
           <td class="header" colspan="2" rowspan="3">Header</td>
           <td class="header">MAC 0</td>
           <td class="header">no</td>
@@ -114,7 +126,7 @@
         </tr>
         <tr>
           <td class="payload" rowspan="8">Payload</td>
-          <td class="adata" rowspan="7">Additional<br>Data</td>
+          <td class="adata" rowspan="7">Additional<br />Data</td>
           <td class="adata">AEAD Cipher Id<sub> 0</sub></td>
           <td class="adata">no</td>
           <td class="adata">uint le</td>
@@ -164,7 +176,7 @@
           <td class="message">31 - 16777215</td>
         </tr>
         <tr>
-          <td class="block last-row" rowspan="6">BlockN<br>(zero or more)</td>
+          <td class="block last-row" rowspan="6">BlockN<br />(zero or more)</td>
           <td class="header" colspan="2" rowspan="3">Header</td>
           <td class="header">MAC N</td>
           <td class="header">no</td>
@@ -185,7 +197,7 @@
         </tr>
         <tr>
           <td class="payload last-row" rowspan="3">Payload</td>
-          <td class="adata" rowspan="2">Additional<br>Data</td>
+          <td class="adata" rowspan="2">Additional<br />Data</td>
           <td class="adata">AEAD Cipher Id<sub> N</sub></td>
           <td class="adata">no</td>
           <td class="adata">uint le</td>
@@ -206,7 +218,6 @@
         </tr>
       </tbody>
     </table>
-    <app-proto-versions></app-proto-versions>
   </div>
 </div>
 <app-copyright />
