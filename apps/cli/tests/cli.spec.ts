@@ -2,10 +2,11 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execSync, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 
 describe('CLI App', () => {
    const cliPath = path.resolve(__dirname, '../../../dist/cli/qcrypt.cjs');
-   const tmpDir = path.resolve(__dirname, '../tmp');
+   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qcrypt-cli-'));
    const userCred = '_sHEi_YNTLC-YUSxfyIWXtMttNVWkkB9WGfyyZr0ZEc';
    const wrongCred = 'AAAAAYNTLC-YUSxfyIWXtMttNVWkkB9WGfyyZr0ZEc';
    const clearText = 'This is a secret message to test the CLI.';
@@ -55,20 +56,15 @@ describe('CLI App', () => {
          console.log('Building CLI before running tests...');
          execSync('pnpm nx build cli', { stdio: 'inherit' });
       }
-      fs.mkdirSync(tmpDir, { recursive: true });
       fs.writeFileSync(inFilePath, clearText, 'utf-8');
    });
 
    afterAll(() => {
-      [inFilePath, encryptedFilePath, decryptedFilePath, infoFilePath].forEach((file) => {
-         if (fs.existsSync(file)) {
-            try {
-               fs.unlinkSync(file);
-            } catch (err) {
-               console.error(`Failed to clean up file ${file}:`, err);
-            }
-         }
-      });
+      try {
+         fs.rmSync(tmpDir, { recursive: true, force: true });
+      } catch (err) {
+         console.error(`Failed to clean up ${tmpDir}:`, err);
+      }
    });
 
    describe('enc command', () => {
