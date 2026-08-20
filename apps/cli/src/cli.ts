@@ -661,9 +661,14 @@ async function main() {
       await decrypt(args, io);
    }
 
-   outfileStream?.end();
-   if (outfileStream && process.exitCode === 1) {
-      fs.rmSync(args.outfile, { force: true });
+   if (outfileStream) {
+      const closed = new Promise<void>((resolve) => outfileStream.once('close', () => resolve()));
+      outfileStream.end();
+      await closed;
+
+      if (process.exitCode === 1) {
+         fs.rmSync(args.outfile, { force: true });
+      }
    }
    reopenedIn?.destroy();
    reopenedOut?.destroy();
