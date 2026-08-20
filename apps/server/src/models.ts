@@ -283,8 +283,7 @@ export const Challenges = new Entity(
             required: true,
          },
          purpose: {
-            // BACKWARD COMPAT: 'noncebackwardcompat' until clients update to call postRecover3 directly
-            type: ['reg', 'add', 'auth', 'recover', 'confirm', 'api', 'nonce', 'noncebackwardcompat'] as const,
+            type: ['reg', 'add', 'auth', 'recover', 'confirm', 'api', 'nonce'] as const,
             required: true,
             readOnly: true,
          },

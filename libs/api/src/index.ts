@@ -29,9 +29,6 @@ export {
    getRecoveryPubKey,
    createRecoveryProof,
    verifyRecoveryProof,
-   // BACKWARD COMPAT: until clients update to call postRecover3 directly
-   createRecoveryProofBackwardCompat,
-   verifyRecoveryProofBackwardCompat,
    recoverySecret,
    RECOVERYID_BYTES,
    CHALLENGE_BYTES,
