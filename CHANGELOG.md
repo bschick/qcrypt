@@ -1,5 +1,18 @@
 # CHANGELOG.md
 
+## 7.5.0 (2026-08-TBD)
+
+#### Features
+
+- added recovery word pattern validation page
+- allow re-printing of emergency recovery sheet from validation page
+
+#### Changes
+
+#### Security
+
+- updated packages
+
 ## 7.4.0 (2026-08-13)
 
 #### Features
