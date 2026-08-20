@@ -30,3 +30,8 @@ export function getCrux(): Crux {
    }
    return _crux;
 }
+
+// Unkeyed BLAKE2b
+export function hashString(data: string, byteLength = 32): string {
+   return getSodium().crypto_generichash(byteLength, data, null, 'base64');
+}

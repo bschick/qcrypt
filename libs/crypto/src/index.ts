@@ -106,7 +106,7 @@ export { PWDKeyProvider, MasterKeyKeyProvider, type PWDProvider, type KeyProvide
 
 // Lazy libsodium and libcrux loader
 // Callers must `await cryptoReady()` before invoking any other crypto export.
-export { cryptoReady } from './lib/crypto';
+export { cryptoReady, hashString } from './lib/crypto';
 
 export { getProofKeyPair, createProof, verifyProof } from './lib/proof';
 

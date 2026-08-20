@@ -103,6 +103,7 @@ export namespace ResponseTypes {
            userId: string;
            userName: string;
            hasRecoveryId: boolean;
+           recoveryKeyId?: string;
            prf: boolean;
            authenticators: AuthenticatorInfo[];
            invitables?: InvitableInfo[];
