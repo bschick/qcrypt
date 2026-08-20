@@ -138,19 +138,19 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
       if (this._checkPwned && this._currentPassword && !this._pwnedChecked) {
          this._pwnedChecked = true;
          this._pwnedDone = (async () => {
-            try {
-               // A queued local evaluation would otherwise overwrite the breach result
-               clearTimeout(this._processTimerId);
-               this._processTimerId = undefined;
+            // A queued local evaluation would otherwise overwrite the breach result
+            clearTimeout(this._processTimerId);
+            this._processTimerId = undefined;
 
-               await checkPwned(true);
-               this._testQueue.push(this._currentPassword);
+            await checkPwned(true);
+            try {
+               const pwd = this._currentPassword;
+               this._testQueue.push(pwd);
                await this.processZxcvbn();
+            } finally {
                await checkPwned(false);
-            } catch (err) {
-               console.error(err);
             }
-         })();
+         })().catch((err) => console.error(err));
       }
 
       await this._pwnedDone;
