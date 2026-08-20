@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest';
-import { cryptoReady, bytesToBase64, base64ToBytes, getRandom } from '@qcrypt/crypto';
+import { cryptoReady, bytesToBase64, base64ToBytes, getRandom, hashString } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import {
    getRecoveryPubKey,
@@ -440,6 +440,9 @@ export function recoverySuite(prf: boolean): void {
          const body = await recoveryKeyBody(user, newSecret);
          const res = await putJson('/v1/recover3/key', body, { 'x-csrf-token': user.csrf }, user.cookie);
          expect(res.status).toBe(200);
+
+         expect(res.data.recoveryKeyId).toEqual(hashString(getRecoveryPubKey(newSecret)));
+         expect(res.data.recoveryKeyId).not.toEqual(hashString(getRecoveryPubKey(user.recoverySecret)));
 
          // Later tests sign with this secret, so it has to track what the server now stores
          user.recoverySecret = newSecret;
