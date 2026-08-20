@@ -43,6 +43,7 @@ import {
    MasterKeyKeyProvider,
    readStreamAll,
    getRandom,
+   hashString,
 } from '@qcrypt/crypto';
 import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
@@ -85,11 +86,13 @@ const EXPIRY_CHECK_INTERVAL_MS = 1000 * 60 * 2;
 const KEYSTORE_SLOT = 'user-cred-key';
 const ACCOUNTPIN_KEY = 'accountpin';
 
+export type RecoveryWordsState = 'match' | 'wrongwords' | 'wronguser' | 'invalid' | 'unknown';
+
 export type VerifiedUserInfo = {
    userId: string;
    userName: string;
    pkId: string;
-   hasRecoveryId: boolean;
+   recoveryKeyId?: string;
    prf: boolean;
    authenticators: AuthenticatorInfo[];
 };
@@ -302,8 +305,12 @@ export class AuthenticatorService {
       return this.getUserInfo().userId;
    }
 
+   public recoveryKeyId(): string | undefined {
+      return this.getUserInfo().recoveryKeyId;
+   }
+
    public hasRecoveryId(): boolean {
-      return this.getUserInfo().hasRecoveryId;
+      return !!this.recoveryKeyId();
    }
 
    public get pkId(): string {
@@ -530,7 +537,7 @@ export class AuthenticatorService {
 
    // Generates fresh recovery words and replaces the server-stored public key. The
    // words are cached for the one-time display that follows.
-   public async changeRecoveryWords(): Promise<void> {
+   public async changeRecoveryWords(): Promise<RecoveryWordsState> {
       if (!this.hasSession()) {
          throw new Error('no active user');
       }
@@ -563,16 +570,60 @@ export class AuthenticatorService {
             }
          }
 
-         const serverUserInfo = await this._doFetch<UserInfo>({
-            method: 'PUT',
-            resource: 'recover3/key',
-            bodyJSON: JSON.stringify(body),
-         });
+         try {
+            this._updateLoggedInUser(
+               await this._doFetch<UserInfo>({
+                  method: 'PUT',
+                  resource: 'recover3/key',
+                  bodyJSON: JSON.stringify(body),
+               }),
+            );
+         } catch (err) {
+            // A lost response does not say whether the server committed
+            console.error(err);
+         }
 
-         this._updateLoggedInUser(serverUserInfo);
-         this._cachedRecoveryWords = recoveryWords;
+         // Failing to store the new key can make an account unrecoverable, so always confirm
+         let state: RecoveryWordsState;
+         try {
+            state = await this.checkRecoveryWords(recoveryWords);
+         } catch (err) {
+            console.error(err);
+            state = 'unknown';
+         }
+
+         // Stored to present to the user
+         if (state === 'match' || state === 'unknown') {
+            this._cachedRecoveryWords = recoveryWords;
+         }
+         return state;
       } finally {
          secret.fill(0);
+      }
+   }
+
+   public async checkRecoveryWords(recoveryWords: string): Promise<RecoveryWordsState> {
+      let recoveryKeyId: string;
+      try {
+         const [, wordsUserId] = this.getRecoveryValues(recoveryWords);
+         if (wordsUserId !== this.userId) {
+            return 'wronguser';
+         }
+
+         const secret = mnemonicToEntropy(recoveryWords, wordlist);
+         try {
+            recoveryKeyId = hashString(getRecoveryPubKey(secret));
+         } finally {
+            secret.fill(0);
+         }
+      } catch {
+         return 'invalid';
+      }
+
+      try {
+         return (await this.refreshUserInfo()).recoveryKeyId === recoveryKeyId ? 'match' : 'wrongwords';
+      } catch {
+         return 'unknown';
       }
    }
 
@@ -835,10 +886,6 @@ export class AuthenticatorService {
       if (!serverUser.authenticators || serverUser.authenticators.length === 0) {
          throw new Error('missing authenticators');
       }
-      if (serverUser.hasRecoveryId === undefined) {
-         throw new Error('missing recovery id info');
-      }
-
       const session = this._getSessionState();
       if (!session) {
          throw new Error('no active user');
@@ -855,7 +902,7 @@ export class AuthenticatorService {
          userId: serverUser.userId,
          userName: serverUser.userName,
          pkId: session.pkId!,
-         hasRecoveryId: serverUser.hasRecoveryId,
+         recoveryKeyId: serverUser.recoveryKeyId,
          prf: serverUser.prf,
          authenticators: serverUser.authenticators,
       };

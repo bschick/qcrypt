@@ -32,39 +32,65 @@
       words and your user credential could delete your Quick Crypt account and
       weaken your encryption strength.
     </p>
-    @if (replacedLink) {
+    @if (unconfirmed) {
       <mat-card appearance="outlined">
         <mat-card-header>
-          <mat-card-title>⚠️ Attention</mat-card-title>
+          <mat-card-title>⚠️ Not Confirmed</mat-card-title>
         </mat-card-header>
         <mat-card-content>
           <p>
-            These recovery words and the emergency recovery sheet have now
-            replaced your old recovery link.
-            <b
-              >Delete your old recovery link and replace it with the word
-              pattern and emergency sheet provided below.</b
-            >
+            Quick Crypt could not reach the server to confirm these recovery
+            words replaced
+            @if (replacedLink) {
+              your recovery link. <b>Keep both your recovery link</b>
+            } @else {
+              your previous recovery words.
+              <b>Keep both your current recovery words</b>
+            }
+            <b>
+              and these new recovery words until you determine which is active.
+            </b>
+            <br />Use the
+            <a [routerLink]="'/checkrecovery'">check recovery page</a>
+            to determine which is active.
           </p>
         </mat-card-content>
       </mat-card>
-    }
-    @if (replacedWords) {
-      <mat-card appearance="outlined">
-        <mat-card-header>
-          <mat-card-title>⚠️ Attention</mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
-          <p>
-            These recovery words and the emergency recovery sheet have now
-            replaced your previous information.
-            <b
-              >Replace all saved copies of your old recovery information with
-              the word pattern and emergency sheet provided below.</b
-            >
-          </p>
-        </mat-card-content>
-      </mat-card>
+    } @else {
+      @if (replacedLink) {
+        <mat-card appearance="outlined">
+          <mat-card-header>
+            <mat-card-title>⚠️ Attention</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <p>
+              These recovery words and the emergency recovery sheet have now
+              replaced your old recovery link.
+              <b>
+                Delete your old recovery link and replace it with the word
+                pattern and emergency sheet provided below.
+              </b>
+            </p>
+          </mat-card-content>
+        </mat-card>
+      }
+      @if (replacedWords) {
+        <mat-card appearance="outlined">
+          <mat-card-header>
+            <mat-card-title>⚠️ Attention</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <p>
+              These recovery words and the emergency recovery sheet have now
+              replaced your previous information.
+              <b
+                >Replace all saved copies of your old recovery information with
+                the word pattern and emergency sheet provided below.</b
+              >
+            </p>
+          </mat-card-content>
+        </mat-card>
+      }
     }
     <div class="control-host">
       @if (!error) {
@@ -74,8 +100,7 @@
               mat-icon-button
               aria-label="Copy"
               (click)="toastMessage('Copied to clipboard')"
-              [cdkCopyToClipboard]="recoveryWords.value!"
-            >
+              [cdkCopyToClipboard]="recoveryWords.value!">
               <mat-icon>content_copy</mat-icon>
             </button>
           </div>
@@ -88,23 +113,20 @@
             type="text"
             [formControl]="recoveryWords"
             readonly="true"
-            class="words-area"
-          ></textarea>
+            class="words-area"></textarea>
         </mat-form-field>
         <div class="button-stack">
           <button
             class="task-button"
             mat-raised-button
-            (click)="onClickPrint()"
-          >
-            Print an emergency recovery sheet
+            (click)="onClickPrint()">
+            Print emergency recovery sheet
           </button>
           <a [routerLink]="'/'">
             <button
               class="task-button"
               mat-raised-button
-              (click)="onClickSaved()"
-            >
+              (click)="onClickSaved()">
               I saved my recovery words securely
             </button>
           </a>
@@ -121,53 +143,8 @@
   </div>
 </div>
 @if (sheetUserCred) {
-  <div class="print-sheet">
-    <h1>Quick Crypt Recovery Information</h1>
-    <p>
-      The information below is needed to recover your account and decrypt your
-      data if you lose access to your Quick Crypt passkeys.
-      <b>
-        Print and store this sheet offline separately from your passkeys
-        somewhere that is physically secure and durable, such as a lockbox. Do
-        not allow others to access your recovery sheet.
-      </b>
-    </p>
-
-    <h2>Recovery Word Pattern:</h2>
-    <p class="sheet-value">{{ recoveryWords.value }}</p>
-    <p>
-      This word pattern allows you to restore your account if you lose access to
-      all your Quick Crypt passkeys. To restore your account, go to
-      https://quickcrypt.org/recovery3 and enter the words in the exact order
-      they appear above.
-    </p>
-    <p>
-      If someone you do not trust gains access to your recovery words but has
-      not used them, go to https://quickcrypt.org/regenrecovery and change your
-      recovery word pattern. If an untrusted party has used or changed your
-      recovery words, your encrypted data is still protected by encryption
-      passwords, but your account's overall security is permanently weakened. We
-      recommend creating a new Quick Crypt account, re-encrypting your data, and
-      then deleting your previous account.
-    </p>
-
-    <h2>User Credential:</h2>
-    <p class="sheet-value">{{ sheetUserCred }}</p>
-    <p>
-      Your user credential, along with your encryption passwords, is used to
-      create the keys that encrypt and decrypt your data. Normally you do not
-      need to know your user credential, but it is provided here for offline
-      storage in case your Quick Crypt account is unintentionally deleted. If
-      that ever happens, you can use the credential above with the Quick Crypt
-      command-line tool to decrypt your data.
-    </p>
-    <p>
-      Unlike the recovery word pattern, your user credential can never be
-      changed. If this sheet is ever exposed to untrusted parties, your
-      encrypted data is still protected by encryption passwords, but your
-      account's overall security is permanently weakened. We recommend creating
-      a new Quick Crypt account, re-encrypting your data, and then deleting your
-      previous account.
-    </p>
-  </div>
+  <app-recovery-sheet
+    [userName]="authSvc.userName"
+    [recoveryWords]="recoveryWords.value!"
+    [userCred]="sheetUserCred" />
 }

@@ -43,26 +43,6 @@ ol.instructions {
   }
 }
 
-.print-sheet {
-  display: none;
-}
-
-@media print {
-  .print-sheet {
-    display: block;
-    padding: 0 12px;
-  }
-
-  .sheet-value {
-    font-family: monospace;
-    font-size: 12pt;
-    // Breaks the credential without splitting hand-transcribed recovery words
-    overflow-wrap: anywhere;
-    border: 1px solid #000;
-    padding: 8px;
-  }
-}
-
 .error-msg {
   color: var(--mat-sys-error);
   margin-top: 12px;

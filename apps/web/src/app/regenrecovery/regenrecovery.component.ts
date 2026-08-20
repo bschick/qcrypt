@@ -22,7 +22,7 @@ SOFTWARE. */
 
 import { Component, type OnDestroy, type OnInit } from '@angular/core';
 import { AuthEvent, AuthenticatorService } from '../services/authenticator.service';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -33,7 +33,7 @@ import { Subscription } from 'rxjs';
    selector: 'app-regenrecovery',
    templateUrl: './regenrecovery.component.html',
    styleUrl: './regenrecovery.component.scss',
-   imports: [MatIconModule, MatButtonModule, MatProgressSpinnerModule, MatCardModule],
+   imports: [MatIconModule, MatButtonModule, MatProgressSpinnerModule, MatCardModule, RouterLink],
 })
 export class RegenrecoveryComponent implements OnInit, OnDestroy {
    public showProgress = false;
@@ -70,8 +70,14 @@ export class RegenrecoveryComponent implements OnInit, OnDestroy {
 
       this.authSvc
          .changeRecoveryWords()
-         .then(() => {
-            this.router.navigateByUrl('/showrecovery', { state: { replacedLink, replacedWords } });
+         .then((state) => {
+            if (state === 'match' || state === 'unknown') {
+               this.router.navigateByUrl('/showrecovery', {
+                  state: { replacedLink, replacedWords, unconfirmed: state !== 'match' },
+               });
+            } else {
+               this.error = 'Could not replace recovery words, try again';
+            }
          })
          .catch((err) => {
             console.error(err);

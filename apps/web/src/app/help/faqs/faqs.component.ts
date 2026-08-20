@@ -255,7 +255,7 @@ const ELEMENT_DATA: FAQElement[] = [
       <a href="https://github.com/bschick/qcrypt/releases/latest/download/qcrypt.zip" target="_blank">download the qcrypt.zip file</a>,
       extract it, and install <a href="https://nodejs.org/" target="_blank">Node.js</a>
       before going offline. Then run the script from the command-line and respond to the prompts:
-      <blockquote>> node qcrypt.cjs</blockquote>.</p>`,
+      <blockquote>> node qcrypt.cjs</blockquote></p>`,
    },
 
    {
@@ -271,7 +271,7 @@ const ELEMENT_DATA: FAQElement[] = [
       download the qcrypt.zip file</a>, extract it, ensure you have
       <a href="https://nodejs.org/" target="_blank">Node.js</a> installed, and
       then run the tool from the command-line and respond to the prompts:
-      <blockquote>> node qcrypt.cjs</blockquote>.`,
+      <blockquote>> node qcrypt.cjs</blockquote>`,
    },
 
    {
@@ -287,8 +287,8 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'What should I do if I cannot locate my passkey but have my recovery word pattern?',
-      answer: `Go to Quick Crypt's <a href="/recovery3">account recovery</a> page and
+      question: 'What should I do if I cannot locate any passkeys but have my recovery word pattern?',
+      answer: `Go to the <a href="/recovery3">Account Recovery</a> page and
       enter your recovery word pattern. Start the recovery process and Quick
       Crypt will delete all existing passkeys and create a new one for you.`,
    },
@@ -298,18 +298,47 @@ const ELEMENT_DATA: FAQElement[] = [
       question: 'What happens if I cannot locate my passkey or my recovery word pattern?',
       answer: `First, look for the emergency recovery sheet you should have printed when
       you created a Quick Crypt account. The sheet lists your recovery words. If you lost
-      your passkey, recovery words, and recovery sheet, you cannot access your existing
-      user identity to decrypt or encrypt data. This is similar to
-      forgetting your encryption password for all previous encryptions. To continue using
-      Quick Crypt, you may create a new user identity, but the new user cannot decrypt
-      existing ciphertext. If you find your original recovery word pattern or passkey
-      later, you can use either to regain access to your original user identity.<p>
+      your passkey, recovery words, and recovery sheet, you cannot access your
+      user identity to decrypt or encrypt data. To continue using
+      Quick Crypt, you must create a new account, but the new account cannot decrypt
+      existing data. If you find your original recovery word pattern or passkey
+      later, you can use either to regain access to your account.<p>
       If you have an old copy of your recovery sheet with outdated recovery words, you
       can still use the user credential printed on it with the Quick Crypt
       <a href="https://github.com/bschick/qcrypt/releases/latest/download/qcrypt.zip" target="_blank">
       command-line tool</a> to decrypt your data offline. That works without your
       passkeys, your recovery words, or the Quick Crypt website.</p>`,
    },
+
+   {
+      position: 0,
+      question: 'What should I do if I forgot to print my emergency recovery sheet?',
+      answer: `There are several potential scenarios, each is described below.
+      <ol type='i'>
+         <li><b>You can log in and know your recovery words:</b>
+           Go to the <a href="/checkrecovery">Check Recovery Words</a> page and
+           enter your recovery word pattern. After validation, you can print a new
+           recovery sheet.
+         </li>
+         <li><b>You can log in but have lost your recovery words:</b>
+           Go to the <a href="/regenrecovery">Replace Recovery Words</a> page,
+           click the generate button, and then print a new recovery sheet.
+         </li>
+         <li><b>You cannot log in but have your recovery words:</b>
+           Go to the <a href="/recovery3">Account Recovery</a> page and
+           enter your word pattern. Start the recovery process and Quick
+           Crypt will delete all existing passkeys and create a new one for you.
+           You can then print a recovery sheet from the
+           <a href="/checkrecovery">Check Recovery Words</a> page.
+         </li>
+         <li><b>You cannot log in and have lost your recovery words:</b>
+           There is no way to recover your account or decrypt your data. If
+           you created more than one Quick Crypt passkey, be sure to try logging
+           in with each one.
+         </li>
+      </ol>`,
+   },
+
    /*
       {
          position: 0,
@@ -324,7 +353,7 @@ const ELEMENT_DATA: FAQElement[] = [
          unencrypted nor encrypted data is processed, sent, or stored by Quick Crypt
          servers, ensuring you maintain full control over the information provided by
          the sender. When you
-         receive encrypted data, you decrypted it as you would normally in Quick Crypt
+         receive encrypted data, you decrypt it as you would normally in Quick Crypt
          with the same strong privacy and authenticity characteristics.</p>
          <p>
 
@@ -338,7 +367,7 @@ const ELEMENT_DATA: FAQElement[] = [
          position: 0,
          question: 'What should I do if someone I don\'t trust obtains a sender link I created?',
          answer: `<p>First, it is important to understand that sender links can only encrypt data.
-         When someone has a sender link you created, they cannot use it to decrypt your data nor
+         When someone has a sender link you created, they cannot use it to decrypt your data, or
          even the resulting cipher armor they create themselves using your link.</p>
          <p>
          If an untrusted person has a sender link you created they could use it to encrypt data
@@ -381,7 +410,7 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: 'Does Quick Crypt store or process Personal Identifiable Information (PII)?',
+      question: 'Does Quick Crypt store or process Personally Identifiable Information (PII)?',
       answer: `Quick Crypt does not request, collect, or process PII. When you enter a user
       name or a
       passkey description, you may use whatever values you choose. It is best not to use PII
@@ -828,7 +857,7 @@ const ELEMENT_DATA: FAQElement[] = [
       question: 'Can Quick Crypt decrypt ciphertext created by other tools?',
       answer: `No, Quick Crypt was not designed to interoperate with ciphertext
       from other tools. Quick Crypt's goals are described on the
-      <a href="/help/overview">overview page</a>`,
+      <a href="/help/overview">overview page</a>.`,
    },
 
    {
@@ -851,8 +880,8 @@ const ELEMENT_DATA: FAQElement[] = [
       'Compact' format is smaller while 'Indent' is easier to read.</p>
       <p>
       The 'Link' format is a URL containing ciphertext that when entered in
-      a browser, takes you directly to the Quick Crypt website with the cipher
-      text ready for decryption. While this is very convenient, the 'Link'
+      a browser, takes you directly to the Quick Crypt website with the
+      ciphertext ready for decryption. While this is very convenient, the 'Link'
       format is less safe. If an attacker can manipulate your stored cipher armor
       URL, they could edit the domain name and send you to an untrusted website.
       This is possible because the domain portion of a URL cannot be encrypted or
@@ -947,7 +976,7 @@ const ELEMENT_DATA: FAQElement[] = [
       configure the required password strength in "Advanced Options" to meet your needs.
       For the best security, always use a strong password with a hint that only helps
       you remember it instead of resorting to a weak password. To help, Quick Crypt
-      indicates the strength of each password you enter.`,
+      indicates the strength of each password you enter.</p>`,
    },
 
    {
@@ -956,7 +985,7 @@ const ELEMENT_DATA: FAQElement[] = [
       answer: `Symmetric cipher keys are ephemeral, 256 bits long, and derived
       from the password you enter during encryption combined with your user
       credential which is accessed with passkey authentication. MAC keys
-      are ephemeral, 256 bits long, derived from your user credential. For more details,
+      are ephemeral, 256 bits long, and derived from your user credential. For more details,
       see the <a href="/help/protocol">protocol description</a> help page.`,
    },
 
@@ -1005,7 +1034,7 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question: "Is Quick Crypt's protocol key committing?",
+      question: "Is Quick Crypt's protocol key-committing?",
       answer: `Yes, <a href="/help/protocol">Quick Crypt's protocol</a> is
       <a href="https://en.wikipedia.org/wiki/Authenticated_encryption#Key-committing_AEAD" target="_blank">
       key-committing</a> for all underlying AEAD cipher modes as of v7. Two features
@@ -1015,8 +1044,8 @@ const ELEMENT_DATA: FAQElement[] = [
       data. Because the root cipher key is itself derived from the user credential and
       password, the commitment key binds each ciphertext block to those secrets. An
       attacker therefore cannot construct a single ciphertext that decrypts to two different
-      cleartexts under two different keys. Next, Quick Crypt creates cipher armor with a collision-
-      resistant 256-bit BLAKE2b keyed hash covering metadata, additional data, and ciphertext. The
+      cleartexts under two different keys. Next, Quick Crypt creates cipher armor with a
+      collision-resistant 256-bit BLAKE2b keyed hash covering metadata, additional data, and ciphertext. The
       hash is verified before decryption, creating an "Encrypt-then-MAC" protocol that rejects both
       cipher key and additional data manipulation.`,
    },

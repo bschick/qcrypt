@@ -32,9 +32,18 @@
       </mat-card>
     }
     <div class="control-host">
-      <button class="task-button" mat-raised-button [disabled]="showProgress" (click)="onClickGenerate()">
-        Generate new recovery words
-      </button>
+      <div class="button-stack">
+        <button class="task-button" mat-raised-button [disabled]="showProgress" (click)="onClickGenerate()">
+          Generate new recovery words
+        </button>
+        @if(authSvc.hasRecoveryId()) {
+          <a [routerLink]="'/checkrecovery'">
+            <button class="task-button" mat-raised-button [disabled]="showProgress">
+              Check existing recovery words
+            </button>
+          </a>
+        }
+      </div>
     </div>
     <div class="error-msg">
       <p>{{error}}</p>
