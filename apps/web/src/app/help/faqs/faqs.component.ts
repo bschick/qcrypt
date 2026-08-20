@@ -56,15 +56,42 @@ export class FaqsComponent implements AfterViewInit {
    }
 
    ngOnInit() {
-      const origFilterPredicate = this.dataSource.filterPredicate;
+      let cachedFilter = '';
+      let positiveTerms: string[] = [];
+      let negativeTerms: string[] = [];
+      let neutralTerms: string[] = [];
+
       this.dataSource.filterPredicate = (data: FAQElement, filter: string): boolean => {
-         const elements = filter.split(',');
-         for (const element of elements) {
-            if (element && origFilterPredicate(data, element.trim())) {
-               return true;
+         if (filter !== cachedFilter) {
+            cachedFilter = filter;
+            positiveTerms = [];
+            negativeTerms = [];
+            neutralTerms = [];
+
+            for (const raw of filter.split(',')) {
+               const term = raw.trim().toLowerCase();
+               if (term.startsWith('+')) {
+                  const cleaned = term.slice(1).trim();
+                  if (cleaned) {
+                     positiveTerms.push(cleaned);
+                  }
+               } else if (term.startsWith('-')) {
+                  const cleaned = term.slice(1).trim();
+                  if (cleaned) {
+                     negativeTerms.push(cleaned);
+                  }
+               } else if (term) {
+                  neutralTerms.push(term);
+               }
             }
          }
-         return false;
+
+         const dataStr = Object.values(data).join('◬').toLowerCase();
+         return (
+            !negativeTerms.some((term) => dataStr.includes(term)) &&
+            positiveTerms.every((term) => dataStr.includes(term)) &&
+            (neutralTerms.length === 0 || neutralTerms.some((term) => dataStr.includes(term)))
+         );
       };
    }
 
@@ -283,6 +310,17 @@ const ELEMENT_DATA: FAQElement[] = [
       credential. Your recovery word pattern lets you create a new passkey, but there is
       no way to recover a lost password. Consider using a password hint
       to help remember your password.`,
+   },
+
+   {
+      position: 0,
+      question: 'How do I confirm I have the correct recovery words for my account?',
+      answer: `Sign in, go to the <a href="/checkrecovery">Check Recovery Words</a>
+      page, enter your word pattern, and click <b>Check recovery words</b>.
+      <p>If your recovery words are valid, you will see a confirmation and can print
+      a new recovery sheet. If they are incorrect and you cannot find your saved pattern,
+      you can create a new set on the <a href="/regenrecovery">Replace Recovery Words</a>
+      page.</p>`,
    },
 
    {
@@ -633,19 +671,32 @@ const ELEMENT_DATA: FAQElement[] = [
 
    {
       position: 0,
-      question:
-         "What should I do if someone I don't trust obtained my recovery word pattern or my emergency recovery sheet?",
+      question: "What should I do if someone I don't trust obtained my recovery word pattern?",
       answer: `Your data is still protected by your encryption passwords, but your
-      Quick Crypt user account is at risk.
+      Quick Crypt account is at risk because recovery words are used to replace
+      your passkeys.
       <p>If someone you do not trust gained access to your recovery words but has
-      not used them, then just <a href="/regenrecovery">change your recovery word
+      not used them, simply <a href="/regenrecovery">change your recovery word
       pattern</a>. Your recovery words have not been used
       if your passkeys are unchanged.</p><p>If an untrusted party has used or
-      changed your recovery words or has access to your recovery sheet, your encrypted
-      data is still protected by
-      your encryption passwords, but your account's overall security is permanently
-      weakened. We recommend creating a new Quick Crypt account, re-encrypting your
+      changed your recovery words, your encrypted data is still protected by
+      your encryption passwords, but your account is compromised and your data is
+      less secure. We recommend creating a new Quick Crypt account, re-encrypting your
       data, and then deleting your previous account.</p>`,
+   },
+
+   {
+      position: 0,
+      question: "What should I do if someone I don't trust obtained my emergency recovery sheet?",
+      answer: `Your data is still protected by your encryption passwords, but is less secure,
+      relying solely on password strength.
+      <p>Your recovery sheet contains both your recovery words and your user credential.
+      Normally you do not need your user credential, but it is provided for offline recovery
+      in case your account is accidentally deleted. Unlike recovery words or passkeys, your
+      user credential cannot be changed and is an essential factor in Quick Crypt's cipher key
+      strength. If your recovery sheet is exposed, an attacker with access to your encrypted
+      files could attempt password-guessing attacks. We recommend creating a new Quick
+      Crypt account, re-encrypting your data, and then deleting your previous account.</p>`,
    },
 
    {
@@ -837,7 +888,8 @@ const ELEMENT_DATA: FAQElement[] = [
       <a href="https://haveibeenpwned.com/API/v2#PwnedPasswords" target="_blank">https://haveibeenpwned.com</a>
       for passwords that have been leaked or stolen, and prevents you from using
       them for encryption. Attackers compile leaked passwords into lists to speed up
-      password guessing.</p>`,
+      password guessing. Quick Crypt sends only anonymized information about your password
+      entry created using haveibeenpwned's published algorithm.</p>`,
    },
 
    {

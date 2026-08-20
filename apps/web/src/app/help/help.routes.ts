@@ -33,6 +33,10 @@ export const helpRoutes: Routes = [
       loadComponent: () => guardedImport(() => import('./faqs/faqs.component').then((m) => m.FaqsComponent)),
    },
    {
+      path: 'faqs/:id',
+      loadComponent: () => guardedImport(() => import('./faqs/faqs.component').then((m) => m.FaqsComponent)),
+   },
+   {
       path: 'protocol',
       loadComponent: () =>
          guardedImport(() => import('./protocol/protocol.component').then((m) => m.Protocol7Component)),
