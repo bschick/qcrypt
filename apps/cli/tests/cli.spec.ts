@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { execSync, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -351,6 +351,7 @@ describe('CLI App', () => {
                '1000000',
                '--outfile',
                encryptedFilePath,
+               '--force',
                '--pwds',
                'pass',
             ],
@@ -401,6 +402,7 @@ describe('CLI App', () => {
             inFilePath,
             '--outfile',
             encryptedFilePath,
+            '--force',
             '--pwds',
             'pass',
          ]);
@@ -573,6 +575,7 @@ describe('CLI App', () => {
             encryptedFilePath,
             '--outfile',
             decryptedFilePath,
+            '--force',
             '--pwds',
             'pass',
          ]);
@@ -642,14 +645,16 @@ describe('CLI App', () => {
             rtEnc,
             '--outfile',
             rtDec,
+            '--force',
             '--pwds',
             'B',
          ]);
          expect(result.status).toBe(1);
          expect(result.stderr).toContain('2 password(s) required in silent mode but 1 provided');
 
-         fs.unlinkSync(rtEnc);
-         fs.unlinkSync(rtDec);
+         fs.rmSync(rtEnc, { force: true });
+         // Already removed by the failed decrypt
+         fs.rmSync(rtDec, { force: true });
       });
 
       // Asserts bytes as well as exit code: a truncated decrypt that still exits 0
@@ -699,6 +704,148 @@ describe('CLI App', () => {
          fs.unlinkSync(bigIn);
          fs.unlinkSync(bigEnc);
          fs.unlinkSync(bigDec);
+      });
+   });
+
+   describe('--credfile', () => {
+      const credPath = path.resolve(tmpDir, 'test-credfile.txt');
+      const encPath = path.resolve(tmpDir, 'test-credfile-enc.bin');
+
+      afterEach(() => {
+         fs.rmSync(credPath, { force: true });
+         fs.rmSync(encPath, { force: true });
+      });
+
+      it('reads the credential from a file, ignoring a trailing newline', () => {
+         // echo and most editors append one, so requiring an exact byte match would surprise
+         fs.writeFileSync(credPath, `${userCred}\n`, 'utf-8');
+
+         const enc = execCli(
+            ['enc', '--credfile', credPath, '--silent', '--iters', '1000000', '--outfile', encPath, '--pwds', 'pass'],
+            clearText,
+         );
+         expect(enc.status).toBe(0);
+
+         const info = execCli(['info', '--cred', userCred, '--silent', '--infile', encPath]);
+         expect(info.status).toBe(0);
+      });
+
+      it('never echoes the credential it read', () => {
+         fs.writeFileSync(credPath, userCred, 'utf-8');
+
+         const result = execCli(
+            [
+               'enc',
+               '--credfile',
+               credPath,
+               '--debug',
+               '--silent',
+               '--iters',
+               '1000000',
+               '--outfile',
+               encPath,
+               '--pwds',
+               'pass',
+            ],
+            clearText,
+         );
+         expect(result.status).toBe(0);
+         expect(result.stderr).not.toContain(userCred);
+         expect(result.stdout).not.toContain(userCred);
+      });
+
+      it('reports a missing credential file', () => {
+         const result = execCli(
+            ['enc', '--credfile', path.resolve(tmpDir, 'nope.txt'), '--silent', '--iters', '1000000', '--pwds', 'p'],
+            clearText,
+         );
+         expect(result.status).toBe(1);
+         expect(result.stderr).toContain('nope.txt');
+      });
+
+      it('rejects being combined with --cred', () => {
+         fs.writeFileSync(credPath, userCred, 'utf-8');
+
+         const result = execCli(
+            ['enc', '--cred', userCred, '--credfile', credPath, '--silent', '--iters', '1000000', '--pwds', 'p'],
+            clearText,
+         );
+         expect(result.status).toBe(1);
+      });
+   });
+
+   describe('--outfile protection', () => {
+      const outPath = path.resolve(tmpDir, 'test-outfile-guard.bin');
+
+      afterEach(() => {
+         if (fs.existsSync(outPath)) {
+            fs.unlinkSync(outPath);
+         }
+      });
+
+      function encryptTo(target: string, extra: string[] = []): SpawnSyncReturns<string> {
+         return execCli(
+            [
+               'enc',
+               '--cred',
+               userCred,
+               '--silent',
+               '--iters',
+               '1000000',
+               '--outfile',
+               target,
+               '--pwds',
+               'pass',
+               ...extra,
+            ],
+            clearText,
+         );
+      }
+
+      it('creates the output readable only by its owner', () => {
+         expect(encryptTo(outPath).status).toBe(0);
+         expect(fs.statSync(outPath).mode & 0o777).toBe(0o600);
+      });
+
+      it('refuses to overwrite an existing file and leaves it untouched', () => {
+         fs.writeFileSync(outPath, 'do not clobber me', 'utf-8');
+
+         const result = encryptTo(outPath);
+         expect(result.status).toBe(1);
+         expect(fs.readFileSync(outPath, 'utf-8')).toBe('do not clobber me');
+      });
+
+      it('overwrites an existing file when forced', () => {
+         fs.writeFileSync(outPath, 'replace me', 'utf-8');
+
+         expect(encryptTo(outPath, ['--force']).status).toBe(0);
+         expect(fs.readFileSync(outPath, 'utf-8')).not.toBe('replace me');
+      });
+
+      it('leaves no output behind when the command fails', () => {
+         expect(encryptTo(outPath).status).toBe(0);
+         const cipherText = fs.readFileSync(outPath);
+         fs.unlinkSync(outPath);
+
+         const encPath = path.resolve(tmpDir, 'test-outfile-guard-enc.bin');
+         fs.writeFileSync(encPath, cipherText);
+
+         const result = execCli([
+            'dec',
+            '--cred',
+            userCred,
+            '--silent',
+            '--infile',
+            encPath,
+            '--outfile',
+            outPath,
+            '--pwds',
+            'WRONGPASS',
+         ]);
+         expect(result.status).toBe(1);
+         // A zero byte leftover reads as a successful decrypt to whatever runs next
+         expect(fs.existsSync(outPath)).toBe(false);
+         fs.unlinkSync(encPath);
       });
    });
 

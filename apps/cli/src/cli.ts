@@ -528,8 +528,10 @@ const args = yargs(hideBin(process.argv))
    })
    .options({
       cred: { alias: 'c', desc: 'user credential from https://quickcrypt.org/cmdline', type: 'string', nargs: 1 },
+      credfile: { desc: 'read user credential from file', type: 'string', nargs: 1 },
       infile: { alias: 'f', desc: 'read input from file', type: 'string' },
       outfile: { alias: 'o', desc: 'save output to file', type: 'string' },
+      force: { desc: 'overwrite --outfile if it already exists', boolean: true },
       pwds: { alias: 'p', desc: 'password(s)', type: 'string', array: true },
       b64url: {
          alias: 'b',
@@ -542,6 +544,10 @@ const args = yargs(hideBin(process.argv))
       nocolor: { desc: 'disable colored output', boolean: true },
    })
    .conflicts('infile', 'text')
+   .conflicts('cred', 'credfile')
+   .epilog(
+      'Values given on the command line are visible to other users while the command runs and are kept in shell history. Prefer --credfile and omit --cred and --pwds to be prompted.',
+   )
    .version(false)
    .wrap(95)
    .check((argv, _options) => {
@@ -587,6 +593,16 @@ function openTTY(kind: 'stdin' | 'stdout'): Promise<(fs.ReadStream & fs.WriteStr
 async function main() {
    await cryptoReady();
 
+   if (args.credfile) {
+      try {
+         args.cred = fs.readFileSync(args.credfile, 'utf-8').trim();
+      } catch (err) {
+         console.error(`\ncould not read ${args.credfile}: ${(err as Error).message}`);
+         process.exitCode = 1;
+         return;
+      }
+   }
+
    let pipedIn: ReadableStream<Uint8Array> | undefined;
    let binaryIn = false;
    if (args.infile) {
@@ -606,7 +622,21 @@ async function main() {
 
    let outfileStream: fs.WriteStream | undefined;
    if (args.outfile) {
-      outfileStream = fs.createWriteStream(args.outfile);
+      if (!args.force && fs.existsSync(args.outfile)) {
+         console.error(`\n${args.outfile} already exists, use --force to overwrite`);
+         process.exitCode = 1;
+         return;
+      }
+      // wx rather than w so a file appearing after the check above, including a timed
+      // symlink, is refused
+      outfileStream = fs.createWriteStream(args.outfile, {
+         mode: 0o600,
+         flags: args.force ? 'w' : 'wx',
+      });
+      outfileStream.on('error', (err) => {
+         console.error(`\ncould not write ${args.outfile}: ${err.message}`);
+         process.exitCode = 1;
+      });
    }
 
    const b64urlIn = args.b64url === 'in' || args.b64url === 'both';
@@ -632,6 +662,9 @@ async function main() {
    }
 
    outfileStream?.end();
+   if (outfileStream && process.exitCode === 1) {
+      fs.rmSync(args.outfile, { force: true });
+   }
    reopenedIn?.destroy();
    reopenedOut?.destroy();
 }
