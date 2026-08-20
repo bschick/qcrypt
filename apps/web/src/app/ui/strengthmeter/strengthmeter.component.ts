@@ -75,9 +75,12 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
    private _usedPasswords: string[] = [];
    private _testQueue: string[] = [];
    private _processing = false;
+   private _processDone: Promise<void> = Promise.resolve();
    private _processTimerId: ReturnType<typeof setTimeout> | undefined = undefined;
    private _currentPassword = '';
    private _currentHint = '';
+   private _pwnedChecked = false;
+   private _pwnedDone: Promise<void> = Promise.resolve();
 
    @ViewChild('sliderElem') sliderRef!: ElementRef;
    @ViewChild('matripple') rippleRef!: ElementRef;
@@ -108,6 +111,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
 
    @Input() set password(passwd: string) {
       this._currentPassword = passwd;
+      this._pwnedChecked = false;
       if (!this._currentPassword) {
          this.setStrength(-1);
          this.warning = '';
@@ -129,10 +133,34 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
       }
    }
 
-   private processZxcvbn() {
+   // Intended to be called once per password to check for breaches
+   public async checkIfPwned(): Promise<AcceptableState> {
+      if (this._checkPwned && this._currentPassword && !this._pwnedChecked) {
+         this._pwnedChecked = true;
+         this._pwnedDone = (async () => {
+            try {
+               // A queued local evaluation would otherwise overwrite the breach result
+               clearTimeout(this._processTimerId);
+               this._processTimerId = undefined;
+
+               await checkPwned(true);
+               this._testQueue.push(this._currentPassword);
+               await this.processZxcvbn();
+               await checkPwned(false);
+            } catch (err) {
+               console.error(err);
+            }
+         })();
+      }
+
+      await this._pwnedDone;
+      return { acceptable: this._acceptable, strength: this.strength };
+   }
+
+   private processZxcvbn(): Promise<void> {
       if (!this._processing) {
          this._processing = true;
-         (async () => {
+         this._processDone = (async () => {
             await zxcvbnReady();
             const { zxcvbnAsync } = getZxcvbn();
             let results: ZxcvbnResult | undefined;
@@ -144,7 +172,10 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
 
                   // Loop because new items could be added while we await zxcvbnAsync
                   results = await zxcvbnAsync(testPwd);
-                  this.setStrength(results.score);
+
+                  // Below the lowest selectable minimum, so a breach is rejected at any setting
+                  const breached = results.sequence.find((match) => 'pwned' === match.pattern);
+                  this.setStrength(breached ? -1 : results.score);
                } catch (err) {
                   console.error(err);
                }
@@ -165,10 +196,12 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
             }
          })();
       }
+
+      return this._processDone;
    }
 
    ngOnInit(): void {
-      checkPwned(this._checkPwned);
+      checkPwned(false);
 
       const parent = this;
 

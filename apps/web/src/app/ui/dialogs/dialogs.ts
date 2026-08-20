@@ -103,6 +103,7 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    public maxHintLen = cc.HINT_MAX_LEN;
 
    @ViewChild('bubbleTip') bubbleTip!: BubbleDirective;
+   @ViewChild(StrengthMeterComponent) strengthMeter?: StrengthMeterComponent;
 
    constructor(
       private r2: Renderer2,
@@ -135,7 +136,15 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
       }
    }
 
-   onAcceptClicked() {
+   async checkPassword() {
+      if (this.strengthMeter) {
+         this.onAcceptableChanged(await this.strengthMeter.checkIfPwned());
+      }
+   }
+
+   async onAcceptClicked() {
+      await this.checkPassword();
+
       if (this.passwd && this.acceptable) {
          this.dialogRef.close([this.passwd, this.hint]);
       } else {
