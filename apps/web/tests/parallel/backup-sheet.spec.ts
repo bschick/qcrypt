@@ -36,7 +36,8 @@ testWithAuth('emergency backup sheet prints both recovery values', async ({ auth
    const sheet = page.locator('.print-sheet');
    await expect(sheet).toContainText(recoveryWords);
    await expect(sheet).toContainText(testUser.userCred);
-   await expect(sheet).toContainText('never be changed');
+   // Printed on paper, so the link has to keep resolving after the id is out of our hands
+   await expect(sheet).toContainText('/help/faqs/bad');
 
    await expect
       .poll(() => page.evaluate(() => (window as unknown as PrintProbe).printTitle))

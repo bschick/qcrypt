@@ -2,6 +2,12 @@
   <div class="content faq">
     <h1>Frequently Asked Questions</h1>
     <div class="control-host">
+      @if (singleFaqId) {
+      <a mat-button class="all-faqs-btn" [routerLink]="['/help/faqs']">
+        <mat-icon>arrow_back</mat-icon>
+        All FAQs
+      </a>
+      } @else {
       <div class="search-field">
         <input class="search-input" #filterInput autofocus type="text" placeholder="search"
           [(ngModel)]="searchTerm" (keyup)="applyFilter(filterInput.value)" />
@@ -14,6 +20,7 @@
       <button mat-icon-button aria-label="Expand Answers" (click)="onToggleExpand()">
         <mat-icon>{{ allExpanded ? 'unfold_less' : 'unfold_more' }}</mat-icon>
       </button>
+      }
     </div>
     <table mat-table [dataSource]="dataSource" multiTemplateDataRows class="faq-table mat-elevation-z0">
       <!-- Position Column -->
@@ -25,7 +32,18 @@
       <!-- Question Column -->
       <ng-container matColumnDef="question">
         <th mat-header-cell class="header-data" *matHeaderCellDef> Question </th>
-        <td mat-cell *matCellDef="let element"> {{element.question}} </td>
+        <td mat-cell *matCellDef="let element">
+          <div class="question-cell">
+            <span class="question-text">{{element.question}}</span>
+            <button mat-icon-button class="faq-link-btn" type="button"
+              matTooltip="Copy link to this FAQ"
+              aria-label="Copy link to this FAQ"
+              [cdkCopyToClipboard]="getFaqUrl(element.id)"
+              (click)="onCopyLink($event)">
+              <mat-icon class="link-icon">link</mat-icon>
+            </button>
+          </div>
+        </td>
       </ng-container>
 
       <!-- Expanded Content Column - The answer row is made up of this one column that spans across all columns -->
@@ -47,7 +65,13 @@
 
       <!-- Row shown when there is no matching data. -->
       <tr class="" *matNoDataRow>
-        <td class="empty-data" colspan="2">No data matching the filter "{{filterInput.value}}"</td>
+        <td class="empty-data" colspan="2">
+          @if (notFound) {
+          No FAQ found with ID "{{singleFaqId}}".
+          } @else {
+          No data matching the filter "{{searchTerm}}".
+          }
+        </td>
       </tr>
     </table>
   </div>

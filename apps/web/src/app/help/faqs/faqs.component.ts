@@ -19,16 +19,21 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Component, ViewEncapsulation } from '@angular/core';
-import type { AfterViewInit } from '@angular/core';
+import { Component, ViewEncapsulation, inject } from '@angular/core';
+import type { OnInit, OnDestroy } from '@angular/core';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { HttpParams } from '@angular/common/http';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { ClipboardModule } from '@angular/cdk/clipboard';
+import { ActivatedRoute, RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import type { Subscription } from 'rxjs';
 import { CopyrightComponent } from '../../ui/copyright/copyright.component';
 
 export interface FAQElement {
+   id: string;
    position: number;
    question: string;
    answer: string;
@@ -39,12 +44,27 @@ export interface FAQElement {
    templateUrl: './faqs.component.html',
    styleUrl: './faqs.component.scss',
    encapsulation: ViewEncapsulation.None,
-   imports: [MatTableModule, MatIconModule, MatButtonModule, FormsModule, CopyrightComponent],
+   imports: [
+      MatTableModule,
+      MatIconModule,
+      MatButtonModule,
+      MatTooltipModule,
+      FormsModule,
+      RouterModule,
+      ClipboardModule,
+      CopyrightComponent,
+   ],
 })
-export class FaqsComponent implements AfterViewInit {
+export class FaqsComponent implements OnInit, OnDestroy {
+   private readonly route = inject(ActivatedRoute);
+   private readonly snackBar = inject(MatSnackBar);
+   private routeSub?: Subscription;
+
    public allExpanded = false;
    public searchTerm = '';
-   public expandedPositions = new Array();
+   public singleFaqId: string | null = null;
+   public notFound = false;
+   public expandedPositions: number[] = [];
    public displayedColumns: string[] = ['position', 'question'];
    public dataSource: MatTableDataSource<FAQElement>;
 
@@ -93,15 +113,53 @@ export class FaqsComponent implements AfterViewInit {
             (neutralTerms.length === 0 || neutralTerms.some((term) => dataStr.includes(term)))
          );
       };
+
+      this.routeSub = this.route.paramMap.subscribe((params) => {
+         const id = params.get('id');
+         this.handleRouteId(id);
+      });
    }
 
-   ngAfterViewInit(): void {
-      const params = new HttpParams({ fromString: window.location.search });
-      const search = params.get('search');
+   ngOnDestroy(): void {
+      this.routeSub?.unsubscribe();
+   }
+
+   private handleRouteId(id: string | null): void {
+      if (id) {
+         const targetId = id.trim().toLowerCase();
+         const match = ELEMENT_DATA.find((faq) => faq.id.toLowerCase() === targetId);
+         if (match) {
+            this.singleFaqId = match.id;
+            this.notFound = false;
+            this.dataSource.data = [match];
+            this.expandedPositions = [match.position];
+            this.allExpanded = true;
+         } else {
+            this.singleFaqId = targetId;
+            this.notFound = true;
+            this.dataSource.data = [];
+            this.expandedPositions = [];
+            this.allExpanded = false;
+         }
+      } else {
+         this.singleFaqId = null;
+         this.notFound = false;
+         this.dataSource.data = ELEMENT_DATA;
+         this.checkQueryParams();
+      }
+   }
+
+   private checkQueryParams(): void {
+      const search = this.route.snapshot.queryParamMap.get('search');
       if (search) {
          this.searchTerm = search;
          this.applyFilter(search);
          this.onToggleExpand();
+      } else {
+         this.searchTerm = '';
+         this.applyFilter('');
+         this.expandedPositions = [];
+         this.allExpanded = false;
       }
    }
 
@@ -120,23 +178,40 @@ export class FaqsComponent implements AfterViewInit {
 
    onToggleExpand() {
       if (this.allExpanded) {
-         this.expandedPositions = new Array();
+         this.expandedPositions = [];
       } else {
          // extra 0 at the front doesn't hurt
          this.expandedPositions = [...Array(ELEMENT_DATA.length).keys(), ELEMENT_DATA.length];
       }
       this.allExpanded = !this.allExpanded;
    }
+
+   getFaqUrl(id: string): string {
+      return `${window.location.origin}/help/faqs/${id}`;
+   }
+
+   onCopyLink(event: MouseEvent) {
+      event.stopPropagation();
+      this.toastMessage('Link copied to clipboard');
+   }
+
+   toastMessage(msg: string) {
+      this.snackBar.open(msg, '', {
+         duration: 2000,
+      });
+   }
 }
 
 const ELEMENT_DATA: FAQElement[] = [
    {
+      id: '0b2',
       position: 0,
       question: 'Who created Quick Crypt and why?',
       answer: `See the <a href="/help/overview">overview page</a>.`,
    },
 
    {
+      id: '1e4',
       position: 0,
       question: 'Why is user creation failing?',
       answer: `<p>To create a Quick Crypt user account, you must complete the
@@ -157,6 +232,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '2f8',
       position: 0,
       question: 'What are Passkeys with PRF and why does Quick Crypt prefer them?',
       answer: `<p>Quick Crypt secures your data using two secrets: a password known only to you,
@@ -187,6 +263,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '3a1',
       position: 0,
       question: 'Where should I report problems or get help with Quick Crypt?',
       answer: `Please report problems by <a href="https://github.com/bschick/qcrypt/issues/new/choose" target="_blank">
@@ -196,6 +273,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '4c7',
       position: 0,
       question: 'Who can decrypt the data I encrypt with Quick Crypt?',
       answer: `To decrypt data encrypted with Quick Crypt, you need both the
@@ -212,6 +290,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '5d9',
       position: 0,
       question: 'What are Passkeys and why does Quick Crypt use them?',
       answer: `There are many good descriptions online.
@@ -245,6 +324,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '6e3',
       position: 0,
       question: 'Can I decrypt my data if the Quick Crypt site goes offline?',
       answer: `Yes, as long as you have your user credential and the password you
@@ -268,6 +348,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '7b5',
       position: 0,
       question: 'Can I decrypt my data without an internet connection?',
       answer: `Yes, as long as you have already signed into Quick Crypt.
@@ -286,6 +367,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '8f1',
       position: 0,
       question: 'Is there a command-line version of Quick Crypt?',
       answer: `Yes, there is a command-line tool that can decrypt, encrypt, and
@@ -302,6 +384,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '9a6',
       position: 0,
       question: 'Can I decrypt my data if I forget the password I used for encryption?',
       answer: `There is no way to decrypt data if you forget the
@@ -313,6 +396,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: 'a3c',
       position: 0,
       question: 'How do I confirm I have the correct recovery words for my account?',
       answer: `Sign in, go to the <a href="/checkrecovery">Check Recovery Words</a>
@@ -324,6 +408,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: 'b4e',
       position: 0,
       question: 'What should I do if I cannot locate any passkeys but have my recovery word pattern?',
       answer: `Go to the <a href="/recovery3">Account Recovery</a> page and
@@ -332,6 +417,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: 'c5d',
       position: 0,
       question: 'What happens if I cannot locate my passkey or my recovery word pattern?',
       answer: `First, look for the emergency recovery sheet you should have printed when
@@ -349,6 +435,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: 'd6f',
       position: 0,
       question: 'What should I do if I forgot to print my emergency recovery sheet?',
       answer: `There are several potential scenarios, each is described below.
@@ -379,6 +466,7 @@ const ELEMENT_DATA: FAQElement[] = [
 
    /*
       {
+         id: 'e7a',
          position: 0,
          question: 'What is a sender link and how do I use it?',
          answer: `<p>A sender link allows others to encrypt text or files that only you can
@@ -402,6 +490,7 @@ const ELEMENT_DATA: FAQElement[] = [
 
 
       {
+         id: 'f8b',
          position: 0,
          question: 'What should I do if someone I don\'t trust obtains a sender link I created?',
          answer: `<p>First, it is important to understand that sender links can only encrypt data.
@@ -447,6 +536,7 @@ const ELEMENT_DATA: FAQElement[] = [
    */
 
    {
+      id: '1a9',
       position: 0,
       question: 'Does Quick Crypt store or process Personally Identifiable Information (PII)?',
       answer: `Quick Crypt does not request, collect, or process PII. When you enter a user
@@ -459,6 +549,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '2b0',
       position: 0,
       question: 'What information does Quick Crypt store and where is it stored?',
       answer: `<table class="tg">
@@ -537,6 +628,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '3c4',
       position: 0,
       question: 'Does Quick Crypt store or upload the passwords I use for encryption?',
       answer: `No. See the previous question about the information Quick Crypt stores for
@@ -544,6 +636,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '4d8',
       position: 0,
       question: 'Does Quick Crypt store or upload the unencrypted or encrypted data I enter?',
       answer: `No. See the previous question about the information Quick Crypt stores for
@@ -551,6 +644,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '5e2',
       position: 0,
       question: 'Does Quick Crypt use browser cookies?',
       answer: `Quick Crypt uses a single, secure
@@ -579,6 +673,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '6f6',
       position: 0,
       question: 'Can I use Quick Crypt to encrypt and decrypt files?',
       answer: `Yes, to encrypt a file click the <i>Files</i> button next to the <i>Encrypt</i>
@@ -596,6 +691,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '7a0',
       position: 0,
       question: 'Can I use Quick Crypt to send secrets to other people?',
       answer: `<p>Yes, but you should find a better way. Quick Crypt was designed
@@ -610,6 +706,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '8b4',
       position: 0,
       question: 'Can I create more than one passkey or user account?',
       answer: `Yes to both. Once signed in, create additional passkeys
@@ -621,6 +718,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '9c8',
       position: 0,
       question: 'How do I delete passkeys?',
       answer: `Once signed in, delete passkeys from the slide-out panel
@@ -631,6 +729,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: 'ad2',
       position: 0,
       question: 'How do I delete my Quick Crypt user identity entirely?',
       answer: `Once signed in, delete all passkeys from the slide-out panel opened
@@ -644,6 +743,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: 'be6',
       position: 0,
       question: "What should I do if someone I don't trust obtained a password I used for encryption?",
       answer: `Your data is still protected.
@@ -656,6 +756,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: 'cf0',
       position: 0,
       question: "What should I do if someone I don't trust obtained my passkey?",
       answer: `Your data is still protected, but your Quick Crypt user account is at risk.
@@ -670,6 +771,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: 'd04',
       position: 0,
       question: "What should I do if someone I don't trust obtained my recovery word pattern?",
       answer: `Your data is still protected by your encryption passwords, but your
@@ -686,20 +788,22 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: 'bad',
       position: 0,
       question: "What should I do if someone I don't trust obtained my emergency recovery sheet?",
       answer: `Your data is still protected by your encryption passwords, but is less secure,
       relying solely on password strength.
       <p>Your recovery sheet contains both your recovery words and your user credential.
-      Normally you do not need your user credential, but it is provided for offline recovery
-      in case your account is accidentally deleted. Unlike recovery words or passkeys, your
-      user credential cannot be changed and is an essential factor in Quick Crypt's cipher key
-      strength. If your recovery sheet is exposed, an attacker with access to your encrypted
-      files could attempt password-guessing attacks. We recommend creating a new Quick
-      Crypt account, re-encrypting your data, and then deleting your previous account.</p>`,
+      Normally you do not need your user credential, but it is included on your sheet for offline
+      recovery in case your Quick Crypt account is unintentionally deleted. Unlike recovery words
+      or passkeys, your user credential cannot be changed and is an essential factor in Quick
+      Crypt's cipher key strength. If your recovery sheet is exposed, an attacker with access to
+      your encrypted files could attempt password-guessing attacks. We recommend creating a new
+      account, re-encrypting your data, and then deleting your previous account.</p>`,
    },
 
    {
+      id: 'f2c',
       position: 0,
       question:
          "What should I do if someone I don't trust obtained my recovery word pattern or passkey and a password I used for encryption?",
@@ -712,6 +816,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '03e',
       position: 0,
       question: 'What does it mean that Quick Crypt has detected a problem and stopped?',
       answer: `Quick Crypt remembers a few details about your account the first time it
@@ -728,6 +833,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '14f',
       position: 0,
       question: 'Has threat modeling been done for Quick Crypt?',
       answer: `Only informally, and we'd welcome contributions. These areas have
@@ -796,6 +902,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '25a',
       position: 0,
       question: 'How should I decide which cipher mode to use?',
       answer: `Quick Crypt offers only well-established and tested
@@ -848,6 +955,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '36b',
       position: 0,
       question: 'How does Quick Crypt generate random values?',
       answer: `<p>Random values are input to cryptographic functions as salts and
@@ -868,6 +976,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '47c',
       position: 0,
       question: "What do the 'Password Handling' Advanced Options do?",
       answer: `<p>Quick Crypt uses many PBKDF2-HMAC-SHA512 key
@@ -893,6 +1002,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '58d',
       position: 0,
       question: 'I have read that web applications should not be trusted for cryptography.',
       answer: `That's not a question! Much has changed over the past decade, making web
@@ -905,6 +1015,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '69e',
       position: 0,
       question: 'Can Quick Crypt decrypt ciphertext created by other tools?',
       answer: `No, Quick Crypt was not designed to interoperate with ciphertext
@@ -913,6 +1024,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '7af',
       position: 0,
       question: 'Can other tools decrypt ciphertext created by Quick Crypt?',
       answer: `Yes, as long as you copy your user credential from
@@ -922,6 +1034,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '8b0',
       position: 0,
       question: 'What are the different Cipher Armor formats?',
       answer: `<p>Cipher armor is text that includes encrypted
@@ -953,6 +1066,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '9c1',
       position: 0,
       question: 'What does the "Loop Encrypt" Advanced Option do?',
       answer: `<p>Loop encryption can improve privacy and authenticity.
@@ -977,6 +1091,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: 'ad5',
       position: 0,
       question: 'How is data encrypted and decrypted, and which crypto implementations are used?',
       answer: `<p>See the detailed description on the
@@ -1022,6 +1137,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: 'be9',
       position: 0,
       question: 'Can I use Quick Crypt without entering encryption passwords?',
       answer: `<p>Quick Crypt requires a password to encrypt or decrypt data. You can
@@ -1032,6 +1148,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: 'cf3',
       position: 0,
       question: 'What key lengths does Quick Crypt use?',
       answer: `Symmetric cipher keys are ephemeral, 256 bits long, and derived
@@ -1042,6 +1159,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: 'd07',
       position: 0,
       question: 'Are my password hints encrypted?',
       answer: `Yes, password hints are encrypted with a key derived from
@@ -1055,6 +1173,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: 'e1b',
       position: 0,
       question: 'Why is XChaCha20 offered rather than IETF ChaCha20?',
       answer: `Quick Crypt uses random nonce values for cipher initialization
@@ -1066,6 +1185,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: 'f2f',
       position: 0,
       question: 'Why does Quick Crypt use both MACs and AEAD ciphers?',
       answer: `First, this improves ciphertext integrity (INT-CTXT) by detecting
@@ -1085,6 +1205,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '043',
       position: 0,
       question: "Is Quick Crypt's protocol key-committing?",
       answer: `Yes, <a href="/help/protocol">Quick Crypt's protocol</a> is
@@ -1103,6 +1224,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '157',
       position: 0,
       question: "Are Quick Crypt's algorithms side-channel attack resistant?",
       answer: `Quick Crypt uses algorithms implemented by the open-source
@@ -1117,6 +1239,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '26b',
       position: 0,
       question: "Are Quick Crypt's algorithms quantum-resistant?",
       answer: `<p>Quick Crypt's protocol is designed to be quantum-resistant against
@@ -1140,6 +1263,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '37f',
       position: 0,
       question: 'What will Quick Crypt do if one of the symmetric cipher modes is broken?',
       answer: `If any of the three symmetric ciphers used by Quick Crypt are someday
@@ -1154,6 +1278,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '483',
       position: 0,
       question: "What does the 'Decryption Reminder' Advanced Option do?",
       answer: `When enabled, this option adds text to JSON cipher armor that reminds
@@ -1162,6 +1287,7 @@ const ELEMENT_DATA: FAQElement[] = [
    },
 
    {
+      id: '597',
       position: 0,
       question: "What do the various 'Display Privacy' Advanced Options do?",
       answer: `These options control what information is visible in the Quick Crypt UI

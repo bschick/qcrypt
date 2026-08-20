@@ -10,7 +10,7 @@
     </b>
   </p>
 
-  <h3>User Name:</h3>
+  <h3>User Name</h3>
   <p class="sheet-value">{{ userName }}</p>
   <p>
     The name above was the user name for this account when this sheet was
@@ -18,7 +18,7 @@
     at {{ host }}/checkrecovery
   </p>
 
-  <h3>Recovery Word Pattern:</h3>
+  <h3>Recovery Word Pattern</h3>
   <p class="sheet-value">{{ recoveryWords }}</p>
   <p>
     This word pattern allows you to restore your account if you lose access to
@@ -26,17 +26,8 @@
     {{ host }}/recovery3 and enter the words in the exact order they appear
     above.
   </p>
-  <p>
-    If someone you do not trust gains access to your recovery words but has not
-    used them, go to {{ host }}/regenrecovery and change your recovery word
-    pattern. If an untrusted party has used or changed your recovery words, your
-    encrypted data is still protected by encryption passwords, but your
-    account's overall security is permanently weakened. We recommend creating a
-    new Quick Crypt account, re-encrypting your data, and then deleting your
-    previous account.
-  </p>
 
-  <h3>User Credential:</h3>
+  <h3>User Credential</h3>
   <p class="sheet-value">{{ userCred }}</p>
   <p>
     Your user credential, along with your encryption passwords, is used to
@@ -46,11 +37,10 @@
     happens, you can use the credential above with the Quick Crypt command-line
     tool to decrypt your data.
   </p>
+  <h3>⚠️ Warning</h3>
   <p>
-    Unlike the recovery word pattern, your user credential can never be changed.
-    If this sheet is ever exposed to untrusted parties, your encrypted data is
-    still protected by encryption passwords, but your account's overall security
-    is permanently weakened. We recommend creating a new Quick Crypt account,
-    re-encrypting your data, and then deleting your previous account.
+    If someone you do not trust gains access to this recovery sheet, your data
+    becomes less secure and relies solely on the strength of your encryption
+    passwords. For more information, see {{ host }}/help/faqs/bad
   </p>
 </div>
