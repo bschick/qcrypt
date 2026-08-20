@@ -237,16 +237,15 @@ const ELEMENT_DATA: FAQElement[] = [
       question: 'What are Passkeys with PRF and why does Quick Crypt prefer them?',
       answer: `<p>Quick Crypt secures your data using two secrets: a password known only to you,
       and a user credential protected by your passkeys. Passkeys that support the WebAuthn PRF
-      (Pseudo-Random Function) extension provide stronger protection by encrypting your
-      user credential locally. This ensures no other systems, including Quick Crypt's
-      servers, can access your user credential, establishing a zero-knowledge
-      relationship between your browser and the server.</p>
+      (Pseudo-Random Function) extension provide stronger protection by creating and
+      encrypting your user credential locally. This ensures no other systems, including
+      Quick Crypt's servers, can access your user credential, establishing a
+      zero-knowledge relationship between your browser and the server.</p>
       <p>PRF-capable passkeys achieve this by generating unique, repeatable cryptographic
       keys locally on your device. These local keys encrypt your user credential
       before it is sent to the server for synchronization. Without PRF, the server
-      must generate and manage your user credential, protecting it using cloud
-      key management services and sending it to your browser when you
-      sign in. While the non-PRF method remains highly secure and gated by passkey
+      must generate and manage your user credential and send it to your browser when
+      you sign in. While the non-PRF method remains highly secure and gated by passkey
       authentication, PRF is a significant security upgrade. With PRF, even a total
       compromise of Quick Crypt's servers cannot expose your user credential. With or
       without PRF, the password you used during encryption is always required to
@@ -280,9 +279,9 @@ const ELEMENT_DATA: FAQElement[] = [
       password you used for encryption and a passkey restricting access to your
       Quick Crypt user credential. Unless you share your passkey and encryption
       password with someone, only you can decrypt data that you have encrypted.
-      Passkeys that support PRF provide even stronger security by encrypting
-      your user credential locally so that not even a compromise of Quick
-      Crypt's servers could expose your information.`,
+      Passkeys that support PRF provide even stronger security by creating and
+      encrypting your user credential locally so that not even a compromise of
+      Quick Crypt's servers could expose your information.`,
       //      This is true for self-encrypted data and data encrypted for you through
       //      a sender link. The Quick Crypt web app does not store your passwords and
       //      therefore cannot decrypt your data. Do not forget the passwords you use
