@@ -307,8 +307,53 @@ export async function expectPasskeyDeleted(credId: string, csrf: string, cookie:
    expect(res.status).toBe(200);
 }
 
+const NAME_PREFIX = 'PWTesty_';
+const NAME_MAX_LEN = 31;
+const SKIP_WORDS = ['and', 'the', 'but', 'for', 'nor', 'yet', 'that', 'this', 'when', 'then', 'its'];
+
+// Hyphens are removed rather than split on so "no-PRF" stays one word and cannot be mistaken
+// for "PRF". Short and joining words are dropped because they crowd out the words that
+// identify the test.
+function condense(text: string, words: number, chars: number): string {
+   return text
+      .toLowerCase()
+      .replace(/-/g, '')
+      .split(/[^a-z0-9]+/)
+      .filter((word) => word.length > 2 && !SKIP_WORDS.includes(word))
+      .slice(0, words)
+      .map((word) => word.slice(0, chars))
+      .join('');
+}
+
+let nameCount = 0;
+let namedTest = '';
+
+// Names an account after the test that created it so a leaked user names its own source. The
+// count distinguishes accounts within one test. Pass a label where the derived one would be
+// unhelpful, or where a test appends to the name and needs the room.
+export function testUserName(label?: string): string {
+   const state = expect.getState();
+   const testName = state.currentTestName ?? '';
+   if (testName !== namedTest) {
+      namedTest = testName;
+      nameCount = 0;
+   }
+
+   const fileName = (state.testPath ?? '').split('/').pop() ?? '';
+   // A registration inside a hook has no test name yet, leaving only the file to go on
+   const derived = [
+      condense(fileName.replace(/\.(spec|suite)\.ts$/, ''), 1, 6),
+      condense(testName.split('>').at(-1) ?? '', 3, 4),
+   ]
+      .filter((part) => part)
+      .join('_');
+   const suffix = `_${++nameCount}`;
+   return `${NAME_PREFIX}${(label ?? derived).slice(0, NAME_MAX_LEN - NAME_PREFIX.length - suffix.length)}${suffix}`;
+}
+
 interface TestUserBase {
    userId: string;
+   userName: string;
    userCred: string;
    cookie: string;
    csrf: string;
@@ -334,9 +379,10 @@ export type TestUser = NoPrfTestUser | PrfTestUser;
 // does and only its public key is sent; the secret is returned for recovery flows. When prf is
 // true the client generates userCred locally and sends only opaque ciphertexts (the server never
 // sees plaintext userCred); when false the server generates and returns userCred as before.
-export async function registerTestUser(userName: string, prf: boolean = false): Promise<TestUser> {
+export async function registerTestUser(prf: boolean = false, label?: string): Promise<TestUser> {
    await cryptoReady();
 
+   const userName = testUserName(label);
    let user: TestUser;
    if (prf) {
       const {
@@ -363,6 +409,7 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
       user = {
          prf: true,
          userId,
+         userName,
          userCred: bytesToBase64(userCred),
          cookie: verifyRes.cookie,
          csrf: verifyRes.data.csrf,
@@ -410,6 +457,7 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
       user = {
          prf: false,
          userId,
+         userName,
          userCred: verifyRes.data.userCred,
          cookie: verifyRes.cookie,
          csrf: verifyRes.data.csrf,

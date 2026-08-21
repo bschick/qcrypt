@@ -29,6 +29,7 @@ import {
    registerTestUser,
    registerNewCredential,
    buildPrfRegBody,
+   testUserName,
    getJson,
    postJson,
    expectPasskeyDeleted,
@@ -56,7 +57,7 @@ describe('PRF account', () => {
    });
 
    it('logs in and decrypts the per-passkey ciphertext back to userCred', async () => {
-      const account = await registerTestUser(`PWTesty_prf_${Date.now()}`, true);
+      const account = await registerTestUser(true);
       cleanup = async () => {
          setSessionSigner(account.userId, account.userCred);
          await expectPasskeyDeleted(account.credId, account.csrf, account.cookie);
@@ -94,7 +95,7 @@ describe('PRF account', () => {
    });
 
    it('rejects a passkey added without an encrypted userCred', async () => {
-      const account = await registerTestUser(`PWTesty_gp_${Date.now()}`, true);
+      const account = await registerTestUser(true);
       const auth = { 'x-csrf-token': account.csrf };
       cleanup = async () => {
          setSessionSigner(account.userId, account.userCred);
@@ -135,7 +136,7 @@ describe('PRF registration input validation', () => {
 
    // reg/verify is unauthenticated, so enumeration-hardening reports every rejection as a uniform 401.
    async function rejectsRegBody(mutate: (body: Record<string, any>) => void): Promise<void> {
-      const { userId, body, userCred } = await buildPrfRegBody(`PWTesty_bad_${Date.now()}`);
+      const { userId, body, userCred } = await buildPrfRegBody(testUserName());
       const tampered = { ...body };
       mutate(tampered);
       const bad = await postJson('/v1/reg/verify', tampered, {}, '');

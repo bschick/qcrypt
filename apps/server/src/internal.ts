@@ -310,7 +310,7 @@ export async function postCleanupTestUsers(httpDetails: HttpDetails): Promise<Re
    // Per-call delete cap. Large cleanups need repeat invocations;
    const maxDeletes = 25;
 
-   const userAttrs = ['userId', 'userName', 'createdAt'] as const;
+   const userAttrs = ['userId', 'verified', 'userName', 'createdAt'] as const;
    let users = await Users.scan.go({
       attributes: userAttrs,
       limit: batchSize,
@@ -330,11 +330,12 @@ export async function postCleanupTestUsers(httpDetails: HttpDetails): Promise<Re
          if (user.userId === 'AAAAAAAAAAAAAAAAAAAAAA') {
             continue;
          }
+         const state = `${user.verified ? 'verified' : 'unverified'} ${new Date(user.createdAt ?? 0).toISOString()}`;
          if (!user.createdAt || user.createdAt > minCreated) {
-            console.log(`not expired test user ${user.userName} - ${user.userId}`);
+            console.log(`not expired test user ${user.userName} - ${user.userId} - ${state}`);
             continue;
          }
-         console.log(`expired test user ${user.userName} - ${user.userId}`);
+         console.log(`expired test user ${user.userName} - ${user.userId} - ${state}`);
          candidates.push({
             userId: user.userId,
             userName: user.userName,

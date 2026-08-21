@@ -50,7 +50,7 @@ describe('no-PRF account', () => {
    });
 
    it('rejects a passkey added with an encrypted userCred', async () => {
-      const account = await registerTestUser(`PWTesty_gn_${Date.now()}`, false);
+      const account = await registerTestUser(false);
       const auth = { 'x-csrf-token': account.csrf };
       cleanup = async () => {
          setSessionSigner(account.userId, account.userCred);

@@ -236,14 +236,13 @@ async function recoverAccount3(user: TestUser, opts: { keepSession?: boolean } =
 
 export function recoverySuite(prf: boolean): void {
    const label = prf ? 'PRF' : 'no-PRF';
-   const tag = prf ? 'pf' : 'np';
 
    describe(`recovery proof (${label})`, () => {
       let user: TestUser;
 
       beforeAll(async () => {
          await cryptoReady();
-         user = await registerTestUser(`PWTesty_rec${tag}_${Date.now()}`, prf);
+         user = await registerTestUser(prf);
       });
 
       // Tests run in arbitrary order and the proof signer is global, so re-point it at the
@@ -352,7 +351,7 @@ export function recoverySuite(prf: boolean): void {
       // Recovery wipes all passkeys, so these run against their own throwaway users.
       // Replacing recovery words rotates the recovery key, which must retire the prior one.
       it('rejects the previous recovery key after it is replaced', async () => {
-         const recoverUser = await registerTestUser(`PWTesty_rgn${tag}_${Date.now()}`, prf);
+         const recoverUser = await registerTestUser(prf);
 
          // The original key recovers the account before it is replaced.
          const session = await recoverAccount3(recoverUser, { keepSession: true });
@@ -376,14 +375,14 @@ export function recoverySuite(prf: boolean): void {
       });
 
       it('recover3 account recovery succeeds', async () => {
-         const recoverUser = await registerTestUser(`PWTesty_r3ok${tag}_${Date.now()}`, prf);
+         const recoverUser = await registerTestUser(prf);
          await recoverAccount3(recoverUser);
       });
 
       // The point of splitting recovery in two: proving the recovery secret alone must not
       // cost the user their passkeys, so an account that never confirms is left intact.
       it('recover3 leaves passkeys in place until confirm', async () => {
-         const recoverUser = await registerTestUser(`PWTesty_r3ka${tag}_${Date.now()}`, prf);
+         const recoverUser = await registerTestUser(prf);
 
          const startRes = await postRecover3(recoverUser);
          expect(startRes.status).toBe(200);
@@ -400,7 +399,7 @@ export function recoverySuite(prf: boolean): void {
       });
 
       it('confirm recover3 deletes every passkey', async () => {
-         const recoverUser = await registerTestUser(`PWTesty_r3del${tag}_${Date.now()}`, prf);
+         const recoverUser = await registerTestUser(prf);
 
          // Recovery must clear the whole list, so give the account more than one to clear.
          const originalCredId = recoverUser.credId;
@@ -496,7 +495,7 @@ export function recoverySuite(prf: boolean): void {
          const good = await postRecover3(user);
          expect(good.status).toBe(200);
 
-         const other = await registerTestUser(`PWTesty_r3ot${tag}_${Date.now()}`, prf);
+         const other = await registerTestUser(prf);
          try {
             // A real recovery key, just not this account's
             const res = await postJson('/v1/recover3', recover3Body(user, { secret: other.recoverySecret }), {}, '');
@@ -517,7 +516,7 @@ export function recoverySuite(prf: boolean): void {
       });
 
       it('rejects confirm with a challenge recover3 never issued', async () => {
-         const recoverUser = await registerTestUser(`PWTesty_r3nc${tag}_${Date.now()}`, prf);
+         const recoverUser = await registerTestUser(prf);
 
          // A correctly signed proof over a self-minted challenge: only recover3 can authorize confirm.
          const neverIssued = bytesToBase64(getRandom(CHALLENGE_BYTES));
@@ -534,7 +533,7 @@ export function recoverySuite(prf: boolean): void {
       it('rejects a confirm challenge minted for another purpose', async () => {
          // An auth-purpose challenge for the same user, from the table confirm challenges share,
          // still must not satisfy confirm
-         const recoverUser = await registerTestUser(`PWTesty_r3pp${tag}_${Date.now()}`, prf);
+         const recoverUser = await registerTestUser(prf);
 
          const authOpts = await postJson('/v1/auth/options', { userId: recoverUser.userId }, {}, '');
          expect(authOpts.status).toBe(200);
@@ -550,7 +549,7 @@ export function recoverySuite(prf: boolean): void {
       });
 
       it('rejects confirm carrying no userCred proof', async () => {
-         const recoverUser = await registerTestUser(`PWTesty_r3np${tag}_${Date.now()}`, prf);
+         const recoverUser = await registerTestUser(prf);
 
          const { startRes } = await startRecovery3(recoverUser);
 
@@ -564,8 +563,8 @@ export function recoverySuite(prf: boolean): void {
 
       // Only the body proof decides the outcome (session is ignored)
       it('ignores a session on confirm', async () => {
-         const other = await registerTestUser(`PWTesty_r3os${tag}_${Date.now()}`, prf);
-         const recoverUser = await registerTestUser(`PWTesty_r3ws${tag}_${Date.now()}`, prf);
+         const other = await registerTestUser(prf);
+         const recoverUser = await registerTestUser(prf);
 
          const { startRes } = await startRecovery3(recoverUser);
 
@@ -582,12 +581,16 @@ export function recoverySuite(prf: boolean): void {
          setSessionSigner(other.userId, other.userCred);
          expect(await passkeyCount(other.userId, other.userCred, other.csrf, other.cookie)).toBe(1);
          await expectPasskeyDeleted(other.credId, other.csrf, other.cookie);
+
+         // Confirm left this account with no passkeys and no session, so finishing a fresh
+         // recovery is the only way to reach a passkey that can be deleted
+         await recoverAccount3(recoverUser);
       });
 
       // A caller that cannot rebuild userCred signs with the wrong key, and the account must
       // come through that untouched.
       it('rejects confirm proved with the wrong userCred and keeps the passkeys', async () => {
-         const recoverUser = await registerTestUser(`PWTesty_r3wc${tag}_${Date.now()}`, prf);
+         const recoverUser = await registerTestUser(prf);
 
          const { startRes } = await startRecovery3(recoverUser);
 
@@ -608,7 +611,7 @@ export function recoverySuite(prf: boolean): void {
       });
 
       it('rejects a confirm challenge reused after it is spent', async () => {
-         const recoverUser = await registerTestUser(`PWTesty_r3rc${tag}_${Date.now()}`, prf);
+         const recoverUser = await registerTestUser(prf);
 
          const { startRes, recoveredUserCred } = await startRecovery3(recoverUser);
          const session = await finishRecovery3(recoverUser, startRes, recoveredUserCred);
@@ -623,7 +626,7 @@ export function recoverySuite(prf: boolean): void {
       // A spent challenge must not be redeemable against a later recovery, or a captured confirm
       // body could be replayed the moment someone starts a fresh one.
       it('rejects a spent confirm challenge against a second recovery', async () => {
-         const recoverUser = await registerTestUser(`PWTesty_r3sc${tag}_${Date.now()}`, prf);
+         const recoverUser = await registerTestUser(prf);
 
          const first = await startRecovery3(recoverUser);
          const spentBody = confirmBody(recoverUser, first.startRes.data.challenge);
@@ -638,7 +641,7 @@ export function recoverySuite(prf: boolean): void {
       });
 
       it('rejects a confirm timestamp outside the skew window', async () => {
-         const recoverUser = await registerTestUser(`PWTesty_r3ct${tag}_${Date.now()}`, prf);
+         const recoverUser = await registerTestUser(prf);
 
          const { startRes } = await startRecovery3(recoverUser);
 
@@ -656,7 +659,7 @@ export function recoverySuite(prf: boolean): void {
       });
 
       it('recover3 invalidates previous session', async () => {
-         const recoverUser = await registerTestUser(`PWTesty_r3rev${tag}_${Date.now()}`, prf);
+         const recoverUser = await registerTestUser(prf);
 
          const before = await getJson('/v1/user', { 'x-csrf-token': recoverUser.csrf }, recoverUser.cookie);
          expect(before.status).toBe(200);

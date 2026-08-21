@@ -71,12 +71,12 @@ async function postAuthVerifyWithRetry(
 // legitimately differ by mode (the add-passkey ciphertext) branch, via registerNewCredential.
 export function coreSuite(prf: boolean): void {
    const label = prf ? 'PRF' : 'no-PRF';
-   // Short tag: usernames are capped at UNAME_MAX_LEN (31), and one test appends "_upd".
-   const tag = prf ? 'pf' : 'np';
 
    describe(`QuickCrypt WebAuthn Full API Suite (${label})`, () => {
       // Shared state
-      const testUser = `PWTesty_${tag}_${Date.now()}`;
+      // Labelled rather than derived: usernames are capped at UNAME_MAX_LEN (31) and one test
+      // appends "_upd", so this one needs the room.
+      let testUser: string;
       let user: TestUser;
       let userId: string;
       let credId: string; // pkId
@@ -86,8 +86,8 @@ export function coreSuite(prf: boolean): void {
       let emulator: WebAuthnEmulator;
 
       beforeAll(async () => {
-         user = await registerTestUser(testUser, prf);
-         ({ userId, userCred, cookie: sessCookie, csrf: csrfToken, credId, emulator } = user);
+         user = await registerTestUser(prf, 'core');
+         ({ userId, userName: testUser, userCred, cookie: sessCookie, csrf: csrfToken, credId, emulator } = user);
       });
 
       describe('User & Session Management', () => {
@@ -485,7 +485,6 @@ export function coreSuite(prf: boolean): void {
          });
 
          it('should reject auth/verify when challenge userId does not match credential owner', async () => {
-            const attackerName = `PWTesty_atk_${tag}_${Date.now()}`;
             let attackerUserId: string | undefined;
             let attackerCredId: string | undefined;
             let attackerCookie = '';
@@ -493,7 +492,7 @@ export function coreSuite(prf: boolean): void {
             let attackerUserCred: string | undefined;
 
             try {
-               const attacker = await registerTestUser(attackerName, prf);
+               const attacker = await registerTestUser(prf);
                attackerUserId = attacker.userId;
                attackerCredId = attacker.credId;
                attackerCookie = attacker.cookie;

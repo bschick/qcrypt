@@ -1,4 +1,4 @@
-import { test, expect, Page, BrowserContext, type Cookie } from '@playwright/test';
+import { test, expect, Page, BrowserContext, type Cookie, type TestInfo } from '@playwright/test';
 import { createUserCredProof } from '@qcrypt/api';
 import {
    cryptoReady,
@@ -221,6 +221,50 @@ type TrackedUser = {
    fastSession?: { cookies: Cookie[]; csrf: string };
 };
 
+const NAME_PREFIX = 'PWTesty_';
+const NAME_MAX_LEN = 31;
+
+const SKIP_WORDS = ['and', 'the', 'but', 'for', 'nor', 'yet', 'that', 'this', 'when', 'then', 'its'];
+
+// Hyphens are removed rather than split on so "no-PRF" stays one word and cannot be mistaken
+// for "PRF". Short and joining words are dropped because they crowd out the words that
+// identify the test.
+function condense(text: string, words: number, chars: number): string {
+   return text
+      .toLowerCase()
+      .replace(/-/g, '')
+      .split(/[^a-z0-9]+/)
+      .filter((word) => word.length > 2 && !SKIP_WORDS.includes(word))
+      .slice(0, words)
+      .map((word) => word.slice(0, chars))
+      .join('');
+}
+
+// Names an account after the test that created it so a leaked user names its own source.
+// Playwright offers nothing short and readable of its own -- testId is an opaque hash and
+// titlePath is far too long for the 31 character limit -- so labels are condensed here.
+// An `@u:<label>` tag on the test or its describe replaces the derived label. Start that label
+// with `lky` when the test is known to abandon a registration, so an unverified account under
+// that name is expected rather than a test that failed to clean up after itself.
+export function testUserName(testInfo: TestInfo, count: number): string {
+   const tagged = testInfo.tags
+      .filter((tag) => tag.startsWith('@u:'))
+      .map((tag) => tag.slice(3))
+      .join('_');
+
+   let label = tagged;
+   if (!label) {
+      // Only the test's own title, since a describe title repeats across every test under it
+      const fileName = (testInfo.titlePath[0] ?? '').split('/').pop() ?? '';
+      label = [condense(fileName.replace(/\.(spec|suite)\.ts$/, ''), 1, 6), condense(testInfo.title, 3, 4)]
+         .filter((part) => part)
+         .join('_');
+   }
+
+   const suffix = `_${count}`;
+   return `${NAME_PREFIX}${label.slice(0, NAME_MAX_LEN - NAME_PREFIX.length - suffix.length)}${suffix}`;
+}
+
 export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
    authFixture: async ({ page }, use, testInfo) => {
       const baseURL = (testInfo.project.use as { baseURL: string }).baseURL;
@@ -306,13 +350,14 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
       await context.addInitScript(`if (window.navigator?.credentials) { ${BrowserInjection.HookWebAuthnApis} }`);
 
       const trackedUsers: TrackedUser[] = [];
+      let userCount = 0;
 
       const createTestUser = async (
          authenticator: Authenticator,
          differentAuth?: Authenticator,
       ): Promise<CreatedTestUser> => {
          active = authenticator.emulator;
-         const userName = `PWTesty_e2e_${Date.now()}`;
+         const userName = testUserName(testInfo, ++userCount);
          await page.goto('/');
 
          const verifyPromise = page.waitForResponse(

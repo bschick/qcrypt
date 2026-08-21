@@ -207,7 +207,7 @@ describe('api fuzzing (authenticated)', () => {
    let credId: string;
 
    beforeAll(async () => {
-      ({ userId, cookie, csrf, credId } = await registerTestUser(`PWTesty_fuzz_${Date.now()}`));
+      ({ userId, cookie, csrf, credId } = await registerTestUser());
    });
 
    afterAll(async () => {

@@ -32,7 +32,8 @@ import {
 } from './common';
 
 describe('proof of userCred enforcement', () => {
-   const testUser = `PWTesty_enf_${Date.now()}`;
+   // Labelled rather than derived: one test appends "_x" and needs room under UNAME_MAX_LEN (31)
+   let testUser: string;
    let userId: string;
    let userCred: string;
    let cookie: string;
@@ -42,7 +43,7 @@ describe('proof of userCred enforcement', () => {
    beforeAll(async () => {
       // A PRF account's proof public key is supplied by the client (not derived server-side), so
       // enforce proof verification against that client-provisioned key.
-      ({ userId, userCred, cookie, csrf, credId } = await registerTestUser(testUser, true));
+      ({ userId, userName: testUser, userCred, cookie, csrf, credId } = await registerTestUser(true, 'enf'));
       // Each test crafts its own proof; disable the harness auto-signer.
       setSessionSigner(undefined);
    });
