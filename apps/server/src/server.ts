@@ -90,13 +90,12 @@ import {
    SESSION_TIMEOUT_SEC,
    getUserCredPubKey,
    verifyUserCredProof,
-   verifyRecoveryProofBackwardCompat,
    PROOF_PUBKEY_BYTES,
    PROOF_SIG_BYTES,
    type RequestTypes,
    type ResponseTypes,
 } from '@qcrypt/api';
-import { cryptoReady } from '@qcrypt/crypto';
+import { cryptoReady, hashString } from '@qcrypt/crypto';
 
 type AuthenticatorInfo = ResponseTypes.AuthenticatorInfo;
 type UserInfo = ResponseTypes.UserInfo;
@@ -1018,7 +1017,9 @@ async function makeUserInfoResponse(
       verified: verifiedUser.verified,
       userId: verifiedUser.userId,
       userName: verifiedUser.userName,
+      // BACKWARD COMPAT: until clients update to use recoveryKeyId, whose presence says the same
       hasRecoveryId: !!verifiedUser.recoveryPubKey,
+      recoveryKeyId: verifiedUser.recoveryPubKey ? hashString(verifiedUser.recoveryPubKey) : undefined,
       prf: verifiedUser.prf,
       authenticators: auths,
       invitables,
@@ -1142,12 +1143,7 @@ async function putRecover3Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
    }
 
    // Verified against the submitted key, so the caller must hold its secret.
-   // BACKWARD COMPAT: until clients update to send a proof. A caller that omits one does
-   // not show it holds the secret behind recoveryPubKey, so the key is taken on trust and a
-   // wrong one leaves the account unrecoverable. Require the proof once clients send it.
-   if (recover3Key?.signature) {
-      await verifyRecoverProof(recoveryPubKey, verifiedUser.userId, recover3Key);
-   }
+   await verifyRecoverProof(recoveryPubKey, verifiedUser.userId, recover3Key);
 
    const updates: { recoveryPubKey: string; userCredEnc?: string } = {
       recoveryPubKey,
@@ -1401,39 +1397,6 @@ async function deletePasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUs
    return { content: response, endSession };
 }
 
-// Issues a single-use challenge for proving recovery-secret ownership. No user
-// validation is done so that the endpoint does not reveal whether a userId
-// exists
-// BACKWARD COMPAT: until clients update to call postRecover3 directly. postRecover3 needs
-// no issued challenge, so removing this also removes an unauthenticated unmetered write
-async function postRecover2Challenge(httpDetails: HttpDetails): Promise<Response> {
-   const { body } = httpDetails;
-
-   const userId = body?.userId;
-   if (!validB64(userId) || base64UrlDecode(userId)?.length !== cc.USERID_BYTES) {
-      throw new ParamError('invalid userid format');
-   }
-
-   const rand = new GenerateRandomCommand({
-      NumberOfBytes: cc.CHALLENGE_BYTES,
-   });
-   const result = await kmsClient.send(rand);
-   const challengeBytes = result.Plaintext;
-
-   if (!challengeBytes || challengeBytes.byteLength !== cc.CHALLENGE_BYTES) {
-      throw new Error('GenerateRandomCommand failure');
-   }
-
-   const challenge = base64UrlEncode(challengeBytes)!;
-   await Challenges.create({
-      challenge,
-      purpose: 'noncebackwardcompat',
-      userId,
-   }).go();
-
-   return { content: { challenge } };
-}
-
 // recover removes all existing passkeys, then initiates the
 // process or creating a new passkey. Caller is expected to followup
 // with a call to verifyRegistration
@@ -1499,82 +1462,6 @@ async function postRecover(httpDetails: HttpDetails): Promise<Response> {
 
    const response = await deleteSession(httpDetails, verifiedUser);
    const regResponse = await registrationOptions(rpID, rpOrigin, verifiedUser, 'recover');
-   response.content = regResponse.content;
-   return response;
-}
-
-// recover removes all existing passkeys, then initiates the
-// process or creating a new passkey. Caller is expected to followup
-// with a call to verifyRegistration
-// BACKWARD COMPAT: until clients update to call postRecover3 directly. This destroys
-// passkeys before the caller has shown it can rebuild userCred, which postRecover3 and
-// postRecoverConfirm split apart so nothing is destroyed until that is proven
-async function postRecover2(httpDetails: HttpDetails): Promise<Response> {
-   const { rpID, rpOrigin, body } = httpDetails;
-
-   if (!body?.signature) {
-      throw new ParamError('missing signature');
-   }
-
-   const userId = body.userId;
-
-   const challenge = body.challenge;
-   const signature = body.signature;
-   if (!validB64(challenge) || !validB64(signature)) {
-      throw new ParamError('invalid recovery proof');
-   }
-   const challengeBytes = base64UrlDecode(challenge)!;
-   const signatureBytes = base64UrlDecode(signature)!;
-   if (challengeBytes.byteLength !== cc.CHALLENGE_BYTES || signatureBytes.byteLength !== PROOF_SIG_BYTES) {
-      throw new ParamError('invalid recovery proof');
-   }
-
-   await consumeChallenge(challenge, 'noncebackwardcompat', userId);
-
-   // Require an existing verified user for recovery
-   const unverifiedUser = await getUnverifiedUser(userId);
-   const verifiedUser = checkVerified(unverifiedUser, userId);
-
-   if (!verifiedUser.recoveryPubKey) {
-      throw new ParamError(`user account ${verifiedUser.userId} has no recovery key`);
-   }
-
-   try {
-      // This call takes < 1ms to run on a warm server, so detecting timing
-      // differences to guess valid userId is not practicle
-      verifyRecoveryProofBackwardCompat(verifiedUser.recoveryPubKey, userId, challenge, signature);
-   } catch {
-      throw new ParamError(`user account ${verifiedUser.userId} invalid recovery proof`);
-   }
-
-   // Note that if the creation of a new passkey is aborted or cancels, the account
-   // will be left with no passkeys. Recovery can be run again to create a new passkey.
-   // Could alternatively address this by marking passkey for deletion and cleaning
-   // up after, but then recovery may be less certain in a security incident.
-   await deleteAllAuthenticators(verifiedUser);
-
-   const rcount = verifiedUser.recovered ? verifiedUser.recovered + 1 : 1;
-
-   await Users.patch({
-      userId: verifiedUser.userId,
-   })
-      .set({
-         recovered: rcount,
-      })
-      .go();
-
-   // Let this happen async
-   recordEvent(EventNames.Recover, verifiedUser.userId);
-
-   const response = await deleteSession(httpDetails, verifiedUser);
-   const regResponse = await registrationOptions(rpID, rpOrigin, verifiedUser, 'recover');
-
-   if (verifiedUser.prf) {
-      const recoverInfo = regResponse.content as ResponseTypes.RecoverInfo;
-      recoverInfo.prf = true;
-      recoverInfo.userCredEnc = verifiedUser.userCredEnc;
-   }
-
    response.content = regResponse.content;
    return response;
 }
@@ -2076,21 +1963,6 @@ const METHODMAP: MethodMap = {
          authorize: false,
          handler: postRecover3,
       },
-      // BACKWARD COMPAT: until clients update to call postRecover3 directly
-      {
-         name: 'postRecover2Challenge',
-         pattern: Patterns.recover2Challenge,
-         version: 1,
-         authorize: false,
-         handler: postRecover2Challenge,
-      },
-      {
-         name: 'postRecover2',
-         pattern: Patterns.recover2,
-         version: 1,
-         authorize: false,
-         handler: postRecover2,
-      },
       // Internal only endpoints that are not exposed in cloudfront and require special auth
       {
          name: 'postMunge',
@@ -2123,8 +1995,6 @@ const METHODMAP: MethodMap = {
    ],
    PUT: [
       { name: 'putRecover3Key', pattern: Patterns.recover3Key, version: 1, authorize: true, handler: putRecover3Key },
-      // BACKWARD COMPAT: until clients update to call recover3/key directly
-      { name: 'putRecover2Key', pattern: Patterns.recover2Key, version: 1, authorize: true, handler: putRecover3Key },
    ],
    PATCH: [
       { name: 'patchPasskey', pattern: Patterns.passkey, version: 1, authorize: true, handler: patchPasskey },

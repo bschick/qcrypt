@@ -1,0 +1,159 @@
+<div class="container">
+  <div class="content">
+    <mat-progress-spinner
+      class="lower-spinner"
+      color="primary"
+      mode="indeterminate"
+      [style.visibility]="showProgress ? 'visible' : 'hidden'">
+    </mat-progress-spinner>
+    <h1>Check Recovery Words</h1>
+    <p>
+      Enter a recovery word pattern to confirm it will recover this account. You
+      must enter every word in the original order presented. Quick Crypt uses
+      these words to create a recovery key for comparison. Your recovery pattern
+      is never sent to the server.
+    </p>
+
+    <div class="control-host">
+      <mat-form-field class="recovery">
+        <mat-label>Recovery Word Pattern</mat-label>
+        <textarea
+          #wordsArea
+          id="wordsArea"
+          matInput
+          type="text"
+          spellcheck="false"
+          [formControl]="recoveryWords"
+          class="words-area"></textarea>
+      </mat-form-field>
+      <div class="button-stack">
+        <button
+          class="task-button"
+          mat-raised-button
+          [disabled]="showProgress"
+          (click)="onClickCheck()">
+          Check recovery words
+        </button>
+        @if (result === "match") {
+          <button
+            class="task-button"
+            mat-raised-button
+            [disabled]="showProgress"
+            (click)="onClickPrint()">
+            Print emergency recovery sheet
+          </button>
+        }
+      </div>
+    </div>
+
+    @if (result === "match") {
+      <mat-card appearance="outlined">
+        <mat-card-header>
+          <mat-card-title>
+            <span style="color: green">✓</span> Valid
+          </mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p>
+            These are the correct recovery words for this account and may be
+            used on the
+            <a [routerLink]="'/recovery3'">account recovery page</a>. Keep your
+            recovery words stored in a secure durable location, separate from
+            your passkeys.
+          </p>
+        </mat-card-content>
+      </mat-card>
+    }
+    @if (result === "invalid") {
+      <mat-card appearance="outlined">
+        <mat-card-header>
+          <mat-card-title>
+            <span style="color: darkred">✕</span> Not Valid
+          </mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p>
+            These recovery words are not formatted correctly and cannot recover
+            this account.
+            <b>
+              Confirm every word was entered in the original order and try
+              again.
+            </b>
+            If you've lost your recovery pattern, use the
+            <a [routerLink]="'/regenrecovery'">replace recovery words page</a>
+            to create new words.
+          </p>
+        </mat-card-content>
+      </mat-card>
+    }
+    @if (result === "wrongwords") {
+      <mat-card appearance="outlined">
+        <mat-card-header>
+          <mat-card-title>
+            <span style="color: darkred">✕</span> Not Valid
+          </mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p>
+            These recovery words are incorrect and cannot recover this account.
+            <b>Confirm every word was entered in the original order.</b> If the
+            pattern you entered matches your saved copy, that copy is out of
+            date. Either locate your current recovery words and try again or use
+            the
+            <a [routerLink]="'/regenrecovery'">replace recovery words page</a>
+            to create new words.
+          </p>
+        </mat-card-content>
+      </mat-card>
+    }
+    @if (result === "wronguser") {
+      <mat-card appearance="outlined">
+        <mat-card-header>
+          <mat-card-title>
+            <span style="color: darkred">✕</span> Wrong User Account
+          </mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p>
+            These recovery words belong to a different Quick Crypt account and
+            cannot recover this account. If you have more than one account,
+            locate the recovery words for this user account and try again. If
+            you've lost your recovery pattern, use the
+            <a [routerLink]="'/regenrecovery'">replace recovery words page</a>
+            to create new words.
+          </p>
+        </mat-card-content>
+      </mat-card>
+    }
+    @if (result === "unknown") {
+      <mat-card appearance="outlined">
+        <mat-card-header>
+          <mat-card-title>⚠️ Not Determined</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p>
+            Quick Crypt could not validate these recovery words. This is likely
+            due to a network connectivity problem, so
+            <b>keep these words and check again later.</b>
+            <br />If the problem persists,
+            <a
+              href="https://github.com/bschick/qcrypt/issues/new/choose"
+              target="_blank">
+              report the issue on GitHub
+            </a>
+          </p>
+        </mat-card-content>
+      </mat-card>
+    }
+
+    <div class="error-msg">
+      <p>{{ error }}</p>
+    </div>
+  </div>
+</div>
+@if (sheetUserCred) {
+  <app-recovery-sheet
+    [userName]="authSvc.userName"
+    [recoveryWords]="recoveryWords.value!"
+    [userCred]="sheetUserCred" />
+}

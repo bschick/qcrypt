@@ -72,12 +72,7 @@ describe('PRF account', () => {
          extensions: PRF_EXTENSION,
       });
 
-      const verifyRes = await postJson(
-         '/v1/auth/verify?usercred=true',
-         { ...assertion, challenge: optsRes.data.challenge },
-         {},
-         '',
-      );
+      const verifyRes = await postJson('/v1/auth/verify', { ...assertion, challenge: optsRes.data.challenge }, {}, '');
       expect(verifyRes.status).toBe(200);
       // The login supersedes the registration session, so clean up with the login session.
       cleanup = async () => {
@@ -143,12 +138,12 @@ describe('PRF registration input validation', () => {
       const { userId, body, userCred } = await buildPrfRegBody(`PWTesty_bad_${Date.now()}`);
       const tampered = { ...body };
       mutate(tampered);
-      const bad = await postJson('/v1/reg/verify?usercred=true', tampered, {}, '');
+      const bad = await postJson('/v1/reg/verify', tampered, {}, '');
       expect(bad.status).toBe(401);
 
       // The field is rejected before the challenge is consumed, so the untampered body still
       // completes registration (proving the tamper was the only cause); delete it to leave no account.
-      const ok = await postJson('/v1/reg/verify?usercred=true', body, {}, '');
+      const ok = await postJson('/v1/reg/verify', body, {}, '');
       expect(ok.status).toBe(200);
       setSessionSigner(userId, bytesToBase64(userCred));
       await expectPasskeyDeleted(ok.data.pkId, ok.data.csrf, ok.cookie);

@@ -54,7 +54,7 @@ import { AuthenticatorService, AuthEvent, type LoginUserInfo } from './authentic
 import { BroadcastService } from './broadcast.service';
 import { KEYSTORE_DB_NAME, KeystoreService } from './keystore.service';
 import * as cc from '@qcrypt/crypto/consts';
-import { base64ToBytes, bytesToBase64, cryptoReady, getRandom } from '@qcrypt/crypto';
+import { base64ToBytes, bytesToBase64, cryptoReady, getRandom, hashString } from '@qcrypt/crypto';
 import { CHALLENGE_BYTES, RECOVERYID_BYTES, getUserCredPubKey, recoverySecret } from '@qcrypt/api';
 import { entropyToMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
@@ -88,6 +88,7 @@ describe('AuthenticatorService', () => {
          userCred,
          csrf: 'csrf-token-from-test',
          hasRecoveryId: true,
+         recoveryKeyId: 'recovery-key-id-from-test',
          prf: false,
          authenticators: [
             {
@@ -452,6 +453,87 @@ describe('AuthenticatorService', () => {
          // @ts-expect-error — exercising private path
          await expect(service._loginUser(noMode, base64ToBytes(userCred))).rejects.toThrow();
          expect(service.halted).toBe(false);
+      });
+   });
+
+   describe('recovery words state', () => {
+      beforeEach(async () => {
+         primeLocalStorage();
+         // @ts-expect-error — exercising private path
+         await service._loginUser(sessionResponse, base64ToBytes(userCred));
+         vi.spyOn(service, 'reauthenticate').mockResolvedValue(service.userInfo()!);
+      });
+
+      // Various ways to mock failed server updates
+      function mockRotation(opts: { putFails?: boolean; refreshFails?: boolean; keyOverride?: string } = {}) {
+         let sentPubKey = '';
+         fetchMock.mockImplementation((url: URL, init: RequestInit) => {
+            if (url.pathname.endsWith('/recover3/key')) {
+               sentPubKey = JSON.parse(init.body as string).recoveryPubKey;
+               if (opts.putFails) {
+                  throw new Error('fetch error');
+               }
+            }
+            if (opts.refreshFails && url.pathname.endsWith('/user')) {
+               throw new Error('fetch error');
+            }
+            return {
+               ok: true,
+               json: async () => ({
+                  ...sessionResponse,
+                  recoveryKeyId: opts.keyOverride ?? hashString(sentPubKey),
+               }),
+            };
+         });
+      }
+
+      it('stores words that check out against the key the server reports', async () => {
+         mockRotation();
+
+         await expect(service.changeRecoveryWords()).resolves.toEqual('match');
+         expect(service.hasRecoveryWords()).toBe(true);
+
+         // Re-checking the displayed words proves they derive the key the server now holds
+         await expect(service.checkRecoveryWords(service.consumeRecoveryWords())).resolves.toEqual('match');
+      });
+
+      it('keeps the words when the response is lost but the server committed', async () => {
+         mockRotation({ putFails: true });
+
+         await expect(service.changeRecoveryWords()).resolves.toEqual('match');
+         expect(service.hasRecoveryWords()).toBe(true);
+      });
+
+      it('discards the words when the response is lost and the server did not commit', async () => {
+         mockRotation({ putFails: true, keyOverride: 'a-different-recovery-key-id' });
+
+         await expect(service.changeRecoveryWords()).resolves.toEqual('wrongwords');
+         expect(service.hasRecoveryWords()).toBe(false);
+      });
+
+      it('discards the words when the request succeeds but a different key is stored', async () => {
+         mockRotation({ keyOverride: 'a-different-recovery-key-id' });
+
+         await expect(service.changeRecoveryWords()).resolves.toEqual('wrongwords');
+         expect(service.hasRecoveryWords()).toBe(false);
+      });
+
+      it('keeps the words when the outcome cannot be determined', async () => {
+         mockRotation({ putFails: true, refreshFails: true });
+
+         await expect(service.changeRecoveryWords()).resolves.toEqual('unknown');
+         expect(service.hasRecoveryWords()).toBe(true);
+      });
+
+      it('reports words that are not a valid pattern', async () => {
+         await expect(service.checkRecoveryWords('not actually a word pattern')).resolves.toEqual('invalid');
+      });
+
+      it('reports a valid pattern belonging to another account', async () => {
+         const otherUserId = bytesToBase64(getRandom(cc.USERID_BYTES));
+         const otherWords = entropyToMnemonic(recoverySecret(getRandom(RECOVERYID_BYTES), otherUserId), wordlist);
+
+         await expect(service.checkRecoveryWords(otherWords)).resolves.toEqual('wronguser');
       });
    });
 

@@ -1,6 +1,6 @@
 /* MIT License
 
-Copyright (c) 2024 Brad Schick
+Copyright (c) 2026 Brad Schick
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -21,86 +21,61 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { Component, type OnDestroy, type OnInit } from '@angular/core';
-import { MatIconModule } from '@angular/material/icon';
-import { MatButtonModule } from '@angular/material/button';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { ClipboardModule } from '@angular/cdk/clipboard';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { MatInputModule } from '@angular/material/input';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { AuthEvent, AuthenticatorService } from '../services/authenticator.service';
-import { Subscription } from 'rxjs';
+import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
-import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { Subscription } from 'rxjs';
 import { bytesToBase64 } from '@qcrypt/crypto';
+import { AuthEvent, AuthenticatorService, type RecoveryWordsState } from '../services/authenticator.service';
 import { RecoverySheetComponent } from '../ui/recoverysheet/recoverysheet.component';
 
-// Browsers name a "Save as PDF" print after the document title
 const SHEET_TITLE = 'quick_crypt_account_recovery';
 
 @Component({
-   selector: 'app-show-recovery',
-   templateUrl: './showrecovery.component.html',
-   styleUrl: './showrecovery.component.scss',
+   selector: 'app-checkrecovery',
+   templateUrl: './checkrecovery.component.html',
+   styleUrl: './checkrecovery.component.scss',
    imports: [
-      MatIconModule,
-      MatButtonModule,
-      ClipboardModule,
+      ReactiveFormsModule,
       RouterLink,
-      MatInputModule,
+      MatButtonModule,
       MatCardModule,
       MatFormFieldModule,
-      FormsModule,
-      ReactiveFormsModule,
+      MatInputModule,
+      MatProgressSpinnerModule,
       RecoverySheetComponent,
    ],
 })
-export class ShowRecoveryComponent implements OnInit, OnDestroy {
+export class CheckRecoveryComponent implements OnInit, OnDestroy {
+   public showProgress = false;
    public error = '';
-   public replacedLink = false;
-   public replacedWords = false;
-   public unconfirmed = false;
+   public result?: RecoveryWordsState;
    public sheetUserCred = '';
-   private authSub!: Subscription;
-   private _priorTitle?: string;
    public recoveryWords = new FormControl<string>('');
+   private _authSub!: Subscription;
+   private _priorTitle?: string;
 
    constructor(
       public authSvc: AuthenticatorService,
       private router: Router,
-      private snackBar: MatSnackBar,
    ) {}
 
    ngOnInit() {
-      // True when these recovery words just replaced an old recovery link or
-      // a previous set of recovery words.
-      this.replacedLink = !!history.state?.replacedLink;
-      this.replacedWords = !!history.state?.replacedWords;
-      this.unconfirmed = !!history.state?.unconfirmed;
-
-      this.authSub = this.authSvc.on([AuthEvent.Logout], () => {
+      this._authSub = this.authSvc.on([AuthEvent.Logout], () => {
          this.error = '';
          this.router.navigateByUrl('/');
       });
-
-      this.reloadData();
-   }
-
-   reloadData() {
-      this.error = '';
-
-      if (this.authSvc.hasRecoveryWords()) {
-         this.recoveryWords.setValue(this.authSvc.consumeRecoveryWords());
-      } else {
-         this.router.navigateByUrl('/regenrecovery');
-      }
    }
 
    ngOnDestroy() {
       this.recoveryWords.setValue('');
       this._clearSheet();
-      if (this.authSub) {
-         this.authSub.unsubscribe();
+      if (this._authSub) {
+         this._authSub.unsubscribe();
       }
    }
 
@@ -139,19 +114,23 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
       window.removeEventListener('afterprint', this._clearSheet);
    };
 
-   toastMessage(msg: string) {
-      this.snackBar.open(msg, '', {
-         duration: 2000,
-      });
-   }
+   onClickCheck() {
+      this.error = '';
+      this.result = undefined;
+      const words = this.recoveryWords.value;
 
-   onClickSaved() {
-      // If the user previous didn't have a recoveryId, refresh the user
-      // so the warning doesn't show. If the user refreshes the page without
-      // clicking, keeping showing to warning to encourage saving
-      if (!this.authSvc.hasRecoveryId()) {
-         // let this happen async
-         this.authSvc.refreshUserInfo().catch((err) => console.error(err));
+      if (words) {
+         this.showProgress = true;
+         this.authSvc
+            .checkRecoveryWords(words)
+            .then((state) => (this.result = state))
+            .catch((err) => {
+               console.error(err);
+               this.error = 'Could not validate recovery words, check your connection and try again';
+            })
+            .finally(() => (this.showProgress = false));
+      } else {
+         this.error = 'Enter your recovery words to check them';
       }
    }
 }

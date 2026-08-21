@@ -51,6 +51,12 @@ export const routes: Routes = [
       canActivate: [showRecoveryGuard],
    },
    {
+      path: 'checkrecovery',
+      loadComponent: () =>
+         guardedImport(() => import('./checkrecovery/checkrecovery.component').then((m) => m.CheckRecoveryComponent)),
+      canActivate: [showRecoveryGuard],
+   },
+   {
       path: 'recovery',
       loadComponent: () =>
          guardedImport(() => import('./recovery/recovery.component').then((m) => m.RecoveryComponent)),

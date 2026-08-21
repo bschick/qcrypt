@@ -32,7 +32,7 @@ body {
 // Printing anywhere in the app yields only the backup sheet, never the surrounding chrome
 @media print {
   @page {
-    margin: 15mm;
+    margin: 15mm 15mm;
   }
 
   // Dropped from layout rather than hidden: anything still occupying space keeps the

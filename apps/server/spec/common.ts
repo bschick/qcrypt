@@ -39,6 +39,7 @@ import {
    bytesToBase64,
    base64ToBytes,
    getRandom,
+   hashString,
    MasterKeyKeyProvider,
    encryptStream,
    decryptStream,
@@ -348,7 +349,7 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
          prfOutput,
       } = await buildPrfRegBody(userName);
 
-      const verifyRes = await postJson(`/v1/reg/verify?usercred=true`, body, {}, '');
+      const verifyRes = await postJson('/v1/reg/verify', body, {}, '');
       expect(verifyRes.status).toBe(200);
       expect(verifyRes.data.verified).toBe(true);
       expect(verifyRes.data.prf).toBe(true);
@@ -356,6 +357,7 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
       expect(verifyRes.data.userCred).toBeUndefined();
       expect(verifyRes.data.csrf).toBeDefined();
       expect(verifyRes.data.pkId).toBeDefined();
+      expect(verifyRes.data.recoveryKeyId).toEqual(hashString(getRecoveryPubKey(secret)));
       expect(verifyRes.cookie).toBeTruthy();
 
       user = {
@@ -396,12 +398,13 @@ export async function registerTestUser(userName: string, prf: boolean = false): 
          challenge: regOpts.data.challenge,
          recoveryPubKey: getRecoveryPubKey(secret),
       };
-      const verifyRes = await postJson(`/v1/reg/verify?usercred=true`, body, {}, '');
+      const verifyRes = await postJson('/v1/reg/verify', body, {}, '');
       expect(verifyRes.status).toBe(200);
       expect(verifyRes.data.verified).toBe(true);
       expect(verifyRes.data.csrf).toBeDefined();
       expect(verifyRes.data.pkId).toBeDefined();
       expect(verifyRes.data.userCred).toBeDefined();
+      expect(verifyRes.data.recoveryKeyId).toEqual(hashString(getRecoveryPubKey(secret)));
       expect(verifyRes.cookie).toBeTruthy();
 
       user = {

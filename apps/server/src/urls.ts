@@ -84,16 +84,6 @@ export const Patterns = {
    recover: new URLPattern({
       pathname: `/v:ver/recover`,
    }),
-   recover2: new URLPattern({
-      pathname: `/v:ver/recover2`,
-   }),
-   recover2Challenge: new URLPattern({
-      pathname: `/v:ver/recover2/challenge`,
-   }),
-   // BACKWARD COMPAT: until clients update to call recover3/key directly
-   recover2Key: new URLPattern({
-      pathname: `/v:ver/recover2/key`,
-   }),
    recover3: new URLPattern({
       pathname: `/v:ver/recover3`,
    }),

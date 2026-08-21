@@ -300,7 +300,7 @@ removed and the account with it.
 
 - `userId` (string): The unique identifier for the user.
 - `userName` (string): The user's chosen name.
-- `hasRecoveryId` (boolean): `true` for recovery words, `false` for the original recovery link.
+- `recoveryKeyId` (string, optional): A hash of the stored recovery public key, absent for an account still on the original recovery link. Client can use `recoveryKeyId` to confirm a match with the server held recovery key.
 - `prf` (boolean): Whether the account generated and encrypts the user credential locally.
 - `authenticators` (array of [`AuthenticatorInfo`](#authenticatorinfo) objects): A list of the user's authenticators.
 

@@ -29,18 +29,19 @@ testWithAuth('emergency backup sheet prints both recovery values', async ({ auth
       };
    });
 
-   await page.getByRole('button', { name: 'Print an emergency recovery' }).click();
+   await page.getByRole('button', { name: 'Print emergency recovery sheet' }).click();
 
    // Both values belong on one sheet: the words alone die with the account, and the
    // credential alone is what still decrypts after it is gone
    const sheet = page.locator('.print-sheet');
    await expect(sheet).toContainText(recoveryWords);
    await expect(sheet).toContainText(testUser.userCred);
-   await expect(sheet).toContainText('never be changed');
+   // Printed on paper, so the link has to keep resolving after the id is out of our hands
+   await expect(sheet).toContainText('/help/faqs/bad');
 
    await expect
       .poll(() => page.evaluate(() => (window as unknown as PrintProbe).printTitle))
-      .toBe('quick_crypt_emergency_backup');
+      .toBe('quick_crypt_account_recovery');
 
    await page.emulateMedia({ media: 'print' });
 

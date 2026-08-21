@@ -7,8 +7,6 @@ import {
    getRecoveryPubKey,
    createRecoveryProof,
    verifyRecoveryProof,
-   createRecoveryProofBackwardCompat,
-   verifyRecoveryProofBackwardCompat,
 } from './proof';
 
 // Public keys derived from the fixed secret bytes 0..31, pinned to catch any
@@ -106,63 +104,6 @@ describe('userCred proof', () => {
    });
 });
 
-describe('recovery proof', () => {
-   let userId: string;
-   let challenge: string;
-
-   beforeEach(async () => {
-      await cryptoReady();
-      userId = bytesToBase64(getRandom(16));
-      challenge = bytesToBase64(getRandom(32));
-   });
-
-   it('sign challenge and verify with derived public key', () => {
-      const secret = getRandom(32);
-      const pubKey = getRecoveryPubKey(secret);
-      const signature = createRecoveryProofBackwardCompat(secret, userId, challenge);
-      expect(verifyRecoveryProofBackwardCompat(pubKey, userId, challenge, signature)).toBe(true);
-   });
-
-   it('derives the pinned public key for a fixed secret', () => {
-      const secret = new Uint8Array(32);
-      for (let pos = 0; pos < secret.length; pos++) {
-         secret[pos] = pos;
-      }
-      // Client and server derive this independently; they must produce identical bytes.
-      expect(getRecoveryPubKey(secret)).toBe(RECOVERY_VECTOR);
-   });
-
-   it('throw when signed fields differ', () => {
-      const secret = getRandom(32);
-      const pubKey = getRecoveryPubKey(secret);
-      const signature = createRecoveryProofBackwardCompat(secret, userId, challenge);
-      const otherUserId = bytesToBase64(getRandom(16));
-      const otherChallenge = bytesToBase64(getRandom(32));
-      expect(() => verifyRecoveryProofBackwardCompat(pubKey, otherUserId, challenge, signature)).toThrow();
-      expect(() => verifyRecoveryProofBackwardCompat(pubKey, userId, otherChallenge, signature)).toThrow();
-   });
-
-   it('throw when the wrong public key is used', () => {
-      const signature = createRecoveryProofBackwardCompat(getRandom(32), userId, challenge);
-      const otherPubKey = getRecoveryPubKey(getRandom(32));
-      expect(() => verifyRecoveryProofBackwardCompat(otherPubKey, userId, challenge, signature)).toThrow();
-   });
-
-   it('throw when the signature is manipulated', () => {
-      const secret = getRandom(32);
-      const pubKey = getRecoveryPubKey(secret);
-      const signature = flipSigBit(createRecoveryProofBackwardCompat(secret, userId, challenge));
-      expect(() => verifyRecoveryProofBackwardCompat(pubKey, userId, challenge, signature)).toThrow();
-   });
-
-   it('does not collide with the userCred proof for the same secret', () => {
-      const secret = getRandom(32);
-      const recoveryPubKey = getRecoveryPubKey(secret);
-      const userCredPubKey = getUserCredPubKey(secret);
-      expect(recoveryPubKey).not.toBe(userCredPubKey);
-   });
-});
-
 describe('recovery nonce proof', () => {
    let userId: string;
    let timestamp: string;
@@ -180,6 +121,22 @@ describe('recovery nonce proof', () => {
       const pubKey = getRecoveryPubKey(secret);
       const signature = createRecoveryProof(secret, userId, timestamp, nonce);
       expect(verifyRecoveryProof(pubKey, userId, timestamp, nonce, signature)).toBe(true);
+   });
+
+   it('derives the pinned public key for a fixed secret', () => {
+      const secret = new Uint8Array(32);
+      for (let pos = 0; pos < secret.length; pos++) {
+         secret[pos] = pos;
+      }
+      // Client and server derive this independently; they must produce identical bytes.
+      expect(getRecoveryPubKey(secret)).toBe(RECOVERY_VECTOR);
+   });
+
+   it('does not collide with the userCred proof for the same secret', () => {
+      const secret = getRandom(32);
+      const recoveryPubKey = getRecoveryPubKey(secret);
+      const userCredPubKey = getUserCredPubKey(secret);
+      expect(recoveryPubKey).not.toBe(userCredPubKey);
    });
 
    it('throw when signed fields differ', () => {
@@ -217,14 +174,5 @@ describe('recovery nonce proof', () => {
       const secret = getRandom(32);
       const shortUserId = bytesToBase64(getRandom(15));
       expect(() => createRecoveryProof(secret, shortUserId, timestamp, nonce)).toThrow();
-   });
-
-   // A signature over the old message must not verify under the new one, or a captured
-   // challenge-signed proof could be redeemed as a nonce-signed one.
-   it('does not accept a proof made for the challenge message', () => {
-      const secret = getRandom(32);
-      const pubKey = getRecoveryPubKey(secret);
-      const signature = createRecoveryProofBackwardCompat(secret, userId, nonce);
-      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, signature)).toThrow();
    });
 });

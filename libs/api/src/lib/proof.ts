@@ -27,8 +27,6 @@ const USERCRED_KEY_CONTEXT = 'UCredKey';
 const USERCRED_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
 
 const RECOVERY_KEY_CONTEXT = 'RecovKey';
-// BACKWARD COMPAT: until clients update to call postRecover3 directly
-const RECOVERY_BACKWARD_COMPAT_SIG_CONTEXT = 'qcrypt/recovery/proof/v1';
 const RECOVERY_SIG_CONTEXT = 'qcrypt/recovery/nonce/v1';
 
 export const RECOVERYID_BYTES = 16;
@@ -114,18 +112,6 @@ export function recoverySecret(recoveryId: Uint8Array, userId: string): Uint8Arr
    return concatArrays([recoveryId, base64ToBytes(userId)]);
 }
 
-// BACKWARD COMPAT: until clients update to call postRecover3 directly
-function buildRecoveryMessageBackwardCompat(userId: string, challenge: string): Uint8Array<ArrayBuffer> {
-   if (base64ToBytes(userId).byteLength !== cc.USERID_BYTES) {
-      throw new Error('invalid userId length');
-   }
-   if (base64ToBytes(challenge).byteLength !== CHALLENGE_BYTES) {
-      throw new Error('invalid challenge length');
-   }
-   const message = [userId, challenge].join('\n');
-   return new TextEncoder().encode(message);
-}
-
 function buildRecoveryMessage(userId: string, timestampMs: string, nonce: string): Uint8Array<ArrayBuffer> {
    if (base64ToBytes(userId).byteLength !== cc.USERID_BYTES) {
       throw new Error('invalid userId length');
@@ -141,41 +127,6 @@ export function getRecoveryPubKey(recoverySecret: Uint8Array): string {
    const { pubKey, secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
    secKey.fill(0);
    return bytesToBase64(pubKey);
-}
-
-// BACKWARD COMPAT: until clients update to call postRecover3 directly
-export function createRecoveryProofBackwardCompat(
-   recoverySecret: Uint8Array,
-   userId: string,
-   challenge: string,
-): string {
-   const { secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
-   try {
-      return bytesToBase64(
-         createProof(
-            secKey,
-            buildRecoveryMessageBackwardCompat(userId, challenge),
-            RECOVERY_BACKWARD_COMPAT_SIG_CONTEXT,
-         ),
-      );
-   } finally {
-      secKey.fill(0);
-   }
-}
-
-// BACKWARD COMPAT: until clients update to call postRecover3 directly
-export function verifyRecoveryProofBackwardCompat(
-   pubKey: string,
-   userId: string,
-   challenge: string,
-   signature: string,
-): boolean {
-   return verifyProof(
-      base64ToBytes(pubKey),
-      buildRecoveryMessageBackwardCompat(userId, challenge),
-      base64ToBytes(signature),
-      RECOVERY_BACKWARD_COMPAT_SIG_CONTEXT,
-   );
 }
 
 export function createRecoveryProof(

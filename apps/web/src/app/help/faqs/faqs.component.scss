@@ -10,6 +10,16 @@
     justify-content: space-between;
   }
 
+  .all-faqs-btn {
+    margin-bottom: 20px;
+    font-size: 15px;
+    color: #444;
+
+    mat-icon {
+      margin-right: 4px;
+    }
+  }
+
   .search-field {
     @include search.field;
     margin-bottom: 20px;
@@ -39,7 +49,44 @@
   }
 
   .mat-column-position {
-    width: 58px;
+    width: 44px;
+    padding-right: 0;
+  }
+
+  .question-cell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .question-text {
+    flex: 1;
+  }
+
+  .faq-link-btn {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.35;
+    color: #555;
+    transition: opacity 150ms ease, color 150ms ease;
+
+    &:hover {
+      opacity: 1;
+      color: #8a8fb2;
+    }
+
+    .link-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
   }
 
   tr.detail-row {
@@ -50,6 +97,15 @@
     .mat-column-position,
     .mat-column-question {
       background-color: white;
+    }
+
+    .faq-link-btn {
+      opacity: 0.75;
+
+      &:hover {
+        opacity: 1;
+        color: #4d5382;
+      }
     }
   }
 
@@ -109,37 +165,30 @@
     border-color: #ccc;
     border-spacing: 0;
 
-    td {
-      background-color: #fff;
-      border-color: #ccc;
-      border-style: solid;
-      border-width: 1px;
+    td,
+    th {
+      border: 1px solid #ccc;
       color: #333;
       font-size: 15px;
       overflow: hidden;
       padding: 10px 5px;
       word-break: normal;
     }
+
+    td {
+      background-color: #fff;
+    }
+
     th {
       background-color: #f0f0f0;
-      border-color: #ccc;
-      border-style: solid;
-      border-width: 1px;
-      color: #333;
-      font-size: 15px;
       font-weight: normal;
-      overflow: hidden;
-      padding: 10px 5px;
-      word-break: normal;
     }
 
     .tg-fymr {
-      border-color: inherit;
       font-weight: bold;
-      text-align: left;
-      vertical-align: top;
     }
 
+    .tg-fymr,
     .tg-0pky {
       border-color: inherit;
       text-align: left;

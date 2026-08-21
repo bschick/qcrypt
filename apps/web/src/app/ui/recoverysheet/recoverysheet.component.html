@@ -1,0 +1,46 @@
+<div class="print-sheet">
+  <h2>Quick Crypt Recovery Information</h2>
+  <p>
+    This information is needed to recover your account and decrypt your data if
+    you lose access to your Quick Crypt passkeys.
+    <b>
+      Print and store this sheet offline somewhere that is physically secure and
+      durable, such as a lockbox. Do not allow others to access this recovery
+      sheet.
+    </b>
+  </p>
+
+  <h3>User Name</h3>
+  <p class="sheet-value">{{ userName }}</p>
+  <p>
+    The name above was the user name for this account when this sheet was
+    printed. It may have been changed since. You can print a new recovery sheet
+    at {{ host }}/checkrecovery
+  </p>
+
+  <h3>Recovery Word Pattern</h3>
+  <p class="sheet-value">{{ recoveryWords }}</p>
+  <p>
+    This word pattern allows you to restore your account if you lose access to
+    all your Quick Crypt passkeys. To restore your account, go to
+    {{ host }}/recovery3 and enter the words in the exact order they appear
+    above.
+  </p>
+
+  <h3>User Credential</h3>
+  <p class="sheet-value">{{ userCred }}</p>
+  <p>
+    Your user credential, along with your encryption passwords, is used to
+    create the keys that encrypt and decrypt your data. Normally you do not need
+    to know your user credential, but it is provided here for offline storage in
+    case your Quick Crypt account is unintentionally deleted. If that ever
+    happens, you can use the credential above with the Quick Crypt command-line
+    tool to decrypt your data.
+  </p>
+  <h3>⚠️ Warning</h3>
+  <p>
+    If someone you do not trust gains access to this recovery sheet, your data
+    becomes less secure and relies solely on the strength of your encryption
+    passwords. For more information, see {{ host }}/help/faqs/bad
+  </p>
+</div>
