@@ -1,100 +1,122 @@
 <div class="container">
-  <div class="content">
-    <h1>Quick Crypt: <i>Easy, Trustworthy Personal Encryption</i></h1>
-    <p>We created Quick Crypt to make it safe and convenient to encrypt sensitive
-      data you want to store in insecure locations while remaining anonymous. Storing
-      confidential information
-      in note taking applications, planning tools, online documents, or similar
-      tools is convenient but risky. Quick Crypt's primary author wanted to store
-      sensitive information in a note taking application and not be limited to the
-      few services that provide end-to-end encryption. Even online tools that support
-      encryption often do not define their protocols and track your identity, making
-      them hard to trust.
-      Installable encryption tools like OpenSSL are powerful and trustworthy but
-      tedious to use, upgrade, and remember. Strong encryption that you don't use
-      isn't all that good in the end.
-    </p>
-    <p>Thus, Quick Crypt. A small-batch cipher tool designed to be
-      easy to use, trustworthy, and convenient. Just paste text or select a file you want
-      to keep confidential and click the Encrypt button. Quick Crypt is built on trusted
-      <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'which cipher'}">
-        cryptographic algorithms</a> and <a [routerLink]="'/help/protocol'">
-        reviewed protocols</a>.
-      Encryption and decryption are performed by cryptographic functions available in
-      modern browsers, ensuring your <b>confidential data never leaves your system</b>.
-      Data protection even works with network access disabled. AEAD symmetric
-      ciphers, passwords you supply, ephemeral keys, and passkey-protected credentials
-      deliver confidentiality, integrity, authenticity, and website forgery protection.
-      A recent passkey enhancement strengthens this, keeping everything needed to
-      unlock your data on your device and your passkey. Quick Crypt's servers have
-      access to none of it.
-    </p>
-    <p>We designed Quick Crypt to make it easy to encrypt data and to decrypt that
-      data days or years later without needing to remember or install complicated
-      tools. Quick Crypt's cipher armor format provides an optional reminder or
-      link to the decryption page, so you only need to remember the password you
-      used during encryption and have your passkey. Understanding how Quick Crypt
-      works is optional, but if you are interested, the
-      <a [routerLink]="'/help/protocol'">protocols are documented</a>, many
-      <a [routerLink]="'/help/faqs'">questions are answered</a>,
-      and the <a href="https://github.com/bschick/qcrypt" target="_blank">code
-        and test cases are open source</a> under the MIT license. Bug reports and pull requests are
-      welcome.
-    </p>
+   <div class="content">
+      <h1>
+         Quick Crypt:
+         <i>Easy, Trustworthy Personal Encryption</i>
+      </h1>
+      <p>
+         We created Quick Crypt to make it safe and convenient to encrypt sensitive data you want to store in insecure
+         locations while remaining anonymous. Storing confidential information in note taking applications, planning
+         tools, online documents, or similar tools is convenient but risky. Quick Crypt's primary author wanted to store
+         sensitive information in a note taking application and not be limited to the few services that provide
+         end-to-end encryption. Even online tools that support encryption often do not define their protocols and track
+         your identity, making them hard to trust. Installable encryption tools like OpenSSL are powerful and
+         trustworthy but tedious to use, upgrade, and remember. Strong encryption that you don't use isn't all that good
+         in the end.
+      </p>
+      <p>
+         Thus, Quick Crypt. A small-batch cipher tool designed to be easy to use, trustworthy, and convenient. Just
+         paste text or select a file you want to keep confidential and click the Encrypt button. Quick Crypt is built on
+         trusted
+         <a [routerLink]="'/help/faqs'" [queryParams]="{ search: 'which cipher' }">cryptographic algorithms</a>
+         and
+         <a [routerLink]="'/help/protocol'">reviewed protocols</a>
+         . Encryption and decryption are performed by cryptographic functions available in modern browsers, ensuring
+         your
+         <b>confidential data never leaves your system</b>
+         . Data protection even works with network access disabled. AEAD symmetric ciphers, passwords you supply,
+         ephemeral keys, and passkey-protected credentials deliver confidentiality, integrity, authenticity, and website
+         forgery protection. A recent passkey enhancement strengthens this, keeping everything needed to unlock your
+         data on your device and your passkey. Quick Crypt's servers have access to none of it.
+      </p>
+      <p>
+         We designed Quick Crypt to make it easy to encrypt data and to decrypt that data days or years later without
+         needing to remember or install complicated tools. Quick Crypt's cipher armor format provides an optional
+         reminder or link to the decryption page, so you only need to remember the password you used during encryption
+         and have your passkey. Understanding how Quick Crypt works is optional, but if you are interested, the
+         <a [routerLink]="'/help/protocol'">protocols are documented</a>
+         , many
+         <a [routerLink]="'/help/faqs'">questions are answered</a>
+         , and the
+         <a href="https://github.com/bschick/qcrypt" target="_blank">code and test cases are open source</a>
+         under the MIT license. Bug reports and pull requests are welcome.
+      </p>
 
-    <h2>Design Goals</h2>
-    <ul>
-      <li>Easy to use and hard to screw up</li>
-      <li>Optimized for encrypting your own data rather than for sharing</li>
-      <li>Nothing to install, and works on most devices</li>
-      <li>Your unencrypted data and passwords never leave your system</li>
-      <li>Secure recovery from lost passkeys</li>
-      <li>Encryption options constrained to secure values</li>
-      <li>Follows current cryptographic best practices</li>
-      <li>Well defined and <a [routerLink]="'/help/protocol'">documented protocols</a></li>
-      <li>After sign-in, works fully offline</li>
-      <li>Uses trusted AEAD symmetric ciphers (AES 256 GCM, XChaCha20 Poly1305, AEGIS 256)
-      <li>Uses the latest web security protocols (csp, cors, sri, hsts, xfo, csrf, corp, etc.)</li>
-      <li>Keep an <a href="https://developer.mozilla.org/en-US/observatory/analyze?host=quickcrypt.org"
-          target="_blank">A+ rating from MDN Observatory</a></li>
-      <li>No advertisements or tracker cookies</li>
-      <li>No personally identifiable information (PII) collected</li>
-      <li><a href="https://github.com/bschick/qcrypt" target="_blank">Open source</a> for peer review of these goals
-      </li>
-    </ul>
+      <h2>Design Goals</h2>
+      <ul>
+         <li>Easy to use and hard to screw up</li>
+         <li>Optimized for encrypting your own data rather than for sharing</li>
+         <li>Nothing to install, and works on most devices</li>
+         <li>Your unencrypted data and passwords never leave your system</li>
+         <li>Secure recovery from lost passkeys</li>
+         <li>Encryption options constrained to secure values</li>
+         <li>Follows current cryptographic best practices</li>
+         <li>
+            Well defined and
+            <a [routerLink]="'/help/protocol'">documented protocols</a>
+         </li>
+         <li>After sign-in, works fully offline</li>
+         <li>Uses trusted AEAD symmetric ciphers (AES 256 GCM, XChaCha20 Poly1305, AEGIS 256)</li>
+         <li>Uses the latest web security protocols (csp, cors, sri, hsts, xfo, csrf, corp, etc.)</li>
+         <li>
+            Keep an
+            <a href="https://developer.mozilla.org/en-US/observatory/analyze?host=quickcrypt.org" target="_blank">
+               A+ rating from MDN Observatory
+            </a>
+         </li>
+         <li>No advertisements or tracker cookies</li>
+         <li>No personally identifiable information (PII) collected</li>
+         <li>
+            <a href="https://github.com/bschick/qcrypt" target="_blank">Open source</a>
+            for peer review of these goals
+         </li>
+      </ul>
 
-    <h2>Bundled Javascript Libraries</h2>
-    <ul>
-      <li><a href="https://angular.io/" target="_blank">angular</a></li>
-      <li><a href="https://github.com/jedisct1/libsodium.js" target="_blank">libsodium.js</a></li>
-      <li><a href="https://simplewebauthn.dev/" target="_blank">simplewebauthn</a></li>
-      <li><a href="https://github.com/paulmillr/scure-bip39" target="_blank">scure-bip39</a></li>
-      <li><a href="https://rxjs.dev/" target="_blank">rxjs</a></li>
-      <li><a href="https://github.com/microsoft/tslib" target="_blank">tslib</a></li>
-      <li><a href="https://zxcvbn-ts.github.io/zxcvbn/" target="_blank">zxcvbn-ts</a></li>
-    </ul>
+      <h2>Bundled Javascript Libraries</h2>
+      <ul>
+         <li><a href="https://angular.io/" target="_blank">angular</a></li>
+         <li>
+            <a href="https://github.com/jedisct1/libsodium.js" target="_blank">libsodium.js</a>
+         </li>
+         <li>
+            <a href="https://simplewebauthn.dev/" target="_blank">simplewebauthn</a>
+         </li>
+         <li>
+            <a href="https://github.com/celabshq/libcrux" target="_blank">libcrux</a>
+         </li>
+         <li>
+            <a href="https://github.com/paulmillr/scure-bip39" target="_blank">scure-bip39</a>
+         </li>
+         <li><a href="https://rxjs.dev/" target="_blank">rxjs</a></li>
+         <li>
+            <a href="https://github.com/microsoft/tslib" target="_blank">tslib</a>
+         </li>
+         <li>
+            <a href="https://zxcvbn-ts.github.io/zxcvbn/" target="_blank">zxcvbn-ts</a>
+         </li>
+      </ul>
 
-    <h2>Optional External Dependencies</h2>
-    <ul>
-      <li><a href="https://haveibeenpwned.com/API/v2" target="_blank">haveibeenpwned.com</a></li>
-    </ul>
+      <h2>Optional External Dependencies</h2>
+      <ul>
+         <li>
+            <a href="https://haveibeenpwned.com/API/v2" target="_blank">haveibeenpwned.com</a>
+         </li>
+      </ul>
 
-    <h2>Author and Release History</h2>
-    <p>
-      Quick Crypt was created by
-      <a href="https://www.linkedin.com/in/schickb/" target="_blank">Brad Schick</a>
-      as a hobby project, initially for personal use and then shared with others. Quick
-      Crypt and its source code are Copyright {{copyright}}. The primary author
-      Brad Schick's past and
-      current employers have no rights or responsibilities for this site, its code, or
-      its content. The source code for
-      <a href="https://github.com/bschick/qcrypt" target="_blank">this site and its back-end</a>
-      are available under the MIT license.
-    </p>
-    <p>
-      <a href="https://github.com/bschick/qcrypt/blob/main/CHANGELOG.md" target="_blank">See the Changelog</a>
-      for release history. This is version {{version}}
-    </p>
-  </div>
+      <h2>Author and Release History</h2>
+      <p>
+         Quick Crypt was created by
+         <a href="https://www.linkedin.com/in/schickb/" target="_blank">Brad Schick</a>
+         as a hobby project, initially for personal use and then shared with others. Quick Crypt and its source code are
+         Copyright {{ copyright }}. The primary author Brad Schick's past and current employers have no rights or
+         responsibilities for this site, its code, or its content. The source code for
+         <a href="https://github.com/bschick/qcrypt" target="_blank">this site and its back-end</a>
+         are available under the MIT license.
+      </p>
+      <p>
+         <a href="https://github.com/bschick/qcrypt/blob/main/CHANGELOG.md" target="_blank">See the Changelog</a>
+         for release history. This is version {{ version }}
+      </p>
+   </div>
 </div>
 <app-copyright />
