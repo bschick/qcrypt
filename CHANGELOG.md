@@ -9,10 +9,11 @@
 
 #### Changes
 
-- more graceful handling of server errors during recovery words change
-- confirm all recovery words changes with recovery key hash (recoveryKeyId)
+- more graceful handling of server errors during recovery word pattern change
+- confirm all recovery word pattern changes with recovery key hash (recoveryKeyId)
 - check for pwned passwords at completion rather than as typed, when enabled
 - known breached passwords are rejected, when check is enabled
+- fixed cli incorrectly detecting piped binary input and empty piped input
 - added permalinks to faqs
 
 #### Security
@@ -21,7 +22,7 @@
 - added notice to migrate from v4 encrypted multi-block data to current protocol version
 - removed superseded /recover2 server API
 - cli security improvements [thanks to Rajat Shukla (@rajat4722)]
-- cli --outfile no longer overwriting without --force
+- cli --outfile no longer overwrites without --force
 - updated packages
 
 ## 7.4.0 (2026-08-13)

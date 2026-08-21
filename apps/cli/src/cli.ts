@@ -66,6 +66,8 @@ function showAnswered(message: string, answer: string, io: IO): void {
 
 async function peekBinary(source: Readable): Promise<{ pipedIn: ReadableStream<Uint8Array>; binaryIn: boolean }> {
    const firstChunk: Buffer = await new Promise((resolve) => {
+      // An empty source never becomes readable, so end has to resolve this too
+      source.once('end', () => resolve(Buffer.alloc(0)));
       const tryRead = () => {
          const chunk = source.read(16);
          if (chunk) {
@@ -76,7 +78,8 @@ async function peekBinary(source: Readable): Promise<{ pipedIn: ReadableStream<U
       };
       tryRead();
    });
-   const binary = firstChunk.length === 0 || !/^\s*\{/.test(firstChunk.subarray(0, 16).toString('utf-8'));
+   const head = firstChunk.subarray(0, 16).toString('utf-8');
+   const binary = firstChunk.length === 0 || !/^\s*\{\s*"[\x20-\x7e]*$/.test(head);
 
    async function* prependedStream() {
       yield firstChunk.subarray(0);

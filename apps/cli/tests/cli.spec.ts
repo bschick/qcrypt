@@ -989,6 +989,21 @@ describe('CLI App', () => {
          expect(result.status).toBe(0);
          expect(result.stdout.trim()).toBe(clearText);
       });
+
+      it('should fail rather than report success on empty piped input', () => {
+         const enc = execCliBin(
+            ['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'],
+            clearText,
+         );
+         expect(enc.status).toBe(0);
+         const good = execCli(['dec', '--cred', userCred, '--silent', '--pwds', 'pass'], enc.stdout);
+         expect(good.status).toBe(0);
+
+         // Exiting 0 here reads as a successful decrypt of nothing
+         const result = execCli(['dec', '--cred', userCred, '--silent', '--pwds', 'pass'], '');
+         expect(result.status).toBe(1);
+         expect(result.stdout).toBe('');
+      });
    });
 
    describe('info command', () => {
