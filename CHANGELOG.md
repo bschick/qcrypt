@@ -1,16 +1,27 @@
 # CHANGELOG.md
 
-## 7.5.0 (2026-08-TBD)
+## 7.5.0 (2026-08-20)
 
 #### Features
 
 - added recovery word pattern validation page
-- allow re-printing of emergency recovery sheet from validation page
+- allow re-printing of emergency recovery sheet from pattern validation page
 
 #### Changes
 
+- more graceful handling of server errors during recovery words change
+- confirm all recovery words changes with recovery key hash (recoveryKeyId)
+- check for pwned passwords at completion rather than as typed, when enabled
+- known breached passwords are rejected, when check is enabled
+- added permalinks to faqs
+
 #### Security
 
+- locked down github action dependencies
+- added notice to migrate from v4 encrypted multi-block data to current protocol version
+- removed superseded /recover2 server API
+- cli security improvements [thanks to Rajat Shukla (@rajat4722)]
+- cli --outfile no longer overwriting without --force
 - updated packages
 
 ## 7.4.0 (2026-08-13)
