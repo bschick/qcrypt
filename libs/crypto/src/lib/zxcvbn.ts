@@ -22,6 +22,7 @@ SOFTWARE. */
 
 import type { zxcvbnAsync, zxcvbnOptions } from '@zxcvbn-ts/core';
 import type { Matcher } from '@zxcvbn-ts/core/dist/types';
+import type { haveIBeenPwned } from '@zxcvbn-ts/matcher-pwned';
 
 // Lazy-loads the @zxcvbn-ts/* dictionary chunks so they land in their own
 // chunks instead of inflating main.
@@ -29,11 +30,11 @@ import type { Matcher } from '@zxcvbn-ts/core/dist/types';
 type ZxcvbnBundle = {
    zxcvbnAsync: typeof zxcvbnAsync;
    zxcvbnOptions: typeof zxcvbnOptions;
+   pwnedLookup: typeof haveIBeenPwned;
 };
 
 let _zxcvbnReady: Promise<ZxcvbnBundle> | undefined;
 let _bundle: ZxcvbnBundle | undefined;
-let _pwnedMatcher: Matcher | undefined;
 
 export function zxcvbnReady(): Promise<ZxcvbnBundle> {
    if (!_zxcvbnReady) {
@@ -53,8 +54,11 @@ export function zxcvbnReady(): Promise<ZxcvbnBundle> {
             graphs: common.adjacencyGraphs,
             useLevenshteinDistance: true,
          });
-         _pwnedMatcher = pwned.matcherPwnedFactory(fetch, core.zxcvbnOptions);
-         _bundle = { zxcvbnAsync: core.zxcvbnAsync, zxcvbnOptions: core.zxcvbnOptions };
+         _bundle = {
+            zxcvbnAsync: core.zxcvbnAsync,
+            zxcvbnOptions: core.zxcvbnOptions,
+            pwnedLookup: pwned.haveIBeenPwned,
+         };
          return _bundle;
       })();
    }
@@ -68,14 +72,14 @@ export function getZxcvbn(): ZxcvbnBundle {
    return _bundle;
 }
 
-export async function checkPwned(check: boolean): Promise<void> {
-   const { zxcvbnOptions } = await zxcvbnReady();
-   if (check) {
-      if (!zxcvbnOptions.matchers['pwned'] && _pwnedMatcher) {
-         zxcvbnOptions.addMatcher('pwned', _pwnedMatcher);
-      }
-   } else {
-      delete zxcvbnOptions.matchers['pwned'];
+// Fails open: an unreachable service reports the password as not breached rather than throwing
+export async function isPwned(password: string): Promise<boolean> {
+   try {
+      const { pwnedLookup } = await zxcvbnReady();
+      return !!(await pwnedLookup(password, { universalFetch: fetch }));
+   } catch (err) {
+      console.error(err);
+      return false;
    }
 }
 

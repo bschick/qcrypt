@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import type { Matcher } from '@zxcvbn-ts/core/dist/types';
-import { zxcvbnReady, getZxcvbn, checkPwned, addMatcher, removeMatcher } from './zxcvbn';
+import { zxcvbnReady, getZxcvbn, isPwned, addMatcher, removeMatcher } from './zxcvbn';
 
 describe('zxcvbn lazy loader', () => {
    // The module caches its loaded state, so the "throws before ready" assertion
@@ -68,21 +68,31 @@ describe('zxcvbn lazy loader', () => {
       expect(zxcvbnOptions.matchers['zxcvbn_spec_test']).toBeUndefined();
    });
 
-   it('checkPwned toggles the pwned matcher', async () => {
+   it('isPwned reports a listed password', async () => {
+      expect(await isPwned('one2many')).toBe(true);
+   });
+
+   it('isPwned returns false for a password the service does not list', async () => {
+      expect(await isPwned(`Xk7$pLm2#qRw9-${crypto.randomUUID()}`)).toBe(false);
+   });
+
+   it('isPwned returns false when the service cannot be reached', async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = (() => Promise.reject(new Error('offline'))) as unknown as typeof fetch;
+      try {
+         expect(await isPwned('Xk7$pLm2#qRw9')).toBe(false);
+      } finally {
+         globalThis.fetch = originalFetch;
+      }
+   });
+
+   it('the pwned matcher is never registered for scoring', async () => {
       const { zxcvbnOptions } = await zxcvbnReady();
-
-      await checkPwned(true);
-      expect(zxcvbnOptions.matchers['pwned']).toBeDefined();
-
-      await checkPwned(false);
       expect(zxcvbnOptions.matchers['pwned']).toBeUndefined();
    });
 
    it('zxcvbnAsync scores a sample password', async () => {
       const { zxcvbnAsync } = await zxcvbnReady();
-      // Don't include pwned matcher — that hits the network.
-      await checkPwned(false);
-
       const result = await zxcvbnAsync('correcthorsebatterystaple');
       expect(result.score).toBeGreaterThanOrEqual(0);
       expect(result.score).toBeLessThanOrEqual(4);
@@ -90,9 +100,6 @@ describe('zxcvbn lazy loader', () => {
 
    it('scores representative passwords with the expected score', async () => {
       const { zxcvbnAsync } = await zxcvbnReady();
-      // Skip pwned to keep the test offline and deterministic.
-      await checkPwned(false);
-
       const cases: Array<{ pwd: string; score: number }> = [
          { pwd: 'password', score: 0 },
          { pwd: '12345678', score: 0 },

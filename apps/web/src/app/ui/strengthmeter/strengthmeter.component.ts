@@ -36,7 +36,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatSliderModule } from '@angular/material/slider';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { zxcvbnReady, getZxcvbn, checkPwned, addMatcher, removeMatcher } from '@qcrypt/crypto';
+import { zxcvbnReady, getZxcvbn, isPwned, addMatcher, removeMatcher } from '@qcrypt/crypto';
 import type { ZxcvbnResult } from '@zxcvbn-ts/core';
 import * as lev from '../../services/levenshtein';
 import type { MatchEstimated, MatchExtended, Match, MatchOptions, Matcher } from '@zxcvbn-ts/core/dist/types';
@@ -48,6 +48,9 @@ const COLORS = [
    'var(--green-pwd-color)',
    'var(--green-pwd-color)',
 ];
+
+const BREACH_WARNING = 'Your password was exposed by a data breach on the Internet.';
+const BREACH_SUGGESTION = 'Add more words that are less common.';
 
 export type AcceptableState = {
    acceptable: boolean;
@@ -81,6 +84,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
    private _currentHint = '';
    private _pwnedChecked = false;
    private _pwnedDone: Promise<void> = Promise.resolve();
+   private _breachedPassword = '';
 
    @ViewChild('sliderElem') sliderRef!: ElementRef;
    @ViewChild('matripple') rippleRef!: ElementRef;
@@ -112,6 +116,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
    @Input() set password(passwd: string) {
       this._currentPassword = passwd;
       this._pwnedChecked = false;
+      this._breachedPassword = '';
       if (!this._currentPassword) {
          this.setStrength(-1);
          this.warning = '';
@@ -123,7 +128,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
    }
 
    private startedProcessing() {
-      // "debounce" a bit to improve performance (lag at the end is acceptable)
+      // debounce a bit to improve performance (lag at the end is acceptable)
       if (!this._processTimerId && this._currentPassword) {
          this._processTimerId = setTimeout(() => {
             this._testQueue.push(this._currentPassword);
@@ -138,17 +143,12 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
       if (this._checkPwned && this._currentPassword && !this._pwnedChecked) {
          this._pwnedChecked = true;
          this._pwnedDone = (async () => {
-            // A queued local evaluation would otherwise overwrite the breach result
-            clearTimeout(this._processTimerId);
-            this._processTimerId = undefined;
-
-            await checkPwned(true);
-            try {
-               const pwd = this._currentPassword;
+            const pwd = this._currentPassword;
+            // Ignore is the password has changed while we await an answer
+            if ((await isPwned(pwd)) && pwd === this._currentPassword) {
+               this._breachedPassword = pwd;
                this._testQueue.push(pwd);
                await this.processZxcvbn();
-            } finally {
-               await checkPwned(false);
             }
          })().catch((err) => console.error(err));
       }
@@ -174,8 +174,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
                   results = await zxcvbnAsync(testPwd);
 
                   // Below the lowest selectable minimum, so a breach is rejected at any setting
-                  const breached = results.sequence.find((match) => 'pwned' === match.pattern);
-                  this.setStrength(breached ? -1 : results.score);
+                  this.setStrength(testPwd === this._breachedPassword ? -1 : results.score);
                } catch (err) {
                   console.error(err);
                }
@@ -183,7 +182,10 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
             this._processing = false;
             this.updateAcceptable();
 
-            if (results?.feedback) {
+            if (results?.password === this._breachedPassword) {
+               this.warning = BREACH_WARNING;
+               this.suggestion = BREACH_SUGGESTION;
+            } else if (results?.feedback) {
                this.warning = results.feedback.warning ?? '';
 
                // Ugly, but zxcvbn puts its own suggestion first so detect our match and pick #2
@@ -201,8 +203,6 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit, OnDestroy 
    }
 
    ngOnInit(): void {
-      checkPwned(false);
-
       const parent = this;
 
       // cloned from https://zxcvbn-ts.github.io/zxcvbn/guide/matcher/#creating-a-custom-matcher
