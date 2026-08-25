@@ -48,7 +48,7 @@ type DerivedKeys = {
    hk: Uint8Array;
    hIV: Uint8Array;
    bk: Uint8Array;
-   commit: Uint8Array;
+   commit: Uint8Array | undefined;
 };
 
 async function deriveAll(
@@ -60,7 +60,7 @@ async function deriveAll(
    const sk = await keyProvider.getSigningKey();
    const [hk, hIV] = await keyProvider.getHintCipherKeyAndIV(iv.slice(0, Ciphers.algIVByteLength(alg)));
    const bk = await keyProvider.getBlockCipherKey(1);
-   const commit = await keyProvider.getKeyCommitment();
+   const commit = keyProvider.supportsCommitment ? await keyProvider.getKeyCommitment() : undefined;
    // Copy before purge — purge() wipes cached buffers we'd otherwise reference.
    return {
       ek: ek.slice(0),
@@ -68,7 +68,7 @@ async function deriveAll(
       hk: hk.slice(0),
       hIV: hIV.slice(0),
       bk: bk.slice(0),
-      commit: commit.slice(0),
+      commit: commit?.slice(0),
    };
 }
 
@@ -82,7 +82,9 @@ function emitAlgEntry(alg: cc.CipherAlgs, keys: DerivedKeys, customAd: Uint8Arra
    console.log(`               hk: ${uint8ArrayLiteral(keys.hk)},`);
    console.log(`               hIV: ${uint8ArrayLiteral(keys.hIV)},`);
    console.log(`               bk: ${uint8ArrayLiteral(keys.bk)},`);
-   console.log(`               commit: ${uint8ArrayLiteral(keys.commit)},`);
+   if (keys.commit) {
+      console.log(`               commit: ${uint8ArrayLiteral(keys.commit)},`);
+   }
    console.log(`            },`);
 }
 

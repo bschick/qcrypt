@@ -73,7 +73,7 @@ export abstract class BaseKeyProvider implements KeyProvider {
       if (typeof customAd === 'string') {
          customAd = base64ToBytes(customAd);
       }
-      if (customAd && customAd.byteLength > cc.ADDIONTAL_DATA_MAX_BYTES) {
+      if (customAd && customAd.byteLength > cc.CUSTOM_AD_BYTES_MAX) {
          throw new Error(`Custom AD too long: ${customAd.byteLength} bytes`);
       }
       this._customAd = customAd;
@@ -332,7 +332,7 @@ export class PWDKeyProvider implements KeyProvider {
       if (typeof customAd === 'string') {
          customAd = base64ToBytes(customAd);
       }
-      if (customAd && customAd.byteLength > cc.ADDIONTAL_DATA_MAX_BYTES) {
+      if (customAd && customAd.byteLength > cc.CUSTOM_AD_BYTES_MAX) {
          throw new Error(`Custom AD too long: ${customAd.byteLength} bytes`);
       }
       this._customAd = customAd;
@@ -380,7 +380,9 @@ export class PWDKeyProvider implements KeyProvider {
 
       // Impls get their own copy so facade and impls can be purged independently.
       const userCredClone = this._userCred.slice(0);
-      if (cdInfo.ver >= cc.VERSION7) {
+      if (cdInfo.ver >= cc.VERSION8) {
+         this._impl = new PWDKeyProviderV8(userCredClone, this._pwdProvider, this._customAd);
+      } else if (cdInfo.ver === cc.VERSION7) {
          this._impl = new PWDKeyProviderV7(userCredClone, this._pwdProvider, this._customAd);
       } else if (cdInfo.ver === cc.VERSION6) {
          this._impl = new PWDKeyProviderV6(userCredClone, this._pwdProvider);
@@ -500,8 +502,12 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       this._customAd = undefined;
    }
 
+   // v8 onward uses no commitment because sk and ek share the masterKey root
    public get supportsCommitment(): boolean {
-      return true;
+      if (!this._cdInfo) {
+         throw new Error('Invalid state, cipherDataInfo not set');
+      }
+      return this._cdInfo.ver < cc.VERSION8;
    }
 
    private _extraContext(): Uint8Array<ArrayBuffer>[] {
@@ -606,7 +612,7 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
 }
 
 export class PWDKeyProviderV7 extends BasePWDKeyProvider {
-   private _cachedExtraContext?: Uint8Array<ArrayBuffer>[];
+   protected _cachedExtraContext?: Uint8Array<ArrayBuffer>[];
 
    constructor(
       userCred: Uint8Array<ArrayBuffer>,
@@ -632,7 +638,11 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       return true;
    }
 
-   private _extraContext(): Uint8Array<ArrayBuffer>[] {
+   protected _ver(): number {
+      return cc.VERSION7;
+   }
+
+   protected _extraContext(): Uint8Array<ArrayBuffer>[] {
       if (!this._cdInfo) {
          throw new Error('Invalid state, cipherDataInfo not set');
       }
@@ -650,6 +660,10 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       return this._cachedExtraContext;
    }
 
+   protected _cipherKeyMaterial(pwdBytes: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {
+      return concatArrays([pwdBytes, this._userCred!, ...this._extraContext()]);
+   }
+
    protected override async _genCipherKey(encrypting: boolean): Promise<Uint8Array<ArrayBuffer>> {
       if (!this._cdInfo) {
          throw new Error('CipherDataInfo not set');
@@ -660,7 +674,7 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       if (!this._userCred) {
          throw new Error('User credential not set');
       }
-      if (this._cdInfo.ver !== cc.VERSION7) {
+      if (this._cdInfo.ver !== this._ver()) {
          throw new Error(`Invalid version: ${this._cdInfo.ver}`);
       }
 
@@ -677,7 +691,7 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
 
       this.setHint(hint);
       const pwdBytes = new TextEncoder().encode(pwd);
-      const rawMaterial = concatArrays([pwdBytes, this._userCred, ...this._extraContext()]);
+      const rawMaterial = this._cipherKeyMaterial(pwdBytes);
 
       const ek = await this._pbkdf2CipherKey(rawMaterial);
       pwdBytes.fill(0);
@@ -734,7 +748,7 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       if (this._cdInfo.slt.byteLength !== cc.SLT_BYTES) {
          throw new Error(`Invalid salt length of: ${this._cdInfo.slt.byteLength}`);
       }
-      if (this._cdInfo.ver !== cc.VERSION7) {
+      if (this._cdInfo.ver !== this._ver()) {
          throw new Error(`Invalid version: ${this._cdInfo.ver}`);
       }
 
@@ -757,6 +771,49 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
          ),
       );
       return derivedKey.slice(0, master.byteLength);
+   }
+}
+
+export class PWDKeyProviderV8 extends PWDKeyProviderV7 {
+   public override clone(): KeyProvider {
+      if (!this._userCred) {
+         throw new Error('Cannot clone a purged keyProvider');
+      }
+      return new PWDKeyProviderV8(this._userCred.slice(0), this._pwdProvider, this._customAd);
+   }
+
+   protected override _ver(): number {
+      return cc.VERSION8;
+   }
+
+   protected override _extraContext(): Uint8Array<ArrayBuffer>[] {
+      if (!this._cdInfo) {
+         throw new Error('Invalid state, cipherDataInfo not set');
+      }
+      if (!this._cachedExtraContext) {
+         const customAd = this._customAd ?? new Uint8Array(0);
+         this._cachedExtraContext = [
+            numToBytes(Ciphers.algId(this._cdInfo.alg), cc.ALG_BYTES),
+            numToBytes(this._cdInfo.ver, cc.VER_BYTES),
+            numToBytes(this._cdInfo.lp, cc.LPP_BYTES),
+            numToBytes(customAd.byteLength, cc.PBKDF2_LEN_BYTES),
+            customAd,
+         ];
+      }
+
+      return this._cachedExtraContext;
+   }
+
+   /* Every variable length field alos get a length, to prevent shifting by an
+    * attacker if client control fields are added later (defense in depth).
+    */
+   protected override _cipherKeyMaterial(pwdBytes: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {
+      return concatArrays([
+         numToBytes(pwdBytes.byteLength, cc.PBKDF2_LEN_BYTES),
+         pwdBytes,
+         this._userCred!,
+         ...this._extraContext(),
+      ]);
    }
 }
 

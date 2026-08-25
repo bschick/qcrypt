@@ -38,6 +38,8 @@ export const LPP_BYTES = 1;
 export const VER_BYTES = 2;
 export const MAC_BYTES = 32;
 export const KEY_BYTES = 32; // all keys are currently 32 bytes
+export const COMMIT_BYTES = 32;
+export const PBKDF2_LEN_BYTES = 4;
 export const USERCRED_BYTES = 32;
 export const USERID_BYTES = 16;
 export const PKID_MIN_BYTES = 16;
@@ -61,7 +63,8 @@ export const ADDIONTAL_DATA_MAX_BYTES =
    SLT_BYTES +
    LPP_BYTES +
    HINT_LEN_BYTES +
-   ENCRYPTED_HINT_MAX_BYTES;
+   ENCRYPTED_HINT_MAX_BYTES +
+   COMMIT_BYTES;
 export const CLEAR_DATA_MAX_BYTES = PAYLOAD_SIZE_MAX - ADDIONTAL_DATA_MAX_BYTES;
 
 export const LP_MAX = 16;
@@ -78,7 +81,8 @@ export const VERSION4 = 4;
 export const VERSION5 = 5;
 export const VERSION6 = 6;
 export const VERSION7 = 7;
-export const CURRENT_VERSION = VERSION7;
+export const VERSION8 = 8;
+export const CURRENT_VERSION = VERSION8;
 export const V1_BELOW = VERSION4; // leave fixed at 4
 
 // needs to fit into 255 bytes encypted... this allows for all double byte + max auth tag

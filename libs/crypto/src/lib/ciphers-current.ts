@@ -1266,7 +1266,8 @@ export class Extractor<T extends ArrayBufferLike> {
          ver !== cc.VERSION4 &&
          ver !== cc.VERSION5 &&
          ver !== cc.VERSION6 &&
-         ver !== cc.VERSION7
+         ver !== cc.VERSION7 &&
+         ver !== cc.VERSION8
       ) {
          throw new Error(`Invalid version of: ${ver}`);
       }
