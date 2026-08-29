@@ -39,6 +39,7 @@ export const VER_BYTES = 2;
 export const MAC_BYTES = 32;
 export const KEY_BYTES = 32; // all keys are currently 32 bytes
 export const COMMIT_BYTES = 32;
+export const COMMIT_LEN_BYTES = 1;
 export const PBKDF2_LEN_BYTES = 4;
 export const USERCRED_BYTES = 32;
 export const USERID_BYTES = 16;
@@ -64,6 +65,7 @@ export const ADDIONTAL_DATA_MAX_BYTES =
    LPP_BYTES +
    HINT_LEN_BYTES +
    ENCRYPTED_HINT_MAX_BYTES +
+   COMMIT_LEN_BYTES +
    COMMIT_BYTES;
 export const CLEAR_DATA_MAX_BYTES = PAYLOAD_SIZE_MAX - ADDIONTAL_DATA_MAX_BYTES;
 

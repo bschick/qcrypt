@@ -257,6 +257,7 @@ export abstract class Ciphers {
       lpEnd?: number;
       ver?: number;
       encryptedHint?: Uint8Array;
+      keyCommitment?: Uint8Array;
    }): Uint8Array<ArrayBuffer> {
       Ciphers.validateAdditionalData(args);
 
@@ -290,25 +291,11 @@ export abstract class Ciphers {
          packer.hint = args.encryptedHint;
       }
 
+      if (args.keyCommitment !== undefined) {
+         packer.commit = args.keyCommitment;
+      }
+
       return packer.trim();
-   }
-
-   protected static async _packFullAD(
-      baseAd: Uint8Array<ArrayBuffer>,
-      keyProvider: KeyProvider,
-   ): Promise<Uint8Array<ArrayBuffer>> {
-      const parts: Uint8Array<ArrayBuffer>[] = [baseAd];
-
-      const customAd = keyProvider.getCustomAd();
-      if (customAd) {
-         parts.push(customAd);
-      }
-
-      if (keyProvider.supportsCommitment) {
-         parts.push(await keyProvider.getKeyCommitment());
-      }
-
-      return concatArrays(parts);
    }
 }
 
@@ -340,7 +327,7 @@ export abstract class Encipher extends Ciphers {
 }
 
 // (exported for testing)
-export class EncipherV7 extends Encipher {
+export class EncipherV8 extends Encipher {
    /* CipherData Layout. Tags are just notation, and are not actually in the
     * data stream. All encodings have one block0 instance followed by zero or
     * more blockN instances
@@ -362,6 +349,8 @@ export class EncipherV7 extends Encipher {
                   LPP_BYTES (packed lp and lpEnd) - 1
                   EHINT_LEN_BYTES - 1
                   EHINT_BYTES (variable) - [0-128]
+                  COMMIT_LEN_BYTES - 1
+                  COMMIT_BYTES (variable) - [0, 32]
                </Additional Data>
                <Encrypted Data>
                   EDATA_BYTES (variable)
@@ -413,7 +402,7 @@ export class EncipherV7 extends Encipher {
    }
 
    public override protocolVersion(): number {
-      return cc.VERSION7;
+      return cc.VERSION8;
    }
 
    // Overall order of operations for encryption
@@ -460,8 +449,12 @@ export class EncipherV7 extends Encipher {
             const hintBytes = bytesFromUTF8String(cdInfo.hint, maxHintBytes);
 
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(iv);
-            encryptedHint = await EncipherV7._doEncrypt(cdInfo.alg, hk, hIV, hintBytes);
+            encryptedHint = await EncipherV8._doEncrypt(cdInfo.alg, hk, hIV, hintBytes);
          }
+
+         const keyCommitment = this._keyProvider.supportsCommitment
+            ? await this._keyProvider.getKeyCommitment()
+            : new Uint8Array(0);
 
          const fileAD = Ciphers._encodeFileAD({
             alg: cdInfo.alg,
@@ -472,12 +465,14 @@ export class EncipherV7 extends Encipher {
             lpEnd: cdInfo.lpEnd,
             slt: cdInfo.slt,
             encryptedHint,
+            keyCommitment,
          });
 
-         const fullAD = await Ciphers._packFullAD(fileAD, this._keyProvider);
+         const customAd = this._keyProvider.getCustomAd();
+         const aeadAd = customAd ? concatArrays([fileAD, customAd]) : fileAD;
 
          // Only block0 uses the root cipher key. Simplifies backward compat and is no less secure
-         const encryptedData = await EncipherV7._doEncrypt(cdInfo.alg, ek, iv, clearBuffer, fullAD);
+         const encryptedData = await EncipherV8._doEncrypt(cdInfo.alg, ek, iv, clearBuffer, aeadAd);
 
          const headerData = await this._createHeader(encryptedData, fileAD);
 
@@ -533,8 +528,9 @@ export class EncipherV7 extends Encipher {
             term: done,
          });
 
-         const fullAD = await Ciphers._packFullAD(fileAD, this._keyProvider);
-         const encryptedData = await EncipherV7._doEncrypt(cdInfo.alg, bk, iv, clearBuffer, fullAD);
+         const customAd = this._keyProvider.getCustomAd();
+         const aeadAd = customAd ? concatArrays([fileAD, customAd]) : fileAD;
+         const encryptedData = await EncipherV8._doEncrypt(cdInfo.alg, bk, iv, clearBuffer, aeadAd);
          const headerData = await this._createHeader(encryptedData, fileAD);
 
          if (done) {
@@ -623,7 +619,7 @@ export class EncipherV7 extends Encipher {
       const payloadBytes = encryptedData.byteLength + additionalData.byteLength;
       // Packer validates ranges as values are added
       const packer = new Packer(cc.HEADER_BYTES_6P, cc.MAC_BYTES);
-      packer.ver = cc.CURRENT_VERSION;
+      packer.ver = this.protocolVersion();
       packer.size = payloadBytes;
 
       const sodium = getSodium();
@@ -652,6 +648,7 @@ type BlockData = {
    iv?: Uint8Array<ArrayBuffer>;
    encryptedData?: Uint8Array<ArrayBuffer>;
    additionalData?: Uint8Array<ArrayBuffer>;
+   keyCommitment?: Uint8Array<ArrayBuffer>;
 };
 
 export abstract class Decipher extends Ciphers {
@@ -668,6 +665,10 @@ export abstract class Decipher extends Ciphers {
    protected override _purge() {
       this._blockData = undefined;
       super._purge();
+   }
+
+   protected async _createAeadAd(baseAd: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+      return baseAd;
    }
 
    // When decryptBlock functions return an empty byte array, the
@@ -716,7 +717,24 @@ export abstract class Decipher extends Ciphers {
          }
 
          const ek = await this._keyProvider.getCipherKey(false);
-         const fullAD = await Ciphers._packFullAD(this._blockData.additionalData, this._keyProvider);
+
+         // Reject a wrong cipher key before it reaches the AEAD
+         const keyCommitment = this._blockData.keyCommitment;
+         if (this._blockData.ver >= cc.VERSION8) {
+            const commitPresent = !!keyCommitment?.byteLength;
+            if (commitPresent !== this._keyProvider.supportsCommitment) {
+               throw new Error('Invalid key commitment presence');
+            }
+         }
+
+         if (keyCommitment?.byteLength) {
+            const expected = await this._keyProvider.getKeyCommitment();
+            if (!getSodium().memcmp(expected, keyCommitment)) {
+               throw new Error('Invalid key commitment');
+            }
+         }
+
+         const aeadAd = await this._createAeadAd(this._blockData.additionalData);
 
          // Only block0 uses the root cipher key. Simplifies backward compat and is no less secure
          const decrypted = await Decipher._doDecrypt(
@@ -724,7 +742,7 @@ export abstract class Decipher extends Ciphers {
             ek,
             this._blockData.iv,
             this._blockData.encryptedData,
-            fullAD,
+            aeadAd,
          );
 
          this._state = CipherState.Block0Done;
@@ -833,10 +851,11 @@ export abstract class Decipher extends Ciphers {
 }
 
 // Can handle version 6 and 7 (because the code is very similar)
-export class DecipherV67 extends Decipher {
-   /* V6/V7 CipherData Layout. Tags are just notation, and are not actually in the
+export class DecipherV678 extends Decipher {
+   /* V6/V7/V8 CipherData Layout. Tags are just notation, and are not actually in the
     * data stream. All encodings have one block0 instance followed by zero or
-    * more blockN instances
+    * more blockN instances. V6 and V7 share this layout, the V7 changes were all
+    * in key derivation. V8 added the two COMMIT fields.
 
       <Document>
          <Block0>
@@ -855,6 +874,8 @@ export class DecipherV67 extends Decipher {
                   LPP_BYTES (packed lp and lpEnd) - 1
                   EHINT_LEN_BYTES - 1
                   EHINT_BYTES (variable) - [0-128]
+                  COMMIT_LEN_BYTES (V8 only) - 1
+                  COMMIT_BYTES (V8 only, variable) - [0, 32]
                </Additional Data>
                <Encrypted Data>
                   EDATA_BYTES (variable)
@@ -903,7 +924,29 @@ export class DecipherV67 extends Decipher {
    }
 
    public override protocolVersion(): number {
-      return cc.VERSION7;
+      if (!this._blockData) {
+         throw new Error('Invalid state, no block decoded');
+      }
+      return this._blockData.ver;
+   }
+
+   protected override async _createAeadAd(baseAd: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+      if (!this._blockData) {
+         throw new Error('Data not initialized');
+      }
+      const parts: Uint8Array<ArrayBuffer>[] = [baseAd];
+
+      const customAd = this._keyProvider.getCustomAd();
+      if (customAd) {
+         parts.push(customAd);
+      }
+
+      // before v8 the commit key was included here
+      if (this._blockData.ver < cc.VERSION8 && this._keyProvider.supportsCommitment) {
+         parts.push(await this._keyProvider.getKeyCommitment());
+      }
+
+      return concatArrays(parts);
    }
 
    private async _decodeHeader(header?: Uint8Array): Promise<boolean> {
@@ -928,7 +971,7 @@ export class DecipherV67 extends Decipher {
       // Order must be invariant (extractor validates sizes and ranges)
       const mac = extractor.mac;
       const ver = extractor.ver;
-      if (ver !== cc.VERSION6 && ver !== cc.VERSION7) {
+      if (ver !== cc.VERSION6 && ver !== cc.VERSION7 && ver !== cc.VERSION8) {
          throw new Error(`Invalid version of: ${ver}`);
       }
       const payloadSize = extractor.size;
@@ -974,6 +1017,9 @@ export class DecipherV67 extends Decipher {
          const ic = extractor.ic;
          const [lp, lpEnd] = extractor.lpp();
          const encryptedHint = extractor.hint;
+         if (this._blockData.ver >= cc.VERSION8) {
+            this._blockData.keyCommitment = extractor.commit;
+         }
          this._blockData.encryptedData = extractor.remainder('edata');
 
          // Since V4, additional data is the payload minus encrypted data
@@ -998,6 +1044,14 @@ export class DecipherV67 extends Decipher {
          const validMac: boolean = await this._verifyMAC();
          if (!validMac) {
             throw new Error('Invalid MAC error');
+         }
+
+         // Checked after the MAC so this only ever reports on verified data
+         if (this._blockData.ver >= cc.VERSION8) {
+            const commitPresent = !!this._blockData.keyCommitment?.byteLength;
+            if (commitPresent !== this._keyProvider.supportsCommitment) {
+               throw new Error('Invalid key commitment presence');
+            }
          }
 
          if (encryptedHint!.byteLength !== 0) {
@@ -1046,14 +1100,14 @@ export class DecipherV67 extends Decipher {
          const bk = await this._keyProvider.getBlockCipherKey(this._blockNum);
          this._blockNum += 1;
 
-         const fullAD = await Ciphers._packFullAD(this._blockData.additionalData, this._keyProvider);
+         const aeadAd = await this._createAeadAd(this._blockData.additionalData);
 
          const decrypted = await Decipher._doDecrypt(
             this._blockData.alg,
             bk,
             this._blockData.iv,
             this._blockData.encryptedData,
-            fullAD,
+            aeadAd,
          );
 
          // Occurs when the last block was only present to mark termination (in v5+)
@@ -1124,6 +1178,17 @@ export class DecipherV67 extends Decipher {
          const validMac: boolean = await this._verifyMAC();
          if (!validMac) {
             throw new Error('Invalid MAC error');
+         }
+
+         // Only block0's algorithm and version are used. Later blocks carry the fields for a
+         // potential future feature, so for now require them to match block0 to prevent
+         // tampering. Checked after the MAC so this only ever reports on verified data.
+         const cdInfo = this._keyProvider.getCipherDataInfo();
+         if (this._blockData.alg !== cdInfo.alg) {
+            throw new Error('Invalid block algorithm');
+         }
+         if (this._blockData.ver !== cdInfo.ver) {
+            throw new Error('Invalid block version');
          }
 
          this._lastFlags = this._blockData.flags;
@@ -1233,6 +1298,14 @@ export class Extractor<T extends ArrayBufferLike> {
 
    get slt(): Uint8Array<T> {
       return this.extract('slt', cc.SLT_BYTES);
+   }
+
+   get commit(): Uint8Array<T> {
+      const commitLen = bytesToNum(this.extract('clen', cc.COMMIT_LEN_BYTES));
+      if (commitLen !== 0 && commitLen !== cc.COMMIT_BYTES) {
+         throw new Error(`Invalid commit length: ${commitLen}`);
+      }
+      return this.extract('commit', commitLen);
    }
 
    get ic(): number {
@@ -1393,6 +1466,14 @@ export class Packer {
       this.pack('slt', salt);
    }
 
+   set commit(keyCommitment: Uint8Array) {
+      if (keyCommitment.byteLength !== 0 && keyCommitment.byteLength !== cc.COMMIT_BYTES) {
+         throw new Error(`Invalid commit length: ${keyCommitment.byteLength}`);
+      }
+      this.pack('clen', numToBytes(keyCommitment.byteLength, cc.COMMIT_LEN_BYTES));
+      this.pack('commit', keyCommitment);
+   }
+
    set ic(iCount: number) {
       // Sanity range only. The version-aware floor is applied by the key provider
       if (iCount !== 0 && (iCount < cc.ICOUNT_MIN_V4 || iCount > cc.ICOUNT_MAX)) {
@@ -1419,7 +1500,8 @@ export class Packer {
          version !== cc.VERSION4 &&
          version !== cc.VERSION5 &&
          version !== cc.VERSION6 &&
-         version !== cc.VERSION7
+         version !== cc.VERSION7 &&
+         version !== cc.VERSION8
       ) {
          throw new Error(`Invalid version of: ${version}`);
       }

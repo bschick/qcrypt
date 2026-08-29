@@ -169,14 +169,9 @@ async function genStreamManipulation(clearData: Uint8Array<ArrayBuffer>): Promis
    console.log(`         slt: ${uint8ArrayLiteral(slt)},`);
    console.log(`         iv: ${uint8ArrayLiteral(iv)},`);
    console.log();
-   console.log(
-      `   // sanity: total cipher bytes=${bytes.byteLength}, block0 size=${block0Size}, expected block1MACOffset=366`,
-   );
-   if (block0Size !== 366) {
-      console.log(
-         `   // WARNING: block0 ends at ${block0Size}, but the test hardcodes block1MACOffset=366. Update the offset constants in the spec or adjust READ_OPTS.`,
-      );
-   }
+   // The spec derives block1's offsets from block0's declared payload size, so this is
+   // reported for orientation rather than checked against a pinned value
+   console.log(`   // sanity: total cipher bytes=${bytes.byteLength}, block0 size=${block0Size}`);
    console.log();
 }
 
