@@ -456,7 +456,7 @@ export class EncipherV8 extends Encipher {
             ? await this._keyProvider.getKeyCommitment()
             : new Uint8Array(0);
 
-         const fileAD = Ciphers._encodeFileAD({
+         const aeadAD = Ciphers._encodeFileAD({
             alg: cdInfo.alg,
             iv,
             term: done,
@@ -468,13 +468,10 @@ export class EncipherV8 extends Encipher {
             keyCommitment,
          });
 
-         const customAd = this._keyProvider.getCustomAd();
-         const aeadAd = customAd ? concatArrays([fileAD, customAd]) : fileAD;
-
          // Only block0 uses the root cipher key. Simplifies backward compat and is no less secure
-         const encryptedData = await EncipherV8._doEncrypt(cdInfo.alg, ek, iv, clearBuffer, aeadAd);
+         const encryptedData = await EncipherV8._doEncrypt(cdInfo.alg, ek, iv, clearBuffer, aeadAD);
 
-         const headerData = await this._createHeader(encryptedData, fileAD);
+         const headerData = await this._createHeader(encryptedData, aeadAD);
 
          if (done) {
             this.finishedState();
@@ -483,7 +480,7 @@ export class EncipherV8 extends Encipher {
          }
 
          return {
-            parts: [headerData, fileAD, encryptedData],
+            parts: [headerData, aeadAD, encryptedData],
             state: this._state,
          };
       } catch (err) {
@@ -522,23 +519,21 @@ export class EncipherV8 extends Encipher {
          const bk = await this._keyProvider.getBlockCipherKey(this._blockNum);
          this._blockNum += 1;
 
-         const fileAD = Ciphers._encodeFileAD({
+         const aeadAD = Ciphers._encodeFileAD({
             alg: cdInfo.alg,
             iv,
             term: done,
          });
 
-         const customAd = this._keyProvider.getCustomAd();
-         const aeadAd = customAd ? concatArrays([fileAD, customAd]) : fileAD;
-         const encryptedData = await EncipherV8._doEncrypt(cdInfo.alg, bk, iv, clearBuffer, aeadAd);
-         const headerData = await this._createHeader(encryptedData, fileAD);
+         const encryptedData = await EncipherV8._doEncrypt(cdInfo.alg, bk, iv, clearBuffer, aeadAD);
+         const headerData = await this._createHeader(encryptedData, aeadAD);
 
          if (done) {
             this.finishedState();
          }
 
          return {
-            parts: [headerData, fileAD, encryptedData],
+            parts: [headerData, aeadAD, encryptedData],
             state: this._state,
          };
       } catch (err) {
@@ -934,19 +929,21 @@ export class DecipherV678 extends Decipher {
       if (!this._blockData) {
          throw new Error('Data not initialized');
       }
-      const parts: Uint8Array<ArrayBuffer>[] = [baseAd];
+      let aeadAd = baseAd;
 
-      const customAd = this._keyProvider.getCustomAd();
-      if (customAd) {
-         parts.push(customAd);
+      if (this._blockData.ver < cc.VERSION8) {
+         const parts: Uint8Array<ArrayBuffer>[] = [baseAd];
+         const customAd = this._keyProvider.getCustomAd();
+         if (customAd) {
+            parts.push(customAd);
+         }
+         if (this._keyProvider.supportsCommitment) {
+            parts.push(await this._keyProvider.getKeyCommitment());
+         }
+         aeadAd = concatArrays(parts);
       }
 
-      // before v8 the commit key was included here
-      if (this._blockData.ver < cc.VERSION8 && this._keyProvider.supportsCommitment) {
-         parts.push(await this._keyProvider.getKeyCommitment());
-      }
-
-      return concatArrays(parts);
+      return aeadAd;
    }
 
    private async _decodeHeader(header?: Uint8Array): Promise<boolean> {

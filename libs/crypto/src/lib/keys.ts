@@ -520,8 +520,13 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
             numToBytes(this._cdInfo.ver, cc.VER_BYTES),
             numToBytes(this._cdInfo.lp, cc.LPP_BYTES),
          ];
-         if (this._customAd) {
-            this._cachedExtraContext.push(this._customAd);
+         let customAd = this._customAd;
+         if (this._cdInfo.ver >= cc.VERSION8) {
+            customAd = customAd ?? new Uint8Array(0);
+            this._cachedExtraContext.push(numToBytes(customAd.byteLength, cc.CUSTOM_AD_LEN_BYTES));
+         }
+         if (customAd) {
+            this._cachedExtraContext.push(customAd);
          }
       }
 
@@ -802,7 +807,7 @@ export class PWDKeyProviderV8 extends PWDKeyProviderV7 {
             numToBytes(Ciphers.algId(this._cdInfo.alg), cc.ALG_BYTES),
             numToBytes(this._cdInfo.ver, cc.VER_BYTES),
             numToBytes(this._cdInfo.lp, cc.LPP_BYTES),
-            numToBytes(customAd.byteLength, cc.PBKDF2_LEN_BYTES),
+            numToBytes(customAd.byteLength, cc.CUSTOM_AD_LEN_BYTES),
             customAd,
          ];
       }
@@ -815,7 +820,7 @@ export class PWDKeyProviderV8 extends PWDKeyProviderV7 {
     */
    protected override _cipherKeyMaterial(pwdBytes: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {
       return concatArrays([
-         numToBytes(pwdBytes.byteLength, cc.PBKDF2_LEN_BYTES),
+         numToBytes(pwdBytes.byteLength, cc.PWD_LEN_BYTES),
          pwdBytes,
          this._userCred!,
          ...this._extraContext(),

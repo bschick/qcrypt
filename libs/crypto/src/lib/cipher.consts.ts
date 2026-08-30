@@ -40,7 +40,9 @@ export const MAC_BYTES = 32;
 export const KEY_BYTES = 32; // all keys are currently 32 bytes
 export const COMMIT_BYTES = 32;
 export const COMMIT_LEN_BYTES = 1;
-export const PBKDF2_LEN_BYTES = 4;
+// Passwords have no enforced maximum, so this must never overflow
+export const PWD_LEN_BYTES = 4;
+export const EXTRA_KEY_LEN_BYTES = 1;
 export const USERCRED_BYTES = 32;
 export const USERID_BYTES = 16;
 export const PKID_MIN_BYTES = 16;

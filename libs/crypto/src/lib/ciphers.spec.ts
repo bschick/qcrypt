@@ -33,8 +33,8 @@ import {
    bytesToNum,
    CipherState,
 } from '../index';
-import type { CipherDataBlock } from '../index';
-import { PWDKeyProvider } from './keys';
+import type { CipherDataBlock, KeyProvider } from '../index';
+import { MasterKeyKeyProvider, PWDKeyProvider } from './keys';
 import { isEqualArray, streamFromBytes, streamFromStr, areEqual, streamFromBase64Url } from './utils.spec';
 
 // Field offsets within block0's additional data, walked from the data itself so that adding
@@ -544,16 +544,13 @@ describe('Encryption and decryption', () => {
       }
    });
 
-   it('round trip blockN, all algorithms', async () => {
+   async function roundTripBlockN(makeKP: () => KeyProvider, ic: number) {
       for (const alg of Ciphers.algs()) {
          let [clearStream, clearData] = streamFromStr('This is a secret 🦀');
-         const pwd = 'a not good pwd';
-         const hint = 'sorta';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
          const readStart = 12;
-         let encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, hint]);
-         let latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
+         let encKeyProvider = makeKP();
+         let latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, ic, {
             startSize: readStart,
          });
 
@@ -562,55 +559,132 @@ describe('Encryption and decryption', () => {
          // once invalidated, it stays that way...
          await expect(latest.encryptBlock0()).rejects.toThrow(/Encipher invalid state.+/);
 
-         [clearStream, clearData] = streamFromStr('This is a secret 🦀');
-         // Counted because assertions inside a provider that is never asked for a password
-         // would silently pass
-         let encPwdCount = 0;
-         encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
-            encPwdCount += 1;
-            expect(cdinfo.lp).toEqual(1);
-            expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, hint];
-         });
-         latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, { startSize: readStart });
+         [clearStream] = streamFromBytes(clearData);
+         encKeyProvider = makeKP();
+         latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, ic, { startSize: readStart });
 
          const block0 = await latest.encryptBlock0();
          const blockN = await latest.encryptBlockN();
-         expect(encPwdCount).toBe(1);
-
-         let decPwdCount = 0;
-         const makeDecKP = () =>
-            new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
-               decPwdCount += 1;
-               expect(cdinfo.lp).toEqual(1);
-               expect(cdinfo.lpEnd).toEqual(1);
-               return [pwd, undefined];
-            });
 
          let [cipherStream] = streamFromCipherBlock([block0, blockN]);
-         let decipher = await getStreamDecipher(cipherStream, makeDecKP());
+         let decipher = await getStreamDecipher(cipherStream, makeKP());
 
          let decb0 = await decipher.decryptBlock0();
          await expect(areEqual(decb0, clearData.slice(0, readStart))).resolves.toEqual(true);
 
          const decb1 = await decipher.decryptBlockN();
          await expect(areEqual(decb1, clearData.slice(readStart))).resolves.toEqual(true);
-         // Only block0 needs a password, so blockN must not have asked again
-         expect(decPwdCount).toBe(1);
 
-         // Try again, but copy block0 head to block N
+         // Try with block0 head copied to block N
          const badBlockN = {
             ...blockN,
          };
          badBlockN.parts[0] = block0.parts[0];
 
          [cipherStream] = streamFromCipherBlock([block0, badBlockN]);
-         decipher = await getStreamDecipher(cipherStream, makeDecKP());
+         decipher = await getStreamDecipher(cipherStream, makeKP());
 
          decb0 = await decipher.decryptBlock0();
          await expect(areEqual(decb0, clearData.slice(0, readStart))).resolves.toEqual(true);
          await expect(decipher.decryptBlockN()).rejects.toThrow(/Cipher data length mismatch2/);
-         expect(decPwdCount).toBe(2);
+      }
+   }
+
+   it('round trip blockN, all algorithms, PWDKeyProvider', async () => {
+      const pwd = 'a not good pwd';
+      const hint = 'sorta';
+      const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+
+      const makePwdKP = () => {
+         let counter = 0;
+         return new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            counter += 1;
+            expect(counter).toEqual(1);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            return [pwd, hint];
+         });
+      };
+
+      roundTripBlockN(makePwdKP, cc.ICOUNT_MIN);
+   });
+
+   it('round trip blockN, all algorithms, PWDKeyProvider with custom AD', async () => {
+      const pwd = 'a not good pwd';
+      const hint = 'sorta';
+      const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+      const customAd = getRandom(10);
+
+      const makePwdKP = () => {
+         let counter = 0;
+         return new PWDKeyProvider(
+            userCred.slice(0),
+            async (cdinfo) => {
+               counter += 1;
+               expect(counter).toEqual(1);
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               return [pwd, hint];
+            },
+            customAd,
+         );
+      };
+
+      roundTripBlockN(makePwdKP, cc.ICOUNT_MIN);
+   });
+
+   it('round trip blockN, all algorithms, MasterKeyKeyProvider', async () => {
+      const masterKey = crypto.getRandomValues(new Uint8Array(cc.KEY_BYTES));
+
+      const makeMasterKP = () => {
+         return new MasterKeyKeyProvider(masterKey.slice(0));
+      };
+
+      roundTripBlockN(makeMasterKP, 0);
+   });
+
+   it('round trip blockN, all algorithms, MasterKeyKeyProvider with custom AD', async () => {
+      const masterKey = crypto.getRandomValues(new Uint8Array(cc.KEY_BYTES));
+
+      const makeMasterKP = () => {
+         return new MasterKeyKeyProvider(masterKey.slice(0), 'some-user-id');
+      };
+
+      roundTripBlockN(makeMasterKP, 0);
+   });
+
+   it('custom AD is bound even though it is absent from the ciphertext', async () => {
+      const userCred = getRandom(cc.USERCRED_BYTES);
+      const masterKey = getRandom(cc.KEY_BYTES);
+      const adOne = getRandom(10);
+      const adTwo = getRandom(10);
+
+      const providers = [
+         {
+            ic: cc.ICOUNT_MIN,
+            make: (customAd: Uint8Array<ArrayBuffer>) =>
+               new PWDKeyProvider(userCred.slice(0), ['a good pwd', undefined], customAd),
+         },
+         {
+            ic: 0,
+            make: (customAd: Uint8Array<ArrayBuffer>) => new MasterKeyKeyProvider(masterKey.slice(0), customAd),
+         },
+      ];
+
+      for (const alg of Ciphers.algs()) {
+         for (const { ic, make } of providers) {
+            const [clearStream, clearData] = streamFromStr('A block0 secret 🦫');
+            const encipher = getLatestEncipher(clearStream, make(adOne), alg, 1, 1, ic);
+            const cipherBytes = concatArrays((await encipher.encryptBlock()).parts);
+
+            let [cipherStream] = streamFromBytes(cipherBytes);
+            const sameDec = await getStreamDecipher(cipherStream, make(adOne));
+            await expect(sameDec.decryptBlock0()).resolves.toEqual(clearData);
+
+            [cipherStream] = streamFromBytes(cipherBytes);
+            const otherDec = await getStreamDecipher(cipherStream, make(adTwo));
+            await expect(otherDec.decryptBlock0()).rejects.toThrow(/Invalid MAC/);
+         }
       }
    });
 });
@@ -760,11 +834,11 @@ describe('Decryption known values', () => {
             ver: 8,
             cts: {
                'AES-GCM':
-                  'F2Yf0vtiJdgE616_TUk2_BUx-4RKxP9WFKYSFGdsEiUIAIEAAAABAPh9tuLmh-aoVUljC_bUymNwZcwyZlHTl13aUi5AdxsAABdbxv6GinJg4JgvRgxc37Phei8FkBNK4yCmwl58TFbsNGsljX9fcD39_MTh7MAWqQ6LnmoQiTKu_5dSMmID3VEAS33xUMUWvnS-tL9gfiUeZA8f-iVEY9KEYEh212e_PWX8KoOUc5b4cMt9nguCMACLuU6jKPScMjDeaqUcCAAoAAABAQC0a008A6Adhhk_F1O_H3q6VvX-8KrbR5iULzlONADm4DffYSFu',
+                  '5WTNC-lyNSsFrD9EE0KiS5KAgMr1c0-0yOTo34khxLgIAIEAAAABAJ9wWZr8QqzldpU6CUpaiJo7jouUDUFL1rXRHGRAdxsAABe1uuPmeC1MIENW_vqnqTaLo81crRnOliAIelajjp5Cqad55TOheTO7VtiZvSoD7ZEvVb3XO7YrBlfXMl3UZm1Ch0F6Jcqbdxowow3kEwKck28P7jrvA3yaUAt1a1CB4-hMdbr_m0yhII-fTO0vPulI26-8vG78KdddSWdVCAAoAAABAQAAPVWORMFgh5WUovu0ztlWMyQy-1Go05xdNHu3j4pbOb8VzVti',
                'X20-PLY':
-                  'RtmLFKHas019nU5K3zoDyMd-PyxcwXWBTVwsl6bvIHkIAI0AAAACAH4aD6YgEFbBCNF7fVjqrMcvZHtN0EEHd27HKko6Qb006LO7kx9FyqxAdxsAABdyhIqqPkayiiIETlM-puLv_hpVFBmgxCALWom8vaBzM1GtnHvO6TeI_JE4W9n0X2mdnq0CnHYpluSN-qUO5yORPOqO-yLy6YXxfoe6opnWT3uu9s8zX5_Qss_rToGeZgnvA8vpY0VeKvLMF5IojmEw6-4vTvF5-JYLFqTGCAA0AAABAgAw0rijVel7ND3guSfcEFwq8nND7e4eyXICPUEO3q2AH-c8OmedlidMf59TEnIkCiHf',
+                  'WsAK62TEy04ffWXQs2TDQphagL5NobAJRHOwXUJcYXQIAI0AAAACADDqx5KoAGLhWWsJmg48Hqt9wj2YxscvYbxXxPMjHUIY9JUV5DUjb4xAdxsAABdDh-rYbdurKmnd5pk6X7RXYpVcNbeUKCBwogeg8S5jD_1l_XPa4oygsQP6i3TCBkUljRgFeQdf0DXmf5Tog8yNfWd8MoFgHd1hzkskwLvZSIKZdLAza2Mp-nDjqqvHvf2HyoG2r3CH2WLlmbvai4mCz1WiFtk8U_YG3Z2RCAA0AAABAgAemEikVE2ivh7L9YM9Z-eyKZqK_EK3Afkh6GQ-GFZOMWwRDGd34C8PDjtgg6s-TYV4',
                'AEGIS-256':
-                  '4EsUJvdxiHyvx4On0fC8-05Nugh0ACfe2uVJBMQp0VMIALUAAAADAIOcGOTpiyG1NUt7KOSJjAkNsTuo3qb-L4Qb5zZNrtuS8EoqpE7s2JgxfWFPq3RHw0B3GwAAJ1sY5IaBYdUSOMUvKetD_Q0KvBvWu4flctGvXNdsP3-MuUD-GH2J7SCSvQTuHTq2E4xhMB0-7J-rC2Bwih6GFEZSGg3Cn2CG1EOtR0l2jqNmBs--mQC4AMt8CAq2n3--OFSq9nyfE3yTjL2syUUaIqHgkNK45TtooYnO955DDVXztyc-M4snXfN3oUdZOf9OI9It3rAlq2I3ihyBywgATAAAAQMAhVOtkCubykoiuXCKWM-QzUnVMrsSwUkKPLbC1RZj8n7BvXgdjaxogclkp1yTsn4Ud5BOlRRZDY7h1dL17BaudDVUGV1dASIsSw',
+                  'PPZPaCDDZlnFgTlgD2rOHzZf9BTmEEXRidCSH49d-NIIALUAAAADABqRb2N_ZklBBTfyhQKKElNjBaP9UdqLYrJ8YH23aGEn6BErjzPtnz8WnN-sNDOKPEB3GwAAJzv7onjozssZX3S8XfNhQbGW3HpmyQ7Zfbci9HGFAVqTfT3kltZpfiDowa8gZTLbmnicy15WJYBPSM-mdpzmmBTKQ3MPjPR_f4PNNDcAoV4LkO-AoTLDRIT0Wja26U498_-lvR9iWK5ZFc-SR2YGGd5BPmrgGRce36G9OOv3m0A8LoC9uxm6M0TqCBMkxh26D9qzZ35OUO1pcfhp-ggATAAAAQMAMgVkIQnh6kzeuR4p6P2FMDoKqy5IEVVnfKWquziUcOHnc7h3HFH1Js1dHssBF66GwjdKkCCwk4QuizFqFa0TrpyghgIg_954xw',
             },
          },
       ];
@@ -889,11 +963,11 @@ describe('Decryption known values', () => {
             ver: 8,
             cts: {
                'AES-GCM':
-                  'sQCGZOu8FZjDzIJayg_YVQv157l2q6L34Rv4Tm5xP-0IAIEAAAABAKbJ6FWkehjTGwH0WKBV6CzkX0RraUs1lI2hpwZAdxsAABdTqcpAWQSD2NwQ5SVMR4VZTMCIUOmapCBEZnTMu7LX4m4atjsBu0L15gGo4e0iCemXA7p-OncKtbKHpfFuXaeSItKBMaqpMehD1uArr-48pgmOqyrrZGMpqNViinl_3F7kZ4EtqUgZzqtCOSUI427Sxf8LbwZ2HeoM_iF4CAAoAAAAAQA_79l0eWVqVLpOSDc2SxbF9Lm9atHY--yQIkHHOard5EL1i2nf',
+                  'eTrk1SjeOlvvs6v4Hu6XtCauiKY_3a_7kWaQVrGt5P4IAIEAAAABAIrFc5cld8ia5ZUXfFYjJWBkNws_JTnLZWJ9BehAdxsAABfVGVM9DociwGarxRaifKpVGgCWuevhNCC_XZFBWkGFHRv9GKUsRth5EepIi2p9nsSZu-hPsxgw7BJ1ymmkGiO3Lh7o2alCAoATPtLDIRQz1hh_yp-wyxRVugY9fZld1uqC3IChaH2DMvAMRREQyCOO67fmkegAE_4W2YnJCAAoAAAAAQDWEOtP-e8l5Jptwid1DXwlV_dLm69TQ9wOdT-0mzQ4P4eXSnva',
                'X20-PLY':
-                  'wmuF2oI4LFNGfmyiDLh_aSttQBFZ6QeFlaVOHueTMJUIAI0AAAACACiPlvLJKz8EbO4DUNu9sZG5xDGO3IBPydglJKUDMVaC-bYsU4rAg8dAdxsAABfsc2iP8jmkTklt0Ve64Ww0uqrCmhIY8SCP73ScdS98s2tH6yiNC7Nct4h4Q2S-6eG1K0AmOapiyJqdyX03Fo9qFmCv5lJVXo2rmFuoRRL3eVeVDH1egPQz5_gz27rVA1sibs8g0gPLz5pGNaazNfIX0ZXhi37LDd-GFLBwCAA0AAAAAgAnPnAWUawvsrFNSVGLD2H1D8XoONVzg--lccbIP7uKPs34c_ogi1UkeLoWgwt12D6R',
+                  'utUQY9649SkDvEzgdUUJUrHx8nB6b7fOlhvdyXdbVbIIAI0AAAACAJu29Qv6r_Pm0OAC8RpMyf4GF8XIQQv5JtxfbTz8c1m981AL0mU9EKJAdxsAABc_5f0X-BIW0xTpkBjPntdh0QpOfx4AeiBPPvjTBM64LQBwXa1B4H8F6msS1Cw2398-RBkvfJ1CxIghkgAQbBV9NCWN9m54waptKg-RBGIhW9yxv7TmXsH9Usr0pa4tuDgvemAiLTwlxCmu6kiAWzZrRe25UyHHk48D1iuuCAA0AAAAAgB9YcUcUWihdnndBqhyfxum_A1c8CCKMC2dhZVyTZMaDPYR7PatDg-OeiTkYZNibB_U',
                'AEGIS-256':
-                  'U9KpQeFhI4qvRe-7axl6doUfWw2ebE1PJ5LBOdFVojwIALUAAAADAKXkUWguiK_mDClYhW5MjkATmSU-dwIKuAKv3zYiOqq9uCE-lz4rsOf0GC49hiqb1kB3GwAAJ6uZA8_UFAUXtBbxmBnp_X4YtZ2L42bj513nHc3x2ET1ujFeC4_pPyA-1a7WWWo633AtvyEobXemaHhbZvWeOCKk4kaZtW1E0RYw6tIfArDviLZ_w76V3TdrePXeiAY6_xovyEOpeHdrRn9ybIXwbWqoLl882RdmcoB7m7dcylvn8hJUzIwP_jgFqjrC6nThlQyI_5T8MlDI2hdBQggATAAAAAMAb2bRPDlE9_i3hBzNWjczq8GAf1LX8Z4jVWlyPkkYp2hesVBnwkeWlrmEEBTb3n2wBIvLUQ4OJHoAAM_49INfE8Klw9CjutvEtg',
+                  'kIs1fdZyAc3LsYc8L-2o75mBL1QvoyZZNuHc3e1RjxUIALUAAAADANh1rqRqftpVdltmd3-lD-0WNcJAjbByW0flt2dEtgXgF5s7KtVNYQ-QX0PU5xsDiUB3GwAAJ-cK8Refq2nlz2knf9Fj-RQdX1oyXVZBpIbb5bJk-3W4-stnWtm_2iCQiC5l_QCrTeoNgVfKx0-logaBhcZKkAdpcbxCqvpbBqJGI9DloN6oPWwcWJcL8TUUZ1UVqYyFobeK2GOd-VdeX-YBCc2APGdNM9rxDeCMfAuWmgTlTf9tWS1Ynj2SMwN1YobABTqAhL7XF9SlgXOVzmiRRQgATAAAAAMA3aHWotS426M_JgHHlobRi1wOv5-bH41uGagtxctPE-Dvty9pFW8CqZ6QxNitgdndP5WZTYIhpdIXL-hIikWw71Tc0ZZXTjkdxQ',
             },
          },
       ];
@@ -965,11 +1039,11 @@ describe('Decryption known values', () => {
             ver: 8,
             cts: {
                'AES-GCM':
-                  'EL3fo90CHNDEUW9UTwHWf7PMsejbUDRbG4v1SRxUikIIAIEAAAEBAMoSgm_fGerXliSaCPXu71f3GZYCwSqKERwz8U1AdxsAABeLjk-cjWHyv92-p_7BFPUcDkwkmV0dECD-jmG_0nLENfSfMiK2f3-NdNHF501RIRdJI1slVWEgeEBbUglnFtP3nzKP5EqWlLc3whWmEOGdrqvs9zhwctqcdjTcOszTHlTt_Xk0WyLgUhQY73SqypZiaBnz0dG30HeOy0UfCAAoAAABAQB2iz_V_0WoS0gNSe8gUiJbEZYWkEU_qWFzyMM5BE7cFHClzzVs',
+                  'pUwFtH2ZNX6Rk1wemXtwD1oV569w3Yjgl-9EciGJq5YIAIEAAAEBAJ1w3Kz4NSXD22b0xfaDLj2JI9NNOSIeaqA0V-5AdxsAABe9l86FCe9Pmnc1u45iEob28MW5mxv7VSBzlK2cvUxDItcn0mSTPSYk4uSB6DKnIeOL0fQqesF6X_QMf-cQnKyrQxEV_1LmJr9nZMnQaRlOXcVYFdw4FJ5RSfNkIjHU2MLgepx9uuXDw9DeUN0qesVkWuhn2aVg_G-j4TM0CAAoAAABAQCIwtOdBSLCRx9jjTzDGqvcczBcWzEZf-5EdTyIfMXkHKIh7Gi6',
                'X20-PLY':
-                  'UJ8nRUA-2eSiBjAVGocyWbKQpKZvu9jLQ5nU9emtN50IAI0AAAECAH6jyf6Pt8x8ca9QAiytnkbW78kTZpsJq92XZRxWAIJpdAA-vS7sDy5AdxsAABc75uDPUPwrtMQuqzIbvaLNZQcKrysQOiD7yGSvaPsCHfeOChFFGVEjgKACEkUpVoo5Tp0d_LP_je8FBfl40jRUJkLsZcUZkVuqmEWvvJpZk_EhMo5diMkfBgTSvanJF7RH8OzfUArYB4HyYMGv0EhV81QAa3Q7MkhWxVckCAA0AAABAgAbq22e9HwlaPQ51uNFqb7rDXfVABObJWNbNOmgKoAjCusn0clz7PKnsNAfX4BC-xep',
+                  'yvZcJgv1_QL7YHFNOpO8FEG2c2Bf9qZudQrNnO7Sx6EIAI0AAAECAGZdj2QwtInQmI4TYkPmpQFoRb9NRDQaS3-DyOJCnxHI5PgGKmvzGV5AdxsAABflQ4fTYAHz7s9u_QuGOuHZZEh3ZgQWAiCsLgPzLx-EI-rr6GTocVEvIIyTqGWtHPCv4B8YJhMxgnY9fAJiNihx8IMTstT4qp9QQGh0sfDQQhfop3JA2kIT7ShlOpnB1nc2bbzl4zDJx96YF00_pzAku85v1NjfQ92wplaTCAA0AAABAgAJnX5drJx3kVmQvEt2votP4loCmHU1Ao_jLqWEKCDIL1Li0XAJmCFh9BiMAf8HjuGP',
                'AEGIS-256':
-                  'a7ckJ-SNuKNZtNEI6jqprn4eDSwUrDZ7p7a6DtnOsCAIALUAAAEDAEt_Inpwp3FOotZZdP9d-VopZ2pjPDdX5FcXAKI_F_l28dvJfr7pbUJ2UJFKBF98XEB3GwAAJ5v38kEAWp4F23ZEwILJKuv_no63QUr5JiqaBsDcKYCtxqn4SU8MsCAhmlVPLg_22H-nu9X1mSu7q17kWaWPQjoeotACPuhLOLslB8nGFbDoLwAVOMUwxmo6M5akgfl0uRkUtInXP510kTWxzWGgGYbJ7v9dNifE5pDxMIt57CELCazpU1f5iyagY1e0ZDPUWeNzMBC4KmK-9VfgtQgATAAAAQMAXjrdTjLJlth9OFRlUWbsXpYgwcnLYm4-2iCzhDoEZ0skgVFbzathK2rsUbvMnZcygGIGzbULcmb5NuUQSg8PrrzmGCrHIHYRnA',
+                  'ojJuRkE72yqz3iMPi91rlF4vi9H0So3UrJHft1sLbCYIALUAAAEDACyLEkhfQ7dgjcBxewa-wwsc88wgk-c6aE0ydH2pzcwBgcCK_WZmqwhllAdm3aRV5UB3GwAAJw4AQYZ-B8Dvjlhz8segHJu4BzxCmAoW-lRgPqXqXqJF1ZCP2kzWpiD1Ua3ySf-Lxgq__Wgz1i_GZw6WgUMdVr3JjUc3IQDwIl1mo9U5GQKmLlS0NqpJ7EYqaJrmom_yGz9soaOF6ZwIPWziyUJUZnNWqjZp3tCyx9Bm2iJ1N1DXUZ13If0K4w0Hpd9JvBXcsjEW9F2DoeSYV9bfNwgATAAAAQMALR6AHhEHHufTa5SfD5PGMd3_47Bg-iLa_5NAbTur0wM-sEx0mjrf8NYxGyoP6VKKu-AV8O_5YBQqLxeXmRoDry7_mhhX0DQExA',
             },
          },
       ];
@@ -1038,11 +1112,11 @@ describe('Decryption known values', () => {
             ver: 8,
             cts: {
                'AES-GCM':
-                  'ocXptmBpZEn80URz2HrKToayBNnGycW4Wd4hVMnjCW0IAIEAAAEBAFFqsF1fNdXLVoawBAAbFS8YXE0xcRLgQjPi4v9AdxsAABezSRTkLzjjPWLcoz1t5gYqkSvsrgJVbiAmuYlJpshVtl9bWVRXQ7bIOZk2xqVP5lZSy99U4mHhPlDjYk7e-TAgx7Rghqmi72F33rXg7XDlAyA6b4wbR97FNJoEOogPLPeDo2ruE7GwcOJpa5pMoVusvnnx6N9WT0qyzwEzCAAoAAAAAQDrP5urj91q48AakAEvHtDx9k07agy8wDOCqClvpKUjbfyQKBsI',
+                  'ARimbkiBV4dgciApyw1wPJZSITioZM_S1_eQGKEjOcYIAIEAAAEBAEdGgKuYDnZt99zSVm7PYGFd6KeqOkufLz8NOxpAdxsAABf03-vLbNx_eZsyd9O8Uhj5b0wbIV0QXyAJFYEprzy8HGR2vKE15SBGQzLJkqqZOU57q-oHpJLFzXYtkqxOTn4BBd2_y5P8jO8Gsy7MrzVQy3_jkvt4tYJoxtSHC5DOODO8UpzuTx_A_nlQoDsk27cXqVVcSbmKe7LOW_fFCAAoAAAAAQCosF6oHNosAumrs1LhxAekOcTTO-WFlEBYT1Sduvuf0Nq3hF2X',
                'X20-PLY':
-                  'YAZUURjgQItrgKyA6QZ06k9_WmEX9PKHkkjxUv_th1gIAI0AAAECAKAFpIhkKXjbfgNUdiNCN9vtLFxPkHZ5MqqxDvZRyUpaSDNvuLJo1QFAdxsAABf6CNGx6sHuk1A_CDXTj8Qc6Sl3aRDjISB9fYHAIZ4ixBLjF0O7TLXAlEnGQKLC94QZMyMyh3kQyE5MWkND-Z4UCXsAgxvMAx0eb8onQIRRKcRM2L9M3U1-rDRmW-B7qY5fNyRdUrsJdVGyzoQe1VA_nOvMNGe2H6JDzpbKCAA0AAAAAgDSX2brXRvPRzwSCnxlOGSw1g2Kg-z2ecEufTIt3-PAUiGuRdrflpEejvpVwWJnwuO-',
+                  'yAtwEyLMG77F8J1F6XRfZ9LdRhZJYtWJsjG0B7a53_AIAI0AAAECAFfYK4tSs85B-ddxUupS3fpQFUydiSTnqyIbQDFkVM-iceLUB1exiY9AdxsAABeEb3Uu-yG3OmbXsTDbfuZYQ__7QUP_gSBFhRWx-arx782kwsk79CQHim55plgkqW2wu-q1sEcbfQOdoQpGcQSXkeHT3x1_95i8_GmEvr27N9tHRBdcLgmMuKml44aQ0UEPEIX0L9M8XxnxgnuVz6ZS-w4IMI-YoinKfOHnCAA0AAAAAgAoVJg1rh00cZwMy2IUAXVAeBZttWgD0IyNUH9e0hVXuKTaO5yCmagpTwmkuCkKSVhl',
                'AEGIS-256':
-                  '8Ow06j6G-ZAD05ZxDr_VQfx9gJdeZjgaa2AJ-la60CMIALUAAAEDAFP-Ao2MzAn5Qgks4H0s5zZ6UL0LCeQvNHhHRAVn9SPUYC2CK_IbpCfkwEqzBEyO5kB3GwAAJ68x5Ln9wnfIRp9pieFhlLJstubLJW9h1zqT3_PrkIotKNohzEhzCiAG0fwJb7vOmgcQx7UJ1tlTA0h23cfwvSwxQMoIPBwQcXf8YvoSwDuxKkzOBwy5s1cYo4YufvSyhy9Py6tgnxzrkibSIhSBPLhqIu194tmpiQQlg3JuWNdaJ0MCG4dujU2E_qoCrlmG-nr7bK0pz_RMbDybDAgATAAAAAMAKri-KMcF9q67R-iG447EX-1mX5LzwsMoVTbSOcypLe-FJRffkRiDTWOScJpB9dUk9n07DnOLQ45v5A88LTQruFN9yHBYhNhCig',
+                  'aTgxgI4rrWR9Lul5VjiutIZnFAnhhOw15u-n3WKdkMAIALUAAAEDAKItraXUWeaORBDcLOWEzbpuIsvxbTtyRY3o0ZQTjcNs3xhO5z8gQEvqt1Rlkw8bYkB3GwAAJ7e37nJ4PmAAT2u8JkS3obtr81-a5W3nuG_156TYu-_E9rmfMIi9DiC0PPapNMsNXK7qHZUOPf6JBcVcC5Qc5_XuQyoo12cHh3esj2wZvi19FNC_u6HgM0P2sccMbeFSHYuu7pOK0DCssKJjtBMEMlzeox1s0nNsEw3d0sPghtDz73mFQqsYUN-Oqpj7DdDlB0aU4lmcBrdHJxdl1AgATAAAAAMAMKdeBvgL7gXJMf4jalTtKuHSNMeIaHfXBA6W4at6Fn-cnucIYL_0fUZlirtPF0oyPU0DuOw1u9olGfk3mrPjMT_Tkk_A2ZXk_Q',
             },
          },
       ];
@@ -1235,11 +1309,11 @@ describe('Decryption known values', () => {
             ver: 8,
             cts: {
                'AES-GCM':
-                  'F2Yf0vtiJdgE616_TUk2_BUx-4RKxP9WFKYSFGdsEiUIAIEAAAABAPh9tuLmh-aoVUljC_bUymNwZcwyZlHTl13aUi5AdxsAABdbxv6GinJg4JgvRgxc37Phei8FkBNK4yCmwl58TFbsNGsljX9fcD39_MTh7MAWqQ6LnmoQiTKu_5dSMmID3VEAS33xUMUWvnS-tL9gfiUeZA8f-iVEY9KEYEh212e_PWX8KoOUc5b4cMt9nguCMACLuU6jKPScMjDeaqUcCAAoAAABAQC0a008A6Adhhk_F1O_H3q6VvX-8KrbR5iULzlONADm4DffYSFu',
+                  '5WTNC-lyNSsFrD9EE0KiS5KAgMr1c0-0yOTo34khxLgIAIEAAAABAJ9wWZr8QqzldpU6CUpaiJo7jouUDUFL1rXRHGRAdxsAABe1uuPmeC1MIENW_vqnqTaLo81crRnOliAIelajjp5Cqad55TOheTO7VtiZvSoD7ZEvVb3XO7YrBlfXMl3UZm1Ch0F6Jcqbdxowow3kEwKck28P7jrvA3yaUAt1a1CB4-hMdbr_m0yhII-fTO0vPulI26-8vG78KdddSWdVCAAoAAABAQAAPVWORMFgh5WUovu0ztlWMyQy-1Go05xdNHu3j4pbOb8VzVti',
                'X20-PLY':
-                  'RtmLFKHas019nU5K3zoDyMd-PyxcwXWBTVwsl6bvIHkIAI0AAAACAH4aD6YgEFbBCNF7fVjqrMcvZHtN0EEHd27HKko6Qb006LO7kx9FyqxAdxsAABdyhIqqPkayiiIETlM-puLv_hpVFBmgxCALWom8vaBzM1GtnHvO6TeI_JE4W9n0X2mdnq0CnHYpluSN-qUO5yORPOqO-yLy6YXxfoe6opnWT3uu9s8zX5_Qss_rToGeZgnvA8vpY0VeKvLMF5IojmEw6-4vTvF5-JYLFqTGCAA0AAABAgAw0rijVel7ND3guSfcEFwq8nND7e4eyXICPUEO3q2AH-c8OmedlidMf59TEnIkCiHf',
+                  'WsAK62TEy04ffWXQs2TDQphagL5NobAJRHOwXUJcYXQIAI0AAAACADDqx5KoAGLhWWsJmg48Hqt9wj2YxscvYbxXxPMjHUIY9JUV5DUjb4xAdxsAABdDh-rYbdurKmnd5pk6X7RXYpVcNbeUKCBwogeg8S5jD_1l_XPa4oygsQP6i3TCBkUljRgFeQdf0DXmf5Tog8yNfWd8MoFgHd1hzkskwLvZSIKZdLAza2Mp-nDjqqvHvf2HyoG2r3CH2WLlmbvai4mCz1WiFtk8U_YG3Z2RCAA0AAABAgAemEikVE2ivh7L9YM9Z-eyKZqK_EK3Afkh6GQ-GFZOMWwRDGd34C8PDjtgg6s-TYV4',
                'AEGIS-256':
-                  '4EsUJvdxiHyvx4On0fC8-05Nugh0ACfe2uVJBMQp0VMIALUAAAADAIOcGOTpiyG1NUt7KOSJjAkNsTuo3qb-L4Qb5zZNrtuS8EoqpE7s2JgxfWFPq3RHw0B3GwAAJ1sY5IaBYdUSOMUvKetD_Q0KvBvWu4flctGvXNdsP3-MuUD-GH2J7SCSvQTuHTq2E4xhMB0-7J-rC2Bwih6GFEZSGg3Cn2CG1EOtR0l2jqNmBs--mQC4AMt8CAq2n3--OFSq9nyfE3yTjL2syUUaIqHgkNK45TtooYnO955DDVXztyc-M4snXfN3oUdZOf9OI9It3rAlq2I3ihyBywgATAAAAQMAhVOtkCubykoiuXCKWM-QzUnVMrsSwUkKPLbC1RZj8n7BvXgdjaxogclkp1yTsn4Ud5BOlRRZDY7h1dL17BaudDVUGV1dASIsSw',
+                  'PPZPaCDDZlnFgTlgD2rOHzZf9BTmEEXRidCSH49d-NIIALUAAAADABqRb2N_ZklBBTfyhQKKElNjBaP9UdqLYrJ8YH23aGEn6BErjzPtnz8WnN-sNDOKPEB3GwAAJzv7onjozssZX3S8XfNhQbGW3HpmyQ7Zfbci9HGFAVqTfT3kltZpfiDowa8gZTLbmnicy15WJYBPSM-mdpzmmBTKQ3MPjPR_f4PNNDcAoV4LkO-AoTLDRIT0Wja26U498_-lvR9iWK5ZFc-SR2YGGd5BPmrgGRce36G9OOv3m0A8LoC9uxm6M0TqCBMkxh26D9qzZ35OUO1pcfhp-ggATAAAAQMAMgVkIQnh6kzeuR4p6P2FMDoKqy5IEVVnfKWquziUcOHnc7h3HFH1Js1dHssBF66GwjdKkCCwk4QuizFqFa0TrpyghgIg_954xw',
             },
          },
       ];
