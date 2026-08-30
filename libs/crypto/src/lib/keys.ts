@@ -53,7 +53,7 @@ export interface KeyProvider {
    getHintCipherKeyAndIV(baseIV: Uint8Array<ArrayBuffer>): Promise<[Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>]>;
    getKeyCommitment(): Promise<Uint8Array<ArrayBuffer>>;
    get supportsCommitment(): boolean;
-   getCustomAd(): Uint8Array<ArrayBuffer> | undefined;
+   getExtraKeyMaterial(): Uint8Array<ArrayBuffer> | undefined;
 }
 
 export abstract class BaseKeyProvider implements KeyProvider {
@@ -67,20 +67,20 @@ export abstract class BaseKeyProvider implements KeyProvider {
    protected _cdInfo: CipherDataInfo | undefined = undefined;
 
    // referenced values
-   protected _customAd: Uint8Array<ArrayBuffer> | undefined = undefined;
+   protected _extraKeyMaterial: Uint8Array<ArrayBuffer> | undefined = undefined;
 
-   constructor(customAd: Uint8Array<ArrayBuffer> | string | undefined = undefined) {
-      if (typeof customAd === 'string') {
-         customAd = base64ToBytes(customAd);
+   constructor(extraKeyMaterial: Uint8Array<ArrayBuffer> | string | undefined = undefined) {
+      if (typeof extraKeyMaterial === 'string') {
+         extraKeyMaterial = base64ToBytes(extraKeyMaterial);
       }
-      if (customAd && customAd.byteLength > cc.CUSTOM_AD_BYTES_MAX) {
-         throw new Error(`Custom AD too long: ${customAd.byteLength} bytes`);
+      if (extraKeyMaterial && extraKeyMaterial.byteLength > cc.EXTRA_BYTES_MAX) {
+         throw new Error(`Extra key material too long: ${extraKeyMaterial.byteLength} bytes`);
       }
-      this._customAd = customAd;
+      this._extraKeyMaterial = extraKeyMaterial;
    }
 
-   public getCustomAd(): Uint8Array<ArrayBuffer> | undefined {
-      return this._customAd;
+   public getExtraKeyMaterial(): Uint8Array<ArrayBuffer> | undefined {
+      return this._extraKeyMaterial;
    }
 
    public setCipherDataInfo(cdInfo: CipherDataInfo) {
@@ -148,7 +148,7 @@ export abstract class BaseKeyProvider implements KeyProvider {
          bk.fill(0);
       }
       this._bks.clear();
-      this._customAd = undefined;
+      this._extraKeyMaterial = undefined;
    }
 
    public async getCipherKey(encrypting: boolean): Promise<Uint8Array<ArrayBuffer>> {
@@ -249,7 +249,7 @@ export abstract class BasePWDKeyProvider extends BaseKeyProvider {
    constructor(
       userCred: Uint8Array<ArrayBuffer>,
       pwdProvider: PWDProvider | undefined = undefined,
-      customAd: Uint8Array<ArrayBuffer> | string | undefined = undefined,
+      extraKeyMaterial: Uint8Array<ArrayBuffer> | string | undefined = undefined,
    ) {
       if (userCred.byteLength !== cc.USERCRED_BYTES) {
          throw new Error(`Invalid userCred length of: ${userCred.byteLength}`);
@@ -259,7 +259,7 @@ export abstract class BasePWDKeyProvider extends BaseKeyProvider {
       if (userCred.every((b) => b === 0)) {
          throw new Error('Invalid userCred: all zero bytes');
       }
-      super(customAd);
+      super(extraKeyMaterial);
       this._userCred = userCred;
       this._pwdProvider = pwdProvider;
    }
@@ -271,7 +271,7 @@ export abstract class BasePWDKeyProvider extends BaseKeyProvider {
          this._userCred = undefined;
       }
       this._pwdProvider = undefined;
-      this._customAd = undefined;
+      this._extraKeyMaterial = undefined;
    }
 
    protected async _pbkdf2CipherKey(rawMaterial: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
@@ -318,7 +318,7 @@ export abstract class BasePWDKeyProvider extends BaseKeyProvider {
 export class PWDKeyProvider implements KeyProvider {
    private _impl?: BasePWDKeyProvider;
    private _userCred: Uint8Array<ArrayBuffer> | undefined;
-   private _customAd: Uint8Array<ArrayBuffer> | undefined;
+   private _extraKeyMaterial: Uint8Array<ArrayBuffer> | undefined;
 
    /**
     * Takes ownership of userCred. Caller must not read or modify it after construction
@@ -327,15 +327,15 @@ export class PWDKeyProvider implements KeyProvider {
    constructor(
       userCred: Uint8Array<ArrayBuffer>,
       private _pwdProvider: PWDProvider | undefined = undefined,
-      customAd: Uint8Array<ArrayBuffer> | string | undefined = undefined,
+      extraKeyMaterial: Uint8Array<ArrayBuffer> | string | undefined = undefined,
    ) {
-      if (typeof customAd === 'string') {
-         customAd = base64ToBytes(customAd);
+      if (typeof extraKeyMaterial === 'string') {
+         extraKeyMaterial = base64ToBytes(extraKeyMaterial);
       }
-      if (customAd && customAd.byteLength > cc.CUSTOM_AD_BYTES_MAX) {
-         throw new Error(`Custom AD too long: ${customAd.byteLength} bytes`);
+      if (extraKeyMaterial && extraKeyMaterial.byteLength > cc.EXTRA_BYTES_MAX) {
+         throw new Error(`Extra key material too long: ${extraKeyMaterial.byteLength} bytes`);
       }
-      this._customAd = customAd;
+      this._extraKeyMaterial = extraKeyMaterial;
 
       if (userCred.byteLength !== cc.USERCRED_BYTES) {
          throw new Error(`Invalid userCred length of: ${userCred.byteLength}`);
@@ -357,14 +357,14 @@ export class PWDKeyProvider implements KeyProvider {
          this._userCred = undefined;
       }
       this._pwdProvider = undefined;
-      this._customAd = undefined;
+      this._extraKeyMaterial = undefined;
    }
 
    public clone(): KeyProvider {
       if (!this._userCred) {
          throw new Error('Cannot clone a purged keyProvider');
       }
-      return new PWDKeyProvider(this._userCred.slice(0), this._pwdProvider, this._customAd);
+      return new PWDKeyProvider(this._userCred.slice(0), this._pwdProvider, this._extraKeyMaterial);
    }
 
    public setCipherDataInfo(cdInfo: CipherDataInfo): void {
@@ -374,16 +374,16 @@ export class PWDKeyProvider implements KeyProvider {
       if (!this._userCred) {
          throw new Error('Cannot use a purged keyProvider');
       }
-      if (cdInfo.ver < cc.VERSION7 && this._customAd) {
-         throw new Error(`customAd is only supported for V7+`);
+      if (cdInfo.ver < cc.VERSION7 && this._extraKeyMaterial) {
+         throw new Error(`extraKeyMaterial is only supported for V7+`);
       }
 
       // Impls get their own copy so facade and impls can be purged independently.
       const userCredClone = this._userCred.slice(0);
       if (cdInfo.ver >= cc.VERSION8) {
-         this._impl = new PWDKeyProviderV8(userCredClone, this._pwdProvider, this._customAd);
+         this._impl = new PWDKeyProviderV8(userCredClone, this._pwdProvider, this._extraKeyMaterial);
       } else if (cdInfo.ver === cc.VERSION7) {
-         this._impl = new PWDKeyProviderV7(userCredClone, this._pwdProvider, this._customAd);
+         this._impl = new PWDKeyProviderV7(userCredClone, this._pwdProvider, this._extraKeyMaterial);
       } else if (cdInfo.ver === cc.VERSION6) {
          this._impl = new PWDKeyProviderV6(userCredClone, this._pwdProvider);
       } else {
@@ -451,11 +451,11 @@ export class PWDKeyProvider implements KeyProvider {
       return this._impl.supportsCommitment;
    }
 
-   public getCustomAd(): Uint8Array<ArrayBuffer> | undefined {
+   public getExtraKeyMaterial(): Uint8Array<ArrayBuffer> | undefined {
       if (!this._impl) {
-         return this._customAd;
+         return this._extraKeyMaterial;
       }
-      return this._impl.getCustomAd();
+      return this._impl.getExtraKeyMaterial();
    }
 }
 
@@ -472,7 +472,10 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
     * Takes ownership of masterKey. Caller must not read or modify it after construction
     * because the buffer will be overwritten. Other values are just referenced.
     */
-   constructor(masterKey: Uint8Array<ArrayBuffer>, customAd: Uint8Array<ArrayBuffer> | string | undefined = undefined) {
+   constructor(
+      masterKey: Uint8Array<ArrayBuffer>,
+      extraKeyMaterial: Uint8Array<ArrayBuffer> | string | undefined = undefined,
+   ) {
       if (masterKey.byteLength !== cc.KEY_BYTES) {
          throw new Error(`Invalid masterKey length of: ${masterKey.byteLength}`);
       }
@@ -481,7 +484,7 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       if (masterKey.every((b) => b === 0)) {
          throw new Error('Invalid masterKey: all zero bytes');
       }
-      super(customAd);
+      super(extraKeyMaterial);
       this._masterKey = masterKey;
    }
 
@@ -489,7 +492,7 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       if (!this._masterKey) {
          throw new Error('Cannot clone a purged keyProvider');
       }
-      return new MasterKeyKeyProvider(this._masterKey.slice(0), this._customAd);
+      return new MasterKeyKeyProvider(this._masterKey.slice(0), this._extraKeyMaterial);
    }
 
    public override purge(): void {
@@ -499,7 +502,7 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
          this._masterKey = undefined;
       }
       this._cachedExtraContext = undefined;
-      this._customAd = undefined;
+      this._extraKeyMaterial = undefined;
    }
 
    // v8 onward uses no commitment because sk and ek share the masterKey root
@@ -520,13 +523,13 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
             numToBytes(this._cdInfo.ver, cc.VER_BYTES),
             numToBytes(this._cdInfo.lp, cc.LPP_BYTES),
          ];
-         let customAd = this._customAd;
+         let extraKeyMaterial = this._extraKeyMaterial;
          if (this._cdInfo.ver >= cc.VERSION8) {
-            customAd = customAd ?? new Uint8Array(0);
-            this._cachedExtraContext.push(numToBytes(customAd.byteLength, cc.CUSTOM_AD_LEN_BYTES));
+            extraKeyMaterial = extraKeyMaterial ?? new Uint8Array(0);
+            this._cachedExtraContext.push(numToBytes(extraKeyMaterial.byteLength, cc.EXTRA_LEN_BYTES));
          }
-         if (customAd) {
-            this._cachedExtraContext.push(customAd);
+         if (extraKeyMaterial) {
+            this._cachedExtraContext.push(extraKeyMaterial);
          }
       }
 
@@ -629,16 +632,16 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
    constructor(
       userCred: Uint8Array<ArrayBuffer>,
       pwdProvider: PWDProvider | undefined = undefined,
-      customAd: Uint8Array<ArrayBuffer> | string | undefined = undefined,
+      extraKeyMaterial: Uint8Array<ArrayBuffer> | string | undefined = undefined,
    ) {
-      super(userCred, pwdProvider, customAd);
+      super(userCred, pwdProvider, extraKeyMaterial);
    }
 
    public clone(): KeyProvider {
       if (!this._userCred) {
          throw new Error('Cannot clone a purged keyProvider');
       }
-      return new PWDKeyProviderV7(this._userCred.slice(0), this._pwdProvider, this._customAd);
+      return new PWDKeyProviderV7(this._userCred.slice(0), this._pwdProvider, this._extraKeyMaterial);
    }
 
    public override purge(): void {
@@ -664,8 +667,8 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
             numToBytes(this._cdInfo.ver, cc.VER_BYTES),
             numToBytes(this._cdInfo.lp, cc.LPP_BYTES),
          ];
-         if (this._customAd) {
-            this._cachedExtraContext.push(this._customAd);
+         if (this._extraKeyMaterial) {
+            this._cachedExtraContext.push(this._extraKeyMaterial);
          }
       }
 
@@ -790,7 +793,7 @@ export class PWDKeyProviderV8 extends PWDKeyProviderV7 {
       if (!this._userCred) {
          throw new Error('Cannot clone a purged keyProvider');
       }
-      return new PWDKeyProviderV8(this._userCred.slice(0), this._pwdProvider, this._customAd);
+      return new PWDKeyProviderV8(this._userCred.slice(0), this._pwdProvider, this._extraKeyMaterial);
    }
 
    protected override _ver(): number {
@@ -802,13 +805,13 @@ export class PWDKeyProviderV8 extends PWDKeyProviderV7 {
          throw new Error('Invalid state, cipherDataInfo not set');
       }
       if (!this._cachedExtraContext) {
-         const customAd = this._customAd ?? new Uint8Array(0);
+         const extraKeyMaterial = this._extraKeyMaterial ?? new Uint8Array(0);
          this._cachedExtraContext = [
             numToBytes(Ciphers.algId(this._cdInfo.alg), cc.ALG_BYTES),
             numToBytes(this._cdInfo.ver, cc.VER_BYTES),
             numToBytes(this._cdInfo.lp, cc.LPP_BYTES),
-            numToBytes(customAd.byteLength, cc.CUSTOM_AD_LEN_BYTES),
-            customAd,
+            numToBytes(extraKeyMaterial.byteLength, cc.EXTRA_LEN_BYTES),
+            extraKeyMaterial,
          ];
       }
 

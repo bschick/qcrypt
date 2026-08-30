@@ -247,7 +247,7 @@ export abstract class Ciphers {
       }
    }
 
-   protected static _encodeFileAD(args: {
+   protected static _encodeAD(args: {
       alg: cc.CipherAlgs;
       iv: Uint8Array;
       term?: boolean;
@@ -456,7 +456,7 @@ export class EncipherV8 extends Encipher {
             ? await this._keyProvider.getKeyCommitment()
             : new Uint8Array(0);
 
-         const aeadAD = Ciphers._encodeFileAD({
+         const aeadAD = Ciphers._encodeAD({
             alg: cdInfo.alg,
             iv,
             term: done,
@@ -519,7 +519,7 @@ export class EncipherV8 extends Encipher {
          const bk = await this._keyProvider.getBlockCipherKey(this._blockNum);
          this._blockNum += 1;
 
-         const aeadAD = Ciphers._encodeFileAD({
+         const aeadAD = Ciphers._encodeAD({
             alg: cdInfo.alg,
             iv,
             term: done,
@@ -933,9 +933,9 @@ export class DecipherV678 extends Decipher {
 
       if (this._blockData.ver < cc.VERSION8) {
          const parts: Uint8Array<ArrayBuffer>[] = [baseAd];
-         const customAd = this._keyProvider.getCustomAd();
-         if (customAd) {
-            parts.push(customAd);
+         const extraKeyMaterial = this._keyProvider.getExtraKeyMaterial();
+         if (extraKeyMaterial) {
+            parts.push(extraKeyMaterial);
          }
          if (this._keyProvider.supportsCommitment) {
             parts.push(await this._keyProvider.getKeyCommitment());

@@ -89,7 +89,7 @@ export class DecipherV1 extends Decipher {
          const encryptedData = extractor.remainder('edata');
 
          // Repack because we don't have the contiguous data any longer
-         const fileAD = DecipherV1._encodeFileAD({
+         const fileAD = DecipherV1._encodeAD({
             alg,
             iv,
             ver,

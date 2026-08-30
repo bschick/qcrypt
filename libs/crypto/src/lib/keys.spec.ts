@@ -849,7 +849,7 @@ describe('Key generation', () => {
             cc.VERSION7,
             {
                'AES-GCM': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      254, 57, 68, 32, 174, 22, 216, 5, 68, 114, 63, 121, 50, 178, 236, 181, 166, 226, 132, 131, 64, 195,
                      139, 103, 82, 12, 131, 30, 155, 73, 48, 171,
@@ -873,7 +873,7 @@ describe('Key generation', () => {
                   ]),
                },
                'X20-PLY': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      214, 16, 97, 74, 248, 18, 228, 247, 137, 139, 165, 39, 178, 202, 71, 208, 9, 231, 86, 55, 7, 75,
                      61, 214, 115, 197, 119, 145, 51, 91, 166, 41,
@@ -900,7 +900,7 @@ describe('Key generation', () => {
                   ]),
                },
                'AEGIS-256': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      235, 73, 183, 169, 184, 191, 201, 229, 211, 241, 189, 43, 42, 230, 10, 91, 12, 34, 171, 146, 189,
                      245, 152, 3, 71, 20, 255, 192, 48, 32, 160, 135,
@@ -1013,7 +1013,7 @@ describe('Key generation', () => {
             cc.VERSION8,
             {
                'AES-GCM': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      32, 117, 121, 29, 10, 105, 150, 189, 22, 119, 5, 133, 210, 115, 26, 212, 115, 103, 31, 11, 128,
                      152, 158, 74, 154, 147, 154, 91, 173, 193, 31, 17,
@@ -1037,7 +1037,7 @@ describe('Key generation', () => {
                   ]),
                },
                'X20-PLY': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      250, 53, 181, 168, 185, 113, 211, 177, 127, 234, 138, 131, 130, 49, 52, 39, 254, 65, 34, 33, 133,
                      65, 146, 64, 238, 194, 89, 96, 172, 92, 225, 122,
@@ -1064,7 +1064,7 @@ describe('Key generation', () => {
                   ]),
                },
                'AEGIS-256': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      92, 128, 44, 140, 241, 62, 109, 211, 51, 6, 102, 204, 120, 252, 81, 174, 110, 32, 55, 195, 205,
                      193, 17, 218, 10, 246, 173, 176, 39, 224, 209, 200,
@@ -1111,7 +1111,7 @@ describe('Key generation', () => {
                28, 140, 53, 215, 85, 89, 158, 248, 52, 175,
             ]);
 
-            const keyProvider = new PWDKeyProvider(userCred, [pwd, undefined], algExpected.customAd);
+            const keyProvider = new PWDKeyProvider(userCred, [pwd, undefined], algExpected.extraKeyMaterial);
             keyProvider.setCipherDataInfo({
                ver,
                alg,
@@ -1316,7 +1316,7 @@ describe('Key generation', () => {
             cc.VERSION7,
             {
                'AES-GCM': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      62, 43, 242, 215, 21, 141, 122, 13, 2, 38, 243, 254, 112, 200, 114, 92, 59, 80, 209, 207, 157, 127,
                      132, 17, 80, 61, 240, 220, 149, 88, 170, 16,
@@ -1340,7 +1340,7 @@ describe('Key generation', () => {
                   ]),
                },
                'X20-PLY': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      157, 147, 112, 209, 3, 40, 65, 66, 67, 89, 106, 123, 251, 202, 215, 13, 68, 220, 209, 45, 56, 197,
                      88, 38, 190, 0, 91, 51, 88, 214, 113, 26,
@@ -1367,7 +1367,7 @@ describe('Key generation', () => {
                   ]),
                },
                'AEGIS-256': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      115, 173, 169, 134, 46, 62, 56, 41, 73, 181, 183, 176, 225, 186, 38, 91, 245, 119, 231, 71, 130,
                      21, 108, 106, 128, 166, 89, 87, 198, 61, 87, 192,
@@ -1468,7 +1468,7 @@ describe('Key generation', () => {
             cc.VERSION8,
             {
                'AES-GCM': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      215, 217, 146, 34, 211, 146, 67, 84, 248, 164, 95, 50, 199, 67, 40, 25, 143, 90, 221, 190, 44, 231,
                      65, 177, 203, 164, 151, 206, 127, 73, 231, 112,
@@ -1488,7 +1488,7 @@ describe('Key generation', () => {
                   ]),
                },
                'X20-PLY': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      6, 229, 20, 128, 6, 243, 13, 148, 254, 32, 236, 220, 163, 133, 15, 111, 241, 61, 41, 29, 66, 50,
                      249, 39, 254, 207, 226, 42, 27, 139, 35, 240,
@@ -1511,7 +1511,7 @@ describe('Key generation', () => {
                   ]),
                },
                'AEGIS-256': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      30, 236, 219, 150, 133, 94, 152, 41, 140, 204, 33, 170, 22, 79, 211, 165, 30, 79, 201, 142, 187,
                      210, 193, 32, 183, 12, 251, 5, 31, 124, 152, 43,
@@ -1552,7 +1552,7 @@ describe('Key generation', () => {
                10, 80, 64, 148, 152, 204, 30, 231, 18,
             ]);
 
-            const keyProvider = new MasterKeyKeyProvider(master, algExpected.customAd);
+            const keyProvider = new MasterKeyKeyProvider(master, algExpected.extraKeyMaterial);
             keyProvider.setCipherDataInfo({
                ver,
                alg,
@@ -1590,7 +1590,7 @@ describe('Key generation', () => {
       }
    });
 
-   it('PWDKeyProvider keys match expected values, multi-loop with customAd', async () => {
+   it('PWDKeyProvider keys match expected values, multi-loop with extraKeyMaterial', async () => {
       // generated by: pnpm vectors:keys
       const expected: [number, number, Record<cc.CipherAlgs, Record<string, Uint8Array<ArrayBuffer>>>][] = [
          [
@@ -1921,7 +1921,7 @@ describe('Key generation', () => {
       ];
 
       const lpEnd = 2;
-      const customAd = new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]);
+      const extraKeyMaterial = new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]);
       const userCred = new Uint8Array([
          214, 245, 252, 122, 133, 39, 76, 162, 64, 201, 143, 217, 237, 57, 18, 207, 199, 153, 20, 28, 162, 9, 236, 66,
          100, 103, 152, 159, 226, 50, 225, 129,
@@ -1936,7 +1936,7 @@ describe('Key generation', () => {
       for (const [ver, lp, algsExpected] of expected) {
          for (const alg of Ciphers.algs()) {
             const algExpected = algsExpected[alg];
-            const keyProvider = new PWDKeyProvider(userCred, [pwd, undefined], customAd);
+            const keyProvider = new PWDKeyProvider(userCred, [pwd, undefined], extraKeyMaterial);
             keyProvider.setCipherDataInfo({
                ver,
                alg,
@@ -1962,7 +1962,7 @@ describe('Key generation', () => {
       }
    });
 
-   it('MasterKeyKeyProvider keys match expected values, multi-loop with customAd', async () => {
+   it('MasterKeyKeyProvider keys match expected values, multi-loop with extraKeyMaterial', async () => {
       // generated by: pnpm vectors:keys
       const expected: [number, number, Record<cc.CipherAlgs, Record<string, Uint8Array<ArrayBuffer>>>][] = [
          [
@@ -2269,7 +2269,7 @@ describe('Key generation', () => {
       ];
 
       const lpEnd = 2;
-      const customAd = new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]);
+      const extraKeyMaterial = new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]);
       const master = new Uint8Array([
          88, 164, 150, 177, 85, 43, 43, 25, 42, 250, 120, 190, 112, 26, 41, 122, 140, 204, 6, 253, 225, 220, 237, 10,
          80, 64, 148, 152, 204, 30, 231, 18,
@@ -2283,7 +2283,7 @@ describe('Key generation', () => {
       for (const [ver, lp, algsExpected] of expected) {
          for (const alg of Ciphers.algs()) {
             const algExpected = algsExpected[alg];
-            const keyProvider = new MasterKeyKeyProvider(master, customAd);
+            const keyProvider = new MasterKeyKeyProvider(master, extraKeyMaterial);
             keyProvider.setCipherDataInfo({
                ver,
                alg,
@@ -2394,10 +2394,10 @@ describe('Key generation', () => {
       masterProvider.purge();
    });
 
-   it('derived keys change with cipher info (alg, lp, slt, customAd)', async () => {
+   it('derived keys change with cipher info (alg, lp, slt, extraKeyMaterial)', async () => {
       const userCred = getRandom(cc.USERCRED_BYTES);
       const master = getRandom(cc.KEY_BYTES);
-      const customAd = getRandom(16);
+      const extraKeyMaterial = getRandom(16);
       const baseSlt = getRandom(cc.SLT_BYTES);
       const otherSlt = getRandom(cc.SLT_BYTES);
       const baseIV = getRandom(32);
@@ -2439,14 +2439,14 @@ describe('Key generation', () => {
          const diffAlg = await derive(provider, 'X20-PLY', 1, baseSlt, undefined);
          const diffLp = await derive(provider, 'AES-GCM', 2, baseSlt, undefined);
          const diffSlt = await derive(provider, 'AES-GCM', 1, otherSlt, undefined);
-         const withCustomAd = await derive(provider, 'AES-GCM', 1, baseSlt, customAd);
+         const withExtraKeyMaterial = await derive(provider, 'AES-GCM', 1, baseSlt, extraKeyMaterial);
 
          for (const name of KEY_NAMES) {
             expect(isEqualArray(baseline[name], sameInputs[name])).toBe(true);
             expect(isEqualArray(baseline[name], diffAlg[name])).toBe(false);
             expect(isEqualArray(baseline[name], diffLp[name])).toBe(false);
             expect(isEqualArray(baseline[name], diffSlt[name])).toBe(false);
-            expect(isEqualArray(baseline[name], withCustomAd[name])).toBe(false);
+            expect(isEqualArray(baseline[name], withExtraKeyMaterial[name])).toBe(false);
          }
       }
    });

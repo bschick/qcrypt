@@ -1348,7 +1348,7 @@ describe('Stream encryption and decryption', () => {
    });
 });
 
-describe('Stream encryption and decryption with customAd', () => {
+describe('Stream encryption and decryption with extraKeyMaterial', () => {
    let cipherSvc: CipherService;
    beforeEach(async () => {
       await cryptoReady();
@@ -1356,13 +1356,13 @@ describe('Stream encryption and decryption with customAd', () => {
       cipherSvc = TestBed.inject(CipherService);
    });
 
-   it('successful round trip, all algorithms, no pwd hint, with customAd', async () => {
+   it('successful round trip, all algorithms, no pwd hint, with extraKeyMaterial', async () => {
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦆';
          const [clearStream, _clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const userCred = getRandom(cc.USERCRED_BYTES);
-         const customAd = bytesToBase64(getRandom(16));
+         const extraKeyMaterial = bytesToBase64(getRandom(16));
 
          const econtext: EContext = {
             algs: [alg],
@@ -1381,7 +1381,7 @@ describe('Stream encryption and decryption with customAd', () => {
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, undefined];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
@@ -1397,7 +1397,7 @@ describe('Stream encryption and decryption with customAd', () => {
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, undefined];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
@@ -1406,14 +1406,14 @@ describe('Stream encryption and decryption with customAd', () => {
       }
    });
 
-   it('successful round trip, all algorithms, with customAd', async () => {
+   it('successful round trip, all algorithms, with extraKeyMaterial', async () => {
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦆';
          const [clearStream, _clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = getRandom(cc.USERCRED_BYTES);
-         const customAd = getRandom(1);
+         const extraKeyMaterial = getRandom(1);
 
          const econtext: EContext = {
             algs: [alg],
@@ -1432,7 +1432,7 @@ describe('Stream encryption and decryption with customAd', () => {
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, hint];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
@@ -1448,7 +1448,7 @@ describe('Stream encryption and decryption with customAd', () => {
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, undefined];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
@@ -1457,14 +1457,14 @@ describe('Stream encryption and decryption with customAd', () => {
       }
    });
 
-   it('successful cipherdatainfo, all algorithms, with customAd', async () => {
+   it('successful cipherdatainfo, all algorithms, with extraKeyMaterial', async () => {
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦆';
          const [clearStream, _clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = getRandom(cc.USERCRED_BYTES);
-         const customAd = getRandom(1);
+         const extraKeyMaterial = getRandom(1);
 
          const econtext: EContext = {
             algs: [alg],
@@ -1483,11 +1483,11 @@ describe('Stream encryption and decryption with customAd', () => {
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, hint];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
-         const infoKeyProvider = new PWDKeyProvider(userCred.slice(0), undefined, customAd);
+         const infoKeyProvider = new PWDKeyProvider(userCred.slice(0), undefined, extraKeyMaterial);
          const cipherInfo = await cipherSvc.getCipherStreamInfo(cipherStream, infoKeyProvider);
          expect(cipherInfo.ver).toEqual(cc.CURRENT_VERSION);
          expect(cipherInfo.alg).toEqual(alg);
@@ -1498,14 +1498,14 @@ describe('Stream encryption and decryption with customAd', () => {
       }
    });
 
-   it('failed round trip, all algorithms, missing customAd', async () => {
+   it('failed round trip, all algorithms, missing extraKeyMaterial', async () => {
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦆';
          const [clearStream, _clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = getRandom(cc.USERCRED_BYTES);
-         const customAd = getRandom(1);
+         const extraKeyMaterial = getRandom(1);
 
          const econtext: EContext = {
             algs: [alg],
@@ -1524,7 +1524,7 @@ describe('Stream encryption and decryption with customAd', () => {
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, hint];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
@@ -1542,14 +1542,14 @@ describe('Stream encryption and decryption with customAd', () => {
       }
    });
 
-   it('failed round trip, all algorithms, added customAd', async () => {
+   it('failed round trip, all algorithms, added extraKeyMaterial', async () => {
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦆';
          const [clearStream, _clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = getRandom(cc.USERCRED_BYTES);
-         const customAd = getRandom(14);
+         const extraKeyMaterial = getRandom(14);
 
          const econtext: EContext = {
             algs: [alg],
@@ -1580,20 +1580,20 @@ describe('Stream encryption and decryption with customAd', () => {
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, undefined];
             },
-            customAd,
+            extraKeyMaterial,
          );
          await expect(cipherSvc.decryptStream(cipherStream, decKeyProvider)).rejects.toThrow(/Invalid MAC/);
       }
    });
 
-   it('failed round trip, all algorithms, wrong customAd', async () => {
+   it('failed round trip, all algorithms, wrong extraKeyMaterial', async () => {
       for (const alg of Ciphers.algs()) {
          const srcString = 'This is a secret 🦆';
          const [clearStream, _clearData] = streamFromStr(srcString);
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = getRandom(cc.USERCRED_BYTES);
-         const customAd = getRandom(1);
+         const extraKeyMaterial = getRandom(1);
 
          const econtext: EContext = {
             algs: [alg],
@@ -1612,7 +1612,7 @@ describe('Stream encryption and decryption with customAd', () => {
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, hint];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
@@ -1634,14 +1634,14 @@ describe('Stream encryption and decryption with customAd', () => {
       }
    });
 
-   it('successful round trip, mixed algorithms, loops, with customAd', async () => {
+   it('successful round trip, mixed algorithms, loops, with extraKeyMaterial', async () => {
       const algKeys = Ciphers.algs();
       const maxLps = algKeys.length;
 
       const srcString = 'This is a secret 🦆';
       const [clearStream] = streamFromStr(srcString);
       const userCred = getRandom(cc.USERCRED_BYTES);
-      const customAd = getRandom(16);
+      const extraKeyMaterial = getRandom(16);
 
       const econtext: EContext = {
          algs: algKeys,
@@ -1660,7 +1660,7 @@ describe('Stream encryption and decryption with customAd', () => {
             expectedEncLp += 1;
             return [String(cdinfo.lp), String(cdinfo.lp)];
          },
-         customAd,
+         extraKeyMaterial,
       );
       const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
@@ -1676,7 +1676,7 @@ describe('Stream encryption and decryption with customAd', () => {
             expectedDecLp -= 1;
             return [cdinfo.hint!, undefined];
          },
-         customAd,
+         extraKeyMaterial,
       );
       const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
 
@@ -1684,12 +1684,12 @@ describe('Stream encryption and decryption with customAd', () => {
       expect(resString).toEqual(srcString);
    });
 
-   it('failed round trip, mixed algorithms, loops, missing customAd', async () => {
+   it('failed round trip, mixed algorithms, loops, missing extraKeyMaterial', async () => {
       const algKeys = Ciphers.algs();
       const srcString = 'This is a secret 🦆';
       const [clearStream] = streamFromStr(srcString);
       const userCred = getRandom(cc.USERCRED_BYTES);
-      const customAd = getRandom(16);
+      const extraKeyMaterial = getRandom(16);
 
       const econtext: EContext = {
          algs: algKeys,
@@ -1701,7 +1701,7 @@ describe('Stream encryption and decryption with customAd', () => {
          async (cdinfo) => {
             return [String(cdinfo.lp), String(cdinfo.lp)];
          },
-         customAd,
+         extraKeyMaterial,
       );
       const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
@@ -1711,13 +1711,13 @@ describe('Stream encryption and decryption with customAd', () => {
       await expect(cipherSvc.decryptStream(cipherStream, decKeyProvider)).rejects.toThrow(/Invalid MAC/);
    });
 
-   it('failed round trip, mixed algorithms, loops, wrong customAd', async () => {
+   it('failed round trip, mixed algorithms, loops, wrong extraKeyMaterial', async () => {
       const algKeys = Ciphers.algs();
       const srcString = 'This is a secret 🦆';
       const [clearStream] = streamFromStr(srcString);
       const userCred = getRandom(cc.USERCRED_BYTES);
-      const customAd = getRandom(16);
-      const wrongCustomAd = getRandom(16);
+      const extraKeyMaterial = getRandom(16);
+      const wrongExtraKeyMaterial = getRandom(16);
 
       const econtext: EContext = {
          algs: algKeys,
@@ -1729,7 +1729,7 @@ describe('Stream encryption and decryption with customAd', () => {
          async (cdinfo) => {
             return [String(cdinfo.lp), String(cdinfo.lp)];
          },
-         customAd,
+         extraKeyMaterial,
       );
       const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
 
@@ -1738,7 +1738,7 @@ describe('Stream encryption and decryption with customAd', () => {
          async (cdinfo) => {
             return [cdinfo.hint!, undefined];
          },
-         wrongCustomAd,
+         wrongExtraKeyMaterial,
       );
       await expect(cipherSvc.decryptStream(cipherStream, decKeyProvider)).rejects.toThrow(/Invalid MAC/);
    });
@@ -2696,11 +2696,11 @@ describe('Block order change and deletion detection, multi-version', () => {
             '11. Block7 (last) deleted':
                'UkTIdpLJZsSOz0nr1tftOY5as7gDg1YLK9ylqYaTvZMIAHMAAAABABFpsbZGNPhr5kZvAB0s84xY4fJkeoh1Z2aS2nTgyBAAABStKbyvoFBJquIuBQL2tBhBAe-4ayBcss0HYYouY-aHWt4AuD2FX1Byz8VfrFxPtOjysCh5hC2uqzg3cFb84OiZcx0i8EehyZKxfIlPL0PBpdiJIy-rXpLFLSueP9bnpn977FNGI-frLtWPhANU7AgAMQAAAAEAjQG0vfgnIHjAZzBhhhcaFWsJhJcJt9HlTHM2Hkq35z-5YTdDyB_Ri7f9LWhIUj5RNhy_wkn_KowhLvSi94-tMlA0WgzJM8eoW7y2ZCrsCABDAAAAAQAbH09l9Pb1HiLR9lPE3sWmHq1Q3pV5hbuhGv4onUzbhEDzAmwaXRW-oa5LmusmnQruRn6fL11JmgxSENUpuRNhxAKWVVC_zRAHu0tyOtNJbhqCN-cIFyVVPPNabY1GnyYIAGcAAAABAFllT1HR1HjdLOdCX6bj4MJAMvdhApOEz8fbB5m0lDb-6z98Hu-U9ZMzk6humzQ_-G0NhD_XzozbN8NtmOBmJz8DxvaLyjnoL4HOt6RRs4KS_-q2pH-Q9H3oqNzWbO1i3T-1snCZbMRIEd_cMyHifPKySzf0jjlSwyxBBdNByDk3R_H1aggArwAAAAEAmDmXC-KKtjaC545ku3h8bH-OH4DJRzN5-KOHT8GJ30g37FJ0B9EHHMSJjflcNTSxufXqAPsgirrGrob2WIE9D68PbbC89kFpSaXuYTfC6RQbfFFrtgq9GuDrohkt0GGxmKxrHbUVcOlOWkQ7a3oLoTszoH5c28bPWVAhuKlAV-zSmgrFo986oc3HJJOEfKuM-W1Q0AnUrmKX7LNGxy1AG8VGxBwYucXZgPwCkQwMnzlDIA2LLqPdQUEHJekx0f-94Dk4Ud3PtNNFhxpVCACvAAAAAQB-T_cFF0EKjro5hIoWjs8oajaed5lmpI6Zk45BjZ-Y412pUXkD_U2UdhPX6_iz4X9c6VFvwPlS-v68_yJDHWwVYf2Gpfnh9xEmieBBG5t6lOBuajQThWCH1QpGS2gN225N6IRi-O4Q6OyyYNC-9-rLJqblI6Jufu8LzX3uqq-oWOdYGX2uYMeKnoro_ze0zZp2p1FexB84fRrDt4pPMDdKFAGBH3QWEpYOePxiBLc-6Kc9qwYEgWr3Oiuzg88TBEDHUOdk_tzYH6oIOm8IAK8AAAABAGX6YJGJgOIIKBzRGP6myowVz5zeO1Rx8Hz6cOa2kP0nXJYjSj5-PCFfie3PSRs-kcUzIpobGd_S5qUU97kWqoFTWj6B-O8SiXV2M5Vt6WVs4wi5k4TOZ0nUwizxmBcL32GQZ0vqZUmobysHpqPXvEnkRloPCt0foKQVhMNEzrAB1PeglqNFmH6ZOCWOJcXOfgWsyc04b0gw7CEzJLjzcu6nXmVGpMjRcdM9pCg',
             '12. Block1 Block7 deleted':
-               'Ta3XqzSSntJoSTE2Ru10N_ot-V8mlwPqWnT9APiNky4IAHMAAAABAKlcxHh4Bwsd1ORWi20jL-hyNBOd5K5aEl9ITw_gyBAAABSKelh_NJBNkl0qTUZgUggKyy_UySBiRO1eIZ0gW6A1q0HOnj5EeH5m0XTASebpCIY2ZGHL8J523j-vlARIlwxSK5nsWojei6xbrH4kiQlnW0eizIEDTuIQVBftM3Al4kULjceXsVuzPwQr9VMbHAgAQwAAAAEAh0c1kD4U1s3O-L243DkwqVvjXe13syPhPtaK9h4ovstxbgjo9dk0mri6qPw4IEE_DVkuPMSGWijzogptf65cPzRfUVrVvahBDKjR1cGMFLVMiY_o9snedY6kWVmC86B8CABnAAAAAQD3h5rJ9cOnY3HItWSERVZmntKnakeeqj6-rCrsRmUuaKtMmvp0v2EKuZFcLB7QONR0ZZYJit11-cUwOudP-glgXfcaW0wEbK9R2UDU6R5eDFPP2ZCyEfj6BfBnbFjz1sVtrmHQXyM-lelqjNfyJo2W-iVKfZuVGgFkMvN5hb3FmGjenWMIAK8AAAABALWt99Y_lXPbU5jwgUgW6qTBllIQdB2FGjG6CI9jl_8RZbOHTJbL1UGSb_iHepG5pVbiau7ewTNmdG0v756JI1BednNpvOhbzlb4-xGbZRnUx8uWuw25z5eWmkh0bkEcPx3M80z90DD2G0T2LF-8beZD6eTOwWDty_vhvvFwev6rzGstNkY7vOrl_NZX6aX572lsGCfRWDlFrxnLQau43FMF3_eLduybHjtwWyMr4IrsZnyxUoS_kXwAFid2IyZkQbjJqjzCb8ZR08hR-QgArwAAAAEA3CsEtdmqxr685mQVnrA3n_o3FZHqECney2BIIc5Yt0nb9YGxlPhZWBwY95XNIXrO9V2eR3mHhF5DRDity4B4ZpjkA7pb5DleovmKXV_T9FalADloU1-L4py1blGyy3_xlRDiD0aea-MWICSLo8dWaSw25tWUogi8Im2D1dQjrYVARaTv1Dy9V8zfR1cQ3Yq81t6HKUQPTYcw9Te_O06cmFb2liwLAfLgCj7LspTtAmzRZsEMvIp8KS91QvfEn-CjH6uhdwfzSGzxzcyPCACvAAAAAQAV0G8kCtwtxwzQWhDwrycIorKSUfVWeFKFD2JMf74RsGmArGSVmKuZ1wpeMP9tB3mx23Xs4aqBfYsTfHhZ_uTrO9mtqDEoEZ0c4KzO5kUCYcki1-NV63CZfzWs5fb9wzgzDaJC_DVgfYG23HRvYVedoLJ9NnVbpIZI8eqWY94_g17di7UnG9OjQ_jHfpgcRhpMY8RRIffVn24nOlQZXGIihnywAjTCNnmYDs0K',
+               'UkTIdpLJZsSOz0nr1tftOY5as7gDg1YLK9ylqYaTvZMIAHMAAAABABFpsbZGNPhr5kZvAB0s84xY4fJkeoh1Z2aS2nTgyBAAABStKbyvoFBJquIuBQL2tBhBAe-4ayBcss0HYYouY-aHWt4AuD2FX1Byz8VfrFxPtOjysCh5hC2uqzg3cFb84OiZcx0i8EehyZKxfIlPL0M-UTYcv8JJ_yqMIS70ovePrTJQNFoMyTPHqFu8tmQq7AgAQwAAAAEAGx9PZfT29R4i0fZTxN7Fph6tUN6VeYW7oRr-KJ1M24RA8wJsGl0VvqGuS5rrJp0K7kZ-ny9dSZoMUhDVKbkTYcQCllVQv80QB7tLcjrTSW4agjfnCBclVTzzWm2NRp8mCABnAAAAAQBZZU9R0dR43SznQl-m4-DCQDL3YQKThM_H2weZtJQ2_us_fB7vlPWTM5Oobps0P_htDYQ_186M2zfDbZjgZic_A8b2i8o56C-BzrekUbOCkv_qtqR_kPR96Kjc1mztYt0_tbJwmWzESBHf3DMh4nzysks39I45UsMsQQXTQcg5N0fx9WoIAK8AAAABAJg5lwviirY2gueOZLt4fGx_jh-AyUczefijh0_Bid9IN-xSdAfRBxzEiY35XDU0sbn16gD7IIq6xq6G9liBPQ-vD22wvPZBaUml7mE3wukUG3xRa7YKvRrg66IZLdBhsZisax21FXDpTlpEO2t6C6E7M6B-XNvGz1lQIbipQFfs0poKxaPfOqHNxySThHyrjPltUNAJ1K5il-yzRsctQBvFRsQcGLnF2YD8ApEMDJ85QyANiy6j3UFBByXpMdH_veA5OFHdz7TTRYcaVQgArwAAAAEAfk_3BRdBCo66OYSKFo7PKGo2nneZZqSOmZOOQY2fmONdqVF5A_1NlHYT1-v4s-F_XOlRb8D5Uvr-vP8iQx1sFWH9hqX54fcRJongQRubepTgbmo0E4Vgh9UKRktoDdtuTeiEYvjuEOjssmDQvvfqyyam5SOibn7vC8197qqvqFjnWBl9rmDHip6K6P83tM2adqdRXsQfOH0aw7eKTzA3ShQBgR90FhKWDnj8YgS3PuinPasGBIFq9zors4PPEwRAx1DnZP7c2B-qCDpvCACvAAAAAQBl-mCRiYDiCCgc0Rj-psqMFc-c3jtUcfB8-nDmtpD9J1yWI0o-fjwhX4ntz0kbPpHFMyKaGxnf0ualFPe5FqqBU1o-gfjvEol1djOVbellbOMIuZOEzmdJ1MIs8ZgXC99hkGdL6mVJqG8rB6aj17xJ5EZaDwrdH6CkFYTDRM6wAdT3oJajRZh-mTgljiXFzn4FrMnNOG9IMOwhMyS483Lup15lRqTI0XHTPaQo',
             '13. All Term':
-               'PyJXJATmMVX82T3nQBlPDmL9YwwytO7ftQBWKZAeobcIAHMAAAEBAAUP63dxfnL4m1RarDIyq9bJfdjQyZTZZhwYJMzgyBAAABQ5atP2TU6Pe87sfli28K0RQnBRwSBzULIw60aDaX5YAes0TyFC4tQwAPR786hOUExkq8aJbf685w8txKOvZ4HnD0gvAwpNO_gavBJcQSt3T_RSLLyQywLDWmWt4G80bOqMEiuYl8OJu9uIjq5HDAgAMQAAAQEATGv5gafd2xbrofgWl6c7Is-Jk3sxDOa-mNdFxA9M8dN9IXWD1UP5Md5LrQicAppizAbfa9OqVVx7senax2JudWHYxaA0nDpucY4fUVRkCABDAAABAQAuIUAGC_B9ln0ACCHFjLj2jfopmBbIexqVRf9uLEEAwRwoIqh26WM5UtmVwgy-2vqWXGRLvZicrh-tfGPeY-pCkMixkY3qBVJSKk_PUMcoXci2fyPcTH-MVRBxLtcrkbkIAGcAAAEBAIcGt0RIryBtzeDcm2VLly_Zt6v4z0CbtFfyQd32kEE1yCfFoN-vh93GdNQRaGhBN9XfBopMh83hu_nPytUn1LkFmHg61_4QXbzZf77H1B40zjyetg9ArOYMhwVCW1n4PVP7AYwgBkqZ7PFr-qgi6e6VIU6_X6L0KObdNUYupPBy5PhkOAgArwAAAQEA0_LgxhKQtp3JbwTQuKesBDVdjwEvgFXjy_rb52kK0azr4UOrsilm1ZvArlukppo1jrq1U1ME0LZNnh-K6y_CcYAQ_n8Zzqu9ceaA-14O49ODNKzJA3jJEGaUHgcHvJD1YMckXuKz6k-Bc_RGO48rKwS7Rn81aUODXWTtmKjjiuEX2R-or5iwbuSdO_sdpGn8Hl6spuuc3MutDVmNrQHbR-PCK_zwDKZ0lUMYQy0HZLGUSlr3jiOqXC9Ux5hW-LivycjUNfr3zCIBtr0wCACvAAABAQAxpUCWSd4vj7sB4aFTbZjHkeZzV0nFgv7X8vvr9HqitIGYSRJ32jDQ5MRUbT6MzVBv7fYjpVVmzWUpMaiN7m7VCp0M7cb1YbOOdFgz42yGEPuLxei-gDJgWS5aBw-bfTScyYl8gcIoRBW-xxyYldSFA3H4pn1eE_C5e17kD208QqVP7VkB_kPK3EpN4yWU5-y4FYMxPTCtzBqDVV_paLKFFCpQz5InEFvGpoA3-fbroBSQUNhK0vB1P9iXvG7qSCxqE39C4eBm8_X-LuQIAK8AAAEBAPZnpZ4K9Mdux0ULr-f3KyX9OIJ8k5jCmvYaDkLVLs1jaJO9oMIUD5VDnJ4xXpf_CIJwhQM5giF1tVVXW30fKHMO9OQsZxPoGl8SGBL-tqYeC0KQ4Kiu8vbA1J93kCKsoVZtGVqxBXLV2JeS4_tpZbyHOqAOjzbo7pgtZnHvKBPOS9TyPkdg1P3FHY5mItZ8g8p67qJuB7GJjuL-7623z3bSlrqSyjVCpMcDWG6QGvVftKUAsJ0QWDr--q4hJlfHAhYF4IXOCbN7PvpF3AgAOAAAAQEAHLXEWIKPlWs6q10elK7Q6aKEZRCpmjGLQxFAoRLLVmGWEeTD8hVcO5cDWrMp26QrZ3tQCa4',
+               'giCf5c4SBC2uz4AQZ-AFkv6xfGj4KK7PGS8fYFVjQnIIAHMAAAEBAGnX3zc0LTTaMwStoZuDonH9nbhIM0gudg0hyDDgyBAAABSBx7NirH6-8f4CWngf5YKkL1yNlyCb_aFawaQZwTFoC3xSRo5u2Bd5jHkkoLvWTBCiZMwizlVJ2uz96wzc8t6IB1xl1Fab79k1glnpHLT3QEHbX8BHmJnoN-TPJdVa0RgUf8ZnlVQAisPe-2NmUggAMQAAAQEABBGpD5rAomKMHD49UvS6QfyQCy4Rek_9sGtnjDrcffB0S8ub7_WqbcEa-2mvYhtZF4UI5nc6RM7Imo2EB10VTAoGd7EUklejcC67JRXlCABDAAABAQCJiU9q5EuH02kmnpseVEARtP4n9s1l17SGwRRlfrRhuYFduq-GK20O1Vc7qutztIFgo1PSLBT3U85gyz-46b_47moOk1S8wIqhUcgTcWRmJ5O-tmUAuGe60QvCOyNHejwIAGcAAAEBAIHm_JQQ3r6Sops5nwmrYR4qhmz9nXDF4QbRDD_d4LgJUeHjewk8cmta4LPuhP5J8i4isQoiqw8P265TFuJRP0kE5rkTVSW9BOrL5LdRskOV-hhlASlOOwi27bkBr86Be3NhllZF1hf9Jw1amWUcGe7yDS6t9M9vO_9ACChV3BjuQ-MMGggArwAAAQEAnaA8rS5ww5OLtheyvx-yoEh4YTOfDnVImm0PDtm4BoMPdTFfd-RP7rM4fmI3aPg-A-jKbBgBL9L032ge6TQfHDa5gfuGgvgHStJMaK3GCuMGv0Anr6dJJ3aD3RVqIUs4GJePTAxsdn54n62C3dOX7OS2hPUgB45dqgyLNAZaEeDBbNBZPMPSJ2HFE9kOS412XiA7q-37uah68mArrYNjgt4A-mRyFa0gdfNRbsyTTM4E-lMLJ_t7wQ3iUAWWTDXGiJ14hesnsgYE-usfCACvAAABAQBtJ2xNQmO10n6HV7UlGsXqBalCOzWTsHfHzg2p19BOR3AtwBA6z2YaQIQG_UFBOZZ3EPcLK_rU-qeOnpxjScESu9xLg7pn93FxkxmFzI1Wrdx2w9-XgO142sDSjC6cMLXij295VT-I9BQIkFVf8LVhbWe9pmGHZx0jnUfINlKdhET89TT11FBQtCZtVHLRRYq6dhLS54vsiQmpGjGktcJj8u9Vk1GYdWUBlAnpLb2kWPREgDQp_sJY2hCfzUke_8wTFjo4nt67X-o19ZoIAK8AAAEBAHdVyD-mNYyFMsGchrT3Iud6PuZMAaDLW__blDT1xp0aKi18sSAnjpMHtLDjEF-rchZyXg33-hp5eoemYLM_MRKIBcQdxt9tlpHe4Us847AC9ICtR8XL6kHSpBzW_tmlqbG9ZZuA7moID2KP2LuzjMTQz7n15LXCJaAx41j5JEhI5ySP5K9QytfluQ-TzAlZxvQM2jc2bj6H-mKr_VLsF1N1z-gA7L3wTfY-NlAbFElAcdHblr71bwohoZij_g1E2G75mqh4mYQH3X6ugwgAOAAAAQEA89mPKGIJV0q0wDwJBGPqw0-H5hQQ3a5UF1wZZyYaPeCGmIh1pDxLvJyW6Im8hRBx9MlcL6k',
             '14. No Term':
-               'KY6WmcUBkWYcUBQJ_r0m2YM0J1K-0rN598ZlpU4LefwIAHMAAAABABfxTyYCeGPV_vo8roQc-WhfsNC42bgS1OUpDS7gyBAAABQAPI4hSh6b12MmA7FVLYT_hOXLUSBoRlKQrFHKLkh8oRQPMVMgCo-4Z4G84xknLPqpTuoOUyBv121mryPAvZVHbkKjB7P1an68pcG-oIkOp3GjqCedbD3B4PxUmUWwcjOhW3z4yHBhIqMyGQyK9AgAMQAAAAEAe3keg7sECm9jYVEyG49w5fiYnyGVKXhrCOCtbb3ALUt5U0i4dCkINiH6HeuKY8GZbyMSFHRwATa2ZkOC3VDVm5GY1bcKMaV1jOD2wgm3CABDAAAAAQD47iVFSgx6hoxeul_wRotapjdG8JDW1WvQfOG0oHl-m_aahMNtjp8I0JrpYOEBSpq0aofiBy87kQFOuctUnyomi4fYWSoGRq7asKfXpft4l80b_I9nPanR23rG0w_RumMIAGcAAAABAIWFQU4hEnaBJHTFqnKwDhUyUqep02fioBcr1Pc8C1LtDDWmlvdO7ji-vyRQSQP6sBw-V7WfN4pAcurcHmdWm0pZu-ZoLIQgHl1zSxpYR0diaKnNu16XklQp2jHaUNw_yhTP8Nnj_-q5iCmrdMlD6ZAMJELLazFEb15m53PVhT4CC6256QgArwAAAAEAxrKX6jZpJeP6VWjgjdbwRyB6ckuKgg58VBF--prrSRrpPlU5Ya8WFLQzl3LF23ss_EX6Hu2je7BbgkijD4DjHoSh3pmnZJTQwXL8lUFErjtq6ah6hi88bmjitQR9mwlr6EhT4D-ztojB_17zvzCbn_KM-tr4I4q31aEb2-zv-mlEzYsFxi_MUW4LDgN5C6HijopKUjI-i7YUAl2C9HZz3T25NcpR1nN_5181B1_W-PG5ym6KWLuTy7Ds32f9utJotCwxKYD9-cdLDnTWCACvAAAAAQA1vPt81dpOw6pCrvKOjTFE7B7-pGQx0uOL1Aems9Leh34WuRp_w0TFSQB_V501cOXTcPmMrfJE6fKlf8ygN6BngMIVbeeKai3s2k3uClP96ZRvgrjhM9zqrjbMhNz5kXA1T45BMC0jC3XXbtOG8FVTEColSVE61SDOqbpHmiFqO88xLhaMEIIS3BPokJEm0VENsOv6X5y9Pk35ah2uH9GnQnOWBA67qqLsexUzF0k7d0GNl9HOmPs6qXw1QLZzdKoYfn8gWq6Jf376FqkIAK8AAAABAGMazPNuhjG6Ltn2LsntkXZkdin8J6ITvRDEud3Lb8qFuEyh05imFHFHoDmH6Pw0w5_2KNe9XAGORsv-5_ZFnanbwsO7NM2zcl-nMVdCOL-cTuWxd_gB1Pq7MUz7zlb1jYAimGgy_Ssg_0jgF0NMIr8f5Ibd-LHDcbvFAWmKq-3cwRZjjm1C3JL96PC7BIdYTqtNKnyQm_vD8c7wIHMbmcznPdWGe3c_hcmwAgjJw_NuYLYylNoJ7BrFE6qWyQsJMZcYxWCrfG0GhnFKPQgAOAAAAAEATlJPKsxzH7J5H1n7KqjfMTQdQmWRa43yrOgh4Tjxm5t3ogNFAaZ0dCSpERxF2R5OMnFHNzc',
+               'pcPWB0APqgu7DhP71Tg0ZlwniOgz2PWFY0XSYur4SfIIAHMAAAABAJRbPPPi_MB4eybwJTiI_GA01--v3Zs4vL8wq2vgyBAAABTMenBYSr_g6oniXnOqzXlNAdowuyCMAOYlkwcrBWbbmySVkMnEhj-_cvMvNp8tQnJeU1gmUkC3oUuw93yR0OQ0ALcr7vXL0w9RAiMkKGbQQOQMaXTISKyTQ9aiOHuO5W-1hYCNToXucMAF_ctVbggAMQAAAAEAUbO_W0daXTxGB9M5gMtKE_ebr6S_9Gn4hNkNpl0ml2itgipAt5T1Lkz35X1myGC4qe_SAVfDEu6LLITYImA7bswDs6yvvc2YVKBOJCKSCABDAAAAAQBqikkul0Vz5V9JK3YEs1efdSJcziU6P-euggFy5-u_zTWLJ8pWecJhLH_HYgJ8oNegtlwB2LJvcDhQ7QOnvcV2wtRRJbngboHu9EVJs6P8GZ7x6ybZE048rb-An2Y_3zkIAGcAAAABAEzGMBCa8LNo0XAJCeq0OrTmDBo0rNpwohdehRNAMHwN8QFoFOw48upx1I1lHTS44f_uQDRko9U9BPbXVWemhdd_l8EYIcVrbbdBJ-Y-wxNCS41lP9QM2qrQgb1dN8nTAAl-ipp9FtVyFiJfjNmrfTGy4KQ_sX6UKJbw2xa3AvLqc-rdDwgArwAAAAEApa1mOExx1aelWnzGGJMlTpEobnSiLIvBR0b8p31dq9BxMorIp2-0VB-PeUhKKT94nQ-n-dJeI29Xhw7kVAf6_bCR5OUG2J1NdMX5MlhCLmoy-N96iIx9KUt1kB4vHoORX6bV3KFpzgl0hLw5Jtj9PDz9prsfaOqh7fTZGdRE4xeysHKL1rApPzhWtzgBlLEyrOpZEx3EdGjwjz32czMZPmsgN05Zp6DkynsnkSzq0ndJblQrSgg5H4F9nSzsvU6xur-G8ilhS8duoU45CACvAAAAAQA89b0Pw2AAIYtCO7lXLdD6HjDS7WHVONQDZBi1efyRDandpGkZ4L-O9vAmxtXvzMq06Ijx6bymwwwiV1RrWtpjgQBxypPgL56kXvCBLcx2LdqSavlIOePhqBusGFZX3DetxlWCPbT8laTew3uq3MnJdfrFu8sttwSVtEgK1_LRnBFwWQ0NWN8CoomrkVnXQ8-8vQJ3cb1Oh9g-KY6ValCO5gA97pS1qD1iezEf4eaTzHX-1lSPB3bfkbY_CWsk-XehV8BOOGEGdxgoxXgIAK8AAAABAHfsmBUTuv2MlQdIh9JYnzVsODFLfZko7lDrfDOjRBsJerEIlmRP06BThDUJ-qPwKgc6jZ-_Mk29Ns_VOgIMY8iMy390PnOF-y4bLDjHAzx6gw4Bx4saGY2f4fI1QLy-ddGQtBBvDj1YP-ietfMIlyh-rxvzQILVLPF0xHZWyqLvI4KuFB1j5jEg_fym_DCIKc_FwExzh9Y_drXVE2dGr9HchsIrncWTIEFgGmWPaTuYD2c0RuRUnjCIPFUAijvYW0HLtLJ7QPG-YsHLmQgAOAAAAAEAbHnHogE3JFGTP6YXt6rwkzSDtPh7bpANXyXlr668n0W49h9M_nGi939c8NCSgjS69NwNTaA',
          },
       },
    ];
@@ -2754,6 +2754,41 @@ describe('Block order change and deletion detection, multi-version', () => {
          });
          await expect(areEqual(dec, clearData)).resolves.toEqual(true);
          expect(decDoneCount).toBe(1);
+      }
+   });
+
+   // Each block is self delimiting, so the payload size in its header gives the next offset
+   function splitBlocks(bytes: Uint8Array, ver: number): Uint8Array[] {
+      const headerBytes = ver < cc.VERSION6 ? cc.HEADER_BYTES_OLD : cc.HEADER_BYTES_6P;
+      const blocks: Uint8Array[] = [];
+      let offset = 0;
+      while (offset < bytes.byteLength) {
+         const sizeStart = offset + cc.MAC_BYTES + cc.VER_BYTES;
+         const size = bytesToNum(bytes.subarray(sizeStart, sizeStart + cc.PAYLOAD_SIZE_BYTES));
+         const end = offset + headerBytes + size;
+         blocks.push(bytes.subarray(offset, end));
+         offset = end;
+      }
+      return blocks;
+   }
+
+   it('block reorder vectors are built from the blocks of the good ciphertext', () => {
+      for (const ver of vers) {
+         const goodBytes = base64ToBytes(ver.goodCt);
+         const goodBlocks = splitBlocks(goodBytes, ver.ver);
+
+         // Splitter control, so a wrong block boundary cannot make the checks below pass
+         expect(concatArrays(goodBlocks)).toEqual(goodBytes);
+         expect(goodBlocks.length).toBeGreaterThan(1);
+
+         for (const [change, ct] of Object.entries(ver.badCts)) {
+            // The term vectors rewrite flag bytes rather than moving whole blocks
+            if (!change.includes('Term')) {
+               for (const block of splitBlocks(base64ToBytes(ct), ver.ver)) {
+                  expect(goodBlocks.some((good) => isEqualArray(good, block))).toBe(true);
+               }
+            }
+         }
       }
    });
 

@@ -3,7 +3,15 @@
 // Shared helpers for the cipher-vector generation scripts
 // (gen_ciphers_vectors.ts, gen_ciphersvc_vectors.ts).
 
-import { PWDKeyProvider, Ciphers, getLatestEncipher, bytesToBase64, readStreamAll, concatArrays } from '@qcrypt/crypto';
+import {
+   PWDKeyProvider,
+   MasterKeyKeyProvider,
+   Ciphers,
+   getLatestEncipher,
+   bytesToBase64,
+   readStreamAll,
+   concatArrays,
+} from '@qcrypt/crypto';
 import type { ReadOpts } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 
@@ -20,7 +28,7 @@ export function bytesFromStr(s: string): Uint8Array {
    return new TextEncoder().encode(s);
 }
 
-// Monkey-patches Ciphers._encodeFileAD to override the `term` flag on
+// Monkey-patches Ciphers._encodeAD to override the `term` flag on
 // the first invocation (block0) and on the invocation that has term=true (the
 // natural last block). null = pass through. Restores the original on return.
 export async function withTermOverride<T>(
@@ -28,9 +36,9 @@ export async function withTermOverride<T>(
    forceBlockNTerm: boolean | null,
    fn: () => Promise<T>,
 ): Promise<T> {
-   const original = (Ciphers as any)._encodeFileAD.bind(Ciphers);
+   const original = (Ciphers as any)._encodeAD.bind(Ciphers);
    let firstCall = true;
-   (Ciphers as any)._encodeFileAD = (args: any) => {
+   (Ciphers as any)._encodeAD = (args: any) => {
       let force: boolean | null = null;
       if (firstCall) {
          force = forceBlock0Term;
@@ -46,15 +54,15 @@ export async function withTermOverride<T>(
    try {
       return await fn();
    } finally {
-      (Ciphers as any)._encodeFileAD = original;
+      (Ciphers as any)._encodeAD = original;
    }
 }
 
 // Like withTermOverride, but forces the same term value on every block.
 // Use to produce "All Term" (force=true) or "No Term" (force=false) corpora.
 export async function withTermOverrideEvery<T>(force: boolean, fn: () => Promise<T>): Promise<T> {
-   const original = (Ciphers as any)._encodeFileAD.bind(Ciphers);
-   (Ciphers as any)._encodeFileAD = (args: any) => {
+   const original = (Ciphers as any)._encodeAD.bind(Ciphers);
+   (Ciphers as any)._encodeAD = (args: any) => {
       if ('term' in args) {
          args = { ...args, term: force };
       }
@@ -63,7 +71,7 @@ export async function withTermOverrideEvery<T>(force: boolean, fn: () => Promise
    try {
       return await fn();
    } finally {
-      (Ciphers as any)._encodeFileAD = original;
+      (Ciphers as any)._encodeAD = original;
    }
 }
 
@@ -78,10 +86,25 @@ export async function encryptOneLoop(
    alg: cc.CipherAlgs,
    ic: number,
    readOpts?: ReadOpts,
-   customAd?: Uint8Array<ArrayBuffer>,
+   extraKeyMaterial?: Uint8Array<ArrayBuffer>,
 ): Promise<Uint8Array> {
-   const kp = new PWDKeyProvider(userCred.slice(0), [pwd, hint], customAd);
-   const encipher = getLatestEncipher(clearStream, kp, alg, 1, 1, ic, readOpts);
+   const kp = new PWDKeyProvider(userCred.slice(0), [pwd, hint], extraKeyMaterial);
+   return encryptAllBlocks(getLatestEncipher(clearStream, kp, alg, 1, 1, ic, readOpts));
+}
+
+// Master keys carry no password, so the iteration count is unused and passed as zero
+export async function encryptOneLoopMaster(
+   clearStream: ReadableStream<Uint8Array>,
+   masterKey: Uint8Array<ArrayBuffer>,
+   alg: cc.CipherAlgs,
+   readOpts?: ReadOpts,
+   extraKeyMaterial?: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array> {
+   const kp = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+   return encryptAllBlocks(getLatestEncipher(clearStream, kp, alg, 1, 1, 0, readOpts));
+}
+
+async function encryptAllBlocks(encipher: ReturnType<typeof getLatestEncipher>): Promise<Uint8Array> {
    const parts: Uint8Array[] = [];
    while (true) {
       const block = await encipher.encryptBlock();

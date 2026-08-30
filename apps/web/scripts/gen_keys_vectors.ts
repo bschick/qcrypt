@@ -2,11 +2,11 @@
 // libs/crypto/src/lib/keys.spec.ts:
 //   - "PWDKeyProvider keys match expected values"
 //   - "MasterKeyKeyProvider keys match expected values"
-//   - "PWDKeyProvider keys match expected values, multi-loop with customAd"
-//   - "MasterKeyKeyProvider keys match expected values, multi-loop with customAd"
+//   - "PWDKeyProvider keys match expected values, multi-loop with extraKeyMaterial"
+//   - "MasterKeyKeyProvider keys match expected values, multi-loop with extraKeyMaterial"
 //
 // Outputs both the existing single-loop V7 entries (regeneration) and the
-// new multi-loop V7 entries with customAd.
+// new multi-loop V7 entries with extraKeyMaterial.
 //
 // Run with: pnpm vectors:keys
 
@@ -72,10 +72,10 @@ async function deriveAll(
    };
 }
 
-function emitAlgEntry(alg: cc.CipherAlgs, keys: DerivedKeys, customAd: Uint8Array | undefined): void {
+function emitAlgEntry(alg: cc.CipherAlgs, keys: DerivedKeys, extraKeyMaterial: Uint8Array | undefined): void {
    console.log(`            '${alg}': {`);
-   if (customAd) {
-      console.log(`               customAd: ${uint8ArrayLiteral(customAd)},`);
+   if (extraKeyMaterial) {
+      console.log(`               extraKeyMaterial: ${uint8ArrayLiteral(extraKeyMaterial)},`);
    }
    console.log(`               ek: ${uint8ArrayLiteral(keys.ek)},`);
    console.log(`               sk: ${uint8ArrayLiteral(keys.sk)},`);
@@ -89,7 +89,7 @@ function emitAlgEntry(alg: cc.CipherAlgs, keys: DerivedKeys, customAd: Uint8Arra
 }
 
 async function genPwdBlock(
-   customAd: Uint8Array<ArrayBuffer> | undefined,
+   extraKeyMaterial: Uint8Array<ArrayBuffer> | undefined,
    lp: number,
    lpEnd: number,
    includeLpInTuple: boolean = false,
@@ -97,7 +97,7 @@ async function genPwdBlock(
    const header = includeLpInTuple ? `         [cc.VERSION${VER}, ${lp}, {` : `         [cc.VERSION${VER}, {`;
    console.log(header);
    for (const alg of ALGS) {
-      const keyProvider = new PWDKeyProvider(PWD_USERCRED.slice(0), [PWD_PWD, undefined], customAd);
+      const keyProvider = new PWDKeyProvider(PWD_USERCRED.slice(0), [PWD_PWD, undefined], extraKeyMaterial);
       keyProvider.setCipherDataInfo({
          ver: VER,
          alg,
@@ -108,13 +108,13 @@ async function genPwdBlock(
       });
       const keys = await deriveAll(keyProvider, alg, PWD_IV);
       keyProvider.purge();
-      emitAlgEntry(alg, keys, customAd);
+      emitAlgEntry(alg, keys, extraKeyMaterial);
    }
    console.log(`         }],`);
 }
 
 async function genMasterBlock(
-   customAd: Uint8Array<ArrayBuffer> | undefined,
+   extraKeyMaterial: Uint8Array<ArrayBuffer> | undefined,
    lp: number,
    lpEnd: number,
    includeLpInTuple: boolean = false,
@@ -122,7 +122,7 @@ async function genMasterBlock(
    const header = includeLpInTuple ? `         [cc.VERSION${VER}, ${lp}, {` : `         [cc.VERSION${VER}, {`;
    console.log(header);
    for (const alg of ALGS) {
-      const keyProvider = new MasterKeyKeyProvider(MASTER_KEY.slice(0), customAd);
+      const keyProvider = new MasterKeyKeyProvider(MASTER_KEY.slice(0), extraKeyMaterial);
       keyProvider.setCipherDataInfo({
          ver: VER,
          alg,
@@ -133,7 +133,7 @@ async function genMasterBlock(
       });
       const keys = await deriveAll(keyProvider, alg, MASTER_IV);
       keyProvider.purge();
-      emitAlgEntry(alg, keys, customAd);
+      emitAlgEntry(alg, keys, extraKeyMaterial);
    }
    console.log(`         }],`);
 }
@@ -141,28 +141,28 @@ async function genMasterBlock(
 async function main() {
    await cryptoReady();
 
-   printBanner(`PWDKeyProvider, V${VER}, single-loop, no customAd (re-emit)`);
+   printBanner(`PWDKeyProvider, V${VER}, single-loop, no extraKeyMaterial (re-emit)`);
    await genPwdBlock(undefined, 1, 1);
 
-   printBanner(`PWDKeyProvider, V${VER}, single-loop, with customAd (re-emit)`);
+   printBanner(`PWDKeyProvider, V${VER}, single-loop, with extraKeyMaterial (re-emit)`);
    await genPwdBlock(PWD_CUSTOMAD, 1, 1);
 
-   printBanner(`PWDKeyProvider, V${VER}, lp=1 of 2, with customAd`);
+   printBanner(`PWDKeyProvider, V${VER}, lp=1 of 2, with extraKeyMaterial`);
    await genPwdBlock(PWD_CUSTOMAD, 1, 2, true);
 
-   printBanner(`PWDKeyProvider, V${VER}, lp=2 of 2, with customAd`);
+   printBanner(`PWDKeyProvider, V${VER}, lp=2 of 2, with extraKeyMaterial`);
    await genPwdBlock(PWD_CUSTOMAD, 2, 2, true);
 
-   printBanner(`MasterKeyKeyProvider, V${VER}, single-loop, no customAd (re-emit)`);
+   printBanner(`MasterKeyKeyProvider, V${VER}, single-loop, no extraKeyMaterial (re-emit)`);
    await genMasterBlock(undefined, 1, 1);
 
-   printBanner(`MasterKeyKeyProvider, V${VER}, single-loop, with customAd (re-emit)`);
+   printBanner(`MasterKeyKeyProvider, V${VER}, single-loop, with extraKeyMaterial (re-emit)`);
    await genMasterBlock(MASTER_CUSTOMAD, 1, 1);
 
-   printBanner(`MasterKeyKeyProvider, V${VER}, lp=1 of 2, with customAd`);
+   printBanner(`MasterKeyKeyProvider, V${VER}, lp=1 of 2, with extraKeyMaterial`);
    await genMasterBlock(MASTER_CUSTOMAD, 1, 2, true);
 
-   printBanner(`MasterKeyKeyProvider, V${VER}, lp=2 of 2, with customAd`);
+   printBanner(`MasterKeyKeyProvider, V${VER}, lp=2 of 2, with extraKeyMaterial`);
    await genMasterBlock(MASTER_CUSTOMAD, 2, 2, true);
 }
 
