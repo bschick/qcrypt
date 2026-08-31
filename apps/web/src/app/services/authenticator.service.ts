@@ -83,6 +83,7 @@ export type InvitableInfo = ResponseTypes.InvitableInfo;
 const baseUrl = environment.apiHost;
 export const ACTIVITY_TIMEOUT_SEC = 60 * 60 * 1.5;
 const EXPIRY_CHECK_INTERVAL_MS = 1000 * 60 * 2;
+const RECOVERY_RETRY_DELAY_MS = 1000;
 const KEYSTORE_SLOT = 'user-cred-key';
 const ACCOUNTPIN_KEY = 'accountpin';
 
@@ -535,6 +536,36 @@ export class AuthenticatorService {
       }
    }
 
+   // PUTs recoveryPubKey as the account's recovery key. Safe to repeat for the same secret
+   private async _putRecoveryKey(
+      secret: Uint8Array<ArrayBuffer>,
+      recoveryPubKey: string,
+      userCredEnc?: string,
+   ): Promise<RecoveryWordsState> {
+      const timestamp = String(Date.now());
+      const nonce = bytesToBase64(getRandom(CHALLENGE_BYTES));
+
+      const body: RequestTypes.Recover3Key = {
+         recoveryPubKey,
+         timestamp,
+         nonce,
+         signature: createRecoveryProof(secret, this.userId, timestamp, nonce),
+         userCredEnc,
+      };
+
+      this._updateLoggedInUser(
+         await this._doFetch<UserInfo>({
+            method: 'PUT',
+            resource: 'recover3/key',
+            bodyJSON: JSON.stringify(body),
+         }),
+      );
+
+      // No exception means it committed. This should always 'match' unless we've hit an
+      // unexpected condition
+      return this.recoveryKeyId() === hashString(recoveryPubKey) ? 'match' : 'unknown';
+   }
+
    // Generates fresh recovery words and replaces the server-stored public key. The
    // words are cached for the one-time display that follows.
    public async changeRecoveryWords(): Promise<RecoveryWordsState> {
@@ -547,49 +578,32 @@ export class AuthenticatorService {
 
       const { secret, recoveryPubKey, recoveryWords } = this._newRecoverySecret(this.userId);
       try {
-         const timestamp = String(Date.now());
-         const nonce = bytesToBase64(getRandom(CHALLENGE_BYTES));
-
-         // Proves to the server that the uploaded key has a secret behind it
-         const signature = createRecoveryProof(secret, this.userId, timestamp, nonce);
-
-         const body: RequestTypes.Recover3Key = {
-            recoveryPubKey,
-            timestamp,
-            nonce,
-            signature,
-         };
-
          // A PRF account keeps userCred encrypted under the recovery secret
+         let userCredEnc: string | undefined;
          if (this.getUserInfo().prf) {
             const userCred = await this.getUserCred();
             try {
-               body.userCredEnc = await prfEncrypt(userCred, secret, this.userId);
+               userCredEnc = await prfEncrypt(userCred, secret, this.userId);
             } finally {
                userCred.fill(0);
             }
          }
 
+         let state: RecoveryWordsState;
          try {
-            this._updateLoggedInUser(
-               await this._doFetch<UserInfo>({
-                  method: 'PUT',
-                  resource: 'recover3/key',
-                  bodyJSON: JSON.stringify(body),
-               }),
-            );
+            state = await this._putRecoveryKey(secret, recoveryPubKey, userCredEnc);
          } catch (err) {
             // A lost response does not say whether the server committed
             console.error(err);
-         }
-
-         // Failing to store the new key can make an account unrecoverable, so always confirm
-         let state: RecoveryWordsState;
-         try {
-            state = await this.checkRecoveryWords(recoveryWords);
-         } catch (err) {
-            console.error(err);
             state = 'unknown';
+
+            // The first attempt may still be running on the server, so pause before repeating it
+            await new Promise((resolve) => setTimeout(resolve, RECOVERY_RETRY_DELAY_MS));
+            try {
+               state = await this._putRecoveryKey(secret, recoveryPubKey, userCredEnc);
+            } catch (retryErr) {
+               console.error(retryErr);
+            }
          }
 
          // Stored to present to the user
