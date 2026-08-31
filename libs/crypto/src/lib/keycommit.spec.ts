@@ -24,12 +24,15 @@ SOFTWARE. */
  * be solved to verify under two different cipher keys. These tests build that collision from
  * real derived keys and feed it to the real decipher, pinning which layer stops it. Across
  * passwords only v8 stops it, because the signing key behind the outer MAC does not depend on
- * the password. Across user credentials the outer MAC stops it in both v7 and v8.
+ * the password. Across user credentials the outer MAC stops it in both v7 and v8, and so it
+ * does across master keys and their extra key material, which is why the master-key path
+ * stores no commitment of its own.
  */
 import { cryptoReady, getSodium } from './crypto';
 import * as cc from './cipher.consts';
 import { getStreamDecipher, Ciphers, Packer, concatArrays, getRandom } from '../index';
-import { PWDKeyProvider } from './keys';
+import type { KeyProvider } from '../index';
+import { MasterKeyKeyProvider, PWDKeyProvider } from './keys';
 import { isEqualArray, streamFromBytes } from './utils.spec';
 
 // GF(2^128) in the bit order GHASH uses
@@ -182,7 +185,7 @@ describe('Key commitment against an AEAD tag collision', () => {
    };
 
    // Omit ver to leave the provider unprimed, as it is when decrypting from a stream
-   function makeKeyProvider(
+   function makePWDKeyProvider(
       userCred: Uint8Array<ArrayBuffer>,
       pwd: string,
       slt: Uint8Array<ArrayBuffer>,
@@ -195,35 +198,64 @@ describe('Key commitment against an AEAD tag collision', () => {
       return keyProvider;
    }
 
+   // Master keys are not password stretched, so the iteration count must stay zero
+   function makeMasterKeyProvider(
+      masterKey: Uint8Array<ArrayBuffer>,
+      extraKeyMaterial: Uint8Array<ArrayBuffer> | undefined,
+      slt: Uint8Array<ArrayBuffer>,
+      ver?: number,
+   ): MasterKeyKeyProvider {
+      const keyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial?.slice(0));
+      if (ver !== undefined) {
+         keyProvider.setCipherDataInfo({ ver, alg: ALG, ic: 0, slt: slt.slice(0), lp: 1, lpEnd: 1 });
+      }
+      return keyProvider;
+   }
+
+   /* storedCommit is what lands on the wire: the derived commitment for providers that
+    * support one, and empty for the master-key path, which relies on the outer MAC instead.
+    */
    function buildFileAD(
       ver: number,
       iv: Uint8Array<ArrayBuffer>,
       slt: Uint8Array<ArrayBuffer>,
-      keyCommitment: Uint8Array<ArrayBuffer>,
+      ic: number,
+      storedCommit: Uint8Array<ArrayBuffer>,
    ): Uint8Array<ArrayBuffer> {
       const packer = new Packer(cc.ADDIONTAL_DATA_MAX_BYTES);
       packer.flags = 1;
       packer.alg = ALG;
       packer.iv = iv;
       packer.slt = slt;
-      packer.ic = cc.ICOUNT_MIN;
+      packer.ic = ic;
       packer.lpp(1, 1);
       packer.hint = new Uint8Array(0);
       if (ver >= cc.VERSION8) {
-         packer.commit = keyCommitment;
+         packer.commit = storedCommit;
       }
       return packer.trim().slice(0);
    }
 
    /* v8 stores the commitment on the wire, so every key sees the same associated data.
-    * v7 stores nothing and appends the commit key it derived, so each key sees its own.
+    * v7 stores nothing and appends the extra key material and the commit key it derived,
+    * so each key sees its own.
     */
    function aeadAD(
       ver: number,
       fileAD: Uint8Array<ArrayBuffer>,
+      extraKeyMaterial: Uint8Array<ArrayBuffer> | undefined,
       keyCommitment: Uint8Array<ArrayBuffer>,
    ): Uint8Array<ArrayBuffer> {
-      return ver >= cc.VERSION8 ? fileAD : concatArrays([fileAD, keyCommitment]);
+      let aeadAd = fileAD;
+      if (ver < cc.VERSION8) {
+         const parts: Uint8Array<ArrayBuffer>[] = [fileAD];
+         if (extraKeyMaterial) {
+            parts.push(extraKeyMaterial);
+         }
+         parts.push(keyCommitment);
+         aeadAd = concatArrays(parts);
+      }
+      return aeadAd;
    }
 
    // Mirrors EncipherV8._createHeader, which cannot be reused because it stamps its own version
@@ -254,8 +286,8 @@ describe('Key commitment against an AEAD tag collision', () => {
       ver: number,
       iv: Uint8Array<ArrayBuffer>,
       slt: Uint8Array<ArrayBuffer>,
-      keyProviderOrig: PWDKeyProvider,
-      keyProviderAlt: PWDKeyProvider,
+      keyProviderOrig: KeyProvider,
+      keyProviderAlt: KeyProvider,
    ): Promise<CraftedBlock> {
       const ekOrig = (await keyProviderOrig.getCipherKey(true)).slice(0);
       const commitOrig = (await keyProviderOrig.getKeyCommitment()).slice(0);
@@ -265,9 +297,10 @@ describe('Key commitment against an AEAD tag collision', () => {
       const commitAlt = (await keyProviderAlt.getKeyCommitment()).slice(0);
       expect(isEqualArray(ekOrig, ekAlt)).toBe(false);
 
-      const fileAD = buildFileAD(ver, iv, slt, commitOrig);
-      const adOrig = aeadAD(ver, fileAD, commitOrig);
-      const adAlt = aeadAD(ver, fileAD, commitAlt);
+      const storedCommit = keyProviderOrig.supportsCommitment ? commitOrig : new Uint8Array(0);
+      const fileAD = buildFileAD(ver, iv, slt, keyProviderOrig.getCipherDataInfo().ic, storedCommit);
+      const adOrig = aeadAD(ver, fileAD, keyProviderOrig.getExtraKeyMaterial(), commitOrig);
+      const adAlt = aeadAD(ver, fileAD, keyProviderAlt.getExtraKeyMaterial(), commitAlt);
 
       const encryptedData = solveCollision(await gcmParams(ekOrig, iv), adOrig, await gcmParams(ekAlt, iv), adAlt);
       const crafted = concatArrays([createHeader(ver, signingKey, fileAD, encryptedData), fileAD, encryptedData]);
@@ -280,7 +313,7 @@ describe('Key commitment against an AEAD tag collision', () => {
       await expect(gcmOpen(block.ekAlt, iv, block.adAlt, block.encryptedData)).resolves.toBeDefined();
    }
 
-   async function decryptBlock0(crafted: Uint8Array<ArrayBuffer>, keyProvider: PWDKeyProvider): Promise<Uint8Array> {
+   async function decryptBlock0(crafted: Uint8Array<ArrayBuffer>, keyProvider: KeyProvider): Promise<Uint8Array> {
       const [cipherStream] = streamFromBytes(crafted);
       const decipher = await getStreamDecipher(cipherStream, keyProvider);
       return decipher.decryptBlock0();
@@ -295,15 +328,15 @@ describe('Key commitment against an AEAD tag collision', () => {
          cc.VERSION7,
          iv,
          slt,
-         makeKeyProvider(userCred, PWD_ORIG, slt, cc.VERSION7),
-         makeKeyProvider(userCred, PWD_ALT, slt, cc.VERSION7),
+         makePWDKeyProvider(userCred, PWD_ORIG, slt, cc.VERSION7),
+         makePWDKeyProvider(userCred, PWD_ALT, slt, cc.VERSION7),
       );
       // The AES-GCM take either key
       await expectAESGCMAcceptsBoth(block, iv);
 
       // v7 is not fully key-commiting, both passwords open the same bytes to different plaintext
-      const clearOrig = await decryptBlock0(block.crafted, makeKeyProvider(userCred, PWD_ORIG, slt));
-      const clearAlt = await decryptBlock0(block.crafted, makeKeyProvider(userCred, PWD_ALT, slt));
+      const clearOrig = await decryptBlock0(block.crafted, makePWDKeyProvider(userCred, PWD_ORIG, slt));
+      const clearAlt = await decryptBlock0(block.crafted, makePWDKeyProvider(userCred, PWD_ALT, slt));
 
       expect(clearOrig).toHaveLength(CLEAR_BYTES);
       expect(clearAlt).toHaveLength(CLEAR_BYTES);
@@ -319,17 +352,17 @@ describe('Key commitment against an AEAD tag collision', () => {
          cc.CURRENT_VERSION,
          iv,
          slt,
-         makeKeyProvider(userCred, PWD_ORIG, slt, cc.CURRENT_VERSION),
-         makeKeyProvider(userCred, PWD_ALT, slt, cc.CURRENT_VERSION),
+         makePWDKeyProvider(userCred, PWD_ORIG, slt, cc.CURRENT_VERSION),
+         makePWDKeyProvider(userCred, PWD_ALT, slt, cc.CURRENT_VERSION),
       );
       // The AES-GCM take either key
       await expectAESGCMAcceptsBoth(block, iv);
 
-      await expect(decryptBlock0(block.crafted, makeKeyProvider(userCred, PWD_ORIG, slt))).resolves.toHaveLength(
+      await expect(decryptBlock0(block.crafted, makePWDKeyProvider(userCred, PWD_ORIG, slt))).resolves.toHaveLength(
          CLEAR_BYTES,
       );
       // Stored commitment rejects, fully key-committing
-      await expect(decryptBlock0(block.crafted, makeKeyProvider(userCred, PWD_ALT, slt))).rejects.toThrow(
+      await expect(decryptBlock0(block.crafted, makePWDKeyProvider(userCred, PWD_ALT, slt))).rejects.toThrow(
          /key commitment/,
       );
    });
@@ -348,17 +381,77 @@ describe('Key commitment against an AEAD tag collision', () => {
             ver,
             iv,
             slt,
-            makeKeyProvider(userCredOrig, PWD_ORIG, slt, ver),
-            makeKeyProvider(userCredAlt, PWD_ORIG, slt, ver),
+            makePWDKeyProvider(userCredOrig, PWD_ORIG, slt, ver),
+            makePWDKeyProvider(userCredAlt, PWD_ORIG, slt, ver),
          );
          // The AES-GCM take either key
          await expectAESGCMAcceptsBoth(block, iv);
 
-         await expect(decryptBlock0(block.crafted, makeKeyProvider(userCredOrig, PWD_ORIG, slt))).resolves.toHaveLength(
-            CLEAR_BYTES,
-         );
+         await expect(
+            decryptBlock0(block.crafted, makePWDKeyProvider(userCredOrig, PWD_ORIG, slt)),
+         ).resolves.toHaveLength(CLEAR_BYTES);
          // Outer MAC rejects, key-committing across userCreds
-         await expect(decryptBlock0(block.crafted, makeKeyProvider(userCredAlt, PWD_ORIG, slt))).rejects.toThrow(
+         await expect(decryptBlock0(block.crafted, makePWDKeyProvider(userCredAlt, PWD_ORIG, slt))).rejects.toThrow(
+            /Invalid MAC/,
+         );
+      }
+   });
+
+   /* The master-key path derives the cipher key and the signing key from the same root, so
+    * nothing can change one without changing the other. That is why v8 stores no commitment
+    * here, and these two tests are what make that omission safe to rely on.
+    */
+   it('v7 and v8 reject a second master key at the outer MAC', async () => {
+      for (const ver of [cc.VERSION7, cc.CURRENT_VERSION]) {
+         const masterKeyOrig = getRandom(cc.KEY_BYTES);
+         const masterKeyAlt = getRandom(cc.KEY_BYTES);
+         const slt = getRandom(cc.SLT_BYTES);
+         const iv = getRandom(Ciphers.algIVByteLength(ALG));
+
+         const block = await craftCollisionBlock(
+            ver,
+            iv,
+            slt,
+            makeMasterKeyProvider(masterKeyOrig, undefined, slt, ver),
+            makeMasterKeyProvider(masterKeyAlt, undefined, slt, ver),
+         );
+         // The AES-GCM take either key
+         await expectAESGCMAcceptsBoth(block, iv);
+
+         await expect(
+            decryptBlock0(block.crafted, makeMasterKeyProvider(masterKeyOrig, undefined, slt)),
+         ).resolves.toHaveLength(CLEAR_BYTES);
+         await expect(
+            decryptBlock0(block.crafted, makeMasterKeyProvider(masterKeyAlt, undefined, slt)),
+         ).rejects.toThrow(/Invalid MAC/);
+      }
+   });
+
+   /* Extra key material is the per-user domain separator on the master-key path, so a file
+    * written for one user must not open for another holding the same master key.
+    */
+   it('v7 and v8 reject different extra key material at the outer MAC', async () => {
+      for (const ver of [cc.VERSION7, cc.CURRENT_VERSION]) {
+         const masterKey = getRandom(cc.KEY_BYTES);
+         const extraOrig = getRandom(16);
+         const extraAlt = getRandom(16);
+         const slt = getRandom(cc.SLT_BYTES);
+         const iv = getRandom(Ciphers.algIVByteLength(ALG));
+
+         const block = await craftCollisionBlock(
+            ver,
+            iv,
+            slt,
+            makeMasterKeyProvider(masterKey, extraOrig, slt, ver),
+            makeMasterKeyProvider(masterKey, extraAlt, slt, ver),
+         );
+         // The AES-GCM take either key
+         await expectAESGCMAcceptsBoth(block, iv);
+
+         await expect(
+            decryptBlock0(block.crafted, makeMasterKeyProvider(masterKey, extraOrig, slt)),
+         ).resolves.toHaveLength(CLEAR_BYTES);
+         await expect(decryptBlock0(block.crafted, makeMasterKeyProvider(masterKey, extraAlt, slt))).rejects.toThrow(
             /Invalid MAC/,
          );
       }

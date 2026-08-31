@@ -34,6 +34,7 @@ import {
    Ciphers,
    type EContext,
    PWDKeyProvider,
+   MasterKeyKeyProvider,
    concatArrays,
 } from '@qcrypt/crypto';
 
@@ -122,6 +123,48 @@ function streamFromBase64(b64: string): [ReadableStream<Uint8Array>, Uint8Array]
    const blob = new Blob([data], { type: 'application/octet-stream' });
    return [blob.stream(), data];
 }
+
+// Each block is self delimiting, so the payload size in its header gives the next offset
+function splitBlocks(bytes: Uint8Array, ver: number): Uint8Array[] {
+   const headerBytes = ver < cc.VERSION6 ? cc.HEADER_BYTES_OLD : cc.HEADER_BYTES_6P;
+   const blocks: Uint8Array[] = [];
+   let offset = 0;
+   while (offset < bytes.byteLength) {
+      const sizeStart = offset + cc.MAC_BYTES + cc.VER_BYTES;
+      const size = bytesToNum(bytes.subarray(sizeStart, sizeStart + cc.PAYLOAD_SIZE_BYTES));
+      const end = offset + headerBytes + size;
+      blocks.push(bytes.subarray(offset, end));
+      offset = end;
+   }
+   return blocks;
+}
+
+// Long enough that the manipulation and block-order vectors split into 8 blocks
+const clearData = new Uint8Array([
+   118, 101, 114, 115, 105, 111, 110, 58, 32, 34, 51, 46, 56, 34, 10, 115, 101, 114, 118, 105, 99, 101, 115, 58, 10, 32,
+   32, 100, 111, 99, 107, 103, 101, 58, 10, 32, 32, 32, 32, 105, 109, 97, 103, 101, 58, 32, 108, 111, 117, 105, 115,
+   108, 97, 109, 47, 100, 111, 99, 107, 103, 101, 58, 49, 10, 32, 32, 32, 32, 114, 101, 115, 116, 97, 114, 116, 58, 32,
+   117, 110, 108, 101, 115, 115, 45, 115, 116, 111, 112, 112, 101, 100, 10, 32, 32, 32, 32, 112, 111, 114, 116, 115, 58,
+   10, 32, 32, 32, 32, 32, 32, 45, 32, 53, 48, 48, 49, 58, 53, 48, 48, 49, 10, 32, 32, 32, 32, 118, 111, 108, 117, 109,
+   101, 115, 58, 10, 32, 32, 32, 32, 32, 32, 45, 32, 47, 118, 97, 114, 47, 114, 117, 110, 47, 100, 111, 99, 107, 101,
+   114, 46, 115, 111, 99, 107, 58, 47, 118, 97, 114, 47, 114, 117, 110, 47, 100, 111, 99, 107, 101, 114, 46, 115, 111,
+   99, 107, 10, 32, 32, 32, 32, 32, 32, 45, 32, 46, 47, 100, 97, 116, 97, 58, 47, 97, 112, 112, 47, 100, 97, 116, 97,
+   10, 32, 32, 32, 32, 32, 32, 35, 32, 83, 116, 97, 99, 107, 115, 32, 68, 105, 114, 101, 99, 116, 111, 114, 121, 10, 32,
+   32, 32, 32, 32, 32, 35, 32, 226, 154, 160, 239, 184, 143, 32, 82, 69, 65, 68, 32, 73, 84, 32, 67, 65, 82, 69, 70, 85,
+   76, 76, 89, 46, 32, 73, 102, 32, 121, 111, 117, 32, 100, 105, 100, 32, 105, 116, 32, 119, 114, 111, 110, 103, 44, 32,
+   121, 111, 117, 114, 32, 100, 97, 116, 97, 32, 99, 111, 117, 108, 100, 32, 101, 110, 100, 32, 117, 112, 32, 119, 114,
+   105, 116, 105, 110, 103, 32, 105, 110, 116, 111, 32, 97, 32, 87, 82, 79, 78, 71, 32, 80, 65, 84, 72, 46, 10, 32, 32,
+   32, 32, 32, 32, 35, 32, 226, 154, 160, 239, 184, 143, 32, 49, 46, 32, 70, 85, 76, 76, 32, 112, 97, 116, 104, 32, 111,
+   110, 108, 121, 46, 32, 78, 111, 32, 114, 101, 108, 97, 116, 105, 118, 101, 32, 112, 97, 116, 104, 32, 40, 77, 85, 83,
+   84, 41, 10, 32, 32, 32, 32, 32, 32, 35, 32, 226, 154, 160, 239, 184, 143, 32, 50, 46, 32, 76, 101, 102, 116, 32, 83,
+   116, 97, 99, 107, 115, 32, 80, 97, 116, 104, 32, 61, 61, 61, 32, 82, 105, 103, 104, 116, 32, 83, 116, 97, 99, 107,
+   115, 32, 80, 97, 116, 104, 32, 40, 77, 85, 83, 84, 41, 10, 32, 32, 32, 32, 32, 32, 45, 32, 47, 111, 112, 116, 47,
+   115, 116, 97, 99, 107, 115, 58, 47, 111, 112, 116, 47, 115, 116, 97, 99, 107, 115, 10, 32, 32, 32, 32, 101, 110, 118,
+   105, 114, 111, 110, 109, 101, 110, 116, 58, 10, 32, 32, 32, 32, 32, 32, 35, 32, 84, 101, 108, 108, 32, 68, 111, 99,
+   107, 103, 101, 32, 119, 104, 101, 114, 101, 32, 116, 111, 32, 102, 105, 110, 100, 32, 116, 104, 101, 32, 115, 116,
+   97, 99, 107, 115, 10, 32, 32, 32, 32, 32, 32, 45, 32, 68, 79, 67, 75, 71, 69, 95, 83, 84, 65, 67, 75, 83, 95, 68, 73,
+   82, 61, 47, 111, 112, 116, 47, 115, 116, 97, 99, 107, 115,
+]);
 
 describe('Stream encryption and decryption', () => {
    let cipherSvc: CipherService;
@@ -1744,6 +1787,265 @@ describe('Stream encryption and decryption with extraKeyMaterial', () => {
    });
 });
 
+describe('Stream encryption and decryption with MasterKeyKeyProvider', () => {
+   let cipherSvc: CipherService;
+   beforeEach(async () => {
+      await cryptoReady();
+      TestBed.configureTestingModule({});
+      cipherSvc = TestBed.inject(CipherService);
+   });
+
+   it('successful round trip, all algorithms, no extraKeyMaterial', async () => {
+      for (const alg of Ciphers.algs()) {
+         const srcString = 'This is a secret 🦆';
+         const [clearStream, _clearData] = streamFromStr(srcString);
+         const masterKey = getRandom(cc.KEY_BYTES);
+
+         const econtext: EContext = {
+            algs: [alg],
+         };
+
+         const encKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0));
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+         const decKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0));
+         const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+
+         const resString = await readStreamAll(decrypted, true);
+         expect(resString).toEqual(srcString);
+      }
+   });
+
+   it('successful round trip, all algorithms, with extraKeyMaterial', async () => {
+      for (const alg of Ciphers.algs()) {
+         const srcString = 'This is a secret 🦆';
+         const [clearStream, _clearData] = streamFromStr(srcString);
+         const masterKey = getRandom(cc.KEY_BYTES);
+         const extraKeyMaterial = getRandom(16);
+
+         const econtext: EContext = {
+            algs: [alg],
+         };
+
+         const encKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+         const decKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+         const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+
+         const resString = await readStreamAll(decrypted, true);
+         expect(resString).toEqual(srcString);
+      }
+   });
+
+   // The authenticator and PRF paths pass a base64 userId rather than bytes
+   it('successful round trip, all algorithms, base64 extraKeyMaterial', async () => {
+      for (const alg of Ciphers.algs()) {
+         const srcString = 'This is a secret 🦆';
+         const [clearStream, _clearData] = streamFromStr(srcString);
+         const masterKey = getRandom(cc.KEY_BYTES);
+         const extraKeyMaterial = bytesToBase64(getRandom(16));
+
+         const econtext: EContext = {
+            algs: [alg],
+         };
+
+         const encKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+         const decKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), base64ToBytes(extraKeyMaterial));
+         const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+
+         const resString = await readStreamAll(decrypted, true);
+         expect(resString).toEqual(srcString);
+      }
+   });
+
+   it('successful cipherdatainfo, all algorithms, with extraKeyMaterial', async () => {
+      for (const alg of Ciphers.algs()) {
+         const srcString = 'This is a secret 🦆';
+         const [clearStream, _clearData] = streamFromStr(srcString);
+         const masterKey = getRandom(cc.KEY_BYTES);
+         const extraKeyMaterial = getRandom(1);
+
+         const econtext: EContext = {
+            algs: [alg],
+         };
+
+         const encKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+         const infoKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+         const cipherInfo = await cipherSvc.getCipherStreamInfo(cipherStream, infoKeyProvider);
+         expect(cipherInfo.ver).toEqual(cc.CURRENT_VERSION);
+         expect(cipherInfo.alg).toEqual(alg);
+         expect(cipherInfo.ic).toBeFalsy();
+         expect(cipherInfo.lp).toEqual(1);
+         expect(cipherInfo.slt.byteLength).toEqual(cc.SLT_BYTES);
+         expect(cipherInfo.hint).toBeFalsy();
+      }
+   });
+
+   it('failed round trip, all algorithms, missing extraKeyMaterial', async () => {
+      for (const alg of Ciphers.algs()) {
+         const srcString = 'This is a secret 🦆';
+         const [clearStream, _clearData] = streamFromStr(srcString);
+         const masterKey = getRandom(cc.KEY_BYTES);
+         const extraKeyMaterial = getRandom(16);
+
+         const econtext: EContext = {
+            algs: [alg],
+         };
+
+         const encKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+         const decKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0));
+         await expect(cipherSvc.decryptStream(cipherStream, decKeyProvider)).rejects.toThrow(/Invalid MAC/);
+      }
+   });
+
+   it('failed round trip, all algorithms, added extraKeyMaterial', async () => {
+      for (const alg of Ciphers.algs()) {
+         const srcString = 'This is a secret 🦆';
+         const [clearStream, _clearData] = streamFromStr(srcString);
+         const masterKey = getRandom(cc.KEY_BYTES);
+
+         const econtext: EContext = {
+            algs: [alg],
+         };
+
+         const encKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0));
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+         const decKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), getRandom(16));
+         await expect(cipherSvc.decryptStream(cipherStream, decKeyProvider)).rejects.toThrow(/Invalid MAC/);
+      }
+   });
+
+   it('failed round trip, all algorithms, wrong extraKeyMaterial', async () => {
+      for (const alg of Ciphers.algs()) {
+         const srcString = 'This is a secret 🦆';
+         const [clearStream, _clearData] = streamFromStr(srcString);
+         const masterKey = getRandom(cc.KEY_BYTES);
+         const extraKeyMaterial = getRandom(16);
+         const wrongExtraKeyMaterial = getRandom(16);
+
+         const econtext: EContext = {
+            algs: [alg],
+         };
+
+         const encKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+         const decKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), wrongExtraKeyMaterial);
+         await expect(cipherSvc.decryptStream(cipherStream, decKeyProvider)).rejects.toThrow(/Invalid MAC/);
+      }
+   });
+
+   it('failed round trip, all algorithms, wrong master key', async () => {
+      for (const alg of Ciphers.algs()) {
+         const srcString = 'This is a secret 🦆';
+         const [clearStream, _clearData] = streamFromStr(srcString);
+         const masterKey = getRandom(cc.KEY_BYTES);
+         const extraKeyMaterial = getRandom(16);
+
+         const econtext: EContext = {
+            algs: [alg],
+         };
+
+         const encKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+         const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+         const decKeyProvider = new MasterKeyKeyProvider(getRandom(cc.KEY_BYTES), extraKeyMaterial);
+         await expect(cipherSvc.decryptStream(cipherStream, decKeyProvider)).rejects.toThrow(/Invalid MAC/);
+      }
+   });
+
+   it('successful round trip, mixed algorithms, loops, with extraKeyMaterial', async () => {
+      const algKeys = Ciphers.algs();
+      const srcString = 'This is a secret 🦆';
+      const [clearStream] = streamFromStr(srcString);
+      const masterKey = getRandom(cc.KEY_BYTES);
+      const extraKeyMaterial = getRandom(16);
+
+      const econtext: EContext = {
+         algs: algKeys,
+      };
+
+      const encKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+      const cipherData = await readStreamAll(await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext));
+
+      // The outermost loop is what got stored, so it reports the last algorithm
+      const infoKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+      const [infoStream] = streamFromBytes(cipherData);
+      const cipherInfo = await cipherSvc.getCipherStreamInfo(infoStream, infoKeyProvider);
+      expect(cipherInfo.lp).toEqual(algKeys.length);
+      expect(cipherInfo.lpEnd).toEqual(algKeys.length);
+      expect(cipherInfo.alg).toEqual(algKeys[algKeys.length - 1]);
+      expect(cipherInfo.ver).toEqual(cc.CURRENT_VERSION);
+
+      const decKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+      const [decStream] = streamFromBytes(cipherData);
+      const decrypted = await cipherSvc.decryptStream(decStream, decKeyProvider);
+
+      const resString = await readStreamAll(decrypted, true);
+      expect(resString).toEqual(srcString);
+   });
+
+   it('failed round trip, mixed algorithms, loops, wrong extraKeyMaterial', async () => {
+      const algKeys = Ciphers.algs();
+      const srcString = 'This is a secret 🦆';
+      const [clearStream] = streamFromStr(srcString);
+      const masterKey = getRandom(cc.KEY_BYTES);
+      const extraKeyMaterial = getRandom(16);
+      const wrongExtraKeyMaterial = getRandom(16);
+
+      const econtext: EContext = {
+         algs: algKeys,
+      };
+
+      const encKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+      const cipherStream = await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext);
+
+      const decKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), wrongExtraKeyMaterial);
+      await expect(cipherSvc.decryptStream(cipherStream, decKeyProvider)).rejects.toThrow(/Invalid MAC/);
+   });
+
+   it('detect encryption argument errors', async () => {
+      const srcString = 'This is a secret 🦆';
+      const masterKey = getRandom(cc.KEY_BYTES);
+      const extraKeyMaterial = getRandom(16);
+
+      // Prove the arguments are otherwise valid
+      const [goodStream] = streamFromStr(srcString);
+      const goodKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+      let cipherStream = await cipherSvc.encryptStream(goodStream, goodKeyProvider, { algs: ['X20-PLY'] });
+
+      const decKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+      const decrypted = await cipherSvc.decryptStream(cipherStream, decKeyProvider);
+      await expect(readStreamAll(decrypted, true)).resolves.toEqual(srcString);
+
+      // Master keys are not password stretched, so an iteration count is meaningless
+      const [icStream] = streamFromStr(srcString);
+      const icKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+      cipherStream = await cipherSvc.encryptStream(icStream, icKeyProvider, {
+         algs: ['X20-PLY'],
+         ic: cc.ICOUNT_MIN,
+      });
+
+      await expect(readStreamAll(cipherStream)).rejects.toThrow(/not used by masterkey/);
+
+      expect(() => new MasterKeyKeyProvider(getRandom(cc.KEY_BYTES - 1), extraKeyMaterial)).toThrow(
+         /Invalid masterKey length/,
+      );
+      expect(() => new MasterKeyKeyProvider(new Uint8Array(cc.KEY_BYTES), extraKeyMaterial)).toThrow(/all zero bytes/);
+      expect(() => new MasterKeyKeyProvider(masterKey.slice(0), getRandom(cc.EXTRA_BYTES_MAX + 1))).toThrow(
+         /Extra key material too long/,
+      );
+   });
+});
+
 describe('Read block size bugs check', () => {
    let cipherSvc: CipherService;
    let savedReadSize: number;
@@ -1896,33 +2198,6 @@ describe('Stream manipulation, multi-version', () => {
          ver: 8,
       },
    ];
-
-   const clearData = new Uint8Array([
-      118, 101, 114, 115, 105, 111, 110, 58, 32, 34, 51, 46, 56, 34, 10, 115, 101, 114, 118, 105, 99, 101, 115, 58, 10,
-      32, 32, 100, 111, 99, 107, 103, 101, 58, 10, 32, 32, 32, 32, 105, 109, 97, 103, 101, 58, 32, 108, 111, 117, 105,
-      115, 108, 97, 109, 47, 100, 111, 99, 107, 103, 101, 58, 49, 10, 32, 32, 32, 32, 114, 101, 115, 116, 97, 114, 116,
-      58, 32, 117, 110, 108, 101, 115, 115, 45, 115, 116, 111, 112, 112, 101, 100, 10, 32, 32, 32, 32, 112, 111, 114,
-      116, 115, 58, 10, 32, 32, 32, 32, 32, 32, 45, 32, 53, 48, 48, 49, 58, 53, 48, 48, 49, 10, 32, 32, 32, 32, 118,
-      111, 108, 117, 109, 101, 115, 58, 10, 32, 32, 32, 32, 32, 32, 45, 32, 47, 118, 97, 114, 47, 114, 117, 110, 47,
-      100, 111, 99, 107, 101, 114, 46, 115, 111, 99, 107, 58, 47, 118, 97, 114, 47, 114, 117, 110, 47, 100, 111, 99,
-      107, 101, 114, 46, 115, 111, 99, 107, 10, 32, 32, 32, 32, 32, 32, 45, 32, 46, 47, 100, 97, 116, 97, 58, 47, 97,
-      112, 112, 47, 100, 97, 116, 97, 10, 32, 32, 32, 32, 32, 32, 35, 32, 83, 116, 97, 99, 107, 115, 32, 68, 105, 114,
-      101, 99, 116, 111, 114, 121, 10, 32, 32, 32, 32, 32, 32, 35, 32, 226, 154, 160, 239, 184, 143, 32, 82, 69, 65, 68,
-      32, 73, 84, 32, 67, 65, 82, 69, 70, 85, 76, 76, 89, 46, 32, 73, 102, 32, 121, 111, 117, 32, 100, 105, 100, 32,
-      105, 116, 32, 119, 114, 111, 110, 103, 44, 32, 121, 111, 117, 114, 32, 100, 97, 116, 97, 32, 99, 111, 117, 108,
-      100, 32, 101, 110, 100, 32, 117, 112, 32, 119, 114, 105, 116, 105, 110, 103, 32, 105, 110, 116, 111, 32, 97, 32,
-      87, 82, 79, 78, 71, 32, 80, 65, 84, 72, 46, 10, 32, 32, 32, 32, 32, 32, 35, 32, 226, 154, 160, 239, 184, 143, 32,
-      49, 46, 32, 70, 85, 76, 76, 32, 112, 97, 116, 104, 32, 111, 110, 108, 121, 46, 32, 78, 111, 32, 114, 101, 108, 97,
-      116, 105, 118, 101, 32, 112, 97, 116, 104, 32, 40, 77, 85, 83, 84, 41, 10, 32, 32, 32, 32, 32, 32, 35, 32, 226,
-      154, 160, 239, 184, 143, 32, 50, 46, 32, 76, 101, 102, 116, 32, 83, 116, 97, 99, 107, 115, 32, 80, 97, 116, 104,
-      32, 61, 61, 61, 32, 82, 105, 103, 104, 116, 32, 83, 116, 97, 99, 107, 115, 32, 80, 97, 116, 104, 32, 40, 77, 85,
-      83, 84, 41, 10, 32, 32, 32, 32, 32, 32, 45, 32, 47, 111, 112, 116, 47, 115, 116, 97, 99, 107, 115, 58, 47, 111,
-      112, 116, 47, 115, 116, 97, 99, 107, 115, 10, 32, 32, 32, 32, 101, 110, 118, 105, 114, 111, 110, 109, 101, 110,
-      116, 58, 10, 32, 32, 32, 32, 32, 32, 35, 32, 84, 101, 108, 108, 32, 68, 111, 99, 107, 103, 101, 32, 119, 104, 101,
-      114, 101, 32, 116, 111, 32, 102, 105, 110, 100, 32, 116, 104, 101, 32, 115, 116, 97, 99, 107, 115, 10, 32, 32, 32,
-      32, 32, 32, 45, 32, 68, 79, 67, 75, 71, 69, 95, 83, 84, 65, 67, 75, 83, 95, 68, 73, 82, 61, 47, 111, 112, 116, 47,
-      115, 116, 97, 99, 107, 115,
-   ]);
 
    // The commitment trails the hint, whose encrypted length varies, so read it from the data
    function block0Offsets(cipherdata: Uint8Array) {
@@ -2705,33 +2980,6 @@ describe('Block order change and deletion detection, multi-version', () => {
       },
    ];
 
-   const clearData = new Uint8Array([
-      118, 101, 114, 115, 105, 111, 110, 58, 32, 34, 51, 46, 56, 34, 10, 115, 101, 114, 118, 105, 99, 101, 115, 58, 10,
-      32, 32, 100, 111, 99, 107, 103, 101, 58, 10, 32, 32, 32, 32, 105, 109, 97, 103, 101, 58, 32, 108, 111, 117, 105,
-      115, 108, 97, 109, 47, 100, 111, 99, 107, 103, 101, 58, 49, 10, 32, 32, 32, 32, 114, 101, 115, 116, 97, 114, 116,
-      58, 32, 117, 110, 108, 101, 115, 115, 45, 115, 116, 111, 112, 112, 101, 100, 10, 32, 32, 32, 32, 112, 111, 114,
-      116, 115, 58, 10, 32, 32, 32, 32, 32, 32, 45, 32, 53, 48, 48, 49, 58, 53, 48, 48, 49, 10, 32, 32, 32, 32, 118,
-      111, 108, 117, 109, 101, 115, 58, 10, 32, 32, 32, 32, 32, 32, 45, 32, 47, 118, 97, 114, 47, 114, 117, 110, 47,
-      100, 111, 99, 107, 101, 114, 46, 115, 111, 99, 107, 58, 47, 118, 97, 114, 47, 114, 117, 110, 47, 100, 111, 99,
-      107, 101, 114, 46, 115, 111, 99, 107, 10, 32, 32, 32, 32, 32, 32, 45, 32, 46, 47, 100, 97, 116, 97, 58, 47, 97,
-      112, 112, 47, 100, 97, 116, 97, 10, 32, 32, 32, 32, 32, 32, 35, 32, 83, 116, 97, 99, 107, 115, 32, 68, 105, 114,
-      101, 99, 116, 111, 114, 121, 10, 32, 32, 32, 32, 32, 32, 35, 32, 226, 154, 160, 239, 184, 143, 32, 82, 69, 65, 68,
-      32, 73, 84, 32, 67, 65, 82, 69, 70, 85, 76, 76, 89, 46, 32, 73, 102, 32, 121, 111, 117, 32, 100, 105, 100, 32,
-      105, 116, 32, 119, 114, 111, 110, 103, 44, 32, 121, 111, 117, 114, 32, 100, 97, 116, 97, 32, 99, 111, 117, 108,
-      100, 32, 101, 110, 100, 32, 117, 112, 32, 119, 114, 105, 116, 105, 110, 103, 32, 105, 110, 116, 111, 32, 97, 32,
-      87, 82, 79, 78, 71, 32, 80, 65, 84, 72, 46, 10, 32, 32, 32, 32, 32, 32, 35, 32, 226, 154, 160, 239, 184, 143, 32,
-      49, 46, 32, 70, 85, 76, 76, 32, 112, 97, 116, 104, 32, 111, 110, 108, 121, 46, 32, 78, 111, 32, 114, 101, 108, 97,
-      116, 105, 118, 101, 32, 112, 97, 116, 104, 32, 40, 77, 85, 83, 84, 41, 10, 32, 32, 32, 32, 32, 32, 35, 32, 226,
-      154, 160, 239, 184, 143, 32, 50, 46, 32, 76, 101, 102, 116, 32, 83, 116, 97, 99, 107, 115, 32, 80, 97, 116, 104,
-      32, 61, 61, 61, 32, 82, 105, 103, 104, 116, 32, 83, 116, 97, 99, 107, 115, 32, 80, 97, 116, 104, 32, 40, 77, 85,
-      83, 84, 41, 10, 32, 32, 32, 32, 32, 32, 45, 32, 47, 111, 112, 116, 47, 115, 116, 97, 99, 107, 115, 58, 47, 111,
-      112, 116, 47, 115, 116, 97, 99, 107, 115, 10, 32, 32, 32, 32, 101, 110, 118, 105, 114, 111, 110, 109, 101, 110,
-      116, 58, 10, 32, 32, 32, 32, 32, 32, 35, 32, 84, 101, 108, 108, 32, 68, 111, 99, 107, 103, 101, 32, 119, 104, 101,
-      114, 101, 32, 116, 111, 32, 102, 105, 110, 100, 32, 116, 104, 101, 32, 115, 116, 97, 99, 107, 115, 10, 32, 32, 32,
-      32, 32, 32, 45, 32, 68, 79, 67, 75, 71, 69, 95, 83, 84, 65, 67, 75, 83, 95, 68, 73, 82, 61, 47, 111, 112, 116, 47,
-      115, 116, 97, 99, 107, 115,
-   ]);
-
    it('good multi block ciphertext', async () => {
       for (const ver of vers) {
          // First make sure it decrypts as expected
@@ -2756,21 +3004,6 @@ describe('Block order change and deletion detection, multi-version', () => {
          expect(decDoneCount).toBe(1);
       }
    });
-
-   // Each block is self delimiting, so the payload size in its header gives the next offset
-   function splitBlocks(bytes: Uint8Array, ver: number): Uint8Array[] {
-      const headerBytes = ver < cc.VERSION6 ? cc.HEADER_BYTES_OLD : cc.HEADER_BYTES_6P;
-      const blocks: Uint8Array[] = [];
-      let offset = 0;
-      while (offset < bytes.byteLength) {
-         const sizeStart = offset + cc.MAC_BYTES + cc.VER_BYTES;
-         const size = bytesToNum(bytes.subarray(sizeStart, sizeStart + cc.PAYLOAD_SIZE_BYTES));
-         const end = offset + headerBytes + size;
-         blocks.push(bytes.subarray(offset, end));
-         offset = end;
-      }
-      return blocks;
-   }
 
    it('block reorder vectors are built from the blocks of the good ciphertext', () => {
       for (const ver of vers) {
@@ -2799,6 +3032,144 @@ describe('Block order change and deletion detection, multi-version', () => {
             const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (_cdinfo) => {
                return ['asdf', undefined];
             });
+            await expect(
+               cipherSvc.decryptStream(cipherStream, decKeyProvider).then((dec) => {
+                  return areEqual(dec, clearData);
+               }),
+            ).rejects.toThrow(Error);
+         }
+      }
+   });
+});
+
+describe('Block order change and deletion detection, MasterKeyKeyProvider, multi-version', () => {
+   let cipherSvc: CipherService;
+   beforeEach(async () => {
+      await cryptoReady();
+      TestBed.configureTestingModule({});
+      cipherSvc = TestBed.inject(CipherService);
+   });
+
+   const masterKey = base64ToBytes('TWFzdGVyS2V5Rml4ZWRTZWVkVmFsdWUwMTIzNDU2Nzg=');
+   const extraKeyMaterial = base64ToBytes('RXh0cmFLZXlNYXQ=');
+
+   const vers = [
+      //v7 — generated by apps/web/scripts/gen_v7_master_blockorder.ts in a v7.5.0 checkout
+      {
+         ver: 7,
+         goodCt:
+            'cDlM27NSsDXF6XKlfohskx7o9STsSjkUeCFxxi6qnwkHAD4AAAABAMPL8m4oCSoUOu-IpP_oqZFKxj9_2tvRxlKIYCMAAAAAAAADiFlD4q7qZdh76NHxxsJCg6n51ihAW3pAWwNYc88nzkYRY2donofyDtNIpI7GaJEFeRq2waVFmw8HADEAAAABAKKOtewqQladEB8rXW_WHOaM0r_4h-YHXH28FmbmTInxImFbC3HurfaoUOaTasaci7-V4tNFWz8l8Wr5RHHtrwkgPpkyzzrEOdSV2SaVcQcAQwAAAAEAi4mPEiGwTF3398M-caMk46qSdzjUUMrhzX8uuykYVkUE5M3zpSwAMgisCGwCitlf7ImF10bUzR92il9hDn3jY7Q71lV-GjvHlj4SnranQZejtjliz767vsNYB2HSqvrVBwBnAAAAAQD-J8ToqNp-6nuZA0r29x9Hrdvw_nuh-JB8t-_agIgXTHCTO2qllwOQexXJ_Y96Lrslk_PgnDxzYFg9dRaRcMKqa8bwPRP83eopmfJT1k4fJ7IMKG2n2wKt8Ih9tzBVG5JMvgPwnOGIqWPCuqxOwxYfRNUkMGlzCf5J6Yre4uAKAMYqtUIHAK8AAAABABfibMO0sj-xYp_B-Fd6Pl4ZNKx2pKuD0oYqXQXW2KePPpvMeWFy4RrAlfK0S4H4sZlA16abGVNPrfWLWOEmQFufEDwxJq447h_Sj_bYwDhYbEKISZxauLmeF6wYh3iDStnUR-Y6Y0MKrnZ55ZEQ_6bnZae1wcYWTQEO2MRQqB24wEOZWqBiQENG0MiMsvQ9uzvmMiwDEOItUq13dcX7n20WFhSg_CdHusjNPgYC1kn2AuKYi8gN7A48HV0zKP4pxY8adhcoDhEzz3jp8wcArwAAAAEA6ceUMmoCT4-zJtDPXWNpIIjwbWQae74_EeuLZA6bnwGSqSXQrCO6e0a2uv95jsHZxBPGr1xb5lOUzUPxypTVMX5hvOFgdXXDXDDh_HPrP64HSKHc6tOKS6S_qu6hUdUTACIwku-VYNdyLJwYlQ5SD8KNVCE9GhmBkPt1XB8XeOPcK3qgSvhl1pgbQ0LEnJc1O-O5PdtnD_MT2Q8mE5WAzplCNafkWNlefRtYjYH_En_Rs3mNL-gMj8K4j3H7Wcd2iVXF28jHKa6rYqN-BwCvAAAAAQAwYzm8Lrsr7ehYcxdy4-JLerdFXl0f5TDLHrBSapC5IRF2tu6WoyxDpC4yV4yBwPTSga69fPvPmLN88JF4ucD-7kNT5xf0NCNJqwLIDJFnbdz98ewskuy55qK_YE4Fn811R7NmbzFBaHdwA_gkll5lkummxFx6qNnoUiBejUexd-BuMRgmU8XWaM4fnPLKk0iTbgqbcv-W78uTBcn3Cwy78z4BQMTHRLJUqbT11K07Ffe4y6ZTG-LlmiTaKRLBt9u7G8dKlNQ_IIZC4PwHADgAAAEBAFGe6iumO8KLoXkZWjMPOmqDLB-oC8gMPMU91fk0QxQYz1_XuEjq1Qkt_fIdCJ4D5_ytNA1e',
+         badCts: {
+            '1. Block0 Block7 swap':
+               '1K07Ffe4y6ZTG-LlmiTaKRLBt9u7G8dKlNQ_IIZC4PwHADgAAAEBAFGe6iumO8KLoXkZWjMPOmqDLB-oC8gMPMU91fk0QxQYz1_XuEjq1Qkt_fIdCJ4D5_ytNA1eWwNYc88nzkYRY2donofyDtNIpI7GaJEFeRq2waVFmw8HADEAAAABAKKOtewqQladEB8rXW_WHOaM0r_4h-YHXH28FmbmTInxImFbC3HurfaoUOaTasaci7-V4tNFWz8l8Wr5RHHtrwkgPpkyzzrEOdSV2SaVcQcAQwAAAAEAi4mPEiGwTF3398M-caMk46qSdzjUUMrhzX8uuykYVkUE5M3zpSwAMgisCGwCitlf7ImF10bUzR92il9hDn3jY7Q71lV-GjvHlj4SnranQZejtjliz767vsNYB2HSqvrVBwBnAAAAAQD-J8ToqNp-6nuZA0r29x9Hrdvw_nuh-JB8t-_agIgXTHCTO2qllwOQexXJ_Y96Lrslk_PgnDxzYFg9dRaRcMKqa8bwPRP83eopmfJT1k4fJ7IMKG2n2wKt8Ih9tzBVG5JMvgPwnOGIqWPCuqxOwxYfRNUkMGlzCf5J6Yre4uAKAMYqtUIHAK8AAAABABfibMO0sj-xYp_B-Fd6Pl4ZNKx2pKuD0oYqXQXW2KePPpvMeWFy4RrAlfK0S4H4sZlA16abGVNPrfWLWOEmQFufEDwxJq447h_Sj_bYwDhYbEKISZxauLmeF6wYh3iDStnUR-Y6Y0MKrnZ55ZEQ_6bnZae1wcYWTQEO2MRQqB24wEOZWqBiQENG0MiMsvQ9uzvmMiwDEOItUq13dcX7n20WFhSg_CdHusjNPgYC1kn2AuKYi8gN7A48HV0zKP4pxY8adhcoDhEzz3jp8wcArwAAAAEA6ceUMmoCT4-zJtDPXWNpIIjwbWQae74_EeuLZA6bnwGSqSXQrCO6e0a2uv95jsHZxBPGr1xb5lOUzUPxypTVMX5hvOFgdXXDXDDh_HPrP64HSKHc6tOKS6S_qu6hUdUTACIwku-VYNdyLJwYlQ5SD8KNVCE9GhmBkPt1XB8XeOPcK3qgSvhl1pgbQ0LEnJc1O-O5PdtnD_MT2Q8mE5WAzplCNafkWNlefRtYjYH_En_Rs3mNL-gMj8K4j3H7Wcd2iVXF28jHKa6rYqN-BwCvAAAAAQAwYzm8Lrsr7ehYcxdy4-JLerdFXl0f5TDLHrBSapC5IRF2tu6WoyxDpC4yV4yBwPTSga69fPvPmLN88JF4ucD-7kNT5xf0NCNJqwLIDJFnbdz98ewskuy55qK_YE4Fn811R7NmbzFBaHdwA_gkll5lkummxFx6qNnoUiBejUexd-BuMRgmU8XWaM4fnPLKk0iTbgqbcv-W78uTBcn3Cwy78z4BQMTHRLJUqbT1cDlM27NSsDXF6XKlfohskx7o9STsSjkUeCFxxi6qnwkHAD4AAAABAMPL8m4oCSoUOu-IpP_oqZFKxj9_2tvRxlKIYCMAAAAAAAADiFlD4q7qZdh76NHxxsJCg6n51ihAW3pA',
+            '2. Block1 Block7 swap':
+               'cDlM27NSsDXF6XKlfohskx7o9STsSjkUeCFxxi6qnwkHAD4AAAABAMPL8m4oCSoUOu-IpP_oqZFKxj9_2tvRxlKIYCMAAAAAAAADiFlD4q7qZdh76NHxxsJCg6n51ihAW3pA1K07Ffe4y6ZTG-LlmiTaKRLBt9u7G8dKlNQ_IIZC4PwHADgAAAEBAFGe6iumO8KLoXkZWjMPOmqDLB-oC8gMPMU91fk0QxQYz1_XuEjq1Qkt_fIdCJ4D5_ytNA1enIu_leLTRVs_JfFq-URx7a8JID6ZMs86xDnUldkmlXEHAEMAAAABAIuJjxIhsExd9_fDPnGjJOOqknc41FDK4c1_LrspGFZFBOTN86UsADIIrAhsAorZX-yJhddG1M0fdopfYQ5942O0O9ZVfho7x5Y-Ep62p0GXo7Y5Ys--u77DWAdh0qr61QcAZwAAAAEA_ifE6Kjafup7mQNK9vcfR63b8P57ofiQfLfv2oCIF0xwkztqpZcDkHsVyf2Pei67JZPz4Jw8c2BYPXUWkXDCqmvG8D0T_N3qKZnyU9ZOHyeyDChtp9sCrfCIfbcwVRuSTL4D8JzhiKljwrqsTsMWH0TVJDBpcwn-SemK3uLgCgDGKrVCBwCvAAAAAQAX4mzDtLI_sWKfwfhXej5eGTSsdqSrg9KGKl0F1tinjz6bzHlhcuEawJXytEuB-LGZQNemmxlTT631i1jhJkBbnxA8MSauOO4f0o_22MA4WGxCiEmcWri5nhesGId4g0rZ1EfmOmNDCq52eeWREP-m52WntcHGFk0BDtjEUKgduMBDmVqgYkBDRtDIjLL0Pbs75jIsAxDiLVKtd3XF-59tFhYUoPwnR7rIzT4GAtZJ9gLimIvIDewOPB1dMyj-KcWPGnYXKA4RM8946fMHAK8AAAABAOnHlDJqAk-PsybQz11jaSCI8G1kGnu-PxHri2QOm58Bkqkl0KwjuntGtrr_eY7B2cQTxq9cW-ZTlM1D8cqU1TF-YbzhYHV1w1ww4fxz6z-uB0ih3OrTikukv6ruoVHVEwAiMJLvlWDXciycGJUOUg_CjVQhPRoZgZD7dVwfF3jj3Ct6oEr4ZdaYG0NCxJyXNTvjuT3bZw_zE9kPJhOVgM6ZQjWn5FjZXn0bWI2B_xJ_0bN5jS_oDI_CuI9x-1nHdolVxdvIxymuq2KjfgcArwAAAAEAMGM5vC67K-3oWHMXcuPiS3q3RV5dH-Uwyx6wUmqQuSERdrbulqMsQ6QuMleMgcD00oGuvXz7z5izfPCReLnA_u5DU-cX9DQjSasCyAyRZ23c_fHsLJLsueaiv2BOBZ_NdUezZm8xQWh3cAP4JJZeZZLppsRceqjZ6FIgXo1HsXfgbjEYJlPF1mjOH5zyypNIk24Km3L_lu_LkwXJ9wsMu_M-AUDEx0SyVKm09VsDWHPPJ85GEWNnaJ6H8g7TSKSOxmiRBXkatsGlRZsPBwAxAAAAAQCijrXsKkJWnRAfK11v1hzmjNK_-IfmB1x9vBZm5kyJ8SJhWwtx7q32qFDmk2rG',
+            '3. Block1 Block4 swap':
+               'cDlM27NSsDXF6XKlfohskx7o9STsSjkUeCFxxi6qnwkHAD4AAAABAMPL8m4oCSoUOu-IpP_oqZFKxj9_2tvRxlKIYCMAAAAAAAADiFlD4q7qZdh76NHxxsJCg6n51ihAW3pAnOGIqWPCuqxOwxYfRNUkMGlzCf5J6Yre4uAKAMYqtUIHAK8AAAABABfibMO0sj-xYp_B-Fd6Pl4ZNKx2pKuD0oYqXQXW2KePPpvMeWFy4RrAlfK0S4H4sZlA16abGVNPrfWLWOEmQFufEDwxJq447h_Sj_bYwDhYbEKISZxauLmeF6wYh3iDStnUR-Y6Y0MKrnZ55ZEQ_6bnZae1wcYWTQEO2MRQqB24wEOZWqBiQENG0MiMsvQ9uzvmMiwDEOItUq13dcX7n20WFhSg_CdHusjNPgaci7-V4tNFWz8l8Wr5RHHtrwkgPpkyzzrEOdSV2SaVcQcAQwAAAAEAi4mPEiGwTF3398M-caMk46qSdzjUUMrhzX8uuykYVkUE5M3zpSwAMgisCGwCitlf7ImF10bUzR92il9hDn3jY7Q71lV-GjvHlj4SnranQZejtjliz767vsNYB2HSqvrVBwBnAAAAAQD-J8ToqNp-6nuZA0r29x9Hrdvw_nuh-JB8t-_agIgXTHCTO2qllwOQexXJ_Y96Lrslk_PgnDxzYFg9dRaRcMKqa8bwPRP83eopmfJT1k4fJ7IMKG2n2wKt8Ih9tzBVG5JMvgPwWwNYc88nzkYRY2donofyDtNIpI7GaJEFeRq2waVFmw8HADEAAAABAKKOtewqQladEB8rXW_WHOaM0r_4h-YHXH28FmbmTInxImFbC3HurfaoUOaTasYC1kn2AuKYi8gN7A48HV0zKP4pxY8adhcoDhEzz3jp8wcArwAAAAEA6ceUMmoCT4-zJtDPXWNpIIjwbWQae74_EeuLZA6bnwGSqSXQrCO6e0a2uv95jsHZxBPGr1xb5lOUzUPxypTVMX5hvOFgdXXDXDDh_HPrP64HSKHc6tOKS6S_qu6hUdUTACIwku-VYNdyLJwYlQ5SD8KNVCE9GhmBkPt1XB8XeOPcK3qgSvhl1pgbQ0LEnJc1O-O5PdtnD_MT2Q8mE5WAzplCNafkWNlefRtYjYH_En_Rs3mNL-gMj8K4j3H7Wcd2iVXF28jHKa6rYqN-BwCvAAAAAQAwYzm8Lrsr7ehYcxdy4-JLerdFXl0f5TDLHrBSapC5IRF2tu6WoyxDpC4yV4yBwPTSga69fPvPmLN88JF4ucD-7kNT5xf0NCNJqwLIDJFnbdz98ewskuy55qK_YE4Fn811R7NmbzFBaHdwA_gkll5lkummxFx6qNnoUiBejUexd-BuMRgmU8XWaM4fnPLKk0iTbgqbcv-W78uTBcn3Cwy78z4BQMTHRLJUqbT11K07Ffe4y6ZTG-LlmiTaKRLBt9u7G8dKlNQ_IIZC4PwHADgAAAEBAFGe6iumO8KLoXkZWjMPOmqDLB-oC8gMPMU91fk0QxQYz1_XuEjq1Qkt_fIdCJ4D5_ytNA1e',
+            '4. Block0 repeated':
+               'cDlM27NSsDXF6XKlfohskx7o9STsSjkUeCFxxi6qnwkHAD4AAAABAMPL8m4oCSoUOu-IpP_oqZFKxj9_2tvRxlKIYCMAAAAAAAADiFlD4q7qZdh76NHxxsJCg6n51ihAW3pAcDlM27NSsDXF6XKlfohskx7o9STsSjkUeCFxxi6qnwkHAD4AAAABAMPL8m4oCSoUOu-IpP_oqZFKxj9_2tvRxlKIYCMAAAAAAAADiFlD4q7qZdh76NHxxsJCg6n51ihAW3pAWwNYc88nzkYRY2donofyDtNIpI7GaJEFeRq2waVFmw8HADEAAAABAKKOtewqQladEB8rXW_WHOaM0r_4h-YHXH28FmbmTInxImFbC3HurfaoUOaTasaci7-V4tNFWz8l8Wr5RHHtrwkgPpkyzzrEOdSV2SaVcQcAQwAAAAEAi4mPEiGwTF3398M-caMk46qSdzjUUMrhzX8uuykYVkUE5M3zpSwAMgisCGwCitlf7ImF10bUzR92il9hDn3jY7Q71lV-GjvHlj4SnranQZejtjliz767vsNYB2HSqvrVBwBnAAAAAQD-J8ToqNp-6nuZA0r29x9Hrdvw_nuh-JB8t-_agIgXTHCTO2qllwOQexXJ_Y96Lrslk_PgnDxzYFg9dRaRcMKqa8bwPRP83eopmfJT1k4fJ7IMKG2n2wKt8Ih9tzBVG5JMvgPwnOGIqWPCuqxOwxYfRNUkMGlzCf5J6Yre4uAKAMYqtUIHAK8AAAABABfibMO0sj-xYp_B-Fd6Pl4ZNKx2pKuD0oYqXQXW2KePPpvMeWFy4RrAlfK0S4H4sZlA16abGVNPrfWLWOEmQFufEDwxJq447h_Sj_bYwDhYbEKISZxauLmeF6wYh3iDStnUR-Y6Y0MKrnZ55ZEQ_6bnZae1wcYWTQEO2MRQqB24wEOZWqBiQENG0MiMsvQ9uzvmMiwDEOItUq13dcX7n20WFhSg_CdHusjNPgYC1kn2AuKYi8gN7A48HV0zKP4pxY8adhcoDhEzz3jp8wcArwAAAAEA6ceUMmoCT4-zJtDPXWNpIIjwbWQae74_EeuLZA6bnwGSqSXQrCO6e0a2uv95jsHZxBPGr1xb5lOUzUPxypTVMX5hvOFgdXXDXDDh_HPrP64HSKHc6tOKS6S_qu6hUdUTACIwku-VYNdyLJwYlQ5SD8KNVCE9GhmBkPt1XB8XeOPcK3qgSvhl1pgbQ0LEnJc1O-O5PdtnD_MT2Q8mE5WAzplCNafkWNlefRtYjYH_En_Rs3mNL-gMj8K4j3H7Wcd2iVXF28jHKa6rYqN-BwCvAAAAAQAwYzm8Lrsr7ehYcxdy4-JLerdFXl0f5TDLHrBSapC5IRF2tu6WoyxDpC4yV4yBwPTSga69fPvPmLN88JF4ucD-7kNT5xf0NCNJqwLIDJFnbdz98ewskuy55qK_YE4Fn811R7NmbzFBaHdwA_gkll5lkummxFx6qNnoUiBejUexd-BuMRgmU8XWaM4fnPLKk0iTbgqbcv-W78uTBcn3Cwy78z4BQMTHRLJUqbT11K07Ffe4y6ZTG-LlmiTaKRLBt9u7G8dKlNQ_IIZC4PwHADgAAAEBAFGe6iumO8KLoXkZWjMPOmqDLB-oC8gMPMU91fk0QxQYz1_XuEjq1Qkt_fIdCJ4D5_ytNA1e',
+            '5. Block0 deleted':
+               'WwNYc88nzkYRY2donofyDtNIpI7GaJEFeRq2waVFmw8HADEAAAABAKKOtewqQladEB8rXW_WHOaM0r_4h-YHXH28FmbmTInxImFbC3HurfaoUOaTasaci7-V4tNFWz8l8Wr5RHHtrwkgPpkyzzrEOdSV2SaVcQcAQwAAAAEAi4mPEiGwTF3398M-caMk46qSdzjUUMrhzX8uuykYVkUE5M3zpSwAMgisCGwCitlf7ImF10bUzR92il9hDn3jY7Q71lV-GjvHlj4SnranQZejtjliz767vsNYB2HSqvrVBwBnAAAAAQD-J8ToqNp-6nuZA0r29x9Hrdvw_nuh-JB8t-_agIgXTHCTO2qllwOQexXJ_Y96Lrslk_PgnDxzYFg9dRaRcMKqa8bwPRP83eopmfJT1k4fJ7IMKG2n2wKt8Ih9tzBVG5JMvgPwnOGIqWPCuqxOwxYfRNUkMGlzCf5J6Yre4uAKAMYqtUIHAK8AAAABABfibMO0sj-xYp_B-Fd6Pl4ZNKx2pKuD0oYqXQXW2KePPpvMeWFy4RrAlfK0S4H4sZlA16abGVNPrfWLWOEmQFufEDwxJq447h_Sj_bYwDhYbEKISZxauLmeF6wYh3iDStnUR-Y6Y0MKrnZ55ZEQ_6bnZae1wcYWTQEO2MRQqB24wEOZWqBiQENG0MiMsvQ9uzvmMiwDEOItUq13dcX7n20WFhSg_CdHusjNPgYC1kn2AuKYi8gN7A48HV0zKP4pxY8adhcoDhEzz3jp8wcArwAAAAEA6ceUMmoCT4-zJtDPXWNpIIjwbWQae74_EeuLZA6bnwGSqSXQrCO6e0a2uv95jsHZxBPGr1xb5lOUzUPxypTVMX5hvOFgdXXDXDDh_HPrP64HSKHc6tOKS6S_qu6hUdUTACIwku-VYNdyLJwYlQ5SD8KNVCE9GhmBkPt1XB8XeOPcK3qgSvhl1pgbQ0LEnJc1O-O5PdtnD_MT2Q8mE5WAzplCNafkWNlefRtYjYH_En_Rs3mNL-gMj8K4j3H7Wcd2iVXF28jHKa6rYqN-BwCvAAAAAQAwYzm8Lrsr7ehYcxdy4-JLerdFXl0f5TDLHrBSapC5IRF2tu6WoyxDpC4yV4yBwPTSga69fPvPmLN88JF4ucD-7kNT5xf0NCNJqwLIDJFnbdz98ewskuy55qK_YE4Fn811R7NmbzFBaHdwA_gkll5lkummxFx6qNnoUiBejUexd-BuMRgmU8XWaM4fnPLKk0iTbgqbcv-W78uTBcn3Cwy78z4BQMTHRLJUqbT11K07Ffe4y6ZTG-LlmiTaKRLBt9u7G8dKlNQ_IIZC4PwHADgAAAEBAFGe6iumO8KLoXkZWjMPOmqDLB-oC8gMPMU91fk0QxQYz1_XuEjq1Qkt_fIdCJ4D5_ytNA1e',
+            '6. Block1 repeated':
+               'cDlM27NSsDXF6XKlfohskx7o9STsSjkUeCFxxi6qnwkHAD4AAAABAMPL8m4oCSoUOu-IpP_oqZFKxj9_2tvRxlKIYCMAAAAAAAADiFlD4q7qZdh76NHxxsJCg6n51ihAW3pAWwNYc88nzkYRY2donofyDtNIpI7GaJEFeRq2waVFmw8HADEAAAABAKKOtewqQladEB8rXW_WHOaM0r_4h-YHXH28FmbmTInxImFbC3HurfaoUOaTasZbA1hzzyfORhFjZ2ieh_IO00ikjsZokQV5GrbBpUWbDwcAMQAAAAEAoo617CpCVp0QHytdb9Yc5ozSv_iH5gdcfbwWZuZMifEiYVsLce6t9qhQ5pNqxpyLv5Xi00VbPyXxavlEce2vCSA-mTLPOsQ51JXZJpVxBwBDAAAAAQCLiY8SIbBMXff3wz5xoyTjqpJ3ONRQyuHNfy67KRhWRQTkzfOlLAAyCKwIbAKK2V_siYXXRtTNH3aKX2EOfeNjtDvWVX4aO8eWPhKetqdBl6O2OWLPvru-w1gHYdKq-tUHAGcAAAABAP4nxOio2n7qe5kDSvb3H0et2_D-e6H4kHy379qAiBdMcJM7aqWXA5B7Fcn9j3ouuyWT8-CcPHNgWD11FpFwwqprxvA9E_zd6imZ8lPWTh8nsgwobafbAq3wiH23MFUbkky-A_Cc4YipY8K6rE7DFh9E1SQwaXMJ_knpit7i4AoAxiq1QgcArwAAAAEAF-Jsw7SyP7Fin8H4V3o-Xhk0rHakq4PShipdBdbYp48-m8x5YXLhGsCV8rRLgfixmUDXppsZU0-t9YtY4SZAW58QPDEmrjjuH9KP9tjAOFhsQohJnFq4uZ4XrBiHeINK2dRH5jpjQwqudnnlkRD_pudlp7XBxhZNAQ7YxFCoHbjAQ5laoGJAQ0bQyIyy9D27O-YyLAMQ4i1SrXd1xfufbRYWFKD8J0e6yM0-BgLWSfYC4piLyA3sDjwdXTMo_inFjxp2FygOETPPeOnzBwCvAAAAAQDpx5QyagJPj7Mm0M9dY2kgiPBtZBp7vj8R64tkDpufAZKpJdCsI7p7Rra6_3mOwdnEE8avXFvmU5TNQ_HKlNUxfmG84WB1dcNcMOH8c-s_rgdIodzq04pLpL-q7qFR1RMAIjCS75Vg13IsnBiVDlIPwo1UIT0aGYGQ-3VcHxd449wreqBK-GXWmBtDQsSclzU747k922cP8xPZDyYTlYDOmUI1p-RY2V59G1iNgf8Sf9GzeY0v6AyPwriPcftZx3aJVcXbyMcprqtio34HAK8AAAABADBjObwuuyvt6FhzF3Lj4kt6t0VeXR_lMMsesFJqkLkhEXa27pajLEOkLjJXjIHA9NKBrr18-8-Ys3zwkXi5wP7uQ1PnF_Q0I0mrAsgMkWdt3P3x7CyS7Lnmor9gTgWfzXVHs2ZvMUFod3AD-CSWXmWS6abEXHqo2ehSIF6NR7F34G4xGCZTxdZozh-c8sqTSJNuCpty_5bvy5MFyfcLDLvzPgFAxMdEslSptPXUrTsV97jLplMb4uWaJNopEsG327sbx0qU1D8ghkLg_AcAOAAAAQEAUZ7qK6Y7wouheRlaMw86aoMsH6gLyAw8xT3V-TRDFBjPX9e4SOrVCS398h0IngPn_K00DV4',
+            '7. Block1 deleted':
+               'cDlM27NSsDXF6XKlfohskx7o9STsSjkUeCFxxi6qnwkHAD4AAAABAMPL8m4oCSoUOu-IpP_oqZFKxj9_2tvRxlKIYCMAAAAAAAADiFlD4q7qZdh76NHxxsJCg6n51ihAW3pAnIu_leLTRVs_JfFq-URx7a8JID6ZMs86xDnUldkmlXEHAEMAAAABAIuJjxIhsExd9_fDPnGjJOOqknc41FDK4c1_LrspGFZFBOTN86UsADIIrAhsAorZX-yJhddG1M0fdopfYQ5942O0O9ZVfho7x5Y-Ep62p0GXo7Y5Ys--u77DWAdh0qr61QcAZwAAAAEA_ifE6Kjafup7mQNK9vcfR63b8P57ofiQfLfv2oCIF0xwkztqpZcDkHsVyf2Pei67JZPz4Jw8c2BYPXUWkXDCqmvG8D0T_N3qKZnyU9ZOHyeyDChtp9sCrfCIfbcwVRuSTL4D8JzhiKljwrqsTsMWH0TVJDBpcwn-SemK3uLgCgDGKrVCBwCvAAAAAQAX4mzDtLI_sWKfwfhXej5eGTSsdqSrg9KGKl0F1tinjz6bzHlhcuEawJXytEuB-LGZQNemmxlTT631i1jhJkBbnxA8MSauOO4f0o_22MA4WGxCiEmcWri5nhesGId4g0rZ1EfmOmNDCq52eeWREP-m52WntcHGFk0BDtjEUKgduMBDmVqgYkBDRtDIjLL0Pbs75jIsAxDiLVKtd3XF-59tFhYUoPwnR7rIzT4GAtZJ9gLimIvIDewOPB1dMyj-KcWPGnYXKA4RM8946fMHAK8AAAABAOnHlDJqAk-PsybQz11jaSCI8G1kGnu-PxHri2QOm58Bkqkl0KwjuntGtrr_eY7B2cQTxq9cW-ZTlM1D8cqU1TF-YbzhYHV1w1ww4fxz6z-uB0ih3OrTikukv6ruoVHVEwAiMJLvlWDXciycGJUOUg_CjVQhPRoZgZD7dVwfF3jj3Ct6oEr4ZdaYG0NCxJyXNTvjuT3bZw_zE9kPJhOVgM6ZQjWn5FjZXn0bWI2B_xJ_0bN5jS_oDI_CuI9x-1nHdolVxdvIxymuq2KjfgcArwAAAAEAMGM5vC67K-3oWHMXcuPiS3q3RV5dH-Uwyx6wUmqQuSERdrbulqMsQ6QuMleMgcD00oGuvXz7z5izfPCReLnA_u5DU-cX9DQjSasCyAyRZ23c_fHsLJLsueaiv2BOBZ_NdUezZm8xQWh3cAP4JJZeZZLppsRceqjZ6FIgXo1HsXfgbjEYJlPF1mjOH5zyypNIk24Km3L_lu_LkwXJ9wsMu_M-AUDEx0SyVKm09dStOxX3uMumUxvi5Zok2ikSwbfbuxvHSpTUPyCGQuD8BwA4AAABAQBRnuorpjvCi6F5GVozDzpqgywfqAvIDDzFPdX5NEMUGM9f17hI6tUJLf3yHQieA-f8rTQNXg',
+            '8. Block2 repeated':
+               'cDlM27NSsDXF6XKlfohskx7o9STsSjkUeCFxxi6qnwkHAD4AAAABAMPL8m4oCSoUOu-IpP_oqZFKxj9_2tvRxlKIYCMAAAAAAAADiFlD4q7qZdh76NHxxsJCg6n51ihAW3pAWwNYc88nzkYRY2donofyDtNIpI7GaJEFeRq2waVFmw8HADEAAAABAKKOtewqQladEB8rXW_WHOaM0r_4h-YHXH28FmbmTInxImFbC3HurfaoUOaTasaci7-V4tNFWz8l8Wr5RHHtrwkgPpkyzzrEOdSV2SaVcQcAQwAAAAEAi4mPEiGwTF3398M-caMk46qSdzjUUMrhzX8uuykYVkUE5M3zpSwAMgisCGwCitlf7ImF10bUzR92il9hDn3jY5yLv5Xi00VbPyXxavlEce2vCSA-mTLPOsQ51JXZJpVxBwBDAAAAAQCLiY8SIbBMXff3wz5xoyTjqpJ3ONRQyuHNfy67KRhWRQTkzfOlLAAyCKwIbAKK2V_siYXXRtTNH3aKX2EOfeNjtDvWVX4aO8eWPhKetqdBl6O2OWLPvru-w1gHYdKq-tUHAGcAAAABAP4nxOio2n7qe5kDSvb3H0et2_D-e6H4kHy379qAiBdMcJM7aqWXA5B7Fcn9j3ouuyWT8-CcPHNgWD11FpFwwqprxvA9E_zd6imZ8lPWTh8nsgwobafbAq3wiH23MFUbkky-A_Cc4YipY8K6rE7DFh9E1SQwaXMJ_knpit7i4AoAxiq1QgcArwAAAAEAF-Jsw7SyP7Fin8H4V3o-Xhk0rHakq4PShipdBdbYp48-m8x5YXLhGsCV8rRLgfixmUDXppsZU0-t9YtY4SZAW58QPDEmrjjuH9KP9tjAOFhsQohJnFq4uZ4XrBiHeINK2dRH5jpjQwqudnnlkRD_pudlp7XBxhZNAQ7YxFCoHbjAQ5laoGJAQ0bQyIyy9D27O-YyLAMQ4i1SrXd1xfufbRYWFKD8J0e6yM0-BgLWSfYC4piLyA3sDjwdXTMo_inFjxp2FygOETPPeOnzBwCvAAAAAQDpx5QyagJPj7Mm0M9dY2kgiPBtZBp7vj8R64tkDpufAZKpJdCsI7p7Rra6_3mOwdnEE8avXFvmU5TNQ_HKlNUxfmG84WB1dcNcMOH8c-s_rgdIodzq04pLpL-q7qFR1RMAIjCS75Vg13IsnBiVDlIPwo1UIT0aGYGQ-3VcHxd449wreqBK-GXWmBtDQsSclzU747k922cP8xPZDyYTlYDOmUI1p-RY2V59G1iNgf8Sf9GzeY0v6AyPwriPcftZx3aJVcXbyMcprqtio34HAK8AAAABADBjObwuuyvt6FhzF3Lj4kt6t0VeXR_lMMsesFJqkLkhEXa27pajLEOkLjJXjIHA9NKBrr18-8-Ys3zwkXi5wP7uQ1PnF_Q0I0mrAsgMkWdt3P3x7CyS7Lnmor9gTgWfzXVHs2ZvMUFod3AD-CSWXmWS6abEXHqo2ehSIF6NR7F34G4xGCZTxdZozh-c8sqTSJNuCpty_5bvy5MFyfcLDLvzPgFAxMdEslSptPXUrTsV97jLplMb4uWaJNopEsG327sbx0qU1D8ghkLg_AcAOAAAAQEAUZ7qK6Y7wouheRlaMw86aoMsH6gLyAw8xT3V-TRDFBjPX9e4SOrVCS398h0IngPn_K00DV4',
+            '9. Block2 deleted':
+               'cDlM27NSsDXF6XKlfohskx7o9STsSjkUeCFxxi6qnwkHAD4AAAABAMPL8m4oCSoUOu-IpP_oqZFKxj9_2tvRxlKIYCMAAAAAAAADiFlD4q7qZdh76NHxxsJCg6n51ihAW3pAWwNYc88nzkYRY2donofyDtNIpI7GaJEFeRq2waVFmw8HADEAAAABAKKOtewqQladEB8rXW_WHOaM0r_4h-YHXH28FmbmTInxImFbC3HurfaoUOaTasa0O9ZVfho7x5Y-Ep62p0GXo7Y5Ys--u77DWAdh0qr61QcAZwAAAAEA_ifE6Kjafup7mQNK9vcfR63b8P57ofiQfLfv2oCIF0xwkztqpZcDkHsVyf2Pei67JZPz4Jw8c2BYPXUWkXDCqmvG8D0T_N3qKZnyU9ZOHyeyDChtp9sCrfCIfbcwVRuSTL4D8JzhiKljwrqsTsMWH0TVJDBpcwn-SemK3uLgCgDGKrVCBwCvAAAAAQAX4mzDtLI_sWKfwfhXej5eGTSsdqSrg9KGKl0F1tinjz6bzHlhcuEawJXytEuB-LGZQNemmxlTT631i1jhJkBbnxA8MSauOO4f0o_22MA4WGxCiEmcWri5nhesGId4g0rZ1EfmOmNDCq52eeWREP-m52WntcHGFk0BDtjEUKgduMBDmVqgYkBDRtDIjLL0Pbs75jIsAxDiLVKtd3XF-59tFhYUoPwnR7rIzT4GAtZJ9gLimIvIDewOPB1dMyj-KcWPGnYXKA4RM8946fMHAK8AAAABAOnHlDJqAk-PsybQz11jaSCI8G1kGnu-PxHri2QOm58Bkqkl0KwjuntGtrr_eY7B2cQTxq9cW-ZTlM1D8cqU1TF-YbzhYHV1w1ww4fxz6z-uB0ih3OrTikukv6ruoVHVEwAiMJLvlWDXciycGJUOUg_CjVQhPRoZgZD7dVwfF3jj3Ct6oEr4ZdaYG0NCxJyXNTvjuT3bZw_zE9kPJhOVgM6ZQjWn5FjZXn0bWI2B_xJ_0bN5jS_oDI_CuI9x-1nHdolVxdvIxymuq2KjfgcArwAAAAEAMGM5vC67K-3oWHMXcuPiS3q3RV5dH-Uwyx6wUmqQuSERdrbulqMsQ6QuMleMgcD00oGuvXz7z5izfPCReLnA_u5DU-cX9DQjSasCyAyRZ23c_fHsLJLsueaiv2BOBZ_NdUezZm8xQWh3cAP4JJZeZZLppsRceqjZ6FIgXo1HsXfgbjEYJlPF1mjOH5zyypNIk24Km3L_lu_LkwXJ9wsMu_M-AUDEx0SyVKm09dStOxX3uMumUxvi5Zok2ikSwbfbuxvHSpTUPyCGQuD8BwA4AAABAQBRnuorpjvCi6F5GVozDzpqgywfqAvIDDzFPdX5NEMUGM9f17hI6tUJLf3yHQieA-f8rTQNXg',
+            '10. Block7 (last) repeated':
+               'cDlM27NSsDXF6XKlfohskx7o9STsSjkUeCFxxi6qnwkHAD4AAAABAMPL8m4oCSoUOu-IpP_oqZFKxj9_2tvRxlKIYCMAAAAAAAADiFlD4q7qZdh76NHxxsJCg6n51ihAW3pAWwNYc88nzkYRY2donofyDtNIpI7GaJEFeRq2waVFmw8HADEAAAABAKKOtewqQladEB8rXW_WHOaM0r_4h-YHXH28FmbmTInxImFbC3HurfaoUOaTasaci7-V4tNFWz8l8Wr5RHHtrwkgPpkyzzrEOdSV2SaVcQcAQwAAAAEAi4mPEiGwTF3398M-caMk46qSdzjUUMrhzX8uuykYVkUE5M3zpSwAMgisCGwCitlf7ImF10bUzR92il9hDn3jY7Q71lV-GjvHlj4SnranQZejtjliz767vsNYB2HSqvrVBwBnAAAAAQD-J8ToqNp-6nuZA0r29x9Hrdvw_nuh-JB8t-_agIgXTHCTO2qllwOQexXJ_Y96Lrslk_PgnDxzYFg9dRaRcMKqa8bwPRP83eopmfJT1k4fJ7IMKG2n2wKt8Ih9tzBVG5JMvgPwnOGIqWPCuqxOwxYfRNUkMGlzCf5J6Yre4uAKAMYqtUIHAK8AAAABABfibMO0sj-xYp_B-Fd6Pl4ZNKx2pKuD0oYqXQXW2KePPpvMeWFy4RrAlfK0S4H4sZlA16abGVNPrfWLWOEmQFufEDwxJq447h_Sj_bYwDhYbEKISZxauLmeF6wYh3iDStnUR-Y6Y0MKrnZ55ZEQ_6bnZae1wcYWTQEO2MRQqB24wEOZWqBiQENG0MiMsvQ9uzvmMiwDEOItUq13dcX7n20WFhSg_CdHusjNPgYC1kn2AuKYi8gN7A48HV0zKP4pxY8adhcoDhEzz3jp8wcArwAAAAEA6ceUMmoCT4-zJtDPXWNpIIjwbWQae74_EeuLZA6bnwGSqSXQrCO6e0a2uv95jsHZxBPGr1xb5lOUzUPxypTVMX5hvOFgdXXDXDDh_HPrP64HSKHc6tOKS6S_qu6hUdUTACIwku-VYNdyLJwYlQ5SD8KNVCE9GhmBkPt1XB8XeOPcK3qgSvhl1pgbQ0LEnJc1O-O5PdtnD_MT2Q8mE5WAzplCNafkWNlefRtYjYH_En_Rs3mNL-gMj8K4j3H7Wcd2iVXF28jHKa6rYqN-BwCvAAAAAQAwYzm8Lrsr7ehYcxdy4-JLerdFXl0f5TDLHrBSapC5IRF2tu6WoyxDpC4yV4yBwPTSga69fPvPmLN88JF4ucD-7kNT5xf0NCNJqwLIDJFnbdz98ewskuy55qK_YE4Fn811R7NmbzFBaHdwA_gkll5lkummxFx6qNnoUiBejUexd-BuMRgmU8XWaM4fnPLKk0iTbgqbcv-W78uTBcn3Cwy78z4BQMTHRLJUqbT11K07Ffe4y6ZTG-LlmiTaKRLBt9u7G8dKlNQ_IIZC4PwHADgAAAEBAFGe6iumO8KLoXkZWjMPOmqDLB-oC8gMPMU91fk0QxQYz1_XuEjq1Qkt_fIdCJ4D5_ytNA1e1K07Ffe4y6ZTG-LlmiTaKRLBt9u7G8dKlNQ_IIZC4PwHADgAAAEBAFGe6iumO8KLoXkZWjMPOmqDLB-oC8gMPMU91fk0QxQYz1_XuEjq1Qkt_fIdCJ4D5_ytNA1e',
+            '11. Block7 (last) deleted':
+               'cDlM27NSsDXF6XKlfohskx7o9STsSjkUeCFxxi6qnwkHAD4AAAABAMPL8m4oCSoUOu-IpP_oqZFKxj9_2tvRxlKIYCMAAAAAAAADiFlD4q7qZdh76NHxxsJCg6n51ihAW3pAWwNYc88nzkYRY2donofyDtNIpI7GaJEFeRq2waVFmw8HADEAAAABAKKOtewqQladEB8rXW_WHOaM0r_4h-YHXH28FmbmTInxImFbC3HurfaoUOaTasaci7-V4tNFWz8l8Wr5RHHtrwkgPpkyzzrEOdSV2SaVcQcAQwAAAAEAi4mPEiGwTF3398M-caMk46qSdzjUUMrhzX8uuykYVkUE5M3zpSwAMgisCGwCitlf7ImF10bUzR92il9hDn3jY7Q71lV-GjvHlj4SnranQZejtjliz767vsNYB2HSqvrVBwBnAAAAAQD-J8ToqNp-6nuZA0r29x9Hrdvw_nuh-JB8t-_agIgXTHCTO2qllwOQexXJ_Y96Lrslk_PgnDxzYFg9dRaRcMKqa8bwPRP83eopmfJT1k4fJ7IMKG2n2wKt8Ih9tzBVG5JMvgPwnOGIqWPCuqxOwxYfRNUkMGlzCf5J6Yre4uAKAMYqtUIHAK8AAAABABfibMO0sj-xYp_B-Fd6Pl4ZNKx2pKuD0oYqXQXW2KePPpvMeWFy4RrAlfK0S4H4sZlA16abGVNPrfWLWOEmQFufEDwxJq447h_Sj_bYwDhYbEKISZxauLmeF6wYh3iDStnUR-Y6Y0MKrnZ55ZEQ_6bnZae1wcYWTQEO2MRQqB24wEOZWqBiQENG0MiMsvQ9uzvmMiwDEOItUq13dcX7n20WFhSg_CdHusjNPgYC1kn2AuKYi8gN7A48HV0zKP4pxY8adhcoDhEzz3jp8wcArwAAAAEA6ceUMmoCT4-zJtDPXWNpIIjwbWQae74_EeuLZA6bnwGSqSXQrCO6e0a2uv95jsHZxBPGr1xb5lOUzUPxypTVMX5hvOFgdXXDXDDh_HPrP64HSKHc6tOKS6S_qu6hUdUTACIwku-VYNdyLJwYlQ5SD8KNVCE9GhmBkPt1XB8XeOPcK3qgSvhl1pgbQ0LEnJc1O-O5PdtnD_MT2Q8mE5WAzplCNafkWNlefRtYjYH_En_Rs3mNL-gMj8K4j3H7Wcd2iVXF28jHKa6rYqN-BwCvAAAAAQAwYzm8Lrsr7ehYcxdy4-JLerdFXl0f5TDLHrBSapC5IRF2tu6WoyxDpC4yV4yBwPTSga69fPvPmLN88JF4ucD-7kNT5xf0NCNJqwLIDJFnbdz98ewskuy55qK_YE4Fn811R7NmbzFBaHdwA_gkll5lkummxFx6qNnoUiBejUexd-BuMRgmU8XWaM4fnPLKk0iTbgqbcv-W78uTBcn3Cwy78z4BQMTHRLJUqbT1',
+            '12. Block1 Block7 deleted':
+               'cDlM27NSsDXF6XKlfohskx7o9STsSjkUeCFxxi6qnwkHAD4AAAABAMPL8m4oCSoUOu-IpP_oqZFKxj9_2tvRxlKIYCMAAAAAAAADiFlD4q7qZdh76NHxxsJCg6n51ihAW3pAnIu_leLTRVs_JfFq-URx7a8JID6ZMs86xDnUldkmlXEHAEMAAAABAIuJjxIhsExd9_fDPnGjJOOqknc41FDK4c1_LrspGFZFBOTN86UsADIIrAhsAorZX-yJhddG1M0fdopfYQ5942O0O9ZVfho7x5Y-Ep62p0GXo7Y5Ys--u77DWAdh0qr61QcAZwAAAAEA_ifE6Kjafup7mQNK9vcfR63b8P57ofiQfLfv2oCIF0xwkztqpZcDkHsVyf2Pei67JZPz4Jw8c2BYPXUWkXDCqmvG8D0T_N3qKZnyU9ZOHyeyDChtp9sCrfCIfbcwVRuSTL4D8JzhiKljwrqsTsMWH0TVJDBpcwn-SemK3uLgCgDGKrVCBwCvAAAAAQAX4mzDtLI_sWKfwfhXej5eGTSsdqSrg9KGKl0F1tinjz6bzHlhcuEawJXytEuB-LGZQNemmxlTT631i1jhJkBbnxA8MSauOO4f0o_22MA4WGxCiEmcWri5nhesGId4g0rZ1EfmOmNDCq52eeWREP-m52WntcHGFk0BDtjEUKgduMBDmVqgYkBDRtDIjLL0Pbs75jIsAxDiLVKtd3XF-59tFhYUoPwnR7rIzT4GAtZJ9gLimIvIDewOPB1dMyj-KcWPGnYXKA4RM8946fMHAK8AAAABAOnHlDJqAk-PsybQz11jaSCI8G1kGnu-PxHri2QOm58Bkqkl0KwjuntGtrr_eY7B2cQTxq9cW-ZTlM1D8cqU1TF-YbzhYHV1w1ww4fxz6z-uB0ih3OrTikukv6ruoVHVEwAiMJLvlWDXciycGJUOUg_CjVQhPRoZgZD7dVwfF3jj3Ct6oEr4ZdaYG0NCxJyXNTvjuT3bZw_zE9kPJhOVgM6ZQjWn5FjZXn0bWI2B_xJ_0bN5jS_oDI_CuI9x-1nHdolVxdvIxymuq2KjfgcArwAAAAEAMGM5vC67K-3oWHMXcuPiS3q3RV5dH-Uwyx6wUmqQuSERdrbulqMsQ6QuMleMgcD00oGuvXz7z5izfPCReLnA_u5DU-cX9DQjSasCyAyRZ23c_fHsLJLsueaiv2BOBZ_NdUezZm8xQWh3cAP4JJZeZZLppsRceqjZ6FIgXo1HsXfgbjEYJlPF1mjOH5zyypNIk24Km3L_lu_LkwXJ9wsMu_M-AUDEx0SyVKm09Q',
+            '13. All Term':
+               'Pl99GfIf4oQ7ul4BYFGNW4qOhconaucJH10f7yFTOZsHAD4AAAEBANw9bX5NlxV9nG0fDwyOqELY3X3KtQJgL-8hOmsAAAAAAADWi-mE__9IeMxpkKvpr3naVXgTGNvb52oG9EHWx9VoGsYvgezPkr-0y4C_Qlm4wyqqOOrA-5O_ycEHADEAAAEBADGF8TflKw6ltrjSNU1fMWJoPICtR55Y8LyVSSERHhnEzU_uPGoYbbLKiK3jahPrD5l9AEx0mVxbFnW9akS-cnqAosloYNm7sfVxNMki6wcAQwAAAQEAhOv6HFhY8gp9RI-9ZDoAq3Q1bf9PNe1ujJL1sjCbJ0ihPcfGDlIsppo4XwUbXGMiAK_emMcOplThSYkHDbWQJqwEvupb4-oNR9_MAtT-KrTSRTDcQoP0JJQf6uYVDZKDBwBnAAABAQBU3cqq57qwvXE8r49ce4IZzHaDjWUmckKCPouvkObBRedmJnyYaWiMz22MW0AjluaLa8XkTpHV_zviI14xs6L8ob6Dpot-Kmzvq5UAMBvc7kt-bBbjI2DEkK9gzU6EL58zO4_n4Hxa_pJmCm_jUSSfWsOb6ozOFgbzVpNPPq0Cej2M8XwHAK8AAAEBAHaLhLZIsVHXUQR97g1uoQzNAWlqMgArUi1WdcOsXEApBOaM64xewklfX4BjGNbnZnTgA4PpnYR6u6mzEJw0XLGq8CG6j6Hvx-DWf_05fXB2LrNpre_sX8oi00TbzM-ikziponXg4TnXD5N6KzLykQEUHZpzaEOHhFGe4dA4xmmxn7Dm_APWaOJb0aHMOlZzxLsTyZJ2JNyzcE4zxavE0QVp0iygaHiY_83tjvFNyzkfQ-75aDFO8BVoU843Cr6uQnNNlniiI5rlT-C4swcArwAAAQEAu_nWL9j3ELtWaNjBQ5pXGIr0RbNpJ8HjO2J4643gqWcd3MRCe3B9TKCbzoma2HgsWR8K1KFc7UllwaVxCBzcnErqltxN8p1jtUhf5Dz3nAURfSbNu3nk3MhRAO9bwda4tyxNmg6h5EwAlpcF0yTU0FwL7Ye1bIoYq9kJkvr68h39fmjvdQm83ZCnjALsmjmxldA5PDvjR-iNLKeGakiEa-sN7THnghVVLpHKQMctt4wvQGGZe0WL375LG84kb-GA__P_IQnoUcJZLsHGBwCvAAABAQCJzBRbzZS5DeUvZIBeFcQZiIxGcJ67baKb63xGgJjkEeDFvqRNTrANfFCgaO-8MAIBRajUyW8rHjDduY15gPkbP_sJCPzlSUqzVc_V2h7bBxhmK5otXhzrpOneesi9i5e-HdYZ6TT3L4AquacWtJ_ufMkW77itzh9qHNLVVNYi-Mdqlu1Bit_o4dn6P-1-RyJCYvyqmY4XMoX9av7ZY4cQmW-qk94Hmgood2O83AJS4kuKNoZKQvbzkaF0Zd2RQrHlqt8r-MytlCerSZQHADgAAAEBAOOvDNvzjjAyBgKGD9DhAIL6UdM4vt2serGIvgspsCIjWp1lRRD2exvFNexOMsLKVPJmdwfM',
+            '14. No Term':
+               'M1QgDX4RZ8yb47kZd3V71PTL7FE0pZ2P3iGbsQKEgFMHAD4AAAABAC-Xh4MUR94MkzdFbO70NGqgbzTSQETRR_PxmjEAAAAAAAAq_dy8eL2eTZ6rXc21qfL1v2qjGgjZZq0luU5Xz9M1Q0LU3fcjk7d8pt_1VySs6EjdED2watvVCxYHADEAAAABANiSsTidCe7ojt13PPVWG0snHfIcN9J5PoJXkv0sK1DCWp_k8bjaxjQtTseZiH14qhFXIxxP0QQEJs16tOSj0OtfnowCLngEKNX_f7a4BAcAQwAAAAEAykqQozHBSi2vtDqGh0fIfpIx7zgXL8nET1zPYapp9kVjLwaa1S5TU-TfFH0sMQ3GMsLp_b81OhoPadxEQTD0UrVSmJ-JN6SuZV1M-tJE0X2BZySzkk7IVNfgRLxoQutWBwBnAAAAAQDJol1iC9CSvnbKk7aapCvu6rJQ7JAVCntZ3d6mxAtBuLadentlPxV7Q0d84dFyJtwKRcpUxl0dNafps3hD8ocmV-E_2yHZqzd60l5_w-3W9LoNQSzEpd-fRmr_0fQPjLLPB7e6iQpcdy8TkygCdbHY3UnJciR5d08qiWQWmX-EQ9FFpnkHAK8AAAABAJrjbp0SlipDEgS_IgUiXWt0cWkAYpe0G_lZcM56G_O1FETDswiX4jhbyviVisuSKa_jhEiVf6ClmPj9hWDIbWMH9dXKAlFS8WQ4StUz08fPBMbzV3qvntHRcVsNQSNHr4vsXeF6WVkWhfmytFhghtFEQBpbCMuHR1uZhpoD9FeSTgR9EOiwWUfS7RcejIq-wCPNSNpOKgFXbUymtEIVGHUSJFLr8W7Pvbm5SVOwo5CqoPONMZL_p07ZidJkAch5MP58Dl8ssvGUOhaZ6QcArwAAAAEA0luDmc1KckessxYP_Fz6UPrYusJj6sHSIJCEdCxj6nHR0gchvBdCKNf1GhZip1ZDLomZd0NTf9YwtofxUXKmj6X4ICx-OhMqFjzXVooD-TSoM0wI-v1f76OYVdiWatnXTDUeAFIAYu5WH_AIHyWbe0-DZ8T1vGffR0tSBq9nF8F0zXTxYjaVdgkGzLrl6a8RQ9t5zUD9TBrvxCFXOHemuW4wYxboWJK24G8HuiIcswNDkpC9IBevBUJl6kmFIWpBD_SUUulnMiuJBvdqBwCvAAAAAQBV3wL74k5ViKEXh0v2lUBvXFqByngLOujLB7_Q2l09MHt6ofVsXwksABj04p1Tg0XOlHw3pP0rsFADbPRJ2VxUFAsQmauOs3ugwNdWKkPpOPHgpgmXHE64Vbqsgvok8tgrXZp0WyNDQOe71Qet9KapDV0DWTJp_X34PlZSFAizd_f9znJ9zr-SZojaM0xuVmDQUW_oo5GwOD2C15s2BBE0B6Bn-REpDqEt48fsgTEKaafPHK_JCEacsjXxrHiobz_g_a8fqHkHsbQqbZcHADgAAAABAI6ZrrtVqX4B2hD61nwqBgRrelSxLDBi_yAD2Hi8SHtps9NbMXL4Sm-kOipkRICyucsRwpMN',
+         },
+      },
+
+      //v8 — generated by: pnpm vectors:ciphersvc
+      {
+         ver: 8,
+         goodCt:
+            'f2txrdTZzvB4165RN-dUg68L0w4UWVtoqestGhj6lcEIAD8AAAABAB74RJWO4IlGlZFGPyXjNA2Jrf_vJ-2845WQlsQAAAAAAAAA21qrVH7UfQOjw6PRiGsmz9cWY7F42sawIv73R6dTDvEGyEl8_k7NdyGqJGRong7VdZZ1jSpI47OzCAAxAAAAAQD7gV8rlA_7yDZxn3bAtWeleFbVClaHnC5V_DaoHPzfleXxLFBiMAXpsiWgoc80NmVtWExPi_KiseEMDPqo0eWJemIn6-XpEj3XEt29k00IAEMAAAABAFOTAMcUcJeusn3ovqe97JbUZih4QkQWs4SXWidXtUTJ2l-esVBtCKfxmeQYkMY3DxrXVFq9FS0v7wJatLZSUlxZ9NarCtUxhJWdcjtDY9kl-2Rrg-pkbL2PYlY7yzWF_AgAZwAAAAEA88sxLBHDjdfS5_TEdfRDy949Gt8vA0fRNRl2ugwPbHnKsfWI_oGhBdWVG7C0idrjnkojPNmkSWXbXODDwJKi-QhkqFPVnjDb-K1o5-bi3Ka_WvZ-ITEJylGSWiIAS6J19j61IgbiKS0XMr2u7Eb_XBaEyjdGIVd03D7O_qHR4ZjPg-Y3CACvAAAAAQAYVubt5PTCzfYPlPtE_4Wi3skYh2oCMBK2H4B5EwfVHxY_T7ujYzoz30_6KFrPR5eb3CgLv9-CTi8X7ybB8-UFvqIOM7LGDmtn8-1Va2EquWNBxoakeFQlBc2D_AYmRaHdwRnAhpbuxtJgoqBnVbUPSKP5yDYBJPjsEV_ymaakPmq0zKgl6O52c7Au18F1VhjQqaZr54jIiz-bORuwRduQGd9_DNzB35VeVx7k974ECfly-VK8nLGut8h5R4DRrJ-vRV4fZ51BFXBBjPUIAK8AAAABAP9rqlDVAMg2rY9EaIfkSNy53vbCloqcRRqLHvH8urXUzakZ_78aOgAYBCAyU4QX_exg1pVoLVq3_hroaw-HsafAofXtdiuxmrMrJAeHkBnxcWHvEMj3RHIXfWB2VuEumfMj2MlGrLpfil4mM2OMVmScA9eir4K_EE33U90EYqu8Ajq4luTkzO-WYjM00JWr-ofAVzRvlHs0A94nwvX0FZQDGleyJE9rsD4irBjd0GO9q_zZlI3pa2d01pbMFqtmTWeD3j2-NqgybYwbTAgArwAAAAEAuG0e-nzdnwgvA05kU1pD19rPjN-uiaiO9zIrvMUliADUl8_-hKMun4lCTrF8KqVYjTZo_-NeKnrXOEP-3HZpNH-6frS0rC4MMnOGB6_8_dhPJdEq_selb2ji2pgOioZCFCp3II9YxKo4ZN4NNaPo4ceMEKlNkZvtPw4pmbpevVpisIiTqPkzuWF_JbK7LExOymGrtRIpKYyPFbbTKh3jff8EHF43vXPJLkEoft-kxelieXjolDw1vfnrSZ1RzGsgJDWrbLqGJ2JhurSmCAA4AAABAQCiD9Vy0bHcVKguDbFLnWr-YR-_VTojTC7ojmtUrupCxiMRdgVls6yYkh_u0D94bXAfHpUgwg',
+         badCts: {
+            '1. Block0 Block7 swap':
+               '36TF6WJ5eOiUPDW9-etJnVHMayAkNatsuoYnYmG6tKYIADgAAAEBAKIP1XLRsdxUqC4NsUudav5hH79VOiNMLuiOa1Su6kLGIxF2BWWzrJiSH-7QP3htcB8elSDC_vdHp1MO8QbISXz-Ts13IaokZGieDtV1lnWNKkjjs7MIADEAAAABAPuBXyuUD_vINnGfdsC1Z6V4VtUKVoecLlX8Nqgc_N-V5fEsUGIwBemyJaChzzQ2ZW1YTE-L8qKx4QwM-qjR5Yl6Yifr5ekSPdcS3b2TTQgAQwAAAAEAU5MAxxRwl66yfei-p73sltRmKHhCRBazhJdaJ1e1RMnaX56xUG0Ip_GZ5BiQxjcPGtdUWr0VLS_vAlq0tlJSXFn01qsK1TGElZ1yO0Nj2SX7ZGuD6mRsvY9iVjvLNYX8CABnAAAAAQDzyzEsEcON19Ln9MR19EPL3j0a3y8DR9E1GXa6DA9secqx9Yj-gaEF1ZUbsLSJ2uOeSiM82aRJZdtc4MPAkqL5CGSoU9WeMNv4rWjn5uLcpr9a9n4hMQnKUZJaIgBLonX2PrUiBuIpLRcyva7sRv9cFoTKN0YhV3TcPs7-odHhmM-D5jcIAK8AAAABABhW5u3k9MLN9g-U-0T_haLeyRiHagIwErYfgHkTB9UfFj9Pu6NjOjPfT_ooWs9Hl5vcKAu_34JOLxfvJsHz5QW-og4zssYOa2fz7VVrYSq5Y0HGhqR4VCUFzYP8BiZFod3BGcCGlu7G0mCioGdVtQ9Io_nINgEk-OwRX_KZpqQ-arTMqCXo7nZzsC7XwXVWGNCppmvniMiLP5s5G7BF25AZ338M3MHflV5XHuT3vgQJ-XL5Urycsa63yHlHgNGsn69FXh9nnUEVcEGM9QgArwAAAAEA_2uqUNUAyDatj0Roh-RI3Lne9sKWipxFGose8fy6tdTNqRn_vxo6ABgEIDJThBf97GDWlWgtWrf-GuhrD4exp8Ch9e12K7GasyskB4eQGfFxYe8QyPdEchd9YHZW4S6Z8yPYyUasul-KXiYzY4xWZJwD16Kvgr8QTfdT3QRiq7wCOriW5OTM75ZiMzTQlav6h8BXNG-UezQD3ifC9fQVlAMaV7IkT2uwPiKsGN3QY72r_NmUjelrZ3TWlswWq2ZNZ4PePb42qDJtjBtMCACvAAAAAQC4bR76fN2fCC8DTmRTWkPX2s-M366JqI73Miu8xSWIANSXz_6Eoy6fiUJOsXwqpViNNmj_414qetc4Q_7cdmk0f7p-tLSsLgwyc4YHr_z92E8l0Sr-x6VvaOLamA6KhkIUKncgj1jEqjhk3g01o-jhx4wQqU2Rm-0_DimZul69WmKwiJOo-TO5YX8lsrssTE7KYau1EikpjI8VttMqHeN9_wQcXje9c8kuQSh-f2txrdTZzvB4165RN-dUg68L0w4UWVtoqestGhj6lcEIAD8AAAABAB74RJWO4IlGlZFGPyXjNA2Jrf_vJ-2845WQlsQAAAAAAAAA21qrVH7UfQOjw6PRiGsmz9cWY7F42sawIg',
+            '2. Block1 Block7 swap':
+               'f2txrdTZzvB4165RN-dUg68L0w4UWVtoqestGhj6lcEIAD8AAAABAB74RJWO4IlGlZFGPyXjNA2Jrf_vJ-2845WQlsQAAAAAAAAA21qrVH7UfQOjw6PRiGsmz9cWY7F42sawIt-kxelieXjolDw1vfnrSZ1RzGsgJDWrbLqGJ2JhurSmCAA4AAABAQCiD9Vy0bHcVKguDbFLnWr-YR-_VTojTC7ojmtUrupCxiMRdgVls6yYkh_u0D94bXAfHpUgwjZlbVhMT4vyorHhDAz6qNHliXpiJ-vl6RI91xLdvZNNCABDAAAAAQBTkwDHFHCXrrJ96L6nveyW1GYoeEJEFrOEl1onV7VEydpfnrFQbQin8ZnkGJDGNw8a11RavRUtL-8CWrS2UlJcWfTWqwrVMYSVnXI7Q2PZJftka4PqZGy9j2JWO8s1hfwIAGcAAAABAPPLMSwRw43X0uf0xHX0Q8vePRrfLwNH0TUZdroMD2x5yrH1iP6BoQXVlRuwtIna455KIzzZpEll21zgw8CSovkIZKhT1Z4w2_itaOfm4tymv1r2fiExCcpRkloiAEuidfY-tSIG4iktFzK9ruxG_1wWhMo3RiFXdNw-zv6h0eGYz4PmNwgArwAAAAEAGFbm7eT0ws32D5T7RP-Fot7JGIdqAjASth-AeRMH1R8WP0-7o2M6M99P-ihaz0eXm9woC7_fgk4vF-8mwfPlBb6iDjOyxg5rZ_PtVWthKrljQcaGpHhUJQXNg_wGJkWh3cEZwIaW7sbSYKKgZ1W1D0ij-cg2AST47BFf8pmmpD5qtMyoJejudnOwLtfBdVYY0Kmma-eIyIs_mzkbsEXbkBnffwzcwd-VXlce5Pe-BAn5cvlSvJyxrrfIeUeA0ayfr0VeH2edQRVwQYz1CACvAAAAAQD_a6pQ1QDINq2PRGiH5Ejcud72wpaKnEUaix7x_Lq11M2pGf-_GjoAGAQgMlOEF_3sYNaVaC1at_4a6GsPh7GnwKH17XYrsZqzKyQHh5AZ8XFh7xDI90RyF31gdlbhLpnzI9jJRqy6X4peJjNjjFZknAPXoq-CvxBN91PdBGKrvAI6uJbk5MzvlmIzNNCVq_qHwFc0b5R7NAPeJ8L19BWUAxpXsiRPa7A-IqwY3dBjvav82ZSN6WtndNaWzBarZk1ng949vjaoMm2MG0wIAK8AAAABALhtHvp83Z8ILwNOZFNaQ9faz4zfromojvcyK7zFJYgA1JfP_oSjLp-JQk6xfCqlWI02aP_jXip61zhD_tx2aTR_un60tKwuDDJzhgev_P3YTyXRKv7HpW9o4tqYDoqGQhQqdyCPWMSqOGTeDTWj6OHHjBCpTZGb7T8OKZm6Xr1aYrCIk6j5M7lhfyWyuyxMTsphq7USKSmMjxW20yod433_BBxeN71zyS5BKH7-90enUw7xBshJfP5OzXchqiRkaJ4O1XWWdY0qSOOzswgAMQAAAAEA-4FfK5QP-8g2cZ92wLVnpXhW1QpWh5wuVfw2qBz835Xl8SxQYjAF6bIloKHPNA',
+            '3. Block1 Block4 swap':
+               'f2txrdTZzvB4165RN-dUg68L0w4UWVtoqestGhj6lcEIAD8AAAABAB74RJWO4IlGlZFGPyXjNA2Jrf_vJ-2845WQlsQAAAAAAAAA21qrVH7UfQOjw6PRiGsmz9cWY7F42sawIgbiKS0XMr2u7Eb_XBaEyjdGIVd03D7O_qHR4ZjPg-Y3CACvAAAAAQAYVubt5PTCzfYPlPtE_4Wi3skYh2oCMBK2H4B5EwfVHxY_T7ujYzoz30_6KFrPR5eb3CgLv9-CTi8X7ybB8-UFvqIOM7LGDmtn8-1Va2EquWNBxoakeFQlBc2D_AYmRaHdwRnAhpbuxtJgoqBnVbUPSKP5yDYBJPjsEV_ymaakPmq0zKgl6O52c7Au18F1VhjQqaZr54jIiz-bORuwRduQGd9_DNzB35VeVx7kNmVtWExPi_KiseEMDPqo0eWJemIn6-XpEj3XEt29k00IAEMAAAABAFOTAMcUcJeusn3ovqe97JbUZih4QkQWs4SXWidXtUTJ2l-esVBtCKfxmeQYkMY3DxrXVFq9FS0v7wJatLZSUlxZ9NarCtUxhJWdcjtDY9kl-2Rrg-pkbL2PYlY7yzWF_AgAZwAAAAEA88sxLBHDjdfS5_TEdfRDy949Gt8vA0fRNRl2ugwPbHnKsfWI_oGhBdWVG7C0idrjnkojPNmkSWXbXODDwJKi-QhkqFPVnjDb-K1o5-bi3Ka_WvZ-ITEJylGSWiIAS6J19j61Iv73R6dTDvEGyEl8_k7NdyGqJGRong7VdZZ1jSpI47OzCAAxAAAAAQD7gV8rlA_7yDZxn3bAtWeleFbVClaHnC5V_DaoHPzfleXxLFBiMAXpsiWgoc80974ECfly-VK8nLGut8h5R4DRrJ-vRV4fZ51BFXBBjPUIAK8AAAABAP9rqlDVAMg2rY9EaIfkSNy53vbCloqcRRqLHvH8urXUzakZ_78aOgAYBCAyU4QX_exg1pVoLVq3_hroaw-HsafAofXtdiuxmrMrJAeHkBnxcWHvEMj3RHIXfWB2VuEumfMj2MlGrLpfil4mM2OMVmScA9eir4K_EE33U90EYqu8Ajq4luTkzO-WYjM00JWr-ofAVzRvlHs0A94nwvX0FZQDGleyJE9rsD4irBjd0GO9q_zZlI3pa2d01pbMFqtmTWeD3j2-NqgybYwbTAgArwAAAAEAuG0e-nzdnwgvA05kU1pD19rPjN-uiaiO9zIrvMUliADUl8_-hKMun4lCTrF8KqVYjTZo_-NeKnrXOEP-3HZpNH-6frS0rC4MMnOGB6_8_dhPJdEq_selb2ji2pgOioZCFCp3II9YxKo4ZN4NNaPo4ceMEKlNkZvtPw4pmbpevVpisIiTqPkzuWF_JbK7LExOymGrtRIpKYyPFbbTKh3jff8EHF43vXPJLkEoft-kxelieXjolDw1vfnrSZ1RzGsgJDWrbLqGJ2JhurSmCAA4AAABAQCiD9Vy0bHcVKguDbFLnWr-YR-_VTojTC7ojmtUrupCxiMRdgVls6yYkh_u0D94bXAfHpUgwg',
+            '4. Block0 repeated':
+               'f2txrdTZzvB4165RN-dUg68L0w4UWVtoqestGhj6lcEIAD8AAAABAB74RJWO4IlGlZFGPyXjNA2Jrf_vJ-2845WQlsQAAAAAAAAA21qrVH7UfQOjw6PRiGsmz9cWY7F42sawIn9rca3U2c7weNeuUTfnVIOvC9MOFFlbaKnrLRoY-pXBCAA_AAAAAQAe-ESVjuCJRpWRRj8l4zQNia3_7yftvOOVkJbEAAAAAAAAANtaq1R-1H0Do8Oj0YhrJs_XFmOxeNrGsCL-90enUw7xBshJfP5OzXchqiRkaJ4O1XWWdY0qSOOzswgAMQAAAAEA-4FfK5QP-8g2cZ92wLVnpXhW1QpWh5wuVfw2qBz835Xl8SxQYjAF6bIloKHPNDZlbVhMT4vyorHhDAz6qNHliXpiJ-vl6RI91xLdvZNNCABDAAAAAQBTkwDHFHCXrrJ96L6nveyW1GYoeEJEFrOEl1onV7VEydpfnrFQbQin8ZnkGJDGNw8a11RavRUtL-8CWrS2UlJcWfTWqwrVMYSVnXI7Q2PZJftka4PqZGy9j2JWO8s1hfwIAGcAAAABAPPLMSwRw43X0uf0xHX0Q8vePRrfLwNH0TUZdroMD2x5yrH1iP6BoQXVlRuwtIna455KIzzZpEll21zgw8CSovkIZKhT1Z4w2_itaOfm4tymv1r2fiExCcpRkloiAEuidfY-tSIG4iktFzK9ruxG_1wWhMo3RiFXdNw-zv6h0eGYz4PmNwgArwAAAAEAGFbm7eT0ws32D5T7RP-Fot7JGIdqAjASth-AeRMH1R8WP0-7o2M6M99P-ihaz0eXm9woC7_fgk4vF-8mwfPlBb6iDjOyxg5rZ_PtVWthKrljQcaGpHhUJQXNg_wGJkWh3cEZwIaW7sbSYKKgZ1W1D0ij-cg2AST47BFf8pmmpD5qtMyoJejudnOwLtfBdVYY0Kmma-eIyIs_mzkbsEXbkBnffwzcwd-VXlce5Pe-BAn5cvlSvJyxrrfIeUeA0ayfr0VeH2edQRVwQYz1CACvAAAAAQD_a6pQ1QDINq2PRGiH5Ejcud72wpaKnEUaix7x_Lq11M2pGf-_GjoAGAQgMlOEF_3sYNaVaC1at_4a6GsPh7GnwKH17XYrsZqzKyQHh5AZ8XFh7xDI90RyF31gdlbhLpnzI9jJRqy6X4peJjNjjFZknAPXoq-CvxBN91PdBGKrvAI6uJbk5MzvlmIzNNCVq_qHwFc0b5R7NAPeJ8L19BWUAxpXsiRPa7A-IqwY3dBjvav82ZSN6WtndNaWzBarZk1ng949vjaoMm2MG0wIAK8AAAABALhtHvp83Z8ILwNOZFNaQ9faz4zfromojvcyK7zFJYgA1JfP_oSjLp-JQk6xfCqlWI02aP_jXip61zhD_tx2aTR_un60tKwuDDJzhgev_P3YTyXRKv7HpW9o4tqYDoqGQhQqdyCPWMSqOGTeDTWj6OHHjBCpTZGb7T8OKZm6Xr1aYrCIk6j5M7lhfyWyuyxMTsphq7USKSmMjxW20yod433_BBxeN71zyS5BKH7fpMXpYnl46JQ8Nb3560mdUcxrICQ1q2y6hidiYbq0pggAOAAAAQEAog_VctGx3FSoLg2xS51q_mEfv1U6I0wu6I5rVK7qQsYjEXYFZbOsmJIf7tA_eG1wHx6VIMI',
+            '5. Block0 deleted':
+               '_vdHp1MO8QbISXz-Ts13IaokZGieDtV1lnWNKkjjs7MIADEAAAABAPuBXyuUD_vINnGfdsC1Z6V4VtUKVoecLlX8Nqgc_N-V5fEsUGIwBemyJaChzzQ2ZW1YTE-L8qKx4QwM-qjR5Yl6Yifr5ekSPdcS3b2TTQgAQwAAAAEAU5MAxxRwl66yfei-p73sltRmKHhCRBazhJdaJ1e1RMnaX56xUG0Ip_GZ5BiQxjcPGtdUWr0VLS_vAlq0tlJSXFn01qsK1TGElZ1yO0Nj2SX7ZGuD6mRsvY9iVjvLNYX8CABnAAAAAQDzyzEsEcON19Ln9MR19EPL3j0a3y8DR9E1GXa6DA9secqx9Yj-gaEF1ZUbsLSJ2uOeSiM82aRJZdtc4MPAkqL5CGSoU9WeMNv4rWjn5uLcpr9a9n4hMQnKUZJaIgBLonX2PrUiBuIpLRcyva7sRv9cFoTKN0YhV3TcPs7-odHhmM-D5jcIAK8AAAABABhW5u3k9MLN9g-U-0T_haLeyRiHagIwErYfgHkTB9UfFj9Pu6NjOjPfT_ooWs9Hl5vcKAu_34JOLxfvJsHz5QW-og4zssYOa2fz7VVrYSq5Y0HGhqR4VCUFzYP8BiZFod3BGcCGlu7G0mCioGdVtQ9Io_nINgEk-OwRX_KZpqQ-arTMqCXo7nZzsC7XwXVWGNCppmvniMiLP5s5G7BF25AZ338M3MHflV5XHuT3vgQJ-XL5Urycsa63yHlHgNGsn69FXh9nnUEVcEGM9QgArwAAAAEA_2uqUNUAyDatj0Roh-RI3Lne9sKWipxFGose8fy6tdTNqRn_vxo6ABgEIDJThBf97GDWlWgtWrf-GuhrD4exp8Ch9e12K7GasyskB4eQGfFxYe8QyPdEchd9YHZW4S6Z8yPYyUasul-KXiYzY4xWZJwD16Kvgr8QTfdT3QRiq7wCOriW5OTM75ZiMzTQlav6h8BXNG-UezQD3ifC9fQVlAMaV7IkT2uwPiKsGN3QY72r_NmUjelrZ3TWlswWq2ZNZ4PePb42qDJtjBtMCACvAAAAAQC4bR76fN2fCC8DTmRTWkPX2s-M366JqI73Miu8xSWIANSXz_6Eoy6fiUJOsXwqpViNNmj_414qetc4Q_7cdmk0f7p-tLSsLgwyc4YHr_z92E8l0Sr-x6VvaOLamA6KhkIUKncgj1jEqjhk3g01o-jhx4wQqU2Rm-0_DimZul69WmKwiJOo-TO5YX8lsrssTE7KYau1EikpjI8VttMqHeN9_wQcXje9c8kuQSh-36TF6WJ5eOiUPDW9-etJnVHMayAkNatsuoYnYmG6tKYIADgAAAEBAKIP1XLRsdxUqC4NsUudav5hH79VOiNMLuiOa1Su6kLGIxF2BWWzrJiSH-7QP3htcB8elSDC',
+            '6. Block1 repeated':
+               'f2txrdTZzvB4165RN-dUg68L0w4UWVtoqestGhj6lcEIAD8AAAABAB74RJWO4IlGlZFGPyXjNA2Jrf_vJ-2845WQlsQAAAAAAAAA21qrVH7UfQOjw6PRiGsmz9cWY7F42sawIv73R6dTDvEGyEl8_k7NdyGqJGRong7VdZZ1jSpI47OzCAAxAAAAAQD7gV8rlA_7yDZxn3bAtWeleFbVClaHnC5V_DaoHPzfleXxLFBiMAXpsiWgoc80_vdHp1MO8QbISXz-Ts13IaokZGieDtV1lnWNKkjjs7MIADEAAAABAPuBXyuUD_vINnGfdsC1Z6V4VtUKVoecLlX8Nqgc_N-V5fEsUGIwBemyJaChzzQ2ZW1YTE-L8qKx4QwM-qjR5Yl6Yifr5ekSPdcS3b2TTQgAQwAAAAEAU5MAxxRwl66yfei-p73sltRmKHhCRBazhJdaJ1e1RMnaX56xUG0Ip_GZ5BiQxjcPGtdUWr0VLS_vAlq0tlJSXFn01qsK1TGElZ1yO0Nj2SX7ZGuD6mRsvY9iVjvLNYX8CABnAAAAAQDzyzEsEcON19Ln9MR19EPL3j0a3y8DR9E1GXa6DA9secqx9Yj-gaEF1ZUbsLSJ2uOeSiM82aRJZdtc4MPAkqL5CGSoU9WeMNv4rWjn5uLcpr9a9n4hMQnKUZJaIgBLonX2PrUiBuIpLRcyva7sRv9cFoTKN0YhV3TcPs7-odHhmM-D5jcIAK8AAAABABhW5u3k9MLN9g-U-0T_haLeyRiHagIwErYfgHkTB9UfFj9Pu6NjOjPfT_ooWs9Hl5vcKAu_34JOLxfvJsHz5QW-og4zssYOa2fz7VVrYSq5Y0HGhqR4VCUFzYP8BiZFod3BGcCGlu7G0mCioGdVtQ9Io_nINgEk-OwRX_KZpqQ-arTMqCXo7nZzsC7XwXVWGNCppmvniMiLP5s5G7BF25AZ338M3MHflV5XHuT3vgQJ-XL5Urycsa63yHlHgNGsn69FXh9nnUEVcEGM9QgArwAAAAEA_2uqUNUAyDatj0Roh-RI3Lne9sKWipxFGose8fy6tdTNqRn_vxo6ABgEIDJThBf97GDWlWgtWrf-GuhrD4exp8Ch9e12K7GasyskB4eQGfFxYe8QyPdEchd9YHZW4S6Z8yPYyUasul-KXiYzY4xWZJwD16Kvgr8QTfdT3QRiq7wCOriW5OTM75ZiMzTQlav6h8BXNG-UezQD3ifC9fQVlAMaV7IkT2uwPiKsGN3QY72r_NmUjelrZ3TWlswWq2ZNZ4PePb42qDJtjBtMCACvAAAAAQC4bR76fN2fCC8DTmRTWkPX2s-M366JqI73Miu8xSWIANSXz_6Eoy6fiUJOsXwqpViNNmj_414qetc4Q_7cdmk0f7p-tLSsLgwyc4YHr_z92E8l0Sr-x6VvaOLamA6KhkIUKncgj1jEqjhk3g01o-jhx4wQqU2Rm-0_DimZul69WmKwiJOo-TO5YX8lsrssTE7KYau1EikpjI8VttMqHeN9_wQcXje9c8kuQSh-36TF6WJ5eOiUPDW9-etJnVHMayAkNatsuoYnYmG6tKYIADgAAAEBAKIP1XLRsdxUqC4NsUudav5hH79VOiNMLuiOa1Su6kLGIxF2BWWzrJiSH-7QP3htcB8elSDC',
+            '7. Block1 deleted':
+               'f2txrdTZzvB4165RN-dUg68L0w4UWVtoqestGhj6lcEIAD8AAAABAB74RJWO4IlGlZFGPyXjNA2Jrf_vJ-2845WQlsQAAAAAAAAA21qrVH7UfQOjw6PRiGsmz9cWY7F42sawIjZlbVhMT4vyorHhDAz6qNHliXpiJ-vl6RI91xLdvZNNCABDAAAAAQBTkwDHFHCXrrJ96L6nveyW1GYoeEJEFrOEl1onV7VEydpfnrFQbQin8ZnkGJDGNw8a11RavRUtL-8CWrS2UlJcWfTWqwrVMYSVnXI7Q2PZJftka4PqZGy9j2JWO8s1hfwIAGcAAAABAPPLMSwRw43X0uf0xHX0Q8vePRrfLwNH0TUZdroMD2x5yrH1iP6BoQXVlRuwtIna455KIzzZpEll21zgw8CSovkIZKhT1Z4w2_itaOfm4tymv1r2fiExCcpRkloiAEuidfY-tSIG4iktFzK9ruxG_1wWhMo3RiFXdNw-zv6h0eGYz4PmNwgArwAAAAEAGFbm7eT0ws32D5T7RP-Fot7JGIdqAjASth-AeRMH1R8WP0-7o2M6M99P-ihaz0eXm9woC7_fgk4vF-8mwfPlBb6iDjOyxg5rZ_PtVWthKrljQcaGpHhUJQXNg_wGJkWh3cEZwIaW7sbSYKKgZ1W1D0ij-cg2AST47BFf8pmmpD5qtMyoJejudnOwLtfBdVYY0Kmma-eIyIs_mzkbsEXbkBnffwzcwd-VXlce5Pe-BAn5cvlSvJyxrrfIeUeA0ayfr0VeH2edQRVwQYz1CACvAAAAAQD_a6pQ1QDINq2PRGiH5Ejcud72wpaKnEUaix7x_Lq11M2pGf-_GjoAGAQgMlOEF_3sYNaVaC1at_4a6GsPh7GnwKH17XYrsZqzKyQHh5AZ8XFh7xDI90RyF31gdlbhLpnzI9jJRqy6X4peJjNjjFZknAPXoq-CvxBN91PdBGKrvAI6uJbk5MzvlmIzNNCVq_qHwFc0b5R7NAPeJ8L19BWUAxpXsiRPa7A-IqwY3dBjvav82ZSN6WtndNaWzBarZk1ng949vjaoMm2MG0wIAK8AAAABALhtHvp83Z8ILwNOZFNaQ9faz4zfromojvcyK7zFJYgA1JfP_oSjLp-JQk6xfCqlWI02aP_jXip61zhD_tx2aTR_un60tKwuDDJzhgev_P3YTyXRKv7HpW9o4tqYDoqGQhQqdyCPWMSqOGTeDTWj6OHHjBCpTZGb7T8OKZm6Xr1aYrCIk6j5M7lhfyWyuyxMTsphq7USKSmMjxW20yod433_BBxeN71zyS5BKH7fpMXpYnl46JQ8Nb3560mdUcxrICQ1q2y6hidiYbq0pggAOAAAAQEAog_VctGx3FSoLg2xS51q_mEfv1U6I0wu6I5rVK7qQsYjEXYFZbOsmJIf7tA_eG1wHx6VIMI',
+            '8. Block2 repeated':
+               'f2txrdTZzvB4165RN-dUg68L0w4UWVtoqestGhj6lcEIAD8AAAABAB74RJWO4IlGlZFGPyXjNA2Jrf_vJ-2845WQlsQAAAAAAAAA21qrVH7UfQOjw6PRiGsmz9cWY7F42sawIv73R6dTDvEGyEl8_k7NdyGqJGRong7VdZZ1jSpI47OzCAAxAAAAAQD7gV8rlA_7yDZxn3bAtWeleFbVClaHnC5V_DaoHPzfleXxLFBiMAXpsiWgoc80NmVtWExPi_KiseEMDPqo0eWJemIn6-XpEj3XEt29k00IAEMAAAABAFOTAMcUcJeusn3ovqe97JbUZih4QkQWs4SXWidXtUTJ2l-esVBtCKfxmeQYkMY3DxrXVFq9FS0v7wJatLZSUlw2ZW1YTE-L8qKx4QwM-qjR5Yl6Yifr5ekSPdcS3b2TTQgAQwAAAAEAU5MAxxRwl66yfei-p73sltRmKHhCRBazhJdaJ1e1RMnaX56xUG0Ip_GZ5BiQxjcPGtdUWr0VLS_vAlq0tlJSXFn01qsK1TGElZ1yO0Nj2SX7ZGuD6mRsvY9iVjvLNYX8CABnAAAAAQDzyzEsEcON19Ln9MR19EPL3j0a3y8DR9E1GXa6DA9secqx9Yj-gaEF1ZUbsLSJ2uOeSiM82aRJZdtc4MPAkqL5CGSoU9WeMNv4rWjn5uLcpr9a9n4hMQnKUZJaIgBLonX2PrUiBuIpLRcyva7sRv9cFoTKN0YhV3TcPs7-odHhmM-D5jcIAK8AAAABABhW5u3k9MLN9g-U-0T_haLeyRiHagIwErYfgHkTB9UfFj9Pu6NjOjPfT_ooWs9Hl5vcKAu_34JOLxfvJsHz5QW-og4zssYOa2fz7VVrYSq5Y0HGhqR4VCUFzYP8BiZFod3BGcCGlu7G0mCioGdVtQ9Io_nINgEk-OwRX_KZpqQ-arTMqCXo7nZzsC7XwXVWGNCppmvniMiLP5s5G7BF25AZ338M3MHflV5XHuT3vgQJ-XL5Urycsa63yHlHgNGsn69FXh9nnUEVcEGM9QgArwAAAAEA_2uqUNUAyDatj0Roh-RI3Lne9sKWipxFGose8fy6tdTNqRn_vxo6ABgEIDJThBf97GDWlWgtWrf-GuhrD4exp8Ch9e12K7GasyskB4eQGfFxYe8QyPdEchd9YHZW4S6Z8yPYyUasul-KXiYzY4xWZJwD16Kvgr8QTfdT3QRiq7wCOriW5OTM75ZiMzTQlav6h8BXNG-UezQD3ifC9fQVlAMaV7IkT2uwPiKsGN3QY72r_NmUjelrZ3TWlswWq2ZNZ4PePb42qDJtjBtMCACvAAAAAQC4bR76fN2fCC8DTmRTWkPX2s-M366JqI73Miu8xSWIANSXz_6Eoy6fiUJOsXwqpViNNmj_414qetc4Q_7cdmk0f7p-tLSsLgwyc4YHr_z92E8l0Sr-x6VvaOLamA6KhkIUKncgj1jEqjhk3g01o-jhx4wQqU2Rm-0_DimZul69WmKwiJOo-TO5YX8lsrssTE7KYau1EikpjI8VttMqHeN9_wQcXje9c8kuQSh-36TF6WJ5eOiUPDW9-etJnVHMayAkNatsuoYnYmG6tKYIADgAAAEBAKIP1XLRsdxUqC4NsUudav5hH79VOiNMLuiOa1Su6kLGIxF2BWWzrJiSH-7QP3htcB8elSDC',
+            '9. Block2 deleted':
+               'f2txrdTZzvB4165RN-dUg68L0w4UWVtoqestGhj6lcEIAD8AAAABAB74RJWO4IlGlZFGPyXjNA2Jrf_vJ-2845WQlsQAAAAAAAAA21qrVH7UfQOjw6PRiGsmz9cWY7F42sawIv73R6dTDvEGyEl8_k7NdyGqJGRong7VdZZ1jSpI47OzCAAxAAAAAQD7gV8rlA_7yDZxn3bAtWeleFbVClaHnC5V_DaoHPzfleXxLFBiMAXpsiWgoc80WfTWqwrVMYSVnXI7Q2PZJftka4PqZGy9j2JWO8s1hfwIAGcAAAABAPPLMSwRw43X0uf0xHX0Q8vePRrfLwNH0TUZdroMD2x5yrH1iP6BoQXVlRuwtIna455KIzzZpEll21zgw8CSovkIZKhT1Z4w2_itaOfm4tymv1r2fiExCcpRkloiAEuidfY-tSIG4iktFzK9ruxG_1wWhMo3RiFXdNw-zv6h0eGYz4PmNwgArwAAAAEAGFbm7eT0ws32D5T7RP-Fot7JGIdqAjASth-AeRMH1R8WP0-7o2M6M99P-ihaz0eXm9woC7_fgk4vF-8mwfPlBb6iDjOyxg5rZ_PtVWthKrljQcaGpHhUJQXNg_wGJkWh3cEZwIaW7sbSYKKgZ1W1D0ij-cg2AST47BFf8pmmpD5qtMyoJejudnOwLtfBdVYY0Kmma-eIyIs_mzkbsEXbkBnffwzcwd-VXlce5Pe-BAn5cvlSvJyxrrfIeUeA0ayfr0VeH2edQRVwQYz1CACvAAAAAQD_a6pQ1QDINq2PRGiH5Ejcud72wpaKnEUaix7x_Lq11M2pGf-_GjoAGAQgMlOEF_3sYNaVaC1at_4a6GsPh7GnwKH17XYrsZqzKyQHh5AZ8XFh7xDI90RyF31gdlbhLpnzI9jJRqy6X4peJjNjjFZknAPXoq-CvxBN91PdBGKrvAI6uJbk5MzvlmIzNNCVq_qHwFc0b5R7NAPeJ8L19BWUAxpXsiRPa7A-IqwY3dBjvav82ZSN6WtndNaWzBarZk1ng949vjaoMm2MG0wIAK8AAAABALhtHvp83Z8ILwNOZFNaQ9faz4zfromojvcyK7zFJYgA1JfP_oSjLp-JQk6xfCqlWI02aP_jXip61zhD_tx2aTR_un60tKwuDDJzhgev_P3YTyXRKv7HpW9o4tqYDoqGQhQqdyCPWMSqOGTeDTWj6OHHjBCpTZGb7T8OKZm6Xr1aYrCIk6j5M7lhfyWyuyxMTsphq7USKSmMjxW20yod433_BBxeN71zyS5BKH7fpMXpYnl46JQ8Nb3560mdUcxrICQ1q2y6hidiYbq0pggAOAAAAQEAog_VctGx3FSoLg2xS51q_mEfv1U6I0wu6I5rVK7qQsYjEXYFZbOsmJIf7tA_eG1wHx6VIMI',
+            '10. Block7 (last) repeated':
+               'f2txrdTZzvB4165RN-dUg68L0w4UWVtoqestGhj6lcEIAD8AAAABAB74RJWO4IlGlZFGPyXjNA2Jrf_vJ-2845WQlsQAAAAAAAAA21qrVH7UfQOjw6PRiGsmz9cWY7F42sawIv73R6dTDvEGyEl8_k7NdyGqJGRong7VdZZ1jSpI47OzCAAxAAAAAQD7gV8rlA_7yDZxn3bAtWeleFbVClaHnC5V_DaoHPzfleXxLFBiMAXpsiWgoc80NmVtWExPi_KiseEMDPqo0eWJemIn6-XpEj3XEt29k00IAEMAAAABAFOTAMcUcJeusn3ovqe97JbUZih4QkQWs4SXWidXtUTJ2l-esVBtCKfxmeQYkMY3DxrXVFq9FS0v7wJatLZSUlxZ9NarCtUxhJWdcjtDY9kl-2Rrg-pkbL2PYlY7yzWF_AgAZwAAAAEA88sxLBHDjdfS5_TEdfRDy949Gt8vA0fRNRl2ugwPbHnKsfWI_oGhBdWVG7C0idrjnkojPNmkSWXbXODDwJKi-QhkqFPVnjDb-K1o5-bi3Ka_WvZ-ITEJylGSWiIAS6J19j61IgbiKS0XMr2u7Eb_XBaEyjdGIVd03D7O_qHR4ZjPg-Y3CACvAAAAAQAYVubt5PTCzfYPlPtE_4Wi3skYh2oCMBK2H4B5EwfVHxY_T7ujYzoz30_6KFrPR5eb3CgLv9-CTi8X7ybB8-UFvqIOM7LGDmtn8-1Va2EquWNBxoakeFQlBc2D_AYmRaHdwRnAhpbuxtJgoqBnVbUPSKP5yDYBJPjsEV_ymaakPmq0zKgl6O52c7Au18F1VhjQqaZr54jIiz-bORuwRduQGd9_DNzB35VeVx7k974ECfly-VK8nLGut8h5R4DRrJ-vRV4fZ51BFXBBjPUIAK8AAAABAP9rqlDVAMg2rY9EaIfkSNy53vbCloqcRRqLHvH8urXUzakZ_78aOgAYBCAyU4QX_exg1pVoLVq3_hroaw-HsafAofXtdiuxmrMrJAeHkBnxcWHvEMj3RHIXfWB2VuEumfMj2MlGrLpfil4mM2OMVmScA9eir4K_EE33U90EYqu8Ajq4luTkzO-WYjM00JWr-ofAVzRvlHs0A94nwvX0FZQDGleyJE9rsD4irBjd0GO9q_zZlI3pa2d01pbMFqtmTWeD3j2-NqgybYwbTAgArwAAAAEAuG0e-nzdnwgvA05kU1pD19rPjN-uiaiO9zIrvMUliADUl8_-hKMun4lCTrF8KqVYjTZo_-NeKnrXOEP-3HZpNH-6frS0rC4MMnOGB6_8_dhPJdEq_selb2ji2pgOioZCFCp3II9YxKo4ZN4NNaPo4ceMEKlNkZvtPw4pmbpevVpisIiTqPkzuWF_JbK7LExOymGrtRIpKYyPFbbTKh3jff8EHF43vXPJLkEoft-kxelieXjolDw1vfnrSZ1RzGsgJDWrbLqGJ2JhurSmCAA4AAABAQCiD9Vy0bHcVKguDbFLnWr-YR-_VTojTC7ojmtUrupCxiMRdgVls6yYkh_u0D94bXAfHpUgwt-kxelieXjolDw1vfnrSZ1RzGsgJDWrbLqGJ2JhurSmCAA4AAABAQCiD9Vy0bHcVKguDbFLnWr-YR-_VTojTC7ojmtUrupCxiMRdgVls6yYkh_u0D94bXAfHpUgwg',
+            '11. Block7 (last) deleted':
+               'f2txrdTZzvB4165RN-dUg68L0w4UWVtoqestGhj6lcEIAD8AAAABAB74RJWO4IlGlZFGPyXjNA2Jrf_vJ-2845WQlsQAAAAAAAAA21qrVH7UfQOjw6PRiGsmz9cWY7F42sawIv73R6dTDvEGyEl8_k7NdyGqJGRong7VdZZ1jSpI47OzCAAxAAAAAQD7gV8rlA_7yDZxn3bAtWeleFbVClaHnC5V_DaoHPzfleXxLFBiMAXpsiWgoc80NmVtWExPi_KiseEMDPqo0eWJemIn6-XpEj3XEt29k00IAEMAAAABAFOTAMcUcJeusn3ovqe97JbUZih4QkQWs4SXWidXtUTJ2l-esVBtCKfxmeQYkMY3DxrXVFq9FS0v7wJatLZSUlxZ9NarCtUxhJWdcjtDY9kl-2Rrg-pkbL2PYlY7yzWF_AgAZwAAAAEA88sxLBHDjdfS5_TEdfRDy949Gt8vA0fRNRl2ugwPbHnKsfWI_oGhBdWVG7C0idrjnkojPNmkSWXbXODDwJKi-QhkqFPVnjDb-K1o5-bi3Ka_WvZ-ITEJylGSWiIAS6J19j61IgbiKS0XMr2u7Eb_XBaEyjdGIVd03D7O_qHR4ZjPg-Y3CACvAAAAAQAYVubt5PTCzfYPlPtE_4Wi3skYh2oCMBK2H4B5EwfVHxY_T7ujYzoz30_6KFrPR5eb3CgLv9-CTi8X7ybB8-UFvqIOM7LGDmtn8-1Va2EquWNBxoakeFQlBc2D_AYmRaHdwRnAhpbuxtJgoqBnVbUPSKP5yDYBJPjsEV_ymaakPmq0zKgl6O52c7Au18F1VhjQqaZr54jIiz-bORuwRduQGd9_DNzB35VeVx7k974ECfly-VK8nLGut8h5R4DRrJ-vRV4fZ51BFXBBjPUIAK8AAAABAP9rqlDVAMg2rY9EaIfkSNy53vbCloqcRRqLHvH8urXUzakZ_78aOgAYBCAyU4QX_exg1pVoLVq3_hroaw-HsafAofXtdiuxmrMrJAeHkBnxcWHvEMj3RHIXfWB2VuEumfMj2MlGrLpfil4mM2OMVmScA9eir4K_EE33U90EYqu8Ajq4luTkzO-WYjM00JWr-ofAVzRvlHs0A94nwvX0FZQDGleyJE9rsD4irBjd0GO9q_zZlI3pa2d01pbMFqtmTWeD3j2-NqgybYwbTAgArwAAAAEAuG0e-nzdnwgvA05kU1pD19rPjN-uiaiO9zIrvMUliADUl8_-hKMun4lCTrF8KqVYjTZo_-NeKnrXOEP-3HZpNH-6frS0rC4MMnOGB6_8_dhPJdEq_selb2ji2pgOioZCFCp3II9YxKo4ZN4NNaPo4ceMEKlNkZvtPw4pmbpevVpisIiTqPkzuWF_JbK7LExOymGrtRIpKYyPFbbTKh3jff8EHF43vXPJLkEofg',
+            '12. Block1 Block7 deleted':
+               'f2txrdTZzvB4165RN-dUg68L0w4UWVtoqestGhj6lcEIAD8AAAABAB74RJWO4IlGlZFGPyXjNA2Jrf_vJ-2845WQlsQAAAAAAAAA21qrVH7UfQOjw6PRiGsmz9cWY7F42sawIjZlbVhMT4vyorHhDAz6qNHliXpiJ-vl6RI91xLdvZNNCABDAAAAAQBTkwDHFHCXrrJ96L6nveyW1GYoeEJEFrOEl1onV7VEydpfnrFQbQin8ZnkGJDGNw8a11RavRUtL-8CWrS2UlJcWfTWqwrVMYSVnXI7Q2PZJftka4PqZGy9j2JWO8s1hfwIAGcAAAABAPPLMSwRw43X0uf0xHX0Q8vePRrfLwNH0TUZdroMD2x5yrH1iP6BoQXVlRuwtIna455KIzzZpEll21zgw8CSovkIZKhT1Z4w2_itaOfm4tymv1r2fiExCcpRkloiAEuidfY-tSIG4iktFzK9ruxG_1wWhMo3RiFXdNw-zv6h0eGYz4PmNwgArwAAAAEAGFbm7eT0ws32D5T7RP-Fot7JGIdqAjASth-AeRMH1R8WP0-7o2M6M99P-ihaz0eXm9woC7_fgk4vF-8mwfPlBb6iDjOyxg5rZ_PtVWthKrljQcaGpHhUJQXNg_wGJkWh3cEZwIaW7sbSYKKgZ1W1D0ij-cg2AST47BFf8pmmpD5qtMyoJejudnOwLtfBdVYY0Kmma-eIyIs_mzkbsEXbkBnffwzcwd-VXlce5Pe-BAn5cvlSvJyxrrfIeUeA0ayfr0VeH2edQRVwQYz1CACvAAAAAQD_a6pQ1QDINq2PRGiH5Ejcud72wpaKnEUaix7x_Lq11M2pGf-_GjoAGAQgMlOEF_3sYNaVaC1at_4a6GsPh7GnwKH17XYrsZqzKyQHh5AZ8XFh7xDI90RyF31gdlbhLpnzI9jJRqy6X4peJjNjjFZknAPXoq-CvxBN91PdBGKrvAI6uJbk5MzvlmIzNNCVq_qHwFc0b5R7NAPeJ8L19BWUAxpXsiRPa7A-IqwY3dBjvav82ZSN6WtndNaWzBarZk1ng949vjaoMm2MG0wIAK8AAAABALhtHvp83Z8ILwNOZFNaQ9faz4zfromojvcyK7zFJYgA1JfP_oSjLp-JQk6xfCqlWI02aP_jXip61zhD_tx2aTR_un60tKwuDDJzhgev_P3YTyXRKv7HpW9o4tqYDoqGQhQqdyCPWMSqOGTeDTWj6OHHjBCpTZGb7T8OKZm6Xr1aYrCIk6j5M7lhfyWyuyxMTsphq7USKSmMjxW20yod433_BBxeN71zyS5BKH4',
+            '13. All Term':
+               'iXS1WieOp2Fig4d5IVfGU9-01mBbNNSMGqoFBSWXDzIIAD8AAAEBAO2IVkPC3UwofC-PB-i6c0effYaVGiLkjUWJzDEAAAAAAAAAxUUpjW9AXsSV2bBpueosmUQuXelqUA9mUuGnbH1OpdpWVxCKfiVLEu8tr1WIAbHCesbA3g-PAThACAAxAAABAQDgGOg3hjUmCI2O9tlrzqamyZJBPrmv6G9_cyr_9f6KxNqaOxROsubdWVVs-6A1L7nQXGanmCFbwraHy4QKJIehVOBmToHwyg9Ej9Q85jwIAEMAAAEBACuTutFXM_7ufR6fsaokMDp68eh9IUoCnilfHN5d4yHCqycfzN-2xj-t5dZ-NBtzTmCp607IXjfdSrx8LNDu1benEC5-JizIR02XVeA-pvKW9CzB8CwhhFfS6X_cYcPpQAgAZwAAAQEAlIDAL4s5x-ysds1AYU7vOCoLO1Uc_L3tNZWbZJEUhKyfAbHxNKiGkq206_FAzHRiwVvdWEikxBBhDu5F0ssS_6iL9aqljLQLrU0tOlxi4Wercnn9F62DlQjfGufRvtrPaMjj1FcamUJTUqYqL1uuZJRdm16CuZ_ixMR0tAs1uHlj_-paCACvAAABAQAYszR2VDgamrbVBNbmuzR92tPP-a8rKf3KWHY43iUsmUKWKpER-O5dd2UWm4G47LSSR0SE2x9svZ08I5yYXr4UTerUBZSBSRRsgpGCbC1-BWnhXs27l7EE7i8_lIskY4BMlJJT1IIqRUEX7zuef3pcaApwnSyHR-uODaDk1Vswj4TCnujWU8uTD8jJJCeDzuPhKwxB7ci2l5Ve1hZHhb_iuPSymOivTiSvixWfvYHRqxUpYtJjTMNnkNFyhtt6fmBVYiW9AuaFXaYgoLwIAK8AAAEBAA1rFu4TvAZf4iiTAEbSVFW3A9cxgxmFEoeHRUBJ4iTnzCKLMKmZLFPbwxJu0fDSE586NlzUr2qpV9ol72pj_BO8402HGnZH_UxBJUC40tvuapiZJlVU7SbVp_NYwilXHSGn7-_oZtKdBaaF5t2yCD9ZiJefC_0u0CD0xlTBYdjCUNblbFyco1DXJynN0ZbNbDbLoVns16uuWDsZd3qlm0N0ZJNiS7A3eps7KjU_p1baUkgd3yzrDkcEYdJ7f30qp1LhMeE3HIVxAAdpZAgArwAAAQEAHNT-mMVzp2ZhuiIQ9GTTVEFhsiRsX1JvZEm5UduMIlBW8VFNDCNGEnojsBoJu5kBLoDpBfGINrqoNmkjguJwS0v-eKWdhTaEoROetK2crGg7FWpTeIC9FbpMZP4YUSX0YrbI3oe3SirB9d2jxdRRETksNeoMq0aKSC_uEgQ1OaEC8-Qkn4eJPRS553tZTyn1A2YvyczRLPmgY7_dpkstLWFE99EBVTofxbt5zKetmkky58AujXxLh7QoTdqtBwDXopip98QNKlRPSLt6CAA4AAABAQCdg-g2lxMkDfN045he_bmncDAcn-cIJcw_1YpPZnyWwJes2NJHxhPtVUfNlvo_XDV_hLUE4g',
+            '14. No Term':
+               '6CedEhsS0ZDAniWjJUb4vO40N14K2C17VV_h2D1cUfAIAD8AAAABAHndr_AbbMn7jONIKBGHK75_0SnPBfJjVKScY5kAAAAAAAAAisiBlk-4r_Bp79WVkEaFXXjNTk5bEJPMBNjevXntD4kYVDIni91vksbvDSRj1c234piObAwc-OphCAAxAAAAAQCFbWWPHH2ZpqDxdA2X_rxRKa_1GjldEmDsdkjIm60_9nfFn7AUeoVJfWTzPyEkpgp_rCZk5wC4aNQR4aQRSP3iPC4_2NG98rP6Zlq-eGkIAEMAAAABAL5A3F3593Bmx8M49rmpLfRpZ03qYZ9WLg8GBvWN1MATTRPd76TsS1oX9q1iUFiPz5PR2L2vkXqUXbbsO6vNXv9BJtqpR6CpAJpZvMKjcEqBFrXmUQdoo8sFUX1pCC_0AQgAZwAAAAEAbcXKQig3piu33MzsCzMMcVI7MtIgLR4iXX8jSwHARwWYiTSc9VAc8Q0RIECIwV3D3NFjB2FjtoWMaTuZWYeDfDF96yQUD5H7DTqULNnASpOeYGKM0RqV7p2UG5Ux_oLqLKWP1XvVuXbvL-eZPX1nC61PzvNBe3Qn84OGLVzJdQwr-PheCACvAAAAAQC7muILKB0B1WeZVQWYeSYZW3U_tRCE69sHQ12PTRRSY7t0EXh3l9v2uJJd-N6BE7-x3EgMbcZZsPsduSP1uxPkdpydH4-uUYWjQVYgpj_4Cf_7rOTdGGqCAszWfZg7VF8g6yUqy8tFnM8bREokmqAv2ogU3TOqrs3hbDWHeKh3l4crQ5d1iLg_E_25xoFAXAQo99c2U63pUnolZBEQFZKj6vfx62F0DcWHF53g4sgg8wDP3jMR9g_4vVlim4X9icjDflFI9u1jW2UlS4EIAK8AAAABAItzW50jiXMbp0JTrIPuxRPTlQTWA97DdfD2FZpAY-lXtndn6kgk12nYcGV9kKWFroZ0caBSfQpRb9Ag1p8Eb9ZDtchGEQnUch5um3uzOE5KRkKyB_hZoGCMigUE0-cEFSe0F3qCjmmxNJh4mXCTjVTscM6ftgf9vqhfTf3CTWcq5PaauPWJohaPGV-n6SZaI3dtRMwtNTt-buLtYYPli9A6gEeUtlWU0pLy0SEksR-_jXm2xDhbcOX7bzS97NvnWO2bDvDk6fvDmrblrQgArwAAAAEAibHLhZCaYfQZ-e2ILnCBcf3fUbdBFVp4diSZkaz2U71Wf85f2_eg0VU3pqIcV23HyRnd3ytViAUlg8B30l9ktAm_xSb8oUS2pdmsuy899RcrzypqNhT2FT4N24_s1PP8EWLSWlx3B2ZpjocG5OiDMtD2RJ_iDunti9KWFw5RRaU8KrxoZeV_3awt-8wccUoskMFwOiRDetrLDCoR_xKTRjzg8WobhunNvB2QfEXqSDKA89oFAsPI7WHha3y9LyJjbPxLz0FOTmbh9A07CAA4AAAAAQAZ8Jgn-GMxM7QojhFUJU-Up47JVC961hbMYeaScsNqh90mQOe0RZYDb7Ixbeb3-iPgidGapg',
+         },
+      },
+   ];
+
+   it('good multi block ciphertext', async () => {
+      for (const ver of vers) {
+         // First make sure it decrypts as expected
+         const [cipherStream] = streamFromBase64(ver.goodCt);
+         const decKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
+         let decDoneCount = 0;
+         const dec = await cipherSvc.decryptStream(cipherStream, decKeyProvider, (doneVer, multiBlock) => {
+            decDoneCount += 1;
+            expect(doneVer).toBe(ver.ver);
+            expect(multiBlock).toBe(true);
+         });
+         await expect(areEqual(dec, clearData)).resolves.toEqual(true);
+         expect(decDoneCount).toBe(1);
+      }
+   });
+
+   it('block reorder vectors are built from the blocks of the good ciphertext', () => {
+      for (const ver of vers) {
+         const goodBytes = base64ToBytes(ver.goodCt);
+         const goodBlocks = splitBlocks(goodBytes, ver.ver);
+
+         // Splitter control, so a wrong block boundary cannot make the checks below pass
+         expect(concatArrays(goodBlocks)).toEqual(goodBytes);
+         expect(goodBlocks.length).toBeGreaterThan(1);
+
+         for (const [change, ct] of Object.entries(ver.badCts)) {
+            // The term vectors rewrite flag bytes rather than moving whole blocks
+            if (!change.includes('Term')) {
+               for (const block of splitBlocks(base64ToBytes(ct), ver.ver)) {
+                  expect(goodBlocks.some((good) => isEqualArray(good, block))).toBe(true);
+               }
+            }
+         }
+      }
+   });
+
+   it('changed multi block ciphertext', async () => {
+      for (const ver of vers) {
+         for (const [_change, ct] of Object.entries(ver.badCts)) {
+            const [cipherStream] = streamFromBase64(ct);
+            const decKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial);
             await expect(
                cipherSvc.decryptStream(cipherStream, decKeyProvider).then((dec) => {
                   return areEqual(dec, clearData);
