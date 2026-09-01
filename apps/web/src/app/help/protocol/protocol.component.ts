@@ -5,7 +5,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
 import { CopyrightComponent } from '../../ui/copyright/copyright.component';
-import { VersionsComponent } from './versions.component';
 
 @Component({
    selector: 'app-protocol',
@@ -65,11 +64,25 @@ export class Protocol6Component {
 
 @Component({
    selector: 'app-protocol7',
-   imports: [MatTooltipModule, CopyrightComponent, VersionsComponent],
+   imports: [MatTooltipModule, RouterLink, CopyrightComponent],
    templateUrl: './protocol7.component.html',
    styleUrl: './protocol.component.scss',
 })
 export class Protocol7Component {
+   constructor(private dialog: MatDialog) {}
+
+   openFlowImage(flowImage: string) {
+      this.dialog.open(FlowDialog, { data: flowImage });
+   }
+}
+
+@Component({
+   selector: 'app-protocol8',
+   imports: [MatTooltipModule, RouterLink, CopyrightComponent],
+   templateUrl: './protocol8.component.html',
+   styleUrl: './protocol.component.scss',
+})
+export class Protocol8Component {
    constructor(private dialog: MatDialog) {}
 
    openFlowImage(flowImage: string) {

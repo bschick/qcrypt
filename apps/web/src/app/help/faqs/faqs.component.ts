@@ -933,7 +933,7 @@ const ELEMENT_DATA: FAQElement[] = [
          either <b>XChaCha20 Poly1305</b> or <b>AEGIS 256</b>, which are provided by libsodium.
          </li>
          <li>If you want a cipher mode that is CMT-1 key-committing
-         even without Quick Crypt's additional commitment key, choose <b>AEGIS 256</b>.
+         even without Quick Crypt's stored key commitment, choose <b>AEGIS 256</b>.
          </li>
          <li>While there is no universal agreement on the "safest" mode, the
          <a href="https://doc.libsodium.org/secret-key_cryptography/aead#tl-dr-which-one-should-i-use" target="_blank">
@@ -944,7 +944,7 @@ const ELEMENT_DATA: FAQElement[] = [
       <p>Quick Crypt defaults to <b>XChaCha20 Poly1305</b> because it is very
       well-established, is generally considered more robust than AES 256 GCM,
       is post-quantum robust, is key-committing when paired with Quick Crypt's
-      additional commitment key, and is easy for Quick Crypt to update if needed.
+      stored key commitment, and is easy for Quick Crypt to update if needed.
       The libsodium implementation is also designed to be side-channel attack resistant.
       </p><p>For increased protection, you can encrypt your data multiple times
       by setting loop encrypt in the "Advanced Options" section to greater than 1.
@@ -1193,8 +1193,8 @@ const ELEMENT_DATA: FAQElement[] = [
       The outer MAC creates a strict "Encrypt-then-MAC" protocol that lets Quick Crypt safely
       read and display unencrypted
       metadata, such as the version number, before the primary decryption algorithm
-      runs. Next, by outputting cipher armor with a collision-resistant BLAKE2b hash,
-      Quick Crypt achieves CMT-4/FROB-secure key commitment for all cipher modes.
+      runs. Next, the collision-resistant BLAKE2b hash prevents the key commitment from being
+      altered, allowing Quick Crypt to achieve CMT-4/FROB-secure key commitment for all cipher modes.
       And finally, the additional MAC provides defense-in-depth. Imagine an
       attacker could modify your encrypted data and knows of a bug in Chrome's
       AES-GCM cipher. Although unlikely, this might allow an attacker to craft the
@@ -1209,14 +1209,14 @@ const ELEMENT_DATA: FAQElement[] = [
       question: "Is Quick Crypt's protocol key-committing?",
       answer: `Yes, <a href="/help/protocol">Quick Crypt's protocol</a> is
       <a href="https://en.wikipedia.org/wiki/Authenticated_encryption#Key-committing_AEAD" target="_blank">
-      key-committing</a> for all underlying AEAD cipher modes as of v7. Two features
+      key-committing</a> for all underlying AEAD cipher modes. Two features
       combine to achieve a <a href="https://tosc.iacr.org/index.php/ToSC/article/view/11404/10902"
-      target="_blank">FROB-secure</a> protocol. During encryption, a commitment key is derived
-      from the root cipher key via a BLAKE2b KDF and then injected into the AEAD additional
-      data. Because the root cipher key is itself derived from the user credential and
-      password, the commitment key binds each ciphertext block to those secrets. An
-      attacker therefore cannot construct a single ciphertext that decrypts to two different
-      cleartexts under two different keys. Next, Quick Crypt creates cipher armor with a
+      target="_blank">FROB-secure</a> protocol. During encryption, a 256-bit commitment to the
+      root cipher key is derived with a BLAKE2b KDF and stored alongside the ciphertext. Before
+      decrypting, Quick Crypt recomputes that commitment from the key it just derived and rejects
+      the data unless the two match. Because the root cipher key is itself derived from the user
+      credential and password, an attacker cannot construct a single ciphertext that decrypts to
+      different cleartexts under different keys. Next, Quick Crypt creates cipher armor with a
       collision-resistant 256-bit BLAKE2b keyed hash covering metadata, additional data, and ciphertext. The
       hash is verified before decryption, creating an "Encrypt-then-MAC" protocol that rejects both
       cipher key and additional data manipulation.`,
