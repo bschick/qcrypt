@@ -16,7 +16,7 @@ lightDefaultB64 = base64.standard_b64encode(lightDefault.encode())
 inputFile = 'assets/combined_aaguid.json'
 pathBase = 'assets/aaguid/'
 pathImg = pathBase + 'img/'
-shutil.rmtree(pathImg)
+shutil.rmtree(pathImg, ignore_errors=True)
 os.makedirs(os.path.dirname(pathImg), exist_ok=True)
 
 with open(inputFile, 'r') as fin:

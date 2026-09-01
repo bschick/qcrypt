@@ -477,7 +477,7 @@ const addGlobalOpts = (y) =>
 // closest match.
 const COMMANDS = ['deploy', 'bdeploy', 'rollback', 'version', 'info'];
 
-const deployBuilder = (y) =>
+const deployOpts = (y) =>
    addGlobalOpts(y)
       .option('build-dir', { type: 'string', default: 'dist/server-test', describe: 'Directory containing server.zip' })
       .option('comment', {
@@ -490,20 +490,24 @@ const deployBuilder = (y) =>
          default: true,
          describe:
             'Point the alias at the newly published version (prod-mode only, default). Pass `--no-alias` to publish the version and leave the alias where it is; move it later with `version <n>`.',
-      })
-      .check((argv) => {
-         try {
-            if (!statSync(argv.buildDir).isDirectory()) {
-               throw new Error('not a directory');
-            }
-         } catch {
-            throw new Error(`--build-dir does not exist or is not a directory: ${argv.buildDir}`);
-         }
-         return true;
       });
 
+// Only deploy consumes a build it did not produce. bdeploy writes build-dir itself, so requiring
+// the directory up front would reject every build into a path that does not exist yet.
+const deployBuilder = (y) =>
+   deployOpts(y).check((argv) => {
+      try {
+         if (!statSync(argv.buildDir).isDirectory()) {
+            throw new Error('not a directory');
+         }
+      } catch {
+         throw new Error(`--build-dir does not exist or is not a directory: ${argv.buildDir}`);
+      }
+      return true;
+   });
+
 const bdeployBuilder = (y) =>
-   deployBuilder(y).option('min', {
+   deployOpts(y).option('min', {
       type: 'boolean',
       describe: 'Force a minified (--min) or unminified (--no-min) build. Defaults to minified for prod, not for test.',
    });
