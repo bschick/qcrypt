@@ -583,7 +583,8 @@ export class AuthenticatorService {
          if (this.getUserInfo().prf) {
             const userCred = await this.getUserCred();
             try {
-               userCredEnc = await prfEncrypt(userCred, secret, this.userId);
+               // prfEncrypt wipes the key it is handed
+               userCredEnc = await prfEncrypt(userCred, secret.slice(0), this.userId);
             } finally {
                userCred.fill(0);
             }
