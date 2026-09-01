@@ -88,13 +88,17 @@ are not listed.
 
 **Cryptography**
 
-1. **AEAD key commitment (`k_C`).** `k_C = KDF(_ek, "Cmit_Key")` is derived from the
-   actual message key and folded into the AEAD associated data on both encrypt and decrypt
-   (`keys.ts:726-729`, `ciphers-current.ts:305-307`). It is recomputed on decrypt, not
-   transmitted, so a ciphertext validates only under the exact key that produced it. This
-   closes the partitioning‑oracle / key‑substitution weakness of raw AES‑GCM and
-   ChaCha‑Poly — a class of attack most tools leave open. Exercised by the "Key commitment
-   is enforced by AEAD" test.
+1. ~~**AEAD key commitment (`k_C`).**~~ **Withdrawn — this was not a strength.** V7 derived
+   `k_C = KDF(_ek, "Cmit_Key")` from the message key and folded it into the AEAD associated
+   data on both encrypt and decrypt. Because *both* parties derive it independently and it is
+   never transmitted, there is nothing on the wire to compare it against: a wrong key changes
+   the AEAD key and the folded value together, leaving the tag equation with the same single
+   free block. It therefore did **not** close the partitioning-oracle or key-substitution
+   weakness for AES-GCM or XChaCha20-Poly1305; under V7 only AEGIS-256 was key-committing, by
+   its own native CMT-1 property. Confirmed by a GF(2^128) collision against the real
+   decipher in `libs/crypto/src/lib/keycommit.spec.ts`. Protocol V8 replaces the fold with a
+   32-byte commitment **stored with the ciphertext and compared before decryption**, which
+   does close the class. See `vibes/keycommit_finding.md`.
 2. **MAC‑before‑decrypt, done deliberately.** Block 0 verifies the keyed‑BLAKE2b MAC
    before any decryption (`ciphers-current.ts:1079-1084`, explicit "Doom Principle"
    comment), with the version bound into the MAC input and the signing key salt‑mixed from
@@ -506,7 +510,8 @@ bounded rate probe); the rest remain owner‑runnable.
 Quick Crypt achieves its confidentiality, integrity, and authenticity goals, and the new
 PRF work is a substantial, correctly‑implemented improvement that removes the server from
 the trust base for accounts that use it. The cryptographic library is careful and, in the
-key‑commitment and per‑message‑key areas, ahead of typical practice. The authorization
+per‑message‑key area, ahead of typical practice. (This review's key‑commitment claim was
+withdrawn — see item 1 above and `vibes/keycommit_finding.md`.) The authorization
 model — cookie + CSRF + post‑quantum proof — is a genuine three‑factor design with sound
 revocation levers and strong enumeration resistance. User verification is enforced, and no
 Critical, High, or Medium issues were found. The highest‑value actions are to **fail the
