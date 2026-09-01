@@ -1,5 +1,30 @@
 # CHANGELOG.md
 
+## 8.0.0 (unreleased)
+
+#### Changes
+
+- renamed `customAd` to `extraKeyMaterial` to describe what the value is rather than where it went
+- much deeper test coverage for `MasterKeyKeyProvider`, which encrypts every stored user credential
+  and previously had none at the cipher service layer
+- pinned cipher text vectors for both key providers, with and without extra key material, covering
+  v7 and v8
+- vector generators emit complete, paste-ready blocks and keep diagnostics off stdout
+- updated libcrux
+
+#### Security
+
+- [protocol version 8 released](https://quickcrypt.org/help/protocol8)
+  - cipher key hash stored in associated data to provide full key commitment for all cipher modes
+  - length prefixes added to key derivation inputs to make the encoding unambiguous
+  - extra key material removed from associated data and used only for key derivation
+  - loop number, protocol version, algorithm ID, and extra key material added to block cipher key
+    derivation for domain isolation
+  - data at rest omits the stored commitment because its cipher and signing keys share one root
+- decryption requires every block's algorithm and version to match block0, for all protocol versions
+- adversarial regression test that solves a real GF(2^128) tag collision and feeds it to the
+  decipher, pinning that v8 rejects what v7 accepted
+
 ## 7.5.0 (2026-08-20)
 
 #### Features
@@ -109,7 +134,6 @@
 - [protocol version 7 released](https://quickcrypt.org/help/protocol7)
   - improved domain isolation by adding context-specific input to key derivations
   - initialization vector no longer shared between hint and block0
-  - cipher key hashes added to associated data to provide full key commitment
   - new non-password based key derivation for encrypting data at rest
 - browser app keeps userCred in memory only during cryptographic operations
 - browser sessionstore used to persist encrypted userCred
