@@ -55,7 +55,7 @@ import { BroadcastService } from './broadcast.service';
 import { KEYSTORE_DB_NAME, KeystoreService } from './keystore.service';
 import * as cc from '@qcrypt/crypto/consts';
 import { base64ToBytes, bytesToBase64, cryptoReady, getRandom, hashString } from '@qcrypt/crypto';
-import { CHALLENGE_BYTES, RECOVERYID_BYTES, getUserCredPubKey, recoverySecret } from '@qcrypt/api';
+import { CHALLENGE_BYTES, RECOVERYID_BYTES, getUserCredPubKey, recoverySecret, type RequestTypes } from '@qcrypt/api';
 import { entropyToMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 
@@ -456,6 +456,36 @@ describe('AuthenticatorService', () => {
       });
    });
 
+   // Various ways to mock failed server updates. failedPuts throws for that many key uploads
+   // before letting the rest through
+   function mockRotation(opts: { failedPuts?: number; keyOverride?: string; prf?: boolean } = {}) {
+      let sentPubKey = '';
+      let puts = 0;
+      fetchMock.mockImplementation((url: URL, init: RequestInit) => {
+         if (url.pathname.endsWith('/recover3/key')) {
+            sentPubKey = JSON.parse(init.body as string).recoveryPubKey;
+            puts += 1;
+            if (puts <= (opts.failedPuts ?? 0)) {
+               throw new Error('fetch error');
+            }
+         }
+         return {
+            ok: true,
+            json: async () => ({
+               ...sessionResponse,
+               prf: !!opts.prf,
+               recoveryKeyId: opts.keyOverride ?? hashString(sentPubKey),
+            }),
+         };
+      });
+   }
+
+   function sentRecoveryKeyBodies(): RequestTypes.Recover3Key[] {
+      return fetchMock.mock.calls
+         .filter((call) => (call[0] as URL).pathname.endsWith('/recover3/key'))
+         .map((call) => JSON.parse((call[1] as RequestInit).body as string));
+   }
+
    describe('recovery words state', () => {
       beforeEach(async () => {
          primeLocalStorage();
@@ -463,29 +493,6 @@ describe('AuthenticatorService', () => {
          await service._loginUser(sessionResponse, base64ToBytes(userCred));
          vi.spyOn(service, 'reauthenticate').mockResolvedValue(service.userInfo()!);
       });
-
-      // Various ways to mock failed server updates. failedPuts throws for that many key uploads
-      // before letting the rest through
-      function mockRotation(opts: { failedPuts?: number; keyOverride?: string } = {}) {
-         let sentPubKey = '';
-         let puts = 0;
-         fetchMock.mockImplementation((url: URL, init: RequestInit) => {
-            if (url.pathname.endsWith('/recover3/key')) {
-               sentPubKey = JSON.parse(init.body as string).recoveryPubKey;
-               puts += 1;
-               if (puts <= (opts.failedPuts ?? 0)) {
-                  throw new Error('fetch error');
-               }
-            }
-            return {
-               ok: true,
-               json: async () => ({
-                  ...sessionResponse,
-                  recoveryKeyId: opts.keyOverride ?? hashString(sentPubKey),
-               }),
-            };
-         });
-      }
 
       it('stores words that check out against the key the server reports', async () => {
          mockRotation();
@@ -537,6 +544,34 @@ describe('AuthenticatorService', () => {
          const otherWords = entropyToMnemonic(recoverySecret(getRandom(RECOVERYID_BYTES), otherUserId), wordlist);
 
          await expect(service.checkRecoveryWords(otherWords)).resolves.toEqual('wronguser');
+      });
+   });
+
+   describe('recovery words state (PRF)', () => {
+      beforeEach(async () => {
+         primeLocalStorage();
+         const prfSession = { ...sessionResponse, prf: true };
+         // @ts-expect-error — exercising private path
+         await service._loginUser(prfSession, base64ToBytes(userCred));
+         vi.spyOn(service, 'reauthenticate').mockResolvedValue(service.userInfo()!);
+      });
+
+      it('re-encrypts the user credential under the new recovery secret', async () => {
+         mockRotation({ prf: true });
+
+         await expect(service.changeRecoveryWords()).resolves.toEqual('match');
+         expect(sentRecoveryKeyBodies()[0].userCredEnc).toBeTruthy();
+      });
+
+      // prfEncrypt wipes the key it is handed, so a shared secret would leave nothing to sign with
+      it('signs every upload attempt after re-encrypting the user credential', async () => {
+         mockRotation({ prf: true, failedPuts: 1 });
+
+         await expect(service.changeRecoveryWords()).resolves.toEqual('match');
+
+         const sent = sentRecoveryKeyBodies();
+         expect(sent.length).toBe(2);
+         expect(sent[0].signature).not.toEqual(sent[1].signature);
       });
    });
 

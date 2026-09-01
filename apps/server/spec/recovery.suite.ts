@@ -304,6 +304,35 @@ export function recoverySuite(prf: boolean): void {
          expect(res.status).toBe(400);
       });
 
+      it('rejects a recovery key change that drops userCredEnc', async () => {
+         const newSecret = recoverySecret(getRandom(RECOVERYID_BYTES), user.userId);
+         const body = await recoveryKeyBody(user, newSecret);
+         delete body.userCredEnc;
+
+         const res = await putJson('/v1/recover3/key', body, { 'x-csrf-token': user.csrf }, user.cookie);
+
+         if (user.prf) {
+            expect(res.status).toBe(400);
+         } else {
+            // A no-PRF account never stores userCredEnc, so its absence is not an error
+            expect(res.status).toBe(200);
+            user.recoverySecret = newSecret;
+         }
+      });
+
+      it('rejects a recovery key change carrying a malformed userCredEnc', async () => {
+         if (!user.prf) {
+            return;
+         }
+
+         const newSecret = recoverySecret(getRandom(RECOVERYID_BYTES), user.userId);
+         const body = await recoveryKeyBody(user, newSecret);
+         body.userCredEnc = bytesToBase64(base64ToBytes(body.userCredEnc!).slice(0, 4));
+
+         const res = await putJson('/v1/recover3/key', body, { 'x-csrf-token': user.csrf }, user.cookie);
+         expect(res.status).toBe(400);
+      });
+
       // The body is otherwise complete so that only the absent proof is under test.
       it('rejects a recovery public key with no proof of its secret', async () => {
          const newSecret = recoverySecret(getRandom(RECOVERYID_BYTES), user.userId);
