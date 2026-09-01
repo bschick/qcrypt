@@ -180,7 +180,7 @@ export async function postConsistency(
                   .go({ attributes: ['credentialId'], consistent: true });
 
                if (!auths || auths.data.length === 0) {
-                  console.log(`no credentials for user: ${user.userId}, ${user.userName}`);
+                  console.log(`no credentials for user: ${user.userId}, ${JSON.stringify(user.userName)}`);
                   leaked += 1;
                   if (params.cleanse === 'true') {
                      deleteBatch.push({
@@ -192,7 +192,7 @@ export async function postConsistency(
                // This is for cleanup of records where something has gone wrong or left-over from
                // previous to the use of DynamoDB TTL automatic cleanup.
                unverified += 1;
-               console.log(`unverified user is expired: ${user.userId}, ${user.userName}`);
+               console.log(`unverified user is expired: ${user.userId}, ${JSON.stringify(user.userName)}`);
                expired += 1;
                if (params.cleanse === 'true') {
                   deleteBatch.push({
@@ -332,10 +332,10 @@ export async function postCleanupTestUsers(httpDetails: HttpDetails): Promise<Re
          }
          const state = `${user.verified ? 'verified' : 'unverified'} ${new Date(user.createdAt ?? 0).toISOString()}`;
          if (!user.createdAt || user.createdAt > minCreated) {
-            console.log(`not expired test user ${user.userName} - ${user.userId} - ${state}`);
+            console.log(`not expired test user ${JSON.stringify(user.userName)} - ${user.userId} - ${state}`);
             continue;
          }
-         console.log(`expired test user ${user.userName} - ${user.userId} - ${state}`);
+         console.log(`expired test user ${JSON.stringify(user.userName)} - ${user.userId} - ${state}`);
          candidates.push({
             userId: user.userId,
             userName: user.userName,
