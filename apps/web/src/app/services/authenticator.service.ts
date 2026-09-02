@@ -551,7 +551,7 @@ export class AuthenticatorService {
          const nonce = bytesToBase64(getRandom(CHALLENGE_BYTES));
 
          // Proves to the server that the uploaded key has a secret behind it
-         const signature = createRecoveryProof(secret, this.userId, timestamp, nonce);
+         const signature = createRecoveryProof(secret, this.userId, timestamp, nonce, 'replace');
 
          const body: RequestTypes.Recover3Key = {
             recoveryPubKey,
@@ -1260,7 +1260,7 @@ export class AuthenticatorService {
             userId,
             timestamp: timestamp1,
             nonce,
-            signature: createRecoveryProof(secret, userId, timestamp1, nonce),
+            signature: createRecoveryProof(secret, userId, timestamp1, nonce, 'recover'),
          };
 
          const startResp = await this._doFetch<RecoverStart>({

@@ -23,7 +23,7 @@ SOFTWARE. */
 import { FilterXSS } from 'xss';
 import { Buffer } from 'node:buffer';
 import * as crypto from 'node:crypto';
-import { verifyRecoveryProof, PROOF_SIG_BYTES, type RequestTypes } from '@qcrypt/api';
+import { verifyRecoveryProof, PROOF_SIG_BYTES, type RecoveryOp, type RequestTypes } from '@qcrypt/api';
 import { Challenges, type ChallengeItem } from './models';
 import { USERCRED_ENC_MIN_BYTES, USERCRED_ENC_MAX_BYTES, CHALLENGE_BYTES, PROOF_SKEW_MS } from './consts';
 
@@ -101,6 +101,7 @@ export async function verifyRecoverProof(
    recoveryPubKey: string,
    userId: string,
    proof: RequestTypes.RecoverProof,
+   op: RecoveryOp,
 ): Promise<void> {
    const { timestamp, nonce, signature } = proof;
    if (!validB64(nonce) || !validB64(signature)) {
@@ -119,7 +120,7 @@ export async function verifyRecoverProof(
    }
 
    try {
-      verifyRecoveryProof(recoveryPubKey, userId, timestamp, nonce, signature);
+      verifyRecoveryProof(recoveryPubKey, userId, timestamp, nonce, signature, op);
    } catch {
       throw new ParamError(`user account ${userId} invalid recovery proof`);
    }

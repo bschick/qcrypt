@@ -36,6 +36,8 @@ export {
    PROOF_SIG_BYTES,
 } from './lib/proof';
 
+export type { RecoveryOp } from './lib/proof';
+
 export namespace RequestTypes {
    export type RegVerify = RegistrationResponseJSON & {
       userId: string;

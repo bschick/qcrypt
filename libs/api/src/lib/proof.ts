@@ -27,7 +27,13 @@ const USERCRED_KEY_CONTEXT = 'UCredKey';
 const USERCRED_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
 
 const RECOVERY_KEY_CONTEXT = 'RecovKey';
-const RECOVERY_SIG_CONTEXT = 'qcrypt/recovery/nonce/v1';
+
+export type RecoveryOp = 'replace' | 'recover';
+
+const RECOVERY_SIG_CONTEXTS: Readonly<Record<RecoveryOp, string>> = {
+   replace: 'qcrypt/recovery/replace/v1',
+   recover: 'qcrypt/recovery/recover/v1',
+};
 
 export const RECOVERYID_BYTES = 16;
 export const CHALLENGE_BYTES = 32;
@@ -134,11 +140,12 @@ export function createRecoveryProof(
    userId: string,
    timestampMs: string,
    nonce: string,
+   op: RecoveryOp,
 ): string {
    const { secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
    try {
       const message = buildRecoveryMessage(userId, timestampMs, nonce);
-      return bytesToBase64(createProof(secKey, message, RECOVERY_SIG_CONTEXT));
+      return bytesToBase64(createProof(secKey, message, RECOVERY_SIG_CONTEXTS[op]));
    } finally {
       secKey.fill(0);
    }
@@ -150,11 +157,12 @@ export function verifyRecoveryProof(
    timestampMs: string,
    nonce: string,
    signature: string,
+   op: RecoveryOp,
 ): boolean {
    return verifyProof(
       base64ToBytes(pubKey),
       buildRecoveryMessage(userId, timestampMs, nonce),
       base64ToBytes(signature),
-      RECOVERY_SIG_CONTEXT,
+      RECOVERY_SIG_CONTEXTS[op],
    );
 }

@@ -1143,7 +1143,7 @@ async function putRecover3Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
    }
 
    // Verified against the submitted key, so the caller must hold its secret.
-   await verifyRecoverProof(recoveryPubKey, verifiedUser.userId, recover3Key);
+   await verifyRecoverProof(recoveryPubKey, verifiedUser.userId, recover3Key, 'replace');
 
    const updates: { recoveryPubKey: string; userCredEnc?: string } = {
       recoveryPubKey,
@@ -1483,7 +1483,7 @@ async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
 
    // This call takes < 1ms to run on a warm server, so detecting timing
    // differences to guess valid userId is not practicle
-   await verifyRecoverProof(unverifiedUser.recoveryPubKey, userId, recover3);
+   await verifyRecoverProof(unverifiedUser.recoveryPubKey, userId, recover3, 'recover');
 
    // Now the user is confirmed
    const verifiedUser = checkVerified(unverifiedUser, userId);
