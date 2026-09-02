@@ -31,6 +31,7 @@ import {
    cryptoReady,
    concatArrays,
    ensureArrayBuffer,
+   expired,
 } from '../index';
 
 // Faster than .toEqual, resulting in few timeouts
@@ -99,6 +100,24 @@ function randomBlob(byteLength: number): Blob {
    }
    return new Blob(arr, { type: 'application/octet-stream' });
 }
+
+describe('expired', () => {
+   const storageOf = (value: string | null): Storage => ({ getItem: () => value }) as unknown as Storage;
+   const offsetIso = (millis: number) => new Date(Date.now() + millis).toISOString();
+
+   it('treats a missing value as expired', () => {
+      expect(expired(storageOf(null), 'sessionexpiry')).toBe(true);
+   });
+
+   it('reports a future time as not expired and a past time as expired', () => {
+      expect(expired(storageOf(offsetIso(60000)), 'sessionexpiry')).toBe(false);
+      expect(expired(storageOf(offsetIso(-60000)), 'sessionexpiry')).toBe(true);
+   });
+
+   it('treats an unreadable value as expired', () => {
+      expect(expired(storageOf('not-a-date'), 'sessionexpiry')).toBe(true);
+   });
+});
 
 describe('Base64 encode decode', () => {
    it('random bytes', () => {
