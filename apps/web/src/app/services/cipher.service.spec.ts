@@ -36,6 +36,7 @@ import {
    PWDKeyProvider,
    MasterKeyKeyProvider,
    concatArrays,
+   getStreamDecipher,
 } from '@qcrypt/crypto';
 
 describe('CipherService', () => {
@@ -388,6 +389,45 @@ describe('Stream encryption and decryption', () => {
 
       const resString = await readStreamAll(decrypted, true);
       expect(resString).toEqual(srcString);
+   });
+
+   it('detect a stripped outer loop layer', async () => {
+      const algKeys = Ciphers.algs();
+      const srcString = 'This is a secret 🦆';
+      const [clearStream] = streamFromStr(srcString);
+      const userCred = getRandom(cc.USERCRED_BYTES);
+
+      const econtext: EContext = {
+         algs: algKeys,
+         ic: cc.ICOUNT_MIN,
+      };
+
+      const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         return [String(cdinfo.lp), String(cdinfo.lp)];
+      });
+      const cipherData = await readStreamAll(await cipherSvc.encryptStream(clearStream, encKeyProvider, econtext));
+
+      // Loop layers nest, so decrypting the outer block yields the entire layer within
+      const [outerStream] = streamFromBytes(cipherData);
+      const peelKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         return [cdinfo.hint!, undefined];
+      });
+      const inner = await (await getStreamDecipher(outerStream, peelKeyProvider)).decryptBlock();
+
+      // Control: the inner layer is a well formed ciphertext that decrypts as a stand-alone block
+      const [controlStream] = streamFromBytes(inner);
+      const controlKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         return [cdinfo.hint!, undefined];
+      });
+      const controlDecipher = await getStreamDecipher(controlStream, controlKeyProvider);
+      await expect(controlDecipher.decryptBlock()).resolves.not.toHaveLength(0);
+
+      // Stream decryption understands nesting and should reject a stream with a missing layer
+      const [innerStream] = streamFromBytes(inner);
+      const strippedKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         return [cdinfo.hint!, undefined];
+      });
+      await expect(cipherSvc.decryptStream(innerStream, strippedKeyProvider)).rejects.toThrow(/Invalid loop/);
    });
 
    it('successful round trip, lpEnd=LP_MAX', { timeout: 60000 }, async () => {

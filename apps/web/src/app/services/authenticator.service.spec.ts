@@ -584,14 +584,13 @@ describe('AuthenticatorService', () => {
             version: phase1.version + 5,
          });
 
-         await new Promise((resolve) => setTimeout(resolve, 200));
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Login]));
 
          expect(createSpy).not.toHaveBeenCalled();
          expect(fetchMock).toHaveBeenCalled();
          const restored = JSON.parse(sessionStorage.getItem('sessionstate')!);
          expect(restored.version).toBe(phase1.version + 5);
          expect(service.hasSession()).toBe(true);
-         expect(events).toEqual([AuthEvent.Login]);
       });
 
       it('login with lower-or-equal version is ignored', async () => {
@@ -636,9 +635,8 @@ describe('AuthenticatorService', () => {
             version: phase1.version + 1,
          });
 
-         await new Promise((resolve) => setTimeout(resolve, 200));
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Logout]));
          expect(service.hasSession()).toBe(false);
-         expect(events).toEqual([AuthEvent.Logout]);
       });
 
       it('login with unknown pkId for a different user emits forget', async () => {
@@ -660,9 +658,8 @@ describe('AuthenticatorService', () => {
             version: phase1.version + 1,
          });
 
-         await new Promise((resolve) => setTimeout(resolve, 200));
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]));
          expect(service.hasSession()).toBe(false);
-         expect(events).toEqual([AuthEvent.Forget]);
       });
 
       it('logout with version >= local triggers logout', async () => {
@@ -675,9 +672,8 @@ describe('AuthenticatorService', () => {
 
          peerResponder.sendLogout({ pkId, version: phase1.version });
 
-         await new Promise((resolve) => setTimeout(resolve, 50));
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Logout]));
          expect(service.hasSession()).toBe(false);
-         expect(events).toEqual([AuthEvent.Logout]);
       });
 
       it('logout with version < local is ignored', async () => {
@@ -711,10 +707,9 @@ describe('AuthenticatorService', () => {
          localStorage.removeItem('pkid');
          peerResponder.sendForget();
 
-         await new Promise((resolve) => setTimeout(resolve, 50));
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]));
          expect(service.hasSession()).toBe(false);
          expect(service.validKnownUser()).toBe(false);
-         expect(events).toEqual([AuthEvent.Forget]);
       });
 
       it('userInfoChanged for matching pkId triggers refreshUserInfo', async () => {
@@ -726,9 +721,8 @@ describe('AuthenticatorService', () => {
 
          peerResponder.sendUserInfoChanged({ pkId });
 
-         await new Promise((resolve) => setTimeout(resolve, 100));
+         await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
 
-         expect(fetchMock).toHaveBeenCalled();
          const calledUrl = fetchMock.mock.calls[0][0] as URL;
          expect(calledUrl.pathname).toContain('/user');
       });
@@ -739,8 +733,7 @@ describe('AuthenticatorService', () => {
 
          peerResponder.sendForget();
 
-         await new Promise((resolve) => setTimeout(resolve, 50));
-         expect(events).toEqual([AuthEvent.Forget]);
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]));
       });
 
       it('forget when not logged in - same user emits forget', async () => {
@@ -750,8 +743,7 @@ describe('AuthenticatorService', () => {
 
          peerResponder.sendForget();
 
-         await new Promise((resolve) => setTimeout(resolve, 50));
-         expect(events).toEqual([AuthEvent.Forget]);
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]));
       });
 
       it('forget when not logged in - different user emits forget', async () => {
@@ -767,8 +759,7 @@ describe('AuthenticatorService', () => {
 
          peerResponder.sendForget();
 
-         await new Promise((resolve) => setTimeout(resolve, 50));
-         expect(events).toEqual([AuthEvent.Forget]);
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]));
       });
 
       it('logout with no session is no action', async () => {
@@ -820,8 +811,7 @@ describe('AuthenticatorService', () => {
             version: 1,
          });
 
-         await new Promise((resolve) => setTimeout(resolve, 50));
-         expect(events).toEqual([AuthEvent.Forget]);
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]));
       });
 
       it('login when not logged in - same user is no action', async () => {
@@ -859,8 +849,7 @@ describe('AuthenticatorService', () => {
             version: 1,
          });
 
-         await new Promise((resolve) => setTimeout(resolve, 50));
-         expect(events).toEqual([AuthEvent.Forget]);
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]));
       });
    });
 });
