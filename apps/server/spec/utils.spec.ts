@@ -32,6 +32,7 @@ import {
    base64Decode,
    knownLenTimingSafeEqual,
 } from '../src/utils';
+import { CHALLENGE_TTL_SECS, PROOF_SKEW_MS } from '../src/consts';
 
 describe('Error classes', () => {
    it('ParamError is an Error', () => {
@@ -210,5 +211,12 @@ describe('timingSafeEqual', () => {
    it('handles unicode BMP code units identically', () => {
       expect(knownLenTimingSafeEqual(Buffer.from('é'), Buffer.from('é'))).toBe(true);
       expect(knownLenTimingSafeEqual(Buffer.from('é'), Buffer.from('e'))).toBe(false);
+   });
+});
+
+describe('Replay window constants', () => {
+   it('challenge records outlive the proof skew window', () => {
+      // A nonce forgotten while its proof is still in the window can be replayed
+      expect(CHALLENGE_TTL_SECS * 1000).toBeGreaterThan(PROOF_SKEW_MS);
    });
 });
