@@ -64,7 +64,7 @@ export class Protocol6Component {
 
 @Component({
    selector: 'app-protocol7',
-   imports: [MatTooltipModule, RouterLink, CopyrightComponent],
+   imports: [MatTooltipModule, CopyrightComponent],
    templateUrl: './protocol7.component.html',
    styleUrl: './protocol.component.scss',
 })
