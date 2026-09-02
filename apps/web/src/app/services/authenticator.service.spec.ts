@@ -87,7 +87,6 @@ describe('AuthenticatorService', () => {
          pkId,
          userCred,
          csrf: 'csrf-token-from-test',
-         hasRecoveryId: true,
          recoveryKeyId: 'recovery-key-id-from-test',
          prf: false,
          authenticators: [

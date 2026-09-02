@@ -1017,8 +1017,6 @@ async function makeUserInfoResponse(
       verified: verifiedUser.verified,
       userId: verifiedUser.userId,
       userName: verifiedUser.userName,
-      // BACKWARD COMPAT: until clients update to use recoveryKeyId, whose presence says the same
-      hasRecoveryId: !!verifiedUser.recoveryPubKey,
       recoveryKeyId: verifiedUser.recoveryPubKey ? hashString(verifiedUser.recoveryPubKey) : undefined,
       prf: verifiedUser.prf,
       authenticators: auths,
