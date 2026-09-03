@@ -1166,7 +1166,8 @@ async function putRecover3Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
    // Let this happen async
    recordEvent(EventNames.PutRecover3Key, verifiedUser.userId, verifiedUser.lastCredentialId);
 
-   // return with full UserInfo to make client side refresh simpler
+   // return with full UserInfo to make client side refresh simpler. Callers treat success as
+   // proof of commit, so only return after the write
    verifiedUser.recoveryPubKey = recoveryPubKey!;
    const response = await makeUserInfoResponse(verifiedUser);
    return { content: response };

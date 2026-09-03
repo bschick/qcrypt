@@ -542,6 +542,10 @@ export class AuthenticatorService {
       recoveryPubKey: string,
       userCredEnc?: string,
    ): Promise<RecoveryWordsState> {
+      if (this.getUserInfo().prf && !userCredEnc) {
+         throw new Error('prf account missing encrypted credential');
+      }
+
       const timestamp = String(Date.now());
       const nonce = bytesToBase64(getRandom(CHALLENGE_BYTES));
 

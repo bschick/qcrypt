@@ -455,8 +455,8 @@ describe('AuthenticatorService', () => {
       });
    });
 
-   // Various ways to mock failed server updates. failedPuts throws for that many key uploads
-   // before letting the rest through
+   // Provides ways to mock failed server updates. failedPuts throws for that many PUTs and
+   // keyOverride mocks a different server key response. No args means no intentional failures
    function mockRotation(opts: { failedPuts?: number; keyOverride?: string; prf?: boolean } = {}) {
       let sentPubKey = '';
       let puts = 0;
@@ -479,6 +479,7 @@ describe('AuthenticatorService', () => {
       });
    }
 
+   // extra what was sent to the server
    function sentRecoveryKeyBodies(): RequestTypes.Recover3Key[] {
       return fetchMock.mock.calls
          .filter((call) => (call[0] as URL).pathname.endsWith('/recover3/key'))
@@ -503,7 +504,7 @@ describe('AuthenticatorService', () => {
          await expect(service.checkRecoveryWords(service.consumeRecoveryWords())).resolves.toEqual('match');
       });
 
-      it('reports a match when a lost response is recovered by repeating the upload', async () => {
+      it('reports a match when the retry succeeds', async () => {
          mockRotation({ failedPuts: 1 });
 
          await expect(service.changeRecoveryWords()).resolves.toEqual('match');
@@ -513,32 +514,32 @@ describe('AuthenticatorService', () => {
          expect(puts.length).toBe(2);
       });
 
-      it('reports an unknown outcome when every upload fails', async () => {
+      it('reports an unknown outcome the retry fails', async () => {
          mockRotation({ failedPuts: 2 });
 
          await expect(service.changeRecoveryWords()).resolves.toEqual('unknown');
          expect(service.hasRecoveryWords()).toBe(true);
       });
 
-      it('reports an unknown outcome when the server reports an unexpected key', async () => {
+      it('reports an unknown outcome when the server returns an unexpected key', async () => {
          mockRotation({ keyOverride: 'a-different-recovery-key-id' });
 
          await expect(service.changeRecoveryWords()).resolves.toEqual('unknown');
          expect(service.hasRecoveryWords()).toBe(true);
       });
 
-      it('reports an unknown outcome when a repeated upload reports an unexpected key', async () => {
+      it('reports an unknown outcome when the retry returns an unexpected key', async () => {
          mockRotation({ failedPuts: 1, keyOverride: 'a-different-recovery-key-id' });
 
          await expect(service.changeRecoveryWords()).resolves.toEqual('unknown');
          expect(service.hasRecoveryWords()).toBe(true);
       });
 
-      it('reports words that are not a valid pattern', async () => {
+      it('detects invalid recovery pattern', async () => {
          await expect(service.checkRecoveryWords('not actually a word pattern')).resolves.toEqual('invalid');
       });
 
-      it('reports a valid pattern belonging to another account', async () => {
+      it('detects valid recovery pattern from another account', async () => {
          const otherUserId = bytesToBase64(getRandom(cc.USERID_BYTES));
          const otherWords = entropyToMnemonic(recoverySecret(getRandom(RECOVERYID_BYTES), otherUserId), wordlist);
 
