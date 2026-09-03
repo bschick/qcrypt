@@ -33,7 +33,7 @@ import * as cc from './cipher.consts';
 import { getStreamDecipher, Ciphers, Packer, concatArrays, getRandom } from '../index';
 import type { KeyProvider } from '../index';
 import { MasterKeyKeyProvider, PWDKeyProvider } from './keys';
-import { isEqualArray, streamFromBytes } from './utils.spec';
+import { isEqualArray, streamFromBytes } from './test-helpers';
 
 // GF(2^128) in the bit order GHASH uses
 const GF_MASK = (1n << 128n) - 1n;

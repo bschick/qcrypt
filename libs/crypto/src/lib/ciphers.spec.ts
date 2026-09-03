@@ -36,7 +36,7 @@ import {
 } from '../index';
 import type { CipherDataBlock, KeyProvider } from '../index';
 import { MasterKeyKeyProvider, PWDKeyProvider } from './keys';
-import { isEqualArray, streamFromBytes, streamFromStr, areEqual, streamFromBase64Url } from './utils.spec';
+import { isEqualArray, streamFromBytes, streamFromStr, areEqual, streamFromBase64Url } from './test-helpers';
 
 // Field offsets within block0's additional data, walked from the data itself so that adding
 // or reordering fields cannot leave these pointing at the wrong bytes

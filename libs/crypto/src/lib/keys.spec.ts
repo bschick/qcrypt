@@ -24,7 +24,7 @@ import * as cc from './cipher.consts';
 import { type KeyProvider, MasterKeyKeyProvider, PWDKeyProvider } from './keys';
 import { Ciphers } from './ciphers';
 import { getRandom } from './utils';
-import { isEqualArray } from './utils.spec';
+import { isEqualArray } from './test-helpers';
 
 const KEY_NAMES = ['ek', 'sk', 'hk', 'hIV', 'bk', 'commit'] as const;
 type AllDerivedKeys = Record<(typeof KEY_NAMES)[number], Uint8Array>;

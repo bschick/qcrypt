@@ -27,67 +27,10 @@ import {
    bytesToBase64,
    BYOBStreamReader,
    bytesFromUTF8String,
-   readStreamAll,
    cryptoReady,
-   concatArrays,
-   ensureArrayBuffer,
    expired,
 } from '../index';
-
-// Faster than .toEqual, resulting in few timeouts
-export function isEqualArray(a: Uint8Array, b: Uint8Array): boolean {
-   if (a.length !== b.length) {
-      return false;
-   }
-   for (let i = 0; i < a.length; ++i) {
-      if (a[i] !== b[i]) {
-         return false;
-      }
-   }
-   return true;
-}
-
-// Faster than .toEqual, resulting in few timeouts
-export async function areEqual(
-   a: Uint8Array | ReadableStream<Uint8Array>,
-   b: Uint8Array | ReadableStream<Uint8Array>,
-): Promise<boolean> {
-   if (a instanceof ReadableStream) {
-      a = await readStreamAll(a);
-   }
-   if (b instanceof ReadableStream) {
-      b = await readStreamAll(b);
-   }
-
-   if (a.byteLength !== b.byteLength) {
-      return false;
-   }
-
-   for (let i = 0; i < a.byteLength; ++i) {
-      if (a[i] !== b[i]) {
-         return false;
-      }
-   }
-   return true;
-}
-
-export function streamFromBytes(data: Uint8Array | Uint8Array[]): [ReadableStream<Uint8Array>, Uint8Array] {
-   const merged = data instanceof Uint8Array ? ensureArrayBuffer(data) : concatArrays(data);
-   const blob = new Blob([merged], { type: 'application/octet-stream' });
-   return [blob.stream(), merged];
-}
-
-export function streamFromStr(str: string): [ReadableStream<Uint8Array>, Uint8Array] {
-   const data = new TextEncoder().encode(str);
-   const blob = new Blob([data], { type: 'application/octet-stream' });
-   return [blob.stream(), data];
-}
-
-export function streamFromBase64Url(b64Url: string): [ReadableStream<Uint8Array>, Uint8Array] {
-   const data = base64ToBytes(b64Url);
-   const blob = new Blob([data], { type: 'application/octet-stream' });
-   return [blob.stream(), data];
-}
+import { isEqualArray } from './test-helpers';
 
 function randomBlob(byteLength: number): Blob {
    // Create on max-size array and repeate it
