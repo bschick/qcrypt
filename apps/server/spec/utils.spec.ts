@@ -62,6 +62,12 @@ describe('Error classes', () => {
    });
 });
 
+// The stripped set was checked against the PRECIS (RFC 8264) derived properties published at
+// https://github.com/byllyfish/precis_i18n/blob/master/test/derived-props-17.0.txt, which matched
+// this runtime's Unicode 17.0. Every codepoint that file marks DISALLOWED/controls or
+// DISALLOWED/precis_ignorable_properties is stripped here; the only characters we strip that it
+// permits are the join controls, which are invisible and so can still disguise one name as another.
+// The file is not vendored because it is pinned to one Unicode version and goes stale.
 describe('sanitizeString', () => {
    it('returns a trimmed plain string unchanged', () => {
       expect(sanitizeString('hello world')).toBe('hello world');
@@ -94,6 +100,76 @@ describe('sanitizeString', () => {
 
    it('throws ParamError when sanitization yields empty', () => {
       expect(() => sanitizeString('<>')).toThrow(ParamError);
+   });
+
+   it('strips control characters that would split a value across log lines', () => {
+      expect(sanitizeString('dave\u000Acap of 25 reached')).toBe('davecap of 25 reached');
+      expect(sanitizeString('dave\u000Dmore')).toBe('davemore');
+      expect(sanitizeString('dave\u0000more')).toBe('davemore');
+      expect(sanitizeString('dave\u007Fmore')).toBe('davemore');
+   });
+
+   it('strips format characters that occupy no visible width', () => {
+      expect(sanitizeString('da\u200Bve')).toBe('dave');
+      expect(sanitizeString('da\u200Dve')).toBe('dave');
+      expect(sanitizeString('\u2066da\u2069ve')).toBe('dave');
+      expect(sanitizeString('da\uFEFFve')).toBe('dave');
+      expect(sanitizeString('da\u00ADve')).toBe('dave');
+   });
+
+   it('leaves nothing that makes a stored value render as different text', () => {
+      // U+202E reverses the run that follows it, so the raw value below reads as 'pwtesty_dave'
+      const displayForm = (value: string): string => {
+         const at = value.indexOf('\u202E');
+         return at === -1 ? value : value.slice(0, at) + [...value.slice(at + 1)].reverse().join('');
+      };
+
+      const twin = sanitizeString('pwtesty_\u202Eevad');
+      expect(displayForm(twin)).toBe(twin);
+      expect(twin).not.toBe(sanitizeString('pwtesty_dave'));
+   });
+
+   it('trims whitespace left behind by stripping', () => {
+      expect(sanitizeString(' \u202E dave ')).toBe('dave');
+   });
+
+   it('strips characters that render as nothing despite being letters', () => {
+      // Hangul fillers are category Lo, so no control or format based filter reaches them
+      expect(sanitizeString('da\u3164ve')).toBe('dave');
+      expect(sanitizeString('da\u115Fve')).toBe('dave');
+      expect(sanitizeString('da\uFFA0ve')).toBe('dave');
+      expect(() => sanitizeString('\u3164'.repeat(6))).toThrow(ParamError);
+   });
+
+   it('strips variation selectors and noncharacters', () => {
+      expect(sanitizeString('da\uFE0Fve')).toBe('dave');
+      expect(sanitizeString('da\uFDD0ve')).toBe('dave');
+   });
+
+   it('normalizes so one name cannot be stored under two encodings', () => {
+      const composed = sanitizeString('jos\u00E9');
+      const decomposed = sanitizeString('jose\u0301');
+      expect(decomposed).toBe(composed);
+   });
+
+   it('keeps characters that carry a visible glyph', () => {
+      expect(sanitizeString('dave smith')).toBe('dave smith');
+      expect(sanitizeString('\u00E9\u4E2D\u6587')).toBe('\u00E9\u4E2D\u6587');
+      expect(sanitizeString('dave \u{1F44D}')).toBe('dave \u{1F44D}');
+   });
+
+   // Running the output back through must not change it again, which fails if normalizing and
+   // stripping can expose new work for each other
+   it('is idempotent', () => {
+      for (const raw of ['dave', 'jose\u0301', 'da\u200Bve', ' \u202E dave ', 'jos\u00E9 \u3164 smith']) {
+         const once = sanitizeString(raw);
+         expect(sanitizeString(once)).toBe(once);
+      }
+   });
+
+   it('throws ParamError when a value holds nothing but stripped characters', () => {
+      expect(() => sanitizeString('\u202E\u200B')).toThrow(ParamError);
+      expect(() => sanitizeString('\u000A\u000D')).toThrow(ParamError);
    });
 });
 

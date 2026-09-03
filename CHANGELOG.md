@@ -25,6 +25,18 @@
 - adversarial regression test that solves a real GF(2^128) tag collision and feeds it to the
   decipher, pinning that v8 rejects what v7 accepted
 
+## 7.5.1 (2026-09-01)
+
+#### Changes
+
+- even more graceful handling of server errors during recovery words change [thanks to Rajat Shukla (@rajat4722)]
+- extended string sanitization to strip invisible codepoints [thanks to Rajat Shukla (@rajat4722)]
+
+#### Security
+
+- added allowlist to prevent cli debug output from showing sensitive data [thanks to Rajat Shukla (@rajat4722)]
+- updated packages
+
 ## 7.5.0 (2026-08-20)
 
 #### Features
@@ -34,7 +46,7 @@
 
 #### Changes
 
-- more graceful handling of server errors during recovery word pattern change
+- more graceful handling of server errors during recovery words pattern change
 - confirm all recovery word pattern changes with recovery key hash (recoveryKeyId)
 - check for pwned passwords at completion rather than as typed, when enabled
 - known breached passwords are rejected, when check is enabled

@@ -1,6 +1,6 @@
 ## Quick Crypt Security
 
-[Quick Crypt](https://quickcrypt.org) is designed to protect your private data, so we naturally take security very seriously and welcome peer reviews and vulnerability reporting. Quick Crypt maintains a bug bounty program at [Open Bug Bounty](https://www.openbugbounty.org/bugbounty/schickb/)
+[Quick Crypt](https://quickcrypt.org) is designed to protect your private data, so we naturally take security very seriously and welcome peer reviews and vulnerability reporting. Quick Crypt maintains a bug bounty program at [Open Bug Bounty](https://www.openbugbounty.org/bugbounty/schickb/).
 
 ### Known Issues
 
@@ -19,7 +19,7 @@ Please use our [vulnerability disclosure program at Open Bug Bounty](https://www
 - $100 for high severity findings
 - $200 for critical findings
 - determination of severity will be a discussion, but quickcrypt.org is the final decision-maker
-- paid via Paypal, Venmo, or USDC
+- paid via PayPal, Venmo, or USDC
 - if desired, your information and finding will be added to Acknowledgments in this file
 
 ### Requirements for submission
@@ -27,7 +27,7 @@ Please use our [vulnerability disclosure program at Open Bug Bounty](https://www
 - focus on leaks of user credential information and errors in the core encryption decryption protocol
 - do not perform DoS or any form of load testing 
 - do not send social engineering exploits
-- source code scanning is encouraged, but please filter out AI generated noise before submission
+- source code scanning is encouraged, but please filter out AI-generated noise before submission
   - https://github.com/bschick/qcrypt
 - always send a working PoC and explain the problem clearly
 - attach screenshots or API response data to demonstrate issues
@@ -42,14 +42,16 @@ Thanks to the following security researchers:
 
 - **destro4evr**:
   - The first to report potential issues and recommend improvements
-  - Developed server API unittests that support Webauthn
+  - Developed server API unittests that support WebAuthn
   - Suggested a user warning against password reuse between encryption loops
 - **Rajat Shukla (@rajat4722)**:
   - Proposed move of recover2 parameters from url path into post request body and returning more generic errors
   - Suggested improvements to auth/options triggering move of userId into request body
   - Discovered that local sessions remained valid after PK deletion
   - Reported CLI security hardening improvements
+  - Suggested better handling of server errors during recovery words change
+  - Found string sanitization was not stripping invisible codepoints
 - **CapsenR**:
   - Proposed adding a warning when clear or cipher text is copied from url
   - Found timing weaknesses in javascript timingSafeEqual implementation
-- [Vaibhav jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/): Reported missing MTA-STS domain email support
+- [Vaibhav Jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/): Reported missing MTA-STS domain email support

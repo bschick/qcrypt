@@ -16,6 +16,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { statSync } from 'node:fs';
 
 const argv = process.argv.slice(2);
 const prod = argv.includes('--prod');
@@ -44,6 +45,19 @@ function run(command, args, env = {}) {
    if (result.status !== 0) {
       process.exit(result.status ?? 1);
    }
+}
+
+// zip only warns when an input is missing, so an absent generated asset would otherwise ship a
+// silently incomplete artifact
+const AAGUID_INDEX = 'apps/server/assets/aaguid/combined.json';
+try {
+   if (!statSync(AAGUID_INDEX).isFile()) {
+      throw new Error('not a file');
+   }
+} catch {
+   console.error(`build:server: missing ${AAGUID_INDEX}, which is bundled into server.zip.`);
+   console.error('build:server: generate it by running `./extractimg.py` from apps/server.');
+   process.exit(1);
 }
 
 console.log(`build:server: ${prod ? 'prod' : 'test'}, ${min ? 'minified' : 'unminified'}, into ${outDir}`);
