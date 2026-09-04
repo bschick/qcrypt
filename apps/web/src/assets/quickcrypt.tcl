@@ -63,9 +63,13 @@ proc Block0 {} {
                 uint8_bits 7,6,5,4 "loop end"
                 move -1
                 uint8_bits 3,2,1,0 "loop"
-                set hintLen [uint8 "hint len"]
+                set hintLen [uint8 "hint encrypted len"]
                 if {$hintLen > 0} {
-                    bytes $hintLen "hint encrypted"
+                    if {$hintLen <= 64} {
+                        hex $hintLen "hint encrypted"
+                    } else {
+                        bytes $hintLen "hint encrypted"
+                    }
                 }
                 if {$ver >= 8} {
                     set commitLen [uint8 "key commitment len"]
