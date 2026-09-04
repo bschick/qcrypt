@@ -76,6 +76,7 @@ import {
    knownLenTimingSafeEqual,
    isReservedTestUserName,
    consumeChallenge,
+   storeSingleUseNonce,
 } from './utils';
 
 export type Response = {
@@ -1777,22 +1778,7 @@ async function verifyProof(verifiedUser: VerifiedUserItem, httpDetails: HttpDeta
          // single-use of the nonce only for state-changing requests
          // TODO: Consider moving this to AWS Elastic cache when usage increases
          if (result === 'ok' && httpDetails.method !== 'GET') {
-            try {
-               const stored = await Challenges.create({
-                  challenge: httpDetails.proofNonce,
-                  purpose: 'api',
-                  userId: verifiedUser.userId,
-               }).go({ returnOnConditionCheckFailure: true });
-
-               if (stored.rejected) {
-                  result = 'replayed';
-               }
-            } catch (err) {
-               // A DDB error here likely means the handler's own writes fail anyway; fail
-               // closed rather than pass a possibly-replayed mutating request.
-               console.error(`proof nonce store error, blocking ${httpDetails.name} ${verifiedUser.userId}`, err);
-               result = 'failed';
-            }
+            result = await storeSingleUseNonce(httpDetails.proofNonce, 'api', verifiedUser.userId);
          }
       }
    }
