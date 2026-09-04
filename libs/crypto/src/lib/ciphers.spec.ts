@@ -376,6 +376,53 @@ describe('Encryption and decryption', () => {
       }
    });
 
+   it('pads hints so a range of lengths share one encrypted length', async () => {
+      for (const alg of Ciphers.algs()) {
+         const encryptedHintLen = async (hintBytes: number): Promise<number> => {
+            const [clearStream] = streamFromBytes(getRandom(64));
+            const keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a good pwd', 'a'.repeat(hintBytes)]);
+            const encipher = getLatestEncipher(clearStream, keyProvider, alg, 1, 1, cc.ICOUNT_MIN);
+            const fileAD = (await encipher.encryptBlock()).parts[1];
+            return fileAD[fileADOffsets(fileAD).hintLen];
+         };
+
+         await expect(encryptedHintLen(0)).resolves.toEqual(0);
+
+         const shortest = await encryptedHintLen(1);
+         for (const hintBytes of [2, cc.HINT_LEN_MODULUS - 1, cc.HINT_LEN_MODULUS]) {
+            await expect(encryptedHintLen(hintBytes)).resolves.toEqual(shortest);
+         }
+         await expect(encryptedHintLen(cc.HINT_LEN_MODULUS + 1)).resolves.toBeGreaterThan(shortest);
+      }
+   });
+
+   it('round trips hints whose padding could be confused with content', async () => {
+      for (const alg of Ciphers.algs()) {
+         for (const hint of ['a', 'trailing space   ', '🌧️🦫', 'x'.repeat(cc.HINT_LEN_MODULUS)]) {
+            const clearData = getRandom(64);
+            const [clearStream] = streamFromBytes(clearData);
+            const userCred = getRandom(cc.USERCRED_BYTES);
+
+            const encipher = getLatestEncipher(
+               clearStream,
+               new PWDKeyProvider(userCred.slice(0), ['a good pwd', hint]),
+               alg,
+               1,
+               1,
+               cc.ICOUNT_MIN,
+            );
+            const [cipherStream] = streamFromBytes(concatArrays((await encipher.encryptBlock()).parts));
+
+            const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdInfo) => {
+               expect(cdInfo.hint).toEqual(hint);
+               return ['a good pwd'];
+            });
+            const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+            await expect(decipher.decryptBlock0()).resolves.toEqual(clearData);
+         }
+      }
+   });
+
    it('added key commitment should be detected in MasterKeyKeyProvider', async () => {
       for (const alg of Ciphers.algs()) {
          const clearData = getRandom(64);

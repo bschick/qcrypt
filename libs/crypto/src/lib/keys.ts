@@ -38,8 +38,8 @@ const KDF_INFO_SIGNING_V1 = 'cipherdata signing key';
 const KDF_INFO_HINT_V1 = 'hint encryption key';
 
 export type PWDProvider =
-   | [string, string | undefined]
-   | ((cdInfo: CipherDataInfo, encrypting: boolean) => Promise<[string, string | undefined]>);
+   | [string, string?]
+   | ((cdInfo: CipherDataInfo, encrypting: boolean) => Promise<[string, string?]>);
 
 export interface KeyProvider {
    purge(): void;

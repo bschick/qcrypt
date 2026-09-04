@@ -29,6 +29,7 @@ export const AUTH_TAG_MIN_BYTES = Math.min(X20_PLY_TAG_BYTES, AES_GCM_TAG_BYTES,
 export const ENCRYPTED_HINT_MAX_BYTES = 255;
 export const ENCRYPTED_HINT_MIN_BYTES = 0;
 export const HINT_LEN_BYTES = 1;
+export const HINT_LEN_MODULUS = 16;
 export const IV_MIN_BYTES = 12;
 export const IV_MAX_BYTES = 32;
 export const ALG_BYTES = 2;

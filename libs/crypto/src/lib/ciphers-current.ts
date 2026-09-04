@@ -448,8 +448,20 @@ export class EncipherV8 extends Encipher {
             const maxHintBytes = cc.ENCRYPTED_HINT_MAX_BYTES - cc.AUTH_TAG_MAX_BYTES;
             const hintBytes = bytesFromUTF8String(cdInfo.hint, maxHintBytes);
 
-            const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(iv);
-            encryptedHint = await EncipherV8._doEncrypt(cdInfo.alg, hk, hIV, hintBytes);
+            // 0xFF cannot appear in UTF-8, so trailing pad is distinguishable from hint text
+            const paddedLen = Math.min(
+               Math.ceil(hintBytes.byteLength / cc.HINT_LEN_MODULUS) * cc.HINT_LEN_MODULUS,
+               maxHintBytes,
+            );
+            const paddedHint = new Uint8Array(paddedLen).fill(0xff);
+            paddedHint.set(hintBytes);
+
+            try {
+               const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(iv);
+               encryptedHint = await EncipherV8._doEncrypt(cdInfo.alg, hk, hIV, paddedHint);
+            } finally {
+               paddedHint.fill(0);
+            }
          }
 
          const keyCommitment = this._keyProvider.supportsCommitment
@@ -1051,7 +1063,16 @@ export class DecipherV678 extends Decipher {
          if (encryptedHint!.byteLength !== 0) {
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(this._blockData.iv);
             const hintBytes = await Decipher._doDecrypt(this._blockData.alg, hk, hIV, encryptedHint);
-            this._keyProvider.setHint(new TextDecoder().decode(hintBytes));
+
+            // 0xFF cannot appear in UTF-8, so any such trailing bytes are padding
+            let hintLen = hintBytes.byteLength;
+            while (hintLen > 0 && hintBytes[hintLen - 1] === 0xff) {
+               hintLen -= 1;
+            }
+            if (hintLen === 0) {
+               throw new Error('Invalid hint padding');
+            }
+            this._keyProvider.setHint(new TextDecoder().decode(hintBytes.subarray(0, hintLen)));
          }
 
          this._state = CipherState.Block0Decoded;
