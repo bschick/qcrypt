@@ -376,6 +376,47 @@ describe('Encryption and decryption', () => {
       }
    });
 
+   it('added key commitment should be detected in MasterKeyKeyProvider', async () => {
+      for (const alg of Ciphers.algs()) {
+         const clearData = getRandom(64);
+         const [clearStream] = streamFromBytes(clearData);
+         const masterKey = getRandom(cc.KEY_BYTES);
+
+         const encKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0));
+         const encipher = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, 0);
+
+         // Read the generated salt before encrypting because the encipher then purges it
+         const slt = encKeyProvider.getCipherDataInfo().slt.slice(0);
+         const block0 = await encipher.encryptBlock();
+
+         const makeKP = (encrypting: boolean): MasterKeyKeyProvider => {
+            const kp = new MasterKeyKeyProvider(masterKey.slice(0));
+            encrypting && kp.setCipherDataInfo({ ver: cc.CURRENT_VERSION, alg, ic: 0, slt, lp: 1, lpEnd: 1 });
+            return kp;
+         };
+
+         // Rebuilds block0's MAC over additionalData the caller may have edited
+         async function reforge(fileAD: Uint8Array): Promise<Uint8Array> {
+            const [emptyStream] = streamFromBytes(new Uint8Array(0));
+            const reforger = new EncipherV8(makeKP(true), new BYOBStreamReader(emptyStream));
+            const headerData = await reforger._createHeader(block0.parts[2], fileAD);
+            return concatArrays([headerData, fileAD, block0.parts[2]]);
+         }
+
+         // Control, so a failure below is isolated to the added commitment
+         let [cipherStream] = streamFromBytes(await reforge(block0.parts[1]));
+         const controlDec = await getStreamDecipher(cipherStream, makeKP(false));
+         await expect(controlDec.decryptBlock0()).resolves.toEqual(clearData);
+
+         // The commitment is the last additional data field, so appending is the whole edit
+         const fileAD = block0.parts[1].slice(0);
+         fileAD[fileADOffsets(fileAD).commitLen] = cc.COMMIT_BYTES;
+         [cipherStream] = streamFromBytes(await reforge(concatArrays([fileAD, getRandom(cc.COMMIT_BYTES)])));
+         const addedDec = await getStreamDecipher(cipherStream, makeKP(false));
+         await expect(addedDec.decryptBlock0()).rejects.toThrow(/key commitment presence/);
+      }
+   });
+
    // Similar tampering party who has gained access to userCred can rebuild MAC
    it('swapped blockN algorithm should fail even when its MAC is rebuilt', async () => {
       for (const alg of Ciphers.algs()) {

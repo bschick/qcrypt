@@ -290,15 +290,18 @@ describe('Key commitment against an AEAD tag collision', () => {
       keyProviderAlt: KeyProvider,
    ): Promise<CraftedBlock> {
       const ekOrig = (await keyProviderOrig.getCipherKey(true)).slice(0);
-      const commitOrig = (await keyProviderOrig.getKeyCommitment()).slice(0);
+      const commitOrig = keyProviderOrig.supportsCommitment
+         ? (await keyProviderOrig.getKeyCommitment()).slice(0)
+         : new Uint8Array(0);
       const signingKey = (await keyProviderOrig.getSigningKey()).slice(0);
 
       const ekAlt = (await keyProviderAlt.getCipherKey(true)).slice(0);
-      const commitAlt = (await keyProviderAlt.getKeyCommitment()).slice(0);
+      const commitAlt = keyProviderAlt.supportsCommitment
+         ? (await keyProviderAlt.getKeyCommitment()).slice(0)
+         : new Uint8Array(0);
       expect(isEqualArray(ekOrig, ekAlt)).toBe(false);
 
-      const storedCommit = keyProviderOrig.supportsCommitment ? commitOrig : new Uint8Array(0);
-      const fileAD = buildFileAD(ver, iv, slt, keyProviderOrig.getCipherDataInfo().ic, storedCommit);
+      const fileAD = buildFileAD(ver, iv, slt, keyProviderOrig.getCipherDataInfo().ic, commitOrig);
       const adOrig = aeadAD(ver, fileAD, keyProviderOrig.getExtraKeyMaterial(), commitOrig);
       const adAlt = aeadAD(ver, fileAD, keyProviderAlt.getExtraKeyMaterial(), commitAlt);
 

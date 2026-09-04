@@ -1038,10 +1038,7 @@ export class DecipherV678 extends Decipher {
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we have the signing key and data.
-         const validMac: boolean = await this._verifyMAC();
-         if (!validMac) {
-            throw new Error('Invalid MAC error');
-         }
+         await this._verifyMAC();
 
          // Checked after the MAC so this only ever reports on verified data
          if (this._blockData.ver >= cc.VERSION8) {
@@ -1172,10 +1169,7 @@ export class DecipherV678 extends Decipher {
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we  have the signing key and data.
-         const validMac: boolean = await this._verifyMAC();
-         if (!validMac) {
-            throw new Error('Invalid MAC error');
-         }
+         await this._verifyMAC();
 
          // Only block0's algorithm and version are used. Later blocks carry the fields for a
          // potential future feature, so for now require them to match block0 to prevent
@@ -1196,7 +1190,7 @@ export class DecipherV678 extends Decipher {
       }
    }
 
-   private async _verifyMAC(): Promise<boolean> {
+   private async _verifyMAC(): Promise<void> {
       if (
          !this._blockData?.payloadSize ||
          !this._blockData.ver ||
@@ -1225,7 +1219,7 @@ export class DecipherV678 extends Decipher {
 
       if (validMac) {
          this._lastMac = this._blockData.mac;
-         return true;
+         return;
       }
 
       throw new Error('Invalid MAC signature');

@@ -51,9 +51,9 @@ export function createProof(secKey: Uint8Array, message: Uint8Array, context: st
    return getCrux().ml_dsa_65_sign(secKey, message, new TextEncoder().encode(context), getRandom(32));
 }
 
-export function verifyProof(pubKey: Uint8Array, message: Uint8Array, signature: Uint8Array, context: string): boolean {
+export function verifyProof(pubKey: Uint8Array, message: Uint8Array, signature: Uint8Array, context: string): void {
    if (getCrux().ml_dsa_65_verify(pubKey, message, new TextEncoder().encode(context), signature)) {
-      return true;
+      return;
    }
    throw new Error('proof verification failed');
 }

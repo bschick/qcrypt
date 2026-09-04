@@ -64,7 +64,7 @@ describe('proof primitive', () => {
       const { pubKey, secKey } = getProofKeyPair(getRandom(32), KEY_CONTEXT);
       const message = new TextEncoder().encode('qcrypt-usercred-v1\nGET\n/v1/user\n1730000000000\nabc');
       const signature = createProof(secKey, message, SIG_CONTEXT);
-      expect(verifyProof(pubKey, message, signature, SIG_CONTEXT)).toBe(true);
+      expect(() => verifyProof(pubKey, message, signature, SIG_CONTEXT)).not.toThrow();
 
       const tamperedMessage = message.slice();
       tamperedMessage[0] ^= 0x01;

@@ -215,6 +215,9 @@ export abstract class BaseKeyProvider implements KeyProvider {
 
    public async getKeyCommitment(): Promise<Uint8Array<ArrayBuffer>> {
       if (!this._keyCommitment) {
+         if (!this.supportsCommitment) {
+            throw new Error('Key commitments not supported for this cipher version');
+         }
          if (!this._ek) {
             throw new Error('Cipher key must be generated before commitment');
          }
@@ -675,6 +678,7 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       return this._cachedExtraContext;
    }
 
+   // V7 layout is pwd || userCred || alg || ver || lp || extraKeyMaterial.
    protected _cipherKeyMaterial(pwdBytes: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {
       return concatArrays([pwdBytes, this._userCred!, ...this._extraContext()]);
    }
@@ -818,7 +822,8 @@ export class PWDKeyProviderV8 extends PWDKeyProviderV7 {
       return this._cachedExtraContext;
    }
 
-   /* Every variable length field alos get a length, to prevent shifting by an
+   /* V8+ layout is pwdLen || pwd || userCred || alg || ver || lp || extraLen || extraKeyMaterial.
+    * Every variable length field gets a length, to prevent shifting by an
     * attacker if client control fields are added later (defense in depth).
     */
    protected override _cipherKeyMaterial(pwdBytes: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {

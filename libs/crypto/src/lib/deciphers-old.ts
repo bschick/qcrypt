@@ -121,10 +121,7 @@ export class DecipherV1 extends Decipher {
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we  have the signing key and data.
-         const validMac: boolean = await this._verifyMAC();
-         if (!validMac) {
-            throw new Error('Invalid MAC error');
-         }
+         await this._verifyMAC();
 
          if (encryptedHint!.byteLength !== 0) {
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(iv);
@@ -142,7 +139,7 @@ export class DecipherV1 extends Decipher {
       }
    }
 
-   private async _verifyMAC(): Promise<boolean> {
+   private async _verifyMAC(): Promise<void> {
       if (!this._blockData?.additionalData || !this._blockData.encryptedData || !this._blockData) {
          throw new Error('Invalid MAC data');
       }
@@ -163,7 +160,7 @@ export class DecipherV1 extends Decipher {
       const valid: boolean = await crypto.subtle.verify('HMAC', subtleSK, this._blockData.mac, data);
       subtleSK = undefined;
       if (valid) {
-         return true;
+         return;
       }
 
       throw new Error('Invalid HMAC signature');
@@ -333,10 +330,7 @@ export class DecipherV4 extends Decipher {
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we have the signing key and data.
-         const validMac: boolean = await this._verifyMAC();
-         if (!validMac) {
-            throw new Error('Invalid MAC error');
-         }
+         await this._verifyMAC();
 
          if (encryptedHint!.byteLength !== 0) {
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(this._blockData.iv);
@@ -439,10 +433,7 @@ export class DecipherV4 extends Decipher {
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we  have the signing key and data.
-         const validMac: boolean = await this._verifyMAC();
-         if (!validMac) {
-            throw new Error('Invalid MAC error');
-         }
+         await this._verifyMAC();
       } catch (err) {
          this.errorState();
          console.error(err);
@@ -450,7 +441,7 @@ export class DecipherV4 extends Decipher {
       }
    }
 
-   protected async _verifyMAC(): Promise<boolean> {
+   protected async _verifyMAC(): Promise<void> {
       if (
          !this._blockData?.payloadSize ||
          !this._blockData.ver ||
@@ -476,7 +467,7 @@ export class DecipherV4 extends Decipher {
       const validMac: boolean = sodium.memcmp(this._blockData.mac, testMac);
 
       if (validMac) {
-         return true;
+         return;
       }
 
       throw new Error('Invalid MAC signature');
@@ -531,7 +522,7 @@ export class DecipherV5 extends DecipherV4 {
       }
    }
 
-   protected override async _verifyMAC(): Promise<boolean> {
+   protected override async _verifyMAC(): Promise<void> {
       if (
          !this._blockData?.payloadSize ||
          !this._blockData.ver ||
@@ -563,7 +554,7 @@ export class DecipherV5 extends DecipherV4 {
 
       if (validMac) {
          this._lastMac = testMac;
-         return true;
+         return;
       }
 
       throw new Error('Invalid MAC signature');

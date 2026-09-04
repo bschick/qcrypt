@@ -35,9 +35,9 @@ describe('userCred proof', () => {
       const pubKey = getUserCredPubKey(userCred);
       const nonce = bytesToBase64(getRandom(32));
       const signature = createUserCredProof(userCred, userId, 'GET', '/v1/user', '1730000000000', nonce, 'abc');
-      expect(verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '1730000000000', nonce, 'abc', signature)).toBe(
-         true,
-      );
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '1730000000000', nonce, 'abc', signature),
+      ).not.toThrow();
    });
 
    it('binds the query string when present', () => {
@@ -45,7 +45,9 @@ describe('userCred proof', () => {
       const pubKey = getUserCredPubKey(userCred);
       const nonce = bytesToBase64(getRandom(32));
       const signature = createUserCredProof(userCred, userId, 'GET', '/v1/user', '100', nonce, 'aa', 'a=b');
-      expect(verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature, 'a=b')).toBe(true);
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature, 'a=b'),
+      ).not.toThrow();
       expect(() =>
          verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature, 'a=c'),
       ).toThrow();
@@ -120,7 +122,7 @@ describe('recovery nonce proof', () => {
       const secret = getRandom(32);
       const pubKey = getRecoveryPubKey(secret);
       const signature = createRecoveryProof(secret, userId, timestamp, nonce, 'recover');
-      expect(verifyRecoveryProof(pubKey, userId, timestamp, nonce, signature, 'recover')).toBe(true);
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, signature, 'recover')).not.toThrow();
    });
 
    it('derives the pinned public key for a fixed secret', () => {
@@ -145,8 +147,8 @@ describe('recovery nonce proof', () => {
 
       const replaceSig = createRecoveryProof(secret, userId, timestamp, nonce, 'replace');
       const recoverSig = createRecoveryProof(secret, userId, timestamp, nonce, 'recover');
-      expect(verifyRecoveryProof(pubKey, userId, timestamp, nonce, replaceSig, 'replace')).toBe(true);
-      expect(verifyRecoveryProof(pubKey, userId, timestamp, nonce, recoverSig, 'recover')).toBe(true);
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, replaceSig, 'replace')).not.toThrow();
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, recoverSig, 'recover')).not.toThrow();
 
       // Both operations sign identical bytes, so only the context separates them
       expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, replaceSig, 'recover')).toThrow(

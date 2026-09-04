@@ -27,7 +27,10 @@ import { getRandom } from './utils';
 import { isEqualArray } from './test-helpers';
 
 const KEY_NAMES = ['ek', 'sk', 'hk', 'hIV', 'bk', 'commit'] as const;
-type AllDerivedKeys = Record<(typeof KEY_NAMES)[number], Uint8Array>;
+// commit is absent on the master-key path from v8 on
+type AllDerivedKeys = Record<Exclude<(typeof KEY_NAMES)[number], 'commit'>, Uint8Array> & {
+   commit?: Uint8Array;
+};
 
 async function deriveAllKeys(
    keyProvider: KeyProvider,
@@ -40,7 +43,7 @@ async function deriveAllKeys(
    const hk = hkRef.slice(0);
    const hIV = hIVRef.slice(0);
    const bk = (await keyProvider.getBlockCipherKey(1)).slice(0);
-   const commit = (await keyProvider.getKeyCommitment()).slice(0);
+   const commit = keyProvider.supportsCommitment ? (await keyProvider.getKeyCommitment()).slice(0) : undefined;
    keyProvider.purge();
    return { ek, sk, hk, hIV, bk, commit };
 }
@@ -2357,8 +2360,7 @@ describe('Key generation', () => {
       v8.setCipherDataInfo({ ver: cc.VERSION8, alg: 'AES-GCM', ic: 0, slt, lp: 1, lpEnd: 1 });
       await v8.getCipherKey(false);
       expect(v8.supportsCommitment).toBe(false);
-      const v8Commit = await v8.getKeyCommitment();
-      expect(v8Commit.byteLength).toBe(cc.KEY_BYTES);
+      await expect(v8.getKeyCommitment()).rejects.toThrow(/Key commitments not supported/);
       v8.purge();
    });
 
@@ -2388,8 +2390,9 @@ describe('Key generation', () => {
       await expect(pwdProvider.getKeyCommitment()).rejects.toThrow(/Cipher key must be generated/);
       pwdProvider.purge();
 
+      // The master-key path derives a commitment only through v7
       const masterProvider = new MasterKeyKeyProvider(getRandom(cc.KEY_BYTES));
-      masterProvider.setCipherDataInfo({ ver: cc.CURRENT_VERSION, alg: 'AES-GCM', ic: 0, slt, lp: 1, lpEnd: 1 });
+      masterProvider.setCipherDataInfo({ ver: cc.VERSION7, alg: 'AES-GCM', ic: 0, slt, lp: 1, lpEnd: 1 });
       await expect(masterProvider.getKeyCommitment()).rejects.toThrow(/Cipher key must be generated/);
       masterProvider.purge();
    });
@@ -2442,11 +2445,14 @@ describe('Key generation', () => {
          const withExtraKeyMaterial = await derive(provider, 'AES-GCM', 1, baseSlt, extraKeyMaterial);
 
          for (const name of KEY_NAMES) {
-            expect(isEqualArray(baseline[name], sameInputs[name])).toBe(true);
-            expect(isEqualArray(baseline[name], diffAlg[name])).toBe(false);
-            expect(isEqualArray(baseline[name], diffLp[name])).toBe(false);
-            expect(isEqualArray(baseline[name], diffSlt[name])).toBe(false);
-            expect(isEqualArray(baseline[name], withExtraKeyMaterial[name])).toBe(false);
+            const base = baseline[name];
+            if (base) {
+               expect(isEqualArray(base, sameInputs[name]!)).toBe(true);
+               expect(isEqualArray(base, diffAlg[name]!)).toBe(false);
+               expect(isEqualArray(base, diffLp[name]!)).toBe(false);
+               expect(isEqualArray(base, diffSlt[name]!)).toBe(false);
+               expect(isEqualArray(base, withExtraKeyMaterial[name]!)).toBe(false);
+            }
          }
       }
    });
@@ -2471,7 +2477,7 @@ describe('Key generation', () => {
       const diffPwd = await derive(userCred, 'pwd-B');
       expect(isEqualArray(baseline.ek, diffPwd.ek)).toBe(false);
       expect(isEqualArray(baseline.bk, diffPwd.bk)).toBe(false);
-      expect(isEqualArray(baseline.commit, diffPwd.commit)).toBe(false);
+      expect(isEqualArray(baseline.commit!, diffPwd.commit!)).toBe(false);
       expect(isEqualArray(baseline.sk, diffPwd.sk)).toBe(true);
       expect(isEqualArray(baseline.hk, diffPwd.hk)).toBe(true);
       expect(isEqualArray(baseline.hIV, diffPwd.hIV)).toBe(true);
@@ -2483,7 +2489,7 @@ describe('Key generation', () => {
       expect(isEqualArray(baseline.sk, diffCred.sk)).toBe(false);
       expect(isEqualArray(baseline.hk, diffCred.hk)).toBe(false);
       expect(isEqualArray(baseline.bk, diffCred.bk)).toBe(false);
-      expect(isEqualArray(baseline.commit, diffCred.commit)).toBe(false);
+      expect(isEqualArray(baseline.commit!, diffCred.commit!)).toBe(false);
       expect(isEqualArray(baseline.hIV, diffCred.hIV)).toBe(true);
    });
 
@@ -2500,8 +2506,8 @@ describe('Key generation', () => {
          return deriveAllKeys(keyProvider, baseIV, alg);
       }
 
-      // Changing masterKey changes ek, sk, hk, and the keys derived from ek
-      // (bk, commit). Only hIV (derived from baseIV) stays the same.
+      // Changing masterKey changes ek, sk, hk, and the key derived from ek
+      // (bk). Only hIV (derived from baseIV) stays the same.
       const baseline = await derive(master);
       const diffMaster = await derive(otherMaster);
 
@@ -2509,18 +2515,21 @@ describe('Key generation', () => {
       expect(isEqualArray(baseline.sk, diffMaster.sk)).toBe(false);
       expect(isEqualArray(baseline.hk, diffMaster.hk)).toBe(false);
       expect(isEqualArray(baseline.bk, diffMaster.bk)).toBe(false);
-      expect(isEqualArray(baseline.commit, diffMaster.commit)).toBe(false);
+      expect(baseline.commit).toBeUndefined();
       expect(isEqualArray(baseline.hIV, diffMaster.hIV)).toBe(true);
    });
 
    it('getKeyCommitment is stable across other key derivations', async () => {
       const slt = getRandom(cc.SLT_BYTES);
+      // The master-key path derives a commitment only through v7
       const providers = [
          {
+            ver: cc.CURRENT_VERSION,
             ic: cc.ICOUNT_MIN,
             make: () => new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['p', undefined]),
          },
          {
+            ver: cc.VERSION7,
             ic: 0,
             make: () => new MasterKeyKeyProvider(getRandom(cc.KEY_BYTES)),
          },
@@ -2529,7 +2538,7 @@ describe('Key generation', () => {
       for (const provider of providers) {
          const keyProvider = provider.make();
          keyProvider.setCipherDataInfo({
-            ver: cc.CURRENT_VERSION,
+            ver: provider.ver,
             alg: 'AES-GCM',
             ic: provider.ic,
             slt,
@@ -2554,12 +2563,15 @@ describe('Key generation', () => {
 
    it('purge zeroes the commitment key', async () => {
       const slt = getRandom(cc.SLT_BYTES);
+      // The master-key path derives a commitment only through v7
       const providers = [
          {
+            ver: cc.CURRENT_VERSION,
             ic: cc.ICOUNT_MIN,
             make: () => new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['p', undefined]),
          },
          {
+            ver: cc.VERSION7,
             ic: 0,
             make: () => new MasterKeyKeyProvider(getRandom(cc.KEY_BYTES)),
          },
@@ -2568,7 +2580,7 @@ describe('Key generation', () => {
       for (const provider of providers) {
          const keyProvider = provider.make();
          keyProvider.setCipherDataInfo({
-            ver: cc.CURRENT_VERSION,
+            ver: provider.ver,
             alg: 'AES-GCM',
             ic: provider.ic,
             slt,

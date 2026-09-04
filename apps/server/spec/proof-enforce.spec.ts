@@ -30,6 +30,7 @@ import {
    registerTestUser,
    setSessionSigner,
 } from './common';
+import { PROOF_SKEW_MS } from '../src/consts';
 
 describe('proof of userCred enforcement', () => {
    // Labelled rather than derived: one test appends "_x" and needs room under UNAME_MAX_LEN (31)
@@ -98,6 +99,36 @@ describe('proof of userCred enforcement', () => {
       const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId, { timestampMs: expired });
       const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
+   });
+
+   /* The two boundary tests below pin the width of the window. Timestamps are judged at
+    * the server, so the test skew has to exceed request latency.
+    */
+   const SKEW_MARGIN_MS = 5000;
+
+   async function requestWithProofAt(offsetMs: number): Promise<number> {
+      const timestampMs = String(Date.now() + offsetMs);
+      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId, { timestampMs });
+      const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
+      return res.status;
+   }
+
+   it('accepts proof timestamps just inside the skew window', async () => {
+      // Unshifted first, both as a control and to warm the server
+      await expect(requestWithProofAt(0)).resolves.toBe(200);
+
+      const inside = PROOF_SKEW_MS - SKEW_MARGIN_MS;
+      await expect(requestWithProofAt(inside)).resolves.toBe(200);
+      await expect(requestWithProofAt(-inside)).resolves.toBe(200);
+   });
+
+   it('rejects proof timestamps just outside the skew window', async () => {
+      // Unshifted first, both as a control and to warm the server
+      await expect(requestWithProofAt(0)).resolves.toBe(200);
+
+      const outside = PROOF_SKEW_MS + SKEW_MARGIN_MS;
+      await expect(requestWithProofAt(outside)).resolves.toBe(401);
+      await expect(requestWithProofAt(-outside)).resolves.toBe(401);
    });
 
    it('rejects a proof signed with the wrong userCred', async () => {

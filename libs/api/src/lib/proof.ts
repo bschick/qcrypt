@@ -102,8 +102,8 @@ export function verifyUserCredProof(
    bodyHashHex: string,
    signature: string,
    queryString: string = '',
-): boolean {
-   return verifyProof(
+): void {
+   verifyProof(
       base64ToBytes(pubKey),
       buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
       base64ToBytes(signature),
@@ -158,8 +158,8 @@ export function verifyRecoveryProof(
    nonce: string,
    signature: string,
    op: RecoveryOp,
-): boolean {
-   return verifyProof(
+): void {
+   verifyProof(
       base64ToBytes(pubKey),
       buildRecoveryMessage(userId, timestampMs, nonce),
       base64ToBytes(signature),
