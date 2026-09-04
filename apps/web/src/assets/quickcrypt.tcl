@@ -1,18 +1,18 @@
 include "Utility/General.tcl"
 
-# Unified Hex Fiend template for Quick Crypt versions 4, 5, and 6.
+# Unified Hex Fiend template for Quick Crypt versions 4 through 8.
 #
-# All three versions share the same per-block layout:
+# Every version shares the same per-block layout:
 #   header | additional data | encrypted data
 # but they differ in where the 1-byte "flags" lives:
 #   V4 — header trailer, byte unused (reserved, always 0)
 #   V5 — header trailer, bit 0 = terminal-block flag
-#   V6 — payload AD prefix, bit 0 = terminal-block flag
+#   V6 and later — payload AD prefix, bit 0 = terminal-block flag
 #
 # So V4/V5 headers are 38 bytes (32 mac + 2 ver + 3 size + 1 flags);
-# V6 headers are 37 bytes (32 mac + 2 ver + 3 size). The version field
-# is repeated in every block's header, so the per-block branch below
-# handles mixed expectations gracefully.
+# V6 and later are 37 bytes (32 mac + 2 ver + 3 size). V8 appends a
+# length prefixed key commitment to block0's additional data, absent
+# from every earlier version.
 
 # Reads the per-block header. Returns [list payloadSize headerVersion].
 proc Header {} {
@@ -51,6 +51,7 @@ proc Block0 {} {
         lassign [Header] plen ver
         # V6+ moves the flags byte from header into payload AD.
         set flagsBytes [expr $ver >= 6 ? 1 : 0]
+        set commitBytes 0
         section "payload" {
             section "additional data" {
                 if {$ver >= 6} {
@@ -66,9 +67,16 @@ proc Block0 {} {
                 if {$hintLen > 0} {
                     bytes $hintLen "hint encrypted"
                 }
+                if {$ver >= 8} {
+                    set commitLen [uint8 "key commitment len"]
+                    if {$commitLen > 0} {
+                        hex $commitLen "key commitment"
+                    }
+                    set commitBytes [expr 1 + $commitLen]
+                }
             }
             section "encrypted data" {
-                bytes [expr $plen - $flagsBytes - 2 - $ivLen - 16 - 4 - 1 - 1 - $hintLen] "data encrypted"
+                bytes [expr $plen - $flagsBytes - 2 - $ivLen - 16 - 4 - 1 - 1 - $hintLen - $commitBytes] "data encrypted"
             }
         }
     }
