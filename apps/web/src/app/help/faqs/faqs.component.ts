@@ -1163,7 +1163,7 @@ const ELEMENT_DATA: FAQElement[] = [
       question: 'Are my password hints encrypted?',
       answer: `Yes, password hints are encrypted with a key derived from
       your user credential which is accessed with passkey authentication. Hint
-      lengths are also concealed by padding before encryption.
+      lengths are also obscured by padding before encryption.
       Although others cannot see your password hints without your passkey,
       for the most robust protection, avoid hints that make it easy for others
       to guess your passwords.
