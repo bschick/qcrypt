@@ -70,8 +70,12 @@ export class EditableComponent {
       }
    }
 
+   /* Blurring returns focus to whatever the surrounding focus trap prefers, so the key must
+    * also be consumed or its default action fires against that newly focused element.
+    */
    cancelEdit(event: Event) {
       event.stopPropagation();
+      event.preventDefault();
       if (this.writing) {
          this.text = this._value;
          this.editInput.nativeElement.blur();
@@ -80,6 +84,7 @@ export class EditableComponent {
 
    acceptEdit(event: Event) {
       event.stopPropagation();
+      event.preventDefault();
       if (this.writing) {
          this.editInput.nativeElement.blur();
       }
