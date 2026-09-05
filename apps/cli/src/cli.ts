@@ -409,7 +409,7 @@ async function decrypt(
             if (!args.silent) {
                showAnswered(`Password${lpMsg}:`, '******', io);
             }
-            return [args.pwds[pos]!, undefined];
+            return [args.pwds[pos]!];
          } else if (args.silent) {
             throw new ParamError(
                `${cdinfo.lpEnd} password(s) required in silent mode but ${args.pwds?.length ?? 0} provided (use --pwds)`,
@@ -417,7 +417,7 @@ async function decrypt(
          } else {
             const hintMsg = lpMsg + (cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '');
             const pwd = await getSensitiveInput(`Password${hintMsg}`, io);
-            return [pwd, undefined];
+            return [pwd];
          }
       });
 

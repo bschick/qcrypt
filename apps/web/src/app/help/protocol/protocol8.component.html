@@ -147,7 +147,7 @@
                <td class="adata">1</td>
             </tr>
             <tr>
-               <td class="adata">Enc Hint Length</td>
+               <td class="adata">Encrypted Hint Length</td>
                <td class="adata">no</td>
                <td class="adata">uint</td>
                <td class="adata">1</td>
@@ -260,23 +260,23 @@
       </table>
       <h1 class="section">Alice-Bob Notation</h1>
       <h2>Agents</h2>
-      <img src="/assets/agents8.png" width="603" height="83" />
+      <img src="/assets/agents5.png" width="603" height="83" />
       <h2>Browser and Libsodium Functions</h2>
-      <img src="/assets/functions8.png" width="608" height="314" />
+      <img src="/assets/functions8.png" width="648" height="731" />
       <h2>Cipher Variables</h2>
-      <img src="/assets/variables8.png" width="624" height="842" />
+      <img src="/assets/variables8.png" width="649" height="1065" />
       <h2>Message Encryption by A</h2>
-      <img src="/assets/encrypt8.png" width="339" height="465" />
+      <img src="/assets/encrypt8.png" width="377" height="466" />
       <h2>Block 0 Encryption by B</h2>
-      <img src="/assets/encrypt_b08.png" width="341" height="213" />
+      <img src="/assets/encrypt_b08.png" width="423" height="192" />
       <h2>Block N Encryption by B</h2>
-      <img src="/assets/encrypt_bN8.png" width="253" height="233" />
+      <img src="/assets/encrypt_bN8.png" width="332" height="213" />
       <h2>Message Decryption by A</h2>
-      <img src="/assets/decrypt8.png" width="339" height="507" />
+      <img src="/assets/decrypt8.png" width="559" height="616" />
       <h2>Block 0 Decryption by B</h2>
-      <img src="/assets/decrypt_b08.png" width="240" height="45" />
+      <img src="/assets/decrypt_b08.png" width="236" height="21" />
       <h2>Block N Decryption by B</h2>
-      <img src="/assets/decrypt_bN8.png" width="255" height="187" />
+      <img src="/assets/decrypt_bN8.png" width="332" height="211" />
       <h2>
          <i>
             u
@@ -284,7 +284,7 @@
          </i>
          Encryption at Rest Variables
       </h2>
-      <img src="/assets/atrest_variables8.png" width="565" height="779" />
+      <img src="/assets/atrest_variables8.png" width="650" height="879" />
       <h2>
          <i>
             k
@@ -292,7 +292,7 @@
          </i>
          Derivation by B
       </h2>
-      <img src="/assets/atrest_derivation8.png" width="245" height="66" />
+      <img src="/assets/atrest_derivation8.png" width="262" height="61" />
       <h2>
          <i>
             u
@@ -300,7 +300,7 @@
          </i>
          Encryption under k by B
       </h2>
-      <img src="/assets/atrest_encrypt8.png" width="393" height="273" />
+      <img src="/assets/atrest_encrypt8.png" width="393" height="232" />
       <h2>
          <i>
             cd
@@ -308,21 +308,21 @@
          </i>
          Decryption under k by B
       </h2>
-      <img src="/assets/atrest_decrypt8.png" width="393" height="252" />
+      <img src="/assets/atrest_decrypt8.png" width="393" height="210" />
       <h2>Authentication Variables</h2>
-      <img src="/assets/webauthn_variables8.png" width="485" height="843" />
+      <img src="/assets/auth_variables8.png" width="650" height="1106" />
       <h2>Registration by A</h2>
-      <img src="/assets/webauthn_registration8.png" width="649" height="512" />
+      <img src="/assets/auth_registration8.png" width="650" height="573" />
       <h2>Authentication by A</h2>
-      <img src="/assets/webauthn_authentication8.png" width="623" height="324" />
+      <img src="/assets/auth_authentication8.png" width="650" height="425" />
       <h2>Authorization by B</h2>
-      <img src="/assets/webauthn_authorization8.png" width="649" height="385" />
+      <img src="/assets/auth_authorization8.png" width="650" height="370" />
       <h2>Add Passkey by A</h2>
-      <img src="/assets/webauthn_addpk8.png" width="650" height="321" />
+      <img src="/assets/auth_addpk8.png" width="650" height="306" />
       <h2>Replace Recovery Words by A</h2>
-      <img src="/assets/webauthn_newwords8.png" width="620" height="469" />
+      <img src="/assets/auth_newwords8.png" width="624" height="454" />
       <h2>Recovery from Lost Passkey by A</h2>
-      <img src="/assets/webauthn_recovery8.png" width="648" height="937" />
+      <img src="/assets/auth_recovery8.png" width="648" height="922" />
       <h1 class="section">Protocol v8 Changes</h1>
       <table class="bytes">
          <tbody>
@@ -344,6 +344,9 @@
                   Loop number, protocol version, algorithm ID, and extra key material added to block cipher key
                   derivation for domain isolation
                </td>
+            </tr>
+            <tr>
+               <td>Password hints padded to a 16 byte modulus before encryption to obscure hint length</td>
             </tr>
          </tbody>
       </table>

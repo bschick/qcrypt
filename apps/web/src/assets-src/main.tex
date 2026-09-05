@@ -10,6 +10,9 @@
 \newlength{\stanzagap}
 \setlength{\stanzagap}{2\baselineskip}  % <-- change this to adjust gap between stanzas
 
+\newlength{\notegap}
+\setlength{\notegap}{0.7\baselineskip}  % <-- change this to adjust gap before notes
+
 \newlength{\stanzawidth}
 \setlength{\stanzawidth}{368pt}         % <-- max stanza width (1300px @ 255 PPI)
 
@@ -66,6 +69,8 @@ $H$ & \textrm{ - BLAKE2b keyed hash (MAC) generator from libsodium} \\
 & \phantom{\textrm{ - }}$H$\textrm{(data ..., key), each data argument hashed in order} \\
 $H_2$ & \textrm{ - SHA-256 from SubtleCrypto} \\
 & \phantom{\textrm{ - }}$H_2$\textrm{(data)} \\
+$PAD$ & \textrm{ - Appends 0 to 15 }\texttt{0xFF}\textrm{ bytes to reach a multiple of 16, max 223} \\
+& \phantom{\textrm{ - }}$PAD$\textrm{(data)} \\
 $P_K$ & \textrm{ - ML-DSA-65 (FIPS 204) keypair generator from libcrux} \\
 & \phantom{\textrm{ - }}$P_K$\textrm{(seed)} \\
 $P_S$ & \textrm{ - ML-DSA-65 (FIPS 204) randomized signature generator from libcrux} \\
@@ -78,7 +83,7 @@ $V$ & \textrm{ - Constant-time hash (MAC) validator from libsodium} \\
 & \phantom{\textrm{ - }}$V$\textrm{(data, key, tag)} \\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{Notes:} $D_H$ must be collision resistant for its key argument, not merely \mbox{pseudorandom}, or two cipher keys could share one $k_C$.\par}
 \end{stanza}
@@ -135,11 +140,11 @@ $u_c$ & \textrm{ - 256 bit user credential in memory}\\
 $v$ & \textrm{ - Cipher data version: 8}\\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{Notes:} A bit range $x[i:j)$ includes bit $i$ and excludes bit $j$. For fixed empty fields, only a length of 0 is included.\par}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{Byte layout:} Field widths and byte order are given by the cipher data structure table on the \href{https://quickcrypt.org/help/protocol}{protocol page} and by the \href{https://quickcrypt.org/help/faqs/6f6}{Hex Fiend template}.\par}
 \end{stanza}
@@ -177,7 +182,7 @@ $v$ & \textrm{ - Cipher data version: 8}\\
 \underline{$cd_0$ Encryption by B}\\
 
 \begin{tabular}{@{}p{5mm} l}
-\multicolumn{2}{@{}l}{$h_E = E_a(h,n_{IVH},\emptyset,k_H)$}\\
+\multicolumn{2}{@{}l}{$h_E = E_a(PAD(h),n_{IVH},\emptyset,k_H)$}\\
 \multicolumn{2}{@{}l}{$h_El = len(h_E)$}\\
 \multicolumn{2}{@{}l}{$f = \textrm{1 if \boxed{\text{TERM}} else 0}$}\\
 \multicolumn{2}{@{}l}{$ad_F = f \mathbin\Vert a \mathbin\Vert n_{IV} \mathbin\Vert n_S \mathbin\Vert i\mathbin\Vert le \mathbin\Vert lp \mathbin\Vert h_El \mathbin\Vert h_E \mathbin\Vert k_Cl \mathbin\Vert k_C$}\\
@@ -229,7 +234,7 @@ $v$ & \textrm{ - Cipher data version: 8}\\
 &$B\textrm{ verify }lp = le\textrm{ in the first loop and }lp-1\textrm{ in each successive loop}$\\
 &$n_{IVH} = D_H(2,kp_H,H(n_S,a,v,lp,e_l,n_{IV}))$\\
 &$k_H = D_H(1,kp_H,H(n_S,a,v,lp,e_l,u_c))$\\
-&$h = E_a^{-1}(h_E,n_{IVH},\emptyset,k_H)$\\
+&$h = PAD^{-1}(E_a^{-1}(h_E,n_{IVH},\emptyset,k_H))$\\
 &$B \rightarrow A: h$\\
 &$B \leftarrow A: p$\\
 &$k_{M0} = D_P(p_l \mathbin\Vert p \mathbin\Vert u_c \mathbin\Vert a \mathbin\Vert v \mathbin\Vert lp \mathbin\Vert e_l,n_S,i)$\\
@@ -313,7 +318,7 @@ $u_r$ & \textrm{ - 128 bit recovery id}\\
 $v$ & \textrm{ - Cipher data version: 8}\\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{Format:} At rest data uses the same wire format as messages, with the fields above fixed as listed. For $cd_r$ this puts $u_i$ in both $k$ and $e$, which keeps the derivation identical across all three $cd_x$.\par}
 \end{stanza}
@@ -413,11 +418,11 @@ $\sigma_R$ & \textrm{ - ML-DSA-65 recovery proof signature} \\
 $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{Encodings:} Every field of $m_U$ and $m_R$ is ASCII text: $u_i$ and $n_P$ are base64url, $mth$ is uppercase, $pth$ is percent encoded, $ts_U$ and $ts_R$ are decimal milliseconds, and $H_2(bd)$ is lowercase hex.\par}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{Webauthn verification:} Where $S$ verifies a webauthn signature it verifies all of: the signature against the stored credential, $ch$ against the challenge $S$ stored for that purpose and user, the origin and relying party id against $o$, and that the authenticator performed user verification. The $ch$ returned alongside $rr$ and $ar$ is the lookup key for the stored challenge.\par}
 \end{stanza}
@@ -448,11 +453,11 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \multicolumn{2}{@{}l}{$A\leftarrow B : u_r\mathbin\Vert u_i\textrm{ as BIP39}$} \\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{No-PRF fallback:} If $M$ returns no $p_R$, $B$ sends $rr, u_i, ch, pk_R$ only; $S$ generates $u_c = R(256)$, stores it encrypted, derives $(pk_U, )$ from $u_c$, and returns $u_c$; $B$ creates and stores $cd_u$ from $u_c$.\par}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{Account mode:} An entire account is either PRF or no-PRF mode. Downgrade from PRF to no-PRF is not supported, and $B$ and $S$ require every passkey to match the account's mode.\par}
 \end{stanza}
@@ -478,11 +483,11 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \multicolumn{2}{@{}l}{$B : cd_u = u_c\textrm{ encryption under }k_L;\ \textrm{store }cd_u$} \\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{No-PRF fallback:} $S$ returns $u_c$ in place of $cd_p$; $B$ creates and stores $cd_u$ from $u_c$.\par}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{First use:} $B$ stores $pk_U$ the first time it authenticates an account and rejects any later authentication that derives a different one, so subsequent $cd_p$ substitution fails authentication.\par}
 \end{stanza}
@@ -508,7 +513,7 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : \textrm{rq response}$} \\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{For state changing requests: } $S$ additionally requires $n_P$ to be unknown and stores it, rejecting replays.\par}
 \end{stanza}
@@ -532,7 +537,7 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \multicolumn{2}{@{}l}{$S\textrm{ verify webauthn signature};\ \textrm{store }rr, cd_p;\ \textrm{remove }ch $} \\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{No-PRF fallback:} $B$ omits $p_S$ and does not decrypt $u_c$ or send $cd_p$; $S$ stores the new passkey without encrypted $u_c$.\par}
 \end{stanza}
@@ -564,7 +569,7 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \multicolumn{2}{@{}l}{$A\leftarrow B : u_r\mathbin\Vert u_i\textrm{ as BIP39}$} \\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{No-PRF fallback:} $B$ does not decrypt $cd_u$ or send $cd_r$; $S$ stores $pk_R$ without $cd_r$.\par}
 \end{stanza}
@@ -616,7 +621,7 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \multicolumn{2}{@{}l}{$B : cd_u = u_c\textrm{ encryption under }k_L;\ \textrm{store }cd_u$} \\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{No-PRF fallback:} $S$ returns $u_c$ in place of $cd_r$; $B$ omits $p_S$ and the $cd_r$ decryption. After the new passkey, $B$ sends $rr, u_i, ch$ only and $S$ stores it without encrypted $u_c$.\par}
 \end{stanza}

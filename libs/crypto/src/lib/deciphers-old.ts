@@ -197,7 +197,7 @@ export class DecipherV4 extends Decipher {
                   IC_BYTES - 4
                   LPP_BYTES (packed lp and lpEnd) - 1
                   EHINT_LEN_BYTES - 1
-                  EHINT_BYTES (variable) - [0-128]
+                  EHINT_BYTES (variable) - [0-255]
                </Additional Data>
                <Encrypted Data>
                   EDATA_BYTES (variable)

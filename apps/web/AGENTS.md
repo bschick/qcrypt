@@ -37,6 +37,8 @@ This `web` client can built, served, and tested locally. It depends on a backend
 - `vitest-all.config.ts`: Vitest configuration for chromium + firefox unit tests.
 - `playwright.config.ts`: Configuration for Playwright (used for end-to-end tests).
 - `tests/`: Contains Playwright e2e test specifications.
+- `scripts/gen_*_vectors.ts`: Generators for the pinned test vectors in `libs/crypto` and this project's specs, run via `pnpm vectors:*` (see the root AGENTS.md "Test Vector Commands").
+- `scripts/splice_vectors.ts`: Replaces the named `BEGIN GENERATED` regions those generators target when `--write` is passed.
 
 ---
 

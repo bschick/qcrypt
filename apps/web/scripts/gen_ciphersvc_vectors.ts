@@ -28,7 +28,12 @@ import {
    uint8ArrayLiteral,
    toBase64,
    printBanner,
+   printVersionedBlock,
+   collectedBlocks,
 } from './gen_helpers.ts';
+import { spliceInto } from './splice_vectors.ts';
+
+const SPEC_PATH = 'apps/web/src/app/services/cipher.service.spec.ts';
 
 const VER = cc.CURRENT_VERSION;
 
@@ -44,11 +49,15 @@ async function genSingleLoopMultiVersion(): Promise<void> {
 
    printBanner(`confirm successful version decryption, multi-version (V${VER})`);
 
+   const lines = ['            cts: ['];
    for (const alg of ALGS) {
       const bytes = await encryptOneLoop(streamFromStr(PLAIN), CRED, PWD, HINT, alg, cc.ICOUNT_MIN);
-      console.log(`               // ${alg}: V${VER}`);
-      console.log(`               "${toBase64(bytes)}",`);
+      lines.push(`               // ${alg}: V${VER}`);
+      lines.push(`               '${toBase64(bytes)}',`);
    }
+   lines.push('            ],');
+
+   printVersionedBlock('singleLoopMultiVersion', '         ', VER, 'vectors:ciphersvc', lines);
    console.log();
 }
 
@@ -68,6 +77,7 @@ async function genMultiVersionLoops(): Promise<void> {
 
    printBanner(`confirm successful version decryption, multi-version loops (V${VER})`);
 
+   const lines = ['            cts: ['];
    for (const { algs } of LOOP_ALGS) {
       // Per-loop pwd/hint = String(cdinfo.lp) — matches the test callback.
       const kp = new PWDKeyProvider(CRED.slice(0), async (cdinfo) => {
@@ -76,9 +86,12 @@ async function genMultiVersionLoops(): Promise<void> {
       const econtext: EContext = { algs, ic: cc.ICOUNT_MIN };
       const cipherStream = await encryptStream(streamFromStr(PLAIN), kp, econtext);
       const cipherBytes = await readStreamAll(cipherStream);
-      console.log(`               // ${algs.join(', ')}, V${VER}, 3 LPS`);
-      console.log(`               "${toBase64(cipherBytes)}",`);
+      lines.push(`               // ${algs.join(', ')}, V${VER}, 3 LPS`);
+      lines.push(`               '${toBase64(cipherBytes)}',`);
    }
+   lines.push('            ],');
+
+   printVersionedBlock('multiVersionLoops', '         ', VER, 'vectors:ciphersvc', lines);
    console.log();
 }
 
@@ -99,7 +112,9 @@ async function genMissingTerminal(): Promise<void> {
    const bytes = await withTermOverride(false, false, async () => {
       return encryptOneLoop(streamFromStr(PLAIN), CRED, PWD, HINT, ALG, IC, READ_OPTS);
    });
-   console.log(`            cipherData: ${uint8ArrayLiteral(bytes)}`);
+   printVersionedBlock('missingTerminal', '         ', VER, 'vectors:ciphersvc', [
+      `            cipherData: ${uint8ArrayLiteral(bytes)}`,
+   ]);
    console.log();
 }
 
@@ -117,14 +132,18 @@ async function genExtraAndFlippedTerminal(): Promise<void> {
    const extraBytes = await withTermOverride(true, true, async () => {
       return encryptOneLoop(streamFromStr(PLAIN), CRED, PWD, HINT, ALG, IC, READ_OPTS);
    });
-   console.log(`         cipherData: ${uint8ArrayLiteral(extraBytes)}`);
+   printVersionedBlock('extraTerminal', '         ', VER, 'vectors:ciphersvc', [
+      `            cipherData: ${uint8ArrayLiteral(extraBytes)}`,
+   ]);
    console.log();
 
    printBanner(`detect flipped terminal block indicator, V${VER}`);
    const flippedBytes = await withTermOverride(true, false, async () => {
       return encryptOneLoop(streamFromStr(PLAIN), CRED, PWD, HINT, ALG, IC, READ_OPTS);
    });
-   console.log(`         cipherData: ${uint8ArrayLiteral(flippedBytes)}`);
+   printVersionedBlock('flippedTerminal', '         ', VER, 'vectors:ciphersvc', [
+      `            cipherData: ${uint8ArrayLiteral(flippedBytes)}`,
+   ]);
    console.log();
 }
 
@@ -138,11 +157,15 @@ async function genCorruptCipherText(): Promise<void> {
 
    printBanner(`detect corrupt cipher text, all algs, multi-version (V${VER})`);
 
+   const lines = ['            cts: ['];
    for (const alg of ALGS) {
       const bytes = await encryptOneLoop(streamFromStr(PLAIN), CRED, PWD, HINT, alg, IC);
-      console.log(`               //${alg}`);
-      console.log(`               "${toBase64(bytes)}",`);
+      lines.push(`               //${alg}`);
+      lines.push(`               '${toBase64(bytes)}',`);
    }
+   lines.push('            ],');
+
+   printVersionedBlock('corruptCipherText', '         ', VER, 'vectors:ciphersvc', lines);
    console.log();
 }
 
@@ -167,9 +190,11 @@ async function genStreamManipulation(clearData: Uint8Array<ArrayBuffer>): Promis
    const block0Size =
       cc.MAC_BYTES + cc.VER_BYTES + cc.PAYLOAD_SIZE_BYTES + readU24LE(bytes, cc.MAC_BYTES + cc.VER_BYTES);
 
-   console.log(`         ct: "${toBase64(bytes)}",`);
-   console.log(`         slt: ${uint8ArrayLiteral(slt)},`);
-   console.log(`         iv: ${uint8ArrayLiteral(iv)},`);
+   printVersionedBlock('streamManipulation', '      ', VER, 'vectors:ciphersvc', [
+      `         ct: '${toBase64(bytes)}',`,
+      `         slt: ${uint8ArrayLiteral(slt)},`,
+      `         iv: ${uint8ArrayLiteral(iv)},`,
+   ]);
    console.log();
    // The spec derives block1's offsets from block0's declared payload size, so this is
    // reported for orientation rather than checked against a pinned value
@@ -194,20 +219,22 @@ const BLOCK_ORDER_MORPHS: Array<[string, string]> = [
 ];
 
 // Values go on their own line because biome wraps them there anyway at this length
-function printVectorField(name: string, value: string): void {
-   console.log(`         ${name}:`);
-   console.log(`            '${value}',`);
+function vectorFieldLines(name: string, value: string): string[] {
+   return [`         ${name}:`, `            '${value}',`];
 }
 
-function printBadCt(index: number, label: string, value: string): void {
-   console.log(`            '${index}. ${label}':`);
-   console.log(`               '${value}',`);
+function badCtLines(index: number, label: string, value: string): string[] {
+   return [`            '${index}. ${label}':`, `               '${value}',`];
 }
 
 // Emits one complete `vers` entry, indented to drop straight into the spec's array.
 // encryptOnce must be replayable, since the terminal-flag vectors re-run it under
 // an override that forces every block's flag.
-async function genBlockOrderVectors(title: string, encryptOnce: () => Promise<Uint8Array>): Promise<void> {
+async function genBlockOrderVectors(
+   name: string,
+   title: string,
+   encryptOnce: () => Promise<Uint8Array>,
+): Promise<void> {
    printBanner(title);
 
    // goodCt: encrypted normally
@@ -215,21 +242,17 @@ async function genBlockOrderVectors(title: string, encryptOnce: () => Promise<Ui
    const parsed = parseBuffer(Buffer.from(goodBytes), 'goodCt', { maxHex: 64, maxBlocks: 256 });
    const blockCount = parsed.blocks.length;
 
-   console.log(`      //v${VER} — generated by: pnpm vectors:ciphersvc`);
-   console.log(`      {`);
-   console.log(`         ver: ${VER},`);
-   printVectorField('goodCt', toBase64(goodBytes));
-   console.log(`         badCts: {`);
+   const lines = [...vectorFieldLines('goodCt', toBase64(goodBytes)), '         badCts: {'];
    let count = 0;
    for (const [label, morph] of BLOCK_ORDER_MORPHS) {
       count += 1;
       try {
          const result = morphInMemory(parsed, morph);
          const b64 = toBase64(new Uint8Array(result.bytes.buffer, result.bytes.byteOffset, result.bytes.byteLength));
-         printBadCt(count, label, b64);
+         lines.push(...badCtLines(count, label, b64));
       } catch (err) {
          const msg = err instanceof Error ? err.message : String(err);
-         console.log(`            // ERROR for '${count}. ${label}': ${msg}`);
+         lines.push(`            // ERROR for '${count}. ${label}': ${msg}`);
       }
    }
 
@@ -237,13 +260,14 @@ async function genBlockOrderVectors(title: string, encryptOnce: () => Promise<Ui
    // the same plaintext with every block forced terminal=true / =false.
    const allTerm = await withTermOverrideEvery(true, encryptOnce);
    count += 1;
-   printBadCt(count, 'All Term', toBase64(allTerm));
+   lines.push(...badCtLines(count, 'All Term', toBase64(allTerm)));
 
    const noTerm = await withTermOverrideEvery(false, encryptOnce);
    count += 1;
-   printBadCt(count, 'No Term', toBase64(noTerm));
-   console.log(`         },`);
-   console.log(`      },`);
+   lines.push(...badCtLines(count, 'No Term', toBase64(noTerm)));
+   lines.push('         },');
+
+   printVersionedBlock(name, '      ', VER, 'vectors:ciphersvc', lines);
 
    // Diagnostics go to stderr so stdout stays a clean paste of the entry
    console.error(`   sanity: parsed ${blockCount} blocks (morphs reference indices 0..7, so 8 blocks expected).`);
@@ -301,19 +325,24 @@ async function main() {
    await genCorruptCipherText();
    await genStreamManipulation(CLEAR_DATA);
 
-   await genBlockOrderVectors(`Block order change and deletion detection, multi-version (V${VER})`, () => {
-      return encryptOneLoop(
-         streamFromBytes(CLEAR_DATA),
-         BLOCK_ORDER_CRED,
-         'asdf',
-         '4321',
-         'AES-GCM',
-         1100000,
-         BLOCK_ORDER_READ_OPTS,
-      );
-   });
+   await genBlockOrderVectors(
+      'blockOrder',
+      `Block order change and deletion detection, multi-version (V${VER})`,
+      () => {
+         return encryptOneLoop(
+            streamFromBytes(CLEAR_DATA),
+            BLOCK_ORDER_CRED,
+            'asdf',
+            '4321',
+            'AES-GCM',
+            1100000,
+            BLOCK_ORDER_READ_OPTS,
+         );
+      },
+   );
 
    await genBlockOrderVectors(
+      'blockOrderMaster',
       `Block order change and deletion detection, MasterKeyKeyProvider, multi-version (V${VER})`,
       () => {
          return encryptOneLoopMaster(
@@ -325,6 +354,12 @@ async function main() {
          );
       },
    );
+
+   if (process.argv.includes('--write')) {
+      const onlyAt = process.argv.indexOf('--only');
+      const only = onlyAt === -1 ? undefined : process.argv.slice(onlyAt + 1).filter((arg) => !arg.startsWith('--'));
+      spliceInto(SPEC_PATH, collectedBlocks(), only);
+   }
 }
 
 main().catch((err) => {

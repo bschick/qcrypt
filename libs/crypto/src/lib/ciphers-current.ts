@@ -348,7 +348,7 @@ export class EncipherV8 extends Encipher {
                   IC_BYTES - 4
                   LPP_BYTES (packed lp and lpEnd) - 1
                   EHINT_LEN_BYTES - 1
-                  EHINT_BYTES (variable) - [0-128]
+                  EHINT_BYTES (variable) - [0-255]
                   COMMIT_LEN_BYTES - 1
                   COMMIT_BYTES (variable) - [0, 32]
                </Additional Data>
@@ -880,7 +880,7 @@ export class DecipherV678 extends Decipher {
                   IC_BYTES - 4
                   LPP_BYTES (packed lp and lpEnd) - 1
                   EHINT_LEN_BYTES - 1
-                  EHINT_BYTES (variable) - [0-128]
+                  EHINT_BYTES (variable) - [0-255]
                   COMMIT_LEN_BYTES (V8 only) - 1
                   COMMIT_BYTES (V8 only, variable) - [0, 32]
                </Additional Data>

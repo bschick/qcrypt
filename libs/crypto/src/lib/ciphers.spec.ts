@@ -121,7 +121,7 @@ describe('Encryption and decryption', () => {
          const slt = crypto.getRandomValues(new Uint8Array(cc.SLT_BYTES));
 
          const makeKP = (userCred: Uint8Array<ArrayBuffer>, encrypting: boolean): PWDKeyProvider => {
-            const kp = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+            const kp = new PWDKeyProvider(userCred.slice(0), [pwd]);
             encrypting &&
                kp.setCipherDataInfo({
                   ver: cc.CURRENT_VERSION,
@@ -192,7 +192,7 @@ describe('Encryption and decryption', () => {
          const slt = crypto.getRandomValues(new Uint8Array(cc.SLT_BYTES));
 
          const makeKP = (userCred: Uint8Array<ArrayBuffer>, encrypting: boolean): PWDKeyProvider => {
-            const kp = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+            const kp = new PWDKeyProvider(userCred.slice(0), [pwd]);
             encrypting &&
                kp.setCipherDataInfo({
                   ver: cc.CURRENT_VERSION,
@@ -235,7 +235,7 @@ describe('Encryption and decryption', () => {
          const pwd = 'a good pwd';
          const userCred = getRandom(cc.USERCRED_BYTES);
 
-         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
          const encipher = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
             startSize: 64,
             maxSize: 128,
@@ -247,7 +247,7 @@ describe('Encryption and decryption', () => {
          await encipher.encryptBlock();
 
          const makeKP = (encrypting: boolean): PWDKeyProvider => {
-            const kp = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+            const kp = new PWDKeyProvider(userCred.slice(0), [pwd]);
             encrypting &&
                kp.setCipherDataInfo({ ver: cc.CURRENT_VERSION, alg, ic: cc.ICOUNT_MIN, slt, lp: 1, lpEnd: 1 });
             return kp;
@@ -289,7 +289,7 @@ describe('Encryption and decryption', () => {
          const pwd = 'a good pwd';
          const userCred = getRandom(cc.USERCRED_BYTES);
 
-         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
          const encipher = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
 
          // Read the generated salt before encrypting because the encipher then purges it
@@ -297,7 +297,7 @@ describe('Encryption and decryption', () => {
          const block0 = await encipher.encryptBlock();
 
          const makeKP = (encrypting: boolean): PWDKeyProvider => {
-            const kp = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+            const kp = new PWDKeyProvider(userCred.slice(0), [pwd]);
             encrypting &&
                kp.setCipherDataInfo({ ver: cc.CURRENT_VERSION, alg, ic: cc.ICOUNT_MIN, slt, lp: 1, lpEnd: 1 });
             return kp;
@@ -341,7 +341,7 @@ describe('Encryption and decryption', () => {
          const pwd = 'a good pwd';
          const userCred = getRandom(cc.USERCRED_BYTES);
 
-         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
          const encipher = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
 
          // Read the generated salt before encrypting because the encipher then purges it
@@ -349,7 +349,7 @@ describe('Encryption and decryption', () => {
          const block0 = await encipher.encryptBlock();
 
          const makeKP = (encrypting: boolean): PWDKeyProvider => {
-            const kp = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+            const kp = new PWDKeyProvider(userCred.slice(0), [pwd]);
             encrypting &&
                kp.setCipherDataInfo({ ver: cc.CURRENT_VERSION, alg, ic: cc.ICOUNT_MIN, slt, lp: 1, lpEnd: 1 });
             return kp;
@@ -472,7 +472,7 @@ describe('Encryption and decryption', () => {
          const pwd = 'a good pwd';
          const userCred = getRandom(cc.USERCRED_BYTES);
 
-         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
          const encipher = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
             startSize: 64,
             maxSize: 256,
@@ -484,7 +484,7 @@ describe('Encryption and decryption', () => {
          const block1 = await encipher.encryptBlock();
 
          const makeKP = (encrypting: boolean): PWDKeyProvider => {
-            const kp = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+            const kp = new PWDKeyProvider(userCred.slice(0), [pwd]);
             encrypting &&
                kp.setCipherDataInfo({ ver: cc.CURRENT_VERSION, alg, ic: cc.ICOUNT_MIN, slt, lp: 1, lpEnd: 1 });
             return kp;
@@ -551,7 +551,7 @@ describe('Encryption and decryption', () => {
             expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
             expect(cdinfo.hint).toEqual(hint);
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -577,7 +577,7 @@ describe('Encryption and decryption', () => {
 
          // Happy path: kick off both without awaiting first.
          const [cipherStream] = streamFromCipherBlock([block0]);
-         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          const cdInfoPromise = decipher.getCipherDataInfo();
@@ -595,7 +595,7 @@ describe('Encryption and decryption', () => {
          // concurrent callers should see the same exception
          const [tamperedStream] = streamFromCipherBlock([block0]);
          const wrongUserCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const wrongKeyProvider = new PWDKeyProvider(wrongUserCred, [pwd, undefined]);
+         const wrongKeyProvider = new PWDKeyProvider(wrongUserCred, [pwd]);
          const badDecipher = await getStreamDecipher(tamperedStream, wrongKeyProvider);
 
          const badCdInfoPromise = badDecipher.getCipherDataInfo();
@@ -617,7 +617,7 @@ describe('Encryption and decryption', () => {
          const block0 = await encipher.encryptBlock0();
 
          const [cipherStream] = streamFromCipherBlock([block0]);
-         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          await decipher._decodeBlock0();
@@ -752,7 +752,7 @@ describe('Encryption and decryption', () => {
          {
             ic: cc.ICOUNT_MIN,
             make: (extraKeyMaterial: Uint8Array<ArrayBuffer>) =>
-               new PWDKeyProvider(userCred.slice(0), ['a good pwd', undefined], extraKeyMaterial),
+               new PWDKeyProvider(userCred.slice(0), ['a good pwd'], extraKeyMaterial),
          },
          {
             ic: 0,
@@ -820,7 +820,7 @@ describe('Decryption known values', () => {
                new Uint8Array([25, 193, 133, 31, 159, 156, 8, 184, 10, 164, 33, 46, 20, 159, 218, 222]),
             ),
          ).toBe(true);
-         return [pwd, undefined];
+         return [pwd];
       });
       const decipher = await getStreamDecipher(cipherStream, keyProvider);
       const cdInfo = await decipher.getCipherDataInfo();
@@ -869,7 +869,7 @@ describe('Decryption known values', () => {
                new Uint8Array([174, 61, 6, 169, 145, 216, 66, 166, 139, 82, 19, 207, 29, 75, 105, 149]),
             ),
          ).toBe(true);
-         return [pwd, undefined];
+         return [pwd];
       });
       const decipher = await getStreamDecipher(cipherStream, keyProvider);
       const cdInfo = await decipher.getCipherDataInfo();
@@ -919,18 +919,20 @@ describe('Decryption known values', () => {
                   'Ikd9XNQvhtfo5NCNgq2yKi-g_NQt4cH6aPQ3c8HyzU0HAJQAAAADAAsJ-GygmL4nz-wJHtnp-Mn-kow1As8sqUmLnkIvyohj1S87gLhGP_2I6_BkR-cFvkB3GwAAJ3MCMWiB_UDWR5eiPJ_eOxe0nQHHkctrcPFKZxy9wX4r-AEEKroXsN2kX6oggAqkqjqWW5aRSQsCh6jkoi8HjKoWIbsTXxGTJFKPff6jH62XBD6x7Vv7NO5c3UvcvvtFwdfl4VkOok6C90xXyqhfcm0BCUiZ46eJeCIIjgcATAAAAQMACQnEdmejMsWyUPAJ8Y7m4isdeoRkIJea71myATpKuvQCMkS0WOHoIzrisYTdJXd7s4jH_t5JYtmhPgmBuR7TNLiOPC4RWq1FEw',
             },
          },
+         // BEGIN GENERATED: v8:correctDecryption
          //v8 — generated by: pnpm vectors:ciphers
          {
             ver: 8,
             cts: {
                'AES-GCM':
-                  '5WTNC-lyNSsFrD9EE0KiS5KAgMr1c0-0yOTo34khxLgIAIEAAAABAJ9wWZr8QqzldpU6CUpaiJo7jouUDUFL1rXRHGRAdxsAABe1uuPmeC1MIENW_vqnqTaLo81crRnOliAIelajjp5Cqad55TOheTO7VtiZvSoD7ZEvVb3XO7YrBlfXMl3UZm1Ch0F6Jcqbdxowow3kEwKck28P7jrvA3yaUAt1a1CB4-hMdbr_m0yhII-fTO0vPulI26-8vG78KdddSWdVCAAoAAABAQAAPVWORMFgh5WUovu0ztlWMyQy-1Go05xdNHu3j4pbOb8VzVti',
+                  'r5MIpa5wieJPvklOihZv6taZAFrDxwdcGPGMZY0NVw8IAIoAAAABABhhZu6SIUALDEh37o3DMh2-8426HwEaWyQOaglAdxsAACB7IAauDExTmsiULMOGivao7EIHKhvWTX1TE8zEQ_FgfSB9YJnHWuXRT78AsrjyaUJcds8KoayekDq9VnppgCwGoznfDvxBQhukb1ouSZ7P6b6XX-dw8RQY7oR0pxB5EmQ3k3TYawGytn3LyEHd1UVxpLOzr5_oGOoRT0OFQX7VoYwydrjkCAAoAAABAQBaHdBC-EmzIMVykuy7ZVAxkQRTcXuy5BsNwmYdAy-5D13Coz-Y',
                'X20-PLY':
-                  'WsAK62TEy04ffWXQs2TDQphagL5NobAJRHOwXUJcYXQIAI0AAAACADDqx5KoAGLhWWsJmg48Hqt9wj2YxscvYbxXxPMjHUIY9JUV5DUjb4xAdxsAABdDh-rYbdurKmnd5pk6X7RXYpVcNbeUKCBwogeg8S5jD_1l_XPa4oygsQP6i3TCBkUljRgFeQdf0DXmf5Tog8yNfWd8MoFgHd1hzkskwLvZSIKZdLAza2Mp-nDjqqvHvf2HyoG2r3CH2WLlmbvai4mCz1WiFtk8U_YG3Z2RCAA0AAABAgAemEikVE2ivh7L9YM9Z-eyKZqK_EK3Afkh6GQ-GFZOMWwRDGd34C8PDjtgg6s-TYV4',
+                  'Q7VFMd3uux1hGhw1F1n2NWHaMBGDQ235sGGeWUc8tDwIAJYAAAACAA-pDBTYG8XH9PRU7-A3cBEBqF_gx1h6klMyvV-JWNpFwpvhazgyb99AdxsAACD62lCM4wR96BPIrgd2Posd7mxc_8ik6DYAbVu0-DS5_yBFFd1_JbWYJ11cAbwt2qCLrY6xb3JXwymbBS2lPLMlJkCdGMepFiBiAbKnOfIP3FV78-D2stVTJkb685wSgrn_knbh7lybIg86BMc3KF3ry_2LI29S0Zag9MefY9yXLURhs1sxCAA0AAABAgCuYiTrkcnq9SQZcMzrP7T6pR-E9Tlfa8tjGwruBVB62f1OqkUoEOp8ZCpChOXtKgsI',
                'AEGIS-256':
-                  'PPZPaCDDZlnFgTlgD2rOHzZf9BTmEEXRidCSH49d-NIIALUAAAADABqRb2N_ZklBBTfyhQKKElNjBaP9UdqLYrJ8YH23aGEn6BErjzPtnz8WnN-sNDOKPEB3GwAAJzv7onjozssZX3S8XfNhQbGW3HpmyQ7Zfbci9HGFAVqTfT3kltZpfiDowa8gZTLbmnicy15WJYBPSM-mdpzmmBTKQ3MPjPR_f4PNNDcAoV4LkO-AoTLDRIT0Wja26U498_-lvR9iWK5ZFc-SR2YGGd5BPmrgGRce36G9OOv3m0A8LoC9uxm6M0TqCBMkxh26D9qzZ35OUO1pcfhp-ggATAAAAQMAMgVkIQnh6kzeuR4p6P2FMDoKqy5IEVVnfKWquziUcOHnc7h3HFH1Js1dHssBF66GwjdKkCCwk4QuizFqFa0TrpyghgIg_954xw',
+                  'aS3zM3fJEHe6EOL5IugoKtM1AkYAaWfnRgLflaMTaTsIAL4AAAADAA7DfeZAQfqGG08Lgf767EdvEowUcv-UAyN0_TW30QbR73I4BcpNZrBTruwMpZuTU0B3GwAAMGwSOtlgT3WyxQ776vrGA-ApWwjrmpeXS4Tu3wY53zRy0WoghCjCqLD308tFsA5K8SA8UrV9ilQxGITQkfFvb6nVNaC2YhguWOGQ3sOAnpOpHMxwE53yYbk_xSCh2Wa8JOYZY9FO9g9N6mkeKyn7L9FcicUS5dmWrlAMQJew3DmiuWN5nNRJYBG1UsYleEJkd2oFSOPWwgP0vwiwPFao-DH2zfmlbAgATAAAAQMAy-ztnlTL3VxdUfbK3lF_jh9MmGqllT6zlzU4Frz6Xk2nBbYhSxhuGCIEyy3n_s7X7kJzY0vv7QY5p4Qiz6U_gq9kz4W7MYpHtw',
             },
          },
+         // END GENERATED: v8:correctDecryption
       ];
 
       const userCred = new Uint8Array([
@@ -950,7 +952,7 @@ describe('Decryption known values', () => {
                expect(cdinfo.hint).toEqual(hint);
                expect(cdinfo.ver).toEqual(ver);
                expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               return [pwd, undefined];
+               return [pwd];
             });
             const decipher = await getStreamDecipher(cipherStream, keyProvider);
             const cdInfo = await decipher.getCipherDataInfo();
@@ -996,7 +998,7 @@ describe('Decryption known values', () => {
                new Uint8Array([162, 203, 172, 111, 119, 158, 192, 123, 81, 141, 89, 174, 126, 4, 65, 105]),
             ),
          ).toBe(true);
-         return [pwd, undefined];
+         return [pwd];
       });
       const decipher = await getStreamDecipher(cipherStream, keyProvider);
       const cdInfo = await decipher.getCipherDataInfo();
@@ -1048,18 +1050,20 @@ describe('Decryption known values', () => {
                   'Z7wOOHsbrWHxuEVocLmZQCUjv4Bhnj-nwuYd3rtKPDQHAJQAAAADAENBfTMqkJRnF7O94Ia0mryEZ7d824e4cUm4cQ0bsbimjC2ibZlqjzdFWMVappX3z0B3GwAAJ5XIi_WF8lrpab5_Icli2jTRX82Zjr5W-7XGYWF6C0sK9CAwEMCyAcUhjzBYApBwf34g0VopUo041cAa1n1w9MNYwUMKT6_NbrsmoTNlR7-JO241DIbV3S1RKf--q4BH4ndbD4ZUNFT9QFUL8u3-YwgZ2Xp9W5Dds3S30gcATAAAAAMAD4GqlRwMH25MNOqk1yCEKAzllVZ_NUlWtWtJ-kuvntxu3ilO54biyrWOB1mV-DKqP_ryHJqX8bEBtbCaGqdpt4LQliThSkiT4Q',
             },
          },
+         // BEGIN GENERATED: v8:missingTerminal
          //v8 — generated by: pnpm vectors:ciphers
          {
             ver: 8,
             cts: {
                'AES-GCM':
-                  'eTrk1SjeOlvvs6v4Hu6XtCauiKY_3a_7kWaQVrGt5P4IAIEAAAABAIrFc5cld8ia5ZUXfFYjJWBkNws_JTnLZWJ9BehAdxsAABfVGVM9DociwGarxRaifKpVGgCWuevhNCC_XZFBWkGFHRv9GKUsRth5EepIi2p9nsSZu-hPsxgw7BJ1ymmkGiO3Lh7o2alCAoATPtLDIRQz1hh_yp-wyxRVugY9fZld1uqC3IChaH2DMvAMRREQyCOO67fmkegAE_4W2YnJCAAoAAAAAQDWEOtP-e8l5Jptwid1DXwlV_dLm69TQ9wOdT-0mzQ4P4eXSnva',
+                  'zzYpeEktmqAEinAO4pfXtoYkZQXJHuqh5DlFfQ9cVdkIAIoAAAABAL-oikVZBtoHlS3ks1kotrkZIz7FsvjZwx1kHaBAdxsAACCPoFdZoO--kQKTG9rPGQu3MeAvZqzv4KMFIXEFNG6rSiBC9CxPohC10A0qlqn1VA9-5CDuJs3iTpn5D34gdeG3QfA61HvjboK-3XftJTxH8aceSnAGIhc9vx8o8Cq-GiDLr-NPY5FhjznU4pr2N_Cvn2Eqyya3TL27XSWf6Bqcqm1CHYAoCAAoAAAAAQBSX6W1ZBztiQE-3eQ6I4nrFoSUlur2JtanXaS8hSyyZAj0OWyB',
                'X20-PLY':
-                  'utUQY9649SkDvEzgdUUJUrHx8nB6b7fOlhvdyXdbVbIIAI0AAAACAJu29Qv6r_Pm0OAC8RpMyf4GF8XIQQv5JtxfbTz8c1m981AL0mU9EKJAdxsAABc_5f0X-BIW0xTpkBjPntdh0QpOfx4AeiBPPvjTBM64LQBwXa1B4H8F6msS1Cw2398-RBkvfJ1CxIghkgAQbBV9NCWN9m54waptKg-RBGIhW9yxv7TmXsH9Usr0pa4tuDgvemAiLTwlxCmu6kiAWzZrRe25UyHHk48D1iuuCAA0AAAAAgB9YcUcUWihdnndBqhyfxum_A1c8CCKMC2dhZVyTZMaDPYR7PatDg-OeiTkYZNibB_U',
+                  '64W9Y8mqsQmHgNHLQrC62SKq8WbFAMwGpxAvxUuGR9kIAJYAAAACAMbHwifkSPqPB7Btwow0NPGO9IxlIxbqwO2WerGHGd01GNXn05F3u5NAdxsAACBFjGK7clEtwMf5-HMMsFWOy3cI6TZAVHgxnJHREyMPUyB3_LTg9HvKr8TahEZY7LjohZ8vMDNitRgTDElY48b18nys_HqyxItl6pWZdZE0k1Zd5REcISn8CLWdqeyh6eVuOdYRoGR-kmP63gbCqAPMari57JUd49eqBbOnL1fCRyZ10r6hCAA0AAAAAgCykzg1FCDr-y1_VBOu8I0br070-6-OBRohqDJGHsU8UFJgWt3bKMz3DF7OL-sXBhfp',
                'AEGIS-256':
-                  'kIs1fdZyAc3LsYc8L-2o75mBL1QvoyZZNuHc3e1RjxUIALUAAAADANh1rqRqftpVdltmd3-lD-0WNcJAjbByW0flt2dEtgXgF5s7KtVNYQ-QX0PU5xsDiUB3GwAAJ-cK8Refq2nlz2knf9Fj-RQdX1oyXVZBpIbb5bJk-3W4-stnWtm_2iCQiC5l_QCrTeoNgVfKx0-logaBhcZKkAdpcbxCqvpbBqJGI9DloN6oPWwcWJcL8TUUZ1UVqYyFobeK2GOd-VdeX-YBCc2APGdNM9rxDeCMfAuWmgTlTf9tWS1Ynj2SMwN1YobABTqAhL7XF9SlgXOVzmiRRQgATAAAAAMA3aHWotS426M_JgHHlobRi1wOv5-bH41uGagtxctPE-Dvty9pFW8CqZ6QxNitgdndP5WZTYIhpdIXL-hIikWw71Tc0ZZXTjkdxQ',
+                  'FslXEWhVvNp-fAcD9TbHFg50cHwFOQrpvsoM73mzNMYIAL4AAAADAKJ2CO8yrr2kth3v9mw8vjjqTIiZRbMb9KYzDVOVCpKor9zDDw4ORV7-MB66FGA7gEB3GwAAMPMjpbE_Qqn99pjdFnTTpU4F7Re3shZA6QIgyR-8-AS5w1hv6_f9Dl8jKvAHlP7HtiBDvnXs7VP7fHeD3NZmGTIU4EO7hF0f1Tvu1DY7-ceYXCf4aScKEDGbv-UfON3OrGeiHVAgRGguu5yv3JKndFXlaEfbYLjlA2nSF92cLNkWAc-VUDUbn8UyCGrYlYEaVHtxtm3ooxjgTl_SLcILQuUfzQLw8wgATAAAAAMAzBP587_7P7VhBIuwGOM5J1Uk6PoO9meUYIb6_lMuxnbNRH7zCH9XIBLHkefrObvcywfgJRIPUVNXIOYx0zjoZU3Ay_9iKybLPg',
             },
          },
+         // END GENERATED: v8:missingTerminal
       ];
 
       for (const { ver, cts } of vers) {
@@ -1074,7 +1078,7 @@ describe('Decryption known values', () => {
                expect(cdinfo.ic).toBe(1800000);
                expect(cdinfo.ver).toEqual(ver);
                expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               return [pwd, undefined];
+               return [pwd];
             });
             const decipher = await getStreamDecipher(cipherStream, keyProvider);
             const cdInfo = await decipher.getCipherDataInfo();
@@ -1124,18 +1128,20 @@ describe('Decryption known values', () => {
                   'o9c6sk_m1Xfm3xdYbSwQi50oYq4acFVjeZFJ15B5Q6kHAJQAAAEDAHeGF6QGO4ZugN20lDIaTZuTy-dYR1L4LGHdo3jn3LP92H2_0motVm3FwTurpBovYkB3GwAAJ2gWjSvLF0kDgVbu063jbNJ5S46PRUrg1eiCVWF2o-fEhodlg7yDTVFfbMIPR_9hbUHbsUENF9HL3asSg6w2KL45Yp0rDHPN8BO-G34L9XIvYU1k7-vVb70fq3os8LpYKBmdhoqeYvQLtH1YAxh3-9_p_5tqDy275YoHhAcATAAAAQMAMBgnTlyeUBBw8_spEhh84TUtezZO4S3W2KZMNm02bgfIKL02ZMFEiNz_FsMeC3HDaKKjO7a_pVLQhFAxywLG2KAQYN2fQo9uNw',
             },
          },
+         // BEGIN GENERATED: v8:extraTerminal
          //v8 — generated by: pnpm vectors:ciphers
          {
             ver: 8,
             cts: {
                'AES-GCM':
-                  'pUwFtH2ZNX6Rk1wemXtwD1oV569w3Yjgl-9EciGJq5YIAIEAAAEBAJ1w3Kz4NSXD22b0xfaDLj2JI9NNOSIeaqA0V-5AdxsAABe9l86FCe9Pmnc1u45iEob28MW5mxv7VSBzlK2cvUxDItcn0mSTPSYk4uSB6DKnIeOL0fQqesF6X_QMf-cQnKyrQxEV_1LmJr9nZMnQaRlOXcVYFdw4FJ5RSfNkIjHU2MLgepx9uuXDw9DeUN0qesVkWuhn2aVg_G-j4TM0CAAoAAABAQCIwtOdBSLCRx9jjTzDGqvcczBcWzEZf-5EdTyIfMXkHKIh7Gi6',
+                  'MPgaSfMZQpF_SRke6pJrKuqPt5w6y7UfU1W7jh05gRgIAIoAAAEBAO6NBrFy1Du8osHKKHJLdS8LGT5jEcHIm2_QVLlAdxsAACDpkPkxkKl7GNREzkXlVwhaPOkia51XJEViSlM0hHfXAyBJTn9c4wwd4v7VqGNPYqCvzNWWK8fuQPpJVb7adYfrTd--FboSi3jjwoammUTpKHD4l18xp_6zKrBXGVOi8VvjLebGQT9wPtPtWXNQ7Ey7p3qMJ1ZiEeNWG-bIYJ4zdv-oVImbCAAoAAABAQCE1EDEhtij60RGqAod7NcWxr_FI1dIxT0q6V2A-TUOxSf3eBrR',
                'X20-PLY':
-                  'yvZcJgv1_QL7YHFNOpO8FEG2c2Bf9qZudQrNnO7Sx6EIAI0AAAECAGZdj2QwtInQmI4TYkPmpQFoRb9NRDQaS3-DyOJCnxHI5PgGKmvzGV5AdxsAABflQ4fTYAHz7s9u_QuGOuHZZEh3ZgQWAiCsLgPzLx-EI-rr6GTocVEvIIyTqGWtHPCv4B8YJhMxgnY9fAJiNihx8IMTstT4qp9QQGh0sfDQQhfop3JA2kIT7ShlOpnB1nc2bbzl4zDJx96YF00_pzAku85v1NjfQ92wplaTCAA0AAABAgAJnX5drJx3kVmQvEt2votP4loCmHU1Ao_jLqWEKCDIL1Li0XAJmCFh9BiMAf8HjuGP',
+                  'rKcqfl6VfNDSXZ5JQKix06ddvGArzSDj64MUo2yuNIgIAJYAAAECACLE0Bh5MC4ryN8qS-sxTniWCUHGsV6CqooM6WIkls7CJ0VgE9uj_JNAdxsAACBiYwfby7Gc0BSfCntHO3yBfSGau8d9kuYwy4nsowxagCAEF-BallL0YVtgTmzJgkyQEpx05TGxqfGFW-A6TwmWvvIebTOvUmrn12fDwQunAVHu3p8EdhqLbks1XYQP_zYWNr47YtcoV_27unPor6tFs_hzJaVcCa1oUd9bbV6yliEJeTAECAA0AAABAgBLOgm1fSvL4bwFsT4lzIBFprjMSIEMWKF3JDusAmoAA6__ta24i0Ga1ypfswZuJkUc',
                'AEGIS-256':
-                  'ojJuRkE72yqz3iMPi91rlF4vi9H0So3UrJHft1sLbCYIALUAAAEDACyLEkhfQ7dgjcBxewa-wwsc88wgk-c6aE0ydH2pzcwBgcCK_WZmqwhllAdm3aRV5UB3GwAAJw4AQYZ-B8Dvjlhz8segHJu4BzxCmAoW-lRgPqXqXqJF1ZCP2kzWpiD1Ua3ySf-Lxgq__Wgz1i_GZw6WgUMdVr3JjUc3IQDwIl1mo9U5GQKmLlS0NqpJ7EYqaJrmom_yGz9soaOF6ZwIPWziyUJUZnNWqjZp3tCyx9Bm2iJ1N1DXUZ13If0K4w0Hpd9JvBXcsjEW9F2DoeSYV9bfNwgATAAAAQMALR6AHhEHHufTa5SfD5PGMd3_47Bg-iLa_5NAbTur0wM-sEx0mjrf8NYxGyoP6VKKu-AV8O_5YBQqLxeXmRoDry7_mhhX0DQExA',
+                  'VBTerVcmk-UkqCJm2neFpQHebiiG1XFFftTiZPkSVAIIAL4AAAEDAJe2cr_X63gicE11Z2fDGjNBLbgPpWR_8K32dtTF8KGXNBlBU9SxkTv4R3Whg9K9qkB3GwAAMBtpRAFXRJYa3f_dGWYhDmZ3ZufKauVFrRAQSxTILXtgVCrGFuQHUTV4Chx6iZxNmCCebBq6g606H3hKjXOWXXaZX7MnnBnOX5jXeZGEic_H-Q0cnb140JEVwoa1Gqyp28QlzfNGULnnsyRNI5e4KATFS1HKNUZrkhqpENoWEMCmZ_bU3DayrGg0eaxwYjvMLLZ6lk8QJSl5lyLe8to3mPdDjtyHIwgATAAAAQMA-bXSqohzZ7p7mNvdK2jbIx3u2ratBRXpCSRoG_8I5f-M3eUr_jk741VJJkGdbECpRvOmMNU6tpeUAGHXdhYzRBuf750EmPxAXg',
             },
          },
+         // END GENERATED: v8:extraTerminal
       ];
 
       for (const { ver, cts } of vers) {
@@ -1150,7 +1156,7 @@ describe('Decryption known values', () => {
                expect(cdinfo.ic).toBe(1800000);
                expect(cdinfo.ver).toEqual(ver);
                expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               return [pwd, undefined];
+               return [pwd];
             });
             const decipher = await getStreamDecipher(cipherStream, keyProvider);
             const cdInfo = await decipher.getCipherDataInfo();
@@ -1197,18 +1203,20 @@ describe('Decryption known values', () => {
                   'Q_foMbKP8JJnzmfmEiJN7_U29v2gm6S4uWvVAhJrT9wHAJQAAAEDAKUqQR3gDPXvwfLTiktkSi2bkHCAaLGQ0-7ExX1zKZlYSa7VdWxa_N4Of5HsGxOFekB3GwAAJ_egRknJkeWIuesGWjr9HW41u9P5n1k1oaCs_tWXe8csWxq_PXOI486X8-6cuWB4-72YidIx2-3mEv_BjruEXvbhXloPXa5m7g17uY8RfnrXxYIqnOaTpaXt6tJvfs5FZXU4Q2DDMc3Vw4cFVVz_S9aDfSJVX2BFgYhzrgcATAAAAAMAM5V16GUy2nF86DgwI801GgcPg1oobQ2me8MVclqcEBD8geH7XPEnuHeR3NE8papsGfdp2OdK0Y0KoE6620ZJD_-fNPN3yGkRhQ',
             },
          },
+         // BEGIN GENERATED: v8:flippedTerminal
          //v8 — generated by: pnpm vectors:ciphers
          {
             ver: 8,
             cts: {
                'AES-GCM':
-                  'ARimbkiBV4dgciApyw1wPJZSITioZM_S1_eQGKEjOcYIAIEAAAEBAEdGgKuYDnZt99zSVm7PYGFd6KeqOkufLz8NOxpAdxsAABf03-vLbNx_eZsyd9O8Uhj5b0wbIV0QXyAJFYEprzy8HGR2vKE15SBGQzLJkqqZOU57q-oHpJLFzXYtkqxOTn4BBd2_y5P8jO8Gsy7MrzVQy3_jkvt4tYJoxtSHC5DOODO8UpzuTx_A_nlQoDsk27cXqVVcSbmKe7LOW_fFCAAoAAAAAQCosF6oHNosAumrs1LhxAekOcTTO-WFlEBYT1Sduvuf0Nq3hF2X',
+                  'L08tHkddbPBovsLlYvsyo0dTv3Wrl5Zhjy9xhtuT9F4IAIoAAAEBAONfU9CIN_vGxfm9ahxYcdPs-gSh6pZTpIw-zeFAdxsAACCAWoO_0H2w89wmho6xOVkJAot31pMN740TizVsDr26mCCwR6W43xs3Zx4to66g9VKHFbV4inHbko6h1Zg4ocf5PyT_M-Yxs3oTMYL2M8letPFUPuhb3N0o7r7OUTfRS0UoOXCJk5iSYjfPSTDQAIvmUloSYzGh3-4ukHXKalzKuPM5La2ACAAoAAAAAQBQYuTwWo91g4hzf4WUMI2uKsM6FqkFNqXJZy-V_C--F22kZer8',
                'X20-PLY':
-                  'yAtwEyLMG77F8J1F6XRfZ9LdRhZJYtWJsjG0B7a53_AIAI0AAAECAFfYK4tSs85B-ddxUupS3fpQFUydiSTnqyIbQDFkVM-iceLUB1exiY9AdxsAABeEb3Uu-yG3OmbXsTDbfuZYQ__7QUP_gSBFhRWx-arx782kwsk79CQHim55plgkqW2wu-q1sEcbfQOdoQpGcQSXkeHT3x1_95i8_GmEvr27N9tHRBdcLgmMuKml44aQ0UEPEIX0L9M8XxnxgnuVz6ZS-w4IMI-YoinKfOHnCAA0AAAAAgAoVJg1rh00cZwMy2IUAXVAeBZttWgD0IyNUH9e0hVXuKTaO5yCmagpTwmkuCkKSVhl',
+                  'KkgGYon51G-dif2SoWOwf_eAtHnoKykhmsaX--HtS6kIAJYAAAECAKP5CEOEq9bOnFtLzRhHVcAbYPsU-2MiCXDPOo4U6v2XgD_P_u9ZOrJAdxsAACA6CJ2R2N8i2GzD6Fj3FN44Adr0pwQ49XQW6Gx5QdH9qiDQ24TtWeNnGtn1TkoWMJ0-PMxbWIwxh8vroYC07VFStt8Z1F_sBnK4CtYQ5guDJwEkCGRHXBhzqHeE07LRxDMd9mPDXi8XwAUsQC2D5oCiEdghDZP6GKsTYovVhEkQdcu_dcfPCAA0AAAAAgDsQPLoHS5JzkkSj80mA8NTw1E-Ba6bONSBEHdA2tXMoLnXqjrGFIgMJnbAR9jNRfuH',
                'AEGIS-256':
-                  'aTgxgI4rrWR9Lul5VjiutIZnFAnhhOw15u-n3WKdkMAIALUAAAEDAKItraXUWeaORBDcLOWEzbpuIsvxbTtyRY3o0ZQTjcNs3xhO5z8gQEvqt1Rlkw8bYkB3GwAAJ7e37nJ4PmAAT2u8JkS3obtr81-a5W3nuG_156TYu-_E9rmfMIi9DiC0PPapNMsNXK7qHZUOPf6JBcVcC5Qc5_XuQyoo12cHh3esj2wZvi19FNC_u6HgM0P2sccMbeFSHYuu7pOK0DCssKJjtBMEMlzeox1s0nNsEw3d0sPghtDz73mFQqsYUN-Oqpj7DdDlB0aU4lmcBrdHJxdl1AgATAAAAAMAMKdeBvgL7gXJMf4jalTtKuHSNMeIaHfXBA6W4at6Fn-cnucIYL_0fUZlirtPF0oyPU0DuOw1u9olGfk3mrPjMT_Tkk_A2ZXk_Q',
+                  'cwC-zOzIRI57xAd8ULzUEWfGcczNMtshGhz0kfY4PnsIAL4AAAEDAHvYsjc9Vm-0x4xsCCckL62RmMtuuBHFge3mcD_U8i8I1YrvWiOS1IFP1e5P5Vg3p0B3GwAAMMK_ctQN0Jwwc1eUxcXaS8yt_blkNGIykItar9xhZtOmZ2L69AtTCZB9wDMVafmHnyAfgngIqsI-VUp_hiN6DH32VWrk8Dhn3ZALWqnvYi-AX4Zwige4VTUU8KO2IEIvu0RgKnV09jEY2QcB8TIi3Gcm7Lqa5w1UyFvDmuAdQ_ywwA9R8oL0o9bM-UdTRQHkwaNoeegGdN0h_nl8KrC4UKJ__9fMIAgATAAAAAMAV_SIsTYOznY7Nn7QAZs5kjp0ed0Jv6FZzGJh7Nzm3swE9EcxJBZxjduxbNWdreE7d7eGeVs78piwoPS6aPoohqcU02-8X_RKXA',
             },
          },
+         // END GENERATED: v8:flippedTerminal
       ];
 
       for (const { ver, cts } of vers) {
@@ -1223,7 +1231,7 @@ describe('Decryption known values', () => {
                expect(cdinfo.ic).toBe(1800000);
                expect(cdinfo.ver).toEqual(ver);
                expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               return [pwd, undefined];
+               return [pwd];
             });
             const decipher = await getStreamDecipher(cipherStream, keyProvider);
             const cdInfo = await decipher.getCipherDataInfo();
@@ -1271,7 +1279,7 @@ describe('Decryption known values', () => {
          expect(cdinfo.ic).toBe(1800000);
          expect(cdinfo.hint).toBeTruthy();
          expect(cdinfo.ver).toEqual(cc.VERSION4);
-         return [pwdGood, undefined];
+         return [pwdGood];
       });
       let decipher = await getStreamDecipher(cipherStream, keyProvider);
 
@@ -1280,7 +1288,7 @@ describe('Decryption known values', () => {
 
       // Ensure bad password fails
       [cipherStream] = streamFromBytes(cipherData);
-      keyProvider = new PWDKeyProvider(userCredGood.slice(0), [pwdBad, undefined]);
+      keyProvider = new PWDKeyProvider(userCredGood.slice(0), [pwdBad]);
       decipher = await getStreamDecipher(cipherStream, keyProvider);
 
       await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
@@ -1297,7 +1305,7 @@ describe('Decryption known values', () => {
 
       // Test wrong userCred with block decrypt first (error msg is different)
       [cipherStream] = streamFromBytes(cipherData);
-      keyProvider = new PWDKeyProvider(userCredBad.slice(0), [pwdGood, undefined]);
+      keyProvider = new PWDKeyProvider(userCredBad.slice(0), [pwdGood]);
       decipher = await getStreamDecipher(cipherStream, keyProvider);
 
       await expect(decipher.decryptBlock0()).rejects.toThrow(/Invalid MAC.+/);
@@ -1334,7 +1342,7 @@ describe('Decryption known values', () => {
          expect(cdinfo.ic).toBe(1800000);
          expect(cdinfo.hint).toBeTruthy();
          expect(cdinfo.ver).toEqual(cc.VERSION5);
-         return [pwdGood, undefined];
+         return [pwdGood];
       });
       let decipher = await getStreamDecipher(cipherStream, keyProvider);
 
@@ -1343,7 +1351,7 @@ describe('Decryption known values', () => {
 
       // Ensure bad password fails
       [cipherStream] = streamFromBytes(cipherData);
-      keyProvider = new PWDKeyProvider(userCredGood, [pwdBad, undefined]);
+      keyProvider = new PWDKeyProvider(userCredGood, [pwdBad]);
       decipher = await getStreamDecipher(cipherStream, keyProvider);
 
       await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
@@ -1394,18 +1402,20 @@ describe('Decryption known values', () => {
                   'Ikd9XNQvhtfo5NCNgq2yKi-g_NQt4cH6aPQ3c8HyzU0HAJQAAAADAAsJ-GygmL4nz-wJHtnp-Mn-kow1As8sqUmLnkIvyohj1S87gLhGP_2I6_BkR-cFvkB3GwAAJ3MCMWiB_UDWR5eiPJ_eOxe0nQHHkctrcPFKZxy9wX4r-AEEKroXsN2kX6oggAqkqjqWW5aRSQsCh6jkoi8HjKoWIbsTXxGTJFKPff6jH62XBD6x7Vv7NO5c3UvcvvtFwdfl4VkOok6C90xXyqhfcm0BCUiZ46eJeCIIjgcATAAAAQMACQnEdmejMsWyUPAJ8Y7m4isdeoRkIJea71myATpKuvQCMkS0WOHoIzrisYTdJXd7s4jH_t5JYtmhPgmBuR7TNLiOPC4RWq1FEw',
             },
          },
+         // BEGIN GENERATED: v8:badPwd
          //v8 — generated by: pnpm vectors:ciphers
          {
             ver: 8,
             cts: {
                'AES-GCM':
-                  '5WTNC-lyNSsFrD9EE0KiS5KAgMr1c0-0yOTo34khxLgIAIEAAAABAJ9wWZr8QqzldpU6CUpaiJo7jouUDUFL1rXRHGRAdxsAABe1uuPmeC1MIENW_vqnqTaLo81crRnOliAIelajjp5Cqad55TOheTO7VtiZvSoD7ZEvVb3XO7YrBlfXMl3UZm1Ch0F6Jcqbdxowow3kEwKck28P7jrvA3yaUAt1a1CB4-hMdbr_m0yhII-fTO0vPulI26-8vG78KdddSWdVCAAoAAABAQAAPVWORMFgh5WUovu0ztlWMyQy-1Go05xdNHu3j4pbOb8VzVti',
+                  'okE3nkgv3PaIXJDNs9JDvmApRTnNo7HEDfhn9m0sjdkIAIoAAAABAN0QgPBRcmBohWp-A7lM5d9qZv7B8M1PWS8xibJAdxsAACBUleh1Oe3EuKbmRbRwomTEaPwZuQm4qOxE41-SDSh6eSCARtCRIIVYxO91wf6NeTttIUKxejWBQtnbcYJSr5t3gj4VNWGcMrvL002gPnoNljsxvOJQT_5rEgVf6GZgwxqrNXsADCD8yQFdwEt82wmGP3eIDZY7NH_i0ksdXhYLYlZv7AwkCAAoAAABAQCKjswAG-h8RiJ6TomoBFRxG0xRMIHb4yyJMuuutGRFTnKUCGhA',
                'X20-PLY':
-                  'WsAK62TEy04ffWXQs2TDQphagL5NobAJRHOwXUJcYXQIAI0AAAACADDqx5KoAGLhWWsJmg48Hqt9wj2YxscvYbxXxPMjHUIY9JUV5DUjb4xAdxsAABdDh-rYbdurKmnd5pk6X7RXYpVcNbeUKCBwogeg8S5jD_1l_XPa4oygsQP6i3TCBkUljRgFeQdf0DXmf5Tog8yNfWd8MoFgHd1hzkskwLvZSIKZdLAza2Mp-nDjqqvHvf2HyoG2r3CH2WLlmbvai4mCz1WiFtk8U_YG3Z2RCAA0AAABAgAemEikVE2ivh7L9YM9Z-eyKZqK_EK3Afkh6GQ-GFZOMWwRDGd34C8PDjtgg6s-TYV4',
+                  'UKaFcULm2htI8wCdiSUMRUMP3YJpfWNI9abpBX7oSksIAJYAAAACAHtk8R_Liuw3OFuMk_-qwmnrjfq3GrDwBOfGkgsepx6--m_PsCgXboBAdxsAACA_rIphz8fmZsiGBJAKpHQzr6uDApQOdB6uFP43mrjafSAo3V5MQwp8FZC3DNR7XxQKLQhezlS6VE3Bc_yfehgMqQsRCsgtY8qjL2tc4XdZLA-tqgksl4nCo1XoZYgiozpp4sdqkFqGROSdB0HuG2FR_ZaqhJphfJp13uVB9TBeH0OwryBdCAA0AAABAgB2sW9yR5n7nWTTyeRVsYdFsZJu_RrAgf0_UffJx_X-Zr9gbZiYppfFLZi4r8qK8xOX',
                'AEGIS-256':
-                  'PPZPaCDDZlnFgTlgD2rOHzZf9BTmEEXRidCSH49d-NIIALUAAAADABqRb2N_ZklBBTfyhQKKElNjBaP9UdqLYrJ8YH23aGEn6BErjzPtnz8WnN-sNDOKPEB3GwAAJzv7onjozssZX3S8XfNhQbGW3HpmyQ7Zfbci9HGFAVqTfT3kltZpfiDowa8gZTLbmnicy15WJYBPSM-mdpzmmBTKQ3MPjPR_f4PNNDcAoV4LkO-AoTLDRIT0Wja26U498_-lvR9iWK5ZFc-SR2YGGd5BPmrgGRce36G9OOv3m0A8LoC9uxm6M0TqCBMkxh26D9qzZ35OUO1pcfhp-ggATAAAAQMAMgVkIQnh6kzeuR4p6P2FMDoKqy5IEVVnfKWquziUcOHnc7h3HFH1Js1dHssBF66GwjdKkCCwk4QuizFqFa0TrpyghgIg_954xw',
+                  '7i5CXnW9ziNBvSVEVWN2DRvmIeh2Jn7EI6YxV_rK6nUIAL4AAAADAJ0WO9eA95MDOdKpf0xPvDCzAEG5riAhCnVDm82VlmIFoMZc4FaUs5SuOXH3WGlfwkB3GwAAMFodb9uvH2lk5qYzDY3T8hXgnJLVufdcxFP9m1XR87UCEI9LzDV7B8BiBlMSxRcjmSDmUWx2xn7Pmpelxed8u94iGZioDw1NUXYUm47GIm79C_34heCekQqK4bpmiTV8Byyh-e8fii-471ldgsN689hxLTZ42pqJsFd8dpJ-0l7HL04jwgPqZJfTX4SuRC70NHr7aZb5otJ7cpKkZK10Mzny-XKHLQgATAAAAQMAXzqG1JAXPj7-zLmiPEwsAVgprZmVEelWsfYWNRTPUTdRaNs3gjLsGpt1aLJ1yuDakHCHvH_w3EK98BLPBFGhZ2RHtpGI3MZpoA',
             },
          },
+         // END GENERATED: v8:badPwd
       ];
 
       for (const { ver, cts } of vers) {
@@ -1417,7 +1427,7 @@ describe('Decryption known values', () => {
                expect(cdinfo.ic).toBe(1800000);
                expect(cdinfo.hint).toBeTruthy();
                expect(cdinfo.ver).toEqual(ver);
-               return [pwdGood, undefined];
+               return [pwdGood];
             });
             let decipher = await getStreamDecipher(cipherStream, keyProvider);
             await expect(decipher.decryptBlock0()).resolves.toEqual(clearData.slice(0, 20));
@@ -1425,7 +1435,7 @@ describe('Decryption known values', () => {
             // Ensure bad password fails. From v8 the stored key commitment rejects the
             // wrong cipher key before the AEAD is reached
             [cipherStream] = streamFromBytes(cipherData);
-            keyProvider = new PWDKeyProvider(userCred.slice(0), [pwdBad, undefined]);
+            keyProvider = new PWDKeyProvider(userCred.slice(0), [pwdBad]);
             decipher = await getStreamDecipher(cipherStream, keyProvider);
             await expect(decipher.decryptBlock0()).rejects.toThrow(
                ver >= cc.VERSION8 ? /key commitment/ : DOMException,
@@ -1433,7 +1443,7 @@ describe('Decryption known values', () => {
 
             // Test wrong userCred
             [cipherStream] = streamFromBytes(cipherData);
-            keyProvider = new PWDKeyProvider(userCredBad.slice(0), [pwdGood, undefined]);
+            keyProvider = new PWDKeyProvider(userCredBad.slice(0), [pwdGood]);
             decipher = await getStreamDecipher(cipherStream, keyProvider);
             await expect(decipher.getCipherDataInfo()).rejects.toThrow(/MAC/);
 
@@ -1483,7 +1493,7 @@ describe('Custom AD encryption and decryption', () => {
                expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
                expect(cdinfo.hint).toEqual(hint);
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, undefined];
+               return [pwd];
             },
             extraKeyMaterial,
          );
@@ -1525,7 +1535,7 @@ describe('Custom AD encryption and decryption', () => {
             async (cdinfo) => {
                expect(cdinfo.lp).toEqual(1);
                expect(cdinfo.lpEnd).toEqual(1);
-               return [pwd, undefined];
+               return [pwd];
             },
             extraKeyMaterial,
          );
@@ -1570,7 +1580,7 @@ describe('Custom AD encryption and decryption', () => {
             expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
             expect(cdinfo.hint).toEqual(hint);
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1607,7 +1617,7 @@ describe('Custom AD encryption and decryption', () => {
                expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
                expect(cdinfo.hint).toEqual(hint);
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, undefined];
+               return [pwd];
             },
             extraKeyMaterial,
          );
@@ -1652,7 +1662,7 @@ describe('Custom AD encryption and decryption', () => {
                expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
                expect(cdinfo.hint).toEqual(hint);
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, undefined];
+               return [pwd];
             },
             extraKeyMaterial,
          );
@@ -1688,7 +1698,7 @@ describe('Custom AD encryption and decryption', () => {
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1721,7 +1731,7 @@ describe('Custom AD encryption and decryption', () => {
             async (cdinfo) => {
                expect(cdinfo.lp).toEqual(1);
                expect(cdinfo.lpEnd).toEqual(1);
-               return [pwd, undefined];
+               return [pwd];
             },
             extraKeyMaterial,
          );
@@ -1762,7 +1772,7 @@ describe('Custom AD encryption and decryption', () => {
             async (cdinfo) => {
                expect(cdinfo.lp).toEqual(1);
                expect(cdinfo.lpEnd).toEqual(1);
-               return [pwd, undefined];
+               return [pwd];
             },
             extraKeyMaterial,
          );
@@ -1799,7 +1809,7 @@ describe('Detect changed cipher data', () => {
 
          const savedHeader = new Uint8Array(block0.parts[0]);
 
-         const makeDecKP = () => new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const makeDecKP = () => new PWDKeyProvider(userCred.slice(0), [pwd]);
 
          // set byte in MAC
          block0.parts[0][12] = block0.parts[0][12] === 123 ? 124 : 123;
@@ -1853,7 +1863,7 @@ describe('Detect changed cipher data', () => {
             new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                expect(cdinfo.lp).toEqual(1);
                expect(cdinfo.lpEnd).toEqual(1);
-               return [pwd, undefined];
+               return [pwd];
             });
 
          block0.parts[1][12] = block0.parts[1][12] === 123 ? 124 : 123;
@@ -1899,7 +1909,7 @@ describe('Detect changed cipher data', () => {
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1930,7 +1940,7 @@ describe('Detect changed cipher data', () => {
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1967,7 +1977,7 @@ describe('Detect changed cipher data', () => {
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -2005,7 +2015,7 @@ describe('Detect changed cipher data', () => {
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -2062,7 +2072,7 @@ describe('Detect block order changes', () => {
          const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -2087,7 +2097,7 @@ describe('Detect block order changes', () => {
          const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -2111,7 +2121,7 @@ describe('Detect block order changes', () => {
          const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -2140,7 +2150,7 @@ describe('Inter-block MAC chaining', () => {
       slt: Uint8Array<ArrayBuffer>,
    ): Promise<[CipherDataBlock, CipherDataBlock, CipherDataBlock]> {
       const [clearStream] = streamFromStr(clearStr);
-      const keyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+      const keyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
       keyProvider.setCipherDataInfo({
          ver: cc.CURRENT_VERSION,
          alg,
@@ -2170,7 +2180,7 @@ describe('Inter-block MAC chaining', () => {
          const cipherBytes = concatArrays(blocks.flatMap((block) => block.parts));
          const [cipherStream] = streamFromBytes(cipherBytes);
 
-         const decKeyProvider = new PWDKeyProvider(userCred, [pwd, undefined]);
+         const decKeyProvider = new PWDKeyProvider(userCred, [pwd]);
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
          const decBlock0 = await decipher.decryptBlock0();
          const decBlock1 = await decipher.decryptBlockN();
@@ -2195,7 +2205,7 @@ describe('Inter-block MAC chaining', () => {
          const spliced = concatArrays([a0, b1, a2].flatMap((block) => block.parts));
          const [cipherStream] = streamFromBytes(spliced);
 
-         const decKeyProvider = new PWDKeyProvider(userCred, [pwd, undefined]);
+         const decKeyProvider = new PWDKeyProvider(userCred, [pwd]);
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
          await expect(decipher.decryptBlock0()).resolves.not.toThrow();
          await expect(decipher.decryptBlockN()).rejects.toThrow(/Invalid MAC/);
@@ -2211,7 +2221,7 @@ describe('Key commitment', () => {
    const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
    function normalKeyProvider(): PWDKeyProvider {
-      const keyProvider = new PWDKeyProvider(userCred.slice(0), ['a good pwd', undefined]);
+      const keyProvider = new PWDKeyProvider(userCred.slice(0), ['a good pwd']);
       return keyProvider;
    }
 
@@ -2293,7 +2303,7 @@ describe('Cipher internal state validation', () => {
          const pwd = 'a not good pwd';
          const userCred = getRandom(cc.USERCRED_BYTES);
 
-         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
          const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
             startSize: readStart,
          });
@@ -2307,7 +2317,7 @@ describe('Cipher internal state validation', () => {
          expect(latest._state).toBe(CipherState.Finished);
          expect(latest.multiBlock).toBe(false);
 
-         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
 
          const [cipherStream] = streamFromCipherBlock([block0]);
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
@@ -2340,7 +2350,7 @@ describe('Cipher internal state validation', () => {
          const pwd = 'a not good pwd';
          const userCred = getRandom(cc.USERCRED_BYTES);
 
-         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
          const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
             startSize: readStart,
          });
@@ -2359,7 +2369,7 @@ describe('Cipher internal state validation', () => {
          expect(latest._state).toBe(CipherState.Finished);
          expect(latest.multiBlock).toBe(true);
 
-         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
 
          const [cipherStream] = streamFromCipherBlock([block0, blockN]);
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
@@ -2392,7 +2402,7 @@ describe('Cipher internal state validation', () => {
          const pwd = 'a not good pwd';
          const userCred = getRandom(cc.USERCRED_BYTES);
 
-         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
          const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
             startSize: readStart,
          });
@@ -2410,7 +2420,7 @@ describe('Cipher internal state validation', () => {
          expect(latest._state).toBe(CipherState.Finished);
          expect(latest.multiBlock).toBe(true);
 
-         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
 
          const [cipherStream] = streamFromCipherBlock([block0, blockN]);
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
@@ -2491,42 +2501,44 @@ describe('Decryption known values, key providers and extra key material', () => 
                'DthZtnDc1JmB_60tau_hoUe5EhdG0g_OIOaqfv94MZUHAG0AAAADAFWZbUWv4W9RWQFylghbGMJk_cSm3GSEZf_yVflyUKEuwVmaYrg-qmAxhx1jQ46w4AAAAAAAALUv8i6Cvrkp75YDdIhy3oSKdAlr6mHUekN0jTDee4Z9kdfDRbPIaPUUUWZeSLAUCpEdu1ZnTEff-uefA2-6EvPd3hgKAOvINFJFOgbQbR3j9dyF0QcATAAAAQMAgqoY4QAxgbvUt1z_8HH5mIgQ5jK6iRLjSacfitQImI64K2_fB3ALDL07K392zfiEYmoQ3STaYgk9X0fGP4_Iy-bKGQa29jXPhw',
          },
       },
+      // BEGIN GENERATED: v8:providers
       //v8 — generated by: pnpm vectors:ciphers
       {
          ver: 8,
          pwdNoExtra: {
             'AES-GCM':
-               'doyc0666_82JCCE67vP6SY7YF_JB7f0DsQrYwed8IkMIAIEAAAABAAbtiljfFnU6lhSm7oZ9sDHPZWI9RO8ii_UI6U5AdxsAABfIf2Z2MRcdjWrN7k4LxYOEvDx34Ug2uCBY9axMhJ5pFZvb-EkGnyE8AuCEHZEeR6rUnxjMRToZxXGFmSm5gL3YEoZ4OuTZUKogPowxUYgSHLtWcWyOaoV13r-D7SA-tAyPuE4ldb7tXEW-rzzIG24NPAsQ6wpu_JeB-1vlCAAoAAABAQCnB42LvHlzvoHs8Ah4OXE4MYuUMsBiPHyXQWUS5vdpv3ycU9wN',
+               'HZJ_P3bsDsBRxK-hv1JQRIsvj5-RqwR4VesU0sIc2DMIAIoAAAABAH0DAuxa-B62bvQcY-cdPJrBjix8CFDEDHSUANVAdxsAACBrQgViAECya6Fx_UpRrdcH46NfEkNUyb4BigpLnP0u8yARZ0cn1tbDNf2RuFZyu5O0olE3YcPnV0oF5-3UgW2w_UehCvZMbWNKJQNImB_jZK4_J-yQx2Bf3yti1BBYBIZ3UsRUD_digrwkp0Yw84aJBdsIPtR116mhMPY-X_6ytDejF4aNCAAoAAABAQDAd8pvS-JhTs6t45egadqD5lpREXvPOojOIdiranYlqSu6EuSc',
             'X20-PLY':
-               'RCg6ndEsaa2i8ctUOnQY-uKm0lTyXaAUCHHVk0qrMUsIAI0AAAACAJ4YpyZAsidykmFcfS6EKJzZ2nWXX1O4VCxXifj9OosbhJLVNbkx2j5AdxsAABdFAuQia2KtsLzYbFGi5qUY2rPKhFUe3CBjAnpWPgj3SJxDl24-iAJwzhoAizLE1EUFrYDhw0_rQKBQ-WDzZvG3jU03_bP6GNci199sRG9PwAFL8OfoBeSJbXS1HRrlI_aY0SrueNc5IwnFKkQskF_D19G8yKOysRWwmL1PCAA0AAABAgBw0Cn-FU2nlGC-XzqawpDrMOPX2aqkqPsR6FBgycS0gYWI6u2H2bF5fsabkJ7pVtJN',
+               'q-MNVLWvt8afUB11S-RLaKaUE6RXZhq8mPhPO8PZ1z8IAJYAAAACAGvBPOLJ6pPXJlnp_PcDlJzD3cZ0J1Z-nvE3vosi5W-uWXK2L-Fyrq9AdxsAACAWRps479n4EczM3c78UTJzkm-wXcSAZjB6gMIpoEW8sCAfbwIFqDHdqTb_0T33U-uxQpRWgrRnKX-j38XK2_VB08IobZ8BJbggqUy9yvFiswRdW5g6tJSCVLpOLc71HP4XE-5ynXLgvIZVthRznDeXtQRlth1kM8OqAHDnNtBzNGXuEFVwCAA0AAABAgAflyclOtB-DrvIkr5z5aPoBZrrApJF41FBnCff8jS77lDtxJEtJCIiuJFuO3HbJCmf',
             'AEGIS-256':
-               '-KkkYHrSgEcRssiIQ6SKpNvOyzX83lhLdqsBeA3hP0YIALUAAAADANZu4mn5d6rPfBDRwa5hEW6Az_wjDLAqa9yN0YniIqOmNmPZu-UqwG770I5DUK-nTkB3GwAAJ7Z7fvmsoCn4MQvN7qgryPJsviJQmT_SSK_9jKfwZuzpsMfOTA_AqCB4ujYni2pwHjFf4N8imfMc8TNZP0wbNG34M4qwiV1SwufIJ7Fpc9cadnnCKHV31y0L5WqgbIiBT0r-Xw2H9RHzf_fzt642rJBwF8NieTx9OQsh9_zfSbqXgunuK0hZ9GnXIOo8b4Cqa7ezI7kTurclyOVLDQgATAAAAQMAsFFGbxzgVZy9V4zyA36yhVSDCXyAUoauh79g8fNu7GB4hDQhitrcKBOvL41lW8o_acFhkRjHh-hax6UNYv_qi0aPZ7fdZ1v6Ng',
+               'cWB6xy2TbH80AhyYP15jEPOgio_mgFYa-R-hrp9wESsIAL4AAAADAJPOWQVLdRv4MJgowc4vGnKkCswIDSqIklbxFcCgMINouq-BrMi-9dYgidKwCBPxwkB3GwAAMCh1Dl-WhDvSS_Fyoi-VP1pD9wLrJphzN4RJQ-lFMhHe7njVqClluxIWO-Bp8HSgHyCjW0XtqLZLOl1owOUrTVV_0OAp9YmxD5RtA0nh26aAY2l7Fp2M4jfQLWgiEKklWwqYQdClLXVI7hzLlNh82vMwjaaOk3G2J1F6dmnTFCwjjFK_j4EfWV-a2viRvT9EIPs24oqu2q_CVXX7y2aWQB3fGGfmTggATAAAAQMAsZonMER0z6dI6Owgpm_CSYg4IfEYD-g-n9_gP0YQGeUBMudPyV3-ZVCQ0KPgPTThv3JPmP8raGJ9vH8-jO3gSsvRCTEa68WKUw',
          },
          pwdWithExtra: {
             'AES-GCM':
-               'aRdNSgrnMSiJJmx6BDHYOvrMfiDBngKQqBDmz4pbbkgIAIEAAAABAOIKk8nbaL_M9bJlFp_9Obik5LCHNWkFj61-vfVAdxsAABfbngdCdriADPwREk3ozdnfur43i5zM7yBQg5z4hDEiKh_Fll6qG7a6qN7YxUnPb2IPXAEU6uoZCj3fYzxYz-D4fURlOpmDenxZ2UUD1mLE4kVGJ3VHvjXLEwSYyiXLrtdP5boEiKAC2pUFBHWYnOgsILEc2wTW2NZYt5b9CAAoAAABAQAsXjo244SWwkiPaxiyNEpVzfoQWkxzYrzX5MotxbHujazugtJt',
+               'K5FkGUAgwZ1wVGNKSPgFknlsnEEQ6IicIutUovbsT_MIAIoAAAABAI7GoT2eNCstbT6qDE3cN-ge-IYZL7KFSlZsgBpAdxsAACBrLBKJmIK0R5VmssA7U_vmmzT8KlcOLNHkzSPeq6ks9SDH9tpCF0s90fRjmMwO_lFotPexuQgZ8sT4wsiVhWrw2EOZvwIfgivWmhkV9VZJPQLZZXgnVFYjX5bgARd9AM4E5AxIGaPo8y8kCBRQJ4O8_63Y01MAO9XlDoNIlNFb-GKqUV89CAAoAAABAQB32YF_DQSizM2kgsxgs406Q2QvIZkxZ5nqNrDn0UdZCLNxC8UZ',
             'X20-PLY':
-               'jyJhScsguHXeD9xCoS7hAryz7hDtimcJ7corHhXW0FoIAI0AAAACAL9glHKQhf_nMFdRg8ZL1PaICTBoJqCZj4UdvbgeVGFXbzmuIQetRhpAdxsAABf2vmI6WPa2KeWKtAsCzCwdhAusk93GuyDqjk7vqsrBiroL1VfpNBb00LuL9pkRvuyjFYIF3p2GqppSers8pVuHhHPRbYRxKhIkUlXVCr7lkYaK7M8QqLalDjyXFnbCNod5DydPUKkCIEnQaoopja6b3AeBQuU5f2Evy4biCAA0AAABAgAHOAx7zHr2n4M3KPpn4flLNuqDMe84pCbFlO0vPOMpwWrHDyFofiL-nuPGjW1U-0eX',
+               'KU0T1UJcBjpbSe064dS5K5GqzNpDI4Rm9iqMRnfAI68IAJYAAAACABmeKS7MY42v6wjIKF1RIPBNu-MBh6RKzQ7cSC9vjdwyZbn-KsLKlG9AdxsAACBq47I2asv1aa2QmDseODqvKwaKfDRrkCk99SgtUvt3miB0B52oVFiKe-Eb5cMhGDB3F-p7DpsLlfraIy6C5wNbqeZydvRfoWDNQ0GttubGzNSXo8ZSChcUN6U_NcHwZAmtXv4Q6gg9MeW2LgVUW1DxyN12-odUOQFKuvYZWY1w7pFSmhx1CAA0AAABAgDzpT-k0ba83sOa02S2XEuW0rbSpn39ZnqyDqwaU7oVe1OW_phS4R0aNIVy08Ai-02s',
             'AEGIS-256':
-               'B5qqkzVF89xcC7hLpGIqV3N_6xJgkwYUvMmUisiULDMIALUAAAADABiqIFQGFZO9_Cinc9tUXIK_zI8C9XGjFvHYPtmYmVfPUxL4cBhnKRkXw9-mMSf4XUB3GwAAJ-rj78AnXgKiOy3huyCq2iaSTHXq1AovQ_jwrd71NktfN6-m4HX9FiBv33RA3lSrrx6Ed6UtjLUN980s7T-n4RJYa6aJ02tgl06NHoBrVxGi2_MulKFNwmJ79uVww1XwOJPLRCwFOUXwxy7SW4qJWPiXyAlDen2-LKE_9T8PCcqKRrtZ2uNOOYAWMcm7_h9RKi3NMvKOoDs4iUW1bAgATAAAAQMAJ5UPblkK1nNPZWwl9jMI9Qm6v-f2236kyP9wBJW9QC66Hb6ayFUW6FQlKrX8eGkfRnfS-QTvWhU8yL5ryneanakrFatiPXaVRw',
+               '9GPQCxHeK_ZIPn75DZsmouRQfPoiTEKUNY2harv248kIAL4AAAADAHfW8TH58flJtzjABFw1Vp2iBMiP7rjrq0Mu1_6d4QNHQqCwaYJKt_BUsp3V-AYxyUB3GwAAMDVdy69J9bWH_uZeSEwBhHfkBGa-a2ZYRrhrwjyyDkgiINzXDtvZtgLLOZSqEnGNiCCQLCzbEyqnVzvFde6i3iiBpR0KhfbiaX1C8eWgxWWrAd70oqfF0SEGnUsn420eXV15HtOy2RifKvOdhVT-5KAbfxu9BUNfXbu4DrcaHB-qBim5UUEaS1zKOs-6Nd2zji_Jne-STRdQZwJMtVYO7GoPbP8J2ggATAAAAQMAcVlRUcVJTqVlfRyr79f-tnXhk2YFsvmF-nmb47LsOQ2p_Q7d2a1AyRSdoCSCbACh5Wawv0SvS1IkN2ncncvG7gVI6i3B7vCvVw',
          },
          masterNoExtra: {
             'AES-GCM':
-               'XVvxUZv-NECGRd5fLJrE8PzXdmCC99mxAZI9x9xSQ8QIAEoAAAABAAPagG9Xcewf7XoSwG_dEKDNAY2eJVkmqs4625oAAAAAAAAAZzuVRDSqva2GIXioD10_SU8IzdXSWEfFHSZPWG2Jng6VK4X82vqA19nnrrN_ugIjRrYkmhvmdC0k4fCruc0YsE3G1NYIACgAAAEBACEprSWmqhf58ek8Vy1Oy6ut0QK7f1rRhczH50f4r-RMpJBVg4Y',
+               'jkDy7TsVWpRFyUjxuOahdO6RscIsIw0tgUV6qE1ARXcIAEoAAAABAPOMuXEtacYF2OKBh6Dp5afSXS5kvd2WaqTmA3oAAAAAAAAAirXNyLUSC_Y697CrnvK1043bPkYvMDTU-DpoNzR3RdPRFsqQOk5pqoKJuyRO9YY3vyQtYaLDFpOHpnQ97Xxm8Dv6uNEIACgAAAEBAOTMWFnXJaSLDxtaF-4NuI_iiJlGGX8ifLVzXsWaXEGlm1tGteg',
             'X20-PLY':
-               'GDWstZL4_0AiDPJ9vPeeffgLDaRbI2R9k7JfStOLTWQIAFYAAAACAMsasQ0w4mvyVVhUcVKx6l4QGmO4tcbhzBqrCKENtwB3j7c_KjmFGAIAAAAAAAAAE_MAghdWEMqtfQifgnr6TiceN3eSkuFWerq8SheVn68tQKFrl8mXXGsUz9ZKLcNV5N41v3tzTBQecubEiHU3dO4Q9z4IADQAAAECAJgvAzLcJw7kFGNY0exGGsO_1OAyNTMLtbYEmxTjar_oy6dLHBt2l14UVijsDOlYO_Y',
+               'LRvyzBTDhhRWO9nC_CGJ96breOqAQ5d8fTqalfR3yg8IAFYAAAACAH-k_7CufTY5gu7KVImXOaJjFifVL7IFz9HS6dNMwgYIGhhRPsDQeSQAAAAAAAAANLNW7hgAiFxY1zRXGfXf2aScURi-NP8rRawQ7-fZ5yf2Sto_AaPmAY9RkAOmoxb8fL1pV4sGQABiYJWPGE28MfiRup0IADQAAAECAL0hlciBuNfPiimHWviDBVBiC-GmR3c3qwbwbEyM15kOBLwKQcnHkbkJFe6OIeC4PlU',
             'AEGIS-256':
-               '5sqpZfAvs8ZXCYmjc7CpgLGxDQB09rpiR2CkHG9zqLMIAG4AAAADAJg-vtneJCdhbD2qTa-SmKDdLGpCQ2XpvhLb83zALRrGP7y6N0U6USS5HTGECucHGwAAAAAAAAAY7_zLuOfg2ArcTk3v18QJLSgTQTaES48XHWVlhOAfCCrqneQNsj9yDa2snb0IcXzE-kq8AGNtoCsORvZSQ8oFabwA4Tq6EiZyA1b2hd-gy3rM_mgIAEwAAAEDAE4ElB9jwwcT_F65m2nB3OJyE-WbDEHQg7LqR5GB5GWI7Fh80yJx7-S6I1HSX3avc8sgIbVlNWpp2ZRO1RoFAEa0slB0kYcUsPs',
+               'Fs4z3XgmePN3is73RLrRNR4DZ80BR8833VBleviM1EwIAG4AAAADAE3wQBU4tRtGUZuvp7lrtlBaQzW-Xlnbd7Ctt_tgD0V-4EJOiqoK7GSaD4AJ5-0UIwAAAAAAAAArMtKMWpUl34jZmcA3te7qxwABXKQXZ7tkv-IwdqnQRTtr88HjYRZnLPA_CJtx2h1JjtCDS2YHYnqGvkOJR7UriTpe14v7Amlg4y_KR_lLTa8k1I4IAEwAAAEDAPo-zhif22NzKw6k7CBwVNQErs1w2J4EFCWtEnhOamxmTn0zPuueVadeyGzHl0yExpgCMVh_YA4m-EM_2sbwemWNR22HipEehPU',
          },
          masterWithExtra: {
             'AES-GCM':
-               '-pEiZCRaVu_IhDn-Yuj4JxA2VNtw-Y3aTpl9unIV06oIAEoAAAABANBaGUzAHzeR72X28ctWz95RJzoN3tEAje3ckHgAAAAAAAAAEt4B3nogmlzx0RZKhFJdUhP5ibshBJ0cm9CKKIwjeY2PUI3-XY6FzS7DqO-e4vKtsRzxwwCAXwn8J6VwWzAKNYgg2V0IACgAAAEBALxhiqSwUWxP0Rq7NOQy7rnHcv9KJlrmyDwSS6e57U_PzzgAGWM',
+               'UI6OKerIbg66qerElkg1H382h98haXy-HViDjrAVDEsIAEoAAAABAK_VWuF9ucjq_KsOABZiCslnls4Qw-ZZk8JVCXcAAAAAAAAAU0YleXqROcr1eZ0xEBsGBUeYWWceJPA4_1O_GKfg8j6U0G-zc_pi14zY5kBVqtyfokVWxMqSI3Ir3SDqiv6FA9g0VhcIACgAAAEBAOftn-7GLV1FrzIM5k7uiTKurJJnqiDOZSWKu9WRhrMVWhig97Q',
             'X20-PLY':
-               'yYK6eClJyahmWmthE44-ejqW_b1CvT_BNq6ftkC0pHkIAFYAAAACAOZiWD8KnNlFY22yYtodpm2yH7Mh9lyhysT1FDPwmHByqBbeElwcL84AAAAAAAAAbHGwH9TU8xIjgnD-xcB11aZpDBQkc8WQhzplFKKNk5LF1Lu6Y4GKEnwk0Ogzq3yUXC9MyYGPi_oGKFaXEVqA0MsyJNYIADQAAAECAPa9PCB0vGNJjzrxIR7g716lHUvlJcZzhasPlZnjKyj_PK9gk-A4W-IDw2ZbVrg6HNQ',
+               'UkeNIB80ddnjvZFA6hEGHhz3o3k1UzpYfRIkkU0rCkwIAFYAAAACAPSY0CR_Mamu8h-08eK56F1EOSXQOEE4pis0BDxkF2x7I1xvcoEYY4kAAAAAAAAAdZcAqPh6SPIPXowiCyNwdtwmwuIL5gHvy2isJkhKxD4Ku7CPY5tiZwWUDFuvVPuxCLDHYh_LuhkbuDrPHvu-10jTWmIIADQAAAECAOzIrZjfvJMuBp0SWEPioHxxV7FzRRz99yEZ2Z_hjxFpOL4XbRDd_mOyXXjoxxLCONw',
             'AEGIS-256':
-               'BIF7h31BmBPDy6PeTBplJ6Ifc5_GeiwEDHxYOOzfqvMIAG4AAAADABRaeRL9MSwIEWNjFEIly-G9TXbCGVhpNlxHUnooXcfBrQIT6iMexFlEpn4A00MhrQAAAAAAAAAGCZOnZHMR_2Jcts8ER8AKfBvzz82Z7Bh3-pl1jkhBSLJSDkU_SkaW9ctEFBWmZOoabarVkYufXgR7Y8LpGlcwZzvPV0aa7TlqvTpl-l-jlCz4wC8IAEwAAAEDALpc63EdLl2Q4vA2wetShhe1W9u5pCsaTVK1Amdx5tO3T32I_aYUQZ5xL4m8ecFL93WRWEuoSokObWKvoSgU99GZmy68QTejFlo',
+               'QnXD3ricAoFA5ifRa8rnTovATadnfoj0ra577dxOCwsIAG4AAAADALFTEXRtSheVHJT3UjIpXJ8W9NPmU_6Y4P82O_PQ_x3Yspj0JM2J1VC7cY_3AoDQZAAAAAAAAAB2RjEZ9f1w-ns90gFPLkr4Y_hzXS0x7f2Bah95ivX9SIM-IRrT7rFjwXZHnwrjmXLoFZqbyzxDGa_IHkkBD3d5W5Tu85kh4DZodt6H7gqT5XRwHOgIAEwAAAEDAPmX3hUNmTuty-b065TF-4BdbiudUzU83l2x-3ATnCbK88khjDHfNao7mJwsSXuQsxU_IUhiurBlaT46zlLom1I_JXHVvT2wxgs',
          },
       },
+      // END GENERATED: v8:providers
    ];
 
    it('PWDKeyProvider without extra key material, multi version', async () => {
@@ -2540,7 +2552,7 @@ describe('Decryption known values, key providers and extra key material', () => 
                expect(cdinfo.ic).toBe(1800000);
                expect(cdinfo.hint).toEqual(hint);
                expect(cdinfo.ver).toEqual(ver);
-               return [pwd, undefined];
+               return [pwd];
             });
             let decipher = await getStreamDecipher(cipherStream, keyProvider);
             await expect(decipher.decryptBlock0()).resolves.toEqual(clearData.subarray(0, 20));
@@ -2549,7 +2561,7 @@ describe('Decryption known values, key providers and extra key material', () => 
             // Extra key material reaches the signing key, so offering some where the
             // ciphertext was built without any fails at the MAC
             [cipherStream] = streamFromBytes(cipherData);
-            keyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined], otherExtra.slice(0));
+            keyProvider = new PWDKeyProvider(userCred.slice(0), [pwd], otherExtra.slice(0));
             decipher = await getStreamDecipher(cipherStream, keyProvider);
             await expect(decipher.getCipherDataInfo()).rejects.toThrow(/MAC/);
          }
@@ -2569,7 +2581,7 @@ describe('Decryption known values, key providers and extra key material', () => 
                   expect(cdinfo.ic).toBe(1800000);
                   expect(cdinfo.hint).toEqual(hint);
                   expect(cdinfo.ver).toEqual(ver);
-                  return [pwd, undefined];
+                  return [pwd];
                },
                extra.slice(0),
             );
@@ -2578,12 +2590,12 @@ describe('Decryption known values, key providers and extra key material', () => 
             await expect(decipher.decryptBlockN()).resolves.toEqual(clearData.subarray(20));
 
             [cipherStream] = streamFromBytes(cipherData);
-            keyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined], otherExtra.slice(0));
+            keyProvider = new PWDKeyProvider(userCred.slice(0), [pwd], otherExtra.slice(0));
             decipher = await getStreamDecipher(cipherStream, keyProvider);
             await expect(decipher.getCipherDataInfo()).rejects.toThrow(/MAC/);
 
             [cipherStream] = streamFromBytes(cipherData);
-            keyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+            keyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
             decipher = await getStreamDecipher(cipherStream, keyProvider);
             await expect(decipher.getCipherDataInfo()).rejects.toThrow(/MAC/);
          }
