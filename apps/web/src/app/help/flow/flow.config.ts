@@ -55,8 +55,8 @@ export const FLOW_OVERVIEWS: Record<string, FlowOverview> = {
 // of Lucidchart placeholder fill #f4d9NN. The same key is also the SVG
 // data-target attribute value and the URL path segment. 'ff' is reserved
 export const FLOW_SUBSYSTEMS: Record<string, FlowItem> = {
-   '01': { label: 'Sign Block0', svg: '/assets/flow/sign_cd0.svg' },
-   '02': { label: 'Sign BlockN', svg: '/assets/flow/sign_cdN.svg' },
+   '01': { label: 'Sign Block0', svg: '/assets/flow/sign_cd0.svg', search: 'header' },
+   '02': { label: 'Sign BlockN', svg: '/assets/flow/sign_cdN.svg', search: 'header' },
    '03': {
       label: 'Encrypt Block0',
       svg: '/assets/flow/encrypt_m0.svg',
@@ -86,8 +86,8 @@ export const FLOW_SUBSYSTEMS: Record<string, FlowItem> = {
       svg: '/assets/flow/obtain_dec_input.svg',
       search: 'cd cdN cd0 user credential passkey',
    },
-   '10': { label: 'Verify Block0', svg: '/assets/flow/verify_cd0.svg' },
-   '11': { label: 'Verify BlockN', svg: '/assets/flow/verify_cdN.svg' },
+   '10': { label: 'Verify Block0', svg: '/assets/flow/verify_cd0.svg', search: 'header' },
+   '11': { label: 'Verify BlockN', svg: '/assets/flow/verify_cdN.svg', search: 'header' },
    '12': { label: 'Unpack Block0 AD', svg: '/assets/flow/unpack_ad0.svg', search: 'additional data' },
    '13': { label: 'Derive Signing Key', svg: '/assets/flow/derive_dec_kS.svg' },
    '14': { label: 'Derive Hint Nonce', svg: '/assets/flow/derive_dec_nIVH.svg' },
