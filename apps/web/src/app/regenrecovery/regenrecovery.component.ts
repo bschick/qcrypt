@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnDestroy, type OnInit } from '@angular/core';
+import { Component, inject, type OnDestroy, type OnInit } from '@angular/core';
 import { AuthEvent, AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -38,12 +38,9 @@ import { Subscription } from 'rxjs';
 export class RegenrecoveryComponent implements OnInit, OnDestroy {
    public showProgress = false;
    public error = '';
+   public readonly authSvc = inject(AuthenticatorService);
+   private readonly router = inject(Router);
    private _authSub!: Subscription;
-
-   constructor(
-      public authSvc: AuthenticatorService,
-      private router: Router,
-   ) {}
 
    ngOnInit() {
       this._authSub = this.authSvc.on([AuthEvent.Logout], () => {
