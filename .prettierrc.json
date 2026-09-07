@@ -1,6 +1,6 @@
 {
   "printWidth": 120,
-  "tabWidth": 3,
+  "tabWidth": 2,
   "htmlWhitespaceSensitivity": "ignore",
   "bracketSameLine": true,
   "singleAttributePerLine": false,

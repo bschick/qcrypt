@@ -101,7 +101,7 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
 ### Code Quality (Biome)
 
-Formatting and linting use [Biome](https://biomejs.dev) (config: `biome.json`). Biome covers **TS/JS/JSON only** — it does **not** format SCSS or Angular HTML templates (nothing in this repo does), and the e2e specs keep their own ESLint check (`lint:e2e`).
+Formatting and linting use [Biome](https://biomejs.dev) (config: `biome.json`). Biome covers **TS/JS/JSON only** — it does **not** format SCSS (nothing in this repo does), and the e2e specs keep their own ESLint check (`lint:e2e`). Angular HTML templates are formatted by Prettier (`.prettierrc.json`, 2-space indent, `.prettierignore` limits it to `*.html`) via the editor's Prettier extension only; Prettier is not a package dependency and `pnpm check` does not cover templates.
 
 | What | pnpm script | Notes |
 |------|------------|-------|
@@ -120,7 +120,7 @@ pnpm check:fix libs/crypto/src/lib/keys.ts   # auto-fix one file
 
 `pnpm check` (no path) gates `build:web`, `build:web:prod`, `build:server`, and `build:server:prod` — it runs first, so a format or lint error blocks the build. `bdeploy` builds through those same scripts, so a deploy is gated too.
 
-**Style:** 3-space indent, 120 columns, single quotes, semicolons, trailing commas. JSON stays 2-space (nx/ng-managed). Excluded: `**/*.html`, `**/*.svg`, `vendor/`, `apps/server/assets/`, generated crux files.
+**Style:** 3-space indent, 120 columns, single quotes, semicolons, trailing commas. JSON stays 2-space (nx/ng-managed), and HTML templates are 2-space (Prettier, see above). Excluded: `**/*.html`, `**/*.svg`, `vendor/`, `apps/server/assets/`, generated crux files.
 
 **Rules deliberately disabled** (they fight this codebase's patterns — do not re-enable without cause):
 
