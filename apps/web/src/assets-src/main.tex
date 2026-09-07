@@ -32,7 +32,7 @@
 
 \begin{tabular}{@{}p{5mm} l}
 $A$ & \textrm{ - Alice} \\
-$B$ & \textrm{ - Browser with Session storage, IndexedDB, SubtleCrypto API, and} \\
+$B$ & \textrm{ - Browser with Session storage, IndexedDB, WebCrypto API, and} \\
 & \phantom{\textrm{ - }}\textrm{libsodium and libcrux libraries} \\
 $M$ & \textrm{ - Webauthn authenticator (passkey manager)} \\
 $S$ & \textrm{ - Quick Crypt server} \\
@@ -53,21 +53,21 @@ $C$ & \textrm{ - Constant-time comparator from libsodium} \\
 & \phantom{\textrm{ - }}$C$\textrm{(value1, value2)} \\
 $D_H$ & \textrm{ - BLAKE2b-512 KDF from libsodium} \\
 & \phantom{\textrm{ - }}$D_H$\textrm{(subkey number, purpose, key)} \\
-$D_P$ & \textrm{ - PBKDF2-HMAC-SHA512 key derivation FIPS-180-4 from SubtleCrypto} \\
+$D_P$ & \textrm{ - PBKDF2-HMAC-SHA512 key derivation FIPS-180-4 from WebCrypto} \\
 & \phantom{\textrm{ - }}$D_P$\textrm{(material, salt, iterations)} \\
-$D_S$ & \textrm{ - HMAC-SHA-512 from SubtleCrypto} \\
+$D_S$ & \textrm{ - HMAC-SHA-512 from WebCrypto} \\
 & \phantom{\textrm{ - }}$D_S$\textrm{(data, key)} \\
 $E_a$ & \textrm{ - Symmetric cipher using AEAD algorithm }$a$ \\
 & \phantom{\textrm{ - }}$E_a$\textrm{(message, IV, additional data, key)} \\
 & \phantom{\textrm{ - }}$a$\textrm{ is one of:}\\
-& \hspace{23pt}\textrm{1. AES-256 in Galois/Counter mode from SubtleCrypto} \\
+& \hspace{23pt}\textrm{1. AES-256 in Galois/Counter mode from WebCrypto} \\
 & \hspace{23pt}\textrm{2. XChaCha20 with Poly1305 MAC from libsodium} \\
 & \hspace{23pt}\textrm{3. AEGIS 256 from libsodium} \\
-$G$ & \textrm{ - HMAC-SHA-512 key generator from SubtleCrypto}\\
+$G$ & \textrm{ - HMAC-SHA-512 key generator from WebCrypto}\\
 & \phantom{\textrm{ - }}$G$\textrm{()} \\
 $H$ & \textrm{ - BLAKE2b keyed hash (MAC) generator from libsodium} \\
 & \phantom{\textrm{ - }}$H$\textrm{(data ..., key), each data argument hashed in order} \\
-$H_2$ & \textrm{ - SHA-256 from SubtleCrypto} \\
+$H_2$ & \textrm{ - SHA-256 from WebCrypto} \\
 & \phantom{\textrm{ - }}$H_2$\textrm{(data)} \\
 $PAD$ & \textrm{ - Appends 0 to 15 }\texttt{0xFF}\textrm{ bytes to reach a multiple of 16, max 223} \\
 & \phantom{\textrm{ - }}$PAD$\textrm{(data)} \\
