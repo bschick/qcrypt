@@ -1,16 +1,23 @@
 # CHANGELOG.md
 
-## 8.0.0 (TBD)
+## 8.0.0 (2026-09-07)
+
+#### Changes
+
+- fixed input focus problem on credentials panel
+- improved test coverage for master key provider, proofs, and nonce uniqueness
 
 #### Security
 
 - [protocol version 8 released](https://quickcrypt.org/help/protocol8)
-  - cipher key hash stored in associated data to provide full key commitment for all cipher modes
-  - length prefixes added to key derivation inputs to make the encoding unambiguous
-  - improved domain isolation by adding context-specific input to block key derivations
-  - password hints padded to a 16 byte modulus before encryption to obscure hint length
+  - cipher key hash added to associated data to achieve full key commitment across all cipher modes
+  - length prefixes added to key derivation inputs to enforce unambiguous encoding
+  - improved domain isolation by adding context-specific input to block key derivation
+  - password hints padded to a 16-byte modulus before encryption to obscure hint length
+  - domain separation of different recovery proof signatures
 - adversarial key commitment test added to solve GF(2^128) collision [thanks to Claude Code (@claude)]
-- udpated packages
+- added detection and error reporting for stripped encryption loops
+- updated packages
 
 ## 7.5.1 (2026-09-01)
 
