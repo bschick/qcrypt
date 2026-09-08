@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
-import { execSync, spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
+import { execSync, spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -889,6 +889,43 @@ describe('CLI App', () => {
          } finally {
             fs.chmodSync(lockedDir, 0o755);
             fs.rmSync(lockedDir, { recursive: true, force: true });
+         }
+      });
+
+      it.skipIf(skipOnWindows)('removes the output when interrupted by a signal', async () => {
+         const pipePath = path.resolve(tmpDir, 'test-outfile-guard-pipe');
+         fs.writeFileSync(outPath, 'do not destroy me', 'utf-8');
+         execSync(`mkfifo '${pipePath}'`);
+         const before = fs.readdirSync(tmpDir);
+         const addedFiles = () => fs.readdirSync(tmpDir).filter((name) => !before.includes(name));
+         // Holding a partial cipher in the pipe stalls the decrypt with its output already open
+         const feeder = spawn('bash', ['-c', `{ head -c 100 '${cipherPath}'; sleep 30; } > '${pipePath}'`]);
+         const decrypting = spawn('node', [
+            cliPath,
+            'dec',
+            '--cred',
+            userCred,
+            '--silent',
+            '--infile',
+            pipePath,
+            '--outfile',
+            outPath,
+            '--force',
+            '--pwds',
+            'pass',
+         ]);
+
+         try {
+            await vi.waitFor(() => expect(addedFiles().length).toBe(1), { timeout: 10000 });
+            decrypting.kill('SIGINT');
+            await new Promise((resolve) => decrypting.once('exit', resolve));
+
+            expect(addedFiles()).toEqual([]);
+            expect(fs.readFileSync(outPath, 'utf-8')).toBe('do not destroy me');
+         } finally {
+            feeder.kill();
+            decrypting.kill();
+            fs.rmSync(pipePath, { force: true });
          }
       });
 

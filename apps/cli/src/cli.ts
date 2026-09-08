@@ -634,6 +634,106 @@ function openTTY(kind: 'stdin' | 'stdout'): Promise<(fs.ReadStream & fs.WriteStr
    });
 }
 
+type OutFile = {
+   stream: fs.WriteStream;
+   finish: (failed: boolean) => Promise<void>;
+};
+
+const EXIT_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
+
+function errDetail(err: unknown): string {
+   const { errno, code, message } = err as NodeJS.ErrnoException;
+   const reason = errno === undefined ? undefined : getSystemErrorMap().get(errno)?.[1];
+   return reason ?? code ?? message;
+}
+
+// A forced overwrite is written beside the destination and renamed over it, so decrypted data
+// never inherits the destination's permissions, follows a symlink, or replaces it half written.
+// Nothing this run creates should outlive a failure, including one delivered as a signal.
+function openOutFile(outfile: string, force: boolean): OutFile {
+   if (fs.existsSync(outfile)) {
+      if (!force) {
+         throw new Error(`${outfile} already exists, use --force to overwrite`);
+      }
+      try {
+         // Otherwise the rename below would replace even a read-only file
+         fs.accessSync(outfile, fs.constants.W_OK);
+      } catch {
+         throw new Error(`could not write ${outfile}: permission denied`);
+      }
+   }
+
+   let temp: string | undefined;
+   // Masks the random part of a temp name, which the user never asked to write
+   let showPath = outfile;
+   if (force) {
+      const prefix = path.join(path.dirname(outfile), `.${path.basename(outfile)}.`);
+      temp = `${prefix}${randomBytes(4).toString('hex')}`;
+      showPath = `${prefix}*`;
+   }
+
+   let created = false;
+   const remove = (): void => {
+      if (created) {
+         created = false;
+         try {
+            fs.rmSync(temp ?? outfile, { force: true });
+         } catch (err) {
+            console.error(`\ncould not remove ${showPath}: ${errDetail(err)}`);
+         }
+      }
+   };
+
+   const onSignal = (signal: NodeJS.Signals): void => {
+      remove();
+      process.removeListener(signal, onSignal);
+      process.kill(process.pid, signal);
+   };
+   // Registered before the file exists so nothing that can throw runs while it is unguarded
+   for (const signal of EXIT_SIGNALS) {
+      process.on(signal, onSignal);
+   }
+
+   // wx rather than w so a file appearing after the checks above, including a timed
+   // symlink, is refused
+   const stream = fs.createWriteStream(temp ?? outfile, { mode: 0o600, flags: 'wx' });
+   stream.once('open', () => {
+      created = true;
+   });
+   // Attached now because a failure during the command closes the stream before it is ended
+   const closed = new Promise<void>((resolve) => stream.once('close', () => resolve()));
+   stream.on('error', (err) => {
+      console.error(`\ncould not write ${showPath}: ${errDetail(err)}`);
+      process.exitCode = 1;
+   });
+
+   const finish = async (failed: boolean): Promise<void> => {
+      if (!stream.destroyed) {
+         stream.end();
+      }
+      await closed;
+      for (const signal of EXIT_SIGNALS) {
+         process.removeListener(signal, onSignal);
+      }
+
+      if (failed) {
+         remove();
+      } else if (temp) {
+         try {
+            fs.renameSync(temp, outfile);
+            created = false;
+         } catch (err) {
+            remove();
+            throw err;
+         }
+      } else {
+         created = false;
+      }
+   };
+
+   return { stream, finish };
+}
+
 async function main() {
    await cryptoReady();
 
@@ -664,46 +764,15 @@ async function main() {
       console.warn('Warning: no TTY available. All values must be passed via command-line options.');
    }
 
-   let outfileStream: fs.WriteStream | undefined;
-   let outfileTemp: string | undefined;
-   let outfileTempShown: string | undefined;
-   const errDetail = (err: unknown): string => {
-      const { errno, code, message } = err as NodeJS.ErrnoException;
-      const reason = errno === undefined ? undefined : getSystemErrorMap().get(errno)?.[1];
-      return reason ?? code ?? message;
-   };
+   let outFile: OutFile | undefined;
    if (args.outfile) {
-      if (fs.existsSync(args.outfile)) {
-         if (!args.force) {
-            console.error(`\n${args.outfile} already exists, use --force to overwrite`);
-            process.exitCode = 1;
-            return;
-         }
-         try {
-            // Otherwise the rename would replace even a read-only file
-            fs.accessSync(args.outfile, fs.constants.W_OK);
-         } catch {
-            console.error(`\ncould not write ${args.outfile}: permission denied`);
-            process.exitCode = 1;
-            return;
-         }
-      }
-      // Write to a temp then rename for clean permissions, no symlink follows, and "atomic" updates
-      if (args.force) {
-         const tempPrefix = path.join(path.dirname(args.outfile), `.${path.basename(args.outfile)}.`);
-         outfileTemp = `${tempPrefix}${randomBytes(4).toString('hex')}`;
-         outfileTempShown = `${tempPrefix}*`;
-      }
-      // wx rather than w so a file appearing after the check above, including a timed
-      // symlink, is refused
-      outfileStream = fs.createWriteStream(outfileTemp ?? args.outfile, {
-         mode: 0o600,
-         flags: 'wx',
-      });
-      outfileStream.on('error', (err) => {
-         console.error(`\ncould not write ${outfileTempShown ?? args.outfile}: ${errDetail(err)}`);
+      try {
+         outFile = openOutFile(args.outfile, args.force);
+      } catch (err) {
+         console.error(`\n${(err as Error).message}`);
          process.exitCode = 1;
-      });
+         return;
+      }
    }
 
    const b64urlIn = args.b64url === 'in' || args.b64url === 'both';
@@ -714,8 +783,8 @@ async function main() {
       ttyOut: reopenedOut ?? process.stdout,
       pipedIn,
       binaryIn,
-      pipedOut: outfileStream ?? process.stdout,
-      binaryOut: !!outfileStream || !process.stdout.isTTY,
+      pipedOut: outFile?.stream ?? process.stdout,
+      binaryOut: !!outFile || !process.stdout.isTTY,
       b64urlIn,
       b64urlOut,
    };
@@ -728,21 +797,12 @@ async function main() {
       await decrypt(args, io);
    }
 
-   if (outfileStream) {
-      const closed = new Promise<void>((resolve) => outfileStream.once('close', () => resolve()));
-      outfileStream.end();
-      await closed;
-
-      if (process.exitCode === 1) {
-         fs.rmSync(outfileTemp ?? args.outfile, { force: true });
-      } else if (outfileTemp) {
-         try {
-            fs.renameSync(outfileTemp, args.outfile);
-         } catch (err) {
-            console.error(`\ncould not write ${args.outfile}: ${errDetail(err)}`);
-            process.exitCode = 1;
-            fs.rmSync(outfileTemp, { force: true });
-         }
+   if (outFile) {
+      try {
+         await outFile.finish(process.exitCode === 1);
+      } catch (err) {
+         console.error(`\ncould not write ${args.outfile}: ${errDetail(err)}`);
+         process.exitCode = 1;
       }
    }
    reopenedIn?.destroy();
