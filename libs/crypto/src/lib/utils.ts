@@ -171,7 +171,8 @@ export function expired(storage: Storage, key: string): boolean {
    if (!value) {
       return true;
    }
-   return Date.now() > Date.parse(value);
+   const expiry = Date.parse(value);
+   return !Number.isFinite(expiry) || Date.now() > expiry;
 }
 
 export class ProcessCancelled extends Error {

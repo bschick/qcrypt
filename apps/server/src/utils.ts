@@ -48,11 +48,15 @@ const filter = new FilterXSS({
 
 const sanitizeXSS = filter.process.bind(filter);
 
+// Codepoints that direct processing or rendering rather than producing a visible glyph
+const nonGlyphChars = /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}\p{Noncharacter_Code_Point}]/gu;
+
 export const sanitizeString = (input: string): string => {
    if (!input || typeof input !== 'string') {
       throw new ParamError('must be string value');
    }
-   const sanitized = sanitizeXSS(input);
+   // Strip categories that steer processing or rendering without contributing a glyph
+   const sanitized = sanitizeXSS(input).normalize('NFC').replace(nonGlyphChars, '');
    if (!sanitized) {
       throw new ParamError('empty string value');
    }

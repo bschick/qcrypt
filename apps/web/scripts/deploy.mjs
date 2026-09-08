@@ -483,6 +483,17 @@ function printKeyList(keys, heading, limit) {
 // ---------------------------------------------------------------------------
 
 async function runDeploy(argv) {
+   // bdeploy reaches here without the parse-time --build-dir check, so a build
+   // that wrote somewhere else would otherwise surface as a raw ENOENT below.
+   try {
+      if (!statSync(argv.buildDir).isDirectory()) {
+         throw new Error('not a directory');
+      }
+   } catch {
+      console.error(`Build directory not found: ${argv.buildDir}. Did you build first (pnpm build:web[:prod])?`);
+      process.exit(1);
+   }
+
    const scope = getScope(argv);
    // 1. Enumerate the local build, filtered to the active scope.
    const files = collectLocalFiles(argv.buildDir, scope.recursive).filter((f) => scope.inScope(f.relKey));
@@ -1143,7 +1154,7 @@ const COMMANDS = [
    'prune',
 ];
 
-const deployBuilder = (y) =>
+const deployOpts = (y) =>
    addAaguidsOpt(addGlobalOpts(y))
       .positional('bucket', { type: 'string', describe: 'Target S3 bucket' })
       .option('build-dir', { type: 'string', default: 'dist/web/browser', describe: 'Local directory to upload' })
@@ -1177,15 +1188,22 @@ const deployBuilder = (y) =>
          if (!Number.isFinite(argv.expirationDays) || argv.expirationDays < 0) {
             throw new Error('--expiration-days must be a non-negative integer');
          }
-         try {
-            if (!statSync(argv.buildDir).isDirectory()) {
-               throw new Error('not a directory');
-            }
-         } catch {
-            throw new Error(`--build-dir does not exist or is not a directory: ${argv.buildDir}`);
-         }
          return true;
       });
+
+// Only deploy consumes a build it did not produce. bdeploy writes build-dir itself, so requiring
+// the directory up front would reject every build into a path that does not exist yet.
+const deployBuilder = (y) =>
+   deployOpts(y).check((argv) => {
+      try {
+         if (!statSync(argv.buildDir).isDirectory()) {
+            throw new Error('not a directory');
+         }
+      } catch {
+         throw new Error(`--build-dir does not exist or is not a directory: ${argv.buildDir}`);
+      }
+      return true;
+   });
 
 // Commands that mutate prod and so require the confirmation gate. The bare
 // `$0 <bucket>` invocation runs bdeploy, so map an empty command to it.
@@ -1211,7 +1229,7 @@ await yargs(hideBin(process.argv))
    .command(
       '$0 <bucket>',
       'Build (production with --prod, else test) then deploy the SPA to S3 with orphan-based retention.',
-      deployBuilder,
+      deployOpts,
       runBdeploy,
    )
    .command(
@@ -1220,7 +1238,7 @@ await yargs(hideBin(process.argv))
       deployBuilder,
       runDeploy,
    )
-   .command('bdeploy <bucket>', 'Build either production (--prod) or test, then deploy.', deployBuilder, runBdeploy)
+   .command('bdeploy <bucket>', 'Build either production (--prod) or test, then deploy.', deployOpts, runBdeploy)
    .command(
       'rollback <bucket>',
       'Break-glass: delete the current S3 version of index.html so the previous version becomes current. Requires bucket versioning.',

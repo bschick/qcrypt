@@ -574,13 +574,51 @@ const args = yargs(hideBin(process.argv))
    // biome-ignore lint/suspicious/noExplicitAny: yargs argv shape is built dynamically from the option chain
    .parseSync() as any;
 
+// yargs repeats each option under its long name, alias, and camelCase form, so debug output names
+// what is safe to print rather than trying to name every spelling of every value that must not be
+const DEBUG_SHOW_KEYS = new Set([
+   '_',
+   '$0',
+   'algs',
+   'a',
+   'iters',
+   'i',
+   'loops',
+   'l',
+   'b64url',
+   'b',
+   'force',
+   'silent',
+   's',
+   'debug',
+   'd',
+   'nocolor',
+   'credfile',
+   'infile',
+   'f',
+   'outfile',
+   'o',
+   'read-start',
+   'readStart',
+   'read-max',
+   'readMax',
+]);
+
+function maskForDebug(key: string, value: unknown): unknown {
+   if (DEBUG_SHOW_KEYS.has(key)) {
+      return value;
+   }
+   // Cipher armor already reveals how long the cleartext is, so its length gives nothing away
+   if (key === 'text' && typeof value === 'string') {
+      return `****** (${value.length} chars)`;
+   }
+   return Array.isArray(value) ? value.map(() => '******') : '******';
+}
+
 if (args.debug) {
-   // Both the long name and the alias carry the value, so each has to be masked
-   const shown = { ...args };
-   for (const key of ['cred', 'c', 'pwds', 'p']) {
-      if (shown[key] !== undefined) {
-         shown[key] = Array.isArray(shown[key]) ? shown[key].map(() => '******') : '******';
-      }
+   const shown: Record<string, unknown> = {};
+   for (const [key, value] of Object.entries(args)) {
+      shown[key] = maskForDebug(key, value);
    }
    console.error('args ->', shown);
 }

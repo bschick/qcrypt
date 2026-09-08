@@ -1,0 +1,5 @@
+# Biome owns every format it supports, which is everything biome.json includes.
+# Prettier is only here for HTML, which biome.json excludes.
+*
+!*/
+!*.html

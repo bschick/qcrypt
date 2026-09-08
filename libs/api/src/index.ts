@@ -99,7 +99,6 @@ export namespace ResponseTypes {
            verified: true;
            userId: string;
            userName: string;
-           hasRecoveryId: boolean;
            recoveryKeyId?: string;
            prf: boolean;
            authenticators: AuthenticatorInfo[];

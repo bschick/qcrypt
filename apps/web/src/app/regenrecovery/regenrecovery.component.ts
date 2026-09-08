@@ -76,7 +76,8 @@ export class RegenrecoveryComponent implements OnInit, OnDestroy {
                   state: { replacedLink, replacedWords, unconfirmed: state !== 'match' },
                });
             } else {
-               this.error = 'Could not replace recovery words, try again';
+               // Reachable only if a future state reports the new words were not stored
+               this.error = 'Recovery words update did not complete. You must retry to avoid losing access.';
             }
          })
          .catch((err) => {
