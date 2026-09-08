@@ -41,6 +41,7 @@ import { Router } from '@angular/router';
 import { type AcceptableState, StrengthMeterComponent } from '../strengthmeter/strengthmeter.component';
 import { AuthenticatorService } from '../../services/authenticator.service';
 import { BubbleDirective } from '../bubble/bubble.directive';
+import { NoAssistDirective } from '../noassist.directive';
 import * as cc from '@qcrypt/crypto/consts';
 import { bytesToBase64, Ciphers } from '@qcrypt/crypto';
 import type { CipherDataInfo } from '../../services/cipher.service';
@@ -80,6 +81,7 @@ const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
       MatTooltipModule,
       MatButtonModule,
       BubbleDirective,
+      NoAssistDirective,
    ],
 })
 export class PasswordDialog implements AfterViewInit, OnDestroy {

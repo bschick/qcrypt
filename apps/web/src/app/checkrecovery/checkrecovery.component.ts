@@ -32,6 +32,7 @@ import { Subscription } from 'rxjs';
 import { bytesToBase64 } from '@qcrypt/crypto';
 import { AuthEvent, AuthenticatorService, type RecoveryWordsState } from '../services/authenticator.service';
 import { RecoverySheetComponent } from '../ui/recoverysheet/recoverysheet.component';
+import { NoAssistDirective } from '../ui/noassist.directive';
 
 const SHEET_TITLE = 'quick_crypt_account_recovery';
 
@@ -48,6 +49,7 @@ const SHEET_TITLE = 'quick_crypt_account_recovery';
       MatInputModule,
       MatProgressSpinnerModule,
       RecoverySheetComponent,
+      NoAssistDirective,
    ],
 })
 export class CheckRecoveryComponent implements OnInit, OnDestroy {

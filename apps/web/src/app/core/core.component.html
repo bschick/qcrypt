@@ -108,9 +108,10 @@ SOFTWARE. -->
         </div>
         <div>
           <div [ngClass]="clearMsgClass" [hidden]="!clearMsg" [innerHTML]="clearMsg"></div>
-          <textarea matInput #clearInput id="clearInput" autofocus cdkTextareaAutosize placeholder="" class="txt-area-clear"
-            [(ngModel)]="clearText" [ngModelOptions]="{standalone: true}" [readonly]="clearMsg ? 'true' : 'false'"
-            [disabled]="(showProgress) ? 'true' : 'false'" (input)="onClearInput()">
+          <textarea matInput noAssist #clearInput id="clearInput" autofocus cdkTextareaAutosize placeholder=""
+            class="txt-area-clear" [(ngModel)]="clearText" [ngModelOptions]="{standalone: true}"
+            [readonly]="clearMsg ? 'true' : 'false'" [disabled]="(showProgress) ? 'true' : 'false'"
+            (input)="onClearInput()">
           </textarea>
         </div>
       </mat-form-field>
@@ -143,7 +144,7 @@ SOFTWARE. -->
         </div>
         <div>
           <div [ngClass]="cipherMsgClass" [hidden]="!cipherMsg" [innerHTML]="cipherMsg"></div>
-          <textarea matInput id="cipherInput" placeholder="" class="txt-area-armor" cdkTextareaAutosize
+          <textarea matInput noAssist id="cipherInput" placeholder="" class="txt-area-armor" cdkTextareaAutosize
             [(ngModel)]="cipherArmor" [ngModelOptions]="{standalone: true}" [readonly]="cipherMsg ? 'true' : 'false'"
             [disabled]="showProgress ? 'true' : 'false'" (input)="onCipherInput()">
           </textarea>

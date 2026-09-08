@@ -35,6 +35,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ClipboardModule } from '@angular/cdk/clipboard';
+import { NoAssistDirective } from '../ui/noassist.directive';
 
 @Component({
    selector: 'app-newuser',
@@ -50,6 +51,7 @@ import { ClipboardModule } from '@angular/cdk/clipboard';
       FormsModule,
       ClipboardModule,
       MatTooltipModule,
+      NoAssistDirective,
    ],
 })
 export class NewUserComponent implements OnInit, AfterViewInit {

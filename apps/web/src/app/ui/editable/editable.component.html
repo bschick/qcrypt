@@ -1,6 +1,7 @@
 <div class="editable">
   <input
     #editableInput
+    noAssist
     type='text'
     [id]="id"
     [readonly]="readonly"
@@ -15,7 +16,7 @@
     (keydown.enter)='acceptEdit($event)'
     (keydown.escape)='cancelEdit($event)'
     data-1p-ignore
-    data-bwignore
+    data-bwignore="true"
     data-lpignore="true"
     data-form-type="other"
   />

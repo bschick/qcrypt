@@ -72,6 +72,7 @@ import {
 import { AuthenticatorService, AuthEvent, type AuthEventData } from '../services/authenticator.service';
 import { PasswordDialog, CipherInfoDialog, SigninDialog } from '../ui/dialogs/dialogs';
 import { BubbleDirective } from '../ui/bubble/bubble.directive';
+import { NoAssistDirective } from '../ui/noassist.directive';
 import { OptionsComponent } from '../ui/options/options.component';
 import { Subscription } from 'rxjs';
 import { CopyrightComponent } from '../ui/copyright/copyright.component';
@@ -102,6 +103,7 @@ const BLOCK_ORDER_WARNING =
       MatTooltipModule,
       CommonModule,
       BubbleDirective,
+      NoAssistDirective,
       OptionsComponent,
       CopyrightComponent,
    ],
