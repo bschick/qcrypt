@@ -378,7 +378,8 @@ const ELEMENT_DATA: FAQElement[] = [
       download the qcrypt.zip file</a>, extract it, ensure you have
       <a href="https://nodejs.org/" target="_blank">Node.js</a> installed, and
       then run the tool from the command-line and respond to the prompts:
-      <blockquote>> node qcrypt.cjs</blockquote>`,
+      <blockquote>> node qcrypt.cjs</blockquote>
+      The command-line tool has not been tested on Windows systems.`,
    },
 
    {

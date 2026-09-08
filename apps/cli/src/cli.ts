@@ -15,7 +15,7 @@ import {
 import * as cc from '@qcrypt/crypto/consts';
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { getSystemErrorMap } from 'node:util';
 import { Readable, Writable } from 'node:stream';
 import yargs from 'yargs/yargs';
@@ -691,7 +691,7 @@ async function main() {
       // Write to a temp then rename for clean permissions, no symlink follows, and "atomic" updates
       if (args.force) {
          const tempPrefix = path.join(path.dirname(args.outfile), `.${path.basename(args.outfile)}.`);
-         outfileTemp = `${tempPrefix}${randomUUID()}`;
+         outfileTemp = `${tempPrefix}${randomBytes(4).toString('hex')}`;
          outfileTempShown = `${tempPrefix}*`;
       }
       // wx rather than w so a file appearing after the check above, including a timed

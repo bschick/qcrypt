@@ -777,6 +777,10 @@ describe('CLI App', () => {
    describe('--outfile protection', () => {
       const outPath = path.resolve(tmpDir, 'test-outfile-guard.bin');
       const cipherPath = path.resolve(tmpDir, 'test-outfile-guard-cipher.bin');
+      // Windows has no POSIX file modes and needs a privilege to create symlinks
+      const skipOnWindows = process.platform === 'win32';
+      // chmod does not restrict root, so a refusal cannot be observed
+      const skipUnrestricted = skipOnWindows || process.getuid?.() === 0;
 
       beforeAll(() => {
          expect(encryptTo(cipherPath).status).toBe(0);
@@ -823,7 +827,7 @@ describe('CLI App', () => {
          );
       }
 
-      it('creates the output readable only by its owner', () => {
+      it.skipIf(skipOnWindows)('creates the output readable only by its owner', () => {
          expect(encryptTo(outPath).status).toBe(0);
          expect(fs.statSync(outPath).mode & 0o777).toBe(0o600);
       });
@@ -843,7 +847,7 @@ describe('CLI App', () => {
          expect(fs.readFileSync(outPath, 'utf-8')).not.toBe('replace me');
       });
 
-      it('restricts permissions when forced over a group and world readable file', () => {
+      it.skipIf(skipOnWindows)('restricts permissions when forced over a group and world readable file', () => {
          fs.writeFileSync(outPath, 'replace me', 'utf-8');
          fs.chmodSync(outPath, 0o644);
 
@@ -852,7 +856,7 @@ describe('CLI App', () => {
          expect(fs.statSync(outPath).mode & 0o777).toBe(0o600);
       });
 
-      it('replaces a symlink destination rather than writing through it', () => {
+      it.skipIf(skipOnWindows)('replaces a symlink destination rather than writing through it', () => {
          const linkTarget = path.resolve(tmpDir, 'test-outfile-guard-link-target.txt');
          fs.writeFileSync(linkTarget, 'not the destination', 'utf-8');
          fs.symlinkSync(linkTarget, outPath);
@@ -864,10 +868,7 @@ describe('CLI App', () => {
          fs.unlinkSync(linkTarget);
       });
 
-      // chmod does not restrict root and has no equivalent on Windows
-      const skipAsRoot = process.platform === 'win32' || process.getuid?.() === 0;
-
-      it.skipIf(skipAsRoot)('refuses a forced overwrite of a file the user cannot write', () => {
+      it.skipIf(skipUnrestricted)('refuses a forced overwrite of a file the user cannot write', () => {
          fs.writeFileSync(outPath, 'protected original', 'utf-8');
          fs.chmodSync(outPath, 0o444);
 
@@ -875,7 +876,7 @@ describe('CLI App', () => {
          expect(fs.readFileSync(outPath, 'utf-8')).toBe('protected original');
       });
 
-      it.skipIf(skipAsRoot)('refuses a forced overwrite inside a directory the user cannot write', () => {
+      it.skipIf(skipUnrestricted)('refuses a forced overwrite inside a directory the user cannot write', () => {
          const lockedDir = path.resolve(tmpDir, 'test-outfile-guard-locked');
          const target = path.resolve(lockedDir, 'target.txt');
          fs.mkdirSync(lockedDir);
