@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-## 8.0.0 (2026-09-07)
+## 8.0.0 (2026-09-TBD)
 
 #### Changes
 
@@ -10,13 +10,16 @@
 #### Security
 
 - [protocol version 8 released](https://quickcrypt.org/help/protocol8)
-  - cipher key hash added to associated data to achieve full key commitment across all cipher modes
+  - cipher key hash added to associated data to achieve full key commitment across all cipher modes [thanks to Rajat Shukla (@rajat4722)]
   - length prefixes added to key derivation inputs to enforce unambiguous encoding
   - improved domain isolation by adding context-specific input to block key derivation
   - password hints padded to a 16-byte modulus before encryption to obscure hint length
   - domain separation of different recovery proof signatures
 - adversarial key commitment test added to solve GF(2^128) collision [thanks to Claude Code (@claude)]
-- added detection and error reporting for stripped encryption loops
+- added detection and error reporting of stripped encryption loops
+- disabled browser text assistance features on sensitive input fields [thanks to Prashikshit Saini (@PrashikshitSaini) and Damir (@Evelynkaz)]
+- enforce output file permissions during cli --force overwrite [thanks to @EpochLiu]
+- cli --force overwrite no longer follows symlinks [thanks to Claude Code (@claude)]
 - updated packages
 
 ## 7.5.1 (2026-09-01)

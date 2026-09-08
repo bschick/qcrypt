@@ -40,18 +40,12 @@ Please use our [vulnerability disclosure program at Open Bug Bounty](https://www
 
 Thanks to the following security researchers:
 
-- **destro4evr**:
-  - The first to report potential issues and recommend improvements
-  - Developed server API unittests that support WebAuthn
-  - Suggested a user warning against password reuse between encryption loops
-- **Rajat Shukla (@rajat4722)**:
-  - Proposed move of recover2 parameters from url path into post request body and returning more generic errors
-  - Suggested improvements to auth/options triggering move of userId into request body
-  - Discovered that local sessions remained valid after PK deletion
-  - Reported CLI security hardening improvements
-  - Suggested better handling of server errors during recovery words change
-  - Found string sanitization was not stripping invisible codepoints
-- **CapsenR**:
-  - Proposed adding a warning when clear or cipher text is copied from url
-  - Found timing weaknesses in javascript timingSafeEqual implementation
-- [Vaibhav Jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/): Reported missing MTA-STS domain email support
+| Researcher | Bounties |
+| --- | --- |
+| Rajat Shukla (@rajat4722) | 7 |
+| destro4evr | 3 |
+| CapsenR | 2 |
+| Prashikshit Saini (@PrashikshitSaini) | 1 |
+| Damir (@Evelynkaz) | 1 |
+| @EpochLiu | 1 |
+| [Vaibhav Jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/) | 1 |
