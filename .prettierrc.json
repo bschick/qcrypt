@@ -4,6 +4,7 @@
   "htmlWhitespaceSensitivity": "ignore",
   "bracketSameLine": true,
   "singleAttributePerLine": false,
+  "proseWrap": "preserve",
   "overrides": [
     {
       "files": "*.html",
