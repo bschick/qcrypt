@@ -1254,4 +1254,69 @@ describe('CLI App', () => {
          fs.unlinkSync(jsonEnc);
       });
    });
+
+   describe('--debug argument masking', () => {
+      const secretText = 'SENTINEL-CLEAR-TEXT';
+      const secretPwd = 'SENTINEL-PASSWORD';
+      const secretHint = 'SENTINEL-HINT';
+
+      it('keeps credential, passwords, hints, and text out of the argument dump', () => {
+         const tmpEnc = path.resolve(tmpDir, 'debug-mask.bin');
+         const enc = execCli([
+            'enc',
+            secretText,
+            '--cred',
+            userCred,
+            '--silent',
+            '--debug',
+            '--iters',
+            '1000000',
+            '--outfile',
+            tmpEnc,
+            '--pwds',
+            secretPwd,
+            '--hints',
+            secretHint,
+         ]);
+
+         expect(enc.status).toBe(0);
+         expect(enc.stderr).toContain('args ->');
+         for (const secret of [secretText, secretPwd, secretHint, userCred]) {
+            expect(enc.stderr).not.toContain(secret);
+         }
+         fs.unlinkSync(tmpEnc);
+      });
+
+      it('reports the length of the masked text', () => {
+         const info = execCli(['info', secretText, '--silent', '--debug']);
+
+         expect(info.stderr).toContain(`****** (${secretText.length} chars)`);
+         expect(info.stderr).not.toContain(secretText);
+      });
+
+      it('still shows values that carry no secret', () => {
+         const tmpEnc = path.resolve(tmpDir, 'debug-show.bin');
+         const enc = execCli([
+            'enc',
+            '--cred',
+            userCred,
+            '--silent',
+            '--debug',
+            '--iters',
+            '1000000',
+            '--algs',
+            'AES-GCM',
+            '--outfile',
+            tmpEnc,
+            '--pwds',
+            secretPwd,
+         ]);
+
+         expect(enc.status).toBe(0);
+         expect(enc.stderr).toContain('AES-GCM');
+         expect(enc.stderr).toContain('1000000');
+         expect(enc.stderr).toContain(tmpEnc);
+         fs.unlinkSync(tmpEnc);
+      });
+   });
 });
