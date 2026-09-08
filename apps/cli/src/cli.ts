@@ -14,6 +14,9 @@ import {
 } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import fs from 'node:fs';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { getSystemErrorMap } from 'node:util';
 import { Readable, Writable } from 'node:stream';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
@@ -662,20 +665,43 @@ async function main() {
    }
 
    let outfileStream: fs.WriteStream | undefined;
+   let outfileTemp: string | undefined;
+   let outfileTempShown: string | undefined;
+   const errDetail = (err: unknown): string => {
+      const { errno, code, message } = err as NodeJS.ErrnoException;
+      const reason = errno === undefined ? undefined : getSystemErrorMap().get(errno)?.[1];
+      return reason ?? code ?? message;
+   };
    if (args.outfile) {
-      if (!args.force && fs.existsSync(args.outfile)) {
-         console.error(`\n${args.outfile} already exists, use --force to overwrite`);
-         process.exitCode = 1;
-         return;
+      if (fs.existsSync(args.outfile)) {
+         if (!args.force) {
+            console.error(`\n${args.outfile} already exists, use --force to overwrite`);
+            process.exitCode = 1;
+            return;
+         }
+         try {
+            // Otherwise the rename would replace even a read-only file
+            fs.accessSync(args.outfile, fs.constants.W_OK);
+         } catch {
+            console.error(`\ncould not write ${args.outfile}: permission denied`);
+            process.exitCode = 1;
+            return;
+         }
+      }
+      // Write to a temp then rename for clean permissions, no symlink follows, and "atomic" updates
+      if (args.force) {
+         const tempPrefix = path.join(path.dirname(args.outfile), `.${path.basename(args.outfile)}.`);
+         outfileTemp = `${tempPrefix}${randomUUID()}`;
+         outfileTempShown = `${tempPrefix}*`;
       }
       // wx rather than w so a file appearing after the check above, including a timed
       // symlink, is refused
-      outfileStream = fs.createWriteStream(args.outfile, {
+      outfileStream = fs.createWriteStream(outfileTemp ?? args.outfile, {
          mode: 0o600,
-         flags: args.force ? 'w' : 'wx',
+         flags: 'wx',
       });
       outfileStream.on('error', (err) => {
-         console.error(`\ncould not write ${args.outfile}: ${err.message}`);
+         console.error(`\ncould not write ${outfileTempShown ?? args.outfile}: ${errDetail(err)}`);
          process.exitCode = 1;
       });
    }
@@ -708,7 +734,15 @@ async function main() {
       await closed;
 
       if (process.exitCode === 1) {
-         fs.rmSync(args.outfile, { force: true });
+         fs.rmSync(outfileTemp ?? args.outfile, { force: true });
+      } else if (outfileTemp) {
+         try {
+            fs.renameSync(outfileTemp, args.outfile);
+         } catch (err) {
+            console.error(`\ncould not write ${args.outfile}: ${errDetail(err)}`);
+            process.exitCode = 1;
+            fs.rmSync(outfileTemp, { force: true });
+         }
       }
    }
    reopenedIn?.destroy();

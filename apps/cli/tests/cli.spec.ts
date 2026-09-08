@@ -776,12 +776,33 @@ describe('CLI App', () => {
 
    describe('--outfile protection', () => {
       const outPath = path.resolve(tmpDir, 'test-outfile-guard.bin');
+      const cipherPath = path.resolve(tmpDir, 'test-outfile-guard-cipher.bin');
+
+      beforeAll(() => {
+         expect(encryptTo(cipherPath).status).toBe(0);
+      });
 
       afterEach(() => {
          if (fs.existsSync(outPath)) {
             fs.unlinkSync(outPath);
          }
       });
+
+      function decryptTo(target: string, password: string, extra: string[] = []): SpawnSyncReturns<string> {
+         return execCli([
+            'dec',
+            '--cred',
+            userCred,
+            '--silent',
+            '--infile',
+            cipherPath,
+            '--outfile',
+            target,
+            '--pwds',
+            password,
+            ...extra,
+         ]);
+      }
 
       function encryptTo(target: string, extra: string[] = []): SpawnSyncReturns<string> {
          return execCli(
@@ -820,6 +841,61 @@ describe('CLI App', () => {
 
          expect(encryptTo(outPath, ['--force']).status).toBe(0);
          expect(fs.readFileSync(outPath, 'utf-8')).not.toBe('replace me');
+      });
+
+      it('restricts permissions when forced over a group and world readable file', () => {
+         fs.writeFileSync(outPath, 'replace me', 'utf-8');
+         fs.chmodSync(outPath, 0o644);
+
+         expect(decryptTo(outPath, 'pass', ['--force']).status).toBe(0);
+         expect(fs.readFileSync(outPath, 'utf-8')).toBe(clearText);
+         expect(fs.statSync(outPath).mode & 0o777).toBe(0o600);
+      });
+
+      it('replaces a symlink destination rather than writing through it', () => {
+         const linkTarget = path.resolve(tmpDir, 'test-outfile-guard-link-target.txt');
+         fs.writeFileSync(linkTarget, 'not the destination', 'utf-8');
+         fs.symlinkSync(linkTarget, outPath);
+
+         expect(decryptTo(outPath, 'pass', ['--force']).status).toBe(0);
+         expect(fs.readFileSync(linkTarget, 'utf-8')).toBe('not the destination');
+         expect(fs.lstatSync(outPath).isSymbolicLink()).toBe(false);
+         expect(fs.readFileSync(outPath, 'utf-8')).toBe(clearText);
+         fs.unlinkSync(linkTarget);
+      });
+
+      // chmod does not restrict root and has no equivalent on Windows
+      const skipAsRoot = process.platform === 'win32' || process.getuid?.() === 0;
+
+      it.skipIf(skipAsRoot)('refuses a forced overwrite of a file the user cannot write', () => {
+         fs.writeFileSync(outPath, 'protected original', 'utf-8');
+         fs.chmodSync(outPath, 0o444);
+
+         expect(decryptTo(outPath, 'pass', ['--force']).status).toBe(1);
+         expect(fs.readFileSync(outPath, 'utf-8')).toBe('protected original');
+      });
+
+      it.skipIf(skipAsRoot)('refuses a forced overwrite inside a directory the user cannot write', () => {
+         const lockedDir = path.resolve(tmpDir, 'test-outfile-guard-locked');
+         const target = path.resolve(lockedDir, 'target.txt');
+         fs.mkdirSync(lockedDir);
+         fs.writeFileSync(target, 'protected original', 'utf-8');
+         fs.chmodSync(lockedDir, 0o555);
+
+         try {
+            expect(decryptTo(target, 'pass', ['--force']).status).toBe(1);
+            expect(fs.readFileSync(target, 'utf-8')).toBe('protected original');
+         } finally {
+            fs.chmodSync(lockedDir, 0o755);
+            fs.rmSync(lockedDir, { recursive: true, force: true });
+         }
+      });
+
+      it('leaves the destination intact when a forced command fails', () => {
+         fs.writeFileSync(outPath, 'do not destroy me', 'utf-8');
+
+         expect(decryptTo(outPath, 'WRONGPASS', ['--force']).status).toBe(1);
+         expect(fs.readFileSync(outPath, 'utf-8')).toBe('do not destroy me');
       });
 
       it('leaves no output behind when the command fails', () => {
