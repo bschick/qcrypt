@@ -886,7 +886,12 @@ async function main() {
       try {
          await outFile.finish();
       } catch (err) {
-         console.error(`\ncould not write ${args.outfile}: ${errDetail(err)}`);
+         // Errors raised here rather than by the filesystem already name the destination
+         if ((err as NodeJS.ErrnoException).code) {
+            console.error(`\ncould not write ${args.outfile}: ${errDetail(err)}`);
+         } else {
+            console.error(`\n${(err as Error).message}`);
+         }
          process.exitCode = 1;
       }
    }
