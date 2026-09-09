@@ -1039,7 +1039,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          const saveFile = await selectWriteableJsonFile('armor');
          const writeable = await saveFile.createWritable();
          await writeable.write(this.cipherArmor);
-         writeable.close();
+         await writeable.close();
       } else {
          const buffer = new TextEncoder().encode(this.cipherArmor);
          const blob = new Blob([buffer], { type: 'text/plain;charset=utf-8' });
@@ -1052,7 +1052,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          const saveFile = await selectWriteableTxtFile('clear');
          const writeable = await saveFile.createWritable();
          await writeable.write(this.clearText);
-         writeable.close();
+         await writeable.close();
       } else {
          const buffer = new TextEncoder().encode(this.clearText);
          const blob = new Blob([buffer], { type: 'text/plain;charset=utf-8' });
