@@ -18,6 +18,7 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { getSystemErrorMap } from 'node:util';
 import { Readable, Writable } from 'node:stream';
+import { once } from 'node:events';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import { input, select, number, password } from '@inquirer/prompts';
@@ -67,8 +68,10 @@ function showAnswered(message: string, answer: string, io: IO): void {
    io.ttyOut.write(`${prefixDone} ${iqTheme.style.message(message, 'done')} ${iqTheme.style.answer(answer)}\n`);
 }
 
-async function peekBinary(source: Readable): Promise<{ pipedIn: ReadableStream<Uint8Array>; binaryIn: boolean }> {
-   const firstChunk: Buffer = await new Promise((resolve) => {
+async function peekBinary(
+   source: Readable,
+): Promise<{ pipedIn: ReadableStream<Uint8Array>; binaryIn: boolean; empty: boolean }> {
+   const firstChunk: Buffer = await new Promise<Buffer>((resolve) => {
       // An empty source never becomes readable, so end has to resolve this too
       source.once('end', () => resolve(Buffer.alloc(0)));
       const tryRead = () => {
@@ -85,7 +88,10 @@ async function peekBinary(source: Readable): Promise<{ pipedIn: ReadableStream<U
    const binary = firstChunk.length === 0 || !/^\s*\{\s*"[\x20-\x7e]*$/.test(head);
 
    async function* prependedStream() {
-      yield firstChunk.subarray(0);
+      // A zero length chunk reads as a stalled source rather than the end of one
+      if (firstChunk.length) {
+         yield firstChunk.subarray(0);
+      }
       for await (const chunk of source) {
          yield chunk;
       }
@@ -95,7 +101,11 @@ async function peekBinary(source: Readable): Promise<{ pipedIn: ReadableStream<U
    const nodeReadableStream = ReadableStream as unknown as {
       from(iterable: AsyncIterable<Uint8Array>): ReadableStream<Uint8Array>;
    };
-   return { pipedIn: nodeReadableStream.from(prependedStream()), binaryIn: binary };
+   return {
+      pipedIn: nodeReadableStream.from(prependedStream()),
+      binaryIn: binary,
+      empty: firstChunk.length === 0,
+   };
 }
 
 function streamFromBytes(data: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Array> {
@@ -117,7 +127,10 @@ async function writeAndCloseStream(
    while (true) {
       const { done, value } = await reader.read();
       if (value) {
-         writeableStream.write(value);
+         // Without waiting, a consumer slower than the cipher queues the whole output in memory
+         if (!writeableStream.write(value) && !(writeableStream as Writable).destroyed) {
+            await once(writeableStream, 'drain');
+         }
          written += value.byteLength;
       }
       if (done) {
@@ -232,7 +245,7 @@ async function info(
       io.pipedOut.write(`Cipher and Mode   : ${Ciphers.algDescription(cdInfo.alg)}
 PBKDF2 Iterations : ${cdInfo.ic}
 Salt (b64Url)     : ${bytesToBase64(cdInfo.slt)}
-Password Hint     : ${cdInfo.hint}
+Password Hint     : ${showHint(cdInfo.hint ?? '')}
 Loops             : ${cdInfo.lpEnd}
 Version           : ${cdInfo.ver}\n`);
    } catch (err) {
@@ -373,14 +386,22 @@ async function encrypt(
          args.readStart || args.readMax ? { startSize: args.readStart, maxSize: args.readMax } : undefined;
       const cipherStream = await encryptStream(clearStream, keyProvider, { algs, ic: iters!, readOpts });
 
+      let cipherLen: number;
       if (io.b64urlOut) {
          const cipherData = await readStreamAll(cipherStream);
+         cipherLen = cipherData.byteLength;
          io.pipedOut.write(`${bytesToBase64(cipherData)}\n`);
       } else if (io.binaryOut) {
-         await writeAndCloseStream(cipherStream, io.pipedOut);
+         cipherLen = await writeAndCloseStream(cipherStream, io.pipedOut);
       } else {
          const cipherData = await readStreamAll(cipherStream);
+         cipherLen = cipherData.byteLength;
          io.pipedOut.write(`${makeCipherArmor(cipherData, 'compact')}\n`);
+      }
+
+      // Empty output means the clear stream was lost, not that there was nothing to encrypt
+      if (cipherLen === 0) {
+         throw new Error('encrypted output was empty');
       }
    } catch (err) {
       if (args.debug) {
@@ -418,7 +439,7 @@ async function decrypt(
                `${cdinfo.lpEnd} password(s) required in silent mode but ${args.pwds?.length ?? 0} provided (use --pwds)`,
             );
          } else {
-            const hintMsg = lpMsg + (cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '');
+            const hintMsg = lpMsg + (cdinfo.hint ? ` (hint: ${showHint(cdinfo.hint)})` : '');
             const pwd = await getSensitiveInput(`Password${hintMsg}`, io);
             return [pwd];
          }
@@ -473,7 +494,8 @@ function CoerceAlgs(algs: string[]): cc.CipherAlgs[] {
 // space that will be stripped (also works for [text])
 const args = yargs(hideBin(process.argv))
    .usage('Usage: $0 <command> [text] [options]')
-   .parserConfiguration({ 'nargs-eats-options': true })
+   // Without this, text that looks like a number is encrypted as a different string
+   .parserConfiguration({ 'nargs-eats-options': true, 'parse-positional-numbers': false })
    .strict()
    .command({
       command: '$0 [text] [options]',
@@ -481,7 +503,7 @@ const args = yargs(hideBin(process.argv))
       describe: 'decrypt cipher data',
       builder: (yargs) => {
          return yargs
-            .positional('text', { desc: 'cipher armor to decrypt (or use -f or stdin)' })
+            .positional('text', { desc: 'cipher armor to decrypt (or use -f or stdin)', type: 'string' })
             .example('$0 -c 97jQeo8N16L4vhKzWy7ys -f doc.qq', ': prints decrypted text of doc.qq');
       },
       handler: () => {},
@@ -491,7 +513,7 @@ const args = yargs(hideBin(process.argv))
       describe: 'show information about cipher data',
       builder: (yargs) => {
          return yargs
-            .positional('text', { desc: 'cipher armor to describe (or use -f or stdin)' })
+            .positional('text', { desc: 'cipher armor to describe (or use -f or stdin)', type: 'string' })
             .example('$0 info -c 97jQeo8N16L4vhKzWy7ys -f doc.qq', ': prints encryption params for doc.qq');
       },
       handler: () => {},
@@ -501,7 +523,7 @@ const args = yargs(hideBin(process.argv))
       describe: 'encrypt clear text',
       builder: (yargs) => {
          return yargs
-            .positional('text', { desc: 'clear text to encrypt (or use -f or stdin)' })
+            .positional('text', { desc: 'clear text to encrypt (or use -f or stdin)', type: 'string' })
             .options({
                iters: { alias: 'i', desc: `password hash iterations (min ${cc.ICOUNT_MIN})`, type: 'number' },
                algs: {
@@ -607,7 +629,16 @@ const DEBUG_SHOW_KEYS = new Set([
    'readMax',
 ]);
 
+// Hints come from whoever encrypted the data, so controls are shown rather than run or dropped
+function showHint(hint: string): string {
+   return hint.replace(/\p{Cc}/gu, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
 function maskForDebug(key: string, value: unknown): unknown {
+   // Everything after -- lands in _ alongside the command, and may be text the user meant to pass
+   if (key === '_' && Array.isArray(value)) {
+      return value.map((entry, index) => (index === 0 ? entry : '******'));
+   }
    if (DEBUG_SHOW_KEYS.has(key)) {
       return value;
    }
@@ -752,7 +783,17 @@ async function main() {
    if (args.infile) {
       ({ pipedIn, binaryIn } = await peekBinary(fs.createReadStream(args.infile)));
    } else if (!process.stdin.isTTY) {
-      ({ pipedIn, binaryIn } = await peekBinary(process.stdin));
+      let emptyIn: boolean;
+      ({ pipedIn, binaryIn, empty: emptyIn } = await peekBinary(process.stdin));
+      // Redirected but empty stdin is what a scheduled job looks like, so the text is still meant
+      if (args.text && emptyIn) {
+         pipedIn = streamFromBytes(new TextEncoder().encode(args.text));
+         binaryIn = false;
+      } else if (args.text) {
+         console.error('\ntext cannot be given together with piped input');
+         process.exitCode = 1;
+         return;
+      }
    } else if (args.text) {
       pipedIn = streamFromBytes(new TextEncoder().encode(args.text));
    }
@@ -762,6 +803,8 @@ async function main() {
 
    if (!reopenedIn) {
       console.warn('Warning: no TTY available. All values must be passed via command-line options.');
+      // Prompting anyway would echo answers, including clear text, into the output stream
+      args.silent = true;
    }
 
    let outFile: OutFile | undefined;
@@ -780,7 +823,8 @@ async function main() {
 
    const io: IO = {
       ttyIn: reopenedIn,
-      ttyOut: reopenedOut ?? process.stdout,
+      // stderr rather than stdout when there is no terminal, so prompts stay out of the data
+      ttyOut: reopenedOut ?? (process.stdout.isTTY ? process.stdout : process.stderr),
       pipedIn,
       binaryIn,
       pipedOut: outFile?.stream ?? process.stdout,
@@ -807,6 +851,17 @@ async function main() {
    }
    reopenedIn?.destroy();
    reopenedOut?.destroy();
+   completed = true;
 }
+
+// A stream that stalls rather than ending drains the event loop and would otherwise exit 0,
+// reporting success for data that was never written
+let completed = false;
+process.on('exit', () => {
+   if (!completed) {
+      console.error('\nthe operation did not finish');
+      process.exitCode = 1;
+   }
+});
 
 main();

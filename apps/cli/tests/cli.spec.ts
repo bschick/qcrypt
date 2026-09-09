@@ -476,6 +476,51 @@ describe('CLI App', () => {
          fs.unlinkSync(rtEnc);
          fs.unlinkSync(rtDec);
       });
+
+      it('should fail rather than report success on empty piped input', () => {
+         const good = execCliBin(
+            ['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'],
+            clearText,
+         );
+         expect(good.status).toBe(0);
+
+         // Exiting 0 here reads as a successful encrypt of nothing
+         const result = execCliBin(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'], '');
+         expect(result.status).toBe(1);
+         expect(result.stdout.length).toBe(0);
+      });
+
+      it('encrypts the text argument when nothing is piped in', () => {
+         const enc = execCliBin(
+            ['enc', 'text argument', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'],
+            '',
+         );
+         expect(enc.status).toBe(0);
+
+         const dec = execCli(['dec', '--cred', userCred, '--silent', '--pwds', 'pass'], enc.stdout);
+         expect(dec.status).toBe(0);
+         expect(dec.stdout.trim()).toBe('text argument');
+      });
+
+      it('encrypts numeric looking text exactly as given', () => {
+         const enc = execCliBin(
+            ['enc', '1e3', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'],
+            '',
+         );
+         expect(enc.status).toBe(0);
+
+         const dec = execCli(['dec', '--cred', userCred, '--silent', '--pwds', 'pass'], enc.stdout);
+         expect(dec.status).toBe(0);
+         expect(dec.stdout.trim()).toBe('1e3');
+      });
+
+      it('refuses a text argument together with piped input', () => {
+         const result = execCli(
+            ['enc', 'text argument', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'],
+            clearText,
+         );
+         expect(result.status).toBe(1);
+      });
    });
 
    describe('dec command', () => {
@@ -1120,6 +1165,66 @@ describe('CLI App', () => {
       });
    });
 
+   describe('untrusted hint rendering', () => {
+      const ESC = '\u001b';
+      const BEL = '\u0007';
+      const hintPath = path.resolve(tmpDir, 'test-hint.bin');
+      // Written by whoever encrypted the data, so it reaches the reader's terminal
+      const escapingHint = `${ESC}]0;PWNED${BEL}${ESC}[2K\rFAKE`;
+
+      afterEach(() => {
+         if (fs.existsSync(hintPath)) {
+            fs.unlinkSync(hintPath);
+         }
+      });
+
+      it('shows control characters in a hint instead of running them', () => {
+         const enc = execCli(
+            [
+               'enc',
+               '--cred',
+               userCred,
+               '--silent',
+               '--iters',
+               '1000000',
+               '--outfile',
+               hintPath,
+               '--pwds',
+               'pass',
+               '--hints',
+               escapingHint,
+            ],
+            clearText,
+         );
+         expect(enc.status).toBe(0);
+
+         const result = execCli(['info', '--cred', userCred, '--silent', '--infile', hintPath]);
+         expect(result.status).toBe(0);
+         expect(result.stdout).toContain('FAKE');
+         expect(result.stdout).toContain('\\u001b');
+         expect(result.stdout).not.toContain(ESC);
+         expect(result.stdout).not.toContain(BEL);
+      });
+   });
+
+   describe('no controlling terminal', () => {
+      // setsid is the only portable way to drop the controlling terminal, and it is linux only
+      const hasSetsid = process.platform === 'linux' && spawnSync('which', ['setsid']).status === 0;
+
+      it.skipIf(!hasSetsid)('reports missing options rather than prompting for them', () => {
+         const result = spawnSync(
+            'setsid',
+            ['node', cliPath, 'enc', 'some text', '--iters', '1000000', '--pwds', 'pass'],
+            { encoding: 'utf-8', input: '' },
+         );
+
+         expect(result.status).toBe(1);
+         expect(result.stderr).toContain('required in silent mode');
+         // A prompt here would echo the answer into the data stream
+         expect(result.stdout).toBe('');
+      });
+   });
+
    describe('info command', () => {
       it('should throw error for invalid cred length on info', () => {
          const result = execCli(['info', '--cred', 'SHORT', '--silent', '--infile', encryptedFilePath]);
@@ -1401,6 +1506,13 @@ describe('CLI App', () => {
          fs.unlinkSync(tmpEnc);
       });
 
+      it('masks arguments after a double dash', () => {
+         const result = execCli(['enc', '--cred', userCred, '--silent', '--debug', '--', secretText], '');
+
+         expect(result.stderr).toContain('args ->');
+         expect(result.stderr).not.toContain(secretText);
+      });
+
       it('reports the length of the masked text', () => {
          const info = execCli(['info', secretText, '--silent', '--debug']);
 
@@ -1410,21 +1522,24 @@ describe('CLI App', () => {
 
       it('still shows values that carry no secret', () => {
          const tmpEnc = path.resolve(tmpDir, 'debug-show.bin');
-         const enc = execCli([
-            'enc',
-            '--cred',
-            userCred,
-            '--silent',
-            '--debug',
-            '--iters',
-            '1000000',
-            '--algs',
-            'AES-GCM',
-            '--outfile',
-            tmpEnc,
-            '--pwds',
-            secretPwd,
-         ]);
+         const enc = execCli(
+            [
+               'enc',
+               '--cred',
+               userCred,
+               '--silent',
+               '--debug',
+               '--iters',
+               '1000000',
+               '--algs',
+               'AES-GCM',
+               '--outfile',
+               tmpEnc,
+               '--pwds',
+               secretPwd,
+            ],
+            clearText,
+         );
 
          expect(enc.status).toBe(0);
          expect(enc.stderr).toContain('AES-GCM');
