@@ -40,6 +40,8 @@ Please use our [vulnerability disclosure program at Open Bug Bounty](https://www
 
 Thanks to the following security researchers:
 
+- **David (@pythonyx135793)**:
+  - Identified extra unwanted fields being sent to the server in webauthn ceremonies, including PRF output
 - **destro4evr**:
   - The first to report potential issues and recommend improvements
   - Developed server API unittests that support WebAuthn

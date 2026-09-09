@@ -1,5 +1,12 @@
 # CHANGELOG.md
 
+## 7.5.2 (2026-09-09)
+
+#### Security
+
+- send only approved webauthn fields to the server, excluding PRF output and other extensions [thanks to David (@pythonyx135793)]
+- updated packages
+
 ## 7.5.1 (2026-09-01)
 
 #### Changes
