@@ -20,20 +20,45 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-export {
-   getUserCredPubKey,
-   createUserCredProof,
-   verifyUserCredProof,
-   getRecoveryPubKey,
-   createRecoveryProof,
-   verifyRecoveryProof,
-   recoverySecret,
-   RECOVERYID_BYTES,
-   CHALLENGE_BYTES,
-   PROOF_PUBKEY_BYTES,
-   PROOF_SIG_BYTES,
-} from './lib/proof';
+export type PatchUserRequest = {
+   userName: string;
+};
 
-export * from './lib/webauthn';
-export * from './lib/user';
-export * from './lib/recovery';
+export type PatchPasskeyRequest = {
+   description: string;
+};
+
+export type AuthenticatorInfoResponse = {
+   credentialId: string;
+   description: string;
+   lightIcon: string;
+   darkIcon: string;
+   name: string;
+};
+
+export type InvitableInfoResponse = {
+   invitableId: string;
+   description?: string;
+};
+
+export type UserInfoResponse =
+   | { verified: false }
+   | {
+        verified: true;
+        userId: string;
+        userName: string;
+        recoveryKeyId?: string;
+        prf: boolean;
+        authenticators: AuthenticatorInfoResponse[];
+        invitables?: InvitableInfoResponse[];
+     };
+
+export type LoginUserInfoResponse = UserInfoResponse & {
+   pkId?: string;
+   userCred?: string;
+   passkeyUserCredEnc?: string;
+   csrf?: string;
+};
+
+export const TOPIC_USERS_MAX = 255;
+export const SESSION_TIMEOUT_SEC = 60 * 60 * 3;
