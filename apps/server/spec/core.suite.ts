@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { SESSION_TIMEOUT_SEC } from '@qcrypt/api';
+import * as api from '@qcrypt/api';
 import WebAuthnEmulator from 'nid-webauthn-emulator';
 import {
    registerTestUser,
@@ -414,7 +414,7 @@ export function coreSuite(prf: boolean): void {
                userId: jwtPayload!.userId,
             };
             const jwtKey = randomBytes(32);
-            const expiresIn = SESSION_TIMEOUT_SEC;
+            const expiresIn = api.SESSION_TIMEOUT_SEC;
 
             const newToken = jwtPkg.sign(newPayload, jwtKey, {
                algorithm: 'HS512',
@@ -443,7 +443,7 @@ export function coreSuite(prf: boolean): void {
 
             const hs256Token = jwtPkg.sign(forged, randomBytes(32), {
                algorithm: 'HS256',
-               expiresIn: SESSION_TIMEOUT_SEC,
+               expiresIn: api.SESSION_TIMEOUT_SEC,
                issuer: 'quickcrypt',
             });
             res = await deleteJson(`/v1/passkeys/${credId}`, { 'x-csrf-token': csrfToken }, `__Host-JWT=${hs256Token}`);

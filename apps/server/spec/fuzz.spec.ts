@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
-import { CHALLENGE_BYTES, PROOF_SIG_BYTES } from '@qcrypt/api';
+import * as api from '@qcrypt/api';
 import { USERCRED_BYTES } from '@qcrypt/crypto/consts';
 import {
    getJson,
@@ -168,8 +168,8 @@ async function fullFuzz(cookie: string, csrf: string, userId: string) {
    // mostly re-tests the same early exit. Vary one field per call instead, and
    // keep the held fields well-formed so the varied one is what gets rejected.
    const heldTimestamp = String(Date.now());
-   const heldNonce = Buffer.alloc(CHALLENGE_BYTES).toString('base64url');
-   const heldSignature = Buffer.alloc(PROOF_SIG_BYTES).toString('base64url');
+   const heldNonce = Buffer.alloc(api.CHALLENGE_BYTES).toString('base64url');
+   const heldSignature = Buffer.alloc(api.PROOF_SIG_BYTES).toString('base64url');
    const heldUserCred = Buffer.alloc(USERCRED_BYTES).toString('base64url');
    const recover3Keys = ['userId', 'timestamp', 'nonce', 'signature'];
    const confirmKeys = ['userId', 'challenge', 'timestamp', 'signature'];

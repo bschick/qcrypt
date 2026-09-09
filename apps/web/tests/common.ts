@@ -1,5 +1,5 @@
 import { test, expect, Page, BrowserContext, type Cookie, type TestInfo } from '@playwright/test';
-import { createUserCredProof } from '@qcrypt/api';
+import * as api from '@qcrypt/api';
 import {
    cryptoReady,
    MasterKeyKeyProvider,
@@ -47,7 +47,7 @@ async function proofHeaders(
    const timestamp = String(Date.now());
    const nonce = randomBytes(32).toString('base64url');
    const bodyHashHex = createHash('sha256').update('').digest('hex');
-   const signature = createUserCredProof(
+   const signature = api.createUserCredProof(
       Buffer.from(userCred, 'base64url'),
       userId,
       method,

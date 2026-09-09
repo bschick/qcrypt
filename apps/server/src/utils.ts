@@ -23,7 +23,7 @@ SOFTWARE. */
 import { FilterXSS } from 'xss';
 import { Buffer } from 'node:buffer';
 import * as crypto from 'node:crypto';
-import { verifyRecoveryProof, PROOF_SIG_BYTES, type RequestTypes } from '@qcrypt/api';
+import * as api from '@qcrypt/api';
 import { Challenges, type ChallengeItem } from './models';
 import { USERCRED_ENC_MIN_BYTES, USERCRED_ENC_MAX_BYTES, CHALLENGE_BYTES, PROOF_SKEW_MS } from './consts';
 
@@ -104,7 +104,7 @@ export async function consumeChallenge(
 export async function verifyRecoverProof(
    recoveryPubKey: string,
    userId: string,
-   proof: RequestTypes.RecoverProof,
+   proof: api.RecoverProof,
 ): Promise<void> {
    const { timestamp, nonce, signature } = proof;
    if (!validB64(nonce) || !validB64(signature)) {
@@ -113,7 +113,7 @@ export async function verifyRecoverProof(
 
    const nonceBytes = base64UrlDecode(nonce)!;
    const signatureBytes = base64UrlDecode(signature)!;
-   if (nonceBytes.byteLength !== CHALLENGE_BYTES || signatureBytes.byteLength !== PROOF_SIG_BYTES) {
+   if (nonceBytes.byteLength !== CHALLENGE_BYTES || signatureBytes.byteLength !== api.PROOF_SIG_BYTES) {
       throw new ParamError('invalid recovery proof');
    }
 
@@ -123,8 +123,9 @@ export async function verifyRecoverProof(
    }
 
    try {
-      verifyRecoveryProof(recoveryPubKey, userId, timestamp, nonce, signature);
-   } catch {
+      api.verifyRecoveryProof(recoveryPubKey, userId, timestamp, nonce, signature);
+   } catch (err) {
+      console.error('verifyRecoveryProof', err);
       throw new ParamError(`user account ${userId} invalid recovery proof`);
    }
 

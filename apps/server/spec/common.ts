@@ -26,14 +26,7 @@ import WebAuthnEmulator, {
    PasskeysCredentialsFileRepository,
    type HmacSecretMode,
 } from 'nid-webauthn-emulator';
-import {
-   createUserCredProof,
-   getUserCredPubKey,
-   getRecoveryPubKey,
-   recoverySecret,
-   RECOVERYID_BYTES,
-   type RequestTypes,
-} from '@qcrypt/api';
+import * as api from '@qcrypt/api';
 import {
    cryptoReady,
    bytesToBase64,
@@ -93,7 +86,7 @@ export async function makeProofHeaders(
    // re-encoded URL pathname.
    const pathname = path.split('?')[0];
    const queryString = path.split('?')[1] || '';
-   const signature = createUserCredProof(
+   const signature = api.createUserCredProof(
       Buffer.from(userCred, 'base64url'),
       userId,
       method,
@@ -403,7 +396,7 @@ export async function registerTestUser(prf: boolean = false, label?: string): Pr
       expect(verifyRes.data.userCred).toBeUndefined();
       expect(verifyRes.data.csrf).toBeDefined();
       expect(verifyRes.data.pkId).toBeDefined();
-      expect(verifyRes.data.recoveryKeyId).toEqual(hashString(getRecoveryPubKey(secret)));
+      expect(verifyRes.data.recoveryKeyId).toEqual(hashString(api.getRecoveryPubKey(secret)));
       expect(verifyRes.cookie).toBeTruthy();
 
       user = {
@@ -426,8 +419,8 @@ export async function registerTestUser(prf: boolean = false, label?: string): Pr
       expect(regOpts.data.user.name).toBe(userName);
 
       const userId: string = regOpts.data.user.id;
-      const recoveryId = getRandom(RECOVERYID_BYTES);
-      const secret = recoverySecret(recoveryId, userId);
+      const recoveryId = getRandom(api.RECOVERYID_BYTES);
+      const secret = api.recoverySecret(recoveryId, userId);
       const emulator = getWebAuthnEmulator();
       const { attestation } = createCredential(
          emulator,
@@ -439,19 +432,18 @@ export async function registerTestUser(prf: boolean = false, label?: string): Pr
          false,
       );
 
-      const body: RequestTypes.RegVerify = {
-         ...attestation,
+      const body = api.makeRegVerifyRequest(attestation, {
          userId,
          challenge: regOpts.data.challenge,
-         recoveryPubKey: getRecoveryPubKey(secret),
-      };
+         recoveryPubKey: api.getRecoveryPubKey(secret),
+      });
       const verifyRes = await postJson('/v1/reg/verify', body, {}, '');
       expect(verifyRes.status).toBe(200);
       expect(verifyRes.data.verified).toBe(true);
       expect(verifyRes.data.csrf).toBeDefined();
       expect(verifyRes.data.pkId).toBeDefined();
       expect(verifyRes.data.userCred).toBeDefined();
-      expect(verifyRes.data.recoveryKeyId).toEqual(hashString(getRecoveryPubKey(secret)));
+      expect(verifyRes.data.recoveryKeyId).toEqual(hashString(api.getRecoveryPubKey(secret)));
       expect(verifyRes.cookie).toBeTruthy();
 
       user = {
@@ -489,7 +481,8 @@ export async function loginWithPasskey(user: TestUser): Promise<{ cookie: string
       expect(optsRes.status).toBe(200);
 
       const assertion = user.emulator.getJSON(RP_ORIGIN, { ...optsRes.data, challenge: optsRes.data.challenge });
-      const verifyRes = await postJson('/v1/auth/verify', { ...assertion, challenge: optsRes.data.challenge }, {}, '');
+      const body = api.makeAuthVerifyRequest(assertion, { challenge: optsRes.data.challenge });
+      const verifyRes = await postJson('/v1/auth/verify', body, {}, '');
 
       if (verifyRes.status === 200 || attempt >= 3) {
          expect(verifyRes.status).toBe(200);
@@ -531,10 +524,7 @@ export async function addPasskey(user: TestUser, csrf: string, cookie: string): 
    expect(optsRes.status).toBe(200);
 
    const { attestation, passkeyUserCredEnc } = await registerNewCredential(user, optsRes.data);
-   const body: Record<string, any> = { ...attestation, challenge: optsRes.data.challenge };
-   if (passkeyUserCredEnc) {
-      body.passkeyUserCredEnc = passkeyUserCredEnc;
-   }
+   const body = api.makeAddVerifyRequest(attestation, { challenge: optsRes.data.challenge, passkeyUserCredEnc });
 
    const verifyRes = await postJson('/v1/passkeys/verify', body, { 'x-csrf-token': csrf }, cookie);
    expect(verifyRes.status).toBe(200);
@@ -548,7 +538,7 @@ export async function addPasskey(user: TestUser, csrf: string, cookie: string): 
 // emulator holding that credential.
 export async function buildPrfRegBody(userName: string): Promise<{
    userId: string;
-   body: RequestTypes.RegVerify;
+   body: api.RegVerifyRequest;
    emulator: WebAuthnEmulator;
    userCred: Uint8Array<ArrayBuffer>;
    recoverySecret: Uint8Array;
@@ -572,17 +562,16 @@ export async function buildPrfRegBody(userName: string): Promise<{
       },
       true,
    );
-   const recoveryId = getRandom(RECOVERYID_BYTES);
-   const secret = recoverySecret(recoveryId, userId);
+   const recoveryId = getRandom(api.RECOVERYID_BYTES);
+   const secret = api.recoverySecret(recoveryId, userId);
 
-   const body: RequestTypes.RegVerify = {
-      ...attestation,
+   const body = api.makeRegVerifyRequest(attestation, {
       userId,
       challenge: regOpts.data.challenge,
       passkeyUserCredEnc: await prfEncrypt(userCred.slice(0), prfOutput.slice(0), userId),
       recoveryUserCredEnc: await prfEncrypt(userCred.slice(0), secret.slice(0), userId),
-      userCredPubKey: getUserCredPubKey(userCred),
-      recoveryPubKey: getRecoveryPubKey(secret),
-   };
+      userCredPubKey: api.getUserCredPubKey(userCred),
+      recoveryPubKey: api.getRecoveryPubKey(secret),
+   });
    return { userId, body, emulator, userCred, recoverySecret: secret, recoveryId, prfOutput };
 }
