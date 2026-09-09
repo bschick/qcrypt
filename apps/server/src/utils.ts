@@ -125,7 +125,8 @@ export async function verifyRecoverProof(
 
    try {
       verifyRecoveryProof(recoveryPubKey, userId, timestamp, nonce, signature, op);
-   } catch {
+   } catch (err) {
+      console.error('verifyRecoveryProof', err);
       throw new ParamError(`user account ${userId} invalid recovery proof`);
    }
 
