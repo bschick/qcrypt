@@ -35,6 +35,10 @@ const RECOVERY_SIG_CONTEXTS: Readonly<Record<RecoveryOp, string>> = {
    recover: 'qcrypt/recovery/recover/v1',
 };
 
+// BACKWARD COMPAT: clients before the per-operation contexts signed both operations with this one,
+// which lets a proof for either operation stand in for the other. Delete once those clients are gone
+const RECOVERY_COMPAT_SIG_CONTEXT = 'qcrypt/recovery/nonce/v1';
+
 export const RECOVERYID_BYTES = 16;
 export const CHALLENGE_BYTES = 32;
 
@@ -159,10 +163,14 @@ export function verifyRecoveryProof(
    signature: string,
    op: RecoveryOp,
 ): void {
-   verifyProof(
-      base64ToBytes(pubKey),
-      buildRecoveryMessage(userId, timestampMs, nonce),
-      base64ToBytes(signature),
-      RECOVERY_SIG_CONTEXTS[op],
-   );
+   const keyBytes = base64ToBytes(pubKey);
+   const message = buildRecoveryMessage(userId, timestampMs, nonce);
+   const signatureBytes = base64ToBytes(signature);
+
+   try {
+      verifyProof(keyBytes, message, signatureBytes, RECOVERY_SIG_CONTEXTS[op]);
+   } catch {
+      // BACKWARD COMPAT: delete this catch, leaving only the call above
+      verifyProof(keyBytes, message, signatureBytes, RECOVERY_COMPAT_SIG_CONTEXT);
+   }
 }

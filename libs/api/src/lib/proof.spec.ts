@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { cryptoReady, getRandom, bytesToBase64, base64ToBytes } from '@qcrypt/crypto';
+import { cryptoReady, getRandom, bytesToBase64, base64ToBytes, getProofKeyPair, createProof } from '@qcrypt/crypto';
 import {
    getUserCredPubKey,
    createUserCredProof,
@@ -139,6 +139,19 @@ describe('recovery nonce proof', () => {
       const recoveryPubKey = getRecoveryPubKey(secret);
       const userCredPubKey = getUserCredPubKey(secret);
       expect(recoveryPubKey).not.toBe(userCredPubKey);
+   });
+
+   // BACKWARD COMPAT: clients before the per-operation contexts signed both operations with a
+   // single context. Delete this test with the fallback it covers.
+   it('BACKWARD COMPAT accepts a proof signed with the shared pre-8.0.0 context', () => {
+      const secret = getRandom(32);
+      const pubKey = getRecoveryPubKey(secret);
+      const { secKey } = getProofKeyPair(secret, 'RecovKey');
+      const message = new TextEncoder().encode([userId, timestamp, nonce].join('\n'));
+      const legacySig = bytesToBase64(createProof(secKey, message, 'qcrypt/recovery/nonce/v1'));
+
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, legacySig, 'recover')).not.toThrow();
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, legacySig, 'replace')).not.toThrow();
    });
 
    it('throw when a proof for one operation is replayed into the other', () => {
