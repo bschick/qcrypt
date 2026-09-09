@@ -42,7 +42,13 @@ interface IO {
 // Inquirer's cleanup ends the output stream it receives via pipe;
 // by giving it a throwaway proxy, ttyOut itself stays open for
 // subsequent prompts and showAnswered calls.
+// Inquirer starts a prompt with a newline only once it has rendered one before, and it cannot
+// see writes made directly to ttyOut, so answers echoed here have to terminate their own line
+// until the first prompt has run
+let promptRendered = false;
+
 function iqOutput(io: IO): Writable {
+   promptRendered = true;
    return new Writable({
       write(chunk: string | Uint8Array, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
          if (typeof chunk === 'string') {
@@ -66,7 +72,8 @@ class ParamError extends Error {
 const iqTheme = makeTheme();
 function showAnswered(message: string, answer: string, io: IO): void {
    const prefixDone = typeof iqTheme.prefix === 'string' ? iqTheme.prefix : iqTheme.prefix.done;
-   io.ttyOut.write(`${prefixDone} ${iqTheme.style.message(message, 'done')} ${iqTheme.style.answer(answer)}\n`);
+   const line = `${prefixDone} ${iqTheme.style.message(message, 'done')} ${iqTheme.style.answer(answer)}`;
+   io.ttyOut.write(promptRendered ? `\n${line}` : `${line}\n`);
 }
 
 async function peekBinary(
@@ -264,9 +271,6 @@ async function getSensitiveInput(msg: string, io: IO): Promise<string> {
       { message: `${msg}:`, mask: '*', validate: (v) => (!v ? `${msg} is required` : true) },
       { input: io.ttyIn, output: iqOutput(io) },
    );
-   // inquirer's answered render leaves the cursor on the same line; ensure the
-   // next direct write to ttyOut/pipedOut starts on a fresh line.
-   io.ttyOut.write('\n');
    return val;
 }
 
@@ -414,6 +418,9 @@ async function encrypt(
    }
 }
 
+// TODO: This is fragile... update crypto lib to return a typed error to fix
+const DECRYPT_FAILURES = ['Invalid key commitment', 'Invalid MAC signature', 'Invalid MAC data'];
+
 async function decrypt(
    args: {
       cred?: string;
@@ -469,6 +476,10 @@ async function decrypt(
    } catch (err) {
       if (args.debug) {
          console.error(err);
+      } else if (DECRYPT_FAILURES.some((failure) => (err as Error).message?.startsWith(failure))) {
+         console.error(
+            '\ndecryption failed: You may be using the wrong password or user credential, or the cipher armor is invalid',
+         );
       } else {
          console.error('\ndecryption failed: ', (err as Error).message);
       }
