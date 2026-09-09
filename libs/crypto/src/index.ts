@@ -22,6 +22,7 @@ SOFTWARE. */
 
 // Utility functions and classes
 export {
+   setLogErrors,
    hasArrayBuffer,
    ensureArrayBuffer,
    getArrayBuffer,

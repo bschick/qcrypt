@@ -11,6 +11,7 @@ import {
    readStreamAll,
    Ciphers,
    PWDKeyProvider,
+   setLogErrors,
 } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import fs from 'node:fs';
@@ -655,6 +656,8 @@ if (args.debug) {
       shown[key] = maskForDebug(key, value);
    }
    console.error('args ->', shown);
+} else {
+   setLogErrors(false);
 }
 
 function openTTY(kind: 'stdin' | 'stdout'): Promise<(fs.ReadStream & fs.WriteStream) | undefined> {
@@ -667,7 +670,7 @@ function openTTY(kind: 'stdin' | 'stdout'): Promise<(fs.ReadStream & fs.WriteStr
 
 type OutFile = {
    stream: fs.WriteStream;
-   finish: (failed: boolean) => Promise<void>;
+   finish: () => Promise<void>;
 };
 
 const EXIT_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
@@ -678,8 +681,8 @@ function errDetail(err: unknown): string {
    return reason ?? code ?? message;
 }
 
-// A forced overwrite is written beside the destination and renamed over it, so decrypted data
-// never inherits the destination's permissions, follows a symlink, or replaces it half written.
+// Output is written beside the destination and moved into place once complete, so decrypted data
+// never inherits the destination's permissions, follows a symlink, or appears half written.
 // Nothing this run creates should outlive a failure, including one delivered as a signal.
 function openOutFile(outfile: string, force: boolean): OutFile {
    if (fs.existsSync(outfile)) {
@@ -694,21 +697,17 @@ function openOutFile(outfile: string, force: boolean): OutFile {
       }
    }
 
-   let temp: string | undefined;
+   const prefix = path.join(path.dirname(outfile), `.${path.basename(outfile)}.`);
+   const temp = `${prefix}${randomBytes(4).toString('hex')}`;
    // Masks the random part of a temp name, which the user never asked to write
-   let showPath = outfile;
-   if (force) {
-      const prefix = path.join(path.dirname(outfile), `.${path.basename(outfile)}.`);
-      temp = `${prefix}${randomBytes(4).toString('hex')}`;
-      showPath = `${prefix}*`;
-   }
+   const showPath = `${prefix}*`;
 
    let created = false;
    const remove = (): void => {
       if (created) {
          created = false;
          try {
-            fs.rmSync(temp ?? outfile, { force: true });
+            fs.rmSync(temp, { force: true });
          } catch (err) {
             console.error(`\ncould not remove ${showPath}: ${errDetail(err)}`);
          }
@@ -725,9 +724,8 @@ function openOutFile(outfile: string, force: boolean): OutFile {
       process.on(signal, onSignal);
    }
 
-   // wx rather than w so a file appearing after the checks above, including a timed
-   // symlink, is refused
-   const stream = fs.createWriteStream(temp ?? outfile, { mode: 0o600, flags: 'wx' });
+   // wx rather than w so a name taken since it was generated is refused rather than replaced
+   const stream = fs.createWriteStream(temp, { mode: 0o600, flags: 'wx' });
    stream.once('open', () => {
       created = true;
    });
@@ -738,7 +736,51 @@ function openOutFile(outfile: string, force: boolean): OutFile {
       process.exitCode = 1;
    });
 
-   const finish = async (failed: boolean): Promise<void> => {
+   const takenError = (): Error => new Error(`${outfile} already exists, use --force to overwrite`);
+
+   // Claiming the name first keeps the refusal atomic, at the cost of an instant where the
+   // destination is empty. Only for filesystems that cannot hard link, which have no better option
+   const claimAndMove = (): void => {
+      try {
+         fs.closeSync(fs.openSync(outfile, 'wx', 0o600));
+      } catch (err) {
+         throw (err as NodeJS.ErrnoException).code === 'EEXIST' ? takenError() : err;
+      }
+      try {
+         fs.renameSync(temp, outfile);
+      } catch (err) {
+         fs.rmSync(outfile, { force: true });
+         throw err;
+      }
+   };
+
+   // A hard link refuses a destination taken during the run, which rename would silently replace
+   const commit = (): void => {
+      if (force) {
+         fs.renameSync(temp, outfile);
+      } else {
+         let linked = false;
+         try {
+            fs.linkSync(temp, outfile);
+            linked = true;
+         } catch (err) {
+            if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+               throw takenError();
+            }
+            claimAndMove();
+         }
+         if (linked) {
+            try {
+               // The destination is already complete, so a stranded temp is not worth failing over
+               fs.rmSync(temp, { force: true });
+            } catch (err) {
+               console.error(`\ncould not remove ${showPath}: ${errDetail(err)}`);
+            }
+         }
+      }
+   };
+
+   const finish = async (): Promise<void> => {
       if (!stream.destroyed) {
          stream.end();
       }
@@ -747,18 +789,17 @@ function openOutFile(outfile: string, force: boolean): OutFile {
          process.removeListener(signal, onSignal);
       }
 
-      if (failed) {
+      // Read after the close, since a write can still fail while the last of it is flushed
+      if (process.exitCode === 1) {
          remove();
-      } else if (temp) {
+      } else {
          try {
-            fs.renameSync(temp, outfile);
+            commit();
             created = false;
          } catch (err) {
             remove();
             throw err;
          }
-      } else {
-         created = false;
       }
    };
 
@@ -843,7 +884,7 @@ async function main() {
 
    if (outFile) {
       try {
-         await outFile.finish(process.exitCode === 1);
+         await outFile.finish();
       } catch (err) {
          console.error(`\ncould not write ${args.outfile}: ${errDetail(err)}`);
          process.exitCode = 1;
@@ -858,7 +899,8 @@ async function main() {
 // reporting success for data that was never written
 let completed = false;
 process.on('exit', () => {
-   if (!completed) {
+   // An already reported failure has said what went wrong, so only silence needs this
+   if (!completed && process.exitCode !== 1) {
       console.error('\nthe operation did not finish');
       process.exitCode = 1;
    }

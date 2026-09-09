@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { getSodium } from './crypto';
 import * as cc from './cipher.consts';
-import { numToBytes, BYOBStreamReader, ensureArrayBuffer, concatArrays } from './utils';
+import { numToBytes, BYOBStreamReader, ensureArrayBuffer, concatArrays, logError } from './utils';
 
 import { Decipher, CipherState, Extractor, type CipherDataInfo } from './ciphers-current';
 import type { KeyProvider } from './keys';
@@ -132,7 +132,7 @@ export class DecipherV1 extends Decipher {
          this._state = CipherState.Block0Decoded;
       } catch (err) {
          this.errorState();
-         console.error(err);
+         logError(err);
          throw err;
       } finally {
          this._headerish = undefined;
@@ -341,7 +341,7 @@ export class DecipherV4 extends Decipher {
          this._state = CipherState.Block0Decoded;
       } catch (err) {
          this.errorState();
-         console.error(err);
+         logError(err);
          throw err;
       } finally {
          this._header = undefined;
@@ -386,7 +386,7 @@ export class DecipherV4 extends Decipher {
          return decrypted;
       } catch (err) {
          this.errorState();
-         console.error(err);
+         logError(err);
          throw err;
       } finally {
          this._blockData = undefined;
@@ -436,7 +436,7 @@ export class DecipherV4 extends Decipher {
          await this._verifyMAC();
       } catch (err) {
          this.errorState();
-         console.error(err);
+         logError(err);
          throw err;
       }
    }

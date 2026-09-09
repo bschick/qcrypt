@@ -32,6 +32,7 @@ import {
    ensureArrayBuffer,
    clamp,
    concatArrays,
+   logError,
 } from './utils';
 import { type KeyProvider, PWDKeyProvider } from './keys';
 
@@ -497,7 +498,7 @@ export class EncipherV8 extends Encipher {
          };
       } catch (err) {
          this.errorState();
-         console.error(err);
+         logError(err);
          throw err;
       }
    }
@@ -550,7 +551,7 @@ export class EncipherV8 extends Encipher {
          };
       } catch (err) {
          this.errorState();
-         console.error(err);
+         logError(err);
          throw err;
       }
    }
@@ -756,7 +757,7 @@ export abstract class Decipher extends Ciphers {
          return decrypted;
       } catch (err) {
          this.errorState();
-         console.error(err);
+         logError(err);
          throw err;
       } finally {
          this._blockData = undefined;
@@ -1079,7 +1080,7 @@ export class DecipherV678 extends Decipher {
          this._lastFlags = this._blockData.flags;
       } catch (err) {
          this.errorState();
-         console.error(err);
+         logError(err);
          throw err;
       } finally {
          this._header = undefined;
@@ -1133,7 +1134,7 @@ export class DecipherV678 extends Decipher {
          return decrypted;
       } catch (err) {
          this.errorState();
-         console.error(err);
+         logError(err);
          throw err;
       } finally {
          this._blockData = undefined;
@@ -1206,7 +1207,7 @@ export class DecipherV678 extends Decipher {
          this._lastFlags = this._blockData.flags;
       } catch (err) {
          this.errorState();
-         console.error(err);
+         logError(err);
          throw err;
       }
    }

@@ -75,7 +75,7 @@ export function parseCipherArmor(cipherArmor: string): Uint8Array<ArrayBuffer> {
       }
       jsonParts = JSON.parse(trimmed);
    } catch (err) {
-      console.error(err);
+      // Only the name, since a parse error quotes the input and this text reaches a terminal
       if (err instanceof Error) {
          throw new Error(`Cipher armor text not formatted correctly. ${err.name}`);
       }

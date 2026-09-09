@@ -520,6 +520,7 @@ describe('CLI App', () => {
             clearText,
          );
          expect(result.status).toBe(1);
+         expect(result.stderr).toContain('cannot be given together with piped input');
       });
    });
 
@@ -934,6 +935,87 @@ describe('CLI App', () => {
          } finally {
             fs.chmodSync(lockedDir, 0o755);
             fs.rmSync(lockedDir, { recursive: true, force: true });
+         }
+      });
+
+      // Base64 output is written in one go at the end, so the failure always lands during the
+      // flush, after the command itself has returned
+      it.skipIf(skipOnWindows)('keeps the destination when the final flush fails', () => {
+         const bulk = path.resolve(tmpDir, 'test-outfile-guard-bulk.bin');
+         fs.writeFileSync(outPath, 'do not destroy me', 'utf-8');
+         const enc = execCli(
+            ['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--outfile', bulk, '--pwds', 'pass'],
+            'S'.repeat(100000),
+         );
+         expect(enc.status).toBe(0);
+
+         const command =
+            `ulimit -f 8; trap '' XFSZ; node '${cliPath}' dec --cred ${userCred} --silent ` +
+            `--infile '${bulk}' --outfile '${outPath}' --force -b out --pwds pass`;
+         const result = spawnSync('bash', ['-c', command], { encoding: 'utf-8' });
+
+         expect(result.status).toBe(1);
+         // Without this the test also passes when nothing was ever written
+         expect(result.stderr).toContain('could not write');
+         expect(fs.readFileSync(outPath, 'utf-8')).toBe('do not destroy me');
+         fs.unlinkSync(bulk);
+      });
+
+      it('creates a new output file only once it is complete', () => {
+         const truncated = path.resolve(tmpDir, 'test-outfile-guard-truncated.bin');
+         const whole = fs.readFileSync(cipherPath);
+         fs.writeFileSync(truncated, whole.subarray(0, whole.length - 1));
+
+         const result = execCli([
+            'dec',
+            '--cred',
+            userCred,
+            '--silent',
+            '--infile',
+            truncated,
+            '--outfile',
+            outPath,
+            '--pwds',
+            'pass',
+         ]);
+
+         expect(result.status).toBe(1);
+         expect(fs.existsSync(outPath)).toBe(false);
+         fs.unlinkSync(truncated);
+      });
+
+      // Only observable while the run is stalled, since a create-then-remove ends the same way
+      it.skipIf(skipOnWindows)('does not create the destination while output is incomplete', async () => {
+         const pipePath = path.resolve(tmpDir, 'test-outfile-guard-pipe2');
+         execSync(`mkfifo '${pipePath}'`);
+         const before = fs.readdirSync(tmpDir);
+         const addedFiles = () => fs.readdirSync(tmpDir).filter((name) => !before.includes(name));
+         const feeder = spawn('bash', ['-c', `{ head -c 100 '${cipherPath}'; sleep 30; } > '${pipePath}'`]);
+         const decrypting = spawn('node', [
+            cliPath,
+            'dec',
+            '--cred',
+            userCred,
+            '--silent',
+            '--infile',
+            pipePath,
+            '--outfile',
+            outPath,
+            '--pwds',
+            'pass',
+         ]);
+
+         try {
+            await vi.waitFor(() => expect(addedFiles().length).toBe(1), { timeout: 10000 });
+            expect(fs.existsSync(outPath)).toBe(false);
+
+            decrypting.kill('SIGINT');
+            await new Promise((resolve) => decrypting.once('exit', resolve));
+            expect(fs.existsSync(outPath)).toBe(false);
+         } finally {
+            feeder.kill();
+            decrypting.kill();
+            fs.rmSync(pipePath, { force: true });
          }
       });
 
