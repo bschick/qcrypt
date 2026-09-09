@@ -20,8 +20,7 @@
 - disabled browser text assistance features on sensitive input fields [thanks to Prashikshit Saini (@PrashikshitSaini) and Damir (@Evelynkaz)]
 - enforce output file permissions during cli --force overwrite [thanks to @EpochLiu]
 - cli --force overwrite no longer follows symlinks [thanks to Claude Code (@claude)]
-- cli no longer leaves decrypted data behind when an output file cannot be written [thanks to Claude Code (@claude)]
-- cli removes partially written output when interrupted by Ctrl-C or a kill [thanks to Claude Code (@claude)]
+- various other cli improvements including better cleanup during error or interruption
 - updated packages
 
 ## 7.5.1 (2026-09-01)
