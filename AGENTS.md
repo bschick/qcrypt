@@ -171,6 +171,7 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 > **Note:** When passing flags through `nx`, use camelCase for config options (e.g., `--runnerConfig=` not `--runner-config`).
 > **Note:** To run specific test files, use `--include`.
 >   - For `test:web` (Angular builder), `--include` expects a file glob. You must use the `**/` prefix to find nested files. Example: `pnpm test:web -- --include='**/keystore.service.spec.ts'`
+>   - **Do not use the `--` form with `test:web:all` or `test:web:most`.** Those scripts pass their own `--runnerConfig`, and adding `-- --include=...` makes nx resolve the command without it, so only chromium runs while the output still looks normal. Call the target directly so both flags survive: `pnpm exec nx test web --runnerConfig=apps/web/vitest-all.config.ts --include='**/keystore.service.spec.ts'`. Confirm it worked by the file and test counts tripling (one instance per browser).
 >   - For `test:e2e` which runs playwrigth you and pass any valid playwright filters. For matching specific regex of the test name use `-g`. Example: `pnpm test:e2e -g "sign in logs out tabs"`
 >   - For other projects (`test:libs`, `test:server`, `test:cli`), they invoke Vitest directly, which uses string/regex matching. **Do not use the `**/` prefix** for these. Example: `pnpm test:libs -- --include=ciphers.spec.ts`
 > **Note:** To run specific tests by **name** (the `describe`/`it` text, matched as a regex against the full suite + test name), the flag differs per runner:
