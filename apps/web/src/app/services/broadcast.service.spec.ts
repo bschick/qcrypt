@@ -67,7 +67,7 @@ describe('BroadcastService', () => {
 
    it('round-trips a credential when peer pkId matches', async () => {
       responder.setCredentialProvider(() => TEST_CRED);
-      const result = await requester.requestCredential(TEST_PK_ID);
+      const result = await requester.requestCredential(TEST_PK_ID, true);
       expect(result).toEqual(TEST_CRED);
    });
 
@@ -126,8 +126,8 @@ describe('BroadcastService', () => {
       responder.setCredentialProvider(() => TEST_CRED);
 
       const [a, b] = await Promise.all([
-         requester.requestCredential(TEST_PK_ID),
-         requester.requestCredential(TEST_PK_ID),
+         requester.requestCredential(TEST_PK_ID, true),
+         requester.requestCredential(TEST_PK_ID, true),
       ]);
 
       expect(a).toEqual(TEST_CRED);
@@ -142,7 +142,7 @@ describe('BroadcastService', () => {
       expect(firstAttempt).toBeUndefined();
 
       credential = TEST_CRED;
-      const secondAttempt = await requester.requestCredential(TEST_PK_ID);
+      const secondAttempt = await requester.requestCredential(TEST_PK_ID, true);
       expect(secondAttempt).toEqual(TEST_CRED);
    });
 
@@ -210,7 +210,7 @@ describe('BroadcastService', () => {
 
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       try {
-         const result = await requester.requestCredential(TEST_PK_ID);
+         const result = await requester.requestCredential(TEST_PK_ID, true);
          // a fulfilled result proves the peer listener ran, so requestNonce is set
          expect(result).toEqual(TEST_CRED);
 
@@ -379,8 +379,8 @@ describe('BroadcastService', () => {
          altResponder.setCredentialProvider(() => ALT_CRED);
 
          const [matchedTest, matchedAlt, unmatched] = await Promise.all([
-            requester.requestCredential(TEST_PK_ID),
-            requester.requestCredential(ALT_PK_ID),
+            requester.requestCredential(TEST_PK_ID, true),
+            requester.requestCredential(ALT_PK_ID, true),
             requester.requestCredential('pk-bogus-not-served-by-anyone'),
          ]);
 
