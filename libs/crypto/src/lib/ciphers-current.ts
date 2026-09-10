@@ -679,6 +679,13 @@ export abstract class Decipher extends Ciphers {
       return baseAd;
    }
 
+   protected async _verifyEmptyReader(): Promise<void> {
+      const [extra] = await this._reader.readAvailable(new ArrayBuffer(1));
+      if (extra.byteLength !== 0) {
+         throw new Error('Unexpected extra data');
+      }
+   }
+
    // When decryptBlock functions return an empty byte array, the
    // stream is done. It work like this because these function
    // retry until each block is read and decrypted (so only return
@@ -1128,6 +1135,7 @@ export class DecipherV678 extends Decipher {
 
          // Occurs when the last block was only present to mark termination (in v5+)
          if (decrypted.byteLength === 0) {
+            await this._verifyEmptyReader();
             this.finishedState();
          }
 

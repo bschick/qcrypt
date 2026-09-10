@@ -40,12 +40,14 @@ Please use our [vulnerability disclosure program at Open Bug Bounty](https://www
 
 Thanks to the following security researchers:
 
-| Researcher | Bounties |
-| --- | --- |
-| Rajat Shukla (@rajat4722) | 7 |
-| destro4evr | 3 |
-| CapsenR | 2 |
-| Prashikshit Saini (@PrashikshitSaini) | 1 |
-| Damir (@Evelynkaz) | 1 |
-| @EpochLiu | 1 |
-| [Vaibhav Jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/) | 1 |
+| Researcher                                                          | Bounties |
+| ------------------------------------------------------------------- | -------- |
+| Rajat Shukla (@rajat4722)                                           | 7        |
+| destro4evr                                                          | 3        |
+| CapsenR                                                             | 2        |
+| Prashikshit Saini (@PrashikshitSaini)                               | 1        |
+| Damir (@Evelynkaz)                                                  | 1        |
+| @EpochLiu                                                           | 1        |
+| [Vaibhav Jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/) | 1        |
+
+// new people appended data, and 7.5.1 fix

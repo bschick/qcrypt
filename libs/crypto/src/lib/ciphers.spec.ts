@@ -224,6 +224,43 @@ describe('Encryption and decryption', () => {
       }
    });
 
+   it('appended data should be detected after an empty terminal block', async () => {
+      for (const alg of Ciphers.algs()) {
+         // just the right size to cause an empty terminal block
+         const clearData = getRandom(64);
+         const [clearStream] = streamFromBytes(clearData);
+         const pwd = 'a good pwd';
+         const userCred = getRandom(cc.USERCRED_BYTES);
+         const makeKP = () => new PWDKeyProvider(userCred.slice(0), [pwd]);
+
+         const encipher = getLatestEncipher(clearStream, makeKP(), alg, 1, 1, cc.ICOUNT_MIN, {
+            startSize: 64,
+            maxSize: 64,
+         });
+
+         const parts: Uint8Array[] = [];
+         for (let guard = 0; guard < 10; guard++) {
+            const block = await encipher.encryptBlock();
+            parts.push(...block.parts);
+            if (block.state === CipherState.Finished) {
+               break;
+            }
+         }
+
+         // Control, so a pass below cannot come from the terminal block carrying clear text
+         const [cleanStream] = streamFromBytes(concatArrays(parts));
+         const cleanDec = await getStreamDecipher(cleanStream, makeKP());
+         await expect(cleanDec.decryptBlock0()).resolves.toEqual(clearData);
+         await expect(cleanDec.decryptBlockN()).resolves.toEqual(new Uint8Array(0));
+
+         // Appending garbage after terminal block should be detected
+         const [appendedStream] = streamFromBytes(concatArrays([...parts, new Uint8Array([123])]));
+         const appendedDec = await getStreamDecipher(appendedStream, makeKP());
+         await expect(appendedDec.decryptBlock0()).resolves.toEqual(clearData);
+         await expect(appendedDec.decryptBlockN()).rejects.toThrow(/extra data/i);
+      }
+   });
+
    // A tampering party who has gained access to userCred can rebuild the outer MAC
    // chain. This test drops a block, sets the term flag, and rebuilds the MAC to verify
    // that the AEAD still detects it because the flag lives in the additional data

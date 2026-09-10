@@ -380,6 +380,7 @@ export class DecipherV4 extends Decipher {
 
          // Occurs when the last block was only present to mark termination (in v5+)
          if (decrypted.byteLength === 0) {
+            await this._verifyEmptyReader();
             this.finishedState();
          }
 

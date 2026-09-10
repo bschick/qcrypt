@@ -17,6 +17,7 @@
   - domain separation of different recovery proof signatures
 - adversarial key commitment test added to solve GF(2^128) collision [thanks to Claude Code (@claude)]
 - added detection and error reporting of stripped encryption loops
+- added detection and error reporting of data appended after an empty final block [thanks to ??]
 - disabled browser text assistance features on sensitive input fields [thanks to Prashikshit Saini (@PrashikshitSaini) and Damir (@Evelynkaz)]
 - enforce output file permissions during cli --force overwrite [thanks to @EpochLiu]
 - cli --force overwrite no longer follows symlinks [thanks to Claude Code (@claude)]

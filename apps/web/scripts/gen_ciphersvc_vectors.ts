@@ -7,6 +7,7 @@
 //   - "detect missing terminal block indicator, multi-version"
 //   - "detect extra terminal block indicator, multi-version"
 //   - "detect flipped terminal block indicator, multi-version"
+//   - "detect appended data after terminal block, multi-version"
 //   - "detect corrupt cipher text, all algs, multi-version"
 //   - "Stream manipulation, multi-version"
 //   - "Block order change and deletion detection, multi-version"
@@ -14,13 +15,22 @@
 //
 // Run with: pnpm vectors:ciphersvc
 
-import { cryptoReady, PWDKeyProvider, encryptStream, readStreamAll, base64ToBytes, Ciphers } from '@qcrypt/crypto';
+import {
+   cryptoReady,
+   PWDKeyProvider,
+   encryptStream,
+   readStreamAll,
+   base64ToBytes,
+   getStreamDecipher,
+   Ciphers,
+} from '@qcrypt/crypto';
 import type { EContext } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import { morphInMemory, parseBuffer } from './parser.ts';
 import {
    streamFromStr,
    streamFromBytes,
+   bytesFromStr,
    withTermOverride,
    withTermOverrideEvery,
    encryptOneLoop,
@@ -144,6 +154,84 @@ async function genExtraAndFlippedTerminal(): Promise<void> {
    printVersionedBlock('flippedTerminal', '         ', VER, 'vectors:ciphersvc', [
       `            cipherData: ${uint8ArrayLiteral(flippedBytes)}`,
    ]);
+   console.log();
+}
+
+// Confirms the block split a vector is meant to capture, since a change in how the
+// encipher sizes blocks would otherwise leave the vector passing for the wrong reason.
+// The trailing zero is what separates the two cases: a terminal block holding no clear
+// text reports it on the block itself, one holding clear text only at end of stream.
+async function confirmBlockSplit(
+   cipherBytes: Uint8Array,
+   userCred: Uint8Array<ArrayBuffer>,
+   pwd: string,
+   clearSizes: number[],
+): Promise<void> {
+   const keyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
+   const decipher = await getStreamDecipher(streamFromBytes(cipherBytes), keyProvider);
+
+   // Runs one call past the expected count so a longer stream is caught too
+   const decrypted = [(await decipher.decryptBlock0()).byteLength];
+   while (decrypted.at(-1) !== 0 && decrypted.length <= clearSizes.length) {
+      decrypted.push((await decipher.decryptBlockN()).byteLength);
+   }
+
+   if (decrypted.join() !== clearSizes.join()) {
+      throw new Error(`blocks hold [${decrypted}] clear bytes, expected [${clearSizes}]`);
+   }
+}
+
+// Vectors for "detect appended data after terminal block, multi-version". Each algorithm
+// gets a pair: clear text that runs out exactly as the first block fills, so the encipher
+// has to append a terminal block carrying nothing, and clear text that spills into a
+// terminal block of its own. Appending to either must be caught rather than ignored.
+async function genAppendedAfterTerminal(): Promise<void> {
+   const PLAIN_EMPTY_TERM = 'This clear text stops exactly where the first cipher block does.';
+   const PLAIN_DATA_TERM = `${PLAIN_EMPTY_TERM} And this spills over.`;
+   const PWD = 'a good pwd';
+   const HINT = 'terminal';
+   const CRED = base64ToBytes('7Ef58ZW_sp30ZHm1I0kp4KzfJkzUIN_FpQjBeCTU2w8');
+   const ALGS: cc.CipherAlgs[] = ['AES-GCM', 'X20-PLY', 'AEGIS-256'];
+   const BLOCK_SIZE = bytesFromStr(PLAIN_EMPTY_TERM).byteLength;
+   const READ_OPTS = { startSize: BLOCK_SIZE, maxSize: BLOCK_SIZE };
+   const SPILL_SIZE = bytesFromStr(PLAIN_DATA_TERM).byteLength - BLOCK_SIZE;
+
+   printBanner(`detect appended data after terminal block, multi-version (V${VER})`);
+
+   const lines = ['            cts: ['];
+   for (const alg of ALGS) {
+      const emptyBytes = await encryptOneLoop(
+         streamFromStr(PLAIN_EMPTY_TERM),
+         CRED,
+         PWD,
+         HINT,
+         alg,
+         cc.ICOUNT_MIN,
+         READ_OPTS,
+      );
+      const dataBytes = await encryptOneLoop(
+         streamFromStr(PLAIN_DATA_TERM),
+         CRED,
+         PWD,
+         HINT,
+         alg,
+         cc.ICOUNT_MIN,
+         READ_OPTS,
+      );
+      await confirmBlockSplit(emptyBytes, CRED, PWD, [BLOCK_SIZE, 0]);
+      await confirmBlockSplit(dataBytes, CRED, PWD, [BLOCK_SIZE, SPILL_SIZE, 0]);
+
+      lines.push(`               //${alg}`);
+      lines.push('               {');
+      lines.push('                  emptyTerm:');
+      lines.push(`                     '${toBase64(emptyBytes)}',`);
+      lines.push('                  dataTerm:');
+      lines.push(`                     '${toBase64(dataBytes)}',`);
+      lines.push('               },');
+   }
+   lines.push('            ],');
+
+   printVersionedBlock('appendedAfterTerminal', '         ', VER, 'vectors:ciphersvc', lines);
    console.log();
 }
 
@@ -322,6 +410,7 @@ async function main() {
    await genMultiVersionLoops();
    await genMissingTerminal();
    await genExtraAndFlippedTerminal();
+   await genAppendedAfterTerminal();
    await genCorruptCipherText();
    await genStreamManipulation(CLEAR_DATA);
 
