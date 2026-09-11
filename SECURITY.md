@@ -50,5 +50,4 @@ Thanks to the following security researchers:
 | Damir (@Evelynkaz)                                                  | 1        |
 | @EpochLiu                                                           | 1        |
 | [Vaibhav Jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/) | 1        |
-
-// new people appended data, and 7.5.1 fix
+| David (@pythonyx135793)                                             | 1        |

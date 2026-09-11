@@ -22,6 +22,12 @@
 - enforce output file permissions during cli --force overwrite [thanks to @EpochLiu]
 - cli --force overwrite no longer follows symlinks [thanks to Claude Code (@claude)]
 - various other cli improvements including better cleanup during error or interruption
+
+## 7.5.2 (2026-09-10)
+
+#### Security
+
+- send only approved webauthn fields to the server, excluding PRF and other extensions [thanks to David (@pythonyx135793)]
 - updated packages
 
 ## 7.5.1 (2026-09-01)

@@ -20,22 +20,41 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-export {
-   getUserCredPubKey,
-   createUserCredProof,
-   verifyUserCredProof,
-   getRecoveryPubKey,
-   createRecoveryProof,
-   verifyRecoveryProof,
-   recoverySecret,
-   RECOVERYID_BYTES,
-   CHALLENGE_BYTES,
-   PROOF_PUBKEY_BYTES,
-   PROOF_SIG_BYTES,
-} from './lib/proof';
+import type { RegOptionsResponse } from './webauthn';
 
-export type { RecoveryOp } from './lib/proof';
+// The pre-recovery-words path, which proves possession by sending userCred itself.
+export type RecoverRequest = {
+   userId: string;
+   userCred: string;
+};
 
-export * from './lib/webauthn';
-export * from './lib/user';
-export * from './lib/recovery';
+export type RecoverProof = {
+   timestamp: string;
+   nonce: string;
+   signature: string;
+};
+
+export type Recover3Request = RecoverProof & {
+   userId: string;
+};
+
+export type Recover3KeyRequest = RecoverProof & {
+   recoveryPubKey: string;
+   userCredEnc?: string;
+};
+
+export type RecoverConfirmRequest = {
+   userId: string;
+   challenge: string;
+   timestamp: string;
+   signature: string;
+};
+
+export type RecoverInfoResponse = RegOptionsResponse & {
+   prf?: boolean;
+   userCredEnc?: string;
+};
+
+export type RecoverStartResponse =
+   | { prf: true; challenge: string; userCredEnc: string }
+   | { prf: false; challenge: string; userCred: string };

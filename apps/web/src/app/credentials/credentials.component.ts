@@ -28,12 +28,8 @@ import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatInputModule } from '@angular/material/input';
-import {
-   AuthenticatorService,
-   type AuthenticatorInfo,
-   AuthEvent,
-   PrfUnsupportedError,
-} from '../services/authenticator.service';
+import { AuthenticatorService, AuthEvent, PrfUnsupportedError } from '../services/authenticator.service';
+import * as api from '@qcrypt/api';
 import { EditableComponent } from '../ui/editable/editable.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -66,7 +62,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    public error = '';
    public prfUnsupported = false;
    public userName = '';
-   public passKeys: AuthenticatorInfo[] = [];
+   public passKeys: api.AuthenticatorInfoResponse[] = [];
    public showProgress = false;
    public displayedColumns: string[] = ['image', 'description', 'delete'];
    @Output() done = new EventEmitter<boolean>();
@@ -109,7 +105,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       });
    }
 
-   onClickDelete(passkey: AuthenticatorInfo) {
+   onClickDelete(passkey: api.AuthenticatorInfoResponse) {
       this.error = '';
       this.prfUnsupported = false;
       let pkState = ConfirmDialog.NONE_PK;
@@ -206,7 +202,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
       this.refresh();
    }
 
-   async onDescriptionChanged(component: EditableComponent, passkey: AuthenticatorInfo): Promise<void> {
+   async onDescriptionChanged(component: EditableComponent, passkey: api.AuthenticatorInfoResponse): Promise<void> {
       try {
          this.error = '';
          this.prfUnsupported = false;

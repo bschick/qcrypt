@@ -50,12 +50,12 @@ to assert most of the meaninful actions in this table
 */
 
 import { TestBed } from '@angular/core/testing';
-import { AuthenticatorService, AuthEvent, type LoginUserInfo } from './authenticator.service';
+import { AuthenticatorService, AuthEvent } from './authenticator.service';
 import { BroadcastService } from './broadcast.service';
 import { KEYSTORE_DB_NAME, KeystoreService } from './keystore.service';
 import * as cc from '@qcrypt/crypto/consts';
 import { base64ToBytes, bytesToBase64, cryptoReady, getRandom, hashString } from '@qcrypt/crypto';
-import { CHALLENGE_BYTES, RECOVERYID_BYTES, getUserCredPubKey, recoverySecret, type RequestTypes } from '@qcrypt/api';
+import * as api from '@qcrypt/api';
 import { entropyToMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 
@@ -66,7 +66,7 @@ describe('AuthenticatorService', () => {
    let userId: string;
    let userCred: string;
    let peerExpiry: string;
-   let sessionResponse: LoginUserInfo;
+   let sessionResponse: api.LoginUserInfoResponse;
    let originalFetch: typeof fetch;
    let fetchMock: ReturnType<typeof vi.fn>;
    const allAuthEvents = [AuthEvent.Login, AuthEvent.Logout, AuthEvent.Forget, AuthEvent.Delete];
@@ -326,7 +326,7 @@ describe('AuthenticatorService', () => {
          primeLocalStorage();
          await login(false, userCred);
          expect(readPin().prf).toBe(false);
-         expect(readPin().userCredPubKey).toBe(getUserCredPubKey(base64ToBytes(userCred)));
+         expect(readPin().userCredPubKey).toBe(api.getUserCredPubKey(base64ToBytes(userCred)));
          expect(service.halted).toBe(false);
       });
 
@@ -400,10 +400,10 @@ describe('AuthenticatorService', () => {
          primeLocalStorage();
          await login(false, userCred);
 
-         const recoveryWords = entropyToMnemonic(recoverySecret(getRandom(RECOVERYID_BYTES), userId), wordlist);
+         const recoveryWords = entropyToMnemonic(api.recoverySecret(getRandom(api.RECOVERYID_BYTES), userId), wordlist);
          const startResp = {
             prf: false,
-            challenge: bytesToBase64(getRandom(CHALLENGE_BYTES)),
+            challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)),
             userCred,
          };
          fetchMock.mockImplementation((url: URL) => ({
@@ -424,10 +424,10 @@ describe('AuthenticatorService', () => {
          await login(true, userCred);
          expect(service.halted).toBe(false);
 
-         const recoveryWords = entropyToMnemonic(recoverySecret(getRandom(RECOVERYID_BYTES), userId), wordlist);
+         const recoveryWords = entropyToMnemonic(api.recoverySecret(getRandom(api.RECOVERYID_BYTES), userId), wordlist);
          const startResp = {
             prf: false,
-            challenge: bytesToBase64(getRandom(CHALLENGE_BYTES)),
+            challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)),
             userCred: bytesToBase64(getRandom(cc.USERCRED_BYTES)),
          };
          fetchMock.mockImplementation((url: URL) => ({
@@ -480,7 +480,7 @@ describe('AuthenticatorService', () => {
    }
 
    // extra what was sent to the server
-   function sentRecoveryKeyBodies(): RequestTypes.Recover3Key[] {
+   function sentRecoveryKeyBodies(): api.Recover3KeyRequest[] {
       return fetchMock.mock.calls
          .filter((call) => (call[0] as URL).pathname.endsWith('/recover3/key'))
          .map((call) => JSON.parse((call[1] as RequestInit).body as string));
@@ -541,7 +541,10 @@ describe('AuthenticatorService', () => {
 
       it('detects valid recovery pattern from another account', async () => {
          const otherUserId = bytesToBase64(getRandom(cc.USERID_BYTES));
-         const otherWords = entropyToMnemonic(recoverySecret(getRandom(RECOVERYID_BYTES), otherUserId), wordlist);
+         const otherWords = entropyToMnemonic(
+            api.recoverySecret(getRandom(api.RECOVERYID_BYTES), otherUserId),
+            wordlist,
+         );
 
          await expect(service.checkRecoveryWords(otherWords)).resolves.toEqual('wronguser');
       });
