@@ -218,6 +218,7 @@ async function _decryptStreamImpl(
          },
       });
 
+      // Recursion moves inward, and only the outermost loop describes the stored bytes, so onDone stops here
       if (cdInfo.lp > 1) {
          return await _decryptStreamImpl(readableStream, keyProvider, undefined, cdInfo.lp - 1);
       }

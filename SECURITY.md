@@ -4,10 +4,11 @@
 
 ### Known Issues
 
-_Please do not report the following known issues:_
+_Please do not report the following currently accepted issues:_
 
 - [Legacy account recovery links with sensitive data in path](https://github.com/bschick/qcrypt/issues/46)
 - [CSP style-src nonces aren't really nonces](https://github.com/bschick/qcrypt/issues/47)
+- [CLI streams decrypted output before full ciphertext validation](https://github.com/bschick/qcrypt/issues/80)
 
 ### Reporting
 
