@@ -104,8 +104,16 @@
         "buildTarget": "web:build"
       }
     },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec tsc -p apps/web/tests/tsconfig.json --noEmit",
+        "cwd": "{workspaceRoot}"
+      }
+    },
     "test": {
       "executor": "@angular/build:unit-test",
+      "dependsOn": ["typecheck"],
       "options": {
         "tsConfig": "apps/web/tsconfig.spec.json",
         "runnerConfig": true,
