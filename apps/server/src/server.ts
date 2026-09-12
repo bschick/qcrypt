@@ -1584,15 +1584,15 @@ async function postRecoverConfirm(httpDetails: HttpDetails): Promise<Response> {
 // Consider if rpOrigin should be moved from being per Authenticator to
 // per User. This wouldn't be more secure, but it might prevent errors during
 // development if a real users data was used in a test region.
-// If origin is moved to user, then we could add a test here to confirm the
-// original user origin is used for all following actions.
 async function getUnverifiedUser(userId: string): Promise<UnverifiedUserItem> {
    if (!validB64(userId) || base64UrlDecode(userId)?.length !== cc.USERID_BYTES) {
       throw new ParamError('invalid userid format');
    }
 
-   // May not want to bring back all parameter
-   // Eventually consistent by choice; revisit if stale fields cause 401s outside tests.
+   // Eventually consistent by choice because this is the hottest read in the system. That
+   // means a recent write could go unseen by this read, including a previous logout. That
+   // race exists regardless or read consistency, however, and sessions always end when
+   // consistency is reached.
    const unverifiedUser = await Users.get({
       userId,
    }).go();
