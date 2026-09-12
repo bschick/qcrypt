@@ -4,8 +4,16 @@
   "projectType": "library",
   "sourceRoot": "libs/api/src",
   "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec tsc -p libs/api/tsconfig.json --noEmit",
+        "cwd": "{workspaceRoot}"
+      }
+    },
     "test": {
       "executor": "nx:run-commands",
+      "dependsOn": ["typecheck"],
       "options": {
         "command": "pnpm exec vitest run --config libs/api/vitest.config.ts {args.include} -t \"{args.name}\"",
         "cwd": "{workspaceRoot}",
