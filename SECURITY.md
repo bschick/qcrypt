@@ -6,9 +6,10 @@
 
 _Please do not report the following currently accepted issues:_
 
-- [Legacy account recovery links with sensitive data in path](https://github.com/bschick/qcrypt/issues/46)
+- [Legacy account recovery links contain sensitive data in path](https://github.com/bschick/qcrypt/issues/46)
 - [CSP style-src nonces aren't really nonces](https://github.com/bschick/qcrypt/issues/47)
 - [CLI streams decrypted output before full ciphertext validation](https://github.com/bschick/qcrypt/issues/80)
+- [Add server issued approval tokens for irreversible actions](https://github.com/bschick/qcrypt/issues/81)
 
 ### Reporting
 
@@ -20,7 +21,7 @@ Please use our [vulnerability disclosure program at Open Bug Bounty](https://www
 - $100 for high severity findings
 - $200 for critical findings
 - determination of severity will be a discussion, but quickcrypt.org is the final decision-maker
-- paid via PayPal, Venmo, or USDC
+- paid via Wise, PayPal, Venmo, or USDC
 - if desired, your information and finding will be added to Acknowledgments in this file
 
 ### Requirements for submission
@@ -50,4 +51,5 @@ Thanks to the following security researchers:
 | Damir (@Evelynkaz)                                                  | 1        |
 | @EpochLiu                                                           | 1        |
 | [Vaibhav Jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/) | 1        |
+| Ben (@benthepythondev00)                                            | 1        |
 | David (@pythonyx135793)                                             | 1        |

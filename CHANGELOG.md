@@ -4,24 +4,25 @@
 
 #### Changes
 
-- fixed input focus problem on credentials panel
+- changed initial focus on the credentials panel to prevent accidental passkey creation
 - improved test coverage for master key provider, proofs, and nonce uniqueness
 
 #### Security
 
 - [protocol version 8 released](https://quickcrypt.org/help/protocol8)
-  - cipher key hash added to associated data to achieve full key commitment across all cipher modes [thanks to Rajat Shukla (@rajat4722)]
+  - key commitment added to AD and verified before decryption to achieve full key commitment across all cipher modes [thanks to Rajat Shukla (@rajat4722)]
   - length prefixes added to key derivation inputs to enforce unambiguous encoding
-  - improved domain isolation by adding context-specific input to block key derivation
+  - improved domain isolation by adding context-specific inputs to block key derivation
   - password hints padded to a 16-byte modulus before encryption to obscure hint length
-  - domain separation of different recovery proof signatures
-- adversarial key commitment test added to solve GF(2^128) collision [thanks to Claude Code (@claude)]
+  - added domain separation between "replace" and "recover" recovery proof signatures
+- added adversarial key commitment test using a GF(2^128) solver [thanks to Claude Code (@claude)]
 - added detection and error reporting of stripped encryption loops
-- added detection and error reporting of data appended after an empty final block [thanks to ??]
+- added detection and error reporting of data appended after an empty final block [thanks to Ben (@benthepythondev00)]
 - disabled browser text assistance features on sensitive input fields [thanks to Prashikshit Saini (@PrashikshitSaini) and Damir (@Evelynkaz)]
-- enforce output file permissions during cli --force overwrite [thanks to @EpochLiu]
+- enforced output file permissions during cli --force overwrite [thanks to @EpochLiu]
 - cli --force overwrite no longer follows symlinks [thanks to Claude Code (@claude)]
-- various other cli improvements including better cleanup during error or interruption
+- various small cli improvements including better cleanup after error or interruption
+- updated packages
 
 ## 7.5.2 (2026-09-10)
 
