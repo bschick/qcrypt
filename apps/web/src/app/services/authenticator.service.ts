@@ -976,14 +976,26 @@ export class AuthenticatorService {
 
    logout(global: boolean, emit: boolean = true) {
       const eventData = this._captureEventData(AuthEvent.Logout);
-      const session = this._getSessionState();
 
       if (global && this.hasSession()) {
          this._pendingLogout = this._doFetch<string>({
             method: 'DELETE',
             resource: 'session',
          }).catch(() => undefined);
+      }
 
+      this.clearSession(global);
+
+      if (emit) {
+         this._emit(eventData);
+      }
+   }
+
+   // Clears the session on the local system, optionally across tabs, but not on the server.
+   clearSession(global: boolean): void {
+      const session = this._getSessionState();
+
+      if (global && this.hasSession()) {
          // rather than clear values, which can trigger error in other tabs,
          // set expirations to the past to trigger clear self-logout
          const expired = new Date(Date.now() - 10000).toISOString();
@@ -1010,10 +1022,6 @@ export class AuthenticatorService {
       // clear sensitive in-memory values
       this._csrf = undefined;
       this._cachedRecoveryWords = undefined;
-
-      if (emit) {
-         this._emit(eventData);
-      }
    }
 
    async setPasskeyDescription(credentialId: string, description: string): Promise<VerifiedUserInfo> {
@@ -1281,7 +1289,7 @@ export class AuthenticatorService {
          });
 
          // server ends the session, so drop local session state to match
-         this.logout(true);
+         this.clearSession(true);
 
          if (startResp.prf) {
             if (!startResp.userCredEnc) {
