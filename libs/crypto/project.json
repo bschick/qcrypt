@@ -7,8 +7,12 @@
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm exec tsc -p libs/crypto/tsconfig.json --noEmit",
-        "cwd": "{workspaceRoot}"
+        "commands": [
+          "pnpm exec tsc -p libs/crypto/tsconfig.lib.json --noEmit",
+          "pnpm exec tsc -p libs/crypto/tsconfig.spec.json --noEmit"
+        ],
+        "cwd": "{workspaceRoot}",
+        "parallel": false
       }
     },
     "test": {
