@@ -88,12 +88,14 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
    }
 
    ngAfterViewInit(): void {
-      try {
-         // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
-         setTimeout(() => this.r2.selectRootElement('#wordsArea').focus(), 0);
-      } catch (err) {
-         console.error(err);
-      }
+      // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
+      setTimeout(() => {
+         try {
+            this.r2.selectRootElement('#wordsArea').focus();
+         } catch (err) {
+            console.error(err);
+         }
+      }, 0);
    }
 
    ngOnDestroy() {

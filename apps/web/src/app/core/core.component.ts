@@ -200,12 +200,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          }
       }
 
-      try {
-         // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
-         setTimeout(() => this.r2.selectRootElement('#clearInput').focus(), 0);
-      } catch (err) {
-         console.error(err);
-      }
+      // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
+      setTimeout(() => {
+         try {
+            this.r2.selectRootElement('#clearInput').focus();
+         } catch (err) {
+            console.error(err);
+         }
+      }, 0);
    }
 
    ngOnInit() {

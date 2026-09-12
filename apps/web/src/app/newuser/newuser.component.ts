@@ -79,12 +79,14 @@ export class NewUserComponent implements OnInit, AfterViewInit {
    }
 
    ngAfterViewInit(): void {
-      try {
-         // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
-         setTimeout(() => this.r2.selectRootElement('#userName').focus(), 0);
-      } catch (err) {
-         console.error(err);
-      }
+      // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
+      setTimeout(() => {
+         try {
+            this.r2.selectRootElement('#userName').focus();
+         } catch (err) {
+            console.error(err);
+         }
+      }, 0);
    }
 
    toastMessage(msg: string): void {
