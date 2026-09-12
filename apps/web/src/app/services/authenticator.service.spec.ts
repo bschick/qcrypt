@@ -479,7 +479,7 @@ describe('AuthenticatorService', () => {
       });
    }
 
-   // extra what was sent to the server
+   // Extracts what was sent to the server
    function sentRecoveryKeyBodies(): api.Recover3KeyRequest[] {
       return fetchMock.mock.calls
          .filter((call) => (call[0] as URL).pathname.endsWith('/recover3/key'))
