@@ -215,20 +215,17 @@ importers:
         specifier: ^13.3.3
         version: 13.3.3
       '@zxcvbn-ts/core':
-        specifier: ^3.0.4
-        version: 3.0.4
+        specifier: ^4.2.0
+        version: 4.2.0
       '@zxcvbn-ts/language-common':
-        specifier: ^3.0.4
-        version: 3.0.4
+        specifier: ^4.1.3
+        version: 4.1.3
       '@zxcvbn-ts/language-en':
-        specifier: ^3.0.2
-        version: 3.0.2
-      '@zxcvbn-ts/language-es-es':
-        specifier: ^3.0.2
-        version: 3.0.2
+        specifier: ^4.1.1
+        version: 4.1.1
       '@zxcvbn-ts/matcher-pwned':
-        specifier: ^3.0.4
-        version: 3.0.4
+        specifier: ^4.1.3
+        version: 4.1.3
       dompurify:
         specifier: ^3.4.15
         version: 3.4.15
@@ -3420,20 +3417,20 @@ packages:
     resolution: {integrity: sha512-nrUSn7hzt7J6JWgWGz78ZYI8wj+gdIJdk0Ynjpp8l+trkn58Uqsf6RYrYkEK+3X18EX+TNdtJI0WxAtc+L84SQ==}
     hasBin: true
 
-  '@zxcvbn-ts/core@3.0.4':
-    resolution: {integrity: sha512-aQeiT0F09FuJaAqNrxynlAwZ2mW/1MdXakKWNmGM1Qp/VaY6CnB/GfnMS2T8gB2231Esp1/maCWd8vTG4OuShw==}
+  '@zxcvbn-ts/core@4.2.0':
+    resolution: {integrity: sha512-tuwzwOcYVca9MufHuUvzKGRyL04iP52OjCNoRDuGXjzzrtPiPcl8r5QtOotbx0AyTR/CMcDTU9qLkN16b9fXiw==}
 
-  '@zxcvbn-ts/language-common@3.0.4':
-    resolution: {integrity: sha512-viSNNnRYtc7ULXzxrQIVUNwHAPSXRtoIwy/Tq4XQQdIknBzw4vz36lQLF6mvhMlTIlpjoN/Z1GFu/fwiAlUSsw==}
+  '@zxcvbn-ts/dictionary-compression@3.0.1':
+    resolution: {integrity: sha512-p3KyPzxGc3vWSap5hHA6SllbUCmh7s+NtpGyC3qEWrxYJT9t9TUAzjPm48Okipo+UUyPQfDlIvTcs9JRShBFiQ==}
 
-  '@zxcvbn-ts/language-en@3.0.2':
-    resolution: {integrity: sha512-Zp+zL+I6Un2Bj0tRXNs6VUBq3Djt+hwTwUz4dkt2qgsQz47U0/XthZ4ULrT/RxjwJRl5LwiaKOOZeOtmixHnjg==}
+  '@zxcvbn-ts/language-common@4.1.3':
+    resolution: {integrity: sha512-g2bg4skmlJG9aJqC/nWziZzgYpSe/f3rKeGobrkdFiOrfZVFqqzUgC6BUQWuX54Sua9j0Jxxt+1bf4f/Mal1Kg==}
 
-  '@zxcvbn-ts/language-es-es@3.0.2':
-    resolution: {integrity: sha512-5IbEduFuUtzA6fQtatPo8HIyuIyu6nqsEksz+jXwpFhNUqh+pplFLrpdHbdJ0RENrJ5uk+Fz1pPOTDgBbLPSZQ==}
+  '@zxcvbn-ts/language-en@4.1.1':
+    resolution: {integrity: sha512-6UdzuBd3Uex8TKubohcn+uXRVAH34Zjs2eCfT4hQVo9zeTy7AkQRQfdV4OnHR5hQfW/XBrK/AGTZk7VBWh7wwQ==}
 
-  '@zxcvbn-ts/matcher-pwned@3.0.4':
-    resolution: {integrity: sha512-7BY6/IfY0Eb9HjTQGbDPIMceiBR6jZtQTOQfA3X3XREAZZ29GQ2XAm9dwZ76wF35XOajszGoXQ+L/fYh8DpkMg==}
+  '@zxcvbn-ts/matcher-pwned@4.1.3':
+    resolution: {integrity: sha512-V2n6xyZP6eRaMP/FVkFb3Kcvw8ydaY+jaDHMu8ut8ikLnOINqce1dEsIAQGUWSsk4AYuKAC+KAmXFuLxu76/Ww==}
 
   abbrev@4.0.0:
     resolution: {integrity: sha512-a1wflyaL0tHtJSmLSOVybYhy22vRih4eduhhrkcjgrWGnRfrZtovJ2FRjxuTtkkj47O/baf0R86QU5OuYpz8fA==}
@@ -10629,19 +10626,23 @@ snapshots:
     dependencies:
       argparse: 2.0.1
 
-  '@zxcvbn-ts/core@3.0.4':
+  '@zxcvbn-ts/core@4.2.0':
     dependencies:
       fastest-levenshtein: 1.0.16
 
-  '@zxcvbn-ts/language-common@3.0.4': {}
+  '@zxcvbn-ts/dictionary-compression@3.0.1': {}
 
-  '@zxcvbn-ts/language-en@3.0.2': {}
-
-  '@zxcvbn-ts/language-es-es@3.0.2': {}
-
-  '@zxcvbn-ts/matcher-pwned@3.0.4':
+  '@zxcvbn-ts/language-common@4.1.3':
     dependencies:
-      '@zxcvbn-ts/core': 3.0.4
+      '@zxcvbn-ts/dictionary-compression': 3.0.1
+
+  '@zxcvbn-ts/language-en@4.1.1':
+    dependencies:
+      '@zxcvbn-ts/dictionary-compression': 3.0.1
+
+  '@zxcvbn-ts/matcher-pwned@4.1.3':
+    dependencies:
+      '@zxcvbn-ts/core': 4.2.0
 
   abbrev@4.0.0: {}
 
