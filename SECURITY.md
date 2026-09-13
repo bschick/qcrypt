@@ -53,3 +53,4 @@ Thanks to the following security researchers:
 | [Vaibhav Jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/) | 1        |
 | Ben (@benthepythondev00)                                            | 1        |
 | David (@pythonyx135793)                                             | 1        |
+| Blake Prins                                                         | 1        |

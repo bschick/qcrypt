@@ -4,6 +4,7 @@
 
 #### Changes
 
+- sign in dialog now reports if the previous sign out succeeded [thanks to Blake Prins]
 - changed initial focus on the credentials panel to prevent accidental passkey creation
 - improved test coverage for master key provider, proofs, and nonce uniqueness
 
