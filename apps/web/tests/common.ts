@@ -342,9 +342,8 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
          makeAuthenticator(mode, new PasskeysCredentialsMemoryRepository());
       const provisionAuthenticator = (dir: string, mode: HmacSecretMode): Authenticator =>
          makeAuthenticator(mode, new PasskeysCredentialsFileRepository(dir));
-      // Runs against an in-memory copy of the stored credential to prevent sign-ins from
-      // updating the persisted keeper file, working around a nid FileRepository bug where
-      // its async unlink can race a sync write and drop the credential.
+      // Runs against an in-memory copy of the stored credential so a sign-in cannot write back
+      // to the persisted keeper file, which is provisioned once and reused across every run.
       const loadAuthenticator = (dir: string): Authenticator => {
          const stored = new PasskeysCredentialsFileRepository(dir).loadCredentials();
          if (stored.length === 0) {

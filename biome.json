@@ -11,7 +11,6 @@
       "!**/*.html",
       "!**/*.md",
       "!**/*.svg",
-      "!vendor",
       "!apps/server/assets",
       "!libs/crypto/src/lib/crux/qc_crux.js",
       "!libs/crypto/src/lib/crux/qc_crux.d.ts",
