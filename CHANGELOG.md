@@ -1,10 +1,10 @@
 # CHANGELOG.md
 
-## 8.0.0 (2026-09-TBD)
+## 8.0.0 (2026-09-12)
 
 #### Changes
 
-- sign in dialog now reports if the previous sign out succeeded [thanks to Blake Prins]
+- sign-in dialog now reports when the previous sign out failed [thanks to Blake Prins (@prins1bap-ui)]
 - changed initial focus on the credentials panel to prevent accidental passkey creation
 - improved test coverage for master key provider, proofs, and nonce uniqueness
 
@@ -22,7 +22,7 @@
 - disabled browser text assistance features on sensitive input fields [thanks to Prashikshit Saini (@PrashikshitSaini) and Damir (@Evelynkaz)]
 - enforced output file permissions during cli --force overwrite [thanks to @EpochLiu]
 - cli --force overwrite no longer follows symlinks [thanks to Claude Code (@claude)]
-- various small cli improvements including better cleanup after error or interruption
+- various small cli improvements including better cleanup after an error or interruption
 - updated packages
 
 ## 7.5.2 (2026-09-10)
@@ -180,7 +180,7 @@
 
 #### Changes
 
-- load signin dialog rather than welcome page when when valid user is known
+- load sign-in dialog rather than welcome page when when valid user is known
 
 #### Security
 
