@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { getSodium } from './crypto';
 import * as cc from './cipher.consts';
-import { numToBytes, BYOBStreamReader, ensureArrayBuffer, concatArrays } from './utils';
+import { numToBytes, BYOBStreamReader, ensureArrayBuffer, concatArrays, logError } from './utils';
 
 import { Decipher, CipherState, Extractor, type CipherDataInfo } from './ciphers-current';
 import type { KeyProvider } from './keys';
@@ -89,7 +89,7 @@ export class DecipherV1 extends Decipher {
          const encryptedData = extractor.remainder('edata');
 
          // Repack because we don't have the contiguous data any longer
-         const fileAD = DecipherV1._encodeFileAD({
+         const fileAD = DecipherV1._encodeAD({
             alg,
             iv,
             ver,
@@ -121,10 +121,7 @@ export class DecipherV1 extends Decipher {
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we  have the signing key and data.
-         const validMac: boolean = await this._verifyMAC();
-         if (!validMac) {
-            throw new Error('Invalid MAC error');
-         }
+         await this._verifyMAC();
 
          if (encryptedHint!.byteLength !== 0) {
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(iv);
@@ -135,14 +132,14 @@ export class DecipherV1 extends Decipher {
          this._state = CipherState.Block0Decoded;
       } catch (err) {
          this.errorState();
-         console.error(err);
+         logError(err);
          throw err;
       } finally {
          this._headerish = undefined;
       }
    }
 
-   private async _verifyMAC(): Promise<boolean> {
+   private async _verifyMAC(): Promise<void> {
       if (!this._blockData?.additionalData || !this._blockData.encryptedData || !this._blockData) {
          throw new Error('Invalid MAC data');
       }
@@ -163,7 +160,7 @@ export class DecipherV1 extends Decipher {
       const valid: boolean = await crypto.subtle.verify('HMAC', subtleSK, this._blockData.mac, data);
       subtleSK = undefined;
       if (valid) {
-         return true;
+         return;
       }
 
       throw new Error('Invalid HMAC signature');
@@ -200,7 +197,7 @@ export class DecipherV4 extends Decipher {
                   IC_BYTES - 4
                   LPP_BYTES (packed lp and lpEnd) - 1
                   EHINT_LEN_BYTES - 1
-                  EHINT_BYTES (variable) - [0-128]
+                  EHINT_BYTES (variable) - [0-255]
                </Additional Data>
                <Encrypted Data>
                   EDATA_BYTES (variable)
@@ -333,10 +330,7 @@ export class DecipherV4 extends Decipher {
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we have the signing key and data.
-         const validMac: boolean = await this._verifyMAC();
-         if (!validMac) {
-            throw new Error('Invalid MAC error');
-         }
+         await this._verifyMAC();
 
          if (encryptedHint!.byteLength !== 0) {
             const [hk, hIV] = await this._keyProvider.getHintCipherKeyAndIV(this._blockData.iv);
@@ -347,7 +341,7 @@ export class DecipherV4 extends Decipher {
          this._state = CipherState.Block0Decoded;
       } catch (err) {
          this.errorState();
-         console.error(err);
+         logError(err);
          throw err;
       } finally {
          this._header = undefined;
@@ -386,13 +380,14 @@ export class DecipherV4 extends Decipher {
 
          // Occurs when the last block was only present to mark termination (in v5+)
          if (decrypted.byteLength === 0) {
+            await this._verifyEmptyReader();
             this.finishedState();
          }
 
          return decrypted;
       } catch (err) {
          this.errorState();
-         console.error(err);
+         logError(err);
          throw err;
       } finally {
          this._blockData = undefined;
@@ -439,18 +434,15 @@ export class DecipherV4 extends Decipher {
 
          // Avoiding the Doom Principle and verify signature before crypto operations.
          // Aka, check MAC as soon as possible after we  have the signing key and data.
-         const validMac: boolean = await this._verifyMAC();
-         if (!validMac) {
-            throw new Error('Invalid MAC error');
-         }
+         await this._verifyMAC();
       } catch (err) {
          this.errorState();
-         console.error(err);
+         logError(err);
          throw err;
       }
    }
 
-   protected async _verifyMAC(): Promise<boolean> {
+   protected async _verifyMAC(): Promise<void> {
       if (
          !this._blockData?.payloadSize ||
          !this._blockData.ver ||
@@ -476,7 +468,7 @@ export class DecipherV4 extends Decipher {
       const validMac: boolean = sodium.memcmp(this._blockData.mac, testMac);
 
       if (validMac) {
-         return true;
+         return;
       }
 
       throw new Error('Invalid MAC signature');
@@ -531,7 +523,7 @@ export class DecipherV5 extends DecipherV4 {
       }
    }
 
-   protected override async _verifyMAC(): Promise<boolean> {
+   protected override async _verifyMAC(): Promise<void> {
       if (
          !this._blockData?.payloadSize ||
          !this._blockData.ver ||
@@ -563,7 +555,7 @@ export class DecipherV5 extends DecipherV4 {
 
       if (validMac) {
          this._lastMac = testMac;
-         return true;
+         return;
       }
 
       throw new Error('Invalid MAC signature');

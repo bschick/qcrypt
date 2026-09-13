@@ -19,8 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Component, ViewEncapsulation, inject } from '@angular/core';
-import type { OnInit, OnDestroy } from '@angular/core';
+import { Component, ViewEncapsulation, inject, type OnInit, type OnDestroy } from '@angular/core';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -350,9 +349,9 @@ const ELEMENT_DATA: FAQElement[] = [
       id: '7b5',
       position: 0,
       question: 'Can I decrypt my data without an internet connection?',
-      answer: `Yes, as long as you have already signed into Quick Crypt.
+      answer: `Yes, as long as you have already signed in to Quick Crypt.
       After signing in, Quick Crypt runs entirely in your browser and does not
-      require an internet connection to decrypt or encrypt data.  If you are
+      require an internet connection to decrypt or encrypt data. If you are
       inactive for 1.5 hours, however, Quick Crypt logs you out and then requires
       an internet connection to sign in again and decrypt data.
       <p>The Quick Crypt command-line tool is another option that never
@@ -361,8 +360,8 @@ const ELEMENT_DATA: FAQElement[] = [
       by navigating to https://quickcrypt.org/cmdline. Then
       <a href="https://github.com/bschick/qcrypt/releases/latest/download/qcrypt.zip" target="_blank">download the qcrypt.zip file</a>,
       extract it, and install <a href="https://nodejs.org/" target="_blank">Node.js</a>
-      before going offline. Then run the script from the command-line and respond to the prompts:
-      <blockquote>> node qcrypt.cjs</blockquote></p>`,
+      before going offline. Then run the script from the command line and respond
+      to the prompts: <blockquote>> node qcrypt.cjs</blockquote></p>`,
    },
 
    {
@@ -379,7 +378,8 @@ const ELEMENT_DATA: FAQElement[] = [
       download the qcrypt.zip file</a>, extract it, ensure you have
       <a href="https://nodejs.org/" target="_blank">Node.js</a> installed, and
       then run the tool from the command-line and respond to the prompts:
-      <blockquote>> node qcrypt.cjs</blockquote>`,
+      <blockquote>> node qcrypt.cjs</blockquote>
+      The command-line tool has not been tested on Windows systems.`,
    },
 
    {
@@ -437,7 +437,7 @@ const ELEMENT_DATA: FAQElement[] = [
       id: 'd6f',
       position: 0,
       question: 'What should I do if I forgot to print my emergency recovery sheet?',
-      answer: `There are several potential scenarios, each is described below.
+      answer: `There are several potential scenarios; each is described below.
       <ol type='i'>
          <li><b>You can log in and know your recovery words:</b>
            Go to the <a href="/checkrecovery">Check Recovery Words</a> page and
@@ -575,7 +575,7 @@ const ELEMENT_DATA: FAQElement[] = [
         <tr>
           <td class="tg-0pky">Cryptographic keys for encryption and decryption</td>
           <td class="tg-0pky">Not stored, not transmitted</td>
-          <td class="tg-0pky">Cryptographic keys are ephemeral, generated on the fly, and discarded after each use.</td>
+          <td class="tg-0pky">Cryptographic keys are ephemeral, generated on the fly, and discarded after each use</td>
         </tr>
         <tr>
           <td class="tg-0pky">Encryption and decryption preferences such as symmetric cipher choice</td>
@@ -630,7 +630,7 @@ const ELEMENT_DATA: FAQElement[] = [
       id: '3c4',
       position: 0,
       question: 'Does Quick Crypt store or upload the passwords I use for encryption?',
-      answer: `No. See the previous question about the information Quick Crypt stores for
+      answer: `No. See the question about the information Quick Crypt stores for
       more detail.`,
    },
 
@@ -638,7 +638,7 @@ const ELEMENT_DATA: FAQElement[] = [
       id: '4d8',
       position: 0,
       question: 'Does Quick Crypt store or upload the unencrypted or encrypted data I enter?',
-      answer: `No. See the previous question about the information Quick Crypt stores for
+      answer: `No. See the question about the information Quick Crypt stores for
       more detail.`,
    },
 
@@ -659,7 +659,7 @@ const ELEMENT_DATA: FAQElement[] = [
          to keep you logged in. Each session has a unique cookie.
          </li>
          <li><b>Cookie Security: </b>Our session cookies are HttpOnly and implemented as
-         server-signed JSON Web Tokens (JWTs) using account and session-specific keys,
+         server-signed JSON Web Tokens (JWTs) using account and session specific keys,
          protecting you from attacks like cross-site scripting.
          </li>
          <li><b>Limited Duration: </b>A session automatically expires after either 1.5
@@ -679,8 +679,8 @@ const ELEMENT_DATA: FAQElement[] = [
       button and then choose
       <i>Select Clear File</i> from the menu. The selected file may contain text
       or binary data. After you select a file, click the <i>Encrypt</i>
-      button or to save the encrypted data to a file, open the Files
-      menu again and choose <i>Encrypt to File</i>. To decrypt a previously encrypted
+      button. Alternatively, to save the encrypted data to a file, open the Files menu
+      again and choose <i>Encrypt to File</i>. To decrypt a previously encrypted
       file, click the <i>Files</i> button next to the <i>Decrypt</i>
       button and then choose <i>Select Cipher File</i> from the menu.
       <p>You can inspect the layout of encrypted data within a Quick Crypt file by
@@ -744,7 +744,7 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       id: 'be6',
       position: 0,
-      question: "What should I do if someone I don't trust obtained a password I used for encryption?",
+      question: "What should I do if someone I don't trust obtains a password I used for encryption?",
       answer: `Your data is still protected.
       The potential attacker also needs your encrypted data and your passkey or
       recovery word pattern to decrypt it.
@@ -757,7 +757,7 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       id: 'cf0',
       position: 0,
-      question: "What should I do if someone I don't trust obtained my passkey?",
+      question: "What should I do if someone I don't trust obtains my passkey?",
       answer: `Your data is still protected, but your Quick Crypt user account is at risk.
       A potential attacker would also need your encrypted data and the password you used
       during encryption to decrypt it. Since your passkey allows access to your user credential,
@@ -772,11 +772,11 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       id: 'd04',
       position: 0,
-      question: "What should I do if someone I don't trust obtained my recovery word pattern?",
+      question: "What should I do if someone I don't trust obtains my recovery word pattern?",
       answer: `Your data is still protected by your encryption passwords, but your
       Quick Crypt account is at risk because recovery words are used to replace
       your passkeys.
-      <p>If someone you do not trust gained access to your recovery words but has
+      <p>If someone you do not trust gains access to your recovery words but has
       not used them, simply <a href="/regenrecovery">change your recovery word
       pattern</a>. Your recovery words have not been used
       if your passkeys are unchanged.</p><p>If an untrusted party has used or
@@ -789,27 +789,31 @@ const ELEMENT_DATA: FAQElement[] = [
    {
       id: 'bad',
       position: 0,
-      question: "What should I do if someone I don't trust obtained my emergency recovery sheet?",
+      question: "What should I do if someone I don't trust obtains my emergency recovery sheet?",
       answer: `Your data is still protected by your encryption passwords, but is less secure,
       relying solely on password strength.
       <p>Your recovery sheet contains both your recovery words and your user credential.
-      Normally you do not need your user credential, but it is included on your sheet for offline
-      recovery in case your Quick Crypt account is unintentionally deleted. Unlike recovery words
+      Normally you do not need to know your user credential, but it is included on your sheet
+      for offline storage in case you ever lose access to your Quick Crypt account. If that ever
+      happens, you can use the credential on your sheet with the Quick Crypt
+      <a href="/help/faqs/8f1">command-line tool</a> to decrypt your data.</p>
+      <p>Unlike recovery words
       or passkeys, your user credential cannot be changed and is an essential factor in Quick
-      Crypt's cipher key strength. If your recovery sheet is exposed, an attacker with access to
-      your encrypted files could attempt password-guessing attacks. We recommend creating a new
-      account, re-encrypting your data, and then deleting your previous account.</p>`,
+      Crypt's security. If your recovery sheet is exposed, an attacker with access to
+      your encrypted data could attempt password-guessing attacks. If someone you don't trust
+      accesses your sheet, we recommend creating a new account, re-encrypting your data,
+      and then deleting your previous account.</p>`,
    },
 
    {
       id: 'f2c',
       position: 0,
       question:
-         "What should I do if someone I don't trust obtained my recovery word pattern or passkey and a password I used for encryption?",
+         "What should I do if someone I don't trust obtains my recovery word pattern or passkey and a password I used for encryption?",
       answer: `The potential attacker also needs your encrypted data to decrypt it.
       If the attacker has your encrypted data, your confidential information may be
       exposed. The best response to a stolen recovery word pattern or passkey along
-      with an encryption password is to create a totally new Quick Crypt user, re-encrypt
+      with an encryption password is to create a new Quick Crypt user, re-encrypt
       your data with a new password, and then delete
       the previous cipher armor and your previous user identity.`,
    },
@@ -846,7 +850,7 @@ const ELEMENT_DATA: FAQElement[] = [
          Much like code reviews, we appreciate reviews of the
          <a href="/help/protocol">Quick Crypt protocol</a>. Please
          <a href="https://github.com/bschick/qcrypt/issues" target="_blank">report issues</a>.
-         We are also planning to engage third party auditors to review Quick Crypt's protocol
+         We are also planning to engage third-party auditors to review Quick Crypt's protocol
          and will publish the results.</li>
          <li><b>Supply chain attacks:</b> This is a growing security issue for all software.
          Quick Crypt tries to limit the surface area of attack by using a small number
@@ -893,7 +897,7 @@ const ELEMENT_DATA: FAQElement[] = [
          save it as a bookmark, and only follow links from sites you trust.
          </li>
          <li><b>Stolen passkeys, recovery word pattern, or encryption passwords:</b>
-         See the related questions about an untrusted user obtaining your
+         See the related questions about an untrusted person obtaining your
          passkeys, recovery word pattern, or encryption passwords. Those questions describe
          the best response to each type of data exposure.
          </li>
@@ -933,7 +937,7 @@ const ELEMENT_DATA: FAQElement[] = [
          either <b>XChaCha20 Poly1305</b> or <b>AEGIS 256</b>, which are provided by libsodium.
          </li>
          <li>If you want a cipher mode that is CMT-1 key-committing
-         even without Quick Crypt's additional commitment key, choose <b>AEGIS 256</b>.
+         even without Quick Crypt's stored key commitment, choose <b>AEGIS 256</b>.
          </li>
          <li>While there is no universal agreement on the "safest" mode, the
          <a href="https://doc.libsodium.org/secret-key_cryptography/aead#tl-dr-which-one-should-i-use" target="_blank">
@@ -944,7 +948,7 @@ const ELEMENT_DATA: FAQElement[] = [
       <p>Quick Crypt defaults to <b>XChaCha20 Poly1305</b> because it is very
       well-established, is generally considered more robust than AES 256 GCM,
       is post-quantum robust, is key-committing when paired with Quick Crypt's
-      additional commitment key, and is easy for Quick Crypt to update if needed.
+      stored key commitment, and is easy for Quick Crypt to update if needed.
       The libsodium implementation is also designed to be side-channel attack resistant.
       </p><p>For increased protection, you can encrypt your data multiple times
       by setting loop encrypt in the "Advanced Options" section to greater than 1.
@@ -1026,10 +1030,11 @@ const ELEMENT_DATA: FAQElement[] = [
       id: '7af',
       position: 0,
       question: 'Can other tools decrypt ciphertext created by Quick Crypt?',
-      answer: `Yes, as long as you copy your user credential from
-      https://quickcrypt.org/cmdline, remember your encryption password, and follow
-      <a href="/help/protocol">Quick Crypt's protocol</a>, you could use other
-      tools to decrypt ciphertext created by Quick Crypt in a multi-step process.`,
+      answer: `Yes, you could use other
+      tools to decrypt ciphertext created by Quick Crypt in a multi-step process.
+      You will need your user credential from
+      https://quickcrypt.org/cmdline and your encryption password, and must follow
+      <a href="/help/protocol">Quick Crypt's protocol</a>.`,
    },
 
    {
@@ -1043,7 +1048,7 @@ const ELEMENT_DATA: FAQElement[] = [
       with different spacing and line breaks. As the names imply, the
       'Compact' format is smaller while 'Indent' is easier to read.</p>
       <p>
-      The 'Link' format is a URL containing ciphertext that when entered in
+      The 'Link' format is a URL containing ciphertext that, when entered in
       a browser, takes you directly to the Quick Crypt website with the
       ciphertext ready for decryption. While this is very convenient, the 'Link'
       format is less safe. If an attacker can manipulate your stored cipher armor
@@ -1053,7 +1058,7 @@ const ELEMENT_DATA: FAQElement[] = [
       access your Quick Crypt passkey, however, it cannot obtain authorization to
       access your user name or credential nor can it decrypt your data (see the
       'threat modeling' question). An untrusted site could request your encryption
-      password to try obtaining some of the information needed for decryption, but
+      password to try to obtain some of the information needed for decryption, but
       you can detect that by always confirming your user name is
       shown at the top of the password popup.</p>
 
@@ -1162,13 +1167,13 @@ const ELEMENT_DATA: FAQElement[] = [
       position: 0,
       question: 'Are my password hints encrypted?',
       answer: `Yes, password hints are encrypted with a key derived from
-      your user credential which is accessed with passkey authentication. Although
-      others cannot see your password hints without your passkey,
-      for the most robust protection avoid hints that make it easy for others to
-      guess your passwords.
+      your user credential, which is accessed with passkey authentication.
+      Hint lengths are also obscured by padding before encryption.
+      Although others cannot see your password hints without your passkey,
+      for the most robust protection, avoid hints that make it easy for others
+      to guess your passwords.
       The best password hints help only you remember your passwords. That way,
-      your data is protected even if your passkey or recovery word pattern
-      is stolen.`,
+      your data is protected even if someone else sees your hint.`,
    },
 
    {
@@ -1193,10 +1198,10 @@ const ELEMENT_DATA: FAQElement[] = [
       The outer MAC creates a strict "Encrypt-then-MAC" protocol that lets Quick Crypt safely
       read and display unencrypted
       metadata, such as the version number, before the primary decryption algorithm
-      runs. Next, by outputting cipher armor with a collision-resistant BLAKE2b hash,
-      Quick Crypt achieves CMT-4/FROB-secure key commitment for all cipher modes.
-      And finally, the additional MAC provides defense-in-depth. Imagine an
-      attacker could modify your encrypted data and knows of a bug in Chrome's
+      runs. Next, the collision-resistant BLAKE2b hash prevents the key commitment from being
+      altered, allowing Quick Crypt to achieve CMT-4/FROB-secure key commitment for all cipher
+      modes. And finally, the additional MAC provides defense-in-depth. Imagine an attacker
+      could modify your encrypted data and knew of a bug in Chrome's
       AES-GCM cipher. Although unlikely, this might allow an attacker to craft the
       ciphertext such that data is leaked when you decrypt it. The additional upfront
       MAC validation during decryption adds a layer atop all underlying AEAD ciphers
@@ -1209,17 +1214,16 @@ const ELEMENT_DATA: FAQElement[] = [
       question: "Is Quick Crypt's protocol key-committing?",
       answer: `Yes, <a href="/help/protocol">Quick Crypt's protocol</a> is
       <a href="https://en.wikipedia.org/wiki/Authenticated_encryption#Key-committing_AEAD" target="_blank">
-      key-committing</a> for all underlying AEAD cipher modes as of v7. Two features
-      combine to achieve a <a href="https://tosc.iacr.org/index.php/ToSC/article/view/11404/10902"
-      target="_blank">FROB-secure</a> protocol. During encryption, a commitment key is derived
-      from the root cipher key via a BLAKE2b KDF and then injected into the AEAD additional
-      data. Because the root cipher key is itself derived from the user credential and
-      password, the commitment key binds each ciphertext block to those secrets. An
-      attacker therefore cannot construct a single ciphertext that decrypts to two different
-      cleartexts under two different keys. Next, Quick Crypt creates cipher armor with a
-      collision-resistant 256-bit BLAKE2b keyed hash covering metadata, additional data, and ciphertext. The
-      hash is verified before decryption, creating an "Encrypt-then-MAC" protocol that rejects both
-      cipher key and additional data manipulation.`,
+      key-committing</a> for all underlying AEAD cipher modes, achieving a
+      <a href="https://tosc.iacr.org/index.php/ToSC/article/view/11404/10902"
+      target="_blank">FROB-secure</a> protocol. During encryption, a 256-bit commitment to the
+      root cipher key is derived with a BLAKE2b KDF and stored alongside the ciphertext. Before
+      decrypting, Quick Crypt recomputes that commitment, compares it to the stored version,
+      and aborts the decryption unless they match. Because the root cipher key is itself derived
+      from the user credential and password, an attacker cannot construct a single ciphertext that
+      decrypts to different cleartexts under different keys. Additionally, the key commitment is
+      included in the AEAD associated data and is covered by a 256-bit BLAKE2b keyed hash to
+      prevent tampering.`,
    },
 
    {
@@ -1254,9 +1258,11 @@ const ELEMENT_DATA: FAQElement[] = [
          it strongly resistant, but not immune. AES 256 GCM uses a 128-bit
          internal state and is the most susceptible to quantum state-collision or
          recovery attacks.</li>
-         <li><b>Public-Key Attacks:</b> Quick Crypt does not use public-key algorithms,
-         like Diffie-Hellman, which would be highly vulnerable to a future quantum computer
-         capable of running Shor's algorithm.</li>
+         <li><b>Public-Key Attacks:</b> Data encryption in Quick Crypt relies strictly on
+         symmetric ciphers rather than public-key encryption. For operations like account
+         recovery and API proofs, Quick Crypt uses <b>ML-DSA-65</b> (FIPS 204), a post-quantum
+         lattice-based digital signature algorithm. Quick Crypt does not use classical signature
+         algorithms like RSA or ECDSA, which are vulnerable to Shor's algorithm.</li>
       </ul>
       <p>Quantum cryptographic theory continues to evolve, however, and Quick Crypt will evolve with it.</p>`,
    },
@@ -1267,10 +1273,10 @@ const ELEMENT_DATA: FAQElement[] = [
       question: 'What will Quick Crypt do if one of the symmetric cipher modes is broken?',
       answer: `If any of the three symmetric ciphers used by Quick Crypt are someday
       found to be weak, Quick Crypt will stop offering those modes as an option for
-      encryption. Problematic ciphers would only be available for decryption so
+      encryption. Problematic ciphers will only be available for decryption so
       users can access already encrypted data. Depending upon the
       severity of the weakness, Quick Crypt would notify users of the situation on
-      this site (remember we have no contact info) and recommend that you re-encrypt
+      this site (remember, we have no contact info) and recommend that you re-encrypt
       data using a different cipher mode. Such a weakness would be massive news
       since two modes are part of the TLS 1.3 standard used by most browsers,
       and the third is proposed for a future TLS version.`,
@@ -1299,9 +1305,9 @@ const ELEMENT_DATA: FAQElement[] = [
       This is useful when you want to encrypt or decrypt multiple items using the
       same password.</p><p><b>Clear When Hidden</b> automatically clears cached password
       and cleartext values when the browser tab displaying Quick Crypt is hidden,
-      for example, when a screen lock occurs. Clear occurs even when there is
+      for example, when a screen lock occurs. Clearing occurs even when there is
       "Cache Time" remaining.</p><p><b>Hide Passwords</b> obscures passwords as you type
-      them. If you turn off this option, passwords are displayed in clear text when you
+      them. If you turn off this option, passwords are displayed in cleartext when you
       enter them. You can switch password visibility on the fly regardless of this
       setting.</p>`,
    },

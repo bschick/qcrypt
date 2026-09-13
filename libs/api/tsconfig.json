@@ -7,5 +7,14 @@
     "esModuleInterop": true,
     "verbatimModuleSyntax": true
   },
-  "extends": "../../tsconfig.base.json"
+  "extends": "../../tsconfig.base.json",
+  "files": [],
+  "references": [
+    {
+      "path": "./tsconfig.lib.json"
+    },
+    {
+      "path": "./tsconfig.spec.json"
+    }
+  ]
 }

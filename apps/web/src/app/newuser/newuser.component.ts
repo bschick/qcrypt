@@ -35,6 +35,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ClipboardModule } from '@angular/cdk/clipboard';
+import { NoAssistDirective } from '../ui/noassist.directive';
 
 @Component({
    selector: 'app-newuser',
@@ -50,6 +51,7 @@ import { ClipboardModule } from '@angular/cdk/clipboard';
       FormsModule,
       ClipboardModule,
       MatTooltipModule,
+      NoAssistDirective,
    ],
 })
 export class NewUserComponent implements OnInit, AfterViewInit {
@@ -77,12 +79,14 @@ export class NewUserComponent implements OnInit, AfterViewInit {
    }
 
    ngAfterViewInit(): void {
-      try {
-         // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
-         setTimeout(() => this.r2.selectRootElement('#userName').focus(), 0);
-      } catch (err) {
-         console.error(err);
-      }
+      // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
+      setTimeout(() => {
+         try {
+            this.r2.selectRootElement('#userName').focus();
+         } catch (err) {
+            console.error(err);
+         }
+      }, 0);
    }
 
    toastMessage(msg: string): void {

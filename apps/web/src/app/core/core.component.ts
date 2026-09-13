@@ -72,6 +72,7 @@ import {
 import { AuthenticatorService, AuthEvent, type AuthEventData } from '../services/authenticator.service';
 import { PasswordDialog, CipherInfoDialog, SigninDialog } from '../ui/dialogs/dialogs';
 import { BubbleDirective } from '../ui/bubble/bubble.directive';
+import { NoAssistDirective } from '../ui/noassist.directive';
 import { OptionsComponent } from '../ui/options/options.component';
 import { Subscription } from 'rxjs';
 import { CopyrightComponent } from '../ui/copyright/copyright.component';
@@ -102,6 +103,7 @@ const BLOCK_ORDER_WARNING =
       MatTooltipModule,
       CommonModule,
       BubbleDirective,
+      NoAssistDirective,
       OptionsComponent,
       CopyrightComponent,
    ],
@@ -198,12 +200,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          }
       }
 
-      try {
-         // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
-         setTimeout(() => this.r2.selectRootElement('#clearInput').focus(), 0);
-      } catch (err) {
-         console.error(err);
-      }
+      // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
+      setTimeout(() => {
+         try {
+            this.r2.selectRootElement('#clearInput').focus();
+         } catch (err) {
+            console.error(err);
+         }
+      }, 0);
    }
 
    ngOnInit() {
@@ -1037,7 +1041,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          const saveFile = await selectWriteableJsonFile('armor');
          const writeable = await saveFile.createWritable();
          await writeable.write(this.cipherArmor);
-         writeable.close();
+         await writeable.close();
       } else {
          const buffer = new TextEncoder().encode(this.cipherArmor);
          const blob = new Blob([buffer], { type: 'text/plain;charset=utf-8' });
@@ -1050,7 +1054,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          const saveFile = await selectWriteableTxtFile('clear');
          const writeable = await saveFile.createWritable();
          await writeable.write(this.clearText);
-         writeable.close();
+         await writeable.close();
       } else {
          const buffer = new TextEncoder().encode(this.clearText);
          const blob = new Blob([buffer], { type: 'text/plain;charset=utf-8' });

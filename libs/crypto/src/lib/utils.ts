@@ -23,6 +23,18 @@ SOFTWARE. */
 import { getSodium } from './crypto';
 import { base64URLStringToBuffer, bufferToBase64URLString } from './base64';
 
+let logErrors = true;
+
+export function setLogErrors(enabled: boolean): void {
+   logErrors = enabled;
+}
+
+export function logError(err: unknown): void {
+   if (logErrors) {
+      console.error(err);
+   }
+}
+
 export function hasArrayBuffer(value: Uint8Array): value is Uint8Array<ArrayBuffer> {
    return value.buffer instanceof ArrayBuffer;
 }
@@ -411,7 +423,7 @@ export async function selectCipherFile(): Promise<FileSystemFileHandle> {
       });
       return fileHandle;
    } catch (err) {
-      console.error(err);
+      logError(err);
       throw new ProcessCancelled();
    }
 }
@@ -425,7 +437,7 @@ export async function selectClearFile(): Promise<FileSystemFileHandle> {
       });
       return fileHandle;
    } catch (err) {
-      console.error(err);
+      logError(err);
       throw new ProcessCancelled();
    }
 }
@@ -445,7 +457,7 @@ async function selectWriteableFileImpl(options: SaveFilePickerOptions): Promise<
       //@ts-expect-error
       return await window.showSaveFilePicker(options);
    } catch (err) {
-      console.error(err);
+      logError(err);
       throw new ProcessCancelled();
    }
 }

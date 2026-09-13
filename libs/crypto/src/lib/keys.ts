@@ -38,8 +38,8 @@ const KDF_INFO_SIGNING_V1 = 'cipherdata signing key';
 const KDF_INFO_HINT_V1 = 'hint encryption key';
 
 export type PWDProvider =
-   | [string, string | undefined]
-   | ((cdInfo: CipherDataInfo, encrypting: boolean) => Promise<[string, string | undefined]>);
+   | [string, string?]
+   | ((cdInfo: CipherDataInfo, encrypting: boolean) => Promise<[string, string?]>);
 
 export interface KeyProvider {
    purge(): void;
@@ -53,7 +53,7 @@ export interface KeyProvider {
    getHintCipherKeyAndIV(baseIV: Uint8Array<ArrayBuffer>): Promise<[Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>]>;
    getKeyCommitment(): Promise<Uint8Array<ArrayBuffer>>;
    get supportsCommitment(): boolean;
-   getCustomAd(): Uint8Array<ArrayBuffer> | undefined;
+   getExtraKeyMaterial(): Uint8Array<ArrayBuffer> | undefined;
 }
 
 export abstract class BaseKeyProvider implements KeyProvider {
@@ -63,24 +63,24 @@ export abstract class BaseKeyProvider implements KeyProvider {
    protected _hk: Uint8Array<ArrayBuffer> | undefined = undefined;
    protected _hIV: Uint8Array<ArrayBuffer> | undefined = undefined;
    protected _bks: Map<number, Uint8Array<ArrayBuffer>> = new Map();
-   protected _commitKey: Uint8Array<ArrayBuffer> | undefined = undefined;
+   protected _keyCommitment: Uint8Array<ArrayBuffer> | undefined = undefined;
    protected _cdInfo: CipherDataInfo | undefined = undefined;
 
    // referenced values
-   protected _customAd: Uint8Array<ArrayBuffer> | undefined = undefined;
+   protected _extraKeyMaterial: Uint8Array<ArrayBuffer> | undefined = undefined;
 
-   constructor(customAd: Uint8Array<ArrayBuffer> | string | undefined = undefined) {
-      if (typeof customAd === 'string') {
-         customAd = base64ToBytes(customAd);
+   constructor(extraKeyMaterial: Uint8Array<ArrayBuffer> | string | undefined = undefined) {
+      if (typeof extraKeyMaterial === 'string') {
+         extraKeyMaterial = base64ToBytes(extraKeyMaterial);
       }
-      if (customAd && customAd.byteLength > cc.ADDIONTAL_DATA_MAX_BYTES) {
-         throw new Error(`Custom AD too long: ${customAd.byteLength} bytes`);
+      if (extraKeyMaterial && extraKeyMaterial.byteLength > cc.EXTRA_BYTES_MAX) {
+         throw new Error(`Extra key material too long: ${extraKeyMaterial.byteLength} bytes`);
       }
-      this._customAd = customAd;
+      this._extraKeyMaterial = extraKeyMaterial;
    }
 
-   public getCustomAd(): Uint8Array<ArrayBuffer> | undefined {
-      return this._customAd;
+   public getExtraKeyMaterial(): Uint8Array<ArrayBuffer> | undefined {
+      return this._extraKeyMaterial;
    }
 
    public setCipherDataInfo(cdInfo: CipherDataInfo) {
@@ -136,9 +136,9 @@ export abstract class BaseKeyProvider implements KeyProvider {
          this._hIV.fill(0);
          this._hIV = undefined;
       }
-      if (this._commitKey) {
-         this._commitKey.fill(0);
-         this._commitKey = undefined;
+      if (this._keyCommitment) {
+         this._keyCommitment.fill(0);
+         this._keyCommitment = undefined;
       }
       if (this._cdInfo) {
          this._cdInfo.hint = undefined;
@@ -148,7 +148,7 @@ export abstract class BaseKeyProvider implements KeyProvider {
          bk.fill(0);
       }
       this._bks.clear();
-      this._customAd = undefined;
+      this._extraKeyMaterial = undefined;
    }
 
    public async getCipherKey(encrypting: boolean): Promise<Uint8Array<ArrayBuffer>> {
@@ -214,16 +214,19 @@ export abstract class BaseKeyProvider implements KeyProvider {
    }
 
    public async getKeyCommitment(): Promise<Uint8Array<ArrayBuffer>> {
-      if (!this._commitKey) {
+      if (!this._keyCommitment) {
+         if (!this.supportsCommitment) {
+            throw new Error('Key commitments not supported for this cipher version');
+         }
          if (!this._ek) {
             throw new Error('Cipher key must be generated before commitment');
          }
-         this._commitKey = await this._genKeyCommitment();
-         if (!this._commitKey || this._commitKey.byteLength !== cc.KEY_BYTES) {
+         this._keyCommitment = await this._genKeyCommitment();
+         if (!this._keyCommitment || this._keyCommitment.byteLength !== cc.KEY_BYTES) {
             throw new Error('Invalid commitment key');
          }
       }
-      return this._commitKey;
+      return this._keyCommitment;
    }
 
    public abstract clone(): KeyProvider;
@@ -249,7 +252,7 @@ export abstract class BasePWDKeyProvider extends BaseKeyProvider {
    constructor(
       userCred: Uint8Array<ArrayBuffer>,
       pwdProvider: PWDProvider | undefined = undefined,
-      customAd: Uint8Array<ArrayBuffer> | string | undefined = undefined,
+      extraKeyMaterial: Uint8Array<ArrayBuffer> | string | undefined = undefined,
    ) {
       if (userCred.byteLength !== cc.USERCRED_BYTES) {
          throw new Error(`Invalid userCred length of: ${userCred.byteLength}`);
@@ -259,7 +262,7 @@ export abstract class BasePWDKeyProvider extends BaseKeyProvider {
       if (userCred.every((b) => b === 0)) {
          throw new Error('Invalid userCred: all zero bytes');
       }
-      super(customAd);
+      super(extraKeyMaterial);
       this._userCred = userCred;
       this._pwdProvider = pwdProvider;
    }
@@ -271,7 +274,7 @@ export abstract class BasePWDKeyProvider extends BaseKeyProvider {
          this._userCred = undefined;
       }
       this._pwdProvider = undefined;
-      this._customAd = undefined;
+      this._extraKeyMaterial = undefined;
    }
 
    protected async _pbkdf2CipherKey(rawMaterial: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
@@ -318,7 +321,7 @@ export abstract class BasePWDKeyProvider extends BaseKeyProvider {
 export class PWDKeyProvider implements KeyProvider {
    private _impl?: BasePWDKeyProvider;
    private _userCred: Uint8Array<ArrayBuffer> | undefined;
-   private _customAd: Uint8Array<ArrayBuffer> | undefined;
+   private _extraKeyMaterial: Uint8Array<ArrayBuffer> | undefined;
 
    /**
     * Takes ownership of userCred. Caller must not read or modify it after construction
@@ -327,15 +330,15 @@ export class PWDKeyProvider implements KeyProvider {
    constructor(
       userCred: Uint8Array<ArrayBuffer>,
       private _pwdProvider: PWDProvider | undefined = undefined,
-      customAd: Uint8Array<ArrayBuffer> | string | undefined = undefined,
+      extraKeyMaterial: Uint8Array<ArrayBuffer> | string | undefined = undefined,
    ) {
-      if (typeof customAd === 'string') {
-         customAd = base64ToBytes(customAd);
+      if (typeof extraKeyMaterial === 'string') {
+         extraKeyMaterial = base64ToBytes(extraKeyMaterial);
       }
-      if (customAd && customAd.byteLength > cc.ADDIONTAL_DATA_MAX_BYTES) {
-         throw new Error(`Custom AD too long: ${customAd.byteLength} bytes`);
+      if (extraKeyMaterial && extraKeyMaterial.byteLength > cc.EXTRA_BYTES_MAX) {
+         throw new Error(`Extra key material too long: ${extraKeyMaterial.byteLength} bytes`);
       }
-      this._customAd = customAd;
+      this._extraKeyMaterial = extraKeyMaterial;
 
       if (userCred.byteLength !== cc.USERCRED_BYTES) {
          throw new Error(`Invalid userCred length of: ${userCred.byteLength}`);
@@ -357,14 +360,14 @@ export class PWDKeyProvider implements KeyProvider {
          this._userCred = undefined;
       }
       this._pwdProvider = undefined;
-      this._customAd = undefined;
+      this._extraKeyMaterial = undefined;
    }
 
    public clone(): KeyProvider {
       if (!this._userCred) {
          throw new Error('Cannot clone a purged keyProvider');
       }
-      return new PWDKeyProvider(this._userCred.slice(0), this._pwdProvider, this._customAd);
+      return new PWDKeyProvider(this._userCred.slice(0), this._pwdProvider, this._extraKeyMaterial);
    }
 
    public setCipherDataInfo(cdInfo: CipherDataInfo): void {
@@ -374,14 +377,16 @@ export class PWDKeyProvider implements KeyProvider {
       if (!this._userCred) {
          throw new Error('Cannot use a purged keyProvider');
       }
-      if (cdInfo.ver < cc.VERSION7 && this._customAd) {
-         throw new Error(`customAd is only supported for V7+`);
+      if (cdInfo.ver < cc.VERSION7 && this._extraKeyMaterial) {
+         throw new Error(`extraKeyMaterial is only supported for V7+`);
       }
 
       // Impls get their own copy so facade and impls can be purged independently.
       const userCredClone = this._userCred.slice(0);
-      if (cdInfo.ver >= cc.VERSION7) {
-         this._impl = new PWDKeyProviderV7(userCredClone, this._pwdProvider, this._customAd);
+      if (cdInfo.ver >= cc.VERSION8) {
+         this._impl = new PWDKeyProviderV8(userCredClone, this._pwdProvider, this._extraKeyMaterial);
+      } else if (cdInfo.ver === cc.VERSION7) {
+         this._impl = new PWDKeyProviderV7(userCredClone, this._pwdProvider, this._extraKeyMaterial);
       } else if (cdInfo.ver === cc.VERSION6) {
          this._impl = new PWDKeyProviderV6(userCredClone, this._pwdProvider);
       } else {
@@ -449,11 +454,11 @@ export class PWDKeyProvider implements KeyProvider {
       return this._impl.supportsCommitment;
    }
 
-   public getCustomAd(): Uint8Array<ArrayBuffer> | undefined {
+   public getExtraKeyMaterial(): Uint8Array<ArrayBuffer> | undefined {
       if (!this._impl) {
-         return this._customAd;
+         return this._extraKeyMaterial;
       }
-      return this._impl.getCustomAd();
+      return this._impl.getExtraKeyMaterial();
    }
 }
 
@@ -470,7 +475,10 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
     * Takes ownership of masterKey. Caller must not read or modify it after construction
     * because the buffer will be overwritten. Other values are just referenced.
     */
-   constructor(masterKey: Uint8Array<ArrayBuffer>, customAd: Uint8Array<ArrayBuffer> | string | undefined = undefined) {
+   constructor(
+      masterKey: Uint8Array<ArrayBuffer>,
+      extraKeyMaterial: Uint8Array<ArrayBuffer> | string | undefined = undefined,
+   ) {
       if (masterKey.byteLength !== cc.KEY_BYTES) {
          throw new Error(`Invalid masterKey length of: ${masterKey.byteLength}`);
       }
@@ -479,7 +487,7 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       if (masterKey.every((b) => b === 0)) {
          throw new Error('Invalid masterKey: all zero bytes');
       }
-      super(customAd);
+      super(extraKeyMaterial);
       this._masterKey = masterKey;
    }
 
@@ -487,7 +495,7 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       if (!this._masterKey) {
          throw new Error('Cannot clone a purged keyProvider');
       }
-      return new MasterKeyKeyProvider(this._masterKey.slice(0), this._customAd);
+      return new MasterKeyKeyProvider(this._masterKey.slice(0), this._extraKeyMaterial);
    }
 
    public override purge(): void {
@@ -497,11 +505,15 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
          this._masterKey = undefined;
       }
       this._cachedExtraContext = undefined;
-      this._customAd = undefined;
+      this._extraKeyMaterial = undefined;
    }
 
+   // v8 onward uses no commitment because sk and ek share the masterKey root
    public get supportsCommitment(): boolean {
-      return true;
+      if (!this._cdInfo) {
+         throw new Error('Invalid state, cipherDataInfo not set');
+      }
+      return this._cdInfo.ver < cc.VERSION8;
    }
 
    private _extraContext(): Uint8Array<ArrayBuffer>[] {
@@ -514,8 +526,13 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
             numToBytes(this._cdInfo.ver, cc.VER_BYTES),
             numToBytes(this._cdInfo.lp, cc.LPP_BYTES),
          ];
-         if (this._customAd) {
-            this._cachedExtraContext.push(this._customAd);
+         let extraKeyMaterial = this._extraKeyMaterial;
+         if (this._cdInfo.ver >= cc.VERSION8) {
+            extraKeyMaterial = extraKeyMaterial ?? new Uint8Array(0);
+            this._cachedExtraContext.push(numToBytes(extraKeyMaterial.byteLength, cc.EXTRA_LEN_BYTES));
+         }
+         if (extraKeyMaterial) {
+            this._cachedExtraContext.push(extraKeyMaterial);
          }
       }
 
@@ -534,8 +551,15 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
    }
 
    protected override async _genBlockCipherKey(blockNum: number): Promise<Uint8Array<ArrayBuffer>> {
-      // No extra context for block keys because _ek was already derived from it
-      return this._genDerivedKey(this._ek!, KDF_CTX_BLOCK_V7, blockNum);
+      if (!this._cdInfo) {
+         throw new Error('Invalid state, cipherDataInfo not set');
+      }
+
+      // _extraContext adds little today since cipherDataInfo only comes from block0.
+      // Honoring per block _extraContext will require updating cipherDataInfo per block.
+      const extraContext = this._cdInfo.ver >= cc.VERSION8 ? this._extraContext() : [];
+
+      return this._genDerivedKey(this._ek!, KDF_CTX_BLOCK_V7, blockNum, extraContext);
    }
 
    protected override async _genHintCipherKeyAndIV(
@@ -606,21 +630,21 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
 }
 
 export class PWDKeyProviderV7 extends BasePWDKeyProvider {
-   private _cachedExtraContext?: Uint8Array<ArrayBuffer>[];
+   protected _cachedExtraContext?: Uint8Array<ArrayBuffer>[];
 
    constructor(
       userCred: Uint8Array<ArrayBuffer>,
       pwdProvider: PWDProvider | undefined = undefined,
-      customAd: Uint8Array<ArrayBuffer> | string | undefined = undefined,
+      extraKeyMaterial: Uint8Array<ArrayBuffer> | string | undefined = undefined,
    ) {
-      super(userCred, pwdProvider, customAd);
+      super(userCred, pwdProvider, extraKeyMaterial);
    }
 
    public clone(): KeyProvider {
       if (!this._userCred) {
          throw new Error('Cannot clone a purged keyProvider');
       }
-      return new PWDKeyProviderV7(this._userCred.slice(0), this._pwdProvider, this._customAd);
+      return new PWDKeyProviderV7(this._userCred.slice(0), this._pwdProvider, this._extraKeyMaterial);
    }
 
    public override purge(): void {
@@ -632,7 +656,11 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       return true;
    }
 
-   private _extraContext(): Uint8Array<ArrayBuffer>[] {
+   protected _ver(): number {
+      return cc.VERSION7;
+   }
+
+   protected _extraContext(): Uint8Array<ArrayBuffer>[] {
       if (!this._cdInfo) {
          throw new Error('Invalid state, cipherDataInfo not set');
       }
@@ -642,12 +670,17 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
             numToBytes(this._cdInfo.ver, cc.VER_BYTES),
             numToBytes(this._cdInfo.lp, cc.LPP_BYTES),
          ];
-         if (this._customAd) {
-            this._cachedExtraContext.push(this._customAd);
+         if (this._extraKeyMaterial) {
+            this._cachedExtraContext.push(this._extraKeyMaterial);
          }
       }
 
       return this._cachedExtraContext;
+   }
+
+   // V7 layout is pwd || userCred || alg || ver || lp || extraKeyMaterial.
+   protected _cipherKeyMaterial(pwdBytes: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {
+      return concatArrays([pwdBytes, this._userCred!, ...this._extraContext()]);
    }
 
    protected override async _genCipherKey(encrypting: boolean): Promise<Uint8Array<ArrayBuffer>> {
@@ -660,7 +693,7 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       if (!this._userCred) {
          throw new Error('User credential not set');
       }
-      if (this._cdInfo.ver !== cc.VERSION7) {
+      if (this._cdInfo.ver !== this._ver()) {
          throw new Error(`Invalid version: ${this._cdInfo.ver}`);
       }
 
@@ -677,7 +710,7 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
 
       this.setHint(hint);
       const pwdBytes = new TextEncoder().encode(pwd);
-      const rawMaterial = concatArrays([pwdBytes, this._userCred, ...this._extraContext()]);
+      const rawMaterial = this._cipherKeyMaterial(pwdBytes);
 
       const ek = await this._pbkdf2CipherKey(rawMaterial);
       pwdBytes.fill(0);
@@ -693,7 +726,6 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
    }
 
    protected override async _genBlockCipherKey(blockNum: number): Promise<Uint8Array<ArrayBuffer>> {
-      // No extra context for block keys because _ek was already derived from it
       return this._genDerivedKey(this._ek!, KDF_CTX_BLOCK_V7, blockNum);
    }
 
@@ -716,7 +748,7 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       return this._genDerivedKey(this._ek!, KDF_CTX_COMMIT_V7, 1);
    }
 
-   private _genDerivedKey(
+   protected _genDerivedKey(
       master: Uint8Array<ArrayBuffer>,
       purpose: string,
       instance: number,
@@ -734,7 +766,7 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       if (this._cdInfo.slt.byteLength !== cc.SLT_BYTES) {
          throw new Error(`Invalid salt length of: ${this._cdInfo.slt.byteLength}`);
       }
-      if (this._cdInfo.ver !== cc.VERSION7) {
+      if (this._cdInfo.ver !== this._ver()) {
          throw new Error(`Invalid version: ${this._cdInfo.ver}`);
       }
 
@@ -757,6 +789,56 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
          ),
       );
       return derivedKey.slice(0, master.byteLength);
+   }
+}
+
+export class PWDKeyProviderV8 extends PWDKeyProviderV7 {
+   public override clone(): KeyProvider {
+      if (!this._userCred) {
+         throw new Error('Cannot clone a purged keyProvider');
+      }
+      return new PWDKeyProviderV8(this._userCred.slice(0), this._pwdProvider, this._extraKeyMaterial);
+   }
+
+   protected override _ver(): number {
+      return cc.VERSION8;
+   }
+
+   protected override _extraContext(): Uint8Array<ArrayBuffer>[] {
+      if (!this._cdInfo) {
+         throw new Error('Invalid state, cipherDataInfo not set');
+      }
+      if (!this._cachedExtraContext) {
+         const extraKeyMaterial = this._extraKeyMaterial ?? new Uint8Array(0);
+         this._cachedExtraContext = [
+            numToBytes(Ciphers.algId(this._cdInfo.alg), cc.ALG_BYTES),
+            numToBytes(this._cdInfo.ver, cc.VER_BYTES),
+            numToBytes(this._cdInfo.lp, cc.LPP_BYTES),
+            numToBytes(extraKeyMaterial.byteLength, cc.EXTRA_LEN_BYTES),
+            extraKeyMaterial,
+         ];
+      }
+
+      return this._cachedExtraContext;
+   }
+
+   /* V8+ layout is pwdLen || pwd || userCred || alg || ver || lp || extraLen || extraKeyMaterial.
+    * Every variable length field gets a length, to prevent shifting by an
+    * attacker if client control fields are added later (defense in depth).
+    */
+   protected override _cipherKeyMaterial(pwdBytes: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {
+      return concatArrays([
+         numToBytes(pwdBytes.byteLength, cc.PWD_LEN_BYTES),
+         pwdBytes,
+         this._userCred!,
+         ...this._extraContext(),
+      ]);
+   }
+
+   protected override async _genBlockCipherKey(blockNum: number): Promise<Uint8Array<ArrayBuffer>> {
+      // _extraContext adds little today since cipherDataInfo only comes from block0.
+      // Honoring per block _extraContext will require updating cipherDataInfo per block.
+      return this._genDerivedKey(this._ek!, KDF_CTX_BLOCK_V7, blockNum, this._extraContext());
    }
 }
 

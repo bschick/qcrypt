@@ -39,7 +39,7 @@ export const helpRoutes: Routes = [
    {
       path: 'protocol',
       loadComponent: () =>
-         guardedImport(() => import('./protocol/protocol.component').then((m) => m.Protocol7Component)),
+         guardedImport(() => import('./protocol/protocol.component').then((m) => m.Protocol8Component)),
    },
    {
       path: 'flow',
@@ -69,6 +69,11 @@ export const helpRoutes: Routes = [
       path: 'protocol7',
       loadComponent: () =>
          guardedImport(() => import('./protocol/protocol.component').then((m) => m.Protocol7Component)),
+   },
+   {
+      path: 'protocol8',
+      loadComponent: () =>
+         guardedImport(() => import('./protocol/protocol.component').then((m) => m.Protocol8Component)),
    },
    { path: '', redirectTo: 'faqs', pathMatch: 'full' },
 ];

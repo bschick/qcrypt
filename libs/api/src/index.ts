@@ -34,6 +34,8 @@ export {
    PROOF_SIG_BYTES,
 } from './lib/proof';
 
+export type { RecoveryOp } from './lib/proof';
+
 export * from './lib/webauthn';
 export * from './lib/user';
 export * from './lib/recovery';

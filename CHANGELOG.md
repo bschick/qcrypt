@@ -1,5 +1,30 @@
 # CHANGELOG.md
 
+## 8.0.0 (2026-09-12)
+
+#### Changes
+
+- sign-in dialog now reports when the previous sign out failed [thanks to Blake Prins (@prins1bap-ui)]
+- changed initial focus on the credentials panel to prevent accidental passkey creation
+- improved test coverage for master key provider, proofs, and nonce uniqueness
+
+#### Security
+
+- [protocol version 8 released](https://quickcrypt.org/help/protocol8)
+  - key commitment added to AD and verified before decryption to achieve full key commitment across all cipher modes [thanks to Rajat Shukla (@rajat4722)]
+  - length prefixes added to key derivation inputs to enforce unambiguous encoding
+  - improved domain isolation by adding context-specific inputs to block key derivation
+  - password hints padded to a 16-byte modulus before encryption to obscure hint length
+  - added domain separation between "replace" and "recover" recovery proof signatures
+- added adversarial key commitment test using a GF(2^128) solver [thanks to Claude Code (@claude)]
+- added detection and error reporting of stripped encryption loops
+- added detection and error reporting of data appended after an empty final block [thanks to Ben (@benthepythondev00)]
+- disabled browser text assistance features on sensitive input fields [thanks to Prashikshit Saini (@PrashikshitSaini) and Damir (@Evelynkaz)]
+- enforced output file permissions during cli --force overwrite [thanks to @EpochLiu]
+- cli --force overwrite no longer follows symlinks [thanks to Claude Code (@claude)]
+- various small cli improvements including better cleanup after an error or interruption
+- updated packages
+
 ## 7.5.2 (2026-09-10)
 
 #### Security
@@ -128,7 +153,6 @@
 - [protocol version 7 released](https://quickcrypt.org/help/protocol7)
   - improved domain isolation by adding context-specific input to key derivations
   - initialization vector no longer shared between hint and block0
-  - cipher key hashes added to associated data to provide full key commitment
   - new non-password based key derivation for encrypting data at rest
 - browser app keeps userCred in memory only during cryptographic operations
 - browser sessionstore used to persist encrypted userCred
@@ -156,7 +180,7 @@
 
 #### Changes
 
-- load signin dialog rather than welcome page when when valid user is known
+- load sign-in dialog rather than welcome page when when valid user is known
 
 #### Security
 

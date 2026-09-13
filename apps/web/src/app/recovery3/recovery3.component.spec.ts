@@ -23,4 +23,15 @@ describe('RecoveryComponent', () => {
    it('should create', () => {
       expect(component).toBeTruthy();
    });
+
+   it('keeps the recovery words away from browser text assistance', () => {
+      component.ready = true;
+      fixture.detectChanges();
+
+      const wordsArea = fixture.nativeElement.querySelector('#wordsArea');
+      expect(wordsArea.getAttribute('spellcheck')).toBe('false');
+      expect(wordsArea.getAttribute('autocomplete')).toBe('off');
+      expect(wordsArea.getAttribute('autocorrect')).toBe('off');
+      expect(wordsArea.getAttribute('autocapitalize')).toBe('off');
+   });
 });

@@ -23,6 +23,7 @@ SOFTWARE. */
 import type { zxcvbnAsync, zxcvbnOptions } from '@zxcvbn-ts/core';
 import type { Matcher } from '@zxcvbn-ts/core/dist/types';
 import type { haveIBeenPwned } from '@zxcvbn-ts/matcher-pwned';
+import { logError } from './utils';
 
 // Lazy-loads the @zxcvbn-ts/* dictionary chunks so they land in their own
 // chunks instead of inflating main.
@@ -78,7 +79,7 @@ export async function isPwned(password: string): Promise<boolean> {
       const { pwnedLookup } = await zxcvbnReady();
       return !!(await pwnedLookup(password, { universalFetch: fetch }));
    } catch (err) {
-      console.error(err);
+      logError(err);
       return false;
    }
 }

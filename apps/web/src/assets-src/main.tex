@@ -10,6 +10,9 @@
 \newlength{\stanzagap}
 \setlength{\stanzagap}{2\baselineskip}  % <-- change this to adjust gap between stanzas
 
+\newlength{\notegap}
+\setlength{\notegap}{0.7\baselineskip}  % <-- change this to adjust gap before notes
+
 \newlength{\stanzawidth}
 \setlength{\stanzawidth}{368pt}         % <-- max stanza width (1300px @ 255 PPI)
 
@@ -27,52 +30,80 @@
 \begin{stanza}
 \underline{Agents}\\
 
-\begin{tabular}{@{}p{2mm} l}
+\begin{tabular}{@{}p{5mm} l}
 $A$ & \textrm{ - Alice} \\
-$B$ & \textrm{ - Browser with Session storage, SubtleCrypto API, and libsodium library} \\
+$B$ & \textrm{ - Browser with Session storage, IndexedDB, WebCrypto API, and} \\
+& \phantom{\textrm{ - }}\textrm{libsodium and libcrux libraries} \\
 $M$ & \textrm{ - Webauthn authenticator (passkey manager)} \\
 $S$ & \textrm{ - Quick Crypt server} \\
 \end{tabular}
 \end{stanza}
 
 % Changed: cipher variables, functions, decrypt by a, block n by B
+%
+% Checks come in two forms. A call to a function declared below uses
+% "b = f(...)" followed by "if !b: err" (V, C, P_V). Anything else uses a
+% descriptive "verify ..." line (webauthn signatures, cookies, clock skew,
+% replay nonces).
 \begin{stanza}
 \underline{Browser and Libsodium Functions}\\
 
-\begin{tabular}{@{}p{2mm} l}
+\begin{tabular}{@{}p{5mm} l}
+$C$ & \textrm{ - Constant-time comparator from libsodium} \\
+& \phantom{\textrm{ - }}$C$\textrm{(value1, value2)} \\
 $D_H$ & \textrm{ - BLAKE2b-512 KDF from libsodium} \\
-$D_P$ & \textrm{ - PBKDF2-HMAC-SHA512 key derivation FIPS-180-4 from SubtleCrypto} \\
-$D_S$ & \textrm{ - HMAC-SHA-512 from SubtleCrypto} \\
-$E_a$ & \textrm{ - Symmetric cipher using AEAD algorithm }$a$\textrm{. One of:}\\
-& \hspace{23pt}\textrm{1. AES-256 in Galois/Counter mode from SubtleCrypto} \\
+& \phantom{\textrm{ - }}$D_H$\textrm{(subkey number, purpose, key)} \\
+$D_P$ & \textrm{ - PBKDF2-HMAC-SHA512 key derivation FIPS-180-4 from WebCrypto} \\
+& \phantom{\textrm{ - }}$D_P$\textrm{(material, salt, iterations)} \\
+$D_S$ & \textrm{ - HMAC-SHA-512 from WebCrypto} \\
+& \phantom{\textrm{ - }}$D_S$\textrm{(data, key)} \\
+$E_a$ & \textrm{ - Symmetric cipher using AEAD algorithm }$a$ \\
+& \phantom{\textrm{ - }}$E_a$\textrm{(message, IV, additional data, key)} \\
+& \phantom{\textrm{ - }}$a$\textrm{ is one of:}\\
+& \hspace{23pt}\textrm{1. AES-256 in Galois/Counter mode from WebCrypto} \\
 & \hspace{23pt}\textrm{2. XChaCha20 with Poly1305 MAC from libsodium} \\
 & \hspace{23pt}\textrm{3. AEGIS 256 from libsodium} \\
-$G$ & \textrm{ - HMAC-SHA-512 key generator from SubtleCrypto}\\
+$G$ & \textrm{ - HMAC-SHA-512 key generator from WebCrypto}\\
+& \phantom{\textrm{ - }}$G$\textrm{()} \\
 $H$ & \textrm{ - BLAKE2b keyed hash (MAC) generator from libsodium} \\
-$H_2$ & \textrm{ - SHA-256 from SubtleCrypto} \\
+& \phantom{\textrm{ - }}$H$\textrm{(data ..., key), each data argument hashed in order} \\
+$H_2$ & \textrm{ - SHA-256 from WebCrypto} \\
+& \phantom{\textrm{ - }}$H_2$\textrm{(data)} \\
+$PAD$ & \textrm{ - Appends 0 to 15 }\texttt{0xFF}\textrm{ bytes to reach a multiple of 16, max 223} \\
+& \phantom{\textrm{ - }}$PAD$\textrm{(data)} \\
 $P_K$ & \textrm{ - ML-DSA-65 (FIPS 204) keypair generator from libcrux} \\
+& \phantom{\textrm{ - }}$P_K$\textrm{(seed)} \\
 $P_S$ & \textrm{ - ML-DSA-65 (FIPS 204) randomized signature generator from libcrux} \\
+& \phantom{\textrm{ - }}$P_S$\textrm{(secret key, message, context)} \\
 $P_V$ & \textrm{ - ML-DSA-65 (FIPS 204) signature verifier from libcrux} \\
+& \phantom{\textrm{ - }}$P_V$\textrm{(public key, message, signature, context)} \\
 $R$ & \textrm{ - Cryptographic pseudo-random generator from libsodium} \\
+& \phantom{\textrm{ - }}$R$\textrm{(bits)} \\
 $V$ & \textrm{ - Constant-time hash (MAC) validator from libsodium} \\
+& \phantom{\textrm{ - }}$V$\textrm{(data, key, tag)} \\
 \end{tabular}
+
+\vspace{\notegap}
+
+{\leftskip=\parindent\noindent\textit{Notes:} $D_H$ must be collision resistant for its key argument, not merely \mbox{pseudorandom}, or two cipher keys could share one $k_C$.\par}
 \end{stanza}
 
 
 \begin{stanza}
 \underline{Cipher Variables}\\
 
-\begin{tabular}{@{}p{2mm} l}
+\begin{tabular}{@{}p{5mm} l}
 $a$ & \textrm{ - Symmetric AEAD cipher and mode: [1, 2, 3]}\\
 $ad_F$ & \textrm{ - Additional data included in ciphertext}\\
-$ad_X$ & \textrm{ - $ad_F$ with extended context}\\
 $b$ & \textrm{ - Valid or invalid MAC tag}\\
 $cd$ & \textrm{ - Cipher data}\\
 $cd_0$ & \textrm{ - Cipher data block 0}\\
 $cd_N$ & \textrm{ - Cipher data block N}\\
-$cd_u$ & \textrm{ - }$u_c$\textrm{ encrypted under session key }$k_L$\\
+$cd_u$ & \textrm{ - }$u_c$\textrm{ encrypted under session key }$k_L$\textrm{, both defined in }$u_c$\\
+& \phantom{\textrm{ - }}\textrm{Encryption at Rest}\\
+$e_l$ & \textrm{ - Extra key material length: 0 (fixed)}\\
 $err$ & \textrm{ - Error message and exit}\\
-$f$ & \textrm{ - Block flags}\\
+$f$ & \textrm{ - Block flags: 1 (TERM) on the final block of a loop, else 0}\\
 $h$ & \textrm{ - Password hint text}\\
 $h_E$ & \textrm{ - Encrypted hint}\\
 $h_El$ & \textrm{ - Encrypted hint length}\\
@@ -81,50 +112,62 @@ $k_H$ & \textrm{ - 256 bit ephemeral hint cipher key}\\
 $k_{M0}$ & \textrm{ - 256 bit ephemeral message block0 cipher key}\\
 $k_{MN}$ & \textrm{ - 256 bit ephemeral message blockN cipher key}\\
 $k_S$ & \textrm{ - 256 bit ephemeral MAC key}\\
-$k_C$ & \textrm{ - 256 bit ephemeral commit key}\\
+$k_C$ & \textrm{ - 256 bit key commitment, the only }$D_H$\textrm{ output stored in }$cd$\\
+$k_Cl$ & \textrm{ - }$k_C$\textrm{ byte length: 32}\\
 $kp_B$ & \textrm{ - Key purpose text: ``Blck\_Key''}\\
 $kp_C$ & \textrm{ - Key purpose text: ``Cmit\_Key''}\\
 $kp_H$ & \textrm{ - Key purpose text: ``Hint\_Key''}\\
 $kp_S$ & \textrm{ - Key purpose text: ``Sign\_Key''}\\
 $l$ & \textrm{ - Payload length}\\
-$le$ & \textrm{ - Loop end (1-16)}\\
-$lp$ & \textrm{ - Loop count (1-16)}\\
+$le$ & \textrm{ - Loop end (1-16), stored as }$le-1$\textrm{ in the high nibble of one byte}\\
+$lp$ & \textrm{ - Loop count (1-16), stored as }$lp-1$\textrm{ in the low nibble of that byte}\\
 $m$ & \textrm{ - Clear text}\\
 $m_0$ & \textrm{ - Clear text block 0}\\
 $m_N$ & \textrm{ - Clear text block N}\\
 $m_E$ & \textrm{ - Block of encrypted message}\\
 $n_{IV}$ & \textrm{ - Pseudo random initialization vector}\\
 $n_{IV}l$ & \textrm{ - }$n_{IV}$\textrm{ bit length: [96, 192, 256]}\\
+$n_{IVH}$ & \textrm{ - Hint initialization vector: }$n_{IV}l$\textrm{ bits}\\
 $n_S$ & \textrm{ - 128 bit pseudo random salt}\\
 $N$ & \textrm{ - Block number}\\
 $p$ & \textrm{ - Password text}\\
+$p_l$ & \textrm{ - }$p$\textrm{ byte length}\\
 $r$ & \textrm{ - 384 bits of pseudo random data}\\
 $t$ & \textrm{ - 256 bit MAC tag}\\
-$t_L$ & \textrm{ - Last 256 bit MAC tag}\\
+$t_L$ & \textrm{ - Preceding 256 bit MAC tag, or the single byte }\texttt{0x00}\textrm{ at the}\\
+& \phantom{\textrm{ - }}\textrm{start of a loop}\\
 $u_c$ & \textrm{ - 256 bit user credential in memory}\\
-$v$ & \textrm{ - Cipher data version: 7}\\
+$v$ & \textrm{ - Cipher data version: 8}\\
 \end{tabular}
+
+\vspace{\notegap}
+
+{\leftskip=\parindent\noindent\textit{Notes:} A bit range $x[i:j)$ includes bit $i$ and excludes bit $j$. For fixed empty fields, only a length of 0 is included.\par}
+
+\vspace{\notegap}
+
+{\leftskip=\parindent\noindent\textit{Byte layout:} Field widths and byte order are given by the cipher data structure table on the \href{https://quickcrypt.org/help/protocol}{protocol page} and by the \href{https://quickcrypt.org/help/faqs/6f6}{Hex Fiend template}.\par}
 \end{stanza}
 
 \begin{stanza}
 \underline{Message Encryption by A}\\
 
-\begin{tabular}{@{}p{2mm} l}
+\begin{tabular}{@{}p{5mm} l}
 \multicolumn{2}{@{}l}{$A\overset{\textrm{webauthn}}{\leftrightarrow} B,M \overset{\textrm{webauthn}}{\leftrightarrow} S$}\\
 \multicolumn{2}{@{}l}{$B : u_c = cd_u\textrm{ decryption under }k_L$}\\
 \multicolumn{2}{@{}l}{$A\rightarrow B: m,i,le$}\\
-\multicolumn{2}{@{}l}{$v = 7$}\\
+\multicolumn{2}{@{}l}{$v = 8$}\\
 \multicolumn{2}{@{}l}{$lp = 1$}\\
-\multicolumn{2}{@{}l}{$t_L = \mathtt{0x00}$}\\
 \multicolumn{2}{@{}l}{$LOOP: B\textrm{ compute} $}\\
+&$t_L = \mathtt{0x00}$\\
 &$A\rightarrow B: p,h,a $\\
 &$r = R(384)$\\
 &$n_S = r[0:128)$\\
 &$n_{IV} = r[128:128+n_{IV}l)$\\
-&$n_{IVH} = D_H(2,kp_H,H(n_S,a,v,lp,n_{IV}))$\\
-&$k_H = D_H(1,kp_H,H(n_S,a,v,lp,u_c))$\\
-&$k_S = D_H(1,kp_S,H(n_S,a,v,lp,u_c))$\\
-&$k_{M0} = D_P(p \mathbin\Vert u_c \mathbin\Vert a \mathbin\Vert v \mathbin\Vert lp,n_S,i)$\\
+&$n_{IVH} = D_H(2,kp_H,H(n_S,a,v,lp,e_l,n_{IV}))$\\
+&$k_H = D_H(1,kp_H,H(n_S,a,v,lp,e_l,u_c))$\\
+&$k_S = D_H(1,kp_S,H(n_S,a,v,lp,e_l,u_c))$\\
+&$k_{M0} = D_P(p_l \mathbin\Vert p \mathbin\Vert u_c \mathbin\Vert a \mathbin\Vert v \mathbin\Vert lp \mathbin\Vert e_l,n_S,i)$\\
 &$k_C = D_H(1,kp_C,H(n_S,k_{M0}))$\\
 &$m_0\mathbin\Vert ... \mathbin\Vert m_N = m$\\
 &$cd = cd_0\mathbin\Vert ... \mathbin\Vert cd_N$\\
@@ -138,13 +181,12 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 \begin{stanza}
 \underline{$cd_0$ Encryption by B}\\
 
-\begin{tabular}{@{}p{2mm} l}
-\multicolumn{2}{@{}l}{$h_E = E_a(h,n_{IVH},\emptyset,k_H)$}\\
+\begin{tabular}{@{}p{5mm} l}
+\multicolumn{2}{@{}l}{$h_E = E_a(PAD(h),n_{IVH},\emptyset,k_H)$}\\
 \multicolumn{2}{@{}l}{$h_El = len(h_E)$}\\
 \multicolumn{2}{@{}l}{$f = \textrm{1 if \boxed{\text{TERM}} else 0}$}\\
-\multicolumn{2}{@{}l}{$ad_F = f \mathbin\Vert a \mathbin\Vert n_{IV} \mathbin\Vert n_S \mathbin\Vert i\mathbin\Vert le \mathbin\Vert lp \mathbin\Vert h_El \mathbin\Vert h_E$}\\
-\multicolumn{2}{@{}l}{$ad_X = ad_F \mathbin\Vert k_C$}\\
-\multicolumn{2}{@{}l}{$m_E = E_a(m_0,n_{IV},ad_X,k_{M0})$}\\
+\multicolumn{2}{@{}l}{$ad_F = f \mathbin\Vert a \mathbin\Vert n_{IV} \mathbin\Vert n_S \mathbin\Vert i\mathbin\Vert le \mathbin\Vert lp \mathbin\Vert h_El \mathbin\Vert h_E \mathbin\Vert k_Cl \mathbin\Vert k_C$}\\
+\multicolumn{2}{@{}l}{$m_E = E_a(m_0,n_{IV},ad_F,k_{M0})$}\\
 \multicolumn{2}{@{}l}{$l = len(ad_F \mathbin\Vert m_E)$}\\
 \multicolumn{2}{@{}l}{$t = H(v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E \mathbin\Vert t_L, k_S)$}\\
 \multicolumn{2}{@{}l}{$t_L = t$}\\
@@ -155,15 +197,14 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 \begin{stanza}
 \underline{$cd_N$ Encryption by B}\\
 
-\begin{tabular}{@{}p{2mm} l}
+\begin{tabular}{@{}p{5mm} l}
 
 \multicolumn{2}{@{}l}{$r = R(384)$}\\
 \multicolumn{2}{@{}l}{$n_{IV} = r[0:n_{IV}l)$}\\
 \multicolumn{2}{@{}l}{$f = \textrm{1 if \boxed{\text{TERM}} else 0}$}\\
 \multicolumn{2}{@{}l}{$ad_F = f \mathbin\Vert a \mathbin\Vert n_{IV}$}\\
-\multicolumn{2}{@{}l}{$k_{MN} = D_H(N,kp_B,H(n_S,k_{M0}))$}\\
-\multicolumn{2}{@{}l}{$ad_X = ad_F \mathbin\Vert k_C$}\\
-\multicolumn{2}{@{}l}{$m_E = E_a(m_N,n_{IV},ad_X,k_{MN})$}\\
+\multicolumn{2}{@{}l}{$k_{MN} = D_H(N,kp_B,H(n_S,a,v,lp,e_l,k_{M0}))$}\\
+\multicolumn{2}{@{}l}{$m_E = E_a(m_N,n_{IV},ad_F,k_{MN})$}\\
 \multicolumn{2}{@{}l}{$l = len(ad_F \mathbin\Vert m_E)$}\\
 \multicolumn{2}{@{}l}{$t = H(v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E \mathbin\Vert t_L, k_S)$}\\
 \multicolumn{2}{@{}l}{$t_L = t$}\\
@@ -175,28 +216,33 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 \begin{stanza}
 \underline{Message Decryption by A}\\
 
-\begin{tabular}{@{}p{2mm} l}
+\begin{tabular}{@{}p{5mm} l}
 \multicolumn{2}{@{}l}{$A \overset{\textrm{webauthn}}{\leftrightarrow} B, M \overset{\textrm{webauthn}}{\leftrightarrow} S$}\\
 \multicolumn{2}{@{}l}{$B : u_c = cd_u\textrm{ decryption under }k_L$}\\
 \multicolumn{2}{@{}l}{$A \rightarrow B: cd$}\\
-\multicolumn{2}{@{}l}{$t_L = \mathtt{0x00}$}\\
 \multicolumn{2}{@{}l}{$LOOP: B\textrm{ compute} $}\\
+&$t_L = \mathtt{0x00}$\\
 &$cd_0\mathbin\Vert ... \mathbin\Vert cd_N = cd$\\
 &$t,v,l,ad_F,m_E=cd_0$\\
-&$f,a,n_{IV},n_S,i,le,lp,h_El,h_E=ad_F$\\
-&$k_S = D_H(1,kp_S,H(n_S,a,v,lp,u_c))$\\
+&$f,a,n_{IV},n_S,i,le,lp,h_El,h_E,k_Cl,k_C=ad_F$\\
+&$k_S = D_H(1,kp_S,H(n_S,a,v,lp,e_l,u_c))$\\
 &$b = V(v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E \mathbin\Vert t_L, k_S, t)$\\
-&$t_L = t$\\
 &$\textrm{if }!b:$\\
 &\hspace{15pt}$A \leftarrow B: err$\\
-&$n_{IVH} = D_H(2,kp_H,H(n_S,a,v,lp,n_{IV}))$\\
-&$k_H = D_H(1,kp_H,H(n_S,a,v,lp,u_c))$\\
-&$h = E_a^{-1}(h_E,n_{IVH},\emptyset,k_H)$\\
+&$t_L = t$\\
+&$B\textrm{ verify }k_Cl = 32\textrm{ and }i \geq 420{,}000$\\
+&$B\textrm{ verify }lp = le\textrm{ in the first loop and }lp-1\textrm{ in each successive loop}$\\
+&$n_{IVH} = D_H(2,kp_H,H(n_S,a,v,lp,e_l,n_{IV}))$\\
+&$k_H = D_H(1,kp_H,H(n_S,a,v,lp,e_l,u_c))$\\
+&$h = PAD^{-1}(E_a^{-1}(h_E,n_{IVH},\emptyset,k_H))$\\
 &$B \rightarrow A: h$\\
 &$B \leftarrow A: p$\\
-&$k_{M0} = D_P(p \mathbin\Vert u_c \mathbin\Vert a \mathbin\Vert v \mathbin\Vert lp,n_S,i)$\\
-&$k_C = D_H(1,kp_C,H(n_S,k_{M0}))$\\
+&$k_{M0} = D_P(p_l \mathbin\Vert p \mathbin\Vert u_c \mathbin\Vert a \mathbin\Vert v \mathbin\Vert lp \mathbin\Vert e_l,n_S,i)$\\
+&$b = C(k_C, D_H(1,kp_C,H(n_S,k_{M0})))$\\
+&$\textrm{if }!b:$\\
+&\hspace{15pt}$A \leftarrow B: err$\\
 &$m = m_0\mathbin\Vert ... \mathbin\Vert m_N$\\
+&$B\textrm{ verify the last decoded block had }f = 1$\\
 &$cd = m$\\
 &$\textrm{goto LOOP if lp} > 1$\\
 \multicolumn{2}{@{}l}{$A\leftarrow B: m$}\\
@@ -206,51 +252,52 @@ $v$ & \textrm{ - Cipher data version: 7}\\
 \begin{stanza}
 \underline{$m_0$ Decryption by B}\\
 
-\begin{tabular}{@{}p{2mm} l}
-\multicolumn{2}{@{}l}{$ad_X = ad_F \mathbin\Vert k_C$}\\
-\multicolumn{2}{@{}l}{$m_0 = E_a^{-1}(m_E, n_{IV},ad_X,k_{M0})$}\\
+\begin{tabular}{@{}p{5mm} l}
+\multicolumn{2}{@{}l}{$m_0 = E_a^{-1}(m_E, n_{IV},ad_F,k_{M0})$}\\
 \end{tabular}
 \end{stanza}
 
 \begin{stanza}
 \underline{$m_N$ Decryption by B}\\
 
-\begin{tabular}{@{}p{2mm} l}
+\begin{tabular}{@{}p{5mm} l}
+\multicolumn{2}{@{}l}{$B\textrm{ verify the preceding block had }f = 0$}\\
 \multicolumn{2}{@{}l}{$t,v,l,ad_F,m_E=cd_N$}\\
 \multicolumn{2}{@{}l}{$f,a,n_{IV}=ad_F$}\\
 \multicolumn{2}{@{}l}{$b = V(v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E \mathbin\Vert t_L, k_S, t)$}\\
-\multicolumn{2}{@{}l}{$t_L = t$}\\
 \multicolumn{2}{@{}l}{$\textrm{if }!b:$}\\
 \multicolumn{2}{@{}l}{\hspace{15pt}$A \leftarrow B: err$}\\
-\multicolumn{2}{@{}l}{$k_{MN} = D_H(N,kp_B,H(n_S,k_{M0}))$}\\
-\multicolumn{2}{@{}l}{$ad_X = ad_F \mathbin\Vert k_C$}\\
-\multicolumn{2}{@{}l}{$m_N = E_a^{-1}(m_E, n_{IV},ad_X,k_{MN})$}\\
+\multicolumn{2}{@{}l}{$t_L = t$}\\
+\multicolumn{2}{@{}l}{$B\textrm{ verify }a\textrm{ and }v\textrm{ equal those of }cd_0$}\\
+\multicolumn{2}{@{}l}{$k_{MN} = D_H(N,kp_B,H(n_S,a,v,lp,e_l,k_{M0}))$}\\
+\multicolumn{2}{@{}l}{$m_N = E_a^{-1}(m_E, n_{IV},ad_F,k_{MN})$}\\
 \end{tabular}
 \end{stanza}
 
 \begin{stanza}
 \underline{$u_c$ Encryption at Rest Variables}\\
 
-\begin{tabular}{@{}p{2mm} l}
+\begin{tabular}{@{}p{5mm} l}
 $a$ & \textrm{ - Symmetric AEAD cipher and mode: 2}\\
 $ad_F$ & \textrm{ - Additional data included in ciphertext}\\
-$ad_X$ & \textrm{ - $ad_F$ with extended context}\\
 $b$ & \textrm{ - Valid or invalid MAC tag}\\
 $cd_p$ & \textrm{ - }$u_c$\textrm{ encrypted under PRF output }$p_R$\\
 $cd_r$ & \textrm{ - }$u_c$\textrm{ encrypted under recovery secret }$u_r \mathbin\Vert u_i$\\
 $cd_u$ & \textrm{ - }$u_c$\textrm{ encrypted under session key }$k_L$\\
 $cd_x$ & \textrm{ - Encrypted }$u_c$\textrm{ cipher data: one of }$cd_u, cd_p, cd_r$\\
+$e$ & \textrm{ - Extra key material: }$u_i$\textrm{ (fixed)}\\
+$e_l$ & \textrm{ - }$e$\textrm{ byte length: 16 (fixed)}\\
 $err$ & \textrm{ - Error message and exit}\\
 $f$ & \textrm{ - Block flags: 1 (fixed)}\\
-$h_El$ & \textrm{ - Encrypted hint length: 0 (unused)}\\
-$i$ & \textrm{ - PBKDF2 iteration count: 0 (unused)}\\
+$h_El$ & \textrm{ - Encrypted hint length: 0 (fixed)}\\
+$i$ & \textrm{ - PBKDF2 iteration count: 0 (fixed)}\\
 $k$ & \textrm{ - 256 bit master key: one of }$k_L$\textrm{, }$p_R$\textrm{, or }$u_r \mathbin\Vert u_i$\\
-$k_C$ & \textrm{ - 256 bit ephemeral commit key}\\
+$k_Cl$ & \textrm{ - Key commitment length: 0 (fixed)}\\
 $k_{KS}$ & \textrm{ - HMAC-SHA-512 non-extractable CryptoKey, stored in IndexedDB}\\
-$k_L$ & \textrm{ - 256 bit ephemeral per session master key}\\
+& \phantom{\textrm{ - }}\textrm{and replaced at each login}\\
+$k_L$ & \textrm{ - 256 bit per login master key}\\
 $k_M$ & \textrm{ - 256 bit ephemeral message cipher key}\\
 $k_S$ & \textrm{ - 256 bit ephemeral MAC key}\\
-$kp_C$ & \textrm{ - Key purpose text: ``Cmit\_Key''}\\
 $kp_M$ & \textrm{ - Key purpose text: ``Cphr\_Key''}\\
 $kp_S$ & \textrm{ - Key purpose text: ``Sign\_Key''}\\
 $l$ & \textrm{ - Payload length}\\
@@ -268,35 +315,37 @@ $t$ & \textrm{ - 256 bit MAC tag}\\
 $u_c$ & \textrm{ - 256 bit user credential (plaintext)}\\
 $u_i$ & \textrm{ - User id}\\
 $u_r$ & \textrm{ - 128 bit recovery id}\\
-$v$ & \textrm{ - Cipher data version: 7}\\
+$v$ & \textrm{ - Cipher data version: 8}\\
 \end{tabular}
+
+\vspace{\notegap}
+
+{\leftskip=\parindent\noindent\textit{Format:} At rest data uses the same wire format as messages, with the fields above fixed as listed. For $cd_r$ this puts $u_i$ in both $k$ and $e$, which keeps the derivation identical across all three $cd_x$.\par}
 \end{stanza}
 
 \begin{stanza}
 \underline{$k_L$ Derivation by B}\\
 
-\begin{tabular}{@{}p{2mm} l}
-\multicolumn{2}{@{}l}{$B \leftarrow M: pkId$}\\
+\begin{tabular}{@{}p{5mm} l}
+\multicolumn{2}{@{}l}{$B \leftarrow S: pkId$}\\
 \multicolumn{2}{@{}l}{$k_{KS} = G()$}\\
-\multicolumn{2}{@{}l}{$k_L = D_S(s \mathbin\Vert pkId, k_{KS})[32:64]$}\\
+\multicolumn{2}{@{}l}{$k_L = D_S(s \mathbin\Vert pkId, k_{KS})[256:512)$}\\
 \end{tabular}
 \end{stanza}
 
 \begin{stanza}
 \underline{$u_c$ Encryption Under $k$ by B}\\
 
-\begin{tabular}{@{}p{2mm} l}
+\begin{tabular}{@{}p{5mm} l}
 \multicolumn{2}{@{}l}{$\textrm{where }(k, cd_x) \in \{(k_L, cd_u), (p_R, cd_p), (u_r \mathbin\Vert u_i, cd_r)\}$}\\
 \multicolumn{2}{@{}l}{$r = R(320)$}\\
 \multicolumn{2}{@{}l}{$n_S = r[0:128)$}\\
 \multicolumn{2}{@{}l}{$n_{IV} = r[128:128 + n_{IV}l)$}\\
-\multicolumn{2}{@{}l}{$k_M = D_H(0, kp_M, H(n_S, a, v, lp, u_i, k))$}\\
-\multicolumn{2}{@{}l}{$k_S = D_H(1, kp_S, H(n_S, a, v, lp, u_i, k))$}\\
-\multicolumn{2}{@{}l}{$k_C = D_H(1, kp_C, H(n_S, k_M))$}\\
+\multicolumn{2}{@{}l}{$k_M = D_H(0, kp_M, H(n_S, a, v, lp, e_l, e, k))$}\\
+\multicolumn{2}{@{}l}{$k_S = D_H(1, kp_S, H(n_S, a, v, lp, e_l, e, k))$}\\
 \multicolumn{2}{@{}l}{$ad_F = f \mathbin\Vert a \mathbin\Vert n_{IV} \mathbin\Vert n_S \mathbin\Vert i \mathbin\Vert le \mathbin\Vert lp \mathbin\Vert
-h_El$}\\
-\multicolumn{2}{@{}l}{$ad_X = ad_F \mathbin\Vert u_i \mathbin\Vert k_C$}\\
-\multicolumn{2}{@{}l}{$m_E = E_a(u_c, n_{IV}, ad_X, k_M)$}\\
+h_El \mathbin\Vert k_Cl$}\\
+\multicolumn{2}{@{}l}{$m_E = E_a(u_c, n_{IV}, ad_F, k_M)$}\\
 \multicolumn{2}{@{}l}{$l = len(ad_F \mathbin\Vert m_E)$}\\
 \multicolumn{2}{@{}l}{$t = H(v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E \mathbin\Vert \mathtt{0x00}, k_S)$}\\
 \multicolumn{2}{@{}l}{$cd_x = t \mathbin\Vert v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E$}\\
@@ -306,26 +355,24 @@ h_El$}\\
 \begin{stanza}
 \underline{$cd_x$ Decryption Under $k$ by B}\\
 
-\begin{tabular}{@{}p{2mm} l}
+\begin{tabular}{@{}p{5mm} l}
 \multicolumn{2}{@{}l}{$\textrm{where }(k, cd_x) \in \{(k_L, cd_u), (p_R, cd_p), (u_r \mathbin\Vert u_i, cd_r)\}$}\\
-\multicolumn{2}{@{}l}{$B \leftarrow S: u_i$}\\
+\multicolumn{2}{@{}l}{$\textrm{for }cd_u, cd_p:\ B \leftarrow S: u_i$}\\
 \multicolumn{2}{@{}l}{$t, v, l, ad_F, m_E = cd_x$}\\
-\multicolumn{2}{@{}l}{$f, a, n_{IV}, n_S, i, le, lp, h_El = ad_F$}\\
-\multicolumn{2}{@{}l}{$k_S = D_H(1, kp_S, H(n_S, a, v, lp, u_i, k))$}\\
+\multicolumn{2}{@{}l}{$f, a, n_{IV}, n_S, i, le, lp, h_El, k_Cl = ad_F$}\\
+\multicolumn{2}{@{}l}{$k_S = D_H(1, kp_S, H(n_S, a, v, lp, e_l, e, k))$}\\
 \multicolumn{2}{@{}l}{$b = V(v \mathbin\Vert l \mathbin\Vert ad_F \mathbin\Vert m_E \mathbin\Vert \mathtt{0x00}, k_S, t)$}\\
 \multicolumn{2}{@{}l}{$\textrm{if }!b:$}\\
 \multicolumn{2}{@{}l}{\hspace{15pt}$A \leftarrow B: err$}\\
-\multicolumn{2}{@{}l}{$k_M = D_H(0, kp_M, H(n_S, a, v, lp, u_i, k))$}\\
-\multicolumn{2}{@{}l}{$k_C = D_H(1, kp_C, H(n_S, k_M))$}\\
-\multicolumn{2}{@{}l}{$ad_X = ad_F \mathbin\Vert u_i \mathbin\Vert k_C$}\\
-\multicolumn{2}{@{}l}{$u_c = E_a^{-1}(m_E, n_{IV}, ad_X, k_M)$}\\
+\multicolumn{2}{@{}l}{$k_M = D_H(0, kp_M, H(n_S, a, v, lp, e_l, e, k))$}\\
+\multicolumn{2}{@{}l}{$u_c = E_a^{-1}(m_E, n_{IV}, ad_F, k_M)$}\\
 \end{tabular}
 \end{stanza}
 
 \begin{stanza}
 \underline{Authentication Variables}\\
 
-\begin{tabular}{@{}p{2mm} l}
+\begin{tabular}{@{}p{5mm} l}
 $ao$ & \textrm{ - Authentication options, including }$o, ch$\\
 $ar$ & \textrm{ - Authentication response, including signed }$ch$\\
 $bd$ & \textrm{ - HTTP request body} \\
@@ -345,15 +392,18 @@ $mth$ & \textrm{ - HTTP request method} \\
 $n_P$ & \textrm{ - 256 bit proof nonce value} \\
 $o$ & \textrm{ - Quick Crypt origin ``https://quickcrypt.org''} \\
 $p_R$ & \textrm{ - 256 bit passkey PRF output } \\
-$p_S$ & \textrm{ - Fixed PRF salt } \\
+$p_S$ & \textrm{ - Fixed 256 bit PRF salt, as base64url } \\
+& \phantom{\textrm{ - }}\texttt{T89fTIZ37DRI-udjI\_MBqc39I4yCyWJWHndLuYpD8yE} \\
 $pk_R$ & \textrm{ - ML-DSA-65 recovery proof public key} \\
 $pk_U$ & \textrm{ - ML-DSA-65 userCred proof public key} \\
 $pth$ & \textrm{ - HTTP request path} \\
+$qs$ & \textrm{ - HTTP request query string, omitted when empty} \\
 $ro$ & \textrm{ - Registration options, including }$o, ch, u_i$\\
-$rq$ & \textrm{ - Authorized request, including }$mth, pth, bd$\\
+$rq$ & \textrm{ - Authorized request, including }$mth, pth, bd, qs$\\
 $rr$ & \textrm{ - Registration response, including signed }$ch$\\
-$sc_R$ & \textrm{ - Recovery signature context: ``qcrypt/recovery/proof/v1''} \\
+$sc_R$ & \textrm{ - Recovery signature context: ``qcrypt/recovery/recover/v1''} \\
 $sc_U$ & \textrm{ - userCred signature context: ``qcrypt/usercred/proof/v1''} \\
+$sc_W$ & \textrm{ - Replace words signature context: ``qcrypt/recovery/replace/v1''} \\
 $sk_R$ & \textrm{ - ML-DSA-65 recovery proof secret key} \\
 $sk_U$ & \textrm{ - ML-DSA-65 userCred proof secret key} \\
 $ts_R$ & \textrm{ - Recovery proof timestamp in milliseconds} \\
@@ -367,12 +417,20 @@ $\delta$ & \textrm{ - Delimiter byte: \texttt{\textbackslash n}}\\
 $\sigma_R$ & \textrm{ - ML-DSA-65 recovery proof signature} \\
 $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \end{tabular}
+
+\vspace{\notegap}
+
+{\leftskip=\parindent\noindent\textit{Encodings:} Every field of $m_U$ and $m_R$ is ASCII text: $u_i$ and $n_P$ are base64url, $mth$ is uppercase, $pth$ is percent encoded, $ts_U$ and $ts_R$ are decimal milliseconds, and $H_2(bd)$ is lowercase hex.\par}
+
+\vspace{\notegap}
+
+{\leftskip=\parindent\noindent\textit{Webauthn verification:} Where $S$ verifies a webauthn signature it verifies all of: the signature against the stored credential, $ch$ against the challenge $S$ stored for that purpose and user, the origin and relying party id against $o$, and that the authenticator performed user verification. The $ch$ returned alongside $rr$ and $ar$ is the lookup key for the stored challenge.\par}
 \end{stanza}
 
 \begin{stanza}
 \underline{Registration by A}\\
 
-\begin{tabular}{@{}p{2mm} l}
+\begin{tabular}{@{}p{5mm} l}
 \multicolumn{2}{@{}l}{$A\rightarrow B : u_n$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow S : u_n, o$} \\
 \multicolumn{2}{@{}l}{$S : u_i = R(128);\ ch = R(256);\ \textrm{store }u_i, ch$} \\
@@ -386,7 +444,7 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \multicolumn{2}{@{}l}{$B : u_c = R(256)$} \\
 \multicolumn{2}{@{}l}{$B : cd_p = u_c\textrm{ encryption under }p_R$} \\
 \multicolumn{2}{@{}l}{$B : cd_r = u_c\textrm{ encryption under }u_r \mathbin\Vert u_i$} \\
-\multicolumn{2}{@{}l}{$B : (pk_U, ) = P_K(D_H(1, kp_U, u_c))$} \\
+\multicolumn{2}{@{}l}{$B : (pk_U, ) = P_K(D_H(1, kp_U, u_c));\ \textrm{store }pk_U$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow S : rr, u_i, ch, pk_R, pk_U, cd_p, cd_r$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ verify webauthn signature};\ \textrm{store }rr, pk_R, pk_U, cd_p, cd_r;\ \textrm{remove }ch $} \\
 \multicolumn{2}{@{}l}{$S\textrm{ create }ck, cs$} \\
@@ -395,15 +453,19 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \multicolumn{2}{@{}l}{$A\leftarrow B : u_r\mathbin\Vert u_i\textrm{ as BIP39}$} \\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{No-PRF fallback:} If $M$ returns no $p_R$, $B$ sends $rr, u_i, ch, pk_R$ only; $S$ generates $u_c = R(256)$, stores it encrypted, derives $(pk_U, )$ from $u_c$, and returns $u_c$; $B$ creates and stores $cd_u$ from $u_c$.\par}
+
+\vspace{\notegap}
+
+{\leftskip=\parindent\noindent\textit{Account mode:} An entire account is either PRF or no-PRF mode. Downgrade from PRF to no-PRF is not supported, and $B$ and $S$ require every passkey to match the account's mode.\par}
 \end{stanza}
 
 \begin{stanza}
 \underline{Authentication by A}\\
 
-\begin{tabular}{@{}p{2mm} l}
+\begin{tabular}{@{}p{5mm} l}
 \multicolumn{2}{@{}l}{$B\rightarrow S : o [,u_i]$} \\
 \multicolumn{2}{@{}l}{$S : ch = R(256);\ \textrm{store }ch$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : ao$} \\
@@ -416,28 +478,34 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \multicolumn{2}{@{}l}{$S\textrm{ create }ck, cs$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : u_i, u_n, cd_p, cs, ck$} \\
 \multicolumn{2}{@{}l}{$B : u_c = cd_p\textrm{ decryption under }p_R$} \\
+\multicolumn{2}{@{}l}{$B : (pk_U, ) = P_K(D_H(1, kp_U, u_c))$} \\
+\multicolumn{2}{@{}l}{$B\textrm{ verify }pk_U\textrm{ matches stored }pk_U$} \\
 \multicolumn{2}{@{}l}{$B : cd_u = u_c\textrm{ encryption under }k_L;\ \textrm{store }cd_u$} \\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{No-PRF fallback:} $S$ returns $u_c$ in place of $cd_p$; $B$ creates and stores $cd_u$ from $u_c$.\par}
+
+\vspace{\notegap}
+
+{\leftskip=\parindent\noindent\textit{First use:} $B$ stores $pk_U$ the first time it authenticates an account and rejects any later authentication that derives a different one, so subsequent $cd_p$ substitution fails authentication.\par}
 \end{stanza}
 
 \begin{stanza}
 \underline{Authorization by B}\\
 
-\begin{tabular}{@{}p{2mm} l}
+\begin{tabular}{@{}p{5mm} l}
 \multicolumn{2}{@{}l}{$B : u_c = cd_u\textrm{ decryption under }k_L$} \\
 \multicolumn{2}{@{}l}{$B : (pk_U, sk_U) = P_K(D_H(1, kp_U, u_c))$} \\
 \multicolumn{2}{@{}l}{$B : ts_U = \textrm{current time}$} \\
 \multicolumn{2}{@{}l}{$B : n_P = R(256)$} \\
-\multicolumn{2}{@{}l}{$B : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert n_P \delta \mathbin\Vert H_2(bd)$} \\
+\multicolumn{2}{@{}l}{$B : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert n_P \delta \mathbin\Vert H_2(bd) [\delta \mathbin\Vert qs]$} \\
 \multicolumn{2}{@{}l}{$B : \sigma_U = P_S(sk_U, m_U, sc_U)$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow S : rq, ck, cs, ts_U, n_P, \sigma_U$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ verify }ck, cs$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ verify }ts_U\textrm{ within }\Delta$} \\
-\multicolumn{2}{@{}l}{$S : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert n_P \delta \mathbin\Vert H_2(bd)$} \\
+\multicolumn{2}{@{}l}{$S : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert n_P \delta \mathbin\Vert H_2(bd) [\delta \mathbin\Vert qs]$} \\
 \multicolumn{2}{@{}l}{$S : b = P_V(pk_U, m_U, \sigma_U, sc_U)$} \\
 \multicolumn{2}{@{}l}{$\textrm{if }!b:$} \\
 \multicolumn{2}{@{}l}{\hspace{15pt}$B \leftarrow S: err$} \\
@@ -445,7 +513,7 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : \textrm{rq response}$} \\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{For state changing requests: } $S$ additionally requires $n_P$ to be unknown and stores it, rejecting replays.\par}
 \end{stanza}
@@ -453,10 +521,10 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \begin{stanza}
 \underline{Add Passkey by A}\\
 
-{\leftskip=\parindent\noindent\textit{A is authenticated; requests authorized per Authorization of A}\par}
+{\leftskip=\parindent\noindent\textit{A is authenticated; requests authorized per Authorization by B}\par}
 
-\begin{tabular}{@{}p{2mm} l}
-\multicolumn{2}{@{}l}{$B\rightarrow S : u_i, o$} \\
+\begin{tabular}{@{}p{5mm} l}
+\multicolumn{2}{@{}l}{$B\rightarrow S : o$} \\
 \multicolumn{2}{@{}l}{$S : ch = R(256);\ \textrm{store }ch$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : ro$} \\
 \multicolumn{2}{@{}l}{$B : u_c = cd_u\textrm{ decryption under }k_L$} \\
@@ -469,7 +537,7 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \multicolumn{2}{@{}l}{$S\textrm{ verify webauthn signature};\ \textrm{store }rr, cd_p;\ \textrm{remove }ch $} \\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{No-PRF fallback:} $B$ omits $p_S$ and does not decrypt $u_c$ or send $cd_p$; $S$ stores the new passkey without encrypted $u_c$.\par}
 \end{stanza}
@@ -477,31 +545,31 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \begin{stanza}
 \underline{Replace Recovery Words by A}\\
 
-{\leftskip=\parindent\noindent\textit{A is authenticated; requests authorized per Authorization of A}\par}
+{\leftskip=\parindent\noindent\textit{A is authenticated; requests authorized per Authorization by B}\par}
 
-\begin{tabular}{@{}p{2mm} l}
-\multicolumn{2}{@{}l}{$B\textrm{ repeat Authentication of A}$} \\
+\begin{tabular}{@{}p{5mm} l}
+\multicolumn{2}{@{}l}{$B\textrm{ repeat Authentication of A (}B\textrm{ policy, not checked by }S\textrm{)}$} \\
 \multicolumn{2}{@{}l}{$B : u_r = R(128)$} \\
 \multicolumn{2}{@{}l}{$B : (pk_R, sk_R) = P_K(D_H(1, kp_R, u_r \mathbin\Vert u_i))$} \\
 \multicolumn{2}{@{}l}{$B : ts_R = \textrm{current time}$} \\
 \multicolumn{2}{@{}l}{$B : n_P = R(256)$} \\
 \multicolumn{2}{@{}l}{$B : m_R = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert n_P$} \\
-\multicolumn{2}{@{}l}{$B : \sigma_R = P_S(sk_R, m_R, sc_R)$} \\
+\multicolumn{2}{@{}l}{$B : \sigma_R = P_S(sk_R, m_R, sc_W)$} \\
 \multicolumn{2}{@{}l}{$B : u_c = cd_u\textrm{ decryption under }k_L$} \\
 \multicolumn{2}{@{}l}{$B : cd_r = u_c\textrm{ encryption under }u_r \mathbin\Vert u_i$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow S : pk_R, ts_R, n_P, \sigma_R, cd_r$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ verify }ts_R\textrm{ within }\Delta$} \\
 \multicolumn{2}{@{}l}{$S : m_R = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert n_P$} \\
-\multicolumn{2}{@{}l}{$S : b = P_V(pk_R, m_R, \sigma_R, sc_R)$} \\
+\multicolumn{2}{@{}l}{$S : b = P_V(pk_R, m_R, \sigma_R, sc_W)$} \\
 \multicolumn{2}{@{}l}{$\textrm{if }!b:$} \\
 \multicolumn{2}{@{}l}{\hspace{15pt}$B \leftarrow S: err$} \\
 \multicolumn{2}{@{}l}{\hspace{15pt}$A \leftarrow B: err$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ verify }n_P\textrm{ unknown};\ \textrm{store }n_P$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ store }pk_R, cd_r$} \\
-\multicolumn{2}{@{}l}{$B\rightarrow A : u_r\mathbin\Vert u_i\textrm{ as BIP39}$} \\
+\multicolumn{2}{@{}l}{$A\leftarrow B : u_r\mathbin\Vert u_i\textrm{ as BIP39}$} \\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{No-PRF fallback:} $B$ does not decrypt $cd_u$ or send $cd_r$; $S$ stores $pk_R$ without $cd_r$.\par}
 \end{stanza}
@@ -509,7 +577,7 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \begin{stanza}
 \underline{Recovery from Lost Passkey by A}\\
 
-\begin{tabular}{@{}p{2mm} l}
+\begin{tabular}{@{}p{5mm} l}
 \multicolumn{2}{@{}l}{$A\rightarrow B : u_r\mathbin\Vert u_i\textrm{ as BIP39}$} \\
 \multicolumn{2}{@{}l}{$B : (pk_R, sk_R) = P_K(D_H(1, kp_R, u_r \mathbin\Vert u_i))$} \\
 \multicolumn{2}{@{}l}{$B : ts_R = \textrm{current time}$} \\
@@ -532,7 +600,7 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \multicolumn{2}{@{}l}{$B : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert ch_R \delta \mathbin\Vert H_2(\emptyset)$} \\
 \multicolumn{2}{@{}l}{$B : \sigma_U = P_S(sk_U, m_U, sc_U)$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow S : u_i, o, ch_R, ts_U, \sigma_U$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ verify }ts_U\textrm{ within }\Delta;\ \textrm{remove }ch_R $} \\
+\multicolumn{2}{@{}l}{$S\textrm{ verify }ts_U\textrm{ within }\Delta;\ \textrm{verify }ch_R\textrm{ is the stored value};\ \textrm{remove }ch_R $} \\
 \multicolumn{2}{@{}l}{$S : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert ch_R \delta \mathbin\Vert H_2(\emptyset)$} \\
 \multicolumn{2}{@{}l}{$S : b = P_V(pk_U, m_U, \sigma_U, sc_U)$} \\
 \multicolumn{2}{@{}l}{$\textrm{if }!b:$} \\
@@ -553,7 +621,7 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \multicolumn{2}{@{}l}{$B : cd_u = u_c\textrm{ encryption under }k_L;\ \textrm{store }cd_u$} \\
 \end{tabular}
 
-\hfill \break
+\vspace{\notegap}
 
 {\leftskip=\parindent\noindent\textit{No-PRF fallback:} $S$ returns $u_c$ in place of $cd_r$; $B$ omits $p_S$ and the $cd_r$ decryption. After the new passkey, $B$ sends $rr, u_i, ch$ only and $S$ stores it without encrypted $u_c$.\par}
 \end{stanza}

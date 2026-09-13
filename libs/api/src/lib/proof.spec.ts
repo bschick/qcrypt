@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { cryptoReady, getRandom, bytesToBase64, base64ToBytes } from '@qcrypt/crypto';
+import { cryptoReady, getRandom, bytesToBase64, base64ToBytes, getProofKeyPair, createProof } from '@qcrypt/crypto';
 import {
    getUserCredPubKey,
    createUserCredProof,
@@ -35,9 +35,9 @@ describe('userCred proof', () => {
       const pubKey = getUserCredPubKey(userCred);
       const nonce = bytesToBase64(getRandom(32));
       const signature = createUserCredProof(userCred, userId, 'GET', '/v1/user', '1730000000000', nonce, 'abc');
-      expect(verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '1730000000000', nonce, 'abc', signature)).toBe(
-         true,
-      );
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '1730000000000', nonce, 'abc', signature),
+      ).not.toThrow();
    });
 
    it('binds the query string when present', () => {
@@ -45,7 +45,9 @@ describe('userCred proof', () => {
       const pubKey = getUserCredPubKey(userCred);
       const nonce = bytesToBase64(getRandom(32));
       const signature = createUserCredProof(userCred, userId, 'GET', '/v1/user', '100', nonce, 'aa', 'a=b');
-      expect(verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature, 'a=b')).toBe(true);
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature, 'a=b'),
+      ).not.toThrow();
       expect(() =>
          verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature, 'a=c'),
       ).toThrow();
@@ -119,8 +121,8 @@ describe('recovery nonce proof', () => {
    it('sign nonce and verify with derived public key', () => {
       const secret = getRandom(32);
       const pubKey = getRecoveryPubKey(secret);
-      const signature = createRecoveryProof(secret, userId, timestamp, nonce);
-      expect(verifyRecoveryProof(pubKey, userId, timestamp, nonce, signature)).toBe(true);
+      const signature = createRecoveryProof(secret, userId, timestamp, nonce, 'recover');
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, signature, 'recover')).not.toThrow();
    });
 
    it('derives the pinned public key for a fixed secret', () => {
@@ -139,40 +141,85 @@ describe('recovery nonce proof', () => {
       expect(recoveryPubKey).not.toBe(userCredPubKey);
    });
 
+   // BACKWARD COMPAT: clients before the per-operation contexts signed both operations with a
+   // single context. Delete this test with the fallback it covers.
+   it('BACKWARD COMPAT accepts a proof signed with the shared pre-8.0.0 context', () => {
+      const secret = getRandom(32);
+      const pubKey = getRecoveryPubKey(secret);
+      const { secKey } = getProofKeyPair(secret, 'RecovKey');
+      const message = new TextEncoder().encode([userId, timestamp, nonce].join('\n'));
+      const legacySig = bytesToBase64(createProof(secKey, message, 'qcrypt/recovery/nonce/v1'));
+
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, legacySig, 'recover')).not.toThrow();
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, legacySig, 'replace')).not.toThrow();
+   });
+
+   it('throw when a proof for one operation is replayed into the other', () => {
+      const secret = getRandom(32);
+      const pubKey = getRecoveryPubKey(secret);
+
+      const replaceSig = createRecoveryProof(secret, userId, timestamp, nonce, 'replace');
+      const recoverSig = createRecoveryProof(secret, userId, timestamp, nonce, 'recover');
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, replaceSig, 'replace')).not.toThrow();
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, recoverSig, 'recover')).not.toThrow();
+
+      // Both operations sign identical bytes, so only the context separates them
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, replaceSig, 'recover')).toThrow(
+         /proof verification failed/,
+      );
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, recoverSig, 'replace')).toThrow(
+         /proof verification failed/,
+      );
+   });
+
    it('throw when signed fields differ', () => {
       const secret = getRandom(32);
       const pubKey = getRecoveryPubKey(secret);
-      const signature = createRecoveryProof(secret, userId, timestamp, nonce);
+      const signature = createRecoveryProof(secret, userId, timestamp, nonce, 'recover');
       const otherUserId = bytesToBase64(getRandom(16));
       const otherTimestamp = String(Number(timestamp) + 1);
       const otherNonce = bytesToBase64(getRandom(32));
-      expect(() => verifyRecoveryProof(pubKey, otherUserId, timestamp, nonce, signature)).toThrow();
-      expect(() => verifyRecoveryProof(pubKey, userId, otherTimestamp, nonce, signature)).toThrow();
-      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, otherNonce, signature)).toThrow();
+      expect(() => verifyRecoveryProof(pubKey, otherUserId, timestamp, nonce, signature, 'recover')).toThrow(
+         /proof verification failed/,
+      );
+      expect(() => verifyRecoveryProof(pubKey, userId, otherTimestamp, nonce, signature, 'recover')).toThrow(
+         /proof verification failed/,
+      );
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, otherNonce, signature, 'recover')).toThrow(
+         /proof verification failed/,
+      );
    });
 
    it('throw when the wrong public key is used', () => {
-      const signature = createRecoveryProof(getRandom(32), userId, timestamp, nonce);
+      const signature = createRecoveryProof(getRandom(32), userId, timestamp, nonce, 'recover');
       const otherPubKey = getRecoveryPubKey(getRandom(32));
-      expect(() => verifyRecoveryProof(otherPubKey, userId, timestamp, nonce, signature)).toThrow();
+      expect(() => verifyRecoveryProof(otherPubKey, userId, timestamp, nonce, signature, 'recover')).toThrow(
+         /proof verification failed/,
+      );
    });
 
    it('throw when the signature is manipulated', () => {
       const secret = getRandom(32);
       const pubKey = getRecoveryPubKey(secret);
-      const signature = flipSigBit(createRecoveryProof(secret, userId, timestamp, nonce));
-      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, signature)).toThrow();
+      const signature = flipSigBit(createRecoveryProof(secret, userId, timestamp, nonce, 'recover'));
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, signature, 'recover')).toThrow(
+         /proof verification failed/,
+      );
    });
 
    it('throw when the nonce is not the expected length', () => {
       const secret = getRandom(32);
       const shortNonce = bytesToBase64(getRandom(31));
-      expect(() => createRecoveryProof(secret, userId, timestamp, shortNonce)).toThrow();
+      expect(() => createRecoveryProof(secret, userId, timestamp, shortNonce, 'recover')).toThrow(
+         /invalid nonce length/,
+      );
    });
 
    it('throw when the userId is not the expected length', () => {
       const secret = getRandom(32);
       const shortUserId = bytesToBase64(getRandom(15));
-      expect(() => createRecoveryProof(secret, shortUserId, timestamp, nonce)).toThrow();
+      expect(() => createRecoveryProof(secret, shortUserId, timestamp, nonce, 'recover')).toThrow(
+         /invalid userId length/,
+      );
    });
 });

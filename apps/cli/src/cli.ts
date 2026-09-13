@@ -11,10 +11,15 @@ import {
    readStreamAll,
    Ciphers,
    PWDKeyProvider,
+   setLogErrors,
 } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import fs from 'node:fs';
+import path from 'node:path';
+import { randomBytes } from 'node:crypto';
+import { getSystemErrorMap } from 'node:util';
 import { Readable, Writable } from 'node:stream';
+import { once } from 'node:events';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import { input, select, number, password } from '@inquirer/prompts';
@@ -37,7 +42,13 @@ interface IO {
 // Inquirer's cleanup ends the output stream it receives via pipe;
 // by giving it a throwaway proxy, ttyOut itself stays open for
 // subsequent prompts and showAnswered calls.
+// Inquirer starts a prompt with a newline only once it has rendered one before, and it cannot
+// see writes made directly to ttyOut, so answers echoed here have to terminate their own line
+// until the first prompt has run
+let promptRendered = false;
+
 function iqOutput(io: IO): Writable {
+   promptRendered = true;
    return new Writable({
       write(chunk: string | Uint8Array, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
          if (typeof chunk === 'string') {
@@ -61,11 +72,14 @@ class ParamError extends Error {
 const iqTheme = makeTheme();
 function showAnswered(message: string, answer: string, io: IO): void {
    const prefixDone = typeof iqTheme.prefix === 'string' ? iqTheme.prefix : iqTheme.prefix.done;
-   io.ttyOut.write(`${prefixDone} ${iqTheme.style.message(message, 'done')} ${iqTheme.style.answer(answer)}\n`);
+   const line = `${prefixDone} ${iqTheme.style.message(message, 'done')} ${iqTheme.style.answer(answer)}`;
+   io.ttyOut.write(promptRendered ? `\n${line}` : `${line}\n`);
 }
 
-async function peekBinary(source: Readable): Promise<{ pipedIn: ReadableStream<Uint8Array>; binaryIn: boolean }> {
-   const firstChunk: Buffer = await new Promise((resolve) => {
+async function peekBinary(
+   source: Readable,
+): Promise<{ pipedIn: ReadableStream<Uint8Array>; binaryIn: boolean; empty: boolean }> {
+   const firstChunk: Buffer = await new Promise<Buffer>((resolve) => {
       // An empty source never becomes readable, so end has to resolve this too
       source.once('end', () => resolve(Buffer.alloc(0)));
       const tryRead = () => {
@@ -82,7 +96,10 @@ async function peekBinary(source: Readable): Promise<{ pipedIn: ReadableStream<U
    const binary = firstChunk.length === 0 || !/^\s*\{\s*"[\x20-\x7e]*$/.test(head);
 
    async function* prependedStream() {
-      yield firstChunk.subarray(0);
+      // A zero length chunk reads as a stalled source rather than the end of one
+      if (firstChunk.length) {
+         yield firstChunk.subarray(0);
+      }
       for await (const chunk of source) {
          yield chunk;
       }
@@ -92,7 +109,11 @@ async function peekBinary(source: Readable): Promise<{ pipedIn: ReadableStream<U
    const nodeReadableStream = ReadableStream as unknown as {
       from(iterable: AsyncIterable<Uint8Array>): ReadableStream<Uint8Array>;
    };
-   return { pipedIn: nodeReadableStream.from(prependedStream()), binaryIn: binary };
+   return {
+      pipedIn: nodeReadableStream.from(prependedStream()),
+      binaryIn: binary,
+      empty: firstChunk.length === 0,
+   };
 }
 
 function streamFromBytes(data: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Array> {
@@ -114,7 +135,10 @@ async function writeAndCloseStream(
    while (true) {
       const { done, value } = await reader.read();
       if (value) {
-         writeableStream.write(value);
+         // Without waiting, a consumer slower than the cipher queues the whole output in memory
+         if (!writeableStream.write(value) && !(writeableStream as Writable).destroyed) {
+            await once(writeableStream, 'drain');
+         }
          written += value.byteLength;
       }
       if (done) {
@@ -229,7 +253,7 @@ async function info(
       io.pipedOut.write(`Cipher and Mode   : ${Ciphers.algDescription(cdInfo.alg)}
 PBKDF2 Iterations : ${cdInfo.ic}
 Salt (b64Url)     : ${bytesToBase64(cdInfo.slt)}
-Password Hint     : ${cdInfo.hint}
+Password Hint     : ${showHint(cdInfo.hint ?? '')}
 Loops             : ${cdInfo.lpEnd}
 Version           : ${cdInfo.ver}\n`);
    } catch (err) {
@@ -247,9 +271,6 @@ async function getSensitiveInput(msg: string, io: IO): Promise<string> {
       { message: `${msg}:`, mask: '*', validate: (v) => (!v ? `${msg} is required` : true) },
       { input: io.ttyIn, output: iqOutput(io) },
    );
-   // inquirer's answered render leaves the cursor on the same line; ensure the
-   // next direct write to ttyOut/pipedOut starts on a fresh line.
-   io.ttyOut.write('\n');
    return val;
 }
 
@@ -370,14 +391,22 @@ async function encrypt(
          args.readStart || args.readMax ? { startSize: args.readStart, maxSize: args.readMax } : undefined;
       const cipherStream = await encryptStream(clearStream, keyProvider, { algs, ic: iters!, readOpts });
 
+      let cipherLen: number;
       if (io.b64urlOut) {
          const cipherData = await readStreamAll(cipherStream);
+         cipherLen = cipherData.byteLength;
          io.pipedOut.write(`${bytesToBase64(cipherData)}\n`);
       } else if (io.binaryOut) {
-         await writeAndCloseStream(cipherStream, io.pipedOut);
+         cipherLen = await writeAndCloseStream(cipherStream, io.pipedOut);
       } else {
          const cipherData = await readStreamAll(cipherStream);
+         cipherLen = cipherData.byteLength;
          io.pipedOut.write(`${makeCipherArmor(cipherData, 'compact')}\n`);
+      }
+
+      // Empty output means the clear stream was lost, not that there was nothing to encrypt
+      if (cipherLen === 0) {
+         throw new Error('encrypted output was empty');
       }
    } catch (err) {
       if (args.debug) {
@@ -388,6 +417,9 @@ async function encrypt(
       process.exitCode = 1;
    }
 }
+
+// TODO: This is fragile... update crypto lib to return a typed error to fix
+const DECRYPT_FAILURES = ['Invalid key commitment', 'Invalid MAC signature', 'Invalid MAC data'];
 
 async function decrypt(
    args: {
@@ -409,15 +441,15 @@ async function decrypt(
             if (!args.silent) {
                showAnswered(`Password${lpMsg}:`, '******', io);
             }
-            return [args.pwds[pos]!, undefined];
+            return [args.pwds[pos]!];
          } else if (args.silent) {
             throw new ParamError(
                `${cdinfo.lpEnd} password(s) required in silent mode but ${args.pwds?.length ?? 0} provided (use --pwds)`,
             );
          } else {
-            const hintMsg = lpMsg + (cdinfo.hint ? ` (hint: ${cdinfo.hint})` : '');
+            const hintMsg = lpMsg + (cdinfo.hint ? ` (hint: ${showHint(cdinfo.hint)})` : '');
             const pwd = await getSensitiveInput(`Password${hintMsg}`, io);
-            return [pwd, undefined];
+            return [pwd];
          }
       });
 
@@ -444,6 +476,10 @@ async function decrypt(
    } catch (err) {
       if (args.debug) {
          console.error(err);
+      } else if (DECRYPT_FAILURES.some((failure) => (err as Error).message?.startsWith(failure))) {
+         console.error(
+            '\ndecryption failed: You may be using the wrong password or user credential, or the cipher armor is invalid',
+         );
       } else {
          console.error('\ndecryption failed: ', (err as Error).message);
       }
@@ -470,7 +506,8 @@ function CoerceAlgs(algs: string[]): cc.CipherAlgs[] {
 // space that will be stripped (also works for [text])
 const args = yargs(hideBin(process.argv))
    .usage('Usage: $0 <command> [text] [options]')
-   .parserConfiguration({ 'nargs-eats-options': true })
+   // Without this, text that looks like a number is encrypted as a different string
+   .parserConfiguration({ 'nargs-eats-options': true, 'parse-positional-numbers': false })
    .strict()
    .command({
       command: '$0 [text] [options]',
@@ -478,7 +515,7 @@ const args = yargs(hideBin(process.argv))
       describe: 'decrypt cipher data',
       builder: (yargs) => {
          return yargs
-            .positional('text', { desc: 'cipher armor to decrypt (or use -f or stdin)' })
+            .positional('text', { desc: 'cipher armor to decrypt (or use -f or stdin)', type: 'string' })
             .example('$0 -c 97jQeo8N16L4vhKzWy7ys -f doc.qq', ': prints decrypted text of doc.qq');
       },
       handler: () => {},
@@ -488,7 +525,7 @@ const args = yargs(hideBin(process.argv))
       describe: 'show information about cipher data',
       builder: (yargs) => {
          return yargs
-            .positional('text', { desc: 'cipher armor to describe (or use -f or stdin)' })
+            .positional('text', { desc: 'cipher armor to describe (or use -f or stdin)', type: 'string' })
             .example('$0 info -c 97jQeo8N16L4vhKzWy7ys -f doc.qq', ': prints encryption params for doc.qq');
       },
       handler: () => {},
@@ -498,7 +535,7 @@ const args = yargs(hideBin(process.argv))
       describe: 'encrypt clear text',
       builder: (yargs) => {
          return yargs
-            .positional('text', { desc: 'clear text to encrypt (or use -f or stdin)' })
+            .positional('text', { desc: 'clear text to encrypt (or use -f or stdin)', type: 'string' })
             .options({
                iters: { alias: 'i', desc: `password hash iterations (min ${cc.ICOUNT_MIN})`, type: 'number' },
                algs: {
@@ -604,7 +641,16 @@ const DEBUG_SHOW_KEYS = new Set([
    'readMax',
 ]);
 
+// Hints come from whoever encrypted the data, so controls are shown rather than run or dropped
+function showHint(hint: string): string {
+   return hint.replace(/\p{Cc}/gu, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
 function maskForDebug(key: string, value: unknown): unknown {
+   // Everything after -- lands in _ alongside the command, and may be text the user meant to pass
+   if (key === '_' && Array.isArray(value)) {
+      return value.map((entry, index) => (index === 0 ? entry : '******'));
+   }
    if (DEBUG_SHOW_KEYS.has(key)) {
       return value;
    }
@@ -621,6 +667,8 @@ if (args.debug) {
       shown[key] = maskForDebug(key, value);
    }
    console.error('args ->', shown);
+} else {
+   setLogErrors(false);
 }
 
 function openTTY(kind: 'stdin' | 'stdout'): Promise<(fs.ReadStream & fs.WriteStream) | undefined> {
@@ -629,6 +677,144 @@ function openTTY(kind: 'stdin' | 'stdout'): Promise<(fs.ReadStream & fs.WriteStr
          resolve(err ? undefined : stream);
       });
    });
+}
+
+type OutFile = {
+   stream: fs.WriteStream;
+   finish: () => Promise<void>;
+};
+
+const EXIT_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
+
+function errDetail(err: unknown): string {
+   const { errno, code, message } = err as NodeJS.ErrnoException;
+   const reason = errno === undefined ? undefined : getSystemErrorMap().get(errno)?.[1];
+   return reason ?? code ?? message;
+}
+
+// Output is written beside the destination and moved into place once complete, so decrypted data
+// never inherits the destination's permissions, follows a symlink, or appears half written.
+// Nothing this run creates should outlive a failure, including one delivered as a signal.
+function openOutFile(outfile: string, force: boolean): OutFile {
+   if (fs.existsSync(outfile)) {
+      if (!force) {
+         throw new Error(`${outfile} already exists, use --force to overwrite`);
+      }
+      try {
+         // Otherwise the rename below would replace even a read-only file
+         fs.accessSync(outfile, fs.constants.W_OK);
+      } catch {
+         throw new Error(`could not write ${outfile}: permission denied`);
+      }
+   }
+
+   const prefix = path.join(path.dirname(outfile), `.${path.basename(outfile)}.`);
+   const temp = `${prefix}${randomBytes(4).toString('hex')}`;
+   // Masks the random part of a temp name, which the user never asked to write
+   const showPath = `${prefix}*`;
+
+   let created = false;
+   const remove = (): void => {
+      if (created) {
+         created = false;
+         try {
+            fs.rmSync(temp, { force: true });
+         } catch (err) {
+            console.error(`\ncould not remove ${showPath}: ${errDetail(err)}`);
+         }
+      }
+   };
+
+   const onSignal = (signal: NodeJS.Signals): void => {
+      remove();
+      process.removeListener(signal, onSignal);
+      process.kill(process.pid, signal);
+   };
+   // Registered before the file exists so nothing that can throw runs while it is unguarded
+   for (const signal of EXIT_SIGNALS) {
+      process.on(signal, onSignal);
+   }
+
+   // wx rather than w so a name taken since it was generated is refused rather than replaced
+   const stream = fs.createWriteStream(temp, { mode: 0o600, flags: 'wx' });
+   stream.once('open', () => {
+      created = true;
+   });
+   // Attached now because a failure during the command closes the stream before it is ended
+   const closed = new Promise<void>((resolve) => stream.once('close', () => resolve()));
+   stream.on('error', (err) => {
+      console.error(`\ncould not write ${showPath}: ${errDetail(err)}`);
+      process.exitCode = 1;
+   });
+
+   const takenError = (): Error => new Error(`${outfile} already exists, use --force to overwrite`);
+
+   // Claiming the name first keeps the refusal atomic, at the cost of an instant where the
+   // destination is empty. Only for filesystems that cannot hard link, which have no better option
+   const claimAndMove = (): void => {
+      try {
+         fs.closeSync(fs.openSync(outfile, 'wx', 0o600));
+      } catch (err) {
+         throw (err as NodeJS.ErrnoException).code === 'EEXIST' ? takenError() : err;
+      }
+      try {
+         fs.renameSync(temp, outfile);
+      } catch (err) {
+         fs.rmSync(outfile, { force: true });
+         throw err;
+      }
+   };
+
+   // A hard link refuses a destination taken during the run, which rename would silently replace
+   const commit = (): void => {
+      if (force) {
+         fs.renameSync(temp, outfile);
+      } else {
+         let linked = false;
+         try {
+            fs.linkSync(temp, outfile);
+            linked = true;
+         } catch (err) {
+            if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+               throw takenError();
+            }
+            claimAndMove();
+         }
+         if (linked) {
+            try {
+               // The destination is already complete, so a stranded temp is not worth failing over
+               fs.rmSync(temp, { force: true });
+            } catch (err) {
+               console.error(`\ncould not remove ${showPath}: ${errDetail(err)}`);
+            }
+         }
+      }
+   };
+
+   const finish = async (): Promise<void> => {
+      if (!stream.destroyed) {
+         stream.end();
+      }
+      await closed;
+      for (const signal of EXIT_SIGNALS) {
+         process.removeListener(signal, onSignal);
+      }
+
+      // Read after the close, since a write can still fail while the last of it is flushed
+      if (process.exitCode === 1) {
+         remove();
+      } else {
+         try {
+            commit();
+            created = false;
+         } catch (err) {
+            remove();
+            throw err;
+         }
+      }
+   };
+
+   return { stream, finish };
 }
 
 async function main() {
@@ -649,7 +835,17 @@ async function main() {
    if (args.infile) {
       ({ pipedIn, binaryIn } = await peekBinary(fs.createReadStream(args.infile)));
    } else if (!process.stdin.isTTY) {
-      ({ pipedIn, binaryIn } = await peekBinary(process.stdin));
+      let emptyIn: boolean;
+      ({ pipedIn, binaryIn, empty: emptyIn } = await peekBinary(process.stdin));
+      // Redirected but empty stdin is what a scheduled job looks like, so the text is still meant
+      if (args.text && emptyIn) {
+         pipedIn = streamFromBytes(new TextEncoder().encode(args.text));
+         binaryIn = false;
+      } else if (args.text) {
+         console.error('\ntext cannot be given together with piped input');
+         process.exitCode = 1;
+         return;
+      }
    } else if (args.text) {
       pipedIn = streamFromBytes(new TextEncoder().encode(args.text));
    }
@@ -659,25 +855,19 @@ async function main() {
 
    if (!reopenedIn) {
       console.warn('Warning: no TTY available. All values must be passed via command-line options.');
+      // Prompting anyway would echo answers, including clear text, into the output stream
+      args.silent = true;
    }
 
-   let outfileStream: fs.WriteStream | undefined;
+   let outFile: OutFile | undefined;
    if (args.outfile) {
-      if (!args.force && fs.existsSync(args.outfile)) {
-         console.error(`\n${args.outfile} already exists, use --force to overwrite`);
+      try {
+         outFile = openOutFile(args.outfile, args.force);
+      } catch (err) {
+         console.error(`\n${(err as Error).message}`);
          process.exitCode = 1;
          return;
       }
-      // wx rather than w so a file appearing after the check above, including a timed
-      // symlink, is refused
-      outfileStream = fs.createWriteStream(args.outfile, {
-         mode: 0o600,
-         flags: args.force ? 'w' : 'wx',
-      });
-      outfileStream.on('error', (err) => {
-         console.error(`\ncould not write ${args.outfile}: ${err.message}`);
-         process.exitCode = 1;
-      });
    }
 
    const b64urlIn = args.b64url === 'in' || args.b64url === 'both';
@@ -685,11 +875,12 @@ async function main() {
 
    const io: IO = {
       ttyIn: reopenedIn,
-      ttyOut: reopenedOut ?? process.stdout,
+      // stderr rather than stdout when there is no terminal, so prompts stay out of the data
+      ttyOut: reopenedOut ?? (process.stdout.isTTY ? process.stdout : process.stderr),
       pipedIn,
       binaryIn,
-      pipedOut: outfileStream ?? process.stdout,
-      binaryOut: !!outfileStream || !process.stdout.isTTY,
+      pipedOut: outFile?.stream ?? process.stdout,
+      binaryOut: !!outFile || !process.stdout.isTTY,
       b64urlIn,
       b64urlOut,
    };
@@ -702,17 +893,33 @@ async function main() {
       await decrypt(args, io);
    }
 
-   if (outfileStream) {
-      const closed = new Promise<void>((resolve) => outfileStream.once('close', () => resolve()));
-      outfileStream.end();
-      await closed;
-
-      if (process.exitCode === 1) {
-         fs.rmSync(args.outfile, { force: true });
+   if (outFile) {
+      try {
+         await outFile.finish();
+      } catch (err) {
+         // Errors raised here rather than by the filesystem already name the destination
+         if ((err as NodeJS.ErrnoException).code) {
+            console.error(`\ncould not write ${args.outfile}: ${errDetail(err)}`);
+         } else {
+            console.error(`\n${(err as Error).message}`);
+         }
+         process.exitCode = 1;
       }
    }
    reopenedIn?.destroy();
    reopenedOut?.destroy();
+   completed = true;
 }
+
+// A stream that stalls rather than ending drains the event loop and would otherwise exit 0,
+// reporting success for data that was never written
+let completed = false;
+process.on('exit', () => {
+   // An already reported failure has said what went wrong, so only silence needs this
+   if (!completed && process.exitCode !== 1) {
+      console.error('\nthe operation did not finish');
+      process.exitCode = 1;
+   }
+});
 
 main();

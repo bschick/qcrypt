@@ -105,6 +105,7 @@ export async function verifyRecoverProof(
    recoveryPubKey: string,
    userId: string,
    proof: api.RecoverProof,
+   op: api.RecoveryOp,
 ): Promise<void> {
    const { timestamp, nonce, signature } = proof;
    if (!validB64(nonce) || !validB64(signature)) {
@@ -123,20 +124,35 @@ export async function verifyRecoverProof(
    }
 
    try {
-      api.verifyRecoveryProof(recoveryPubKey, userId, timestamp, nonce, signature);
+      api.verifyRecoveryProof(recoveryPubKey, userId, timestamp, nonce, signature, op);
    } catch (err) {
       console.error('verifyRecoveryProof', err);
       throw new ParamError(`user account ${userId} invalid recovery proof`);
    }
 
-   const stored = await Challenges.create({
-      challenge: nonce,
-      purpose: 'nonce',
-      userId,
-   }).go({ returnOnConditionCheckFailure: true });
-
-   if (stored.rejected) {
+   const outcome = await storeSingleUseNonce(nonce, 'nonce', userId);
+   if (outcome === 'replayed') {
       throw new ParamError(`user account ${userId} replayed recovery proof`);
+   }
+   if (outcome === 'failed') {
+      throw new ParamError(`user account ${userId} recovery proof nonce store failed`);
+   }
+}
+
+// Never throws: an error from the store itself is reported as 'failed'.
+export async function storeSingleUseNonce(
+   nonce: string,
+   purpose: ChallengeItem['purpose'],
+   userId: string,
+): Promise<'ok' | 'replayed' | 'failed'> {
+   try {
+      const stored = await Challenges.create({ challenge: nonce, purpose, userId }).go({
+         returnOnConditionCheckFailure: true,
+      });
+      return stored.rejected ? 'replayed' : 'ok';
+   } catch (err) {
+      console.error(`nonce store error for ${userId}`, err);
+      return 'failed';
    }
 }
 

@@ -92,6 +92,9 @@ type FetchArgs = {
 
 type SessionState = Partial<CredentialPayload> & { userId: string };
 
+// 'none' when no sign out has been attempted since the last authentication
+export type LogoutResult = 'none' | 'success' | 'error';
+
 // Account values recorded at registration or first login, which no endpoint later changes
 type AccountPin = {
    prf: boolean;
@@ -140,7 +143,7 @@ export class AuthenticatorService {
    private _intervalId: number = 0;
    private _csrf?: string = undefined;
    private _cachedRecoveryWords?: string;
-   private _pendingLogout: Promise<unknown> = Promise.resolve();
+   private _pendingLogout: Promise<LogoutResult> = Promise.resolve('none');
    private _halted = false;
 
    constructor(
@@ -528,6 +531,10 @@ export class AuthenticatorService {
       recoveryPubKey: string,
       userCredEnc?: string,
    ): Promise<RecoveryWordsState> {
+      if (this.getUserInfo().prf && !userCredEnc) {
+         throw new Error('prf account missing encrypted credential');
+      }
+
       const timestamp = String(Date.now());
       const nonce = bytesToBase64(getRandom(api.CHALLENGE_BYTES));
 
@@ -535,7 +542,7 @@ export class AuthenticatorService {
          recoveryPubKey,
          timestamp,
          nonce,
-         signature: api.createRecoveryProof(secret, this.userId, timestamp, nonce),
+         signature: api.createRecoveryProof(secret, this.userId, timestamp, nonce, 'replace'),
          userCredEnc,
       };
 
@@ -731,6 +738,9 @@ export class AuthenticatorService {
             userCredExpiry,
             version,
          });
+
+         // Authenticating revokes earlier sessions, including one an unconfirmed logout left behind
+         this._pendingLogout = Promise.resolve('none');
 
          return userInfo;
       } finally {
@@ -972,14 +982,34 @@ export class AuthenticatorService {
 
    logout(global: boolean, emit: boolean = true) {
       const eventData = this._captureEventData(AuthEvent.Logout);
-      const session = this._getSessionState();
 
       if (global && this.hasSession()) {
          this._pendingLogout = this._doFetch<string>({
             method: 'DELETE',
             resource: 'session',
-         }).catch(() => undefined);
+         })
+            .then<LogoutResult>(() => 'success')
+            .catch<LogoutResult>(() => 'error');
+      }
 
+      this.clearSession(global);
+
+      if (emit) {
+         this._emit(eventData);
+      }
+   }
+
+   // 'error' when the last session delete failed, which includes a lost response, and
+   // the server session may or may not be active.
+   async logoutResult(): Promise<LogoutResult> {
+      return this._pendingLogout;
+   }
+
+   // Clears the session on the local system, optionally across tabs, but not on the server.
+   clearSession(global: boolean): void {
+      const session = this._getSessionState();
+
+      if (global && this.hasSession()) {
          // rather than clear values, which can trigger error in other tabs,
          // set expirations to the past to trigger clear self-logout
          const expired = new Date(Date.now() - 10000).toISOString();
@@ -1006,10 +1036,6 @@ export class AuthenticatorService {
       // clear sensitive in-memory values
       this._csrf = undefined;
       this._cachedRecoveryWords = undefined;
-
-      if (emit) {
-         this._emit(eventData);
-      }
    }
 
    async setPasskeyDescription(credentialId: string, description: string): Promise<VerifiedUserInfo> {
@@ -1267,7 +1293,7 @@ export class AuthenticatorService {
             userId,
             timestamp: timestamp1,
             nonce,
-            signature: api.createRecoveryProof(secret, userId, timestamp1, nonce),
+            signature: api.createRecoveryProof(secret, userId, timestamp1, nonce, 'recover'),
          };
 
          const startResp = await this._doFetch<api.RecoverStartResponse>({
@@ -1277,7 +1303,7 @@ export class AuthenticatorService {
          });
 
          // server ends the session, so drop local session state to match
-         this.logout(true);
+         this.clearSession(true);
 
          if (startResp.prf) {
             if (!startResp.userCredEnc) {

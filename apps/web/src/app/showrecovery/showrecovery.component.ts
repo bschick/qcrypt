@@ -34,6 +34,7 @@ import { MatCardModule } from '@angular/material/card';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { bytesToBase64 } from '@qcrypt/crypto';
 import { RecoverySheetComponent } from '../ui/recoverysheet/recoverysheet.component';
+import { NoAssistDirective } from '../ui/noassist.directive';
 
 // Browsers name a "Save as PDF" print after the document title
 const SHEET_TITLE = 'quick_crypt_account_recovery';
@@ -53,6 +54,7 @@ const SHEET_TITLE = 'quick_crypt_account_recovery';
       FormsModule,
       ReactiveFormsModule,
       RecoverySheetComponent,
+      NoAssistDirective,
    ],
 })
 export class ShowRecoveryComponent implements OnInit, OnDestroy {

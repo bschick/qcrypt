@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { testWithAuth, toggleCredentials } from '.././common';
+import { testWithAuth, toggleCredentials, waitForApiResponse } from '.././common';
 
 test('has title', async ({ page }) => {
    await page.goto('/');
@@ -47,7 +47,8 @@ testWithAuth('username is sanitized on create', async ({ authFixture }) => {
    const authenticator = authFixture.memAuthenticator('none');
    await page.goto('/');
 
-   const verifyPromise = page.waitForResponse(
+   const verifyPromise = waitForApiResponse(
+      page,
       (r) => r.url().includes('/v1/reg/verify') && r.request().method() === 'POST',
    );
    await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();

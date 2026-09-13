@@ -50,6 +50,8 @@ const SLT_BYTES = 16;
 const IC_BYTES = 4;
 const LPP_BYTES = 1;
 const HINT_LEN_BYTES = 1;
+const COMMIT_LEN_BYTES = 1;
+const COMMIT_BYTES = 32;
 
 // V4/V5 keep the flags byte in the header; V6+ moves it into the payload's
 // additional-data section. V4's flags byte is reserved (always 0); V5 uses
@@ -67,7 +69,7 @@ const PAYLOAD_SIZE_MAX = 16777215;
 // V1 has no per-block headers and no payload size; the entire file is a
 // single document with the version embedded in the middle. See DecipherV1
 // in libs/crypto/src/lib/deciphers-old.ts.
-export const SUPPORTED_VERSIONS = [1, 4, 5, 6, 7] as const;
+export const SUPPORTED_VERSIONS = [1, 4, 5, 6, 7, 8] as const;
 export type SupportedVersion = (typeof SUPPORTED_VERSIONS)[number];
 
 // Version we fall back to when the on-disk version is unrecognized.
@@ -565,7 +567,7 @@ function parseBlock(
    }
 
    if (isFirst) {
-      parseBlock0Tail(reader, payloadStart, payloadSize, blockIndex, fields, errors, opts);
+      parseBlock0Tail(reader, fileVersion, payloadStart, payloadSize, blockIndex, fields, errors, opts);
    } else {
       parseBlockNTail(reader, payloadStart, payloadSize, blockIndex, fields, errors, opts);
    }
@@ -582,6 +584,7 @@ function parseBlock(
 
 function parseBlock0Tail(
    reader: Reader,
+   fileVersion: SupportedVersion,
    payloadStart: number,
    payloadSize: number,
    blockIndex: number,
@@ -724,7 +727,79 @@ function parseBlock0Tail(
       }
    }
 
+   if (fileVersion >= 8 && !parseKeyCommitment(reader, payloadStart, payloadSize, blockIndex, fields, errors, opts)) {
+      return;
+   }
+
    readEncryptedData(reader, payloadStart, payloadSize, blockIndex, fields, errors, opts);
+}
+
+// Returns false when the commitment is too truncated to keep parsing past it
+function parseKeyCommitment(
+   reader: Reader,
+   payloadStart: number,
+   payloadSize: number,
+   blockIndex: number,
+   fields: Field[],
+   errors: ErrorRecord[],
+   opts: Options,
+): boolean {
+   const where = `block ${blockIndex}`;
+
+   if (reader.remaining < COMMIT_LEN_BYTES) {
+      consumeRemainder(
+         reader,
+         payloadStart,
+         payloadSize,
+         blockIndex,
+         fields,
+         errors,
+         'truncated before commit len',
+         opts,
+      );
+      return false;
+   }
+
+   const clenOffset = reader.pos;
+   const commitLen = reader.readU8();
+   let clenNote = '';
+   // The packer only ever writes a full commitment or none at all
+   if (commitLen !== COMMIT_BYTES && commitLen !== 0) {
+      clenNote = recordError(errors, where, `commit len ${commitLen} is neither 0 nor ${COMMIT_BYTES}`);
+   }
+   fields.push({
+      name: 'commit len',
+      offset: clenOffset,
+      length: COMMIT_LEN_BYTES,
+      value: String(commitLen),
+      note: clenNote,
+   });
+
+   if (commitLen > 0) {
+      const commitOffset = reader.pos;
+      const available = Math.min(commitLen, reader.remaining, Math.max(0, payloadSize - (reader.pos - payloadStart)));
+      const commit = reader.readBytes(available);
+      let commitNote = '';
+      if (available < commitLen) {
+         commitNote = recordFatal(
+            errors,
+            where,
+            `key commitment truncated: expected ${commitLen} bytes, only ${available} available`,
+         );
+      }
+      fields.push({
+         name: 'key commitment',
+         offset: commitOffset,
+         length: available,
+         value: fmtHex(commit, opts.maxHex),
+         note: commitNote,
+      });
+      if (available < commitLen) {
+         return false;
+      }
+   }
+
+   return true;
 }
 
 function parseBlockNTail(

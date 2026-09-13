@@ -27,10 +27,19 @@ import { FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
+import { NoAssistDirective } from '../noassist.directive';
 
 @Component({
    selector: 'app-editable',
-   imports: [CommonModule, MatInputModule, FormsModule, MatFormFieldModule, MatIconModule, MatButtonModule],
+   imports: [
+      CommonModule,
+      MatInputModule,
+      FormsModule,
+      MatFormFieldModule,
+      MatIconModule,
+      MatButtonModule,
+      NoAssistDirective,
+   ],
    templateUrl: './editable.component.html',
    styleUrl: './editable.component.scss',
 })
@@ -70,8 +79,12 @@ export class EditableComponent {
       }
    }
 
+   /* Blurring returns focus to whatever the surrounding focus trap prefers, so the key must
+    * also be consumed or its default action fires against that newly focused element.
+    */
    cancelEdit(event: Event) {
       event.stopPropagation();
+      event.preventDefault();
       if (this.writing) {
          this.text = this._value;
          this.editInput.nativeElement.blur();
@@ -80,6 +93,7 @@ export class EditableComponent {
 
    acceptEdit(event: Event) {
       event.stopPropagation();
+      event.preventDefault();
       if (this.writing) {
          this.editInput.nativeElement.blur();
       }

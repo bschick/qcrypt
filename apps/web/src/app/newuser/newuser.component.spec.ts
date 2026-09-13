@@ -23,4 +23,12 @@ describe('NewuserComponent', () => {
    it('should create', () => {
       expect(component).toBeTruthy();
    });
+
+   it('keeps the user name away from browser text assistance', () => {
+      const userName = fixture.nativeElement.querySelector('#userName');
+      expect(userName.getAttribute('spellcheck')).toBe('false');
+      expect(userName.getAttribute('autocomplete')).toBe('off');
+      expect(userName.getAttribute('autocorrect')).toBe('off');
+      expect(userName.getAttribute('autocapitalize')).toBe('off');
+   });
 });

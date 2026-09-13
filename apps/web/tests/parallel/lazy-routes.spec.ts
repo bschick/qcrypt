@@ -39,7 +39,7 @@ test.describe('help page content', () => {
 
    test('/help/faqs/bad shows that one answer alone', async ({ page }) => {
       await page.goto('/help/faqs/bad');
-      await expect(page.getByText(/obtained my emergency recovery sheet/)).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText(/obtains my emergency recovery sheet/)).toBeVisible({ timeout: 10000 });
       await expect(page.getByRole('link', { name: /All FAQs/ })).toBeVisible();
       await expect(page.locator('tr.element-row')).toHaveCount(1);
    });

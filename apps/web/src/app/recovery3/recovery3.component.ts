@@ -34,6 +34,7 @@ import { validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
+import { NoAssistDirective } from '../ui/noassist.directive';
 
 @Component({
    selector: 'app-recovery3',
@@ -49,6 +50,7 @@ import { firstValueFrom } from 'rxjs';
       MatCardModule,
       MatFormFieldModule,
       MatInputModule,
+      NoAssistDirective,
    ],
 })
 export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
@@ -86,12 +88,14 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
    }
 
    ngAfterViewInit(): void {
-      try {
-         // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
-         setTimeout(() => this.r2.selectRootElement('#wordsArea').focus(), 0);
-      } catch (err) {
-         console.error(err);
-      }
+      // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
+      setTimeout(() => {
+         try {
+            this.r2.selectRootElement('#wordsArea').focus();
+         } catch (err) {
+            console.error(err);
+         }
+      }, 0);
    }
 
    ngOnDestroy() {

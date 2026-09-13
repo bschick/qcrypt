@@ -13,13 +13,27 @@
 
 import { cryptoReady, base64ToBytes } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
-import { streamFromStr, withTermOverride, encryptOneLoop, toBase64, printBanner } from './gen_helpers.ts';
+import {
+   streamFromStr,
+   withTermOverride,
+   encryptOneLoop,
+   encryptOneLoopMaster,
+   toBase64,
+   printBanner,
+   printVersionedBlock,
+   collectedBlocks,
+} from './gen_helpers.ts';
+import { spliceInto } from './splice_vectors.ts';
+
+const SPEC_PATH = 'libs/crypto/src/lib/ciphers.spec.ts';
 
 const VER = cc.CURRENT_VERSION;
 const PLAIN = 'A nice 🦫 came to say hello';
 const PWD = 'a 🌲 of course';
 const HINT = '🌧️';
 const CRED = base64ToBytes('Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=');
+const MASTER_KEY = base64ToBytes('TWFzdGVyS2V5Rml4ZWRTZWVkVmFsdWUwMTIzNDU2Nzg=');
+const EXTRA = base64ToBytes('RXh0cmFLZXlNYXQ=');
 const IC = 1800000;
 const ALGS: cc.CipherAlgs[] = ['AES-GCM', 'X20-PLY', 'AEGIS-256'];
 const READ_OPTS = { startSize: 20, maxSize: 320 };
@@ -43,15 +57,79 @@ async function genCipherText(
    });
 }
 
+// Block names, in CASES order. The bad-pwd test decrypts the same ciphertexts as the
+// correct-decryption test, so both regions receive one generated set.
+const CASE_NAMES = ['correctDecryption', 'missingTerminal', 'extraTerminal', 'flippedTerminal'];
+
+async function algLines(produce: (alg: cc.CipherAlgs) => Promise<string>, indent: string): Promise<string[]> {
+   const lines: string[] = [];
+   for (const alg of ALGS) {
+      lines.push(`${indent}'${alg}': '${await produce(alg)}',`);
+   }
+   return lines;
+}
+
 async function main() {
    await cryptoReady();
-   for (const [name, forceB0, forceBN] of CASES) {
+
+   let correctCts: string[] = [];
+   for (const [index, [name, forceB0, forceBN]] of CASES.entries()) {
       printBanner(`${name} (V${VER})`);
-      for (const alg of ALGS) {
-         const txt = await genCipherText(alg, forceB0, forceBN);
-         console.log(`               '${alg}': '${txt}',`);
+      const cts = await algLines((alg) => genCipherText(alg, forceB0, forceBN), '               ');
+      if (index === 0) {
+         correctCts = cts;
       }
+      printVersionedBlock(CASE_NAMES[index], '         ', VER, 'vectors:ciphers', [
+         '            cts: {',
+         ...cts,
+         '            },',
+      ]);
       console.log();
+   }
+
+   printBanner(`bad pwd, reusing the correct decryption vectors (V${VER})`);
+   printVersionedBlock('badPwd', '         ', VER, 'vectors:ciphers', [
+      '            cts: {',
+      ...correctCts,
+      '            },',
+   ]);
+   console.log();
+
+   printBanner(`PWDKeyProvider and MasterKeyKeyProvider, with and without extra key material (V${VER})`);
+   const providerLines = [
+      '         pwdNoExtra: {',
+      ...(await algLines(
+         async (alg) => toBase64(await encryptOneLoop(streamFromStr(PLAIN), CRED, PWD, HINT, alg, IC, READ_OPTS)),
+         '            ',
+      )),
+      '         },',
+      '         pwdWithExtra: {',
+      ...(await algLines(
+         async (alg) =>
+            toBase64(await encryptOneLoop(streamFromStr(PLAIN), CRED, PWD, HINT, alg, IC, READ_OPTS, EXTRA)),
+         '            ',
+      )),
+      '         },',
+      '         masterNoExtra: {',
+      ...(await algLines(
+         async (alg) => toBase64(await encryptOneLoopMaster(streamFromStr(PLAIN), MASTER_KEY, alg, READ_OPTS)),
+         '            ',
+      )),
+      '         },',
+      '         masterWithExtra: {',
+      ...(await algLines(
+         async (alg) => toBase64(await encryptOneLoopMaster(streamFromStr(PLAIN), MASTER_KEY, alg, READ_OPTS, EXTRA)),
+         '            ',
+      )),
+      '         },',
+   ];
+   printVersionedBlock('providers', '      ', VER, 'vectors:ciphers', providerLines);
+   console.log();
+
+   if (process.argv.includes('--write')) {
+      const onlyAt = process.argv.indexOf('--only');
+      const only = onlyAt === -1 ? undefined : process.argv.slice(onlyAt + 1).filter((arg) => !arg.startsWith('--'));
+      spliceInto(SPEC_PATH, collectedBlocks(), only);
    }
 }
 

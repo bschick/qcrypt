@@ -24,10 +24,13 @@ import * as cc from './cipher.consts';
 import { type KeyProvider, MasterKeyKeyProvider, PWDKeyProvider } from './keys';
 import { Ciphers } from './ciphers';
 import { getRandom } from './utils';
-import { isEqualArray } from './utils.spec';
+import { isEqualArray } from './test-helpers';
 
 const KEY_NAMES = ['ek', 'sk', 'hk', 'hIV', 'bk', 'commit'] as const;
-type AllDerivedKeys = Record<(typeof KEY_NAMES)[number], Uint8Array>;
+// commit is absent on the master-key path from v8 on
+type AllDerivedKeys = Record<Exclude<(typeof KEY_NAMES)[number], 'commit'>, Uint8Array> & {
+   commit?: Uint8Array;
+};
 
 async function deriveAllKeys(
    keyProvider: KeyProvider,
@@ -40,7 +43,7 @@ async function deriveAllKeys(
    const hk = hkRef.slice(0);
    const hIV = hIVRef.slice(0);
    const bk = (await keyProvider.getBlockCipherKey(1)).slice(0);
-   const commit = (await keyProvider.getKeyCommitment()).slice(0);
+   const commit = keyProvider.supportsCommitment ? (await keyProvider.getKeyCommitment()).slice(0) : undefined;
    keyProvider.purge();
    return { ek, sk, hk, hIV, bk, commit };
 }
@@ -130,7 +133,7 @@ describe('Key generation', () => {
          const slt = randomArray.slice(0, cc.SLT_BYTES);
          const iv = randomArray.slice(cc.SLT_BYTES, cc.SLT_BYTES + Ciphers.algIVByteLength(alg));
 
-         const keyProvider = new PWDKeyProvider(userCred, [pwd, undefined]);
+         const keyProvider = new PWDKeyProvider(userCred, [pwd]);
          keyProvider.setCipherDataInfo({
             ver: cc.CURRENT_VERSION,
             alg,
@@ -154,7 +157,7 @@ describe('Key generation', () => {
          const slt = randomArray.slice(0, cc.SLT_BYTES);
          const iv = randomArray.slice(cc.SLT_BYTES, cc.SLT_BYTES + Ciphers.algIVByteLength(alg));
 
-         const keyProvider = new PWDKeyProvider(userCred, [pwd, undefined]);
+         const keyProvider = new PWDKeyProvider(userCred, [pwd]);
          keyProvider.setCipherDataInfo({
             ver: cc.CURRENT_VERSION,
             alg,
@@ -178,7 +181,7 @@ describe('Key generation', () => {
          const slt = randomArray.slice(0, cc.SLT_BYTES);
          const iv = randomArray.slice(cc.SLT_BYTES, cc.SLT_BYTES + Ciphers.algIVByteLength(alg));
 
-         const keyProvider = new PWDKeyProvider(userCred, [pwd, undefined]);
+         const keyProvider = new PWDKeyProvider(userCred, [pwd]);
          keyProvider.setCipherDataInfo({
             ver: cc.CURRENT_VERSION,
             alg,
@@ -194,7 +197,7 @@ describe('Key generation', () => {
 
    it('PWDKeyProvider clone after purge throws', () => {
       const userCred = getRandom(cc.USERCRED_BYTES);
-      const keyProvider = new PWDKeyProvider(userCred, ['a pwd', undefined]);
+      const keyProvider = new PWDKeyProvider(userCred, ['a pwd']);
       keyProvider.purge();
 
       expect(() => keyProvider.clone()).toThrow(/Cannot clone a purged keyProvider/);
@@ -212,7 +215,7 @@ describe('Key generation', () => {
          lpEnd: 1,
       };
 
-      const original = new PWDKeyProvider(userCred, ['a pwd', undefined]);
+      const original = new PWDKeyProvider(userCred, ['a pwd']);
       original.setCipherDataInfo(cdInfo);
       const originalKey = (await original.getSigningKey()).slice(0);
 
@@ -235,7 +238,7 @@ describe('Key generation', () => {
          const _slt = randomArray.slice(0, cc.SLT_BYTES);
          const iv = randomArray.slice(cc.SLT_BYTES, cc.SLT_BYTES + Ciphers.algIVByteLength(alg));
 
-         const keyProvider = new PWDKeyProvider(userCred, [pwd, undefined]);
+         const keyProvider = new PWDKeyProvider(userCred, [pwd]);
          expect(() => keyProvider.getCipherDataInfo()).toThrow();
          expect(() => keyProvider.setHint('abc')).toThrow();
          await expect(keyProvider.getCipherKey(false)).rejects.toThrow();
@@ -249,7 +252,7 @@ describe('Key generation', () => {
    it('PWDKeyProvider setCipherDataInfo rejects second call', () => {
       const userCred = getRandom(cc.USERCRED_BYTES);
       const slt = getRandom(cc.SLT_BYTES);
-      const keyProvider = new PWDKeyProvider(userCred, ['a pwd', undefined]);
+      const keyProvider = new PWDKeyProvider(userCred, ['a pwd']);
 
       keyProvider.setCipherDataInfo({
          ver: cc.CURRENT_VERSION,
@@ -285,29 +288,29 @@ describe('Key generation', () => {
       };
 
       // lp = 0 (below min)
-      let keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd', undefined]);
+      let keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd']);
       expect(() => keyProvider.setCipherDataInfo({ ...baseInfo, lp: 0, lpEnd: 1 })).toThrow(/Invalid lp/);
       keyProvider.purge();
 
       // lp > lpEnd
-      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd', undefined]);
+      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd']);
       expect(() => keyProvider.setCipherDataInfo({ ...baseInfo, lp: 2, lpEnd: 1 })).toThrow(/Invalid lp/);
       keyProvider.purge();
 
       // lpEnd = 0 (below min)
-      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd', undefined]);
+      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd']);
       expect(() => keyProvider.setCipherDataInfo({ ...baseInfo, lp: 1, lpEnd: 0 })).toThrow(/Invalid lpEnd/);
       keyProvider.purge();
 
       // lpEnd > LP_MAX
-      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd', undefined]);
+      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd']);
       expect(() => keyProvider.setCipherDataInfo({ ...baseInfo, lp: 1, lpEnd: cc.LP_MAX + 1 })).toThrow(
          /Invalid lpEnd/,
       );
       keyProvider.purge();
 
       // lp = lpEnd = LP_MAX (boundary success)
-      keyProvider = new PWDKeyProvider(userCred, ['a pwd', undefined]);
+      keyProvider = new PWDKeyProvider(userCred, ['a pwd']);
       keyProvider.setCipherDataInfo({ ...baseInfo, lp: cc.LP_MAX, lpEnd: cc.LP_MAX });
       const key = (await keyProvider.getSigningKey()).slice(0);
       expect(key.byteLength).toBe(cc.KEY_BYTES);
@@ -324,17 +327,17 @@ describe('Key generation', () => {
          lpEnd: 1,
       };
 
-      let keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd', undefined]);
+      let keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd']);
       keyProvider.setCipherDataInfo({ ...baseInfo, ver: 0 });
       await expect(keyProvider.getCipherKey(false)).rejects.toThrow(/Invalid version/);
       keyProvider.purge();
 
-      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd', undefined]);
+      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd']);
       keyProvider.setCipherDataInfo({ ...baseInfo, ver: 3 });
       await expect(keyProvider.getCipherKey(false)).rejects.toThrow(/Invalid version/);
       keyProvider.purge();
 
-      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd', undefined]);
+      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd']);
       keyProvider.setCipherDataInfo({ ...baseInfo, ver: cc.CURRENT_VERSION + 1 });
       await expect(keyProvider.getCipherKey(false)).rejects.toThrow(/Invalid version/);
       keyProvider.purge();
@@ -350,16 +353,16 @@ describe('Key generation', () => {
          lpEnd: 1,
       };
 
-      let keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd', undefined]);
+      let keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd']);
       expect(() => keyProvider.setCipherDataInfo({ ...baseInfo, ic: cc.ICOUNT_MIN - 1 })).toThrow(/Invalid ic/);
       keyProvider.purge();
 
-      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd', undefined]);
+      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd']);
       expect(() => keyProvider.setCipherDataInfo({ ...baseInfo, ic: cc.ICOUNT_MAX + 1 })).toThrow(/Invalid ic/);
       keyProvider.purge();
 
       // Boundary success: exactly ICOUNT_MAX is accepted.
-      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd', undefined]);
+      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd']);
       keyProvider.setCipherDataInfo({ ...baseInfo, ic: cc.ICOUNT_MAX });
       keyProvider.purge();
    });
@@ -849,7 +852,7 @@ describe('Key generation', () => {
             cc.VERSION7,
             {
                'AES-GCM': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      254, 57, 68, 32, 174, 22, 216, 5, 68, 114, 63, 121, 50, 178, 236, 181, 166, 226, 132, 131, 64, 195,
                      139, 103, 82, 12, 131, 30, 155, 73, 48, 171,
@@ -873,7 +876,7 @@ describe('Key generation', () => {
                   ]),
                },
                'X20-PLY': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      214, 16, 97, 74, 248, 18, 228, 247, 137, 139, 165, 39, 178, 202, 71, 208, 9, 231, 86, 55, 7, 75,
                      61, 214, 115, 197, 119, 145, 51, 91, 166, 41,
@@ -900,7 +903,7 @@ describe('Key generation', () => {
                   ]),
                },
                'AEGIS-256': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      235, 73, 183, 169, 184, 191, 201, 229, 211, 241, 189, 43, 42, 230, 10, 91, 12, 34, 171, 146, 189,
                      245, 152, 3, 71, 20, 255, 192, 48, 32, 160, 135,
@@ -928,6 +931,175 @@ describe('Key generation', () => {
                },
             },
          ],
+         // BEGIN GENERATED: v8:pwdSingleNoExtra
+         // generated by: pnpm vectors:keys
+         [
+            cc.VERSION8,
+            {
+               'AES-GCM': {
+                  ek: new Uint8Array([
+                     175, 233, 148, 101, 170, 172, 53, 70, 150, 93, 166, 175, 139, 152, 107, 232, 134, 10, 173, 147,
+                     186, 47, 96, 112, 70, 120, 56, 166, 146, 45, 238, 37,
+                  ]),
+                  sk: new Uint8Array([
+                     252, 155, 134, 50, 138, 122, 136, 236, 123, 154, 141, 114, 147, 26, 215, 17, 102, 152, 246, 198,
+                     222, 2, 2, 58, 244, 112, 21, 225, 162, 55, 97, 209,
+                  ]),
+                  hk: new Uint8Array([
+                     54, 124, 30, 38, 152, 16, 237, 128, 123, 97, 123, 217, 38, 242, 190, 101, 112, 244, 142, 219, 165,
+                     123, 47, 137, 49, 78, 109, 8, 87, 111, 92, 89,
+                  ]),
+                  hIV: new Uint8Array([224, 138, 32, 7, 229, 118, 49, 38, 83, 150, 44, 204]),
+                  bk: new Uint8Array([
+                     21, 32, 32, 200, 200, 105, 171, 185, 87, 167, 200, 78, 27, 191, 110, 221, 105, 155, 245, 17, 186,
+                     196, 22, 123, 100, 95, 191, 167, 211, 146, 106, 31,
+                  ]),
+                  commit: new Uint8Array([
+                     249, 205, 172, 95, 0, 230, 172, 28, 17, 8, 203, 187, 6, 60, 68, 39, 101, 95, 167, 155, 176, 92,
+                     112, 165, 187, 207, 119, 225, 50, 93, 115, 163,
+                  ]),
+               },
+               'X20-PLY': {
+                  ek: new Uint8Array([
+                     10, 204, 213, 226, 63, 16, 1, 89, 94, 232, 82, 134, 77, 86, 216, 149, 85, 22, 117, 103, 150, 50,
+                     186, 122, 52, 127, 23, 132, 213, 49, 29, 246,
+                  ]),
+                  sk: new Uint8Array([
+                     108, 134, 59, 195, 233, 127, 174, 112, 59, 57, 226, 135, 170, 36, 4, 209, 220, 57, 43, 191, 172,
+                     186, 2, 198, 155, 169, 178, 6, 221, 108, 213, 1,
+                  ]),
+                  hk: new Uint8Array([
+                     122, 177, 106, 245, 78, 142, 40, 128, 217, 242, 41, 198, 10, 51, 154, 230, 201, 186, 185, 38, 232,
+                     22, 105, 137, 146, 6, 194, 217, 207, 39, 17, 52,
+                  ]),
+                  hIV: new Uint8Array([
+                     97, 228, 205, 236, 66, 5, 184, 193, 174, 48, 213, 119, 117, 166, 95, 185, 121, 164, 209, 145, 173,
+                     154, 70, 179,
+                  ]),
+                  bk: new Uint8Array([
+                     228, 182, 216, 173, 171, 178, 185, 10, 43, 248, 213, 26, 197, 168, 38, 92, 125, 91, 98, 140, 23,
+                     173, 240, 97, 161, 52, 167, 50, 130, 23, 186, 123,
+                  ]),
+                  commit: new Uint8Array([
+                     183, 169, 207, 56, 250, 134, 31, 150, 18, 5, 139, 91, 63, 30, 1, 10, 239, 130, 122, 233, 26, 173,
+                     63, 206, 240, 243, 151, 247, 63, 110, 95, 132,
+                  ]),
+               },
+               'AEGIS-256': {
+                  ek: new Uint8Array([
+                     26, 143, 30, 0, 141, 250, 239, 60, 121, 224, 188, 130, 71, 129, 2, 209, 87, 251, 204, 13, 2, 202,
+                     18, 228, 246, 213, 85, 55, 61, 64, 198, 95,
+                  ]),
+                  sk: new Uint8Array([
+                     69, 57, 17, 114, 211, 93, 190, 64, 205, 230, 224, 94, 168, 198, 91, 198, 111, 102, 214, 170, 42,
+                     136, 28, 208, 184, 124, 75, 138, 127, 228, 152, 229,
+                  ]),
+                  hk: new Uint8Array([
+                     116, 43, 60, 230, 33, 152, 159, 17, 30, 146, 57, 13, 211, 238, 49, 135, 7, 120, 29, 118, 171, 177,
+                     214, 209, 70, 131, 107, 75, 19, 106, 117, 63,
+                  ]),
+                  hIV: new Uint8Array([
+                     236, 177, 157, 141, 157, 23, 142, 172, 190, 227, 97, 26, 64, 34, 136, 2, 243, 67, 218, 203, 112,
+                     154, 0, 110, 11, 151, 199, 121, 151, 53, 168, 0,
+                  ]),
+                  bk: new Uint8Array([
+                     16, 144, 127, 200, 212, 109, 237, 89, 251, 125, 56, 143, 142, 111, 220, 31, 193, 119, 49, 184, 235,
+                     48, 233, 11, 247, 212, 223, 200, 147, 103, 123, 185,
+                  ]),
+                  commit: new Uint8Array([
+                     125, 54, 98, 239, 175, 137, 67, 203, 100, 233, 61, 86, 227, 42, 211, 244, 22, 40, 106, 184, 35,
+                     170, 56, 141, 24, 116, 150, 255, 117, 226, 205, 154,
+                  ]),
+               },
+            },
+         ],
+         // END GENERATED: v8:pwdSingleNoExtra
+         // BEGIN GENERATED: v8:pwdSingleWithExtra
+         // generated by: pnpm vectors:keys
+         [
+            cc.VERSION8,
+            {
+               'AES-GCM': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     32, 117, 121, 29, 10, 105, 150, 189, 22, 119, 5, 133, 210, 115, 26, 212, 115, 103, 31, 11, 128,
+                     152, 158, 74, 154, 147, 154, 91, 173, 193, 31, 17,
+                  ]),
+                  sk: new Uint8Array([
+                     221, 174, 102, 247, 95, 187, 207, 231, 79, 218, 70, 180, 126, 13, 247, 181, 121, 104, 122, 52, 5,
+                     64, 37, 149, 205, 92, 87, 82, 214, 210, 17, 208,
+                  ]),
+                  hk: new Uint8Array([
+                     90, 194, 117, 60, 122, 242, 120, 155, 54, 183, 40, 229, 122, 41, 37, 206, 117, 37, 45, 19, 193, 66,
+                     163, 37, 86, 236, 238, 1, 98, 19, 14, 169,
+                  ]),
+                  hIV: new Uint8Array([142, 1, 116, 106, 41, 117, 29, 165, 47, 206, 233, 237]),
+                  bk: new Uint8Array([
+                     153, 181, 175, 243, 245, 68, 28, 58, 178, 118, 43, 66, 113, 75, 234, 138, 16, 80, 248, 97, 71, 66,
+                     170, 36, 87, 7, 90, 143, 120, 18, 187, 33,
+                  ]),
+                  commit: new Uint8Array([
+                     33, 82, 14, 160, 185, 26, 26, 29, 192, 95, 120, 112, 255, 183, 87, 90, 21, 251, 119, 101, 136, 61,
+                     154, 0, 86, 79, 120, 94, 126, 116, 144, 37,
+                  ]),
+               },
+               'X20-PLY': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     250, 53, 181, 168, 185, 113, 211, 177, 127, 234, 138, 131, 130, 49, 52, 39, 254, 65, 34, 33, 133,
+                     65, 146, 64, 238, 194, 89, 96, 172, 92, 225, 122,
+                  ]),
+                  sk: new Uint8Array([
+                     2, 44, 20, 50, 187, 190, 36, 35, 171, 186, 125, 37, 41, 10, 51, 0, 95, 78, 189, 0, 209, 91, 190,
+                     88, 15, 169, 57, 113, 147, 248, 55, 76,
+                  ]),
+                  hk: new Uint8Array([
+                     81, 169, 160, 78, 161, 251, 3, 149, 31, 146, 162, 176, 61, 8, 220, 120, 110, 217, 5, 146, 82, 164,
+                     251, 185, 30, 1, 208, 241, 22, 128, 202, 216,
+                  ]),
+                  hIV: new Uint8Array([
+                     27, 171, 3, 247, 24, 149, 31, 100, 83, 248, 177, 1, 152, 175, 203, 93, 134, 121, 183, 77, 7, 226,
+                     30, 117,
+                  ]),
+                  bk: new Uint8Array([
+                     254, 150, 127, 188, 17, 68, 69, 105, 69, 127, 85, 118, 83, 104, 165, 253, 89, 240, 26, 192, 68, 45,
+                     221, 147, 1, 102, 19, 198, 74, 43, 8, 160,
+                  ]),
+                  commit: new Uint8Array([
+                     184, 196, 186, 19, 162, 75, 166, 171, 251, 50, 119, 56, 82, 183, 172, 163, 22, 154, 160, 109, 84,
+                     68, 40, 218, 193, 201, 160, 88, 218, 126, 98, 232,
+                  ]),
+               },
+               'AEGIS-256': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     92, 128, 44, 140, 241, 62, 109, 211, 51, 6, 102, 204, 120, 252, 81, 174, 110, 32, 55, 195, 205,
+                     193, 17, 218, 10, 246, 173, 176, 39, 224, 209, 200,
+                  ]),
+                  sk: new Uint8Array([
+                     27, 212, 154, 186, 188, 74, 233, 153, 206, 33, 54, 119, 181, 51, 128, 33, 67, 46, 188, 11, 111,
+                     129, 86, 144, 109, 93, 235, 160, 191, 120, 157, 87,
+                  ]),
+                  hk: new Uint8Array([
+                     150, 26, 18, 62, 5, 245, 177, 191, 55, 176, 128, 250, 53, 65, 163, 48, 6, 5, 5, 238, 205, 209, 103,
+                     193, 225, 173, 121, 218, 129, 249, 227, 31,
+                  ]),
+                  hIV: new Uint8Array([
+                     241, 203, 228, 11, 168, 162, 200, 31, 116, 212, 31, 246, 126, 54, 146, 43, 121, 172, 106, 102, 89,
+                     10, 107, 88, 254, 87, 102, 66, 170, 24, 51, 5,
+                  ]),
+                  bk: new Uint8Array([
+                     110, 50, 118, 171, 253, 246, 58, 165, 215, 72, 150, 119, 190, 102, 53, 102, 165, 91, 125, 249, 14,
+                     129, 135, 200, 148, 67, 10, 151, 89, 242, 138, 114,
+                  ]),
+                  commit: new Uint8Array([
+                     173, 120, 26, 154, 191, 127, 65, 43, 152, 90, 43, 237, 80, 90, 194, 56, 25, 130, 119, 17, 245, 245,
+                     255, 74, 12, 30, 120, 33, 32, 103, 167, 36,
+                  ]),
+               },
+            },
+         ],
+         // END GENERATED: v8:pwdSingleWithExtra
       ];
 
       for (const [ver, algsExpected] of expected) {
@@ -947,7 +1119,7 @@ describe('Key generation', () => {
                28, 140, 53, 215, 85, 89, 158, 248, 52, 175,
             ]);
 
-            const keyProvider = new PWDKeyProvider(userCred, [pwd, undefined], algExpected.customAd);
+            const keyProvider = new PWDKeyProvider(userCred, [pwd], algExpected.extraKeyMaterial);
             keyProvider.setCipherDataInfo({
                ver,
                alg,
@@ -1001,12 +1173,12 @@ describe('Key generation', () => {
       };
 
       // Called before getCipherKey
-      let keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd', undefined]);
+      let keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd']);
       keyProvider.setCipherDataInfo(baseInfo);
       await expect(keyProvider.getBlockCipherKey(1)).rejects.toThrow(/getCipherKey/);
       keyProvider.purge();
 
-      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd', undefined]);
+      keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd']);
       keyProvider.setCipherDataInfo(baseInfo);
       await keyProvider.getCipherKey(false);
 
@@ -1021,7 +1193,7 @@ describe('Key generation', () => {
 
    it('PWDKeyProvider getBlockCipherKey enforces version', async () => {
       const slt = getRandom(cc.SLT_BYTES);
-      const keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd', undefined]);
+      const keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd']);
       keyProvider.setCipherDataInfo({
          ver: cc.VERSION4,
          alg: 'AES-GCM',
@@ -1152,7 +1324,7 @@ describe('Key generation', () => {
             cc.VERSION7,
             {
                'AES-GCM': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      62, 43, 242, 215, 21, 141, 122, 13, 2, 38, 243, 254, 112, 200, 114, 92, 59, 80, 209, 207, 157, 127,
                      132, 17, 80, 61, 240, 220, 149, 88, 170, 16,
@@ -1176,7 +1348,7 @@ describe('Key generation', () => {
                   ]),
                },
                'X20-PLY': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      157, 147, 112, 209, 3, 40, 65, 66, 67, 89, 106, 123, 251, 202, 215, 13, 68, 220, 209, 45, 56, 197,
                      88, 38, 190, 0, 91, 51, 88, 214, 113, 26,
@@ -1203,7 +1375,7 @@ describe('Key generation', () => {
                   ]),
                },
                'AEGIS-256': {
-                  customAd: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      115, 173, 169, 134, 46, 62, 56, 41, 73, 181, 183, 176, 225, 186, 38, 91, 245, 119, 231, 71, 130,
                      21, 108, 106, 128, 166, 89, 87, 198, 61, 87, 192,
@@ -1231,6 +1403,151 @@ describe('Key generation', () => {
                },
             },
          ],
+         // BEGIN GENERATED: v8:masterSingleNoExtra
+         // generated by: pnpm vectors:keys
+         [
+            cc.VERSION8,
+            {
+               'AES-GCM': {
+                  ek: new Uint8Array([
+                     210, 239, 184, 194, 116, 61, 216, 119, 58, 172, 211, 10, 69, 198, 173, 34, 201, 228, 168, 59, 11,
+                     184, 12, 96, 146, 172, 117, 16, 16, 88, 55, 249,
+                  ]),
+                  sk: new Uint8Array([
+                     175, 220, 98, 250, 116, 170, 226, 156, 118, 70, 53, 40, 58, 46, 193, 36, 18, 129, 2, 107, 72, 255,
+                     88, 243, 43, 242, 61, 58, 197, 162, 220, 103,
+                  ]),
+                  hk: new Uint8Array([
+                     159, 149, 70, 195, 203, 58, 136, 197, 25, 222, 253, 219, 62, 122, 106, 21, 18, 161, 55, 244, 184,
+                     159, 241, 120, 152, 49, 78, 136, 211, 23, 224, 71,
+                  ]),
+                  hIV: new Uint8Array([231, 67, 255, 85, 112, 73, 179, 70, 96, 234, 44, 25]),
+                  bk: new Uint8Array([
+                     49, 56, 52, 60, 241, 32, 201, 13, 24, 23, 58, 64, 153, 4, 152, 63, 72, 206, 204, 52, 35, 127, 207,
+                     251, 250, 145, 73, 72, 59, 73, 119, 17,
+                  ]),
+               },
+               'X20-PLY': {
+                  ek: new Uint8Array([
+                     23, 24, 18, 222, 111, 210, 65, 172, 2, 201, 157, 122, 42, 108, 246, 245, 152, 13, 182, 149, 92,
+                     243, 196, 9, 17, 215, 50, 105, 104, 194, 22, 153,
+                  ]),
+                  sk: new Uint8Array([
+                     83, 197, 150, 59, 233, 74, 62, 173, 51, 8, 123, 154, 38, 46, 94, 19, 4, 227, 57, 220, 99, 185, 6,
+                     53, 34, 151, 36, 239, 133, 162, 164, 166,
+                  ]),
+                  hk: new Uint8Array([
+                     178, 183, 4, 2, 54, 18, 38, 53, 15, 20, 34, 43, 146, 235, 123, 35, 122, 241, 174, 74, 47, 115, 6,
+                     197, 140, 156, 163, 127, 4, 109, 199, 63,
+                  ]),
+                  hIV: new Uint8Array([
+                     251, 163, 160, 221, 76, 240, 2, 192, 57, 32, 28, 90, 194, 33, 139, 53, 11, 165, 8, 23, 82, 188, 67,
+                     242,
+                  ]),
+                  bk: new Uint8Array([
+                     36, 206, 145, 69, 127, 41, 147, 75, 102, 81, 22, 118, 62, 45, 181, 243, 58, 52, 253, 132, 29, 27,
+                     6, 222, 204, 48, 147, 251, 103, 124, 81, 230,
+                  ]),
+               },
+               'AEGIS-256': {
+                  ek: new Uint8Array([
+                     99, 245, 206, 144, 91, 47, 219, 165, 140, 176, 194, 77, 192, 66, 242, 154, 129, 112, 87, 54, 39,
+                     231, 6, 49, 90, 75, 255, 141, 100, 98, 227, 20,
+                  ]),
+                  sk: new Uint8Array([
+                     20, 253, 35, 120, 160, 132, 40, 53, 212, 63, 96, 157, 211, 6, 3, 234, 85, 122, 144, 55, 52, 64, 90,
+                     136, 97, 49, 36, 61, 69, 144, 119, 220,
+                  ]),
+                  hk: new Uint8Array([
+                     6, 60, 228, 36, 18, 104, 236, 120, 151, 163, 27, 155, 228, 170, 188, 61, 221, 254, 64, 194, 178,
+                     203, 56, 135, 93, 22, 246, 164, 158, 224, 5, 31,
+                  ]),
+                  hIV: new Uint8Array([
+                     231, 163, 155, 32, 13, 22, 166, 33, 141, 104, 152, 30, 0, 89, 27, 106, 78, 178, 94, 62, 235, 63,
+                     143, 10, 9, 179, 154, 2, 89, 35, 193, 54,
+                  ]),
+                  bk: new Uint8Array([
+                     19, 40, 70, 21, 34, 5, 20, 25, 15, 5, 190, 140, 123, 147, 45, 141, 27, 150, 9, 134, 59, 83, 32, 33,
+                     117, 185, 37, 40, 122, 28, 53, 48,
+                  ]),
+               },
+            },
+         ],
+         // END GENERATED: v8:masterSingleNoExtra
+         // BEGIN GENERATED: v8:masterSingleWithExtra
+         // generated by: pnpm vectors:keys
+         [
+            cc.VERSION8,
+            {
+               'AES-GCM': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     215, 217, 146, 34, 211, 146, 67, 84, 248, 164, 95, 50, 199, 67, 40, 25, 143, 90, 221, 190, 44, 231,
+                     65, 177, 203, 164, 151, 206, 127, 73, 231, 112,
+                  ]),
+                  sk: new Uint8Array([
+                     222, 202, 209, 238, 7, 128, 74, 178, 225, 231, 91, 26, 130, 196, 36, 93, 247, 213, 152, 3, 48, 166,
+                     69, 116, 94, 109, 248, 145, 127, 226, 242, 98,
+                  ]),
+                  hk: new Uint8Array([
+                     25, 197, 73, 222, 245, 31, 205, 161, 199, 166, 97, 160, 46, 5, 77, 113, 176, 22, 184, 199, 52, 233,
+                     43, 190, 55, 229, 22, 144, 230, 22, 36, 70,
+                  ]),
+                  hIV: new Uint8Array([4, 159, 201, 115, 152, 229, 8, 81, 83, 29, 131, 169]),
+                  bk: new Uint8Array([
+                     233, 251, 182, 125, 73, 88, 3, 200, 146, 139, 27, 222, 45, 133, 34, 136, 202, 89, 9, 91, 160, 11,
+                     242, 133, 33, 102, 5, 168, 118, 146, 208, 2,
+                  ]),
+               },
+               'X20-PLY': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     6, 229, 20, 128, 6, 243, 13, 148, 254, 32, 236, 220, 163, 133, 15, 111, 241, 61, 41, 29, 66, 50,
+                     249, 39, 254, 207, 226, 42, 27, 139, 35, 240,
+                  ]),
+                  sk: new Uint8Array([
+                     62, 10, 107, 181, 251, 15, 26, 100, 118, 205, 154, 167, 140, 35, 182, 241, 125, 8, 231, 215, 157,
+                     81, 46, 174, 2, 152, 40, 178, 118, 30, 149, 131,
+                  ]),
+                  hk: new Uint8Array([
+                     224, 2, 156, 14, 208, 184, 186, 241, 127, 187, 151, 58, 116, 47, 219, 150, 135, 14, 113, 5, 9, 30,
+                     208, 77, 62, 26, 5, 215, 18, 132, 166, 103,
+                  ]),
+                  hIV: new Uint8Array([
+                     72, 102, 156, 233, 39, 122, 78, 6, 62, 49, 105, 99, 79, 208, 30, 69, 168, 192, 157, 110, 19, 83,
+                     93, 227,
+                  ]),
+                  bk: new Uint8Array([
+                     8, 8, 207, 14, 207, 59, 176, 85, 213, 154, 162, 42, 187, 187, 242, 141, 201, 210, 160, 161, 60, 87,
+                     92, 3, 93, 215, 18, 193, 205, 61, 110, 71,
+                  ]),
+               },
+               'AEGIS-256': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     30, 236, 219, 150, 133, 94, 152, 41, 140, 204, 33, 170, 22, 79, 211, 165, 30, 79, 201, 142, 187,
+                     210, 193, 32, 183, 12, 251, 5, 31, 124, 152, 43,
+                  ]),
+                  sk: new Uint8Array([
+                     33, 87, 61, 230, 148, 145, 77, 60, 10, 50, 142, 110, 181, 75, 65, 150, 158, 195, 49, 53, 52, 133,
+                     242, 222, 63, 37, 230, 13, 219, 52, 242, 90,
+                  ]),
+                  hk: new Uint8Array([
+                     41, 19, 126, 166, 120, 44, 229, 201, 88, 59, 13, 100, 50, 33, 119, 49, 36, 170, 29, 164, 167, 161,
+                     234, 175, 113, 102, 123, 72, 244, 44, 126, 194,
+                  ]),
+                  hIV: new Uint8Array([
+                     57, 99, 49, 81, 246, 52, 156, 206, 95, 98, 248, 121, 65, 158, 0, 16, 252, 229, 76, 147, 216, 233,
+                     169, 210, 196, 171, 20, 175, 49, 166, 80, 165,
+                  ]),
+                  bk: new Uint8Array([
+                     227, 209, 235, 165, 120, 133, 4, 127, 209, 109, 69, 143, 43, 110, 5, 65, 168, 113, 177, 197, 184,
+                     173, 133, 53, 80, 28, 147, 52, 130, 219, 176, 147,
+                  ]),
+               },
+            },
+         ],
+         // END GENERATED: v8:masterSingleWithExtra
       ];
 
       for (const [ver, algsExpected] of expected) {
@@ -1248,7 +1565,7 @@ describe('Key generation', () => {
                10, 80, 64, 148, 152, 204, 30, 231, 18,
             ]);
 
-            const keyProvider = new MasterKeyKeyProvider(master, algExpected.customAd);
+            const keyProvider = new MasterKeyKeyProvider(master, algExpected.extraKeyMaterial);
             keyProvider.setCipherDataInfo({
                ver,
                alg,
@@ -1262,26 +1579,31 @@ describe('Key generation', () => {
             const [hk, hIV] = await keyProvider.getHintCipherKeyAndIV(iv.slice(0, Ciphers.algIVByteLength(alg)));
             await expect(keyProvider.getBlockCipherKey(0)).rejects.toThrow(/Invalid block number: 0/);
             const bk = await keyProvider.getBlockCipherKey(1);
-            const commit = await keyProvider.getKeyCommitment();
+            expect(keyProvider.supportsCommitment).toBe(!!algExpected.commit);
+            const commit = algExpected.commit ? await keyProvider.getKeyCommitment() : undefined;
 
             expect(isEqualArray(ek, algExpected.ek)).toBe(true);
             expect(isEqualArray(sk, algExpected.sk)).toBe(true);
             expect(isEqualArray(hk, algExpected.hk)).toBe(true);
             expect(isEqualArray(hIV, algExpected.hIV)).toBe(true);
             expect(isEqualArray(bk, algExpected.bk)).toBe(true);
-            expect(isEqualArray(commit, algExpected.commit)).toBe(true);
+            if (commit) {
+               expect(isEqualArray(commit, algExpected.commit)).toBe(true);
+            }
 
             expect(isEqualArray(ek, master)).toBe(false);
             expect(isEqualArray(sk, master)).toBe(false);
             expect(isEqualArray(hk, master)).toBe(false);
             expect(isEqualArray(hIV, master)).toBe(false);
             expect(isEqualArray(bk, master)).toBe(false);
-            expect(isEqualArray(commit, master)).toBe(false);
+            if (commit) {
+               expect(isEqualArray(commit, master)).toBe(false);
+            }
          }
       }
    });
 
-   it('PWDKeyProvider keys match expected values, multi-loop with customAd', async () => {
+   it('PWDKeyProvider keys match expected values, multi-loop with extraKeyMaterial', async () => {
       // generated by: pnpm vectors:keys
       const expected: [number, number, Record<cc.CipherAlgs, Record<string, Uint8Array<ArrayBuffer>>>][] = [
          [
@@ -1289,6 +1611,7 @@ describe('Key generation', () => {
             1,
             {
                'AES-GCM': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      254, 57, 68, 32, 174, 22, 216, 5, 68, 114, 63, 121, 50, 178, 236, 181, 166, 226, 132, 131, 64, 195,
                      139, 103, 82, 12, 131, 30, 155, 73, 48, 171,
@@ -1312,6 +1635,7 @@ describe('Key generation', () => {
                   ]),
                },
                'X20-PLY': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      214, 16, 97, 74, 248, 18, 228, 247, 137, 139, 165, 39, 178, 202, 71, 208, 9, 231, 86, 55, 7, 75,
                      61, 214, 115, 197, 119, 145, 51, 91, 166, 41,
@@ -1338,6 +1662,7 @@ describe('Key generation', () => {
                   ]),
                },
                'AEGIS-256': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      235, 73, 183, 169, 184, 191, 201, 229, 211, 241, 189, 43, 42, 230, 10, 91, 12, 34, 171, 146, 189,
                      245, 152, 3, 71, 20, 255, 192, 48, 32, 160, 135,
@@ -1370,6 +1695,7 @@ describe('Key generation', () => {
             2,
             {
                'AES-GCM': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      66, 206, 240, 128, 213, 23, 28, 69, 62, 156, 185, 1, 204, 151, 11, 101, 106, 128, 203, 128, 16, 32,
                      191, 147, 77, 95, 105, 107, 153, 246, 193, 114,
@@ -1393,6 +1719,7 @@ describe('Key generation', () => {
                   ]),
                },
                'X20-PLY': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      154, 109, 219, 233, 90, 111, 177, 221, 193, 214, 32, 186, 226, 201, 0, 36, 46, 144, 167, 245, 129,
                      94, 243, 101, 30, 182, 116, 121, 187, 239, 99, 98,
@@ -1419,6 +1746,7 @@ describe('Key generation', () => {
                   ]),
                },
                'AEGIS-256': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      33, 74, 135, 189, 151, 233, 117, 150, 42, 164, 78, 220, 2, 79, 13, 170, 36, 95, 3, 152, 68, 90,
                      142, 8, 87, 195, 222, 22, 62, 245, 17, 166,
@@ -1446,10 +1774,183 @@ describe('Key generation', () => {
                },
             },
          ],
+         // BEGIN GENERATED: v8:pwdMultiLp1
+         // generated by: pnpm vectors:keys
+         [
+            cc.VERSION8,
+            1,
+            {
+               'AES-GCM': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     32, 117, 121, 29, 10, 105, 150, 189, 22, 119, 5, 133, 210, 115, 26, 212, 115, 103, 31, 11, 128,
+                     152, 158, 74, 154, 147, 154, 91, 173, 193, 31, 17,
+                  ]),
+                  sk: new Uint8Array([
+                     221, 174, 102, 247, 95, 187, 207, 231, 79, 218, 70, 180, 126, 13, 247, 181, 121, 104, 122, 52, 5,
+                     64, 37, 149, 205, 92, 87, 82, 214, 210, 17, 208,
+                  ]),
+                  hk: new Uint8Array([
+                     90, 194, 117, 60, 122, 242, 120, 155, 54, 183, 40, 229, 122, 41, 37, 206, 117, 37, 45, 19, 193, 66,
+                     163, 37, 86, 236, 238, 1, 98, 19, 14, 169,
+                  ]),
+                  hIV: new Uint8Array([142, 1, 116, 106, 41, 117, 29, 165, 47, 206, 233, 237]),
+                  bk: new Uint8Array([
+                     153, 181, 175, 243, 245, 68, 28, 58, 178, 118, 43, 66, 113, 75, 234, 138, 16, 80, 248, 97, 71, 66,
+                     170, 36, 87, 7, 90, 143, 120, 18, 187, 33,
+                  ]),
+                  commit: new Uint8Array([
+                     33, 82, 14, 160, 185, 26, 26, 29, 192, 95, 120, 112, 255, 183, 87, 90, 21, 251, 119, 101, 136, 61,
+                     154, 0, 86, 79, 120, 94, 126, 116, 144, 37,
+                  ]),
+               },
+               'X20-PLY': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     250, 53, 181, 168, 185, 113, 211, 177, 127, 234, 138, 131, 130, 49, 52, 39, 254, 65, 34, 33, 133,
+                     65, 146, 64, 238, 194, 89, 96, 172, 92, 225, 122,
+                  ]),
+                  sk: new Uint8Array([
+                     2, 44, 20, 50, 187, 190, 36, 35, 171, 186, 125, 37, 41, 10, 51, 0, 95, 78, 189, 0, 209, 91, 190,
+                     88, 15, 169, 57, 113, 147, 248, 55, 76,
+                  ]),
+                  hk: new Uint8Array([
+                     81, 169, 160, 78, 161, 251, 3, 149, 31, 146, 162, 176, 61, 8, 220, 120, 110, 217, 5, 146, 82, 164,
+                     251, 185, 30, 1, 208, 241, 22, 128, 202, 216,
+                  ]),
+                  hIV: new Uint8Array([
+                     27, 171, 3, 247, 24, 149, 31, 100, 83, 248, 177, 1, 152, 175, 203, 93, 134, 121, 183, 77, 7, 226,
+                     30, 117,
+                  ]),
+                  bk: new Uint8Array([
+                     254, 150, 127, 188, 17, 68, 69, 105, 69, 127, 85, 118, 83, 104, 165, 253, 89, 240, 26, 192, 68, 45,
+                     221, 147, 1, 102, 19, 198, 74, 43, 8, 160,
+                  ]),
+                  commit: new Uint8Array([
+                     184, 196, 186, 19, 162, 75, 166, 171, 251, 50, 119, 56, 82, 183, 172, 163, 22, 154, 160, 109, 84,
+                     68, 40, 218, 193, 201, 160, 88, 218, 126, 98, 232,
+                  ]),
+               },
+               'AEGIS-256': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     92, 128, 44, 140, 241, 62, 109, 211, 51, 6, 102, 204, 120, 252, 81, 174, 110, 32, 55, 195, 205,
+                     193, 17, 218, 10, 246, 173, 176, 39, 224, 209, 200,
+                  ]),
+                  sk: new Uint8Array([
+                     27, 212, 154, 186, 188, 74, 233, 153, 206, 33, 54, 119, 181, 51, 128, 33, 67, 46, 188, 11, 111,
+                     129, 86, 144, 109, 93, 235, 160, 191, 120, 157, 87,
+                  ]),
+                  hk: new Uint8Array([
+                     150, 26, 18, 62, 5, 245, 177, 191, 55, 176, 128, 250, 53, 65, 163, 48, 6, 5, 5, 238, 205, 209, 103,
+                     193, 225, 173, 121, 218, 129, 249, 227, 31,
+                  ]),
+                  hIV: new Uint8Array([
+                     241, 203, 228, 11, 168, 162, 200, 31, 116, 212, 31, 246, 126, 54, 146, 43, 121, 172, 106, 102, 89,
+                     10, 107, 88, 254, 87, 102, 66, 170, 24, 51, 5,
+                  ]),
+                  bk: new Uint8Array([
+                     110, 50, 118, 171, 253, 246, 58, 165, 215, 72, 150, 119, 190, 102, 53, 102, 165, 91, 125, 249, 14,
+                     129, 135, 200, 148, 67, 10, 151, 89, 242, 138, 114,
+                  ]),
+                  commit: new Uint8Array([
+                     173, 120, 26, 154, 191, 127, 65, 43, 152, 90, 43, 237, 80, 90, 194, 56, 25, 130, 119, 17, 245, 245,
+                     255, 74, 12, 30, 120, 33, 32, 103, 167, 36,
+                  ]),
+               },
+            },
+         ],
+         // END GENERATED: v8:pwdMultiLp1
+         // BEGIN GENERATED: v8:pwdMultiLp2
+         // generated by: pnpm vectors:keys
+         [
+            cc.VERSION8,
+            2,
+            {
+               'AES-GCM': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     27, 129, 28, 215, 62, 8, 223, 37, 141, 217, 175, 80, 48, 24, 24, 63, 113, 199, 59, 85, 236, 245,
+                     25, 225, 36, 152, 176, 110, 165, 97, 134, 47,
+                  ]),
+                  sk: new Uint8Array([
+                     48, 57, 150, 144, 40, 155, 147, 173, 88, 49, 9, 230, 171, 97, 64, 201, 222, 102, 182, 121, 44, 212,
+                     147, 228, 188, 180, 187, 58, 60, 233, 59, 192,
+                  ]),
+                  hk: new Uint8Array([
+                     82, 20, 149, 215, 96, 176, 251, 131, 177, 169, 78, 190, 247, 43, 123, 79, 107, 138, 210, 220, 79,
+                     107, 70, 106, 91, 54, 1, 35, 97, 157, 144, 166,
+                  ]),
+                  hIV: new Uint8Array([95, 140, 151, 33, 186, 201, 230, 106, 177, 56, 56, 213]),
+                  bk: new Uint8Array([
+                     217, 27, 111, 85, 75, 218, 222, 165, 125, 176, 131, 204, 145, 240, 5, 81, 65, 199, 182, 232, 122,
+                     237, 36, 248, 60, 100, 191, 96, 25, 18, 137, 41,
+                  ]),
+                  commit: new Uint8Array([
+                     85, 28, 229, 253, 127, 44, 230, 158, 215, 14, 96, 172, 242, 79, 168, 62, 211, 136, 39, 205, 4, 113,
+                     43, 234, 203, 153, 19, 65, 235, 255, 215, 240,
+                  ]),
+               },
+               'X20-PLY': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     94, 167, 185, 77, 219, 112, 71, 66, 75, 117, 137, 155, 77, 120, 112, 237, 4, 21, 16, 5, 108, 170,
+                     242, 56, 187, 129, 255, 101, 36, 228, 111, 143,
+                  ]),
+                  sk: new Uint8Array([
+                     97, 223, 152, 140, 76, 136, 0, 237, 89, 158, 8, 139, 132, 216, 169, 97, 36, 213, 80, 207, 19, 212,
+                     136, 55, 166, 205, 124, 213, 164, 100, 130, 134,
+                  ]),
+                  hk: new Uint8Array([
+                     48, 128, 243, 40, 201, 102, 120, 37, 93, 92, 49, 207, 190, 152, 72, 232, 62, 60, 158, 123, 201,
+                     191, 85, 50, 36, 241, 182, 165, 252, 254, 116, 57,
+                  ]),
+                  hIV: new Uint8Array([
+                     232, 89, 24, 216, 83, 6, 32, 160, 203, 207, 140, 253, 242, 218, 13, 53, 95, 31, 170, 164, 75, 244,
+                     86, 249,
+                  ]),
+                  bk: new Uint8Array([
+                     104, 134, 187, 58, 90, 103, 155, 204, 229, 51, 244, 148, 99, 42, 29, 149, 20, 135, 15, 248, 63,
+                     175, 1, 173, 0, 55, 99, 218, 77, 173, 164, 175,
+                  ]),
+                  commit: new Uint8Array([
+                     63, 162, 129, 92, 139, 247, 191, 71, 234, 151, 207, 135, 37, 152, 229, 249, 100, 11, 12, 228, 89,
+                     4, 45, 174, 43, 156, 127, 190, 199, 225, 185, 149,
+                  ]),
+               },
+               'AEGIS-256': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     77, 60, 92, 182, 243, 180, 201, 117, 42, 148, 35, 105, 243, 29, 48, 89, 125, 193, 36, 47, 187, 219,
+                     81, 156, 190, 138, 204, 112, 205, 254, 179, 235,
+                  ]),
+                  sk: new Uint8Array([
+                     45, 242, 43, 71, 163, 244, 151, 145, 92, 238, 145, 238, 159, 61, 224, 127, 248, 172, 237, 69, 221,
+                     16, 87, 194, 201, 86, 187, 213, 223, 161, 188, 111,
+                  ]),
+                  hk: new Uint8Array([
+                     185, 39, 198, 58, 113, 218, 13, 178, 217, 32, 253, 90, 48, 181, 156, 114, 76, 170, 55, 6, 1, 159,
+                     245, 218, 172, 17, 168, 122, 2, 12, 91, 13,
+                  ]),
+                  hIV: new Uint8Array([
+                     131, 30, 145, 164, 154, 122, 121, 129, 187, 60, 4, 171, 93, 153, 74, 127, 154, 132, 217, 214, 81,
+                     102, 226, 61, 7, 112, 126, 40, 205, 41, 146, 240,
+                  ]),
+                  bk: new Uint8Array([
+                     46, 201, 255, 107, 92, 28, 16, 200, 62, 51, 215, 50, 95, 176, 149, 18, 222, 226, 182, 73, 159, 199,
+                     26, 148, 156, 232, 221, 97, 91, 161, 239, 142,
+                  ]),
+                  commit: new Uint8Array([
+                     234, 28, 110, 185, 63, 73, 51, 140, 126, 137, 49, 211, 158, 178, 196, 28, 183, 72, 200, 94, 114,
+                     238, 167, 229, 229, 2, 106, 42, 43, 30, 8, 77,
+                  ]),
+               },
+            },
+         ],
+         // END GENERATED: v8:pwdMultiLp2
       ];
 
       const lpEnd = 2;
-      const customAd = new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]);
       const userCred = new Uint8Array([
          214, 245, 252, 122, 133, 39, 76, 162, 64, 201, 143, 217, 237, 57, 18, 207, 199, 153, 20, 28, 162, 9, 236, 66,
          100, 103, 152, 159, 226, 50, 225, 129,
@@ -1464,7 +1965,7 @@ describe('Key generation', () => {
       for (const [ver, lp, algsExpected] of expected) {
          for (const alg of Ciphers.algs()) {
             const algExpected = algsExpected[alg];
-            const keyProvider = new PWDKeyProvider(userCred, [pwd, undefined], customAd);
+            const keyProvider = new PWDKeyProvider(userCred, [pwd], algExpected.extraKeyMaterial);
             keyProvider.setCipherDataInfo({
                ver,
                alg,
@@ -1490,7 +1991,7 @@ describe('Key generation', () => {
       }
    });
 
-   it('MasterKeyKeyProvider keys match expected values, multi-loop with customAd', async () => {
+   it('MasterKeyKeyProvider keys match expected values, multi-loop with extraKeyMaterial', async () => {
       // generated by: pnpm vectors:keys
       const expected: [number, number, Record<cc.CipherAlgs, Record<string, Uint8Array<ArrayBuffer>>>][] = [
          [
@@ -1498,6 +1999,7 @@ describe('Key generation', () => {
             1,
             {
                'AES-GCM': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      62, 43, 242, 215, 21, 141, 122, 13, 2, 38, 243, 254, 112, 200, 114, 92, 59, 80, 209, 207, 157, 127,
                      132, 17, 80, 61, 240, 220, 149, 88, 170, 16,
@@ -1521,6 +2023,7 @@ describe('Key generation', () => {
                   ]),
                },
                'X20-PLY': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      157, 147, 112, 209, 3, 40, 65, 66, 67, 89, 106, 123, 251, 202, 215, 13, 68, 220, 209, 45, 56, 197,
                      88, 38, 190, 0, 91, 51, 88, 214, 113, 26,
@@ -1547,6 +2050,7 @@ describe('Key generation', () => {
                   ]),
                },
                'AEGIS-256': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      115, 173, 169, 134, 46, 62, 56, 41, 73, 181, 183, 176, 225, 186, 38, 91, 245, 119, 231, 71, 130,
                      21, 108, 106, 128, 166, 89, 87, 198, 61, 87, 192,
@@ -1579,6 +2083,7 @@ describe('Key generation', () => {
             2,
             {
                'AES-GCM': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      172, 45, 162, 96, 158, 190, 214, 221, 177, 245, 79, 138, 170, 38, 17, 132, 71, 147, 40, 98, 194,
                      226, 93, 11, 17, 244, 65, 9, 92, 21, 35, 254,
@@ -1602,6 +2107,7 @@ describe('Key generation', () => {
                   ]),
                },
                'X20-PLY': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      86, 14, 79, 152, 62, 235, 61, 35, 91, 35, 168, 85, 111, 42, 68, 57, 9, 212, 151, 119, 104, 86, 201,
                      102, 253, 38, 232, 54, 90, 80, 163, 241,
@@ -1628,6 +2134,7 @@ describe('Key generation', () => {
                   ]),
                },
                'AEGIS-256': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
                   ek: new Uint8Array([
                      200, 76, 42, 9, 63, 102, 66, 39, 58, 22, 98, 21, 114, 198, 85, 50, 26, 101, 167, 127, 94, 7, 143,
                      93, 81, 79, 165, 232, 138, 72, 55, 41,
@@ -1655,10 +2162,159 @@ describe('Key generation', () => {
                },
             },
          ],
+         // BEGIN GENERATED: v8:masterMultiLp1
+         // generated by: pnpm vectors:keys
+         [
+            cc.VERSION8,
+            1,
+            {
+               'AES-GCM': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     215, 217, 146, 34, 211, 146, 67, 84, 248, 164, 95, 50, 199, 67, 40, 25, 143, 90, 221, 190, 44, 231,
+                     65, 177, 203, 164, 151, 206, 127, 73, 231, 112,
+                  ]),
+                  sk: new Uint8Array([
+                     222, 202, 209, 238, 7, 128, 74, 178, 225, 231, 91, 26, 130, 196, 36, 93, 247, 213, 152, 3, 48, 166,
+                     69, 116, 94, 109, 248, 145, 127, 226, 242, 98,
+                  ]),
+                  hk: new Uint8Array([
+                     25, 197, 73, 222, 245, 31, 205, 161, 199, 166, 97, 160, 46, 5, 77, 113, 176, 22, 184, 199, 52, 233,
+                     43, 190, 55, 229, 22, 144, 230, 22, 36, 70,
+                  ]),
+                  hIV: new Uint8Array([4, 159, 201, 115, 152, 229, 8, 81, 83, 29, 131, 169]),
+                  bk: new Uint8Array([
+                     233, 251, 182, 125, 73, 88, 3, 200, 146, 139, 27, 222, 45, 133, 34, 136, 202, 89, 9, 91, 160, 11,
+                     242, 133, 33, 102, 5, 168, 118, 146, 208, 2,
+                  ]),
+               },
+               'X20-PLY': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     6, 229, 20, 128, 6, 243, 13, 148, 254, 32, 236, 220, 163, 133, 15, 111, 241, 61, 41, 29, 66, 50,
+                     249, 39, 254, 207, 226, 42, 27, 139, 35, 240,
+                  ]),
+                  sk: new Uint8Array([
+                     62, 10, 107, 181, 251, 15, 26, 100, 118, 205, 154, 167, 140, 35, 182, 241, 125, 8, 231, 215, 157,
+                     81, 46, 174, 2, 152, 40, 178, 118, 30, 149, 131,
+                  ]),
+                  hk: new Uint8Array([
+                     224, 2, 156, 14, 208, 184, 186, 241, 127, 187, 151, 58, 116, 47, 219, 150, 135, 14, 113, 5, 9, 30,
+                     208, 77, 62, 26, 5, 215, 18, 132, 166, 103,
+                  ]),
+                  hIV: new Uint8Array([
+                     72, 102, 156, 233, 39, 122, 78, 6, 62, 49, 105, 99, 79, 208, 30, 69, 168, 192, 157, 110, 19, 83,
+                     93, 227,
+                  ]),
+                  bk: new Uint8Array([
+                     8, 8, 207, 14, 207, 59, 176, 85, 213, 154, 162, 42, 187, 187, 242, 141, 201, 210, 160, 161, 60, 87,
+                     92, 3, 93, 215, 18, 193, 205, 61, 110, 71,
+                  ]),
+               },
+               'AEGIS-256': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     30, 236, 219, 150, 133, 94, 152, 41, 140, 204, 33, 170, 22, 79, 211, 165, 30, 79, 201, 142, 187,
+                     210, 193, 32, 183, 12, 251, 5, 31, 124, 152, 43,
+                  ]),
+                  sk: new Uint8Array([
+                     33, 87, 61, 230, 148, 145, 77, 60, 10, 50, 142, 110, 181, 75, 65, 150, 158, 195, 49, 53, 52, 133,
+                     242, 222, 63, 37, 230, 13, 219, 52, 242, 90,
+                  ]),
+                  hk: new Uint8Array([
+                     41, 19, 126, 166, 120, 44, 229, 201, 88, 59, 13, 100, 50, 33, 119, 49, 36, 170, 29, 164, 167, 161,
+                     234, 175, 113, 102, 123, 72, 244, 44, 126, 194,
+                  ]),
+                  hIV: new Uint8Array([
+                     57, 99, 49, 81, 246, 52, 156, 206, 95, 98, 248, 121, 65, 158, 0, 16, 252, 229, 76, 147, 216, 233,
+                     169, 210, 196, 171, 20, 175, 49, 166, 80, 165,
+                  ]),
+                  bk: new Uint8Array([
+                     227, 209, 235, 165, 120, 133, 4, 127, 209, 109, 69, 143, 43, 110, 5, 65, 168, 113, 177, 197, 184,
+                     173, 133, 53, 80, 28, 147, 52, 130, 219, 176, 147,
+                  ]),
+               },
+            },
+         ],
+         // END GENERATED: v8:masterMultiLp1
+         // BEGIN GENERATED: v8:masterMultiLp2
+         // generated by: pnpm vectors:keys
+         [
+            cc.VERSION8,
+            2,
+            {
+               'AES-GCM': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     224, 9, 174, 37, 125, 92, 81, 173, 79, 203, 194, 26, 162, 101, 249, 90, 123, 37, 83, 235, 21, 35,
+                     154, 211, 29, 6, 49, 247, 1, 254, 47, 108,
+                  ]),
+                  sk: new Uint8Array([
+                     107, 78, 125, 91, 218, 5, 48, 238, 232, 129, 178, 198, 18, 10, 109, 65, 215, 34, 248, 41, 133, 240,
+                     172, 127, 174, 125, 112, 117, 171, 145, 126, 43,
+                  ]),
+                  hk: new Uint8Array([
+                     131, 100, 252, 35, 187, 94, 66, 169, 191, 228, 110, 228, 71, 201, 196, 25, 126, 171, 144, 247, 34,
+                     202, 5, 13, 46, 112, 51, 189, 233, 210, 140, 38,
+                  ]),
+                  hIV: new Uint8Array([142, 110, 237, 96, 242, 99, 118, 205, 9, 42, 248, 77]),
+                  bk: new Uint8Array([
+                     251, 41, 64, 22, 216, 139, 93, 229, 152, 227, 232, 92, 109, 0, 131, 102, 117, 162, 111, 39, 129,
+                     43, 138, 82, 235, 195, 64, 245, 53, 17, 223, 167,
+                  ]),
+               },
+               'X20-PLY': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     173, 58, 57, 98, 87, 88, 130, 249, 13, 54, 78, 23, 17, 186, 32, 76, 165, 240, 162, 97, 55, 106,
+                     193, 244, 77, 50, 72, 189, 214, 148, 9, 4,
+                  ]),
+                  sk: new Uint8Array([
+                     83, 63, 39, 140, 131, 155, 239, 39, 47, 253, 232, 50, 94, 116, 141, 59, 56, 204, 87, 215, 29, 209,
+                     1, 4, 111, 180, 159, 9, 41, 179, 155, 189,
+                  ]),
+                  hk: new Uint8Array([
+                     46, 118, 193, 50, 119, 49, 125, 76, 44, 108, 147, 149, 102, 226, 62, 216, 129, 7, 50, 32, 70, 76,
+                     161, 68, 90, 68, 231, 125, 164, 231, 178, 108,
+                  ]),
+                  hIV: new Uint8Array([
+                     89, 155, 212, 16, 94, 108, 245, 18, 212, 213, 129, 145, 211, 85, 236, 242, 89, 211, 210, 60, 115,
+                     153, 86, 62,
+                  ]),
+                  bk: new Uint8Array([
+                     189, 180, 232, 14, 222, 237, 40, 248, 31, 191, 94, 232, 97, 140, 67, 210, 103, 107, 186, 132, 7,
+                     81, 239, 38, 226, 82, 55, 217, 89, 31, 65, 199,
+                  ]),
+               },
+               'AEGIS-256': {
+                  extraKeyMaterial: new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]),
+                  ek: new Uint8Array([
+                     206, 124, 18, 209, 235, 206, 1, 57, 116, 185, 254, 197, 98, 67, 196, 241, 22, 247, 236, 164, 204,
+                     246, 33, 189, 25, 46, 193, 82, 175, 145, 155, 150,
+                  ]),
+                  sk: new Uint8Array([
+                     116, 88, 6, 245, 53, 4, 191, 224, 7, 66, 10, 150, 25, 224, 95, 69, 54, 6, 113, 193, 153, 165, 189,
+                     186, 222, 215, 134, 20, 95, 58, 0, 1,
+                  ]),
+                  hk: new Uint8Array([
+                     236, 107, 243, 55, 109, 81, 80, 70, 114, 155, 136, 121, 140, 79, 56, 49, 137, 97, 37, 66, 26, 157,
+                     58, 244, 90, 211, 226, 66, 247, 200, 90, 12,
+                  ]),
+                  hIV: new Uint8Array([
+                     233, 237, 143, 10, 118, 159, 27, 44, 23, 18, 239, 129, 47, 44, 106, 140, 185, 72, 120, 150, 198,
+                     65, 194, 202, 41, 169, 83, 204, 203, 82, 76, 52,
+                  ]),
+                  bk: new Uint8Array([
+                     14, 99, 182, 112, 69, 21, 176, 6, 168, 231, 191, 96, 52, 230, 148, 170, 36, 45, 131, 69, 203, 110,
+                     233, 188, 71, 183, 23, 137, 58, 56, 148, 58,
+                  ]),
+               },
+            },
+         ],
+         // END GENERATED: v8:masterMultiLp2
       ];
 
       const lpEnd = 2;
-      const customAd = new Uint8Array([120, 190, 112, 41, 122, 140, 204, 6, 253, 18]);
       const master = new Uint8Array([
          88, 164, 150, 177, 85, 43, 43, 25, 42, 250, 120, 190, 112, 26, 41, 122, 140, 204, 6, 253, 225, 220, 237, 10,
          80, 64, 148, 152, 204, 30, 231, 18,
@@ -1672,7 +2328,7 @@ describe('Key generation', () => {
       for (const [ver, lp, algsExpected] of expected) {
          for (const alg of Ciphers.algs()) {
             const algExpected = algsExpected[alg];
-            const keyProvider = new MasterKeyKeyProvider(master, customAd);
+            const keyProvider = new MasterKeyKeyProvider(master, algExpected.extraKeyMaterial);
             keyProvider.setCipherDataInfo({
                ver,
                alg,
@@ -1686,14 +2342,17 @@ describe('Key generation', () => {
             const sk = await keyProvider.getSigningKey();
             const [hk, hIV] = await keyProvider.getHintCipherKeyAndIV(iv.slice(0, Ciphers.algIVByteLength(alg)));
             const bk = await keyProvider.getBlockCipherKey(1);
-            const commit = await keyProvider.getKeyCommitment();
+            expect(keyProvider.supportsCommitment).toBe(!!algExpected.commit);
+            const commit = algExpected.commit ? await keyProvider.getKeyCommitment() : undefined;
 
             expect(isEqualArray(ek, algExpected.ek)).toBe(true);
             expect(isEqualArray(sk, algExpected.sk)).toBe(true);
             expect(isEqualArray(hk, algExpected.hk)).toBe(true);
             expect(isEqualArray(hIV, algExpected.hIV)).toBe(true);
             expect(isEqualArray(bk, algExpected.bk)).toBe(true);
-            expect(isEqualArray(commit, algExpected.commit)).toBe(true);
+            if (commit) {
+               expect(isEqualArray(commit, algExpected.commit)).toBe(true);
+            }
          }
       }
    });
@@ -1703,44 +2362,65 @@ describe('Key generation', () => {
       const slt = getRandom(cc.SLT_BYTES);
       const base = { alg: 'AES-GCM' as cc.CipherAlgs, ic: cc.ICOUNT_MIN, slt, lp: 1, lpEnd: 1 };
 
-      const v4 = new PWDKeyProvider(userCred.slice(0), ['p', undefined]);
+      const v4 = new PWDKeyProvider(userCred.slice(0), ['p']);
       v4.setCipherDataInfo({ ...base, ver: cc.VERSION4 });
       await v4.getCipherKey(false);
       expect(v4.supportsCommitment).toBe(false);
       await expect(v4.getKeyCommitment()).rejects.toThrow(/Key commitments not supported/);
       v4.purge();
 
-      const v6 = new PWDKeyProvider(userCred.slice(0), ['p', undefined]);
+      const v6 = new PWDKeyProvider(userCred.slice(0), ['p']);
       v6.setCipherDataInfo({ ...base, ver: cc.VERSION6 });
       await v6.getCipherKey(false);
       expect(v6.supportsCommitment).toBe(false);
       await expect(v6.getKeyCommitment()).rejects.toThrow(/Key commitments not supported/);
       v6.purge();
 
-      const v7 = new PWDKeyProvider(userCred.slice(0), ['p', undefined]);
-      v7.setCipherDataInfo({ ...base, ver: cc.CURRENT_VERSION });
-      await v7.getCipherKey(false);
-      expect(v7.supportsCommitment).toBe(true);
-      const commit = await v7.getKeyCommitment();
-      expect(commit.byteLength).toBe(cc.KEY_BYTES);
-      v7.purge();
+      for (const ver of [cc.VERSION7, cc.VERSION8]) {
+         const keyProvider = new PWDKeyProvider(userCred.slice(0), ['p']);
+         keyProvider.setCipherDataInfo({ ...base, ver });
+         await keyProvider.getCipherKey(false);
+         expect(keyProvider.supportsCommitment).toBe(true);
+         const commit = await keyProvider.getKeyCommitment();
+         expect(commit.byteLength).toBe(cc.KEY_BYTES);
+         keyProvider.purge();
+      }
    });
 
-   it('MasterKeyKeyProvider supportsCommitment succeeds', async () => {
-      const master = getRandom(cc.KEY_BYTES);
+   it('MasterKeyKeyProvider supportsCommitment per version', async () => {
       const slt = getRandom(cc.SLT_BYTES);
-      const keyProvider = new MasterKeyKeyProvider(master);
-      keyProvider.setCipherDataInfo({ ver: cc.CURRENT_VERSION, alg: 'AES-GCM', ic: 0, slt, lp: 1, lpEnd: 1 });
-      await keyProvider.getCipherKey(false);
-      expect(keyProvider.supportsCommitment).toBe(true);
-      const commit = await keyProvider.getKeyCommitment();
-      expect(commit.byteLength).toBe(cc.KEY_BYTES);
-      keyProvider.purge();
+
+      const v7 = new MasterKeyKeyProvider(getRandom(cc.KEY_BYTES));
+      v7.setCipherDataInfo({ ver: cc.VERSION7, alg: 'AES-GCM', ic: 0, slt, lp: 1, lpEnd: 1 });
+      await v7.getCipherKey(false);
+      expect(v7.supportsCommitment).toBe(true);
+      const v7Commit = await v7.getKeyCommitment();
+      expect(v7Commit.byteLength).toBe(cc.KEY_BYTES);
+      v7.purge();
+
+      const v8 = new MasterKeyKeyProvider(getRandom(cc.KEY_BYTES));
+      v8.setCipherDataInfo({ ver: cc.VERSION8, alg: 'AES-GCM', ic: 0, slt, lp: 1, lpEnd: 1 });
+      await v8.getCipherKey(false);
+      expect(v8.supportsCommitment).toBe(false);
+      await expect(v8.getKeyCommitment()).rejects.toThrow(/Key commitments not supported/);
+      v8.purge();
+   });
+
+   it('MasterKeyKeyProvider supportsCommitment requires cipherdatainfo', () => {
+      const slt = getRandom(cc.SLT_BYTES);
+      const ready = new MasterKeyKeyProvider(getRandom(cc.KEY_BYTES));
+      ready.setCipherDataInfo({ ver: cc.CURRENT_VERSION, alg: 'AES-GCM', ic: 0, slt, lp: 1, lpEnd: 1 });
+      expect(ready.supportsCommitment).toBe(false);
+      ready.purge();
+
+      const notReady = new MasterKeyKeyProvider(getRandom(cc.KEY_BYTES));
+      expect(() => notReady.supportsCommitment).toThrow(/cipherDataInfo not set/);
+      notReady.purge();
    });
 
    it('getKeyCommitment requires getCipherKey to have been called', async () => {
       const slt = getRandom(cc.SLT_BYTES);
-      const pwdProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['p', undefined]);
+      const pwdProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['p']);
       pwdProvider.setCipherDataInfo({
          ver: cc.CURRENT_VERSION,
          alg: 'AES-GCM',
@@ -1751,17 +2431,12 @@ describe('Key generation', () => {
       });
       await expect(pwdProvider.getKeyCommitment()).rejects.toThrow(/Cipher key must be generated/);
       pwdProvider.purge();
-
-      const masterProvider = new MasterKeyKeyProvider(getRandom(cc.KEY_BYTES));
-      masterProvider.setCipherDataInfo({ ver: cc.CURRENT_VERSION, alg: 'AES-GCM', ic: 0, slt, lp: 1, lpEnd: 1 });
-      await expect(masterProvider.getKeyCommitment()).rejects.toThrow(/Cipher key must be generated/);
-      masterProvider.purge();
    });
 
-   it('derived keys change with cipher info (alg, lp, slt, customAd)', async () => {
+   it('derived keys change with cipher info (alg, lp, slt, extraKeyMaterial)', async () => {
       const userCred = getRandom(cc.USERCRED_BYTES);
       const master = getRandom(cc.KEY_BYTES);
-      const customAd = getRandom(16);
+      const extraKeyMaterial = getRandom(16);
       const baseSlt = getRandom(cc.SLT_BYTES);
       const otherSlt = getRandom(cc.SLT_BYTES);
       const baseIV = getRandom(32);
@@ -1769,8 +2444,7 @@ describe('Key generation', () => {
       const providers = [
          {
             ic: cc.ICOUNT_MIN,
-            make: (extraAd?: Uint8Array<ArrayBuffer>) =>
-               new PWDKeyProvider(userCred.slice(0), ['pwd-A', undefined], extraAd),
+            make: (extraAd?: Uint8Array<ArrayBuffer>) => new PWDKeyProvider(userCred.slice(0), ['pwd-A'], extraAd),
          },
          {
             ic: 0,
@@ -1803,14 +2477,17 @@ describe('Key generation', () => {
          const diffAlg = await derive(provider, 'X20-PLY', 1, baseSlt, undefined);
          const diffLp = await derive(provider, 'AES-GCM', 2, baseSlt, undefined);
          const diffSlt = await derive(provider, 'AES-GCM', 1, otherSlt, undefined);
-         const withCustomAd = await derive(provider, 'AES-GCM', 1, baseSlt, customAd);
+         const withExtraKeyMaterial = await derive(provider, 'AES-GCM', 1, baseSlt, extraKeyMaterial);
 
          for (const name of KEY_NAMES) {
-            expect(isEqualArray(baseline[name], sameInputs[name])).toBe(true);
-            expect(isEqualArray(baseline[name], diffAlg[name])).toBe(false);
-            expect(isEqualArray(baseline[name], diffLp[name])).toBe(false);
-            expect(isEqualArray(baseline[name], diffSlt[name])).toBe(false);
-            expect(isEqualArray(baseline[name], withCustomAd[name])).toBe(false);
+            const base = baseline[name];
+            if (base) {
+               expect(isEqualArray(base, sameInputs[name]!)).toBe(true);
+               expect(isEqualArray(base, diffAlg[name]!)).toBe(false);
+               expect(isEqualArray(base, diffLp[name]!)).toBe(false);
+               expect(isEqualArray(base, diffSlt[name]!)).toBe(false);
+               expect(isEqualArray(base, withExtraKeyMaterial[name]!)).toBe(false);
+            }
          }
       }
    });
@@ -1823,7 +2500,7 @@ describe('Key generation', () => {
       const alg: cc.CipherAlgs = 'AES-GCM';
 
       async function derive(cred: Uint8Array<ArrayBuffer>, pwd: string): Promise<AllDerivedKeys> {
-         const keyProvider = new PWDKeyProvider(cred.slice(0), [pwd, undefined]);
+         const keyProvider = new PWDKeyProvider(cred.slice(0), [pwd]);
          keyProvider.setCipherDataInfo({ ver: cc.CURRENT_VERSION, alg, ic: cc.ICOUNT_MIN, slt, lp: 1, lpEnd: 1 });
          return deriveAllKeys(keyProvider, baseIV, alg);
       }
@@ -1835,7 +2512,7 @@ describe('Key generation', () => {
       const diffPwd = await derive(userCred, 'pwd-B');
       expect(isEqualArray(baseline.ek, diffPwd.ek)).toBe(false);
       expect(isEqualArray(baseline.bk, diffPwd.bk)).toBe(false);
-      expect(isEqualArray(baseline.commit, diffPwd.commit)).toBe(false);
+      expect(isEqualArray(baseline.commit!, diffPwd.commit!)).toBe(false);
       expect(isEqualArray(baseline.sk, diffPwd.sk)).toBe(true);
       expect(isEqualArray(baseline.hk, diffPwd.hk)).toBe(true);
       expect(isEqualArray(baseline.hIV, diffPwd.hIV)).toBe(true);
@@ -1847,7 +2524,7 @@ describe('Key generation', () => {
       expect(isEqualArray(baseline.sk, diffCred.sk)).toBe(false);
       expect(isEqualArray(baseline.hk, diffCred.hk)).toBe(false);
       expect(isEqualArray(baseline.bk, diffCred.bk)).toBe(false);
-      expect(isEqualArray(baseline.commit, diffCred.commit)).toBe(false);
+      expect(isEqualArray(baseline.commit!, diffCred.commit!)).toBe(false);
       expect(isEqualArray(baseline.hIV, diffCred.hIV)).toBe(true);
    });
 
@@ -1864,8 +2541,8 @@ describe('Key generation', () => {
          return deriveAllKeys(keyProvider, baseIV, alg);
       }
 
-      // Changing masterKey changes ek, sk, hk, and the keys derived from ek
-      // (bk, commit). Only hIV (derived from baseIV) stays the same.
+      // Changing masterKey changes ek, sk, hk, and the key derived from ek
+      // (bk). Only hIV (derived from baseIV) stays the same.
       const baseline = await derive(master);
       const diffMaster = await derive(otherMaster);
 
@@ -1873,18 +2550,21 @@ describe('Key generation', () => {
       expect(isEqualArray(baseline.sk, diffMaster.sk)).toBe(false);
       expect(isEqualArray(baseline.hk, diffMaster.hk)).toBe(false);
       expect(isEqualArray(baseline.bk, diffMaster.bk)).toBe(false);
-      expect(isEqualArray(baseline.commit, diffMaster.commit)).toBe(false);
+      expect(baseline.commit).toBeUndefined();
       expect(isEqualArray(baseline.hIV, diffMaster.hIV)).toBe(true);
    });
 
    it('getKeyCommitment is stable across other key derivations', async () => {
       const slt = getRandom(cc.SLT_BYTES);
+      // The master-key path derives a commitment only through v7
       const providers = [
          {
+            ver: cc.CURRENT_VERSION,
             ic: cc.ICOUNT_MIN,
-            make: () => new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['p', undefined]),
+            make: () => new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['p']),
          },
          {
+            ver: cc.VERSION7,
             ic: 0,
             make: () => new MasterKeyKeyProvider(getRandom(cc.KEY_BYTES)),
          },
@@ -1893,7 +2573,7 @@ describe('Key generation', () => {
       for (const provider of providers) {
          const keyProvider = provider.make();
          keyProvider.setCipherDataInfo({
-            ver: cc.CURRENT_VERSION,
+            ver: provider.ver,
             alg: 'AES-GCM',
             ic: provider.ic,
             slt,
@@ -1918,12 +2598,15 @@ describe('Key generation', () => {
 
    it('purge zeroes the commitment key', async () => {
       const slt = getRandom(cc.SLT_BYTES);
+      // The master-key path derives a commitment only through v7
       const providers = [
          {
+            ver: cc.CURRENT_VERSION,
             ic: cc.ICOUNT_MIN,
-            make: () => new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['p', undefined]),
+            make: () => new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['p']),
          },
          {
+            ver: cc.VERSION7,
             ic: 0,
             make: () => new MasterKeyKeyProvider(getRandom(cc.KEY_BYTES)),
          },
@@ -1932,7 +2615,7 @@ describe('Key generation', () => {
       for (const provider of providers) {
          const keyProvider = provider.make();
          keyProvider.setCipherDataInfo({
-            ver: cc.CURRENT_VERSION,
+            ver: provider.ver,
             alg: 'AES-GCM',
             ic: provider.ic,
             slt,

@@ -48,8 +48,8 @@
         <div class="control-host">
           <mat-form-field class="recovery">
             <mat-label>Recovery Word Pattern</mat-label>
-            <textarea #wordsArea id="wordsArea" matInput autofocus type="text" [formControl]="recoveryWords"
-              class="words-area"></textarea>
+            <textarea #wordsArea id="wordsArea" matInput noAssist autofocus type="text"
+              [formControl]="recoveryWords" class="words-area"></textarea>
           </mat-form-field>
           <div>
             <button class="button" mat-raised-button (click)="onClickStartRecovery($event)">

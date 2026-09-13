@@ -75,10 +75,9 @@ export function parseCipherArmor(cipherArmor: string): Uint8Array<ArrayBuffer> {
       }
       jsonParts = JSON.parse(trimmed);
    } catch (err) {
-      console.error(err);
-      if (err instanceof Error) {
-         throw new Error(`Cipher armor text not formatted correctly. ${err.name}`);
-      }
+      // Only the name, since a parse error quotes the input and this text reaches a terminal
+      const name = err instanceof Error ? err.name : 'Invalid input';
+      throw new Error(`Cipher armor text not formatted correctly. ${name}`);
    }
    if (!('ct' in jsonParts)) {
       throw new Error('Missing ct in cipher armor text');

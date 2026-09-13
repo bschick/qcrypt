@@ -1,4 +1,13 @@
-import { test, expect, Page, BrowserContext, type Cookie, type TestInfo } from '@playwright/test';
+import {
+   test,
+   expect,
+   Page,
+   BrowserContext,
+   type Cookie,
+   type Request,
+   type Response,
+   type TestInfo,
+} from '@playwright/test';
 import * as api from '@qcrypt/api';
 import {
    cryptoReady,
@@ -265,6 +274,25 @@ export function testUserName(testInfo: TestInfo, count: number): string {
    return `${NAME_PREFIX}${label.slice(0, NAME_MAX_LEN - NAME_PREFIX.length - suffix.length)}${suffix}`;
 }
 
+// Gives an accurate cause when an API call triggered by a UI action fails at the network level.
+// waitForResponse settles only on a response, so a dropped connection leaves it pending until the
+// test timeout and blames the wait rather than naming the request that died.
+export function waitForApiResponse(page: Page, matcher: (response: Response) => boolean): Promise<Response> {
+   let failPending: (error: Error) => void = () => {};
+   const requestFailed = new Promise<never>((_resolve, reject) => {
+      failPending = reject;
+   });
+   const onRequestFailed = (request: Request) => {
+      if (request.url().includes('/v1/')) {
+         failPending(new Error(`${request.url()} failed: ${request.failure()?.errorText ?? 'unknown'}`));
+      }
+   };
+   page.on('requestfailed', onRequestFailed);
+   return Promise.race([page.waitForResponse(matcher), requestFailed]).finally(() => {
+      page.off('requestfailed', onRequestFailed);
+   });
+}
+
 export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
    authFixture: async ({ page }, use, testInfo) => {
       const baseURL = (testInfo.project.use as { baseURL: string }).baseURL;
@@ -284,6 +312,13 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
          });
          watched.on('pageerror', (err) => {
             browserErrors.push(`[pageerror] ${err.message}`);
+         });
+         // One legible line for a network-level failure, which otherwise reaches the console only
+         // as a bare "Failed to fetch" under a framework stack.
+         watched.on('requestfailed', (request) => {
+            if (request.url().includes('/v1/')) {
+               browserErrors.push(`[requestfailed] ${request.url()}: ${request.failure()?.errorText ?? 'unknown'}`);
+            }
          });
       };
       page.context().pages().forEach(watchConsole);
@@ -360,7 +395,8 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
          const userName = testUserName(testInfo, ++userCount);
          await page.goto('/');
 
-         const verifyPromise = page.waitForResponse(
+         const verifyPromise = waitForApiResponse(
+            page,
             (r) => r.url().includes('/v1/reg/verify') && r.request().method() === 'POST',
          );
          await page.getByRole('button', { name: 'I am new to Quick Crypt' }).click();
@@ -459,7 +495,8 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
          trigger: () => Promise<void>,
       ): Promise<string> => {
          active = authenticator.emulator;
-         const verifyPromise = page.waitForResponse(
+         const verifyPromise = waitForApiResponse(
+            page,
             (r) =>
                (r.url().includes('/v1/passkeys/verify') ||
                   r.url().includes('/v1/reg/verify') ||
@@ -492,7 +529,10 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
          const awaitVerify = opts.awaitVerify ?? true;
          active = authenticator.emulator;
          const verifyPromise: Promise<unknown> = awaitVerify
-            ? targetPage.waitForResponse((r) => r.url().includes('/v1/auth/verify') && r.request().method() === 'POST')
+            ? waitForApiResponse(
+                 targetPage,
+                 (r) => r.url().includes('/v1/auth/verify') && r.request().method() === 'POST',
+              )
             : Promise.resolve();
          await trigger();
          await verifyPromise;
@@ -588,7 +628,8 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
             await page.goto('/');
             await page.evaluate(() => localStorage.clear());
             await page.reload();
-            const verifyPromise = page.waitForResponse(
+            const verifyPromise = waitForApiResponse(
+               page,
                (r) => r.url().includes('/v1/auth/verify') && r.request().method() === 'POST',
             );
             await page.getByRole('button', { name: /I have used Quick Crypt/ }).click();
@@ -647,7 +688,8 @@ export async function expectActiveServerSession(page: Page, expectedUserName?: s
    if (!(await page.locator('table.credtable tbody tr').first().isVisible())) {
       await toggleCredentials(page);
    }
-   const userResponse = page.waitForResponse(
+   const userResponse = waitForApiResponse(
+      page,
       (response) => response.url().includes('/v1/user') && response.request().method() === 'GET',
    );
    await page.getByRole('button', { name: 'Refresh' }).click();
@@ -672,7 +714,8 @@ async function confirmPasskeyDelete(
       await page.locator('input#confirmInput').fill(userName);
    }
 
-   const deleted = page.waitForResponse(
+   const deleted = waitForApiResponse(
+      page,
       (response) => response.url().includes('/passkeys') && response.request().method() === 'DELETE',
    );
    const confirm = async () => {

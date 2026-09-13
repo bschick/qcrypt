@@ -23,8 +23,8 @@ SOFTWARE. */
 // Builds each WebAuthn payload from named fields only, so anything else carried on a source
 // object is left behind rather than spread along.
 
-// Leaf and enum types are reused from simplewebauthn because they constrain values rather than
-// shape, and reusing them keeps these types assignable to the browser ceremony calls.
+// Leaf and enum types are reused from simplewebauthn making them assignable
+// during browser ceremony calls.
 import type {
    AttestationConveyancePreference,
    AuthenticationExtensionsClientInputs,
@@ -41,7 +41,6 @@ import type {
    UserVerificationRequirement,
 } from '@simplewebauthn/browser';
 
-// The credential public key and its algorithm travel inside attestationObject.
 export type RegistrationFields = {
    id: string;
    rawId: string;
@@ -53,7 +52,6 @@ export type RegistrationFields = {
    };
 };
 
-// userHandle is the one field here not covered by the assertion signature.
 export type AuthenticationFields = {
    id: string;
    rawId: string;
@@ -175,8 +173,8 @@ export function makeAddVerifyRequest(source: RegistrationFields, riders: AddVeri
 
 // ----- Responses (server to client) -----
 
-// These match the simplewebauthn options types as of 2026-09-08. They are declared separately so
-// that later library changes cannot silently alter the wire shape.
+// These match the simplewebauthn options types as of 2026-09-08. They are declared separately
+// so that later library changes cannot silently alter transmitted data.
 
 export type CredentialDescriptorResponse = {
    id: string;
@@ -262,14 +260,14 @@ export function makeAuthOptionsResponse(source: PublicKeyCredentialRequestOption
       allowCredentials: pickDescriptors(source.allowCredentials),
       userVerification: source.userVerification,
       hints: source.hints,
-      // See makeRegOptionsResponse
       extensions: source.extensions,
    };
 }
 
 // ----- Adapters for @simplewebauthn/server -----
 
-// Both verifier types require clientExtensionResults, so supply an empty value.
+// Both functions re-apply the field allowlist unwanted data cannot reach verifyRegistrationResponse
+// or verifyAuthenticationResponse. Those functions expect clientExtensionResults, so add empty instances.
 
 export function toRegistrationResponseJSON(request: RegistrationFields): RegistrationResponseJSON {
    return { ...pickRegistrationFields(request), clientExtensionResults: {} };

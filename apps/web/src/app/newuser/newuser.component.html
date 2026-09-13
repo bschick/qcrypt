@@ -38,13 +38,13 @@
       <div class="control-host">
         <mat-form-field class="user-name">
           <input matInput
+            noAssist
             id="userName"
             #userName
             placeholder="user name"
             autofocus type="text"
-            autocomplete="off"
             data-1p-ignore
-            data-bwignore
+            data-bwignore="true"
             data-lpignore="true"
             data-form-type="other"
             [(ngModel)]="newUserName" />

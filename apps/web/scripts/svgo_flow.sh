@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepare and optimize SVG files in apps/web/src/assets/flow/v7/.
+# Prepare and optimize SVG files in apps/web/src/assets/flow/.
 #
 # Two-step pass over each target file:
 #   1. tag_flow_svg.ts - inserts viewBox if missing AND converts
@@ -20,7 +20,7 @@
 
 set -euo pipefail
 
-FLOW_DIR="apps/web/src/assets/flow/v7"
+FLOW_DIR="apps/web/src/assets/flow"
 TAG_SCRIPT="apps/web/scripts/tag_flow_svg.ts"
 
 if [[ ! -d "$FLOW_DIR" ]]; then

@@ -22,6 +22,7 @@ SOFTWARE. */
 
 import { Entity, type EntityItem, type EntityRecord } from 'electrodb';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { CHALLENGE_TTL_SECS } from './consts';
 
 const client = new DynamoDBClient({
    region: 'us-east-1',
@@ -294,10 +295,8 @@ export const Challenges = new Entity(
          },
          expiresAt: {
             type: 'number',
-            // Needs unix time (convert from MS to S) and add 5 minutes after creation
-            // Which is a 4 minute buffer since webauthn stuff defaults to 1 minute timeout
-            // Must exceed PROOF_SKEW_MS or proof nonces expire within the window and replay reopens
-            default: () => Math.floor(Date.now() / 1000) + 300,
+            // Needs unix time, so convert from MS to S
+            default: () => Math.floor(Date.now() / 1000) + CHALLENGE_TTL_SECS,
             required: true,
             readOnly: true,
          },

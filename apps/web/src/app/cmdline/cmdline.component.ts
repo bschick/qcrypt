@@ -35,6 +35,7 @@ import { Subscription } from 'rxjs';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { bytesToBase64 } from '@qcrypt/crypto';
+import { NoAssistDirective } from '../ui/noassist.directive';
 
 @Component({
    selector: 'app-cmd-line',
@@ -51,6 +52,7 @@ import { bytesToBase64 } from '@qcrypt/crypto';
       FormsModule,
       ReactiveFormsModule,
       RouterLink,
+      NoAssistDirective,
    ],
 })
 export class CmdLineComponent implements OnInit, OnDestroy {

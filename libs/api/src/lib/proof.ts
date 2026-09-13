@@ -27,7 +27,17 @@ const USERCRED_KEY_CONTEXT = 'UCredKey';
 const USERCRED_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
 
 const RECOVERY_KEY_CONTEXT = 'RecovKey';
-const RECOVERY_SIG_CONTEXT = 'qcrypt/recovery/nonce/v1';
+
+export type RecoveryOp = 'replace' | 'recover';
+
+const RECOVERY_SIG_CONTEXTS: Readonly<Record<RecoveryOp, string>> = {
+   replace: 'qcrypt/recovery/replace/v1',
+   recover: 'qcrypt/recovery/recover/v1',
+};
+
+// BACKWARD COMPAT: clients before the per-operation contexts signed both operations with this one,
+// which lets a proof for either operation stand in for the other. Delete once those clients are gone
+const RECOVERY_COMPAT_SIG_CONTEXT = 'qcrypt/recovery/nonce/v1';
 
 export const RECOVERYID_BYTES = 16;
 export const CHALLENGE_BYTES = 32;
@@ -96,8 +106,8 @@ export function verifyUserCredProof(
    bodyHashHex: string,
    signature: string,
    queryString: string = '',
-): boolean {
-   return verifyProof(
+): void {
+   verifyProof(
       base64ToBytes(pubKey),
       buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
       base64ToBytes(signature),
@@ -134,11 +144,12 @@ export function createRecoveryProof(
    userId: string,
    timestampMs: string,
    nonce: string,
+   op: RecoveryOp,
 ): string {
    const { secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
    try {
       const message = buildRecoveryMessage(userId, timestampMs, nonce);
-      return bytesToBase64(createProof(secKey, message, RECOVERY_SIG_CONTEXT));
+      return bytesToBase64(createProof(secKey, message, RECOVERY_SIG_CONTEXTS[op]));
    } finally {
       secKey.fill(0);
    }
@@ -150,11 +161,16 @@ export function verifyRecoveryProof(
    timestampMs: string,
    nonce: string,
    signature: string,
-): boolean {
-   return verifyProof(
-      base64ToBytes(pubKey),
-      buildRecoveryMessage(userId, timestampMs, nonce),
-      base64ToBytes(signature),
-      RECOVERY_SIG_CONTEXT,
-   );
+   op: RecoveryOp,
+): void {
+   const keyBytes = base64ToBytes(pubKey);
+   const message = buildRecoveryMessage(userId, timestampMs, nonce);
+   const signatureBytes = base64ToBytes(signature);
+
+   try {
+      verifyProof(keyBytes, message, signatureBytes, RECOVERY_SIG_CONTEXTS[op]);
+   } catch {
+      // BACKWARD COMPAT: delete this catch, leaving only the call above
+      verifyProof(keyBytes, message, signatureBytes, RECOVERY_COMPAT_SIG_CONTEXT);
+   }
 }

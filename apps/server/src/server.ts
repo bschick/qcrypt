@@ -74,6 +74,7 @@ import {
    knownLenTimingSafeEqual,
    isReservedTestUserName,
    consumeChallenge,
+   storeSingleUseNonce,
 } from './utils';
 
 export type Response = {
@@ -1122,7 +1123,7 @@ async function putRecover3Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
    }
 
    // Verified against the submitted key, so the caller must hold its secret.
-   await verifyRecoverProof(recoveryPubKey, verifiedUser.userId, recover3Key);
+   await verifyRecoverProof(recoveryPubKey, verifiedUser.userId, recover3Key, 'replace');
 
    const updates: { recoveryPubKey: string; userCredEnc?: string } = {
       recoveryPubKey,
@@ -1146,7 +1147,8 @@ async function putRecover3Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
    // Let this happen async
    recordEvent(EventNames.PutRecover3Key, verifiedUser.userId, verifiedUser.lastCredentialId);
 
-   // return with full api.UserInfoResponse to make client side refresh simpler
+   // return with full api.UserInfoResponse to make client side refresh simpler. Callers treat
+   // success as proof of commit, so only return after the write
    verifiedUser.recoveryPubKey = recoveryPubKey!;
    const response = await makeUserInfoResponse(verifiedUser);
    return { content: response };
@@ -1464,7 +1466,7 @@ async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
 
    // This call takes < 1ms to run on a warm server, so detecting timing
    // differences to guess valid userId is not practicle
-   await verifyRecoverProof(unverifiedUser.recoveryPubKey, userId, recover3);
+   await verifyRecoverProof(unverifiedUser.recoveryPubKey, userId, recover3, 'recover');
 
    // Now the user is confirmed
    const verifiedUser = checkVerified(unverifiedUser, userId);
@@ -1582,15 +1584,15 @@ async function postRecoverConfirm(httpDetails: HttpDetails): Promise<Response> {
 // Consider if rpOrigin should be moved from being per Authenticator to
 // per User. This wouldn't be more secure, but it might prevent errors during
 // development if a real users data was used in a test region.
-// If origin is moved to user, then we could add a test here to confirm the
-// original user origin is used for all following actions.
 async function getUnverifiedUser(userId: string): Promise<UnverifiedUserItem> {
    if (!validB64(userId) || base64UrlDecode(userId)?.length !== cc.USERID_BYTES) {
       throw new ParamError('invalid userid format');
    }
 
-   // May not want to bring back all parameter
-   // Eventually consistent by choice; revisit if stale fields cause 401s outside tests.
+   // Eventually consistent by choice because this is the hottest read in the system. That
+   // means a recent write could go unseen by this read, including a previous logout. That
+   // race exists regardless or read consistency, however, and sessions always end when
+   // consistency is reached.
    const unverifiedUser = await Users.get({
       userId,
    }).go();
@@ -1759,22 +1761,7 @@ async function verifyProof(verifiedUser: VerifiedUserItem, httpDetails: HttpDeta
          // single-use of the nonce only for state-changing requests
          // TODO: Consider moving this to AWS Elastic cache when usage increases
          if (result === 'ok' && httpDetails.method !== 'GET') {
-            try {
-               const stored = await Challenges.create({
-                  challenge: httpDetails.proofNonce,
-                  purpose: 'api',
-                  userId: verifiedUser.userId,
-               }).go({ returnOnConditionCheckFailure: true });
-
-               if (stored.rejected) {
-                  result = 'replayed';
-               }
-            } catch (err) {
-               // A DDB error here likely means the handler's own writes fail anyway; fail
-               // closed rather than pass a possibly-replayed mutating request.
-               console.error(`proof nonce store error, blocking ${httpDetails.name} ${verifiedUser.userId}`, err);
-               result = 'failed';
-            }
+            result = await storeSingleUseNonce(httpDetails.proofNonce, 'api', verifiedUser.userId);
          }
       }
    }

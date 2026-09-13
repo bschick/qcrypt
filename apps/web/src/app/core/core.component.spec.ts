@@ -24,4 +24,14 @@ describe('CoreComponent', () => {
       //    expect(true).toBeTruthy();
       expect(component).toBeTruthy();
    });
+
+   it('keeps the clear and cipher text away from browser text assistance', () => {
+      for (const id of ['#clearInput', '#cipherInput']) {
+         const textArea = fixture.nativeElement.querySelector(id);
+         expect(textArea.getAttribute('spellcheck')).toBe('false');
+         expect(textArea.getAttribute('autocomplete')).toBe('off');
+         expect(textArea.getAttribute('autocorrect')).toBe('off');
+         expect(textArea.getAttribute('autocapitalize')).toBe('off');
+      }
+   });
 });

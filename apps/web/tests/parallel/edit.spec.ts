@@ -1,5 +1,5 @@
 import { test, expect, Response } from '@playwright/test';
-import { testWithAuth, toggleCredentials } from '.././common';
+import { testWithAuth, toggleCredentials, waitForApiResponse } from '.././common';
 
 testWithAuth('edit fields', async ({ authFixture }) => {
    const { page } = authFixture;
@@ -28,28 +28,28 @@ testWithAuth('edit fields', async ({ authFixture }) => {
    await nameInput.click();
    await nameInput.fill(`PWTesty_e2e_<script>${rand}`);
    await expect(nameInput).toHaveValue(`PWTesty_e2e_<script>${rand}`);
-   let [resp] = await Promise.all([page.waitForResponse(userPatch), nameInput.press('Enter')]);
+   let [resp] = await Promise.all([waitForApiResponse(page, userPatch), nameInput.press('Enter')]);
    expect(resp.status()).toBe(200);
    await expect(nameInput).toHaveValue(`PWTesty_e2e_${rand}`);
 
    await nameInput.click();
    await nameInput.fill(testUser.userName);
    await expect(nameInput).toHaveValue(testUser.userName);
-   [resp] = await Promise.all([page.waitForResponse(userPatch), nameInput.press('Enter')]);
+   [resp] = await Promise.all([waitForApiResponse(page, userPatch), nameInput.press('Enter')]);
    expect(resp.status()).toBe(200);
    await expect(nameInput).toHaveValue(testUser.userName);
 
    await descInput.click();
    await descInput.fill(`VirtualPK${rand}`);
    await expect(descInput).toHaveValue(`VirtualPK${rand}`);
-   [resp] = await Promise.all([page.waitForResponse(passkeyPatch), descInput.press('Enter')]);
+   [resp] = await Promise.all([waitForApiResponse(page, passkeyPatch), descInput.press('Enter')]);
    expect(resp.status()).toBe(200);
    await expect(descInput).toHaveValue(`VirtualPK${rand}`);
 
    await descInput.click();
    await descInput.fill('Passkey');
    await expect(descInput).toHaveValue('Passkey');
-   [resp] = await Promise.all([page.waitForResponse(passkeyPatch), descInput.press('Enter')]);
+   [resp] = await Promise.all([waitForApiResponse(page, passkeyPatch), descInput.press('Enter')]);
    expect(resp.status()).toBe(200);
    await expect(descInput).toHaveValue('Passkey');
 });

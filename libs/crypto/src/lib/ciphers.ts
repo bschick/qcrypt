@@ -27,8 +27,8 @@ import {
    Ciphers,
    Encipher,
    Decipher,
-   EncipherV7,
-   DecipherV67,
+   EncipherV8,
+   DecipherV678,
    CipherState,
    type CipherDataInfo,
    type ReadOpts,
@@ -61,7 +61,7 @@ export function getLatestEncipher(
    });
 
    const reader = new BYOBStreamReader(clearStream);
-   return new EncipherV7(keyProvider, reader, readOpts);
+   return new EncipherV8(keyProvider, reader, readOpts);
 }
 
 // Return appropriate version of Decipher. pwdProvider can be undefined when
@@ -86,8 +86,8 @@ export async function getStreamDecipher(
    // version is >=4). WARNING: Breaks if ALG_BYTES or VER_BYTES sizes changes.
    const verOrAlg = bytesToNum(header.subarray(cc.MAC_BYTES, cc.MAC_BYTES + cc.VER_BYTES));
 
-   if (verOrAlg === cc.VERSION6 || verOrAlg === cc.VERSION7) {
-      decipher = new DecipherV67(keyProvider, reader, header);
+   if (verOrAlg === cc.VERSION6 || verOrAlg === cc.VERSION7 || verOrAlg === cc.VERSION8) {
+      decipher = new DecipherV678(keyProvider, reader, header);
    } else {
       if (verOrAlg === cc.VERSION5) {
          decipher = new DecipherV5(keyProvider, reader, header);

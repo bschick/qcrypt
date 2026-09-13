@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
-import { execSync, spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
+import { execSync, spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -476,6 +476,52 @@ describe('CLI App', () => {
          fs.unlinkSync(rtEnc);
          fs.unlinkSync(rtDec);
       });
+
+      it('should fail rather than report success on empty piped input', () => {
+         const good = execCliBin(
+            ['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'],
+            clearText,
+         );
+         expect(good.status).toBe(0);
+
+         // Exiting 0 here reads as a successful encrypt of nothing
+         const result = execCliBin(['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'], '');
+         expect(result.status).toBe(1);
+         expect(result.stdout.length).toBe(0);
+      });
+
+      it('encrypts the text argument when nothing is piped in', () => {
+         const enc = execCliBin(
+            ['enc', 'text argument', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'],
+            '',
+         );
+         expect(enc.status).toBe(0);
+
+         const dec = execCli(['dec', '--cred', userCred, '--silent', '--pwds', 'pass'], enc.stdout);
+         expect(dec.status).toBe(0);
+         expect(dec.stdout.trim()).toBe('text argument');
+      });
+
+      it('encrypts numeric looking text exactly as given', () => {
+         const enc = execCliBin(
+            ['enc', '1e3', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'],
+            '',
+         );
+         expect(enc.status).toBe(0);
+
+         const dec = execCli(['dec', '--cred', userCred, '--silent', '--pwds', 'pass'], enc.stdout);
+         expect(dec.status).toBe(0);
+         expect(dec.stdout.trim()).toBe('1e3');
+      });
+
+      it('refuses a text argument together with piped input', () => {
+         const result = execCli(
+            ['enc', 'text argument', '--cred', userCred, '--silent', '--iters', '1000000', '--pwds', 'pass'],
+            clearText,
+         );
+         expect(result.status).toBe(1);
+         expect(result.stderr).toContain('cannot be given together with piped input');
+      });
    });
 
    describe('dec command', () => {
@@ -776,12 +822,37 @@ describe('CLI App', () => {
 
    describe('--outfile protection', () => {
       const outPath = path.resolve(tmpDir, 'test-outfile-guard.bin');
+      const cipherPath = path.resolve(tmpDir, 'test-outfile-guard-cipher.bin');
+      // Windows has no POSIX file modes and needs a privilege to create symlinks
+      const skipOnWindows = process.platform === 'win32';
+      // chmod does not restrict root, so a refusal cannot be observed
+      const skipUnrestricted = skipOnWindows || process.getuid?.() === 0;
+
+      beforeAll(() => {
+         expect(encryptTo(cipherPath).status).toBe(0);
+      });
 
       afterEach(() => {
          if (fs.existsSync(outPath)) {
             fs.unlinkSync(outPath);
          }
       });
+
+      function decryptTo(target: string, password: string, extra: string[] = []): SpawnSyncReturns<string> {
+         return execCli([
+            'dec',
+            '--cred',
+            userCred,
+            '--silent',
+            '--infile',
+            cipherPath,
+            '--outfile',
+            target,
+            '--pwds',
+            password,
+            ...extra,
+         ]);
+      }
 
       function encryptTo(target: string, extra: string[] = []): SpawnSyncReturns<string> {
          return execCli(
@@ -802,7 +873,7 @@ describe('CLI App', () => {
          );
       }
 
-      it('creates the output readable only by its owner', () => {
+      it.skipIf(skipOnWindows)('creates the output readable only by its owner', () => {
          expect(encryptTo(outPath).status).toBe(0);
          expect(fs.statSync(outPath).mode & 0o777).toBe(0o600);
       });
@@ -820,6 +891,176 @@ describe('CLI App', () => {
 
          expect(encryptTo(outPath, ['--force']).status).toBe(0);
          expect(fs.readFileSync(outPath, 'utf-8')).not.toBe('replace me');
+      });
+
+      it.skipIf(skipOnWindows)('restricts permissions when forced over a group and world readable file', () => {
+         fs.writeFileSync(outPath, 'replace me', 'utf-8');
+         fs.chmodSync(outPath, 0o644);
+
+         expect(decryptTo(outPath, 'pass', ['--force']).status).toBe(0);
+         expect(fs.readFileSync(outPath, 'utf-8')).toBe(clearText);
+         expect(fs.statSync(outPath).mode & 0o777).toBe(0o600);
+      });
+
+      it.skipIf(skipOnWindows)('replaces a symlink destination rather than writing through it', () => {
+         const linkTarget = path.resolve(tmpDir, 'test-outfile-guard-link-target.txt');
+         fs.writeFileSync(linkTarget, 'not the destination', 'utf-8');
+         fs.symlinkSync(linkTarget, outPath);
+
+         expect(decryptTo(outPath, 'pass', ['--force']).status).toBe(0);
+         expect(fs.readFileSync(linkTarget, 'utf-8')).toBe('not the destination');
+         expect(fs.lstatSync(outPath).isSymbolicLink()).toBe(false);
+         expect(fs.readFileSync(outPath, 'utf-8')).toBe(clearText);
+         fs.unlinkSync(linkTarget);
+      });
+
+      it.skipIf(skipUnrestricted)('refuses a forced overwrite of a file the user cannot write', () => {
+         fs.writeFileSync(outPath, 'protected original', 'utf-8');
+         fs.chmodSync(outPath, 0o444);
+
+         expect(decryptTo(outPath, 'pass', ['--force']).status).toBe(1);
+         expect(fs.readFileSync(outPath, 'utf-8')).toBe('protected original');
+      });
+
+      it.skipIf(skipUnrestricted)('refuses a forced overwrite inside a directory the user cannot write', () => {
+         const lockedDir = path.resolve(tmpDir, 'test-outfile-guard-locked');
+         const target = path.resolve(lockedDir, 'target.txt');
+         fs.mkdirSync(lockedDir);
+         fs.writeFileSync(target, 'protected original', 'utf-8');
+         fs.chmodSync(lockedDir, 0o555);
+
+         try {
+            expect(decryptTo(target, 'pass', ['--force']).status).toBe(1);
+            expect(fs.readFileSync(target, 'utf-8')).toBe('protected original');
+         } finally {
+            fs.chmodSync(lockedDir, 0o755);
+            fs.rmSync(lockedDir, { recursive: true, force: true });
+         }
+      });
+
+      // Base64 output is written in one go at the end, so the failure always lands during the
+      // flush, after the command itself has returned
+      it.skipIf(skipOnWindows)('keeps the destination when the final flush fails', () => {
+         const bulk = path.resolve(tmpDir, 'test-outfile-guard-bulk.bin');
+         fs.writeFileSync(outPath, 'do not destroy me', 'utf-8');
+         const enc = execCli(
+            ['enc', '--cred', userCred, '--silent', '--iters', '1000000', '--outfile', bulk, '--pwds', 'pass'],
+            'S'.repeat(100000),
+         );
+         expect(enc.status).toBe(0);
+
+         const command =
+            `ulimit -f 8; trap '' XFSZ; node '${cliPath}' dec --cred ${userCred} --silent ` +
+            `--infile '${bulk}' --outfile '${outPath}' --force -b out --pwds pass`;
+         const result = spawnSync('bash', ['-c', command], { encoding: 'utf-8' });
+
+         expect(result.status).toBe(1);
+         // Without this the test also passes when nothing was ever written
+         expect(result.stderr).toContain('could not write');
+         expect(fs.readFileSync(outPath, 'utf-8')).toBe('do not destroy me');
+         fs.unlinkSync(bulk);
+      });
+
+      it('creates a new output file only once it is complete', () => {
+         const truncated = path.resolve(tmpDir, 'test-outfile-guard-truncated.bin');
+         const whole = fs.readFileSync(cipherPath);
+         fs.writeFileSync(truncated, whole.subarray(0, whole.length - 1));
+
+         const result = execCli([
+            'dec',
+            '--cred',
+            userCred,
+            '--silent',
+            '--infile',
+            truncated,
+            '--outfile',
+            outPath,
+            '--pwds',
+            'pass',
+         ]);
+
+         expect(result.status).toBe(1);
+         expect(fs.existsSync(outPath)).toBe(false);
+         fs.unlinkSync(truncated);
+      });
+
+      // Only observable while the run is stalled, since a create-then-remove ends the same way
+      it.skipIf(skipOnWindows)('does not create the destination while output is incomplete', async () => {
+         const pipePath = path.resolve(tmpDir, 'test-outfile-guard-pipe2');
+         execSync(`mkfifo '${pipePath}'`);
+         const before = fs.readdirSync(tmpDir);
+         const addedFiles = () => fs.readdirSync(tmpDir).filter((name) => !before.includes(name));
+         const feeder = spawn('bash', ['-c', `{ head -c 100 '${cipherPath}'; sleep 30; } > '${pipePath}'`]);
+         const decrypting = spawn('node', [
+            cliPath,
+            'dec',
+            '--cred',
+            userCred,
+            '--silent',
+            '--infile',
+            pipePath,
+            '--outfile',
+            outPath,
+            '--pwds',
+            'pass',
+         ]);
+
+         try {
+            await vi.waitFor(() => expect(addedFiles().length).toBe(1), { timeout: 10000 });
+            expect(fs.existsSync(outPath)).toBe(false);
+
+            decrypting.kill('SIGINT');
+            await new Promise((resolve) => decrypting.once('exit', resolve));
+            expect(fs.existsSync(outPath)).toBe(false);
+         } finally {
+            feeder.kill();
+            decrypting.kill();
+            fs.rmSync(pipePath, { force: true });
+         }
+      });
+
+      it.skipIf(skipOnWindows)('removes the output when interrupted by a signal', async () => {
+         const pipePath = path.resolve(tmpDir, 'test-outfile-guard-pipe');
+         fs.writeFileSync(outPath, 'do not destroy me', 'utf-8');
+         execSync(`mkfifo '${pipePath}'`);
+         const before = fs.readdirSync(tmpDir);
+         const addedFiles = () => fs.readdirSync(tmpDir).filter((name) => !before.includes(name));
+         // Holding a partial cipher in the pipe stalls the decrypt with its output already open
+         const feeder = spawn('bash', ['-c', `{ head -c 100 '${cipherPath}'; sleep 30; } > '${pipePath}'`]);
+         const decrypting = spawn('node', [
+            cliPath,
+            'dec',
+            '--cred',
+            userCred,
+            '--silent',
+            '--infile',
+            pipePath,
+            '--outfile',
+            outPath,
+            '--force',
+            '--pwds',
+            'pass',
+         ]);
+
+         try {
+            await vi.waitFor(() => expect(addedFiles().length).toBe(1), { timeout: 10000 });
+            decrypting.kill('SIGINT');
+            await new Promise((resolve) => decrypting.once('exit', resolve));
+
+            expect(addedFiles()).toEqual([]);
+            expect(fs.readFileSync(outPath, 'utf-8')).toBe('do not destroy me');
+         } finally {
+            feeder.kill();
+            decrypting.kill();
+            fs.rmSync(pipePath, { force: true });
+         }
+      });
+
+      it('leaves the destination intact when a forced command fails', () => {
+         fs.writeFileSync(outPath, 'do not destroy me', 'utf-8');
+
+         expect(decryptTo(outPath, 'WRONGPASS', ['--force']).status).toBe(1);
+         expect(fs.readFileSync(outPath, 'utf-8')).toBe('do not destroy me');
       });
 
       it('leaves no output behind when the command fails', () => {
@@ -1002,6 +1243,66 @@ describe('CLI App', () => {
          // Exiting 0 here reads as a successful decrypt of nothing
          const result = execCli(['dec', '--cred', userCred, '--silent', '--pwds', 'pass'], '');
          expect(result.status).toBe(1);
+         expect(result.stdout).toBe('');
+      });
+   });
+
+   describe('untrusted hint rendering', () => {
+      const ESC = '\u001b';
+      const BEL = '\u0007';
+      const hintPath = path.resolve(tmpDir, 'test-hint.bin');
+      // Written by whoever encrypted the data, so it reaches the reader's terminal
+      const escapingHint = `${ESC}]0;PWNED${BEL}${ESC}[2K\rFAKE`;
+
+      afterEach(() => {
+         if (fs.existsSync(hintPath)) {
+            fs.unlinkSync(hintPath);
+         }
+      });
+
+      it('shows control characters in a hint instead of running them', () => {
+         const enc = execCli(
+            [
+               'enc',
+               '--cred',
+               userCred,
+               '--silent',
+               '--iters',
+               '1000000',
+               '--outfile',
+               hintPath,
+               '--pwds',
+               'pass',
+               '--hints',
+               escapingHint,
+            ],
+            clearText,
+         );
+         expect(enc.status).toBe(0);
+
+         const result = execCli(['info', '--cred', userCred, '--silent', '--infile', hintPath]);
+         expect(result.status).toBe(0);
+         expect(result.stdout).toContain('FAKE');
+         expect(result.stdout).toContain('\\u001b');
+         expect(result.stdout).not.toContain(ESC);
+         expect(result.stdout).not.toContain(BEL);
+      });
+   });
+
+   describe('no controlling terminal', () => {
+      // setsid is the only portable way to drop the controlling terminal, and it is linux only
+      const hasSetsid = process.platform === 'linux' && spawnSync('which', ['setsid']).status === 0;
+
+      it.skipIf(!hasSetsid)('reports missing options rather than prompting for them', () => {
+         const result = spawnSync(
+            'setsid',
+            ['node', cliPath, 'enc', 'some text', '--iters', '1000000', '--pwds', 'pass'],
+            { encoding: 'utf-8', input: '' },
+         );
+
+         expect(result.status).toBe(1);
+         expect(result.stderr).toContain('required in silent mode');
+         // A prompt here would echo the answer into the data stream
          expect(result.stdout).toBe('');
       });
    });
@@ -1287,6 +1588,13 @@ describe('CLI App', () => {
          fs.unlinkSync(tmpEnc);
       });
 
+      it('masks arguments after a double dash', () => {
+         const result = execCli(['enc', '--cred', userCred, '--silent', '--debug', '--', secretText], '');
+
+         expect(result.stderr).toContain('args ->');
+         expect(result.stderr).not.toContain(secretText);
+      });
+
       it('reports the length of the masked text', () => {
          const info = execCli(['info', secretText, '--silent', '--debug']);
 
@@ -1296,21 +1604,24 @@ describe('CLI App', () => {
 
       it('still shows values that carry no secret', () => {
          const tmpEnc = path.resolve(tmpDir, 'debug-show.bin');
-         const enc = execCli([
-            'enc',
-            '--cred',
-            userCred,
-            '--silent',
-            '--debug',
-            '--iters',
-            '1000000',
-            '--algs',
-            'AES-GCM',
-            '--outfile',
-            tmpEnc,
-            '--pwds',
-            secretPwd,
-         ]);
+         const enc = execCli(
+            [
+               'enc',
+               '--cred',
+               userCred,
+               '--silent',
+               '--debug',
+               '--iters',
+               '1000000',
+               '--algs',
+               'AES-GCM',
+               '--outfile',
+               tmpEnc,
+               '--pwds',
+               secretPwd,
+            ],
+            clearText,
+         );
 
          expect(enc.status).toBe(0);
          expect(enc.stderr).toContain('AES-GCM');

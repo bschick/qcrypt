@@ -25,15 +25,35 @@ import {
    BYOBStreamReader,
    getStreamDecipher,
    getLatestEncipher,
-   EncipherV7,
+   EncipherV8,
    Ciphers,
    concatArrays,
    getRandom,
+   numToBytes,
+   bytesToNum,
+   base64ToBytes,
    CipherState,
 } from '../index';
-import type { CipherDataBlock } from '../index';
-import { PWDKeyProvider } from './keys';
-import { isEqualArray, streamFromBytes, streamFromStr, areEqual, streamFromBase64Url } from './utils.spec';
+import type { CipherDataBlock, KeyProvider } from '../index';
+import { MasterKeyKeyProvider, PWDKeyProvider } from './keys';
+import { isEqualArray, streamFromBytes, streamFromStr, areEqual, streamFromBase64Url } from './test-helpers';
+
+// Field offsets within block0's additional data, walked from the data itself so that adding
+// or reordering fields cannot leave these pointing at the wrong bytes
+function fileADOffsets(fileAD: Uint8Array) {
+   const flags = 0;
+   const alg = flags + cc.FLAGS_BYTES;
+   const iv = alg + cc.ALG_BYTES;
+   const algName = Ciphers.algName(bytesToNum(fileAD.subarray(alg, alg + cc.ALG_BYTES)));
+   const slt = iv + Ciphers.algIVByteLength(algName);
+   const ic = slt + cc.SLT_BYTES;
+   const lp = ic + cc.IC_BYTES;
+   const hintLen = lp + cc.LPP_BYTES;
+   const hint = hintLen + cc.HINT_LEN_BYTES;
+   const commitLen = hint + fileAD[hintLen];
+   const commit = commitLen + cc.COMMIT_LEN_BYTES;
+   return { flags, alg, iv, slt, ic, lp, hintLen, hint, commitLen, commit };
+}
 
 function streamFromCipherBlock(cdBlocks: CipherDataBlock[]): [ReadableStream<Uint8Array>, Uint8Array] {
    const parts = cdBlocks.flatMap((block) => block.parts);
@@ -46,16 +66,27 @@ describe('Encryption and decryption', () => {
    });
 
    async function signAndRepack(
-      encipher: EncipherV7,
+      encipher: EncipherV8,
       block: CipherDataBlock,
       keyProvider: PWDKeyProvider,
+      restampCommitment: boolean = true,
    ): Promise<Uint8Array> {
       // cheating... parts[1] is _additionalData, parts[2] is encryptedData
       // and set _keyProvider to the one with potentially wrong userCred, reset _lastMac
       encipher['_keyProvider'] = keyProvider;
       encipher['_lastMac'] = new Uint8Array([0]);
-      const headerData = await encipher._createHeader(block.parts[2], block.parts[1]);
-      return concatArrays([headerData, block.parts[1], block.parts[2]]);
+
+      // Restamp the stored key commitment for this userCred so the block stays internally
+      // consistent, leaving the AEAD as the thing under test rather than the commitment gate
+      const fileAD = block.parts[1].slice(0);
+      if (restampCommitment && keyProvider.supportsCommitment) {
+         await keyProvider.getCipherKey(true);
+         const keyCommitment = await keyProvider.getKeyCommitment();
+         fileAD.set(keyCommitment, fileADOffsets(fileAD).commit);
+      }
+
+      const headerData = await encipher._createHeader(block.parts[2], fileAD);
+      return concatArrays([headerData, fileAD, block.parts[2]]);
    }
 
    // More complex test to ensure that having the wrong usercred causes
@@ -81,7 +112,7 @@ describe('Encryption and decryption', () => {
    // evil site does not have access to Alice's userCredA which is
    // combined with her password to generate the cipher key.
 
-   it('decryption should fail with replaced valid signature', async () => {
+   it('decryption should fail with replaced valid signature and additionalData', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🐓');
          const pwd = 'a good pwd';
@@ -90,7 +121,7 @@ describe('Encryption and decryption', () => {
          const slt = crypto.getRandomValues(new Uint8Array(cc.SLT_BYTES));
 
          const makeKP = (userCred: Uint8Array<ArrayBuffer>, encrypting: boolean): PWDKeyProvider => {
-            const kp = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+            const kp = new PWDKeyProvider(userCred.slice(0), [pwd]);
             encrypting &&
                kp.setCipherDataInfo({
                   ver: cc.CURRENT_VERSION,
@@ -104,7 +135,7 @@ describe('Encryption and decryption', () => {
          };
 
          const reader = new BYOBStreamReader(clearStream);
-         const encipher = new EncipherV7(makeKP(userCredA, true), reader);
+         const encipher = new EncipherV8(makeKP(userCredA, true), reader);
          const cipherBlock = await encipher.encryptBlock0();
 
          // Sign and repack with both the original (correct) values to help ensure the
@@ -150,6 +181,381 @@ describe('Encryption and decryption', () => {
       }
    });
 
+   // Same evil site as above, but leaving Alice's key commitment in place so the mismatch
+   // is caught before the AEAD is reached
+   it('decryption should fail when stored key commitment does not match the cipher key', async () => {
+      for (const alg of Ciphers.algs()) {
+         const [clearStream, clearData] = streamFromStr('This is a secret 🐈');
+         const pwd = 'a good pwd';
+         const userCredA = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const userCredB = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+         const slt = crypto.getRandomValues(new Uint8Array(cc.SLT_BYTES));
+
+         const makeKP = (userCred: Uint8Array<ArrayBuffer>, encrypting: boolean): PWDKeyProvider => {
+            const kp = new PWDKeyProvider(userCred.slice(0), [pwd]);
+            encrypting &&
+               kp.setCipherDataInfo({
+                  ver: cc.CURRENT_VERSION,
+                  alg,
+                  ic: cc.ICOUNT_MIN,
+                  slt,
+                  lp: 1,
+                  lpEnd: 1,
+               });
+            return kp;
+         };
+
+         const reader = new BYOBStreamReader(clearStream);
+         const encipher = new EncipherV8(makeKP(userCredA, true), reader);
+         const cipherBlock = await encipher.encryptBlock0();
+
+         // Control keeps the original commitment too, so userCred is the only difference
+         const [goodStream] = streamFromBytes(
+            await signAndRepack(encipher, cipherBlock, makeKP(userCredA, true), false),
+         );
+         const goodDecipher = await getStreamDecipher(goodStream, makeKP(userCredA, false));
+         await expect(goodDecipher.decryptBlock0()).resolves.toEqual(clearData);
+
+         const [badStream] = streamFromBytes(
+            await signAndRepack(encipher, cipherBlock, makeKP(userCredB, true), false),
+         );
+         const badDecipher = await getStreamDecipher(badStream, makeKP(userCredB, false));
+         await expect(badDecipher.decryptBlock0()).rejects.toThrow(/key commitment/);
+      }
+   });
+
+   it('appended data should be detected after an empty terminal block', async () => {
+      for (const alg of Ciphers.algs()) {
+         // just the right size to cause an empty terminal block
+         const clearData = getRandom(64);
+         const [clearStream] = streamFromBytes(clearData);
+         const pwd = 'a good pwd';
+         const userCred = getRandom(cc.USERCRED_BYTES);
+         const makeKP = () => new PWDKeyProvider(userCred.slice(0), [pwd]);
+
+         const encipher = getLatestEncipher(clearStream, makeKP(), alg, 1, 1, cc.ICOUNT_MIN, {
+            startSize: 64,
+            maxSize: 64,
+         });
+
+         const parts: Uint8Array[] = [];
+         for (let guard = 0; guard < 10; guard++) {
+            const block = await encipher.encryptBlock();
+            parts.push(...block.parts);
+            if (block.state === CipherState.Finished) {
+               break;
+            }
+         }
+
+         // Control, so a pass below cannot come from the terminal block carrying clear text
+         const [cleanStream] = streamFromBytes(concatArrays(parts));
+         const cleanDec = await getStreamDecipher(cleanStream, makeKP());
+         await expect(cleanDec.decryptBlock0()).resolves.toEqual(clearData);
+         await expect(cleanDec.decryptBlockN()).resolves.toEqual(new Uint8Array(0));
+
+         // Appending garbage after terminal block should be detected
+         const [appendedStream] = streamFromBytes(concatArrays([...parts, new Uint8Array([123])]));
+         const appendedDec = await getStreamDecipher(appendedStream, makeKP());
+         await expect(appendedDec.decryptBlock0()).resolves.toEqual(clearData);
+         await expect(appendedDec.decryptBlockN()).rejects.toThrow(/extra data/i);
+      }
+   });
+
+   // A tampering party who has gained access to userCred can rebuild the outer MAC
+   // chain. This test drops a block, sets the term flag, and rebuilds the MAC to verify
+   // that the AEAD still detects it because the flag lives in the additional data
+   it('truncation should fail even when the outer MAC is rebuilt', async () => {
+      for (const alg of Ciphers.algs()) {
+         // 192 bytes splits into a 64 byte block0 and a terminal 128 byte block1
+         const clearData = getRandom(192);
+         const [clearStream] = streamFromBytes(clearData);
+         const pwd = 'a good pwd';
+         const userCred = getRandom(cc.USERCRED_BYTES);
+
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
+         const encipher = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
+            startSize: 64,
+            maxSize: 128,
+         });
+
+         // Read the generated salt before encrypting because the encipher then purges it
+         const slt = encKeyProvider.getCipherDataInfo().slt.slice(0);
+         const block0 = await encipher.encryptBlock();
+         await encipher.encryptBlock();
+
+         const makeKP = (encrypting: boolean): PWDKeyProvider => {
+            const kp = new PWDKeyProvider(userCred.slice(0), [pwd]);
+            encrypting &&
+               kp.setCipherDataInfo({ ver: cc.CURRENT_VERSION, alg, ic: cc.ICOUNT_MIN, slt, lp: 1, lpEnd: 1 });
+            return kp;
+         };
+
+         // Rebuilds block0's MAC over additionalData the caller may have edited
+         async function reforge(fileAD: Uint8Array): Promise<Uint8Array> {
+            const [emptyStream] = streamFromBytes(new Uint8Array(0));
+            const reforger = new EncipherV8(makeKP(true), new BYOBStreamReader(emptyStream));
+            const headerData = await reforger._createHeader(block0.parts[2], fileAD);
+            return concatArrays([headerData, fileAD, block0.parts[2]]);
+         }
+
+         // Control, so a failure below cannot be blamed on the repacking itself
+         let [cipherStream] = streamFromBytes(await reforge(block0.parts[1]));
+         const controlDec = await getStreamDecipher(cipherStream, makeKP(false));
+         await expect(controlDec.decryptBlock0()).resolves.toEqual(clearData.subarray(0, 64));
+
+         // Dropping block1 alone is caught by the terminal flag and needs no forging
+         [cipherStream] = streamFromBytes(concatArrays(block0.parts));
+         const plainDec = await getStreamDecipher(cipherStream, makeKP(false));
+         await expect(plainDec.decryptBlock0()).resolves.toEqual(clearData.subarray(0, 64));
+         await expect(plainDec.decryptBlockN()).rejects.toThrow(/terminal/);
+
+         // Marking block0 terminal with a correctly rebuilt MAC leaves only the AEAD to object
+         const tamperedAD = block0.parts[1].slice(0);
+         tamperedAD[0] = 1;
+         [cipherStream] = streamFromBytes(await reforge(tamperedAD));
+         const forgedDec = await getStreamDecipher(cipherStream, makeKP(false));
+         await expect(forgedDec.decryptBlock0()).rejects.toThrow(DOMException);
+      }
+   });
+
+   // Same tampering party editing the commit length rather than the commitment value
+   it('missing or wrong length key commitment should fail even when the outer MAC is rebuilt', async () => {
+      for (const alg of Ciphers.algs()) {
+         const clearData = getRandom(64);
+         const [clearStream] = streamFromBytes(clearData);
+         const pwd = 'a good pwd';
+         const userCred = getRandom(cc.USERCRED_BYTES);
+
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
+         const encipher = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
+
+         // Read the generated salt before encrypting because the encipher then purges it
+         const slt = encKeyProvider.getCipherDataInfo().slt.slice(0);
+         const block0 = await encipher.encryptBlock();
+
+         const makeKP = (encrypting: boolean): PWDKeyProvider => {
+            const kp = new PWDKeyProvider(userCred.slice(0), [pwd]);
+            encrypting &&
+               kp.setCipherDataInfo({ ver: cc.CURRENT_VERSION, alg, ic: cc.ICOUNT_MIN, slt, lp: 1, lpEnd: 1 });
+            return kp;
+         };
+
+         // Rebuilds block0's MAC over additionalData the caller may have edited
+         async function reforge(fileAD: Uint8Array): Promise<Uint8Array> {
+            const [emptyStream] = streamFromBytes(new Uint8Array(0));
+            const reforger = new EncipherV8(makeKP(true), new BYOBStreamReader(emptyStream));
+            const headerData = await reforger._createHeader(block0.parts[2], fileAD);
+            return concatArrays([headerData, fileAD, block0.parts[2]]);
+         }
+
+         // Only the length changes, so the rebuilt MAC still covers the same bytes
+         function withCommitLen(commitLen: number): Uint8Array {
+            const fileAD = block0.parts[1].slice(0);
+            fileAD[fileADOffsets(fileAD).commitLen] = commitLen;
+            return fileAD;
+         }
+
+         // Control, so a failure below is isolated to the commit length change
+         let [cipherStream] = streamFromBytes(await reforge(withCommitLen(cc.COMMIT_BYTES)));
+         const controlDec = await getStreamDecipher(cipherStream, makeKP(false));
+         await expect(controlDec.decryptBlock0()).resolves.toEqual(clearData);
+
+         [cipherStream] = streamFromBytes(await reforge(withCommitLen(0)));
+         const missingDec = await getStreamDecipher(cipherStream, makeKP(false));
+         await expect(missingDec.decryptBlock0()).rejects.toThrow(/key commitment presence/);
+
+         [cipherStream] = streamFromBytes(await reforge(withCommitLen(cc.COMMIT_BYTES - 1)));
+         const wrongLenDec = await getStreamDecipher(cipherStream, makeKP(false));
+         await expect(wrongLenDec.decryptBlock0()).rejects.toThrow(/Invalid commit length/);
+      }
+   });
+
+   // Similar tampering party who has gained access to userCred can rebuild MAC
+   it('altered key commitment should fail even when the outer MAC is rebuilt', async () => {
+      for (const alg of Ciphers.algs()) {
+         const clearData = getRandom(64);
+         const [clearStream] = streamFromBytes(clearData);
+         const pwd = 'a good pwd';
+         const userCred = getRandom(cc.USERCRED_BYTES);
+
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
+         const encipher = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
+
+         // Read the generated salt before encrypting because the encipher then purges it
+         const slt = encKeyProvider.getCipherDataInfo().slt.slice(0);
+         const block0 = await encipher.encryptBlock();
+
+         const makeKP = (encrypting: boolean): PWDKeyProvider => {
+            const kp = new PWDKeyProvider(userCred.slice(0), [pwd]);
+            encrypting &&
+               kp.setCipherDataInfo({ ver: cc.CURRENT_VERSION, alg, ic: cc.ICOUNT_MIN, slt, lp: 1, lpEnd: 1 });
+            return kp;
+         };
+
+         // Rebuilds block0's MAC over additionalData the caller may have edited
+         async function reforge(fileAD: Uint8Array): Promise<Uint8Array> {
+            const [emptyStream] = streamFromBytes(new Uint8Array(0));
+            const reforger = new EncipherV8(makeKP(true), new BYOBStreamReader(emptyStream));
+            const headerData = await reforger._createHeader(block0.parts[2], fileAD);
+            return concatArrays([headerData, fileAD, block0.parts[2]]);
+         }
+
+         // Control, so a failure below is isolated to the commit key change
+         let [cipherStream] = streamFromBytes(await reforge(block0.parts[1]));
+         const controlDec = await getStreamDecipher(cipherStream, makeKP(false));
+         await expect(controlDec.decryptBlock0()).resolves.toEqual(clearData);
+
+         const tamperedAD = block0.parts[1].slice(0);
+         tamperedAD[fileADOffsets(tamperedAD).commit] ^= 0x01;
+         [cipherStream] = streamFromBytes(await reforge(tamperedAD));
+         const forgedDec = await getStreamDecipher(cipherStream, makeKP(false));
+         await expect(forgedDec.decryptBlock0()).rejects.toThrow(/key commitment/);
+      }
+   });
+
+   it('pads hints so a range of lengths share one encrypted length', async () => {
+      for (const alg of Ciphers.algs()) {
+         const encryptedHintLen = async (hintBytes: number): Promise<number> => {
+            const [clearStream] = streamFromBytes(getRandom(64));
+            const keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a good pwd', 'a'.repeat(hintBytes)]);
+            const encipher = getLatestEncipher(clearStream, keyProvider, alg, 1, 1, cc.ICOUNT_MIN);
+            const fileAD = (await encipher.encryptBlock()).parts[1];
+            return fileAD[fileADOffsets(fileAD).hintLen];
+         };
+
+         await expect(encryptedHintLen(0)).resolves.toEqual(0);
+
+         const shortest = await encryptedHintLen(1);
+         for (const hintBytes of [2, cc.HINT_LEN_MODULUS - 1, cc.HINT_LEN_MODULUS]) {
+            await expect(encryptedHintLen(hintBytes)).resolves.toEqual(shortest);
+         }
+         await expect(encryptedHintLen(cc.HINT_LEN_MODULUS + 1)).resolves.toBeGreaterThan(shortest);
+      }
+   });
+
+   it('round trips hints whose padding could be confused with content', async () => {
+      for (const alg of Ciphers.algs()) {
+         for (const hint of ['a', 'trailing space   ', '🌧️🦫', 'x'.repeat(cc.HINT_LEN_MODULUS)]) {
+            const clearData = getRandom(64);
+            const [clearStream] = streamFromBytes(clearData);
+            const userCred = getRandom(cc.USERCRED_BYTES);
+
+            const encipher = getLatestEncipher(
+               clearStream,
+               new PWDKeyProvider(userCred.slice(0), ['a good pwd', hint]),
+               alg,
+               1,
+               1,
+               cc.ICOUNT_MIN,
+            );
+            const [cipherStream] = streamFromBytes(concatArrays((await encipher.encryptBlock()).parts));
+
+            const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdInfo) => {
+               expect(cdInfo.hint).toEqual(hint);
+               return ['a good pwd'];
+            });
+            const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
+            await expect(decipher.decryptBlock0()).resolves.toEqual(clearData);
+         }
+      }
+   });
+
+   it('added key commitment should be detected in MasterKeyKeyProvider', async () => {
+      for (const alg of Ciphers.algs()) {
+         const clearData = getRandom(64);
+         const [clearStream] = streamFromBytes(clearData);
+         const masterKey = getRandom(cc.KEY_BYTES);
+
+         const encKeyProvider = new MasterKeyKeyProvider(masterKey.slice(0));
+         const encipher = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, 0);
+
+         // Read the generated salt before encrypting because the encipher then purges it
+         const slt = encKeyProvider.getCipherDataInfo().slt.slice(0);
+         const block0 = await encipher.encryptBlock();
+
+         const makeKP = (encrypting: boolean): MasterKeyKeyProvider => {
+            const kp = new MasterKeyKeyProvider(masterKey.slice(0));
+            encrypting && kp.setCipherDataInfo({ ver: cc.CURRENT_VERSION, alg, ic: 0, slt, lp: 1, lpEnd: 1 });
+            return kp;
+         };
+
+         // Rebuilds block0's MAC over additionalData the caller may have edited
+         async function reforge(fileAD: Uint8Array): Promise<Uint8Array> {
+            const [emptyStream] = streamFromBytes(new Uint8Array(0));
+            const reforger = new EncipherV8(makeKP(true), new BYOBStreamReader(emptyStream));
+            const headerData = await reforger._createHeader(block0.parts[2], fileAD);
+            return concatArrays([headerData, fileAD, block0.parts[2]]);
+         }
+
+         // Control, so a failure below is isolated to the added commitment
+         let [cipherStream] = streamFromBytes(await reforge(block0.parts[1]));
+         const controlDec = await getStreamDecipher(cipherStream, makeKP(false));
+         await expect(controlDec.decryptBlock0()).resolves.toEqual(clearData);
+
+         // The commitment is the last additional data field, so appending is the whole edit
+         const fileAD = block0.parts[1].slice(0);
+         fileAD[fileADOffsets(fileAD).commitLen] = cc.COMMIT_BYTES;
+         [cipherStream] = streamFromBytes(await reforge(concatArrays([fileAD, getRandom(cc.COMMIT_BYTES)])));
+         const addedDec = await getStreamDecipher(cipherStream, makeKP(false));
+         await expect(addedDec.decryptBlock0()).rejects.toThrow(/key commitment presence/);
+      }
+   });
+
+   // Similar tampering party who has gained access to userCred can rebuild MAC
+   it('swapped blockN algorithm should fail even when its MAC is rebuilt', async () => {
+      for (const alg of Ciphers.algs()) {
+         // Enough plaintext to produce a block1
+         const [clearStream, clearData] = streamFromStr('x'.repeat(2048));
+         const pwd = 'a good pwd';
+         const userCred = getRandom(cc.USERCRED_BYTES);
+
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
+         const encipher = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
+            startSize: 64,
+            maxSize: 256,
+         });
+
+         // Read the generated salt before encrypting because the encipher then purges it
+         const slt = encKeyProvider.getCipherDataInfo().slt.slice(0);
+         const block0 = await encipher.encryptBlock();
+         const block1 = await encipher.encryptBlock();
+
+         const makeKP = (encrypting: boolean): PWDKeyProvider => {
+            const kp = new PWDKeyProvider(userCred.slice(0), [pwd]);
+            encrypting &&
+               kp.setCipherDataInfo({ ver: cc.CURRENT_VERSION, alg, ic: cc.ICOUNT_MIN, slt, lp: 1, lpEnd: 1 });
+            return kp;
+         };
+
+         function block1WithAlg(algName: cc.CipherAlgs): Uint8Array {
+            const blockNAD = block1.parts[1].slice(0);
+            blockNAD.set(numToBytes(Ciphers.algId(algName), cc.ALG_BYTES), cc.FLAGS_BYTES);
+            return blockNAD;
+         }
+
+         async function reforge(blockNAD: Uint8Array): Promise<Uint8Array> {
+            const [emptyStream] = streamFromBytes(new Uint8Array(0));
+            const reforger = new EncipherV8(makeKP(true), new BYOBStreamReader(emptyStream));
+            reforger['_lastMac'] = block0.parts[0].slice(0, cc.MAC_BYTES);
+            const headerN = await reforger._createHeader(block1.parts[2], blockNAD);
+            return concatArrays([...block0.parts, headerN, blockNAD, block1.parts[2]]);
+         }
+
+         // Control. Write the original algorithm back through the same path so a failure
+         // below is isolated to the Alg change
+         let [cipherStream] = streamFromBytes(await reforge(block1WithAlg(alg)));
+         const controlDec = await getStreamDecipher(cipherStream, makeKP(false));
+         await expect(controlDec.decryptBlock0()).resolves.toEqual(clearData.subarray(0, 64));
+         await expect(controlDec.decryptBlockN()).resolves.toEqual(clearData.subarray(64, 64 + 128));
+
+         const swapped = Ciphers.algs().find((other) => other !== alg) as cc.CipherAlgs;
+         [cipherStream] = streamFromBytes(await reforge(block1WithAlg(swapped)));
+         const forgedDec = await getStreamDecipher(cipherStream, makeKP(false));
+         await expect(forgedDec.decryptBlock0()).resolves.toEqual(clearData.subarray(0, 64));
+         await expect(forgedDec.decryptBlockN()).rejects.toThrow(/Invalid block algorithm/);
+      }
+   });
+
    it('round trip block0, all algorithms', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
@@ -182,7 +588,7 @@ describe('Encryption and decryption', () => {
             expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
             expect(cdinfo.hint).toEqual(hint);
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -208,7 +614,7 @@ describe('Encryption and decryption', () => {
 
          // Happy path: kick off both without awaiting first.
          const [cipherStream] = streamFromCipherBlock([block0]);
-         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          const cdInfoPromise = decipher.getCipherDataInfo();
@@ -226,7 +632,7 @@ describe('Encryption and decryption', () => {
          // concurrent callers should see the same exception
          const [tamperedStream] = streamFromCipherBlock([block0]);
          const wrongUserCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const wrongKeyProvider = new PWDKeyProvider(wrongUserCred, [pwd, undefined]);
+         const wrongKeyProvider = new PWDKeyProvider(wrongUserCred, [pwd]);
          const badDecipher = await getStreamDecipher(tamperedStream, wrongKeyProvider);
 
          const badCdInfoPromise = badDecipher.getCipherDataInfo();
@@ -248,7 +654,7 @@ describe('Encryption and decryption', () => {
          const block0 = await encipher.encryptBlock0();
 
          const [cipherStream] = streamFromCipherBlock([block0]);
-         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
          await decipher._decodeBlock0();
@@ -264,16 +670,13 @@ describe('Encryption and decryption', () => {
       }
    });
 
-   it('round trip blockN, all algorithms', async () => {
+   async function roundTripBlockN(makeKP: () => KeyProvider, ic: number) {
       for (const alg of Ciphers.algs()) {
          let [clearStream, clearData] = streamFromStr('This is a secret 🦀');
-         const pwd = 'a not good pwd';
-         const hint = 'sorta';
-         const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
          const readStart = 12;
-         let encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, hint]);
-         let latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
+         let encKeyProvider = makeKP();
+         let latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, ic, {
             startSize: readStart,
          });
 
@@ -282,55 +685,133 @@ describe('Encryption and decryption', () => {
          // once invalidated, it stays that way...
          await expect(latest.encryptBlock0()).rejects.toThrow(/Encipher invalid state.+/);
 
-         [clearStream, clearData] = streamFromStr('This is a secret 🦀');
-         // Counted because assertions inside a provider that is never asked for a password
-         // would silently pass
-         let encPwdCount = 0;
-         encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
-            encPwdCount += 1;
-            expect(cdinfo.lp).toEqual(1);
-            expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, hint];
-         });
-         latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, { startSize: readStart });
+         [clearStream] = streamFromBytes(clearData);
+         encKeyProvider = makeKP();
+         latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, ic, { startSize: readStart });
 
          const block0 = await latest.encryptBlock0();
          const blockN = await latest.encryptBlockN();
-         expect(encPwdCount).toBe(1);
-
-         let decPwdCount = 0;
-         const makeDecKP = () =>
-            new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
-               decPwdCount += 1;
-               expect(cdinfo.lp).toEqual(1);
-               expect(cdinfo.lpEnd).toEqual(1);
-               return [pwd, undefined];
-            });
 
          let [cipherStream] = streamFromCipherBlock([block0, blockN]);
-         let decipher = await getStreamDecipher(cipherStream, makeDecKP());
+         let decipher = await getStreamDecipher(cipherStream, makeKP());
 
          let decb0 = await decipher.decryptBlock0();
          await expect(areEqual(decb0, clearData.slice(0, readStart))).resolves.toEqual(true);
 
          const decb1 = await decipher.decryptBlockN();
          await expect(areEqual(decb1, clearData.slice(readStart))).resolves.toEqual(true);
-         // Only block0 needs a password, so blockN must not have asked again
-         expect(decPwdCount).toBe(1);
 
-         // Try again, but copy block0 head to block N
+         // Try with block0 head copied to block N
          const badBlockN = {
             ...blockN,
          };
          badBlockN.parts[0] = block0.parts[0];
 
          [cipherStream] = streamFromCipherBlock([block0, badBlockN]);
-         decipher = await getStreamDecipher(cipherStream, makeDecKP());
+         decipher = await getStreamDecipher(cipherStream, makeKP());
 
          decb0 = await decipher.decryptBlock0();
          await expect(areEqual(decb0, clearData.slice(0, readStart))).resolves.toEqual(true);
          await expect(decipher.decryptBlockN()).rejects.toThrow(/Cipher data length mismatch2/);
-         expect(decPwdCount).toBe(2);
+      }
+   }
+
+   it('round trip blockN, all algorithms, PWDKeyProvider', async () => {
+      const pwd = 'a not good pwd';
+      const hint = 'sorta';
+      const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+
+      const makePwdKP = () => {
+         let counter = 0;
+         return new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+            counter += 1;
+            expect(counter).toEqual(1);
+            expect(cdinfo.lp).toEqual(1);
+            expect(cdinfo.lpEnd).toEqual(1);
+            return [pwd, hint];
+         });
+      };
+
+      roundTripBlockN(makePwdKP, cc.ICOUNT_MIN);
+   });
+
+   it('round trip blockN, all algorithms, PWDKeyProvider with custom AD', async () => {
+      const pwd = 'a not good pwd';
+      const hint = 'sorta';
+      const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
+      const extraKeyMaterial = getRandom(10);
+
+      const makePwdKP = () => {
+         let counter = 0;
+         return new PWDKeyProvider(
+            userCred.slice(0),
+            async (cdinfo) => {
+               counter += 1;
+               expect(counter).toEqual(1);
+               expect(cdinfo.lp).toEqual(1);
+               expect(cdinfo.lpEnd).toEqual(1);
+               return [pwd, hint];
+            },
+            extraKeyMaterial,
+         );
+      };
+
+      roundTripBlockN(makePwdKP, cc.ICOUNT_MIN);
+   });
+
+   it('round trip blockN, all algorithms, MasterKeyKeyProvider', async () => {
+      const masterKey = crypto.getRandomValues(new Uint8Array(cc.KEY_BYTES));
+
+      const makeMasterKP = () => {
+         return new MasterKeyKeyProvider(masterKey.slice(0));
+      };
+
+      roundTripBlockN(makeMasterKP, 0);
+   });
+
+   it('round trip blockN, all algorithms, MasterKeyKeyProvider with custom AD', async () => {
+      const masterKey = crypto.getRandomValues(new Uint8Array(cc.KEY_BYTES));
+
+      const makeMasterKP = () => {
+         return new MasterKeyKeyProvider(masterKey.slice(0), 'some-user-id');
+      };
+
+      roundTripBlockN(makeMasterKP, 0);
+   });
+
+   it('custom AD is bound even though it is absent from the ciphertext', async () => {
+      const userCred = getRandom(cc.USERCRED_BYTES);
+      const masterKey = getRandom(cc.KEY_BYTES);
+      const adOne = getRandom(10);
+      const adTwo = getRandom(10);
+
+      const providers = [
+         {
+            ic: cc.ICOUNT_MIN,
+            make: (extraKeyMaterial: Uint8Array<ArrayBuffer>) =>
+               new PWDKeyProvider(userCred.slice(0), ['a good pwd'], extraKeyMaterial),
+         },
+         {
+            ic: 0,
+            make: (extraKeyMaterial: Uint8Array<ArrayBuffer>) =>
+               new MasterKeyKeyProvider(masterKey.slice(0), extraKeyMaterial),
+         },
+      ];
+
+      for (const alg of Ciphers.algs()) {
+         for (const { ic, make } of providers) {
+            const [clearStream, clearData] = streamFromStr('A block0 secret 🦫');
+            const encipher = getLatestEncipher(clearStream, make(adOne), alg, 1, 1, ic);
+            const cipherBytes = concatArrays((await encipher.encryptBlock()).parts);
+
+            let [cipherStream] = streamFromBytes(cipherBytes);
+            const sameDec = await getStreamDecipher(cipherStream, make(adOne));
+            await expect(sameDec.decryptBlock0()).resolves.toEqual(clearData);
+
+            [cipherStream] = streamFromBytes(cipherBytes);
+            const otherDec = await getStreamDecipher(cipherStream, make(adTwo));
+            await expect(otherDec.decryptBlock0()).rejects.toThrow(/Invalid MAC/);
+         }
       }
    });
 });
@@ -376,7 +857,7 @@ describe('Decryption known values', () => {
                new Uint8Array([25, 193, 133, 31, 159, 156, 8, 184, 10, 164, 33, 46, 20, 159, 218, 222]),
             ),
          ).toBe(true);
-         return [pwd, undefined];
+         return [pwd];
       });
       const decipher = await getStreamDecipher(cipherStream, keyProvider);
       const cdInfo = await decipher.getCipherDataInfo();
@@ -425,7 +906,7 @@ describe('Decryption known values', () => {
                new Uint8Array([174, 61, 6, 169, 145, 216, 66, 166, 139, 82, 19, 207, 29, 75, 105, 149]),
             ),
          ).toBe(true);
-         return [pwd, undefined];
+         return [pwd];
       });
       const decipher = await getStreamDecipher(cipherStream, keyProvider);
       const cdInfo = await decipher.getCipherDataInfo();
@@ -475,6 +956,20 @@ describe('Decryption known values', () => {
                   'Ikd9XNQvhtfo5NCNgq2yKi-g_NQt4cH6aPQ3c8HyzU0HAJQAAAADAAsJ-GygmL4nz-wJHtnp-Mn-kow1As8sqUmLnkIvyohj1S87gLhGP_2I6_BkR-cFvkB3GwAAJ3MCMWiB_UDWR5eiPJ_eOxe0nQHHkctrcPFKZxy9wX4r-AEEKroXsN2kX6oggAqkqjqWW5aRSQsCh6jkoi8HjKoWIbsTXxGTJFKPff6jH62XBD6x7Vv7NO5c3UvcvvtFwdfl4VkOok6C90xXyqhfcm0BCUiZ46eJeCIIjgcATAAAAQMACQnEdmejMsWyUPAJ8Y7m4isdeoRkIJea71myATpKuvQCMkS0WOHoIzrisYTdJXd7s4jH_t5JYtmhPgmBuR7TNLiOPC4RWq1FEw',
             },
          },
+         // BEGIN GENERATED: v8:correctDecryption
+         //v8 — generated by: pnpm vectors:ciphers
+         {
+            ver: 8,
+            cts: {
+               'AES-GCM':
+                  'r5MIpa5wieJPvklOihZv6taZAFrDxwdcGPGMZY0NVw8IAIoAAAABABhhZu6SIUALDEh37o3DMh2-8426HwEaWyQOaglAdxsAACB7IAauDExTmsiULMOGivao7EIHKhvWTX1TE8zEQ_FgfSB9YJnHWuXRT78AsrjyaUJcds8KoayekDq9VnppgCwGoznfDvxBQhukb1ouSZ7P6b6XX-dw8RQY7oR0pxB5EmQ3k3TYawGytn3LyEHd1UVxpLOzr5_oGOoRT0OFQX7VoYwydrjkCAAoAAABAQBaHdBC-EmzIMVykuy7ZVAxkQRTcXuy5BsNwmYdAy-5D13Coz-Y',
+               'X20-PLY':
+                  'Q7VFMd3uux1hGhw1F1n2NWHaMBGDQ235sGGeWUc8tDwIAJYAAAACAA-pDBTYG8XH9PRU7-A3cBEBqF_gx1h6klMyvV-JWNpFwpvhazgyb99AdxsAACD62lCM4wR96BPIrgd2Posd7mxc_8ik6DYAbVu0-DS5_yBFFd1_JbWYJ11cAbwt2qCLrY6xb3JXwymbBS2lPLMlJkCdGMepFiBiAbKnOfIP3FV78-D2stVTJkb685wSgrn_knbh7lybIg86BMc3KF3ry_2LI29S0Zag9MefY9yXLURhs1sxCAA0AAABAgCuYiTrkcnq9SQZcMzrP7T6pR-E9Tlfa8tjGwruBVB62f1OqkUoEOp8ZCpChOXtKgsI',
+               'AEGIS-256':
+                  'aS3zM3fJEHe6EOL5IugoKtM1AkYAaWfnRgLflaMTaTsIAL4AAAADAA7DfeZAQfqGG08Lgf767EdvEowUcv-UAyN0_TW30QbR73I4BcpNZrBTruwMpZuTU0B3GwAAMGwSOtlgT3WyxQ776vrGA-ApWwjrmpeXS4Tu3wY53zRy0WoghCjCqLD308tFsA5K8SA8UrV9ilQxGITQkfFvb6nVNaC2YhguWOGQ3sOAnpOpHMxwE53yYbk_xSCh2Wa8JOYZY9FO9g9N6mkeKyn7L9FcicUS5dmWrlAMQJew3DmiuWN5nNRJYBG1UsYleEJkd2oFSOPWwgP0vwiwPFao-DH2zfmlbAgATAAAAQMAy-ztnlTL3VxdUfbK3lF_jh9MmGqllT6zlzU4Frz6Xk2nBbYhSxhuGCIEyy3n_s7X7kJzY0vv7QY5p4Qiz6U_gq9kz4W7MYpHtw',
+            },
+         },
+         // END GENERATED: v8:correctDecryption
       ];
 
       const userCred = new Uint8Array([
@@ -494,7 +989,7 @@ describe('Decryption known values', () => {
                expect(cdinfo.hint).toEqual(hint);
                expect(cdinfo.ver).toEqual(ver);
                expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               return [pwd, undefined];
+               return [pwd];
             });
             const decipher = await getStreamDecipher(cipherStream, keyProvider);
             const cdInfo = await decipher.getCipherDataInfo();
@@ -540,7 +1035,7 @@ describe('Decryption known values', () => {
                new Uint8Array([162, 203, 172, 111, 119, 158, 192, 123, 81, 141, 89, 174, 126, 4, 65, 105]),
             ),
          ).toBe(true);
-         return [pwd, undefined];
+         return [pwd];
       });
       const decipher = await getStreamDecipher(cipherStream, keyProvider);
       const cdInfo = await decipher.getCipherDataInfo();
@@ -592,6 +1087,20 @@ describe('Decryption known values', () => {
                   'Z7wOOHsbrWHxuEVocLmZQCUjv4Bhnj-nwuYd3rtKPDQHAJQAAAADAENBfTMqkJRnF7O94Ia0mryEZ7d824e4cUm4cQ0bsbimjC2ibZlqjzdFWMVappX3z0B3GwAAJ5XIi_WF8lrpab5_Icli2jTRX82Zjr5W-7XGYWF6C0sK9CAwEMCyAcUhjzBYApBwf34g0VopUo041cAa1n1w9MNYwUMKT6_NbrsmoTNlR7-JO241DIbV3S1RKf--q4BH4ndbD4ZUNFT9QFUL8u3-YwgZ2Xp9W5Dds3S30gcATAAAAAMAD4GqlRwMH25MNOqk1yCEKAzllVZ_NUlWtWtJ-kuvntxu3ilO54biyrWOB1mV-DKqP_ryHJqX8bEBtbCaGqdpt4LQliThSkiT4Q',
             },
          },
+         // BEGIN GENERATED: v8:missingTerminal
+         //v8 — generated by: pnpm vectors:ciphers
+         {
+            ver: 8,
+            cts: {
+               'AES-GCM':
+                  'zzYpeEktmqAEinAO4pfXtoYkZQXJHuqh5DlFfQ9cVdkIAIoAAAABAL-oikVZBtoHlS3ks1kotrkZIz7FsvjZwx1kHaBAdxsAACCPoFdZoO--kQKTG9rPGQu3MeAvZqzv4KMFIXEFNG6rSiBC9CxPohC10A0qlqn1VA9-5CDuJs3iTpn5D34gdeG3QfA61HvjboK-3XftJTxH8aceSnAGIhc9vx8o8Cq-GiDLr-NPY5FhjznU4pr2N_Cvn2Eqyya3TL27XSWf6Bqcqm1CHYAoCAAoAAAAAQBSX6W1ZBztiQE-3eQ6I4nrFoSUlur2JtanXaS8hSyyZAj0OWyB',
+               'X20-PLY':
+                  '64W9Y8mqsQmHgNHLQrC62SKq8WbFAMwGpxAvxUuGR9kIAJYAAAACAMbHwifkSPqPB7Btwow0NPGO9IxlIxbqwO2WerGHGd01GNXn05F3u5NAdxsAACBFjGK7clEtwMf5-HMMsFWOy3cI6TZAVHgxnJHREyMPUyB3_LTg9HvKr8TahEZY7LjohZ8vMDNitRgTDElY48b18nys_HqyxItl6pWZdZE0k1Zd5REcISn8CLWdqeyh6eVuOdYRoGR-kmP63gbCqAPMari57JUd49eqBbOnL1fCRyZ10r6hCAA0AAAAAgCykzg1FCDr-y1_VBOu8I0br070-6-OBRohqDJGHsU8UFJgWt3bKMz3DF7OL-sXBhfp',
+               'AEGIS-256':
+                  'FslXEWhVvNp-fAcD9TbHFg50cHwFOQrpvsoM73mzNMYIAL4AAAADAKJ2CO8yrr2kth3v9mw8vjjqTIiZRbMb9KYzDVOVCpKor9zDDw4ORV7-MB66FGA7gEB3GwAAMPMjpbE_Qqn99pjdFnTTpU4F7Re3shZA6QIgyR-8-AS5w1hv6_f9Dl8jKvAHlP7HtiBDvnXs7VP7fHeD3NZmGTIU4EO7hF0f1Tvu1DY7-ceYXCf4aScKEDGbv-UfON3OrGeiHVAgRGguu5yv3JKndFXlaEfbYLjlA2nSF92cLNkWAc-VUDUbn8UyCGrYlYEaVHtxtm3ooxjgTl_SLcILQuUfzQLw8wgATAAAAAMAzBP587_7P7VhBIuwGOM5J1Uk6PoO9meUYIb6_lMuxnbNRH7zCH9XIBLHkefrObvcywfgJRIPUVNXIOYx0zjoZU3Ay_9iKybLPg',
+            },
+         },
+         // END GENERATED: v8:missingTerminal
       ];
 
       for (const { ver, cts } of vers) {
@@ -606,7 +1115,7 @@ describe('Decryption known values', () => {
                expect(cdinfo.ic).toBe(1800000);
                expect(cdinfo.ver).toEqual(ver);
                expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               return [pwd, undefined];
+               return [pwd];
             });
             const decipher = await getStreamDecipher(cipherStream, keyProvider);
             const cdInfo = await decipher.getCipherDataInfo();
@@ -656,6 +1165,20 @@ describe('Decryption known values', () => {
                   'o9c6sk_m1Xfm3xdYbSwQi50oYq4acFVjeZFJ15B5Q6kHAJQAAAEDAHeGF6QGO4ZugN20lDIaTZuTy-dYR1L4LGHdo3jn3LP92H2_0motVm3FwTurpBovYkB3GwAAJ2gWjSvLF0kDgVbu063jbNJ5S46PRUrg1eiCVWF2o-fEhodlg7yDTVFfbMIPR_9hbUHbsUENF9HL3asSg6w2KL45Yp0rDHPN8BO-G34L9XIvYU1k7-vVb70fq3os8LpYKBmdhoqeYvQLtH1YAxh3-9_p_5tqDy275YoHhAcATAAAAQMAMBgnTlyeUBBw8_spEhh84TUtezZO4S3W2KZMNm02bgfIKL02ZMFEiNz_FsMeC3HDaKKjO7a_pVLQhFAxywLG2KAQYN2fQo9uNw',
             },
          },
+         // BEGIN GENERATED: v8:extraTerminal
+         //v8 — generated by: pnpm vectors:ciphers
+         {
+            ver: 8,
+            cts: {
+               'AES-GCM':
+                  'MPgaSfMZQpF_SRke6pJrKuqPt5w6y7UfU1W7jh05gRgIAIoAAAEBAO6NBrFy1Du8osHKKHJLdS8LGT5jEcHIm2_QVLlAdxsAACDpkPkxkKl7GNREzkXlVwhaPOkia51XJEViSlM0hHfXAyBJTn9c4wwd4v7VqGNPYqCvzNWWK8fuQPpJVb7adYfrTd--FboSi3jjwoammUTpKHD4l18xp_6zKrBXGVOi8VvjLebGQT9wPtPtWXNQ7Ey7p3qMJ1ZiEeNWG-bIYJ4zdv-oVImbCAAoAAABAQCE1EDEhtij60RGqAod7NcWxr_FI1dIxT0q6V2A-TUOxSf3eBrR',
+               'X20-PLY':
+                  'rKcqfl6VfNDSXZ5JQKix06ddvGArzSDj64MUo2yuNIgIAJYAAAECACLE0Bh5MC4ryN8qS-sxTniWCUHGsV6CqooM6WIkls7CJ0VgE9uj_JNAdxsAACBiYwfby7Gc0BSfCntHO3yBfSGau8d9kuYwy4nsowxagCAEF-BallL0YVtgTmzJgkyQEpx05TGxqfGFW-A6TwmWvvIebTOvUmrn12fDwQunAVHu3p8EdhqLbks1XYQP_zYWNr47YtcoV_27unPor6tFs_hzJaVcCa1oUd9bbV6yliEJeTAECAA0AAABAgBLOgm1fSvL4bwFsT4lzIBFprjMSIEMWKF3JDusAmoAA6__ta24i0Ga1ypfswZuJkUc',
+               'AEGIS-256':
+                  'VBTerVcmk-UkqCJm2neFpQHebiiG1XFFftTiZPkSVAIIAL4AAAEDAJe2cr_X63gicE11Z2fDGjNBLbgPpWR_8K32dtTF8KGXNBlBU9SxkTv4R3Whg9K9qkB3GwAAMBtpRAFXRJYa3f_dGWYhDmZ3ZufKauVFrRAQSxTILXtgVCrGFuQHUTV4Chx6iZxNmCCebBq6g606H3hKjXOWXXaZX7MnnBnOX5jXeZGEic_H-Q0cnb140JEVwoa1Gqyp28QlzfNGULnnsyRNI5e4KATFS1HKNUZrkhqpENoWEMCmZ_bU3DayrGg0eaxwYjvMLLZ6lk8QJSl5lyLe8to3mPdDjtyHIwgATAAAAQMA-bXSqohzZ7p7mNvdK2jbIx3u2ratBRXpCSRoG_8I5f-M3eUr_jk741VJJkGdbECpRvOmMNU6tpeUAGHXdhYzRBuf750EmPxAXg',
+            },
+         },
+         // END GENERATED: v8:extraTerminal
       ];
 
       for (const { ver, cts } of vers) {
@@ -670,7 +1193,7 @@ describe('Decryption known values', () => {
                expect(cdinfo.ic).toBe(1800000);
                expect(cdinfo.ver).toEqual(ver);
                expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               return [pwd, undefined];
+               return [pwd];
             });
             const decipher = await getStreamDecipher(cipherStream, keyProvider);
             const cdInfo = await decipher.getCipherDataInfo();
@@ -717,6 +1240,20 @@ describe('Decryption known values', () => {
                   'Q_foMbKP8JJnzmfmEiJN7_U29v2gm6S4uWvVAhJrT9wHAJQAAAEDAKUqQR3gDPXvwfLTiktkSi2bkHCAaLGQ0-7ExX1zKZlYSa7VdWxa_N4Of5HsGxOFekB3GwAAJ_egRknJkeWIuesGWjr9HW41u9P5n1k1oaCs_tWXe8csWxq_PXOI486X8-6cuWB4-72YidIx2-3mEv_BjruEXvbhXloPXa5m7g17uY8RfnrXxYIqnOaTpaXt6tJvfs5FZXU4Q2DDMc3Vw4cFVVz_S9aDfSJVX2BFgYhzrgcATAAAAAMAM5V16GUy2nF86DgwI801GgcPg1oobQ2me8MVclqcEBD8geH7XPEnuHeR3NE8papsGfdp2OdK0Y0KoE6620ZJD_-fNPN3yGkRhQ',
             },
          },
+         // BEGIN GENERATED: v8:flippedTerminal
+         //v8 — generated by: pnpm vectors:ciphers
+         {
+            ver: 8,
+            cts: {
+               'AES-GCM':
+                  'L08tHkddbPBovsLlYvsyo0dTv3Wrl5Zhjy9xhtuT9F4IAIoAAAEBAONfU9CIN_vGxfm9ahxYcdPs-gSh6pZTpIw-zeFAdxsAACCAWoO_0H2w89wmho6xOVkJAot31pMN740TizVsDr26mCCwR6W43xs3Zx4to66g9VKHFbV4inHbko6h1Zg4ocf5PyT_M-Yxs3oTMYL2M8letPFUPuhb3N0o7r7OUTfRS0UoOXCJk5iSYjfPSTDQAIvmUloSYzGh3-4ukHXKalzKuPM5La2ACAAoAAAAAQBQYuTwWo91g4hzf4WUMI2uKsM6FqkFNqXJZy-V_C--F22kZer8',
+               'X20-PLY':
+                  'KkgGYon51G-dif2SoWOwf_eAtHnoKykhmsaX--HtS6kIAJYAAAECAKP5CEOEq9bOnFtLzRhHVcAbYPsU-2MiCXDPOo4U6v2XgD_P_u9ZOrJAdxsAACA6CJ2R2N8i2GzD6Fj3FN44Adr0pwQ49XQW6Gx5QdH9qiDQ24TtWeNnGtn1TkoWMJ0-PMxbWIwxh8vroYC07VFStt8Z1F_sBnK4CtYQ5guDJwEkCGRHXBhzqHeE07LRxDMd9mPDXi8XwAUsQC2D5oCiEdghDZP6GKsTYovVhEkQdcu_dcfPCAA0AAAAAgDsQPLoHS5JzkkSj80mA8NTw1E-Ba6bONSBEHdA2tXMoLnXqjrGFIgMJnbAR9jNRfuH',
+               'AEGIS-256':
+                  'cwC-zOzIRI57xAd8ULzUEWfGcczNMtshGhz0kfY4PnsIAL4AAAEDAHvYsjc9Vm-0x4xsCCckL62RmMtuuBHFge3mcD_U8i8I1YrvWiOS1IFP1e5P5Vg3p0B3GwAAMMK_ctQN0Jwwc1eUxcXaS8yt_blkNGIykItar9xhZtOmZ2L69AtTCZB9wDMVafmHnyAfgngIqsI-VUp_hiN6DH32VWrk8Dhn3ZALWqnvYi-AX4Zwige4VTUU8KO2IEIvu0RgKnV09jEY2QcB8TIi3Gcm7Lqa5w1UyFvDmuAdQ_ywwA9R8oL0o9bM-UdTRQHkwaNoeegGdN0h_nl8KrC4UKJ__9fMIAgATAAAAAMAV_SIsTYOznY7Nn7QAZs5kjp0ed0Jv6FZzGJh7Nzm3swE9EcxJBZxjduxbNWdreE7d7eGeVs78piwoPS6aPoohqcU02-8X_RKXA',
+            },
+         },
+         // END GENERATED: v8:flippedTerminal
       ];
 
       for (const { ver, cts } of vers) {
@@ -731,7 +1268,7 @@ describe('Decryption known values', () => {
                expect(cdinfo.ic).toBe(1800000);
                expect(cdinfo.ver).toEqual(ver);
                expect(cdinfo.slt.byteLength).toEqual(cc.SLT_BYTES);
-               return [pwd, undefined];
+               return [pwd];
             });
             const decipher = await getStreamDecipher(cipherStream, keyProvider);
             const cdInfo = await decipher.getCipherDataInfo();
@@ -779,7 +1316,7 @@ describe('Decryption known values', () => {
          expect(cdinfo.ic).toBe(1800000);
          expect(cdinfo.hint).toBeTruthy();
          expect(cdinfo.ver).toEqual(cc.VERSION4);
-         return [pwdGood, undefined];
+         return [pwdGood];
       });
       let decipher = await getStreamDecipher(cipherStream, keyProvider);
 
@@ -788,7 +1325,7 @@ describe('Decryption known values', () => {
 
       // Ensure bad password fails
       [cipherStream] = streamFromBytes(cipherData);
-      keyProvider = new PWDKeyProvider(userCredGood.slice(0), [pwdBad, undefined]);
+      keyProvider = new PWDKeyProvider(userCredGood.slice(0), [pwdBad]);
       decipher = await getStreamDecipher(cipherStream, keyProvider);
 
       await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
@@ -805,7 +1342,7 @@ describe('Decryption known values', () => {
 
       // Test wrong userCred with block decrypt first (error msg is different)
       [cipherStream] = streamFromBytes(cipherData);
-      keyProvider = new PWDKeyProvider(userCredBad.slice(0), [pwdGood, undefined]);
+      keyProvider = new PWDKeyProvider(userCredBad.slice(0), [pwdGood]);
       decipher = await getStreamDecipher(cipherStream, keyProvider);
 
       await expect(decipher.decryptBlock0()).rejects.toThrow(/Invalid MAC.+/);
@@ -842,7 +1379,7 @@ describe('Decryption known values', () => {
          expect(cdinfo.ic).toBe(1800000);
          expect(cdinfo.hint).toBeTruthy();
          expect(cdinfo.ver).toEqual(cc.VERSION5);
-         return [pwdGood, undefined];
+         return [pwdGood];
       });
       let decipher = await getStreamDecipher(cipherStream, keyProvider);
 
@@ -851,7 +1388,7 @@ describe('Decryption known values', () => {
 
       // Ensure bad password fails
       [cipherStream] = streamFromBytes(cipherData);
-      keyProvider = new PWDKeyProvider(userCredGood, [pwdBad, undefined]);
+      keyProvider = new PWDKeyProvider(userCredGood, [pwdBad]);
       decipher = await getStreamDecipher(cipherStream, keyProvider);
 
       await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
@@ -902,6 +1439,20 @@ describe('Decryption known values', () => {
                   'Ikd9XNQvhtfo5NCNgq2yKi-g_NQt4cH6aPQ3c8HyzU0HAJQAAAADAAsJ-GygmL4nz-wJHtnp-Mn-kow1As8sqUmLnkIvyohj1S87gLhGP_2I6_BkR-cFvkB3GwAAJ3MCMWiB_UDWR5eiPJ_eOxe0nQHHkctrcPFKZxy9wX4r-AEEKroXsN2kX6oggAqkqjqWW5aRSQsCh6jkoi8HjKoWIbsTXxGTJFKPff6jH62XBD6x7Vv7NO5c3UvcvvtFwdfl4VkOok6C90xXyqhfcm0BCUiZ46eJeCIIjgcATAAAAQMACQnEdmejMsWyUPAJ8Y7m4isdeoRkIJea71myATpKuvQCMkS0WOHoIzrisYTdJXd7s4jH_t5JYtmhPgmBuR7TNLiOPC4RWq1FEw',
             },
          },
+         // BEGIN GENERATED: v8:badPwd
+         //v8 — generated by: pnpm vectors:ciphers
+         {
+            ver: 8,
+            cts: {
+               'AES-GCM':
+                  'okE3nkgv3PaIXJDNs9JDvmApRTnNo7HEDfhn9m0sjdkIAIoAAAABAN0QgPBRcmBohWp-A7lM5d9qZv7B8M1PWS8xibJAdxsAACBUleh1Oe3EuKbmRbRwomTEaPwZuQm4qOxE41-SDSh6eSCARtCRIIVYxO91wf6NeTttIUKxejWBQtnbcYJSr5t3gj4VNWGcMrvL002gPnoNljsxvOJQT_5rEgVf6GZgwxqrNXsADCD8yQFdwEt82wmGP3eIDZY7NH_i0ksdXhYLYlZv7AwkCAAoAAABAQCKjswAG-h8RiJ6TomoBFRxG0xRMIHb4yyJMuuutGRFTnKUCGhA',
+               'X20-PLY':
+                  'UKaFcULm2htI8wCdiSUMRUMP3YJpfWNI9abpBX7oSksIAJYAAAACAHtk8R_Liuw3OFuMk_-qwmnrjfq3GrDwBOfGkgsepx6--m_PsCgXboBAdxsAACA_rIphz8fmZsiGBJAKpHQzr6uDApQOdB6uFP43mrjafSAo3V5MQwp8FZC3DNR7XxQKLQhezlS6VE3Bc_yfehgMqQsRCsgtY8qjL2tc4XdZLA-tqgksl4nCo1XoZYgiozpp4sdqkFqGROSdB0HuG2FR_ZaqhJphfJp13uVB9TBeH0OwryBdCAA0AAABAgB2sW9yR5n7nWTTyeRVsYdFsZJu_RrAgf0_UffJx_X-Zr9gbZiYppfFLZi4r8qK8xOX',
+               'AEGIS-256':
+                  '7i5CXnW9ziNBvSVEVWN2DRvmIeh2Jn7EI6YxV_rK6nUIAL4AAAADAJ0WO9eA95MDOdKpf0xPvDCzAEG5riAhCnVDm82VlmIFoMZc4FaUs5SuOXH3WGlfwkB3GwAAMFodb9uvH2lk5qYzDY3T8hXgnJLVufdcxFP9m1XR87UCEI9LzDV7B8BiBlMSxRcjmSDmUWx2xn7Pmpelxed8u94iGZioDw1NUXYUm47GIm79C_34heCekQqK4bpmiTV8Byyh-e8fii-471ldgsN689hxLTZ42pqJsFd8dpJ-0l7HL04jwgPqZJfTX4SuRC70NHr7aZb5otJ7cpKkZK10Mzny-XKHLQgATAAAAQMAXzqG1JAXPj7-zLmiPEwsAVgprZmVEelWsfYWNRTPUTdRaNs3gjLsGpt1aLJ1yuDakHCHvH_w3EK98BLPBFGhZ2RHtpGI3MZpoA',
+            },
+         },
+         // END GENERATED: v8:badPwd
       ];
 
       for (const { ver, cts } of vers) {
@@ -913,20 +1464,23 @@ describe('Decryption known values', () => {
                expect(cdinfo.ic).toBe(1800000);
                expect(cdinfo.hint).toBeTruthy();
                expect(cdinfo.ver).toEqual(ver);
-               return [pwdGood, undefined];
+               return [pwdGood];
             });
             let decipher = await getStreamDecipher(cipherStream, keyProvider);
             await expect(decipher.decryptBlock0()).resolves.toEqual(clearData.slice(0, 20));
 
-            // Ensure bad password fails
+            // Ensure bad password fails. From v8 the stored key commitment rejects the
+            // wrong cipher key before the AEAD is reached
             [cipherStream] = streamFromBytes(cipherData);
-            keyProvider = new PWDKeyProvider(userCred.slice(0), [pwdBad, undefined]);
+            keyProvider = new PWDKeyProvider(userCred.slice(0), [pwdBad]);
             decipher = await getStreamDecipher(cipherStream, keyProvider);
-            await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
+            await expect(decipher.decryptBlock0()).rejects.toThrow(
+               ver >= cc.VERSION8 ? /key commitment/ : DOMException,
+            );
 
             // Test wrong userCred
             [cipherStream] = streamFromBytes(cipherData);
-            keyProvider = new PWDKeyProvider(userCredBad.slice(0), [pwdGood, undefined]);
+            keyProvider = new PWDKeyProvider(userCredBad.slice(0), [pwdGood]);
             decipher = await getStreamDecipher(cipherStream, keyProvider);
             await expect(decipher.getCipherDataInfo()).rejects.toThrow(/MAC/);
 
@@ -943,13 +1497,13 @@ describe('Custom AD encryption and decryption', () => {
       await cryptoReady();
    });
 
-   it('round trip block0, all algorithms with customAd', async () => {
+   it('round trip block0, all algorithms with extraKeyMaterial', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const customAd = crypto.getRandomValues(new Uint8Array(52));
+         const extraKeyMaterial = crypto.getRandomValues(new Uint8Array(52));
 
          const encKeyProvider = new PWDKeyProvider(
             userCred.slice(0),
@@ -962,7 +1516,7 @@ describe('Custom AD encryption and decryption', () => {
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, hint];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
          const block0 = await latest.encryptBlock0();
@@ -976,9 +1530,9 @@ describe('Custom AD encryption and decryption', () => {
                expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
                expect(cdinfo.hint).toEqual(hint);
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, undefined];
+               return [pwd];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -987,13 +1541,13 @@ describe('Custom AD encryption and decryption', () => {
       }
    });
 
-   it('round trip blockN, all algorithms with customAd', async () => {
+   it('round trip blockN, all algorithms with extraKeyMaterial', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, clearData] = streamFromStr('This is a secret 🦀');
          const pwd = 'a not good pwd';
          const hint = 'sorta';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const customAd = crypto.getRandomValues(new Uint8Array(223));
+         const extraKeyMaterial = crypto.getRandomValues(new Uint8Array(223));
 
          const readStart = 12;
          const encKeyProvider = new PWDKeyProvider(
@@ -1003,7 +1557,7 @@ describe('Custom AD encryption and decryption', () => {
                expect(cdinfo.lpEnd).toEqual(1);
                return [pwd, hint];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
             startSize: readStart,
@@ -1018,9 +1572,9 @@ describe('Custom AD encryption and decryption', () => {
             async (cdinfo) => {
                expect(cdinfo.lp).toEqual(1);
                expect(cdinfo.lpEnd).toEqual(1);
-               return [pwd, undefined];
+               return [pwd];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1032,13 +1586,13 @@ describe('Custom AD encryption and decryption', () => {
       }
    });
 
-   it('round trip block0, all algorithms missing customAd', async () => {
+   it('round trip block0, all algorithms missing extraKeyMaterial', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, _clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const customAd = crypto.getRandomValues(new Uint8Array(52));
+         const extraKeyMaterial = crypto.getRandomValues(new Uint8Array(52));
 
          const encKeyProvider = new PWDKeyProvider(
             userCred.slice(0),
@@ -1051,7 +1605,7 @@ describe('Custom AD encryption and decryption', () => {
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, hint];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
          const block0 = await latest.encryptBlock0();
@@ -1063,7 +1617,7 @@ describe('Custom AD encryption and decryption', () => {
             expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
             expect(cdinfo.hint).toEqual(hint);
             expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1071,13 +1625,13 @@ describe('Custom AD encryption and decryption', () => {
       }
    });
 
-   it('round trip block0, all algorithms added customAd', async () => {
+   it('round trip block0, all algorithms added extraKeyMaterial', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, _clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const customAd = crypto.getRandomValues(new Uint8Array(52));
+         const extraKeyMaterial = crypto.getRandomValues(new Uint8Array(52));
 
          const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.alg).toEqual(alg);
@@ -1100,9 +1654,9 @@ describe('Custom AD encryption and decryption', () => {
                expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
                expect(cdinfo.hint).toEqual(hint);
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, undefined];
+               return [pwd];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1110,13 +1664,13 @@ describe('Custom AD encryption and decryption', () => {
       }
    });
 
-   it('round trip block0, all algorithms changed customAd', async () => {
+   it('round trip block0, all algorithms changed extraKeyMaterial', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, _clearData] = streamFromStr('This is a secret 🦆');
          const pwd = 'a good pwd';
          const hint = 'not really';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const customAd = crypto.getRandomValues(new Uint8Array(52));
+         const extraKeyMaterial = crypto.getRandomValues(new Uint8Array(52));
 
          const encKeyProvider = new PWDKeyProvider(
             userCred.slice(0),
@@ -1129,13 +1683,13 @@ describe('Custom AD encryption and decryption', () => {
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
                return [pwd, hint];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN);
          const block0 = await latest.encryptBlock0();
 
-         // modify customAd so it doesn't match what was used for encryption
-         customAd[2] ^= 1;
+         // modify extraKeyMaterial so it doesn't match what was used for encryption
+         extraKeyMaterial[2] ^= 1;
          const [cipherStream] = streamFromCipherBlock([block0]);
          const decKeyProvider = new PWDKeyProvider(
             userCred,
@@ -1145,9 +1699,9 @@ describe('Custom AD encryption and decryption', () => {
                expect(cdinfo.ic).toBe(cc.ICOUNT_MIN);
                expect(cdinfo.hint).toEqual(hint);
                expect(cdinfo.ver).toEqual(cc.CURRENT_VERSION);
-               return [pwd, undefined];
+               return [pwd];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1155,13 +1709,13 @@ describe('Custom AD encryption and decryption', () => {
       }
    });
 
-   it('round trip blockN, all algorithms missing customAd', async () => {
+   it('round trip blockN, all algorithms missing extraKeyMaterial', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, _clearData] = streamFromStr('This is a secret 🦀');
          const pwd = 'a not good pwd';
          const hint = 'sorta';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const customAd = crypto.getRandomValues(new Uint8Array(123));
+         const extraKeyMaterial = crypto.getRandomValues(new Uint8Array(123));
 
          const encKeyProvider = new PWDKeyProvider(
             userCred.slice(0),
@@ -1170,7 +1724,7 @@ describe('Custom AD encryption and decryption', () => {
                expect(cdinfo.lpEnd).toEqual(1);
                return [pwd, hint];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, { startSize: 12 });
 
@@ -1181,7 +1735,7 @@ describe('Custom AD encryption and decryption', () => {
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1190,13 +1744,13 @@ describe('Custom AD encryption and decryption', () => {
       }
    });
 
-   it('round trip blockN, all algorithms added customAd', async () => {
+   it('round trip blockN, all algorithms added extraKeyMaterial', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, _clearData] = streamFromStr('This is a secret 🦀');
          const pwd = 'a not good pwd';
          const hint = 'sorta';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const customAd = crypto.getRandomValues(new Uint8Array(123));
+         const extraKeyMaterial = crypto.getRandomValues(new Uint8Array(123));
 
          const encKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
@@ -1214,9 +1768,9 @@ describe('Custom AD encryption and decryption', () => {
             async (cdinfo) => {
                expect(cdinfo.lp).toEqual(1);
                expect(cdinfo.lpEnd).toEqual(1);
-               return [pwd, undefined];
+               return [pwd];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1225,13 +1779,13 @@ describe('Custom AD encryption and decryption', () => {
       }
    });
 
-   it('round trip blockN, all algorithms tampered customAd', async () => {
+   it('round trip blockN, all algorithms tampered extraKeyMaterial', async () => {
       for (const alg of Ciphers.algs()) {
          const [clearStream, _clearData] = streamFromStr('This is a secret 🦀');
          const pwd = 'a not good pwd';
          const hint = 'sorta';
          const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
-         const customAd = crypto.getRandomValues(new Uint8Array(123));
+         const extraKeyMaterial = crypto.getRandomValues(new Uint8Array(123));
 
          const encKeyProvider = new PWDKeyProvider(
             userCred.slice(0),
@@ -1240,24 +1794,24 @@ describe('Custom AD encryption and decryption', () => {
                expect(cdinfo.lpEnd).toEqual(1);
                return [pwd, hint];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, { startSize: 12 });
 
          const block0 = await latest.encryptBlock0();
          const blockN = await latest.encryptBlockN();
 
-         // modify customAd so it doesn't match what was used for encryption
-         customAd[customAd.length - 1] ^= 1;
+         // modify extraKeyMaterial so it doesn't match what was used for encryption
+         extraKeyMaterial[extraKeyMaterial.length - 1] ^= 1;
          const [cipherStream] = streamFromCipherBlock([block0, blockN]);
          const decKeyProvider = new PWDKeyProvider(
             userCred,
             async (cdinfo) => {
                expect(cdinfo.lp).toEqual(1);
                expect(cdinfo.lpEnd).toEqual(1);
-               return [pwd, undefined];
+               return [pwd];
             },
-            customAd,
+            extraKeyMaterial,
          );
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1292,7 +1846,7 @@ describe('Detect changed cipher data', () => {
 
          const savedHeader = new Uint8Array(block0.parts[0]);
 
-         const makeDecKP = () => new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const makeDecKP = () => new PWDKeyProvider(userCred.slice(0), [pwd]);
 
          // set byte in MAC
          block0.parts[0][12] = block0.parts[0][12] === 123 ? 124 : 123;
@@ -1346,7 +1900,7 @@ describe('Detect changed cipher data', () => {
             new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
                expect(cdinfo.lp).toEqual(1);
                expect(cdinfo.lpEnd).toEqual(1);
-               return [pwd, undefined];
+               return [pwd];
             });
 
          block0.parts[1][12] = block0.parts[1][12] === 123 ? 124 : 123;
@@ -1392,7 +1946,7 @@ describe('Detect changed cipher data', () => {
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1423,7 +1977,7 @@ describe('Detect changed cipher data', () => {
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1460,7 +2014,7 @@ describe('Detect changed cipher data', () => {
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1498,7 +2052,7 @@ describe('Detect changed cipher data', () => {
          const decKeyProvider = new PWDKeyProvider(userCred, async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1555,7 +2109,7 @@ describe('Detect block order changes', () => {
          const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1580,7 +2134,7 @@ describe('Detect block order changes', () => {
          const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1604,7 +2158,7 @@ describe('Detect block order changes', () => {
          const decKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
             expect(cdinfo.lp).toEqual(1);
             expect(cdinfo.lpEnd).toEqual(1);
-            return [pwd, undefined];
+            return [pwd];
          });
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
 
@@ -1633,7 +2187,7 @@ describe('Inter-block MAC chaining', () => {
       slt: Uint8Array<ArrayBuffer>,
    ): Promise<[CipherDataBlock, CipherDataBlock, CipherDataBlock]> {
       const [clearStream] = streamFromStr(clearStr);
-      const keyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+      const keyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
       keyProvider.setCipherDataInfo({
          ver: cc.CURRENT_VERSION,
          alg,
@@ -1644,7 +2198,7 @@ describe('Inter-block MAC chaining', () => {
       });
 
       const reader = new BYOBStreamReader(clearStream);
-      const encipher = new EncipherV7(keyProvider, reader, { startSize: 12 });
+      const encipher = new EncipherV8(keyProvider, reader, { startSize: 12 });
       const block0 = await encipher.encryptBlock0();
       const block1 = await encipher.encryptBlockN();
       const block2 = await encipher.encryptBlockN();
@@ -1663,7 +2217,7 @@ describe('Inter-block MAC chaining', () => {
          const cipherBytes = concatArrays(blocks.flatMap((block) => block.parts));
          const [cipherStream] = streamFromBytes(cipherBytes);
 
-         const decKeyProvider = new PWDKeyProvider(userCred, [pwd, undefined]);
+         const decKeyProvider = new PWDKeyProvider(userCred, [pwd]);
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
          const decBlock0 = await decipher.decryptBlock0();
          const decBlock1 = await decipher.decryptBlockN();
@@ -1688,7 +2242,7 @@ describe('Inter-block MAC chaining', () => {
          const spliced = concatArrays([a0, b1, a2].flatMap((block) => block.parts));
          const [cipherStream] = streamFromBytes(spliced);
 
-         const decKeyProvider = new PWDKeyProvider(userCred, [pwd, undefined]);
+         const decKeyProvider = new PWDKeyProvider(userCred, [pwd]);
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
          await expect(decipher.decryptBlock0()).resolves.not.toThrow();
          await expect(decipher.decryptBlockN()).rejects.toThrow(/Invalid MAC/);
@@ -1696,7 +2250,7 @@ describe('Inter-block MAC chaining', () => {
    });
 });
 
-describe('Key commitment is enforced by AEAD', () => {
+describe('Key commitment', () => {
    beforeEach(async () => {
       await cryptoReady();
    });
@@ -1704,18 +2258,18 @@ describe('Key commitment is enforced by AEAD', () => {
    const userCred = crypto.getRandomValues(new Uint8Array(cc.USERCRED_BYTES));
 
    function normalKeyProvider(): PWDKeyProvider {
-      const keyProvider = new PWDKeyProvider(userCred.slice(0), ['a good pwd', undefined]);
+      const keyProvider = new PWDKeyProvider(userCred.slice(0), ['a good pwd']);
       return keyProvider;
    }
 
-   // Wraps a KeyProvider to tamper with the commit key
+   // Wraps a KeyProvider to tamper with the key commitment
    function tamperingKeyProvider(baseKeyProvider: PWDKeyProvider): PWDKeyProvider {
       const origGetKeyCommitment = baseKeyProvider.getKeyCommitment.bind(baseKeyProvider);
       baseKeyProvider.getKeyCommitment = async () => {
-         const commitKey = await origGetKeyCommitment();
-         const tamperedKey = commitKey.slice(0);
-         tamperedKey[3] ^= 0x01;
-         return tamperedKey;
+         const keyCommitment = await origGetKeyCommitment();
+         const tamperedCommitment = keyCommitment.slice(0);
+         tamperedCommitment[3] ^= 0x01;
+         return tamperedCommitment;
       };
       return baseKeyProvider;
    }
@@ -1736,11 +2290,13 @@ describe('Key commitment is enforced by AEAD', () => {
 
          [cipherStream] = streamFromBytes(cipherBytes);
          const tamperedDec = await getStreamDecipher(cipherStream, tamperingKeyProvider(normalKeyProvider()));
-         await expect(tamperedDec.decryptBlock0()).rejects.toThrow(DOMException);
+         await expect(tamperedDec.decryptBlock0()).rejects.toThrow(/key commitment/);
       }
    });
 
-   it('blockN decryption fails when commitment is tampered', async () => {
+   // Later blocks carry no commitment of their own. Their keys derive from the root cipher
+   // key, so a mismatch stops the stream at block0 and no later block is ever reached.
+   it('multi-block decryption stops at block0 when commitment is tampered', async () => {
       for (const alg of Ciphers.algs()) {
          // Enough plaintext to produce a block1
          const plaintext = 'x'.repeat(2048);
@@ -1762,12 +2318,11 @@ describe('Key commitment is enforced by AEAD', () => {
          await expect(controlDec.decryptBlockN()).resolves.toEqual(clearData.subarray(64, 64 + 128));
 
          [cipherStream] = streamFromBytes(cipherBytes);
-         const tamperedDec = await getStreamDecipher(cipherStream, normalKeyProvider());
-         await expect(tamperedDec.decryptBlock0()).resolves.not.toThrow();
+         const tamperedDec = await getStreamDecipher(cipherStream, tamperingKeyProvider(normalKeyProvider()));
+         await expect(tamperedDec.decryptBlock0()).rejects.toThrow(/key commitment/);
 
-         // @ts-expect-error — inject tampering keyProvider for blockN only
-         tamperedDec._keyProvider = tamperingKeyProvider(tamperedDec._keyProvider);
-         await expect(tamperedDec.decryptBlockN()).rejects.toThrow(DOMException);
+         // The stream is dead, so block1 is unreachable rather than merely undetected
+         await expect(tamperedDec.decryptBlockN()).rejects.toThrow();
       }
    });
 });
@@ -1785,7 +2340,7 @@ describe('Cipher internal state validation', () => {
          const pwd = 'a not good pwd';
          const userCred = getRandom(cc.USERCRED_BYTES);
 
-         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
          const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
             startSize: readStart,
          });
@@ -1799,7 +2354,7 @@ describe('Cipher internal state validation', () => {
          expect(latest._state).toBe(CipherState.Finished);
          expect(latest.multiBlock).toBe(false);
 
-         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
 
          const [cipherStream] = streamFromCipherBlock([block0]);
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
@@ -1832,7 +2387,7 @@ describe('Cipher internal state validation', () => {
          const pwd = 'a not good pwd';
          const userCred = getRandom(cc.USERCRED_BYTES);
 
-         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
          const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
             startSize: readStart,
          });
@@ -1851,7 +2406,7 @@ describe('Cipher internal state validation', () => {
          expect(latest._state).toBe(CipherState.Finished);
          expect(latest.multiBlock).toBe(true);
 
-         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
 
          const [cipherStream] = streamFromCipherBlock([block0, blockN]);
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
@@ -1884,7 +2439,7 @@ describe('Cipher internal state validation', () => {
          const pwd = 'a not good pwd';
          const userCred = getRandom(cc.USERCRED_BYTES);
 
-         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
          const latest = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
             startSize: readStart,
          });
@@ -1902,7 +2457,7 @@ describe('Cipher internal state validation', () => {
          expect(latest._state).toBe(CipherState.Finished);
          expect(latest.multiBlock).toBe(true);
 
-         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd, undefined]);
+         const decKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
 
          const [cipherStream] = streamFromCipherBlock([block0, blockN]);
          const decipher = await getStreamDecipher(cipherStream, decKeyProvider);
@@ -1930,6 +2485,208 @@ describe('Cipher internal state validation', () => {
          //@ts-expect-error
          expect(decipher._state).toBe(CipherState.Finished);
          expect(decipher.multiBlock).toBe(true);
+      }
+   });
+});
+
+describe('Decryption known values, key providers and extra key material', () => {
+   const pwd = 'a 🌲 of course';
+   const hint = '🌧️';
+   const userCred = base64ToBytes('Ohyqajb6nFOm2Y5lOTkIkhc3uAaF8sUrYrQ9pts2pDc=');
+   const masterKey = base64ToBytes('TWFzdGVyS2V5Rml4ZWRTZWVkVmFsdWUwMTIzNDU2Nzg=');
+   const extra = base64ToBytes('RXh0cmFLZXlNYXQ=');
+   const otherExtra = base64ToBytes('T3RoZXJLZXlNYXQ=');
+
+   beforeEach(async () => {
+      await cryptoReady();
+   });
+
+   const vers = [
+      //v7 — generated by apps/web/scripts/gen_v7_extra_vectors.ts run in a v7.5.0 checkout
+      {
+         ver: 7,
+         pwdNoExtra: {
+            'AES-GCM':
+               'O716fvu8Nxuma64B8_5zDkzWZ8D_1IAMdn5YHCm7pqkHAGAAAAABAMJ8IP4mUxmggtd263Es2LGWzAcSSc3INCClW4FAdxsAABedVaBXEX41uQZpXFAIi7B93ueUhmbfTx194wsFjl47xNOGd7Cw0GL1UmZ2Vgz1-pmXifidlOrzkYI2oyGO1ccOcXR3QkQvQaa8_iaYL_pgCQSSwqmTEoLnd258BwAoAAABAQD3c7ZeHM0kVR1o_HLfGThSZE4agnYyVxThIrXFGd8hYR5jM9kG',
+            'X20-PLY':
+               '7mNqOdjmoZfUIlxtcrDsAKCRy_JltzQmQ74gQUvzhSAHAGwAAAACAA5u2MCwdI-r_SQ0bXFCuJ9ioVpiyHW0SQqXF58erTdKUguc2Y8ZUylAdxsAABfoPgEVY5TLSSA0qvHp0bmsbew2-Evmoc4nnRcCjSIXNK97_GudvEz9sPknkHToE7rYG5IVlFPlBUStzKJ5qlzXCL8GBR7JnhUmgWDWxppbKI13coxecu3sxAPfBwA0AAABAgASjp3UwYIX9AVM-eKFzhm3Hc12_e2ZEwATjlEWRUnSnrWf1ENguUhUXTBRyKQT1_Qp',
+            'AEGIS-256':
+               'bTJEz6FGTf81DW3JE94FivcYXIhg2199Y3eDsJ5w16UHAJQAAAADAPm9BlLKdrOlEOi_pUE-S37zk6Uqdv08cBaOvmre2BPa0MNjENOYpVOETlAwT5A8zkB3GwAAJ63Zwkmy6JJnfF_eldZlvoLxTjHW-PuG0GKRqxkNhoNbWEW9Ns1E4rccI7a6ZYL01G3QysQ8fZdXJoD4g8pw-7E1alFcaI0cE1G8TeAM0ge_BaiBUWw73Vut_5XUQgX4p5LrqzefhxxD0wRhxyG0pB9uj8auIYsCXDeWtAcATAAAAQMAD6BLONVIHIn-W1yMcm4zO6LaCRWWwmi8_7zPdb0-zCmqAcbpsCmyJfnH9go6qfZivxsbTCbktRPAg6dCgCzEElxQAMFuPgN7qQ',
+         },
+         pwdWithExtra: {
+            'AES-GCM':
+               '9MBxuzZj40C_HCt410lh5n_5T9qfiq_AN6DadQmHAikHAGAAAAABAJWvJUcGPntOqD8o-KLFkb7Ozzp3vCmNz02gn3VAdxsAABeR4kVHxhHvouQh564mGQBWMQ0lixltvmk9lQw1yorBIoeSyhl-EGDGnZabM5jzXRhLprsAVucVE2EAJSdgAOUSiIL-Pv3-cIS3zbK6V9y00MCfov_rLTn3AKmrBwAoAAABAQBgZhXERDKwDbEQ3JmvncrtyVXaIQMFk9ljz0I-e8_gKqgWvvJR',
+            'X20-PLY':
+               'Woy9euml-I58AkopMcDYW4Sw_d_rMpVfPqoiVCbhKW4HAGwAAAACAI0Ru9F1o_lZGcEh_XjNbXrhitRydT6C-r9CTel3ntc00C5y5Y0lDS5AdxsAABdxkSz7_NeV8i2CERllMSL7--9J_VEVqavm1iMMxbnmkHN50SqazCWt2CjyLzUmZ_JWk4t6hCbzI6InFCwwxGPxA5Eeo6FEEvY69pvUofDaLNB0rl-blyBK6QrrBwA0AAABAgDIuD8AFIp81FDBe_NuQ_M8c6WUjhCKgQ3VBhQCKnaOFd8Bvt3X2LJBYWZub5fOUXyw',
+            'AEGIS-256':
+               'xG2AE7bJ_NHx_oA8hM0Lo367FYGhSewvFofWnIhlHZ8HAJQAAAADAA0SA0NiHJy0CJcEhpBLJPgM1m_93-VzSYajvQ2JB_3FZy-ziZASPgGbNrl0lGipEUB3GwAAJwAnFfWXNNIbstXcW7r98biGLHYcoUjaHDMoGgP0bkOx28TD1fDjRlNfujDltRTAxMRr-gi6eN1aaoPa7ojzxK-RoT4bKZToeHSq5cBQ7uzo-oerDjzxBpUvXWKRF46IMhbqMz1T8ZNO8v53JkmZvwFjM_hRCdsldqn6QgcATAAAAQMAy3yugSeesloA8H9jM0Wc6MTwu6_vV_3RDs1JmpAJobTLbAlwbP4UNSHTtIwN-QW5CpfaC9YC9uFuC6-yNQ9bU4yDuTPBRY5vUA',
+         },
+         masterNoExtra: {
+            'AES-GCM':
+               'ARB0BgorsspAviyT28QXQ1CE0cQsoNgs-P8D3ASMh-QHAEkAAAABAJXX-2oMFl2O5U-Pbublz9uSwwhMgV1CoigoqdsAAAAAAACkacI5WVSSm7u6jKSJ5nzq-f367VwxH70aJsDjpmNHuhJ1vTE8HOx4dJcwK41q0Be_bF6Wws1P-tHqSXxDk3syBx0DngcAKAAAAQEAnnwBy17QgZus1I24O9sMSEkXnywVeQzeRjgQY6Z3l5JAoSVDnA',
+            'X20-PLY':
+               'E9Y7AZgB3UsqyrGk9zB_yke8AhVxj09dJ06mQRkrdyUHAFUAAAACAKW4HNq1bpiLxG8Emx6cd85BHilUZqp9P4ySA7JMmOURmoHAPp6qq-QAAAAAAACCTCkxcJRs6VvbrgBUnwvHKmzEy9N2OA6GtoyBCd3u7fFqC2w8BKKkTfHFv_yHgdqGdDNhIhgN1XVSCkf2xG6v6CQ5AgcANAAAAQIA4UnaftCg2TK8DrqtLhqt2NQgEpsO1MDsyxJzU6mI5kUpfljo9Hb56Y6vx6BSFPtvEw',
+            'AEGIS-256':
+               'XbfSaP1AyXGr6OkKtcNdOfchELrL7hFZcdZdmpkhzuEHAG0AAAADAMfUHOTKt8pEDJU8uZAlZGmJqqqhevkPkCXgDktwgA3sQ8fssyqaUQ_PUzAEQEad2QAAAAAAAERDj8HWrOX6qO7lUUOe-EGqAtc41Od_oiPvjeSlKkJBBJxzWrGwGxS9Zrz3fHHxH7cs4ICScDToZ-kkGMCmdY14_Hl7PQISq7qGMaTm_eD60IMhdwcATAAAAQMAgN0bLVb2bdKs5rfale7maIUKkmHqE-XV3iacVlWhVHIH-jgFUO5HEiYpPtAC66N4fLj9jIrxIxOy9Ivl49CIJwAHtEJRKKD3GA',
+         },
+         masterWithExtra: {
+            'AES-GCM':
+               'dIrH-Who2ZLUnl5vhYjgdeIkzJyxrIRNiHXdajJpLgUHAEkAAAABABE57zjmQLHDDBc_rzWy0JUc9Dg78ET-y_Ip_vwAAAAAAADj65RBsYoXfxMbc-KoEfHwHMy_pVTbugOQXpqrr8_Zt81g-qwA12hpTTQP5y1xdCkRyyVX-RWr8axhPlDAuBcmNYo0_gcAKAAAAQEAmq9E1GXUGDzIWYBF3Ru8D62YzYTdHbuSRTDlb8hWSNNV5a-ZIQ',
+            'X20-PLY':
+               'cP3TL_MfS4gDXL6chvkyX9h-LdwSHb1290FgD8owItAHAFUAAAACAKIVZCL5CKy7_a4YqDxYYdNqdRSRZKQq-mmNGDffSJKwV80pkJ5ANZMAAAAAAAAMoYhn0_wTx1m0guDpqYV_fXeV9cCtEp1Z4YpabG-rK6TFqm3lCTbRZofPRZUoriQ3EU3X1hUVljjrz_D1mU8MoLbR7AcANAAAAQIAPcNP1HtwleMSPuBMzz9UlDnRm8UkwMeIND5a6Z-OKshE811N31cN-qTgCl-I3Lznlg',
+            'AEGIS-256':
+               'DthZtnDc1JmB_60tau_hoUe5EhdG0g_OIOaqfv94MZUHAG0AAAADAFWZbUWv4W9RWQFylghbGMJk_cSm3GSEZf_yVflyUKEuwVmaYrg-qmAxhx1jQ46w4AAAAAAAALUv8i6Cvrkp75YDdIhy3oSKdAlr6mHUekN0jTDee4Z9kdfDRbPIaPUUUWZeSLAUCpEdu1ZnTEff-uefA2-6EvPd3hgKAOvINFJFOgbQbR3j9dyF0QcATAAAAQMAgqoY4QAxgbvUt1z_8HH5mIgQ5jK6iRLjSacfitQImI64K2_fB3ALDL07K392zfiEYmoQ3STaYgk9X0fGP4_Iy-bKGQa29jXPhw',
+         },
+      },
+      // BEGIN GENERATED: v8:providers
+      //v8 — generated by: pnpm vectors:ciphers
+      {
+         ver: 8,
+         pwdNoExtra: {
+            'AES-GCM':
+               'HZJ_P3bsDsBRxK-hv1JQRIsvj5-RqwR4VesU0sIc2DMIAIoAAAABAH0DAuxa-B62bvQcY-cdPJrBjix8CFDEDHSUANVAdxsAACBrQgViAECya6Fx_UpRrdcH46NfEkNUyb4BigpLnP0u8yARZ0cn1tbDNf2RuFZyu5O0olE3YcPnV0oF5-3UgW2w_UehCvZMbWNKJQNImB_jZK4_J-yQx2Bf3yti1BBYBIZ3UsRUD_digrwkp0Yw84aJBdsIPtR116mhMPY-X_6ytDejF4aNCAAoAAABAQDAd8pvS-JhTs6t45egadqD5lpREXvPOojOIdiranYlqSu6EuSc',
+            'X20-PLY':
+               'q-MNVLWvt8afUB11S-RLaKaUE6RXZhq8mPhPO8PZ1z8IAJYAAAACAGvBPOLJ6pPXJlnp_PcDlJzD3cZ0J1Z-nvE3vosi5W-uWXK2L-Fyrq9AdxsAACAWRps479n4EczM3c78UTJzkm-wXcSAZjB6gMIpoEW8sCAfbwIFqDHdqTb_0T33U-uxQpRWgrRnKX-j38XK2_VB08IobZ8BJbggqUy9yvFiswRdW5g6tJSCVLpOLc71HP4XE-5ynXLgvIZVthRznDeXtQRlth1kM8OqAHDnNtBzNGXuEFVwCAA0AAABAgAflyclOtB-DrvIkr5z5aPoBZrrApJF41FBnCff8jS77lDtxJEtJCIiuJFuO3HbJCmf',
+            'AEGIS-256':
+               'cWB6xy2TbH80AhyYP15jEPOgio_mgFYa-R-hrp9wESsIAL4AAAADAJPOWQVLdRv4MJgowc4vGnKkCswIDSqIklbxFcCgMINouq-BrMi-9dYgidKwCBPxwkB3GwAAMCh1Dl-WhDvSS_Fyoi-VP1pD9wLrJphzN4RJQ-lFMhHe7njVqClluxIWO-Bp8HSgHyCjW0XtqLZLOl1owOUrTVV_0OAp9YmxD5RtA0nh26aAY2l7Fp2M4jfQLWgiEKklWwqYQdClLXVI7hzLlNh82vMwjaaOk3G2J1F6dmnTFCwjjFK_j4EfWV-a2viRvT9EIPs24oqu2q_CVXX7y2aWQB3fGGfmTggATAAAAQMAsZonMER0z6dI6Owgpm_CSYg4IfEYD-g-n9_gP0YQGeUBMudPyV3-ZVCQ0KPgPTThv3JPmP8raGJ9vH8-jO3gSsvRCTEa68WKUw',
+         },
+         pwdWithExtra: {
+            'AES-GCM':
+               'K5FkGUAgwZ1wVGNKSPgFknlsnEEQ6IicIutUovbsT_MIAIoAAAABAI7GoT2eNCstbT6qDE3cN-ge-IYZL7KFSlZsgBpAdxsAACBrLBKJmIK0R5VmssA7U_vmmzT8KlcOLNHkzSPeq6ks9SDH9tpCF0s90fRjmMwO_lFotPexuQgZ8sT4wsiVhWrw2EOZvwIfgivWmhkV9VZJPQLZZXgnVFYjX5bgARd9AM4E5AxIGaPo8y8kCBRQJ4O8_63Y01MAO9XlDoNIlNFb-GKqUV89CAAoAAABAQB32YF_DQSizM2kgsxgs406Q2QvIZkxZ5nqNrDn0UdZCLNxC8UZ',
+            'X20-PLY':
+               'KU0T1UJcBjpbSe064dS5K5GqzNpDI4Rm9iqMRnfAI68IAJYAAAACABmeKS7MY42v6wjIKF1RIPBNu-MBh6RKzQ7cSC9vjdwyZbn-KsLKlG9AdxsAACBq47I2asv1aa2QmDseODqvKwaKfDRrkCk99SgtUvt3miB0B52oVFiKe-Eb5cMhGDB3F-p7DpsLlfraIy6C5wNbqeZydvRfoWDNQ0GttubGzNSXo8ZSChcUN6U_NcHwZAmtXv4Q6gg9MeW2LgVUW1DxyN12-odUOQFKuvYZWY1w7pFSmhx1CAA0AAABAgDzpT-k0ba83sOa02S2XEuW0rbSpn39ZnqyDqwaU7oVe1OW_phS4R0aNIVy08Ai-02s',
+            'AEGIS-256':
+               '9GPQCxHeK_ZIPn75DZsmouRQfPoiTEKUNY2harv248kIAL4AAAADAHfW8TH58flJtzjABFw1Vp2iBMiP7rjrq0Mu1_6d4QNHQqCwaYJKt_BUsp3V-AYxyUB3GwAAMDVdy69J9bWH_uZeSEwBhHfkBGa-a2ZYRrhrwjyyDkgiINzXDtvZtgLLOZSqEnGNiCCQLCzbEyqnVzvFde6i3iiBpR0KhfbiaX1C8eWgxWWrAd70oqfF0SEGnUsn420eXV15HtOy2RifKvOdhVT-5KAbfxu9BUNfXbu4DrcaHB-qBim5UUEaS1zKOs-6Nd2zji_Jne-STRdQZwJMtVYO7GoPbP8J2ggATAAAAQMAcVlRUcVJTqVlfRyr79f-tnXhk2YFsvmF-nmb47LsOQ2p_Q7d2a1AyRSdoCSCbACh5Wawv0SvS1IkN2ncncvG7gVI6i3B7vCvVw',
+         },
+         masterNoExtra: {
+            'AES-GCM':
+               'jkDy7TsVWpRFyUjxuOahdO6RscIsIw0tgUV6qE1ARXcIAEoAAAABAPOMuXEtacYF2OKBh6Dp5afSXS5kvd2WaqTmA3oAAAAAAAAAirXNyLUSC_Y697CrnvK1043bPkYvMDTU-DpoNzR3RdPRFsqQOk5pqoKJuyRO9YY3vyQtYaLDFpOHpnQ97Xxm8Dv6uNEIACgAAAEBAOTMWFnXJaSLDxtaF-4NuI_iiJlGGX8ifLVzXsWaXEGlm1tGteg',
+            'X20-PLY':
+               'LRvyzBTDhhRWO9nC_CGJ96breOqAQ5d8fTqalfR3yg8IAFYAAAACAH-k_7CufTY5gu7KVImXOaJjFifVL7IFz9HS6dNMwgYIGhhRPsDQeSQAAAAAAAAANLNW7hgAiFxY1zRXGfXf2aScURi-NP8rRawQ7-fZ5yf2Sto_AaPmAY9RkAOmoxb8fL1pV4sGQABiYJWPGE28MfiRup0IADQAAAECAL0hlciBuNfPiimHWviDBVBiC-GmR3c3qwbwbEyM15kOBLwKQcnHkbkJFe6OIeC4PlU',
+            'AEGIS-256':
+               'Fs4z3XgmePN3is73RLrRNR4DZ80BR8833VBleviM1EwIAG4AAAADAE3wQBU4tRtGUZuvp7lrtlBaQzW-Xlnbd7Ctt_tgD0V-4EJOiqoK7GSaD4AJ5-0UIwAAAAAAAAArMtKMWpUl34jZmcA3te7qxwABXKQXZ7tkv-IwdqnQRTtr88HjYRZnLPA_CJtx2h1JjtCDS2YHYnqGvkOJR7UriTpe14v7Amlg4y_KR_lLTa8k1I4IAEwAAAEDAPo-zhif22NzKw6k7CBwVNQErs1w2J4EFCWtEnhOamxmTn0zPuueVadeyGzHl0yExpgCMVh_YA4m-EM_2sbwemWNR22HipEehPU',
+         },
+         masterWithExtra: {
+            'AES-GCM':
+               'UI6OKerIbg66qerElkg1H382h98haXy-HViDjrAVDEsIAEoAAAABAK_VWuF9ucjq_KsOABZiCslnls4Qw-ZZk8JVCXcAAAAAAAAAU0YleXqROcr1eZ0xEBsGBUeYWWceJPA4_1O_GKfg8j6U0G-zc_pi14zY5kBVqtyfokVWxMqSI3Ir3SDqiv6FA9g0VhcIACgAAAEBAOftn-7GLV1FrzIM5k7uiTKurJJnqiDOZSWKu9WRhrMVWhig97Q',
+            'X20-PLY':
+               'UkeNIB80ddnjvZFA6hEGHhz3o3k1UzpYfRIkkU0rCkwIAFYAAAACAPSY0CR_Mamu8h-08eK56F1EOSXQOEE4pis0BDxkF2x7I1xvcoEYY4kAAAAAAAAAdZcAqPh6SPIPXowiCyNwdtwmwuIL5gHvy2isJkhKxD4Ku7CPY5tiZwWUDFuvVPuxCLDHYh_LuhkbuDrPHvu-10jTWmIIADQAAAECAOzIrZjfvJMuBp0SWEPioHxxV7FzRRz99yEZ2Z_hjxFpOL4XbRDd_mOyXXjoxxLCONw',
+            'AEGIS-256':
+               'QnXD3ricAoFA5ifRa8rnTovATadnfoj0ra577dxOCwsIAG4AAAADALFTEXRtSheVHJT3UjIpXJ8W9NPmU_6Y4P82O_PQ_x3Yspj0JM2J1VC7cY_3AoDQZAAAAAAAAAB2RjEZ9f1w-ns90gFPLkr4Y_hzXS0x7f2Bah95ivX9SIM-IRrT7rFjwXZHnwrjmXLoFZqbyzxDGa_IHkkBD3d5W5Tu85kh4DZodt6H7gqT5XRwHOgIAEwAAAEDAPmX3hUNmTuty-b065TF-4BdbiudUzU83l2x-3ATnCbK88khjDHfNao7mJwsSXuQsxU_IUhiurBlaT46zlLom1I_JXHVvT2wxgs',
+         },
+      },
+      // END GENERATED: v8:providers
+   ];
+
+   it('PWDKeyProvider without extra key material, multi version', async () => {
+      const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
+
+      for (const { ver, pwdNoExtra } of vers) {
+         for (const [alg, cipherTxt] of Object.entries(pwdNoExtra)) {
+            let [cipherStream, cipherData] = streamFromBase64Url(cipherTxt);
+            let keyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+               expect(cdinfo.alg).toBe(alg);
+               expect(cdinfo.ic).toBe(1800000);
+               expect(cdinfo.hint).toEqual(hint);
+               expect(cdinfo.ver).toEqual(ver);
+               return [pwd];
+            });
+            let decipher = await getStreamDecipher(cipherStream, keyProvider);
+            await expect(decipher.decryptBlock0()).resolves.toEqual(clearData.subarray(0, 20));
+            await expect(decipher.decryptBlockN()).resolves.toEqual(clearData.subarray(20));
+
+            // Extra key material reaches the signing key, so offering some where the
+            // ciphertext was built without any fails at the MAC
+            [cipherStream] = streamFromBytes(cipherData);
+            keyProvider = new PWDKeyProvider(userCred.slice(0), [pwd], otherExtra.slice(0));
+            decipher = await getStreamDecipher(cipherStream, keyProvider);
+            await expect(decipher.getCipherDataInfo()).rejects.toThrow(/MAC/);
+         }
+      }
+   });
+
+   it('PWDKeyProvider with extra key material, multi version', async () => {
+      const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
+
+      for (const { ver, pwdWithExtra } of vers) {
+         for (const [alg, cipherTxt] of Object.entries(pwdWithExtra)) {
+            let [cipherStream, cipherData] = streamFromBase64Url(cipherTxt);
+            let keyProvider = new PWDKeyProvider(
+               userCred.slice(0),
+               async (cdinfo) => {
+                  expect(cdinfo.alg).toBe(alg);
+                  expect(cdinfo.ic).toBe(1800000);
+                  expect(cdinfo.hint).toEqual(hint);
+                  expect(cdinfo.ver).toEqual(ver);
+                  return [pwd];
+               },
+               extra.slice(0),
+            );
+            let decipher = await getStreamDecipher(cipherStream, keyProvider);
+            await expect(decipher.decryptBlock0()).resolves.toEqual(clearData.subarray(0, 20));
+            await expect(decipher.decryptBlockN()).resolves.toEqual(clearData.subarray(20));
+
+            [cipherStream] = streamFromBytes(cipherData);
+            keyProvider = new PWDKeyProvider(userCred.slice(0), [pwd], otherExtra.slice(0));
+            decipher = await getStreamDecipher(cipherStream, keyProvider);
+            await expect(decipher.getCipherDataInfo()).rejects.toThrow(/MAC/);
+
+            [cipherStream] = streamFromBytes(cipherData);
+            keyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
+            decipher = await getStreamDecipher(cipherStream, keyProvider);
+            await expect(decipher.getCipherDataInfo()).rejects.toThrow(/MAC/);
+         }
+      }
+   });
+
+   it('MasterKeyKeyProvider without extra key material, multi version', async () => {
+      const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
+
+      for (const { ver, masterNoExtra } of vers) {
+         for (const [alg, cipherTxt] of Object.entries(masterNoExtra)) {
+            let [cipherStream, cipherData] = streamFromBase64Url(cipherTxt);
+            let keyProvider = new MasterKeyKeyProvider(masterKey.slice(0));
+            let decipher = await getStreamDecipher(cipherStream, keyProvider);
+            const cdInfo = await decipher.getCipherDataInfo();
+
+            expect(cdInfo.alg).toEqual(alg);
+            expect(cdInfo.ver).toEqual(ver);
+            await expect(decipher.decryptBlock0()).resolves.toEqual(clearData.subarray(0, 20));
+            await expect(decipher.decryptBlockN()).resolves.toEqual(clearData.subarray(20));
+
+            [cipherStream] = streamFromBytes(cipherData);
+            keyProvider = new MasterKeyKeyProvider(masterKey.slice(0), otherExtra.slice(0));
+            decipher = await getStreamDecipher(cipherStream, keyProvider);
+            await expect(decipher.getCipherDataInfo()).rejects.toThrow(/MAC/);
+         }
+      }
+   });
+
+   it('MasterKeyKeyProvider with extra key material, multi version', async () => {
+      const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
+
+      for (const { ver, masterWithExtra } of vers) {
+         for (const [alg, cipherTxt] of Object.entries(masterWithExtra)) {
+            let [cipherStream, cipherData] = streamFromBase64Url(cipherTxt);
+            let keyProvider = new MasterKeyKeyProvider(masterKey.slice(0), extra.slice(0));
+            let decipher = await getStreamDecipher(cipherStream, keyProvider);
+            const cdInfo = await decipher.getCipherDataInfo();
+
+            expect(cdInfo.alg).toEqual(alg);
+            expect(cdInfo.ver).toEqual(ver);
+            await expect(decipher.decryptBlock0()).resolves.toEqual(clearData.subarray(0, 20));
+            await expect(decipher.decryptBlockN()).resolves.toEqual(clearData.subarray(20));
+
+            [cipherStream] = streamFromBytes(cipherData);
+            keyProvider = new MasterKeyKeyProvider(masterKey.slice(0), otherExtra.slice(0));
+            decipher = await getStreamDecipher(cipherStream, keyProvider);
+            await expect(decipher.getCipherDataInfo()).rejects.toThrow(/MAC/);
+
+            [cipherStream] = streamFromBytes(cipherData);
+            keyProvider = new MasterKeyKeyProvider(masterKey.slice(0));
+            decipher = await getStreamDecipher(cipherStream, keyProvider);
+            await expect(decipher.getCipherDataInfo()).rejects.toThrow(/MAC/);
+         }
       }
    });
 });

@@ -101,7 +101,7 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
 ### Code Quality (Biome)
 
-Formatting and linting use [Biome](https://biomejs.dev) (config: `biome.json`). Biome covers **TS/JS/JSON only** — it does **not** format SCSS or Angular HTML templates (nothing in this repo does), and the e2e specs keep their own ESLint check (`lint:e2e`).
+Formatting and linting use [Biome](https://biomejs.dev) (config: `biome.json`). Biome covers **TS/JS/JSON only** — it does **not** format SCSS (nothing in this repo does), and the e2e specs keep their own ESLint check (`lint:e2e`). Angular HTML templates are formatted by Prettier (`.prettierrc.json`, 2-space indent, `.prettierignore` limits it to `*.html`) via the editor's Prettier extension only; Prettier is not a package dependency and `pnpm check` does not cover templates.
 
 | What | pnpm script | Notes |
 |------|------------|-------|
@@ -120,7 +120,7 @@ pnpm check:fix libs/crypto/src/lib/keys.ts   # auto-fix one file
 
 `pnpm check` (no path) gates `build:web`, `build:web:prod`, `build:server`, and `build:server:prod` — it runs first, so a format or lint error blocks the build. `bdeploy` builds through those same scripts, so a deploy is gated too.
 
-**Style:** 3-space indent, 120 columns, single quotes, semicolons, trailing commas. JSON stays 2-space (nx/ng-managed). Excluded: `**/*.html`, `**/*.svg`, `vendor/`, `apps/server/assets/`, generated crux files.
+**Style:** 3-space indent, 120 columns, single quotes, semicolons, trailing commas. JSON stays 2-space (nx/ng-managed), and HTML templates are 2-space (Prettier, see above). Excluded: `**/*.html`, `**/*.svg`, `vendor/`, `apps/server/assets/`, generated crux files.
 
 **Rules deliberately disabled** (they fight this codebase's patterns — do not re-enable without cause):
 
@@ -178,6 +178,42 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 >   - For `test:web` (Angular builder), use `--filter`. Example: `pnpm test:web -- --include='**/prf.spec.ts' --filter="PRF_SALT is 32 bytes"`
 >   - For the Vitest projects (`test:server`, `test:cli`, `test:lib:crypto`, api), use `--name` (a placeholder each `nx test` target forwards to Vitest's `-t`). Example: `pnpm test:server -- --name="should reject manipulated csrf"` (combine with `--include` to also scope the file). **Do not use `-t`** through these wrappers — nx claims `-t` as its own `--targets` flag, so it never reaches Vitest. `-t` works only when calling Vitest directly: `pnpm exec vitest run --config apps/server/vitest.config.ts nonprf.spec.ts -t "manipulated csrf"`.
 >   - For `test:e2e` (Playwright), use `-g` (see the file-filter note above).
+
+### Test Vector Commands
+
+Pinned vectors are produced by generators in `apps/web/scripts/` and live inside
+`// BEGIN GENERATED: v<ver>:<name>` / `// END GENERATED: v<ver>:<name>` markers in the spec
+files. Each generator prints its blocks and only edits a spec when given `--write`.
+
+| What | pnpm script | Writes to | Blocks |
+|------|------------|-----------|--------|
+| Cipher text vectors | `pnpm vectors:ciphers` | `libs/crypto/src/lib/ciphers.spec.ts` | 6 |
+| CipherService vectors | `pnpm vectors:ciphersvc` | `apps/web/src/app/services/cipher.service.spec.ts` | 9 |
+| Key derivation vectors | `pnpm vectors:keys` | `libs/crypto/src/lib/keys.spec.ts` | 8 |
+
+| Flag | Effect |
+|------|--------|
+| *(none)* | Print the blocks to stdout, change nothing |
+| `--write` | Replace every marked region of the target spec |
+| `--write --only <name> [<name> ...]` | Replace only the named regions |
+
+> **Note:** Splicing matches on block **name**, never position. Generator order and spec order
+> differ — `vectors:keys` emits PWD-single, PWD-multi, Master-single, Master-multi while the spec
+> interleaves them — so a positional splice would write the wrong vectors and still compile.
+> **Note:** A generated block with no marked region, or a marked region no generator fills, aborts
+> the write. Stale vectors normally still pass their tests, so a silent skip could hide for months.
+> **Note:** `vectors:keys` is deterministic: it derives from fixed salt/IV constants and never
+> encrypts, so `--write` is a no-op unless a derivation actually changed. `vectors:ciphers` and
+> `vectors:ciphersvc` encrypt with a fresh salt and IV per run, so every `--write` rewrites all of
+> their vectors — use `--only` to avoid that churn.
+> **Note:** `--write` formats the spec with Biome itself, so no follow up command is needed. It
+> warns rather than failing if Biome cannot be run, since the vectors are already written by then.
+> **Note:** Region names carry the protocol version, so raising `CURRENT_VERSION` cannot overwrite
+> an older version's pinned vectors — those are what prove old cipher data still decodes. On the
+> first `--write` after a version bump, each new block opens its own region immediately after the
+> newest region sharing its base name, and the older regions are left alone. A block whose base
+> name has no region at any version aborts the write, since there is nothing to infer a location
+> from; add that `BEGIN`/`END` pair by hand.
 
 ### Deploy Commands
 

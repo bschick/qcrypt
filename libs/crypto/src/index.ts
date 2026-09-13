@@ -22,6 +22,7 @@ SOFTWARE. */
 
 // Utility functions and classes
 export {
+   setLogErrors,
    hasArrayBuffer,
    ensureArrayBuffer,
    getArrayBuffer,
@@ -62,8 +63,8 @@ export {
    Ciphers,
    Encipher,
    Decipher,
-   EncipherV7,
-   DecipherV67,
+   EncipherV8,
+   DecipherV678,
    CipherState,
    Extractor,
    Packer,
