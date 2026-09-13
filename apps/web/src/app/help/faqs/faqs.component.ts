@@ -1214,17 +1214,16 @@ const ELEMENT_DATA: FAQElement[] = [
       question: "Is Quick Crypt's protocol key-committing?",
       answer: `Yes, <a href="/help/protocol">Quick Crypt's protocol</a> is
       <a href="https://en.wikipedia.org/wiki/Authenticated_encryption#Key-committing_AEAD" target="_blank">
-      key-committing</a> for all underlying AEAD cipher modes. Two features
-      combine to achieve a <a href="https://tosc.iacr.org/index.php/ToSC/article/view/11404/10902"
+      key-committing</a> for all underlying AEAD cipher modes, achieving a
+      <a href="https://tosc.iacr.org/index.php/ToSC/article/view/11404/10902"
       target="_blank">FROB-secure</a> protocol. During encryption, a 256-bit commitment to the
       root cipher key is derived with a BLAKE2b KDF and stored alongside the ciphertext. Before
-      decrypting, Quick Crypt recomputes that commitment from the key it just derived and rejects
-      the data unless the two match. Because the root cipher key is itself derived from the user
-      credential and password, an attacker cannot construct a single ciphertext that decrypts to
-      different cleartexts under different keys. Next, Quick Crypt creates cipher armor with a
-      collision-resistant 256-bit BLAKE2b keyed hash covering metadata, additional data, and ciphertext. The
-      hash is verified before decryption, creating an "Encrypt-then-MAC" protocol that rejects both
-      cipher key and additional data manipulation.`,
+      decrypting, Quick Crypt recomputes that commitment, compares it to the stored version,
+      and aborts the decryption unless they match. Because the root cipher key is itself derived
+      from the user credential and password, an attacker cannot construct a single ciphertext that
+      decrypts to different cleartexts under different keys. Additionally, the key commitment is
+      included in the AEAD associated data and is covered by a 256-bit BLAKE2b keyed hash to
+      prevent tampering.`,
    },
 
    {
