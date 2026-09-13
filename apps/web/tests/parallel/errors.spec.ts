@@ -65,9 +65,7 @@ test.describe('errors', () => {
          { awaitVerify: false },
       );
 
-      await expect(page.locator('div.button-host div.error-msg')).toContainText(
-         /Sign in failed, try again or change users/,
-      );
+      await expect(page.locator('.signin div.error-msg')).toContainText(/Sign in failed, try again or change users/);
    });
 
    testWithAuth('edit errors', async ({ authFixture }) => {
@@ -165,8 +163,26 @@ test.describe('errors', () => {
          { awaitVerify: false },
       );
 
-      await expect(page.locator('div.button-host div.error-msg')).toContainText(
-         /Sign in failed, try again or change users/,
-      );
+      await expect(page.locator('.signin div.error-msg')).toContainText(/Sign in failed, try again or change users/);
+   });
+
+   testWithAuth('failed sign out is reported', async ({ authFixture }) => {
+      const { page } = authFixture;
+
+      await authFixture.createTestUser(authFixture.memAuthenticator());
+
+      // Only the session delete fails, leaving the rest of the sign out to proceed normally
+      await page.route('**/v1/session', async (route) => {
+         if (route.request().method() === 'DELETE') {
+            await route.abort('failed');
+         } else {
+            await route.continue();
+         }
+      });
+
+      await toggleCredentials(page);
+      await page.getByRole('button', { name: /Sign out/ }).click();
+
+      await expect(page.locator('.signin div.error-msg')).toContainText(/Sign out failed/);
    });
 });

@@ -21,23 +21,32 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
 <span class="signin">
   <h1 mat-dialog-title class="header">Quick Crypt Sign In</h1>
-  <mat-progress-spinner class="spinner" color="primary" mode="indeterminate"
-    [style.visibility]="showProgress ? 'visible' : 'hidden'">
-  </mat-progress-spinner>
+  <mat-progress-spinner
+    class="spinner"
+    color="primary"
+    mode="indeterminate"
+    [style.visibility]="showProgress ? 'visible' : 'hidden'"></mat-progress-spinner>
 
   <div mat-dialog-content class="dialog-content">
     <img src="/assets/passkey.svg" class="pklogo" />
     <p class="welcome">
-      <b>Welcome Back.</b> Quick Crypt will request your passkey for sign in.
+      <b>Welcome Back.</b>
+      Quick Crypt will request your passkey for sign in.
     </p>
     <div class="button-host">
       <button mat-raised-button (click)="onClickSignin($event)" class="button">
-        <!--<mat-icon>login</mat-icon>--><span>Sign in as<br />{{userName}}</span>
+        <!--<mat-icon>login</mat-icon>-->
+        <span>
+          Sign in as
+          <br />
+          {{ userName }}
+        </span>
       </button>
       <button mat-raised-button (click)="onClickForget($event)" class="button">
-        <!--<mat-icon>vpn_key</mat-icon>--><span>Sign in as a different user</span>
+        <!--<mat-icon>vpn_key</mat-icon>-->
+        <span>Sign in as a different user</span>
       </button>
-      <div class="error-msg">{{error}}</div>
     </div>
+    <div [class]="noticeClass">{{ notice }}</div>
   </div>
 </span>

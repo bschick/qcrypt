@@ -181,9 +181,20 @@ SOFTWARE. */
     text-align: center;
   }
 
-  .error-msg {
+  %msg {
     margin-top: 12px;
     height: 24px;
+    text-align: center;
+  }
+
+  .error-msg {
+    @extend %msg;
     color: var(--mat-sys-error);
   }
+
+  .success-msg {
+    @extend %msg;
+    color: var(--mat-sys-outline);
+  }
+
 }

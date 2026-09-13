@@ -229,27 +229,59 @@ export class CipherInfoDialog {
    styleUrl: './dialogs.scss',
    imports: [MatDialogModule, MatProgressSpinnerModule, MatIconModule, MatTooltipModule, MatButtonModule],
 })
-export class SigninDialog {
+export class SigninDialog implements OnDestroy {
    public userName: string | null;
    public userId: string | null;
-   public error: string = '';
+   public notice: string = '';
+   public noticeClass: string = 'error-msg';
    public showProgress: boolean = false;
+   private _noticeTimerId = 0;
+   private _userActed = false;
 
    constructor(
       private authSvc: AuthenticatorService,
       private router: Router,
       public dialogRef: MatDialogRef<SigninDialog>,
-      @Inject(MAT_DIALOG_DATA) public data: SigninDialog,
    ) {
       dialogRef.disableClose = true;
       [this.userId, this.userName] = this.authSvc.loadKnownUser();
+
+      this.authSvc.logoutResult().then((result) => {
+         if (!this._userActed) {
+            if (result === 'error') {
+               this.notice = 'Sign out failed, sign in then out again to retry.';
+            } else if (result === 'success') {
+               this.noticeClass = 'success-msg';
+               this.notice = 'Sign out succeeded';
+               this._noticeTimerId = window.setTimeout(() => {
+                  this._noticeTimerId = 0;
+                  this.notice = '';
+               }, 4000);
+            }
+         }
+      });
+   }
+
+   ngOnDestroy(): void {
+      this._userActed = true;
+      this._clearNoticeTimer();
+   }
+
+   private _clearNoticeTimer(): void {
+      if (this._noticeTimerId) {
+         window.clearTimeout(this._noticeTimerId);
+         this._noticeTimerId = 0;
+      }
    }
 
    // Would be cleaner to move navigation to core.component, but doing
    // it in the dialog gives us a good place to show errors.
    async onClickSignin(_event: MouseEvent) {
       try {
-         this.error = '';
+         this._userActed = true;
+         this._clearNoticeTimer();
+         this.notice = '';
+         this.noticeClass = 'error-msg';
 
          // This can happen if another tab logs out or changes passkeys while the
          // dialog is open. Not a great UX, but it's likely a rare race condition
@@ -266,9 +298,9 @@ export class SigninDialog {
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
-            this.error = 'Sign in failed, check your connection';
+            this.notice = 'Sign in failed, check your connection';
          } else {
-            this.error = 'Sign in failed, try again or change users';
+            this.notice = 'Sign in failed, try again or change users';
          }
       } finally {
          this.showProgress = false;
@@ -276,7 +308,9 @@ export class SigninDialog {
    }
 
    onClickForget(_event: MouseEvent) {
-      this.error = '';
+      this._userActed = true;
+      this._clearNoticeTimer();
+      this.notice = '';
       // kill other tab sessions
       this.authSvc.forgetUser(true);
       this.router.navigateByUrl('/welcome');

@@ -92,6 +92,9 @@ type FetchArgs = {
 
 type SessionState = Partial<CredentialPayload> & { userId: string };
 
+// 'none' when no sign out has been attempted since the last authentication
+export type LogoutResult = 'none' | 'success' | 'error';
+
 // Account values recorded at registration or first login, which no endpoint later changes
 type AccountPin = {
    prf: boolean;
@@ -140,7 +143,7 @@ export class AuthenticatorService {
    private _intervalId: number = 0;
    private _csrf?: string = undefined;
    private _cachedRecoveryWords?: string;
-   private _pendingLogout: Promise<unknown> = Promise.resolve();
+   private _pendingLogout: Promise<LogoutResult> = Promise.resolve('none');
    private _halted = false;
 
    constructor(
@@ -736,6 +739,9 @@ export class AuthenticatorService {
             version,
          });
 
+         // Authenticating revokes earlier sessions, including one an unconfirmed logout left behind
+         this._pendingLogout = Promise.resolve('none');
+
          return userInfo;
       } finally {
          userCred.fill(0);
@@ -981,7 +987,9 @@ export class AuthenticatorService {
          this._pendingLogout = this._doFetch<string>({
             method: 'DELETE',
             resource: 'session',
-         }).catch(() => undefined);
+         })
+            .then<LogoutResult>(() => 'success')
+            .catch<LogoutResult>(() => 'error');
       }
 
       this.clearSession(global);
@@ -989,6 +997,12 @@ export class AuthenticatorService {
       if (emit) {
          this._emit(eventData);
       }
+   }
+
+   // 'error' when the last session delete failed, which includes a lost response, and
+   // the server session may or may not be active.
+   async logoutResult(): Promise<LogoutResult> {
+      return this._pendingLogout;
    }
 
    // Clears the session on the local system, optionally across tabs, but not on the server.

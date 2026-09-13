@@ -27,6 +27,7 @@ export function lifecycleSuite(prf: boolean): void {
       await expect(tableBody.locator('tr')).toHaveCount(1);
 
       await page.getByRole('button', { name: /Sign out/ }).click();
+      await expect(page.locator('.signin div.success-msg')).toContainText(/Sign out succeeded/);
       await authFixture.passkeyAuth(authenticator, async () => {
          await page.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
       });
