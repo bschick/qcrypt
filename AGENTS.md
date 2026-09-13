@@ -120,7 +120,7 @@ pnpm check:fix libs/crypto/src/lib/keys.ts   # auto-fix one file
 
 `pnpm check` (no path) gates `build:web`, `build:web:prod`, `build:server`, and `build:server:prod` — it runs first, so a format or lint error blocks the build. `bdeploy` builds through those same scripts, so a deploy is gated too.
 
-**Style:** 3-space indent, 120 columns, single quotes, semicolons, trailing commas. JSON stays 2-space (nx/ng-managed), and HTML templates are 2-space (Prettier, see above). Excluded: `**/*.html`, `**/*.svg`, `vendor/`, `apps/server/assets/`, generated crux files.
+**Style:** 3-space indent, 120 columns, single quotes, semicolons, trailing commas. JSON stays 2-space (nx/ng-managed), and HTML templates are 2-space (Prettier, see above). Excluded: `**/*.html`, `**/*.svg`, `apps/server/assets/`, generated crux files.
 
 **Rules deliberately disabled** (they fight this codebase's patterns — do not re-enable without cause):
 
