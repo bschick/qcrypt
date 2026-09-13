@@ -62,7 +62,11 @@ export const FLOW_SUBSYSTEMS: Record<string, FlowItem> = {
       svg: '/assets/flow/encrypt_m0.svg',
       search: 'cipher key message symmetric km0 kc',
    },
-   '04': { label: 'Pack Block0 AD', svg: '/assets/flow/pack_ad0.svg', search: 'additional associated data' },
+   '04': {
+      label: 'Pack Block0 AD',
+      svg: '/assets/flow/pack_ad0.svg',
+      search: 'adf random niv additional associated data',
+   },
    '05': { label: 'Derive Signing Key', svg: '/assets/flow/derive_enc_kS.svg' },
    '06': {
       label: 'Encryption Input',
@@ -74,7 +78,11 @@ export const FLOW_SUBSYSTEMS: Record<string, FlowItem> = {
    '09': { label: 'Derive Key Commit', svg: '/assets/flow/derive_enc_kC.svg' },
    '0a': { label: 'Derive Hint Nonce', svg: '/assets/flow/derive_enc_nIVH.svg' },
    '0b': { label: 'Derive Hint Key', svg: '/assets/flow/derive_enc_kH.svg' },
-   '0c': { label: 'Pack BlockN AD', svg: '/assets/flow/pack_adN.svg', search: 'random niv additional associated data' },
+   '0c': {
+      label: 'Pack BlockN AD',
+      svg: '/assets/flow/pack_adN.svg',
+      search: 'adf random niv additional associated data',
+   },
    '0d': {
       label: 'Encrypt BlockN',
       svg: '/assets/flow/encrypt_mN.svg',
@@ -88,7 +96,7 @@ export const FLOW_SUBSYSTEMS: Record<string, FlowItem> = {
    },
    '10': { label: 'Verify Block0', svg: '/assets/flow/verify_cd0.svg', search: 'header' },
    '11': { label: 'Verify BlockN', svg: '/assets/flow/verify_cdN.svg', search: 'header' },
-   '12': { label: 'Unpack Block0 AD', svg: '/assets/flow/unpack_ad0.svg', search: 'additional associated data' },
+   '12': { label: 'Unpack Block0 AD', svg: '/assets/flow/unpack_ad0.svg', search: 'adf additional associated data' },
    '13': { label: 'Derive Signing Key', svg: '/assets/flow/derive_dec_kS.svg' },
    '14': { label: 'Derive Hint Nonce', svg: '/assets/flow/derive_dec_nIVH.svg' },
    '15': { label: 'Derive Hint Key', svg: '/assets/flow/derive_dec_kH.svg' },
@@ -105,7 +113,7 @@ export const FLOW_SUBSYSTEMS: Record<string, FlowItem> = {
       svg: '/assets/flow/decrypt_mEN.svg',
       search: 'cipher key message symmetric kmn kc',
    },
-   '1b': { label: 'Unpack BlockN AD', svg: '/assets/flow/unpack_adN.svg', search: 'additional associated data' },
+   '1b': { label: 'Unpack BlockN AD', svg: '/assets/flow/unpack_adN.svg', search: 'adf additional associated data' },
    '1c': { label: 'Derive BlockN Key', svg: '/assets/flow/derive_dec_kMN.svg' },
 };
 
