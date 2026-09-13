@@ -308,7 +308,7 @@ export async function postCleanupTestUsers(httpDetails: HttpDetails): Promise<Re
    const minAgeMs = 6 * 60 * 60 * 1000;
    const minCreated = Date.now() - minAgeMs;
    // Per-call delete cap. Large cleanups need repeat invocations;
-   const maxDeletes = 25;
+   const maxDeletes = 50;
 
    const userAttrs = ['userId', 'verified', 'userName', 'createdAt'] as const;
    let users = await Users.scan.go({
