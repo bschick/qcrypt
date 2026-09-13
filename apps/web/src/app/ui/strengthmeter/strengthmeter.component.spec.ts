@@ -117,4 +117,40 @@ describe('StrengthMeterComponent', () => {
       expect(pwnedUrls).toEqual([]);
       expect(state).toEqual({ acceptable: false, strength: -1 });
    });
+
+   describe('reuse and hint similarity', () => {
+      it('scores a password reused from an earlier loop at the minimum', async () => {
+         component.usedPasswords = [PASSWORD];
+         component.password = PASSWORD;
+
+         await vi.waitFor(() => expect(component.warning).toContain('previous loop'));
+         expect(component.strength).toBe(0);
+      });
+
+      it('scores a password close to an earlier one at the minimum', async () => {
+         component.usedPasswords = [PASSWORD];
+         component.password = `${PASSWORD}1`;
+
+         await vi.waitFor(() => expect(component.warning).toContain('previous loop'));
+         expect(component.strength).toBe(0);
+      });
+
+      it('scores a password resembling its own hint at the minimum', async () => {
+         component.hint = PASSWORD;
+         component.password = PASSWORD;
+
+         await vi.waitFor(() => expect(component.warning).toContain('hint'));
+         expect(component.strength).toBe(0);
+      });
+
+      it('leaves a password unrelated to the hint or earlier loops alone', async () => {
+         component.usedPasswords = ['completely-different-9042'];
+         component.hint = 'nothing alike';
+         component.password = PASSWORD;
+
+         await vi.waitFor(() => expect(component.strength).toBe(4));
+         expect(component.warning).not.toContain('previous loop');
+         expect(component.warning).not.toContain('hint');
+      });
+   });
 });

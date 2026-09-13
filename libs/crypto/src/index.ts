@@ -112,5 +112,4 @@ export { cryptoReady, hashString } from './lib/crypto';
 export { getProofKeyPair, createProof, verifyProof } from './lib/proof';
 
 // Lazy zxcvbn loader
-// Callers must `await zxcvbnReady()` before invoking any other zxcvbn export.
-export { zxcvbnReady, getZxcvbn, isPwned, addMatcher, removeMatcher } from './lib/zxcvbn';
+export { zxcvbnReady, isPwned, createZxcvbn } from './lib/zxcvbn';

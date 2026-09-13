@@ -20,52 +20,18 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import type { Matcher } from '@zxcvbn-ts/core/dist/types';
-import { zxcvbnReady, getZxcvbn, isPwned, addMatcher, removeMatcher } from './zxcvbn';
+import { zxcvbnReady, isPwned, createZxcvbn } from './zxcvbn';
 
 describe('zxcvbn lazy loader', () => {
-   // The module caches its loaded state, so the "throws before ready" assertion
-   // must run before any other test triggers zxcvbnReady().
-
-   it('getZxcvbn throws before zxcvbnReady is awaited', () => {
-      expect(() => getZxcvbn()).toThrow(/not awaited/);
-   });
-
-   it('zxcvbnReady resolves with a bundle exposing zxcvbnAsync and zxcvbnOptions', async () => {
+   it('zxcvbnReady resolves with a bundle exposing ZxcvbnFactory and options', async () => {
       const bundle = await zxcvbnReady();
-      expect(typeof bundle.zxcvbnAsync).toBe('function');
-      expect(bundle.zxcvbnOptions).toBeDefined();
-      expect(bundle.zxcvbnOptions.matchers).toBeDefined();
-   });
-
-   it('getZxcvbn returns the cached bundle once ready', async () => {
-      await zxcvbnReady();
-      const a = getZxcvbn();
-      const b = getZxcvbn();
-      expect(a).toBe(b);
-      expect(a).toBe(await zxcvbnReady());
+      expect(typeof bundle.ZxcvbnFactory).toBe('function');
+      expect(bundle.options).toBeDefined();
+      expect(bundle.options.dictionary).toBeDefined();
    });
 
    it('repeated zxcvbnReady calls share a single promise', () => {
       expect(zxcvbnReady()).toBe(zxcvbnReady());
-   });
-
-   it('addMatcher / removeMatcher manipulate the matchers map', async () => {
-      const { zxcvbnOptions } = await zxcvbnReady();
-      const dummy: Matcher = {
-         Matching: class {
-            match() {
-               return [];
-            }
-         },
-         feedback: () => null,
-         scoring: () => 0,
-      };
-      await addMatcher('zxcvbn_spec_test', dummy);
-      expect(zxcvbnOptions.matchers['zxcvbn_spec_test']).toBe(dummy);
-
-      await removeMatcher('zxcvbn_spec_test');
-      expect(zxcvbnOptions.matchers['zxcvbn_spec_test']).toBeUndefined();
    });
 
    it('isPwned reports a listed password', async () => {
@@ -86,20 +52,21 @@ describe('zxcvbn lazy loader', () => {
       }
    });
 
-   it('the pwned matcher is never registered for scoring', async () => {
-      const { zxcvbnOptions } = await zxcvbnReady();
-      expect(zxcvbnOptions.matchers['pwned']).toBeUndefined();
+   it('the pwned matcher is never part of scoring', async () => {
+      const zxcvbn = await createZxcvbn();
+      const result = await zxcvbn.checkAsync('one2many');
+      expect(result.sequence.some((match) => match.pattern === 'pwned')).toBe(false);
    });
 
-   it('zxcvbnAsync scores a sample password', async () => {
-      const { zxcvbnAsync } = await zxcvbnReady();
-      const result = await zxcvbnAsync('correcthorsebatterystaple');
+   it('checkAsync scores a sample password', async () => {
+      const zxcvbn = await createZxcvbn();
+      const result = await zxcvbn.checkAsync('correcthorsebatterystaple');
       expect(result.score).toBeGreaterThanOrEqual(0);
       expect(result.score).toBeLessThanOrEqual(4);
    });
 
    it('scores representative passwords with the expected score', async () => {
-      const { zxcvbnAsync } = await zxcvbnReady();
+      const zxcvbn = await createZxcvbn();
       const cases: Array<{ pwd: string; score: number }> = [
          { pwd: 'password', score: 0 },
          { pwd: '12345678', score: 0 },
@@ -114,7 +81,7 @@ describe('zxcvbn lazy loader', () => {
       ];
 
       for (const { pwd, score } of cases) {
-         const result = await zxcvbnAsync(pwd);
+         const result = await zxcvbn.checkAsync(pwd);
          if (result.score !== score) {
             throw new Error(`"${pwd}" scored ${result.score}, expected ${score}`);
          }
