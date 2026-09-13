@@ -1307,6 +1307,52 @@ describe('CLI App', () => {
       });
    });
 
+   describe('interactive terminal output', () => {
+      // A pty is the only arrangement where an answered prompt and command output share a
+      // stream, so it is the only one that can catch them landing on the same line
+      const hasScript = process.platform === 'linux' && spawnSync('which', ['script']).status === 0;
+
+      it.skipIf(!hasScript)('starts the info report on its own line after the credential prompt', () => {
+         const ptyIn = path.resolve(tmpDir, 'pty-info.bin');
+         const ptyOut = path.resolve(tmpDir, 'pty-info.out');
+         execCli([
+            'enc',
+            'some text',
+            '--cred',
+            userCred,
+            '--pwds',
+            'pass',
+            '--iters',
+            '1000000',
+            '--silent',
+            '--outfile',
+            ptyIn,
+         ]);
+
+         // Typing before the prompt is listening loses the answer to the terminal's own echo
+         const driver =
+            `: > ${ptyOut}\n` +
+            `{\n` +
+            `  for _ in $(seq 1 200); do\n` +
+            `    grep -q 'User Credential' ${ptyOut} 2>/dev/null && break\n` +
+            `    sleep 0.05\n` +
+            `  done\n` +
+            `  printf '%s\\n' '${userCred}'\n` +
+            `  sleep 1\n` +
+            `} | script -qfc "node ${cliPath} info --infile ${ptyIn}" /dev/null > ${ptyOut}\n`;
+         spawnSync('bash', ['-c', driver], { encoding: 'utf-8' });
+
+         const ESC = '';
+         const lines = fs
+            .readFileSync(ptyOut, 'utf-8')
+            .replace(new RegExp(`${ESC}\\[[0-9;?]*[A-Za-z]`, 'g'), '')
+            .split(/\r?\n/);
+
+         expect(lines.some((line) => line.startsWith('Cipher and Mode'))).toBe(true);
+         expect(lines.some((line) => line.startsWith('Version'))).toBe(true);
+      });
+   });
+
    describe('info command', () => {
       it('should throw error for invalid cred length on info', () => {
          const result = execCli(['info', '--cred', 'SHORT', '--silent', '--infile', encryptedFilePath]);

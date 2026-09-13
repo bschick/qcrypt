@@ -38,24 +38,18 @@ interface IO {
    b64urlOut: boolean;
 }
 
-// Returns a disposable Writable that delegates to io.ttyOut.
-// Inquirer's cleanup ends the output stream it receives via pipe;
-// by giving it a throwaway proxy, ttyOut itself stays open for
-// subsequent prompts and showAnswered calls.
-// Inquirer starts a prompt with a newline only once it has rendered one before, and it cannot
-// see writes made directly to ttyOut, so answers echoed here have to terminate their own line
-// until the first prompt has run
-let promptRendered = false;
-
+// Inquirer's cleanup ends the output stream it receives, so it gets a throwaway proxy and
+// ttyOut stays open. Writes complete synchronously so inquirer's cleanup output, which carries
+// the newline terminating an answer, reaches ttyOut before anything written there next.
 function iqOutput(io: IO): Writable {
-   promptRendered = true;
    return new Writable({
       write(chunk: string | Uint8Array, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
          if (typeof chunk === 'string') {
-            io.ttyOut.write(chunk, encoding, callback);
+            io.ttyOut.write(chunk, encoding);
          } else {
-            io.ttyOut.write(chunk, callback);
+            io.ttyOut.write(chunk);
          }
+         callback();
       },
    });
 }
@@ -67,13 +61,13 @@ class ParamError extends Error {
    }
 }
 
-// Display a pre-supplied answer using inquirer's own theme so it looks
-// identical to an interactively answered prompt.
+// Uses inquirer's own theme so a pre-supplied answer is indistinguishable from an
+// interactively answered prompt.
 const iqTheme = makeTheme();
 function showAnswered(message: string, answer: string, io: IO): void {
    const prefixDone = typeof iqTheme.prefix === 'string' ? iqTheme.prefix : iqTheme.prefix.done;
    const line = `${prefixDone} ${iqTheme.style.message(message, 'done')} ${iqTheme.style.answer(answer)}`;
-   io.ttyOut.write(promptRendered ? `\n${line}` : `${line}\n`);
+   io.ttyOut.write(`${line}\n`);
 }
 
 async function peekBinary(
@@ -260,7 +254,7 @@ Version           : ${cdInfo.ver}\n`);
       if (args.debug) {
          console.error(err);
       } else {
-         console.error('\nget info failed: ', (err as Error).message);
+         console.error('get info failed: ', (err as Error).message);
       }
       process.exitCode = 1;
    }
@@ -412,7 +406,7 @@ async function encrypt(
       if (args.debug) {
          console.error(err);
       } else {
-         console.error('\nencryption failed: ', (err as Error).message);
+         console.error('encryption failed: ', (err as Error).message);
       }
       process.exitCode = 1;
    }
@@ -481,7 +475,7 @@ async function decrypt(
             '\ndecryption failed: You may be using the wrong password or user credential, or the cipher armor is invalid',
          );
       } else {
-         console.error('\ndecryption failed: ', (err as Error).message);
+         console.error('decryption failed: ', (err as Error).message);
       }
       process.exitCode = 1;
    }
@@ -501,9 +495,9 @@ function CoerceAlgs(algs: string[]): cc.CipherAlgs[] {
    return Ciphers.validateAlgs(algs.map((alg: string) => alg.toUpperCase()));
 }
 
-//yargs seems to have a bug with nargs not working as described... if the credential starts with
-// a -, it still gets picked up as an option. To work around, you can quoate it and start with a
-// space that will be stripped (also works for [text])
+// yargs' nargs does not behave as documented: a credential starting with a - is still taken as
+// an option. Quoting it with a leading space, which gets stripped, passes it through (also
+// works for [text])
 const args = yargs(hideBin(process.argv))
    .usage('Usage: $0 <command> [text] [options]')
    // Without this, text that looks like a number is encrypted as a different string
@@ -611,8 +605,8 @@ const args = yargs(hideBin(process.argv))
    // biome-ignore lint/suspicious/noExplicitAny: yargs argv shape is built dynamically from the option chain
    .parseSync() as any;
 
-// yargs repeats each option under its long name, alias, and camelCase form, so debug output names
-// what is safe to print rather than trying to name every spelling of every value that must not be
+// yargs repeats each option under its long name, alias, and camelCase form, so debug output
+// names what is safe to print rather than every spelling of every value that must stay hidden
 const DEBUG_SHOW_KEYS = new Set([
    '_',
    '$0',
@@ -641,20 +635,20 @@ const DEBUG_SHOW_KEYS = new Set([
    'readMax',
 ]);
 
-// Hints come from whoever encrypted the data, so controls are shown rather than run or dropped
+// Only control codepoints are escaped. Bidi and formatting marks are the user's own data and
+// do not break the rest of the terminal.
 function showHint(hint: string): string {
    return hint.replace(/\p{Cc}/gu, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
 }
 
 function maskForDebug(key: string, value: unknown): unknown {
-   // Everything after -- lands in _ alongside the command, and may be text the user meant to pass
+   // Positionals after the command name carry the user's own text, so only display the name
    if (key === '_' && Array.isArray(value)) {
       return value.map((entry, index) => (index === 0 ? entry : '******'));
    }
    if (DEBUG_SHOW_KEYS.has(key)) {
       return value;
    }
-   // Cipher armor already reveals how long the cleartext is, so its length gives nothing away
    if (key === 'text' && typeof value === 'string') {
       return `****** (${value.length} chars)`;
    }
@@ -694,7 +688,7 @@ function errDetail(err: unknown): string {
 
 // Output is written beside the destination and moved into place once complete, so decrypted data
 // never inherits the destination's permissions, follows a symlink, or appears half written.
-// Nothing this run creates should outlive a failure, including one delivered as a signal.
+// Nothing this run creates should outlive a failure.
 function openOutFile(outfile: string, force: boolean): OutFile {
    if (fs.existsSync(outfile)) {
       if (!force) {
@@ -720,7 +714,7 @@ function openOutFile(outfile: string, force: boolean): OutFile {
          try {
             fs.rmSync(temp, { force: true });
          } catch (err) {
-            console.error(`\ncould not remove ${showPath}: ${errDetail(err)}`);
+            console.error(`could not remove ${showPath}: ${errDetail(err)}`);
          }
       }
    };
@@ -730,7 +724,7 @@ function openOutFile(outfile: string, force: boolean): OutFile {
       process.removeListener(signal, onSignal);
       process.kill(process.pid, signal);
    };
-   // Registered before the file exists so nothing that can throw runs while it is unguarded
+
    for (const signal of EXIT_SIGNALS) {
       process.on(signal, onSignal);
    }
@@ -740,17 +734,17 @@ function openOutFile(outfile: string, force: boolean): OutFile {
    stream.once('open', () => {
       created = true;
    });
-   // Attached now because a failure during the command closes the stream before it is ended
+
    const closed = new Promise<void>((resolve) => stream.once('close', () => resolve()));
    stream.on('error', (err) => {
-      console.error(`\ncould not write ${showPath}: ${errDetail(err)}`);
+      console.error(`could not write ${showPath}: ${errDetail(err)}`);
       process.exitCode = 1;
    });
 
    const takenError = (): Error => new Error(`${outfile} already exists, use --force to overwrite`);
 
-   // Claiming the name first keeps the refusal atomic, at the cost of an instant where the
-   // destination is empty. Only for filesystems that cannot hard link, which have no better option
+   // Claiming the name first keeps the refusal atomic.
+   // Fallback for filesystems without hard links, where nothing stronger is available
    const claimAndMove = (): void => {
       try {
          fs.closeSync(fs.openSync(outfile, 'wx', 0o600));
@@ -785,7 +779,7 @@ function openOutFile(outfile: string, force: boolean): OutFile {
                // The destination is already complete, so a stranded temp is not worth failing over
                fs.rmSync(temp, { force: true });
             } catch (err) {
-               console.error(`\ncould not remove ${showPath}: ${errDetail(err)}`);
+               console.error(`could not remove ${showPath}: ${errDetail(err)}`);
             }
          }
       }
@@ -824,7 +818,7 @@ async function main() {
       try {
          args.cred = fs.readFileSync(args.credfile, 'utf-8').trim();
       } catch (err) {
-         console.error(`\ncould not read ${args.credfile}: ${(err as Error).message}`);
+         console.error(`could not read ${args.credfile}: ${(err as Error).message}`);
          process.exitCode = 1;
          return;
       }
@@ -837,12 +831,11 @@ async function main() {
    } else if (!process.stdin.isTTY) {
       let emptyIn: boolean;
       ({ pipedIn, binaryIn, empty: emptyIn } = await peekBinary(process.stdin));
-      // Redirected but empty stdin is what a scheduled job looks like, so the text is still meant
       if (args.text && emptyIn) {
          pipedIn = streamFromBytes(new TextEncoder().encode(args.text));
          binaryIn = false;
       } else if (args.text) {
-         console.error('\ntext cannot be given together with piped input');
+         console.error('text cannot be given together with piped input');
          process.exitCode = 1;
          return;
       }
@@ -855,7 +848,7 @@ async function main() {
 
    if (!reopenedIn) {
       console.warn('Warning: no TTY available. All values must be passed via command-line options.');
-      // Prompting anyway would echo answers, including clear text, into the output stream
+      // With no terminal, a prompt's answer would be echoed into the output stream
       args.silent = true;
    }
 
@@ -864,7 +857,7 @@ async function main() {
       try {
          outFile = openOutFile(args.outfile, args.force);
       } catch (err) {
-         console.error(`\n${(err as Error).message}`);
+         console.error(`${(err as Error).message}`);
          process.exitCode = 1;
          return;
       }
@@ -897,11 +890,10 @@ async function main() {
       try {
          await outFile.finish();
       } catch (err) {
-         // Errors raised here rather than by the filesystem already name the destination
          if ((err as NodeJS.ErrnoException).code) {
-            console.error(`\ncould not write ${args.outfile}: ${errDetail(err)}`);
+            console.error(`could not write ${args.outfile}: ${errDetail(err)}`);
          } else {
-            console.error(`\n${(err as Error).message}`);
+            console.error(`${(err as Error).message}`);
          }
          process.exitCode = 1;
       }
@@ -911,13 +903,12 @@ async function main() {
    completed = true;
 }
 
-// A stream that stalls rather than ending drains the event loop and would otherwise exit 0,
-// reporting success for data that was never written
+// Node exits 0 once the event loop empties, even with main() still suspended on a stream that
+// stalled instead of ending. Marks that unfinished exit as a failure.
 let completed = false;
 process.on('exit', () => {
-   // An already reported failure has said what went wrong, so only silence needs this
    if (!completed && process.exitCode !== 1) {
-      console.error('\nthe operation did not finish');
+      console.error('the operation did not finish');
       process.exitCode = 1;
    }
 });
