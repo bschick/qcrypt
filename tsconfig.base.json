@@ -9,6 +9,7 @@
     "target": "ES2022",
     "module": "ES2022",
     "skipLibCheck": true,
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@qcrypt/crypto": ["libs/crypto/src/index.ts"],
