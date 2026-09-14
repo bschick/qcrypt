@@ -27,7 +27,7 @@ import {
    ViewChild,
    ElementRef,
    type AfterViewInit,
-   type OnInit,
+   ChangeDetectionStrategy,
 } from '@angular/core';
 
 import { MatIconModule } from '@angular/material/icon';
@@ -36,8 +36,7 @@ import { MatSliderModule } from '@angular/material/slider';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { isPwned, createZxcvbn } from '@qcrypt/crypto';
-import { MatcherBaseClass } from '@zxcvbn-ts/core';
-import type { ZxcvbnFactory, ZxcvbnResult } from '@zxcvbn-ts/core';
+import type { MatcherBaseClass, ZxcvbnFactory, ZxcvbnResult } from '@zxcvbn-ts/core';
 import * as lev from '../../services/levenshtein';
 import type { MatchEstimated, MatchExtended, Match, MatchOptions, Matcher, Options } from '@zxcvbn-ts/core';
 
@@ -61,9 +60,10 @@ export type AcceptableState = {
    selector: 'app-strengthmeter',
    imports: [MatIconModule, MatButtonModule, MatSliderModule, ReactiveFormsModule, MatTooltipModule],
    templateUrl: './strengthmeter.component.html',
+   changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './strengthmeter.component.scss',
 })
-export class StrengthMeterComponent implements AfterViewInit, OnInit {
+export class StrengthMeterComponent implements AfterViewInit {
    public strength = -1;
    public strengthMin = 0;
 
@@ -162,24 +162,32 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit {
       if (!this._processing) {
          this._processing = true;
          this._processDone = (async () => {
-            const zxcvbn = await this._scorer!;
             let results: ZxcvbnResult | undefined;
-            while (this._testQueue.length > 0) {
-               try {
-                  // Use the last password in the queue and drop everything else before it
-                  const testPwd = this._testQueue.at(-1)!;
-                  this._testQueue.length = 0;
+            try {
+               this._scorer ??= createZxcvbn((base) => ({ qcMatcher: this.makeMatcher(base) }));
+               const zxcvbn = await this._scorer;
+               while (this._testQueue.length > 0) {
+                  try {
+                     // Use the last password in the queue and drop everything else before it
+                     const testPwd = this._testQueue.at(-1)!;
+                     this._testQueue.length = 0;
 
-                  // Loop because new items could be added while we await checkAsync
-                  results = await zxcvbn.checkAsync(testPwd);
+                     // Loop because new items could be added while we await checkAsync
+                     results = await zxcvbn.checkAsync(testPwd);
 
-                  // Below the lowest selectable minimum, so a breach is rejected at any setting
-                  this.setStrength(testPwd === this._breachedPassword ? -1 : results.score);
-               } catch (err) {
-                  console.error(err);
+                     // Below the lowest selectable minimum, so a breach is rejected at any setting
+                     this.setStrength(testPwd === this._breachedPassword ? -1 : results.score);
+                  } catch (err) {
+                     console.error(err);
+                  }
                }
+            } catch (err) {
+               // Reset the cached loader so the next attempt retries the dictionary download
+               this._scorer = undefined;
+               console.error(err);
+            } finally {
+               this._processing = false;
             }
-            this._processing = false;
             this.updateAcceptable();
 
             if (results?.password === this._breachedPassword) {
@@ -202,12 +210,12 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit {
       return this._processDone;
    }
 
-   ngOnInit(): void {
+   private makeMatcher(base: typeof MatcherBaseClass): Matcher {
       const parent = this;
 
       // cloned from https://zxcvbn-ts.github.io/zxcvbn/guide/matcher/#creating-a-custom-matcher
       const qcMatcher: Matcher = {
-         Matching: class QCPasswordChecker extends MatcherBaseClass {
+         Matching: class QCPasswordChecker extends base {
             match({ password }: MatchOptions) {
                const matches: Match[] = [];
 
@@ -262,7 +270,7 @@ export class StrengthMeterComponent implements AfterViewInit, OnInit {
          },
       };
 
-      this._scorer = createZxcvbn({ qcMatcher });
+      return qcMatcher;
    }
 
    ngAfterViewInit(): void {

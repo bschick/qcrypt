@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import type { Matcher, OptionsType, ZxcvbnFactory } from '@zxcvbn-ts/core';
+import type { Matcher, MatcherBaseClass, OptionsType, ZxcvbnFactory } from '@zxcvbn-ts/core';
 import type { haveIBeenPwned } from '@zxcvbn-ts/matcher-pwned';
 import { logError } from './utils';
 
@@ -29,6 +29,7 @@ import { logError } from './utils';
 
 type ZxcvbnBundle = {
    ZxcvbnFactory: typeof ZxcvbnFactory;
+   MatcherBaseClass: typeof MatcherBaseClass;
    options: OptionsType;
    pwnedLookup: typeof haveIBeenPwned;
 };
@@ -47,6 +48,7 @@ export function zxcvbnReady(): Promise<ZxcvbnBundle> {
          ]);
          _bundle = {
             ZxcvbnFactory: core.ZxcvbnFactory,
+            MatcherBaseClass: core.MatcherBaseClass,
             options: {
                translations: en.translations,
                dictionary: {
@@ -75,7 +77,10 @@ export async function isPwned(password: string): Promise<boolean> {
    }
 }
 
-export async function createZxcvbn(matchers?: Record<string, Matcher>): Promise<ZxcvbnFactory> {
-   const { ZxcvbnFactory: Factory, options } = await zxcvbnReady();
-   return new Factory(options, matchers);
+// Matcher is built from the lazily loaded MatcherBaseClass to avoid a static import
+export async function createZxcvbn(
+   makeMatchers?: (base: typeof MatcherBaseClass) => Record<string, Matcher>,
+): Promise<ZxcvbnFactory> {
+   const { ZxcvbnFactory: Factory, MatcherBaseClass: base, options } = await zxcvbnReady();
+   return new Factory(options, makeMatchers?.(base));
 }
