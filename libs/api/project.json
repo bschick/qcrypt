@@ -7,10 +7,7 @@
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
-        "commands": [
-          "pnpm exec tsc -p libs/api/tsconfig.lib.json --noEmit",
-          "pnpm exec tsc -p libs/api/tsconfig.spec.json --noEmit"
-        ],
+        "commands": ["pnpm exec tsc -p libs/api/tsconfig.lib.json", "pnpm exec tsc -p libs/api/tsconfig.spec.json"],
         "cwd": "{workspaceRoot}",
         "parallel": false
       }

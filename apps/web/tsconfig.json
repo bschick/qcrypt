@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "outDir": "../../dist/out-tsc",
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
