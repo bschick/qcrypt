@@ -70,3 +70,4 @@ serve.log
 # Nx
 .nx/cache
 .nx/workspace-data
+.nx/migrate-runs
