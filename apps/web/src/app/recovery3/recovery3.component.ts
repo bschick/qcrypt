@@ -20,7 +20,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { type AfterViewInit, Component, Inject, type OnDestroy, type OnInit, Renderer2 } from '@angular/core';
+import {
+   type AfterViewInit,
+   Component,
+   Inject,
+   type OnDestroy,
+   type OnInit,
+   Renderer2,
+   ChangeDetectionStrategy,
+} from '@angular/core';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -40,6 +48,7 @@ import { NoAssistDirective } from '../ui/noassist.directive';
    selector: 'app-recovery3',
    templateUrl: './recovery3.component.html',
    styleUrl: './recovery3.component.scss',
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       MatIconModule,
       MatButtonModule,
@@ -174,6 +183,7 @@ export interface ConfirmData {
    selector: 'recovery-confirm-dialog',
    templateUrl: 'confirm-dialog.html',
    styleUrl: './recovery3.component.scss',
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatDialogModule, MatIconModule, MatButtonModule],
 })
 export class ConfirmDialog {

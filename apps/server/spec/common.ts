@@ -187,8 +187,6 @@ export async function prfDecrypt(
    }
 }
 
-// createJSON returns RegistrationResponseJSON, which only becomes a DOM global in TypeScript 6
-// (this project is on 5.9). Track it through the emulator's method so it resolves under both.
 export type EmulatorAttestation = ReturnType<WebAuthnEmulator['createJSON']>;
 
 // Register a credential and, for PRF accounts, return its per-credential PRF output. The emulator
@@ -432,7 +430,7 @@ export async function registerTestUser(prf: boolean = false, label?: string): Pr
          false,
       );
 
-      const body = api.makeRegVerifyRequest(attestation, {
+      const body = api.makeRegVerifyRequest(attestation as api.RegistrationFields, {
          userId,
          challenge: regOpts.data.challenge,
          recoveryPubKey: api.getRecoveryPubKey(secret),
@@ -481,7 +479,9 @@ export async function loginWithPasskey(user: TestUser): Promise<{ cookie: string
       expect(optsRes.status).toBe(200);
 
       const assertion = user.emulator.getJSON(RP_ORIGIN, { ...optsRes.data, challenge: optsRes.data.challenge });
-      const body = api.makeAuthVerifyRequest(assertion, { challenge: optsRes.data.challenge });
+      const body = api.makeAuthVerifyRequest(assertion as api.AuthenticationFields, {
+         challenge: optsRes.data.challenge,
+      });
       const verifyRes = await postJson('/v1/auth/verify', body, {}, '');
 
       if (verifyRes.status === 200 || attempt >= 3) {
@@ -524,7 +524,10 @@ export async function addPasskey(user: TestUser, csrf: string, cookie: string): 
    expect(optsRes.status).toBe(200);
 
    const { attestation, passkeyUserCredEnc } = await registerNewCredential(user, optsRes.data);
-   const body = api.makeAddVerifyRequest(attestation, { challenge: optsRes.data.challenge, passkeyUserCredEnc });
+   const body = api.makeAddVerifyRequest(attestation as api.RegistrationFields, {
+      challenge: optsRes.data.challenge,
+      passkeyUserCredEnc,
+   });
 
    const verifyRes = await postJson('/v1/passkeys/verify', body, { 'x-csrf-token': csrf }, cookie);
    expect(verifyRes.status).toBe(200);
@@ -565,7 +568,7 @@ export async function buildPrfRegBody(userName: string): Promise<{
    const recoveryId = getRandom(api.RECOVERYID_BYTES);
    const secret = api.recoverySecret(recoveryId, userId);
 
-   const body = api.makeRegVerifyRequest(attestation, {
+   const body = api.makeRegVerifyRequest(attestation as api.RegistrationFields, {
       userId,
       challenge: regOpts.data.challenge,
       passkeyUserCredEnc: await prfEncrypt(userCred.slice(0), prfOutput.slice(0), userId),

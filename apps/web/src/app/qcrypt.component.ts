@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnDestroy, type OnInit } from '@angular/core';
+import { Component, type OnDestroy, type OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -36,6 +36,7 @@ import { Subscription } from 'rxjs';
    selector: 'qcrypt-root',
    templateUrl: './qcrypt.component.html',
    styleUrl: './qcrypt.component.scss',
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       RouterOutlet,
       MatToolbarModule,

@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnInit, inject } from '@angular/core';
+import { Component, type OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -33,6 +33,7 @@ import { bytesToBase64 } from '@qcrypt/crypto';
    selector: 'app-recovery',
    templateUrl: './recovery.component.html',
    styleUrl: './recovery.component.scss',
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatIconModule, MatButtonModule, RouterLink, MatProgressSpinnerModule, MatCardModule],
 })
 export class RecoveryComponent implements OnInit {

@@ -28,6 +28,7 @@ import {
    Input,
    Output,
    ViewChild,
+   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -96,6 +97,7 @@ function setIfBoolean(check: boolean | string | null, setter: (bool: boolean) =>
       ReactiveFormsModule,
    ],
    templateUrl: './options.component.html',
+   changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './options.component.scss',
 })
 export class OptionsComponent implements OnInit, AfterViewInit {

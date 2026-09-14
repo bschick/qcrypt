@@ -20,13 +20,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 import { environment } from '../../../environments/environment';
 
 // Only rendered while printing, so a page can keep it mounted with no visible effect
 @Component({
    selector: 'app-recovery-sheet',
    templateUrl: './recoverysheet.component.html',
+   changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './recoverysheet.component.scss',
 })
 export class RecoverySheetComponent {

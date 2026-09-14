@@ -31,6 +31,7 @@ import {
    HostListener,
    SecurityContext,
    NgZone,
+   ChangeDetectionStrategy,
 } from '@angular/core';
 import { Ciphers, makeCipherArmor, parseCipherArmor, PWDKeyProvider } from '@qcrypt/crypto';
 import { CommonModule } from '@angular/common';
@@ -86,6 +87,7 @@ const BLOCK_ORDER_WARNING =
    selector: 'app-core',
    templateUrl: './core.component.html',
    styleUrl: './core.component.scss',
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       MatProgressSpinnerModule,
       MatMenuModule,

@@ -66,7 +66,6 @@ export const routes: Routes = [
       loadComponent: () =>
          guardedImport(() => import('./recovery3/recovery3.component').then((m) => m.Recovery3Component)),
    },
-   // Help pages and saved recovery-word instructions have pointed people at this path
    {
       path: 'recovery2',
       redirectTo: 'recovery3',

@@ -152,14 +152,14 @@ async function finishRecovery3(
    if (user.prf) {
       const { attestation, prfOutput } = createCredential(user.emulator, createOptions, true);
       const passkeyUserCredEnc = await prfEncrypt(recoveredUserCred, prfOutput, user.userId);
-      verifyBody = api.makeRecoverVerifyRequest(attestation, {
+      verifyBody = api.makeRecoverVerifyRequest(attestation as api.RegistrationFields, {
          userId: user.userId,
          challenge: confirmRes.data.challenge,
          passkeyUserCredEnc,
       });
    } else {
       const { attestation } = createCredential(user.emulator, createOptions, false);
-      verifyBody = api.makeRecoverVerifyRequest(attestation, {
+      verifyBody = api.makeRecoverVerifyRequest(attestation as api.RegistrationFields, {
          userId: user.userId,
          challenge: confirmRes.data.challenge,
       });

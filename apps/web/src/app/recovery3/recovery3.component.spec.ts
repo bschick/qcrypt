@@ -3,7 +3,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Recovery3Component } from './recovery3.component';
 import { RouterModule } from '@angular/router';
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
 
 describe('RecoveryComponent', () => {
    let component: Recovery3Component;
@@ -12,7 +12,7 @@ describe('RecoveryComponent', () => {
    beforeEach(async () => {
       await TestBed.configureTestingModule({
          imports: [Recovery3Component, RouterModule.forRoot([]), NoopAnimationsModule],
-         providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()],
+         providers: [provideHttpClient(withXhr(), withInterceptorsFromDi()), provideHttpClientTesting()],
       }).compileComponents();
 
       fixture = TestBed.createComponent(Recovery3Component);

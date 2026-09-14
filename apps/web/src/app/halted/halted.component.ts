@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
 import { RouterLink } from '@angular/router';
@@ -29,6 +29,7 @@ import { RouterLink } from '@angular/router';
    selector: 'app-halted',
    templateUrl: './halted.component.html',
    styleUrl: './halted.component.scss',
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatIconModule, MatCardModule, RouterLink],
 })
 export class HaltedComponent {}

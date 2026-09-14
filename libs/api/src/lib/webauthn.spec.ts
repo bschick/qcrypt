@@ -39,6 +39,8 @@ import {
    makeRegVerifyRequest,
    toAuthenticationResponseJSON,
    toRegistrationResponseJSON,
+   type AuthenticationFields,
+   type RegistrationFields,
 } from './webauthn';
 
 const RP_ORIGIN = process.env.QC_ENV === 'prod' ? 'https://quickcrypt.org' : 'https://t1.quickcrypt.org:4200';
@@ -197,7 +199,7 @@ describe('webauthn round trip', () => {
       });
 
       const attestation = emulator.createJSON(RP_ORIGIN, makeRegOptionsResponse(regOptions));
-      const regRequest = makeRegVerifyRequest(attestation, {
+      const regRequest = makeRegVerifyRequest(attestation as RegistrationFields, {
          userId: 'user-id',
          challenge: regOptions.challenge,
          recoveryPubKey: 'recovery-pub-key',
@@ -214,7 +216,9 @@ describe('webauthn round trip', () => {
 
       const authOptions = await generateAuthenticationOptions({ rpID: RP_ID, userVerification: 'required' });
       const assertion = emulator.getJSON(RP_ORIGIN, makeAuthOptionsResponse(authOptions));
-      const authRequest = makeAuthVerifyRequest(assertion, { challenge: authOptions.challenge });
+      const authRequest = makeAuthVerifyRequest(assertion as AuthenticationFields, {
+         challenge: authOptions.challenge,
+      });
 
       const authenticated = await verifyAuthenticationResponse({
          response: toAuthenticationResponseJSON(authRequest),
