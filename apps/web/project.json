@@ -107,8 +107,12 @@
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm exec tsc -p apps/web/tests/tsconfig.json --noEmit",
-        "cwd": "{workspaceRoot}"
+        "commands": [
+          "pnpm exec tsc -p apps/web/tests/tsconfig.json",
+          "pnpm exec tsc -p apps/web/scripts/tsconfig.json"
+        ],
+        "cwd": "{workspaceRoot}",
+        "parallel": false
       }
     },
     "test": {

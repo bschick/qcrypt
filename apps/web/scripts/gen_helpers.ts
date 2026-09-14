@@ -88,7 +88,7 @@ export async function encryptOneLoop(
    ic: number,
    readOpts?: ReadOpts,
    extraKeyMaterial?: Uint8Array<ArrayBuffer>,
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
    const kp = new PWDKeyProvider(userCred.slice(0), [pwd, hint], extraKeyMaterial);
    return encryptAllBlocks(getLatestEncipher(clearStream, kp, alg, 1, 1, ic, readOpts));
 }
@@ -105,7 +105,7 @@ export async function encryptOneLoopMaster(
    return encryptAllBlocks(getLatestEncipher(clearStream, kp, alg, 1, 1, 0, readOpts));
 }
 
-async function encryptAllBlocks(encipher: ReturnType<typeof getLatestEncipher>): Promise<Uint8Array> {
+async function encryptAllBlocks(encipher: ReturnType<typeof getLatestEncipher>): Promise<Uint8Array<ArrayBuffer>> {
    const parts: Uint8Array[] = [];
    while (true) {
       const block = await encipher.encryptBlock();

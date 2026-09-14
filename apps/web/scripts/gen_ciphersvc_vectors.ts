@@ -162,7 +162,7 @@ async function genExtraAndFlippedTerminal(): Promise<void> {
 // The trailing zero is what separates the two cases: a terminal block holding no clear
 // text reports it on the block itself, one holding clear text only at end of stream.
 async function confirmBlockSplit(
-   cipherBytes: Uint8Array,
+   cipherBytes: Uint8Array<ArrayBuffer>,
    userCred: Uint8Array<ArrayBuffer>,
    pwd: string,
    clearSizes: number[],
