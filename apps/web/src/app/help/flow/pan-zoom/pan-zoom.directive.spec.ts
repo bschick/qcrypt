@@ -1,10 +1,11 @@
-import { Component, viewChild } from '@angular/core';
+import { Component, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { PanZoomDirective } from './pan-zoom.directive';
 
 @Component({
    standalone: true,
    imports: [PanZoomDirective],
+   changeDetection: ChangeDetectionStrategy.Eager,
    template: `<div panZoom #viewer="panZoom" style="width:400px;height:300px"><img alt="x" /></div>`,
 })
 class HostComponent {

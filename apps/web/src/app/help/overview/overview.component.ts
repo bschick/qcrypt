@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CopyrightComponent } from '../../ui/copyright/copyright.component';
 import { environment } from '../../../environments/environment';
@@ -7,6 +7,7 @@ import { environment } from '../../../environments/environment';
    selector: 'app-overview',
    templateUrl: './overview.component.html',
    styleUrl: './overview.component.scss',
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [RouterLink, CopyrightComponent],
 })
 export class OverviewComponent {

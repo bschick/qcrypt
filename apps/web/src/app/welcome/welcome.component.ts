@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthenticatorService } from '../services/authenticator.service';
@@ -40,6 +40,7 @@ function paramsToQueryString(): string {
    selector: 'app-welcome',
    templateUrl: './welcome.component.html',
    styleUrl: './welcome.component.scss',
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatButtonModule, MatProgressSpinnerModule, MatIconModule, MatDividerModule, RouterLink],
 })
 export class WelcomeComponent {
@@ -81,6 +82,7 @@ export class WelcomeComponent {
    selector: 'recovery-dialog',
    templateUrl: './recovery-dialog.html',
    styleUrl: './welcome.component.scss',
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatDialogModule, MatIconModule, MatTooltipModule, MatButtonModule, RouterLink],
 })
 export class RecoveryDialog {

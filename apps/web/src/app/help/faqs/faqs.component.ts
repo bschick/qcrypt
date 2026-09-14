@@ -19,7 +19,14 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Component, ViewEncapsulation, inject, type OnInit, type OnDestroy } from '@angular/core';
+import {
+   Component,
+   ViewEncapsulation,
+   inject,
+   type OnInit,
+   type OnDestroy,
+   ChangeDetectionStrategy,
+} from '@angular/core';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -43,6 +50,7 @@ export interface FAQElement {
    templateUrl: './faqs.component.html',
    styleUrl: './faqs.component.scss',
    encapsulation: ViewEncapsulation.None,
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       MatTableModule,
       MatIconModule,

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoAssistDirective } from './noassist.directive';
 
@@ -7,6 +7,7 @@ import { NoAssistDirective } from './noassist.directive';
       <textarea id="words" noAssist></textarea>
       <input id="password" noAssist autocomplete="new-password" />
    `,
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [NoAssistDirective],
 })
 class HostComponent {}

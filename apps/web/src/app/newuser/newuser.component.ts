@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { type AfterViewInit, Component, type OnInit, Renderer2 } from '@angular/core';
+import { type AfterViewInit, Component, type OnInit, Renderer2, ChangeDetectionStrategy } from '@angular/core';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatInputModule } from '@angular/material/input';
@@ -41,6 +41,7 @@ import { NoAssistDirective } from '../ui/noassist.directive';
    selector: 'app-newuser',
    templateUrl: './newuser.component.html',
    styleUrl: './newuser.component.scss',
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       MatIconModule,
       MatButtonModule,
@@ -155,6 +156,7 @@ export class NewUserComponent implements OnInit, AfterViewInit {
    selector: 'prf-fallback-dialog',
    templateUrl: './prf-fallback-dialog.html',
    styleUrl: './prf-fallback-dialog.scss',
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatDialogModule, MatButtonModule, RouterLink],
 })
 export class PrfFallbackDialog {}

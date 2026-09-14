@@ -27,6 +27,7 @@ import {
    ViewChild,
    type AfterViewInit,
    type OnDestroy,
+   ChangeDetectionStrategy,
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 
@@ -70,6 +71,7 @@ const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
    templateUrl: './password.dialog.html',
    styleUrl: './dialogs.scss',
    encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       MatDialogModule,
       MatFormFieldModule,
@@ -192,6 +194,7 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    selector: 'cipher-info.dialog',
    templateUrl: './cipher-info.dialog.html',
    styleUrl: './dialogs.scss',
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatDialogModule, MatIconModule, MatButtonModule],
 })
 export class CipherInfoDialog {
@@ -227,6 +230,7 @@ export class CipherInfoDialog {
    selector: 'signin.dialog',
    templateUrl: './signin.dialog.html',
    styleUrl: './dialogs.scss',
+   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatDialogModule, MatProgressSpinnerModule, MatIconModule, MatTooltipModule, MatButtonModule],
 })
 export class SigninDialog implements OnDestroy {

@@ -1,6 +1,6 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { bufferToBase64URLString } from '@qcrypt/crypto';
 import { SvgInlineDirective } from './svg-inline.directive';
@@ -9,6 +9,7 @@ import { FLOW_SVG_HASHES } from '../flow.config';
 @Component({
    standalone: true,
    imports: [SvgInlineDirective],
+   changeDetection: ChangeDetectionStrategy.Eager,
    template: `<div [svgInline]="url()"></div>`,
 })
 class HostComponent {
@@ -35,7 +36,7 @@ describe('SvgInlineDirective', () => {
    beforeEach(async () => {
       await TestBed.configureTestingModule({
          imports: [HostComponent],
-         providers: [provideHttpClient(), provideHttpClientTesting()],
+         providers: [provideHttpClient(withXhr()), provideHttpClientTesting()],
       }).compileComponents();
       fixture = TestBed.createComponent(HostComponent);
       httpController = TestBed.inject(HttpTestingController);
