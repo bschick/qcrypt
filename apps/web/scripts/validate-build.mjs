@@ -16,9 +16,9 @@
  *     browser SRI-rejects the real bundle. (This is what broke prod.)
  *   - It find-replaces a single hard-coded nonce placeholder; any other nonce
  *     value survives unreplaced and fails the per-request CSP.
- *   - The CSP authorizes initial scripts by hash and lazy chunks by 'self',
- *     with no machinery for statically-imported initial chunks — those only
- *     exist when the chunk optimizer didn't run.
+ *   - The CSP authorizes initial scripts by hash and every other same-origin
+ *     script fetch by 'self'. A chunk an entry statically imports is fetched
+ *     as a module, so its SRI protection comes from a modulepreload link.
  *
  * Exports `validateBuild(browserDir)` -> string[] of problems (empty = OK).
  */
@@ -34,6 +34,27 @@ export const KNOWN_NONCE = 'ew26COJKMG8qrA/bjTcl0w==';
 // Static imports only — `from "./chunk-X.js"` and bare `import "./chunk-X.js"`.
 // Dynamic `import("./chunk-X.js")` (lazy chunks, authorized by 'self') is fine.
 const STATIC_IMPORT_RE = /(?:from|\bimport)\s*["'`](\.\/chunk-[A-Za-z0-9_-]+\.js)["'`]/g;
+
+// A string each lazy payload emits into whichever chunk holds it. Library markers are identifiers
+// the library itself defines, so a call site naming one of its methods does not match.
+const LAZY_MARKERS = {
+   'app-newuser': 'newuser component',
+   'app-show-recovery': 'showrecovery component',
+   'app-regenrecovery': 'regenrecovery component',
+   'app-checkrecovery': 'checkrecovery component',
+   'app-recovery': 'recovery component',
+   'app-recovery3': 'recovery3 component',
+   'app-cmd-line': 'cmdline component',
+   'app-faqs': 'faqs component',
+   'app-flow': 'flow component',
+   'app-overview': 'overview component',
+   'app-protocol': 'protocol component',
+   _sodium: 'libsodium',
+   qc_crux: 'libcrux wasm',
+   wordSequenceNames: 'zxcvbn core',
+   'passwords-common': 'zxcvbn common-password dictionary',
+   'commonWords-en': 'zxcvbn language-en dictionary',
+};
 
 function attr(tag, name) {
    const m = tag.match(new RegExp(`\\b${name}\\s*=\\s*["']([^"']*)["']`, 'i'));
@@ -105,23 +126,61 @@ export function validateBuild(browserDir) {
       }
    }
 
-   // No entry script may statically import a ./chunk-*.js: the deployed CSP
-   // can't authorize initial chunks (optimizer collapses them into main).
-   const staticChunks = new Set();
+   // A chunk an entry script statically imports is fetched as a module rather than through a
+   // <script> tag, so index.html must preload it with integrity. That is what gives the browser
+   // SRI metadata for it; 'self' in script-src is what authorizes the fetch.
+   const preloadedWithIntegrity = new Set();
+   for (const tag of linkTags) {
+      const href = attr(tag, 'href');
+      if (href && /modulepreload/i.test(attr(tag, 'rel') ?? '') && /^sha384-/.test(attr(tag, 'integrity') ?? '')) {
+         preloadedWithIntegrity.add(href);
+      }
+   }
+
+   const unpreloadedChunks = new Set();
    for (const entry of moduleEntries) {
       const entryPath = join(browserDir, entry);
       if (!existsSync(entryPath)) {
          continue;
       }
       for (const m of readFileSync(entryPath, 'utf8').matchAll(STATIC_IMPORT_RE)) {
-         staticChunks.add(m[1].slice(2));
+         const chunk = m[1].slice(2);
+         if (!preloadedWithIntegrity.has(chunk)) {
+            unpreloadedChunks.add(chunk);
+         }
       }
    }
-   if (staticChunks.size > 0) {
+   if (unpreloadedChunks.size > 0) {
       problems.push(
-         `${staticChunks.size} chunk(s) statically imported by an entry script ` +
-            '(chunk optimizer did not run — expected NG_BUILD_OPTIMIZE_CHUNKS=1): ' +
-            [...staticChunks].sort().join(', '),
+         `${unpreloadedChunks.size} chunk(s) statically imported by an entry script without a ` +
+            'modulepreload link carrying sha384 integrity: ' +
+            [...unpreloadedChunks].sort().join(', '),
+      );
+   }
+
+   // Walk the static import graph from the entry scripts: that set is what every visitor downloads
+   // before the app runs, so nothing we intend to lazy load should be found.
+   const eager = new Set();
+   const pending = moduleEntries.filter((entry) => existsSync(join(browserDir, entry)));
+   while (pending.length > 0) {
+      const file = pending.pop();
+      if (!eager.has(file)) {
+         eager.add(file);
+         for (const m of readFileSync(join(browserDir, file), 'utf8').matchAll(STATIC_IMPORT_RE)) {
+            const chunk = m[1].slice(2);
+            if (!eager.has(chunk) && existsSync(join(browserDir, chunk))) {
+               pending.push(chunk);
+            }
+         }
+      }
+   }
+   const eagerText = [...eager].map((file) => readFileSync(join(browserDir, file), 'utf8')).join('');
+   const eagerLazies = Object.entries(LAZY_MARKERS)
+      .filter(([marker]) => eagerText.includes(marker))
+      .map(([, name]) => name);
+   if (eagerLazies.length > 0) {
+      problems.push(
+         `${eagerLazies.length} lazy payload(s) included in the initial download: ${eagerLazies.join(', ')}`,
       );
    }
 
