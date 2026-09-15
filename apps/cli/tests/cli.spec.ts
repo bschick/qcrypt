@@ -1329,18 +1329,29 @@ describe('CLI App', () => {
             ptyIn,
          ]);
 
-         // Typing before the prompt is listening loses the answer to the terminal's own echo
+         // Typing before the prompt is listening loses the answer to the terminal's own echo.
+         // Paths reach bash as environment values so a directory holding a space or a shell
+         // metacharacter cannot alter the command.
          const driver =
-            `: > ${ptyOut}\n` +
+            `: > "$QC_PTY_OUT"\n` +
             `{\n` +
             `  for _ in $(seq 1 200); do\n` +
-            `    grep -q 'User Credential' ${ptyOut} 2>/dev/null && break\n` +
+            `    grep -q 'User Credential' "$QC_PTY_OUT" 2>/dev/null && break\n` +
             `    sleep 0.05\n` +
             `  done\n` +
-            `  printf '%s\\n' '${userCred}'\n` +
+            `  printf '%s\\n' "$QC_USER_CRED"\n` +
             `  sleep 1\n` +
-            `} | script -qfc "node ${cliPath} info --infile ${ptyIn}" /dev/null > ${ptyOut}\n`;
-         spawnSync('bash', ['-c', driver], { encoding: 'utf-8' });
+            `} | script -qfc "node \\"$QC_CLI_PATH\\" info --infile \\"$QC_PTY_IN\\"" /dev/null > "$QC_PTY_OUT"\n`;
+         spawnSync('bash', ['-c', driver], {
+            encoding: 'utf-8',
+            env: {
+               ...process.env,
+               QC_PTY_IN: ptyIn,
+               QC_PTY_OUT: ptyOut,
+               QC_CLI_PATH: cliPath,
+               QC_USER_CRED: userCred,
+            },
+         });
 
          const ESC = '';
          const lines = fs
