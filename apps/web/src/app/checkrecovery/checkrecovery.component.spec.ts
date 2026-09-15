@@ -1,5 +1,4 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { CheckRecoveryComponent } from './checkrecovery.component';
 import { RouterModule } from '@angular/router';
@@ -11,7 +10,7 @@ describe('CheckRecoveryComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [CheckRecoveryComponent, RouterModule.forRoot([]), NoopAnimationsModule],
+         imports: [CheckRecoveryComponent, RouterModule.forRoot([])],
          providers: [provideHttpClient(withXhr(), withInterceptorsFromDi()), provideHttpClientTesting()],
       }).compileComponents();
 

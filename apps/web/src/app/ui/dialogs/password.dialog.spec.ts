@@ -1,5 +1,4 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { PasswordDialog, type PwdDialogData } from './dialogs';
 
@@ -25,7 +24,7 @@ describe('PasswordDialog', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [PasswordDialog, NoopAnimationsModule],
+         imports: [PasswordDialog],
          providers: [
             { provide: MatDialogRef, useValue: { close: () => {} } },
             { provide: MAT_DIALOG_DATA, useValue: DIALOG_DATA },
