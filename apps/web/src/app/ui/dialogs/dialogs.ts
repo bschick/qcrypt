@@ -70,7 +70,7 @@ const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
    selector: 'password.dialog',
    templateUrl: './password.dialog.html',
    styleUrl: './dialogs.scss',
-   encapsulation: ViewEncapsulation.None, // Needed to change stypes of stength meter
+   encapsulation: ViewEncapsulation.None, // Needed to change styles of strength meter
    changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       MatDialogModule,

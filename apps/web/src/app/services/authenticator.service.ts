@@ -934,7 +934,7 @@ export class AuthenticatorService {
 
    private _signalAcceptedCredentials(userInfo: VerifiedUserInfo): void {
       // WebAuthn signals are considered "fire and forget". There is no guarantee that sending
-      // a signal make its way to a user's credential manager via the browser and/or platform.
+      // a signal makes its way to a user's credential manager via the browser and/or platform.
       sendSignal({
          signalName: 'allAcceptedCredentials',
          rpID: window.location.hostname,
