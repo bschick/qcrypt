@@ -2,7 +2,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FaqsComponent } from './faqs.component';
 import { ActivatedRoute, type ParamMap, convertToParamMap, provideRouter } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 describe('FaqsComponent', () => {
    let paramMapSubject: BehaviorSubject<ParamMap>;
@@ -12,7 +11,7 @@ describe('FaqsComponent', () => {
    ): Promise<{ fixture: ComponentFixture<FaqsComponent>; component: FaqsComponent }> {
       paramMapSubject = new BehaviorSubject<ParamMap>(convertToParamMap(initialId === null ? {} : { id: initialId }));
       await TestBed.configureTestingModule({
-         imports: [FaqsComponent, NoopAnimationsModule],
+         imports: [FaqsComponent],
          providers: [
             provideRouter([]),
             {

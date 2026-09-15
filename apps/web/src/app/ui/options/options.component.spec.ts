@@ -1,6 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { OptionsComponent } from './options.component';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { RouterModule } from '@angular/router';
 import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
@@ -11,7 +10,7 @@ describe('OptionsComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [OptionsComponent, RouterModule.forRoot([]), NoopAnimationsModule],
+         imports: [OptionsComponent, RouterModule.forRoot([])],
          providers: [provideHttpClient(withXhr(), withInterceptorsFromDi()), provideHttpClientTesting()],
       }).compileComponents();
 

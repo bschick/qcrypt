@@ -2,7 +2,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FlowComponent } from './flow.component';
 import { ActivatedRoute, type ParamMap, convertToParamMap, provideRouter } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { FLOW_OVERVIEWS, FLOW_SUBSYSTEMS } from './flow.config';
 import { parseSubscripts } from './sub-label/sub-label.component';
 
@@ -22,7 +21,7 @@ describe('FlowComponent', () => {
          convertToParamMap(initialPath === null ? {} : { path: initialPath }),
       );
       await TestBed.configureTestingModule({
-         imports: [FlowComponent, NoopAnimationsModule],
+         imports: [FlowComponent],
          providers: [provideRouter([]), { provide: ActivatedRoute, useValue: { queryParamMap } }],
       }).compileComponents();
       const fixture = TestBed.createComponent(FlowComponent);

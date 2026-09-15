@@ -1,5 +1,4 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { NewUserComponent } from './newuser.component';
 import { RouterModule } from '@angular/router';
@@ -11,7 +10,7 @@ describe('NewuserComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [NewUserComponent, RouterModule.forRoot([]), NoopAnimationsModule],
+         imports: [NewUserComponent, RouterModule.forRoot([])],
          providers: [provideHttpClient(withXhr(), withInterceptorsFromDi()), provideHttpClientTesting()],
       }).compileComponents();
 
