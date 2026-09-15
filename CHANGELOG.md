@@ -6,6 +6,7 @@
 
 - upgraded key libraries: angular 22, typescript 6, nx 23, zxcvbn-ts 4, simplewebauthn 14
 - added passkey synchronization via the webauthn signal api (which many password managers do not yet implement)
+- added EdDSA and post-quantum ML-DSA algorithm support for passkeys
 
 ## 8.0.0 (2026-09-12)
 
