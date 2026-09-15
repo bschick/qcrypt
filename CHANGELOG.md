@@ -1,5 +1,12 @@
 # CHANGELOG.md
 
+## 8.0.1 (2026-09-14)
+
+#### Changes
+
+- upgraded key libraries: angular 22, typescript 6, nx 23, zxcvbn-ts 4, simplewebauthn 14
+- added passkey synchronization via the webauthn signal api (which many password managers do not yet implement)
+
 ## 8.0.0 (2026-09-12)
 
 #### Changes
