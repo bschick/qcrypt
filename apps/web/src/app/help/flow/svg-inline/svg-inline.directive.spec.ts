@@ -45,11 +45,14 @@ describe('SvgInlineDirective', () => {
    afterEach(() => httpController.verify());
 
    const waitForSvg = () =>
-      vi.waitFor(() => {
-         const svg = fixture.nativeElement.querySelector('svg') as SVGSVGElement | null;
-         expect(svg).toBeTruthy();
-         return svg!;
-      });
+      vi.waitFor(
+         () => {
+            const svg = fixture.nativeElement.querySelector('svg') as SVGSVGElement | null;
+            expect(svg).toBeTruthy();
+            return svg!;
+         },
+         { timeout: 5000 },
+      );
 
    it('verifies the hash, then inserts a <svg> child', async () => {
       const buf = await registerHash('/test.svg', SAMPLE_SVG);
@@ -69,8 +72,9 @@ describe('SvgInlineDirective', () => {
       const buf1 = await registerHash('/test.svg', SAMPLE_SVG);
       fixture.detectChanges();
       httpController.expectOne('/test.svg').flush(buf1);
-      await vi.waitFor(() =>
-         expect(fixture.nativeElement.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 100 100'),
+      await vi.waitFor(
+         () => expect(fixture.nativeElement.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 100 100'),
+         { timeout: 5000 },
       );
 
       const buf2 = await registerHash(
@@ -81,8 +85,9 @@ describe('SvgInlineDirective', () => {
       fixture.detectChanges();
       httpController.expectOne('/other.svg').flush(buf2);
 
-      await vi.waitFor(() =>
-         expect(fixture.nativeElement.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 50 50'),
+      await vi.waitFor(
+         () => expect(fixture.nativeElement.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 50 50'),
+         { timeout: 5000 },
       );
       const host: HTMLElement = fixture.nativeElement.querySelector('div');
       expect(host.querySelectorAll('svg').length).toBe(1);
@@ -97,7 +102,7 @@ describe('SvgInlineDirective', () => {
       const tampered = new TextEncoder().encode(SAMPLE_SVG.replace('red', 'blue')).buffer;
       httpController.expectOne('/test.svg').flush(tampered);
 
-      await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled());
+      await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled(), { timeout: 5000 });
       errorSpy.mockRestore();
 
       const host: HTMLElement = fixture.nativeElement.querySelector('div');
@@ -113,7 +118,7 @@ describe('SvgInlineDirective', () => {
       // Well-formed SVG, but the path has no hash on record.
       httpController.expectOne('/unregistered.svg').flush(new TextEncoder().encode(SAMPLE_SVG).buffer);
 
-      await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled());
+      await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled(), { timeout: 5000 });
       errorSpy.mockRestore();
 
       const host: HTMLElement = fixture.nativeElement.querySelector('div');

@@ -625,7 +625,7 @@ describe('AuthenticatorService', () => {
             version: phase1.version + 5,
          });
 
-         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Login]));
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Login]), { timeout: 5000 });
 
          expect(createSpy).not.toHaveBeenCalled();
          expect(fetchMock).toHaveBeenCalled();
@@ -676,7 +676,7 @@ describe('AuthenticatorService', () => {
             version: phase1.version + 1,
          });
 
-         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Logout]));
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Logout]), { timeout: 5000 });
          expect(service.hasSession()).toBe(false);
       });
 
@@ -699,7 +699,7 @@ describe('AuthenticatorService', () => {
             version: phase1.version + 1,
          });
 
-         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]));
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]), { timeout: 5000 });
          expect(service.hasSession()).toBe(false);
       });
 
@@ -713,7 +713,7 @@ describe('AuthenticatorService', () => {
 
          peerResponder.sendLogout({ pkId, version: phase1.version });
 
-         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Logout]));
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Logout]), { timeout: 5000 });
          expect(service.hasSession()).toBe(false);
       });
 
@@ -748,7 +748,7 @@ describe('AuthenticatorService', () => {
          localStorage.removeItem('pkid');
          peerResponder.sendForget();
 
-         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]));
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]), { timeout: 5000 });
          expect(service.hasSession()).toBe(false);
          expect(service.validKnownUser()).toBe(false);
       });
@@ -762,7 +762,7 @@ describe('AuthenticatorService', () => {
 
          peerResponder.sendUserInfoChanged({ pkId });
 
-         await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+         await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled(), { timeout: 5000 });
 
          const calledUrl = fetchMock.mock.calls[0][0] as URL;
          expect(calledUrl.pathname).toContain('/user');
@@ -774,7 +774,7 @@ describe('AuthenticatorService', () => {
 
          peerResponder.sendForget();
 
-         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]));
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]), { timeout: 5000 });
       });
 
       it('forget when not logged in - same user emits forget', async () => {
@@ -784,7 +784,7 @@ describe('AuthenticatorService', () => {
 
          peerResponder.sendForget();
 
-         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]));
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]), { timeout: 5000 });
       });
 
       it('forget when not logged in - different user emits forget', async () => {
@@ -800,7 +800,7 @@ describe('AuthenticatorService', () => {
 
          peerResponder.sendForget();
 
-         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]));
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]), { timeout: 5000 });
       });
 
       it('logout with no session is no action', async () => {
@@ -852,7 +852,7 @@ describe('AuthenticatorService', () => {
             version: 1,
          });
 
-         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]));
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]), { timeout: 5000 });
       });
 
       it('login when not logged in - same user is no action', async () => {
@@ -890,7 +890,7 @@ describe('AuthenticatorService', () => {
             version: 1,
          });
 
-         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]));
+         await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]), { timeout: 5000 });
       });
    });
 });

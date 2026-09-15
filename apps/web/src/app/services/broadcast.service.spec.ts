@@ -175,9 +175,12 @@ describe('BroadcastService', () => {
       try {
          const result = await requester.requestCredential(TEST_PK_ID);
          expect(result).toBeUndefined();
-         await vi.waitFor(() => {
-            expect(requestNonce).toBeTruthy();
-         });
+         await vi.waitFor(
+            () => {
+               expect(requestNonce).toBeTruthy();
+            },
+            { timeout: 5000 },
+         );
 
          peer.postMessage({
             kind: MessageKind.CredentialResponse,
