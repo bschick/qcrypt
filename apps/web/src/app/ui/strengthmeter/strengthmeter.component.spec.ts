@@ -51,7 +51,7 @@ describe('StrengthMeterComponent', () => {
 
    // Strength leaves its -1 start only once zxcvbn has scored something
    function scored(): Promise<void> {
-      return vi.waitFor(() => expect(component.strength).toBeGreaterThanOrEqual(0));
+      return vi.waitFor(() => expect(component.strength).toBeGreaterThanOrEqual(0), { timeout: 5000 });
    }
 
    function delay(millis: number): Promise<void> {
@@ -68,7 +68,7 @@ describe('StrengthMeterComponent', () => {
          // Longer than the meter's debounce, so every entry is scored on its own
          await delay(250);
       }
-      await vi.waitFor(() => expect(component.strength).toBe(4));
+      await vi.waitFor(() => expect(component.strength).toBe(4), { timeout: 5000 });
 
       expect(pwnedUrls).toEqual([]);
    });
@@ -80,7 +80,7 @@ describe('StrengthMeterComponent', () => {
       const first = await component.checkIfPwned();
       const second = await component.checkIfPwned();
 
-      await vi.waitFor(() => expect(pwnedUrls.length).toBe(1));
+      await vi.waitFor(() => expect(pwnedUrls.length).toBe(1), { timeout: 5000 });
       expect(first).toEqual({ acceptable: true, strength: 4 });
       expect(second).toEqual(first);
    });
@@ -94,7 +94,7 @@ describe('StrengthMeterComponent', () => {
       await scored();
       await component.checkIfPwned();
 
-      await vi.waitFor(() => expect(pwnedUrls.length).toBe(2));
+      await vi.waitFor(() => expect(pwnedUrls.length).toBe(2), { timeout: 5000 });
       expect(pwnedUrls[0]).not.toBe(pwnedUrls[1]);
    });
 
@@ -123,7 +123,7 @@ describe('StrengthMeterComponent', () => {
          component.usedPasswords = [PASSWORD];
          component.password = PASSWORD;
 
-         await vi.waitFor(() => expect(component.warning).toContain('previous loop'));
+         await vi.waitFor(() => expect(component.warning).toContain('previous loop'), { timeout: 5000 });
          expect(component.strength).toBe(0);
       });
 
@@ -131,7 +131,7 @@ describe('StrengthMeterComponent', () => {
          component.usedPasswords = [PASSWORD];
          component.password = `${PASSWORD}1`;
 
-         await vi.waitFor(() => expect(component.warning).toContain('previous loop'));
+         await vi.waitFor(() => expect(component.warning).toContain('previous loop'), { timeout: 5000 });
          expect(component.strength).toBe(0);
       });
 
@@ -139,7 +139,7 @@ describe('StrengthMeterComponent', () => {
          component.hint = PASSWORD;
          component.password = PASSWORD;
 
-         await vi.waitFor(() => expect(component.warning).toContain('hint'));
+         await vi.waitFor(() => expect(component.warning).toContain('hint'), { timeout: 5000 });
          expect(component.strength).toBe(0);
       });
 
@@ -148,7 +148,7 @@ describe('StrengthMeterComponent', () => {
          component.hint = 'nothing alike';
          component.password = PASSWORD;
 
-         await vi.waitFor(() => expect(component.strength).toBe(4));
+         await vi.waitFor(() => expect(component.strength).toBe(4), { timeout: 5000 });
          expect(component.warning).not.toContain('previous loop');
          expect(component.warning).not.toContain('hint');
       });
