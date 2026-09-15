@@ -198,7 +198,10 @@ describe('webauthn round trip', () => {
          supportedAlgorithmIDs: ALGIDS,
       });
 
-      const attestation = emulator.createJSON(RP_ORIGIN, makeRegOptionsResponse(regOptions));
+      const attestation = emulator.createJSON(
+         RP_ORIGIN,
+         makeRegOptionsResponse(regOptions) as PublicKeyCredentialCreationOptionsJSON,
+      );
       const regRequest = makeRegVerifyRequest(attestation as RegistrationFields, {
          userId: 'user-id',
          challenge: regOptions.challenge,
@@ -215,7 +218,10 @@ describe('webauthn round trip', () => {
       expect(registered.verified).toBe(true);
 
       const authOptions = await generateAuthenticationOptions({ rpID: RP_ID, userVerification: 'required' });
-      const assertion = emulator.getJSON(RP_ORIGIN, makeAuthOptionsResponse(authOptions));
+      const assertion = emulator.getJSON(
+         RP_ORIGIN,
+         makeAuthOptionsResponse(authOptions) as PublicKeyCredentialRequestOptionsJSON,
+      );
       const authRequest = makeAuthVerifyRequest(assertion as AuthenticationFields, {
          challenge: authOptions.challenge,
       });

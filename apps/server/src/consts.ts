@@ -30,7 +30,8 @@ import {
 
 export const RETRIES = 3;
 export const RPNAME = 'Quick Crypt';
-export const ALGIDS = [24, 7, 3, 1, -7, -257];
+// ML-DSA-65, ML-DSA-44, EdDSA, ES256, RS256
+export const ALGIDS = [-49, -48, -8, -7, -257];
 
 export { RECOVERYID_BYTES, CHALLENGE_BYTES } from '@qcrypt/api';
 

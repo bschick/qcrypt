@@ -37,7 +37,6 @@ import type {
    PublicKeyCredentialRequestOptionsJSON,
    PublicKeyCredentialCreationOptionsJSON,
    WebAuthnCredential,
-   AuthenticatorTransportFuture,
    PublicKeyCredentialDescriptorJSON,
 } from '@simplewebauthn/server';
 
@@ -332,7 +331,7 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
       publicKey: base64UrlDecode(authenticator.credentialPublicKey)!,
       id: authenticator.credentialId,
       counter: 0, // not using counters
-      transports: authenticator.transports as AuthenticatorTransportFuture[],
+      transports: authenticator.transports,
    };
 
    let verification: VerifiedAuthenticationResponse;
@@ -707,7 +706,7 @@ async function dummyAllowedCreds(inputUserId: string): Promise<PublicKeyCredenti
    // in the Authenticators table. Ceil is summed weights. Since 98% of users have
    // exactly one credential, we return a single entry. Resample and retune
    // as the mix shifts.
-   const profiles: { ceil: number; len: number; transports: AuthenticatorTransportFuture[] }[] = [
+   const profiles: { ceil: number; len: number; transports: string[] }[] = [
       { ceil: 82, len: 16, transports: ['hybrid', 'internal'] },
       { ceil: 124, len: 32, transports: ['internal'] },
       { ceil: 143, len: 20, transports: ['hybrid', 'internal'] },
@@ -755,7 +754,7 @@ async function postAuthOptions(httpDetails: HttpDetails): Promise<Response> {
             allowedCreds = auths.data.map((cred: AuthItem) => ({
                id: cred.credentialId,
                type: 'public-key',
-               transports: cred.transports as AuthenticatorTransportFuture[],
+               transports: cred.transports,
             }));
          }
       } catch (err) {
@@ -902,13 +901,13 @@ async function registrationOptions(
 
       let excludeCreds: {
          id: string;
-         transports?: AuthenticatorTransportFuture[];
+         transports?: string[];
       }[] = [];
 
       if (auths?.data) {
          excludeCreds = auths.data.map((cred: AuthItem) => ({
             id: cred.credentialId,
-            transports: cred.transports as AuthenticatorTransportFuture[],
+            transports: cred.transports,
          }));
       }
 

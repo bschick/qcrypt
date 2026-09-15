@@ -32,6 +32,7 @@ import {
 } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import type {
+   AuthenticationExtensionsClientOutputs,
    PublicKeyCredentialCreationOptionsJSON,
    PublicKeyCredentialRequestOptionsJSON,
 } from '@simplewebauthn/browser';
