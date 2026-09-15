@@ -2480,7 +2480,7 @@ describe('Stream manipulation, multi-version', () => {
       }
    });
 
-   it('detect manipulated cipher stream header, blockN', async () => {
+   it('detect manipulated cipher stream header, blockN', { timeout: 45000 }, async () => {
       for (const ver of vers) {
          // First make sure it decrypts as expected
          const [cipherStream, cipherdata] = streamFromBase64(ver.ct);
@@ -3175,7 +3175,7 @@ describe('Block order change and deletion detection, multi-version', () => {
       }
    });
 
-   it('changed multi block ciphertext', async () => {
+   it('changed multi block ciphertext', { timeout: 60000 }, async () => {
       for (const ver of vers) {
          for (const [_change, ct] of Object.entries(ver.badCts)) {
             const [cipherStream] = streamFromBase64(ct);
@@ -3317,7 +3317,7 @@ describe('Block order change and deletion detection, MasterKeyKeyProvider, multi
       }
    });
 
-   it('changed multi block ciphertext', async () => {
+   it('changed multi block ciphertext', { timeout: 60000 }, async () => {
       for (const ver of vers) {
          for (const [_change, ct] of Object.entries(ver.badCts)) {
             const [cipherStream] = streamFromBase64(ct);

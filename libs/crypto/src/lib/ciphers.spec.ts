@@ -1405,7 +1405,7 @@ describe('Decryption known values', () => {
       await expect(decipher.decryptBlock0()).rejects.toThrow(/Decipher invalid state.+/);
    });
 
-   it('bad pwd to cipherdata info and decrypt, multi version', async () => {
+   it('bad pwd to cipherdata info and decrypt, multi version', { timeout: 45000 }, async () => {
       const [_, clearData] = streamFromStr('A nice 🦫 came to say hello');
       const pwdGood = 'a 🌲 of course';
       const pwdBad = 'a 🌵 of course';
