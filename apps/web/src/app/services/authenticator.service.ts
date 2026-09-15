@@ -28,6 +28,7 @@ import {
    type RegistrationResponseJSON,
    startRegistration,
    startAuthentication,
+   sendSignal,
 } from '@simplewebauthn/browser';
 import { Subject, Subscription, filter } from 'rxjs';
 import {
@@ -927,7 +928,20 @@ export class AuthenticatorService {
 
       this.userInfo.set(userInfo);
       this.activity();
+      this._signalAcceptedCredentials(userInfo);
       return userInfo;
+   }
+
+   private _signalAcceptedCredentials(userInfo: VerifiedUserInfo): void {
+      // WebAuthn signals are considered "fire and forget". There is no guarantee that sending
+      // a signal make its way to a user's credential manager via the browser and/or platform.
+      sendSignal({
+         signalName: 'allAcceptedCredentials',
+         rpID: window.location.hostname,
+         userID: userInfo.userId,
+         // Authenticators may hide a missing passky, so include all known passkeys
+         allAcceptedCredentialIDs: userInfo.authenticators.map((authenticator) => authenticator.credentialId),
+      }).catch(() => undefined);
    }
 
    activity() {
@@ -936,11 +950,11 @@ export class AuthenticatorService {
          this._intervalId = 0;
       }
 
-      // Currently 1.5 hours inactivity expritation
+      // 1.5 hours inactivity expritation
       const activityExpiry = new Date(Date.now() + ACTIVITY_TIMEOUT_SEC * 1000).toISOString();
       localStorage.setItem('activityexpiry', activityExpiry);
 
-      // Currently every 2 minutes
+      // Check every 2 minutes
       this._intervalId = window.setInterval(() => this._timerTick(), EXPIRY_CHECK_INTERVAL_MS);
    }
 
@@ -1092,8 +1106,20 @@ export class AuthenticatorService {
       }
 
       const userInfo = this._updateLoggedInUser(serverUserInfo);
+      this._signalUserName(userInfo.userId, userInfo.userName);
       this._broadcastSvc.sendUserInfoChanged({ pkId: userInfo.pkId });
       return userInfo;
+   }
+
+   private _signalUserName(userId: string, userName: string): void {
+      // WebAuthn signals are considered "fire and forget". There is no guarantee that sending
+      // a signal make its way to a user's credential manager via the browser and/or platform.
+      sendSignal({
+         signalName: 'currentUserDetails',
+         rpID: window.location.hostname,
+         userID: userId,
+         userName,
+      }).catch(() => undefined);
    }
 
    async deletePasskey(credentialId: string): Promise<number> {
@@ -1526,7 +1552,7 @@ export class AuthenticatorService {
       optionsJson: api.RegOptionsResponse,
       tryPrf: boolean,
    ): Promise<{ regResponse: RegistrationResponseJSON; prfKey: Uint8Array<ArrayBuffer> | null }> {
-      // SimpleWebAuthn v10 caused incompatibility with older versions by
+      // SimpleWebAuthn v10+ caused incompatibility with older versions by
       // encoding credential user.id as b64 rather than utf as older versions
       // We therefore need to translate.
       const idBytes = new TextEncoder().encode(optionsJson.user.id);
