@@ -31,7 +31,6 @@ import type {
    AuthenticationResponseJSON,
    AuthenticatorAttachment,
    AuthenticatorSelectionCriteria,
-   AuthenticatorTransportFuture,
    COSEAlgorithmIdentifier,
    PublicKeyCredentialCreationOptionsJSON,
    PublicKeyCredentialRequestOptionsJSON,
@@ -48,7 +47,7 @@ export type RegistrationFields = {
    response: {
       clientDataJSON: string;
       attestationObject: string;
-      transports?: AuthenticatorTransportFuture[];
+      transports?: string[];
    };
 };
 
@@ -178,8 +177,8 @@ export function makeAddVerifyRequest(source: RegistrationFields, riders: AddVeri
 
 export type CredentialDescriptorResponse = {
    id: string;
-   type: PublicKeyCredentialType;
-   transports?: AuthenticatorTransportFuture[];
+   type: string;
+   transports?: string[];
 };
 
 export type RegOptionsResponse = {
