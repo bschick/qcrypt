@@ -20,6 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
+import { COSEALG } from '@simplewebauthn/server/helpers';
 import {
    PAYLOAD_SIZE_MIN,
    HEADER_BYTES_6P,
@@ -30,8 +31,7 @@ import {
 
 export const RETRIES = 3;
 export const RPNAME = 'Quick Crypt';
-// ML-DSA-65, ML-DSA-44, EdDSA, ES256, RS256
-export const ALGIDS = [-49, -48, -8, -7, -257];
+export const ALGIDS: number[] = [COSEALG.ML_DSA_65, COSEALG.ML_DSA_44, COSEALG.EdDSA, COSEALG.ES256, COSEALG.RS256];
 
 export { RECOVERYID_BYTES, CHALLENGE_BYTES } from '@qcrypt/api';
 
