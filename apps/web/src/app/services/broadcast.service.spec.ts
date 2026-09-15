@@ -188,8 +188,12 @@ describe('BroadcastService', () => {
             nonce: requestNonce,
          });
 
-         await new Promise((resolve) => setTimeout(resolve, 50));
-         expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/collection window/));
+         await vi.waitFor(
+            () => {
+               expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/collection window/));
+            },
+            { timeout: 5000 },
+         );
       } finally {
          errorSpy.mockRestore();
          peer.close();
@@ -304,16 +308,20 @@ describe('BroadcastService', () => {
          userCredExpiry: TEST_EXPIRY,
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(received).toEqual([
-         {
-            kind: MessageKind.Login,
-            pkId: TEST_PK_ID,
-            version: 7,
-            userCredEnc: USER_CRED_ENC,
-            userCredExpiry: TEST_EXPIRY,
+      await vi.waitFor(
+         () => {
+            expect(received).toEqual([
+               {
+                  kind: MessageKind.Login,
+                  pkId: TEST_PK_ID,
+                  version: 7,
+                  userCredEnc: USER_CRED_ENC,
+                  userCredExpiry: TEST_EXPIRY,
+               },
+            ]);
          },
-      ]);
+         { timeout: 5000 },
+      );
    });
 
    it('handler receives logout messages', async () => {
@@ -322,14 +330,18 @@ describe('BroadcastService', () => {
 
       responder.sendLogout({ pkId: TEST_PK_ID, version: 4 });
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(received).toEqual([
-         {
-            kind: MessageKind.Logout,
-            pkId: TEST_PK_ID,
-            version: 4,
+      await vi.waitFor(
+         () => {
+            expect(received).toEqual([
+               {
+                  kind: MessageKind.Logout,
+                  pkId: TEST_PK_ID,
+                  version: 4,
+               },
+            ]);
          },
-      ]);
+         { timeout: 5000 },
+      );
    });
 
    it('handler receives forget messages', async () => {
@@ -338,8 +350,12 @@ describe('BroadcastService', () => {
 
       responder.sendForget();
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(received).toEqual([{ kind: MessageKind.Forget }]);
+      await vi.waitFor(
+         () => {
+            expect(received).toEqual([{ kind: MessageKind.Forget }]);
+         },
+         { timeout: 5000 },
+      );
    });
 
    it('handler receives userInfoChanged messages', async () => {
@@ -348,8 +364,12 @@ describe('BroadcastService', () => {
 
       responder.sendUserInfoChanged({ pkId: TEST_PK_ID });
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(received).toEqual([{ kind: MessageKind.UserInfoChanged, pkId: TEST_PK_ID }]);
+      await vi.waitFor(
+         () => {
+            expect(received).toEqual([{ kind: MessageKind.UserInfoChanged, pkId: TEST_PK_ID }]);
+         },
+         { timeout: 5000 },
+      );
    });
 
    it('handler does not receive credRequest or credResponse internal messages', async () => {
