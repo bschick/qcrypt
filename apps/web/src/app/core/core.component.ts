@@ -22,7 +22,6 @@ SOFTWARE. */
 import {
    Component,
    Renderer2,
-   ViewChild,
    ElementRef,
    type OnInit,
    type AfterViewInit,
@@ -33,6 +32,7 @@ import {
    NgZone,
    ChangeDetectionStrategy,
    inject,
+   viewChild,
 } from '@angular/core';
 import { Ciphers, makeCipherArmor, parseCipherArmor, PWDKeyProvider } from '@qcrypt/crypto';
 import { CommonModule } from '@angular/common';
@@ -154,13 +154,13 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    public clearWarning = '';
    public cipherWarning = '';
 
-   @ViewChild('clearField') clearField!: ElementRef;
-   @ViewChild('cipherField') cipherField!: ElementRef;
-   @ViewChild('inputArea') inputArea!: ElementRef;
-   @ViewChild('fileUpload') fileUpload!: ElementRef;
-   @ViewChild('bubbleTip1') bubbleTip1!: BubbleDirective;
-   @ViewChild('bubbleTip2') bubbleTip2!: BubbleDirective;
-   @ViewChild('options') options!: OptionsComponent;
+   readonly clearField = viewChild.required<ElementRef>('clearField');
+   readonly cipherField = viewChild.required<ElementRef>('cipherField');
+   readonly inputArea = viewChild.required<ElementRef>('inputArea');
+   readonly fileUpload = viewChild.required<ElementRef>('fileUpload');
+   readonly bubbleTip1 = viewChild.required<BubbleDirective>('bubbleTip1');
+   readonly bubbleTip2 = viewChild.required<BubbleDirective>('bubbleTip2');
+   readonly options = viewChild.required<OptionsComponent>('options');
 
    constructor() {
       this.matIconRegistry.addSvgIcon(
@@ -178,7 +178,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async showTextFromParams() {
-      await this.options.optionsLoaded();
+      await this.options().optionsLoaded();
 
       const params = new HttpParams({ fromString: window.location.search });
       if (params.get('cipherarmor')) {
@@ -198,7 +198,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          if (localStorage.getItem(`${this.authSvc.userId}welcomed`) !== 'yup') {
             setTimeout(() => {
                this.welcomed = false;
-               this.bubbleTip1.show();
+               this.bubbleTip1().show();
             }, 1000);
          }
       }
@@ -246,7 +246,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    onAuthEvent(data: AuthEventData) {
       if (data.event === AuthEvent.Login) {
-         this.options.loadOptions(data.userId!);
+         this.options().loadOptions(data.userId!);
          this.showTextFromParams();
       } else if (data.event === AuthEvent.Logout || data.event === AuthEvent.Forget) {
          // Dismiss first, so nothing failing below can leave a dialog over the stop page
@@ -256,15 +256,15 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.privacyClear();
          this.onClearCipher();
          if (data.event === AuthEvent.Logout) {
-            this.options.detachOptions();
+            this.options().detachOptions();
             this.trySigninDialog();
          } else {
-            this.options.nukeSensitiveOptions();
+            this.options().nukeSensitiveOptions();
             this.router.navigateByUrl('/welcome');
          }
       } else if (data.event === AuthEvent.Delete) {
          localStorage.removeItem(`${data.userId}welcomed`);
-         this.options.nukeAllOptions();
+         this.options().nukeAllOptions();
       }
    }
 
@@ -321,8 +321,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.intervalId = 0;
       }
 
-      this.cacheTimeout = Date.now() + this.options.cacheTime * 1000;
-      this.secondsRemaining = this.options.cacheTime;
+      this.cacheTimeout = Date.now() + this.options().cacheTime * 1000;
+      this.secondsRemaining = this.options().cacheTime;
 
       // @ts-ignore
       this.intervalId = setInterval(() => this.timerTick(), 1000);
@@ -346,7 +346,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    @HostListener('document:visibilitychange')
    visibilitychange() {
-      if (document.hidden && this.options.visClear) {
+      if (document.hidden && this.options().visClear) {
          this.privacyClear();
       }
    }
@@ -357,17 +357,17 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    onDraggerMouseMove(event: MouseEvent) {
       if (this.mouseDown) {
-         const pointerRelativeXpos = event.clientX - this.inputArea.nativeElement.offsetLeft;
+         const pointerRelativeXpos = event.clientX - this.inputArea().nativeElement.offsetLeft;
          const minWidth = 200;
 
-         const areaWidth = this.inputArea.nativeElement.offsetWidth - 16; // 16 for the size of the drag area
+         const areaWidth = this.inputArea().nativeElement.offsetWidth - 16; // 16 for the size of the drag area
          //      const clearWidth = this.clearField.nativeElement.offsetWidth;
          //      const cipherWidth = this.cipherField.nativeElement.offsetWidth;
 
          const newclearWidth = Math.max(minWidth, pointerRelativeXpos - 8); // 8 to center in drag area
 
-         this.clearField.nativeElement.style.flexGrow = newclearWidth / areaWidth;
-         this.cipherField.nativeElement.style.flexGrow = (areaWidth - newclearWidth) / areaWidth;
+         this.clearField().nativeElement.style.flexGrow = newclearWidth / areaWidth;
+         this.cipherField().nativeElement.style.flexGrow = (areaWidth - newclearWidth) / areaWidth;
       }
    }
 
@@ -400,8 +400,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.clearLabel = 'Clear Text';
       this.clearWarning = '';
       if (!this.welcomed && this.authSvc.hasSession()) {
-         this.bubbleTip1.show();
-         this.bubbleTip2.hide();
+         this.bubbleTip1().show();
+         this.bubbleTip2().hide();
       }
    }
 
@@ -410,8 +410,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.clearWarning = '';
       }
       if (!this.welcomed && this.authSvc.hasSession()) {
-         this.bubbleTip1.hide();
-         this.bubbleTip2.show();
+         this.bubbleTip1().hide();
+         this.bubbleTip2().show();
       }
    }
 
@@ -475,11 +475,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                data: {
                   hint: cdInfo.hint,
                   encrypting,
-                  minStrength: +this.options.minPwdStrength,
-                  hidePwd: this.options.hidePwd,
+                  minStrength: +this.options().minPwdStrength,
+                  hidePwd: this.options().hidePwd,
                   loopCount: cdInfo.lp,
                   loops: cdInfo.lpEnd,
-                  checkPwned: this.options.checkPwned,
+                  checkPwned: this.options().checkPwned,
                   welcomed: this.welcomed,
                   userName: this.authSvc.userName,
                   cipherMode: cdInfo.alg,
@@ -494,7 +494,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                   reject(new ProcessCancelled());
                } else {
                   this.clearPassword();
-                  if (this.options.cacheTime > 0 && result[0] && cdInfo.lpEnd === 1) {
+                  if (this.options().cacheTime > 0 && result[0] && cdInfo.lpEnd === 1) {
                      const encoder = new TextEncoder();
                      this.cachedPassword = encoder.encode(result[0]);
                      this.cachedHint = encoder.encode(result[1]);
@@ -521,8 +521,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.showClearFile(`${msg}selected for encryption`, saved, clearFile.name);
 
       if (!this.welcomed) {
-         this.bubbleTip1.hide();
-         this.bubbleTip2.show();
+         this.bubbleTip1().hide();
+         this.bubbleTip2().show();
       }
    }
 
@@ -543,12 +543,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.onClearCipher();
 
       if (!this.welcomed) {
-         this.bubbleTip1.hide();
-         this.bubbleTip2.hide();
+         this.bubbleTip1().hide();
+         this.bubbleTip2().hide();
       }
 
       try {
-         if (this.options.loops > 1) {
+         if (this.options().loops > 1) {
             // it's confusing to use cached password when looping so
             // start from scratch
             this.clearPassword();
@@ -589,7 +589,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.showCipherError(msg);
          }
          if (!this.welcomed) {
-            this.bubbleTip2.show();
+            this.bubbleTip2().show();
          }
       } finally {
          this.showProgress = false;
@@ -614,8 +614,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.onClearCipher();
 
       if (!this.welcomed) {
-         this.bubbleTip1.hide();
-         this.bubbleTip2.hide();
+         this.bubbleTip1().hide();
+         this.bubbleTip2().hide();
       }
 
       try {
@@ -627,7 +627,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             baseName = 'armor';
          }
 
-         if (this.options.loops > 1) {
+         if (this.options().loops > 1) {
             // it's confusing to use cached password when looping so
             // start from scratch
             this.clearPassword();
@@ -675,7 +675,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.showCipherError(msg);
          }
          if (!this.welcomed) {
-            this.bubbleTip2.show();
+            this.bubbleTip2().show();
          }
       } finally {
          this.showProgress = false;
@@ -704,8 +704,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    // Return value is false if the process was aborted
    async makeCipherStream(clearStream: ReadableStream<Uint8Array>): Promise<ReadableStream<Uint8Array>> {
       const econtext = {
-         algs: this.options.algorithms,
-         ic: this.options.icount,
+         algs: this.options().algorithms,
+         ic: this.options().icount,
       };
 
       // PWDKeyProvider takes ownershp of userCred
@@ -943,7 +943,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    showCipherData(cipherData: Uint8Array, extra: string = ''): void {
-      const cipherArmor = makeCipherArmor(cipherData, this.options.format, this.options.reminder, environment.host);
+      const cipherArmor = makeCipherArmor(cipherData, this.options().format, this.options().reminder, environment.host);
       this.cipherArmor = cipherArmor;
       this.cipherFile = undefined;
       this.cipherMsg = '';
@@ -991,13 +991,14 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async cipherFileLoader() {
-      this.fileUpload.nativeElement.onchange = (event: Event) => {
+      const fileUpload = this.fileUpload();
+      fileUpload.nativeElement.onchange = (event: Event) => {
          const file = (event.target as HTMLInputElement).files?.[0];
          if (file) {
             this.setCipherFile(file);
          }
       };
-      this.fileUpload.nativeElement.click();
+      fileUpload.nativeElement.click();
    }
 
    async onLoadClearFile() {
@@ -1017,14 +1018,15 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    async clearFileLoader() {
-      this.fileUpload.nativeElement.onchange = (event: Event) => {
+      const fileUpload = this.fileUpload();
+      fileUpload.nativeElement.onchange = (event: Event) => {
          const file = (event.target as HTMLInputElement).files?.[0];
          if (file) {
             this.onClearClear();
             this.setClearFile(file);
          }
       };
-      this.fileUpload.nativeElement.click();
+      fileUpload.nativeElement.click();
    }
 
    fileDownload(filename: string, blob: Blob): void {

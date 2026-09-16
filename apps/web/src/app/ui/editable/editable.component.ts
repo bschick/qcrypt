@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Component, Output, Input, EventEmitter, ViewChild, ElementRef, ChangeDetectionStrategy } from '@angular/core';
+import { Component, Input, ElementRef, ChangeDetectionStrategy, input, output, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatInputModule } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
@@ -45,15 +45,15 @@ import { NoAssistDirective } from '../noassist.directive';
    styleUrl: './editable.component.scss',
 })
 export class EditableComponent {
-   @Input() id = '';
-   @Input() minlength = '0';
-   @Input() maxlength = '50';
-   @Input() readonly = false;
+   readonly id = input('');
+   readonly minlength = input('0');
+   readonly maxlength = input('50');
+   readonly readonly = input(false);
    @Input() writing = false;
-   @Input() color = '';
-   @Input() backgroundColor = '';
-   @Output() valueChanged = new EventEmitter<EditableComponent>();
-   @ViewChild('editableInput', { static: true }) editInput!: ElementRef;
+   readonly color = input('');
+   readonly backgroundColor = input('');
+   readonly valueChanged = output<EditableComponent>();
+   readonly editInput = viewChild.required<ElementRef>('editableInput');
    public text = '';
    private _value = '';
 
@@ -67,7 +67,7 @@ export class EditableComponent {
    }
 
    onFocusOut() {
-      if (!this.readonly && this._value !== this.text) {
+      if (!this.readonly() && this._value !== this.text) {
          this._value = this.text;
          this.valueChanged.emit(this);
       }
@@ -75,7 +75,7 @@ export class EditableComponent {
    }
 
    tryMakeEditable() {
-      if (!this.readonly) {
+      if (!this.readonly()) {
          this.writing = true;
       }
    }
@@ -88,7 +88,7 @@ export class EditableComponent {
       event.preventDefault();
       if (this.writing) {
          this.text = this._value;
-         this.editInput.nativeElement.blur();
+         this.editInput().nativeElement.blur();
       }
    }
 
@@ -96,11 +96,11 @@ export class EditableComponent {
       event.stopPropagation();
       event.preventDefault();
       if (this.writing) {
-         this.editInput.nativeElement.blur();
+         this.editInput().nativeElement.blur();
       }
    }
 
    focus() {
-      this.editInput?.nativeElement?.focus();
+      this.editInput()?.nativeElement?.focus();
    }
 }

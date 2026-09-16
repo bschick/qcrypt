@@ -23,13 +23,11 @@ import {
    type AfterViewInit,
    Component,
    ElementRef,
-   EventEmitter,
    type OnInit,
-   Input,
-   Output,
-   ViewChild,
    ChangeDetectionStrategy,
    inject,
+   output,
+   viewChild,
 } from '@angular/core';
 import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -140,19 +138,15 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    private _algorithmList: cc.CipherAlgs[] = ['X20-PLY'];
    private _userId: string | null = null;
 
-   @ViewChild('formatLabel') formatLabel!: ElementRef;
-   @ViewChild('minStrLabel') minStrLabel!: ElementRef;
-   @ViewChild('algorithms') algorithmsCmp!: AlgorithmsComponent;
+   readonly formatLabel = viewChild.required<ElementRef>('formatLabel');
+   readonly minStrLabel = viewChild.required<ElementRef>('minStrLabel');
+   readonly algorithmsCmp = viewChild.required<AlgorithmsComponent>('algorithms');
 
-   @Input() set expand(expandOptions: boolean) {
-      this.expandOptions = expandOptions;
-   }
-
-   @Output() loopsChange = new EventEmitter<number>();
-   @Output() icountChange = new EventEmitter<number>();
-   @Output() cacheTimeChange = new EventEmitter<number>();
-   @Output() pwdOptionsChange = new EventEmitter<boolean>();
-   @Output() formatOptionsChange = new EventEmitter<boolean>();
+   readonly loopsChange = output<number>();
+   readonly icountChange = output<number>();
+   readonly cacheTimeChange = output<number>();
+   readonly pwdOptionsChange = output<boolean>();
+   readonly formatOptionsChange = output<boolean>();
 
    ngOnInit() {
       this.cacheTimeInput.valueChanges.subscribe(this.onCacheTimeChange.bind(this));
@@ -188,8 +182,8 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
    ngAfterViewInit() {
       // ugly hack to make angular not clip the label for dropdown select elements
-      this.formatLabel.nativeElement.parentElement.style.maxWidth = 'calc(100%/0.7)';
-      this.minStrLabel.nativeElement.parentElement.style.maxWidth = 'calc(100%/0.7)';
+      this.formatLabel().nativeElement.parentElement.style.maxWidth = 'calc(100%/0.7)';
+      this.minStrLabel().nativeElement.parentElement.style.maxWidth = 'calc(100%/0.7)';
    }
 
    loadOptions(userId: string) {
@@ -236,8 +230,9 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
          this.setIcountWarning();
          // order is important, set modes first
-         this.algorithmsCmp.modes = this._algorithmList;
-         this.algorithmsCmp.count = this.loopsInput.value || this.LOOPS_DEFAULT;
+         const algorithmsCmp = this.algorithmsCmp();
+         algorithmsCmp.modes = this._algorithmList;
+         algorithmsCmp.count = this.loopsInput.value || this.LOOPS_DEFAULT;
       }
    }
 
@@ -261,8 +256,9 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
       // order is important, set modes first
       this._algorithmList = ['X20-PLY'];
-      this.algorithmsCmp.modes = this._algorithmList;
-      this.algorithmsCmp.count = this.loopsInput.value || this.LOOPS_DEFAULT;
+      const algorithmsCmp = this.algorithmsCmp();
+      algorithmsCmp.modes = this._algorithmList;
+      algorithmsCmp.count = this.loopsInput.value || this.LOOPS_DEFAULT;
       this.lsSet('algorithm', JSON.stringify(this._algorithmList));
 
       // these values are only stored when during onblur, so set manually
@@ -450,7 +446,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       loops = Math.max(loops, 1);
       loops = Math.min(loops, this.LOOPS_MAX);
 
-      this.algorithmsCmp.count = loops;
+      this.algorithmsCmp().count = loops;
       this.setLoops(loops);
       this.lsSet('loops', loops);
 

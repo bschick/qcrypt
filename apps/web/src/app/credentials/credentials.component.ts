@@ -22,14 +22,13 @@ SOFTWARE. */
 
 import {
    Component,
-   EventEmitter,
    type OnInit,
-   Output,
    effect,
    Renderer2,
    type OnDestroy,
    ChangeDetectionStrategy,
    inject,
+   output,
 } from '@angular/core';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -81,7 +80,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    public passKeys: api.AuthenticatorInfoResponse[] = [];
    public showProgress = false;
    public displayedColumns: string[] = ['image', 'description', 'delete'];
-   @Output() done = new EventEmitter<boolean>();
+   readonly done = output<boolean>();
 
    constructor() {
       effect(() => {

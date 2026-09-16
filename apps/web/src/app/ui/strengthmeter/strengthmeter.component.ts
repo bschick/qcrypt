@@ -21,13 +21,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import {
    Component,
-   Output,
    Input,
-   EventEmitter,
-   ViewChild,
    ElementRef,
    type AfterViewInit,
    ChangeDetectionStrategy,
+   output,
+   viewChild,
 } from '@angular/core';
 
 import { MatIconModule } from '@angular/material/icon';
@@ -87,10 +86,10 @@ export class StrengthMeterComponent implements AfterViewInit {
    private _breachedPassword = '';
    private _scorer: Promise<ZxcvbnFactory> | undefined;
 
-   @ViewChild('sliderElem') sliderRef!: ElementRef;
-   @ViewChild('matripple') rippleRef!: ElementRef;
+   readonly sliderRef = viewChild.required<ElementRef>('sliderElem');
+   readonly rippleRef = viewChild.required<ElementRef>('matripple');
 
-   @Output() acceptableChanged = new EventEmitter<AcceptableState>();
+   readonly acceptableChanged = output<AcceptableState>();
 
    @Input() set minStrength(strengthMin: number) {
       this.strengthMin = Math.max(0, Math.min(strengthMin, 4));
@@ -275,8 +274,9 @@ export class StrengthMeterComponent implements AfterViewInit {
 
    ngAfterViewInit(): void {
       // https://github.com/angular/components/issues/28679
-      if (this.sliderRef?.nativeElement) {
-         const parent = this.sliderRef.nativeElement.parentNode;
+      const sliderRef = this.sliderRef();
+      if (sliderRef?.nativeElement) {
+         const parent = sliderRef.nativeElement.parentNode;
          const ripple = parent.getElementsByClassName('mat-ripple');
          if (ripple.length) {
             ripple[0].remove();

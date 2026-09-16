@@ -23,11 +23,11 @@ import {
    Component,
    Renderer2,
    ViewEncapsulation,
-   ViewChild,
    type AfterViewInit,
    type OnDestroy,
    ChangeDetectionStrategy,
    inject,
+   viewChild,
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 
@@ -110,8 +110,8 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    public usedPasswords: string[];
    public maxHintLen = cc.HINT_MAX_LEN;
 
-   @ViewChild('bubbleTip') bubbleTip!: BubbleDirective;
-   @ViewChild(StrengthMeterComponent) strengthMeter?: StrengthMeterComponent;
+   readonly bubbleTip = viewChild.required<BubbleDirective>('bubbleTip');
+   readonly strengthMeter = viewChild(StrengthMeterComponent);
 
    constructor() {
       const data = this.data;
@@ -132,19 +132,20 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
 
    ngAfterViewInit(): void {
       if (!this.welcomed) {
-         this.bubbleTip.show();
+         this.bubbleTip().show();
       }
    }
 
    ngOnDestroy(): void {
       if (!this.welcomed) {
-         this.bubbleTip.hide();
+         this.bubbleTip().hide();
       }
    }
 
    async checkPassword() {
-      if (this.strengthMeter) {
-         this.onAcceptableChanged(await this.strengthMeter.checkIfPwned());
+      const strengthMeter = this.strengthMeter();
+      if (strengthMeter) {
+         this.onAcceptableChanged(await strengthMeter.checkIfPwned());
       }
    }
 

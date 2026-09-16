@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, input } from '@angular/core';
 import { environment } from '../../../environments/environment';
 
 // Only rendered while printing, so a page can keep it mounted with no visible effect
@@ -31,8 +31,8 @@ import { environment } from '../../../environments/environment';
    styleUrl: './recoverysheet.component.scss',
 })
 export class RecoverySheetComponent {
-   @Input({ required: true }) userName!: string;
-   @Input({ required: true }) recoveryWords!: string;
-   @Input({ required: true }) userCred!: string;
+   readonly userName = input.required<string>();
+   readonly recoveryWords = input.required<string>();
+   readonly userCred = input.required<string>();
    public readonly host = environment.host;
 }

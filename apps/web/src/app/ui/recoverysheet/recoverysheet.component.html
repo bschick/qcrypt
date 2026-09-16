@@ -10,14 +10,14 @@
   </p>
 
   <h3>User Name</h3>
-  <p class="sheet-value">{{ userName }}</p>
+  <p class="sheet-value">{{ userName() }}</p>
   <p>
     The name above was the user name for this account when this sheet was printed. It may have been changed since. You
     can print a new recovery sheet at {{ host }}/checkrecovery
   </p>
 
   <h3>Recovery Word Pattern</h3>
-  <p class="sheet-value">{{ recoveryWords }}</p>
+  <p class="sheet-value">{{ recoveryWords() }}</p>
   <p>
     This word pattern allows you to restore your account if you lose access to all your Quick Crypt passkeys. To restore
     your account, go to
@@ -25,7 +25,7 @@
   </p>
 
   <h3>User Credential</h3>
-  <p class="sheet-value">{{ userCred }}</p>
+  <p class="sheet-value">{{ userCred() }}</p>
   <p>
     Your user credential, along with your encryption passwords, is used to encrypt and decrypt your data. Normally you
     do not need to know your user credential, but it is provided here for offline storage in case you ever lose access

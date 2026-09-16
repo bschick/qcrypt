@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Directive, Input, ComponentRef, ElementRef, Injector, ViewContainerRef, NgZone, inject } from '@angular/core';
+import { Directive, ComponentRef, ElementRef, Injector, ViewContainerRef, NgZone, inject, input } from '@angular/core';
 import { BubbleComponent, BubblePosition } from './bubble.component';
 
 @Directive({
@@ -35,10 +35,10 @@ export class BubbleDirective {
 
    private bubbleIndex!: number;
 
-   @Input() bubbleTip = 'this is a QC tip';
-   @Input() bubblePosition: BubblePosition = BubblePosition.DEFAULT;
-   @Input() bubbleWidth?: string;
-   @Input() bubbleHeight?: string;
+   readonly bubbleTip = input('this is a QC tip');
+   readonly bubblePosition = input<BubblePosition>(BubblePosition.DEFAULT);
+   readonly bubbleWidth = input<string>();
+   readonly bubbleHeight = input<string>();
 
    private componentRef: ComponentRef<BubbleComponent> | null = null;
    private scrollHandler: (() => void) | null = null;
@@ -77,10 +77,10 @@ export class BubbleDirective {
 
    private setComponentProperties() {
       if (this.componentRef !== null) {
-         this.componentRef.instance.tip = this.bubbleTip;
-         this.componentRef.instance.position = this.bubblePosition;
-         this.componentRef.instance.width = this.bubbleWidth;
-         this.componentRef.instance.height = this.bubbleHeight;
+         this.componentRef.instance.tip = this.bubbleTip();
+         this.componentRef.instance.position = this.bubblePosition();
+         this.componentRef.instance.width = this.bubbleWidth();
+         this.componentRef.instance.height = this.bubbleHeight();
          this.positionAndClamp();
       }
    }
@@ -92,7 +92,8 @@ export class BubbleDirective {
 
       const { left, right, top, bottom } = this.elementRef.nativeElement.getBoundingClientRect();
 
-      switch (this.bubblePosition) {
+      const bubblePosition = this.bubblePosition();
+      switch (bubblePosition) {
          case BubblePosition.UPPER:
          case BubblePosition.ABOVE: {
             this.componentRef.instance.left = Math.round((right - left) / 2 + left);
@@ -105,7 +106,7 @@ export class BubbleDirective {
             break;
          }
          default: {
-            console.error('unknown bubble position', this.bubblePosition);
+            console.error('unknown bubble position', bubblePosition);
          }
       }
 
