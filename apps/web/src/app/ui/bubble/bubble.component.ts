@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { ChangeDetectorRef, Component, type OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { ChangeDetectorRef, Component, type OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { NgClass } from '@angular/common';
 
 export const BubblePosition = {
@@ -39,6 +39,9 @@ export type BubblePosition = (typeof BubblePosition)[keyof typeof BubblePosition
    imports: [NgClass],
 })
 export class BubbleComponent implements OnInit {
+   // BubbleDirective creates this component dynamically and drives its change detection from outside
+   public changeRef = inject(ChangeDetectorRef);
+
    position: BubblePosition = BubblePosition.DEFAULT;
    theme = 'light';
    tip = '';
@@ -47,8 +50,6 @@ export class BubbleComponent implements OnInit {
    width?: string;
    height?: string;
    visible = false;
-
-   constructor(public changeRef: ChangeDetectorRef) {}
 
    ngOnInit(): void {}
 

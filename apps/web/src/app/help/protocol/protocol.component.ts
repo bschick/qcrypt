@@ -1,6 +1,6 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
-import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
@@ -14,7 +14,7 @@ import { CopyrightComponent } from '../../ui/copyright/copyright.component';
    styleUrl: './protocol.component.scss',
 })
 export class ProtocolComponent {
-   constructor(private dialog: MatDialog) {}
+   private dialog = inject(MatDialog);
 
    openFlowImage(flowImage: string) {
       this.dialog.open(FlowDialog, { data: flowImage });
@@ -29,7 +29,7 @@ export class ProtocolComponent {
    styleUrl: './protocol.component.scss',
 })
 export class Protocol4Component {
-   constructor(private dialog: MatDialog) {}
+   private dialog = inject(MatDialog);
 
    openFlowImage(flowImage: string) {
       this.dialog.open(FlowDialog, { data: flowImage });
@@ -44,7 +44,7 @@ export class Protocol4Component {
    styleUrl: './protocol.component.scss',
 })
 export class Protocol5Component {
-   constructor(private dialog: MatDialog) {}
+   private dialog = inject(MatDialog);
 
    openFlowImage(flowImage: string) {
       this.dialog.open(FlowDialog, { data: flowImage });
@@ -59,7 +59,7 @@ export class Protocol5Component {
    styleUrl: './protocol.component.scss',
 })
 export class Protocol6Component {
-   constructor(private dialog: MatDialog) {}
+   private dialog = inject(MatDialog);
 
    openFlowImage(flowImage: string) {
       this.dialog.open(FlowDialog, { data: flowImage });
@@ -74,7 +74,7 @@ export class Protocol6Component {
    styleUrl: './protocol.component.scss',
 })
 export class Protocol7Component {
-   constructor(private dialog: MatDialog) {}
+   private dialog = inject(MatDialog);
 
    openFlowImage(flowImage: string) {
       this.dialog.open(FlowDialog, { data: flowImage });
@@ -89,7 +89,7 @@ export class Protocol7Component {
    styleUrl: './protocol.component.scss',
 })
 export class Protocol8Component {
-   constructor(private dialog: MatDialog) {}
+   private dialog = inject(MatDialog);
 
    openFlowImage(flowImage: string) {
       this.dialog.open(FlowDialog, { data: flowImage });
@@ -104,13 +104,12 @@ export class Protocol8Component {
    imports: [MatDialogModule, MatIconModule, MatTooltipModule, MatButtonModule],
 })
 export class FlowDialog {
+   private flowData = inject<string>(MAT_DIALOG_DATA);
+
    public flowImage: string;
    public zoomed = true;
 
-   constructor(
-      public dialogRef: MatDialogRef<FlowDialog>,
-      @Inject(MAT_DIALOG_DATA) public flowData: string,
-   ) {
-      this.flowImage = flowData;
+   constructor() {
+      this.flowImage = this.flowData;
    }
 }

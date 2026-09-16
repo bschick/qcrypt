@@ -29,6 +29,7 @@ import {
    Output,
    ViewChild,
    ChangeDetectionStrategy,
+   inject,
 } from '@angular/core';
 import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -101,6 +102,9 @@ function setIfBoolean(check: boolean | string | null, setter: (bool: boolean) =>
    styleUrl: './options.component.scss',
 })
 export class OptionsComponent implements OnInit, AfterViewInit {
+   private authSvc = inject(AuthenticatorService);
+   private cipherSvc = inject(CipherService);
+
    public expandOptions = false;
    public cipherPanelExpanded = false;
    public hashTimeWarning = '';
@@ -139,11 +143,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    @ViewChild('formatLabel') formatLabel!: ElementRef;
    @ViewChild('minStrLabel') minStrLabel!: ElementRef;
    @ViewChild('algorithms') algorithmsCmp!: AlgorithmsComponent;
-
-   constructor(
-      private authSvc: AuthenticatorService,
-      private cipherSvc: CipherService,
-   ) {}
 
    @Input() set expand(expandOptions: boolean) {
       this.expandOptions = expandOptions;

@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { type AfterViewInit, Component, type OnInit, Renderer2, ChangeDetectionStrategy } from '@angular/core';
+import { type AfterViewInit, Component, type OnInit, Renderer2, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatInputModule } from '@angular/material/input';
@@ -56,20 +56,18 @@ import { NoAssistDirective } from '../ui/noassist.directive';
    ],
 })
 export class NewUserComponent implements OnInit, AfterViewInit {
+   private r2 = inject(Renderer2);
+   private authSvc = inject(AuthenticatorService);
+   private router = inject(Router);
+   private dialog = inject(MatDialog);
+   private snackBar = inject(MatSnackBar);
+
    public showProgress = false;
    public error = '';
    public newUserName = '';
    public currentUserName: string | null = null;
    public recoveryLink = '';
    public authenticated = false;
-
-   constructor(
-      private r2: Renderer2,
-      private authSvc: AuthenticatorService,
-      private router: Router,
-      private dialog: MatDialog,
-      private snackBar: MatSnackBar,
-   ) {}
 
    ngOnInit() {
       const [userId, userName] = this.authSvc.loadKnownUser();

@@ -32,6 +32,7 @@ import {
    SecurityContext,
    NgZone,
    ChangeDetectionStrategy,
+   inject,
 } from '@angular/core';
 import { Ciphers, makeCipherArmor, parseCipherArmor, PWDKeyProvider } from '@qcrypt/crypto';
 import { CommonModule } from '@angular/common';
@@ -111,6 +112,17 @@ const BLOCK_ORDER_WARNING =
    ],
 })
 export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
+   private authSvc = inject(AuthenticatorService);
+   private cipherSvc = inject(CipherService);
+   private r2 = inject(Renderer2);
+   private dialog = inject(MatDialog);
+   private snackBar = inject(MatSnackBar);
+   private matIconRegistry = inject(MatIconRegistry);
+   private domSanitizer = inject(DomSanitizer);
+   private changeRef = inject(ChangeDetectorRef);
+   private ngZone = inject(NgZone);
+   private router = inject(Router);
+
    protected clearFile?: File;
    protected cipherFile?: File;
    protected readonly useFilePicker = browserSupportsFilePickers();
@@ -150,18 +162,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    @ViewChild('bubbleTip2') bubbleTip2!: BubbleDirective;
    @ViewChild('options') options!: OptionsComponent;
 
-   constructor(
-      private authSvc: AuthenticatorService,
-      private cipherSvc: CipherService,
-      private r2: Renderer2,
-      private dialog: MatDialog,
-      private snackBar: MatSnackBar,
-      private matIconRegistry: MatIconRegistry,
-      private domSanitizer: DomSanitizer,
-      private changeRef: ChangeDetectorRef,
-      private ngZone: NgZone,
-      private router: Router,
-   ) {
+   constructor() {
       this.matIconRegistry.addSvgIcon(
          'github',
          this.domSanitizer.bypassSecurityTrustResourceUrl('../assets/github-circle-white-transparent.svg'),

@@ -23,13 +23,13 @@ SOFTWARE. */
 import {
    Component,
    EventEmitter,
-   Inject,
    type OnInit,
    Output,
    effect,
    Renderer2,
    type OnDestroy,
    ChangeDetectionStrategy,
+   inject,
 } from '@angular/core';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -68,6 +68,11 @@ import { MatCardModule } from '@angular/material/card';
    ],
 })
 export class CredentialsComponent implements OnInit, OnDestroy {
+   protected authSvc = inject(AuthenticatorService);
+   private dialog = inject(MatDialog);
+   private router = inject(Router);
+   private snackBar = inject(MatSnackBar);
+
    private authSub!: Subscription;
    private routeSub!: Subscription;
    public error = '';
@@ -78,12 +83,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    public displayedColumns: string[] = ['image', 'description', 'delete'];
    @Output() done = new EventEmitter<boolean>();
 
-   constructor(
-      public authSvc: AuthenticatorService,
-      public dialog: MatDialog,
-      private router: Router,
-      private snackBar: MatSnackBar,
-   ) {
+   constructor() {
       effect(() => {
          const userInfo = this.authSvc.userInfo();
          this.passKeys = userInfo ? userInfo.authenticators : [];
@@ -255,6 +255,10 @@ https://angular.dev/guide/forms/reactive-forms
    ],
 })
 export class ConfirmDialog {
+   private dialogRef = inject<MatDialogRef<ConfirmDialog>>(MatDialogRef);
+   private r2 = inject(Renderer2);
+   private data = inject<ConfirmData>(MAT_DIALOG_DATA);
+
    public pkState = 0;
    public userName = '';
    public confirmInput = new FormControl('');
@@ -274,13 +278,9 @@ export class ConfirmDialog {
       return ConfirmDialog.ACTIVE_PK;
    }
 
-   constructor(
-      public dialogRef: MatDialogRef<ConfirmDialog>,
-      private r2: Renderer2,
-      @Inject(MAT_DIALOG_DATA) public data: ConfirmData,
-   ) {
-      this.pkState = data.pkState;
-      this.userName = data.userName;
+   constructor() {
+      this.pkState = this.data.pkState;
+      this.userName = this.data.userName;
    }
 
    onYesClicked() {

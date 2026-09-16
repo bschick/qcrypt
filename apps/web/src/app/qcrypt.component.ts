@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnDestroy, type OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, type OnDestroy, type OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -50,15 +50,13 @@ import { Subscription } from 'rxjs';
    ],
 })
 export class QCryptComponent implements OnInit, OnDestroy {
+   private router = inject(Router);
+   private authSvc = inject(AuthenticatorService);
+
    private authSub!: Subscription;
    public bgColorDefault = '';
    public bgColorFocus = 'color-mix(in srgb,var(--mat-sys-primary) 10%,transparent)';
    public showPKButton = false;
-
-   constructor(
-      public router: Router,
-      public authSvc: AuthenticatorService,
-   ) {}
 
    ngOnInit(): void {
       this.showPKButton = this.authSvc.hasSession();

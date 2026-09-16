@@ -22,12 +22,12 @@ SOFTWARE. */
 import {
    Component,
    Renderer2,
-   Inject,
    ViewEncapsulation,
    ViewChild,
    type AfterViewInit,
    type OnDestroy,
    ChangeDetectionStrategy,
+   inject,
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 
@@ -87,6 +87,10 @@ const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
    ],
 })
 export class PasswordDialog implements AfterViewInit, OnDestroy {
+   private r2 = inject(Renderer2);
+   private dialogRef = inject<MatDialogRef<PasswordDialog>>(MatDialogRef);
+   private data = inject<PwdDialogData>(MAT_DIALOG_DATA);
+
    public hidePwd = false;
    public passwd = '';
    public hint = '';
@@ -109,11 +113,9 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    @ViewChild('bubbleTip') bubbleTip!: BubbleDirective;
    @ViewChild(StrengthMeterComponent) strengthMeter?: StrengthMeterComponent;
 
-   constructor(
-      private r2: Renderer2,
-      public dialogRef: MatDialogRef<PasswordDialog>,
-      @Inject(MAT_DIALOG_DATA) public data: PwdDialogData,
-   ) {
+   constructor() {
+      const data = this.data;
+
       this.hint = data.hint;
       this.encrypting = data.encrypting;
       this.minStrength = data.minStrength;
@@ -198,6 +200,8 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    imports: [MatDialogModule, MatIconModule, MatButtonModule],
 })
 export class CipherInfoDialog {
+   private data = inject<CipherDataInfo>(MAT_DIALOG_DATA);
+
    public error;
    public ic!: string;
    public alg!: string;
@@ -206,10 +210,9 @@ export class CipherInfoDialog {
    public lps!: number;
    public hint?: string;
 
-   constructor(
-      public dialogRef: MatDialogRef<CipherInfoDialog>,
-      @Inject(MAT_DIALOG_DATA) public data: CipherDataInfo,
-   ) {
+   constructor() {
+      const data = this.data;
+
       if (!data) {
          this.error = 'The wrong passkey was selected or the cipher armor is invalid';
       } else {
@@ -234,6 +237,10 @@ export class CipherInfoDialog {
    imports: [MatDialogModule, MatProgressSpinnerModule, MatIconModule, MatTooltipModule, MatButtonModule],
 })
 export class SigninDialog implements OnDestroy {
+   private authSvc = inject(AuthenticatorService);
+   private router = inject(Router);
+   private dialogRef = inject<MatDialogRef<SigninDialog>>(MatDialogRef);
+
    public userName: string | null;
    public userId: string | null;
    public notice: string = '';
@@ -242,11 +249,9 @@ export class SigninDialog implements OnDestroy {
    private _noticeTimerId = 0;
    private _userActed = false;
 
-   constructor(
-      private authSvc: AuthenticatorService,
-      private router: Router,
-      public dialogRef: MatDialogRef<SigninDialog>,
-   ) {
+   constructor() {
+      const dialogRef = this.dialogRef;
+
       dialogRef.disableClose = true;
       [this.userId, this.userName] = this.authSvc.loadKnownUser();
 

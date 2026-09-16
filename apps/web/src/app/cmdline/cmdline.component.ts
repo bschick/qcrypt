@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnDestroy, type OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, type OnDestroy, type OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -57,17 +57,15 @@ import { NoAssistDirective } from '../ui/noassist.directive';
    ],
 })
 export class CmdLineComponent implements OnInit, OnDestroy {
+   private authSvc = inject(AuthenticatorService);
+   private router = inject(Router);
+   private snackBar = inject(MatSnackBar);
+
    public showProgress = true;
    public hideCred = true;
    public error = '';
    private authSub!: Subscription;
    public userCredential = new FormControl<string>('');
-
-   constructor(
-      public authSvc: AuthenticatorService,
-      private router: Router,
-      private snackBar: MatSnackBar,
-   ) {}
 
    ngOnInit() {
       this.authSub = this.authSvc.on([AuthEvent.Logout], () => {

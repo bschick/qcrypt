@@ -23,11 +23,11 @@ SOFTWARE. */
 import {
    type AfterViewInit,
    Component,
-   Inject,
    type OnDestroy,
    type OnInit,
    Renderer2,
    ChangeDetectionStrategy,
+   inject,
 } from '@angular/core';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink } from '@angular/router';
@@ -40,7 +40,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
-import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
 import { NoAssistDirective } from '../ui/noassist.directive';
 
@@ -63,6 +63,11 @@ import { NoAssistDirective } from '../ui/noassist.directive';
    ],
 })
 export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
+   private r2 = inject(Renderer2);
+   private authSvc = inject(AuthenticatorService);
+   private router = inject(Router);
+   private dialog = inject(MatDialog);
+
    public validRecoveryWords = false;
    public error = '';
    public ready = false;
@@ -70,13 +75,6 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
    public authenticated = false;
    public currentUserName: string | null = null;
    public recoveryWords = new FormControl<string>('');
-
-   constructor(
-      private r2: Renderer2,
-      private authSvc: AuthenticatorService,
-      private router: Router,
-      private dialog: MatDialog,
-   ) {}
 
    ngOnInit() {
       const [userId, userName] = this.authSvc.loadKnownUser();
@@ -187,12 +185,11 @@ export interface ConfirmData {
    imports: [MatDialogModule, MatIconModule, MatButtonModule],
 })
 export class ConfirmDialog {
+   private data = inject<ConfirmData>(MAT_DIALOG_DATA);
+
    public currentUserName: string;
 
-   constructor(
-      public dialogRef: MatDialogRef<ConfirmDialog>,
-      @Inject(MAT_DIALOG_DATA) public data: ConfirmData,
-   ) {
-      this.currentUserName = data.userName;
+   constructor() {
+      this.currentUserName = this.data.userName;
    }
 }

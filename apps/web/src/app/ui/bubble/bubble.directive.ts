@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Directive, Input, ComponentRef, ElementRef, Injector, ViewContainerRef, NgZone } from '@angular/core';
+import { Directive, Input, ComponentRef, ElementRef, Injector, ViewContainerRef, NgZone, inject } from '@angular/core';
 import { BubbleComponent, BubblePosition } from './bubble.component';
 
 @Directive({
@@ -28,6 +28,11 @@ import { BubbleComponent, BubblePosition } from './bubble.component';
    standalone: true,
 })
 export class BubbleDirective {
+   private elementRef = inject(ElementRef);
+   private viewContainerRef = inject(ViewContainerRef);
+   private injector = inject(Injector);
+   private ngZone = inject(NgZone);
+
    private bubbleIndex!: number;
 
    @Input() bubbleTip = 'this is a QC tip';
@@ -42,13 +47,6 @@ export class BubbleDirective {
    private clampedTop = 0;
    private initialScrollLeft = 0;
    private initialScrollTop = 0;
-
-   constructor(
-      private elementRef: ElementRef,
-      private viewContainerRef: ViewContainerRef,
-      private injector: Injector,
-      private ngZone: NgZone,
-   ) {}
 
    public show() {
       this.initializeBubble();

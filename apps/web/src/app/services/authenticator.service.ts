@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { environment } from '../../environments/environment';
-import { Injectable, afterNextRender, signal } from '@angular/core';
+import { Injectable, afterNextRender, signal, inject } from '@angular/core';
 import {
    type PublicKeyCredentialRequestOptionsJSON,
    type AuthenticationResponseJSON,
@@ -137,6 +137,10 @@ export class PrfUnsupportedError extends Error {
    providedIn: 'root',
 })
 export class AuthenticatorService {
+   private _keystoreSvc = inject(KeystoreService);
+   private _cipherSvc = inject(CipherService);
+   private _broadcastSvc = inject(BroadcastService);
+
    public userInfo = signal<VerifiedUserInfo | undefined>(undefined);
    public ready: Promise<unknown>;
 
@@ -147,11 +151,7 @@ export class AuthenticatorService {
    private _pendingLogout: Promise<LogoutResult> = Promise.resolve('none');
    private _halted = false;
 
-   constructor(
-      private _keystoreSvc: KeystoreService,
-      private _cipherSvc: CipherService,
-      private _broadcastSvc: BroadcastService,
-   ) {
+   constructor() {
       this._broadcastSvc.setCredentialProvider(() => this._getCredentialPayload());
       this._broadcastSvc.setMessageHandler((msg) => this._handlePeerMessage(msg));
       this._broadcastSvc.start();

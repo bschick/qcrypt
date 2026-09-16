@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Component, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthenticatorService } from '../services/authenticator.service';
@@ -44,14 +44,12 @@ function paramsToQueryString(): string {
    imports: [MatButtonModule, MatProgressSpinnerModule, MatIconModule, MatDividerModule, RouterLink],
 })
 export class WelcomeComponent {
+   private dialog = inject(MatDialog);
+   private authSvc = inject(AuthenticatorService);
+   private router = inject(Router);
+
    public error: string = '';
    public showProgress: boolean = false;
-
-   constructor(
-      private dialog: MatDialog,
-      private authSvc: AuthenticatorService,
-      private router: Router,
-   ) {}
 
    async onClickExisting(_event: MouseEvent) {
       try {
@@ -86,10 +84,8 @@ export class WelcomeComponent {
    imports: [MatDialogModule, MatIconModule, MatTooltipModule, MatButtonModule, RouterLink],
 })
 export class RecoveryDialog {
-   constructor(
-      public dialogRef: MatDialogRef<RecoveryDialog>,
-      private router: Router,
-   ) {}
+   private dialogRef = inject<MatDialogRef<RecoveryDialog>>(MatDialogRef);
+   private router = inject(Router);
 
    onClickNewUser(event: Event) {
       event.stopPropagation();

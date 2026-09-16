@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnDestroy, type OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, type OnDestroy, type OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -59,6 +59,10 @@ const SHEET_TITLE = 'quick_crypt_account_recovery';
    ],
 })
 export class ShowRecoveryComponent implements OnInit, OnDestroy {
+   protected authSvc = inject(AuthenticatorService);
+   private router = inject(Router);
+   private snackBar = inject(MatSnackBar);
+
    public error = '';
    public replacedLink = false;
    public replacedWords = false;
@@ -67,12 +71,6 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
    private authSub!: Subscription;
    private _priorTitle?: string;
    public recoveryWords = new FormControl<string>('');
-
-   constructor(
-      public authSvc: AuthenticatorService,
-      private router: Router,
-      private snackBar: MatSnackBar,
-   ) {}
 
    ngOnInit() {
       // True when these recovery words just replaced an old recovery link or
