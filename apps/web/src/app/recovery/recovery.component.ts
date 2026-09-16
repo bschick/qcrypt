@@ -45,40 +45,40 @@ export class RecoveryComponent implements OnInit {
    public authenticated = false;
    public selfRecovery = false;
    public currentUserName: string | null = null;
-   private recoveryUserId: string | null = null;
-   private recoverUserCred: string | null = null;
+   private _recoveryUserId: string | null = null;
+   private _recoverUserCred: string | null = null;
 
-   private authSvc = inject<AuthenticatorService>(AuthenticatorService);
-   private router = inject<Router>(Router);
-   private activeRoute = inject<ActivatedRoute>(ActivatedRoute);
+   private readonly _authSvc = inject<AuthenticatorService>(AuthenticatorService);
+   private readonly _router = inject<Router>(Router);
+   private readonly _activeRoute = inject<ActivatedRoute>(ActivatedRoute);
 
    ngOnInit() {
-      const [userId, userName] = this.authSvc.loadKnownUser();
+      const [userId, userName] = this._authSvc.loadKnownUser();
       if (userId && userName) {
          this.currentUserName = userName;
       }
 
       this.showProgress = true;
 
-      this.authSvc.ready
+      this._authSvc.ready
          .then(async () => {
-            this.authenticated = this.authSvc.hasSession();
+            this.authenticated = this._authSvc.hasSession();
 
-            if (this.authenticated && this.authSvc.hasRecoveryId()) {
-               this.router.navigateByUrl('/recovery3');
+            if (this.authenticated && this._authSvc.hasRecoveryId()) {
+               this._router.navigateByUrl('/recovery3');
             } else {
                try {
-                  this.recoveryUserId = this.activeRoute.snapshot.queryParamMap.get('userid');
-                  this.recoverUserCred = this.activeRoute.snapshot.queryParamMap.get('usercred');
-                  if (!this.recoveryUserId || !this.recoverUserCred) {
+                  this._recoveryUserId = this._activeRoute.snapshot.queryParamMap.get('userid');
+                  this._recoverUserCred = this._activeRoute.snapshot.queryParamMap.get('usercred');
+                  if (!this._recoveryUserId || !this._recoverUserCred) {
                      throw new Error(
-                        `recovery link missing userid or usercred: ${this.activeRoute.snapshot.toString()}`,
+                        `recovery link missing userid or usercred: ${this._activeRoute.snapshot.toString()}`,
                      );
                   }
                   this.validRecoveryLink = true;
                   if (this.authenticated) {
-                     const userCred = await this.authSvc.getUserCred();
-                     this.selfRecovery = this.recoverUserCred === bytesToBase64(userCred);
+                     const userCred = await this._authSvc.getUserCred();
+                     this.selfRecovery = this._recoverUserCred === bytesToBase64(userCred);
                      userCred.fill(0);
                   }
                } catch (err) {
@@ -98,8 +98,8 @@ export class RecoveryComponent implements OnInit {
       try {
          this.error = '';
          this.showProgress = true;
-         await this.authSvc.createDefaultSession();
-         this.router.navigateByUrl('/');
+         await this._authSvc.createDefaultSession();
+         this._router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
@@ -115,10 +115,10 @@ export class RecoveryComponent implements OnInit {
    async onClickStartRecovery(_event: MouseEvent) {
       try {
          this.showProgress = true;
-         await this.authSvc.recover(this.recoveryUserId!, this.recoverUserCred!);
-         this.recoverUserCred = null;
-         this.recoveryUserId = null;
-         this.router.navigateByUrl('/');
+         await this._authSvc.recover(this._recoveryUserId!, this._recoverUserCred!);
+         this._recoverUserCred = null;
+         this._recoveryUserId = null;
+         this._router.navigateByUrl('/');
       } catch (err) {
          if (err instanceof Error && err.message.includes('instead')) {
             this.error = 'You must user recovery words';

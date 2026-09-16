@@ -44,9 +44,9 @@ function paramsToQueryString(): string {
    imports: [MatButtonModule, MatProgressSpinnerModule, MatIconModule, MatDividerModule, RouterLink],
 })
 export class WelcomeComponent {
-   private dialog = inject(MatDialog);
-   private authSvc = inject(AuthenticatorService);
-   private router = inject(Router);
+   private readonly _dialog = inject(MatDialog);
+   private readonly _authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
 
    public error: string = '';
    public showProgress: boolean = false;
@@ -55,8 +55,8 @@ export class WelcomeComponent {
       try {
          this.error = '';
          this.showProgress = true;
-         await this.authSvc.createSession();
-         this.router.navigateByUrl(`/${paramsToQueryString()}`);
+         await this._authSvc.createSession();
+         this._router.navigateByUrl(`/${paramsToQueryString()}`);
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
@@ -72,7 +72,7 @@ export class WelcomeComponent {
    onClickNew(_event: MouseEvent) {}
 
    onClickRecovery(_event: MouseEvent) {
-      this.dialog.open(RecoveryDialog);
+      this._dialog.open(RecoveryDialog);
    }
 }
 
@@ -84,18 +84,18 @@ export class WelcomeComponent {
    imports: [MatDialogModule, MatIconModule, MatTooltipModule, MatButtonModule, RouterLink],
 })
 export class RecoveryDialog {
-   private dialogRef = inject<MatDialogRef<RecoveryDialog>>(MatDialogRef);
-   private router = inject(Router);
+   private readonly _dialogRef = inject<MatDialogRef<RecoveryDialog>>(MatDialogRef);
+   private readonly _router = inject(Router);
 
    onClickNewUser(event: Event) {
       event.stopPropagation();
-      this.dialogRef.close();
-      this.router.navigateByUrl('/newuser');
+      this._dialogRef.close();
+      this._router.navigateByUrl('/newuser');
    }
 
    onClickRecovery3(event: Event) {
       event.stopPropagation();
-      this.dialogRef.close();
-      this.router.navigateByUrl('/recovery3');
+      this._dialogRef.close();
+      this._router.navigateByUrl('/recovery3');
    }
 }

@@ -50,17 +50,17 @@ import { Subscription } from 'rxjs';
    ],
 })
 export class QCryptComponent implements OnInit, OnDestroy {
-   private router = inject(Router);
-   private authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
+   private readonly _authSvc = inject(AuthenticatorService);
 
-   private authSub!: Subscription;
+   private _authSub!: Subscription;
    public bgColorDefault = '';
    public bgColorFocus = 'color-mix(in srgb,var(--mat-sys-primary) 10%,transparent)';
    public showPKButton = false;
 
    ngOnInit(): void {
-      this.showPKButton = this.authSvc.hasSession();
-      this.authSub = this.authSvc.on([AuthEvent.Logout, AuthEvent.Login], this.onAuthEvent.bind(this));
+      this.showPKButton = this._authSvc.hasSession();
+      this._authSub = this._authSvc.on([AuthEvent.Logout, AuthEvent.Login], this.onAuthEvent.bind(this));
    }
 
    onAuthEvent(data: AuthEventData) {
@@ -68,18 +68,18 @@ export class QCryptComponent implements OnInit, OnDestroy {
    }
 
    ngOnDestroy(): void {
-      if (this.authSub) {
-         this.authSub.unsubscribe();
+      if (this._authSub) {
+         this._authSub.unsubscribe();
       }
    }
 
    // Help stays readable so the user can look up what the halt means
    showHalted(): boolean {
-      return this.authSvc.halted && !window.location.pathname.startsWith('/help');
+      return this._authSvc.halted && !window.location.pathname.startsWith('/help');
    }
 
    toggleNav(nav: MatSidenav) {
-      if (this.authSvc.hasSession()) {
+      if (this._authSvc.hasSession()) {
          // Open with a mouse focus origin so the focus restored to this toggle when the
          // panel closes doesn't leave the keyboard-focus highlight on the button.
          nav.toggle(!nav.opened, 'mouse');
@@ -100,7 +100,7 @@ export class QCryptComponent implements OnInit, OnDestroy {
    }
 
    isWelcomePage(): boolean {
-      return this.router.url.startsWith('/welcome');
+      return this._router.url.startsWith('/welcome');
    }
 
    onOpenedCredentials() {}

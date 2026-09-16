@@ -54,8 +54,8 @@ const SHEET_TITLE = 'quick_crypt_account_recovery';
    ],
 })
 export class CheckRecoveryComponent implements OnInit, OnDestroy {
-   protected authSvc = inject(AuthenticatorService);
-   private router = inject(Router);
+   protected readonly authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
 
    public showProgress = false;
    public error = '';
@@ -68,7 +68,7 @@ export class CheckRecoveryComponent implements OnInit, OnDestroy {
    ngOnInit() {
       this._authSub = this.authSvc.on([AuthEvent.Logout], () => {
          this.error = '';
-         this.router.navigateByUrl('/');
+         this._router.navigateByUrl('/');
       });
    }
 

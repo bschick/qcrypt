@@ -39,7 +39,7 @@ export type BubblePosition = (typeof BubblePosition)[keyof typeof BubblePosition
 })
 export class BubbleComponent implements OnInit {
    // BubbleDirective creates this component dynamically and drives its change detection from outside
-   public changeRef = inject(ChangeDetectorRef);
+   public readonly changeRef = inject(ChangeDetectorRef);
 
    position: BubblePosition = BubblePosition.DEFAULT;
    theme = 'light';

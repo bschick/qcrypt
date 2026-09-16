@@ -113,31 +113,31 @@ const BLOCK_ORDER_WARNING =
    ],
 })
 export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
-   private authSvc = inject(AuthenticatorService);
-   private cipherSvc = inject(CipherService);
-   private r2 = inject(Renderer2);
-   private dialog = inject(MatDialog);
-   private snackBar = inject(MatSnackBar);
-   private matIconRegistry = inject(MatIconRegistry);
-   private domSanitizer = inject(DomSanitizer);
-   private changeRef = inject(ChangeDetectorRef);
-   private ngZone = inject(NgZone);
-   private router = inject(Router);
+   private readonly _authSvc = inject(AuthenticatorService);
+   private readonly _cipherSvc = inject(CipherService);
+   private readonly _r2 = inject(Renderer2);
+   private readonly _dialog = inject(MatDialog);
+   private readonly _snackBar = inject(MatSnackBar);
+   private readonly _matIconRegistry = inject(MatIconRegistry);
+   private readonly _domSanitizer = inject(DomSanitizer);
+   private readonly _changeRef = inject(ChangeDetectorRef);
+   private readonly _ngZone = inject(NgZone);
+   private readonly _router = inject(Router);
 
    protected clearFile?: File;
    protected cipherFile?: File;
    protected readonly useFilePicker = browserSupportsFilePickers();
    protected readonly useByteStream = browserSupportsBytesStream();
 
-   private signinDialogRef?: MatDialogRef<SigninDialog>;
-   private mouseDown = false;
-   private cachedPassword?: Uint8Array;
-   private cachedHint?: Uint8Array;
-   private intervalId = 0;
-   private spinnerAbove = 1500000; // Default since benchmark is async
-   private actionStart = 0;
-   private authSub!: Subscription;
-   private usedPasswords: string[] = [];
+   private _signinDialogRef?: MatDialogRef<SigninDialog>;
+   private _mouseDown = false;
+   private _cachedPassword?: Uint8Array;
+   private _cachedHint?: Uint8Array;
+   private _intervalId = 0;
+   private _spinnerAbove = 1500000; // Default since benchmark is async
+   private _actionStart = 0;
+   private _authSub!: Subscription;
+   private _usedPasswords: string[] = [];
    public cacheTimeout = 0;
    public clearText = '';
    public pwdCached = false;
@@ -164,17 +164,17 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    readonly options = viewChild.required<OptionsComponent>('options');
 
    constructor() {
-      this.matIconRegistry.addSvgIcon(
+      this._matIconRegistry.addSvgIcon(
          'github',
-         this.domSanitizer.bypassSecurityTrustResourceUrl('../assets/github-circle-white-transparent.svg'),
+         this._domSanitizer.bypassSecurityTrustResourceUrl('../assets/github-circle-white-transparent.svg'),
       );
-      this.matIconRegistry.addSvgIcon(
+      this._matIconRegistry.addSvgIcon(
          'encrypted_add',
-         this.domSanitizer.bypassSecurityTrustResourceUrl('../assets/encrypted_add_circle.svg'),
+         this._domSanitizer.bypassSecurityTrustResourceUrl('../assets/encrypted_add_circle.svg'),
       );
-      this.matIconRegistry.addSvgIcon(
+      this._matIconRegistry.addSvgIcon(
          'encrypted_minus',
-         this.domSanitizer.bypassSecurityTrustResourceUrl('../assets/encrypted_minus_circle.svg'),
+         this._domSanitizer.bypassSecurityTrustResourceUrl('../assets/encrypted_minus_circle.svg'),
       );
    }
 
@@ -194,9 +194,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    ngAfterViewInit() {
-      if (this.authSvc.hasSession()) {
+      if (this._authSvc.hasSession()) {
          this.showTextFromParams();
-         if (localStorage.getItem(`${this.authSvc.userId}welcomed`) !== 'yup') {
+         if (localStorage.getItem(`${this._authSvc.userId}welcomed`) !== 'yup') {
             setTimeout(() => {
                this.welcomed = false;
                this.bubbleTip1().show();
@@ -207,7 +207,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
       setTimeout(() => {
          try {
-            this.r2.selectRootElement('#clearInput').focus();
+            this._r2.selectRootElement('#clearInput').focus();
          } catch (err) {
             console.error(err);
          }
@@ -218,15 +218,16 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       // This can be greatly delayed is there is a long running async benchmark or
       // encrpt or decrypt from a previous instance (tab that has not fully closed).
       // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
-      this.cipherSvc.benchmark(cc.ICOUNT_MIN).then(([_icount, _icountMax, hashRate]) => {
+      this._cipherSvc.benchmark(cc.ICOUNT_MIN).then(([_icount, _icountMax, hashRate]) => {
          // progress spinner about 1.25 secs of estimated delay
          const target_spinner_millis = 1250;
-         this.spinnerAbove = Math.round(target_spinner_millis * hashRate);
+         this._spinnerAbove = Math.round(target_spinner_millis * hashRate);
       });
 
       // subscribe to auth events
-      this.authSub = this.authSvc.on([AuthEvent.Logout, AuthEvent.Forget, AuthEvent.Login, AuthEvent.Delete], (data) =>
-         this.onAuthEvent(data),
+      this._authSub = this._authSvc.on(
+         [AuthEvent.Logout, AuthEvent.Forget, AuthEvent.Login, AuthEvent.Delete],
+         (data) => this.onAuthEvent(data),
       );
 
       // core.guard doesn't allow reaching this point if the
@@ -236,12 +237,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    ngOnDestroy() {
-      if (this.authSub) {
-         this.authSub.unsubscribe();
+      if (this._authSub) {
+         this._authSub.unsubscribe();
       }
-      if (this.signinDialogRef) {
-         this.signinDialogRef.close();
-         this.signinDialogRef = undefined;
+      if (this._signinDialogRef) {
+         this._signinDialogRef.close();
+         this._signinDialogRef = undefined;
       }
    }
 
@@ -251,8 +252,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.showTextFromParams();
       } else if (data.event === AuthEvent.Logout || data.event === AuthEvent.Forget) {
          // Dismiss first, so nothing failing below can leave a dialog over the stop page
-         if (this.authSvc.halted) {
-            this.dialog.closeAll();
+         if (this._authSvc.halted) {
+            this._dialog.closeAll();
          }
          this.privacyClear();
          this.onClearCipher();
@@ -261,7 +262,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.trySigninDialog();
          } else {
             this.options().nukeSensitiveOptions();
-            this.router.navigateByUrl('/welcome');
+            this._router.navigateByUrl('/welcome');
          }
       } else if (data.event === AuthEvent.Delete) {
          localStorage.removeItem(`${data.userId}welcomed`);
@@ -271,29 +272,29 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    async trySigninDialog(): Promise<void> {
       // Signing in again would only repeat whatever caused the halt
-      if (!this.signinDialogRef && !this.authSvc.halted) {
+      if (!this._signinDialogRef && !this._authSvc.halted) {
          // This check prevents showing progreess when there is no
          // valid session, aka nothing to wait for (like when a new tab is opened)
-         if (this.authSvc.potentialSession()) {
+         if (this._authSvc.potentialSession()) {
             // no-op if ready is resolved
             this.showProgress = true;
-            await this.authSvc.ready;
+            await this._authSvc.ready;
             this.showProgress = false;
          }
 
          // happens when another tab does forget or changes passkey
-         if (!this.authSvc.validKnownUser()) {
-            this.router.navigateByUrl('/welcome');
-         } else if (!this.authSvc.hasSession()) {
-            this.signinDialogRef = this.dialog.open(SigninDialog, {
+         if (!this._authSvc.validKnownUser()) {
+            this._router.navigateByUrl('/welcome');
+         } else if (!this._authSvc.hasSession()) {
+            this._signinDialogRef = this._dialog.open(SigninDialog, {
                backdropClass: 'signinBackdrop',
                closeOnNavigation: true,
             });
 
-            this.signinDialogRef.afterClosed().subscribe((result: string) => {
-               this.signinDialogRef = undefined;
+            this._signinDialogRef.afterClosed().subscribe((result: string) => {
+               this._signinDialogRef = undefined;
                if (result === 'Login') {
-                  this.r2.selectRootElement('#clearInput').focus();
+                  this._r2.selectRootElement('#clearInput').focus();
                }
             });
          }
@@ -312,36 +313,36 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          // Do this to avoid setting a template value after it has been checked,
          // which triggers an ExpressionChangedAfterItHasBeenCheckedError
          this.secondsRemaining = result;
-         this.changeRef.detectChanges();
+         this._changeRef.detectChanges();
       }
    }
 
    restartTimer() {
-      if (this.intervalId !== 0) {
-         clearInterval(this.intervalId);
-         this.intervalId = 0;
+      if (this._intervalId !== 0) {
+         clearInterval(this._intervalId);
+         this._intervalId = 0;
       }
 
       this.cacheTimeout = Date.now() + this.options().cacheTime * 1000;
       this.secondsRemaining = this.options().cacheTime;
 
       // @ts-ignore
-      this.intervalId = setInterval(() => this.timerTick(), 1000);
+      this._intervalId = setInterval(() => this.timerTick(), 1000);
    }
 
    clearPassword() {
       this.pwdCached = false;
-      if (this.cachedPassword) {
-         this.cachedPassword.fill(0);
-         this.cachedPassword = undefined;
+      if (this._cachedPassword) {
+         this._cachedPassword.fill(0);
+         this._cachedPassword = undefined;
       }
-      if (this.cachedHint) {
-         this.cachedHint.fill(0);
-         this.cachedHint = undefined;
+      if (this._cachedHint) {
+         this._cachedHint.fill(0);
+         this._cachedHint = undefined;
       }
-      if (this.intervalId !== 0) {
-         clearInterval(this.intervalId);
-         this.intervalId = 0;
+      if (this._intervalId !== 0) {
+         clearInterval(this._intervalId);
+         this._intervalId = 0;
       }
    }
 
@@ -352,11 +353,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onDraggerMouseDown() {
-      this.mouseDown = true;
+      this._mouseDown = true;
    }
 
    onDraggerMouseMove(event: MouseEvent) {
-      if (this.mouseDown) {
+      if (this._mouseDown) {
          const pointerRelativeXpos = event.clientX - this.inputArea().nativeElement.offsetLeft;
          const minWidth = 200;
 
@@ -372,7 +373,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    onDraggerMouseUp() {
-      this.mouseDown = false;
+      this._mouseDown = false;
    }
 
    onPwdOptionsChange() {
@@ -380,7 +381,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    toastMessage(msg: string) {
-      this.snackBar.open(msg, '', {
+      this._snackBar.open(msg, '', {
          duration: 2000,
       });
    }
@@ -399,7 +400,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.clearText = '';
       this.clearLabel = 'Clear Text';
       this.clearWarning = '';
-      if (!this.welcomed && this.authSvc.hasSession()) {
+      if (!this.welcomed && this._authSvc.hasSession()) {
          this.bubbleTip1().show();
          this.bubbleTip2().hide();
       }
@@ -409,7 +410,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this.clearText) {
          this.clearWarning = '';
       }
-      if (!this.welcomed && this.authSvc.hasSession()) {
+      if (!this.welcomed && this._authSvc.hasSession()) {
          this.bubbleTip1().hide();
          this.bubbleTip2().show();
       }
@@ -435,33 +436,33 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       let hint: string | undefined;
 
       if (cdInfo.lp === 1) {
-         this.usedPasswords = [];
+         this._usedPasswords = [];
       }
 
       if (this.pwdCached && cdInfo.lpEnd === 1) {
          this.restartTimer();
          const decoder = new TextDecoder();
-         [pwd, hint] = [decoder.decode(this.cachedPassword), decoder.decode(this.cachedHint)];
+         [pwd, hint] = [decoder.decode(this._cachedPassword), decoder.decode(this._cachedHint)];
       } else {
          [pwd, hint] = await this.askForPassword(cdInfo, encrypting);
       }
 
       // This can run outside of Angular's zone because the  callback
       // comes from within stream connections
-      this.ngZone.run(() => {
+      this._ngZone.run(() => {
          // Avoid briefly putting up spinner and disabling buttons
-         if (cdInfo.ic > this.spinnerAbove || this.usingFile) {
+         if (cdInfo.ic > this._spinnerAbove || this.usingFile) {
             this.showProgress = true;
          }
       });
 
       if (cdInfo.lp === cdInfo.lpEnd) {
-         this.usedPasswords = [];
+         this._usedPasswords = [];
       } else {
-         this.usedPasswords.push(pwd);
+         this._usedPasswords.push(pwd);
       }
 
-      this.actionStart = Date.now();
+      this._actionStart = Date.now();
       return [pwd, hint];
    }
 
@@ -470,8 +471,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       return new Promise((resolve, reject) => {
          // This can run outside of Angular's zone because the password callback
          // comes from within streem connections
-         this.ngZone.run(() => {
-            const dialogRef = this.dialog.open(PasswordDialog, {
+         this._ngZone.run(() => {
+            const dialogRef = this._dialog.open(PasswordDialog, {
                data: {
                   hint: cdInfo.hint,
                   encrypting,
@@ -481,9 +482,9 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                   loops: cdInfo.lpEnd,
                   checkPwned: this.options().checkPwned,
                   welcomed: this.welcomed,
-                  userName: this.authSvc.userName,
+                  userName: this._authSvc.userName,
                   cipherMode: cdInfo.alg,
-                  usedPasswords: [...this.usedPasswords],
+                  usedPasswords: [...this._usedPasswords],
                },
             });
 
@@ -496,8 +497,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                   this.clearPassword();
                   if (this.options().cacheTime > 0 && result[0] && cdInfo.lpEnd === 1) {
                      const encoder = new TextEncoder();
-                     this.cachedPassword = encoder.encode(result[0]);
-                     this.cachedHint = encoder.encode(result[1]);
+                     this._cachedPassword = encoder.encode(result[0]);
+                     this._cachedHint = encoder.encode(result[1]);
                      this.pwdCached = true;
                      this.restartTimer();
                   }
@@ -530,16 +531,16 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this.clearFile && this.clearText.length < 1) {
          this.onClearClear();
          this.showCipherError('Missing clear text. Enter clear text or select a file, then encrypt');
-         this.r2.selectRootElement('#clearInput').focus();
+         this._r2.selectRootElement('#clearInput').focus();
          return;
       }
 
-      if (!this.authSvc.hasSession()) {
+      if (!this._authSvc.hasSession()) {
          this.showClearError('User not authenticated, try refreshing this page');
          return;
       }
 
-      this.authSvc.activity();
+      this._authSvc.activity();
       this.onClearCipher();
 
       if (!this.welcomed) {
@@ -571,7 +572,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
             // it worked, so stop showing tips (setting this before next loop)
             this.welcomed = true;
-            localStorage.setItem(`${this.authSvc.userId}welcomed`, 'yup');
+            localStorage.setItem(`${this._authSvc.userId}welcomed`, 'yup');
          }
 
          /* A bit torn about always clearing this when not caching...
@@ -579,7 +580,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             this.onClearClear();
          }*/
       } catch (something) {
-         this.usedPasswords = [];
+         this._usedPasswords = [];
          if (!ProcessCancelled.isProcessCancelled(something)) {
             console.error(something);
             let msg = 'Could not encrypt text';
@@ -601,16 +602,16 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this.clearFile && this.clearText.length < 1) {
          this.onClearClear();
          this.showCipherError('Missing clear text.  Enter clear text or select a file, then encrypt');
-         this.r2.selectRootElement('#clearInput').focus();
+         this._r2.selectRootElement('#clearInput').focus();
          return;
       }
 
-      if (!this.authSvc.hasSession()) {
+      if (!this._authSvc.hasSession()) {
          this.showClearError('User not authenticated, try refreshing this page');
          return;
       }
 
-      this.authSvc.activity();
+      this._authSvc.activity();
       this.onClearCipher();
 
       if (!this.welcomed) {
@@ -664,7 +665,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
          // If the user got this far, stop showing tips
          this.welcomed = true;
-         localStorage.setItem(`${this.authSvc.userId}welcomed`, 'yup');
+         localStorage.setItem(`${this._authSvc.userId}welcomed`, 'yup');
       } catch (something) {
          if (!ProcessCancelled.isProcessCancelled(something)) {
             console.error(something);
@@ -709,26 +710,26 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       };
 
       // PWDKeyProvider takes ownershp of userCred
-      const keyProvider = new PWDKeyProvider(await this.authSvc.getUserCred(), (cdInfo, encrypting) =>
+      const keyProvider = new PWDKeyProvider(await this._authSvc.getUserCred(), (cdInfo, encrypting) =>
          this.passwordProvider(cdInfo, encrypting),
       );
-      return this.cipherSvc.encryptStream(clearStream, keyProvider, econtext);
+      return this._cipherSvc.encryptStream(clearStream, keyProvider, econtext);
    }
 
    async onDecrypt(): Promise<void> {
       if (!this.cipherFile && this.cipherArmor.length < cc.HEADER_BYTES_6P + cc.PAYLOAD_SIZE_MIN) {
          this.onClearCipher();
          this.showClearError('Missing cipher armor. Enter cipher armor text or select a file, then decrypt');
-         this.r2.selectRootElement('#cipherInput').focus();
+         this._r2.selectRootElement('#cipherInput').focus();
          return;
       }
 
-      if (!this.authSvc.hasSession()) {
+      if (!this._authSvc.hasSession()) {
          this.showClearError('User not authenticated, try refreshing this page');
          return;
       }
 
-      this.authSvc.activity();
+      this._authSvc.activity();
       this.onClearClear();
 
       try {
@@ -764,16 +765,16 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this.cipherFile && this.cipherArmor.length < 1) {
          this.onClearCipher();
          this.showClearError('Missing cipher armor. Enter cipher armor text or select a file, then decrypt');
-         this.r2.selectRootElement('#cipherInput').focus();
+         this._r2.selectRootElement('#cipherInput').focus();
          return;
       }
 
-      if (!this.authSvc.hasSession()) {
+      if (!this._authSvc.hasSession()) {
          this.showClearError('User not authenticated, try refreshing this page');
          return;
       }
 
-      this.authSvc.activity();
+      this._authSvc.activity();
       this.onClearClear();
 
       try {
@@ -869,10 +870,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    async makeClearStream(cipherStream: ReadableStream<Uint8Array>): Promise<ReadableStream<Uint8Array>> {
       // PWDKeyProvider takes ownershp of userCred
-      const keyProvider = new PWDKeyProvider(await this.authSvc.getUserCred(), (cdInfo, encrypting) =>
+      const keyProvider = new PWDKeyProvider(await this._authSvc.getUserCred(), (cdInfo, encrypting) =>
          this.passwordProvider(cdInfo, encrypting),
       );
-      return await this.cipherSvc.decryptStream(cipherStream, keyProvider, (ver, multiBlock) => {
+      return await this._cipherSvc.decryptStream(cipherStream, keyProvider, (ver, multiBlock) => {
          if (ver === cc.VERSION4 && multiBlock) {
             this.clearWarning = BLOCK_ORDER_WARNING;
          }
@@ -884,7 +885,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    showClearFile(msg: string, took: boolean, hdr: string | null = null): void {
-      const label = took ? `File (${makeTookMsg(this.actionStart, Date.now())})` : 'File';
+      const label = took ? `File (${makeTookMsg(this._actionStart, Date.now())})` : 'File';
       this.showClearMsg('fileBox', label, msg, hdr);
    }
 
@@ -894,11 +895,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.clearMsg = '';
 
       if (hdr) {
-         const safeHdr = this.domSanitizer.sanitize(SecurityContext.HTML, hdr);
+         const safeHdr = this._domSanitizer.sanitize(SecurityContext.HTML, hdr);
          this.clearMsg += `<b>${safeHdr}</b><br />`;
       }
       if (msg) {
-         const safeMsg = this.domSanitizer.sanitize(SecurityContext.HTML, msg);
+         const safeMsg = this._domSanitizer.sanitize(SecurityContext.HTML, msg);
          this.clearMsg += safeMsg;
       }
       this.clearMsgClass = cls;
@@ -913,7 +914,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    showClearTextAndTime(clearText: string): void {
-      const tookMsg = makeTookMsg(this.actionStart, Date.now());
+      const tookMsg = makeTookMsg(this._actionStart, Date.now());
       this.showClearText(clearText, `(${tookMsg})`);
    }
 
@@ -922,7 +923,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    showCipherFile(msg: string, took: boolean, hdr: string | null = null): void {
-      const label = took ? `File (${makeTookMsg(this.actionStart, Date.now())})` : 'File';
+      const label = took ? `File (${makeTookMsg(this._actionStart, Date.now())})` : 'File';
       this.showCipherMsg('fileBox', label, msg, hdr);
    }
 
@@ -931,11 +932,11 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cipherMsg = '';
 
       if (hdr) {
-         const safeHdr = this.domSanitizer.sanitize(SecurityContext.HTML, hdr);
+         const safeHdr = this._domSanitizer.sanitize(SecurityContext.HTML, hdr);
          this.cipherMsg += `<b>${safeHdr}</b><br />`;
       }
       if (msg) {
-         const safeMsg = this.domSanitizer.sanitize(SecurityContext.HTML, msg);
+         const safeMsg = this._domSanitizer.sanitize(SecurityContext.HTML, msg);
          this.cipherMsg += safeMsg;
       }
       this.cipherMsgClass = cls;
@@ -951,7 +952,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    showCipherDataAndTime(cipherData: Uint8Array): void {
-      const tookMsg = makeTookMsg(this.actionStart, Date.now());
+      const tookMsg = makeTookMsg(this._actionStart, Date.now());
       this.showCipherData(cipherData, `(${tookMsg})`);
    }
 
@@ -1075,22 +1076,22 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    async onCipherTextInfo(): Promise<void> {
       try {
-         if (!this.authSvc.hasSession()) {
+         if (!this._authSvc.hasSession()) {
             throw new Error('User not authenticated, try refreshing this page');
          }
 
          const cdInfo = await this.getCipherDataInfo();
-         this.dialog.open(CipherInfoDialog, { data: cdInfo });
+         this._dialog.open(CipherInfoDialog, { data: cdInfo });
       } catch (err) {
          console.error(err);
-         this.dialog.open(CipherInfoDialog, { data: null });
+         this._dialog.open(CipherInfoDialog, { data: null });
       }
    }
 
    // note that we aren't checking plain text cipher armor for loops because
    // it was never used in the wild
    async getCipherDataInfo(): Promise<CipherDataInfo> {
-      if (!this.authSvc.hasSession()) {
+      if (!this._authSvc.hasSession()) {
          throw new Error('User not authenticated, try refreshing this page');
       }
 
@@ -1100,8 +1101,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
 
       // PWDKeyProvider takes ownershp of userCred
-      const keyProvider = new PWDKeyProvider(await this.authSvc.getUserCred());
-      return await this.cipherSvc.getCipherStreamInfo(cipherStream, keyProvider);
+      const keyProvider = new PWDKeyProvider(await this._authSvc.getUserCred());
+      return await this._cipherSvc.getCipherStreamInfo(cipherStream, keyProvider);
    }
 
    algDescription(alg: string): string {

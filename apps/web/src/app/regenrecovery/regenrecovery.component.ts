@@ -40,13 +40,13 @@ export class RegenrecoveryComponent implements OnInit, OnDestroy {
    public showProgress = false;
    public error = '';
    public readonly authSvc = inject(AuthenticatorService);
-   private readonly router = inject(Router);
+   private readonly _router = inject(Router);
    private _authSub!: Subscription;
 
    ngOnInit() {
       this._authSub = this.authSvc.on([AuthEvent.Logout], () => {
          this.error = '';
-         this.router.navigateByUrl('/');
+         this._router.navigateByUrl('/');
       });
    }
 
@@ -70,7 +70,7 @@ export class RegenrecoveryComponent implements OnInit, OnDestroy {
          .changeRecoveryWords()
          .then((state) => {
             if (state === 'match' || state === 'unknown') {
-               this.router.navigateByUrl('/showrecovery', {
+               this._router.navigateByUrl('/showrecovery', {
                   state: { replacedLink, replacedWords, unconfirmed: state !== 'match' },
                });
             } else {

@@ -28,33 +28,33 @@ import { BubbleComponent, BubblePosition } from './bubble.component';
    standalone: true,
 })
 export class BubbleDirective {
-   private elementRef = inject(ElementRef);
-   private viewContainerRef = inject(ViewContainerRef);
-   private injector = inject(Injector);
-   private ngZone = inject(NgZone);
+   private readonly _elementRef = inject(ElementRef);
+   private readonly _viewContainerRef = inject(ViewContainerRef);
+   private readonly _injector = inject(Injector);
+   private readonly _ngZone = inject(NgZone);
 
-   private bubbleIndex!: number;
+   private _bubbleIndex!: number;
 
    readonly bubbleTip = input('this is a QC tip');
    readonly bubblePosition = input<BubblePosition>(BubblePosition.DEFAULT);
    readonly bubbleWidth = input<string>();
    readonly bubbleHeight = input<string>();
 
-   private componentRef: ComponentRef<BubbleComponent> | null = null;
-   private scrollHandler: (() => void) | null = null;
-   private resizeHandler: (() => void) | null = null;
-   private clampedLeft = 0;
-   private clampedTop = 0;
-   private initialScrollLeft = 0;
-   private initialScrollTop = 0;
+   private _componentRef: ComponentRef<BubbleComponent> | null = null;
+   private _scrollHandler: (() => void) | null = null;
+   private _resizeHandler: (() => void) | null = null;
+   private _clampedLeft = 0;
+   private _clampedTop = 0;
+   private _initialScrollLeft = 0;
+   private _initialScrollTop = 0;
 
    public show() {
-      this.initializeBubble();
+      this._initializeBubble();
       setTimeout(() => {
-         if (this.componentRef !== null) {
-            this.positionAndClamp();
-            this.addEventListeners();
-            this.componentRef.instance.visible = true;
+         if (this._componentRef !== null) {
+            this._positionAndClamp();
+            this._addEventListeners();
+            this._componentRef.instance.visible = true;
          }
       }, 200);
    }
@@ -63,46 +63,46 @@ export class BubbleDirective {
       this.destroy();
    }
 
-   private getScrollContainer(): Element | null {
+   private _getScrollContainer(): Element | null {
       return document.getElementById('scrollContent');
    }
 
-   private initializeBubble() {
-      if (this.componentRef === null) {
-         this.componentRef = this.viewContainerRef.createComponent(BubbleComponent, { injector: this.injector });
-         this.setComponentProperties();
-         this.bubbleIndex = this.viewContainerRef.indexOf(this.componentRef.hostView);
+   private _initializeBubble() {
+      if (this._componentRef === null) {
+         this._componentRef = this._viewContainerRef.createComponent(BubbleComponent, { injector: this._injector });
+         this._setComponentProperties();
+         this._bubbleIndex = this._viewContainerRef.indexOf(this._componentRef.hostView);
       }
    }
 
-   private setComponentProperties() {
-      if (this.componentRef !== null) {
-         this.componentRef.instance.tip = this.bubbleTip();
-         this.componentRef.instance.position = this.bubblePosition();
-         this.componentRef.instance.width = this.bubbleWidth();
-         this.componentRef.instance.height = this.bubbleHeight();
-         this.positionAndClamp();
+   private _setComponentProperties() {
+      if (this._componentRef !== null) {
+         this._componentRef.instance.tip = this.bubbleTip();
+         this._componentRef.instance.position = this.bubblePosition();
+         this._componentRef.instance.width = this.bubbleWidth();
+         this._componentRef.instance.height = this.bubbleHeight();
+         this._positionAndClamp();
       }
    }
 
-   private positionAndClamp() {
-      if (this.componentRef === null) {
+   private _positionAndClamp() {
+      if (this._componentRef === null) {
          return;
       }
 
-      const { left, right, top, bottom } = this.elementRef.nativeElement.getBoundingClientRect();
+      const { left, right, top, bottom } = this._elementRef.nativeElement.getBoundingClientRect();
 
       const bubblePosition = this.bubblePosition();
       switch (bubblePosition) {
          case BubblePosition.UPPER:
          case BubblePosition.ABOVE: {
-            this.componentRef.instance.left = Math.round((right - left) / 2 + left);
-            this.componentRef.instance.top = Math.round(top);
+            this._componentRef.instance.left = Math.round((right - left) / 2 + left);
+            this._componentRef.instance.top = Math.round(top);
             break;
          }
          case BubblePosition.RIGHT: {
-            this.componentRef.instance.left = Math.round(right);
-            this.componentRef.instance.top = Math.round(top + (bottom - top) / 2);
+            this._componentRef.instance.left = Math.round(right);
+            this._componentRef.instance.top = Math.round(top + (bottom - top) / 2);
             break;
          }
          default: {
@@ -110,9 +110,9 @@ export class BubbleDirective {
          }
       }
 
-      this.componentRef.instance.changeRef.detectChanges();
+      this._componentRef.instance.changeRef.detectChanges();
 
-      const bubbleEl = this.componentRef.location.nativeElement.querySelector('.bubble');
+      const bubbleEl = this._componentRef.location.nativeElement.querySelector('.bubble');
       if (!bubbleEl) {
          return;
       }
@@ -138,62 +138,62 @@ export class BubbleDirective {
       }
 
       if (adjustLeft !== 0 || adjustTop !== 0) {
-         this.componentRef.instance.left += adjustLeft;
-         this.componentRef.instance.top += adjustTop;
-         this.componentRef.instance.changeRef.detectChanges();
+         this._componentRef.instance.left += adjustLeft;
+         this._componentRef.instance.top += adjustTop;
+         this._componentRef.instance.changeRef.detectChanges();
       }
 
       // Store clamped position and initial scroll state for scroll tracking
-      this.clampedLeft = this.componentRef.instance.left;
-      this.clampedTop = this.componentRef.instance.top;
-      const container = this.getScrollContainer();
-      this.initialScrollLeft = container?.scrollLeft ?? 0;
-      this.initialScrollTop = container?.scrollTop ?? 0;
+      this._clampedLeft = this._componentRef.instance.left;
+      this._clampedTop = this._componentRef.instance.top;
+      const container = this._getScrollContainer();
+      this._initialScrollLeft = container?.scrollLeft ?? 0;
+      this._initialScrollTop = container?.scrollTop ?? 0;
    }
 
-   private addEventListeners() {
-      if (this.scrollHandler || this.resizeHandler) {
+   private _addEventListeners() {
+      if (this._scrollHandler || this._resizeHandler) {
          return;
       }
 
-      const container = this.getScrollContainer();
-      if (container?.contains(this.elementRef.nativeElement)) {
+      const container = this._getScrollContainer();
+      if (container?.contains(this._elementRef.nativeElement)) {
          // Inside scroll container: track scroll to maintain page-relative position
-         this.scrollHandler = () => {
-            if (this.componentRef) {
-               this.componentRef.instance.left = this.clampedLeft - (container.scrollLeft - this.initialScrollLeft);
-               this.componentRef.instance.top = this.clampedTop - (container.scrollTop - this.initialScrollTop);
-               this.componentRef.instance.changeRef.detectChanges();
+         this._scrollHandler = () => {
+            if (this._componentRef) {
+               this._componentRef.instance.left = this._clampedLeft - (container.scrollLeft - this._initialScrollLeft);
+               this._componentRef.instance.top = this._clampedTop - (container.scrollTop - this._initialScrollTop);
+               this._componentRef.instance.changeRef.detectChanges();
             }
          };
 
-         this.ngZone.runOutsideAngular(() => {
-            container.addEventListener('scroll', this.scrollHandler!);
+         this._ngZone.runOutsideAngular(() => {
+            container.addEventListener('scroll', this._scrollHandler!);
          });
       } else {
          // Outside scroll container (e.g. dialog): reposition on resize
          // Use requestAnimationFrame to let the dialog complete its layout first
-         this.resizeHandler = () => {
-            if (this.componentRef) {
-               this.positionAndClamp();
+         this._resizeHandler = () => {
+            if (this._componentRef) {
+               this._positionAndClamp();
             }
          };
 
-         this.ngZone.runOutsideAngular(() => {
-            window.addEventListener('resize', this.resizeHandler!);
+         this._ngZone.runOutsideAngular(() => {
+            window.addEventListener('resize', this._resizeHandler!);
          });
       }
    }
 
-   private removeEventListeners() {
-      if (this.scrollHandler) {
-         const container = this.getScrollContainer();
-         container?.removeEventListener('scroll', this.scrollHandler);
-         this.scrollHandler = null;
+   private _removeEventListeners() {
+      if (this._scrollHandler) {
+         const container = this._getScrollContainer();
+         container?.removeEventListener('scroll', this._scrollHandler);
+         this._scrollHandler = null;
       }
-      if (this.resizeHandler) {
-         window.removeEventListener('resize', this.resizeHandler);
-         this.resizeHandler = null;
+      if (this._resizeHandler) {
+         window.removeEventListener('resize', this._resizeHandler);
+         this._resizeHandler = null;
       }
    }
 
@@ -202,12 +202,12 @@ export class BubbleDirective {
    }
 
    destroy(): void {
-      this.removeEventListeners();
-      if (this.componentRef !== null) {
-         this.componentRef.instance.visible = false;
-         this.viewContainerRef.remove(this.bubbleIndex);
-         this.componentRef.destroy();
-         this.componentRef = null;
+      this._removeEventListeners();
+      if (this._componentRef !== null) {
+         this._componentRef.instance.visible = false;
+         this._viewContainerRef.remove(this._bubbleIndex);
+         this._componentRef.destroy();
+         this._componentRef = null;
       }
    }
 }

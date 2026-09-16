@@ -56,11 +56,11 @@ import { NoAssistDirective } from '../ui/noassist.directive';
    ],
 })
 export class NewUserComponent implements OnInit, AfterViewInit {
-   private r2 = inject(Renderer2);
-   private authSvc = inject(AuthenticatorService);
-   private router = inject(Router);
-   private dialog = inject(MatDialog);
-   private snackBar = inject(MatSnackBar);
+   private readonly _r2 = inject(Renderer2);
+   private readonly _authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
+   private readonly _dialog = inject(MatDialog);
+   private readonly _snackBar = inject(MatSnackBar);
 
    public showProgress = false;
    public error = '';
@@ -70,18 +70,18 @@ export class NewUserComponent implements OnInit, AfterViewInit {
    public authenticated = false;
 
    ngOnInit() {
-      const [userId, userName] = this.authSvc.loadKnownUser();
+      const [userId, userName] = this._authSvc.loadKnownUser();
       if (userId && userName) {
          this.currentUserName = userName;
       }
-      this.authenticated = this.authSvc.hasSession();
+      this.authenticated = this._authSvc.hasSession();
    }
 
    ngAfterViewInit(): void {
       // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
       setTimeout(() => {
          try {
-            this.r2.selectRootElement('#userName').focus();
+            this._r2.selectRootElement('#userName').focus();
          } catch (err) {
             console.error(err);
          }
@@ -89,7 +89,7 @@ export class NewUserComponent implements OnInit, AfterViewInit {
    }
 
    toastMessage(msg: string): void {
-      this.snackBar.open(msg, '', {
+      this._snackBar.open(msg, '', {
          duration: 2000,
       });
    }
@@ -98,8 +98,8 @@ export class NewUserComponent implements OnInit, AfterViewInit {
       try {
          this.error = '';
          this.showProgress = true;
-         await this.authSvc.createDefaultSession();
-         this.router.navigateByUrl('/');
+         await this._authSvc.createDefaultSession();
+         this._router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
@@ -123,9 +123,9 @@ export class NewUserComponent implements OnInit, AfterViewInit {
       try {
          this.showProgress = true;
          // Session will be replaced, so don't need to kill direclty
-         this.authSvc.forgetUser(false);
-         await this.authSvc.newUser(this.newUserName, () => this._decidePrfFallback());
-         this.router.navigateByUrl('/showrecovery');
+         this._authSvc.forgetUser(false);
+         await this._authSvc.newUser(this.newUserName, () => this._decidePrfFallback());
+         this._router.navigateByUrl('/showrecovery');
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
@@ -141,7 +141,7 @@ export class NewUserComponent implements OnInit, AfterViewInit {
    // The dialog cannot be dismissed, so it always resolves to a definite choice.
    private async _decidePrfFallback(): Promise<'standard' | 'different'> {
       this.showProgress = false;
-      const choice = await firstValueFrom(this.dialog.open(PrfFallbackDialog, { disableClose: true }).afterClosed());
+      const choice = await firstValueFrom(this._dialog.open(PrfFallbackDialog, { disableClose: true }).afterClosed());
       if (choice !== 'standard' && choice !== 'different') {
          throw new Error('PRF fallback dialog returned an invalid choice');
       }

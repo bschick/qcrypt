@@ -67,13 +67,13 @@ import { MatCardModule } from '@angular/material/card';
    ],
 })
 export class CredentialsComponent implements OnInit, OnDestroy {
-   protected authSvc = inject(AuthenticatorService);
-   private dialog = inject(MatDialog);
-   private router = inject(Router);
-   private snackBar = inject(MatSnackBar);
+   protected readonly authSvc = inject(AuthenticatorService);
+   private readonly _dialog = inject(MatDialog);
+   private readonly _router = inject(Router);
+   private readonly _snackBar = inject(MatSnackBar);
 
-   private authSub!: Subscription;
-   private routeSub!: Subscription;
+   private _authSub!: Subscription;
+   private _routeSub!: Subscription;
    public error = '';
    public prfUnsupported = false;
    public userName = '';
@@ -91,26 +91,26 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    }
 
    ngOnInit(): void {
-      this.routeSub = this.router.events.subscribe((event: RouterEvent) => {
+      this._routeSub = this._router.events.subscribe((event: RouterEvent) => {
          if (event instanceof NavigationStart) {
             this.done.emit(true);
          }
       });
 
-      this.authSub = this.authSvc.on([AuthEvent.Logout], () => this.refresh());
+      this._authSub = this.authSvc.on([AuthEvent.Logout], () => this.refresh());
    }
 
    ngOnDestroy(): void {
-      if (this.authSub) {
-         this.authSub.unsubscribe();
+      if (this._authSub) {
+         this._authSub.unsubscribe();
       }
-      if (this.routeSub) {
-         this.routeSub.unsubscribe();
+      if (this._routeSub) {
+         this._routeSub.unsubscribe();
       }
    }
 
    toastMessage(msg: string): void {
-      this.snackBar.open(msg, '', {
+      this._snackBar.open(msg, '', {
          duration: 2000,
       });
    }
@@ -128,7 +128,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
          pkState = ConfirmDialog.ACTIVE_PK;
       }
 
-      var dialogRef = this.dialog.open(ConfirmDialog, {
+      var dialogRef = this._dialog.open(ConfirmDialog, {
          data: {
             pkState,
             userName: this.userName,
@@ -140,7 +140,7 @@ export class CredentialsComponent implements OnInit, OnDestroy {
             try {
                const remainingAuths = await this.authSvc.deletePasskey(passkey.credentialId);
                if (remainingAuths === 0) {
-                  this.router.navigateByUrl('/welcome');
+                  this._router.navigateByUrl('/welcome');
                }
             } catch (err) {
                console.error(err);
@@ -254,9 +254,9 @@ https://angular.dev/guide/forms/reactive-forms
    ],
 })
 export class ConfirmDialog {
-   private dialogRef = inject<MatDialogRef<ConfirmDialog>>(MatDialogRef);
-   private r2 = inject(Renderer2);
-   private data = inject<ConfirmData>(MAT_DIALOG_DATA);
+   private readonly _dialogRef = inject<MatDialogRef<ConfirmDialog>>(MatDialogRef);
+   private readonly _r2 = inject(Renderer2);
+   private readonly _data = inject<ConfirmData>(MAT_DIALOG_DATA);
 
    public pkState = 0;
    public userName = '';
@@ -278,16 +278,16 @@ export class ConfirmDialog {
    }
 
    constructor() {
-      this.pkState = this.data.pkState;
-      this.userName = this.data.userName;
+      this.pkState = this._data.pkState;
+      this.userName = this._data.userName;
    }
 
    onYesClicked() {
       if (this.pkState !== this.LAST_PK || (this.confirmInput.value && this.confirmInput.value === this.userName)) {
-         this.dialogRef.close('Yes');
+         this._dialogRef.close('Yes');
       } else {
          try {
-            this.r2.selectRootElement('#confirmInput').focus();
+            this._r2.selectRootElement('#confirmInput').focus();
          } catch (err) {
             console.error(err);
          }

@@ -63,10 +63,10 @@ import { NoAssistDirective } from '../ui/noassist.directive';
    ],
 })
 export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
-   private r2 = inject(Renderer2);
-   private authSvc = inject(AuthenticatorService);
-   private router = inject(Router);
-   private dialog = inject(MatDialog);
+   private readonly _r2 = inject(Renderer2);
+   private readonly _authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
+   private readonly _dialog = inject(MatDialog);
 
    public validRecoveryWords = false;
    public error = '';
@@ -77,16 +77,16 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
    public recoveryWords = new FormControl<string>('');
 
    ngOnInit() {
-      const [userId, userName] = this.authSvc.loadKnownUser();
+      const [userId, userName] = this._authSvc.loadKnownUser();
       if (userId && userName) {
          this.currentUserName = userName;
       }
 
       this.showProgress = true;
 
-      this.authSvc.ready
+      this._authSvc.ready
          .then(() => {
-            this.authenticated = this.authSvc.hasSession();
+            this.authenticated = this._authSvc.hasSession();
          })
          .finally(() => {
             this.ready = true;
@@ -98,7 +98,7 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
       // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
       setTimeout(() => {
          try {
-            this.r2.selectRootElement('#wordsArea').focus();
+            this._r2.selectRootElement('#wordsArea').focus();
          } catch (err) {
             console.error(err);
          }
@@ -113,8 +113,8 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
       try {
          this.error = '';
          this.showProgress = true;
-         await this.authSvc.createDefaultSession();
-         this.router.navigateByUrl('/');
+         await this._authSvc.createDefaultSession();
+         this._router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
@@ -143,8 +143,8 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
                const proceed = await this._checkProceed(cleanedWords);
                if (proceed) {
                   this.showProgress = true;
-                  await this.authSvc.recover3(cleanedWords);
-                  this.router.navigateByUrl('/');
+                  await this._authSvc.recover3(cleanedWords);
+                  this._router.navigateByUrl('/');
                }
             }
          }
@@ -161,13 +161,13 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
    }
 
    private async _checkProceed(recoveryWords: string): Promise<boolean> {
-      const [_, userId] = this.authSvc.getRecoveryValues(recoveryWords);
-      if (!this.authSvc.hasSession() || userId === this.authSvc.userId) {
+      const [_, userId] = this._authSvc.getRecoveryValues(recoveryWords);
+      if (!this._authSvc.hasSession() || userId === this._authSvc.userId) {
          return true;
       }
 
-      const dialogRef = this.dialog.open(ConfirmDialog, {
-         data: { userName: this.authSvc.userName },
+      const dialogRef = this._dialog.open(ConfirmDialog, {
+         data: { userName: this._authSvc.userName },
       });
       return await firstValueFrom(dialogRef.afterClosed());
    }
@@ -185,11 +185,11 @@ export interface ConfirmData {
    imports: [MatDialogModule, MatIconModule, MatButtonModule],
 })
 export class ConfirmDialog {
-   private data = inject<ConfirmData>(MAT_DIALOG_DATA);
+   private readonly _data = inject<ConfirmData>(MAT_DIALOG_DATA);
 
    public currentUserName: string;
 
    constructor() {
-      this.currentUserName = this.data.userName;
+      this.currentUserName = this._data.userName;
    }
 }

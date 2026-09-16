@@ -87,9 +87,9 @@ const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
    ],
 })
 export class PasswordDialog implements AfterViewInit, OnDestroy {
-   private r2 = inject(Renderer2);
-   private dialogRef = inject<MatDialogRef<PasswordDialog>>(MatDialogRef);
-   private data = inject<PwdDialogData>(MAT_DIALOG_DATA);
+   private readonly _r2 = inject(Renderer2);
+   private readonly _dialogRef = inject<MatDialogRef<PasswordDialog>>(MatDialogRef);
+   private readonly _data = inject<PwdDialogData>(MAT_DIALOG_DATA);
 
    public hidePwd = false;
    public passwd = '';
@@ -104,9 +104,9 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    public cipherMode = '';
    public cipherShow = false;
    public checkPwned = false;
-   private welcomed = true;
-   private timerId = -1;
-   private acceptable: boolean;
+   private _welcomed = true;
+   private _timerId = -1;
+   private _acceptable: boolean;
    public usedPasswords: string[];
    public maxHintLen = cc.HINT_MAX_LEN;
 
@@ -114,7 +114,7 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    readonly strengthMeter = viewChild(StrengthMeterComponent);
 
    constructor() {
-      const data = this.data;
+      const data = this._data;
 
       this.hint = data.hint;
       this.encrypting = data.encrypting;
@@ -123,21 +123,21 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
       this.loopCount = data.loopCount;
       this.loops = data.loops;
       this.checkPwned = data.checkPwned;
-      this.welcomed = data.welcomed;
+      this._welcomed = data.welcomed;
       this.userName = data.userName;
       this.cipherMode = data.cipherMode;
-      this.acceptable = !data.encrypting;
+      this._acceptable = !data.encrypting;
       this.usedPasswords = data.usedPasswords;
    }
 
    ngAfterViewInit(): void {
-      if (!this.welcomed) {
+      if (!this._welcomed) {
          this.bubbleTip().show();
       }
    }
 
    ngOnDestroy(): void {
-      if (!this.welcomed) {
+      if (!this._welcomed) {
          this.bubbleTip().hide();
       }
    }
@@ -152,22 +152,22 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    async onAcceptClicked() {
       await this.checkPassword();
 
-      if (this.passwd && this.acceptable) {
-         this.dialogRef.close([this.passwd, this.hint]);
+      if (this.passwd && this._acceptable) {
+         this._dialogRef.close([this.passwd, this.hint]);
       } else {
          this.strengthAlert = true;
-         this.r2.selectRootElement('#password').focus();
+         this._r2.selectRootElement('#password').focus();
       }
    }
 
    onPasswordChange() {
       // Don't want to leave an open pwd dialog if, there are characters entered
       // and not activity for a few minutes minutes, close the dialog
-      if (this.timerId >= 0) {
-         window.clearTimeout(this.timerId);
+      if (this._timerId >= 0) {
+         window.clearTimeout(this._timerId);
       }
 
-      this.timerId = window.setTimeout(() => this.dialogRef.close(), PWD_CLOSE_TIMEOUT);
+      this._timerId = window.setTimeout(() => this._dialogRef.close(), PWD_CLOSE_TIMEOUT);
    }
 
    onAcceptableChanged(state: AcceptableState) {
@@ -175,7 +175,7 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
          return;
       }
 
-      this.acceptable = state.acceptable;
+      this._acceptable = state.acceptable;
 
       if (!this.passwd) {
          this.strengthPhrase = 'Password is empty';
@@ -201,7 +201,7 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    imports: [MatDialogModule, MatIconModule, MatButtonModule],
 })
 export class CipherInfoDialog {
-   private data = inject<CipherDataInfo>(MAT_DIALOG_DATA);
+   private readonly _data = inject<CipherDataInfo>(MAT_DIALOG_DATA);
 
    public error;
    public ic!: string;
@@ -212,7 +212,7 @@ export class CipherInfoDialog {
    public hint?: string;
 
    constructor() {
-      const data = this.data;
+      const data = this._data;
 
       if (!data) {
          this.error = 'The wrong passkey was selected or the cipher armor is invalid';
@@ -238,9 +238,9 @@ export class CipherInfoDialog {
    imports: [MatDialogModule, MatProgressSpinnerModule, MatIconModule, MatTooltipModule, MatButtonModule],
 })
 export class SigninDialog implements OnDestroy {
-   private authSvc = inject(AuthenticatorService);
-   private router = inject(Router);
-   private dialogRef = inject<MatDialogRef<SigninDialog>>(MatDialogRef);
+   private readonly _authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
+   private readonly _dialogRef = inject<MatDialogRef<SigninDialog>>(MatDialogRef);
 
    public userName: string | null;
    public userId: string | null;
@@ -251,12 +251,12 @@ export class SigninDialog implements OnDestroy {
    private _userActed = false;
 
    constructor() {
-      const dialogRef = this.dialogRef;
+      const dialogRef = this._dialogRef;
 
       dialogRef.disableClose = true;
-      [this.userId, this.userName] = this.authSvc.loadKnownUser();
+      [this.userId, this.userName] = this._authSvc.loadKnownUser();
 
-      this.authSvc.logoutResult().then((result) => {
+      this._authSvc.logoutResult().then((result) => {
          if (!this._userActed) {
             if (result === 'error') {
                this.notice = 'Sign out failed, sign in then out again to retry.';
@@ -295,15 +295,15 @@ export class SigninDialog implements OnDestroy {
 
          // This can happen if another tab logs out or changes passkeys while the
          // dialog is open. Not a great UX, but it's likely a rare race condition
-         if (!this.authSvc.validKnownUser()) {
+         if (!this._authSvc.validKnownUser()) {
             // don't kill other tab sessions
-            this.authSvc.forgetUser(false);
-            this.router.navigateByUrl('/welcome');
-            this.dialogRef.close('Navigate');
+            this._authSvc.forgetUser(false);
+            this._router.navigateByUrl('/welcome');
+            this._dialogRef.close('Navigate');
          } else {
             this.showProgress = true;
-            await this.authSvc.createDefaultSession();
-            this.dialogRef.close('Login');
+            await this._authSvc.createDefaultSession();
+            this._dialogRef.close('Login');
          }
       } catch (err) {
          console.error(err);
@@ -322,8 +322,8 @@ export class SigninDialog implements OnDestroy {
       this._clearNoticeTimer();
       this.notice = '';
       // kill other tab sessions
-      this.authSvc.forgetUser(true);
-      this.router.navigateByUrl('/welcome');
-      this.dialogRef.close('Forget');
+      this._authSvc.forgetUser(true);
+      this._router.navigateByUrl('/welcome');
+      this._dialogRef.close('Forget');
    }
 }

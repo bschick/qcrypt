@@ -102,14 +102,14 @@ export class StrengthMeterComponent implements AfterViewInit {
    @Input() set usedPasswords(usedPasswords: string[]) {
       this._usedPasswords = usedPasswords;
       if (this._currentPassword) {
-         this.startedProcessing();
+         this._startedProcessing();
       }
    }
 
    @Input() set hint(hint: string) {
       this._currentHint = hint;
       if (this._currentPassword) {
-         this.startedProcessing();
+         this._startedProcessing();
       }
    }
 
@@ -123,16 +123,16 @@ export class StrengthMeterComponent implements AfterViewInit {
          this.suggestion = '';
          this.updateAcceptable();
       } else {
-         this.startedProcessing();
+         this._startedProcessing();
       }
    }
 
-   private startedProcessing() {
+   private _startedProcessing() {
       // debounce a bit to improve performance (lag at the end is acceptable)
       if (!this._processTimerId && this._currentPassword) {
          this._processTimerId = setTimeout(() => {
             this._testQueue.push(this._currentPassword);
-            this.processZxcvbn();
+            this._processZxcvbn();
             this._processTimerId = undefined;
          }, 175);
       }
@@ -148,7 +148,7 @@ export class StrengthMeterComponent implements AfterViewInit {
             if ((await isPwned(pwd)) && pwd === this._currentPassword) {
                this._breachedPassword = pwd;
                this._testQueue.push(pwd);
-               await this.processZxcvbn();
+               await this._processZxcvbn();
             }
          })().catch((err) => console.error(err));
       }
@@ -157,13 +157,13 @@ export class StrengthMeterComponent implements AfterViewInit {
       return { acceptable: this._acceptable, strength: this.strength };
    }
 
-   private processZxcvbn(): Promise<void> {
+   private _processZxcvbn(): Promise<void> {
       if (!this._processing) {
          this._processing = true;
          this._processDone = (async () => {
             let results: ZxcvbnResult | undefined;
             try {
-               this._scorer ??= createZxcvbn((base) => ({ qcMatcher: this.makeMatcher(base) }));
+               this._scorer ??= createZxcvbn((base) => ({ qcMatcher: this._makeMatcher(base) }));
                const zxcvbn = await this._scorer;
                while (this._testQueue.length > 0) {
                   try {
@@ -209,7 +209,7 @@ export class StrengthMeterComponent implements AfterViewInit {
       return this._processDone;
    }
 
-   private makeMatcher(base: typeof MatcherBaseClass): Matcher {
+   private _makeMatcher(base: typeof MatcherBaseClass): Matcher {
       const parent = this;
 
       // cloned from https://zxcvbn-ts.github.io/zxcvbn/guide/matcher/#creating-a-custom-matcher

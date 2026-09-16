@@ -57,20 +57,20 @@ import { NoAssistDirective } from '../ui/noassist.directive';
    ],
 })
 export class CmdLineComponent implements OnInit, OnDestroy {
-   private authSvc = inject(AuthenticatorService);
-   private router = inject(Router);
-   private snackBar = inject(MatSnackBar);
+   private readonly _authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
+   private readonly _snackBar = inject(MatSnackBar);
 
    public showProgress = true;
    public hideCred = true;
    public error = '';
-   private authSub!: Subscription;
+   private _authSub!: Subscription;
    public userCredential = new FormControl<string>('');
 
    ngOnInit() {
-      this.authSub = this.authSvc.on([AuthEvent.Logout], () => {
+      this._authSub = this._authSvc.on([AuthEvent.Logout], () => {
          this.error = '';
-         this.router.navigateByUrl('/');
+         this._router.navigateByUrl('/');
       });
 
       this.reloadData();
@@ -78,8 +78,8 @@ export class CmdLineComponent implements OnInit, OnDestroy {
 
    ngOnDestroy() {
       this.userCredential.setValue('');
-      if (this.authSub) {
-         this.authSub.unsubscribe();
+      if (this._authSub) {
+         this._authSub.unsubscribe();
       }
    }
 
@@ -87,10 +87,10 @@ export class CmdLineComponent implements OnInit, OnDestroy {
       this.showProgress = true;
       this.error = '';
 
-      this.authSvc
+      this._authSvc
          .reauthenticate()
          .then(async () => {
-            const userCred = await this.authSvc.getUserCred();
+            const userCred = await this._authSvc.getUserCred();
             this.userCredential.setValue(bytesToBase64(userCred));
             userCred.fill(0);
          })
@@ -106,7 +106,7 @@ export class CmdLineComponent implements OnInit, OnDestroy {
    }
 
    toastMessage(msg: string) {
-      this.snackBar.open(msg, '', {
+      this._snackBar.open(msg, '', {
          duration: 2000,
       });
    }

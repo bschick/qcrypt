@@ -63,9 +63,9 @@ export interface FAQElement {
    ],
 })
 export class FaqsComponent implements OnInit, OnDestroy {
-   private readonly route = inject(ActivatedRoute);
-   private readonly snackBar = inject(MatSnackBar);
-   private routeSub?: Subscription;
+   private readonly _route = inject(ActivatedRoute);
+   private readonly _snackBar = inject(MatSnackBar);
+   private _routeSub?: Subscription;
 
    public allExpanded = false;
    public searchTerm = '';
@@ -121,17 +121,17 @@ export class FaqsComponent implements OnInit, OnDestroy {
          );
       };
 
-      this.routeSub = this.route.paramMap.subscribe((params) => {
+      this._routeSub = this._route.paramMap.subscribe((params) => {
          const id = params.get('id');
-         this.handleRouteId(id);
+         this._handleRouteId(id);
       });
    }
 
    ngOnDestroy(): void {
-      this.routeSub?.unsubscribe();
+      this._routeSub?.unsubscribe();
    }
 
-   private handleRouteId(id: string | null): void {
+   private _handleRouteId(id: string | null): void {
       if (id) {
          const targetId = id.trim().toLowerCase();
          const match = ELEMENT_DATA.find((faq) => faq.id.toLowerCase() === targetId);
@@ -152,12 +152,12 @@ export class FaqsComponent implements OnInit, OnDestroy {
          this.singleFaqId = null;
          this.notFound = false;
          this.dataSource.data = ELEMENT_DATA;
-         this.checkQueryParams();
+         this._checkQueryParams();
       }
    }
 
-   private checkQueryParams(): void {
-      const search = this.route.snapshot.queryParamMap.get('search');
+   private _checkQueryParams(): void {
+      const search = this._route.snapshot.queryParamMap.get('search');
       if (search) {
          this.searchTerm = search;
          this.applyFilter(search);
@@ -203,7 +203,7 @@ export class FaqsComponent implements OnInit, OnDestroy {
    }
 
    toastMessage(msg: string) {
-      this.snackBar.open(msg, '', {
+      this._snackBar.open(msg, '', {
          duration: 2000,
       });
    }

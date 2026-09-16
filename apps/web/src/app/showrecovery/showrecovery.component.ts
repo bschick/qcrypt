@@ -59,16 +59,16 @@ const SHEET_TITLE = 'quick_crypt_account_recovery';
    ],
 })
 export class ShowRecoveryComponent implements OnInit, OnDestroy {
-   protected authSvc = inject(AuthenticatorService);
-   private router = inject(Router);
-   private snackBar = inject(MatSnackBar);
+   protected readonly authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
+   private readonly _snackBar = inject(MatSnackBar);
 
    public error = '';
    public replacedLink = false;
    public replacedWords = false;
    public unconfirmed = false;
    public sheetUserCred = '';
-   private authSub!: Subscription;
+   private _authSub!: Subscription;
    private _priorTitle?: string;
    public recoveryWords = new FormControl<string>('');
 
@@ -79,9 +79,9 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
       this.replacedWords = !!history.state?.replacedWords;
       this.unconfirmed = !!history.state?.unconfirmed;
 
-      this.authSub = this.authSvc.on([AuthEvent.Logout], () => {
+      this._authSub = this.authSvc.on([AuthEvent.Logout], () => {
          this.error = '';
-         this.router.navigateByUrl('/');
+         this._router.navigateByUrl('/');
       });
 
       this.reloadData();
@@ -93,15 +93,15 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
       if (this.authSvc.hasRecoveryWords()) {
          this.recoveryWords.setValue(this.authSvc.consumeRecoveryWords());
       } else {
-         this.router.navigateByUrl('/regenrecovery');
+         this._router.navigateByUrl('/regenrecovery');
       }
    }
 
    ngOnDestroy() {
       this.recoveryWords.setValue('');
       this._clearSheet();
-      if (this.authSub) {
-         this.authSub.unsubscribe();
+      if (this._authSub) {
+         this._authSub.unsubscribe();
       }
    }
 
@@ -141,7 +141,7 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
    };
 
    toastMessage(msg: string) {
-      this.snackBar.open(msg, '', {
+      this._snackBar.open(msg, '', {
          duration: 2000,
       });
    }

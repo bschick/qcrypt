@@ -135,9 +135,9 @@ export class PrfUnsupportedError extends Error {
 
 @Service()
 export class AuthenticatorService {
-   private _keystoreSvc = inject(KeystoreService);
-   private _cipherSvc = inject(CipherService);
-   private _broadcastSvc = inject(BroadcastService);
+   private readonly _keystoreSvc = inject(KeystoreService);
+   private readonly _cipherSvc = inject(CipherService);
+   private readonly _broadcastSvc = inject(BroadcastService);
 
    public userInfo = signal<VerifiedUserInfo | undefined>(undefined);
    public ready: Promise<unknown>;
