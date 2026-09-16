@@ -76,7 +76,6 @@ import { BubbleDirective } from '../ui/bubble/bubble.directive';
 import { NoAssistDirective } from '../ui/noassist.directive';
 import { OptionsComponent } from '../ui/options/options.component';
 import { Subscription } from 'rxjs';
-import { CopyrightComponent } from '../ui/copyright/copyright.component';
 import { Router } from '@angular/router';
 
 const INJECTED_WARNING = 'Content was copied from the address bar. Please confirm its validity.';
@@ -109,7 +108,6 @@ const BLOCK_ORDER_WARNING =
       BubbleDirective,
       NoAssistDirective,
       OptionsComponent,
-      CopyrightComponent,
    ],
 })
 export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -164,10 +162,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    readonly options = viewChild.required<OptionsComponent>('options');
 
    constructor() {
-      this._matIconRegistry.addSvgIcon(
-         'github',
-         this._domSanitizer.bypassSecurityTrustResourceUrl('../assets/github-circle-white-transparent.svg'),
-      );
       this._matIconRegistry.addSvgIcon(
          'encrypted_add',
          this._domSanitizer.bypassSecurityTrustResourceUrl('../assets/encrypted_add_circle.svg'),

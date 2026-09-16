@@ -113,9 +113,13 @@
          <a href="https://github.com/bschick/qcrypt" target="_blank">this site and its back-end</a>
          are available under the MIT license.
       </p>
-      <p>
-         <a href="https://github.com/bschick/qcrypt/blob/main/CHANGELOG.md" target="_blank">See the Changelog</a>
-         for release history. This is version {{ version }}
+      <p class="changelog">
+         <a mat-fab extended class="changelog-link" href="https://github.com/bschick/qcrypt/blob/main/CHANGELOG.md"
+          target="_blank" aria-label="Changelog on GitHub"
+          matTooltip="Quick Crypt is on GitHub: get the source, report issues, or make improvements">
+           <mat-icon svgIcon="github"></mat-icon><span class="github-label">GitHub</span>
+         </a>
+         <span>for release history. This is version {{ version }}</span>
       </p>
    </div>
 </div>

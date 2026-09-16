@@ -96,7 +96,7 @@ SOFTWARE. */
 .toolbar {
   height: 48px;
   width: #{5 * 50px};
-  background-color: none;
+  background-color: transparent;
   display: flex;
   justify-content: flex-end;
   align-items: center;
@@ -139,11 +139,13 @@ SOFTWARE. */
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: center;
 }
 
 .dragger-icon {
   font-size: 18px;
   margin-left: 0px;
+  text-align: center;
 }
 
 @mixin txt-area {

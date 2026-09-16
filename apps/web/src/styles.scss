@@ -58,15 +58,43 @@ body {
 }
 
 :root {
-//  --mat-button-filled-container-color: green;
+
+  --qc-toolbar-ink: var(--mat-sys-on-primary-container);
 
   @include mat.toolbar-overrides(
     (
       container-background-color: var(--mat-sys-primary-container),
-      container-text-color:
-        var(--mat-button-text-label-text-color, var(--mat-sys-primary)),
+      container-text-color: var(--qc-toolbar-ink),
     )
   );
+
+  .mat-toolbar {
+    @include mat.button-overrides(
+      (
+        text-label-text-color: var(--qc-toolbar-ink),
+      )
+    );
+
+    @include mat.icon-button-overrides(
+      (
+        icon-color: var(--qc-toolbar-ink),
+      )
+    );
+  }
+
+  .toolbar-menu {
+    @include mat.menu-overrides(
+      (
+        item-label-text-color: var(--qc-toolbar-ink),
+        item-icon-color: var(--qc-toolbar-ink),
+        container-color: var(--mat-sys-primary-container),
+        item-hover-state-layer-color:
+          color-mix(in srgb, var(--mat-sys-primary) 10%, transparent),
+        item-focus-state-layer-color:
+          color-mix(in srgb, var(--mat-sys-primary) 10%, transparent),
+      )
+    );
+  }
 
   // Material 3 set button label 'letter-spacing' to be too small IMO
   @include mat.button-overrides(
