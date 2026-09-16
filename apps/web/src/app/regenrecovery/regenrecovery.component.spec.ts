@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RegenrecoveryComponent } from './regenrecovery.component';
-import { Router, RouterModule } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { AuthenticatorService } from '../services/authenticator.service';
 
@@ -21,8 +21,8 @@ describe('RegenrecoveryComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [RegenrecoveryComponent, RouterModule.forRoot([])],
-         providers: [{ provide: AuthenticatorService, useValue: authStub }],
+         imports: [RegenrecoveryComponent],
+         providers: [provideRouter([]), { provide: AuthenticatorService, useValue: authStub }],
       }).compileComponents();
 
       fixture = TestBed.createComponent(RegenrecoveryComponent);

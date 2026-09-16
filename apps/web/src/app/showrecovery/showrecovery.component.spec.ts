@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ShowRecoveryComponent } from './showrecovery.component';
-import { RouterModule } from '@angular/router';
+import { provideRouter } from '@angular/router';
 
 describe('ShowRecoveryComponent', () => {
    let component: ShowRecoveryComponent;
@@ -8,7 +8,8 @@ describe('ShowRecoveryComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [ShowRecoveryComponent, RouterModule.forRoot([{ path: 'regenrecovery', children: [] }])],
+         imports: [ShowRecoveryComponent],
+         providers: [provideRouter([{ path: 'regenrecovery', children: [] }])],
       }).compileComponents();
 
       fixture = TestBed.createComponent(ShowRecoveryComponent);

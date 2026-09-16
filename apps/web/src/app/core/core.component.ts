@@ -35,7 +35,7 @@ import {
    viewChild,
 } from '@angular/core';
 import { Ciphers, makeCipherArmor, parseCipherArmor, PWDKeyProvider } from '@qcrypt/crypto';
-import { CommonModule } from '@angular/common';
+
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatInputModule } from '@angular/material/input';
@@ -104,7 +104,6 @@ const BLOCK_ORDER_WARNING =
       MatSelectModule,
       MatButtonToggleModule,
       MatTooltipModule,
-      CommonModule,
       BubbleDirective,
       NoAssistDirective,
       OptionsComponent,

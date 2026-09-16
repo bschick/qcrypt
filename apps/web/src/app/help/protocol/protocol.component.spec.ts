@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Protocol8Component, ProtocolComponent } from './protocol.component';
-import { RouterModule } from '@angular/router';
+import { provideRouter } from '@angular/router';
 
 describe('ProtocolComponent', () => {
    let component: ProtocolComponent;
@@ -8,7 +8,8 @@ describe('ProtocolComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [ProtocolComponent, RouterModule.forRoot([])],
+         imports: [ProtocolComponent],
+         providers: [provideRouter([])],
       }).compileComponents();
 
       fixture = TestBed.createComponent(ProtocolComponent);
@@ -27,7 +28,8 @@ describe('Protocol8Component', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [Protocol8Component, RouterModule.forRoot([])],
+         imports: [Protocol8Component],
+         providers: [provideRouter([])],
       }).compileComponents();
 
       fixture = TestBed.createComponent(Protocol8Component);

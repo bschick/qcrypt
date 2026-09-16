@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CmdLineComponent } from './cmdline.component';
-import { RouterModule } from '@angular/router';
+import { provideRouter } from '@angular/router';
 
 describe('CmdLineComponent', () => {
    let component: CmdLineComponent;
@@ -8,7 +8,8 @@ describe('CmdLineComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [CmdLineComponent, RouterModule.forRoot([])],
+         imports: [CmdLineComponent],
+         providers: [provideRouter([])],
       }).compileComponents();
 
       fixture = TestBed.createComponent(CmdLineComponent);

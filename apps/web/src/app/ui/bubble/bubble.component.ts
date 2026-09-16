@@ -20,7 +20,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { ChangeDetectorRef, Component, type OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
-import { NgClass } from '@angular/common';
 
 export const BubblePosition = {
    ABOVE: 'above',
@@ -36,7 +35,7 @@ export type BubblePosition = (typeof BubblePosition)[keyof typeof BubblePosition
    templateUrl: './bubble.component.html',
    styleUrl: './bubble.component.scss',
    changeDetection: ChangeDetectionStrategy.Eager,
-   imports: [NgClass],
+   imports: [],
 })
 export class BubbleComponent implements OnInit {
    // BubbleDirective creates this component dynamically and drives its change detection from outside

@@ -33,7 +33,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ClipboardModule } from '@angular/cdk/clipboard';
-import { ActivatedRoute, RouterModule } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import type { Subscription } from 'rxjs';
 import { CopyrightComponent } from '../../ui/copyright/copyright.component';
@@ -57,7 +57,7 @@ export interface FAQElement {
       MatButtonModule,
       MatTooltipModule,
       FormsModule,
-      RouterModule,
+      RouterLink,
       ClipboardModule,
       CopyrightComponent,
    ],
