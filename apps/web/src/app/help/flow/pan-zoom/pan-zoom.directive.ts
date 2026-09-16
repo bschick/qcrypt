@@ -34,7 +34,7 @@ import {
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 12;
-const WHEEL_STEP = 1.04;
+const WHEEL_STEP = 1.02;
 const BUTTON_STEP = 1.25;
 const KEY_PAN_PX = 60;
 const KEY_PAN_PX_FAST = 240;
