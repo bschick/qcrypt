@@ -27,7 +27,6 @@ import {
    type AfterViewInit,
    type OnDestroy,
    ChangeDetectorRef,
-   HostListener,
    SecurityContext,
    NgZone,
    ChangeDetectionStrategy,
@@ -89,6 +88,9 @@ const BLOCK_ORDER_WARNING =
    templateUrl: './core.component.html',
    styleUrl: './core.component.scss',
    changeDetection: ChangeDetectionStrategy.Eager,
+   host: {
+      '(document:visibilitychange)': 'visibilitychange()',
+   },
    imports: [
       MatProgressSpinnerModule,
       MatMenuModule,
@@ -343,7 +345,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   @HostListener('document:visibilitychange')
    visibilitychange() {
       if (document.hidden && this.options().visClear) {
          this.privacyClear();

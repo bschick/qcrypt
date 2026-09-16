@@ -28,7 +28,7 @@ SOFTWARE. -->
         [disabled]="showProgress ? 'true' : 'false'">
         <u>E</u>ncrypt
       </button>
-      <button mat-raised-button class="top-button mleft15" color="basic" [matMenuTriggerFor]="clearMenu"
+      <button mat-raised-button class="top-button mleft15" [matMenuTriggerFor]="clearMenu"
         matTooltip="File actions" [disabled]="showProgress ? 'true' : 'false'">
         Files
         <mat-icon iconPositionEnd>expand_more</mat-icon>
@@ -49,14 +49,14 @@ SOFTWARE. -->
       </mat-menu>
     </span>
     <span class="flx-buttons">
-      <button mat-raised-button (click)="privacyClear()" class="top-button mleft15 clear-button" color="basic"
+      <button mat-raised-button (click)="privacyClear()" class="top-button mleft15 clear-button"
         matTooltip="Forget cached password and decrypted text" [disabled]="showProgress ? 'true' : 'false'"
         [style.visibility]="pwdCached ? 'visible' : 'hidden'">
         {{'&nbsp;Flush&nbsp; ('+ secondsRemaining +')'}}
       </button>
     </span>
     <span class="flx-buttons">
-      <button mat-raised-button class="top-button mleft15" color="basic" [matMenuTriggerFor]="cipherMenu"
+      <button mat-raised-button class="top-button mleft15" [matMenuTriggerFor]="cipherMenu"
         matTooltip="File Actions" [disabled]="showProgress ? 'true' : 'false'">
         Files
         <mat-icon iconPositionEnd>expand_more</mat-icon>
@@ -83,7 +83,7 @@ SOFTWARE. -->
   </div>
   <div (mouseup)="onDraggerMouseUp();" (mousemove)="onDraggerMouseMove($event);" #inputArea
     class="input-area flx-container">
-    <mat-progress-spinner class="spinner" color="primary" mode="indeterminate"
+    <mat-progress-spinner class="spinner" mode="indeterminate"
       [style.visibility]="showProgress ? 'visible' : 'hidden'">
     </mat-progress-spinner>
     <div #clearField class="flx-item">

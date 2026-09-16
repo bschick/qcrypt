@@ -24,7 +24,6 @@ import {
    DestroyRef,
    Directive,
    ElementRef,
-   HostListener,
    computed,
    effect,
    inject,
@@ -50,6 +49,13 @@ const DRAG_PIXEL_THRESHOLD = 4;
       '[style.overflow]': '"hidden"',
       '[style.user-select]': '"none"',
       '[style.cursor]': 'cursorStyle()',
+      '(pointerdown)': 'onPointerDown($event)',
+      '(pointermove)': 'onPointerMove($event)',
+      '(pointerup)': 'onPointerUp($event)',
+      '(pointercancel)': 'onPointerUp($event)',
+      '(pointerleave)': 'onPointerUp($event)',
+      '(dblclick)': 'onDoubleClick($event)',
+      '(keydown)': 'onKeyDown($event)',
    },
 })
 export class PanZoomDirective {
@@ -228,7 +234,6 @@ export class PanZoomDirective {
       this._scaleAt(factor, event.clientX - rect.left, event.clientY - rect.top);
    };
 
-   @HostListener('pointerdown', ['$event'])
    onPointerDown(event: PointerEvent): void {
       if (event.button !== 0 && event.pointerType === 'mouse') {
          return;
@@ -242,7 +247,6 @@ export class PanZoomDirective {
       this.focus();
    }
 
-   @HostListener('pointermove', ['$event'])
    onPointerMove(event: PointerEvent): void {
       if (!this.dragging() || event.pointerId !== this._activePointerId) {
          return;
@@ -268,9 +272,6 @@ export class PanZoomDirective {
       this.panBy(dx, dy);
    }
 
-   @HostListener('pointerup', ['$event'])
-   @HostListener('pointercancel', ['$event'])
-   @HostListener('pointerleave', ['$event'])
    onPointerUp(event: PointerEvent): void {
       if (event.pointerId !== this._activePointerId) {
          return;
@@ -278,14 +279,12 @@ export class PanZoomDirective {
       this._releaseCapture();
    }
 
-   @HostListener('dblclick', ['$event'])
    onDoubleClick(event: MouseEvent): void {
       event.preventDefault();
       const rect = this._host.nativeElement.getBoundingClientRect();
       this._scaleAt(BUTTON_STEP * BUTTON_STEP, event.clientX - rect.left, event.clientY - rect.top);
    }
 
-   @HostListener('keydown', ['$event'])
    onKeyDown(event: KeyboardEvent): void {
       const step = event.shiftKey ? KEY_PAN_PX_FAST : KEY_PAN_PX;
       switch (event.key) {
