@@ -106,6 +106,7 @@ If a test fails, view the trace with `pnpm exec playwright show-trace playwright
 ## 6. Key Patterns & Conventions
 
 - **Component-Based Architecture:** The application follows Angular's component-based architecture. New features should be encapsulated in their own components where appropriate.
+- **Forms:** New components must use Signal Forms (`@angular/forms/signals` — `form()`, the `Field` directive, and the schema validators). Existing components built on `FormControl` or `[(ngModel)]` are converted opportunistically, when they are already being changed or refactored for some other reason. There is no scheduled migration, so the two styles coexist until the last one is touched.
 - **Client-Side Logic:** All sensitive operations, especially cryptography, must remain strictly on the client-side. No sensitive data should be sent to any server.
 - **Testing:** Any new feature or bug fix should be accompanied by corresponding unit or e2e tests to prevent regressions.
 - **Immutability:** Follow best practices for immutability, especially when dealing with application state.
