@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Injectable } from '@angular/core';
+import { Service } from '@angular/core';
 
 const CHANNEL_NAME = 'qcrypt-encrypted-credentials';
 const COLLECTION_WINDOW_MS = 120;
@@ -73,9 +73,7 @@ type Responses = {
    resolve: (value: CredentialPayload | undefined) => void;
 };
 
-@Injectable({
-   providedIn: 'root',
-})
+@Service()
 export class BroadcastService {
    private _channel?: BroadcastChannel;
    private _pending = new Map<string, Responses>();

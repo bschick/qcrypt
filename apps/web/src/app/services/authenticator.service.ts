@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { environment } from '../../environments/environment';
-import { Injectable, afterNextRender, signal, inject } from '@angular/core';
+import { afterNextRender, signal, inject, Service } from '@angular/core';
 import {
    type PublicKeyCredentialRequestOptionsJSON,
    type AuthenticationResponseJSON,
@@ -133,9 +133,7 @@ export class PrfUnsupportedError extends Error {
    }
 }
 
-@Injectable({
-   providedIn: 'root',
-})
+@Service()
 export class AuthenticatorService {
    private _keystoreSvc = inject(KeystoreService);
    private _cipherSvc = inject(CipherService);
