@@ -26,7 +26,7 @@ SOFTWARE. -->
         bubbleTip="When you have finished entering text, click the Encrypt button. You will then be promted for a password."
         bubblePosition="right" bubbleWidth="250px" aria-label="Encrypt Text" accesskey="E"
         [disabled]="showProgress ? 'true' : 'false'">
-        <u>E</u>ncrypt
+        Encrypt
       </button>
       <button mat-raised-button class="top-button mleft15" color="basic" [matMenuTriggerFor]="clearMenu"
         matTooltip="File actions" [disabled]="showProgress ? 'true' : 'false'">
@@ -77,7 +77,7 @@ SOFTWARE. -->
       </mat-menu>
       <button mat-raised-button (click)="onDecrypt()" class="top-button strong-button mleft15" aria-label="Decrypt Text"
         accesskey="D" [disabled]="showProgress ? 'true' : 'false'">
-        <u>D</u>ecrypt
+        Decrypt
       </button>
     </span>
   </div>
@@ -117,8 +117,7 @@ SOFTWARE. -->
       </mat-form-field>
     </div>
     <div class="dragger" (mousedown)="onDraggerMouseDown();">
-      <mat-icon class="dragger-icon">drag_indicator
-      </mat-icon>
+      <mat-icon class="dragger-icon">drag_indicator</mat-icon>
     </div>
     <div #cipherField class="flx-item">
       <mat-form-field [style.width.%]="100" [style.height.%]="100" spellcheck="false">
@@ -155,16 +154,5 @@ SOFTWARE. -->
   <enc-options #options (cacheTimeChange)="onCacheTimeChange($event)" (pwdOptionsChange)="onPwdOptionsChange()"
     (formatOptionsChange)="onFormatOptionsChange()">
   </enc-options>
-  <p>
-    <span class="github">
-      <a href="https://github.com/bschick/qcrypt?tab=readme-ov-file" target="_blank">
-        <button mat-fab extended
-          matTooltip="Quick Crypt is on GitHub: Get the source, report issues, or make improvements">
-          <mat-icon svgIcon="github"></mat-icon><span class="github-label">GitHub</span>
-        </button>
-      </a>
-    </span>
-  </p>
   <input type="file" (click)="onClickFileUpload($event)" class="file-input" accept="*" #fileUpload />
 </div>
-<app-copyright />

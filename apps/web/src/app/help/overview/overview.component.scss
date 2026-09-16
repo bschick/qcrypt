@@ -1,6 +1,35 @@
+@use "@angular/material" as mat;
 @use "../help.scss";
 
 
 ul {
   margin-top: 0;
+}
+
+.changelog {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.changelog-link {
+  height: 36px;
+  padding-left: 16px;
+  padding-right: 9px;
+  flex: 0 0 auto;
+  text-decoration: none;
+
+  @include mat.fab-overrides(
+    (
+      extended-container-elevation-shadow: none,
+      extended-focus-container-elevation-shadow: none,
+      extended-hover-container-elevation-shadow: none,
+      extended-pressed-container-elevation-shadow: none,
+    )
+  );
+
+  .github-label {
+    margin: 0 0 0 -4px;
+  }
 }
