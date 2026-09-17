@@ -22,6 +22,7 @@ SOFTWARE. */
 import {
    type AfterViewInit,
    Component,
+   DestroyRef,
    ElementRef,
    type OnInit,
    ChangeDetectionStrategy,
@@ -29,6 +30,7 @@ import {
    output,
    viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { AlgorithmsComponent } from '../algorithms/algorithms.component';
@@ -102,6 +104,7 @@ function setIfBoolean(check: boolean | string | null, setter: (bool: boolean) =>
 export class OptionsComponent implements OnInit, AfterViewInit {
    private readonly _authSvc = inject(AuthenticatorService);
    private readonly _cipherSvc = inject(CipherService);
+   private readonly _destroyRef = inject(DestroyRef);
 
    public expandOptions = false;
    public cipherPanelExpanded = false;
@@ -149,14 +152,27 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    readonly formatOptionsChange = output<boolean>();
 
    ngOnInit() {
-      this.cacheTimeInput.valueChanges.subscribe(this.onCacheTimeChange.bind(this));
-      this.strengthSelect.valueChanges.subscribe(this.onPwdStrengthChange.bind(this));
-      this.checkPwnedToggle.valueChanges.subscribe(this.onCheckPwnedChange.bind(this));
-
-      this.visClearToggle.valueChanges.subscribe(this.onVisClearChnage.bind(this));
-      this.hidePwdToggle.valueChanges.subscribe(this.onHidePwdChange.bind(this));
-      this.formatSelect.valueChanges.subscribe(this.onFormatChange.bind(this));
-      this.reminderToggle.valueChanges.subscribe(this.onReminderChange.bind(this));
+      this.cacheTimeInput.valueChanges
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(this.onCacheTimeChange.bind(this));
+      this.strengthSelect.valueChanges
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(this.onPwdStrengthChange.bind(this));
+      this.checkPwnedToggle.valueChanges
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(this.onCheckPwnedChange.bind(this));
+      this.visClearToggle.valueChanges
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(this.onVisClearChnage.bind(this));
+      this.hidePwdToggle.valueChanges
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(this.onHidePwdChange.bind(this));
+      this.formatSelect.valueChanges
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(this.onFormatChange.bind(this));
+      this.reminderToggle.valueChanges
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(this.onReminderChange.bind(this));
 
       // This can be greatly delayed is there is a long running async benchmark or
       // encrpt or decrypt from a previous instance (tab that has not fully closed).
