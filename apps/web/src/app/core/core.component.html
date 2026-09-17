@@ -20,139 +20,259 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
 <div class="core">
-  <div class="input-area flx-container" (mouseup)="onDraggerMouseUp();">
+  <div class="input-area flx-container" (mouseup)="onDraggerMouseUp()">
     <span class="flx-buttons">
-      <button mat-raised-button (click)="onEncrypt()" class="top-button strong-button" #bubbleTip2="bubbleTip"
+      <button
+        mat-raised-button
+        (click)="onEncrypt()"
+        class="top-button strong-button"
+        #bubbleTip2="bubbleTip"
         bubbleTip="When you have finished entering text, click the Encrypt button. You will then be promted for a password."
-        bubblePosition="right" bubbleWidth="250px" aria-label="Encrypt Text" accesskey="E"
+        bubblePosition="right"
+        bubbleWidth="250px"
+        aria-label="Encrypt Text"
+        accesskey="E"
         [disabled]="showProgress ? 'true' : 'false'">
         Encrypt
       </button>
-      <button mat-raised-button class="top-button mleft15" [matMenuTriggerFor]="clearMenu"
-        matTooltip="File actions" [disabled]="showProgress ? 'true' : 'false'">
+      <button
+        mat-raised-button
+        class="top-button mleft15"
+        [matMenuTriggerFor]="clearMenu"
+        matTooltip="File actions"
+        [disabled]="showProgress ? 'true' : 'false'">
         Files
         <mat-icon iconPositionEnd>expand_more</mat-icon>
       </button>
       <mat-menu #clearMenu="matMenu" xPosition="before">
-        <button mat-menu-item (click)="onEncryptToFile()" matTooltip="Encrypt to cipher armor file"
+        <button
+          mat-menu-item
+          (click)="onEncryptToFile()"
+          matTooltip="Encrypt to cipher armor file"
           matTooltipPosition="right">
-          <mat-icon svgIcon="encrypted_add"></mat-icon>Encrypt to File
+          <mat-icon svgIcon="encrypted_add"></mat-icon>
+          Encrypt to File
         </button>
-        <button mat-menu-item (click)="onLoadClearFile()" matTooltip="Select clear text file"
+        <button
+          mat-menu-item
+          (click)="onLoadClearFile()"
+          matTooltip="Select clear text file"
           matTooltipPosition="right">
-          <mat-icon>file_upload</mat-icon>Select Clear File
+          <mat-icon>file_upload</mat-icon>
+          Select Clear File
         </button>
-        <button mat-menu-item (click)="onSaveClearFile()" matTooltip="Save clear text file" matTooltipPosition="right"
+        <button
+          mat-menu-item
+          (click)="onSaveClearFile()"
+          matTooltip="Save clear text file"
+          matTooltipPosition="right"
           [disabled]="!clearText ? 'true' : 'false'">
-          <mat-icon>file_download</mat-icon>Save Clear File
+          <mat-icon>file_download</mat-icon>
+          Save Clear File
         </button>
       </mat-menu>
     </span>
     <span class="flx-buttons">
-      <button mat-raised-button (click)="privacyClear()" class="top-button mleft15 clear-button"
-        matTooltip="Forget cached password and decrypted text" [disabled]="showProgress ? 'true' : 'false'"
+      <button
+        mat-raised-button
+        (click)="privacyClear()"
+        class="top-button mleft15 clear-button"
+        matTooltip="Forget cached password and decrypted text"
+        [disabled]="showProgress ? 'true' : 'false'"
         [style.visibility]="pwdCached ? 'visible' : 'hidden'">
-        {{'&nbsp;Flush&nbsp; ('+ secondsRemaining +')'}}
+        {{ "&nbsp;Flush&nbsp; (" + secondsRemaining + ")" }}
       </button>
     </span>
     <span class="flx-buttons">
-      <button mat-raised-button class="top-button mleft15" [matMenuTriggerFor]="cipherMenu"
-        matTooltip="File Actions" [disabled]="showProgress ? 'true' : 'false'">
+      <button
+        mat-raised-button
+        class="top-button mleft15"
+        [matMenuTriggerFor]="cipherMenu"
+        matTooltip="File Actions"
+        [disabled]="showProgress ? 'true' : 'false'">
         Files
         <mat-icon iconPositionEnd>expand_more</mat-icon>
       </button>
       <mat-menu #cipherMenu="matMenu" xPosition="before">
-        <button mat-menu-item (click)="onDecryptToFile()" matTooltip="Decrypt to cipher armor file"
+        <button
+          mat-menu-item
+          (click)="onDecryptToFile()"
+          matTooltip="Decrypt to cipher armor file"
           matTooltipPosition="left">
-          <mat-icon svgIcon="encrypted_minus"></mat-icon>Decrypt to File
+          <mat-icon svgIcon="encrypted_minus"></mat-icon>
+          Decrypt to File
         </button>
-        <button mat-menu-item (click)="onLoadCipherFile()" matTooltip="Select cipher armor file"
+        <button
+          mat-menu-item
+          (click)="onLoadCipherFile()"
+          matTooltip="Select cipher armor file"
           matTooltipPosition="left">
-          <mat-icon>file_upload</mat-icon>Select Cipher File
+          <mat-icon>file_upload</mat-icon>
+          Select Cipher File
         </button>
-        <button mat-menu-item (click)="onSaveCipherFile()" matTooltip="Save cipher armor file" matTooltipPosition="left"
+        <button
+          mat-menu-item
+          (click)="onSaveCipherFile()"
+          matTooltip="Save cipher armor file"
+          matTooltipPosition="left"
           [disabled]="!cipherArmor ? 'true' : 'false'">
-          <mat-icon>file_download</mat-icon>Save Cipher File
+          <mat-icon>file_download</mat-icon>
+          Save Cipher File
         </button>
       </mat-menu>
-      <button mat-raised-button (click)="onDecrypt()" class="top-button strong-button mleft15" aria-label="Decrypt Text"
-        accesskey="D" [disabled]="showProgress ? 'true' : 'false'">
+      <button
+        mat-raised-button
+        (click)="onDecrypt()"
+        class="top-button strong-button mleft15"
+        aria-label="Decrypt Text"
+        accesskey="D"
+        [disabled]="showProgress ? 'true' : 'false'">
         Decrypt
       </button>
     </span>
   </div>
-  <div (mouseup)="onDraggerMouseUp();" (mousemove)="onDraggerMouseMove($event);" #inputArea
+  <div
+    (mouseup)="onDraggerMouseUp()"
+    (mousemove)="onDraggerMouseMove($event)"
+    #inputArea
     class="input-area flx-container">
-    <mat-progress-spinner class="spinner" mode="indeterminate"
-      [style.visibility]="showProgress ? 'visible' : 'hidden'">
-    </mat-progress-spinner>
+    <mat-progress-spinner
+      class="spinner"
+      mode="indeterminate"
+      [style.visibility]="showProgress ? 'visible' : 'hidden'"></mat-progress-spinner>
     <div #clearField class="flx-item">
-      <mat-form-field #bubbleTip1="bubbleTip"
-        bubbleTip="To encrypt some data, type or paste text here then click the Encrypt button." bubblePosition="upper"
-        bubbleWidth="250px" [style.width.%]="100" [style.height.%]="100" spellcheck="false">
-        <mat-label>{{clearLabel}}</mat-label>
+      <mat-form-field
+        #bubbleTip1="bubbleTip"
+        bubbleTip="To encrypt some data, type or paste text here then click the Encrypt button."
+        bubblePosition="above"
+        bubbleWidth="250px"
+        bubbleShiftY="10"
+        bubbleShiftX="110"
+        [style.width.%]="100"
+        [style.height.%]="100"
+        spellcheck="false">
+        <mat-label>{{ clearLabel }}</mat-label>
         <div class="toolbar">
-          <button [hidden]="!clearWarning" mat-icon-button class="warn-icon" aria-label="Warning"
-            [matTooltip]="clearWarning" (click)="toastMessage(clearWarning)">
+          <button
+            [hidden]="!clearWarning"
+            mat-icon-button
+            class="warn-icon"
+            aria-label="Warning"
+            [matTooltip]="clearWarning"
+            (click)="toastMessage(clearWarning)">
             <mat-icon>warning</mat-icon>
           </button>
-          <button [hidden]="!clearText || showProgress" mat-icon-button aria-label="Copy"
-            matTooltip="Copy clear text to clipboard" (click)="toastMessage('Clear text copied to clipboard')"
+          <button
+            [hidden]="!clearText || showProgress"
+            mat-icon-button
+            aria-label="Copy"
+            matTooltip="Copy clear text to clipboard"
+            (click)="toastMessage('Clear text copied to clipboard')"
             [cdkCopyToClipboard]="clearText">
             <mat-icon>content_copy</mat-icon>
           </button>
-          <button [hidden]="showProgress" mat-icon-button aria-label="Clear" matTooltip="Clear text"
+          <button
+            [hidden]="showProgress"
+            mat-icon-button
+            aria-label="Clear"
+            matTooltip="Clear text"
             (click)="onClearClear()">
             <mat-icon>close</mat-icon>
           </button>
         </div>
         <div>
           <div [class]="clearMsgClass" [hidden]="!clearMsg" [innerHTML]="clearMsg"></div>
-          <textarea matInput noAssist #clearInput id="clearInput" autofocus cdkTextareaAutosize placeholder=""
-            class="txt-area-clear" [(ngModel)]="clearText" [ngModelOptions]="{standalone: true}"
-            [readonly]="clearMsg ? 'true' : 'false'" [disabled]="(showProgress) ? 'true' : 'false'"
-            (input)="onClearInput()">
-          </textarea>
+          <textarea
+            matInput
+            noAssist
+            #clearInput
+            id="clearInput"
+            autofocus
+            cdkTextareaAutosize
+            placeholder=""
+            class="txt-area-clear"
+            [(ngModel)]="clearText"
+            [ngModelOptions]="{ standalone: true }"
+            [readonly]="clearMsg ? 'true' : 'false'"
+            [disabled]="showProgress ? 'true' : 'false'"
+            (input)="onClearInput()"></textarea>
         </div>
       </mat-form-field>
     </div>
-    <div class="dragger" (mousedown)="onDraggerMouseDown();">
+    <div class="dragger" (mousedown)="onDraggerMouseDown()">
       <mat-icon class="dragger-icon">drag_indicator</mat-icon>
     </div>
     <div #cipherField class="flx-item">
-      <mat-form-field [style.width.%]="100" [style.height.%]="100" spellcheck="false">
-        <mat-label>{{cipherLabel}}</mat-label>
+      <mat-form-field
+        #bubbleTip3="bubbleTip"
+        bubbleTip="👍"
+        bubblePosition="above"
+        bubbleWidth="50px"
+        bubbleFontSize="24px"
+        bubbleShiftY="-5"
+        bubbleShiftX="-100"
+        [style.width.%]="100"
+        [style.height.%]="100"
+        spellcheck="false">
+        <mat-label>{{ cipherLabel }}</mat-label>
         <div class="toolbar">
-          <button [hidden]="!cipherWarning" mat-icon-button class="warn-icon" aria-label="Warning"
-            [matTooltip]="cipherWarning" (click)="toastMessage(cipherWarning)">
+          <button
+            [hidden]="!cipherWarning"
+            mat-icon-button
+            class="warn-icon"
+            aria-label="Warning"
+            [matTooltip]="cipherWarning"
+            (click)="toastMessage(cipherWarning)">
             <mat-icon>warning</mat-icon>
           </button>
-          <button [hidden]="!cipherArmor || showProgress" mat-icon-button aria-label="Copy"
-            matTooltip="Copy cipher armor to clipboard" (click)="toastMessage('Cipher armor copied to clipboard')"
+          <button
+            [hidden]="!cipherArmor || showProgress"
+            mat-icon-button
+            aria-label="Copy"
+            matTooltip="Copy cipher armor to clipboard"
+            (click)="toastMessage('Cipher armor copied to clipboard')"
             [cdkCopyToClipboard]="cipherArmor">
             <mat-icon>content_copy</mat-icon>
           </button>
-          <button [hidden]="(!cipherArmor && !cipherFile) || showProgress" mat-icon-button aria-label="Info"
-            matTooltip="Show decryption parameters" (click)="onCipherTextInfo()">
+          <button
+            [hidden]="(!cipherArmor && !cipherFile) || showProgress"
+            mat-icon-button
+            aria-label="Info"
+            matTooltip="Show decryption parameters"
+            (click)="onCipherTextInfo()">
             <mat-icon>info</mat-icon>
           </button>
-          <button [hidden]="showProgress" mat-icon-button aria-label="Clear" matTooltip="Clear cipher armor"
+          <button
+            [hidden]="showProgress"
+            mat-icon-button
+            aria-label="Clear"
+            matTooltip="Clear cipher armor"
             (click)="onClearCipher()">
             <mat-icon>close</mat-icon>
           </button>
         </div>
         <div>
           <div [class]="cipherMsgClass" [hidden]="!cipherMsg" [innerHTML]="cipherMsg"></div>
-          <textarea matInput noAssist id="cipherInput" placeholder="" class="txt-area-armor" cdkTextareaAutosize
-            [(ngModel)]="cipherArmor" [ngModelOptions]="{standalone: true}" [readonly]="cipherMsg ? 'true' : 'false'"
-            [disabled]="showProgress ? 'true' : 'false'" (input)="onCipherInput()">
-          </textarea>
+          <textarea
+            matInput
+            noAssist
+            id="cipherInput"
+            placeholder=""
+            class="txt-area-armor"
+            cdkTextareaAutosize
+            [(ngModel)]="cipherArmor"
+            [ngModelOptions]="{ standalone: true }"
+            [readonly]="cipherMsg ? 'true' : 'false'"
+            [disabled]="showProgress ? 'true' : 'false'"
+            (input)="onCipherInput()"></textarea>
         </div>
       </mat-form-field>
     </div>
   </div>
-  <enc-options #options (cacheTimeChange)="onCacheTimeChange($event)" (pwdOptionsChange)="onPwdOptionsChange()"
-    (formatOptionsChange)="onFormatOptionsChange()">
-  </enc-options>
+  <enc-options
+    #options
+    (cacheTimeChange)="onCacheTimeChange($event)"
+    (pwdOptionsChange)="onPwdOptionsChange()"
+    (formatOptionsChange)="onFormatOptionsChange()"></enc-options>
   <input type="file" (click)="onClickFileUpload($event)" class="file-input" accept="*" #fileUpload />
 </div>

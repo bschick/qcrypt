@@ -20,11 +20,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
 <span class="cipher-info">
-  <h1 mat-dialog-title class="header">Decryption Parameters</h1>
+  <h1 mat-dialog-title class="header">Encryption Parameters</h1>
   <div class="scroller">
     <div mat-dialog-content class="dialog-content">
       @if (error) {
-        <p>{{error}}</p>
+        <p>{{ error }}</p>
       }
       @if (!error) {
         <div class="dialog-body">
@@ -32,7 +32,6 @@ SOFTWARE. -->
             <li><b>Cipher and Mode:</b></li>
             <li><b>PBKDF2 Iterations:</b></li>
             <li><b>Derived Keys:</b></li>
-            <li><b>Salt (b64Url):</b></li>
             @if (hint) {
               <li><b>Password Hint:</b></li>
             }
@@ -40,16 +39,15 @@ SOFTWARE. -->
             <li><b>Version:</b></li>
           </ul>
           <ul class="tech-list">
-            <li>{{alg}}</li>
-            <li>{{ic}}</li>
+            <li>{{ alg }}</li>
+            <li>{{ ic }}</li>
             <!-- hard-coded -->
             <li>256-bit</li>
-            <li>{{slt}}</li>
             @if (hint) {
-              <li>{{hint}}</li>
+              <li>{{ hint }}</li>
             }
-            <li>{{lps}}</li>
-            <li>{{ver}}</li>
+            <li>{{ lps }}</li>
+            <li>{{ ver }}</li>
           </ul>
         </div>
       }

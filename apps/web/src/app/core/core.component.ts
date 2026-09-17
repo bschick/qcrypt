@@ -160,6 +160,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    readonly fileUpload = viewChild.required<ElementRef>('fileUpload');
    readonly bubbleTip1 = viewChild.required<BubbleDirective>('bubbleTip1');
    readonly bubbleTip2 = viewChild.required<BubbleDirective>('bubbleTip2');
+   readonly bubbleTip3 = viewChild.required<BubbleDirective>('bubbleTip3');
    readonly options = viewChild.required<OptionsComponent>('options');
 
    constructor() {
@@ -195,7 +196,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             setTimeout(() => {
                this.welcomed = false;
                this.bubbleTip1().show();
-            }, 1000);
+            }, 500);
          }
       }
 
@@ -395,6 +396,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this.welcomed && this._authSvc.hasSession()) {
          this.bubbleTip1().show();
          this.bubbleTip2().hide();
+         this.bubbleTip3().hide();
       }
    }
 
@@ -405,6 +407,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this.welcomed && this._authSvc.hasSession()) {
          this.bubbleTip1().hide();
          this.bubbleTip2().show();
+         this.bubbleTip3().hide();
       }
    }
 
@@ -516,6 +519,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this.welcomed) {
          this.bubbleTip1().hide();
          this.bubbleTip2().show();
+         this.bubbleTip3().hide();
       }
    }
 
@@ -538,6 +542,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this.welcomed) {
          this.bubbleTip1().hide();
          this.bubbleTip2().hide();
+         this.bubbleTip3().hide();
       }
 
       try {
@@ -561,6 +566,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             const cipherData = await readStreamAll(cipherStream);
             this.showCipherDataAndTime(cipherData);
             this.toastMessage('Congratulations, data encrypted');
+            if (!this.welcomed) {
+               this.bubbleTip3().show();
+               setTimeout(() => {
+                  this.bubbleTip3().hide();
+               }, 5000);
+            }
 
             // it worked, so stop showing tips (setting this before next loop)
             this.welcomed = true;
@@ -609,6 +620,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this.welcomed) {
          this.bubbleTip1().hide();
          this.bubbleTip2().hide();
+         this.bubbleTip3().hide();
       }
 
       try {
