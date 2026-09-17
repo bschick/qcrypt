@@ -20,7 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnDestroy, type OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
+import { Component, DestroyRef, type OnDestroy, type OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -31,7 +32,6 @@ import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { AuthEvent, AuthenticatorService } from '../services/authenticator.service';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { Subscription } from 'rxjs';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { bytesToBase64 } from '@qcrypt/crypto';
@@ -60,27 +60,27 @@ export class CmdLineComponent implements OnInit, OnDestroy {
    private readonly _authSvc = inject(AuthenticatorService);
    private readonly _router = inject(Router);
    private readonly _snackBar = inject(MatSnackBar);
+   private readonly _destroyRef = inject(DestroyRef);
 
    public showProgress = true;
    public hideCred = true;
    public error = '';
-   private _authSub!: Subscription;
    public userCredential = new FormControl<string>('');
 
    ngOnInit() {
-      this._authSub = this._authSvc.on([AuthEvent.Logout], () => {
-         this.error = '';
-         this._router.navigateByUrl('/');
-      });
+      this._authSvc
+         .on([AuthEvent.Logout])
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(() => {
+            this.error = '';
+            this._router.navigateByUrl('/');
+         });
 
       this.reloadData();
    }
 
    ngOnDestroy() {
       this.userCredential.setValue('');
-      if (this._authSub) {
-         this._authSub.unsubscribe();
-      }
    }
 
    reloadData() {

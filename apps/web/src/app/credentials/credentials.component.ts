@@ -22,14 +22,15 @@ SOFTWARE. */
 
 import {
    Component,
+   DestroyRef,
    type OnInit,
    effect,
    Renderer2,
-   type OnDestroy,
    ChangeDetectionStrategy,
    inject,
    output,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
@@ -46,7 +47,6 @@ import { Router, RouterLink, NavigationStart } from '@angular/router';
 import type { Event as RouterEvent } from '@angular/router';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
-import { Subscription } from 'rxjs';
 import { MatCardModule } from '@angular/material/card';
 
 @Component({
@@ -66,14 +66,13 @@ import { MatCardModule } from '@angular/material/card';
       MatCardModule,
    ],
 })
-export class CredentialsComponent implements OnInit, OnDestroy {
+export class CredentialsComponent implements OnInit {
    protected readonly authSvc = inject(AuthenticatorService);
    private readonly _dialog = inject(MatDialog);
    private readonly _router = inject(Router);
    private readonly _snackBar = inject(MatSnackBar);
 
-   private _authSub!: Subscription;
-   private _routeSub!: Subscription;
+   private readonly _destroyRef = inject(DestroyRef);
    public error = '';
    public prfUnsupported = false;
    public userName = '';
@@ -91,22 +90,16 @@ export class CredentialsComponent implements OnInit, OnDestroy {
    }
 
    ngOnInit(): void {
-      this._routeSub = this._router.events.subscribe((event: RouterEvent) => {
+      this._router.events.pipe(takeUntilDestroyed(this._destroyRef)).subscribe((event: RouterEvent) => {
          if (event instanceof NavigationStart) {
             this.done.emit(true);
          }
       });
 
-      this._authSub = this.authSvc.on([AuthEvent.Logout], () => this.refresh());
-   }
-
-   ngOnDestroy(): void {
-      if (this._authSub) {
-         this._authSub.unsubscribe();
-      }
-      if (this._routeSub) {
-         this._routeSub.unsubscribe();
-      }
+      this.authSvc
+         .on([AuthEvent.Logout])
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(() => this.refresh());
    }
 
    toastMessage(msg: string): void {

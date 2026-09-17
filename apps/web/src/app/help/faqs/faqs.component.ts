@@ -19,14 +19,8 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import {
-   Component,
-   ViewEncapsulation,
-   inject,
-   type OnInit,
-   type OnDestroy,
-   ChangeDetectionStrategy,
-} from '@angular/core';
+import { Component, DestroyRef, ViewEncapsulation, inject, type OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -35,7 +29,6 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import type { Subscription } from 'rxjs';
 import { CopyrightComponent } from '../../ui/copyright/copyright.component';
 
 export interface FAQElement {
@@ -62,10 +55,10 @@ export interface FAQElement {
       CopyrightComponent,
    ],
 })
-export class FaqsComponent implements OnInit, OnDestroy {
+export class FaqsComponent implements OnInit {
    private readonly _route = inject(ActivatedRoute);
    private readonly _snackBar = inject(MatSnackBar);
-   private _routeSub?: Subscription;
+   private readonly _destroyRef = inject(DestroyRef);
 
    public allExpanded = false;
    public searchTerm = '';
@@ -121,14 +114,10 @@ export class FaqsComponent implements OnInit, OnDestroy {
          );
       };
 
-      this._routeSub = this._route.paramMap.subscribe((params) => {
+      this._route.paramMap.pipe(takeUntilDestroyed(this._destroyRef)).subscribe((params) => {
          const id = params.get('id');
          this._handleRouteId(id);
       });
-   }
-
-   ngOnDestroy(): void {
-      this._routeSub?.unsubscribe();
    }
 
    private _handleRouteId(id: string | null): void {

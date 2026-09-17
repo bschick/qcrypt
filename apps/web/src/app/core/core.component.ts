@@ -21,6 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import {
    Component,
+   DestroyRef,
    Renderer2,
    ElementRef,
    type OnInit,
@@ -33,6 +34,7 @@ import {
    inject,
    viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Ciphers, makeCipherArmor, parseCipherArmor, PWDKeyProvider } from '@qcrypt/crypto';
 
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
@@ -75,7 +77,6 @@ import { PasswordDialog, CipherInfoDialog, SigninDialog } from '../ui/dialogs/di
 import { BubbleDirective } from '../ui/bubble/bubble.directive';
 import { NoAssistDirective } from '../ui/noassist.directive';
 import { OptionsComponent } from '../ui/options/options.component';
-import { Subscription } from 'rxjs';
 import { Router } from '@angular/router';
 
 const INJECTED_WARNING = 'Content was copied from the address bar. Please confirm its validity.';
@@ -134,7 +135,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    private _intervalId = 0;
    private _spinnerAbove = 1500000; // Default since benchmark is async
    private _actionStart = 0;
-   private _authSub!: Subscription;
+   private readonly _destroyRef = inject(DestroyRef);
    private _usedPasswords: string[] = [];
    public cacheTimeout = 0;
    public clearText = '';
@@ -219,10 +220,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       });
 
       // subscribe to auth events
-      this._authSub = this._authSvc.on(
-         [AuthEvent.Logout, AuthEvent.Forget, AuthEvent.Login, AuthEvent.Delete],
-         (data) => this.onAuthEvent(data),
-      );
+      this._authSvc
+         .on([AuthEvent.Logout, AuthEvent.Forget, AuthEvent.Login, AuthEvent.Delete])
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe((data) => this.onAuthEvent(data));
 
       // core.guard doesn't allow reaching this point if the
       // user is unknown, If not authenticated, ask the user
@@ -231,9 +232,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    ngOnDestroy() {
-      if (this._authSub) {
-         this._authSub.unsubscribe();
-      }
       if (this._signinDialogRef) {
          this._signinDialogRef.close();
          this._signinDialogRef = undefined;

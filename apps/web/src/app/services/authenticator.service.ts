@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { environment } from '../../environments/environment';
-import { afterNextRender, signal, inject, Service } from '@angular/core';
+import { afterNextRender, computed, signal, inject, Service } from '@angular/core';
 import {
    type PublicKeyCredentialRequestOptionsJSON,
    type AuthenticationResponseJSON,
@@ -30,7 +30,7 @@ import {
    startAuthentication,
    sendSignal,
 } from '@simplewebauthn/browser';
-import { Subject, Subscription, filter } from 'rxjs';
+import { Observable, Subject, filter } from 'rxjs';
 import {
    base64ToBytes,
    bytesToBase64,
@@ -144,7 +144,9 @@ export class AuthenticatorService {
 
    private _subject = new Subject<AuthEventData>();
    private _intervalId: number = 0;
-   private _csrf?: string = undefined;
+   // sessionState in this tab is only written within this service, so this signal always reflects its current value
+   private readonly _sessionState = signal<SessionState | null>(this._loadSessionState());
+   private readonly _csrf = signal<string | undefined>(undefined);
    private _cachedRecoveryWords?: string;
    private _pendingLogout: Promise<LogoutResult> = Promise.resolve('none');
    private _halted = false;
@@ -192,18 +194,23 @@ export class AuthenticatorService {
    // it is possible for "hasSession" to be true and "potentialSession"
    // to be false. this happens when another tab logs out, or out then in,
    // using a different Pk until this tab detects it
-   public hasSession(): boolean {
-      const session = this._getSessionState();
+   public readonly hasSession = computed<boolean>(() => {
+      const session = this._sessionState();
       return (
-         !!session && !!session.pkId && !!session.userCredEnc && !!session.version && !!this._csrf && !!this.userInfo()
+         !!session &&
+         !!session.pkId &&
+         !!session.userCredEnc &&
+         !!session.version &&
+         !!this._csrf() &&
+         !!this.userInfo()
       );
-   }
+   });
 
    public potentialSession(): boolean {
       // Expiry or changed user (from another tab) means invalid session.
       // Cookie may still be valid, but we won't use it.
       const globalPKId = localStorage.getItem('pkid');
-      const myUserId = this._getSessionState()?.userId;
+      const myUserId = this._sessionState()?.userId;
       const sessionExpired = expired(localStorage, 'sessionexpiry');
       const activityExpired = expired(localStorage, 'activityexpiry');
       const [userId, userName] = this.loadKnownUser();
@@ -222,7 +229,7 @@ export class AuthenticatorService {
    public validKnownUser(): boolean {
       const [userId, userName] = this.loadKnownUser();
       if (userId && userName && localStorage.getItem('pkid')) {
-         const myUserId = this._getSessionState()?.userId;
+         const myUserId = this._sessionState()?.userId;
          if (!myUserId || myUserId === userId) {
             return true;
          }
@@ -234,9 +241,19 @@ export class AuthenticatorService {
       return [localStorage.getItem('userid'), localStorage.getItem('username')];
    }
 
-   private _getSessionState(): SessionState | null {
+   private _loadSessionState(): SessionState | null {
       const raw = sessionStorage.getItem('sessionstate');
       return raw ? JSON.parse(raw) : null;
+   }
+
+   // The only code that may change the 'sessionstate' key in sessionStorage (or signal becomes stale)
+   private _setSessionState(state: SessionState | null): void {
+      if (state) {
+         sessionStorage.setItem('sessionstate', JSON.stringify(state));
+      } else {
+         sessionStorage.removeItem('sessionstate');
+      }
+      this._sessionState.set(state);
    }
 
    private _loadAccountPin(userId: string): AccountPin | null {
@@ -308,7 +325,7 @@ export class AuthenticatorService {
 
    // Callers MUST overwrite returned value ASAP
    public async getUserCred(): Promise<Uint8Array<ArrayBuffer>> {
-      const session = this._getSessionState();
+      const session = this._sessionState();
       if (!session?.userCredEnc || !session.pkId) {
          throw new Error('no active user');
       }
@@ -348,11 +365,11 @@ export class AuthenticatorService {
 
    private async _doFetch<T>(args: FetchArgs): Promise<T> {
       const { method, userId, resource, resourceId, params, bodyJSON } = args;
-      const session = args.session ?? this._getSessionState();
+      const session = args.session ?? this._sessionState();
 
       const headers = new Headers({
          'Content-Type': 'application/json',
-         'x-csrf-token': this._csrf!,
+         'x-csrf-token': this._csrf()!,
       });
 
       const bodyData = new TextEncoder().encode(bodyJSON ?? '');
@@ -428,7 +445,7 @@ export class AuthenticatorService {
          return;
       }
 
-      let session = this._getSessionState();
+      let session = this._sessionState();
 
       if (!session?.userCredEnc) {
          const targetPkId = localStorage.getItem('pkid');
@@ -645,8 +662,8 @@ export class AuthenticatorService {
       return await this._loginUser(serverLoginUserInfo, userCred);
    }
 
-   on(events: AuthEvent[], action: (data: AuthEventData) => void): Subscription {
-      return this._subject.pipe(filter((ed: AuthEventData) => events.includes(ed.event))).subscribe(action);
+   on(events: AuthEvent[]): Observable<AuthEventData> {
+      return this._subject.pipe(filter((ed: AuthEventData) => events.includes(ed.event)));
    }
 
    private _captureEventData(event: AuthEvent): AuthEventData {
@@ -779,13 +796,13 @@ export class AuthenticatorService {
          userCredExpiry,
          version,
       };
-      sessionStorage.setItem('sessionstate', JSON.stringify(sessionState));
+      this._setSessionState(sessionState);
 
       if (!serverLogin.csrf || serverLogin.csrf.length === 0) {
          throw new Error('invalid csrf token');
       }
 
-      this._csrf = serverLogin.csrf;
+      this._csrf.set(serverLogin.csrf);
       localStorage.setItem('sessionexpiry', userCredExpiry);
       localStorage.setItem('userid', serverLogin.userId);
       localStorage.setItem('pkid', serverLogin.pkId);
@@ -796,7 +813,7 @@ export class AuthenticatorService {
    }
 
    private _getCredentialPayload(): CredentialPayload | undefined {
-      const sessionState = this._getSessionState();
+      const sessionState = this._sessionState();
       if (sessionState && this.hasSession() && !expired(localStorage, 'sessionexpiry')) {
          return {
             pkId: sessionState.pkId!,
@@ -830,7 +847,7 @@ export class AuthenticatorService {
    }
 
    private _handlePeerLogout(msg: LogoutPayload): void {
-      const sessionState = this._getSessionState();
+      const sessionState = this._sessionState();
       if (sessionState?.version && msg.version >= sessionState.version) {
          this.logout(false);
       }
@@ -838,7 +855,7 @@ export class AuthenticatorService {
 
    private _handlePeerLogin(msg: LoginPayload): void {
       if (this.hasSession()) {
-         const sessionState = this._getSessionState()!;
+         const sessionState = this._sessionState()!;
          if (msg.version > sessionState.version!) {
             if (
                this.userInfo()!.authenticators.some(
@@ -903,7 +920,7 @@ export class AuthenticatorService {
       if (!serverUser.authenticators || serverUser.authenticators.length === 0) {
          throw new Error('missing authenticators');
       }
-      const session = this._getSessionState();
+      const session = this._sessionState();
       if (!session) {
          throw new Error('no active user');
       }
@@ -1019,7 +1036,7 @@ export class AuthenticatorService {
 
    // Clears the session on the local system, optionally across tabs, but not on the server.
    clearSession(global: boolean): void {
-      const session = this._getSessionState();
+      const session = this._sessionState();
 
       if (global && this.hasSession()) {
          // rather than clear values, which can trigger error in other tabs,
@@ -1040,13 +1057,13 @@ export class AuthenticatorService {
       if (session?.userId) {
          // Preserve userId so this tab refuses to auto-resume a different user's session
          const partial: SessionState = { userId: session.userId };
-         sessionStorage.setItem('sessionstate', JSON.stringify(partial));
+         this._setSessionState(partial);
       } else {
-         sessionStorage.removeItem('sessionstate');
+         this._setSessionState(null);
       }
 
       // clear sensitive in-memory values
-      this._csrf = undefined;
+      this._csrf.set(undefined);
       this._cachedRecoveryWords = undefined;
    }
 

@@ -20,7 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnDestroy, type OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
+import { Component, DestroyRef, type OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -30,7 +31,6 @@ import { MatSidenav, MatSidenavModule } from '@angular/material/sidenav';
 import { CredentialsComponent } from './credentials/credentials.component';
 import { HaltedComponent } from './halted/halted.component';
 import { AuthEvent, type AuthEventData, AuthenticatorService } from './services/authenticator.service';
-import { Subscription } from 'rxjs';
 
 @Component({
    selector: 'qcrypt-root',
@@ -49,28 +49,25 @@ import { Subscription } from 'rxjs';
       HaltedComponent,
    ],
 })
-export class QCryptComponent implements OnInit, OnDestroy {
+export class QCryptComponent implements OnInit {
    private readonly _router = inject(Router);
    private readonly _authSvc = inject(AuthenticatorService);
 
-   private _authSub!: Subscription;
+   private readonly _destroyRef = inject(DestroyRef);
    public bgColorDefault = '';
    public bgColorFocus = 'color-mix(in srgb,var(--mat-sys-primary) 10%,transparent)';
    public showPKButton = false;
 
    ngOnInit(): void {
       this.showPKButton = this._authSvc.hasSession();
-      this._authSub = this._authSvc.on([AuthEvent.Logout, AuthEvent.Login], this.onAuthEvent.bind(this));
+      this._authSvc
+         .on([AuthEvent.Logout, AuthEvent.Login])
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe((data) => this.onAuthEvent(data));
    }
 
    onAuthEvent(data: AuthEventData) {
       this.showPKButton = data.event === AuthEvent.Login;
-   }
-
-   ngOnDestroy(): void {
-      if (this._authSub) {
-         this._authSub.unsubscribe();
-      }
    }
 
    // Help stays readable so the user can look up what the halt means

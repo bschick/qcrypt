@@ -146,7 +146,7 @@ describe('AuthenticatorService', () => {
       const createSpy = vi.spyOn(keystoreSvc, 'create');
       const getSpy = vi.spyOn(keystoreSvc, 'get');
       const events: AuthEvent[] = [];
-      service.on(allAuthEvents, (ed) => events.push(ed.event));
+      service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
       await service._restoreSession(loadCrypto);
 
@@ -181,7 +181,7 @@ describe('AuthenticatorService', () => {
       const createSpy = vi.spyOn(keystoreSvc, 'create');
       const getSpy = vi.spyOn(keystoreSvc, 'get');
       const events: AuthEvent[] = [];
-      service.on(allAuthEvents, (ed) => events.push(ed.event));
+      service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
       await service._restoreSession(loadCrypto);
 
@@ -207,7 +207,7 @@ describe('AuthenticatorService', () => {
       const createSpy = vi.spyOn(keystoreSvc, 'create');
       const getSpy = vi.spyOn(keystoreSvc, 'get');
       const events: AuthEvent[] = [];
-      service.on(allAuthEvents, (ed) => events.push(ed.event));
+      service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
       await service._restoreSession(loadCrypto);
 
@@ -227,7 +227,7 @@ describe('AuthenticatorService', () => {
       const createSpy = vi.spyOn(keystoreSvc, 'create');
       const getSpy = vi.spyOn(keystoreSvc, 'get');
       const events: AuthEvent[] = [];
-      service.on(allAuthEvents, (ed) => events.push(ed.event));
+      service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
       // Step 1: invoke _loginUser directly to populate IndexedDB and write
       // a userCredEnc to sessionStorage.
@@ -301,7 +301,7 @@ describe('AuthenticatorService', () => {
       const createSpy = vi.spyOn(keystoreSvc, 'create');
       const getSpy = vi.spyOn(keystoreSvc, 'get');
       const events: AuthEvent[] = [];
-      service.on(allAuthEvents, (ed) => events.push(ed.event));
+      service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
       await service._restoreSession(loadCrypto);
 
@@ -610,7 +610,7 @@ describe('AuthenticatorService', () => {
          const keystoreSvc = TestBed.inject(KeystoreService);
          const createSpy = vi.spyOn(keystoreSvc, 'create');
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.setCredentialProvider(() => ({
             pkId,
@@ -642,7 +642,7 @@ describe('AuthenticatorService', () => {
 
          fetchMock.mockClear();
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogin({
             pkId,
@@ -667,7 +667,7 @@ describe('AuthenticatorService', () => {
          const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
          const strangerPkId = bytesToBase64(getRandom(cc.PKID_MIN_BYTES));
          const events: AuthEvent[] = [];
-         service.on([AuthEvent.Logout, AuthEvent.Forget], (ed) => events.push(ed.event));
+         service.on([AuthEvent.Logout, AuthEvent.Forget]).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogin({
             pkId: strangerPkId,
@@ -687,7 +687,7 @@ describe('AuthenticatorService', () => {
          const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
          const strangerPkId = bytesToBase64(getRandom(cc.PKID_MIN_BYTES));
          const events: AuthEvent[] = [];
-         service.on([AuthEvent.Logout, AuthEvent.Forget], (ed) => events.push(ed.event));
+         service.on([AuthEvent.Logout, AuthEvent.Forget]).subscribe((ed) => events.push(ed.event));
 
          // Simulate another tab signing in as a different user.
          localStorage.setItem('userid', bytesToBase64(getRandom(cc.USERID_BYTES)));
@@ -709,7 +709,7 @@ describe('AuthenticatorService', () => {
          await service._loginUser(sessionResponse, base64ToBytes(userCred));
          const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogout({ pkId, version: phase1.version });
 
@@ -723,7 +723,7 @@ describe('AuthenticatorService', () => {
          await service._loginUser(sessionResponse, base64ToBytes(userCred));
          const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          fetchMock.mockClear();
          peerResponder.sendLogout({ pkId, version: phase1.version - 1 });
@@ -740,7 +740,7 @@ describe('AuthenticatorService', () => {
          await service._loginUser(sessionResponse, base64ToBytes(userCred));
          expect(service.hasSession()).toBe(true);
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          // Real sender of forget clears shared localStorage before broadcasting.
          localStorage.removeItem('userid');
@@ -770,7 +770,7 @@ describe('AuthenticatorService', () => {
 
       it('forget with no session emits forget', async () => {
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendForget();
 
@@ -780,7 +780,7 @@ describe('AuthenticatorService', () => {
       it('forget when not logged in - same user emits forget', async () => {
          primeLocalStorage();
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendForget();
 
@@ -789,14 +789,10 @@ describe('AuthenticatorService', () => {
 
       it('forget when not logged in - different user emits forget', async () => {
          primeLocalStorage();
-         sessionStorage.setItem(
-            'sessionstate',
-            JSON.stringify({
-               userId: bytesToBase64(getRandom(cc.USERID_BYTES)),
-            }),
-         );
+         // @ts-expect-error — exercising private path
+         service._setSessionState({ userId: bytesToBase64(getRandom(cc.USERID_BYTES)) });
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendForget();
 
@@ -805,7 +801,7 @@ describe('AuthenticatorService', () => {
 
       it('logout with no session is no action', async () => {
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogout({ pkId, version: 1 });
 
@@ -816,7 +812,7 @@ describe('AuthenticatorService', () => {
       it('logout when not logged in - same user is no action', async () => {
          primeLocalStorage();
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogout({ pkId, version: 1 });
 
@@ -826,14 +822,10 @@ describe('AuthenticatorService', () => {
 
       it('logout when not logged in - different user is no action', async () => {
          primeLocalStorage();
-         sessionStorage.setItem(
-            'sessionstate',
-            JSON.stringify({
-               userId: bytesToBase64(getRandom(cc.USERID_BYTES)),
-            }),
-         );
+         // @ts-expect-error — exercising private path
+         service._setSessionState({ userId: bytesToBase64(getRandom(cc.USERID_BYTES)) });
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogout({ pkId, version: 1 });
 
@@ -843,7 +835,7 @@ describe('AuthenticatorService', () => {
 
       it('login with no session emits forget', async () => {
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogin({
             pkId,
@@ -858,7 +850,7 @@ describe('AuthenticatorService', () => {
       it('login when not logged in - same user is no action', async () => {
          primeLocalStorage();
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogin({
             pkId,
@@ -873,15 +865,11 @@ describe('AuthenticatorService', () => {
 
       it('login when not logged in - different user emits forget', async () => {
          primeLocalStorage();
-         // Simulate sessionStorage preserved from a previous session as a different user.
-         sessionStorage.setItem(
-            'sessionstate',
-            JSON.stringify({
-               userId: bytesToBase64(getRandom(cc.USERID_BYTES)),
-            }),
-         );
+         // Simulate session state preserved from a previous session as a different user.
+         // @ts-expect-error — exercising private path
+         service._setSessionState({ userId: bytesToBase64(getRandom(cc.USERID_BYTES)) });
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogin({
             pkId,

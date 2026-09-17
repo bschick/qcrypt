@@ -20,14 +20,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, inject, type OnDestroy, type OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, DestroyRef, inject, type OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AuthEvent, AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCardModule } from '@angular/material/card';
-import { Subscription } from 'rxjs';
 
 @Component({
    selector: 'app-regenrecovery',
@@ -36,24 +36,21 @@ import { Subscription } from 'rxjs';
    changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatIconModule, MatButtonModule, MatProgressSpinnerModule, MatCardModule, RouterLink],
 })
-export class RegenrecoveryComponent implements OnInit, OnDestroy {
+export class RegenrecoveryComponent implements OnInit {
    public showProgress = false;
    public error = '';
    public readonly authSvc = inject(AuthenticatorService);
    private readonly _router = inject(Router);
-   private _authSub!: Subscription;
+   private readonly _destroyRef = inject(DestroyRef);
 
    ngOnInit() {
-      this._authSub = this.authSvc.on([AuthEvent.Logout], () => {
-         this.error = '';
-         this._router.navigateByUrl('/');
-      });
-   }
-
-   ngOnDestroy() {
-      if (this._authSub) {
-         this._authSub.unsubscribe();
-      }
+      this.authSvc
+         .on([AuthEvent.Logout])
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(() => {
+            this.error = '';
+            this._router.navigateByUrl('/');
+         });
    }
 
    onClickGenerate() {

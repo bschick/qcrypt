@@ -20,7 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnDestroy, type OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
+import { Component, DestroyRef, type OnDestroy, type OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -28,7 +29,6 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { Subscription } from 'rxjs';
 import { bytesToBase64 } from '@qcrypt/crypto';
 import { AuthEvent, AuthenticatorService, type RecoveryWordsState } from '../services/authenticator.service';
 import { RecoverySheetComponent } from '../ui/recoverysheet/recoverysheet.component';
@@ -62,22 +62,22 @@ export class CheckRecoveryComponent implements OnInit, OnDestroy {
    public result?: RecoveryWordsState;
    public sheetUserCred = '';
    public recoveryWords = new FormControl<string>('');
-   private _authSub!: Subscription;
+   private readonly _destroyRef = inject(DestroyRef);
    private _priorTitle?: string;
 
    ngOnInit() {
-      this._authSub = this.authSvc.on([AuthEvent.Logout], () => {
-         this.error = '';
-         this._router.navigateByUrl('/');
-      });
+      this.authSvc
+         .on([AuthEvent.Logout])
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(() => {
+            this.error = '';
+            this._router.navigateByUrl('/');
+         });
    }
 
    ngOnDestroy() {
       this.recoveryWords.setValue('');
       this._clearSheet();
-      if (this._authSub) {
-         this._authSub.unsubscribe();
-      }
    }
 
    async onClickPrint(): Promise<void> {

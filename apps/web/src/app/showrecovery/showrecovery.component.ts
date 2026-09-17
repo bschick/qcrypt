@@ -20,7 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnDestroy, type OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
+import { Component, DestroyRef, type OnDestroy, type OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -29,7 +30,6 @@ import { Router, RouterLink } from '@angular/router';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { AuthEvent, AuthenticatorService } from '../services/authenticator.service';
-import { Subscription } from 'rxjs';
 import { MatCardModule } from '@angular/material/card';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { bytesToBase64 } from '@qcrypt/crypto';
@@ -68,7 +68,7 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
    public replacedWords = false;
    public unconfirmed = false;
    public sheetUserCred = '';
-   private _authSub!: Subscription;
+   private readonly _destroyRef = inject(DestroyRef);
    private _priorTitle?: string;
    public recoveryWords = new FormControl<string>('');
 
@@ -79,10 +79,13 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
       this.replacedWords = !!history.state?.replacedWords;
       this.unconfirmed = !!history.state?.unconfirmed;
 
-      this._authSub = this.authSvc.on([AuthEvent.Logout], () => {
-         this.error = '';
-         this._router.navigateByUrl('/');
-      });
+      this.authSvc
+         .on([AuthEvent.Logout])
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(() => {
+            this.error = '';
+            this._router.navigateByUrl('/');
+         });
 
       this.reloadData();
    }
@@ -100,9 +103,6 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
    ngOnDestroy() {
       this.recoveryWords.setValue('');
       this._clearSheet();
-      if (this._authSub) {
-         this._authSub.unsubscribe();
-      }
    }
 
    async onClickPrint(): Promise<void> {

@@ -1,25 +1,23 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RegenrecoveryComponent } from './regenrecovery.component';
 import { Router, provideRouter } from '@angular/router';
-import { Subscription } from 'rxjs';
-import { AuthenticatorService } from '../services/authenticator.service';
+import { Subject } from 'rxjs';
+import { AuthEvent, type AuthEventData, AuthenticatorService } from '../services/authenticator.service';
 
 describe('RegenrecoveryComponent', () => {
-   let component: RegenrecoveryComponent;
+   let component: ComponentFixture<RegenrecoveryComponent>['componentInstance'];
    let fixture: ComponentFixture<RegenrecoveryComponent>;
-   let logoutHandler: () => void;
+   let authEvents: Subject<AuthEventData>;
 
    // The route guard guarantees a session, so the component renders assuming one.
    const authStub = {
       hasSession: () => true,
       hasRecoveryId: () => false,
-      on: (_events: unknown, action: () => void) => {
-         logoutHandler = action;
-         return new Subscription();
-      },
+      on: () => authEvents,
    };
 
    beforeEach(async () => {
+      authEvents = new Subject<AuthEventData>();
       await TestBed.configureTestingModule({
          imports: [RegenrecoveryComponent],
          providers: [provideRouter([]), { provide: AuthenticatorService, useValue: authStub }],
@@ -37,7 +35,7 @@ describe('RegenrecoveryComponent', () => {
    it('returns to the start on logout so the sign-in dialog can show', () => {
       const router = TestBed.inject(Router);
       const navSpy = vi.spyOn(router, 'navigateByUrl');
-      logoutHandler();
+      authEvents.next({ event: AuthEvent.Logout, userId: null, userName: null });
       expect(navSpy).toHaveBeenCalledWith('/');
    });
 });
