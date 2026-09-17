@@ -133,6 +133,17 @@ export class PrfUnsupportedError extends Error {
    }
 }
 
+// SimpleWebAuthn v10+ encodes credential user.id as b64 rather than utf as older versions,
+// so translate to keep the handle stable for passkeys registered under v9.
+// https://github.com/MasterKale/SimpleWebAuthn/discussions/636
+export function userIdToHandle(userId: string): string {
+   return bytesToBase64(new TextEncoder().encode(userId));
+}
+
+export function handleToUserId(handle: string): string {
+   return new TextDecoder('utf-8').decode(base64ToBytes(handle));
+}
+
 @Injectable({
    providedIn: 'root',
 })
@@ -938,7 +949,7 @@ export class AuthenticatorService {
       sendSignal({
          signalName: 'allAcceptedCredentials',
          rpID: window.location.hostname,
-         userID: userInfo.userId,
+         userID: userIdToHandle(userInfo.userId),
          // Authenticators may hide a missing passky, so include all known passkeys
          allAcceptedCredentialIDs: userInfo.authenticators.map((authenticator) => authenticator.credentialId),
       }).catch(() => undefined);
@@ -1117,7 +1128,7 @@ export class AuthenticatorService {
       sendSignal({
          signalName: 'currentUserDetails',
          rpID: window.location.hostname,
-         userID: userId,
+         userID: userIdToHandle(userId),
          userName,
       }).catch(() => undefined);
    }
@@ -1268,11 +1279,7 @@ export class AuthenticatorService {
          console.error('startAuthentication', err);
          throw err;
       }
-      // SimpleWebAuthn v10 caused incompatibility with older versions by
-      // decoding credential user.id to b64 rather than utf as older versions
-      // We therefore need to translate.
-      const handleBytes = base64ToBytes(startAuth.response.userHandle!);
-      startAuth.response.userHandle = new TextDecoder('utf-8').decode(handleBytes);
+      startAuth.response.userHandle = handleToUserId(startAuth.response.userHandle!);
 
       const prfKey = prfReadKey(startAuth.clientExtensionResults);
 
@@ -1552,11 +1559,7 @@ export class AuthenticatorService {
       optionsJson: api.RegOptionsResponse,
       tryPrf: boolean,
    ): Promise<{ regResponse: RegistrationResponseJSON; prfKey: Uint8Array<ArrayBuffer> | null }> {
-      // SimpleWebAuthn v10+ caused incompatibility with older versions by
-      // encoding credential user.id as b64 rather than utf as older versions
-      // We therefore need to translate.
-      const idBytes = new TextEncoder().encode(optionsJson.user.id);
-      optionsJson.user.id = bytesToBase64(idBytes);
+      optionsJson.user.id = userIdToHandle(optionsJson.user.id);
 
       if (tryPrf) {
          injectPrfExtension(optionsJson);
