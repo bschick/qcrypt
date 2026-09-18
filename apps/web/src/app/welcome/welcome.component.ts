@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthenticatorService } from '../services/authenticator.service';
@@ -48,30 +48,28 @@ export class WelcomeComponent {
    private readonly _authSvc = inject(AuthenticatorService);
    private readonly _router = inject(Router);
 
-   public error: string = '';
-   public showProgress: boolean = false;
+   protected readonly error = signal('');
+   protected readonly showProgress = signal(false);
 
    async onClickExisting(_event: MouseEvent) {
       try {
-         this.error = '';
-         this.showProgress = true;
+         this.error.set('');
+         this.showProgress.set(true);
          await this._authSvc.createSession();
          this._router.navigateByUrl(`/${paramsToQueryString()}`);
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
-            this.error = 'Sign in failed, check your internet connection';
+            this.error.set('Sign in failed, check your internet connection');
          } else {
-            this.error = 'Passkey not recognized. Either try again or select another option above.';
+            this.error.set('Passkey not recognized. Either try again or select another option above.');
          }
       } finally {
-         this.showProgress = false;
+         this.showProgress.set(false);
       }
    }
 
-   onClickNew(_event: MouseEvent) {}
-
-   onClickRecovery(_event: MouseEvent) {
+   protected onClickRecovery(_event: MouseEvent) {
       this._dialog.open(RecoveryDialog);
    }
 }
@@ -87,13 +85,13 @@ export class RecoveryDialog {
    private readonly _dialogRef = inject<MatDialogRef<RecoveryDialog>>(MatDialogRef);
    private readonly _router = inject(Router);
 
-   onClickNewUser(event: Event) {
+   protected onClickNewUser(event: Event) {
       event.stopPropagation();
       this._dialogRef.close();
       this._router.navigateByUrl('/newuser');
    }
 
-   onClickRecovery3(event: Event) {
+   protected onClickRecovery3(event: Event) {
       event.stopPropagation();
       this._dialogRef.close();
       this._router.navigateByUrl('/recovery3');

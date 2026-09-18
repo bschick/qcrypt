@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, type OnInit, inject, ChangeDetectionStrategy, signal } from '@angular/core';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -37,14 +37,14 @@ import { bytesToBase64 } from '@qcrypt/crypto';
    imports: [MatIconModule, MatButtonModule, RouterLink, MatProgressSpinnerModule, MatCardModule],
 })
 export class RecoveryComponent implements OnInit {
-   public validRecoveryLink = false;
-   public error = '';
-   public hasRecoveryWords = false;
-   public ready = false;
-   public showProgress = false;
-   public authenticated = false;
-   public selfRecovery = false;
-   public currentUserName: string | null = null;
+   protected readonly validRecoveryLink = signal(false);
+   protected readonly error = signal('');
+   protected readonly hasRecoveryWords = signal(false);
+   protected readonly ready = signal(false);
+   protected readonly showProgress = signal(false);
+   protected readonly authenticated = signal(false);
+   protected readonly selfRecovery = signal(false);
+   protected readonly currentUserName = signal<string | null>(null);
    private _recoveryUserId: string | null = null;
    private _recoverUserCred: string | null = null;
 
@@ -55,80 +55,83 @@ export class RecoveryComponent implements OnInit {
    ngOnInit() {
       const [userId, userName] = this._authSvc.loadKnownUser();
       if (userId && userName) {
-         this.currentUserName = userName;
+         this.currentUserName.set(userName);
       }
 
-      this.showProgress = true;
+      this.showProgress.set(true);
 
       this._authSvc.ready
          .then(async () => {
-            this.authenticated = this._authSvc.hasSession();
+            this.authenticated.set(this._authSvc.hasSession());
 
-            if (this.authenticated && this._authSvc.hasRecoveryId()) {
+            if (this.authenticated() && this._authSvc.hasRecoveryId()) {
                this._router.navigateByUrl('/recovery3');
             } else {
-               try {
-                  this._recoveryUserId = this._activeRoute.snapshot.queryParamMap.get('userid');
-                  this._recoverUserCred = this._activeRoute.snapshot.queryParamMap.get('usercred');
-                  if (!this._recoveryUserId || !this._recoverUserCred) {
-                     throw new Error(
-                        `recovery link missing userid or usercred: ${this._activeRoute.snapshot.toString()}`,
-                     );
-                  }
-                  this.validRecoveryLink = true;
-                  if (this.authenticated) {
+               this._recoveryUserId = this._activeRoute.snapshot.queryParamMap.get('userid');
+               this._recoverUserCred = this._activeRoute.snapshot.queryParamMap.get('usercred');
+
+               if (this._recoveryUserId && this._recoverUserCred) {
+                  this.validRecoveryLink.set(true);
+               } else {
+                  console.error(`recovery link missing userid or usercred: ${this._activeRoute.snapshot.toString()}`);
+                  this.error.set('Recovery link is invalid');
+                  this.validRecoveryLink.set(false);
+               }
+
+               // A failed credential read says nothing about the link, so it leaves validity alone
+               if (this.validRecoveryLink() && this.authenticated()) {
+                  try {
                      const userCred = await this._authSvc.getUserCred();
-                     this.selfRecovery = this._recoverUserCred === bytesToBase64(userCred);
+                     this.selfRecovery.set(this._recoverUserCred === bytesToBase64(userCred));
                      userCred.fill(0);
+                  } catch (err) {
+                     console.error(err);
+                     this.error.set('Could not read your user credential, try again');
                   }
-               } catch (err) {
-                  console.error(err);
-                  this.error = 'Recovery link is invalid';
-                  this.validRecoveryLink = false;
                }
             }
          })
          .finally(() => {
-            this.ready = true;
-            this.showProgress = false;
+            this.ready.set(true);
+            this.showProgress.set(false);
          });
    }
 
-   async onClickSignin(): Promise<void> {
+   protected async onClickSignin(): Promise<void> {
       try {
-         this.error = '';
-         this.showProgress = true;
+         this.error.set('');
+         this.showProgress.set(true);
          await this._authSvc.createDefaultSession();
          this._router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
-            this.error = 'Sign in failed, check your connection';
+            this.error.set('Sign in failed, check your connection');
          } else {
-            this.error = 'Sign in failed, try again or change users';
+            this.error.set('Sign in failed, try again or change users');
          }
       } finally {
-         this.showProgress = false;
+         this.showProgress.set(false);
       }
    }
 
-   async onClickStartRecovery(_event: MouseEvent) {
+   protected async onClickStartRecovery(_event: MouseEvent) {
       try {
-         this.showProgress = true;
+         this.showProgress.set(true);
          await this._authSvc.recover(this._recoveryUserId!, this._recoverUserCred!);
          this._recoverUserCred = null;
          this._recoveryUserId = null;
          this._router.navigateByUrl('/');
       } catch (err) {
          if (err instanceof Error && err.message.includes('instead')) {
-            this.error = 'You must user recovery words';
-            this.hasRecoveryWords = true;
+            this.error.set('You must user recovery words');
+            this.hasRecoveryWords.set(true);
          } else {
             console.error(err);
-            this.error = 'The operation was not allowed or timed out';
+            this.error.set('The operation was not allowed or timed out');
          }
       } finally {
-         this.showProgress = false;
+         this.showProgress.set(false);
       }
    }
 }

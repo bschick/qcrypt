@@ -20,11 +20,18 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, DestroyRef, type OnDestroy, type OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
+import {
+   Component,
+   DestroyRef,
+   type OnDestroy,
+   type OnInit,
+   ChangeDetectionStrategy,
+   inject,
+   signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import { Router } from '@angular/router';
@@ -59,12 +66,11 @@ import { NoAssistDirective } from '../ui/noassist.directive';
 export class CmdLineComponent implements OnInit, OnDestroy {
    private readonly _authSvc = inject(AuthenticatorService);
    private readonly _router = inject(Router);
-   private readonly _snackBar = inject(MatSnackBar);
    private readonly _destroyRef = inject(DestroyRef);
 
-   public showProgress = true;
-   public hideCred = true;
-   public error = '';
+   protected readonly showProgress = signal(true);
+   protected readonly hideCred = signal(true);
+   protected readonly error = signal('');
    public userCredential = new FormControl<string>('');
 
    ngOnInit() {
@@ -72,7 +78,7 @@ export class CmdLineComponent implements OnInit, OnDestroy {
          .on([AuthEvent.Logout])
          .pipe(takeUntilDestroyed(this._destroyRef))
          .subscribe(() => {
-            this.error = '';
+            this.error.set('');
             this._router.navigateByUrl('/');
          });
 
@@ -83,9 +89,9 @@ export class CmdLineComponent implements OnInit, OnDestroy {
       this.userCredential.setValue('');
    }
 
-   reloadData() {
-      this.showProgress = true;
-      this.error = '';
+   protected reloadData() {
+      this.showProgress.set(true);
+      this.error.set('');
 
       this._authSvc
          .reauthenticate()
@@ -97,17 +103,11 @@ export class CmdLineComponent implements OnInit, OnDestroy {
          .catch((err) => {
             console.error(err);
             if (err instanceof Error && err.message.includes('fetch')) {
-               this.error = 'Retrieval failed, check your connection try again';
+               this.error.set('Retrieval failed, check your connection try again');
             } else {
-               this.error = 'Retrieval failed, try again';
+               this.error.set('Retrieval failed, try again');
             }
          })
-         .finally(() => (this.showProgress = false));
-   }
-
-   toastMessage(msg: string) {
-      this._snackBar.open(msg, '', {
-         duration: 2000,
-      });
+         .finally(() => this.showProgress.set(false));
    }
 }

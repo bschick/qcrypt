@@ -22,8 +22,10 @@ describe('CmdLineComponent', () => {
    });
 
    it('keeps the user credential away from browser text assistance', () => {
-      component.showProgress = false;
-      component.error = '';
+      // @ts-expect-error — exercising protected state to render the credential field
+      component.showProgress.set(false);
+      // @ts-expect-error — exercising protected state to render the credential field
+      component.error.set('');
       fixture.detectChanges();
 
       const credential = fixture.nativeElement.querySelector('#credential');

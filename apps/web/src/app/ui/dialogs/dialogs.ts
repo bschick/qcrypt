@@ -44,7 +44,7 @@ import { AuthenticatorService } from '../../services/authenticator.service';
 import { BubbleDirective } from '../bubble/bubble.directive';
 import { NoAssistDirective } from '../noassist.directive';
 import * as cc from '@qcrypt/crypto/consts';
-import { bytesToBase64, Ciphers } from '@qcrypt/crypto';
+import { Ciphers } from '@qcrypt/crypto';
 import type { CipherDataInfo } from '../../services/cipher.service';
 
 const PWD_CLOSE_TIMEOUT = 1000 * 60 * 5;

@@ -32,7 +32,6 @@ import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import { NoAssistDirective } from '../ui/noassist.directive';
@@ -60,7 +59,6 @@ export class NewUserComponent implements OnInit, AfterViewInit {
    private readonly _authSvc = inject(AuthenticatorService);
    private readonly _router = inject(Router);
    private readonly _dialog = inject(MatDialog);
-   private readonly _snackBar = inject(MatSnackBar);
 
    public showProgress = false;
    public error = '';
@@ -86,12 +84,6 @@ export class NewUserComponent implements OnInit, AfterViewInit {
             console.error(err);
          }
       }, 0);
-   }
-
-   toastMessage(msg: string): void {
-      this._snackBar.open(msg, '', {
-         duration: 2000,
-      });
    }
 
    async onClickSignin(): Promise<void> {
