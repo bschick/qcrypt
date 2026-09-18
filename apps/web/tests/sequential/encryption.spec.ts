@@ -38,10 +38,10 @@ testWithAuth('encrypt decrypt', async ({ authFixture }) => {
    await expect(page.locator('textarea#cipherInput')).not.toBeEmpty();
    await page.getByRole('button', { name: 'Info', exact: true }).click();
 
-   await expect(page.getByLabel('Decryption Parameters').getByText('XChaCha20 Poly1305')).toBeVisible({
+   await expect(page.getByLabel('Encryption Parameters').getByText('XChaCha20 Poly1305')).toBeVisible({
       timeout: 10000,
    });
-   await expect(page.getByLabel('Decryption Parameters').getByText(hint)).toBeVisible({ timeout: 10000 });
+   await expect(page.getByLabel('Encryption Parameters').getByText(hint)).toBeVisible({ timeout: 10000 });
    await page.keyboard.press('Escape');
 
    await page.getByRole('button', { name: 'Decrypt Text' }).click();

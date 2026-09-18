@@ -19,7 +19,17 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Component, Input, ElementRef, ChangeDetectionStrategy, input, output, viewChild } from '@angular/core';
+import {
+   Component,
+   ElementRef,
+   ChangeDetectionStrategy,
+   effect,
+   input,
+   model,
+   output,
+   signal,
+   viewChild,
+} from '@angular/core';
 
 import { MatInputModule } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
@@ -41,58 +51,51 @@ export class EditableComponent {
    readonly minlength = input('0');
    readonly maxlength = input('50');
    readonly readonly = input(false);
-   @Input() writing = false;
    readonly color = input('');
    readonly backgroundColor = input('');
+   readonly value = model('');
    readonly valueChanged = output<EditableComponent>();
    readonly editInput = viewChild.required<ElementRef>('editableInput');
-   public text = '';
-   private _value = '';
 
-   @Input() set value(value: string) {
-      this._value = value;
-      this.text = value;
+   protected readonly writing = signal(false);
+   protected readonly text = signal('');
+
+   constructor() {
+      // A new committed value replaces whatever is being typed, including a rollback after a failed save
+      effect(() => this.text.set(this.value()));
    }
 
-   get value(): string {
-      return this._value;
-   }
-
-   onFocusOut() {
-      if (!this.readonly() && this._value !== this.text) {
-         this._value = this.text;
+   protected onFocusOut() {
+      if (!this.readonly() && this.value() !== this.text()) {
+         this.value.set(this.text());
          this.valueChanged.emit(this);
       }
-      this.writing = false;
+      this.writing.set(false);
    }
 
-   tryMakeEditable() {
+   protected tryMakeEditable() {
       if (!this.readonly()) {
-         this.writing = true;
+         this.writing.set(true);
       }
    }
 
    /* Blurring returns focus to whatever the surrounding focus trap prefers, so the key must
     * also be consumed or its default action fires against that newly focused element.
     */
-   cancelEdit(event: Event) {
+   protected cancelEdit(event: Event) {
       event.stopPropagation();
       event.preventDefault();
-      if (this.writing) {
-         this.text = this._value;
+      if (this.writing()) {
+         this.text.set(this.value());
          this.editInput().nativeElement.blur();
       }
    }
 
-   acceptEdit(event: Event) {
+   protected acceptEdit(event: Event) {
       event.stopPropagation();
       event.preventDefault();
-      if (this.writing) {
+      if (this.writing()) {
          this.editInput().nativeElement.blur();
       }
-   }
-
-   focus() {
-      this.editInput()?.nativeElement?.focus();
    }
 }

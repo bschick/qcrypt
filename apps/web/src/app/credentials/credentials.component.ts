@@ -187,14 +187,14 @@ export class CredentialsComponent implements OnInit {
          this.prfUnsupported = false;
          // change detection does work if before and after end up being the same,
          // so for the pre-server-cleaned version (may be a bug in 'editable')
-         this.userName = component.value;
-         await this.authSvc.setUserName(component.value);
+         this.userName = component.value();
+         await this.authSvc.setUserName(component.value());
          this.toastMessage('User name updated');
       } catch (err) {
          console.error(err);
          this.error = 'Name change failed, must be 6 to 31 characters';
          // failed, put back the old value by setting [value] again...
-         component.value = this.userName!;
+         component.value.set(this.userName!);
       }
    }
 
@@ -209,13 +209,13 @@ export class CredentialsComponent implements OnInit {
       try {
          this.error = '';
          this.prfUnsupported = false;
-         await this.authSvc.setPasskeyDescription(passkey.credentialId, component.value);
+         await this.authSvc.setPasskeyDescription(passkey.credentialId, component.value());
          this.toastMessage('Passkey description updated');
       } catch (err) {
          console.error(err);
          this.error = 'Description change failed, must be 6 to 42 characters';
          //failed, put back the old value by setting [value] again...
-         component.value = passkey.description;
+         component.value.set(passkey.description);
       }
    }
 }
