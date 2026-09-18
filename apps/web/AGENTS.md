@@ -60,15 +60,21 @@ pnpm test
 
 **End-to-End Tests using AWS hosted test API backend:**
 ```bash
-# Before starting the development server, you must first run the One-time setup steps above
-# The development server must be running to execute the E2E tests.
-# For interactive users, you can run the server and tests in separate terminals.
-# For automation, the server can be run as a background process.
-nohup pnpm serve > serve.log 2>&1 &
-sleep 35s # Allow the server time to start
+# You must first run the One-time setup steps above.
+# No separate serve is needed: for --project local (the default), run_e2e.sh starts a frozen
+# dev serve itself (no watch, no live-reload, so a file save mid-run cannot restart it), waits
+# for the port, and tears the whole process tree down on exit.
 pnpm test:e2e
-pkill pnpm; pkill ng # Stop the development server and ng process
+
+# Append --reporter=list when the output is captured rather than shown in a terminal
+# (background jobs, pipes, CI logs), so results stay parseable.
+pnpm test:e2e --reporter=list
 ```
+
+E2E is the **only** check that covers rendered output: user-visible strings, element labels,
+stacking and clipping, and anything that repaints in response to an async event. `pnpm check` and
+`pnpm test` cannot see any of it. Run e2e alongside them before finishing a piece of work, not only
+before a release.
 
 ### c. Running Manual Tests
 
@@ -96,11 +102,15 @@ Before submitting any changes, run the following test suites to ensure that the 
 pnpm test
 ```
 
-### b. End-to-End Tests (requires start of Local server, see 4.b)
+### b. End-to-End Tests (starts and stops its own dev serve, see 4.b)
 ```bash
 pnpm test:e2e
 ```
 If a test fails, view the trace with `pnpm exec playwright show-trace playwright-report/<path-to-trace>`
+
+Treat this as part of the normal gate, not a release-only step. It is the only check that sees
+rendered output, so a renamed label, a restyled control or a binding that stops repainting passes
+`pnpm check` and `pnpm test` unnoticed.
 ---
 
 ## 6. Key Patterns & Conventions
