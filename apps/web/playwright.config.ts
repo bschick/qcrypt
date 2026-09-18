@@ -143,10 +143,7 @@ export default defineConfig({
       // },
    ],
 
-   /* Run your local dev server before starting the tests */
-   // webServer: {
-   //   command: 'npm run start',
-   //   url: 'http://localhost:3000',
-   //   reuseExistingServer: !process.env.CI,
-   // },
+   /* For --project local, scripts/run_e2e.sh starts a frozen dev server (no watch, no
+      live-reload) so a file save mid-run cannot restart the server during tests, and stops it
+      on exit. --project prod runs against the deployed site. */
 });
