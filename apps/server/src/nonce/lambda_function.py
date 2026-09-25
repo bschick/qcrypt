@@ -39,6 +39,7 @@ def lambda_handler(event, context):
             if path := http.get('path', None):
                 if 'maintenance.html' in path.lower():
                     key = 'maintenance.html'
+
     etag, tree = stashed.get(key, ('',None))
 
     try:

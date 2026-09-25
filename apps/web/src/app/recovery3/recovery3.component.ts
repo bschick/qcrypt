@@ -28,6 +28,7 @@ import {
    Renderer2,
    ChangeDetectionStrategy,
    inject,
+   signal,
 } from '@angular/core';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink } from '@angular/router';
@@ -68,29 +69,28 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
    private readonly _router = inject(Router);
    private readonly _dialog = inject(MatDialog);
 
-   public validRecoveryWords = false;
-   public error = '';
-   public ready = false;
-   public showProgress = false;
-   public authenticated = false;
-   public currentUserName: string | null = null;
-   public recoveryWords = new FormControl<string>('');
+   protected readonly error = signal('');
+   protected readonly ready = signal(false);
+   protected readonly showProgress = signal(false);
+   protected readonly authenticated = signal(false);
+   protected readonly currentUserName = signal<string | null>(null);
+   protected readonly recoveryWords = new FormControl<string>('');
 
    ngOnInit() {
       const [userId, userName] = this._authSvc.loadKnownUser();
       if (userId && userName) {
-         this.currentUserName = userName;
+         this.currentUserName.set(userName);
       }
 
-      this.showProgress = true;
+      this.showProgress.set(true);
 
       this._authSvc.ready
          .then(() => {
-            this.authenticated = this._authSvc.hasSession();
+            this.authenticated.set(this._authSvc.hasSession());
          })
          .finally(() => {
-            this.ready = true;
-            this.showProgress = false;
+            this.ready.set(true);
+            this.showProgress.set(false);
          });
    }
 
@@ -109,40 +109,40 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
       this.recoveryWords.setValue('');
    }
 
-   async onClickSignin(): Promise<void> {
+   protected async onClickSignin(): Promise<void> {
       try {
-         this.error = '';
-         this.showProgress = true;
+         this.error.set('');
+         this.showProgress.set(true);
          await this._authSvc.createDefaultSession();
          this._router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
-            this.error = 'Sign in failed, check your connection';
+            this.error.set('Sign in failed, check your connection');
          } else {
-            this.error = 'Sign in failed, try again or change users';
+            this.error.set('Sign in failed, try again or change users');
          }
       } finally {
-         this.showProgress = false;
+         this.showProgress.set(false);
       }
    }
 
-   async onClickStartRecovery(_event: MouseEvent) {
+   protected async onClickStartRecovery(_event: MouseEvent) {
       try {
-         this.error = '';
+         this.error.set('');
          const rawString = this.recoveryWords.value?.trim();
 
          if (!rawString) {
-            this.error = 'No recovery words were entered.';
+            this.error.set('No recovery words were entered.');
          } else {
             const words = rawString.split(/\s+/);
             const cleanedWords = words.join(' ');
             if (!validateMnemonic(cleanedWords, wordlist)) {
-               this.error = 'The recovery pattern contains incorrect words.';
+               this.error.set('The recovery pattern contains incorrect words.');
             } else {
                const proceed = await this._checkProceed(cleanedWords);
                if (proceed) {
-                  this.showProgress = true;
+                  this.showProgress.set(true);
                   await this._authSvc.recover3(cleanedWords);
                   this._router.navigateByUrl('/');
                }
@@ -150,12 +150,14 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
          }
       } catch (err) {
          console.error(err);
-         this.error = 'The operation was not allowed or timed out.';
+         this.error.set('The operation was not allowed or timed out.');
       } finally {
-         this.showProgress = false;
-         if (this.error) {
-            this.error +=
-               ' Ensure you are using the recovery word pattern provided when you created your account, then try again.';
+         this.showProgress.set(false);
+         if (this.error()) {
+            this.error.update(
+               (msg) =>
+                  `${msg} Ensure you are using the recovery word pattern provided when you created your account, then try again.`,
+            );
          }
       }
    }
@@ -187,7 +189,7 @@ export interface ConfirmData {
 export class ConfirmDialog {
    private readonly _data = inject<ConfirmData>(MAT_DIALOG_DATA);
 
-   public currentUserName: string;
+   protected readonly currentUserName: string;
 
    constructor() {
       this.currentUserName = this._data.userName;

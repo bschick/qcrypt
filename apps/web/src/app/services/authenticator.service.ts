@@ -150,7 +150,7 @@ export class AuthenticatorService {
    private readonly _cipherSvc = inject(CipherService);
    private readonly _broadcastSvc = inject(BroadcastService);
 
-   public userInfo = signal<VerifiedUserInfo | undefined>(undefined);
+   private readonly _userInfo = signal<VerifiedUserInfo | undefined>(undefined);
    public ready: Promise<unknown>;
 
    private _subject = new Subject<AuthEventData>();
@@ -213,7 +213,7 @@ export class AuthenticatorService {
          !!session.userCredEnc &&
          !!session.version &&
          !!this._csrf() &&
-         !!this.userInfo()
+         !!this._userInfo()
       );
    });
 
@@ -334,6 +334,10 @@ export class AuthenticatorService {
       return this.getUserInfo().pkId;
    }
 
+   public get authenticators(): api.AuthenticatorInfoResponse[] {
+      return this.getUserInfo().authenticators;
+   }
+
    // Callers MUST overwrite returned value ASAP
    public async getUserCred(): Promise<Uint8Array<ArrayBuffer>> {
       const session = this._sessionState();
@@ -371,7 +375,7 @@ export class AuthenticatorService {
       if (!this.hasSession()) {
          throw new Error('no active user');
       }
-      return this.userInfo()!;
+      return this._userInfo()!;
    }
 
    private async _doFetch<T>(args: FetchArgs): Promise<T> {
@@ -869,7 +873,7 @@ export class AuthenticatorService {
          const sessionState = this._sessionState()!;
          if (msg.version > sessionState.version!) {
             if (
-               this.userInfo()!.authenticators.some(
+               this._userInfo()!.authenticators.some(
                   (auth: api.AuthenticatorInfoResponse) => auth.credentialId === msg.pkId,
                )
             ) {
@@ -890,7 +894,7 @@ export class AuthenticatorService {
    }
 
    private _handlePeerUserInfoChanged(msg: PasskeyIdPayload): void {
-      const userInfo = this.userInfo();
+      const userInfo = this._userInfo();
       if (
          this.hasSession() &&
          userInfo!.authenticators.some((auth: api.AuthenticatorInfoResponse) => auth.credentialId === msg.pkId)
@@ -952,7 +956,7 @@ export class AuthenticatorService {
          authenticators: serverUser.authenticators,
       };
 
-      this.userInfo.set(userInfo);
+      this._userInfo.set(userInfo);
       this.activity();
       this._signalAcceptedCredentials(userInfo);
       return userInfo;
@@ -1064,7 +1068,7 @@ export class AuthenticatorService {
          this._intervalId = 0;
       }
 
-      this.userInfo.set(undefined);
+      this._userInfo.set(undefined);
       if (session?.userId) {
          // Preserve userId so this tab refuses to auto-resume a different user's session
          const partial: SessionState = { userId: session.userId };
@@ -1155,7 +1159,7 @@ export class AuthenticatorService {
       if (!this.hasSession()) {
          throw new Error('no active user');
       }
-      if (this.userInfo()?.authenticators.length === 1) {
+      if (this._userInfo()?.authenticators.length === 1) {
          await this.reauthenticate();
       }
 

@@ -32,12 +32,21 @@ testWithAuth('edit fields', async ({ authFixture }) => {
    expect(resp.status()).toBe(200);
    await expect(nameInput).toHaveValue(`PWTesty_e2e_${rand}`);
 
+   // Under 6 characters is rejected in the client, with no request sent
+   await nameInput.click();
+   await nameInput.fill('ab');
+   await nameInput.press('Enter');
+   await expect(page.locator('mat-sidenav .error-msg')).toContainText('Name change failed');
+   await expect(nameInput).toHaveValue('ab');
+   await expect(nameInput).toBeFocused();
+
    await nameInput.click();
    await nameInput.fill(testUser.userName);
    await expect(nameInput).toHaveValue(testUser.userName);
    [resp] = await Promise.all([waitForApiResponse(page, userPatch), nameInput.press('Enter')]);
    expect(resp.status()).toBe(200);
    await expect(nameInput).toHaveValue(testUser.userName);
+   await expect(page.locator('mat-sidenav .error-msg')).not.toContainText('Name change failed');
 
    await descInput.click();
    await descInput.fill(`VirtualPK${rand}`);
@@ -52,6 +61,32 @@ testWithAuth('edit fields', async ({ authFixture }) => {
    [resp] = await Promise.all([waitForApiResponse(page, passkeyPatch), descInput.press('Enter')]);
    expect(resp.status()).toBe(200);
    await expect(descInput).toHaveValue('Passkey');
+});
+
+testWithAuth('correcting a rejected name clears its error', async ({ authFixture }) => {
+   const { page } = authFixture;
+   test.setTimeout(60000);
+
+   const authenticator = authFixture.memAuthenticator('hmac-secret-mc');
+   const testUser = await authFixture.createTestUser(authenticator);
+
+   await toggleCredentials(page);
+   const nameInput = page.locator('mat-sidenav input').first();
+   const errorMsg = page.locator('mat-sidenav .error-msg');
+
+   await nameInput.click();
+   await nameInput.fill('ab');
+   await nameInput.press('Enter');
+   await expect(errorMsg).toContainText('Name change failed');
+   await expect(nameInput).toBeFocused();
+   await expect(nameInput).toHaveClass(/writing/);
+
+   // Correcting without clicking first, since the rejected field already holds focus
+   await nameInput.fill(testUser.userName);
+   await nameInput.press('Enter');
+
+   await expect(nameInput).toHaveValue(testUser.userName);
+   await expect(errorMsg).not.toContainText('Name change failed');
 });
 
 testWithAuth('options persistence and defaults', async ({ authFixture }) => {

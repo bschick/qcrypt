@@ -23,8 +23,8 @@ import {
    Component,
    ElementRef,
    ChangeDetectionStrategy,
-   effect,
    input,
+   linkedSignal,
    model,
    output,
    signal,
@@ -55,19 +55,27 @@ export class EditableComponent {
    readonly backgroundColor = input('');
    readonly value = model('');
    readonly valueChanged = output<EditableComponent>();
+   readonly valueEdited = output<void>();
    readonly editInput = viewChild.required<ElementRef>('editableInput');
 
    protected readonly writing = signal(false);
-   protected readonly text = signal('');
+   // A new committed value replaces whatever is being typed
+   protected readonly text = linkedSignal(() => this.value());
 
-   constructor() {
-      // A new committed value replaces whatever is being typed, including a rollback after a failed save
-      effect(() => this.text.set(this.value()));
+   readonly typed = this.text.asReadonly();
+
+   focus(): void {
+      this.editInput().nativeElement.focus();
+   }
+
+   commit(saved: string): void {
+      this.value.set(saved);
+      // text is set explicitly because a linked signal does not update when assigned an equal value
+      this.text.set(saved);
    }
 
    protected onFocusOut() {
       if (!this.readonly() && this.value() !== this.text()) {
-         this.value.set(this.text());
          this.valueChanged.emit(this);
       }
       this.writing.set(false);
@@ -87,6 +95,7 @@ export class EditableComponent {
       event.preventDefault();
       if (this.writing()) {
          this.text.set(this.value());
+         this.valueEdited.emit();
          this.editInput().nativeElement.blur();
       }
    }

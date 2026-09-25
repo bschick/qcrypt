@@ -20,7 +20,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { type AfterViewInit, Component, type OnInit, Renderer2, ChangeDetectionStrategy, inject } from '@angular/core';
+import {
+   type AfterViewInit,
+   Component,
+   type OnInit,
+   Renderer2,
+   ChangeDetectionStrategy,
+   inject,
+   signal,
+} from '@angular/core';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatInputModule } from '@angular/material/input';
@@ -60,19 +68,18 @@ export class NewUserComponent implements OnInit, AfterViewInit {
    private readonly _router = inject(Router);
    private readonly _dialog = inject(MatDialog);
 
-   public showProgress = false;
-   public error = '';
-   public newUserName = '';
-   public currentUserName: string | null = null;
-   public recoveryLink = '';
-   public authenticated = false;
+   protected readonly showProgress = signal(false);
+   protected readonly error = signal('');
+   protected readonly newUserName = signal('');
+   protected readonly currentUserName = signal<string | null>(null);
+   protected readonly authenticated = signal(false);
 
    ngOnInit() {
       const [userId, userName] = this._authSvc.loadKnownUser();
       if (userId && userName) {
-         this.currentUserName = userName;
+         this.currentUserName.set(userName);
       }
-      this.authenticated = this._authSvc.hasSession();
+      this.authenticated.set(this._authSvc.hasSession());
    }
 
    ngAfterViewInit(): void {
@@ -86,58 +93,59 @@ export class NewUserComponent implements OnInit, AfterViewInit {
       }, 0);
    }
 
-   async onClickSignin(): Promise<void> {
+   protected async onClickSignin(): Promise<void> {
       try {
-         this.error = '';
-         this.showProgress = true;
+         this.error.set('');
+         this.showProgress.set(true);
          await this._authSvc.createDefaultSession();
          this._router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
-            this.error = 'Sign in failed, check your connection';
+            this.error.set('Sign in failed, check your connection');
          } else {
-            this.error = 'Sign in failed, try again or change users';
+            this.error.set('Sign in failed, try again or change users');
          }
       } finally {
-         this.showProgress = false;
+         this.showProgress.set(false);
       }
    }
 
-   async onClickNewUser(_event: MouseEvent): Promise<void> {
-      this.error = '';
+   protected async onClickNewUser(_event: MouseEvent): Promise<void> {
+      this.error.set('');
+      const userName = this.newUserName();
 
-      if (!this.newUserName || this.newUserName.length < 6 || this.newUserName.length > 31) {
-         this.error = 'User name must be 6 to 31 characters long';
+      if (!userName || userName.length < 6 || userName.length > 31) {
+         this.error.set('User name must be 6 to 31 characters long');
          return;
       }
 
       try {
-         this.showProgress = true;
+         this.showProgress.set(true);
          // Session will be replaced, so don't need to kill direclty
          this._authSvc.forgetUser(false);
-         await this._authSvc.newUser(this.newUserName, () => this._decidePrfFallback());
+         await this._authSvc.newUser(userName, () => this._decidePrfFallback());
          this._router.navigateByUrl('/showrecovery');
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
-            this.error = 'New user creation failed, check your internet connection';
+            this.error.set('New user creation failed, check your internet connection');
          } else {
-            this.error = 'New user creation failed, please try again';
+            this.error.set('New user creation failed, please try again');
          }
       } finally {
-         this.showProgress = false;
+         this.showProgress.set(false);
       }
    }
 
    // The dialog cannot be dismissed, so it always resolves to a definite choice.
    private async _decidePrfFallback(): Promise<'standard' | 'different'> {
-      this.showProgress = false;
+      this.showProgress.set(false);
       const choice = await firstValueFrom(this._dialog.open(PrfFallbackDialog, { disableClose: true }).afterClosed());
       if (choice !== 'standard' && choice !== 'different') {
          throw new Error('PRF fallback dialog returned an invalid choice');
       }
-      this.showProgress = true;
+      this.showProgress.set(true);
       return choice;
    }
 }

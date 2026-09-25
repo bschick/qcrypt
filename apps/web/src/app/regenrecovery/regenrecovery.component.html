@@ -1,3 +1,5 @@
+<!-- The route guard only covers entry, and a session can end while this page is still displayed -->
+@if (authSvc.hasSession()) {
 <div class="container">
   <div class="content">
     <mat-progress-spinner
@@ -50,3 +52,4 @@
     </div>
   </div>
 </div>
+}

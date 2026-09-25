@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import { testWithAuth, toggleCredentials } from '.././common';
+import { test, expect, Response } from '@playwright/test';
+import { testWithAuth, toggleCredentials, waitForApiResponse } from '.././common';
 
 test.describe('errors', () => {
    testWithAuth('user too short', async ({ authFixture }) => {
@@ -81,6 +81,10 @@ test.describe('errors', () => {
       await page.keyboard.press('Enter');
 
       await expect(page.locator('div.error-msg')).toContainText(/Name change failed, must be 6 to 31 characters/);
+
+      // A rejected name keeps focus, and Escape abandons it so another field can take the click
+      await page.keyboard.press('Escape');
+      await expect(page.locator('div.error-msg')).not.toContainText('Name change failed');
 
       await page.locator('mat-sidenav input').nth(1).click();
       await page.locator('mat-sidenav input').nth(1).fill('12345');
@@ -184,5 +188,50 @@ test.describe('errors', () => {
       await page.getByRole('button', { name: /Sign out/ }).click();
 
       await expect(page.locator('.signin div.error-msg')).toContainText(/Sign out failed/);
+   });
+
+   testWithAuth('failed rename keeps the entered name for editing', async ({ authFixture }) => {
+      const { page } = authFixture;
+      const rand = Math.floor(Math.random() * 100);
+
+      await authFixture.createTestUser(authFixture.memAuthenticator());
+      await toggleCredentials(page);
+
+      const nameInput = page.locator('mat-sidenav input').first();
+      const accepted = `PWTesty_err_${rand}`;
+
+      const userPatch = (response: Response) =>
+         response.url().includes('/user') &&
+         !response.url().includes('/users/') &&
+         response.request().method() === 'PATCH';
+
+      await nameInput.click();
+      await nameInput.fill(accepted);
+      const [resp] = await Promise.all([waitForApiResponse(page, userPatch), nameInput.press('Enter')]);
+      expect(resp.status()).toBe(200);
+      await expect(nameInput).toHaveValue(accepted);
+
+      await page.route('**/v1/user*', async (route) => {
+         if (route.request().method() === 'PATCH') {
+            await route.abort('failed');
+         } else {
+            await route.continue();
+         }
+      });
+
+      const rejected = `PWTesty_gone_${rand}`;
+      await nameInput.click();
+      await nameInput.fill(rejected);
+      await nameInput.press('Enter');
+
+      await expect(page.locator('mat-sidenav .error-msg')).toContainText('Name change failed');
+      await expect(nameInput).toHaveValue(rejected);
+      await expect(nameInput).toBeFocused();
+
+      // The entered name still differs from the stored one, so leaving the field saves it again
+      await page.unroute('**/v1/user*');
+      const [retry] = await Promise.all([waitForApiResponse(page, userPatch), nameInput.blur()]);
+      expect(retry.status()).toBe(200);
+      await expect(nameInput).toHaveValue(rejected);
    });
 });

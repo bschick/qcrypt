@@ -64,7 +64,7 @@ import { NoAssistDirective } from '../ui/noassist.directive';
    ],
 })
 export class CmdLineComponent implements OnInit, OnDestroy {
-   private readonly _authSvc = inject(AuthenticatorService);
+   protected readonly authSvc = inject(AuthenticatorService);
    private readonly _router = inject(Router);
    private readonly _destroyRef = inject(DestroyRef);
 
@@ -74,11 +74,13 @@ export class CmdLineComponent implements OnInit, OnDestroy {
    public userCredential = new FormControl<string>('');
 
    ngOnInit() {
-      this._authSvc
-         .on([AuthEvent.Logout])
+      this.authSvc
+         .on([AuthEvent.Logout, AuthEvent.Forget])
          .pipe(takeUntilDestroyed(this._destroyRef))
          .subscribe(() => {
             this.error.set('');
+            // Clear before navigating so the credential is not briefly visible during the transition
+            this.userCredential.setValue('');
             this._router.navigateByUrl('/');
          });
 
@@ -93,10 +95,10 @@ export class CmdLineComponent implements OnInit, OnDestroy {
       this.showProgress.set(true);
       this.error.set('');
 
-      this._authSvc
+      this.authSvc
          .reauthenticate()
          .then(async () => {
-            const userCred = await this._authSvc.getUserCred();
+            const userCred = await this.authSvc.getUserCred();
             this.userCredential.setValue(bytesToBase64(userCred));
             userCred.fill(0);
          })

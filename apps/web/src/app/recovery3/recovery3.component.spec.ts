@@ -28,7 +28,7 @@ describe('RecoveryComponent', () => {
    });
 
    it('keeps the recovery words away from browser text assistance', () => {
-      component.ready = true;
+      component['ready'].set(true);
       fixture.detectChanges();
 
       const wordsArea = fixture.nativeElement.querySelector('#wordsArea');

@@ -45,7 +45,7 @@ export class RegenrecoveryComponent implements OnInit {
 
    ngOnInit() {
       this.authSvc
-         .on([AuthEvent.Logout])
+         .on([AuthEvent.Logout, AuthEvent.Forget])
          .pipe(takeUntilDestroyed(this._destroyRef))
          .subscribe(() => {
             this.error.set('');

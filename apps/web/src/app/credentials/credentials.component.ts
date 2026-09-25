@@ -24,11 +24,13 @@ import {
    Component,
    DestroyRef,
    type OnInit,
+   computed,
    effect,
    Renderer2,
    ChangeDetectionStrategy,
    inject,
    output,
+   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -48,6 +50,12 @@ import type { Event as RouterEvent } from '@angular/router';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
+
+// Include routerLink to render text as a link or exclude for plain text
+export type ErrorPart = {
+   text: string;
+   routerLink?: string;
+};
 
 @Component({
    selector: 'app-credentials',
@@ -73,20 +81,14 @@ export class CredentialsComponent implements OnInit {
    private readonly _snackBar = inject(MatSnackBar);
 
    private readonly _destroyRef = inject(DestroyRef);
-   public error = '';
-   public prfUnsupported = false;
-   public userName = '';
-   public passKeys: api.AuthenticatorInfoResponse[] = [];
-   public showProgress = false;
-   public displayedColumns: string[] = ['image', 'description', 'delete'];
+   protected readonly error = signal<ErrorPart[]>([]);
+   protected readonly userName = signal('');
+   protected readonly passKeys = computed<api.AuthenticatorInfoResponse[]>(() => this.authSvc.authenticators);
+   protected readonly displayedColumns: string[] = ['image', 'description', 'delete'];
    readonly done = output<boolean>();
 
    constructor() {
-      effect(() => {
-         const userInfo = this.authSvc.userInfo();
-         this.passKeys = userInfo ? userInfo.authenticators : [];
-         this.userName = userInfo ? userInfo.userName : '';
-      });
+      effect(() => this.userName.set(this.authSvc.hasSession() ? this.authSvc.userName : ''));
    }
 
    ngOnInit(): void {
@@ -97,25 +99,38 @@ export class CredentialsComponent implements OnInit {
       });
 
       this.authSvc
-         .on([AuthEvent.Logout])
+         .on([AuthEvent.Logout, AuthEvent.Forget])
          .pipe(takeUntilDestroyed(this._destroyRef))
          .subscribe(() => this.refresh());
    }
 
-   toastMessage(msg: string): void {
+   protected clearError(): void {
+      this.error.set([]);
+   }
+
+   private _setError(...parts: (string | ErrorPart)[]): void {
+      const message: ErrorPart[] = [];
+      for (const part of parts) {
+         if (typeof part === 'string') {
+            message.push({ text: part });
+         } else {
+            message.push(part);
+         }
+      }
+      this.error.set(message);
+   }
+
+   protected toastMessage(msg: string): void {
       this._snackBar.open(msg, '', {
          duration: 2000,
       });
    }
 
-   onClickDelete(passkey: api.AuthenticatorInfoResponse) {
-      this.error = '';
-      this.prfUnsupported = false;
+   protected onClickDelete(passkey: api.AuthenticatorInfoResponse) {
+      this.clearError();
       let pkState = ConfirmDialog.NONE_PK;
-      const userInfo = this.authSvc.userInfo();
-      this.passKeys = userInfo ? userInfo.authenticators : [];
 
-      if (this.passKeys.length === 1) {
+      if (this.passKeys().length === 1) {
          pkState = ConfirmDialog.LAST_PK;
       } else if (this.isCurrentPk(passkey.credentialId)) {
          pkState = ConfirmDialog.ACTIVE_PK;
@@ -124,7 +139,7 @@ export class CredentialsComponent implements OnInit {
       var dialogRef = this._dialog.open(ConfirmDialog, {
          data: {
             pkState,
-            userName: this.userName,
+            userName: this.userName(),
          },
       });
 
@@ -137,38 +152,40 @@ export class CredentialsComponent implements OnInit {
                }
             } catch (err) {
                console.error(err);
-               this.error = 'Passkey not deleted, try again';
+               this._setError('Passkey not deleted, try again');
             }
          }
       });
    }
 
-   async onClickAdd() {
+   protected async onClickAdd() {
       try {
-         this.error = '';
-         this.prfUnsupported = false;
+         this.clearError();
          await this.authSvc.addPasskey();
       } catch (err) {
          if (err instanceof PrfUnsupportedError) {
-            this.prfUnsupported = true;
+            this._setError(
+               'This account requires passkeys that support',
+               { text: 'local key creation.', routerLink: '/help/faqs/2f8' },
+               'Please use a passkey with the PRF extension.',
+            );
          } else {
             console.error(err);
             if (err instanceof Error && err.name === 'InvalidStateError') {
-               this.error = 'Your passkey manager only allows one credential';
+               this._setError('Your passkey manager only allows one credential');
             } else {
-               this.error = 'Passkey not created, try again';
+               this._setError('Passkey not created, try again');
             }
          }
       }
    }
 
-   isCurrentPk(credentialId: string): boolean {
+   protected isCurrentPk(credentialId: string): boolean {
       return this.authSvc.isCurrentPk(credentialId);
    }
 
-   async refresh(): Promise<void> {
-      this.error = '';
-      this.prfUnsupported = false;
+   protected async refresh(): Promise<void> {
+      this.clearError();
       if (this.authSvc.hasSession()) {
          // This runs async handle updates in signal
          this.authSvc.refreshUserInfo().catch((err) => {
@@ -176,46 +193,42 @@ export class CredentialsComponent implements OnInit {
          });
       } else {
          this.done.emit(true);
-         this.passKeys = [];
-         this.userName = '';
       }
    }
 
-   async onUserNameChanged(component: EditableComponent): Promise<void> {
+   protected async onUserNameChanged(component: EditableComponent): Promise<void> {
       try {
-         this.error = '';
-         this.prfUnsupported = false;
-         // change detection does work if before and after end up being the same,
-         // so for the pre-server-cleaned version (may be a bug in 'editable')
-         this.userName = component.value();
-         await this.authSvc.setUserName(component.value());
+         this.clearError();
+         const userInfo = await this.authSvc.setUserName(component.typed());
+         component.commit(userInfo.userName);
          this.toastMessage('User name updated');
       } catch (err) {
          console.error(err);
-         this.error = 'Name change failed, must be 6 to 31 characters';
-         // failed, put back the old value by setting [value] again...
-         component.value.set(this.userName!);
+         this._setError('Name change failed, must be 6 to 31 characters');
+         component.focus();
       }
    }
 
-   async onClickSignout(): Promise<void> {
-      this.error = '';
-      this.prfUnsupported = false;
+   protected async onClickSignout(): Promise<void> {
+      this.clearError();
       this.authSvc.logout(true);
       this.refresh();
    }
 
-   async onDescriptionChanged(component: EditableComponent, passkey: api.AuthenticatorInfoResponse): Promise<void> {
+   protected async onDescriptionChanged(
+      component: EditableComponent,
+      passkey: api.AuthenticatorInfoResponse,
+   ): Promise<void> {
       try {
-         this.error = '';
-         this.prfUnsupported = false;
-         await this.authSvc.setPasskeyDescription(passkey.credentialId, component.value());
+         this.clearError();
+         const userInfo = await this.authSvc.setPasskeyDescription(passkey.credentialId, component.typed());
+         const saved = userInfo.authenticators.find((auth) => auth.credentialId === passkey.credentialId);
+         component.commit(saved!.description);
          this.toastMessage('Passkey description updated');
       } catch (err) {
          console.error(err);
-         this.error = 'Description change failed, must be 6 to 42 characters';
-         //failed, put back the old value by setting [value] again...
-         component.value.set(passkey.description);
+         this._setError('Description change failed, must be 6 to 42 characters');
+         component.focus();
       }
    }
 }
@@ -251,22 +264,22 @@ export class ConfirmDialog {
    private readonly _r2 = inject(Renderer2);
    private readonly _data = inject<ConfirmData>(MAT_DIALOG_DATA);
 
-   public pkState = 0;
-   public userName = '';
-   public confirmInput = new FormControl('');
+   protected pkState = 0;
+   protected userName = '';
+   protected readonly confirmInput = new FormControl('');
 
    static readonly NONE_PK = 0;
    static readonly LAST_PK = 1;
    static readonly ACTIVE_PK = 2;
 
    // A bit ugly but needed to access constant from template
-   get NONE_PK(): number {
+   protected get NONE_PK(): number {
       return ConfirmDialog.NONE_PK;
    }
-   get LAST_PK(): number {
+   protected get LAST_PK(): number {
       return ConfirmDialog.LAST_PK;
    }
-   get ACTIVE_PK(): number {
+   protected get ACTIVE_PK(): number {
       return ConfirmDialog.ACTIVE_PK;
    }
 
@@ -275,7 +288,7 @@ export class ConfirmDialog {
       this.userName = this._data.userName;
    }
 
-   onYesClicked() {
+   protected onYesClicked() {
       if (this.pkState !== this.LAST_PK || (this.confirmInput.value && this.confirmInput.value === this.userName)) {
          this._dialogRef.close('Yes');
       } else {

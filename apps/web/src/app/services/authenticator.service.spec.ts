@@ -491,7 +491,7 @@ describe('AuthenticatorService', () => {
          primeLocalStorage();
          // @ts-expect-error — exercising private path
          await service._loginUser(sessionResponse, base64ToBytes(userCred));
-         vi.spyOn(service, 'reauthenticate').mockResolvedValue(service.userInfo()!);
+         vi.spyOn(service, 'reauthenticate').mockResolvedValue(service.getUserInfo());
       });
 
       it('stores words that check out against the key the server reports', async () => {
@@ -556,7 +556,7 @@ describe('AuthenticatorService', () => {
          const prfSession = { ...sessionResponse, prf: true };
          // @ts-expect-error — exercising private path
          await service._loginUser(prfSession, base64ToBytes(userCred));
-         vi.spyOn(service, 'reauthenticate').mockResolvedValue(service.userInfo()!);
+         vi.spyOn(service, 'reauthenticate').mockResolvedValue(service.getUserInfo());
       });
 
       it('re-encrypts the user credential under the new recovery secret', async () => {

@@ -61,7 +61,7 @@ export class QCryptComponent implements OnInit {
    ngOnInit(): void {
       this.showPKButton = this._authSvc.hasSession();
       this._authSvc
-         .on([AuthEvent.Logout, AuthEvent.Login])
+         .on([AuthEvent.Logout, AuthEvent.Login, AuthEvent.Forget])
          .pipe(takeUntilDestroyed(this._destroyRef))
          .subscribe((data) => this.onAuthEvent(data));
    }

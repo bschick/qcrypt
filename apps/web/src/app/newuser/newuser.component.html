@@ -2,22 +2,22 @@
   <div class="content">
     <div>
       <mat-progress-spinner class="spinner" mode="indeterminate"
-        [style.visibility]="showProgress ? 'visible' : 'hidden'">
+        [style.visibility]="showProgress() ? 'visible' : 'hidden'">
       </mat-progress-spinner>
       <h1>Create A New User</h1>
-      @if (authenticated) {
+      @if (authenticated()) {
         <p>
-          You are already signed in as <b>"{{currentUserName}}"</b> and can
+          You are already signed in as <b>"{{currentUserName()}}"</b> and can
           <a href="javascript:void(null);" role="button" [routerLink]="'/'">
-          encrypt and decrypt data as "{{currentUserName}}"</a>.
+          encrypt and decrypt data as "{{currentUserName()}}"</a>.
           If you still want to create a new user identity, continue below.
         </p>
       }
-      @if (currentUserName && !authenticated) {
+      @if (currentUserName() && !authenticated()) {
         <p>
-          You have an existing user called <b>"{{currentUserName}}"</b> and can
+          You have an existing user called <b>"{{currentUserName()}}"</b> and can
           <a href="javascript:void(null);" role="button" (click)="onClickSignin()">
-          sign in as "{{currentUserName}}"</a>.
+          sign in as "{{currentUserName()}}"</a>.
           If you want to create a new user identity instead, continue on.
         </p>
       }
@@ -54,7 +54,7 @@
         </button>
       </div>
       <div class="error-msg">
-        <p>{{error}}</p>
+        <p>{{error()}}</p>
       </div>
     </div>
   </div>
