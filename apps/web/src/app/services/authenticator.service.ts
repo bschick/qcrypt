@@ -1290,7 +1290,11 @@ export class AuthenticatorService {
          console.error('startAuthentication', err);
          throw err;
       }
-      startAuth.response.userHandle = handleToUserId(startAuth.response.userHandle!);
+
+      if (!startAuth.response.userHandle) {
+         throw new Error('authenticator missing user handle');
+      }
+      startAuth.response.userHandle = handleToUserId(startAuth.response.userHandle);
 
       const prfKey = prfReadKey(startAuth.clientExtensionResults);
 
