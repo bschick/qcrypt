@@ -159,7 +159,7 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 | Web unit tests (chromium) | `pnpm test:web` | `pnpm nx test web` | |
 | Web unit tests (watch mode) | `pnpm test:web:watch` | `pnpm nx test web --watch` | |
 | Web unit tests (all browsers) | `pnpm test:web:all` | `pnpm nx test web --runnerConfig=apps/web/vitest-all.config.ts` | |
-| Web E2E tests (local) | `pnpm test:e2e` | | *Playwright, requires `pnpm serve`* |
+| Web E2E tests (local) | `pnpm test:e2e` | | *Playwright; starts and stops its own dev server, so port 4200 must be free* |
 | Web E2E tests (prod) | `pnpm test:e2e:prod` | | *Playwright against quickcrypt.org* |
 | API full fuzz tests (test) | `pnpm test:fuzz` | | *Vitest against test.quickcrypt.org (`QC_FULL_FUZZ=true`); the small fuzz also runs in every `pnpm test:server`* |
 | API full fuzz tests (prod) | `pnpm test:fuzz:prod` | | *Vitest against quickcrypt.org* |

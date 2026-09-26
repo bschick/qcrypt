@@ -60,19 +60,15 @@ pnpm test
 
 **End-to-End Tests using AWS hosted test API backend:**
 ```bash
-# Before starting the development server, you must first run the One-time setup steps above
-# The development server must be running to execute the E2E tests.
-# For interactive users, you can run the server and tests in separate terminals.
-# For automation, the server can be run as a background process.
-nohup pnpm serve > serve.log 2>&1 &
-sleep 35s # Allow the server time to start
+# You must first run the One-time setup steps above.
+# pnpm test:e2e starts its own dev server (no watch or live-reload) and stops it when done.
+# Do not run pnpm serve at the same time; the run fails if port 4200 is already in use.
 pnpm test:e2e
-pkill pnpm; pkill ng # Stop the development server and ng process
 ```
 
 ### c. Running Manual Tests
 
-- Start the development server as described above with `pnpm serve`. The server will listen on all IP addresses on that system.
+- Start the development server with `pnpm serve`. The server will listen on all IP addresses on that system.
 - If you plan to run a web browser on a different system than the development server, you must edit that system's `hosts` file to set the name of the primary IP address where the development server is running to `t1.quickcrypt.org`. Ensure you can `ping t1.quickcrypt.org`.
 - To avoid security warnings, you must also import the project's local CA certificate on the system running your browser. You can find the CA certificate in the `./localssl` directory relative to where you ran the `pnpm serve` command. Import this certificate into your system's or browser's trusted certificate store. This process is dependent on your operating system.
 - Finally, start a web browser and navigate to `https://t1.quickcrypt.org:4200`. The test front-end uses a test back-end API server running in AWS with a URL of `https://test.quickcrypt.org`. The test API server is intended **only for those contributing to the Quick Crypt project**. Unnecessary or excessive usage that drives up AWS costs will be blocked. Do not run invasive tests against the production API server.
@@ -96,7 +92,7 @@ Before submitting any changes, run the following test suites to ensure that the 
 pnpm test
 ```
 
-### b. End-to-End Tests (requires start of Local server, see 4.b)
+### b. End-to-End Tests (starts its own local server, see 4.b)
 ```bash
 pnpm test:e2e
 ```
