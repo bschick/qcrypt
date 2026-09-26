@@ -66,14 +66,21 @@ export function zxcvbnReady(): Promise<ZxcvbnBundle> {
    return _zxcvbnReady;
 }
 
-// Fails open: an unreachable service reports the password as not breached rather than throwing
-export async function isPwned(password: string): Promise<boolean> {
+// Returns true when the password was found in a breach, false when not in a breach, and undefined for errors
+export async function isPwned(password: string): Promise<boolean | undefined> {
    try {
       const { pwnedLookup } = await zxcvbnReady();
-      return !!(await pwnedLookup(password, { universalFetch: fetch }));
+      const found = await pwnedLookup(password, {
+         universalFetch: fetch,
+         // pwnedLookup returns false for network and HTTP errors by default, so rethrow them
+         networkErrorHandler: (error) => {
+            throw error instanceof Response ? new Error(`pwned lookup failed: ${error.status}`) : error;
+         },
+      });
+      return !!found;
    } catch (err) {
       logError(err);
-      return false;
+      return undefined;
    }
 }
 

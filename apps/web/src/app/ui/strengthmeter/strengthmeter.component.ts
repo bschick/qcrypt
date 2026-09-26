@@ -28,6 +28,7 @@ import {
    ElementRef,
    type AfterViewInit,
    ChangeDetectionStrategy,
+   inject,
 } from '@angular/core';
 
 import { MatIconModule } from '@angular/material/icon';
@@ -35,6 +36,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatSliderModule } from '@angular/material/slider';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { isPwned, createZxcvbn } from '@qcrypt/crypto';
 import type { MatcherBaseClass, ZxcvbnFactory, ZxcvbnResult } from '@zxcvbn-ts/core';
 import * as lev from '../../services/levenshtein';
@@ -50,6 +52,7 @@ const COLORS = [
 
 const BREACH_WARNING = 'Your password was exposed by a data breach on the Internet.';
 const BREACH_SUGGESTION = 'Add more words that are less common.';
+const BREACH_CHECK_FAILED = 'Could not check if your password was stolen';
 
 export type AcceptableState = {
    acceptable: boolean;
@@ -86,6 +89,7 @@ export class StrengthMeterComponent implements AfterViewInit {
    private _pwnedDone: Promise<void> = Promise.resolve();
    private _breachedPassword = '';
    private _scorer: Promise<ZxcvbnFactory> | undefined;
+   private _snackBar = inject(MatSnackBar);
 
    @ViewChild('sliderElem') sliderRef!: ElementRef;
    @ViewChild('matripple') rippleRef!: ElementRef;
@@ -145,8 +149,14 @@ export class StrengthMeterComponent implements AfterViewInit {
          this._pwnedChecked = true;
          this._pwnedDone = (async () => {
             const pwd = this._currentPassword;
+            const pwned = await isPwned(pwd);
             // Ignore is the password has changed while we await an answer
-            if ((await isPwned(pwd)) && pwd === this._currentPassword) {
+            if (pwd !== this._currentPassword) {
+               return;
+            }
+            if (pwned === undefined) {
+               this._snackBar.open(BREACH_CHECK_FAILED, '', { duration: 5000 });
+            } else if (pwned) {
                this._breachedPassword = pwd;
                this._testQueue.push(pwd);
                await this.processZxcvbn();

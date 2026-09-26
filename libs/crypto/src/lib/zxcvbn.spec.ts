@@ -42,11 +42,14 @@ describe('zxcvbn lazy loader', () => {
       expect(await isPwned(`Xk7$pLm2#qRw9-${crypto.randomUUID()}`)).toBe(false);
    });
 
-   it('isPwned returns false when the service cannot be reached', async () => {
+   it('isPwned returns undefined when the service cannot be reached or fails', async () => {
       const originalFetch = globalThis.fetch;
-      globalThis.fetch = (() => Promise.reject(new Error('offline'))) as unknown as typeof fetch;
       try {
-         expect(await isPwned('Xk7$pLm2#qRw9')).toBe(false);
+         globalThis.fetch = (() => Promise.reject(new Error('offline'))) as unknown as typeof fetch;
+         expect(await isPwned('Xk7$pLm2#qRw9')).toBeUndefined();
+
+         globalThis.fetch = (() => Promise.resolve(new Response('', { status: 503 }))) as unknown as typeof fetch;
+         expect(await isPwned('Xk7$pLm2#qRw9')).toBeUndefined();
       } finally {
          globalThis.fetch = originalFetch;
       }
