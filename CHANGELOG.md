@@ -5,12 +5,14 @@
 #### Changes
 
 - improved accessibility of the main page
+- passkeys abandoned during creation are now signaled as unknown to help password managers clean up
+- failed password breach checks now display a message [thanks to Rajat Shukla (@rajat4722)]
+- moved webauthn signal api calls to avoid a possible race condition and incorrect passkey update [thanks to Blake Prins (@prins1bap-ui)]
 - corrected userId encoding for webauthn signal api calls [thanks to @pierreneuville]
 
 #### Security
 
-- failed password breach checks now display a message [thanks to Rajat Shukla (@rajat4722)]
-- moved webauthn signal api calls to avoid a possible race condition and incorrect passkey update [thanks to Blake Prins (@prins1bap-ui)]
+- made the post-quantum libcrux wasm module build reproducible and verifiable against its source [thanks to Rajat Shukla (@rajat4722) and Claude Code (@claude)]
 - updated packages
 
 ## 8.0.1 (2026-09-15)
