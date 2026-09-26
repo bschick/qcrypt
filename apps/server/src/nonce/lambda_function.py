@@ -1,4 +1,5 @@
 import logging
+import os
 import boto3
 import base64
 import hashlib
@@ -7,13 +8,12 @@ from secrets import token_bytes
 from botocore.exceptions import ClientError
 
 client = boto3.client('s3')
+bucket = os.environ['bucket']
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 stashed = {}
-style_hashes = None
-script_hashes = None
 nonce_replace = 'ew26COJKMG8qrA/bjTcl0w=='
 style_replace = '[style-hashes]'
 script_replace = '[script-hashes]'
@@ -28,28 +28,24 @@ script_replace = '[script-hashes]'
 #     does not authorize the load. 'strict-dynamic' was tried but Chrome does not reliably propagate
 #     hash-based trust to dynamic imports.
 #   - 'wasm-unsafe-eval' for libsodium.
-csp_base = f"base-uri 'self'; default-src 'none'; style-src 'self' 'nonce-ew26COJKMG8qrA/bjTcl0w==' 'sha384-vs+F4EXSC56upFqonhYE6vU0SibuBoCWHg/P3d9TuSiUX7xLz97dYJMUxibOoC6D' {style_replace}; script-src {script_replace} 'self' 'wasm-unsafe-eval'; img-src 'self'; object-src 'none'; font-src 'self' https://fonts.gstatic.com/; connect-src 'self' https://api.pwnedpasswords.com/; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; trusted-types angular angular#components dompurify; require-trusted-types-for 'script'; upgrade-insecure-requests; report-to csp-endpoint; report-uri https://o4511265226555392.ingest.us.sentry.io/api/4511265232650240/security/?sentry_key=a7be4684d4608abd82e299fea1b65927;"
+csp_base = f"base-uri 'self'; default-src 'none'; style-src 'self' 'nonce-ew26COJKMG8qrA/bjTcl0w==' 'sha384-qfsqnE+Qgjt1Ckhj+CPmNYwwOzttopfi+ij4Pf31hhsFcc5gIUY6UfSgAWjRwY6q' {style_replace}; script-src {script_replace} 'self' 'wasm-unsafe-eval'; img-src 'self'; object-src 'none'; font-src 'self' https://fonts.gstatic.com/; connect-src 'self' https://api.pwnedpasswords.com/; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; trusted-types angular angular#components dompurify; require-trusted-types-for 'script'; upgrade-insecure-requests; report-to csp-endpoint; report-uri https://o4511265226555392.ingest.us.sentry.io/api/4511265232650240/security/?sentry_key=a7be4684d4608abd82e299fea1b65927;"
 
 def lambda_handler(event, context):
-    global stashed, style_hashes, script_hashes
+    global stashed
 
-    key = 'index.html'
-    if rq_ctx := event.get('requestContext', None):
-        if http := rq_ctx.get('http', None):
-            if path := http.get('path', None):
-                if 'maintenance.html' in path.lower():
-                    key = 'maintenance.html'
-    etag, tree = stashed.get(key, ('',None))
+    # Set maintenance=true on the function to serve only maintenance.html, regardless of path
+    key = 'maintenance.html' if os.environ.get('maintenance', '').lower() == 'true' else 'index.html'
+    etag, tree, style_hashes, script_hashes = stashed.get(key, ('', None, None, None))
 
     try:
-        response = client.get_object(Bucket='quickcrypt', IfNoneMatch=etag, Key=key)
+        response = client.get_object(Bucket=bucket, IfNoneMatch=etag, Key=key)
         # if etag matches, this raises 304 and we don't reparse
         if response and response['ResponseMetadata']['HTTPStatusCode'] == 200:
             base_html = response['Body'].read().decode('utf8')
             tree = HTMLParser(base_html)
             (style_hashes, script_hashes) = fix_csp(tree)
             tree = tree.html
-            stashed[key] = (response['ETag'], tree)
+            stashed[key] = (response['ETag'], tree, style_hashes, script_hashes)
     except ClientError as ce:
         if ce.response['Error']['Code'] != '304':
             raise ce
