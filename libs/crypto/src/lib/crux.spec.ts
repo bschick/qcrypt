@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { cryptoReady, getCrux } from './crypto';
 
@@ -41,8 +41,34 @@ describe('crux ML-DSA-65', () => {
 
 describe('crux manifest', () => {
    const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
-   const manifest = JSON.parse(readFileSync(`${repoRoot}libs/crypto/crux/manifest.json`, 'utf8'));
+   const readRepo = (file: string) => readFileSync(`${repoRoot}${file}`, 'utf8');
+   const manifest = JSON.parse(readRepo('libs/crypto/crux/manifest.json'));
    const recorded: [string, string][] = Object.entries({ ...manifest.inputs, ...manifest.outputs });
+
+   it('lists every crux input and artifact', () => {
+      const sources = readdirSync(`${repoRoot}libs/crypto/crux/src`, { recursive: true, encoding: 'utf8' })
+         .filter((file) => file.endsWith('.rs'))
+         .map((file) => `libs/crypto/crux/src/${file}`);
+      const configs = ['Cargo.lock', 'Cargo.toml', 'regen.mjs', 'rust-toolchain.toml'].map(
+         (file) => `libs/crypto/crux/${file}`,
+      );
+      expect(Object.keys(manifest.inputs).sort()).toEqual([...configs, ...sources].sort());
+      expect(Object.keys(manifest.outputs).sort()).toEqual(
+         ['qc_crux.d.ts', 'qc_crux.js', 'wasm.ts'].map((file) => `libs/crypto/src/lib/crux/${file}`),
+      );
+   });
+
+   it('records the pinned tool versions', () => {
+      const regen = readRepo('libs/crypto/crux/regen.mjs');
+      expect(manifest.toolchain).toEqual({
+         rustc: readRepo('libs/crypto/crux/rust-toolchain.toml').match(/channel = "([^"]+)"/)?.[1],
+         'wasm-pack': regen.match(/WASM_PACK_VERSION = '([^']+)'/)?.[1],
+         'wasm-opt': regen.match(/WASM_OPT_VERSION = '([^']+)'/)?.[1],
+         'wasm-bindgen': readRepo('libs/crypto/crux/Cargo.lock').match(
+            /name = "wasm-bindgen"\nversion = "([^"]+)"/,
+         )?.[1],
+      });
+   });
 
    // A mismatch means crux source or artifacts changed without running pnpm build:libs:crux
    it.each(recorded)('%s matches manifest.json', (file, hash) => {
