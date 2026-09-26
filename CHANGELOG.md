@@ -1,5 +1,18 @@
 # CHANGELOG.md
 
+## 8.0.2 (2026-09-26)
+
+#### Changes
+
+- improved accessibility of main page
+- display a message when password breach reporting is enabled and fails [thanks to Rajat Shukla (@rajat4722)]
+- webauthn signal api calls moved to avoid possible race condition causing incorrect updates [thanks to Blake Prins (@prins1bap-ui)]
+- corrected userId encoding for webauthn signal api calls [thanks to @pierreneuville]
+
+#### Security
+
+- updated packages
+
 ## 8.0.1 (2026-09-15)
 
 #### Changes
