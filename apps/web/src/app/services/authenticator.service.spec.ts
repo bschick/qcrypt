@@ -50,7 +50,7 @@ to assert most of the meaninful actions in this table
 */
 
 import { TestBed } from '@angular/core/testing';
-import { AuthenticatorService, AuthEvent } from './authenticator.service';
+import { AuthenticatorService, AuthEvent, PrfUnsupportedError, userIdToHandle } from './authenticator.service';
 import { BroadcastService } from './broadcast.service';
 import { KEYSTORE_DB_NAME, KeystoreService } from './keystore.service';
 import * as cc from '@qcrypt/crypto/consts';
@@ -124,6 +124,7 @@ describe('AuthenticatorService', () => {
       sessionStorage.clear();
       await TestBed.inject(KeystoreService).flush();
       vi.restoreAllMocks();
+      vi.unstubAllGlobals();
    });
 
    function primeLocalStorage() {
@@ -133,6 +134,17 @@ describe('AuthenticatorService', () => {
       localStorage.setItem('pkid', pkId);
       localStorage.setItem('sessionexpiry', future);
       localStorage.setItem('activityexpiry', future);
+   }
+
+   // Replaces the WebAuthn signal API with spies
+   function stubSignals() {
+      const signals = {
+         signalAllAcceptedCredentials: vi.fn().mockResolvedValue(undefined),
+         signalCurrentUserDetails: vi.fn().mockResolvedValue(undefined),
+         signalUnknownCredential: vi.fn().mockResolvedValue(undefined),
+      };
+      vi.stubGlobal('PublicKeyCredential', signals);
+      return signals;
    }
 
    it('should be created', () => {
@@ -758,14 +770,21 @@ describe('AuthenticatorService', () => {
          // @ts-expect-error — exercising private path
          await service._loginUser(sessionResponse, base64ToBytes(userCred));
 
+         const signals = stubSignals();
          fetchMock.mockClear();
+         fetchMock.mockResolvedValue({
+            ok: true,
+            json: async () => ({ ...sessionResponse, userName: 'peer-renamed' }),
+         });
 
          peerResponder.sendUserInfoChanged({ pkId });
 
-         await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled(), { timeout: 5000 });
+         await vi.waitFor(() => expect(service.userName).toBe('peer-renamed'), { timeout: 5000 });
 
          const calledUrl = fetchMock.mock.calls[0][0] as URL;
          expect(calledUrl.pathname).toContain('/user');
+         // A peer refresh may read a stale passkey list, so it must not signal
+         expect(signals.signalAllAcceptedCredentials).not.toHaveBeenCalled();
       });
 
       it('forget with no session emits forget', async () => {
@@ -891,6 +910,145 @@ describe('AuthenticatorService', () => {
          });
 
          await vi.waitFor(() => expect(events).toEqual([AuthEvent.Forget]), { timeout: 5000 });
+      });
+   });
+
+   describe('webauthn signals', () => {
+      let signals: ReturnType<typeof stubSignals>;
+      let otherPkId: string;
+      let newPkId: string;
+
+      function withPasskeys(...credentialIds: string[]) {
+         const authenticators = credentialIds.map((credentialId) => ({
+            credentialId,
+            description: 'Test authenticator',
+            lightIcon: 'light.svg',
+            darkIcon: 'dark.svg',
+            name: 'Passkey',
+         }));
+         return { ...sessionResponse, authenticators };
+      }
+
+      beforeEach(async () => {
+         otherPkId = bytesToBase64(getRandom(cc.PKID_MIN_BYTES));
+         newPkId = bytesToBase64(getRandom(cc.PKID_MIN_BYTES));
+
+         primeLocalStorage();
+         // @ts-expect-error — exercising private path
+         await service._loginUser(withPasskeys(pkId, otherPkId), base64ToBytes(userCred));
+
+         // The passkey ceremony cannot run here, so stand in for the new passkey
+         const regResponse = {
+            id: newPkId,
+            rawId: newPkId,
+            type: 'public-key',
+            response: { clientDataJSON: '', attestationObject: '' },
+            clientExtensionResults: {},
+         };
+         // @ts-expect-error — exercising private path
+         vi.spyOn(service, '_startRegistration').mockResolvedValue({ regResponse, prfKey: null });
+
+         signals = stubSignals();
+      });
+
+      it('adding a passkey signals the verified list', async () => {
+         fetchMock.mockResolvedValue({ ok: true, json: async () => withPasskeys(pkId, otherPkId, newPkId) });
+
+         await service.addPasskey();
+
+         expect(signals.signalAllAcceptedCredentials).toHaveBeenCalledExactlyOnceWith({
+            rpId: window.location.hostname,
+            userId: userIdToHandle(userId),
+            allAcceptedCredentialIds: [pkId, otherPkId, newPkId],
+         });
+      });
+
+      it('deleting a passkey signals the remaining list', async () => {
+         fetchMock.mockResolvedValue({ ok: true, json: async () => withPasskeys(pkId) });
+
+         await expect(service.deletePasskey(otherPkId)).resolves.toBe(1);
+         expect(signals.signalAllAcceptedCredentials).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({ allAcceptedCredentialIds: [pkId] }),
+         );
+      });
+
+      it('deleting the last passkey signals an empty list', async () => {
+         // The other passkey was already deleted elsewhere, so this delete ends the account
+         fetchMock.mockResolvedValue({ ok: true, json: async () => ({ verified: false }) });
+
+         await expect(service.deletePasskey(otherPkId)).resolves.toBe(0);
+         expect(signals.signalAllAcceptedCredentials).toHaveBeenCalledExactlyOnceWith({
+            rpId: window.location.hostname,
+            userId: userIdToHandle(userId),
+            allAcceptedCredentialIds: [],
+         });
+      });
+
+      it('recovery signals the recovered passkey list', async () => {
+         const recoveryWords = entropyToMnemonic(api.recoverySecret(getRandom(api.RECOVERYID_BYTES), userId), wordlist);
+         const startResp = {
+            prf: false,
+            challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)),
+            userCred,
+         };
+         const recovered = { ...withPasskeys(newPkId), pkId: newPkId };
+         fetchMock.mockImplementation((url: URL) => ({
+            ok: true,
+            json: async () => (url.pathname.endsWith('/recover3') ? startResp : recovered),
+         }));
+
+         await service.recover3(recoveryWords);
+
+         expect(service.hasSession()).toBe(true);
+         expect(signals.signalAllAcceptedCredentials).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({ allAcceptedCredentialIds: [newPkId] }),
+         );
+      });
+
+      it('renaming the user signals the new name', async () => {
+         // The signal must carry the server's sanitized name, not the input
+         fetchMock.mockResolvedValue({
+            ok: true,
+            json: async () => ({ ...withPasskeys(pkId, otherPkId), userName: 'renamed-user' }),
+         });
+
+         await service.setUserName('  renamed-user  ');
+
+         expect(signals.signalCurrentUserDetails).toHaveBeenCalledExactlyOnceWith({
+            rpId: window.location.hostname,
+            userId: userIdToHandle(userId),
+            name: 'renamed-user',
+            displayName: '',
+         });
+      });
+
+      it('a passkey without PRF on a PRF account is signaled as unknown', async () => {
+         // @ts-expect-error — exercising private path
+         await service._loginUser({ ...withPasskeys(pkId, otherPkId), prf: true }, base64ToBytes(userCred));
+
+         await expect(service.addPasskey()).rejects.toThrow(PrfUnsupportedError);
+         expect(signals.signalUnknownCredential).toHaveBeenCalledExactlyOnceWith({
+            rpId: window.location.hostname,
+            credentialId: newPkId,
+         });
+      });
+
+      it('a passkey abandoned during registration is signaled as unknown', async () => {
+         fetchMock.mockResolvedValue({ ok: true, json: async () => ({ user: { id: userId }, challenge: 'reg' }) });
+         const abandoned = { regResponse: { id: bytesToBase64(getRandom(cc.PKID_MIN_BYTES)) }, prfKey: null };
+         // @ts-expect-error — exercising private path
+         vi.spyOn(service, '_startRegistration').mockResolvedValueOnce(abandoned);
+         // Try a different passkey once, then dismiss the prompt to end registration
+         const onPrfUnavailable = vi
+            .fn()
+            .mockResolvedValueOnce('different')
+            .mockRejectedValueOnce(new Error('dismissed'));
+
+         await expect(service.newUser('test-user', onPrfUnavailable)).rejects.toThrow('dismissed');
+         expect(signals.signalUnknownCredential).toHaveBeenCalledExactlyOnceWith({
+            rpId: window.location.hostname,
+            credentialId: abandoned.regResponse.id,
+         });
       });
    });
 });

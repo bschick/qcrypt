@@ -939,19 +939,18 @@ export class AuthenticatorService {
 
       this.userInfo.set(userInfo);
       this.activity();
-      this._signalAcceptedCredentials(userInfo);
       return userInfo;
    }
 
-   private _signalAcceptedCredentials(userInfo: VerifiedUserInfo): void {
-      // WebAuthn signals are considered "fire and forget". There is no guarantee that sending
-      // a signal makes its way to a user's credential manager via the browser and/or platform.
+   // Only call after this tab adds, deletes, or recovers passkeys, never from peer messages
+   private _signalAcceptedCredentials(userId: string, authenticators: api.AuthenticatorInfoResponse[]): void {
+      // WebAuthn signals are "fire and forget"... there is no guarantee that sending
+      // a signal makes its way to a user's credential manager
       sendSignal({
          signalName: 'allAcceptedCredentials',
          rpID: window.location.hostname,
-         userID: userIdToHandle(userInfo.userId),
-         // Authenticators may hide a missing passky, so include all known passkeys
-         allAcceptedCredentialIDs: userInfo.authenticators.map((authenticator) => authenticator.credentialId),
+         userID: userIdToHandle(userId),
+         allAcceptedCredentialIDs: authenticators.map((authenticator) => authenticator.credentialId),
       }).catch(() => undefined);
    }
 
@@ -1133,6 +1132,16 @@ export class AuthenticatorService {
       }).catch(() => undefined);
    }
 
+   // Only for passkeys the server never received. If the passkey manager does not support
+   // the unknown credential signal, the user must clean them up
+   private _signalUnknownCredential(credentialId: string): void {
+      sendSignal({
+         signalName: 'unknownCredential',
+         rpID: window.location.hostname,
+         credentialID: credentialId,
+      }).catch(() => undefined);
+   }
+
    async deletePasskey(credentialId: string): Promise<number> {
       if (!credentialId) {
          throw new Error('invalid credentialId');
@@ -1155,6 +1164,8 @@ export class AuthenticatorService {
       if (!serverUserInfo) {
          throw new Error('authentication failed');
       }
+
+      this._signalAcceptedCredentials(this.userId, serverUserInfo.verified ? serverUserInfo.authenticators : []);
 
       // Unverified response means that was the last PK and the user was deleted.
       // If the user is still valid but we deleted our own current PK, the server
@@ -1424,6 +1435,7 @@ export class AuthenticatorService {
          let passkeyUserCredEnc: string | undefined;
          if (prf) {
             if (!prfKey) {
+               this._signalUnknownCredential(regResponse.id);
                throw new PrfUnsupportedError();
             }
             passkeyUserCredEnc = await prfEncrypt(userCred, prfKey, userId);
@@ -1438,7 +1450,9 @@ export class AuthenticatorService {
          const serverLoginUserInfo = await this._passkeyVerify('recover/verify', body);
          this._checkAccountPinPrf(userId, serverLoginUserInfo.prf);
 
-         return await this._loginUser(serverLoginUserInfo, userCred);
+         const userInfo = await this._loginUser(serverLoginUserInfo, userCred);
+         this._signalAcceptedCredentials(userInfo.userId, userInfo.authenticators);
+         return userInfo;
       } finally {
          userCred.fill(0);
          if (prfKey) {
@@ -1478,8 +1492,8 @@ export class AuthenticatorService {
             const { regResponse, prfKey } = await this._startRegistration(optionsJson, true);
 
             if (!prfKey && (await onPrfUnavailable()) === 'different') {
-               // discard the created passkey and register a fresh one. Note that this leaks a
-               // passkey in the user's authenticator
+               // discard the created passkey and register a fresh one
+               this._signalUnknownCredential(regResponse.id);
                continue;
             }
 
@@ -1532,6 +1546,7 @@ export class AuthenticatorService {
       if (accountPrf) {
          // A PRF account requires all passkey to support PRF (no downgrade)
          if (!prfKey) {
+            this._signalUnknownCredential(regResponse.id);
             throw new PrfUnsupportedError();
          }
 
@@ -1550,6 +1565,7 @@ export class AuthenticatorService {
       const body = api.makeAddVerifyRequest(regResponse, { challenge: optionsJson.challenge, passkeyUserCredEnc });
       const serverLoginUserInfo = await this._passkeyVerify('passkeys/verify', body);
       const userInfo = this._updateLoggedInUser(serverLoginUserInfo);
+      this._signalAcceptedCredentials(userInfo.userId, userInfo.authenticators);
       this._broadcastSvc.sendUserInfoChanged({ pkId: userInfo.pkId });
       return userInfo;
    }
@@ -1579,7 +1595,12 @@ export class AuthenticatorService {
          // an extra user interactions to get the PRF output
          prfKey = prfReadKey(regResponse.clientExtensionResults);
          if (!prfKey && prfEnabled(regResponse.clientExtensionResults)) {
-            prfKey = await this._readPrfViaAssertion(regResponse.id, optionsJson.rp.id);
+            try {
+               prfKey = await this._readPrfViaAssertion(regResponse.id, optionsJson.rp.id);
+            } catch (err) {
+               this._signalUnknownCredential(regResponse.id);
+               throw err;
+            }
          }
       }
 
