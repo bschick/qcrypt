@@ -4,13 +4,13 @@
 
 #### Changes
 
-- improved accessibility of main page
-- display a message when password breach reporting is enabled and fails [thanks to Rajat Shukla (@rajat4722)]
-- webauthn signal api calls moved to avoid possible race condition causing incorrect updates [thanks to Blake Prins (@prins1bap-ui)]
+- improved accessibility of the main page
 - corrected userId encoding for webauthn signal api calls [thanks to @pierreneuville]
 
 #### Security
 
+- failed password breach checks now display a message [thanks to Rajat Shukla (@rajat4722)]
+- moved webauthn signal api calls to avoid a possible race condition and incorrect passkey update [thanks to Blake Prins (@prins1bap-ui)]
 - updated packages
 
 ## 8.0.1 (2026-09-15)
