@@ -6,3 +6,17 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+
+  # crux PRs fail crux.spec.ts until pnpm build:libs:crux regenerates the artifacts on that branch
+  - package-ecosystem: "cargo"
+    directory: "/libs/crypto/crux"
+    schedule:
+      interval: "weekly"
+    groups:
+      crux:
+        patterns:
+          - "*"
+  - package-ecosystem: "rust-toolchain"
+    directory: "/libs/crypto/crux"
+    schedule:
+      interval: "weekly"

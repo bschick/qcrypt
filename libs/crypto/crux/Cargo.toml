@@ -13,3 +13,5 @@ libcrux-ml-dsa = { version = "0.0", features = ["mldsa65", "std"] }
 
 [profile.release]
 opt-level = 3
+lto = true
+codegen-units = 1

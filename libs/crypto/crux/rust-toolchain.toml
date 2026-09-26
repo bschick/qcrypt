@@ -1,0 +1,5 @@
+# Pinned so rebuilds reproduce the committed crux artifacts byte for byte
+[toolchain]
+channel = "1.98.1"
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"
