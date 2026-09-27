@@ -132,7 +132,9 @@ are not listed.
    *and* `userId` and atomically consumed (`_createAuthenticator` `server.ts:713-731`);
    authentication resolves identity from the credential‑id GSI and the signed assertion
    rather than the client‑supplied `userHandle` (`server.ts:343-387`). Together these close
-   the two historical account‑takeover bug classes.
+   the two historical account‑takeover bug classes. *(8.0.2: the GSI is no longer used.
+   The credential is found with a strongly consistent get keyed by `(userHandle, credentialId)`,
+   and identity still comes from the stored record and the signed assertion.)*
 9. **At‑rest `userCred` protection in the browser.** A non‑extractable HMAC‑SHA‑512
    `CryptoKey` (`extractable:false`, `keystore.service.ts:158-165`) in IndexedDB derives
    `k_L`, which X20‑Poly1305‑wraps `userCred` (bound to `userId` as AAD) in per‑tab

@@ -7,8 +7,9 @@
 - improved accessibility of the main page
 - passkeys abandoned during creation are now signaled as unknown to help password managers clean up
 - failed password breach checks now display a message [thanks to Rajat Shukla (@rajat4722)]
-- moved webauthn signal api calls to avoid a possible race condition and incorrect passkey update [thanks to Blake Prins (@prins1bap-ui)]
+- moved webauthn signal api calls to avoid possible race conditions and incorrect passkey updates [thanks to Blake Prins (@prins1bap-ui)]
 - corrected userId encoding for webauthn signal api calls [thanks to @pierreneuville]
+- changed server authentication to use consistent reads to prevent various race conditions
 
 #### Security
 

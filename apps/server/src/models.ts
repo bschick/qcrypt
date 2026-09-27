@@ -195,15 +195,6 @@ export const Authenticators = new Entity(
                casing: 'none',
             },
          },
-         byCredId: {
-            index: 'credentialid-index',
-            pk: {
-               field: 'credentialId',
-               cast: 'string',
-               composite: ['credentialId'],
-               casing: 'none',
-            },
-         },
       },
    },
    {

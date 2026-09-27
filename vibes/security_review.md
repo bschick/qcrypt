@@ -19,6 +19,7 @@ Full re-review by Opus 4.7 against the live tree. All prior findings re-verified
 - `deleteSession` (`server.ts:273+`) bumps `authCount`, invalidating prior cookies.
 - `postAuthOptions` (`server.ts:755+`) returns a dummy `allowCredentials` via `dummyAllowedCreds` (seeded by `HKDF(jwtMaterial, inputUserId)` into a weighted profile table) plus an equivalent-cost DB call and 5–35 ms jitter to align timing for unknown users.
 - `Authenticators` now has a `credentialid-index` GSI; `postAuthVerify` (`server.ts:296+`) uses it to resolve the passkey to a userId and cross-checks `userHandle`, eliminating the "trust caller's `body.userId`" shape.
+  - *Superseded in 8.0.2:* the GSI was eventually consistent, so a sign-in soon after a passkey was created could miss it. `postAuthVerify` now does a strongly consistent get keyed by `(userHandle, credentialId)`, and the GSI is no longer used. Identity was never taken from `userHandle`: it comes from verifying the signature against the stored record's public key, and a forged `userHandle` matches no record, or a record whose key rejects the signature.
 
 **Still active (unchanged from prior review):**
 - **H5 — legacy `/v1/users/{userid}/recover/{usercred}` route remains mounted.** `METHODMAP` in `server.ts:1804` still registers `postRecoverOld` against `Patterns.recoverOld` (`urls.ts:88`). The fix note "external urls cannot change" addresses client migration, but any caller that still hits the legacy URL — including an attacker — gets their `userCred` written to access logs and `Referer` headers. Fully closing H5 requires removing the route from `METHODMAP` so the endpoint 404s server-side; client-side migration alone does not protect against third-party replay of a logged path. Log scrubbing and `userCred` rotation for historical users remain the follow-up.
@@ -306,6 +307,8 @@ This finding was promoted to the High section on further reflection: logs and `R
 **Fix:** Always return a plausible non‑empty `allowCredentials` list (mix in random dummy credentialIds) when the `userId` is unknown, or reject with a generic 400 for unknown users at the same response time.
 
 #### M5b. (fixed) Second-leg enumeration via `/auth/verify`
+
+> *8.0.2:* the miss path is now a miss on the consistent `(userHandle, credentialId)` get rather than on `byCredId`, and its matched-work dummy user read is consistent to match the real one. The mitigation below is otherwise unchanged.
 
 Even with the `/auth/options` dummy-credentials mitigation in place, `/auth/verify` was distinguishable. After calling `/auth/options` with a guessed `userId`, an attacker could forge an `AuthenticationResponseJSON` that echoes the `userId` back in `response.userHandle` and sends a bogus signature. Three distinguishers fell out of the existing code paths:
 

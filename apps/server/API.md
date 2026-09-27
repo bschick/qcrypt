@@ -14,7 +14,8 @@ This document provides documentation for the passkey-based authentication server
 - **Request Body:** A JSON object with a `userName` key. Example: `{"userName": "New User"}`. User name must be greater than 5 and less than 32 characters and may not contain HTML tags.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
-  - `400 Bad Request`: The request was malformed or the username is invalid.
+  - `400 Bad Request`: The body is not valid JSON.
+  - `401 Unauthorized`: Returned for every other failure, including an invalid username.
 
 ### POST /v1/reg/verify
 
@@ -26,8 +27,8 @@ This document provides documentation for the passkey-based authentication server
 - **Request Body:** A [`RegVerify`](#regverify) object created by the client from the previous POST to `/v1/reg/options`: the SimpleWebAuthn/client `RegistrationResponseJSON` response, `userId`, `challenge`, `recoveryPubKey`, and the client-encrypted credential fields `passkeyUserCredEnc`, `recoveryUserCredEnc`, and `userCredPubKey`.
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object including `csrf` and session cookie.
-  - `400 Bad Request`: The request was malformed or the request body is invalid.
-  - `401 Unauthorized`: The registration challenge has expired or is invalid.
+  - `400 Bad Request`: The body is not valid JSON.
+  - `401 Unauthorized`: Returned for every other failure, including an invalid request body or an expired or invalid registration challenge.
 
 ## Authentication Endpoints
 
@@ -40,7 +41,8 @@ This document provides documentation for the passkey-based authentication server
 - **Request Body:** (optional) A JSON object with the `userId` of a user whose allowed credentials should be returned. Example: `{"userId": "base64id"}`.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialRequestOptionsJSON`](#publickeycredentialrequestoptionsjson) JSON object.
-  - `400 Bad Request`: The request was malformed or missing required parameters.
+  - `400 Bad Request`: The body is not valid JSON.
+  - `401 Unauthorized`: Returned for every other failure, including an invalid `userId`.
 
 ### POST /v1/auth/verify
 
@@ -52,8 +54,8 @@ This document provides documentation for the passkey-based authentication server
 - **Request Body:** The SimpleWebAuthn/client `AuthenticationResponseJSON` JSON object response & `challenge` created by client from previous POST to `/v1/auth/options`.
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object including `csrf` and session cookie.
-  - `400 Bad Request`: The request was malformed or the request body is invalid.
-  - `401 Unauthorized`: The authentication challenge has expired or is invalid.
+  - `400 Bad Request`: The body is not valid JSON.
+  - `401 Unauthorized`: Returned for every other failure, including an invalid request body, an unknown passkey, or an expired or invalid challenge.
 
 ## Passkey Endpoints
 
@@ -147,7 +149,8 @@ session. The first two calls end an existing session.
 - **Request Body:** A [`Recover3`](#recover3) object.
 - **Responses:**
   - `200 OK`: A [`RecoverStart`](#recoverstart) JSON object.
-  - `400 Bad Request`: The request was malformed, or the recovery signature is invalid, replayed, or outside the timestamp skew window.
+  - `400 Bad Request`: The body is not valid JSON.
+  - `401 Unauthorized`: Returned for every other failure, including a recovery signature that is invalid, replayed, or outside the timestamp skew window.
 
 ### POST /v1/recover/confirm
 
@@ -159,7 +162,8 @@ session. The first two calls end an existing session.
 - **Request Body:** A [`RecoverConfirm`](#recoverconfirm) object.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
-  - `400 Bad Request`: The request was malformed, the challenge is unknown or already spent, or the signature is invalid.
+  - `400 Bad Request`: The body is not valid JSON.
+  - `401 Unauthorized`: Returned for every other failure, including a challenge that is unknown or already spent, or an invalid signature.
 
 ### POST /v1/recover/verify
 
@@ -171,8 +175,8 @@ session. The first two calls end an existing session.
 - **Request Body:** A [`RecoverVerify`](#recoververify) object: the SimpleWebAuthn/client `RegistrationResponseJSON` response, `userId`, `challenge`, and the client-encrypted credential field `passkeyUserCredEnc`.
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object including `csrf` and session cookie.
-  - `400 Bad Request`: The request was malformed or the request body is invalid.
-  - `401 Unauthorized`: The recovery challenge has expired or is invalid.
+  - `400 Bad Request`: The body is not valid JSON.
+  - `401 Unauthorized`: Returned for every other failure, including an invalid request body or an expired or invalid recovery challenge.
 
 ### PUT /v1/recover3/key
 
@@ -197,8 +201,8 @@ session. The first two calls end an existing session.
 - **Request Body:** A JSON object with `userId` and `userCred` keys.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
-  - `400 Bad Request`: The user credential is not valid, or the account must use recovery words.
-  - `401 Unauthorized`: The request is not authorized.
+  - `400 Bad Request`: The body is not valid JSON.
+  - `401 Unauthorized`: Returned for every other failure, including an invalid user credential or an account that must use recovery words.
 
 ## Session Endpoints
 
