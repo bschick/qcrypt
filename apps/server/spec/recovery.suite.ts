@@ -29,6 +29,7 @@ import {
    putJson,
    getJson,
    expectPasskeyDeleted,
+   expectListedPasskeys,
    registerTestUser,
    setSessionSigner,
    createCredential,
@@ -118,11 +119,15 @@ function confirmBody(
    };
 }
 
-async function passkeyCount(userId: string, userCred: string, csrf: string, cookie: string): Promise<number> {
+async function expectUserPasskeys(
+   credIds: string[],
+   userId: string,
+   userCred: string,
+   csrf: string,
+   cookie: string,
+): Promise<void> {
    setSessionSigner(userId, userCred);
-   const res = await getJson('/v1/user', { 'x-csrf-token': csrf }, cookie);
-   expect(res.status).toBe(200);
-   return res.data.authenticators.length;
+   await expectListedPasskeys('/v1/user', credIds, csrf, cookie);
 }
 
 type StartResponse = {
@@ -401,9 +406,18 @@ export function recoverySuite(prf: boolean): void {
          await recoverAccount3({ ...recoverUser, recoverySecret: newSecret });
       });
 
-      it('recover3 account recovery succeeds', async () => {
+      it('recover3 and immediate sign in succeed', async () => {
          const recoverUser = await registerTestUser(prf);
-         await recoverAccount3(recoverUser);
+         let session: { cookie: string; csrf: string } = await recoverAccount3(recoverUser, { keepSession: true });
+         setSessionSigner(recoverUser.userId, recoverUser.userCred);
+
+         try {
+            session = await loginWithPasskey(recoverUser);
+            const userRes = await getJson('/v1/user', { 'x-csrf-token': session.csrf }, session.cookie);
+            expect(userRes.status).toBe(200);
+         } finally {
+            await expectPasskeyDeleted(recoverUser.credId, session.csrf, session.cookie);
+         }
       });
 
       // The point of splitting recovery in two: proving the recovery secret alone must not
@@ -416,11 +430,13 @@ export function recoverySuite(prf: boolean): void {
 
          // Abandon the recovery here, then sign in with the original passkey to show it survived.
          const session = await loginWithPasskey(recoverUser);
-         setSessionSigner(recoverUser.userId, recoverUser.userCred);
-         const userRes = await getJson('/v1/user', { 'x-csrf-token': session.csrf }, session.cookie);
-         expect(userRes.status).toBe(200);
-         expect(userRes.data.authenticators.length).toBe(1);
-         expect(userRes.data.authenticators[0].credentialId).toBe(recoverUser.credId);
+         await expectUserPasskeys(
+            [recoverUser.credId],
+            recoverUser.userId,
+            recoverUser.userCred,
+            session.csrf,
+            session.cookie,
+         );
 
          await expectPasskeyDeleted(recoverUser.credId, session.csrf, session.cookie);
       });
@@ -431,18 +447,18 @@ export function recoverySuite(prf: boolean): void {
          // Recovery must clear the whole list, so give the account more than one to clear.
          const originalCredId = recoverUser.credId;
          const addedCredId = await addPasskey(recoverUser, recoverUser.csrf, recoverUser.cookie);
-         expect(
-            await passkeyCount(recoverUser.userId, recoverUser.userCred, recoverUser.csrf, recoverUser.cookie),
-         ).toBe(2);
+         await expectUserPasskeys(
+            [originalCredId, addedCredId],
+            recoverUser.userId,
+            recoverUser.userCred,
+            recoverUser.csrf,
+            recoverUser.cookie,
+         );
 
          const session = await recoverAccount3(recoverUser, { keepSession: true });
 
          // Both originals are gone and only the replacement remains.
-         setSessionSigner(recoverUser.userId, session.userCred);
-         const userRes = await getJson('/v1/user', { 'x-csrf-token': session.csrf }, session.cookie);
-         expect(userRes.status).toBe(200);
-         expect(userRes.data.authenticators.length).toBe(1);
-         expect(userRes.data.authenticators[0].credentialId).toBe(session.credId);
+         await expectUserPasskeys([session.credId], recoverUser.userId, session.userCred, session.csrf, session.cookie);
          expect(session.credId).not.toBe(originalCredId);
          expect(session.credId).not.toBe(addedCredId);
 
@@ -550,9 +566,13 @@ export function recoverySuite(prf: boolean): void {
          const res = await postJson('/v1/recover/confirm', confirmBody(recoverUser, neverIssued), {}, '');
          expect(res.status).toBe(401);
 
-         expect(
-            await passkeyCount(recoverUser.userId, recoverUser.userCred, recoverUser.csrf, recoverUser.cookie),
-         ).toBe(1);
+         await expectUserPasskeys(
+            [recoverUser.credId],
+            recoverUser.userId,
+            recoverUser.userCred,
+            recoverUser.csrf,
+            recoverUser.cookie,
+         );
 
          await expectPasskeyDeleted(recoverUser.credId, recoverUser.csrf, recoverUser.cookie);
       });
@@ -568,9 +588,13 @@ export function recoverySuite(prf: boolean): void {
          const res = await postJson(CONFIRM_PATH, confirmBody(recoverUser, authOpts.data.challenge), {}, '');
          expect(res.status).toBe(401);
 
-         expect(
-            await passkeyCount(recoverUser.userId, recoverUser.userCred, recoverUser.csrf, recoverUser.cookie),
-         ).toBe(1);
+         await expectUserPasskeys(
+            [recoverUser.credId],
+            recoverUser.userId,
+            recoverUser.userCred,
+            recoverUser.csrf,
+            recoverUser.cookie,
+         );
 
          await expectPasskeyDeleted(recoverUser.credId, recoverUser.csrf, recoverUser.cookie);
       });
@@ -605,8 +629,7 @@ export function recoverySuite(prf: boolean): void {
          );
          expect(res.status).toBe(200);
 
-         setSessionSigner(other.userId, other.userCred);
-         expect(await passkeyCount(other.userId, other.userCred, other.csrf, other.cookie)).toBe(1);
+         await expectUserPasskeys([other.credId], other.userId, other.userCred, other.csrf, other.cookie);
          await expectPasskeyDeleted(other.credId, other.csrf, other.cookie);
 
          // Confirm left this account with no passkeys and no session, so finishing a fresh
@@ -632,7 +655,13 @@ export function recoverySuite(prf: boolean): void {
 
          // Confirm the original credential still works
          const session = await loginWithPasskey(recoverUser);
-         expect(await passkeyCount(recoverUser.userId, recoverUser.userCred, session.csrf, session.cookie)).toBe(1);
+         await expectUserPasskeys(
+            [recoverUser.credId],
+            recoverUser.userId,
+            recoverUser.userCred,
+            session.csrf,
+            session.cookie,
+         );
 
          await expectPasskeyDeleted(recoverUser.credId, session.csrf, session.cookie);
       });
@@ -642,7 +671,7 @@ export function recoverySuite(prf: boolean): void {
 
          const { startRes, recoveredUserCred } = await startRecovery3(recoverUser);
          const session = await finishRecovery3(recoverUser, startRes, recoveredUserCred);
-         expect(await passkeyCount(recoverUser.userId, session.userCred, session.csrf, session.cookie)).toBe(1);
+         await expectUserPasskeys([session.credId], recoverUser.userId, session.userCred, session.csrf, session.cookie);
 
          const res = await postJson('/v1/recover/confirm', confirmBody(recoverUser, startRes.data.challenge), {}, '');
          expect(res.status).toBe(401);

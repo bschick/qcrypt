@@ -1,5 +1,21 @@
 # CHANGELOG.md
 
+## 8.0.2 (2026-09-27)
+
+#### Changes
+
+- improved accessibility of the main page
+- passkeys abandoned during creation are now signaled as unknown to help password managers clean up
+- failed password breach checks now display a message [thanks to Rajat Shukla (@rajat4722)]
+- moved webauthn signal api calls to avoid possible race conditions and incorrect passkey updates [thanks to Blake Prins (@prins1bap-ui)]
+- corrected userId encoding for webauthn signal api calls [thanks to @pierreneuville]
+- changed server authentication to use consistent reads to fix rare sign-in failures
+
+#### Security
+
+- made the post-quantum libcrux wasm module build reproducible and verifiable against its source [thanks to Rajat Shukla (@rajat4722) and Claude Code (@claude)]
+- updated packages
+
 ## 8.0.1 (2026-09-15)
 
 #### Changes

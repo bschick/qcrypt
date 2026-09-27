@@ -77,6 +77,7 @@ The `pnpm` scripts in `package.json` call `nx` under the hood. You can use eithe
 | CLI build | `pnpm build:cli` | `pnpm nx build cli` |
 | CLI build (minified) | `pnpm build:cli:min` | `pnpm nx build-min cli` |
 | libcrux WASM (`crux`) rebuild | `pnpm build:libs:crux` | *(node + wasm-pack; see below — not part of any aggregate build)* |
+| libcrux WASM (`crux`) verify | `pnpm verify:libs:crux` | *(rebuilds to a temp dir and compares with the committed files; see below)* |
 
 `build:server` writes `dist/server-test` unminified; `build:server:prod` writes `dist/server` minified.
 Either takes `--min` or `--no-min` to override the minification default, and `QC_SERVER_OUT` to
@@ -87,17 +88,18 @@ override the directory. Do not call the Nx targets directly — the pnpm scripts
 
 `libs/crypto/crux/` is a `wasm-bindgen` wrapper around [libcrux](https://github.com/cryspen/libcrux) (currently ML-DSA-65) compiled to WebAssembly. Its generated outputs are **committed** (`libs/crypto/src/lib/crux/{qc_crux.js,qc_crux.d.ts,wasm.ts}` — the glue, types, and base64-embedded wasm), so normal builds, tests, and CI need **no Rust toolchain**. Rebuild only when you change the Rust wrapper (`libs/crypto/crux/src/lib.rs`), bump the `libcrux-ml-dsa` version, or add a libcrux feature.
 
-**One-time prerequisites** — Rust toolchain + wasm target + wasm-pack:
+**One-time prerequisites** — rustup + the pinned wasm-pack. `libs/crypto/crux/rust-toolchain.toml` pins the Rust version, and rustup installs that toolchain with its wasm target the first time it is used in that directory:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && . "$HOME/.cargo/env"
-rustup target add wasm32-unknown-unknown
-curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+cargo install wasm-pack --version 0.15.0 --locked
 ```
 
-**Rebuild:** `pnpm build:libs:crux` — runs `libs/crypto/crux/regen.mjs` (`wasm-pack build --target web`, then regenerates the committed TS). It is intentionally **not** wired into any `build:*` aggregate, since it requires Rust.
+**Rebuild:** `pnpm build:libs:crux` — runs `libs/crypto/crux/regen.mjs` (`wasm-pack build --target web`, then regenerates the committed TS and `libs/crypto/crux/manifest.json`). It refuses to run when rustc, wasm-pack, or a `wasm-opt` on `PATH` differs from its pin (`rust-toolchain.toml`, and `WASM_PACK_VERSION` and `WASM_OPT_VERSION` in `regen.mjs`), when `Cargo.lock` needs an update, or when a cargo config file sets release profile, compiler, or wasm32 target settings. It ignores `RUSTFLAGS`, `CARGO_PROFILE_*`, and similar environment overrides, turns off incremental builds, strips the wasm `producers` section, and remaps local and registry paths out of the wasm, so rebuilds from the same sources are byte-for-byte identical. That has been checked across checkout paths, `CARGO_HOME` locations, a vendored crates.io replacement, and a locally built `wasm-bindgen`, but not across operating systems or CPU architectures. It is intentionally **not** wired into any `build:*` aggregate, since it requires Rust.
 
-**Commit after a rebuild:** the regenerated `libs/crypto/src/lib/crux/{qc_crux.js,qc_crux.d.ts,wasm.ts}`, plus `libs/crypto/crux/Cargo.lock` if dependency versions changed. **Do not commit** `libs/crypto/crux/pkg/` or `libs/crypto/crux/target/` (gitignored build outputs).
+**Verify:** `pnpm verify:libs:crux` rebuilds into a temp directory and fails unless the committed artifacts and manifest match that rebuild exactly, listing any manifest entries that differ. Run it when reviewing any change to crux sources or artifacts, and before bumping a pin. Separately, `crux.spec.ts` (no Rust needed) fails when a file listed in `manifest.json` no longer matches its recorded SHA-256, when the manifest does not list every `src/**/*.rs` file, or when its tool versions differ from the pins, so `pnpm test` catches a source, pin, or artifact change made without a rebuild.
+
+**Commit after a rebuild:** the regenerated `libs/crypto/src/lib/crux/{qc_crux.js,qc_crux.d.ts,wasm.ts}` and `libs/crypto/crux/manifest.json`, plus `libs/crypto/crux/Cargo.lock` if dependency versions changed, and `rust-toolchain.toml` or `regen.mjs` if a pin changed. **Do not commit** `libs/crypto/crux/pkg/` or `libs/crypto/crux/target/` (gitignored build outputs).
 
 ### Code Quality (Biome)
 
@@ -153,19 +155,20 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 
 | What | pnpm script | Direct Nx equivalent | Notes |
 |------|------------|---------------------|-------|
-| **All unit tests** | `pnpm test` | | *runs test:web, test:server, test:lib, test:cli* |
+| **All unit tests** | `pnpm test` | | *runs test:web, test:server, test:libs, test:cli* |
 | Web unit tests (chromium) | `pnpm test:web` | `pnpm nx test web` | |
 | Web unit tests (watch mode) | `pnpm test:web:watch` | `pnpm nx test web --watch` | |
 | Web unit tests (all browsers) | `pnpm test:web:all` | `pnpm nx test web --runnerConfig=apps/web/vitest-all.config.ts` | |
-| Web E2E tests (local) | `pnpm test:e2e` | | *Playwright, requires `pnpm serve`* |
+| Web E2E tests (local) | `pnpm test:e2e` | | *Playwright; starts and stops its own dev server, so port 4200 must be free* |
 | Web E2E tests (prod) | `pnpm test:e2e:prod` | | *Playwright against quickcrypt.org* |
 | API full fuzz tests (test) | `pnpm test:fuzz` | | *Vitest against test.quickcrypt.org (`QC_FULL_FUZZ=true`); the small fuzz also runs in every `pnpm test:server`* |
 | API full fuzz tests (prod) | `pnpm test:fuzz:prod` | | *Vitest against quickcrypt.org* |
 | Server unit tests | `pnpm test:server` | `pnpm nx test server` | |
 | Server unit tests (prod) | `pnpm test:server:prod` | `pnpm nx test-prod server` | |
 | Lint e2e specs | `pnpm lint:e2e` | | *ESLint `playwright/missing-playwright-await`; also runs first in `build:web` and `build:web:prod`* |
-| All library unit tests | `pnpm test:lib` | | *runs test:lib:crypto* |
-| Crypto library unit tests | `pnpm test:lib:crypto` | `pnpm nx test crypto` | |
+| All library unit tests | `pnpm test:libs` | | *runs test:libs:crypto, test:libs:api* |
+| Crypto library unit tests | `pnpm test:libs:crypto` | `pnpm nx test crypto` | |
+| API library unit tests | `pnpm test:libs:api` | `pnpm nx test api` | |
 | CLI unit tests | `pnpm test:cli` | `pnpm nx test cli` | |
 
 > **Note:** When passing flags through `nx`, use camelCase for config options (e.g., `--runnerConfig=` not `--runner-config`).
@@ -176,7 +179,7 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 >   - For other projects (`test:libs`, `test:server`, `test:cli`), they invoke Vitest directly, which uses string/regex matching. **Do not use the `**/` prefix** for these. Example: `pnpm test:libs -- --include=ciphers.spec.ts`
 > **Note:** To run specific tests by **name** (the `describe`/`it` text, matched as a regex against the full suite + test name), the flag differs per runner:
 >   - For `test:web` (Angular builder), use `--filter`. Example: `pnpm test:web -- --include='**/prf.spec.ts' --filter="PRF_SALT is 32 bytes"`
->   - For the Vitest projects (`test:server`, `test:cli`, `test:lib:crypto`, api), use `--name` (a placeholder each `nx test` target forwards to Vitest's `-t`). Example: `pnpm test:server -- --name="should reject manipulated csrf"` (combine with `--include` to also scope the file). **Do not use `-t`** through these wrappers — nx claims `-t` as its own `--targets` flag, so it never reaches Vitest. `-t` works only when calling Vitest directly: `pnpm exec vitest run --config apps/server/vitest.config.ts nonprf.spec.ts -t "manipulated csrf"`.
+>   - For the Vitest projects (`test:server`, `test:cli`, `test:libs:crypto`, `test:libs:api`), use `--name` (a placeholder each `nx test` target forwards to Vitest's `-t`). Example: `pnpm test:server -- --name="should reject manipulated csrf"` (combine with `--include` to also scope the file). **Do not use `-t`** through these wrappers — nx claims `-t` as its own `--targets` flag, so it never reaches Vitest. `-t` works only when calling Vitest directly: `pnpm exec vitest run --config apps/server/vitest.config.ts nonprf.spec.ts -t "manipulated csrf"`.
 >   - For `test:e2e` (Playwright), use `-g` (see the file-filter note above).
 
 ### Test Vector Commands

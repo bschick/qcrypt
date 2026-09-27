@@ -28,7 +28,9 @@ import {
    registerNewCredential,
    deleteJson,
    expectPasskeyDeleted,
+   expectListedPasskeys,
    getJson,
+   getIsolatedWebAuthnEmulator,
    patchJson,
    postJson,
    setSessionSigner,
@@ -38,33 +40,20 @@ import {
 import jwtPkg from 'jsonwebtoken';
 import { randomBytes } from 'node:crypto';
 
-// postAuthVerify looks up the credential via the Authenticators GSI (credentialid-index),
-// which is eventually consistent. When this suite registers a user and then immediately logs in,
-// the GSI may not yet reflect the new Authenticator record. Retry to give the GSI time to catch
-// up before failing. Not needed for normal clients because the calls are split by user actions.
-// Each attempt mints its own challenge, because postAuthVerify consumes the challenge before it
-// reaches the credential lookup and a spent one can never verify. Returns the assertion that was
-// sent so a caller can replay it.
-async function postAuthVerifyWithRetry(
+// Requests an auth challenge and posts an assertion for it. Returns the assertion that was sent so
+// a caller can replay it.
+async function postAuthVerify(
    emulator: WebAuthnEmulator,
    optionsBody: Record<string, unknown>,
    cookie: string,
 ): Promise<{ res: Awaited<ReturnType<typeof postJson>>; body: Record<string, unknown> }> {
-   const maxAttempts = 3;
+   const optsRes = await postJson(`/v1/auth/options`, optionsBody, {}, '');
+   expect(optsRes.status).toBe(200);
 
-   for (let attempt = 1; ; attempt++) {
-      const optsRes = await postJson(`/v1/auth/options`, optionsBody, {}, '');
-      expect(optsRes.status).toBe(200);
-
-      const assertion = emulator.getJSON(RP_ORIGIN, { ...optsRes.data, challenge: optsRes.data.challenge });
-      const body = { ...assertion, challenge: optsRes.data.challenge };
-      const res = await postJson(`/v1/auth/verify`, body, {}, cookie);
-
-      if (res.status === 200 || attempt >= maxAttempts) {
-         return { res, body };
-      }
-      await new Promise((r) => setTimeout(r, 10000));
-   }
+   const assertion = emulator.getJSON(RP_ORIGIN, { ...optsRes.data, challenge: optsRes.data.challenge });
+   const body = { ...assertion, challenge: optsRes.data.challenge };
+   const res = await postJson(`/v1/auth/verify`, body, {}, cookie);
+   return { res, body };
 }
 
 // The full authorized-API contract, run against a PRF or a no-PRF account. Only the parts that
@@ -92,12 +81,10 @@ export function coreSuite(prf: boolean): void {
 
       describe('User & Session Management', () => {
          it('should fetch current session details', async () => {
-            const res = await getJson(`/v1/session`, { 'x-csrf-token': csrfToken }, sessCookie);
-            expect(res.status).toBe(200);
+            const res = await expectListedPasskeys('/v1/session', [credId], csrfToken, sessCookie);
             expect(res.data.verified).toBe(true);
             expect(res.data.userId).toBe(userId);
             expect(res.data.userName).toBe(testUser);
-            expect(res.data.authenticators.length).toBe(1);
             expect(res.data.csrf).toBeDefined();
             expect(res.data.userCred).toBeUndefined();
             // Update CSRF in case it rotated (though usually static per session)
@@ -304,7 +291,7 @@ export function coreSuite(prf: boolean): void {
             expect(res.status).toBe(401); // Expect Unauthorized
 
             // Sign a fresh challenge and verify
-            const { res: verifyRes } = await postAuthVerifyWithRetry(emulator, { userId }, sessCookie);
+            const { res: verifyRes } = await postAuthVerify(emulator, { userId }, sessCookie);
 
             expect(verifyRes.status).toBe(200);
             expect(verifyRes.data.verified).toBe(true);
@@ -316,12 +303,10 @@ export function coreSuite(prf: boolean): void {
             csrfToken = verifyRes.data.csrf;
 
             // The restored session works for a subsequent authorized read.
-            const restored = await getJson(`/v1/user`, { 'x-csrf-token': csrfToken }, sessCookie);
-            expect(restored.status).toBe(200);
+            const restored = await expectListedPasskeys('/v1/user', [credId], csrfToken, sessCookie);
             expect(restored.data.verified).toBeTruthy();
             expect(restored.data.userName).toBe(testUser);
             expect(restored.data.userId).toBe(userId);
-            expect(restored.data.authenticators.length).toBe(1);
          });
 
          it('should login without userId in options', async () => {
@@ -338,7 +323,7 @@ export function coreSuite(prf: boolean): void {
             expect(res.status).toBe(401); // Expect Unauthorized
 
             // Options carry no userId, exercising the discoverable credential flow
-            const { res: verifyRes } = await postAuthVerifyWithRetry(emulator, {}, sessCookie);
+            const { res: verifyRes } = await postAuthVerify(emulator, {}, sessCookie);
 
             expect(verifyRes.status).toBe(200);
             expect(verifyRes.data.verified).toBe(true);
@@ -348,6 +333,46 @@ export function coreSuite(prf: boolean): void {
             // Restore session state
             sessCookie = verifyRes.cookie;
             csrfToken = verifyRes.data.csrf;
+         });
+
+         it('passkey creation and immediate sign in succeed', async () => {
+            const optsRes = await getJson(`/v1/passkeys/options`, { 'x-csrf-token': csrfToken }, sessCookie);
+            expect(optsRes.status).toBe(200);
+
+            const addedEmulator = getIsolatedWebAuthnEmulator(prf ? 'hmac-secret-mc' : 'none');
+            const { attestation, passkeyUserCredEnc } = await registerNewCredential(user, optsRes.data, addedEmulator);
+            const addBody = api.makeAddVerifyRequest(attestation as api.RegistrationFields, {
+               challenge: optsRes.data.challenge,
+               passkeyUserCredEnc,
+            });
+            const addRes = await postJson(`/v1/passkeys/verify`, addBody, { 'x-csrf-token': csrfToken }, sessCookie);
+            expect(addRes.status).toBe(200);
+
+            try {
+               const { res: verifyRes } = await postAuthVerify(addedEmulator, { userId }, '');
+               expect(verifyRes.status).toBe(200);
+               expect(verifyRes.data.pkId).toBe(attestation.id);
+               const listed = verifyRes.data.authenticators.map(
+                  (auth: api.AuthenticatorInfoResponse) => auth.credentialId,
+               );
+               expect(listed.sort()).toEqual([credId, attestation.id].sort());
+               if (prf) {
+                  expect(verifyRes.data.passkeyUserCredEnc).toBe(passkeyUserCredEnc);
+               } else {
+                  expect(verifyRes.data.userCred).toBe(user.userCred);
+               }
+
+               const userRes = await getJson(`/v1/user`, { 'x-csrf-token': verifyRes.data.csrf }, verifyRes.cookie);
+               expect(userRes.status).toBe(200);
+            } finally {
+               // Deleting the passkey a session signed in with ends that session, so sign back in with the
+               // original passkey before removing the added one
+               const { res: restoreRes } = await postAuthVerify(emulator, { userId }, '');
+               expect(restoreRes.status).toBe(200);
+               sessCookie = restoreRes.cookie;
+               csrfToken = restoreRes.data.csrf;
+               await expectPasskeyDeleted(attestation.id, csrfToken, sessCookie);
+            }
          });
       });
 
@@ -500,12 +525,8 @@ export function coreSuite(prf: boolean): void {
                attackerUserCred = attacker.userCred;
                const attackerEmulator = attacker.emulator;
 
-               // Self-login once so the credentialid-index GSI is certain to be consistent before the bypass attempt
-               const { res: selfVerify } = await postAuthVerifyWithRetry(
-                  attackerEmulator,
-                  { userId: attackerUserId },
-                  '',
-               );
+               // Signing in right after registering requires the credential lookup to find the new passkey
+               const { res: selfVerify } = await postAuthVerify(attackerEmulator, { userId: attackerUserId }, '');
                expect(selfVerify.status).toBe(200);
                expect(selfVerify.data.userId).toBe(attackerUserId);
                if (selfVerify.cookie) {
@@ -534,8 +555,7 @@ export function coreSuite(prf: boolean): void {
                expect(bypass.status).toBe(401);
                expect(bypass.rawText).toBe('not authorized');
 
-               // Same attack, but also forge userHandle to the victim. The challenge-binding
-               // check should still fires first since the credId resolves to the attacker.
+               // Same attack, but also forge userHandle to the victim, which should be rejected too
                const optsRes2 = await postJson(`/v1/auth/options`, { userId }, {}, '');
                expect(optsRes2.status).toBe(200);
                const assertion2 = attackerEmulator.getJSON(RP_ORIGIN, {
@@ -564,9 +584,39 @@ export function coreSuite(prf: boolean): void {
             }
          });
 
+         it('should reject a malformed userHandle', async () => {
+            const cases: [string, number][] = [
+               ['!!', 401],
+               [randomBytes(15).toString('base64url'), 401],
+               [userId, 200],
+            ];
+            for (const [userHandle, expectedStatus] of cases) {
+               const optsRes = await postJson(`/v1/auth/options`, { userId }, {}, '');
+               expect(optsRes.status).toBe(200);
+               const assertion = emulator.getJSON(RP_ORIGIN, { ...optsRes.data, challenge: optsRes.data.challenge });
+               const res = await postJson(
+                  `/v1/auth/verify`,
+                  {
+                     ...assertion,
+                     response: { ...assertion.response, userHandle },
+                     challenge: optsRes.data.challenge,
+                  },
+                  {},
+                  '',
+               );
+               expect(res.status).toBe(expectedStatus);
+               if (expectedStatus === 200) {
+                  sessCookie = res.cookie;
+                  csrfToken = res.data.csrf;
+               } else {
+                  expect(res.rawText).toBe('not authorized');
+               }
+            }
+         });
+
          it('should reject a replayed authentication assertion', async () => {
             // A fresh assertion authenticates once and rotates the session.
-            const { res: first, body } = await postAuthVerifyWithRetry(emulator, { userId }, '');
+            const { res: first, body } = await postAuthVerify(emulator, { userId }, '');
             expect(first.status).toBe(200);
             sessCookie = first.cookie;
             csrfToken = first.data.csrf;

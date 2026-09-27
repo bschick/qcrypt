@@ -24,6 +24,7 @@ import crypto from 'node:crypto';
 import WebAuthnEmulator, {
    AuthenticatorEmulator,
    PasskeysCredentialsFileRepository,
+   PasskeysCredentialsMemoryRepository,
    type HmacSecretMode,
 } from 'nid-webauthn-emulator';
 import * as api from '@qcrypt/api';
@@ -129,6 +130,18 @@ export function getWebAuthnEmulator(
    }
 
    return emulator;
+}
+
+// Returns an emulator with its own credential store. Emulators created without a repository share one
+// default store, which keeps a single credential per userHandle.
+export function getIsolatedWebAuthnEmulator(hmacSecret: HmacSecretMode = 'none'): WebAuthnEmulator {
+   return new WebAuthnEmulator(
+      new AuthenticatorEmulator({
+         transports: ['internal'],
+         hmacSecret,
+         credentialsRepository: new PasskeysCredentialsMemoryRepository(),
+      }),
+   );
 }
 
 // Must match the fixed PRF salt in apps/web/src/app/services/prf.ts (NOT a secret).
@@ -282,20 +295,32 @@ export const putJson = (p: string, b: any, h: any, c: string) => request('PUT', 
 export const patchJson = (p: string, b: any, h: any, c: string) => request('PATCH', p, b, h, c);
 export const deleteJson = (p: string, h: any, c: string) => request('DELETE', p, null, h, c);
 
-// The session key is derived from lastCredentialId and authCount, which are read back
-// eventually consistent. An authorized call made before that read settles derives a different
-// key and gets a 401, which real use rarely hits because it is not this rapid fire.
-const SESSION_SETTLE_MS = 300;
-
-function settleSession(): Promise<void> {
-   return new Promise((resolve) => setTimeout(resolve, SESSION_SETTLE_MS));
-}
-
 // A swallowed cleanup-delete failure leaks a verified, no-TTL account permanently,
 // so assert success here instead of ignoring the result.
 export async function expectPasskeyDeleted(credId: string, csrf: string, cookie: string): Promise<void> {
    const res = await deleteJson(`/v1/passkeys/${credId}`, { 'x-csrf-token': csrf }, cookie);
    expect(res.status).toBe(200);
+}
+
+// Polls because session and user reads list passkeys eventually consistently
+export async function expectListedPasskeys(
+   path: '/v1/session' | '/v1/user',
+   credIds: string[],
+   csrf: string,
+   cookie: string,
+) {
+   const expected = [...credIds].sort();
+   const listed = (res: Awaited<ReturnType<typeof getJson>>): string[] =>
+      res.data.authenticators.map((auth: api.AuthenticatorInfoResponse) => auth.credentialId).sort();
+
+   let res = await getJson(path, { 'x-csrf-token': csrf }, cookie);
+   for (let retry = 0; retry < 2 && res.status === 200 && listed(res).join() !== expected.join(); retry++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      res = await getJson(path, { 'x-csrf-token': csrf }, cookie);
+   }
+   expect(res.status).toBe(200);
+   expect(listed(res)).toEqual(expected);
+   return res;
 }
 
 const NAME_PREFIX = 'PWTesty_';
@@ -461,57 +486,50 @@ export async function registerTestUser(prf: boolean = false, label?: string): Pr
    // Make this user the current session signer
    setSessionSigner(user.userId, user.userCred);
 
-   await settleSession();
    return user;
 }
 
-// Register an additional credential on the account and return its attestation. The emulator evicts
-// any stored credential sharing a userHandle, so a throwaway handle keeps the primary credential
-// intact; it stays invisible to the server, which binds the new credential to the session's account
-// (a registration response carries no userHandle). For a PRF account it also returns the new
-// credential's ciphertext of the account userCred; no-PRF returns only the attestation.
-// Signs in with an account's existing passkey. auth/verify resolves the credential through an
-// eventually consistent index, so a login soon after registration can miss; each retry needs a
-// fresh challenge because the failed attempt already spent the previous one.
+// Signs in with an account's existing passkey
 export async function loginWithPasskey(user: TestUser): Promise<{ cookie: string; csrf: string }> {
-   for (let attempt = 1; ; attempt++) {
-      const optsRes = await postJson('/v1/auth/options', { userId: user.userId }, {}, '');
-      expect(optsRes.status).toBe(200);
+   const optsRes = await postJson('/v1/auth/options', { userId: user.userId }, {}, '');
+   expect(optsRes.status).toBe(200);
 
-      const assertion = user.emulator.getJSON(RP_ORIGIN, { ...optsRes.data, challenge: optsRes.data.challenge });
-      const body = api.makeAuthVerifyRequest(assertion as api.AuthenticationFields, {
-         challenge: optsRes.data.challenge,
-      });
-      const verifyRes = await postJson('/v1/auth/verify', body, {}, '');
-
-      if (verifyRes.status === 200 || attempt >= 3) {
-         expect(verifyRes.status).toBe(200);
-         expect(verifyRes.data.verified).toBe(true);
-         await settleSession();
-         return { cookie: verifyRes.cookie, csrf: verifyRes.data.csrf };
-      }
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-   }
+   const assertion = user.emulator.getJSON(RP_ORIGIN, { ...optsRes.data, challenge: optsRes.data.challenge });
+   const body = api.makeAuthVerifyRequest(assertion as api.AuthenticationFields, {
+      challenge: optsRes.data.challenge,
+   });
+   const verifyRes = await postJson('/v1/auth/verify', body, {}, '');
+   expect(verifyRes.status).toBe(200);
+   expect(verifyRes.data.verified).toBe(true);
+   return { cookie: verifyRes.cookie, csrf: verifyRes.data.csrf };
 }
 
+// Register an additional credential and return its attestation. Without an emulator override, a
+// throwaway userHandle is used so the emulator's per-handle credential eviction does not affect the
+// primary credential; the server still binds the new credential to the session's account since a
+// registration response carries no userHandle. When an emulator is supplied, the credential is
+// registered under the account's own userId. For a PRF account this also returns the new
+// credential's ciphertext of the account userCred; no-PRF returns only the attestation.
 export async function registerNewCredential(
    user: TestUser,
    optionsData: PublicKeyCredentialCreationOptionsJSON,
+   emulator?: WebAuthnEmulator,
 ): Promise<{ attestation: EmulatorAttestation; passkeyUserCredEnc?: string }> {
    const createOptions = {
       ...optionsData,
-      user: { ...optionsData.user, id: bytesToBase64(getRandom(cc.USERID_BYTES)) },
+      user: { ...optionsData.user, id: emulator ? user.userId : bytesToBase64(getRandom(cc.USERID_BYTES)) },
       challenge: optionsData.challenge,
       excludeCredentials: [],
    };
+   const target = emulator ?? user.emulator;
 
    let result: { attestation: EmulatorAttestation; passkeyUserCredEnc?: string };
    if (user.prf) {
-      const { attestation, prfOutput } = createCredential(user.emulator, createOptions, true);
+      const { attestation, prfOutput } = createCredential(target, createOptions, true);
       const passkeyUserCredEnc = await prfEncrypt(base64ToBytes(user.userCred), prfOutput, user.userId);
       result = { attestation, passkeyUserCredEnc };
    } else {
-      const { attestation } = createCredential(user.emulator, createOptions, false);
+      const { attestation } = createCredential(target, createOptions, false);
       result = { attestation };
    }
    return result;

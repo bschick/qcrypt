@@ -127,6 +127,8 @@ export const kmsClient = new KMSClient({ region: 'us-east-1' });
 let jwtMaterial: Uint8Array | undefined;
 const INTERNAL_PHRASE = "Yup, I'm internal";
 
+const RECENT_COOKIE_SEC = 10;
+
 await cryptoReady();
 
 function isVerified(unverifiedUser: UnverifiedUserItem, userId: string): unverifiedUser is VerifiedUserItem {
@@ -233,7 +235,7 @@ async function getSession(_httpDetails: HttpDetails, verifiedUser?: VerifiedUser
       throw new AuthError();
    }
 
-   const responseContent = await makeLoginUserInfoResponse(verifiedUser, 'none');
+   const responseContent = await makeLoginUserInfoResponse(verifiedUser, null);
 
    // Return passed in csrf but don't start new session so that expiration is not reset
    return {
@@ -266,27 +268,30 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
    const { rpID, rpOrigin } = httpDetails;
    const authVerify = httpDetails.body as api.AuthVerifyRequest;
 
-   if (!authVerify.response?.userHandle) {
+   const userHandle = authVerify.response?.userHandle;
+   if (!userHandle) {
       throw new ParamError('missing userHandle');
+   }
+   if (!validB64(userHandle) || base64UrlDecode(userHandle)?.length !== cc.USERID_BYTES) {
+      throw new ParamError('invalid userHandle');
    }
    if (!validB64(authVerify.id)) {
       throw new ParamError('invalid authenticatorId');
    }
-   // Bound to a userId only when auth/options named one, so the match happens below
+
+   // Holds the userId sent to auth/options, if any, which is checked against the credential below
    const challenge = await consumeChallenge(authVerify.challenge, 'auth');
 
-   // Derive identity from the credential record via GSI, not from the
-   // unsigned userHandle field in the assertion response (which is fakeable)
-   const credResult = await Authenticators.query
-      .byCredId({
-         credentialId: authVerify.id,
-      })
-      .go();
+   // Read consistently so a passkey created moments earlier is found
+   const credResult = await Authenticators.get({
+      userId: userHandle,
+      credentialId: authVerify.id,
+   }).go({ consistent: true });
 
-   if (!credResult || credResult.data.length === 0) {
+   if (!credResult?.data) {
       // Timing parity for the credential-not-found branch.
       try {
-         await getUnverifiedUser('AAAAAAAAAAAAAAAAAAAAAA');
+         await getUnverifiedUser('AAAAAAAAAAAAAAAAAAAAAA', true);
       } catch {
          /* expected */
       }
@@ -312,18 +317,11 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
       throw new AuthError();
    }
 
-   const authenticator = credResult.data[0];
-   const unverifiedUser = await getUnverifiedUser(authenticator.userId);
+   const authenticator = credResult.data;
+   const unverifiedUser = await getUnverifiedUser(authenticator.userId, true);
 
-   // If the auth challenge was bound to a specific user at creation, the verify must match.
    // Unbound auth challenges are allowed for discoverable credential flow.
    if (challenge.userId !== UnknownUserId && challenge.userId !== unverifiedUser.userId) {
-      throw new AuthError();
-   }
-
-   // userHandle is not part of the signed assertion — cross-check it against
-   // the credential-derived userId to detect tampering
-   if (authVerify.response.userHandle !== unverifiedUser.userId) {
       throw new AuthError();
    }
 
@@ -382,7 +380,11 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
    verifiedUser.lastCredentialId = authenticator.credentialId;
    verifiedUser.authCount += 1;
 
-   const responseContent = await makeLoginUserInfoResponse(verifiedUser, 'passkey');
+   const responseContent = await makeLoginUserInfoResponse(
+      verifiedUser,
+      authenticator,
+      await loadAuthenticators(verifiedUser, true),
+   );
 
    // Let this happen async
    recordEvent(EventNames.AuthVerify, unverifiedUser.userId, authenticator.credentialId);
@@ -410,7 +412,7 @@ async function postPasskeyVerify(httpDetails: HttpDetails, verifiedUser?: Verifi
 
    // force consistent read to capture recent create authenticator
    const authenticators = await loadAuthenticators(verifiedUser, true);
-   const responseContent = await makeLoginUserInfoResponse(verifiedUser, 'none', authenticators);
+   const responseContent = await makeLoginUserInfoResponse(verifiedUser, null, authenticators);
 
    // Let this happen async
    recordEvent(EventNames.RegVerify, verifiedUser.userId, auth.credentialId);
@@ -550,7 +552,7 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
 
    // force consistent read to capture recent create
    const authenticators = await loadAuthenticators(verifiedUser, true);
-   const responseContent = await makeLoginUserInfoResponse(verifiedUser, hasPrf ? 'none' : 'passkey', authenticators);
+   const responseContent = await makeLoginUserInfoResponse(verifiedUser, hasPrf ? null : auth, authenticators);
 
    // Let this happen async
    recordEvent(EventNames.RegVerify, verifiedUser.userId, auth.credentialId);
@@ -600,7 +602,7 @@ async function postRecoverVerify(httpDetails: HttpDetails): Promise<Response> {
    const authenticators = await loadAuthenticators(verifiedUser, true);
    const responseContent = await makeLoginUserInfoResponse(
       verifiedUser,
-      verifiedUser.prf ? 'none' : 'passkey',
+      verifiedUser.prf ? null : auth,
       authenticators,
    );
 
@@ -770,7 +772,7 @@ async function postAuthOptions(httpDetails: HttpDetails): Promise<Response> {
          userId = UnknownUserId;
 
          // Jitter blurs the gap between this path's empty lookups and the
-         // real path's populated DDB get + GSI query.
+         // real path's populated DDB get + query.
          await setTimeout(randomInt(5, 95));
       }
    }
@@ -940,9 +942,11 @@ async function registrationOptions(
    }
 }
 
+// A non-null passkey adds the user credential to the response and must be the record of
+// verifiedUser.lastCredentialId
 async function makeLoginUserInfoResponse(
    verifiedUser: VerifiedUserItem,
-   includeUserCred: 'none' | 'passkey',
+   passkey: AuthItem | null,
    auths?: api.AuthenticatorInfoResponse[],
 ): Promise<api.LoginUserInfoResponse> {
    const userInfo = await makeUserInfoResponse(verifiedUser, auths);
@@ -951,14 +955,12 @@ async function makeLoginUserInfoResponse(
       let userCred: string | undefined;
       let passkeyUserCredEnc: string | undefined;
 
-      if (includeUserCred !== 'none') {
+      if (passkey) {
+         if (passkey.credentialId !== verifiedUser.lastCredentialId) {
+            throw new Error('passkey is not the last credential');
+         }
          if (verifiedUser.prf) {
-            const auth = await Authenticators.get({
-               userId: verifiedUser.userId,
-               credentialId: verifiedUser.lastCredentialId!,
-            }).go();
-
-            passkeyUserCredEnc = auth.data?.userCredEnc;
+            passkeyUserCredEnc = passkey.userCredEnc;
             if (!passkeyUserCredEnc) {
                throw new Error('missing encrypted user credential');
             }
@@ -1583,18 +1585,18 @@ async function postRecoverConfirm(httpDetails: HttpDetails): Promise<Response> {
 // Consider if rpOrigin should be moved from being per Authenticator to
 // per User. This wouldn't be more secure, but it might prevent errors during
 // development if a real users data was used in a test region.
-async function getUnverifiedUser(userId: string): Promise<UnverifiedUserItem> {
+async function getUnverifiedUser(userId: string, consistent: boolean = false): Promise<UnverifiedUserItem> {
    if (!validB64(userId) || base64UrlDecode(userId)?.length !== cc.USERID_BYTES) {
       throw new ParamError('invalid userid format');
    }
 
-   // Eventually consistent by choice because this is the hottest read in the system. That
+   // Eventually consistent by default because this is the hottest read in the system. That
    // means a recent write could go unseen by this read, including a previous logout. That
    // race exists regardless or read consistency, however, and sessions always end when
    // consistency is reached.
    const unverifiedUser = await Users.get({
       userId,
-   }).go();
+   }).go({ consistent });
 
    if (!unverifiedUser?.data) {
       throw new AuthError();
@@ -1693,22 +1695,35 @@ async function verifyCookie(cookie: string, rpID: string): Promise<VerifiedUserI
          throw new Error('invalid cookie');
       }
 
-      const unverifiedUser = await getUnverifiedUser(unverifiedPayload.userId);
-      // A stale read of the derivation fields surfaces here as a spurious 401.
-      const jwtKey = await getSessionKey(unverifiedUser, 'jwt_key');
+      const verifyWithUser = async (unverifiedUser: UnverifiedUserItem): Promise<VerifiedUserItem> => {
+         const jwtKey = await getSessionKey(unverifiedUser, 'jwt_key');
 
-      // Internally verifies exp date set with expiresIn during cookie creation
-      const verifiedPayload = verify(token, jwtKey, {
-         algorithms: ['HS512'],
-         issuer: rpID,
-         complete: false,
-      }) as JwtPayload;
+         // Internally verifies exp date set with expiresIn during cookie creation
+         const verifiedPayload = verify(token, jwtKey, {
+            algorithms: ['HS512'],
+            issuer: rpID,
+            complete: false,
+         }) as JwtPayload;
 
-      if (!verifiedPayload || verifiedPayload.iss !== rpID) {
-         throw new Error('invalid cookie');
+         if (!verifiedPayload || verifiedPayload.iss !== rpID) {
+            throw new Error('invalid cookie');
+         }
+
+         return checkVerified(unverifiedUser, verifiedPayload.userId);
+      };
+
+      try {
+         // Default to eventually consistent user read to reduce cost
+         return await verifyWithUser(await getUnverifiedUser(unverifiedPayload.userId));
+      } catch (err) {
+         // Retry as consistent user read if within RECENT_COOKIE_SEC window
+         const cookieAgeSec = Date.now() / 1000 - (unverifiedPayload.iat ?? 0);
+         if (cookieAgeSec < 0 || cookieAgeSec > RECENT_COOKIE_SEC) {
+            throw err;
+         }
+         console.warn('cookie verification using a consistent read after the first check failed', err);
+         return await verifyWithUser(await getUnverifiedUser(unverifiedPayload.userId, true));
       }
-
-      return checkVerified(unverifiedUser, verifiedPayload.userId);
    } catch (err) {
       console.error(err);
       throw new AuthError();

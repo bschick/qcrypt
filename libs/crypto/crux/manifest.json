@@ -1,0 +1,20 @@
+{
+  "toolchain": {
+    "rustc": "1.98.1",
+    "wasm-pack": "0.15.0",
+    "wasm-opt": "117",
+    "wasm-bindgen": "0.2.129"
+  },
+  "inputs": {
+    "libs/crypto/crux/Cargo.lock": "51b688b4dfc542e4ecda459d3b66a4df03fc3963fb0dcfdb3a2e75600738c23e",
+    "libs/crypto/crux/Cargo.toml": "e7d462db6e811faff5f6d3f27a620263fe4cbe9bf70e0b4a80a2ac04f32fa18a",
+    "libs/crypto/crux/regen.mjs": "c6f1634604c241e73634dc3ea595c2912abd3554dbb02b73887d21f0ee653c9d",
+    "libs/crypto/crux/rust-toolchain.toml": "d7dc804274f0693764c8fc0a8f9517387ff0af16e0cdc6919758bc3ac2f18a2f",
+    "libs/crypto/crux/src/lib.rs": "76ab86d8cccd4bad8d72890958293c6340dfec28a61a0a7233556e27a78d98bb"
+  },
+  "outputs": {
+    "libs/crypto/src/lib/crux/qc_crux.d.ts": "bac45258728f98b3c4091f9e7d1a3a0539d20b23ccedbf2176817f29a1297e40",
+    "libs/crypto/src/lib/crux/qc_crux.js": "d4f17c467099516cec417c056f7a72221d6e37c7565878cb78a21841ef04ec5a",
+    "libs/crypto/src/lib/crux/wasm.ts": "a34ea97d158b3abd73874b88ec432360591e987e3effc4bd2b72ef73d0af1b80"
+  }
+}

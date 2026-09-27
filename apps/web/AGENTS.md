@@ -63,7 +63,8 @@ pnpm test
 # You must first run the One-time setup steps above.
 # No separate serve is needed: for --project local (the default), run_e2e.sh starts a frozen
 # dev serve itself (no watch, no live-reload, so a file save mid-run cannot restart it), waits
-# for the port, and tears the whole process tree down on exit.
+# for the port, and tears the whole process tree down on exit. Do not run pnpm serve at the
+# same time; the run fails if port 4200 is already in use.
 pnpm test:e2e
 
 # Append --reporter=list when the output is captured rather than shown in a terminal
@@ -78,7 +79,7 @@ before a release.
 
 ### c. Running Manual Tests
 
-- Start the development server as described above with `pnpm serve`. The server will listen on all IP addresses on that system.
+- Start the development server with `pnpm serve`. The server will listen on all IP addresses on that system.
 - If you plan to run a web browser on a different system than the development server, you must edit that system's `hosts` file to set the name of the primary IP address where the development server is running to `t1.quickcrypt.org`. Ensure you can `ping t1.quickcrypt.org`.
 - To avoid security warnings, you must also import the project's local CA certificate on the system running your browser. You can find the CA certificate in the `./localssl` directory relative to where you ran the `pnpm serve` command. Import this certificate into your system's or browser's trusted certificate store. This process is dependent on your operating system.
 - Finally, start a web browser and navigate to `https://t1.quickcrypt.org:4200`. The test front-end uses a test back-end API server running in AWS with a URL of `https://test.quickcrypt.org`. The test API server is intended **only for those contributing to the Quick Crypt project**. Unnecessary or excessive usage that drives up AWS costs will be blocked. Do not run invasive tests against the production API server.
