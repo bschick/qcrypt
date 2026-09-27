@@ -214,6 +214,7 @@ describe('AuthenticatorService', () => {
       const userCredEnc1: string = restoredState1.userCredEnc;
       expect(userCredEnc1).toBeTruthy();
 
+      const signals = stubSignals();
       fetchMock.mockClear();
       const keystoreSvc = TestBed.inject(KeystoreService);
       const createSpy = vi.spyOn(keystoreSvc, 'create');
@@ -230,6 +231,8 @@ describe('AuthenticatorService', () => {
       expect(restoredState2.userCredEnc).toBe(userCredEnc1);
       expect(service.hasSession()).toBe(true);
       expect(events).toEqual([AuthEvent.Login]);
+      // A restore may read a stale passkey list, so it must not signal
+      expect(signals.signalAllAcceptedCredentials).not.toHaveBeenCalled();
    });
 
    it('full login then relay login, restore session succeeds', async () => {
@@ -618,6 +621,7 @@ describe('AuthenticatorService', () => {
          await service._loginUser(sessionResponse, base64ToBytes(userCred));
          const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
 
+         const signals = stubSignals();
          fetchMock.mockClear();
          const keystoreSvc = TestBed.inject(KeystoreService);
          const createSpy = vi.spyOn(keystoreSvc, 'create');
@@ -644,6 +648,8 @@ describe('AuthenticatorService', () => {
          const restored = JSON.parse(sessionStorage.getItem('sessionstate')!);
          expect(restored.version).toBe(phase1.version + 5);
          expect(service.hasSession()).toBe(true);
+         // The peer tab signaled its own login, so adopting it must not signal again
+         expect(signals.signalAllAcceptedCredentials).not.toHaveBeenCalled();
       });
 
       it('login with lower-or-equal version is ignored', async () => {
@@ -949,6 +955,23 @@ describe('AuthenticatorService', () => {
          vi.spyOn(service, '_startRegistration').mockResolvedValue({ regResponse, prfKey: null });
 
          signals = stubSignals();
+      });
+
+      it('signing in signals passkey update', async () => {
+         service.logout(false);
+         // @ts-expect-error — exercising private path
+         vi.spyOn(service, '_createSessionImpl').mockResolvedValue({
+            serverLoginUserInfo: withPasskeys(pkId, newPkId),
+            prfKey: null,
+         });
+
+         await service.createSession(userId);
+
+         expect(signals.signalAllAcceptedCredentials).toHaveBeenCalledExactlyOnceWith({
+            rpId: window.location.hostname,
+            userId: userIdToHandle(userId),
+            allAcceptedCredentialIds: [pkId, newPkId],
+         });
       });
 
       it('adding a passkey signals the verified list', async () => {

@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-## 8.0.2 (2026-09-26)
+## 8.0.2 (2026-09-27)
 
 #### Changes
 
@@ -9,7 +9,7 @@
 - failed password breach checks now display a message [thanks to Rajat Shukla (@rajat4722)]
 - moved webauthn signal api calls to avoid possible race conditions and incorrect passkey updates [thanks to Blake Prins (@prins1bap-ui)]
 - corrected userId encoding for webauthn signal api calls [thanks to @pierreneuville]
-- changed server authentication to use consistent reads to prevent various race conditions
+- changed server authentication to use consistent reads to fix rare sign-in failures
 
 #### Security
 

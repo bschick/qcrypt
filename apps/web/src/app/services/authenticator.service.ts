@@ -743,6 +743,7 @@ export class AuthenticatorService {
          const userCredEnc = bytesToBase64(cipherData);
          const userCredExpiry = new Date(Date.now() + api.SESSION_TIMEOUT_SEC * 1000).toISOString();
          const userInfo = this._loginRestore(serverLogin, userCredEnc, userCredExpiry, version);
+         this._signalAcceptedCredentials(userInfo.userId, userInfo.authenticators);
 
          this._broadcastSvc.sendLogin({
             pkId: serverLogin.pkId,
@@ -942,7 +943,8 @@ export class AuthenticatorService {
       return userInfo;
    }
 
-   // Only call after this tab adds, deletes, or recovers passkeys, never from peer messages
+   // Only call with a passkey list the server read consistently for an action in this tab.
+   // Accepted risk: a passkey another tab adds between that read and this signal stays hidden until the next signal
    private _signalAcceptedCredentials(userId: string, authenticators: api.AuthenticatorInfoResponse[]): void {
       // WebAuthn signals are "fire and forget"... there is no guarantee that sending
       // a signal makes its way to a user's credential manager
@@ -1454,9 +1456,7 @@ export class AuthenticatorService {
          const serverLoginUserInfo = await this._passkeyVerify('recover/verify', body);
          this._checkAccountPinPrf(userId, serverLoginUserInfo.prf);
 
-         const userInfo = await this._loginUser(serverLoginUserInfo, userCred);
-         this._signalAcceptedCredentials(userInfo.userId, userInfo.authenticators);
-         return userInfo;
+         return await this._loginUser(serverLoginUserInfo, userCred);
       } finally {
          userCred.fill(0);
          if (prfKey) {
