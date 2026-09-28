@@ -145,6 +145,7 @@ async function finishRecovery3(
    const confirmRes = await postJson('/v1/recover/confirm', confirmBody(user, startRes.data.challenge), {}, '');
    expect(confirmRes.status).toBe(200);
    expect(confirmRes.data.challenge).toBeDefined();
+   expect(confirmRes.data.excludeCredentials).toEqual([]);
 
    // Recovery replaces the account's credential, so it reuses the real userHandle.
    const createOptions = {
@@ -406,6 +407,8 @@ export function recoverySuite(prf: boolean): void {
          await recoverAccount3({ ...recoverUser, recoverySecret: newSecret });
       });
 
+      // Accepted rare flake: recover/confirm and auth/options read eventually consistently, so
+      // calling them right after registration or recovery can miss the new account or passkey
       it('recover3 and immediate sign in succeed', async () => {
          const recoverUser = await registerTestUser(prf);
          let session: { cookie: string; csrf: string } = await recoverAccount3(recoverUser, { keepSession: true });

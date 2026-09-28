@@ -422,7 +422,8 @@ async function postPasskeyVerify(httpDetails: HttpDetails, verifiedUser?: Verifi
 async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
    const regVerify = httpDetails.body as api.RegVerifyRequest;
 
-   const unverifiedUser = await getUnverifiedUser(regVerify.userId);
+   // Consistent so the user created by reg/options is always found
+   const unverifiedUser = await getUnverifiedUser(regVerify.userId, true);
    if (unverifiedUser.verified) {
       throw new ParamError();
    }
@@ -565,7 +566,8 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
 async function postRecoverVerify(httpDetails: HttpDetails): Promise<Response> {
    const recoverVerify = httpDetails.body as api.RecoverVerifyRequest;
 
-   const unverifiedUser = await getUnverifiedUser(recoverVerify.userId);
+   // Consistent so the lastCredentialId check sees the reset from recover/confirm
+   const unverifiedUser = await getUnverifiedUser(recoverVerify.userId, true);
 
    // should be empty for recovered account
    if (unverifiedUser.lastCredentialId) {
@@ -895,11 +897,12 @@ async function registrationOptions(
    }
 
    try {
+      // Consistent so the list matches the stored passkeys
       const auths = await Authenticators.query
          .byUserId({
             userId: unverifiedUser.userId,
          })
-         .go();
+         .go({ consistent: true });
 
       let excludeCreds: {
          id: string;
@@ -1196,13 +1199,14 @@ async function getUser(_httpDetails: HttpDetails, verifiedUser?: VerifiedUserIte
 }
 
 // Ensures every passkey is deleted, raising an exception to abort the caller if any survive.
-// Reads 'all' pages because the 1MB query budget is charged against full items
+// Reads 'all' pages because the 1MB query budget is charged against full items, and reads
+// consistently so no passkeys are missed
 async function deleteAllAuthenticators(verifiedUser: VerifiedUserItem): Promise<void> {
    const auths = await Authenticators.query
       .byUserId({
          userId: verifiedUser.userId,
       })
-      .go({ attributes: ['userId', 'credentialId'], pages: 'all' });
+      .go({ attributes: ['userId', 'credentialId'], pages: 'all', consistent: true });
 
    let pending = auths?.data ?? [];
    for (let attempt = 0; pending.length !== 0 && attempt < cc.RETRIES; attempt++) {
@@ -1459,7 +1463,8 @@ async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
       throw new ParamError('invalid recovery proof');
    }
 
-   const unverifiedUser = await getUnverifiedUser(userId);
+   // Read consistently so a recently updated recovery key is always loaded
+   const unverifiedUser = await getUnverifiedUser(userId, true);
 
    if (!unverifiedUser.recoveryPubKey) {
       throw new ParamError(`user account ${unverifiedUser.userId} has no recovery key`);
