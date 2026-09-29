@@ -680,8 +680,8 @@ export abstract class Decipher extends Ciphers {
    }
 
    protected async _verifyEmptyReader(): Promise<void> {
-      const [extra] = await this._reader.readAvailable(new ArrayBuffer(1));
-      if (extra.byteLength !== 0) {
+      const [extra, done] = await this._reader.readAvailable(new ArrayBuffer(1));
+      if (extra.byteLength !== 0 || !done) {
          throw new Error('Unexpected extra data');
       }
    }
