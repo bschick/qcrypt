@@ -204,7 +204,7 @@ export class CredentialsComponent implements OnInit {
          this.toastMessage('User name updated');
       } catch (err) {
          console.error(err);
-         this._setError('Name change failed, must be 6 to 31 characters');
+         this._setError('Name change failed, must be 6 to 31 characters after unsupported characters are removed');
          component.focus();
       }
    }
@@ -227,7 +227,9 @@ export class CredentialsComponent implements OnInit {
          this.toastMessage('Passkey description updated');
       } catch (err) {
          console.error(err);
-         this._setError('Description change failed, must be 6 to 42 characters');
+         this._setError(
+            'Description change failed, must be 6 to 42 characters after unsupported characters are removed',
+         );
          component.focus();
       }
    }

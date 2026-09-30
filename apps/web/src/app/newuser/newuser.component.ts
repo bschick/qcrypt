@@ -131,7 +131,9 @@ export class NewUserComponent implements OnInit, AfterViewInit {
          if (err instanceof Error && err.message.includes('fetch')) {
             this.error.set('New user creation failed, check your internet connection');
          } else {
-            this.error.set('New user creation failed, please try again');
+            this.error.set(
+               'New user creation failed, the name must be 6 to 31 characters after unsupported characters are removed',
+            );
          }
       } finally {
          this.showProgress.set(false);

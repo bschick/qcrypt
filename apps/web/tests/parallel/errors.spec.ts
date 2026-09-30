@@ -93,6 +93,17 @@ test.describe('errors', () => {
       await expect(page.locator('div.error-msg')).toContainText(
          /Description change failed, must be 6 to 42 characters/,
       );
+
+      await page.keyboard.press('Escape');
+      await expect(page.locator('div.error-msg')).not.toContainText('Description change failed');
+
+      // Long enough as typed, but the server removes the tag before counting
+      await page.locator('mat-sidenav input').nth(1).fill('1Pass<script>');
+      await page.keyboard.press('Enter');
+
+      await expect(page.locator('div.error-msg')).toContainText(
+         /Description change failed, must be 6 to 42 characters after unsupported characters are removed/,
+      );
    });
 
    testWithAuth('no recovery access', async ({ authFixture }) => {
