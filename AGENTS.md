@@ -158,6 +158,7 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 | **All unit tests** | `pnpm test` | | *runs test:web, test:server, test:libs, test:cli* |
 | Web unit tests (chromium) | `pnpm test:web` | `pnpm nx test web` | |
 | Web unit tests (watch mode) | `pnpm test:web:watch` | `pnpm nx test web --watch` | |
+| Web unit tests (chromium + webkit) | `pnpm test:web:most` | `pnpm nx test web --runnerConfig=apps/web/vitest-most.config.ts` | |
 | Web unit tests (all browsers) | `pnpm test:web:all` | `pnpm nx test web --runnerConfig=apps/web/vitest-all.config.ts` | |
 | Web E2E tests (local) | `pnpm test:e2e` | | *Playwright; starts and stops its own dev server, so port 4200 must be free* |
 | Web E2E tests (prod) | `pnpm test:e2e:prod` | | *Playwright against quickcrypt.org* |

@@ -21,7 +21,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import { createHash, randomBytes } from 'node:crypto';
-import { postJson, RP_ORIGIN } from './common';
+import * as api from '@qcrypt/api';
+import {
+   postJson,
+   RP_ORIGIN,
+   registerTestUser,
+   loginWithPasskey,
+   expectPasskeyDeleted,
+   setSessionSigner,
+   type TestUser,
+} from './common';
 import { base64UrlDecode } from '../src/utils';
 
 type AllowCred = {
@@ -58,9 +67,9 @@ const REAL_TEST_USER_ID = 'U1hfQPpLzjCXvaRQ-2hVDg';
 // Hardcoded unknown userId that decodes to exactly 16 bytes (matches real
 // server-assigned userId size, passes current and future decoded-length
 // validation). Decodes to ASCII "test-pinned-usr1".
-const PINNED_UNKNOWN_USER_ID = 'dGVzdC1waW5uZWQtdXNyMQ';
+const PINNED_GUESSED_USER_ID = 'dGVzdC1waW5uZWQtdXNyMQ';
 
-// Expected dummy credential for PINNED_UNKNOWN_USER_ID. Replace placeholders
+// Expected dummy credential for PINNED_GUESSED_USER_ID. Replace placeholders
 // with the actual values returned by the test server on first run. Update if
 // EncMaterial (the KMS-encrypted jwtMaterial seed) is rotated.
 const EXPECTED_PINNED_CRED_TEST: AllowCred = {
@@ -74,7 +83,7 @@ const EXPECTED_PINNED_CRED_PROD: AllowCred = {
    transports: ['hybrid', 'internal'],
 };
 
-function unknownUserId(): string {
+function guessedUserId(): string {
    // 16 random bytes → 22-char base64url (no padding), matching real userId shape.
    return randomBytes(16).toString('base64url');
 }
@@ -166,7 +175,7 @@ describe('auth/options credential shape', () => {
 
    it('multiple unknown userIds each return a dummy credential matching a known profile', async () => {
       for (let i = 0; i < 5; i++) {
-         const creds = await getAllowCredentials(unknownUserId(), 'invalid');
+         const creds = await getAllowCredentials(guessedUserId(), 'invalid');
          expect(creds.length).toBe(1);
          const cred = creds[0];
          expect(matchesAnyDummyProfile(cred), `unexpected dummy cred: ${JSON.stringify(cred)}`).toBe(true);
@@ -174,8 +183,8 @@ describe('auth/options credential shape', () => {
    });
 
    it('pinned unknown userId returns the expected hardcoded dummy credential on every call', async () => {
-      const a = await getAllowCredentials(PINNED_UNKNOWN_USER_ID, 'invalid');
-      const b = await getAllowCredentials(PINNED_UNKNOWN_USER_ID, 'invalid');
+      const a = await getAllowCredentials(PINNED_GUESSED_USER_ID, 'invalid');
+      const b = await getAllowCredentials(PINNED_GUESSED_USER_ID, 'invalid');
       expect(a.length).toBe(1);
       expect(b.length).toBe(1);
       expect(a[0]).toStrictEqual(b[0]);
@@ -187,7 +196,7 @@ describe('auth/options credential shape', () => {
       const samples = 8;
       const ids = new Set<string>();
       for (let i = 0; i < samples; i++) {
-         const creds = await getAllowCredentials(unknownUserId(), 'invalid');
+         const creds = await getAllowCredentials(guessedUserId(), 'invalid');
          expect(creds.length).toBe(1);
          ids.add(creds[0].id);
       }
@@ -250,10 +259,27 @@ async function forgeAndVerify(userId: string, label: TimingLabel | 'warmup') {
    return result;
 }
 
+// Signs the auth/options challenge issued for userId with signer's own passkey
+async function verifyWithOtherPasskey(signer: TestUser, userId: string) {
+   const opts = await postJson('/v1/auth/options', { userId }, {}, '');
+   expect(opts.status).toBe(200);
+
+   const assertion = signer.emulator.getJSON(RP_ORIGIN, {
+      ...opts.data,
+      allowCredentials: [{ id: signer.credId, type: 'public-key' }],
+   });
+   return await postJson(
+      '/v1/auth/verify',
+      api.makeAuthVerifyRequest(assertion as api.AuthenticationFields, { challenge: opts.data.challenge }),
+      {},
+      '',
+   );
+}
+
 // Lambda cold-start adds ~1s to the first call and skews the per-endpoint averages
 // Prime every endpoint and userId-label combination so the summary reflects warm-state
 beforeAll(async () => {
-   await forgeAndVerify(unknownUserId(), 'warmup');
+   await forgeAndVerify(guessedUserId(), 'warmup');
    if (process.env.QC_ENV !== 'prod') {
       await forgeAndVerify(REAL_TEST_USER_ID, 'warmup');
    }
@@ -261,8 +287,8 @@ beforeAll(async () => {
 
 describe('auth/verify response parity', () => {
    it('two different unknown userIds return indistinguishable 401 responses', async () => {
-      const a = await forgeAndVerify(unknownUserId(), 'invalid');
-      const b = await forgeAndVerify(unknownUserId(), 'invalid');
+      const a = await forgeAndVerify(guessedUserId(), 'invalid');
+      const b = await forgeAndVerify(guessedUserId(), 'invalid');
       expect(a.status).toBe(401);
       expect(b.status).toBe(401);
       expect(a.rawText).toBe(b.rawText);
@@ -272,12 +298,34 @@ describe('auth/verify response parity', () => {
       'real userId with forged signature returns same status and body as unknown userId',
       async () => {
          const real = await forgeAndVerify(REAL_TEST_USER_ID, 'valid');
-         const dummy = await forgeAndVerify(unknownUserId(), 'invalid');
+         const dummy = await forgeAndVerify(guessedUserId(), 'invalid');
          expect(real.status).toBe(401);
          expect(dummy.status).toBe(401);
          expect(real.rawText).toBe(dummy.rawText);
       },
    );
+
+   // Another account's passkey must get the same refusal on a real userId's challenge as on a
+   // guessed one, or the outcome reveals whether the userId exists.
+   it("returns the same refusal for another account's passkey on real and guessed userIds", async () => {
+      const other = await registerTestUser();
+      const target = await registerTestUser();
+      try {
+         await loginWithPasskey(other);
+
+         const real = await verifyWithOtherPasskey(other, target.userId);
+         const guessed = await verifyWithOtherPasskey(other, guessedUserId());
+         expect(real.status).toBe(401);
+         expect(guessed.status).toBe(401);
+         expect(real.rawText).toBe(guessed.rawText);
+      } finally {
+         for (const user of [other, target]) {
+            setSessionSigner(user.userId, user.userCred);
+            const session = await loginWithPasskey(user);
+            await expectPasskeyDeleted(user.credId, session.csrf, session.cookie);
+         }
+      }
+   });
 });
 
 // Dedicated timing-sample loops. The parity tests above contribute a handful
@@ -293,7 +341,7 @@ describe.skipIf(!process.env.QC_TIMING)('timing samples', () => {
       'invalid userId samples',
       async () => {
          for (let i = 0; i < SAMPLES; i++) {
-            await forgeAndVerify(unknownUserId(), 'invalid');
+            await forgeAndVerify(guessedUserId(), 'invalid');
          }
       },
       TIMEOUT_MS,

@@ -12,6 +12,7 @@ This document provides documentation for the passkey-based authentication server
 - **Authorization:** Not required
 - **Description:** Start registration of a new user and returns registration options for creating a passkey.
 - **Request Body:** A JSON object with a `userName` key. Example: `{"userName": "New User"}`. User name must be greater than 5 and less than 32 characters and may not contain HTML tags.
+- **Read consistency:** Not applicable. Options are built for the user this call creates.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
   - `400 Bad Request`: The body is not valid JSON.
@@ -25,6 +26,7 @@ This document provides documentation for the passkey-based authentication server
 - **Authorization:** Not required
 - **Description:** Verifies a registration response from a client, creating a new user and passkey. Response contains a `csrf` token that must be sent in the `x-csrf-token` header for authorized requests.
 - **Request Body:** A [`RegVerify`](#regverify) object created by the client from the previous POST to `/v1/reg/options`: the SimpleWebAuthn/client `RegistrationResponseJSON` response, `userId`, `challenge`, `recoveryPubKey`, and the client-encrypted credential fields `passkeyUserCredEnc`, `recoveryUserCredEnc`, and `userCredPubKey`.
+- **Read consistency:** Consistent.
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object including `csrf` and session cookie.
   - `400 Bad Request`: The body is not valid JSON.
@@ -39,6 +41,7 @@ This document provides documentation for the passkey-based authentication server
 - **Authorization:** Not required
 - **Description:** Retrieves authentication options for a user. If a `userId` is sent in the request body, the response will include a list of allowed credentials for that user only.
 - **Request Body:** (optional) A JSON object with the `userId` of a user whose allowed credentials should be returned. Example: `{"userId": "base64id"}`.
+- **Read consistency:** Eventually consistent. `allowCredentials` may omit a passkey added moments earlier or list one just deleted.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialRequestOptionsJSON`](#publickeycredentialrequestoptionsjson) JSON object.
   - `400 Bad Request`: The body is not valid JSON.
@@ -52,6 +55,7 @@ This document provides documentation for the passkey-based authentication server
 - **Authorization:** Not required
 - **Description:** Verifies an authentication response from a client and establishes a new user session. Response contains a `csrf` token that must be sent in a `x-csrf-token` header for authorized requests.
 - **Request Body:** The SimpleWebAuthn/client `AuthenticationResponseJSON` JSON object response & `challenge` created by client from previous POST to `/v1/auth/options`.
+- **Read consistency:** Consistent.
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object including `csrf` and session cookie.
   - `400 Bad Request`: The body is not valid JSON.
@@ -65,6 +69,7 @@ This document provides documentation for the passkey-based authentication server
 - **Path:** `/v1/passkeys/options`
 - **Authorization:** Required (cookie, x-csrf-token, and x-proof)
 - **Description:** Returns registration options for adding a new passkey to the currently authenticated user.
+- **Read consistency:** `excludeCredentials` is consistent. The `user` fields are eventually consistent.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
   - `401 Unauthorized`: The request is not authorized.
@@ -77,6 +82,7 @@ This document provides documentation for the passkey-based authentication server
 - **Authorization:** Required (cookie, x-csrf-token, and x-proof)
 - **Description:** Verifies a registration response from a client and adds a new passkey to the currently authenticated user.
 - **Request Body:** An [`AddVerify`](#addverify) object created by the client from the previous GET to `/v1/passkeys/options`: the SimpleWebAuthn/client `RegistrationResponseJSON` response, `challenge`, and the client-encrypted credential field `passkeyUserCredEnc`.
+- **Read consistency:** `authenticators` is consistent and includes the new passkey. The other `UserInfo` fields are eventually consistent.
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object.
   - `400 Bad Request`: The request was malformed or the request body is invalid.
@@ -90,6 +96,7 @@ This document provides documentation for the passkey-based authentication server
 - **Authorization:** Required (cookie, x-csrf-token, and x-proof)
 - **Description:** Updates the description of the passkey specified by `credid` for the currently authenticated user.
 - **Request Body:** A JSON object with a `description` key. Example: `{"description": "My Yubikey"}`. Passkey description must be greater than 5 and less than 43 characters and may not contain HTML tags.
+- **Read consistency:** `authenticators` is consistent and includes the new description. The other `UserInfo` fields are eventually consistent.
 - **Responses:**
   - `200 OK`: A [`UserInfo`](#userinfo) JSON object.
   - `400 Bad Request`: The request was malformed or the description is invalid.
@@ -101,6 +108,7 @@ This document provides documentation for the passkey-based authentication server
 - **Path:** `/v1/passkeys/{credid}`
 - **Authorization:** Required (cookie, x-csrf-token, and x-proof)
 - **Description:** Deletes the passkey specified by `credid` for the currently authenticated user. When a user's last passkey is deleted, the entire user account is permanently deleted and cannot be recovered.
+- **Read consistency:** `authenticators` is consistent and omits the deleted passkey. The other `UserInfo` fields are eventually consistent.
 - **Responses:**
   - `200 OK`: A [`UserInfo`](#userinfo) JSON object. If this was the last passkey, the entire user account will be deleted and the response will indicate the user is not verified.
   - `400 Bad Request`: The credential ID is not valid.
@@ -114,6 +122,7 @@ This document provides documentation for the passkey-based authentication server
 - **Path:** `/v1/user`
 - **Authorization:** Required (cookie, x-csrf-token, and x-proof)
 - **Description:** Retrieves information about the currently authenticated user.
+- **Read consistency:** Eventually consistent.
 - **Responses:**
   - `200 OK`: A [`UserInfo`](#userinfo) JSON object.
   - `400 Bad Request`: The request was malformed.
@@ -127,6 +136,7 @@ This document provides documentation for the passkey-based authentication server
 - **Authorization:** Required (cookie, x-csrf-token, and x-proof)
 - **Description:** Updates the username of the currently authenticated user.
 - **Request Body:** A JSON object with a `userName` key. Example: `{"userName": "Some Name"}`. User name must be greater than 5 and less than 32 characters and may not contain HTML tags.
+- **Read consistency:** `userName` reflects this change. The other `UserInfo` fields, including `authenticators`, are eventually consistent.
 - **Responses:**
   - `200 OK`: A [`UserInfo`](#userinfo) JSON object.
   - `400 Bad Request`: The request was malformed or the request body is invalid.
@@ -137,7 +147,7 @@ This document provides documentation for the passkey-based authentication server
 Recovery takes three calls. `/v1/recover3` verifies the account's recovery secret and returns the
 user credential, `/v1/recover/confirm` verifies that a client has that credential and deletes the
 account's passkeys, and `/v1/recover/verify` registers the replacement passkey and starts a
-session. The first two calls end an existing session.
+session. The first two calls end an existing session. Interleaved recover3 flows are not allowed.
 
 ### POST /v1/recover3
 
@@ -147,6 +157,7 @@ session. The first two calls end an existing session.
 - **Authorization:** Not required
 - **Description:** Starts account recovery by verifying a signature created by the client, using a key derived from the account's recovery secret, over `userId` and a timestamp and nonce the client chooses. Returns the user credential previously encrypted under that secret, or the user credential itself for no-PRF accounts, along with the challenge for `/v1/recover/confirm`.
 - **Request Body:** A [`Recover3`](#recover3) object.
+- **Read consistency:** Consistent.
 - **Responses:**
   - `200 OK`: A [`RecoverStart`](#recoverstart) JSON object.
   - `400 Bad Request`: The body is not valid JSON.
@@ -160,6 +171,7 @@ session. The first two calls end an existing session.
 - **Authorization:** Not required
 - **Description:** Confirms that a client has the expected user credential by verifying a signature over the challenge returned by `/v1/recover3`, created by the client with a key derived from that credential. On success the server deletes all existing passkeys for the account and returns registration options to create a new passkey.
 - **Request Body:** A [`RecoverConfirm`](#recoverconfirm) object.
+- **Read consistency:** Consistent.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
   - `400 Bad Request`: The body is not valid JSON.
@@ -173,6 +185,7 @@ session. The first two calls end an existing session.
 - **Authorization:** Not required
 - **Description:** Completes account recovery by verifying the registration of the new passkey created from the registration options returned by `/v1/recover/confirm`, and establishes a new session.
 - **Request Body:** A [`RecoverVerify`](#recoververify) object: the SimpleWebAuthn/client `RegistrationResponseJSON` response, `userId`, `challenge`, and the client-encrypted credential field `passkeyUserCredEnc`.
+- **Read consistency:** Consistent.
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object including `csrf` and session cookie.
   - `400 Bad Request`: The body is not valid JSON.
@@ -186,6 +199,7 @@ session. The first two calls end an existing session.
 - **Authorization:** Required (cookie, x-csrf-token, and x-proof)
 - **Description:** Replaces the account's recovery key with a new public key derived by the client app from new recovery words. The caller must also include a signature, created with the new keypair, over the authenticated `userId` and a timestamp and nonce it chooses. For PRF accounts, the user credential re-encrypted under the new recovery secret must also be supplied.
 - **Request Body:** A [`Recover3Key`](#recover3key) object.
+- **Read consistency:** `recoveryKeyId` reflects this change. The other `UserInfo` fields, including `authenticators`, are eventually consistent.
 - **Responses:**
   - `200 OK`: A [`UserInfo`](#userinfo) JSON object.
   - `400 Bad Request`: The request was malformed, or the recovery signature is invalid, replayed, or outside the timestamp skew window.
@@ -199,6 +213,7 @@ session. The first two calls end an existing session.
 - **Authorization:** Not required
 - **Description:** DEPRECATED. Upgrade account and use `/v1/recover3` instead. Initiates the account recovery process for the user Id and user credential sent in the request body. This will delete all existing passkeys for the user and return registration options to create a new passkey. Accounts that have moved to recovery words are refused.
 - **Request Body:** A JSON object with `userId` and `userCred` keys.
+- **Read consistency:** `excludeCredentials` is consistent. The `user` fields are eventually consistent.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
   - `400 Bad Request`: The body is not valid JSON.
@@ -212,6 +227,7 @@ session. The first two calls end an existing session.
 - **Path:** `/v1/session`
 - **Authorization:** Required (cookie and x-proof)
 - **Description:** If a session exists and is valid, returns information for the currently authenticated user which includes a `csrf` token that must be sent in a `x-csrf-token` header for all other authorized requests.
+- **Read consistency:** Eventually consistent.
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object including `csrf` but not `userCred` or `passkeyUserCredEnc`.
   - `400 Bad Request`: The request was malformed.
@@ -223,6 +239,7 @@ session. The first two calls end an existing session.
 - **Path:** `/v1/session`
 - **Authorization:** Required (cookie, x-csrf-token, and x-proof)
 - **Description:** Ends the current session and invalidates the session cookie and csrf token. Sessions will expire automatically, this endpoint is only needed to force early termination.
+- **Read consistency:** Not applicable.
 - **Responses:**
   - `200 OK`: A JSON object with a `message` key and a value of "done", along with an expired session cookie.
   - `400 Bad Request`: The request was malformed.
@@ -364,6 +381,12 @@ The SimpleWebAuthn/server `PublicKeyCredentialRequestOptionsJSON` object contain
 
 Every response carries `Cache-Control: no-store` and `Pragma: no-cache`, so a client, proxy, or
 browser back/forward navigation always reaches the server rather than a stored copy.
+
+## Read Consistency
+
+Each endpoint notes whether the data it returns comes from consistent or eventually consistent
+database reads. A consistent read reflects every write that completed before it. An eventually
+consistent read may miss a recent write, usually one from within the last second.
 
 ## Authorization
 

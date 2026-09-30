@@ -53,10 +53,11 @@ export const UNAME_MAX_LEN = 31;
 // export const CERT_MAX_BYTES = CERT_VERSION_BYTES + CERT_KEY_BYTES + USERID_BYTES + UNAME_LEN_BYTES + Math.pow(2, UNAME_LEN_BYTES * 8);
 
 export const NOUSER_ID = 'AAAAAAAAAAAAAAAAAAAAAA';
+export const UNKNOWN_USER_ID = 'unknown';
 
 export const KMS_KEYID_NEW = process.env.KMSKeyId_New!;
 export const KMS_KEYID_BACKUP = process.env.KMSKeyId_Old!;
 
-// PROOF_SKEW_MS must stay below CHALLENGE_TTL_SECS or proof nonces expire within the window and replay becomes possible
+// 2 * PROOF_SKEW_MS / 1000 must not exceed CHALLENGE_TTL_SECS or proof nonces expire and replay becomes possible
 export const PROOF_SKEW_MS = 120 * 1000;
 export const CHALLENGE_TTL_SECS = 300;

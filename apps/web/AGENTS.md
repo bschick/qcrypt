@@ -12,7 +12,7 @@ This `web` client can built, served, and tested locally. It depends on a backend
 - **Source Repository:** Project source code, issues tracking, and releases are at [qcrypt github](https://github.com/bschick/qcrypt)
 - **Core Logic:** The main application logic, including key derivation, encryption, and decryption, is located in `src/`.
 - **Technology Stack:** The application is built with Angular using pnpm as its package manager. It uses `libsodium-wrappers` and `@simplewebauthn/browser` for cryptographic and WebAuthn functionalities.
-- **Crypto Details:** The cryptographic protocol is detailed in `src/assets/protocol6.pdf` and online at [https://quickcrypt.org/help/protocol](https://quickcrypt.org/help/protocol).
+- **Crypto Details:** The cryptographic protocol is detailed in `src/assets/protocol8.pdf` and online at [https://quickcrypt.org/help/protocol](https://quickcrypt.org/help/protocol).
 - **API Interaction:** The client communicates with the `server` for user management and passkey operations. Server code is at [qcrypt-server github](https://github.com/bschick/qcrypt-server) and deployed at `https://test.quickcrypt.org`
 
 ---
@@ -28,13 +28,14 @@ This `web` client can built, served, and tested locally. It depends on a backend
 ## 3. Important Files & Directories
 
 - `src/app/qcrypt.component.ts`: The main Angular component containing the core application logic.
-- `src/app/services/ciphers-current.ts`: Contains the implementation of the most recent encryption and decryption ciphers.
-- `src/app/services/deciphers-old.ts`: Contains the implementation of previous decryption ciphers versions.
+- `libs/crypto/src/lib/ciphers-current.ts` (repo root): Contains the implementation of the most recent encryption and decryption ciphers.
+- `libs/crypto/src/lib/deciphers-old.ts` (repo root): Contains the implementation of previous decryption ciphers versions.
 - `src/app/services/authenticator.service.ts`: Handles WebAuthn authenticator logic.
-- `src/assets/protocol6.pdf`: Detailed documentation of the cryptographic protocol.
+- `src/assets/protocol8.pdf`: Detailed documentation of the cryptographic protocol.
 - `package.json`: Lists project dependencies and pnpm scripts for building, serving, and testing the application.
 - `vitest-base.config.ts`: Vitest configuration for chromium-only unit tests.
-- `vitest-all.config.ts`: Vitest configuration for chromium + firefox unit tests.
+- `vitest-most.config.ts`: Vitest configuration for chromium + webkit unit tests.
+- `vitest-all.config.ts`: Vitest configuration for chromium + firefox + webkit unit tests.
 - `playwright.config.ts`: Configuration for Playwright (used for end-to-end tests).
 - `tests/`: Contains Playwright e2e test specifications.
 - `scripts/gen_*_vectors.ts`: Generators for the pinned test vectors in `libs/crypto` and this project's specs, run via `pnpm vectors:*` (see the root AGENTS.md "Test Vector Commands").
@@ -127,7 +128,7 @@ rendered output, so a renamed label, a restyled control or a binding that stops 
 - **Client-Side Logic:** All sensitive operations, especially cryptography, must remain strictly on the client-side. No sensitive data should be sent to any server.
 - **Testing:** Any new feature or bug fix should be accompanied by corresponding unit or e2e tests to prevent regressions.
 - **Immutability:** Follow best practices for immutability, especially when dealing with application state.
-- **Security:** Adhere to the security principles outlined in `src/assets/protocol6.pdf`, including the use of strong cryptographic primitives and secure coding practices.
+- **Security:** Adhere to the security principles outlined in `src/assets/protocol8.pdf`, including the use of strong cryptographic primitives and secure coding practices.
 - **Cross-origin isolation:** The deployed site sets `Cross-Origin-Embedder-Policy: require-corp` alongside `COOP: same-origin` and `CORP: same-origin` (configured at CloudFront). This puts the page in a cross-origin-isolated context, which is what enables `SharedArrayBuffer` and high-resolution timers — appropriate for a crypto app. The tradeoff: every third-party asset (font, image, script, iframe, `fetch` target) must return `Cross-Origin-Resource-Policy: cross-origin` (or a matching CORS response) or the browser will refuse to load it and the page will break. Currently compatible: `fonts.gstatic.com` and `api.pwnedpasswords.com`. Before adding any new third-party dependency, confirm it returns CORP/CORS-friendly headers.
 
 See the root [`AGENTS.md`](../../AGENTS.md#5-shared-conventions) for additional shared conventions (GitHub workflow, AWS resource policies).
