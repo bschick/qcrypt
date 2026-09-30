@@ -623,6 +623,10 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 
 \vspace{\notegap}
 
+{\leftskip=\parindent\noindent\textit{Recovery challenges:} Where $S$ verifies $ch_R$ or the $ch$ in $ro$, it verifies against the value $S$ stored for that purpose, user, $pk_R$, and sign-in count.\par}
+
+\vspace{\notegap}
+
 {\leftskip=\parindent\noindent\textit{No-PRF fallback:} $S$ returns $u_c$ in place of $cd_r$; $B$ omits $p_S$ and the $cd_r$ decryption. After the new passkey, $B$ sends $rr, u_i, ch$ only and $S$ stores it without encrypted $u_c$.\par}
 \end{stanza}
 
