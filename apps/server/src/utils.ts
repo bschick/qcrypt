@@ -25,7 +25,13 @@ import { Buffer } from 'node:buffer';
 import * as crypto from 'node:crypto';
 import * as api from '@qcrypt/api';
 import { Challenges, type ChallengeItem } from './models';
-import { USERCRED_ENC_MIN_BYTES, USERCRED_ENC_MAX_BYTES, CHALLENGE_BYTES, PROOF_SKEW_MS } from './consts';
+import {
+   USERCRED_ENC_MIN_BYTES,
+   USERCRED_ENC_MAX_BYTES,
+   CHALLENGE_BYTES,
+   PROOF_SKEW_MS,
+   UNKNOWN_USER_ID,
+} from './consts';
 
 export class ParamError extends Error {}
 
@@ -71,18 +77,19 @@ export function isReservedTestUserName(userName: string): boolean {
    return userName.toLowerCase().startsWith('pwtesty_');
 }
 
-// When userId is given the challenge must also be bound to it, otherwise any binding is accepted
-export async function consumeChallenge(
-   challenge: string,
-   purpose: ChallengeItem['purpose'],
-   userId?: string,
-): Promise<ChallengeItem> {
+export type ChallengeSpec =
+   | { purpose: 'auth' | 'reg' | 'add'; userId: string; binding?: never }
+   | { purpose: 'recover' | 'confirm'; userId: string; binding: string };
+
+// The challenge must match the given userId, unless it is an auth challenge created with UNKNOWN_USER_ID.
+// The binding must also match; an omitted binding matches only a challenge created without one.
+export async function consumeChallenge(challenge: string, check: ChallengeSpec): Promise<ChallengeItem> {
    if (!validB64(challenge)) {
       throw new ParamError('challenge not valid');
    }
 
    const consumed = await Challenges.delete({
-      purpose,
+      purpose: check.purpose,
       challenge,
    }).go({ response: 'all_old' });
 
@@ -92,11 +99,23 @@ export async function consumeChallenge(
    if (Date.now() / 1000 > consumed.data.expiresAt) {
       throw new AuthError();
    }
-   if (userId !== undefined && consumed.data.userId !== userId) {
+   const anyUser = check.purpose === 'auth' && consumed.data.userId === UNKNOWN_USER_ID;
+   if (!anyUser && consumed.data.userId !== check.userId) {
+      throw new AuthError();
+   }
+   if (consumed.data.binding !== check.binding) {
       throw new AuthError();
    }
 
    return consumed.data;
+}
+
+export async function createChallenge(challenge: string, spec: ChallengeSpec): Promise<void> {
+   if (spec.userId === UNKNOWN_USER_ID && spec.purpose !== 'auth') {
+      throw new Error(`${spec.purpose} challenge cannot use UNKNOWN_USER_ID`);
+   }
+
+   await Challenges.create({ challenge, ...spec }).go();
 }
 
 // Throws unless the proof is well formed, within the skew window, verifies, and its nonce has
@@ -142,7 +161,7 @@ export async function verifyRecoverProof(
 // Never throws: an error from the store itself is reported as 'failed'.
 export async function storeSingleUseNonce(
    nonce: string,
-   purpose: ChallengeItem['purpose'],
+   purpose: 'api' | 'nonce',
    userId: string,
 ): Promise<'ok' | 'replayed' | 'failed'> {
    try {

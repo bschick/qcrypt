@@ -284,6 +284,10 @@ export const Challenges = new Entity(
             required: true,
             readOnly: true,
          },
+         binding: {
+            type: 'string',
+            readOnly: true,
+         },
          expiresAt: {
             type: 'number',
             // Needs unix time, so convert from MS to S

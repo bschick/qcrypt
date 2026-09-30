@@ -147,7 +147,7 @@ This document provides documentation for the passkey-based authentication server
 Recovery takes three calls. `/v1/recover3` verifies the account's recovery secret and returns the
 user credential, `/v1/recover/confirm` verifies that a client has that credential and deletes the
 account's passkeys, and `/v1/recover/verify` registers the replacement passkey and starts a
-session. The first two calls end an existing session.
+session. The first two calls end an existing session. Interleaved recover3 flows are not allowed.
 
 ### POST /v1/recover3
 
@@ -171,7 +171,7 @@ session. The first two calls end an existing session.
 - **Authorization:** Not required
 - **Description:** Confirms that a client has the expected user credential by verifying a signature over the challenge returned by `/v1/recover3`, created by the client with a key derived from that credential. On success the server deletes all existing passkeys for the account and returns registration options to create a new passkey.
 - **Request Body:** A [`RecoverConfirm`](#recoverconfirm) object.
-- **Read consistency:** `excludeCredentials` is consistent. The `user` fields are eventually consistent.
+- **Read consistency:** Consistent.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
   - `400 Bad Request`: The body is not valid JSON.
