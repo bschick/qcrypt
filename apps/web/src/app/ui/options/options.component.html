@@ -20,19 +20,19 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
 <mat-accordion multi>
-  <mat-expansion-panel matRipple [matRippleDisabled]="true" [expanded]="expandOptions">
+  <mat-expansion-panel matRipple [matRippleDisabled]="true" [expanded]="expandOptions()">
     <mat-expansion-panel-header>
-      <mat-panel-title class="panel-title">{{(loopsInput.value || 1) > 1 ? 'Encryption Modes' : 'Encryption Mode'}}</mat-panel-title>
+      <mat-panel-title class="panel-title">{{(loopsInput() || 1) > 1 ? 'Encryption Modes' : 'Encryption Mode'}}</mat-panel-title>
     </mat-expansion-panel-header>
     <div class="algs-area">
-      <app-algorithms (modesChange)="onModesChange($event)" #algorithms></app-algorithms>
+      <app-algorithms [modes]="algorithmList()" [count]="loopCount()" (modesChange)="onModesChange($event)"></app-algorithms>
       <a [routerLink]="'/help/faqs'" [queryParams]="{search: 'which cipher'}" class="alg-help" target="_blank">
         <mat-icon class="help-icon">help</mat-icon>
       </a>
     </div>
   </mat-expansion-panel>
-  <mat-expansion-panel (afterExpand)="cipherPanelExpanded = true" (closed)="cipherPanelExpanded = false" matRipple
-    [matRippleDisabled]="true" [expanded]="expandOptions">
+  <mat-expansion-panel (afterExpand)="cipherPanelExpanded.set(true)" (closed)="cipherPanelExpanded.set(false)" matRipple
+    [matRippleDisabled]="true" [expanded]="expandOptions()">
     <mat-expansion-panel-header>
       <mat-panel-title class="panel-title">Advanced Options</mat-panel-title>
     </mat-expansion-panel-header>
@@ -48,15 +48,15 @@ SOFTWARE. -->
         <div>
           <mat-form-field subscriptSizing="dynamic">
             <mat-label>Hash Iterations</mat-label>
-            <input type="number" [min]="ICOUNT_MIN" [max]="ICOUNT_MAX" step="200000" matInput [formControl]="icountInput"
+            <input type="number" [min]="ICOUNT_MIN" [max]="icountMax()" step="200000" matInput [(ngModel)]="icountInput"
               (blur)="onBlurICount()"
-              [matTooltip]="'Larger values make password guessing slower. Range ['+ICOUNT_MIN/1000+'K,'+ICOUNT_MAX/1000000+'M]'" />
+              [matTooltip]="'Larger values make password guessing slower. Range ['+ICOUNT_MIN/1000+'K,'+icountMax()/1000000+'M]'" />
           </mat-form-field>
         </div>
         <div>
           <mat-form-field subscriptSizing="dynamic">
             <mat-label #minStrLabel>Default Strength</mat-label>
-            <mat-select id="pwdStrength" [formControl]="strengthSelect"
+            <mat-select id="pwdStrength" [(ngModel)]="strengthSelect" (ngModelChange)="onPwdStrengthChange($event)"
               matTooltip="Defaul minimum password strength allowed for encryption">
               <mat-option class="red-pwd-strength" value="0">Terrible</mat-option>
               <mat-option class="red-pwd-strength" value="1">Weak</mat-option>
@@ -67,13 +67,13 @@ SOFTWARE. -->
           </mat-form-field>
         </div>
         <div>
-          <mat-slide-toggle [formControl]="checkPwnedToggle"
+          <mat-slide-toggle [(ngModel)]="checkPwnedToggle" (ngModelChange)="onCheckPwnedChange($event)"
             matTooltip="Check if your password matches a known stolen password">Check If Stolen
           </mat-slide-toggle>
         </div>
       </div>
-      <span class="hash-warning" [style.visibility]="cipherPanelExpanded ? 'visible' : 'hidden'">
-        {{hashTimeWarning}}
+      <span class="hash-warning" [style.visibility]="cipherPanelExpanded() ? 'visible' : 'hidden'">
+        {{hashTimeWarning()}}
       </span>
     </div>
 
@@ -88,18 +88,19 @@ SOFTWARE. -->
         <div>
           <mat-form-field subscriptSizing="dynamic">
             <mat-label>Cache Time (secs)</mat-label>
-            <input type="number" min="0" [max]="ACTIVITY_TIMEOUT" step="10" matInput [formControl]="cacheTimeInput"
+            <input type="number" min="0" [max]="ACTIVITY_TIMEOUT" step="10" matInput [(ngModel)]="cacheTimeInput"
+            (ngModelChange)="onCacheTimeChange($event)"
             (blur)="onBlurCacheTime()"
             matTooltip="Number of seconds until your clear text and cached password are automatically flushed" />
           </mat-form-field>
         </div>
         <div>
-          <mat-slide-toggle [formControl]="visClearToggle"
+          <mat-slide-toggle [(ngModel)]="visClearToggle" (ngModelChange)="onVisClearChnage($event)"
             matTooltip="Automatically flush clear text and cached password on focus change">Clear When Hidden
           </mat-slide-toggle>
         </div>
         <div>
-          <mat-slide-toggle [formControl]="hidePwdToggle"
+          <mat-slide-toggle [(ngModel)]="hidePwdToggle" (ngModelChange)="onHidePwdChange($event)"
             matTooltip="Hide encryption passwords while typing">Hide Passwords<br />
           </mat-slide-toggle>
         </div>
@@ -118,7 +119,7 @@ SOFTWARE. -->
         <div>
           <mat-form-field subscriptSizing="dynamic">
             <mat-label>Loop Encrypt</mat-label>
-            <input type="number" min="1" [max]="LOOPS_MAX" step="1" matInput [formControl]="loopsInput"
+            <input type="number" min="1" [max]="LOOPS_MAX" step="1" matInput [(ngModel)]="loopsInput"
               (blur)="onBlurLoops()" name="loops"
               matTooltip="Number of times to run encryption in a loop. Enter a different password each loop" />
           </mat-form-field>
@@ -126,7 +127,7 @@ SOFTWARE. -->
         <div>
           <mat-form-field subscriptSizing="dynamic">
             <mat-label #formatLabel>Cipher Armor Format</mat-label>
-            <mat-select id="format" [formControl]="formatSelect"
+            <mat-select id="format" [(ngModel)]="formatSelect" (ngModelChange)="onFormatChange($event)"
               matTooltip="Format of output cipher armor. Only use 'link' when you are not concerned about others changing the cipher armor">
               <mat-option value="compact">Compact</mat-option>
               <mat-option value="indent">Indent</mat-option>
@@ -135,7 +136,8 @@ SOFTWARE. -->
           </mat-form-field>
         </div>
         <div>
-          <mat-slide-toggle [formControl]="reminderToggle"
+          <mat-slide-toggle [(ngModel)]="reminderToggle" (ngModelChange)="onReminderChange($event)"
+            [disabled]="reminderLocked()"
             matTooltip="Add a reminder to cipher armor that Quick Crypt was used">Decryption
             Reminder
           </mat-slide-toggle>

@@ -22,18 +22,18 @@ SOFTWARE. */
 import {
    type AfterViewInit,
    Component,
-   DestroyRef,
    ElementRef,
    type OnInit,
    ChangeDetectionStrategy,
+   computed,
    inject,
    output,
+   signal,
    viewChild,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
-import { AlgorithmsComponent } from '../algorithms/algorithms.component';
+import { AlgorithmsComponent, fillModes } from '../algorithms/algorithms.component';
 import { MatRippleModule } from '@angular/material/core';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -44,7 +44,7 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { AuthenticatorService, ACTIVITY_TIMEOUT_SEC } from '../../services/authenticator.service';
 import { CipherService } from '../../services/cipher.service';
 import { Ciphers, makeTookMsg } from '@qcrypt/crypto';
@@ -95,7 +95,6 @@ function setIfBoolean(check: boolean | string | null, setter: (bool: boolean) =>
       MatSlideToggleModule,
       FormsModule,
       MatButtonModule,
-      ReactiveFormsModule,
    ],
    templateUrl: './options.component.html',
    changeDetection: ChangeDetectionStrategy.Eager,
@@ -104,11 +103,10 @@ function setIfBoolean(check: boolean | string | null, setter: (bool: boolean) =>
 export class OptionsComponent implements OnInit, AfterViewInit {
    private readonly _authSvc = inject(AuthenticatorService);
    private readonly _cipherSvc = inject(CipherService);
-   private readonly _destroyRef = inject(DestroyRef);
 
-   public expandOptions = false;
-   public cipherPanelExpanded = false;
-   public hashTimeWarning = '';
+   protected readonly expandOptions = signal(false);
+   protected readonly cipherPanelExpanded = signal(false);
+   protected readonly hashTimeWarning = signal('');
 
    public readonly ACTIVITY_TIMEOUT = ACTIVITY_TIMEOUT_SEC;
    public readonly LOOPS_MAX = 6;
@@ -122,28 +120,30 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    public readonly VIS_CLEAR_DEFAULT = true;
    public readonly HIDE_PWD_DEFAULT = true;
 
-   public ICOUNT_MAX = cc.ICOUNT_MAX; // Default since benchmark is async
+   protected readonly icountMax = signal<number>(cc.ICOUNT_MAX); // Default since benchmark is async
    public ICOUNT_DEFAULT = cc.ICOUNT_DEFAULT; // Default since benchmark is async
 
-   public loopsInput = new FormControl(this.LOOPS_DEFAULT);
-   public cacheTimeInput = new FormControl(this.CACHE_TIME_DEFAULT);
-   public icountInput = new FormControl(cc.ICOUNT_DEFAULT);
+   protected readonly loopsInput = signal<number | null>(this.LOOPS_DEFAULT);
+   protected readonly cacheTimeInput = signal<number | null>(this.CACHE_TIME_DEFAULT);
+   protected readonly icountInput = signal<number | null>(cc.ICOUNT_DEFAULT);
 
-   public strengthSelect = new FormControl(this.PWD_STRENGTH_DEFAULT);
-   public checkPwnedToggle = new FormControl(this.CHECK_PWNED_DEFAULT);
-   public visClearToggle = new FormControl(this.VIS_CLEAR_DEFAULT);
-   public hidePwdToggle = new FormControl(this.HIDE_PWD_DEFAULT);
-   public formatSelect = new FormControl(this.FORMAT_DEFAULT);
-   public reminderToggle = new FormControl(this.REMINDER_DEFAULT);
+   protected readonly strengthSelect = signal<string>(this.PWD_STRENGTH_DEFAULT);
+   protected readonly checkPwnedToggle = signal<boolean>(this.CHECK_PWNED_DEFAULT);
+   protected readonly visClearToggle = signal<boolean>(this.VIS_CLEAR_DEFAULT);
+   protected readonly hidePwdToggle = signal<boolean>(this.HIDE_PWD_DEFAULT);
+   protected readonly formatSelect = signal<string>(this.FORMAT_DEFAULT);
+   protected readonly reminderToggle = signal<boolean>(this.REMINDER_DEFAULT);
+   protected readonly reminderLocked = computed(() => this.formatSelect() === 'link');
+
+   protected readonly algorithmList = signal<cc.CipherAlgs[]>(['X20-PLY']);
+   protected readonly loopCount = signal<number>(this.LOOPS_DEFAULT);
 
    private _optionsLoaded = false;
    private _lastReminder = this.REMINDER_DEFAULT;
-   private _algorithmList: cc.CipherAlgs[] = ['X20-PLY'];
    private _userId: string | null = null;
 
    readonly formatLabel = viewChild.required<ElementRef>('formatLabel');
    readonly minStrLabel = viewChild.required<ElementRef>('minStrLabel');
-   readonly algorithmsCmp = viewChild.required<AlgorithmsComponent>('algorithms');
 
    readonly loopsChange = output<number>();
    readonly icountChange = output<number>();
@@ -152,28 +152,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    readonly formatOptionsChange = output<boolean>();
 
    ngOnInit() {
-      this.cacheTimeInput.valueChanges
-         .pipe(takeUntilDestroyed(this._destroyRef))
-         .subscribe(this.onCacheTimeChange.bind(this));
-      this.strengthSelect.valueChanges
-         .pipe(takeUntilDestroyed(this._destroyRef))
-         .subscribe(this.onPwdStrengthChange.bind(this));
-      this.checkPwnedToggle.valueChanges
-         .pipe(takeUntilDestroyed(this._destroyRef))
-         .subscribe(this.onCheckPwnedChange.bind(this));
-      this.visClearToggle.valueChanges
-         .pipe(takeUntilDestroyed(this._destroyRef))
-         .subscribe(this.onVisClearChnage.bind(this));
-      this.hidePwdToggle.valueChanges
-         .pipe(takeUntilDestroyed(this._destroyRef))
-         .subscribe(this.onHidePwdChange.bind(this));
-      this.formatSelect.valueChanges
-         .pipe(takeUntilDestroyed(this._destroyRef))
-         .subscribe(this.onFormatChange.bind(this));
-      this.reminderToggle.valueChanges
-         .pipe(takeUntilDestroyed(this._destroyRef))
-         .subscribe(this.onReminderChange.bind(this));
-
       // This can be greatly delayed is there is a long running async benchmark or
       // encrpt or decrypt from a previous instance (tab that has not fully closed).
       // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
@@ -182,7 +160,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          .then(([icount, icountMax, _hashRate]) => {
             this._setIcount(icount);
             this.ICOUNT_DEFAULT = icount;
-            this.ICOUNT_MAX = icountMax;
+            this.icountMax.set(icountMax);
          })
          .finally(() => {
             // load after benchmark to overwrite benchmarks with saved values
@@ -203,8 +181,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    loadOptions(userId: string) {
-      // First check localStorage, then apply params (which take president)
-      // (note that changes are not presisted until the encrypt button is used)
+      // URL parameters are applied after the stored values, so they take precedence.
       /* debug
       for (let i = 0; i < localStorage.length; i++) {
         let key = localStorage.key(i)!;
@@ -230,7 +207,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
          // If there are customized options, expand the panel by default
          if (params.keys().some((p) => !['cipherarmor', 'cleartext'].includes(p))) {
-            this.expandOptions = true;
+            this.expandOptions.set(true);
          }
 
          this._setReminder(params.get('reminder'));
@@ -245,10 +222,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          this._setVisibilityClear(params.get('vclear'));
 
          this._setIcountWarning();
-         // order is important, set modes first
-         const algorithmsCmp = this.algorithmsCmp();
-         algorithmsCmp.modes = this._algorithmList;
-         algorithmsCmp.count = this.loopsInput.value || this.LOOPS_DEFAULT;
+         this.loopCount.set(this.loops);
       }
    }
 
@@ -270,12 +244,9 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       // set reminder last to override other changes above
       this._setReminder(this.REMINDER_DEFAULT);
 
-      // order is important, set modes first
-      this._algorithmList = ['X20-PLY'];
-      const algorithmsCmp = this.algorithmsCmp();
-      algorithmsCmp.modes = this._algorithmList;
-      algorithmsCmp.count = this.loopsInput.value || this.LOOPS_DEFAULT;
-      this.lsSet('algorithm', JSON.stringify(this._algorithmList));
+      this.algorithmList.set(['X20-PLY']);
+      this.loopCount.set(this.loops);
+      this.lsSet('algorithm', JSON.stringify(this.algorithmList()));
 
       // these values are only stored when during onblur, so set manually
       this.lsSet('loops', this.LOOPS_DEFAULT);
@@ -320,43 +291,43 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    get loops(): number {
-      return this.loopsInput.value || this.LOOPS_DEFAULT;
+      return this.loopsInput() || this.LOOPS_DEFAULT;
    }
 
    get algorithms(): cc.CipherAlgs[] {
-      return this._algorithmList.slice(0, this.loops);
+      return fillModes(this.algorithmList(), this.loops);
    }
 
    get cacheTime(): number {
-      return this.cacheTimeInput.value || this.CACHE_TIME_DEFAULT;
+      return this.cacheTimeInput() || this.CACHE_TIME_DEFAULT;
    }
 
    get icount(): number {
-      return this.icountInput.value || this.ICOUNT_DEFAULT;
+      return this.icountInput() || this.ICOUNT_DEFAULT;
    }
 
    get minPwdStrength(): string {
-      return this.strengthSelect.value || this.PWD_STRENGTH_DEFAULT;
+      return this.strengthSelect() || this.PWD_STRENGTH_DEFAULT;
    }
 
    get checkPwned(): boolean {
-      return this.checkPwnedToggle.value || false;
+      return this.checkPwnedToggle() || false;
    }
 
    get visClear(): boolean {
-      return this.visClearToggle.value || false;
+      return this.visClearToggle() || false;
    }
 
    get hidePwd(): boolean {
-      return this.hidePwdToggle.value || false;
+      return this.hidePwdToggle() || false;
    }
 
    get format(): string {
-      return this.formatSelect.value || this.FORMAT_DEFAULT;
+      return this.formatSelect() || this.FORMAT_DEFAULT;
    }
 
    get reminder(): boolean {
-      return this.reminderToggle.value || false;
+      return this.reminderToggle() || false;
    }
 
    private _setAlgorithm(alg: string | null): void {
@@ -371,75 +342,85 @@ export class OptionsComponent implements OnInit, AfterViewInit {
             algs = [alg];
          }
 
-         this._algorithmList = Ciphers.validateAlgs(algs);
+         this.algorithmList.set(Ciphers.validateAlgs(algs));
       }
    }
 
+   // Where an option has a change handler, its setter calls it directly so the value is saved and
+   // announced even when set programmatically
    private _setIcount(ic: number | string | null): void {
       // Ignores if out of range or NaN
-      setIfBetween(ic, this.ICOUNT_MIN, this.ICOUNT_MAX, (num) => {
-         this.icountInput.setValue(num);
+      setIfBetween(ic, this.ICOUNT_MIN, this.icountMax(), (num) => {
+         this.icountInput.set(num);
       });
    }
 
    private _setHidePwd(hide: boolean | string | null) {
       setIfBoolean(hide, (bool) => {
-         this.hidePwdToggle.setValue(bool);
+         this.hidePwdToggle.set(bool);
+         this.onHidePwdChange(bool);
       });
    }
 
    private _setCacheTime(tm: number | string | null): void {
       setIfBetween(tm, 0, this.ACTIVITY_TIMEOUT, (num) => {
          //         this._cacheTime = num;
-         this.cacheTimeInput.setValue(num);
+         this.cacheTimeInput.set(num);
+         this.onCacheTimeChange(num);
       });
    }
 
    private _setCheckPwned(check: boolean | string | null): void {
       setIfBoolean(check, (bool) => {
-         this.checkPwnedToggle.setValue(bool);
+         this.checkPwnedToggle.set(bool);
+         this.onCheckPwnedChange(bool);
       });
    }
 
    private _setMinPwdStrength(stren: string | null): void {
       if (['0', '1', '2', '3', '4'].includes(stren!)) {
-         this.strengthSelect.setValue(stren!);
+         this.strengthSelect.set(stren!);
+         this.onPwdStrengthChange(stren);
       }
    }
 
    private _setLoops(lpEnd: number | string | null): void {
       setIfBetween(lpEnd, 1, this.LOOPS_MAX, (num) => {
-         this.loopsInput.setValue(num);
+         this.loopsInput.set(num);
       });
    }
 
    private _setCTFormat(ctFormat: string | null): void {
       if (['link', 'compact', 'indent'].includes(ctFormat!)) {
-         this.formatSelect.setValue(ctFormat!);
+         this.formatSelect.set(ctFormat!);
+         this.onFormatChange(ctFormat);
       }
    }
 
    private _setReminder(reminder: boolean | string | null): void {
       setIfBoolean(reminder, (bool) => {
-         this.reminderToggle.setValue(bool);
+         this.reminderToggle.set(bool);
+         this.onReminderChange(bool);
       });
    }
 
    private _setVisibilityClear(clear: boolean | string | null): void {
       setIfBoolean(clear, (bool) => {
-         this.visClearToggle.setValue(bool);
+         this.visClearToggle.set(bool);
+         this.onVisClearChnage(bool);
       });
    }
 
    private _setIcountWarning() {
-      this.hashTimeWarning = '';
-      if (this.icountInput.value) {
-         const hashMillis = this.icountInput.value / this._cipherSvc.hashRate;
+      this.hashTimeWarning.set('');
+      const icount = this.icountInput();
+      if (icount) {
+         const hashMillis = icount / this._cipherSvc.hashRate;
 
          // if greater than 15 seconds show message
          if (hashMillis > 15 * 1000) {
             const takeMsg = makeTookMsg(0, hashMillis, 'take');
-            this.hashTimeWarning = `*password hash may ${takeMsg}`;
+            this.hashTimeWarning.set(`*password hash may ${takeMsg}`);
          }
       }
    }
@@ -452,17 +433,16 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       // Note that modes length is the max number of modes that have
       // been set, which may be larger than the current # of loops
       // This is done to preserve default values
-      if (this.lsSet('algorithm', JSON.stringify(modes))) {
-         this._algorithmList = modes;
-      }
+      this.algorithmList.set(modes);
+      this.lsSet('algorithm', JSON.stringify(modes));
    }
 
    onBlurLoops() {
-      let loops = this.loopsInput.value || this.LOOPS_DEFAULT;
+      let loops = this.loopsInput() || this.LOOPS_DEFAULT;
       loops = Math.max(loops, 1);
       loops = Math.min(loops, this.LOOPS_MAX);
 
-      this.algorithmsCmp().count = loops;
+      this.loopCount.set(loops);
       this._setLoops(loops);
       this.lsSet('loops', loops);
 
@@ -470,9 +450,9 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    onBlurICount() {
-      let icount = this.icountInput.value || this.ICOUNT_MIN;
+      let icount = this.icountInput() || this.ICOUNT_MIN;
       icount = Math.max(icount, this.ICOUNT_MIN);
-      icount = Math.min(icount, this.ICOUNT_MAX);
+      icount = Math.min(icount, this.icountMax());
 
       this._setIcount(icount);
       this.lsSet('icount', icount);
@@ -482,7 +462,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    onBlurCacheTime() {
-      if (this.cacheTimeInput.value == null) {
+      if (this.cacheTimeInput() == null) {
          this.onCacheTimeChange(this.CACHE_TIME_DEFAULT);
       }
    }
@@ -492,7 +472,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          cacheTime = Math.max(cacheTime, 0);
          cacheTime = Math.min(cacheTime, this.ACTIVITY_TIMEOUT);
 
-         if (cacheTime !== this.cacheTimeInput.value) {
+         if (cacheTime !== this.cacheTimeInput()) {
             this._setCacheTime(cacheTime);
          } else {
             this.lsSet('cachetime', cacheTime);
@@ -513,7 +493,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
    onReminderChange(reminder: boolean | null) {
       // don't save reminder state if in link format (reminder is always false)
-      if (this.formatSelect.value !== 'link') {
+      if (this.formatSelect() !== 'link') {
          if (this.lsSet('reminder', reminder)) {
             this._lastReminder = reminder!;
          }
@@ -527,13 +507,11 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
    onFormatChange(selected: string | null) {
       if (selected === 'link') {
-         const saved = this.reminderToggle.value || false;
+         const saved = this.reminderToggle() || false;
          this._setReminder(false);
-         this.reminderToggle.disable();
          this._lastReminder = saved;
       } else {
          this._setReminder(this._lastReminder);
-         this.reminderToggle.enable();
       }
       this.lsSet('ctformat', selected);
       this.formatOptionsChange.emit(true);

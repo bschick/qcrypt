@@ -19,17 +19,22 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Component, Input, ChangeDetectionStrategy, output } from '@angular/core';
+import { Component, ChangeDetectionStrategy, computed, input, model } from '@angular/core';
 import { Ciphers } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import { MatTableModule } from '@angular/material/table';
-import { MatButtonToggleModule, type MatButtonToggleChange } from '@angular/material/button-toggle';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { FormsModule } from '@angular/forms';
 
-export type LoopInfo = {
-   loop: number;
-   alg: string;
-};
+export function fillModes(modes: cc.CipherAlgs[], count: number): cc.CipherAlgs[] {
+   const allowed = Ciphers.algs();
+   const filled: cc.CipherAlgs[] = [modes[0] || 'X20-PLY'];
+   for (let i = 1; i < count; i++) {
+      const defaultIndex = (allowed.indexOf(filled[i - 1]) + 1) % allowed.length;
+      filled.push(modes[i] || allowed[defaultIndex]);
+   }
+   return filled;
+}
 
 @Component({
    selector: 'app-algorithms',
@@ -39,55 +44,21 @@ export type LoopInfo = {
    styleUrl: './algorithms.component.scss',
 })
 export class AlgorithmsComponent {
-   public loopCount = 1;
-   public displayedColumns: string[] = ['loop', 'algorithm'];
-   public loops: LoopInfo[] = [];
-   private _allowedAlgs = Ciphers.algs();
-   private _defaultModes: cc.CipherAlgs[] = ['X20-PLY'];
-   readonly modesChange = output<cc.CipherAlgs[]>();
+   // May contain more entries than the current loop count
+   readonly modes = model<cc.CipherAlgs[]>(['X20-PLY']);
+   readonly count = input(1);
 
-   @Input() set count(count: number) {
-      this.loopCount = Math.max(1, count);
+   private readonly _loopCount = computed(() => Math.max(1, this.count()));
+   protected readonly filledModes = computed(() => fillModes(this.modes(), this._loopCount()));
+   protected readonly loops = computed(() => Array.from({ length: this._loopCount() }, (_unused, index) => index + 1));
+   protected readonly displayedColumns = computed(() =>
+      this._loopCount() > 1 ? ['loop', 'algorithm'] : ['algorithm'],
+   );
 
-      this.displayedColumns = ['algorithm'];
-      if (this.loopCount > 1) {
-         this.displayedColumns.unshift('loop');
-      }
-
-      this.loops = [];
-      let nextAlg = this._defaultModes[0] || 'X20-PLY';
-
-      for (let l = 0; l < this.loopCount; l++) {
-         const alg = nextAlg;
-         this.loops.push({
-            loop: l + 1,
-            alg,
-         });
-
-         this._defaultModes[l] = alg;
-
-         // Use a default for next alg if we have one, else randomly pick
-         nextAlg = this._defaultModes[l + 1];
-         if (!nextAlg) {
-            const idx = this._allowedAlgs.indexOf(alg);
-            nextAlg = this._allowedAlgs[(idx + 1) % this._allowedAlgs.length];
-         }
-      }
-   }
-
-   @Input() set modes(modes: cc.CipherAlgs[]) {
-      this._defaultModes = modes;
-   }
-
-   get modes(): cc.CipherAlgs[] {
-      // note that this returns all defaults, even when larger than
-      // the current loopCount
-      return this._defaultModes;
-   }
-
-   onAlgorithmChange(event: MatButtonToggleChange, loop: number): void {
-      this._defaultModes[loop - 1] = event.value;
-      this.modesChange.emit(this._defaultModes);
+   protected onAlgorithmChange(loop: number, alg: cc.CipherAlgs): void {
+      const modes = [...this.filledModes(), ...this.modes().slice(this._loopCount())];
+      modes[loop - 1] = alg;
+      this.modes.set(modes);
    }
 
    algDescription(alg: string): string {
