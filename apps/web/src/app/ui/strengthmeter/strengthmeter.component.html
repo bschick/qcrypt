@@ -10,5 +10,5 @@
     (change)="onStrengthMinChange($event)" [disableRipple]="true">
     <input #sliderElem matSliderThumb [formControl]="strengthSlider">
   </mat-slider>
-  <div class="feedback" matTooltip="Minimum password strength, drag to change">{{warning}} {{suggestion}}</div>
+  <div class="feedback" matTooltip="Minimum password strength, drag to change">{{warning()}} {{suggestion()}}</div>
 </div>

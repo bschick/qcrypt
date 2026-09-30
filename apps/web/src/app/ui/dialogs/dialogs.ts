@@ -27,6 +27,7 @@ import {
    type OnDestroy,
    ChangeDetectionStrategy,
    inject,
+   signal,
    viewChild,
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
@@ -91,44 +92,29 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    private readonly _dialogRef = inject<MatDialogRef<PasswordDialog>>(MatDialogRef);
    private readonly _data = inject<PwdDialogData>(MAT_DIALOG_DATA);
 
-   public hidePwd = false;
-   public passwd = '';
-   public hint = '';
-   public strengthPhrase = 'Password is empty';
-   public strengthAlert = false;
-   public minStrength = 3;
-   public loopCount = 0;
-   public loops = 0;
-   public encrypting = false;
-   public userName = '';
-   public cipherMode = '';
-   public cipherShow = false;
-   public checkPwned = false;
-   private _welcomed = true;
+   protected readonly hidePwd = signal(this._data.hidePwd);
+   protected readonly passwd = signal('');
+   protected readonly hint = signal(this._data.hint);
+   protected readonly strengthPhrase = signal('Password is empty');
+   protected readonly strengthAlert = signal(false);
+   protected readonly cipherShow = signal(false);
+
+   protected readonly minStrength = this._data.minStrength;
+   protected readonly loopCount = this._data.loopCount;
+   protected readonly loops = this._data.loops;
+   protected readonly encrypting = this._data.encrypting;
+   protected readonly userName = this._data.userName;
+   protected readonly cipherMode = this._data.cipherMode;
+   protected readonly checkPwned = this._data.checkPwned;
+   protected readonly usedPasswords = this._data.usedPasswords;
+   protected readonly maxHintLen = cc.HINT_MAX_LEN;
+
+   private readonly _welcomed = this._data.welcomed;
    private _timerId = -1;
-   private _acceptable: boolean;
-   public usedPasswords: string[];
-   public maxHintLen = cc.HINT_MAX_LEN;
+   private _acceptable = !this._data.encrypting;
 
    readonly bubbleTip = viewChild.required<BubbleDirective>('bubbleTip');
    readonly strengthMeter = viewChild(StrengthMeterComponent);
-
-   constructor() {
-      const data = this._data;
-
-      this.hint = data.hint;
-      this.encrypting = data.encrypting;
-      this.minStrength = data.minStrength;
-      this.hidePwd = data.hidePwd;
-      this.loopCount = data.loopCount;
-      this.loops = data.loops;
-      this.checkPwned = data.checkPwned;
-      this._welcomed = data.welcomed;
-      this.userName = data.userName;
-      this.cipherMode = data.cipherMode;
-      this._acceptable = !data.encrypting;
-      this.usedPasswords = data.usedPasswords;
-   }
 
    ngAfterViewInit(): void {
       if (!this._welcomed) {
@@ -142,25 +128,25 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
       }
    }
 
-   async checkPassword() {
+   protected async checkPassword() {
       const strengthMeter = this.strengthMeter();
       if (strengthMeter) {
          this.onAcceptableChanged(await strengthMeter.checkIfPwned());
       }
    }
 
-   async onAcceptClicked() {
+   protected async onAcceptClicked() {
       await this.checkPassword();
 
-      if (this.passwd && this._acceptable) {
-         this._dialogRef.close([this.passwd, this.hint]);
+      if (this.passwd() && this._acceptable) {
+         this._dialogRef.close([this.passwd(), this.hint()]);
       } else {
-         this.strengthAlert = true;
+         this.strengthAlert.set(true);
          this._r2.selectRootElement('#password').focus();
       }
    }
 
-   onPasswordChange() {
+   protected onPasswordChange() {
       // Don't want to leave an open pwd dialog if, there are characters entered
       // and not activity for a few minutes minutes, close the dialog
       if (this._timerId >= 0) {
@@ -177,18 +163,14 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
 
       this._acceptable = state.acceptable;
 
-      if (!this.passwd) {
-         this.strengthPhrase = 'Password is empty';
+      if (!this.passwd()) {
+         this.strengthPhrase.set('Password is empty');
       } else if (!state.acceptable) {
-         this.strengthPhrase = 'Password is too weak';
+         this.strengthPhrase.set('Password is too weak');
       } else {
-         this.strengthAlert = false;
-         this.strengthPhrase = 'Password is allowed';
-         if (state.strength < 2) {
-            this.strengthPhrase += `... but ${NAMES[state.strength]}`;
-         } else {
-            this.strengthPhrase += `... and ${NAMES[state.strength]}`;
-         }
+         this.strengthAlert.set(false);
+         const qualifier = state.strength < 2 ? 'but' : 'and';
+         this.strengthPhrase.set(`Password is allowed... ${qualifier} ${NAMES[state.strength]}`);
       }
    }
 }

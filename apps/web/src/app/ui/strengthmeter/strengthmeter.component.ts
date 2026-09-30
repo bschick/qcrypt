@@ -21,12 +21,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import {
    Component,
-   Input,
    ElementRef,
    type AfterViewInit,
    ChangeDetectionStrategy,
+   effect,
    inject,
+   input,
+   linkedSignal,
    output,
+   signal,
+   untracked,
    viewChild,
 } from '@angular/core';
 
@@ -66,15 +70,20 @@ export type AcceptableState = {
    styleUrl: './strengthmeter.component.scss',
 })
 export class StrengthMeterComponent implements AfterViewInit {
-   public strength = -1;
-   public strengthMin = 0;
+   readonly minStrength = input(0);
+   readonly pwned = input(false);
+   readonly usedPasswords = input<string[]>([]);
+   readonly hint = input('');
+   readonly password = input('');
 
-   public segmentOnColor = '';
-   public segmentOffColor = 'var(--none-pwd-color)';
-   public strengthSlider = new FormControl(this.strengthMin + 1);
-   public warning = '';
-   public suggestion = '';
-   private _checkPwned = false;
+   protected readonly strength = signal(-1);
+   // Local overrides of strengthMin take precedence until minStrength() changes
+   protected readonly strengthMin = linkedSignal(() => Math.max(0, Math.min(this.minStrength(), 4)));
+   protected readonly segmentOffColor = 'var(--none-pwd-color)';
+   protected readonly strengthSlider = new FormControl(1);
+   protected readonly warning = signal('');
+   protected readonly suggestion = signal('');
+
    private _acceptable = false;
    private _lastStrength = -1;
    private _usedPasswords: string[] = [];
@@ -82,7 +91,6 @@ export class StrengthMeterComponent implements AfterViewInit {
    private _processing = false;
    private _processDone: Promise<void> = Promise.resolve();
    private _processTimerId: ReturnType<typeof setTimeout> | undefined = undefined;
-   private _currentPassword = '';
    private _currentHint = '';
    private _pwnedChecked = false;
    private _pwnedDone: Promise<void> = Promise.resolve();
@@ -91,51 +99,42 @@ export class StrengthMeterComponent implements AfterViewInit {
    private _snackBar = inject(MatSnackBar);
 
    readonly sliderRef = viewChild.required<ElementRef>('sliderElem');
-   readonly rippleRef = viewChild.required<ElementRef>('matripple');
 
    readonly acceptableChanged = output<AcceptableState>();
 
-   @Input() set minStrength(strengthMin: number) {
-      this.strengthMin = Math.max(0, Math.min(strengthMin, 4));
-   }
+   constructor() {
+      effect(() => {
+         const password = this.password();
+         this._pwnedChecked = false;
+         this._breachedPassword = '';
 
-   @Input() set pwned(check: boolean) {
-      this._checkPwned = check;
-   }
+         // _updateAcceptable reads strength and strengthMin, which must not trigger a rescore
+         untracked(() => {
+            if (password) {
+               this._startedProcessing();
+            } else {
+               clearTimeout(this._processTimerId);
+               this._processTimerId = undefined;
+               this._setStrength(-1);
+               this.warning.set('');
+               this.suggestion.set('');
+               this._updateAcceptable();
+            }
+         });
+      });
 
-   @Input() set usedPasswords(usedPasswords: string[]) {
-      this._usedPasswords = usedPasswords;
-      if (this._currentPassword) {
-         this._startedProcessing();
-      }
-   }
-
-   @Input() set hint(hint: string) {
-      this._currentHint = hint;
-      if (this._currentPassword) {
-         this._startedProcessing();
-      }
-   }
-
-   @Input() set password(passwd: string) {
-      this._currentPassword = passwd;
-      this._pwnedChecked = false;
-      this._breachedPassword = '';
-      if (!this._currentPassword) {
-         this.setStrength(-1);
-         this.warning = '';
-         this.suggestion = '';
-         this.updateAcceptable();
-      } else {
-         this._startedProcessing();
-      }
+      effect(() => {
+         this._currentHint = this.hint();
+         this._usedPasswords = this.usedPasswords();
+         untracked(() => this._startedProcessing());
+      });
    }
 
    private _startedProcessing() {
-      // debounce a bit to improve performance (lag at the end is acceptable)
-      if (!this._processTimerId && this._currentPassword) {
+      // Scores at most once per interval to improve performance (lag at the end is acceptable)
+      if (!this._processTimerId && this.password()) {
          this._processTimerId = setTimeout(() => {
-            this._testQueue.push(this._currentPassword);
+            this._testQueue.push(this.password());
             this._processZxcvbn();
             this._processTimerId = undefined;
          }, 175);
@@ -144,13 +143,22 @@ export class StrengthMeterComponent implements AfterViewInit {
 
    // Intended to be called once per password to check for breaches
    public async checkIfPwned(): Promise<AcceptableState> {
-      if (this._checkPwned && this._currentPassword && !this._pwnedChecked) {
+      // Cancel any queued scoring timer and score the current password before checking pwned status
+      if (this._processTimerId) {
+         clearTimeout(this._processTimerId);
+         this._processTimerId = undefined;
+         this._testQueue.push(this.password());
+         this._processZxcvbn();
+      }
+      await this._processDone;
+
+      if (this.pwned() && this.password() && !this._pwnedChecked) {
          this._pwnedChecked = true;
          this._pwnedDone = (async () => {
-            const pwd = this._currentPassword;
+            const pwd = this.password();
             const pwned = await isPwned(pwd);
             // Ignore is the password has changed while we await an answer
-            if (pwd !== this._currentPassword) {
+            if (pwd !== this.password()) {
                return;
             }
             if (pwned === undefined) {
@@ -164,7 +172,7 @@ export class StrengthMeterComponent implements AfterViewInit {
       }
 
       await this._pwnedDone;
-      return { acceptable: this._acceptable, strength: this.strength };
+      return { acceptable: this._acceptable, strength: this.strength() };
    }
 
    private _processZxcvbn(): Promise<void> {
@@ -182,10 +190,15 @@ export class StrengthMeterComponent implements AfterViewInit {
                      this._testQueue.length = 0;
 
                      // Loop because new items could be added while we await checkAsync
-                     results = await zxcvbn.checkAsync(testPwd);
+                     const scored = await zxcvbn.checkAsync(testPwd);
 
-                     // Below the lowest selectable minimum, so a breach is rejected at any setting
-                     this.setStrength(testPwd === this._breachedPassword ? -1 : results.score);
+                     // Ignore results for a password the user has since changed
+                     if (testPwd === this.password()) {
+                        results = scored;
+
+                        // Below the lowest selectable minimum, so a breach is rejected at any setting
+                        this._setStrength(testPwd === this._breachedPassword ? -1 : results.score);
+                     }
                   } catch (err) {
                      console.error(err);
                   }
@@ -197,13 +210,13 @@ export class StrengthMeterComponent implements AfterViewInit {
             } finally {
                this._processing = false;
             }
-            this.updateAcceptable();
+            this._updateAcceptable();
 
             if (results?.password === this._breachedPassword) {
-               this.warning = BREACH_WARNING;
-               this.suggestion = BREACH_SUGGESTION;
+               this.warning.set(BREACH_WARNING);
+               this.suggestion.set(BREACH_SUGGESTION);
             } else if (results?.feedback) {
-               this.warning = results.feedback.warning ?? '';
+               this.warning.set(results.feedback.warning ?? '');
 
                // Ugly, but zxcvbn puts its own suggestion first so detect our match and pick #2
                let suggestionIndex = 0;
@@ -211,7 +224,7 @@ export class StrengthMeterComponent implements AfterViewInit {
                if (qcMatch) {
                   suggestionIndex = 1;
                }
-               this.suggestion = results.feedback.suggestions[suggestionIndex] ?? '';
+               this.suggestion.set(results.feedback.suggestions[suggestionIndex] ?? '');
             }
          })();
       }
@@ -296,49 +309,42 @@ export class StrengthMeterComponent implements AfterViewInit {
          parent.style.setProperty('--mat-slider-inactive-track-color', 'transparent');
       }
 
-      this.setMinStrength(this.strengthMin);
+      this._setMinStrength(this.strengthMin());
    }
 
-   onStrengthMinChange(_$event: Event) {
-      this.setMinStrength(this.strengthSlider.value! - 1);
+   protected onStrengthMinChange(_$event: Event) {
+      this._setMinStrength(this.strengthSlider.value! - 1);
    }
 
-   setMinStrength(strengthMin: number) {
+   private _setMinStrength(strengthMin: number) {
       strengthMin = Math.max(0, Math.min(strengthMin, 4));
       this.strengthSlider.setValue(strengthMin + 1);
-      this.strengthMin = strengthMin;
+      this.strengthMin.set(strengthMin);
 
-      this.updateAcceptable();
+      this._updateAcceptable();
    }
 
-   setStrength(strength: number) {
-      strength = Math.max(-1, Math.min(strength, 4));
-
-      if (strength >= 0) {
-         const color = COLORS[strength];
-         this.segmentOnColor = color;
-      }
-      this.strength = strength;
+   private _setStrength(strength: number) {
+      this.strength.set(Math.max(-1, Math.min(strength, 4)));
    }
 
-   updateAcceptable() {
-      const acceptable = this.strength >= this.strengthMin;
+   private _updateAcceptable() {
+      const strength = this.strength();
+      const acceptable = strength >= this.strengthMin();
 
-      if (acceptable !== this._acceptable || this.strength !== this._lastStrength) {
+      if (acceptable !== this._acceptable || strength !== this._lastStrength) {
          this._acceptable = acceptable;
-         this._lastStrength = this.strength;
+         this._lastStrength = strength;
 
-         // Avoids RuntimeError: NG0100 (and seems very hacky)
-         setTimeout(() => {
-            this.acceptableChanged.emit({
-               acceptable: !!acceptable,
-               strength: this.strength,
-            });
+         this.acceptableChanged.emit({
+            acceptable: !!acceptable,
+            strength,
          });
       }
    }
 
-   segmentColor(segment: number): string {
-      return this.strength >= segment ? this.segmentOnColor : this.segmentOffColor;
+   protected segmentColor(segment: number): string {
+      const strength = this.strength();
+      return strength >= segment ? COLORS[strength] : this.segmentOffColor;
    }
 }

@@ -32,6 +32,9 @@ testWithAuth('a breached password stays rejected while the hint is typed', async
 
    // Scoring the password again must not discard what the lookup found
    await page.locator('input#hint').fill('a hint');
+   // The rescore is on a timer, so the state has to still hold after it has run
+   await page.waitForTimeout(500);
+   await expect(page.getByText(/exposed by a data breach/)).toBeVisible();
    await expect(page.getByText('Password is too weak')).toBeVisible();
 
    await page.getByRole('button', { name: 'Accept' }).click();
