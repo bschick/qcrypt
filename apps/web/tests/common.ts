@@ -303,11 +303,16 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
       // Buffer browser console.error + uncaught page errors (across every tab,
       // including ones a test opens later) and dump them only if the test fails, so
       // a failure shows the client-side cause without spamming passing runs.
+      // QC_E2E_BROWSER_ERRORS=all also buffers console.warn and dumps for passing tests, so two runs
+      // can be compared.
+      const logAllBrowserMessages = process.env['QC_E2E_BROWSER_ERRORS'] === 'all';
       const browserErrors: string[] = [];
       const watchConsole = (watched: Page) => {
          watched.on('console', (msg) => {
             if (msg.type() === 'error' && !msg.text().includes('WebSocket connection to')) {
                browserErrors.push(`[console.error] ${msg.text()}`);
+            } else if (logAllBrowserMessages && msg.type() === 'warning') {
+               browserErrors.push(`[console.warn] ${msg.text()}`);
             }
          });
          watched.on('pageerror', (err) => {
@@ -552,7 +557,7 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
          passkeyAuth,
       });
 
-      if (testInfo.status !== testInfo.expectedStatus && browserErrors.length) {
+      if ((logAllBrowserMessages || testInfo.status !== testInfo.expectedStatus) && browserErrors.length) {
          console.log(`[browser errors] ${testInfo.title}\n${browserErrors.join('\n')}`);
       }
 
