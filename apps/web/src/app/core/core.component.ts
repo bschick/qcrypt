@@ -27,15 +27,15 @@ import {
    type OnInit,
    type AfterViewInit,
    type OnDestroy,
-   ChangeDetectorRef,
    SecurityContext,
    NgZone,
    ChangeDetectionStrategy,
    inject,
+   signal,
    viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Ciphers, makeCipherArmor, parseCipherArmor, PWDKeyProvider } from '@qcrypt/crypto';
+import { makeCipherArmor, parseCipherArmor, PWDKeyProvider } from '@qcrypt/crypto';
 
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -119,14 +119,13 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    private readonly _snackBar = inject(MatSnackBar);
    private readonly _matIconRegistry = inject(MatIconRegistry);
    private readonly _domSanitizer = inject(DomSanitizer);
-   private readonly _changeRef = inject(ChangeDetectorRef);
    private readonly _ngZone = inject(NgZone);
    private readonly _router = inject(Router);
 
-   protected clearFile?: File;
-   protected cipherFile?: File;
-   protected readonly useFilePicker = browserSupportsFilePickers();
-   protected readonly useByteStream = browserSupportsBytesStream();
+   private _clearFile?: File;
+   protected readonly cipherFile = signal<File | undefined>(undefined);
+   private readonly _useFilePicker = browserSupportsFilePickers();
+   private readonly _useByteStream = browserSupportsBytesStream();
 
    private _signinDialogRef?: MatDialogRef<SigninDialog>;
    private _mouseDown = false;
@@ -137,22 +136,22 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    private _actionStart = 0;
    private readonly _destroyRef = inject(DestroyRef);
    private _usedPasswords: string[] = [];
-   public cacheTimeout = 0;
-   public clearText = '';
-   public pwdCached = false;
-   public cipherLabel = 'Cipher Armor';
-   public clearLabel = 'Clear Text';
-   public cipherArmor = '';
-   public showProgress = false;
-   public usingFile = false;
-   public cipherMsg = '';
-   public cipherMsgClass = 'errorBox';
-   public clearMsg = '';
-   public clearMsgClass = 'errorBox';
-   public secondsRemaining = 0;
-   public welcomed: boolean = true;
-   public clearWarning = '';
-   public cipherWarning = '';
+   private _cacheTimeout = 0;
+   protected readonly clearText = signal('');
+   protected readonly pwdCached = signal(false);
+   protected readonly cipherLabel = signal('Cipher Armor');
+   protected readonly clearLabel = signal('Clear Text');
+   protected readonly cipherArmor = signal('');
+   protected readonly showProgress = signal(false);
+   private _usingFile = false;
+   protected readonly cipherMsg = signal('');
+   protected readonly cipherMsgClass = signal('errorBox');
+   protected readonly clearMsg = signal('');
+   protected readonly clearMsgClass = signal('errorBox');
+   protected readonly secondsRemaining = signal(0);
+   private _welcomed: boolean = true;
+   protected readonly clearWarning = signal('');
+   protected readonly cipherWarning = signal('');
 
    readonly clearField = viewChild.required<ElementRef>('clearField');
    readonly cipherField = viewChild.required<ElementRef>('cipherField');
@@ -174,27 +173,27 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       );
    }
 
-   async showTextFromParams() {
+   private async _showTextFromParams() {
       await this.options().optionsLoaded();
 
       const params = new HttpParams({ fromString: window.location.search });
       if (params.get('cipherarmor')) {
          const cipherData = parseCipherArmor(params.get('cipherarmor')!);
-         this.cipherWarning = INJECTED_WARNING;
-         this.showCipherData(cipherData);
+         this.cipherWarning.set(INJECTED_WARNING);
+         this._showCipherData(cipherData);
       }
       if (params.get('cleartext')) {
-         this.clearWarning = INJECTED_WARNING;
-         this.showClearText(decodeURIComponent(params.get('cleartext')!));
+         this.clearWarning.set(INJECTED_WARNING);
+         this._showClearText(decodeURIComponent(params.get('cleartext')!));
       }
    }
 
    ngAfterViewInit() {
       if (this._authSvc.hasSession()) {
-         this.showTextFromParams();
+         this._showTextFromParams();
          if (localStorage.getItem(`${this._authSvc.userId}welcomed`) !== 'yup') {
             setTimeout(() => {
-               this.welcomed = false;
+               this._welcomed = false;
                this.bubbleTip1().show();
             }, 500);
          }
@@ -224,12 +223,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this._authSvc
          .on([AuthEvent.Logout, AuthEvent.Forget, AuthEvent.Login, AuthEvent.Delete])
          .pipe(takeUntilDestroyed(this._destroyRef))
-         .subscribe((data) => this.onAuthEvent(data));
+         .subscribe((data) => this._onAuthEvent(data));
 
       // core.guard doesn't allow reaching this point if the
       // user is unknown, If not authenticated, ask the user
       // to sign in
-      this.trySigninDialog();
+      this._trySigninDialog();
    }
 
    ngOnDestroy() {
@@ -239,10 +238,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   onAuthEvent(data: AuthEventData) {
+   private _onAuthEvent(data: AuthEventData) {
       if (data.event === AuthEvent.Login) {
          this.options().loadOptions(data.userId!);
-         this.showTextFromParams();
+         this._showTextFromParams();
       } else if (data.event === AuthEvent.Logout || data.event === AuthEvent.Forget) {
          // Dismiss first, so nothing failing below can leave a dialog over the stop page
          if (this._authSvc.halted) {
@@ -252,7 +251,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this.onClearCipher();
          if (data.event === AuthEvent.Logout) {
             this.options().detachOptions();
-            this.trySigninDialog();
+            this._trySigninDialog();
          } else {
             this.options().nukeSensitiveOptions();
             this._router.navigateByUrl('/welcome');
@@ -263,16 +262,16 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   async trySigninDialog(): Promise<void> {
+   private async _trySigninDialog(): Promise<void> {
       // Signing in again would only repeat whatever caused the halt
       if (!this._signinDialogRef && !this._authSvc.halted) {
          // This check prevents showing progreess when there is no
          // valid session, aka nothing to wait for (like when a new tab is opened)
          if (this._authSvc.potentialSession()) {
             // no-op if ready is resolved
-            this.showProgress = true;
+            this.showProgress.set(true);
             await this._authSvc.ready;
-            this.showProgress = false;
+            this.showProgress.set(false);
          }
 
          // happens when another tab does forget or changes passkey
@@ -294,37 +293,32 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   timerTick() {
-      if (Date.now() > this.cacheTimeout) {
+   private _timerTick() {
+      if (Date.now() > this._cacheTimeout) {
          this.privacyClear();
       }
       let result = 0;
-      if (this.pwdCached) {
-         result = Math.max(0, Math.round((this.cacheTimeout - Date.now()) / 1000));
+      if (this.pwdCached()) {
+         result = Math.max(0, Math.round((this._cacheTimeout - Date.now()) / 1000));
       }
-      if (result !== this.secondsRemaining) {
-         // Do this to avoid setting a template value after it has been checked,
-         // which triggers an ExpressionChangedAfterItHasBeenCheckedError
-         this.secondsRemaining = result;
-         this._changeRef.detectChanges();
-      }
+      this.secondsRemaining.set(result);
    }
 
-   restartTimer() {
+   private _restartTimer() {
       if (this._intervalId !== 0) {
          clearInterval(this._intervalId);
          this._intervalId = 0;
       }
 
-      this.cacheTimeout = Date.now() + this.options().cacheTime * 1000;
-      this.secondsRemaining = this.options().cacheTime;
+      this._cacheTimeout = Date.now() + this.options().cacheTime * 1000;
+      this.secondsRemaining.set(this.options().cacheTime);
 
       // @ts-ignore
-      this._intervalId = setInterval(() => this.timerTick(), 1000);
+      this._intervalId = setInterval(() => this._timerTick(), 1000);
    }
 
-   clearPassword() {
-      this.pwdCached = false;
+   private _clearPassword() {
+      this.pwdCached.set(false);
       if (this._cachedPassword) {
          this._cachedPassword.fill(0);
          this._cachedPassword = undefined;
@@ -339,17 +333,17 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   visibilitychange() {
+   protected visibilitychange() {
       if (document.hidden && this.options().visClear) {
          this.privacyClear();
       }
    }
 
-   onDraggerMouseDown() {
+   protected onDraggerMouseDown() {
       this._mouseDown = true;
    }
 
-   onDraggerMouseMove(event: MouseEvent) {
+   protected onDraggerMouseMove(event: MouseEvent) {
       if (this._mouseDown) {
          const pointerRelativeXpos = event.clientX - this.inputArea().nativeElement.offsetLeft;
          const minWidth = 200;
@@ -365,64 +359,69 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       }
    }
 
-   onDraggerMouseUp() {
+   protected onDraggerMouseUp() {
       this._mouseDown = false;
    }
 
-   onPwdOptionsChange() {
-      this.clearPassword();
+   protected onPwdOptionsChange() {
+      this._clearPassword();
    }
 
-   toastMessage(msg: string) {
+   protected toastMessage(msg: string) {
       this._snackBar.open(msg, '', {
          duration: 2000,
       });
    }
 
-   onClearCipher() {
-      this.cipherMsg = '';
-      this.cipherFile = undefined;
-      this.cipherArmor = '';
-      this.cipherLabel = 'Cipher Armor';
-      this.cipherWarning = '';
+   protected onClearCipher() {
+      this.cipherMsg.set('');
+      this.cipherFile.set(undefined);
+      this.cipherArmor.set('');
+      this.cipherLabel.set('Cipher Armor');
+      this.cipherWarning.set('');
    }
 
-   onClearClear() {
-      this.clearMsg = '';
-      this.clearFile = undefined;
-      this.clearText = '';
-      this.clearLabel = 'Clear Text';
-      this.clearWarning = '';
-      if (!this.welcomed && this._authSvc.hasSession()) {
+   protected onClearClear() {
+      this.clearMsg.set('');
+      this._clearFile = undefined;
+      this.clearText.set('');
+      this.clearLabel.set('Clear Text');
+      this.clearWarning.set('');
+      if (!this._welcomed && this._authSvc.hasSession()) {
          this.bubbleTip1().show();
          this.bubbleTip2().hide();
          this.bubbleTip3().hide();
       }
    }
 
-   onClearInput() {
-      if (!this.clearText) {
-         this.clearWarning = '';
+   protected onClearInput() {
+      if (!this.clearText()) {
+         this.clearWarning.set('');
       }
-      if (!this.welcomed && this._authSvc.hasSession()) {
-         this.bubbleTip1().hide();
-         this.bubbleTip2().show();
+      if (!this._welcomed && this._authSvc.hasSession()) {
+         if (this.clearText()) {
+            this.bubbleTip1().hide();
+            this.bubbleTip2().show();
+         } else {
+            this.bubbleTip1().show();
+            this.bubbleTip2().hide();
+         }
          this.bubbleTip3().hide();
       }
    }
 
-   onCipherInput() {
-      if (!this.cipherArmor) {
-         this.cipherWarning = '';
+   protected onCipherInput() {
+      if (!this.cipherArmor()) {
+         this.cipherWarning.set('');
       }
    }
 
-   privacyClear() {
-      this.clearPassword();
+   protected privacyClear() {
+      this._clearPassword();
       this.onClearClear();
    }
 
-   async passwordProvider(cdInfo: CipherDataInfo, encrypting: boolean): Promise<[string, string | undefined]> {
+   private async _passwordProvider(cdInfo: CipherDataInfo, encrypting: boolean): Promise<[string, string | undefined]> {
       if (cdInfo.ic === undefined) {
          throw new Error('Missing CipherDataInfo iter count');
       }
@@ -434,20 +433,20 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          this._usedPasswords = [];
       }
 
-      if (this.pwdCached && cdInfo.lpEnd === 1) {
-         this.restartTimer();
+      if (this.pwdCached() && cdInfo.lpEnd === 1) {
+         this._restartTimer();
          const decoder = new TextDecoder();
          [pwd, hint] = [decoder.decode(this._cachedPassword), decoder.decode(this._cachedHint)];
       } else {
-         [pwd, hint] = await this.askForPassword(cdInfo, encrypting);
+         [pwd, hint] = await this._askForPassword(cdInfo, encrypting);
       }
 
       // This can run outside of Angular's zone because the  callback
       // comes from within stream connections
       this._ngZone.run(() => {
          // Avoid briefly putting up spinner and disabling buttons
-         if (cdInfo.ic > this._spinnerAbove || this.usingFile) {
-            this.showProgress = true;
+         if (cdInfo.ic > this._spinnerAbove || this._usingFile) {
+            this.showProgress.set(true);
          }
       });
 
@@ -461,8 +460,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       return [pwd, hint];
    }
 
-   async askForPassword(cdInfo: CipherDataInfo, encrypting: boolean): Promise<[string, string]> {
-      this.clearPassword();
+   private async _askForPassword(cdInfo: CipherDataInfo, encrypting: boolean): Promise<[string, string]> {
+      this._clearPassword();
       return new Promise((resolve, reject) => {
          // This can run outside of Angular's zone because the password callback
          // comes from within streem connections
@@ -476,7 +475,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                   loopCount: cdInfo.lp,
                   loops: cdInfo.lpEnd,
                   checkPwned: this.options().checkPwned,
-                  welcomed: this.welcomed,
+                  welcomed: this._welcomed,
                   userName: this._authSvc.userName,
                   cipherMode: cdInfo.alg,
                   usedPasswords: [...this._usedPasswords],
@@ -489,13 +488,13 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
                   // caught as an error, just cancelation
                   reject(new ProcessCancelled());
                } else {
-                  this.clearPassword();
+                  this._clearPassword();
                   if (this.options().cacheTime > 0 && result[0] && cdInfo.lpEnd === 1) {
                      const encoder = new TextEncoder();
                      this._cachedPassword = encoder.encode(result[0]);
                      this._cachedHint = encoder.encode(result[1]);
-                     this.pwdCached = true;
-                     this.restartTimer();
+                     this.pwdCached.set(true);
+                     this._restartTimer();
                   }
                   resolve([result[0], result[1]]);
                }
@@ -504,42 +503,42 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       });
    }
 
-   setCipherFile(cipherFile: File, saved: boolean = false) {
+   private _setCipherFile(cipherFile: File, saved: boolean = false) {
       this.onClearCipher();
-      this.cipherFile = cipherFile;
+      this.cipherFile.set(cipherFile);
       const msg = saved ? 'file saved and ' : '';
-      this.showCipherFile(`${msg}selected for decryption`, saved, cipherFile.name);
+      this._showCipherFile(`${msg}selected for decryption`, saved, cipherFile.name);
    }
 
-   setClearFile(clearFile: File, saved: boolean = false) {
-      this.clearFile = clearFile;
+   private _setClearFile(clearFile: File, saved: boolean = false) {
+      this._clearFile = clearFile;
       const msg = saved ? 'file saved and ' : '';
-      this.showClearFile(`${msg}selected for encryption`, saved, clearFile.name);
+      this._showClearFile(`${msg}selected for encryption`, saved, clearFile.name);
 
-      if (!this.welcomed) {
+      if (!this._welcomed) {
          this.bubbleTip1().hide();
          this.bubbleTip2().show();
          this.bubbleTip3().hide();
       }
    }
 
-   async onEncrypt(): Promise<void> {
-      if (!this.clearFile && this.clearText.length < 1) {
+   protected async onEncrypt(): Promise<void> {
+      if (!this._clearFile && this.clearText().length < 1) {
          this.onClearClear();
-         this.showCipherError('Missing clear text. Enter clear text or select a file, then encrypt');
+         this._showCipherError('Missing clear text. Enter clear text or select a file, then encrypt');
          this._r2.selectRootElement('#clearInput').focus();
          return;
       }
 
       if (!this._authSvc.hasSession()) {
-         this.showClearError('User not authenticated, try refreshing this page');
+         this._showClearError('User not authenticated, try refreshing this page');
          return;
       }
 
       this._authSvc.activity();
       this.onClearCipher();
 
-      if (!this.welcomed) {
+      if (!this._welcomed) {
          this.bubbleTip1().hide();
          this.bubbleTip2().hide();
          this.bubbleTip3().hide();
@@ -549,24 +548,24 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          if (this.options().loops > 1) {
             // it's confusing to use cached password when looping so
             // start from scratch
-            this.clearPassword();
+            this._clearPassword();
          }
 
-         const [clearStream, streamSize] = this.getClearStream();
+         const [clearStream, streamSize] = this._getClearStream();
          if (streamSize > cc.CLEAR_DATA_MAX_BYTES) {
-            this.showCipherError(
+            this._showCipherError(
                `Clear data must be smaller than ${Math.round(cc.CLEAR_DATA_MAX_BYTES / 1024 / 1024)} MB to display`,
                'Try Encrypt to File',
             );
             return;
          }
 
-         const cipherStream = await this.makeCipherStream(clearStream);
+         const cipherStream = await this._makeCipherStream(clearStream);
          if (cipherStream) {
             const cipherData = await readStreamAll(cipherStream);
-            this.showCipherDataAndTime(cipherData);
+            this._showCipherDataAndTime(cipherData);
             this.toastMessage('Congratulations, data encrypted');
-            if (!this.welcomed) {
+            if (!this._welcomed) {
                this.bubbleTip3().show();
                setTimeout(() => {
                   this.bubbleTip3().hide();
@@ -574,12 +573,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             }
 
             // it worked, so stop showing tips (setting this before next loop)
-            this.welcomed = true;
+            this._welcomed = true;
             localStorage.setItem(`${this._authSvc.userId}welcomed`, 'yup');
          }
 
          /* A bit torn about always clearing this when not caching...
-         if (completed && !this.pwdCached) {
+         if (completed && !this.pwdCached()) {
             this.onClearClear();
          }*/
       } catch (something) {
@@ -590,34 +589,34 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             if (something instanceof Error) {
                msg += ` because:</br>${something.message}`;
             }
-            this.showCipherError(msg);
+            this._showCipherError(msg);
          }
-         if (!this.welcomed) {
+         if (!this._welcomed) {
             this.bubbleTip2().show();
          }
       } finally {
-         this.showProgress = false;
-         this.usingFile = false;
+         this.showProgress.set(false);
+         this._usingFile = false;
       }
    }
 
-   async onEncryptToFile(): Promise<void> {
-      if (!this.clearFile && this.clearText.length < 1) {
+   protected async onEncryptToFile(): Promise<void> {
+      if (!this._clearFile && this.clearText().length < 1) {
          this.onClearClear();
-         this.showCipherError('Missing clear text.  Enter clear text or select a file, then encrypt');
+         this._showCipherError('Missing clear text.  Enter clear text or select a file, then encrypt');
          this._r2.selectRootElement('#clearInput').focus();
          return;
       }
 
       if (!this._authSvc.hasSession()) {
-         this.showClearError('User not authenticated, try refreshing this page');
+         this._showClearError('User not authenticated, try refreshing this page');
          return;
       }
 
       this._authSvc.activity();
       this.onClearCipher();
 
-      if (!this.welcomed) {
+      if (!this._welcomed) {
          this.bubbleTip1().hide();
          this.bubbleTip2().hide();
          this.bubbleTip3().hide();
@@ -626,8 +625,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       try {
          let baseName: string;
 
-         if (this.clearFile) {
-            baseName = this.clearFile.name;
+         if (this._clearFile) {
+            baseName = this._clearFile.name;
          } else {
             baseName = 'armor';
          }
@@ -635,40 +634,40 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          if (this.options().loops > 1) {
             // it's confusing to use cached password when looping so
             // start from scratch
-            this.clearPassword();
+            this._clearPassword();
          }
 
-         const [clearStream, streamSize] = this.getClearStream();
-         this.usingFile = true;
+         const [clearStream, streamSize] = this._getClearStream();
+         this._usingFile = true;
 
          // Ordered like this to show file picker before password dialog(s)
-         if (this.useFilePicker) {
+         if (this._useFilePicker) {
             const saveFile = await selectWriteableQQFile(baseName);
             const writeable = await saveFile.createWritable();
-            const cipherStream = await this.makeCipherStream(clearStream);
+            const cipherStream = await this._makeCipherStream(clearStream);
 
             await cipherStream.pipeTo(writeable);
-            this.setCipherFile(await saveFile.getFile(), true);
+            this._setCipherFile(await saveFile.getFile(), true);
             this.toastMessage('Data encrypted');
          } else {
             // Safari doesn't support byte steam or > 2G downloads
-            if (!this.useByteStream && streamSize > 2 * 1024 * 1024 * 1024) {
-               this.showCipherError(
+            if (!this._useByteStream && streamSize > 2 * 1024 * 1024 * 1024) {
+               this._showCipherError(
                   'Your browser does not support files larger than 2 GB. Try Chrome, Firefox, or Edge.',
                );
             } else {
-               const cipherStream = await this.makeCipherStream(clearStream);
+               const cipherStream = await this._makeCipherStream(clearStream);
 
                const response = new Response(cipherStream);
                const blob = await response.blob();
-               this.fileDownload(`${baseName}.qq`, blob);
-               this.showCipherFile('Encrypted file will be in your downloads folder', true);
+               this._fileDownload(`${baseName}.qq`, blob);
+               this._showCipherFile('Encrypted file will be in your downloads folder', true);
                this.toastMessage('Data encrypted');
             }
          }
 
          // If the user got this far, stop showing tips
-         this.welcomed = true;
+         this._welcomed = true;
          localStorage.setItem(`${this._authSvc.userId}welcomed`, 'yup');
       } catch (something) {
          if (!ProcessCancelled.isProcessCancelled(something)) {
@@ -677,27 +676,27 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             if (something instanceof Error) {
                msg += ` because:</br>${something.message}`;
             }
-            this.showCipherError(msg);
+            this._showCipherError(msg);
          }
-         if (!this.welcomed) {
+         if (!this._welcomed) {
             this.bubbleTip2().show();
          }
       } finally {
-         this.showProgress = false;
-         this.usingFile = false;
+         this.showProgress.set(false);
+         this._usingFile = false;
       }
    }
 
-   getClearStream(): [ReadableStream<Uint8Array>, number] {
+   private _getClearStream(): [ReadableStream<Uint8Array>, number] {
       let size = 0;
       let clearStream: ReadableStream<Uint8Array>;
 
-      if (this.clearFile) {
-         size = this.clearFile.size;
-         clearStream = this.clearFile.stream();
-         this.usingFile = true;
+      if (this._clearFile) {
+         size = this._clearFile.size;
+         clearStream = this._clearFile.stream();
+         this._usingFile = true;
       } else {
-         const clearData = new TextEncoder().encode(this.clearText);
+         const clearData = new TextEncoder().encode(this.clearText());
          size = clearData.byteLength;
          const blob = new Blob([clearData], { type: 'application/octet-stream' });
          clearStream = blob.stream();
@@ -707,7 +706,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    }
 
    // Return value is false if the process was aborted
-   async makeCipherStream(clearStream: ReadableStream<Uint8Array>): Promise<ReadableStream<Uint8Array>> {
+   private async _makeCipherStream(clearStream: ReadableStream<Uint8Array>): Promise<ReadableStream<Uint8Array>> {
       const econtext = {
          algs: this.options().algorithms,
          ic: this.options().icount,
@@ -715,21 +714,21 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // PWDKeyProvider takes ownershp of userCred
       const keyProvider = new PWDKeyProvider(await this._authSvc.getUserCred(), (cdInfo, encrypting) =>
-         this.passwordProvider(cdInfo, encrypting),
+         this._passwordProvider(cdInfo, encrypting),
       );
       return this._cipherSvc.encryptStream(clearStream, keyProvider, econtext);
    }
 
-   async onDecrypt(): Promise<void> {
-      if (!this.cipherFile && this.cipherArmor.length < cc.HEADER_BYTES_6P + cc.PAYLOAD_SIZE_MIN) {
+   protected async onDecrypt(): Promise<void> {
+      if (!this.cipherFile() && this.cipherArmor().length < cc.HEADER_BYTES_6P + cc.PAYLOAD_SIZE_MIN) {
          this.onClearCipher();
-         this.showClearError('Missing cipher armor. Enter cipher armor text or select a file, then decrypt');
+         this._showClearError('Missing cipher armor. Enter cipher armor text or select a file, then decrypt');
          this._r2.selectRootElement('#cipherInput').focus();
          return;
       }
 
       if (!this._authSvc.hasSession()) {
-         this.showClearError('User not authenticated, try refreshing this page');
+         this._showClearError('User not authenticated, try refreshing this page');
          return;
       }
 
@@ -737,44 +736,45 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.onClearClear();
 
       try {
-         const [cipherStream, size] = await this.getCipherStream();
+         const [cipherStream, size] = await this._getCipherStream();
          if (size > cc.CLEAR_DATA_MAX_BYTES) {
-            this.showClearError(
+            this._showClearError(
                `Cipher data must be smaller than ${Math.round(cc.CLEAR_DATA_MAX_BYTES / 1024 / 1024)} MB to display`,
                'Try Decrypt to File',
             );
             return;
          }
 
-         const clearStream = await this.makeClearStream(cipherStream);
+         const clearStream = await this._makeClearStream(cipherStream);
          if (clearStream) {
-            this.showClearTextAndTime(await readStreamAll(clearStream, true));
+            this._showClearTextAndTime(await readStreamAll(clearStream, true));
             this.toastMessage('Data decrypted');
          }
       } catch (something) {
          if (!ProcessCancelled.isProcessCancelled(something)) {
             console.error(something);
-            this.clearPassword();
-            this.showClearError(
+            this._clearPassword();
+            this._showClearError(
                'Could not decrypt cipher armor text. You may be using the wrong password or passkey, or the cipher armor is invalid',
             );
          }
       } finally {
-         this.showProgress = false;
-         this.usingFile = false;
+         this.showProgress.set(false);
+         this._usingFile = false;
       }
    }
 
-   async onDecryptToFile(): Promise<void> {
-      if (!this.cipherFile && this.cipherArmor.length < 1) {
+   protected async onDecryptToFile(): Promise<void> {
+      const cipherFile = this.cipherFile();
+      if (!cipherFile && this.cipherArmor().length < 1) {
          this.onClearCipher();
-         this.showClearError('Missing cipher armor. Enter cipher armor text or select a file, then decrypt');
+         this._showClearError('Missing cipher armor. Enter cipher armor text or select a file, then decrypt');
          this._r2.selectRootElement('#cipherInput').focus();
          return;
       }
 
       if (!this._authSvc.hasSession()) {
-         this.showClearError('User not authenticated, try refreshing this page');
+         this._showClearError('User not authenticated, try refreshing this page');
          return;
       }
 
@@ -784,83 +784,88 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       try {
          let baseName: string;
 
-         if (this.cipherFile) {
-            if (this.cipherFile.type.includes('json') && this.cipherFile.size > cc.CLEAR_DATA_MAX_BYTES) {
+         if (cipherFile) {
+            if (cipherFile.type.includes('json') && cipherFile.size > cc.CLEAR_DATA_MAX_BYTES) {
                // limited because it will all be read into memory at once
-               this.showClearError(`File must be smaller than ${Math.round(cc.CLEAR_DATA_MAX_BYTES / 1024 / 1024)} MB`);
+               this._showClearError(
+                  `File must be smaller than ${Math.round(cc.CLEAR_DATA_MAX_BYTES / 1024 / 1024)} MB`,
+               );
                return;
             }
             const re = /^(.*[\\/])?(\.*.*?)(\.[^.]+?|)$/;
-            baseName = re.exec(this.cipherFile.name)![2];
+            baseName = re.exec(cipherFile.name)![2];
             if (baseName.startsWith('armor.')) {
                baseName = 'clear';
             }
          } else {
-            if (this.cipherArmor.length > cc.CLEAR_DATA_MAX_BYTES) {
+            if (this.cipherArmor().length > cc.CLEAR_DATA_MAX_BYTES) {
                // limited because it will all be read into memory at once
-               this.showClearError(`Data must be smaller than ${Math.round(cc.CLEAR_DATA_MAX_BYTES / 1024 / 1024)} MB`);
+               this._showClearError(
+                  `Data must be smaller than ${Math.round(cc.CLEAR_DATA_MAX_BYTES / 1024 / 1024)} MB`,
+               );
                return;
             }
             baseName = 'clear';
          }
 
-         const [cipherStream, streamSize] = await this.getCipherStream();
-         this.usingFile = true;
+         const [cipherStream, streamSize] = await this._getCipherStream();
+         this._usingFile = true;
 
-         if (this.useFilePicker) {
+         if (this._useFilePicker) {
             const saveFile = await selectWriteableFile(baseName);
             const writeable = await saveFile.createWritable();
-            const clearStream = await this.makeClearStream(cipherStream);
+            const clearStream = await this._makeClearStream(cipherStream);
 
             await clearStream.pipeTo(writeable);
-            this.setClearFile(await saveFile.getFile(), true);
+            this._setClearFile(await saveFile.getFile(), true);
             this.toastMessage('Data decrypted');
          } else {
             // This indicates Safari, which also doesn't support > 2G downloads
-            if (!this.useByteStream && streamSize > 2 * 1024 * 1024 * 1024) {
-               this.showClearError(
+            if (!this._useByteStream && streamSize > 2 * 1024 * 1024 * 1024) {
+               this._showClearError(
                   'Your browser does not support files larger than 2 GB. Try Chrome, Firefox, or Edge.',
                );
             } else {
-               const clearStream = await this.makeClearStream(cipherStream);
+               const clearStream = await this._makeClearStream(cipherStream);
 
                const response = new Response(clearStream);
                const blob = await response.blob();
-               this.fileDownload(baseName, blob);
-               this.showClearFile('Decrypted file will be in your downloads folder', true);
+               this._fileDownload(baseName, blob);
+               this._showClearFile('Decrypted file will be in your downloads folder', true);
                this.toastMessage('Data decrypted');
             }
          }
       } catch (something) {
          if (!ProcessCancelled.isProcessCancelled(something)) {
             console.error(something);
-            this.clearPassword();
-            this.showClearError(
+            this._clearPassword();
+            this._showClearError(
                'Could not decrypt cipher armor text. You may be using the wrong password or passkey, or the cipher armor is invalid',
             );
          }
       } finally {
-         this.showProgress = false;
-         this.usingFile = false;
+         this.showProgress.set(false);
+         this._usingFile = false;
       }
    }
 
-   async getCipherStream(): Promise<[ReadableStream<Uint8Array>, number]> {
+   private async _getCipherStream(): Promise<[ReadableStream<Uint8Array>, number]> {
       let size = 0;
       let cipherStream: ReadableStream<Uint8Array>;
+      const cipherFile = this.cipherFile();
 
-      if (this.cipherFile && !this.cipherFile.type.includes('json')) {
-         size = this.cipherFile.size;
-         cipherStream = this.cipherFile.stream();
-         this.usingFile = true;
+      if (cipherFile && !cipherFile.type.includes('json')) {
+         size = cipherFile.size;
+         cipherStream = cipherFile.stream();
+         this._usingFile = true;
       } else {
          let cipherArmor: string;
-         if (this.cipherFile) {
+         if (cipherFile) {
             // It is a json file that contains plain text cipher armor. Don't count
             // as "usingFile" since size is limited
-            cipherArmor = await readStreamAll(this.cipherFile.stream(), true);
+            cipherArmor = await readStreamAll(cipherFile.stream(), true);
          } else {
-            cipherArmor = this.cipherArmor;
+            cipherArmor = this.cipherArmor();
          }
 
          const cipherData = parseCipherArmor(cipherArmor);
@@ -872,169 +877,171 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       return [cipherStream, size];
    }
 
-   async makeClearStream(cipherStream: ReadableStream<Uint8Array>): Promise<ReadableStream<Uint8Array>> {
+   private async _makeClearStream(cipherStream: ReadableStream<Uint8Array>): Promise<ReadableStream<Uint8Array>> {
       // PWDKeyProvider takes ownershp of userCred
       const keyProvider = new PWDKeyProvider(await this._authSvc.getUserCred(), (cdInfo, encrypting) =>
-         this.passwordProvider(cdInfo, encrypting),
+         this._passwordProvider(cdInfo, encrypting),
       );
       return await this._cipherSvc.decryptStream(cipherStream, keyProvider, (ver, multiBlock) => {
          if (ver === cc.VERSION4 && multiBlock) {
-            this.clearWarning = BLOCK_ORDER_WARNING;
+            this.clearWarning.set(BLOCK_ORDER_WARNING);
          }
       });
    }
 
-   showClearError(msg: string, hdr: string | null = null): void {
-      this.showClearMsg('errorBox', 'Error', msg, hdr);
+   private _showClearError(msg: string, hdr: string | null = null): void {
+      this._showClearMsg('errorBox', 'Error', msg, hdr);
    }
 
-   showClearFile(msg: string, took: boolean, hdr: string | null = null): void {
+   private _showClearFile(msg: string, took: boolean, hdr: string | null = null): void {
       const label = took ? `File (${makeTookMsg(this._actionStart, Date.now())})` : 'File';
-      this.showClearMsg('fileBox', label, msg, hdr);
+      this._showClearMsg('fileBox', label, msg, hdr);
    }
 
-   showClearMsg(cls: string, label: string, msg: string, hdr: string | null = null): void {
-      //      this.clearFile = undefined;
-      this.clearText = '';
-      this.clearMsg = '';
+   private _showClearMsg(cls: string, label: string, msg: string, hdr: string | null = null): void {
+      //      this._clearFile = undefined;
+      this.clearText.set('');
+      let clearMsg = '';
 
       if (hdr) {
          const safeHdr = this._domSanitizer.sanitize(SecurityContext.HTML, hdr);
-         this.clearMsg += `<b>${safeHdr}</b><br />`;
+         clearMsg += `<b>${safeHdr}</b><br />`;
       }
       if (msg) {
          const safeMsg = this._domSanitizer.sanitize(SecurityContext.HTML, msg);
-         this.clearMsg += safeMsg;
+         clearMsg += safeMsg;
       }
-      this.clearMsgClass = cls;
-      this.clearLabel = `Clear Text ${label}`;
+      this.clearMsg.set(clearMsg);
+      this.clearMsgClass.set(cls);
+      this.clearLabel.set(`Clear Text ${label}`);
    }
 
-   showClearText(clearText: string, extra: string = ''): void {
-      this.clearText = clearText;
-      this.clearFile = undefined;
-      this.clearMsg = '';
-      this.clearLabel = `Clear Text ${extra}`;
+   private _showClearText(clearText: string, extra: string = ''): void {
+      this.clearText.set(clearText);
+      this._clearFile = undefined;
+      this.clearMsg.set('');
+      this.clearLabel.set(`Clear Text ${extra}`);
    }
 
-   showClearTextAndTime(clearText: string): void {
+   private _showClearTextAndTime(clearText: string): void {
       const tookMsg = makeTookMsg(this._actionStart, Date.now());
-      this.showClearText(clearText, `(${tookMsg})`);
+      this._showClearText(clearText, `(${tookMsg})`);
    }
 
-   showCipherError(msg: string, hdr: string | null = null): void {
-      this.showCipherMsg('errorBox', 'Error', msg, hdr);
+   private _showCipherError(msg: string, hdr: string | null = null): void {
+      this._showCipherMsg('errorBox', 'Error', msg, hdr);
    }
 
-   showCipherFile(msg: string, took: boolean, hdr: string | null = null): void {
+   private _showCipherFile(msg: string, took: boolean, hdr: string | null = null): void {
       const label = took ? `File (${makeTookMsg(this._actionStart, Date.now())})` : 'File';
-      this.showCipherMsg('fileBox', label, msg, hdr);
+      this._showCipherMsg('fileBox', label, msg, hdr);
    }
 
-   showCipherMsg(cls: string, label: string, msg: string, hdr: string | null = null): void {
-      this.cipherArmor = '';
-      this.cipherMsg = '';
+   private _showCipherMsg(cls: string, label: string, msg: string, hdr: string | null = null): void {
+      this.cipherArmor.set('');
+      let cipherMsg = '';
 
       if (hdr) {
          const safeHdr = this._domSanitizer.sanitize(SecurityContext.HTML, hdr);
-         this.cipherMsg += `<b>${safeHdr}</b><br />`;
+         cipherMsg += `<b>${safeHdr}</b><br />`;
       }
       if (msg) {
          const safeMsg = this._domSanitizer.sanitize(SecurityContext.HTML, msg);
-         this.cipherMsg += safeMsg;
+         cipherMsg += safeMsg;
       }
-      this.cipherMsgClass = cls;
-      this.cipherLabel = `Cipher Armor ${label}`;
+      this.cipherMsg.set(cipherMsg);
+      this.cipherMsgClass.set(cls);
+      this.cipherLabel.set(`Cipher Armor ${label}`);
    }
 
-   showCipherData(cipherData: Uint8Array, extra: string = ''): void {
+   private _showCipherData(cipherData: Uint8Array, extra: string = ''): void {
       const cipherArmor = makeCipherArmor(cipherData, this.options().format, this.options().reminder, environment.host);
-      this.cipherArmor = cipherArmor;
-      this.cipherFile = undefined;
-      this.cipherMsg = '';
-      this.cipherLabel = `Cipher Armor ${extra}`;
+      this.cipherArmor.set(cipherArmor);
+      this.cipherFile.set(undefined);
+      this.cipherMsg.set('');
+      this.cipherLabel.set(`Cipher Armor ${extra}`);
    }
 
-   showCipherDataAndTime(cipherData: Uint8Array): void {
+   private _showCipherDataAndTime(cipherData: Uint8Array): void {
       const tookMsg = makeTookMsg(this._actionStart, Date.now());
-      this.showCipherData(cipherData, `(${tookMsg})`);
+      this._showCipherData(cipherData, `(${tookMsg})`);
    }
 
-   onFormatOptionsChange() {
-      this.reformatCipherArmor();
+   protected onFormatOptionsChange() {
+      this._reformatCipherArmor();
    }
 
-   reformatCipherArmor() {
-      if (this.cipherArmor) {
+   private _reformatCipherArmor() {
+      if (this.cipherArmor()) {
          try {
-            const cipherData = parseCipherArmor(this.cipherArmor);
-            this.showCipherData(cipherData);
+            const cipherData = parseCipherArmor(this.cipherArmor());
+            this._showCipherData(cipherData);
          } catch (err) {
             console.error(err);
          }
       }
    }
 
-   onClickFileUpload(event: MouseEvent) {
+   protected onClickFileUpload(event: MouseEvent) {
       // needed to clear previous value so that onchange fires
       (event.target as HTMLInputElement).value = '';
    }
 
-   async onLoadCipherFile() {
-      if (this.useFilePicker) {
-         this.cipherFilePicker();
+   protected async onLoadCipherFile() {
+      if (this._useFilePicker) {
+         this._cipherFilePicker();
       } else {
-         this.cipherFileLoader();
+         this._cipherFileLoader();
       }
    }
 
-   async cipherFilePicker() {
+   private async _cipherFilePicker() {
       const fileHandle = await selectCipherFile();
       if (fileHandle) {
-         this.setCipherFile(await fileHandle.getFile());
+         this._setCipherFile(await fileHandle.getFile());
       }
    }
 
-   async cipherFileLoader() {
+   private async _cipherFileLoader() {
       const fileUpload = this.fileUpload();
       fileUpload.nativeElement.onchange = (event: Event) => {
          const file = (event.target as HTMLInputElement).files?.[0];
          if (file) {
-            this.setCipherFile(file);
+            this._setCipherFile(file);
          }
       };
       fileUpload.nativeElement.click();
    }
 
-   async onLoadClearFile() {
-      if (this.useFilePicker) {
-         this.clearFilePicker();
+   protected async onLoadClearFile() {
+      if (this._useFilePicker) {
+         this._clearFilePicker();
       } else {
-         this.clearFileLoader();
+         this._clearFileLoader();
       }
    }
 
-   async clearFilePicker() {
+   private async _clearFilePicker() {
       const fileHandle = await selectClearFile();
       if (fileHandle) {
          this.onClearClear();
-         this.setClearFile(await fileHandle.getFile());
+         this._setClearFile(await fileHandle.getFile());
       }
    }
 
-   async clearFileLoader() {
+   private async _clearFileLoader() {
       const fileUpload = this.fileUpload();
       fileUpload.nativeElement.onchange = (event: Event) => {
          const file = (event.target as HTMLInputElement).files?.[0];
          if (file) {
             this.onClearClear();
-            this.setClearFile(file);
+            this._setClearFile(file);
          }
       };
       fileUpload.nativeElement.click();
    }
 
-   fileDownload(filename: string, blob: Blob): void {
+   private _fileDownload(filename: string, blob: Blob): void {
       const alink = document.createElement('a');
       alink.style.display = 'none';
       document.body.appendChild(alink);
@@ -1046,45 +1053,45 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       document.body.removeChild(alink);
    }
 
-   async onSaveCipherFile(): Promise<void> {
-      if (this.useFilePicker) {
+   protected async onSaveCipherFile(): Promise<void> {
+      if (this._useFilePicker) {
          const saveFile = await selectWriteableJsonFile('armor');
          const writeable = await saveFile.createWritable();
-         await writeable.write(this.cipherArmor);
+         await writeable.write(this.cipherArmor());
          await writeable.close();
       } else {
-         const buffer = new TextEncoder().encode(this.cipherArmor);
+         const buffer = new TextEncoder().encode(this.cipherArmor());
          const blob = new Blob([buffer], { type: 'text/plain;charset=utf-8' });
-         this.fileDownload('armor.json', blob);
+         this._fileDownload('armor.json', blob);
       }
    }
 
-   async onSaveClearFile(): Promise<void> {
-      if (this.useFilePicker) {
+   protected async onSaveClearFile(): Promise<void> {
+      if (this._useFilePicker) {
          const saveFile = await selectWriteableTxtFile('clear');
          const writeable = await saveFile.createWritable();
-         await writeable.write(this.clearText);
+         await writeable.write(this.clearText());
          await writeable.close();
       } else {
-         const buffer = new TextEncoder().encode(this.clearText);
+         const buffer = new TextEncoder().encode(this.clearText());
          const blob = new Blob([buffer], { type: 'text/plain;charset=utf-8' });
-         this.fileDownload('clear.txt', blob);
+         this._fileDownload('clear.txt', blob);
       }
    }
 
-   onCacheTimeChange(_cacheTime: number): void {
-      if (this.pwdCached) {
-         this.restartTimer();
+   protected onCacheTimeChange(_cacheTime: number): void {
+      if (this.pwdCached()) {
+         this._restartTimer();
       }
    }
 
-   async onCipherTextInfo(): Promise<void> {
+   protected async onCipherTextInfo(): Promise<void> {
       try {
          if (!this._authSvc.hasSession()) {
             throw new Error('User not authenticated, try refreshing this page');
          }
 
-         const cdInfo = await this.getCipherDataInfo();
+         const cdInfo = await this._getCipherDataInfo();
          this._dialog.open(CipherInfoDialog, { data: cdInfo });
       } catch (err) {
          console.error(err);
@@ -1094,12 +1101,12 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    // note that we aren't checking plain text cipher armor for loops because
    // it was never used in the wild
-   async getCipherDataInfo(): Promise<CipherDataInfo> {
+   private async _getCipherDataInfo(): Promise<CipherDataInfo> {
       if (!this._authSvc.hasSession()) {
          throw new Error('User not authenticated, try refreshing this page');
       }
 
-      const [cipherStream, size] = await this.getCipherStream();
+      const [cipherStream, size] = await this._getCipherStream();
       if (size < cc.HEADER_BYTES_6P + cc.PAYLOAD_SIZE_MIN) {
          throw new Error('Missing cipher armor');
       }
@@ -1107,9 +1114,5 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       // PWDKeyProvider takes ownershp of userCred
       const keyProvider = new PWDKeyProvider(await this._authSvc.getUserCred());
       return await this._cipherSvc.getCipherStreamInfo(cipherStream, keyProvider);
-   }
-
-   algDescription(alg: string): string {
-      return Ciphers.algDescription(alg);
    }
 }
