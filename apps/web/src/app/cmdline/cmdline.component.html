@@ -34,7 +34,7 @@
               id="credential"
               matInput
               noAssist
-              [formControl]="userCredential"
+              [(ngModel)]="userCredential"
               [type]="hideCred() ? 'password' : 'text'"
               readonly
             />

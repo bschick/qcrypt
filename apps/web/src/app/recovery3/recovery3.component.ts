@@ -35,7 +35,7 @@ import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -55,7 +55,6 @@ import { NoAssistDirective } from '../ui/noassist.directive';
       MatButtonModule,
       RouterLink,
       FormsModule,
-      ReactiveFormsModule,
       MatProgressSpinnerModule,
       MatCardModule,
       MatFormFieldModule,
@@ -74,7 +73,7 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
    protected readonly showProgress = signal(false);
    protected readonly authenticated = signal(false);
    protected readonly currentUserName = signal<string | null>(null);
-   protected readonly recoveryWords = new FormControl<string>('');
+   protected readonly recoveryWords = signal('');
 
    ngOnInit() {
       const [userId, userName] = this._authSvc.loadKnownUser();
@@ -106,7 +105,7 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
    }
 
    ngOnDestroy() {
-      this.recoveryWords.setValue('');
+      this.recoveryWords.set('');
    }
 
    protected async onClickSignin(): Promise<void> {
@@ -130,7 +129,7 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
    protected async onClickStartRecovery(_event: MouseEvent) {
       try {
          this.error.set('');
-         const rawString = this.recoveryWords.value?.trim();
+         const rawString = this.recoveryWords().trim();
 
          if (!rawString) {
             this.error.set('No recovery words were entered.');

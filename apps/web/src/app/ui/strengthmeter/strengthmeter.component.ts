@@ -37,7 +37,7 @@ import {
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSliderModule } from '@angular/material/slider';
-import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { isPwned, createZxcvbn } from '@qcrypt/crypto';
@@ -64,7 +64,7 @@ export type AcceptableState = {
 
 @Component({
    selector: 'app-strengthmeter',
-   imports: [MatIconModule, MatButtonModule, MatSliderModule, ReactiveFormsModule, MatTooltipModule],
+   imports: [MatIconModule, MatButtonModule, MatSliderModule, FormsModule, MatTooltipModule],
    templateUrl: './strengthmeter.component.html',
    changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './strengthmeter.component.scss',
@@ -80,7 +80,7 @@ export class StrengthMeterComponent implements AfterViewInit {
    // Local overrides of strengthMin take precedence until minStrength() changes
    protected readonly strengthMin = linkedSignal(() => Math.max(0, Math.min(this.minStrength(), 4)));
    protected readonly segmentOffColor = 'var(--none-pwd-color)';
-   protected readonly strengthSlider = new FormControl(1);
+   protected readonly strengthSlider = signal(1);
    protected readonly warning = signal('');
    protected readonly suggestion = signal('');
 
@@ -313,12 +313,12 @@ export class StrengthMeterComponent implements AfterViewInit {
    }
 
    protected onStrengthMinChange(_$event: Event) {
-      this._setMinStrength(this.strengthSlider.value! - 1);
+      this._setMinStrength(this.strengthSlider() - 1);
    }
 
    private _setMinStrength(strengthMin: number) {
       strengthMin = Math.max(0, Math.min(strengthMin, 4));
-      this.strengthSlider.setValue(strengthMin + 1);
+      this.strengthSlider.set(strengthMin + 1);
       this.strengthMin.set(strengthMin);
 
       this._updateAcceptable();

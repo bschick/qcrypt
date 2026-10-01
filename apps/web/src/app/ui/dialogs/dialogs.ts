@@ -33,7 +33,7 @@ import {
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -80,7 +80,6 @@ const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
       MatIconModule,
       StrengthMeterComponent,
       FormsModule,
-      ReactiveFormsModule,
       MatTooltipModule,
       MatButtonModule,
       BubbleDirective,

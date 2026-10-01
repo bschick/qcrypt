@@ -48,7 +48,7 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angu
 import { Router, RouterLink, NavigationStart } from '@angular/router';
 import type { Event as RouterEvent } from '@angular/router';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 
 // Include routerLink to render text as a link or exclude for plain text
@@ -258,7 +258,6 @@ https://angular.dev/guide/forms/reactive-forms
       MatFormFieldModule,
       MatInputModule,
       FormsModule,
-      ReactiveFormsModule,
    ],
 })
 export class ConfirmDialog {
@@ -268,7 +267,7 @@ export class ConfirmDialog {
 
    protected pkState = 0;
    protected userName = '';
-   protected readonly confirmInput = new FormControl('');
+   protected readonly confirmInput = signal('');
 
    static readonly NONE_PK = 0;
    static readonly LAST_PK = 1;
@@ -291,7 +290,7 @@ export class ConfirmDialog {
    }
 
    protected onYesClicked() {
-      if (this.pkState !== this.LAST_PK || (this.confirmInput.value && this.confirmInput.value === this.userName)) {
+      if (this.pkState !== this.LAST_PK || (this.confirmInput() && this.confirmInput() === this.userName)) {
          this._dialogRef.close('Yes');
       } else {
          try {

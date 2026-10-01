@@ -30,7 +30,7 @@ import {
    signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -50,7 +50,7 @@ const SHEET_TITLE = 'quick_crypt_account_recovery';
    styleUrl: './checkrecovery.component.scss',
    changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
-      ReactiveFormsModule,
+      FormsModule,
       RouterLink,
       MatButtonModule,
       MatCardModule,
@@ -69,7 +69,7 @@ export class CheckRecoveryComponent implements OnInit, OnDestroy {
    protected readonly error = signal('');
    protected readonly result = signal<RecoveryWordsState | undefined>(undefined);
    protected readonly sheetUserCred = signal('');
-   protected readonly recoveryWords = new FormControl<string>('');
+   protected readonly recoveryWords = signal('');
    private readonly _destroyRef = inject(DestroyRef);
    private _priorTitle?: string;
 
@@ -86,7 +86,7 @@ export class CheckRecoveryComponent implements OnInit, OnDestroy {
    }
 
    ngOnDestroy() {
-      this.recoveryWords.setValue('');
+      this.recoveryWords.set('');
       this._clearSheet();
    }
 
@@ -128,7 +128,7 @@ export class CheckRecoveryComponent implements OnInit, OnDestroy {
    protected onClickCheck() {
       this.error.set('');
       this.result.set(undefined);
-      const words = this.recoveryWords.value;
+      const words = this.recoveryWords();
 
       if (words) {
          this.showProgress.set(true);

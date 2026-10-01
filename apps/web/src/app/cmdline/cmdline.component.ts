@@ -39,7 +39,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { AuthEvent, AuthenticatorService } from '../services/authenticator.service';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { bytesToBase64 } from '@qcrypt/crypto';
 import { NoAssistDirective } from '../ui/noassist.directive';
@@ -58,7 +58,6 @@ import { NoAssistDirective } from '../ui/noassist.directive';
       MatFormFieldModule,
       MatTooltipModule,
       FormsModule,
-      ReactiveFormsModule,
       RouterLink,
       NoAssistDirective,
    ],
@@ -71,7 +70,7 @@ export class CmdLineComponent implements OnInit, OnDestroy {
    protected readonly showProgress = signal(true);
    protected readonly hideCred = signal(true);
    protected readonly error = signal('');
-   public userCredential = new FormControl<string>('');
+   protected readonly userCredential = signal('');
 
    ngOnInit() {
       this.authSvc
@@ -80,7 +79,7 @@ export class CmdLineComponent implements OnInit, OnDestroy {
          .subscribe(() => {
             this.error.set('');
             // Clear before navigating so the credential is not briefly visible during the transition
-            this.userCredential.setValue('');
+            this.userCredential.set('');
             this._router.navigateByUrl('/');
          });
 
@@ -88,7 +87,7 @@ export class CmdLineComponent implements OnInit, OnDestroy {
    }
 
    ngOnDestroy() {
-      this.userCredential.setValue('');
+      this.userCredential.set('');
    }
 
    protected reloadData() {
@@ -99,7 +98,7 @@ export class CmdLineComponent implements OnInit, OnDestroy {
          .reauthenticate()
          .then(async () => {
             const userCred = await this.authSvc.getUserCred();
-            this.userCredential.setValue(bytesToBase64(userCred));
+            this.userCredential.set(bytesToBase64(userCred));
             userCred.fill(0);
          })
          .catch((err) => {

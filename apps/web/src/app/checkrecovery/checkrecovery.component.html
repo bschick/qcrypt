@@ -24,7 +24,7 @@
           matInput
           noAssist
           type="text"
-          [formControl]="recoveryWords"
+          [(ngModel)]="recoveryWords"
           class="words-area"></textarea>
       </mat-form-field>
       <div class="button-stack">
@@ -155,7 +155,7 @@
 @if (sheetUserCred()) {
   <app-recovery-sheet
     [userName]="authSvc.userName"
-    [recoveryWords]="recoveryWords.value!"
+    [recoveryWords]="recoveryWords()"
     [userCred]="sheetUserCred()" />
 }
 }
