@@ -51,7 +51,7 @@ export class WelcomeComponent {
    protected readonly error = signal('');
    protected readonly showProgress = signal(false);
 
-   async onClickExisting(_event: MouseEvent) {
+   protected async onClickExisting(_event: MouseEvent) {
       try {
          this.error.set('');
          this.showProgress.set(true);

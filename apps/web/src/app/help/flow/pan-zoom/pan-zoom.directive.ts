@@ -71,7 +71,7 @@ export class PanZoomDirective {
    readonly panY = signal(0);
    readonly dragging = signal(false);
 
-   readonly cursorStyle = computed(() => {
+   protected readonly cursorStyle = computed(() => {
       // Only show a grab cursor when there's actually something to
       // pan (scale > 1)
       if (this.scale() <= 1) {
@@ -234,7 +234,7 @@ export class PanZoomDirective {
       this._scaleAt(factor, event.clientX - rect.left, event.clientY - rect.top);
    };
 
-   onPointerDown(event: PointerEvent): void {
+   protected onPointerDown(event: PointerEvent): void {
       if (event.button !== 0 && event.pointerType === 'mouse') {
          return;
       }
@@ -247,7 +247,7 @@ export class PanZoomDirective {
       this.focus();
    }
 
-   onPointerMove(event: PointerEvent): void {
+   protected onPointerMove(event: PointerEvent): void {
       if (!this.dragging() || event.pointerId !== this._activePointerId) {
          return;
       }
@@ -272,20 +272,20 @@ export class PanZoomDirective {
       this.panBy(dx, dy);
    }
 
-   onPointerUp(event: PointerEvent): void {
+   protected onPointerUp(event: PointerEvent): void {
       if (event.pointerId !== this._activePointerId) {
          return;
       }
       this._releaseCapture();
    }
 
-   onDoubleClick(event: MouseEvent): void {
+   protected onDoubleClick(event: MouseEvent): void {
       event.preventDefault();
       const rect = this._host.nativeElement.getBoundingClientRect();
       this._scaleAt(BUTTON_STEP * BUTTON_STEP, event.clientX - rect.left, event.clientY - rect.top);
    }
 
-   onKeyDown(event: KeyboardEvent): void {
+   protected onKeyDown(event: KeyboardEvent): void {
       const step = event.shiftKey ? KEY_PAN_PX_FAST : KEY_PAN_PX;
       switch (event.key) {
          case '+':

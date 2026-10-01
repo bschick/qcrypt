@@ -68,12 +68,12 @@ export class FaqsComponent implements OnInit {
    private readonly _snackBar = inject(MatSnackBar);
    private readonly _destroyRef = inject(DestroyRef);
 
-   public readonly allExpanded = signal(false);
+   protected readonly allExpanded = signal(false);
    public readonly searchTerm = signal('');
    public readonly singleFaqId = signal<string | null>(null);
    public readonly notFound = signal(false);
    public readonly expandedPositions = signal<number[]>([]);
-   public readonly displayedColumns: string[] = ['position', 'question'];
+   protected readonly displayedColumns: string[] = ['position', 'question'];
    public readonly dataSource: MatTableDataSource<FAQElement>;
 
    constructor() {
@@ -167,12 +167,12 @@ export class FaqsComponent implements OnInit {
       }
    }
 
-   applyFilter(filter: string | null = null) {
+   protected applyFilter(filter: string | null = null) {
       filter = filter ?? '';
       this.dataSource.filter = filter.trim().toLowerCase();
    }
 
-   addOrRemove(position: number) {
+   protected addOrRemove(position: number) {
       if (this.expandedPositions().includes(position)) {
          this.expandedPositions.update((positions) => positions.filter((pos) => pos !== position));
       } else {
@@ -180,7 +180,7 @@ export class FaqsComponent implements OnInit {
       }
    }
 
-   onToggleExpand() {
+   protected onToggleExpand() {
       if (this.allExpanded()) {
          this.expandedPositions.set([]);
       } else {
@@ -194,7 +194,7 @@ export class FaqsComponent implements OnInit {
       return `${window.location.origin}/help/faqs/${id}`;
    }
 
-   onCopyLink(event: MouseEvent) {
+   protected onCopyLink(event: MouseEvent) {
       event.stopPropagation();
       this.toastMessage('Link copied to clipboard');
    }

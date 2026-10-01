@@ -120,7 +120,7 @@ export class CredentialsComponent implements OnInit {
       this.error.set(message);
    }
 
-   protected toastMessage(msg: string): void {
+   private _toastMessage(msg: string): void {
       this._snackBar.open(msg, '', {
          duration: 2000,
       });
@@ -201,7 +201,7 @@ export class CredentialsComponent implements OnInit {
          this.clearError();
          const userInfo = await this.authSvc.setUserName(component.typed());
          component.commit(userInfo.userName);
-         this.toastMessage('User name updated');
+         this._toastMessage('User name updated');
       } catch (err) {
          console.error(err);
          this._setError('Name change failed, must be 6 to 31 characters after unsupported characters are removed');
@@ -224,7 +224,7 @@ export class CredentialsComponent implements OnInit {
          const userInfo = await this.authSvc.setPasskeyDescription(passkey.credentialId, component.typed());
          const saved = userInfo.authenticators.find((auth) => auth.credentialId === passkey.credentialId);
          component.commit(saved!.description);
-         this.toastMessage('Passkey description updated');
+         this._toastMessage('Passkey description updated');
       } catch (err) {
          console.error(err);
          this._setError(

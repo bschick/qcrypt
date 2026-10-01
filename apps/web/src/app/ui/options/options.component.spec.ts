@@ -11,6 +11,7 @@ import { MatSelectHarness } from '@angular/material/select/testing';
 import { MatSlideToggleHarness } from '@angular/material/slide-toggle/testing';
 import * as cc from '@qcrypt/crypto/consts';
 import { CipherService } from '../../services/cipher.service';
+import { AuthenticatorService } from '../../services/authenticator.service';
 
 const USER_ID = 'optionsSpecUser';
 
@@ -142,5 +143,24 @@ describe('OptionsComponent', () => {
       expect(component.algorithms).toEqual(['AES-GCM', 'X20-PLY', 'AEGIS-256']);
       expect(fixture.nativeElement.querySelectorAll('app-algorithms tr').length).toBe(3);
       expect(panelTitle()).toBe('Encryption Modes');
+   });
+
+   it('ignores a benchmark that finishes after the options are gone', async () => {
+      const warn = vi.spyOn(console, 'warn');
+      let finishBenchmark: (result: [number, number, number]) => void = () => {};
+      vi.spyOn(TestBed.inject(CipherService), 'benchmark').mockReturnValue(
+         new Promise((resolve) => {
+            finishBenchmark = resolve;
+         }),
+      );
+      const lateFixture = TestBed.createComponent(OptionsComponent);
+      lateFixture.detectChanges();
+      lateFixture.destroy();
+
+      finishBenchmark([cc.ICOUNT_DEFAULT, cc.ICOUNT_MAX, 1000]);
+      await TestBed.inject(AuthenticatorService).ready;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('NG0953'));
    });
 });

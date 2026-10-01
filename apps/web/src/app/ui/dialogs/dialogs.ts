@@ -155,7 +155,7 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
       this._timerId = window.setTimeout(() => this._dialogRef.close(), PWD_CLOSE_TIMEOUT);
    }
 
-   onAcceptableChanged(state: AcceptableState) {
+   protected onAcceptableChanged(state: AcceptableState) {
       if (!this.encrypting) {
          return;
       }
@@ -188,7 +188,7 @@ export class CipherInfoDialog {
    public ic!: string;
    public alg!: string;
    public ver!: string;
-   public lps!: number;
+   protected lps!: number;
    public hint?: string;
 
    constructor() {
@@ -223,8 +223,8 @@ export class SigninDialog implements OnDestroy {
 
    public userName: string | null;
    public userId: string | null;
-   public notice: string = '';
-   public noticeClass: string = 'error-msg';
+   protected notice: string = '';
+   protected noticeClass: string = 'error-msg';
    public showProgress: boolean = false;
    private _noticeTimerId = 0;
    private _userActed = false;
@@ -265,7 +265,7 @@ export class SigninDialog implements OnDestroy {
 
    // Would be cleaner to move navigation to core.component, but doing
    // it in the dialog gives us a good place to show errors.
-   async onClickSignin(_event: MouseEvent) {
+   protected async onClickSignin(_event: MouseEvent) {
       try {
          this._userActed = true;
          this._clearNoticeTimer();
@@ -296,7 +296,7 @@ export class SigninDialog implements OnDestroy {
       }
    }
 
-   onClickForget(_event: MouseEvent) {
+   protected onClickForget(_event: MouseEvent) {
       this._userActed = true;
       this._clearNoticeTimer();
       this.notice = '';

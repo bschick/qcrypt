@@ -54,8 +54,8 @@ export class QCryptComponent implements OnInit {
    private readonly _authSvc = inject(AuthenticatorService);
 
    private readonly _destroyRef = inject(DestroyRef);
-   public bgColorDefault = '';
-   public bgColorFocus = 'color-mix(in srgb,var(--mat-sys-primary) 10%,transparent)';
+   private _bgColorDefault = '';
+   private _bgColorFocus = 'color-mix(in srgb,var(--mat-sys-primary) 10%,transparent)';
    public showPKButton = false;
 
    ngOnInit(): void {
@@ -63,19 +63,19 @@ export class QCryptComponent implements OnInit {
       this._authSvc
          .on([AuthEvent.Logout, AuthEvent.Login, AuthEvent.Forget])
          .pipe(takeUntilDestroyed(this._destroyRef))
-         .subscribe((data) => this.onAuthEvent(data));
+         .subscribe((data) => this._onAuthEvent(data));
    }
 
-   onAuthEvent(data: AuthEventData) {
+   private _onAuthEvent(data: AuthEventData) {
       this.showPKButton = data.event === AuthEvent.Login;
    }
 
    // Help stays readable so the user can look up what the halt means
-   showHalted(): boolean {
+   protected showHalted(): boolean {
       return this._authSvc.halted && !window.location.pathname.startsWith('/help');
    }
 
-   toggleNav(nav: MatSidenav) {
+   protected toggleNav(nav: MatSidenav) {
       if (this._authSvc.hasSession()) {
          // Open with a mouse focus origin so the focus restored to this toggle when the
          // panel closes doesn't leave the keyboard-focus highlight on the button.
@@ -85,20 +85,20 @@ export class QCryptComponent implements OnInit {
       }
    }
 
-   focusColor(test?: string) {
+   protected focusColor(test?: string) {
       const location = window.location;
       if (test) {
-         return location.pathname.startsWith(test) ? this.bgColorFocus : this.bgColorDefault;
+         return location.pathname.startsWith(test) ? this._bgColorFocus : this._bgColorDefault;
       } else {
          return ['', '/newuser', '/welcome', '/', undefined].includes(location.pathname)
-            ? this.bgColorFocus
-            : this.bgColorDefault;
+            ? this._bgColorFocus
+            : this._bgColorDefault;
       }
    }
 
-   isWelcomePage(): boolean {
+   protected isWelcomePage(): boolean {
       return this._router.url.startsWith('/welcome');
    }
 
-   onOpenedCredentials() {}
+   protected onOpenedCredentials() {}
 }

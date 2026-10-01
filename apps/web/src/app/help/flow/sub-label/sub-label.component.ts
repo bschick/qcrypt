@@ -72,5 +72,5 @@ export function parseSubscripts(text: string): LabelSegment[] {
 })
 export class SubLabelComponent {
    text = input.required<string>();
-   segments = computed(() => parseSubscripts(this.text()));
+   protected segments = computed(() => parseSubscripts(this.text()));
 }

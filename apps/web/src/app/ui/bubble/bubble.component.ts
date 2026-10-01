@@ -42,7 +42,7 @@ export class BubbleComponent {
    public readonly changeRef = inject(ChangeDetectorRef);
 
    readonly position = signal<BubblePosition>(BubblePosition.DEFAULT);
-   readonly theme = signal('light');
+   protected readonly theme = signal('light');
    readonly tip = signal('');
    readonly left = signal(0);
    readonly top = signal(0);

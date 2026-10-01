@@ -77,9 +77,9 @@ export class StrengthMeterComponent implements AfterViewInit {
    readonly password = input('');
 
    protected readonly strength = signal(-1);
-   // Local overrides of strengthMin take precedence until minStrength() changes
-   protected readonly strengthMin = linkedSignal(() => Math.max(0, Math.min(this.minStrength(), 4)));
-   protected readonly segmentOffColor = 'var(--none-pwd-color)';
+   // Local overrides of _strengthMin take precedence until minStrength() changes
+   private readonly _strengthMin = linkedSignal(() => Math.max(0, Math.min(this.minStrength(), 4)));
+   private readonly _segmentOffColor = 'var(--none-pwd-color)';
    protected readonly strengthSlider = signal(1);
    protected readonly warning = signal('');
    protected readonly suggestion = signal('');
@@ -108,7 +108,7 @@ export class StrengthMeterComponent implements AfterViewInit {
          this._pwnedChecked = false;
          this._breachedPassword = '';
 
-         // _updateAcceptable reads strength and strengthMin, which must not trigger a rescore
+         // _updateAcceptable reads strength and _strengthMin, which must not trigger a rescore
          untracked(() => {
             if (password) {
                this._startedProcessing();
@@ -309,7 +309,7 @@ export class StrengthMeterComponent implements AfterViewInit {
          parent.style.setProperty('--mat-slider-inactive-track-color', 'transparent');
       }
 
-      this._setMinStrength(this.strengthMin());
+      this._setMinStrength(this._strengthMin());
    }
 
    protected onStrengthMinChange(_$event: Event) {
@@ -319,7 +319,7 @@ export class StrengthMeterComponent implements AfterViewInit {
    private _setMinStrength(strengthMin: number) {
       strengthMin = Math.max(0, Math.min(strengthMin, 4));
       this.strengthSlider.set(strengthMin + 1);
-      this.strengthMin.set(strengthMin);
+      this._strengthMin.set(strengthMin);
 
       this._updateAcceptable();
    }
@@ -330,7 +330,7 @@ export class StrengthMeterComponent implements AfterViewInit {
 
    private _updateAcceptable() {
       const strength = this.strength();
-      const acceptable = strength >= this.strengthMin();
+      const acceptable = strength >= this._strengthMin();
 
       if (acceptable !== this._acceptable || strength !== this._lastStrength) {
          this._acceptable = acceptable;
@@ -345,6 +345,6 @@ export class StrengthMeterComponent implements AfterViewInit {
 
    protected segmentColor(segment: number): string {
       const strength = this.strength();
-      return strength >= segment ? COLORS[strength] : this.segmentOffColor;
+      return strength >= segment ? COLORS[strength] : this._segmentOffColor;
    }
 }

@@ -16,7 +16,7 @@ import { CopyrightComponent } from '../../ui/copyright/copyright.component';
 export class ProtocolComponent {
    private readonly _dialog = inject(MatDialog);
 
-   openFlowImage(flowImage: string) {
+   protected openFlowImage(flowImage: string) {
       this._dialog.open(FlowDialog, { data: flowImage });
    }
 }
@@ -31,7 +31,7 @@ export class ProtocolComponent {
 export class Protocol4Component {
    private readonly _dialog = inject(MatDialog);
 
-   openFlowImage(flowImage: string) {
+   protected openFlowImage(flowImage: string) {
       this._dialog.open(FlowDialog, { data: flowImage });
    }
 }
@@ -46,7 +46,7 @@ export class Protocol4Component {
 export class Protocol5Component {
    private readonly _dialog = inject(MatDialog);
 
-   openFlowImage(flowImage: string) {
+   protected openFlowImage(flowImage: string) {
       this._dialog.open(FlowDialog, { data: flowImage });
    }
 }
@@ -61,7 +61,7 @@ export class Protocol5Component {
 export class Protocol6Component {
    private readonly _dialog = inject(MatDialog);
 
-   openFlowImage(flowImage: string) {
+   protected openFlowImage(flowImage: string) {
       this._dialog.open(FlowDialog, { data: flowImage });
    }
 }
@@ -73,13 +73,7 @@ export class Protocol6Component {
    changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './protocol.component.scss',
 })
-export class Protocol7Component {
-   private readonly _dialog = inject(MatDialog);
-
-   openFlowImage(flowImage: string) {
-      this._dialog.open(FlowDialog, { data: flowImage });
-   }
-}
+export class Protocol7Component {}
 
 @Component({
    selector: 'app-protocol8',
@@ -88,13 +82,7 @@ export class Protocol7Component {
    changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './protocol.component.scss',
 })
-export class Protocol8Component {
-   private readonly _dialog = inject(MatDialog);
-
-   openFlowImage(flowImage: string) {
-      this._dialog.open(FlowDialog, { data: flowImage });
-   }
-}
+export class Protocol8Component {}
 
 @Component({
    selector: 'flow-dialog',

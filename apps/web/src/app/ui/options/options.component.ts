@@ -22,6 +22,7 @@ SOFTWARE. */
 import {
    type AfterViewInit,
    Component,
+   DestroyRef,
    ElementRef,
    type OnInit,
    ChangeDetectionStrategy,
@@ -103,6 +104,7 @@ function setIfBoolean(check: boolean | string | null, setter: (bool: boolean) =>
 export class OptionsComponent implements OnInit, AfterViewInit {
    private readonly _authSvc = inject(AuthenticatorService);
    private readonly _cipherSvc = inject(CipherService);
+   private readonly _destroyRef = inject(DestroyRef);
 
    protected readonly expandOptions = signal(false);
    protected readonly cipherPanelExpanded = signal(false);
@@ -165,10 +167,14 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          .finally(() => {
             // load after benchmark to overwrite benchmarks with saved values
             this._authSvc.ready.then(() => {
-               if (this._authSvc.hasSession()) {
-                  this.loadOptions(this._authSvc.userId);
-               } else {
-                  this.defaultOptions();
+               // The benchmark can finish after this component is destroyed, and loading then emits to
+               // destroyed outputs
+               if (!this._destroyRef.destroyed) {
+                  if (this._authSvc.hasSession()) {
+                     this.loadOptions(this._authSvc.userId);
+                  } else {
+                     this._defaultOptions();
+                  }
                }
             });
          });
@@ -192,16 +198,16 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          this._optionsLoaded = true;
 
          // set reminder first to reload _lastReminder, which get used in other settings
-         this._setReminder(this.lsGet('reminder'));
-         this._setAlgorithm(this.lsGet('algorithm'));
-         this._setIcount(this.lsGet('icount'));
-         this._setHidePwd(this.lsGet('hidepwd'));
-         this._setCacheTime(this.lsGet('cachetime'));
-         this._setCheckPwned(this.lsGet('checkpwned'));
-         this._setMinPwdStrength(this.lsGet('minpwdstrength'));
-         this._setLoops(this.lsGet('loops'));
-         this._setCTFormat(this.lsGet('ctformat'));
-         this._setVisibilityClear(this.lsGet('vclear'));
+         this._setReminder(this._lsGet('reminder'));
+         this._setAlgorithm(this._lsGet('algorithm'));
+         this._setIcount(this._lsGet('icount'));
+         this._setHidePwd(this._lsGet('hidepwd'));
+         this._setCacheTime(this._lsGet('cachetime'));
+         this._setCheckPwned(this._lsGet('checkpwned'));
+         this._setMinPwdStrength(this._lsGet('minpwdstrength'));
+         this._setLoops(this._lsGet('loops'));
+         this._setCTFormat(this._lsGet('ctformat'));
+         this._setVisibilityClear(this._lsGet('vclear'));
 
          const params = new HttpParams({ fromString: window.location.search });
 
@@ -232,7 +238,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       }
    }
 
-   defaultOptions(): void {
+   private _defaultOptions(): void {
       this._setIcount(this.ICOUNT_DEFAULT);
       this._setHidePwd(this.HIDE_PWD_DEFAULT);
       this._setCacheTime(this.CACHE_TIME_DEFAULT);
@@ -246,24 +252,24 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
       this.algorithmList.set(['X20-PLY']);
       this.loopCount.set(this.loops);
-      this.lsSet('algorithm', JSON.stringify(this.algorithmList()));
+      this._lsSet('algorithm', JSON.stringify(this.algorithmList()));
 
       // these values are only stored when during onblur, so set manually
-      this.lsSet('loops', this.LOOPS_DEFAULT);
-      this.lsSet('icount', this.ICOUNT_DEFAULT);
+      this._lsSet('loops', this.LOOPS_DEFAULT);
+      this._lsSet('icount', this.ICOUNT_DEFAULT);
    }
 
    detachOptions(): void {
       this._optionsLoaded = false;
       this._userId = null;
-      this.defaultOptions();
+      this._defaultOptions();
    }
 
    nukeSensitiveOptions(): void {
       try {
-         this.lsDel('algorithm');
-         this.lsDel('minpwdstrength');
-         this.lsDel('loops');
+         this._lsDel('algorithm');
+         this._lsDel('minpwdstrength');
+         this._lsDel('loops');
          this.detachOptions();
       } catch (err) {
          console.error(err);
@@ -273,16 +279,16 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
    nukeAllOptions(): void {
       try {
-         this.lsDel('algorithm');
-         this.lsDel('icount');
-         this.lsDel('hidepwd');
-         this.lsDel('cachetime');
-         this.lsDel('checkpwned');
-         this.lsDel('minpwdstrength');
-         this.lsDel('loops');
-         this.lsDel('ctformat');
-         this.lsDel('vclear');
-         this.lsDel('reminder');
+         this._lsDel('algorithm');
+         this._lsDel('icount');
+         this._lsDel('hidepwd');
+         this._lsDel('cachetime');
+         this._lsDel('checkpwned');
+         this._lsDel('minpwdstrength');
+         this._lsDel('loops');
+         this._lsDel('ctformat');
+         this._lsDel('vclear');
+         this._lsDel('reminder');
          this.detachOptions();
       } catch (err) {
          console.error(err);
@@ -425,49 +431,49 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       }
    }
 
-   onHidePwdChange(hide: boolean | null): void {
-      this.lsSet('hidepwd', hide);
+   protected onHidePwdChange(hide: boolean | null): void {
+      this._lsSet('hidepwd', hide);
    }
 
-   onModesChange(modes: cc.CipherAlgs[]): void {
+   protected onModesChange(modes: cc.CipherAlgs[]): void {
       // Note that modes length is the max number of modes that have
       // been set, which may be larger than the current # of loops
       // This is done to preserve default values
       this.algorithmList.set(modes);
-      this.lsSet('algorithm', JSON.stringify(modes));
+      this._lsSet('algorithm', JSON.stringify(modes));
    }
 
-   onBlurLoops() {
+   protected onBlurLoops() {
       let loops = this.loopsInput() || this.LOOPS_DEFAULT;
       loops = Math.max(loops, 1);
       loops = Math.min(loops, this.LOOPS_MAX);
 
       this.loopCount.set(loops);
       this._setLoops(loops);
-      this.lsSet('loops', loops);
+      this._lsSet('loops', loops);
 
       this.loopsChange.emit(loops);
    }
 
-   onBlurICount() {
+   protected onBlurICount() {
       let icount = this.icountInput() || this.ICOUNT_MIN;
       icount = Math.max(icount, this.ICOUNT_MIN);
       icount = Math.min(icount, this.icountMax());
 
       this._setIcount(icount);
-      this.lsSet('icount', icount);
+      this._lsSet('icount', icount);
       this._setIcountWarning();
 
       this.icountChange.emit(icount);
    }
 
-   onBlurCacheTime() {
+   protected onBlurCacheTime() {
       if (this.cacheTimeInput() == null) {
          this.onCacheTimeChange(this.CACHE_TIME_DEFAULT);
       }
    }
 
-   onCacheTimeChange(cacheTime: number | null) {
+   protected onCacheTimeChange(cacheTime: number | null) {
       if (cacheTime != null) {
          cacheTime = Math.max(cacheTime, 0);
          cacheTime = Math.min(cacheTime, this.ACTIVITY_TIMEOUT);
@@ -475,37 +481,37 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          if (cacheTime !== this.cacheTimeInput()) {
             this._setCacheTime(cacheTime);
          } else {
-            this.lsSet('cachetime', cacheTime);
+            this._lsSet('cachetime', cacheTime);
             this.cacheTimeChange.emit(cacheTime);
          }
       }
    }
 
-   onPwdStrengthChange(minStrength: string | null): void {
-      this.lsSet('minpwdstrength', minStrength);
+   protected onPwdStrengthChange(minStrength: string | null): void {
+      this._lsSet('minpwdstrength', minStrength);
       this.pwdOptionsChange.emit(true);
    }
 
-   onCheckPwnedChange(check: boolean | null): void {
-      this.lsSet('checkpwned', check);
+   protected onCheckPwnedChange(check: boolean | null): void {
+      this._lsSet('checkpwned', check);
       this.pwdOptionsChange.emit(true);
    }
 
-   onReminderChange(reminder: boolean | null) {
+   protected onReminderChange(reminder: boolean | null) {
       // don't save reminder state if in link format (reminder is always false)
       if (this.formatSelect() !== 'link') {
-         if (this.lsSet('reminder', reminder)) {
+         if (this._lsSet('reminder', reminder)) {
             this._lastReminder = reminder!;
          }
          this.formatOptionsChange.emit(true);
       }
    }
 
-   onVisClearChnage(vclear: boolean | null) {
-      this.lsSet('vclear', vclear);
+   protected onVisClearChnage(vclear: boolean | null) {
+      this._lsSet('vclear', vclear);
    }
 
-   onFormatChange(selected: string | null) {
+   protected onFormatChange(selected: string | null) {
       if (selected === 'link') {
          const saved = this.reminderToggle() || false;
          this._setReminder(false);
@@ -513,22 +519,22 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       } else {
          this._setReminder(this._lastReminder);
       }
-      this.lsSet('ctformat', selected);
+      this._lsSet('ctformat', selected);
       this.formatOptionsChange.emit(true);
    }
 
-   onClickResetOptions(): void {
-      this.defaultOptions();
+   protected onClickResetOptions(): void {
+      this._defaultOptions();
    }
 
-   lsGet(key: string): string | null {
+   private _lsGet(key: string): string | null {
       if (this._userId) {
          return localStorage.getItem(this._userId + key);
       }
       return null;
    }
 
-   lsSet(key: string, value: string | number | boolean | null): boolean {
+   private _lsSet(key: string, value: string | number | boolean | null): boolean {
       if (value != null && this._userId) {
          localStorage.setItem(this._userId + key, value.toString());
          return true;
@@ -536,7 +542,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       return false;
    }
 
-   lsDel(key: string) {
+   private _lsDel(key: string) {
       if (this._userId) {
          localStorage.removeItem(this._userId + key);
       }

@@ -101,16 +101,16 @@ export class FlowComponent {
    private readonly _snackBar = inject(MatSnackBar);
    private readonly _params = toSignal(this._route.queryParamMap, { requireSync: true });
    readonly viewer = viewChild<PanZoomDirective>('viewer');
-   readonly reducedMotion = signal(false);
+   private readonly _reducedMotion = signal(false);
    private _zoomFromRect: DOMRect | null = null;
-   readonly overviewEntries = Object.entries(FLOW_OVERVIEWS) as [string, FlowItem][];
+   protected readonly overviewEntries = Object.entries(FLOW_OVERVIEWS) as [string, FlowItem][];
 
-   readonly searchData = new MatTableDataSource<FlowSearchItem>([]);
-   readonly searchColumns = ['label'];
+   protected readonly searchData = new MatTableDataSource<FlowSearchItem>([]);
+   protected readonly searchColumns = ['label'];
    readonly searchTerm = signal('');
-   readonly searchOpen = signal(false);
-   readonly searchResultCount = signal(0);
-   readonly searchActiveIndex = signal(-1);
+   protected readonly searchOpen = signal(false);
+   protected readonly searchResultCount = signal(0);
+   protected readonly searchActiveIndex = signal(-1);
    private readonly _searchPanel = viewChild<ElementRef<HTMLElement>>('searchPanel');
 
    // Parses ?path=<seg0>,<seg1>,... and truncates to the longest valid prefix.
@@ -198,12 +198,12 @@ export class FlowComponent {
 
       if (typeof window !== 'undefined') {
          const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-         this.reducedMotion.set(query.matches);
-         query.addEventListener('change', (event) => this.reducedMotion.set(event.matches));
+         this._reducedMotion.set(query.matches);
+         query.addEventListener('change', (event) => this._reducedMotion.set(event.matches));
       }
    }
 
-   selectOverview(overviewId: string, event: Event): void {
+   protected selectOverview(overviewId: string, event: Event): void {
       const sourceRect = (event.currentTarget as HTMLElement | null)?.getBoundingClientRect();
       if (sourceRect) {
          this._zoomFromRect = sourceRect;
@@ -211,7 +211,7 @@ export class FlowComponent {
       this._navigateTo([overviewId]);
    }
 
-   onCrumbClick(event: MouseEvent, queryParams: Record<string, string | null>): void {
+   protected onCrumbClick(event: MouseEvent, queryParams: Record<string, string | null>): void {
       event.preventDefault();
       this._router.navigate([], {
          relativeTo: this._route,
@@ -220,7 +220,7 @@ export class FlowComponent {
       });
    }
 
-   onSvgLoaded(svg: SVGSVGElement): void {
+   protected onSvgLoaded(svg: SVGSVGElement): void {
       svg.querySelectorAll<SVGElement>('[data-target]').forEach((elem) => {
          const target = elem.getAttribute('data-target');
          if (!target || !FLOW_SUBSYSTEMS[target]) {
@@ -244,7 +244,7 @@ export class FlowComponent {
       }
    }
 
-   onSvgClick(event: MouseEvent): void {
+   protected onSvgClick(event: MouseEvent): void {
       if (this.viewer()?.wasDrag()) {
          return;
       }
@@ -256,33 +256,33 @@ export class FlowComponent {
       }
    }
 
-   onSearchInput(value: string): void {
+   protected onSearchInput(value: string): void {
       this.searchTerm.set(value);
       this.searchActiveIndex.set(-1);
       this.searchOpen.set(value.trim() !== '');
       this._applyFilter(value);
    }
 
-   onSearchFocus(): void {
+   protected onSearchFocus(): void {
       this.searchActiveIndex.set(-1);
       this.searchOpen.set(this.searchTerm().trim() !== '');
       this._applyFilter(this.searchTerm());
    }
 
-   onSearchClick(): void {
+   protected onSearchClick(): void {
       this.searchOpen.set(this.searchTerm().trim() !== '');
    }
 
-   clearSearch(input: HTMLInputElement): void {
+   protected clearSearch(input: HTMLInputElement): void {
       this._resetSearch();
       input.focus();
    }
 
-   onSearchBlur(): void {
+   protected onSearchBlur(): void {
       this.searchOpen.set(false);
    }
 
-   onSearchKeydown(event: KeyboardEvent, input: HTMLInputElement): void {
+   protected onSearchKeydown(event: KeyboardEvent, input: HTMLInputElement): void {
       const count = this.searchData.filteredData.length;
       switch (event.key) {
          case 'ArrowDown':
@@ -315,7 +315,7 @@ export class FlowComponent {
       }
    }
 
-   selectSearchResult(key: string, event: Event): void {
+   protected selectSearchResult(key: string, event: Event): void {
       event.preventDefault();
       this.searchActiveIndex.set(-1);
       this.searchOpen.set(false);
@@ -360,7 +360,7 @@ export class FlowComponent {
    }
 
    private _playZoomIn(svg: SVGSVGElement, source: DOMRect): void {
-      if (this.reducedMotion() || typeof svg.animate !== 'function') {
+      if (this._reducedMotion() || typeof svg.animate !== 'function') {
          return;
       }
       const parent = svg.parentElement;
@@ -401,7 +401,7 @@ export class FlowComponent {
       this.viewer()?.focus();
    }
 
-   resetView(): void {
+   protected resetView(): void {
       this.viewer()?.reset();
       this.viewer()?.focus();
    }
