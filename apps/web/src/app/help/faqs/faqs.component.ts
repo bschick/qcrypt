@@ -19,7 +19,15 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Component, DestroyRef, ViewEncapsulation, inject, type OnInit, ChangeDetectionStrategy } from '@angular/core';
+import {
+   Component,
+   DestroyRef,
+   ViewEncapsulation,
+   inject,
+   type OnInit,
+   ChangeDetectionStrategy,
+   signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
@@ -60,13 +68,13 @@ export class FaqsComponent implements OnInit {
    private readonly _snackBar = inject(MatSnackBar);
    private readonly _destroyRef = inject(DestroyRef);
 
-   public allExpanded = false;
-   public searchTerm = '';
-   public singleFaqId: string | null = null;
-   public notFound = false;
-   public expandedPositions: number[] = [];
-   public displayedColumns: string[] = ['position', 'question'];
-   public dataSource: MatTableDataSource<FAQElement>;
+   public readonly allExpanded = signal(false);
+   public readonly searchTerm = signal('');
+   public readonly singleFaqId = signal<string | null>(null);
+   public readonly notFound = signal(false);
+   public readonly expandedPositions = signal<number[]>([]);
+   public readonly displayedColumns: string[] = ['position', 'question'];
+   public readonly dataSource: MatTableDataSource<FAQElement>;
 
    constructor() {
       for (const [index, element] of ELEMENT_DATA.entries()) {
@@ -125,21 +133,21 @@ export class FaqsComponent implements OnInit {
          const targetId = id.trim().toLowerCase();
          const match = ELEMENT_DATA.find((faq) => faq.id.toLowerCase() === targetId);
          if (match) {
-            this.singleFaqId = match.id;
-            this.notFound = false;
+            this.singleFaqId.set(match.id);
+            this.notFound.set(false);
             this.dataSource.data = [match];
-            this.expandedPositions = [match.position];
-            this.allExpanded = true;
+            this.expandedPositions.set([match.position]);
+            this.allExpanded.set(true);
          } else {
-            this.singleFaqId = targetId;
-            this.notFound = true;
+            this.singleFaqId.set(targetId);
+            this.notFound.set(true);
             this.dataSource.data = [];
-            this.expandedPositions = [];
-            this.allExpanded = false;
+            this.expandedPositions.set([]);
+            this.allExpanded.set(false);
          }
       } else {
-         this.singleFaqId = null;
-         this.notFound = false;
+         this.singleFaqId.set(null);
+         this.notFound.set(false);
          this.dataSource.data = ELEMENT_DATA;
          this._checkQueryParams();
       }
@@ -148,14 +156,14 @@ export class FaqsComponent implements OnInit {
    private _checkQueryParams(): void {
       const search = this._route.snapshot.queryParamMap.get('search');
       if (search) {
-         this.searchTerm = search;
+         this.searchTerm.set(search);
          this.applyFilter(search);
          this.onToggleExpand();
       } else {
-         this.searchTerm = '';
+         this.searchTerm.set('');
          this.applyFilter('');
-         this.expandedPositions = [];
-         this.allExpanded = false;
+         this.expandedPositions.set([]);
+         this.allExpanded.set(false);
       }
    }
 
@@ -165,21 +173,21 @@ export class FaqsComponent implements OnInit {
    }
 
    addOrRemove(position: number) {
-      if (this.expandedPositions.includes(position)) {
-         this.expandedPositions = this.expandedPositions.filter((e) => e !== position);
+      if (this.expandedPositions().includes(position)) {
+         this.expandedPositions.update((positions) => positions.filter((pos) => pos !== position));
       } else {
-         this.expandedPositions.push(position);
+         this.expandedPositions.update((positions) => [...positions, position]);
       }
    }
 
    onToggleExpand() {
-      if (this.allExpanded) {
-         this.expandedPositions = [];
+      if (this.allExpanded()) {
+         this.expandedPositions.set([]);
       } else {
          // extra 0 at the front doesn't hurt
-         this.expandedPositions = [...Array(ELEMENT_DATA.length).keys(), ELEMENT_DATA.length];
+         this.expandedPositions.set([...Array(ELEMENT_DATA.length).keys(), ELEMENT_DATA.length]);
       }
-      this.allExpanded = !this.allExpanded;
+      this.allExpanded.set(!this.allExpanded());
    }
 
    getFaqUrl(id: string): string {

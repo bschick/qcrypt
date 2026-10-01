@@ -104,12 +104,5 @@ export class Protocol8Component {
    imports: [MatDialogModule, MatIconModule, MatTooltipModule, MatButtonModule],
 })
 export class FlowDialog {
-   private readonly _flowData = inject<string>(MAT_DIALOG_DATA);
-
-   public flowImage: string;
-   public zoomed = true;
-
-   constructor() {
-      this.flowImage = this._flowData;
-   }
+   protected readonly flowImage = inject<string>(MAT_DIALOG_DATA);
 }

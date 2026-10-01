@@ -18,8 +18,8 @@ export class OverviewComponent {
    private readonly _matIconRegistry = inject(MatIconRegistry);
    private readonly _domSanitizer = inject(DomSanitizer);
 
-   public version = environment.clientVersion;
-   public copyright = environment.copyright;
+   public readonly version = environment.clientVersion;
+   public readonly copyright = environment.copyright;
 
    constructor() {
       this._matIconRegistry.addSvgIcon(
