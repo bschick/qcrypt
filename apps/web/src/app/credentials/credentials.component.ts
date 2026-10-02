@@ -20,18 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import {
-   Component,
-   DestroyRef,
-   type OnInit,
-   computed,
-   effect,
-   Renderer2,
-   ChangeDetectionStrategy,
-   inject,
-   output,
-   signal,
-} from '@angular/core';
+import { Component, DestroyRef, type OnInit, computed, effect, Renderer2, inject, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -61,7 +50,6 @@ export type ErrorPart = {
    selector: 'app-credentials',
    templateUrl: './credentials.component.html',
    styleUrl: './credentials.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       MatDividerModule,
       MatTableModule,
@@ -249,7 +237,6 @@ https://angular.dev/guide/forms/reactive-forms
    selector: 'confirm-dialog',
    templateUrl: 'confirm-dialog.html',
    styleUrl: './credentials.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       MatDialogModule,
       MatIconModule,

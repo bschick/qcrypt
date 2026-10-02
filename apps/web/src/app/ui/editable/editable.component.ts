@@ -19,17 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import {
-   Component,
-   ElementRef,
-   ChangeDetectionStrategy,
-   input,
-   linkedSignal,
-   model,
-   output,
-   signal,
-   viewChild,
-} from '@angular/core';
+import { Component, ElementRef, input, linkedSignal, model, output, signal, viewChild } from '@angular/core';
 
 import { MatInputModule } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
@@ -43,7 +33,6 @@ import { NoAssistDirective } from '../noassist.directive';
    selector: 'app-editable',
    imports: [MatInputModule, FormsModule, MatFormFieldModule, MatIconModule, MatButtonModule, NoAssistDirective],
    templateUrl: './editable.component.html',
-   changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './editable.component.scss',
 })
 export class EditableComponent {

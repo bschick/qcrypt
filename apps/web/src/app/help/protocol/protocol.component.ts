@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -10,7 +10,6 @@ import { CopyrightComponent } from '../../ui/copyright/copyright.component';
    selector: 'app-protocol',
    imports: [MatTooltipModule, RouterLink, CopyrightComponent],
    templateUrl: './protocol.component.html',
-   changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './protocol.component.scss',
 })
 export class ProtocolComponent {
@@ -25,7 +24,6 @@ export class ProtocolComponent {
    selector: 'app-protocol4',
    imports: [MatTooltipModule, RouterLink, CopyrightComponent],
    templateUrl: './protocol4.component.html',
-   changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './protocol.component.scss',
 })
 export class Protocol4Component {
@@ -40,7 +38,6 @@ export class Protocol4Component {
    selector: 'app-protocol5',
    imports: [MatTooltipModule, RouterLink, CopyrightComponent],
    templateUrl: './protocol5.component.html',
-   changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './protocol.component.scss',
 })
 export class Protocol5Component {
@@ -55,7 +52,6 @@ export class Protocol5Component {
    selector: 'app-protocol6',
    imports: [MatTooltipModule, RouterLink, CopyrightComponent],
    templateUrl: './protocol6.component.html',
-   changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './protocol.component.scss',
 })
 export class Protocol6Component {
@@ -70,7 +66,6 @@ export class Protocol6Component {
    selector: 'app-protocol7',
    imports: [MatTooltipModule, CopyrightComponent],
    templateUrl: './protocol7.component.html',
-   changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './protocol.component.scss',
 })
 export class Protocol7Component {}
@@ -79,7 +74,6 @@ export class Protocol7Component {}
    selector: 'app-protocol8',
    imports: [MatTooltipModule, RouterLink, CopyrightComponent],
    templateUrl: './protocol8.component.html',
-   changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './protocol.component.scss',
 })
 export class Protocol8Component {}
@@ -88,7 +82,6 @@ export class Protocol8Component {}
    selector: 'flow-dialog',
    templateUrl: './flow-dialog.html',
    styleUrl: './protocol.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatDialogModule, MatIconModule, MatTooltipModule, MatButtonModule],
 })
 export class FlowDialog {

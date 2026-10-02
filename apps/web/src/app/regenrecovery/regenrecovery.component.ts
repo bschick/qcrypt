@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, DestroyRef, inject, type OnInit, ChangeDetectionStrategy, signal } from '@angular/core';
+import { Component, DestroyRef, inject, type OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AuthEvent, AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink } from '@angular/router';
@@ -33,7 +33,6 @@ import { MatCardModule } from '@angular/material/card';
    selector: 'app-regenrecovery',
    templateUrl: './regenrecovery.component.html',
    styleUrl: './regenrecovery.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatIconModule, MatButtonModule, MatProgressSpinnerModule, MatCardModule, RouterLink],
 })
 export class RegenrecoveryComponent implements OnInit {

@@ -20,15 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import {
-   Component,
-   DestroyRef,
-   type OnDestroy,
-   type OnInit,
-   ChangeDetectionStrategy,
-   inject,
-   signal,
-} from '@angular/core';
+import { Component, DestroyRef, type OnDestroy, type OnInit, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -48,7 +40,6 @@ const SHEET_TITLE = 'quick_crypt_account_recovery';
    selector: 'app-checkrecovery',
    templateUrl: './checkrecovery.component.html',
    styleUrl: './checkrecovery.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       FormsModule,
       RouterLink,

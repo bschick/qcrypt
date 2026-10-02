@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { Component, computed, input } from '@angular/core';
 
 export interface LabelSegment {
    text: string;
@@ -54,7 +54,6 @@ export function parseSubscripts(text: string): LabelSegment[] {
 
 @Component({
    selector: 'sub-label',
-   changeDetection: ChangeDetectionStrategy.OnPush,
    template: `
       @for (seg of segments(); track $index) {
       @if (seg.sub) {<sub>{{ seg.text }}</sub>}

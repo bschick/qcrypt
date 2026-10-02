@@ -22,8 +22,10 @@ SOFTWARE. */
 import {
    type ApplicationConfig,
    inject,
+   isDevMode,
    provideAppInitializer,
    provideBrowserGlobalErrorListeners,
+   provideCheckNoChangesConfig,
 } from '@angular/core';
 import { OVERLAY_DEFAULT_CONFIG } from '@angular/cdk/overlay';
 import { MatIconRegistry } from '@angular/material/icon';
@@ -47,5 +49,7 @@ export const appConfig: ApplicationConfig = {
       provideAppInitializer(() => {
          inject(MatIconRegistry).setDefaultFontSetClass('material-symbols-rounded');
       }),
+      // Helps detect views that stop updating because a displayed value is not a signal
+      ...(isDevMode() ? [provideCheckNoChangesConfig({ exhaustive: true, interval: 1000 })] : []),
    ],
 };

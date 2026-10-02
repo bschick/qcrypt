@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule, MatIconRegistry } from '@angular/material/icon';
@@ -11,7 +11,6 @@ import { environment } from '../../../environments/environment';
    selector: 'app-overview',
    templateUrl: './overview.component.html',
    styleUrl: './overview.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [RouterLink, MatButtonModule, MatIconModule, MatTooltipModule, CopyrightComponent],
 })
 export class OverviewComponent {

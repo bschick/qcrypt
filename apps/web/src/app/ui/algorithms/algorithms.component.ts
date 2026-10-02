@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Component, ChangeDetectionStrategy, computed, input, model } from '@angular/core';
+import { Component, computed, input, model } from '@angular/core';
 import { Ciphers } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import { MatTableModule } from '@angular/material/table';
@@ -40,7 +40,6 @@ export function fillModes(modes: cc.CipherAlgs[], count: number): cc.CipherAlgs[
    selector: 'app-algorithms',
    imports: [MatTableModule, MatButtonToggleModule, FormsModule],
    templateUrl: './algorithms.component.html',
-   changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './algorithms.component.scss',
 })
 export class AlgorithmsComponent {

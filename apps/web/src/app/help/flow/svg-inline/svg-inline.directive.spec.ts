@@ -1,4 +1,4 @@
-import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -9,7 +9,6 @@ import { FLOW_SVG_HASHES } from '../flow.config';
 @Component({
    standalone: true,
    imports: [SvgInlineDirective],
-   changeDetection: ChangeDetectionStrategy.Eager,
    template: `<div [svgInline]="url()"></div>`,
 })
 class HostComponent {

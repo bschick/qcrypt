@@ -19,17 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import {
-   ChangeDetectionStrategy,
-   Component,
-   ElementRef,
-   computed,
-   effect,
-   inject,
-   signal,
-   untracked,
-   viewChild,
-} from '@angular/core';
+import { Component, ElementRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatIconModule } from '@angular/material/icon';
@@ -81,7 +71,6 @@ function flowSearchItems(overview: string): FlowSearchItem[] {
 
 @Component({
    selector: 'app-flow',
-   changeDetection: ChangeDetectionStrategy.OnPush,
    templateUrl: './flow.component.html',
    styleUrl: './flow.component.scss',
    imports: [

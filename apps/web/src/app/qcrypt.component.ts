@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, ChangeDetectionStrategy, computed, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map } from 'rxjs';
 import { MatIconModule } from '@angular/material/icon';
@@ -37,7 +37,6 @@ import { AuthenticatorService } from './services/authenticator.service';
    selector: 'qcrypt-root',
    templateUrl: './qcrypt.component.html',
    styleUrl: './qcrypt.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       RouterOutlet,
       MatToolbarModule,

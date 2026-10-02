@@ -19,15 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import {
-   Component,
-   DestroyRef,
-   ViewEncapsulation,
-   inject,
-   type OnInit,
-   ChangeDetectionStrategy,
-   signal,
-} from '@angular/core';
+import { Component, DestroyRef, ViewEncapsulation, inject, type OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
@@ -51,7 +43,6 @@ export interface FAQElement {
    templateUrl: './faqs.component.html',
    styleUrl: './faqs.component.scss',
    encapsulation: ViewEncapsulation.None,
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       MatTableModule,
       MatIconModule,

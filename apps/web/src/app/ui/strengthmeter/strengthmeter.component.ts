@@ -23,7 +23,6 @@ import {
    Component,
    ElementRef,
    type AfterViewInit,
-   ChangeDetectionStrategy,
    effect,
    inject,
    input,
@@ -66,7 +65,6 @@ export type AcceptableState = {
    selector: 'app-strengthmeter',
    imports: [MatIconModule, MatButtonModule, MatSliderModule, FormsModule, MatTooltipModule],
    templateUrl: './strengthmeter.component.html',
-   changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './strengthmeter.component.scss',
 })
 export class StrengthMeterComponent implements AfterViewInit {

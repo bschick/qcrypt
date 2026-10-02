@@ -25,7 +25,6 @@ import {
    DestroyRef,
    ElementRef,
    type OnInit,
-   ChangeDetectionStrategy,
    computed,
    inject,
    output,
@@ -98,7 +97,6 @@ function setIfBoolean(check: boolean | string | null, setter: (bool: boolean) =>
       MatButtonModule,
    ],
    templateUrl: './options.component.html',
-   changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './options.component.scss',
 })
 export class OptionsComponent implements OnInit, AfterViewInit {

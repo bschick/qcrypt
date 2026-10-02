@@ -29,7 +29,6 @@ import {
    type OnDestroy,
    SecurityContext,
    NgZone,
-   ChangeDetectionStrategy,
    inject,
    signal,
    viewChild,
@@ -87,7 +86,6 @@ const BLOCK_ORDER_WARNING =
    selector: 'app-core',
    templateUrl: './core.component.html',
    styleUrl: './core.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    host: {
       '(document:visibilitychange)': 'visibilitychange()',
    },
