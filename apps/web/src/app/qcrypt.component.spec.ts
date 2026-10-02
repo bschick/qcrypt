@@ -26,10 +26,10 @@ describe('QCryptComponent', () => {
 
    // Creating an account in another tab clears this session and triggers the forgetUser flow
    it('hides the passkey button when the user is forgotten', () => {
-      component.showPKButton = true;
-
       authSvc.forgetUser(false);
+      fixture.detectChanges();
 
-      expect(component.showPKButton).toBe(false);
+      const button: HTMLButtonElement = fixture.nativeElement.querySelector('button[aria-label="Passkey information"]');
+      expect(button.style.visibility).toBe('hidden');
    });
 });

@@ -24,7 +24,7 @@ SOFTWARE. -->
   <mat-progress-spinner
     class="spinner"
     mode="indeterminate"
-    [style.visibility]="showProgress ? 'visible' : 'hidden'"></mat-progress-spinner>
+    [style.visibility]="showProgress() ? 'visible' : 'hidden'"></mat-progress-spinner>
 
   <div mat-dialog-content class="dialog-content">
     <img src="/assets/passkey.svg" class="pklogo" width="65" height="68.75" />
@@ -46,6 +46,6 @@ SOFTWARE. -->
         <span>Sign in as a different user</span>
       </button>
     </div>
-    <div [class]="noticeClass">{{ notice }}</div>
+    <div [class]="noticeClass()">{{ notice() }}</div>
   </div>
 </span>

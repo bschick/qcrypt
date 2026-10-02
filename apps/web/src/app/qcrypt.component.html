@@ -26,12 +26,12 @@ SOFTWARE.
 <div class="qcrypt">
   <mat-toolbar class="toolbar" [class.toolbar-hidden]="isWelcomePage()">
     <a [routerLink]="'/'">
-      <button [style.background-color]="focusColor()" mat-button class="toolbar-text">
+      <button [style.background-color]="homeButtonColor()" mat-button class="toolbar-text">
         <mat-icon class="filled">enhanced_encryption</mat-icon>
         Quick Crypt
       </button>
     </a>
-    <button [style.background-color]="focusColor('/help')" mat-button class="toolbar-text mleft15"
+    <button [style.background-color]="helpButtonColor()" mat-button class="toolbar-text mleft15"
       #menuTrigger="matMenuTrigger" [matMenuTriggerFor]="helpMenu" name="Help">
       <!--        (mouseover)="menuTrigger.openMenu()" -->
       Help
@@ -55,7 +55,7 @@ SOFTWARE.
     </mat-menu>
 
     <span class="toolbar-spacer"></span>
-    <button [style.visibility]="showPKButton ? 'visible' : 'hidden'" (click)="toggleNav(sideNav)" mat-icon-button
+    <button [style.visibility]="showPKButton() ? 'visible' : 'hidden'" (click)="toggleNav(sideNav)" mat-icon-button
       aria-label="Passkey information">
       <mat-icon>menu</mat-icon>
     </button>

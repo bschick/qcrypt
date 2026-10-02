@@ -72,7 +72,7 @@ export type AcceptableState = {
 export class StrengthMeterComponent implements AfterViewInit {
    readonly minStrength = input(0);
    readonly pwned = input(false);
-   readonly usedPasswords = input<string[]>([]);
+   readonly usedPasswords = input<readonly string[]>([]);
    readonly hint = input('');
    readonly password = input('');
 
@@ -86,7 +86,7 @@ export class StrengthMeterComponent implements AfterViewInit {
 
    private _acceptable = false;
    private _lastStrength = -1;
-   private _usedPasswords: string[] = [];
+   private _usedPasswords: readonly string[] = [];
    private _testQueue: string[] = [];
    private _processing = false;
    private _processDone: Promise<void> = Promise.resolve();

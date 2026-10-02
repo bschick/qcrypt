@@ -62,7 +62,7 @@ export type PwdDialogData = {
    welcomed: boolean;
    userName: string;
    cipherMode: string;
-   usedPasswords: string[];
+   usedPasswords: readonly string[];
 };
 
 const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
@@ -184,12 +184,12 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
 export class CipherInfoDialog {
    private readonly _data = inject<CipherDataInfo>(MAT_DIALOG_DATA);
 
-   public error;
-   public ic!: string;
-   public alg!: string;
-   public ver!: string;
-   protected lps!: number;
-   public hint?: string;
+   public readonly error;
+   public readonly ic!: string;
+   public readonly alg!: string;
+   public readonly ver!: string;
+   protected readonly lps!: number;
+   public readonly hint?: string;
 
    constructor() {
       const data = this._data;
@@ -221,11 +221,11 @@ export class SigninDialog implements OnDestroy {
    private readonly _router = inject(Router);
    private readonly _dialogRef = inject<MatDialogRef<SigninDialog>>(MatDialogRef);
 
-   public userName: string | null;
-   public userId: string | null;
-   protected notice: string = '';
-   protected noticeClass: string = 'error-msg';
-   public showProgress: boolean = false;
+   public readonly userName: string | null;
+   public readonly userId: string | null;
+   protected readonly notice = signal('');
+   protected readonly noticeClass = signal('error-msg');
+   public readonly showProgress = signal(false);
    private _noticeTimerId = 0;
    private _userActed = false;
 
@@ -238,13 +238,13 @@ export class SigninDialog implements OnDestroy {
       this._authSvc.logoutResult().then((result) => {
          if (!this._userActed) {
             if (result === 'error') {
-               this.notice = 'Sign out failed, sign in then out again to retry.';
+               this.notice.set('Sign out failed, sign in then out again to retry.');
             } else if (result === 'success') {
-               this.noticeClass = 'success-msg';
-               this.notice = 'Sign out succeeded';
+               this.noticeClass.set('success-msg');
+               this.notice.set('Sign out succeeded');
                this._noticeTimerId = window.setTimeout(() => {
                   this._noticeTimerId = 0;
-                  this.notice = '';
+                  this.notice.set('');
                }, 4000);
             }
          }
@@ -269,8 +269,8 @@ export class SigninDialog implements OnDestroy {
       try {
          this._userActed = true;
          this._clearNoticeTimer();
-         this.notice = '';
-         this.noticeClass = 'error-msg';
+         this.notice.set('');
+         this.noticeClass.set('error-msg');
 
          // This can happen if another tab logs out or changes passkeys while the
          // dialog is open. Not a great UX, but it's likely a rare race condition
@@ -280,26 +280,26 @@ export class SigninDialog implements OnDestroy {
             this._router.navigateByUrl('/welcome');
             this._dialogRef.close('Navigate');
          } else {
-            this.showProgress = true;
+            this.showProgress.set(true);
             await this._authSvc.createDefaultSession();
             this._dialogRef.close('Login');
          }
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
-            this.notice = 'Sign in failed, check your connection';
+            this.notice.set('Sign in failed, check your connection');
          } else {
-            this.notice = 'Sign in failed, try again or change users';
+            this.notice.set('Sign in failed, try again or change users');
          }
       } finally {
-         this.showProgress = false;
+         this.showProgress.set(false);
       }
    }
 
    protected onClickForget(_event: MouseEvent) {
       this._userActed = true;
       this._clearNoticeTimer();
-      this.notice = '';
+      this.notice.set('');
       // kill other tab sessions
       this._authSvc.forgetUser(true);
       this._router.navigateByUrl('/welcome');

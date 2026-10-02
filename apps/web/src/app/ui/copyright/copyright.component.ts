@@ -30,5 +30,5 @@ import { environment } from '../../../environments/environment';
    styleUrl: './copyright.component.scss',
 })
 export class CopyrightComponent {
-   public copyright = environment.copyright;
+   public readonly copyright = environment.copyright;
 }

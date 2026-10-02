@@ -103,10 +103,10 @@ export class FlowComponent {
    readonly viewer = viewChild<PanZoomDirective>('viewer');
    private readonly _reducedMotion = signal(false);
    private _zoomFromRect: DOMRect | null = null;
-   protected readonly overviewEntries = Object.entries(FLOW_OVERVIEWS) as [string, FlowItem][];
+   protected readonly overviewEntries = Object.entries(FLOW_OVERVIEWS) as readonly [string, FlowItem][];
 
    protected readonly searchData = new MatTableDataSource<FlowSearchItem>([]);
-   protected readonly searchColumns = ['label'];
+   protected readonly searchColumns: readonly string[] = ['label'];
    readonly searchTerm = signal('');
    protected readonly searchOpen = signal(false);
    protected readonly searchResultCount = signal(0);

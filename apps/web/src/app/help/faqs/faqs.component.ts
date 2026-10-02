@@ -73,7 +73,7 @@ export class FaqsComponent implements OnInit {
    public readonly singleFaqId = signal<string | null>(null);
    public readonly notFound = signal(false);
    public readonly expandedPositions = signal<number[]>([]);
-   protected readonly displayedColumns: string[] = ['position', 'question'];
+   protected readonly displayedColumns: readonly string[] = ['position', 'question'];
    public readonly dataSource: MatTableDataSource<FAQElement>;
 
    constructor() {

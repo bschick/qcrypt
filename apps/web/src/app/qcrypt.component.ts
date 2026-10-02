@@ -20,17 +20,18 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, DestroyRef, type OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Component, ChangeDetectionStrategy, computed, inject } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { filter, map } from 'rxjs';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatToolbarModule } from '@angular/material/toolbar';
-import { Router, RouterOutlet, RouterLink } from '@angular/router';
+import { NavigationEnd, Router, RouterOutlet, RouterLink } from '@angular/router';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSidenav, MatSidenavModule } from '@angular/material/sidenav';
 import { CredentialsComponent } from './credentials/credentials.component';
 import { HaltedComponent } from './halted/halted.component';
-import { AuthEvent, type AuthEventData, AuthenticatorService } from './services/authenticator.service';
+import { AuthenticatorService } from './services/authenticator.service';
 
 @Component({
    selector: 'qcrypt-root',
@@ -49,31 +50,31 @@ import { AuthEvent, type AuthEventData, AuthenticatorService } from './services/
       HaltedComponent,
    ],
 })
-export class QCryptComponent implements OnInit {
+export class QCryptComponent {
    private readonly _router = inject(Router);
    private readonly _authSvc = inject(AuthenticatorService);
 
-   private readonly _destroyRef = inject(DestroyRef);
-   private _bgColorDefault = '';
-   private _bgColorFocus = 'color-mix(in srgb,var(--mat-sys-primary) 10%,transparent)';
-   public showPKButton = false;
+   private readonly _bgColorDefault = '';
+   private readonly _bgColorFocus = 'color-mix(in srgb,var(--mat-sys-primary) 10%,transparent)';
+   protected readonly showPKButton = this._authSvc.hasSession;
 
-   ngOnInit(): void {
-      this.showPKButton = this._authSvc.hasSession();
-      this._authSvc
-         .on([AuthEvent.Logout, AuthEvent.Login, AuthEvent.Forget])
-         .pipe(takeUntilDestroyed(this._destroyRef))
-         .subscribe((data) => this._onAuthEvent(data));
-   }
-
-   private _onAuthEvent(data: AuthEventData) {
-      this.showPKButton = data.event === AuthEvent.Login;
-   }
-
+   // router.url and window.location are not signals, so the computeds below read the path from here
+   private readonly _path = toSignal(
+      this._router.events.pipe(
+         filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+         map((event) => new URL(event.urlAfterRedirects, window.location.origin).pathname),
+      ),
+      { initialValue: window.location.pathname },
+   );
+   protected readonly isWelcomePage = computed(() => this._path().startsWith('/welcome'));
+   protected readonly homeButtonColor = computed(() =>
+      this._path() === '/' ? this._bgColorFocus : this._bgColorDefault,
+   );
+   protected readonly helpButtonColor = computed(() =>
+      this._path().startsWith('/help') ? this._bgColorFocus : this._bgColorDefault,
+   );
    // Help stays readable so the user can look up what the halt means
-   protected showHalted(): boolean {
-      return this._authSvc.halted && !window.location.pathname.startsWith('/help');
-   }
+   protected readonly showHalted = computed(() => this._authSvc.halted && !this._path().startsWith('/help'));
 
    protected toggleNav(nav: MatSidenav) {
       if (this._authSvc.hasSession()) {
@@ -83,21 +84,6 @@ export class QCryptComponent implements OnInit {
       } else {
          nav.close();
       }
-   }
-
-   protected focusColor(test?: string) {
-      const location = window.location;
-      if (test) {
-         return location.pathname.startsWith(test) ? this._bgColorFocus : this._bgColorDefault;
-      } else {
-         return ['', '/newuser', '/welcome', '/', undefined].includes(location.pathname)
-            ? this._bgColorFocus
-            : this._bgColorDefault;
-      }
-   }
-
-   protected isWelcomePage(): boolean {
-      return this._router.url.startsWith('/welcome');
    }
 
    protected onOpenedCredentials() {}

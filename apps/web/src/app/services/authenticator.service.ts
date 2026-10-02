@@ -160,7 +160,7 @@ export class AuthenticatorService {
    private readonly _csrf = signal<string | undefined>(undefined);
    private _cachedRecoveryWords?: string;
    private _pendingLogout: Promise<LogoutResult> = Promise.resolve('none');
-   private _halted = false;
+   private readonly _halted = signal(false);
 
    constructor() {
       this._broadcastSvc.setCredentialProvider(() => this._getCredentialPayload());
@@ -273,12 +273,12 @@ export class AuthenticatorService {
    }
 
    public get halted(): boolean {
-      return this._halted;
+      return this._halted();
    }
 
    private _halt(reason: string): never {
       console.error(`halted: ${reason}`);
-      this._halted = true;
+      this._halted.set(true);
       this.logout(true);
       throw new Error('halted');
    }

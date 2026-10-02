@@ -84,7 +84,7 @@ export class CredentialsComponent implements OnInit {
    protected readonly error = signal<ErrorPart[]>([]);
    protected readonly userName = signal('');
    protected readonly passKeys = computed<api.AuthenticatorInfoResponse[]>(() => this.authSvc.authenticators);
-   protected readonly displayedColumns: string[] = ['image', 'description', 'delete'];
+   protected readonly displayedColumns: readonly string[] = ['image', 'description', 'delete'];
    readonly done = output<boolean>();
 
    constructor() {
@@ -265,8 +265,8 @@ export class ConfirmDialog {
    private readonly _r2 = inject(Renderer2);
    private readonly _data = inject<ConfirmData>(MAT_DIALOG_DATA);
 
-   protected pkState = 0;
-   protected userName = '';
+   protected readonly pkState = this._data.pkState;
+   protected readonly userName = this._data.userName;
    protected readonly confirmInput = signal('');
 
    static readonly NONE_PK = 0;
@@ -282,11 +282,6 @@ export class ConfirmDialog {
    }
    protected get ACTIVE_PK(): number {
       return ConfirmDialog.ACTIVE_PK;
-   }
-
-   constructor() {
-      this.pkState = this._data.pkState;
-      this.userName = this._data.userName;
    }
 
    protected onYesClicked() {
