@@ -1,31 +1,24 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FaqsComponent } from './faqs.component';
-import { ActivatedRoute, type ParamMap, convertToParamMap, provideRouter } from '@angular/router';
-import { BehaviorSubject } from 'rxjs';
+import { provideRouter } from '@angular/router';
 
 describe('FaqsComponent', () => {
-   let paramMapSubject: BehaviorSubject<ParamMap>;
-
    async function createFixture(
       initialId: string | null = null,
       search: string | null = null,
    ): Promise<{ fixture: ComponentFixture<FaqsComponent>; component: FaqsComponent }> {
-      paramMapSubject = new BehaviorSubject<ParamMap>(convertToParamMap(initialId === null ? {} : { id: initialId }));
       await TestBed.configureTestingModule({
          imports: [FaqsComponent],
-         providers: [
-            provideRouter([]),
-            {
-               provide: ActivatedRoute,
-               useValue: {
-                  paramMap: paramMapSubject,
-                  snapshot: { queryParamMap: convertToParamMap(search === null ? {} : { search }) },
-               },
-            },
-         ],
+         providers: [provideRouter([])],
       }).compileComponents();
 
       const fixture = TestBed.createComponent(FaqsComponent);
+      if (initialId !== null) {
+         fixture.componentRef.setInput('id', initialId);
+      }
+      if (search !== null) {
+         fixture.componentRef.setInput('search', search);
+      }
       fixture.detectChanges();
       return { fixture, component: fixture.componentInstance };
    }
@@ -92,10 +85,11 @@ describe('FaqsComponent', () => {
    });
 
    it('reacts dynamically when route params change from single FAQ back to all FAQs', async () => {
-      const { component } = await createFixture('0b2');
+      const { fixture, component } = await createFixture('0b2');
       expect(component.dataSource.data.length).toBe(1);
 
-      paramMapSubject.next(convertToParamMap({}));
+      fixture.componentRef.setInput('id', undefined);
+      fixture.detectChanges();
       expect(component.singleFaqId()).toBeNull();
       expect(component.notFound()).toBe(false);
       expect(component.dataSource.data.length).toBeGreaterThan(1);
@@ -118,6 +112,16 @@ describe('FaqsComponent', () => {
       expect(shown).toBeLessThan(component.dataSource.data.length);
       expect(openAnswers(fixture).length).toBe(shown);
       expect(fixture.nativeElement.querySelector('.search-clear')).not.toBeNull();
+   });
+
+   it('applies + and - terms in the search from the URL', async () => {
+      const { fixture, component } = await createFixture(null, '+recovery,-words');
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const shown = questionRows(fixture).length;
+      expect(shown).toBeGreaterThan(0);
+      expect(shown).toBeLessThan(component.dataSource.data.length);
    });
 
    it('clicking a question opens its answer, and clicking again closes it', async () => {

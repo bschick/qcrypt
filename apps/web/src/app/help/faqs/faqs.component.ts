@@ -19,15 +19,14 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Component, DestroyRef, ViewEncapsulation, inject, type OnInit, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Component, ViewEncapsulation, effect, inject, input, type OnInit, signal, untracked } from '@angular/core';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ClipboardModule } from '@angular/cdk/clipboard';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CopyrightComponent } from '../../ui/copyright/copyright.component';
 
@@ -55,9 +54,11 @@ export interface FAQElement {
    ],
 })
 export class FaqsComponent implements OnInit {
-   private readonly _route = inject(ActivatedRoute);
    private readonly _snackBar = inject(MatSnackBar);
-   private readonly _destroyRef = inject(DestroyRef);
+
+   // Set by the router from the :id route parameter and the search query parameter
+   readonly id = input<string>();
+   readonly search = input<string>();
 
    protected readonly allExpanded = signal(false);
    public readonly searchTerm = signal('');
@@ -72,6 +73,11 @@ export class FaqsComponent implements OnInit {
          element.position = index + 1;
       }
       this.dataSource = new MatTableDataSource(ELEMENT_DATA);
+
+      effect(() => {
+         const id = this.id();
+         untracked(() => this._handleRouteId(id ?? null));
+      });
    }
 
    ngOnInit() {
@@ -112,11 +118,6 @@ export class FaqsComponent implements OnInit {
             (neutralTerms.length === 0 || neutralTerms.some((term) => dataStr.includes(term)))
          );
       };
-
-      this._route.paramMap.pipe(takeUntilDestroyed(this._destroyRef)).subscribe((params) => {
-         const id = params.get('id');
-         this._handleRouteId(id);
-      });
    }
 
    private _handleRouteId(id: string | null): void {
@@ -145,7 +146,7 @@ export class FaqsComponent implements OnInit {
    }
 
    private _checkQueryParams(): void {
-      const search = this._route.snapshot.queryParamMap.get('search');
+      const search = this.search();
       if (search) {
          this.searchTerm.set(search);
          this.applyFilter(search);

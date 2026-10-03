@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { RecoveryComponent } from './recovery.component';
-import { ActivatedRoute, provideRouter } from '@angular/router';
+import { provideRouter } from '@angular/router';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { bytesToBase64, cryptoReady, getRandom } from '@qcrypt/crypto';
@@ -13,7 +13,6 @@ describe('RecoveryComponent', () => {
    let getUserCred: () => Promise<Uint8Array>;
    let userId: string;
    let userCred: string;
-   let routeStub: { snapshot: { queryParamMap: Map<string, string>; toString: () => string } };
    let authStub: {
       ready: Promise<void>;
       loadKnownUser: () => string[];
@@ -28,17 +27,6 @@ describe('RecoveryComponent', () => {
       userId = bytesToBase64(getRandom(cc.USERID_BYTES));
       userCred = bytesToBase64(getRandom(cc.USERCRED_BYTES));
       getUserCred = () => Promise.resolve(getRandom(cc.USERCRED_BYTES));
-
-      // A link carrying both parameters is well formed, whatever the credential fetch later does
-      routeStub = {
-         snapshot: {
-            queryParamMap: new Map([
-               ['userid', userId],
-               ['usercred', userCred],
-            ]),
-            toString: () => `/recovery?userid=${userId}&usercred=${userCred}`,
-         },
-      };
 
       authStub = {
          ready: Promise.resolve(),
@@ -55,14 +43,21 @@ describe('RecoveryComponent', () => {
             provideHttpClient(withInterceptorsFromDi()),
             provideHttpClientTesting(),
             { provide: AuthenticatorService, useValue: authStub },
-            { provide: ActivatedRoute, useValue: routeStub },
          ],
       }).compileComponents();
 
+      // Both link parameters are set, so the link is valid whatever the credential fetch returns
+      createComponent({ userid: userId, usercred: userCred });
+   });
+
+   function createComponent(link: { userid?: string; usercred?: string }) {
       fixture = TestBed.createComponent(RecoveryComponent);
       component = fixture.componentInstance;
+      for (const [name, value] of Object.entries(link)) {
+         fixture.componentRef.setInput(name, value);
+      }
       fixture.detectChanges();
-   });
+   }
 
    it('should create', () => {
       expect(component).toBeTruthy();
@@ -80,10 +75,7 @@ describe('RecoveryComponent', () => {
 
    it('keeps the link valid when the credential fetch fails', async () => {
       getUserCred = () => Promise.reject(new Error('passkey prompt dismissed'));
-
-      fixture = TestBed.createComponent(RecoveryComponent);
-      component = fixture.componentInstance;
-      fixture.detectChanges();
+      createComponent({ userid: userId, usercred: userCred });
 
       await authStub.ready;
       await fixture.whenStable();
@@ -93,5 +85,19 @@ describe('RecoveryComponent', () => {
       expect(component.validRecoveryLink()).toBe(true);
       // @ts-expect-error — asserting protected state
       expect(component.error()).not.toBe('Recovery link is invalid');
+   });
+
+   it('rejects a link without a user credential', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      createComponent({ userid: userId });
+
+      await authStub.ready;
+      await fixture.whenStable();
+      errorSpy.mockRestore();
+
+      // @ts-expect-error — asserting protected state
+      expect(component.validRecoveryLink()).toBe(false);
+      // @ts-expect-error — asserting protected state
+      expect(component.error()).toBe('Recovery link is invalid');
    });
 });

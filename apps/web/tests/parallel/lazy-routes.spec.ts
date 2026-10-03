@@ -49,3 +49,21 @@ test.describe('help page content', () => {
       await expect(page.getByRole('heading', { name: /Protocol Description/ })).toBeVisible({ timeout: 10000 });
    });
 });
+
+test.describe('URL values reach the page', () => {
+   test('/help/faqs?search= fills the search box', async ({ page }) => {
+      await page.goto('/help/faqs?search=recovery');
+      await expect(page.locator('.search-input')).toHaveValue('recovery', { timeout: 10000 });
+   });
+
+   test('/recovery with userid and usercred offers to start recovery', async ({ page }) => {
+      await page.goto('/recovery?userid=dXNlcmlk&usercred=dXNlcmNyZWQ');
+      await expect(page.getByRole('button', { name: 'Start the recovery process' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText('The recovery link is not valid')).toHaveCount(0);
+   });
+
+   test('/recovery without usercred reports an invalid link', async ({ page }) => {
+      await page.goto('/recovery?userid=dXNlcmlk');
+      await expect(page.getByText('The recovery link is not valid')).toBeVisible({ timeout: 10000 });
+   });
+});

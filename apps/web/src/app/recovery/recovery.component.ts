@@ -20,9 +20,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnInit, inject, signal } from '@angular/core';
+import { Component, type OnInit, inject, input, signal } from '@angular/core';
 import { AuthenticatorService } from '../services/authenticator.service';
-import { Router, RouterLink, ActivatedRoute } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -49,7 +49,10 @@ export class RecoveryComponent implements OnInit {
 
    private readonly _authSvc = inject<AuthenticatorService>(AuthenticatorService);
    private readonly _router = inject<Router>(Router);
-   private readonly _activeRoute = inject<ActivatedRoute>(ActivatedRoute);
+
+   // Set by the router from the recovery link's query parameters
+   readonly linkUserId = input<string>(undefined, { alias: 'userid' });
+   readonly linkUserCred = input<string>(undefined, { alias: 'usercred' });
 
    ngOnInit() {
       const [userId, userName] = this._authSvc.loadKnownUser();
@@ -66,13 +69,13 @@ export class RecoveryComponent implements OnInit {
             if (this.authenticated() && this._authSvc.hasRecoveryId()) {
                this._router.navigateByUrl('/recovery3');
             } else {
-               this._recoveryUserId = this._activeRoute.snapshot.queryParamMap.get('userid');
-               this._recoverUserCred = this._activeRoute.snapshot.queryParamMap.get('usercred');
+               this._recoveryUserId = this.linkUserId() ?? null;
+               this._recoverUserCred = this.linkUserCred() ?? null;
 
                if (this._recoveryUserId && this._recoverUserCred) {
                   this.validRecoveryLink.set(true);
                } else {
-                  console.error(`recovery link missing userid or usercred: ${this._activeRoute.snapshot.toString()}`);
+                  console.error('recovery link missing userid or usercred');
                   this.error.set('Recovery link is invalid');
                   this.validRecoveryLink.set(false);
                }
