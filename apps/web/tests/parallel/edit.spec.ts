@@ -1,5 +1,5 @@
 import { test, expect, Response } from '@playwright/test';
-import { testWithAuth, toggleCredentials, waitForApiResponse } from '.././common';
+import { testWithAuth, toggleCredentials, waitForApiResponse, setSwitch } from '.././common';
 
 testWithAuth('edit fields', async ({ authFixture }) => {
    const { page } = authFixture;
@@ -100,9 +100,9 @@ testWithAuth('options persistence and defaults', async ({ authFixture }) => {
    await expect(page.locator('text="XChaCha20 Poly1305"')).toHaveCount(1);
    await page.locator('mat-expansion-panel-header').filter({ hasText: 'Advanced Options' }).click();
 
-   await page.getByRole('switch', { name: 'Check If Stolen' }).check();
-   await page.getByRole('switch', { name: 'Clear When Hidden' }).uncheck();
-   await page.getByRole('switch', { name: 'Hide Password' }).uncheck();
+   await setSwitch(page.getByRole('switch', { name: 'Check If Stolen' }), true);
+   await setSwitch(page.getByRole('switch', { name: 'Clear When Hidden' }), false);
+   await setSwitch(page.getByRole('switch', { name: 'Hide Password' }), false);
    await page.locator('mat-select#pwdStrength').click();
    await page.locator('mat-option').filter({ hasText: 'Strong' }).click();
    await page.getByLabel('Hash Iterations').fill('3210000');

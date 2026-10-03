@@ -24,7 +24,7 @@
  *     immediately removes anything not in the new build, breaking any
  *     browser session still fetching chunks referenced by a cached older
  *     `index.html`.
- *   - S3 lifecycle rule by object age: unchanged files (e.g. polyfills
+ *   - S3 lifecycle rule by object age: unchanged files (e.g. a chunk
  *     whose content didn't change) are never re-uploaded, so their
  *     `LastModified` stays at original-upload time — the rule eventually
  *     deletes them while they're still in use by the live site.
@@ -373,8 +373,9 @@ function checkEssentialFiles(scope, keys) {
    if (!hasMatch(/^main-[A-Za-z0-9_-]+\.js$/)) {
       problems.push('missing main-*.js');
    }
-   if (!hasMatch(/^polyfills-[A-Za-z0-9_-]+\.js$/)) {
-      problems.push('missing polyfills-*.js');
+   // The app is zoneless and builds without polyfills, so this file appears only if zone.js or another polyfill is added
+   if (hasMatch(/^polyfills-[A-Za-z0-9_-]+\.js$/)) {
+      problems.push('unexpected polyfills-*.js');
    }
    if (!hasMatch(/^styles-[A-Za-z0-9_-]+\.css$/)) {
       problems.push('missing styles-*.css');

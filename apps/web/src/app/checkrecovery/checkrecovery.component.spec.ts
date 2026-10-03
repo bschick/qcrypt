@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { CheckRecoveryComponent } from './checkrecovery.component';
 import { Router, provideRouter } from '@angular/router';
-import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { AuthenticatorService } from '../services/authenticator.service';
 
 describe('CheckRecoveryComponent', () => {
@@ -12,11 +12,7 @@ describe('CheckRecoveryComponent', () => {
    beforeEach(async () => {
       await TestBed.configureTestingModule({
          imports: [CheckRecoveryComponent],
-         providers: [
-            provideRouter([]),
-            provideHttpClient(withXhr(), withInterceptorsFromDi()),
-            provideHttpClientTesting(),
-         ],
+         providers: [provideRouter([]), provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()],
       }).compileComponents();
 
       fixture = TestBed.createComponent(CheckRecoveryComponent);

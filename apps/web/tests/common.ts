@@ -4,6 +4,7 @@ import {
    Page,
    BrowserContext,
    type Cookie,
+   type Locator,
    type Request,
    type Response,
    type TestInfo,
@@ -672,6 +673,16 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
 export async function toggleCredentials(page: Page): Promise<void> {
    await page.getByRole('button', { name: 'Passkey information' }).click();
    await expect(page.locator('table.credtable tbody tr').first()).toBeVisible();
+}
+
+// YUCK. This works around a race caused by Angular Zoneless + Material 3 controls +
+// Playwright. Use this rather than check() or uncheck(), which read the state once
+// right after the click and fail because zoneless renders aria-checked a moment later.
+export async function setSwitch(toggle: Locator, checked: boolean): Promise<void> {
+   if ((await toggle.isChecked()) !== checked) {
+      await toggle.click();
+   }
+   await expect(toggle).toBeChecked({ checked });
 }
 
 // Asserts the credentials sidenav PRF badge matches the account mode. Requires the

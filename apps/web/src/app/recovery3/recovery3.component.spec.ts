@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Recovery3Component } from './recovery3.component';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 describe('RecoveryComponent', () => {
    let component: Recovery3Component;
@@ -11,11 +11,7 @@ describe('RecoveryComponent', () => {
    beforeEach(async () => {
       await TestBed.configureTestingModule({
          imports: [Recovery3Component],
-         providers: [
-            provideRouter([]),
-            provideHttpClient(withXhr(), withInterceptorsFromDi()),
-            provideHttpClientTesting(),
-         ],
+         providers: [provideRouter([]), provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()],
       }).compileComponents();
 
       fixture = TestBed.createComponent(Recovery3Component);

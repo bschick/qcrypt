@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { RecoveryComponent } from './recovery.component';
 import { ActivatedRoute, provideRouter } from '@angular/router';
-import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { bytesToBase64, cryptoReady, getRandom } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
@@ -52,7 +52,7 @@ describe('RecoveryComponent', () => {
          imports: [RecoveryComponent],
          providers: [
             provideRouter([]),
-            provideHttpClient(withXhr(), withInterceptorsFromDi()),
+            provideHttpClient(withInterceptorsFromDi()),
             provideHttpClientTesting(),
             { provide: AuthenticatorService, useValue: authStub },
             { provide: ActivatedRoute, useValue: routeStub },

@@ -25,7 +25,6 @@ import {
    ElementRef,
    Injector,
    ViewContainerRef,
-   NgZone,
    inject,
    input,
    numberAttribute,
@@ -41,7 +40,6 @@ export class BubbleDirective {
    private readonly _elementRef = inject(ElementRef);
    private readonly _viewContainerRef = inject(ViewContainerRef);
    private readonly _injector = inject(Injector);
-   private readonly _ngZone = inject(NgZone);
 
    private _bubbleIndex!: number;
 
@@ -175,17 +173,11 @@ export class BubbleDirective {
       const container = this._getScrollContainer();
       if (container?.contains(this._elementRef.nativeElement)) {
          this._scrollHandler = () => this._reposition();
-
-         this._ngZone.runOutsideAngular(() => {
-            container.addEventListener('scroll', this._scrollHandler!);
-         });
+         container.addEventListener('scroll', this._scrollHandler);
       }
 
       this._resizeHandler = () => this._reposition();
-
-      this._ngZone.runOutsideAngular(() => {
-         window.addEventListener('resize', this._resizeHandler!);
-      });
+      window.addEventListener('resize', this._resizeHandler);
    }
 
    // Scroll fires far more often than a frame renders, so coalesce to one measurement per frame

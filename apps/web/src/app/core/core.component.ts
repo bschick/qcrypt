@@ -28,7 +28,6 @@ import {
    type AfterViewInit,
    type OnDestroy,
    SecurityContext,
-   NgZone,
    inject,
    signal,
    viewChild,
@@ -117,7 +116,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    private readonly _snackBar = inject(MatSnackBar);
    private readonly _matIconRegistry = inject(MatIconRegistry);
    private readonly _domSanitizer = inject(DomSanitizer);
-   private readonly _ngZone = inject(NgZone);
    private readonly _router = inject(Router);
 
    private _clearFile?: File;
@@ -439,14 +437,10 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
          [pwd, hint] = await this._askForPassword(cdInfo, encrypting);
       }
 
-      // This can run outside of Angular's zone because the  callback
-      // comes from within stream connections
-      this._ngZone.run(() => {
-         // Avoid briefly putting up spinner and disabling buttons
-         if (cdInfo.ic > this._spinnerAbove || this._usingFile) {
-            this.showProgress.set(true);
-         }
-      });
+      // Avoid briefly putting up spinner and disabling buttons
+      if (cdInfo.ic > this._spinnerAbove || this._usingFile) {
+         this.showProgress.set(true);
+      }
 
       if (cdInfo.lp === cdInfo.lpEnd) {
          this._usedPasswords = [];
@@ -461,42 +455,38 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    private async _askForPassword(cdInfo: CipherDataInfo, encrypting: boolean): Promise<[string, string]> {
       this._clearPassword();
       return new Promise((resolve, reject) => {
-         // This can run outside of Angular's zone because the password callback
-         // comes from within streem connections
-         this._ngZone.run(() => {
-            const dialogRef = this._dialog.open(PasswordDialog, {
-               data: {
-                  hint: cdInfo.hint,
-                  encrypting,
-                  minStrength: +this.options().minPwdStrength,
-                  hidePwd: this.options().hidePwd,
-                  loopCount: cdInfo.lp,
-                  loops: cdInfo.lpEnd,
-                  checkPwned: this.options().checkPwned,
-                  welcomed: this._welcomed,
-                  userName: this._authSvc.userName,
-                  cipherMode: cdInfo.alg,
-                  usedPasswords: [...this._usedPasswords],
-               },
-            });
+         const dialogRef = this._dialog.open(PasswordDialog, {
+            data: {
+               hint: cdInfo.hint,
+               encrypting,
+               minStrength: +this.options().minPwdStrength,
+               hidePwd: this.options().hidePwd,
+               loopCount: cdInfo.lp,
+               loops: cdInfo.lpEnd,
+               checkPwned: this.options().checkPwned,
+               welcomed: this._welcomed,
+               userName: this._authSvc.userName,
+               cipherMode: cdInfo.alg,
+               usedPasswords: [...this._usedPasswords],
+            },
+         });
 
-            dialogRef.afterClosed().subscribe((result) => {
-               if (!result) {
-                  // intentially do not rejct with "new Error()" so this isn't
-                  // caught as an error, just cancelation
-                  reject(new ProcessCancelled());
-               } else {
-                  this._clearPassword();
-                  if (this.options().cacheTime > 0 && result[0] && cdInfo.lpEnd === 1) {
-                     const encoder = new TextEncoder();
-                     this._cachedPassword = encoder.encode(result[0]);
-                     this._cachedHint = encoder.encode(result[1]);
-                     this.pwdCached.set(true);
-                     this._restartTimer();
-                  }
-                  resolve([result[0], result[1]]);
+         dialogRef.afterClosed().subscribe((result) => {
+            if (!result) {
+               // intentially do not rejct with "new Error()" so this isn't
+               // caught as an error, just cancelation
+               reject(new ProcessCancelled());
+            } else {
+               this._clearPassword();
+               if (this.options().cacheTime > 0 && result[0] && cdInfo.lpEnd === 1) {
+                  const encoder = new TextEncoder();
+                  this._cachedPassword = encoder.encode(result[0]);
+                  this._cachedHint = encoder.encode(result[1]);
+                  this.pwdCached.set(true);
+                  this._restartTimer();
                }
-            });
+               resolve([result[0], result[1]]);
+            }
          });
       });
    }

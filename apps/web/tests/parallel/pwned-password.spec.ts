@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { testWithAuth } from '.././common';
+import { testWithAuth, setSwitch } from '.././common';
 
 // Queries the live haveibeenpwned service, so it fails when that service is unreachable
 const BREACHED_PWD = 'one2many';
@@ -17,7 +17,7 @@ testWithAuth('a breached password stays rejected while the hint is typed', async
    await page.getByRole('button', { name: 'Advanced Options' }).click();
    await page.locator('mat-select#pwdStrength').click();
    await page.locator('mat-option').filter({ hasText: 'Terrible' }).click();
-   await page.getByRole('switch', { name: 'Check If Stolen' }).check();
+   await setSwitch(page.getByRole('switch', { name: 'Check If Stolen' }), true);
 
    await page.locator('textarea#clearInput').fill('this is very secret');
    await page.getByRole('button', { name: 'Encrypt Text' }).click();
@@ -53,7 +53,7 @@ testWithAuth('a failed breach check shows a notice and still encrypts', async ({
 
    await page.route('https://api.pwnedpasswords.com/**', (route) => route.abort());
    await page.getByRole('button', { name: 'Advanced Options' }).click();
-   await page.getByRole('switch', { name: 'Check If Stolen' }).check();
+   await setSwitch(page.getByRole('switch', { name: 'Check If Stolen' }), true);
 
    await page.locator('textarea#clearInput').fill('this is very secret');
    await page.getByRole('button', { name: 'Encrypt Text' }).click();

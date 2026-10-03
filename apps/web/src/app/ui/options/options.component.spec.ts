@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { OptionsComponent } from './options.component';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import type { HarnessLoader } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { MatButtonHarness } from '@angular/material/button/testing';
@@ -30,11 +30,7 @@ describe('OptionsComponent', () => {
 
       await TestBed.configureTestingModule({
          imports: [OptionsComponent],
-         providers: [
-            provideRouter([]),
-            provideHttpClient(withXhr(), withInterceptorsFromDi()),
-            provideHttpClientTesting(),
-         ],
+         providers: [provideRouter([]), provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()],
       }).compileComponents();
 
       // Options load when each test says so, never when the benchmark finishes in the background
