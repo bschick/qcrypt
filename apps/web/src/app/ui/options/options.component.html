@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. -->
 <mat-accordion multi>
-  <mat-expansion-panel matRipple [matRippleDisabled]="true" [expanded]="expandOptions()">
+  <mat-expansion-panel matRipple [matRippleDisabled]="true">
     <mat-expansion-panel-header>
       <mat-panel-title class="panel-title">{{(loopsInput() || 1) > 1 ? 'Encryption Modes' : 'Encryption Mode'}}</mat-panel-title>
     </mat-expansion-panel-header>
@@ -32,7 +32,7 @@ SOFTWARE. -->
     </div>
   </mat-expansion-panel>
   <mat-expansion-panel (afterExpand)="cipherPanelExpanded.set(true)" (closed)="cipherPanelExpanded.set(false)" matRipple
-    [matRippleDisabled]="true" [expanded]="expandOptions()">
+    [matRippleDisabled]="true">
     <mat-expansion-panel-header>
       <mat-panel-title class="panel-title">Advanced Options</mat-panel-title>
     </mat-expansion-panel-header>

@@ -59,18 +59,23 @@ describe('OptionsComponent', () => {
       expect(component).toBeTruthy();
    });
 
-   it('saves and announces options given as URL parameters', () => {
+   it('ignores option values in the URL', () => {
+      localStorage.setItem(`${USER_ID}cachetime`, '60');
+      localStorage.setItem(`${USER_ID}hidepwd`, 'true');
       history.replaceState(null, '', `${location.pathname}?cachetime=30&hidepwd=false`);
       const cacheTimes: number[] = [];
       component.cacheTimeChange.subscribe((secs) => cacheTimes.push(secs));
 
       component.loadOptions(USER_ID);
+      fixture.detectChanges();
 
-      expect(component.cacheTime).toBe(30);
-      expect(component.hidePwd).toBe(false);
-      expect(stored('cachetime')).toBe('30');
-      expect(stored('hidepwd')).toBe('false');
-      expect(cacheTimes).toContain(30);
+      expect(component.cacheTime).toBe(60);
+      expect(component.hidePwd).toBe(true);
+      expect(stored('cachetime')).toBe('60');
+      expect(stored('hidepwd')).toBe('true');
+      expect(cacheTimes).toContain(60);
+      expect(cacheTimes).not.toContain(30);
+      expect(fixture.nativeElement.querySelector('mat-expansion-panel.mat-expanded')).toBeNull();
    });
 
    it('reset to defaults saves every option', async () => {

@@ -49,7 +49,6 @@ import { AuthenticatorService, ACTIVITY_TIMEOUT_SEC } from '../../services/authe
 import { CipherService } from '../../services/cipher.service';
 import { Ciphers, makeTookMsg } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
-import { HttpParams } from '@angular/common/http';
 
 // Set only if num is betwee min and max (inclusive) when min and max are not null
 function setIfBetween(
@@ -104,7 +103,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    private readonly _cipherSvc = inject(CipherService);
    private readonly _destroyRef = inject(DestroyRef);
 
-   protected readonly expandOptions = signal(false);
    protected readonly cipherPanelExpanded = signal(false);
    protected readonly hashTimeWarning = signal('');
 
@@ -185,7 +183,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    loadOptions(userId: string) {
-      // URL parameters are applied after the stored values, so they take precedence.
       /* debug
       for (let i = 0; i < localStorage.length; i++) {
         let key = localStorage.key(i)!;
@@ -206,24 +203,6 @@ export class OptionsComponent implements OnInit, AfterViewInit {
          this._setLoops(this._lsGet('loops'));
          this._setCTFormat(this._lsGet('ctformat'));
          this._setVisibilityClear(this._lsGet('vclear'));
-
-         const params = new HttpParams({ fromString: window.location.search });
-
-         // If there are customized options, expand the panel by default
-         if (params.keys().some((p) => !['cipherarmor', 'cleartext'].includes(p))) {
-            this.expandOptions.set(true);
-         }
-
-         this._setReminder(params.get('reminder'));
-         this._setAlgorithm(params.get('algorithm'));
-         this._setIcount(params.get('icount'));
-         this._setHidePwd(params.get('hidepwd'));
-         this._setCacheTime(params.get('cachetime'));
-         this._setCheckPwned(params.get('checkpwned'));
-         this._setMinPwdStrength(params.get('minpwdstrength'));
-         this._setLoops(params.get('loops'));
-         this._setCTFormat(params.get('ctformat'));
-         this._setVisibilityClear(params.get('vclear'));
 
          this._setIcountWarning();
          this.loopCount.set(this.loops);
