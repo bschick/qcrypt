@@ -1,5 +1,11 @@
 # CHANGELOG.md
 
+## 8.0.3 (unreleased)
+
+#### Changes
+
+- recovery words pasted with extra spaces, line breaks, or capital letters (such as words copied from a saved recovery sheet) are now accepted
+
 ## 8.0.2 (2026-09-27)
 
 #### Changes

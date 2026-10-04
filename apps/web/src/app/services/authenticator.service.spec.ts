@@ -415,7 +415,8 @@ describe('AuthenticatorService', () => {
          primeLocalStorage();
          await login(false, userCred);
 
-         const recoveryWords = entropyToMnemonic(api.recoverySecret(getRandom(api.RECOVERYID_BYTES), userId), wordlist);
+         const secret = api.recoverySecret(getRandom(api.RECOVERYID_BYTES), userId);
+         const recoveryWords = entropyToMnemonic(secret, wordlist);
          const startResp = {
             prf: false,
             challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)),
@@ -426,12 +427,24 @@ describe('AuthenticatorService', () => {
             json: async () => (url.pathname.endsWith('/recover3') ? startResp : sessionResponse),
          }));
 
-         // Recovery still fails, because the passkey ceremony that follows cannot run
-         // here, but only after reaching the step that replaces the passkeys
-         await expect(service.recover3(recoveryWords)).rejects.toThrow();
-         expect(service.halted).toBe(false);
-         const paths = fetchMock.mock.calls.map((call) => (call[0] as URL).pathname);
-         expect(paths.some((path) => path.endsWith('/recover/confirm'))).toBe(true);
+         for (const words of [recoveryWords, copiedFromPdf(recoveryWords)]) {
+            fetchMock.mockClear();
+
+            // Recovery still fails, because the passkey ceremony that follows cannot run
+            // here, but only after reaching the step that replaces the passkeys
+            await expect(service.recover3(words)).rejects.toThrow();
+            expect(service.halted).toBe(false);
+            const paths = fetchMock.mock.calls.map((call) => (call[0] as URL).pathname);
+            expect(paths.some((path) => path.endsWith('/recover/confirm'))).toBe(true);
+
+            const startCall = fetchMock.mock.calls.find((call) => (call[0] as URL).pathname.endsWith('/recover3'));
+            const body: api.Recover3Request = JSON.parse((startCall![1] as RequestInit).body as string);
+            expect(body.userId).toBe(userId);
+            const pubKey = api.getRecoveryPubKey(secret);
+            expect(() =>
+               api.verifyRecoveryProof(pubKey, userId, body.timestamp, body.nonce, body.signature, 'recover'),
+            ).not.toThrow();
+         }
       });
 
       it('halts when account is downgraded during recovery', async () => {
@@ -501,6 +514,12 @@ describe('AuthenticatorService', () => {
          .map((call) => JSON.parse((call[1] as RequestInit).body as string));
    }
 
+   function copiedFromPdf(words: string): string {
+      const separators = ['  ', '\n', ' ', '\t ', '\r\n'];
+      const parts = words.split(' ').map((word, i) => (i % 4 === 0 ? word.toUpperCase() : word));
+      return ` ${parts.map((word, i) => word + separators[i % separators.length]).join('')}`;
+   }
+
    describe('recovery words state', () => {
       beforeEach(async () => {
          primeLocalStorage();
@@ -516,7 +535,10 @@ describe('AuthenticatorService', () => {
          expect(service.hasRecoveryWords()).toBe(true);
 
          // Re-checking the displayed words proves they derive the key the server now holds
-         await expect(service.checkRecoveryWords(service.consumeRecoveryWords())).resolves.toEqual('match');
+         const words = service.consumeRecoveryWords();
+         for (const entered of [words, copiedFromPdf(words)]) {
+            await expect(service.checkRecoveryWords(entered)).resolves.toEqual('match');
+         }
       });
 
       it('reports a match when the retry succeeds', async () => {

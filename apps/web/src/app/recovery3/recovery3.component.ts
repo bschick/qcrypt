@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { type AfterViewInit, Component, type OnDestroy, type OnInit, Renderer2, inject, signal } from '@angular/core';
-import { AuthenticatorService } from '../services/authenticator.service';
+import { AuthenticatorService, normalizeRecoveryWords } from '../services/authenticator.service';
 import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -124,8 +124,7 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
          if (!rawString) {
             this.error.set('No recovery words were entered.');
          } else {
-            const words = rawString.split(/\s+/);
-            const cleanedWords = words.join(' ');
+            const cleanedWords = normalizeRecoveryWords(rawString);
             if (!validateMnemonic(cleanedWords, wordlist)) {
                this.error.set('The recovery pattern contains incorrect words.');
             } else {
@@ -152,7 +151,7 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
    }
 
    private async _checkProceed(recoveryWords: string): Promise<boolean> {
-      const [_, userId] = this._authSvc.getRecoveryValues(recoveryWords);
+      const userId = this._authSvc.getRecoveryUserId(recoveryWords);
       if (!this._authSvc.hasSession() || userId === this._authSvc.userId) {
          return true;
       }

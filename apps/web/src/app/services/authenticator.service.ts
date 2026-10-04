@@ -144,6 +144,10 @@ export function handleToUserId(handle: string): string {
    return new TextDecoder('utf-8').decode(base64ToBytes(handle));
 }
 
+export function normalizeRecoveryWords(words: string): string {
+   return words.trim().toLowerCase().split(/\s+/).join(' ');
+}
+
 @Service()
 export class AuthenticatorService {
    private readonly _keystoreSvc = inject(KeystoreService);
@@ -644,12 +648,12 @@ export class AuthenticatorService {
    public async checkRecoveryWords(recoveryWords: string): Promise<RecoveryWordsState> {
       let recoveryKeyId: string;
       try {
-         const [, wordsUserId] = this.getRecoveryValues(recoveryWords);
-         if (wordsUserId !== this.userId) {
+         const words = normalizeRecoveryWords(recoveryWords);
+         if (this.getRecoveryUserId(words) !== this.userId) {
             return 'wronguser';
          }
 
-         const secret = mnemonicToEntropy(recoveryWords, wordlist);
+         const secret = mnemonicToEntropy(words, wordlist);
          try {
             recoveryKeyId = hashString(api.getRecoveryPubKey(secret));
          } finally {
@@ -1326,32 +1330,31 @@ export class AuthenticatorService {
       };
    }
 
-   getRecoveryValues(recoveryWords: string): [string, string] {
-      if (!recoveryWords?.length) {
+   getRecoveryUserId(recoveryWords: string): string {
+      const words = normalizeRecoveryWords(recoveryWords);
+      if (!words) {
          throw new Error('missing recovery words');
       }
 
-      if (!validateMnemonic(recoveryWords, wordlist)) {
+      if (!validateMnemonic(words, wordlist)) {
          throw new Error('invalid recovery words');
       }
 
-      const recoveryBytes = mnemonicToEntropy(recoveryWords, wordlist);
-      if (!recoveryBytes || recoveryBytes.byteLength !== api.RECOVERYID_BYTES + cc.USERID_BYTES) {
-         throw new Error('invalid recovery words');
+      const recoveryBytes = mnemonicToEntropy(words, wordlist);
+      try {
+         if (recoveryBytes.byteLength !== api.RECOVERYID_BYTES + cc.USERID_BYTES) {
+            throw new Error('invalid recovery words');
+         }
+         return bytesToBase64(recoveryBytes.subarray(api.RECOVERYID_BYTES));
+      } finally {
+         recoveryBytes.fill(0);
       }
-
-      const recoveryIdBytes = recoveryBytes.subarray(0, api.RECOVERYID_BYTES);
-      const userIdBytes = recoveryBytes.subarray(api.RECOVERYID_BYTES);
-
-      const recoveryId = bytesToBase64(recoveryIdBytes);
-      const userId = bytesToBase64(userIdBytes);
-
-      return [recoveryId, userId];
    }
 
    async recover3(recoveryWords: string): Promise<VerifiedUserInfo> {
-      const [, userId] = this.getRecoveryValues(recoveryWords);
-      const secret = mnemonicToEntropy(recoveryWords, wordlist);
+      const words = normalizeRecoveryWords(recoveryWords);
+      const userId = this.getRecoveryUserId(words);
+      const secret = mnemonicToEntropy(words, wordlist);
       let userCred: Uint8Array<ArrayBuffer> | undefined;
       await this._pendingLogout;
 
