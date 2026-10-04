@@ -637,16 +637,19 @@ describe('AuthenticatorService', () => {
          } as unknown as Credential;
       }
 
-      it('rejects a PRF read from an assertion without user verification', async () => {
-         vi.spyOn(navigator.credentials, 'get')
-            .mockResolvedValueOnce(assertionWithFlags(userPresent | userVerified))
-            .mockResolvedValueOnce(assertionWithFlags(userPresent));
+      it.skipIf(!window.PublicKeyCredential || !navigator.credentials)(
+         'rejects a PRF read from an assertion without user verification',
+         async () => {
+            vi.spyOn(navigator.credentials, 'get')
+               .mockResolvedValueOnce(assertionWithFlags(userPresent | userVerified))
+               .mockResolvedValueOnce(assertionWithFlags(userPresent));
 
-         // @ts-expect-error — exercising private path
-         await expect(service._readPrfViaAssertion('Y3JlZA')).resolves.toBeTruthy();
-         // @ts-expect-error — exercising private path
-         await expect(service._readPrfViaAssertion('Y3JlZA')).rejects.toThrow(/user verification/);
-      });
+            // @ts-expect-error — exercising private path
+            await expect(service._readPrfViaAssertion('Y3JlZA')).resolves.toBeTruthy();
+            // @ts-expect-error — exercising private path
+            await expect(service._readPrfViaAssertion('Y3JlZA')).rejects.toThrow(/user verification/);
+         },
+      );
    });
 
    describe('session user binding', () => {
