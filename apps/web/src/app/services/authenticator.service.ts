@@ -676,7 +676,7 @@ export class AuthenticatorService {
          throw new Error('no active user');
       }
 
-      const { serverLoginUserInfo, prfKey } = await this._createSessionImpl(this.userId);
+      const { serverLoginUserInfo, prfKey } = await this._createSessionImpl(this.userId, true);
       const userCred = await this._resolveUserCred(serverLoginUserInfo, prfKey);
       return await this._loginUser(serverLoginUserInfo, userCred);
    }
@@ -1267,8 +1267,9 @@ export class AuthenticatorService {
    // If no userId is provided, will present all Passkeys for this domain
    private async _createSessionImpl(
       userId: string | null = null,
+      requireVerification: boolean = false,
    ): Promise<{ serverLoginUserInfo: api.LoginUserInfoResponse; prfKey: Uint8Array<ArrayBuffer> | null }> {
-      const { verifyBody, prfKey } = await this._startAuthentication(userId);
+      const { verifyBody, prfKey } = await this._startAuthentication(userId, requireVerification);
       try {
          const serverLoginUserInfo = await this._doFetch<api.LoginUserInfoResponse>({
             method: 'POST',
@@ -1291,6 +1292,7 @@ export class AuthenticatorService {
 
    private async _startAuthentication(
       userId: string | null,
+      requireVerification: boolean,
    ): Promise<{ verifyBody: api.AuthVerifyRequest; prfKey: Uint8Array<ArrayBuffer> | null }> {
       // Start the process without userId prevents limiting authenticator creds
       // so the user can look for an existing credential
@@ -1304,6 +1306,11 @@ export class AuthenticatorService {
       // The account mode is unknown until auth/verify returns, so request PRF output from
       // every get authentication
       injectPrfExtension(optionsJson);
+
+      // Some authenticators treat an unlocked vault as verified unless verification is required
+      if (requireVerification) {
+         optionsJson.userVerification = 'required';
+      }
 
       let startAuth: AuthenticationResponseJSON;
       try {

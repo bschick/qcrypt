@@ -652,6 +652,43 @@ describe('AuthenticatorService', () => {
       );
    });
 
+   describe('user verification requests', () => {
+      function serveAuthOptions() {
+         fetchMock.mockResolvedValue({
+            ok: true,
+            json: async () => ({
+               challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)),
+               userVerification: 'preferred',
+            }),
+         });
+      }
+
+      it.skipIf(!window.PublicKeyCredential || !navigator.credentials)(
+         'passes the server user verification request through at sign-in',
+         async () => {
+            serveAuthOptions();
+            const getSpy = vi.spyOn(navigator.credentials, 'get').mockRejectedValue(new Error('stopped'));
+
+            await expect(service.createSession()).rejects.toThrow();
+            expect(getSpy.mock.calls[0][0]?.publicKey?.userVerification).toBe('preferred');
+         },
+      );
+
+      it.skipIf(!window.PublicKeyCredential || !navigator.credentials)(
+         'requires user verification to re-authenticate',
+         async () => {
+            primeLocalStorage();
+            // @ts-expect-error — exercising private path
+            await service._loginUser(sessionResponse, base64ToBytes(userCred));
+            serveAuthOptions();
+            const getSpy = vi.spyOn(navigator.credentials, 'get').mockRejectedValue(new Error('stopped'));
+
+            await expect(service.reauthenticate()).rejects.toThrow();
+            expect(getSpy.mock.calls[0][0]?.publicKey?.userVerification).toBe('required');
+         },
+      );
+   });
+
    describe('session user binding', () => {
       it('refuses a user info response with a different account', async () => {
          primeLocalStorage();
