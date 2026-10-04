@@ -3,6 +3,7 @@ import os
 import boto3
 import base64
 import hashlib
+import re
 from selectolax.parser import HTMLParser
 from secrets import token_bytes
 from botocore.exceptions import ClientError
@@ -89,6 +90,16 @@ def lambda_handler(event, context):
         }
 
 
+sha384_pattern = re.compile(r'sha384-[A-Za-z0-9+/]{64}')
+
+
+def add_hash(hashes, value):
+    if isinstance(value, str) and sha384_pattern.fullmatch(value):
+        hashes.add(value)
+    else:
+        logger.warning('dropped non-conforming integrity value: %r', value)
+
+
 def fix_csp(tree):
     style_hashes = update_hashes(tree, 'style')
     script_hashes = update_hashes(tree, 'script')
@@ -101,7 +112,7 @@ def fix_csp(tree):
             del element.attrs['nonce']
 
         if 'integrity' in element.attributes and element.attributes.get('rel') == 'stylesheet':
-            style_hashes.add(element.attributes['integrity'])
+            add_hash(style_hashes, element.attributes['integrity'])
 
     return (style_hashes, script_hashes)
 
@@ -122,6 +133,6 @@ def update_hashes(tree, tag):
             element.attrs['integrity'] = integHash
             hashes.add(integHash)
         else:
-            hashes.add(element.attributes['integrity'])
+            add_hash(hashes, element.attributes['integrity'])
 
     return hashes
