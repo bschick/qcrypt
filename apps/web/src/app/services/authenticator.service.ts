@@ -1641,7 +1641,7 @@ export class AuthenticatorService {
       const optionsJson: PublicKeyCredentialRequestOptionsJSON = {
          challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)),
          allowCredentials: [{ id: credentialId, type: 'public-key' }],
-         userVerification: 'preferred',
+         userVerification: 'required',
          ...(rpId ? { rpId } : {}),
       };
       injectPrfExtension(optionsJson);
@@ -1652,6 +1652,12 @@ export class AuthenticatorService {
       } catch (err) {
          console.error('startAuthentication', err);
          throw err;
+      }
+
+      // PRF output differs with and w/o user verification, so enforce with
+      const flags = base64ToBytes(startAuth.response.authenticatorData)[32];
+      if ((flags & cc.AUTHDATA_UV_FLAG) === 0) {
+         throw new Error('PRF read without user verification');
       }
       return prfReadKey(startAuth.clientExtensionResults);
    }

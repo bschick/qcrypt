@@ -47,6 +47,7 @@ export const EXTRA_LEN_BYTES = 1;
 export const USERCRED_BYTES = 32;
 export const USERID_BYTES = 16;
 export const PKID_MIN_BYTES = 16;
+export const AUTHDATA_UV_FLAG = 0x04;
 export const PAYLOAD_SIZE_BYTES = 3;
 export const FLAGS_BYTES = 1;
 export const EXTRA_BYTES_MAX = 255;
