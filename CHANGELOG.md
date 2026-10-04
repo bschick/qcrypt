@@ -1,17 +1,18 @@
 # CHANGELOG.md
 
-## 8.0.3 (TBD)
+## 8.0.3 (2026-10-05)
 
 #### Changes
 
-- improve usability of in-place edit control
-- updated to modern Angular patterns (signals, OnPush, zoneless, router input binding)
-- removed zone.js making the initial download ~5% smaller
+- improved usability of in-place edit control
+- updated to modern angular patterns (signals, onpush, zoneless, router input binding)
+- removed zone.js, making the initial download ~5% smaller
+- recovery words pasted with extra spaces, line breaks, or caps are now accepted
 
 #### Security
 
-- detect recovery key change part way through account recovery [thanks to Blake Prins (@prins1bap-ui)]
-- fixed password strength scoring race conditions
+- detect recovery key changes partway through account recovery [thanks to Blake Prins (@prins1bap-ui)]
+- fixed password strength meter scoring race conditions
 - updated packages
 
 ## 8.0.2 (2026-09-27)
