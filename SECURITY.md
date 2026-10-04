@@ -53,12 +53,12 @@ Thanks to the following security researchers:
 | Researcher                                                          | Bounties |
 | ------------------------------------------------------------------- | -------- |
 | Rajat Shukla (@rajat4722)                                           | 8        |
+| Blake Prins (@prins1bap-ui)                                         | 3        |
 | destro4evr                                                          | 3        |
 | CapsenR                                                             | 2        |
-| Blake Prins (@prins1bap-ui)                                         | 2        |
+| David (@pythonyx135793)                                             | 1        |
 | Prashikshit Saini (@PrashikshitSaini)                               | 1        |
 | Damir (@Evelynkaz)                                                  | 1        |
 | @EpochLiu                                                           | 1        |
 | [Vaibhav Jain](https://www.linkedin.com/in/vaibhav-jain-aa5680254/) | 1        |
 | Ben (@benthepythondev00)                                            | 1        |
-| David (@pythonyx135793)                                             | 1        |
