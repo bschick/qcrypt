@@ -8,11 +8,12 @@
 - updated to modern angular patterns (signals, onpush, zoneless, router input binding)
 - removed zone.js, making the initial download ~5% smaller
 - recovery words pasted with extra spaces, line breaks, or caps are now accepted
+- no longer accept encryption settings from url params [thanks to Rajat Shukla (@rajat4722)]
 
 #### Security
 
 - detect recovery key changes partway through account recovery [thanks to Blake Prins (@prins1bap-ui)]
-- fixed password strength meter scoring race conditions
+- fixed password scoring race conditions in strength meter
 - updated packages
 
 ## 8.0.2 (2026-09-27)
