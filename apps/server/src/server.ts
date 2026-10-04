@@ -778,7 +778,7 @@ async function postAuthOptions(httpDetails: HttpDetails): Promise<Response> {
       const options: PublicKeyCredentialRequestOptionsJSON = await generateAuthenticationOptions({
          allowCredentials: allowedCreds,
          rpID,
-         userVerification: 'required',
+         userVerification: 'preferred',
       });
 
       await createChallenge(options.challenge, { purpose: 'auth', userId });
