@@ -9,10 +9,9 @@ test.describe('lazy routes render', () => {
       '/help/faqs',
       '/help/faqs/bad',
       '/help/protocol',
-      '/help/protocol1',
-      '/help/protocol4',
-      '/help/protocol5',
       '/help/protocol6',
+      '/help/protocol7',
+      '/help/protocol8',
    ];
 
    for (const path of smokeRoutes) {
@@ -20,6 +19,14 @@ test.describe('lazy routes render', () => {
          await page.goto(path);
          await expect(page).toHaveURL(new RegExp(`${path.replace(/\//g, '\\/')}$`));
          await expect(page.locator('mat-sidenav-content')).toBeVisible({ timeout: 10000 });
+      });
+   }
+
+   for (const path of ['/help/protocol1', '/help/protocol4', '/help/protocol5']) {
+      test(`redirects ${path} to /help/protocol`, async ({ page }) => {
+         await page.goto(path);
+         await expect(page).toHaveURL(/\/help\/protocol$/);
+         await expect(page.getByRole('heading', { name: /Protocol Description/ })).toBeVisible({ timeout: 10000 });
       });
    }
 });
