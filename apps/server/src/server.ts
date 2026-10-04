@@ -1210,7 +1210,7 @@ async function deleteAllAuthenticators(verifiedUser: VerifiedUserItem): Promise<
    }
 }
 
-async function loadAuthenticators(
+export async function loadAuthenticators(
    verifiedUser: VerifiedUserItem,
    consistent: boolean = false,
 ): Promise<api.AuthenticatorInfoResponse[]> {
@@ -1244,9 +1244,17 @@ async function loadAuthenticators(
    }
 
    if (aaguidsToGet.length > 0) {
+      // AAGUIDs not in the table keep these defaults, so they aren't looked up on every call
+      const timestamp = Date.now();
+      const defaultData = { lightIcon: lightFileDefault, darkIcon: darkFileDefault, name: 'Passkey' };
+      for (const aaguid of aaguidsToGet) {
+         aaguidCache.set(aaguid, { data: defaultData, timestamp });
+      }
+
       const getParams = aaguidsToGet.map((aaguid) => ({ aaguid }));
       const aaguidsDetail = await AAGUIDs.get(getParams).go();
 
+      // Update cache with the known AAGUIDs we found
       for (const aaguidDetail of aaguidsDetail.data) {
          aaguidCache.set(aaguidDetail.aaguid, {
             data: {
