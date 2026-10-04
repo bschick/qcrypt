@@ -43,7 +43,6 @@ import type {
 import {
    Users,
    Authenticators,
-   Challenges,
    AuthEvents,
    AAGUIDs,
    Invitables,
@@ -73,6 +72,7 @@ import {
    knownLenTimingSafeEqual,
    isReservedTestUserName,
    consumeChallenge,
+   createChallenge,
    storeSingleUseNonce,
 } from './utils';
 
@@ -101,8 +101,6 @@ export const darkFileDefault = 'assets/aaguid/img/default_dark.svg';
 
 const aaguidCache = new Map<string, AAGUIDInfo>();
 const AAGUID_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-const UnknownUserId = 'unknown';
 
 // The WebAuthn spec keeps adding transports, so bound the shape rather than enumerate
 // values and reject an authenticator newer than this code
@@ -244,19 +242,38 @@ async function getSession(_httpDetails: HttpDetails, verifiedUser?: VerifiedUser
    };
 }
 
+// authCount is incremented atomically so concurrent calls receive distinct values
+async function _setLastCredential(user: UnverifiedUserItem, credentialId: string | null): Promise<void> {
+   if (credentialId === '') {
+      throw new Error('empty credential id');
+   }
+
+   const lastCredentialId = credentialId ?? '';
+   const updated = await Users.patch({
+      userId: user.userId,
+   })
+      .set({
+         lastCredentialId,
+      })
+      .add({
+         authCount: 1,
+      })
+      .go({ response: 'all_new' });
+
+   user.lastCredentialId = lastCredentialId;
+   user.authCount = updated.data.authCount;
+}
+
+function _recoveryBinding(user: UnverifiedUserItem): string {
+   return hashString(`${user.recoveryPubKey ?? ''}:${user.authCount}`);
+}
+
 async function deleteSession(_httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
    if (!verifiedUser) {
       throw new AuthError();
    }
 
-   await Users.patch({
-      userId: verifiedUser.userId,
-   })
-      .set({
-         lastCredentialId: '',
-         authCount: verifiedUser.authCount + 1,
-      })
-      .go();
+   await _setLastCredential(verifiedUser, null);
 
    return {
       content: { message: 'done' },
@@ -279,8 +296,8 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
       throw new ParamError('invalid authenticatorId');
    }
 
-   // Holds the userId sent to auth/options, if any, which is checked against the credential below
-   const challenge = await consumeChallenge(authVerify.challenge, 'auth');
+   // Unbound auth challenges are allowed for discoverable credential flow.
+   const challenge = await consumeChallenge(authVerify.challenge, { purpose: 'auth', userId: userHandle });
 
    // Read consistently so a passkey created moments earlier is found
    const credResult = await Authenticators.get({
@@ -319,11 +336,6 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
 
    const authenticator = credResult.data;
    const unverifiedUser = await getUnverifiedUser(authenticator.userId, true);
-
-   // Unbound auth challenges are allowed for discoverable credential flow.
-   if (challenge.userId !== UnknownUserId && challenge.userId !== unverifiedUser.userId) {
-      throw new AuthError();
-   }
 
    const webAuthnCredential: WebAuthnCredential = {
       publicKey: base64UrlDecode(authenticator.credentialPublicKey)!,
@@ -366,19 +378,7 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
       })
       .go();
 
-   const patchUsers = Users.patch({
-      userId: verifiedUser.userId,
-   })
-      .set({
-         lastCredentialId: authenticator.credentialId,
-         authCount: verifiedUser.authCount + 1,
-      })
-      .go();
-
-   await Promise.all([patchAuths, patchUsers]);
-
-   verifiedUser.lastCredentialId = authenticator.credentialId;
-   verifiedUser.authCount += 1;
+   await Promise.all([patchAuths, _setLastCredential(verifiedUser, authenticator.credentialId)]);
 
    const responseContent = await makeLoginUserInfoResponse(
       verifiedUser,
@@ -422,7 +422,8 @@ async function postPasskeyVerify(httpDetails: HttpDetails, verifiedUser?: Verifi
 async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
    const regVerify = httpDetails.body as api.RegVerifyRequest;
 
-   const unverifiedUser = await getUnverifiedUser(regVerify.userId);
+   // Consistent so the user created by reg/options is always found
+   const unverifiedUser = await getUnverifiedUser(regVerify.userId, true);
    if (unverifiedUser.verified) {
       throw new ParamError();
    }
@@ -565,7 +566,8 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
 async function postRecoverVerify(httpDetails: HttpDetails): Promise<Response> {
    const recoverVerify = httpDetails.body as api.RecoverVerifyRequest;
 
-   const unverifiedUser = await getUnverifiedUser(recoverVerify.userId);
+   // Consistent so the lastCredentialId check and challenge binding always use the last write
+   const unverifiedUser = await getUnverifiedUser(recoverVerify.userId, true);
 
    // should be empty for recovered account
    if (unverifiedUser.lastCredentialId) {
@@ -583,19 +585,8 @@ async function postRecoverVerify(httpDetails: HttpDetails): Promise<Response> {
 
    const auth = await _createAuthenticator(httpDetails, unverifiedUser, 'recover');
 
-   await Users.patch({
-      userId: unverifiedUser.userId,
-   })
-      .set({
-         lastCredentialId: auth.credentialId,
-         authCount: unverifiedUser.authCount + 1,
-      })
-      .go();
+   await _setLastCredential(unverifiedUser, auth.credentialId);
 
-   unverifiedUser.lastCredentialId = auth.credentialId;
-   unverifiedUser.authCount += 1;
-
-   // now be verified
    const verifiedUser = checkVerified(unverifiedUser, auth.userId);
 
    // force consistent read to capture recent create
@@ -636,7 +627,12 @@ async function _createAuthenticator(
       }
    }
 
-   const challenge = await consumeChallenge(passkeyVerify.challenge, expectedPurpose, unverifiedUser.userId);
+   const challenge = await consumeChallenge(
+      passkeyVerify.challenge,
+      expectedPurpose === 'recover'
+         ? { purpose: 'recover', userId: unverifiedUser.userId, binding: _recoveryBinding(unverifiedUser) }
+         : { purpose: expectedPurpose, userId: unverifiedUser.userId },
+   );
 
    let verification: VerifiedRegistrationResponse;
    try {
@@ -732,7 +728,7 @@ async function postAuthOptions(httpDetails: HttpDetails): Promise<Response> {
    const { rpID } = httpDetails;
    const authOptions = httpDetails.body as api.AuthOptionsRequest;
 
-   let userId = UnknownUserId;
+   let userId = cc.UNKNOWN_USER_ID;
    const unverifiedUserId = authOptions?.userId;
 
    // If no userid is provided, then we don't return allowed creds and
@@ -769,7 +765,8 @@ async function postAuthOptions(httpDetails: HttpDetails): Promise<Response> {
 
       if (!allowedCreds) {
          allowedCreds = await dummyAllowedCreds(unverifiedUserId);
-         userId = UnknownUserId;
+         // Binds like a real account so the challenge is locked to the guessed userId
+         userId = unverifiedUserId;
 
          // Jitter blurs the gap between this path's empty lookups and the
          // real path's populated DDB get + query.
@@ -784,13 +781,7 @@ async function postAuthOptions(httpDetails: HttpDetails): Promise<Response> {
          userVerification: 'required',
       });
 
-      // Bind the challenge to its purpose, and to the userId. Note that userId
-      // can be "Unknown" for the discoverable-credential auth flow.
-      await Challenges.create({
-         challenge: options.challenge,
-         purpose: 'auth',
-         userId,
-      }).go();
+      await createChallenge(options.challenge, { purpose: 'auth', userId });
 
       // Let this happen async. Don't report a credentialId since
       // there could be none or multiple
@@ -895,11 +886,12 @@ async function registrationOptions(
    }
 
    try {
+      // Consistent so the list matches the stored passkeys
       const auths = await Authenticators.query
          .byUserId({
             userId: unverifiedUser.userId,
          })
-         .go();
+         .go({ consistent: true });
 
       let excludeCreds: {
          id: string;
@@ -927,11 +919,12 @@ async function registrationOptions(
          supportedAlgorithmIDs: cc.ALGIDS,
       });
 
-      await Challenges.create({
-         challenge: options.challenge,
-         purpose,
-         userId: unverifiedUser.userId,
-      }).go();
+      await createChallenge(
+         options.challenge,
+         purpose === 'recover'
+            ? { purpose: 'recover', userId: unverifiedUser.userId, binding: _recoveryBinding(unverifiedUser) }
+            : { purpose, userId: unverifiedUser.userId },
+      );
 
       // Let this happen async
       recordEvent(EventNames.RegOptions, unverifiedUser.userId);
@@ -1196,13 +1189,14 @@ async function getUser(_httpDetails: HttpDetails, verifiedUser?: VerifiedUserIte
 }
 
 // Ensures every passkey is deleted, raising an exception to abort the caller if any survive.
-// Reads 'all' pages because the 1MB query budget is charged against full items
+// Reads 'all' pages because the 1MB query budget is charged against full items, and reads
+// consistently so no passkeys are missed
 async function deleteAllAuthenticators(verifiedUser: VerifiedUserItem): Promise<void> {
    const auths = await Authenticators.query
       .byUserId({
          userId: verifiedUser.userId,
       })
-      .go({ attributes: ['userId', 'credentialId'], pages: 'all' });
+      .go({ attributes: ['userId', 'credentialId'], pages: 'all', consistent: true });
 
    let pending = auths?.data ?? [];
    for (let attempt = 0; pending.length !== 0 && attempt < cc.RETRIES; attempt++) {
@@ -1451,6 +1445,7 @@ async function postRecover(httpDetails: HttpDetails): Promise<Response> {
    return response;
 }
 
+// Interleaved recover3 flows are not allowed.
 async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
    const recover3 = httpDetails.body as api.Recover3Request;
 
@@ -1459,7 +1454,8 @@ async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
       throw new ParamError('invalid recovery proof');
    }
 
-   const unverifiedUser = await getUnverifiedUser(userId);
+   // Read consistently so a recently updated recovery key is always loaded
+   const unverifiedUser = await getUnverifiedUser(userId, true);
 
    if (!unverifiedUser.recoveryPubKey) {
       throw new ParamError(`user account ${unverifiedUser.userId} has no recovery key`);
@@ -1482,15 +1478,14 @@ async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
       throw new Error('GenerateRandomCommand failure');
    }
 
+   // The recovery binding must reflect the incremented authCount, which requires deleteSession to run
+   // before challenge creation
+   const response = await deleteSession(httpDetails, verifiedUser);
+
    // Redeemed by POST /recover/confirm
    const challenge = base64UrlEncode(challengeBytes)!;
-   await Challenges.create({
-      challenge,
-      purpose: 'confirm',
-      userId,
-   }).go();
+   await createChallenge(challenge, { purpose: 'confirm', userId, binding: _recoveryBinding(verifiedUser) });
 
-   const response = await deleteSession(httpDetails, verifiedUser);
    let content: api.RecoverStartResponse;
 
    if (verifiedUser.prf) {
@@ -1527,11 +1522,12 @@ async function postRecoverConfirm(httpDetails: HttpDetails): Promise<Response> {
       throw new ParamError('invalid confirmation');
    }
 
-   // No exception confirms recovery started with a correct proof of recovery secret
-   // for this user and purpose
-   await consumeChallenge(challenge, 'confirm', userId);
+   // Fetch consistently before consuming the challenge so the binding reflects the current
+   // recovery key and authCount
+   const unverifiedUser = await getUnverifiedUser(userId, true);
 
-   const unverifiedUser = await getUnverifiedUser(userId);
+   await consumeChallenge(challenge, { purpose: 'confirm', userId, binding: _recoveryBinding(unverifiedUser) });
+
    if (!unverifiedUser.verified || !validB64(unverifiedUser.userCredPubKey)) {
       throw new AuthError();
    }
