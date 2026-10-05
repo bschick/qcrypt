@@ -149,31 +149,41 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    readonly pwdOptionsChange = output<boolean>();
    readonly formatOptionsChange = output<boolean>();
 
-   ngOnInit() {
+   async ngOnInit() {
       // This can be greatly delayed is there is a long running async benchmark or
       // encrpt or decrypt from a previous instance (tab that has not fully closed).
       // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
-      this._cipherSvc
-         .benchmark(this.ICOUNT_MIN)
-         .then(([icount, icountMax, _hashRate]) => {
-            this._setIcount(icount);
-            this.ICOUNT_DEFAULT = icount;
-            this.icountMax.set(icountMax);
-         })
-         .finally(() => {
-            // load after benchmark to overwrite benchmarks with saved values
-            this._authSvc.ready.then(() => {
-               // The benchmark can finish after this component is destroyed, and loading then emits to
-               // destroyed outputs
-               if (!this._destroyRef.destroyed) {
-                  if (this._authSvc.hasSession()) {
-                     this.loadOptions(this._authSvc.userId);
-                  } else {
-                     this._defaultOptions();
-                  }
-               }
-            });
-         });
+      const benchmark = this._cipherSvc.benchmark(this.ICOUNT_MIN).catch((err) => console.error(err));
+
+      // Load options before the benchmark completes so user change are saved while the benchmark runs
+      await this._authSvc.ready;
+      if (this._authSvc.hasSession()) {
+         this.loadOptions(this._authSvc.userId);
+      }
+
+      const result = await benchmark;
+
+      // The benchmark can finish after this component is destroyed, and loading then emits to
+      // destroyed outputs
+      if (this._destroyRef.destroyed) {
+         return;
+      }
+
+      if (result) {
+         const [icount, icountMax] = result;
+         this.ICOUNT_DEFAULT = icount;
+         this.icountMax.set(icountMax);
+      }
+
+      // A saved iteration count takes precedence over the benchmark
+      if (this._authSvc.hasSession()) {
+         if (this._lsGet('icount') === null) {
+            this._setIcount(this.ICOUNT_DEFAULT);
+         }
+         this._setIcountWarning();
+      } else {
+         this._defaultOptions();
+      }
    }
 
    ngAfterViewInit() {

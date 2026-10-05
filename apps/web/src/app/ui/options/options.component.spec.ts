@@ -146,6 +146,22 @@ describe('OptionsComponent', () => {
       expect(panelTitle()).toBe('Encryption Modes');
    });
 
+   it('saves option changes made before the benchmark finishes', async () => {
+      const authSvc = TestBed.inject(AuthenticatorService);
+      vi.spyOn(authSvc, 'hasSession').mockReturnValue(true);
+      vi.spyOn(authSvc, 'userId', 'get').mockReturnValue(USER_ID);
+      const signedIn = TestBed.createComponent(OptionsComponent);
+      const signedInLoader = TestbedHarnessEnvironment.loader(signedIn);
+      signedIn.detectChanges();
+      await authSvc.ready;
+      await signedIn.whenStable();
+
+      const checkPwned = await signedInLoader.getHarness(MatSlideToggleHarness.with({ label: 'Check If Stolen' }));
+      await checkPwned.check();
+
+      expect(stored('checkpwned')).toBe('true');
+   });
+
    it('ignores a benchmark that finishes after the options are gone', async () => {
       const warn = vi.spyOn(console, 'warn');
       let finishBenchmark: (result: [number, number, number]) => void = () => {};
