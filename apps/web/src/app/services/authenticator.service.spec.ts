@@ -1043,7 +1043,6 @@ describe('AuthenticatorService', () => {
 
       it('signing in signals passkey update', async () => {
          service.logout(false);
-         // @ts-expect-error — exercising private path
          vi.spyOn(service, '_createSessionImpl').mockResolvedValue({
             serverLoginUserInfo: withPasskeys(pkId, newPkId),
             prfKey: null,
