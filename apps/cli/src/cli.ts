@@ -474,6 +474,9 @@ async function decrypt(
          console.error(
             '\ndecryption failed: You may be using the wrong password or user credential, or the cipher armor is invalid',
          );
+         if (args.pwds && args.pwds.length > 1) {
+            console.error('check --pwds order, decryption is the reverse of encryption order');
+         }
       } else {
          console.error('decryption failed: ', (err as Error).message);
       }
@@ -566,7 +569,7 @@ const args = yargs(hideBin(process.argv))
       infile: { alias: 'f', desc: 'read input from file', type: 'string' },
       outfile: { alias: 'o', desc: 'save output to file', type: 'string' },
       force: { desc: 'overwrite --outfile if it already exists', boolean: true },
-      pwds: { alias: 'p', desc: 'password(s)', type: 'string', array: true },
+      pwds: { alias: 'p', desc: 'password(s) in prompt order', type: 'string', array: true },
       b64url: {
          alias: 'b',
          desc: 'base64url-encode input, output, or both',

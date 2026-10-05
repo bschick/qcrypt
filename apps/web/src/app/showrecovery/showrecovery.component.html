@@ -1,3 +1,5 @@
+<!-- The route guard only covers entry, and a session can end while this page is still displayed -->
+@if (authSvc.hasSession()) {
 <div class="container">
   <div class="content">
     <h1>Account Backup and Recovery</h1>
@@ -32,7 +34,7 @@
       words and your user credential could delete your Quick Crypt account and
       weaken your encryption strength.
     </p>
-    @if (unconfirmed) {
+    @if (unconfirmed()) {
       <mat-card appearance="outlined">
         <mat-card-header>
           <mat-card-title>⚠️ Not Confirmed</mat-card-title>
@@ -40,7 +42,7 @@
         <mat-card-content>
           <p>
             Quick Crypt could not confirm these recovery words replaced
-            @if (replacedLink) {
+            @if (replacedLink()) {
               your recovery link. <b>Keep both your recovery link</b>
             } @else {
               your previous recovery words.
@@ -56,7 +58,7 @@
         </mat-card-content>
       </mat-card>
     } @else {
-      @if (replacedLink) {
+      @if (replacedLink()) {
         <mat-card appearance="outlined">
           <mat-card-header>
             <mat-card-title>⚠️ Attention</mat-card-title>
@@ -73,7 +75,7 @@
           </mat-card-content>
         </mat-card>
       }
-      @if (replacedWords) {
+      @if (replacedWords()) {
         <mat-card appearance="outlined">
           <mat-card-header>
             <mat-card-title>⚠️ Attention</mat-card-title>
@@ -92,14 +94,14 @@
       }
     }
     <div class="control-host">
-      @if (!error) {
+      @if (!error()) {
         <mat-form-field class="recovery">
           <div class="toolbar">
             <button
               mat-icon-button
               aria-label="Copy"
               (click)="toastMessage('Copied to clipboard')"
-              [cdkCopyToClipboard]="recoveryWords.value!">
+              [cdkCopyToClipboard]="recoveryWords()">
               <mat-icon>content_copy</mat-icon>
             </button>
           </div>
@@ -111,7 +113,7 @@
             matInput
             noAssist
             type="text"
-            [formControl]="recoveryWords"
+            [value]="recoveryWords()"
             readonly="true"
             class="words-area"></textarea>
         </mat-form-field>
@@ -138,13 +140,14 @@
       }
     </div>
     <div class="error-msg">
-      <p>{{ error }}</p>
+      <p>{{ error() }}</p>
     </div>
   </div>
 </div>
-@if (sheetUserCred) {
+@if (sheetUserCred()) {
   <app-recovery-sheet
     [userName]="authSvc.userName"
-    [recoveryWords]="recoveryWords.value!"
-    [userCred]="sheetUserCred" />
+    [recoveryWords]="recoveryWords()"
+    [userCred]="sheetUserCred()" />
+}
 }

@@ -8,7 +8,7 @@
     </div>
   <mat-slider matTooltip="Minimum password strength, drag to change" class="slider" min="0" max="5" step="1" value="1"
     (change)="onStrengthMinChange($event)" [disableRipple]="true">
-    <input #sliderElem matSliderThumb [formControl]="strengthSlider">
+    <input #sliderElem matSliderThumb [(ngModel)]="strengthSlider">
   </mat-slider>
-  <div class="feedback" matTooltip="Minimum password strength, drag to change">{{warning}} {{suggestion}}</div>
+  <div class="feedback" matTooltip="Minimum password strength, drag to change">{{warning()}} {{suggestion()}}</div>
 </div>

@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { InjectionToken, Injectable, inject } from '@angular/core';
+import { InjectionToken, inject, Service } from '@angular/core';
 import * as cc from '@qcrypt/crypto/consts';
 import { base64ToBytes, concatArrays } from '@qcrypt/crypto';
 
@@ -43,9 +43,7 @@ export type KeystoreResult = {
    version: number;
 };
 
-@Injectable({
-   providedIn: 'root',
-})
+@Service()
 export class KeystoreService {
    private _dbPromise?: Promise<IDBDatabase>;
    private _dbName: string = inject(KEYSTORE_DB_NAME);

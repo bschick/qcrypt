@@ -22,17 +22,17 @@ SOFTWARE. */
 import {
    Component,
    Renderer2,
-   Inject,
    ViewEncapsulation,
-   ViewChild,
    type AfterViewInit,
    type OnDestroy,
-   ChangeDetectionStrategy,
+   inject,
+   signal,
+   viewChild,
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -44,7 +44,7 @@ import { AuthenticatorService } from '../../services/authenticator.service';
 import { BubbleDirective } from '../bubble/bubble.directive';
 import { NoAssistDirective } from '../noassist.directive';
 import * as cc from '@qcrypt/crypto/consts';
-import { bytesToBase64, Ciphers } from '@qcrypt/crypto';
+import { Ciphers } from '@qcrypt/crypto';
 import type { CipherDataInfo } from '../../services/cipher.service';
 
 const PWD_CLOSE_TIMEOUT = 1000 * 60 * 5;
@@ -61,7 +61,7 @@ export type PwdDialogData = {
    welcomed: boolean;
    userName: string;
    cipherMode: string;
-   usedPasswords: string[];
+   usedPasswords: readonly string[];
 };
 
 const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
@@ -71,7 +71,6 @@ const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
    templateUrl: './password.dialog.html',
    styleUrl: './dialogs.scss',
    encapsulation: ViewEncapsulation.None, // Needed to change styles of strength meter
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       MatDialogModule,
       MatFormFieldModule,
@@ -79,7 +78,6 @@ const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
       MatIconModule,
       StrengthMeterComponent,
       FormsModule,
-      ReactiveFormsModule,
       MatTooltipModule,
       MatButtonModule,
       BubbleDirective,
@@ -87,105 +85,89 @@ const NAMES = ['terrible', 'weak', 'decent', 'good', 'strong'];
    ],
 })
 export class PasswordDialog implements AfterViewInit, OnDestroy {
-   public hidePwd = false;
-   public passwd = '';
-   public hint = '';
-   public strengthPhrase = 'Password is empty';
-   public strengthAlert = false;
-   public minStrength = 3;
-   public loopCount = 0;
-   public loops = 0;
-   public encrypting = false;
-   public userName = '';
-   public cipherMode = '';
-   public cipherShow = false;
-   public checkPwned = false;
-   private welcomed = true;
-   private timerId = -1;
-   private acceptable: boolean;
-   public usedPasswords: string[];
-   public maxHintLen = cc.HINT_MAX_LEN;
+   private readonly _r2 = inject(Renderer2);
+   private readonly _dialogRef = inject<MatDialogRef<PasswordDialog>>(MatDialogRef);
+   private readonly _data = inject<PwdDialogData>(MAT_DIALOG_DATA);
 
-   @ViewChild('bubbleTip') bubbleTip!: BubbleDirective;
-   @ViewChild(StrengthMeterComponent) strengthMeter?: StrengthMeterComponent;
+   protected readonly hidePwd = signal(this._data.hidePwd);
+   protected readonly passwd = signal('');
+   protected readonly hint = signal(this._data.hint);
+   protected readonly strengthPhrase = signal('Password is empty');
+   protected readonly strengthAlert = signal(false);
+   protected readonly cipherShow = signal(false);
 
-   constructor(
-      private r2: Renderer2,
-      public dialogRef: MatDialogRef<PasswordDialog>,
-      @Inject(MAT_DIALOG_DATA) public data: PwdDialogData,
-   ) {
-      this.hint = data.hint;
-      this.encrypting = data.encrypting;
-      this.minStrength = data.minStrength;
-      this.hidePwd = data.hidePwd;
-      this.loopCount = data.loopCount;
-      this.loops = data.loops;
-      this.checkPwned = data.checkPwned;
-      this.welcomed = data.welcomed;
-      this.userName = data.userName;
-      this.cipherMode = data.cipherMode;
-      this.acceptable = !data.encrypting;
-      this.usedPasswords = data.usedPasswords;
-   }
+   protected readonly minStrength = this._data.minStrength;
+   protected readonly loopCount = this._data.loopCount;
+   protected readonly loops = this._data.loops;
+   protected readonly encrypting = this._data.encrypting;
+   protected readonly userName = this._data.userName;
+   protected readonly cipherMode = this._data.cipherMode;
+   protected readonly checkPwned = this._data.checkPwned;
+   protected readonly usedPasswords = this._data.usedPasswords;
+   protected readonly maxHintLen = cc.HINT_MAX_LEN;
+
+   private readonly _welcomed = this._data.welcomed;
+   private _timerId = -1;
+   private _acceptable = !this._data.encrypting;
+
+   readonly bubbleTip = viewChild.required<BubbleDirective>('bubbleTip');
+   readonly strengthMeter = viewChild(StrengthMeterComponent);
 
    ngAfterViewInit(): void {
-      if (!this.welcomed) {
-         this.bubbleTip.show();
+      if (!this._welcomed) {
+         this.bubbleTip().show();
       }
    }
 
    ngOnDestroy(): void {
-      if (!this.welcomed) {
-         this.bubbleTip.hide();
+      if (!this._welcomed) {
+         this.bubbleTip().hide();
       }
    }
 
-   async checkPassword() {
-      if (this.strengthMeter) {
-         this.onAcceptableChanged(await this.strengthMeter.checkIfPwned());
+   protected async checkPassword() {
+      const strengthMeter = this.strengthMeter();
+      if (strengthMeter) {
+         this.onAcceptableChanged(await strengthMeter.checkIfPwned());
       }
    }
 
-   async onAcceptClicked() {
+   protected async onAcceptClicked() {
       await this.checkPassword();
 
-      if (this.passwd && this.acceptable) {
-         this.dialogRef.close([this.passwd, this.hint]);
+      if (this.passwd() && this._acceptable) {
+         this._dialogRef.close([this.passwd(), this.hint()]);
       } else {
-         this.strengthAlert = true;
-         this.r2.selectRootElement('#password').focus();
+         this.strengthAlert.set(true);
+         this._r2.selectRootElement('#password').focus();
       }
    }
 
-   onPasswordChange() {
+   protected onPasswordChange() {
       // Don't want to leave an open pwd dialog if, there are characters entered
       // and not activity for a few minutes minutes, close the dialog
-      if (this.timerId >= 0) {
-         window.clearTimeout(this.timerId);
+      if (this._timerId >= 0) {
+         window.clearTimeout(this._timerId);
       }
 
-      this.timerId = window.setTimeout(() => this.dialogRef.close(), PWD_CLOSE_TIMEOUT);
+      this._timerId = window.setTimeout(() => this._dialogRef.close(), PWD_CLOSE_TIMEOUT);
    }
 
-   onAcceptableChanged(state: AcceptableState) {
+   protected onAcceptableChanged(state: AcceptableState) {
       if (!this.encrypting) {
          return;
       }
 
-      this.acceptable = state.acceptable;
+      this._acceptable = state.acceptable;
 
-      if (!this.passwd) {
-         this.strengthPhrase = 'Password is empty';
+      if (!this.passwd()) {
+         this.strengthPhrase.set('Password is empty');
       } else if (!state.acceptable) {
-         this.strengthPhrase = 'Password is too weak';
+         this.strengthPhrase.set('Password is too weak');
       } else {
-         this.strengthAlert = false;
-         this.strengthPhrase = 'Password is allowed';
-         if (state.strength < 2) {
-            this.strengthPhrase += `... but ${NAMES[state.strength]}`;
-         } else {
-            this.strengthPhrase += `... and ${NAMES[state.strength]}`;
-         }
+         this.strengthAlert.set(false);
+         const qualifier = state.strength < 2 ? 'but' : 'and';
+         this.strengthPhrase.set(`Password is allowed... ${qualifier} ${NAMES[state.strength]}`);
       }
    }
 }
@@ -194,22 +176,21 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    selector: 'cipher-info.dialog',
    templateUrl: './cipher-info.dialog.html',
    styleUrl: './dialogs.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatDialogModule, MatIconModule, MatButtonModule],
 })
 export class CipherInfoDialog {
-   public error;
-   public ic!: string;
-   public alg!: string;
-   public slt!: string;
-   public ver!: string;
-   public lps!: number;
-   public hint?: string;
+   private readonly _data = inject<CipherDataInfo>(MAT_DIALOG_DATA);
 
-   constructor(
-      public dialogRef: MatDialogRef<CipherInfoDialog>,
-      @Inject(MAT_DIALOG_DATA) public data: CipherDataInfo,
-   ) {
+   public readonly error;
+   public readonly ic!: string;
+   public readonly alg!: string;
+   public readonly ver!: string;
+   protected readonly lps!: number;
+   public readonly hint?: string;
+
+   constructor() {
+      const data = this._data;
+
       if (!data) {
          this.error = 'The wrong passkey was selected or the cipher armor is invalid';
       } else {
@@ -218,7 +199,6 @@ export class CipherInfoDialog {
          }
          this.ic = data.ic.toLocaleString();
          this.alg = Ciphers.algDescription(data.alg);
-         this.slt = bytesToBase64(data.slt as Uint8Array);
          this.hint = data.hint;
          this.lps = data.lpEnd;
          this.ver = data.ver.toString();
@@ -230,36 +210,37 @@ export class CipherInfoDialog {
    selector: 'signin.dialog',
    templateUrl: './signin.dialog.html',
    styleUrl: './dialogs.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatDialogModule, MatProgressSpinnerModule, MatIconModule, MatTooltipModule, MatButtonModule],
 })
 export class SigninDialog implements OnDestroy {
-   public userName: string | null;
-   public userId: string | null;
-   public notice: string = '';
-   public noticeClass: string = 'error-msg';
-   public showProgress: boolean = false;
+   private readonly _authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
+   private readonly _dialogRef = inject<MatDialogRef<SigninDialog>>(MatDialogRef);
+
+   public readonly userName: string | null;
+   public readonly userId: string | null;
+   protected readonly notice = signal('');
+   protected readonly noticeClass = signal('error-msg');
+   public readonly showProgress = signal(false);
    private _noticeTimerId = 0;
    private _userActed = false;
 
-   constructor(
-      private authSvc: AuthenticatorService,
-      private router: Router,
-      public dialogRef: MatDialogRef<SigninDialog>,
-   ) {
-      dialogRef.disableClose = true;
-      [this.userId, this.userName] = this.authSvc.loadKnownUser();
+   constructor() {
+      const dialogRef = this._dialogRef;
 
-      this.authSvc.logoutResult().then((result) => {
+      dialogRef.disableClose = true;
+      [this.userId, this.userName] = this._authSvc.loadKnownUser();
+
+      this._authSvc.logoutResult().then((result) => {
          if (!this._userActed) {
             if (result === 'error') {
-               this.notice = 'Sign out failed, sign in then out again to retry.';
+               this.notice.set('Sign out failed, sign in then out again to retry.');
             } else if (result === 'success') {
-               this.noticeClass = 'success-msg';
-               this.notice = 'Sign out succeeded';
+               this.noticeClass.set('success-msg');
+               this.notice.set('Sign out succeeded');
                this._noticeTimerId = window.setTimeout(() => {
                   this._noticeTimerId = 0;
-                  this.notice = '';
+                  this.notice.set('');
                }, 4000);
             }
          }
@@ -280,44 +261,44 @@ export class SigninDialog implements OnDestroy {
 
    // Would be cleaner to move navigation to core.component, but doing
    // it in the dialog gives us a good place to show errors.
-   async onClickSignin(_event: MouseEvent) {
+   protected async onClickSignin(_event: MouseEvent) {
       try {
          this._userActed = true;
          this._clearNoticeTimer();
-         this.notice = '';
-         this.noticeClass = 'error-msg';
+         this.notice.set('');
+         this.noticeClass.set('error-msg');
 
          // This can happen if another tab logs out or changes passkeys while the
          // dialog is open. Not a great UX, but it's likely a rare race condition
-         if (!this.authSvc.validKnownUser()) {
+         if (!this._authSvc.validKnownUser()) {
             // don't kill other tab sessions
-            this.authSvc.forgetUser(false);
-            this.router.navigateByUrl('/welcome');
-            this.dialogRef.close('Navigate');
+            this._authSvc.forgetUser(false);
+            this._router.navigateByUrl('/welcome');
+            this._dialogRef.close('Navigate');
          } else {
-            this.showProgress = true;
-            await this.authSvc.createDefaultSession();
-            this.dialogRef.close('Login');
+            this.showProgress.set(true);
+            await this._authSvc.createDefaultSession();
+            this._dialogRef.close('Login');
          }
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
-            this.notice = 'Sign in failed, check your connection';
+            this.notice.set('Sign in failed, check your connection');
          } else {
-            this.notice = 'Sign in failed, try again or change users';
+            this.notice.set('Sign in failed, try again or change users');
          }
       } finally {
-         this.showProgress = false;
+         this.showProgress.set(false);
       }
    }
 
-   onClickForget(_event: MouseEvent) {
+   protected onClickForget(_event: MouseEvent) {
       this._userActed = true;
       this._clearNoticeTimer();
-      this.notice = '';
+      this.notice.set('');
       // kill other tab sessions
-      this.authSvc.forgetUser(true);
-      this.router.navigateByUrl('/welcome');
-      this.dialogRef.close('Forget');
+      this._authSvc.forgetUser(true);
+      this._router.navigateByUrl('/welcome');
+      this._dialogRef.close('Forget');
    }
 }

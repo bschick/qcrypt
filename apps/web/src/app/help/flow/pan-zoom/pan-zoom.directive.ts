@@ -24,7 +24,6 @@ import {
    DestroyRef,
    Directive,
    ElementRef,
-   HostListener,
    computed,
    effect,
    inject,
@@ -35,7 +34,7 @@ import {
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 12;
-const WHEEL_STEP = 1.04;
+const WHEEL_STEP = 1.02;
 const BUTTON_STEP = 1.25;
 const KEY_PAN_PX = 60;
 const KEY_PAN_PX_FAST = 240;
@@ -50,6 +49,13 @@ const DRAG_PIXEL_THRESHOLD = 4;
       '[style.overflow]': '"hidden"',
       '[style.user-select]': '"none"',
       '[style.cursor]': 'cursorStyle()',
+      '(pointerdown)': 'onPointerDown($event)',
+      '(pointermove)': 'onPointerMove($event)',
+      '(pointerup)': 'onPointerUp($event)',
+      '(pointercancel)': 'onPointerUp($event)',
+      '(pointerleave)': 'onPointerUp($event)',
+      '(dblclick)': 'onDoubleClick($event)',
+      '(keydown)': 'onKeyDown($event)',
    },
 })
 export class PanZoomDirective {
@@ -65,7 +71,7 @@ export class PanZoomDirective {
    readonly panY = signal(0);
    readonly dragging = signal(false);
 
-   readonly cursorStyle = computed(() => {
+   protected readonly cursorStyle = computed(() => {
       // Only show a grab cursor when there's actually something to
       // pan (scale > 1)
       if (this.scale() <= 1) {
@@ -228,8 +234,7 @@ export class PanZoomDirective {
       this._scaleAt(factor, event.clientX - rect.left, event.clientY - rect.top);
    };
 
-   @HostListener('pointerdown', ['$event'])
-   onPointerDown(event: PointerEvent): void {
+   protected onPointerDown(event: PointerEvent): void {
       if (event.button !== 0 && event.pointerType === 'mouse') {
          return;
       }
@@ -242,8 +247,7 @@ export class PanZoomDirective {
       this.focus();
    }
 
-   @HostListener('pointermove', ['$event'])
-   onPointerMove(event: PointerEvent): void {
+   protected onPointerMove(event: PointerEvent): void {
       if (!this.dragging() || event.pointerId !== this._activePointerId) {
          return;
       }
@@ -268,25 +272,20 @@ export class PanZoomDirective {
       this.panBy(dx, dy);
    }
 
-   @HostListener('pointerup', ['$event'])
-   @HostListener('pointercancel', ['$event'])
-   @HostListener('pointerleave', ['$event'])
-   onPointerUp(event: PointerEvent): void {
+   protected onPointerUp(event: PointerEvent): void {
       if (event.pointerId !== this._activePointerId) {
          return;
       }
       this._releaseCapture();
    }
 
-   @HostListener('dblclick', ['$event'])
-   onDoubleClick(event: MouseEvent): void {
+   protected onDoubleClick(event: MouseEvent): void {
       event.preventDefault();
       const rect = this._host.nativeElement.getBoundingClientRect();
       this._scaleAt(BUTTON_STEP * BUTTON_STEP, event.clientX - rect.left, event.clientY - rect.top);
    }
 
-   @HostListener('keydown', ['$event'])
-   onKeyDown(event: KeyboardEvent): void {
+   protected onKeyDown(event: KeyboardEvent): void {
       const step = event.shiftKey ? KEY_PAN_PX_FAST : KEY_PAN_PX;
       switch (event.key) {
          case '+':

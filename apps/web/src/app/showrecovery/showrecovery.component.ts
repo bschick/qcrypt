@@ -20,7 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnDestroy, type OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, DestroyRef, type OnDestroy, type OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -29,9 +30,7 @@ import { Router, RouterLink } from '@angular/router';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { AuthEvent, AuthenticatorService } from '../services/authenticator.service';
-import { Subscription } from 'rxjs';
 import { MatCardModule } from '@angular/material/card';
-import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { bytesToBase64 } from '@qcrypt/crypto';
 import { RecoverySheetComponent } from '../ui/recoverysheet/recoverysheet.component';
 import { NoAssistDirective } from '../ui/noassist.directive';
@@ -43,7 +42,6 @@ const SHEET_TITLE = 'quick_crypt_account_recovery';
    selector: 'app-show-recovery',
    templateUrl: './showrecovery.component.html',
    styleUrl: './showrecovery.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       MatIconModule,
       MatButtonModule,
@@ -52,77 +50,75 @@ const SHEET_TITLE = 'quick_crypt_account_recovery';
       MatInputModule,
       MatCardModule,
       MatFormFieldModule,
-      FormsModule,
-      ReactiveFormsModule,
       RecoverySheetComponent,
       NoAssistDirective,
    ],
 })
 export class ShowRecoveryComponent implements OnInit, OnDestroy {
-   public error = '';
-   public replacedLink = false;
-   public replacedWords = false;
-   public unconfirmed = false;
-   public sheetUserCred = '';
-   private authSub!: Subscription;
-   private _priorTitle?: string;
-   public recoveryWords = new FormControl<string>('');
+   protected readonly authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
+   private readonly _snackBar = inject(MatSnackBar);
 
-   constructor(
-      public authSvc: AuthenticatorService,
-      private router: Router,
-      private snackBar: MatSnackBar,
-   ) {}
+   protected readonly error = signal('');
+   protected readonly replacedLink = signal(false);
+   protected readonly replacedWords = signal(false);
+   protected readonly unconfirmed = signal(false);
+   protected readonly sheetUserCred = signal('');
+   private readonly _destroyRef = inject(DestroyRef);
+   private _priorTitle?: string;
+   protected readonly recoveryWords = signal('');
 
    ngOnInit() {
       // True when these recovery words just replaced an old recovery link or
       // a previous set of recovery words.
-      this.replacedLink = !!history.state?.replacedLink;
-      this.replacedWords = !!history.state?.replacedWords;
-      this.unconfirmed = !!history.state?.unconfirmed;
+      this.replacedLink.set(!!history.state?.replacedLink);
+      this.replacedWords.set(!!history.state?.replacedWords);
+      this.unconfirmed.set(!!history.state?.unconfirmed);
 
-      this.authSub = this.authSvc.on([AuthEvent.Logout], () => {
-         this.error = '';
-         this.router.navigateByUrl('/');
-      });
+      this.authSvc
+         .on([AuthEvent.Logout, AuthEvent.Forget])
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(() => {
+            this.error.set('');
+            // Clear before navigating so the credential is not briefly visible during the transition
+            this._clearSheet();
+            this._router.navigateByUrl('/');
+         });
 
       this.reloadData();
    }
 
-   reloadData() {
-      this.error = '';
+   protected reloadData() {
+      this.error.set('');
 
       if (this.authSvc.hasRecoveryWords()) {
-         this.recoveryWords.setValue(this.authSvc.consumeRecoveryWords());
+         this.recoveryWords.set(this.authSvc.consumeRecoveryWords());
       } else {
-         this.router.navigateByUrl('/regenrecovery');
+         this._router.navigateByUrl('/regenrecovery');
       }
    }
 
    ngOnDestroy() {
-      this.recoveryWords.setValue('');
+      this.recoveryWords.set('');
       this._clearSheet();
-      if (this.authSub) {
-         this.authSub.unsubscribe();
-      }
    }
 
-   async onClickPrint(): Promise<void> {
-      this.error = '';
+   protected async onClickPrint(): Promise<void> {
+      this.error.set('');
 
       try {
          const userCred = await this.authSvc.getUserCred();
          try {
-            this.sheetUserCred = bytesToBase64(userCred);
+            this.sheetUserCred.set(bytesToBase64(userCred));
          } finally {
             userCred.fill(0);
          }
       } catch (err) {
          console.error(err);
-         this.error = 'Could not build the backup sheet, try again';
+         this.error.set('Could not build the backup sheet, try again');
       }
 
-      if (this.sheetUserCred) {
+      if (this.sheetUserCred()) {
          this._priorTitle = document.title;
          document.title = SHEET_TITLE;
 
@@ -134,7 +130,7 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
    }
 
    private _clearSheet = (): void => {
-      this.sheetUserCred = '';
+      this.sheetUserCred.set('');
       if (this._priorTitle !== undefined) {
          document.title = this._priorTitle;
          this._priorTitle = undefined;
@@ -142,13 +138,13 @@ export class ShowRecoveryComponent implements OnInit, OnDestroy {
       window.removeEventListener('afterprint', this._clearSheet);
    };
 
-   toastMessage(msg: string) {
-      this.snackBar.open(msg, '', {
+   protected toastMessage(msg: string) {
+      this._snackBar.open(msg, '', {
          duration: 2000,
       });
    }
 
-   onClickSaved() {
+   protected onClickSaved() {
       // If the user previous didn't have a recoveryId, refresh the user
       // so the warning doesn't show. If the user refreshes the page without
       // clicking, keeping showing to warning to encourage saving

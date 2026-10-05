@@ -20,27 +20,19 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import {
-   type AfterViewInit,
-   Component,
-   Inject,
-   type OnDestroy,
-   type OnInit,
-   Renderer2,
-   ChangeDetectionStrategy,
-} from '@angular/core';
-import { AuthenticatorService } from '../services/authenticator.service';
+import { type AfterViewInit, Component, type OnDestroy, type OnInit, Renderer2, inject, signal } from '@angular/core';
+import { AuthenticatorService, normalizeRecoveryWords } from '../services/authenticator.service';
 import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
-import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
 import { NoAssistDirective } from '../ui/noassist.directive';
 
@@ -48,13 +40,11 @@ import { NoAssistDirective } from '../ui/noassist.directive';
    selector: 'app-recovery3',
    templateUrl: './recovery3.component.html',
    styleUrl: './recovery3.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       MatIconModule,
       MatButtonModule,
       RouterLink,
       FormsModule,
-      ReactiveFormsModule,
       MatProgressSpinnerModule,
       MatCardModule,
       MatFormFieldModule,
@@ -63,36 +53,33 @@ import { NoAssistDirective } from '../ui/noassist.directive';
    ],
 })
 export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
-   public validRecoveryWords = false;
-   public error = '';
-   public ready = false;
-   public showProgress = false;
-   public authenticated = false;
-   public currentUserName: string | null = null;
-   public recoveryWords = new FormControl<string>('');
+   private readonly _r2 = inject(Renderer2);
+   private readonly _authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
+   private readonly _dialog = inject(MatDialog);
 
-   constructor(
-      private r2: Renderer2,
-      private authSvc: AuthenticatorService,
-      private router: Router,
-      private dialog: MatDialog,
-   ) {}
+   protected readonly error = signal('');
+   protected readonly ready = signal(false);
+   protected readonly showProgress = signal(false);
+   protected readonly authenticated = signal(false);
+   protected readonly currentUserName = signal<string | null>(null);
+   protected readonly recoveryWords = signal('');
 
    ngOnInit() {
-      const [userId, userName] = this.authSvc.loadKnownUser();
+      const [userId, userName] = this._authSvc.loadKnownUser();
       if (userId && userName) {
-         this.currentUserName = userName;
+         this.currentUserName.set(userName);
       }
 
-      this.showProgress = true;
+      this.showProgress.set(true);
 
-      this.authSvc.ready
+      this._authSvc.ready
          .then(() => {
-            this.authenticated = this.authSvc.hasSession();
+            this.authenticated.set(this._authSvc.hasSession());
          })
          .finally(() => {
-            this.ready = true;
-            this.showProgress = false;
+            this.ready.set(true);
+            this.showProgress.set(false);
          });
    }
 
@@ -100,7 +87,7 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
       // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
       setTimeout(() => {
          try {
-            this.r2.selectRootElement('#wordsArea').focus();
+            this._r2.selectRootElement('#wordsArea').focus();
          } catch (err) {
             console.error(err);
          }
@@ -108,68 +95,69 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
    }
 
    ngOnDestroy() {
-      this.recoveryWords.setValue('');
+      this.recoveryWords.set('');
    }
 
-   async onClickSignin(): Promise<void> {
+   protected async onClickSignin(): Promise<void> {
       try {
-         this.error = '';
-         this.showProgress = true;
-         await this.authSvc.createDefaultSession();
-         this.router.navigateByUrl('/');
+         this.error.set('');
+         this.showProgress.set(true);
+         await this._authSvc.createDefaultSession();
+         this._router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
-            this.error = 'Sign in failed, check your connection';
+            this.error.set('Sign in failed, check your connection');
          } else {
-            this.error = 'Sign in failed, try again or change users';
+            this.error.set('Sign in failed, try again or change users');
          }
       } finally {
-         this.showProgress = false;
+         this.showProgress.set(false);
       }
    }
 
-   async onClickStartRecovery(_event: MouseEvent) {
+   protected async onClickStartRecovery(_event: MouseEvent) {
       try {
-         this.error = '';
-         const rawString = this.recoveryWords.value?.trim();
+         this.error.set('');
+         const rawString = this.recoveryWords().trim();
 
          if (!rawString) {
-            this.error = 'No recovery words were entered.';
+            this.error.set('No recovery words were entered.');
          } else {
-            const words = rawString.split(/\s+/);
-            const cleanedWords = words.join(' ');
+            const cleanedWords = normalizeRecoveryWords(rawString);
             if (!validateMnemonic(cleanedWords, wordlist)) {
-               this.error = 'The recovery pattern contains incorrect words.';
+               this.error.set('The recovery pattern contains incorrect words.');
             } else {
                const proceed = await this._checkProceed(cleanedWords);
                if (proceed) {
-                  this.showProgress = true;
-                  await this.authSvc.recover3(cleanedWords);
-                  this.router.navigateByUrl('/');
+                  this.showProgress.set(true);
+                  await this._authSvc.recover3(cleanedWords);
+                  this._router.navigateByUrl('/');
                }
             }
          }
       } catch (err) {
          console.error(err);
-         this.error = 'The operation was not allowed or timed out.';
+         this.error.set('The operation was not allowed or timed out.');
       } finally {
-         this.showProgress = false;
-         if (this.error) {
-            this.error +=
-               ' Ensure you are using the recovery word pattern provided when you created your account, then try again.';
+         this.showProgress.set(false);
+         if (this.error()) {
+            this.error.update(
+               (msg) =>
+                  `${msg} Ensure you are using the recovery word pattern provided when you created your account, then try again.`,
+            );
          }
       }
    }
 
    private async _checkProceed(recoveryWords: string): Promise<boolean> {
-      const [_, userId] = this.authSvc.getRecoveryValues(recoveryWords);
-      if (!this.authSvc.hasSession() || userId === this.authSvc.userId) {
+      const userId = this._authSvc.getRecoveryUserId(recoveryWords);
+      if (!this._authSvc.hasSession() || userId === this._authSvc.userId) {
          return true;
       }
 
-      const dialogRef = this.dialog.open(ConfirmDialog, {
-         data: { userName: this.authSvc.userName },
+      const dialogRef = this._dialog.open(ConfirmDialog, {
+         data: { userName: this._authSvc.userName },
       });
       return await firstValueFrom(dialogRef.afterClosed());
    }
@@ -183,16 +171,14 @@ export interface ConfirmData {
    selector: 'recovery-confirm-dialog',
    templateUrl: 'confirm-dialog.html',
    styleUrl: './recovery3.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatDialogModule, MatIconModule, MatButtonModule],
 })
 export class ConfirmDialog {
-   public currentUserName: string;
+   private readonly _data = inject<ConfirmData>(MAT_DIALOG_DATA);
 
-   constructor(
-      public dialogRef: MatDialogRef<ConfirmDialog>,
-      @Inject(MAT_DIALOG_DATA) public data: ConfirmData,
-   ) {
-      this.currentUserName = data.userName;
+   protected readonly currentUserName: string;
+
+   constructor() {
+      this.currentUserName = this._data.userName;
    }
 }

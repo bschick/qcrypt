@@ -778,7 +778,7 @@ async function postAuthOptions(httpDetails: HttpDetails): Promise<Response> {
       const options: PublicKeyCredentialRequestOptionsJSON = await generateAuthenticationOptions({
          allowCredentials: allowedCreds,
          rpID,
-         userVerification: 'required',
+         userVerification: 'preferred',
       });
 
       await createChallenge(options.challenge, { purpose: 'auth', userId });
@@ -1023,7 +1023,7 @@ async function patchPasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUse
    // only desciption can be changed
    const description = sanitizeString(patchPasskeyRequest.description);
    if (description.length < 6 || description.length > 42) {
-      throw new ParamError('description must more than 5 and less than 43 character');
+      throw new ParamError('description must be more than 5 and less than 43 character');
    }
 
    const credId = resources.credid;
@@ -1070,7 +1070,7 @@ async function patchUser(httpDetails: HttpDetails, verifiedUser?: VerifiedUserIt
    // Only support userName changes
    const userName = sanitizeString(patchUserRequest.userName);
    if (userName.length < 6 || userName.length > 31) {
-      throw new ParamError('username must more than 5 and less than 32 character');
+      throw new ParamError('username must be more than 5 and less than 32 character');
    }
 
    // Same guardrail as postRegOptions, reserved for testing (and cleanup)
@@ -1210,7 +1210,7 @@ async function deleteAllAuthenticators(verifiedUser: VerifiedUserItem): Promise<
    }
 }
 
-async function loadAuthenticators(
+export async function loadAuthenticators(
    verifiedUser: VerifiedUserItem,
    consistent: boolean = false,
 ): Promise<api.AuthenticatorInfoResponse[]> {
@@ -1244,9 +1244,17 @@ async function loadAuthenticators(
    }
 
    if (aaguidsToGet.length > 0) {
+      // AAGUIDs not in the table keep these defaults, so they aren't looked up on every call
+      const timestamp = Date.now();
+      const defaultData = { lightIcon: lightFileDefault, darkIcon: darkFileDefault, name: 'Passkey' };
+      for (const aaguid of aaguidsToGet) {
+         aaguidCache.set(aaguid, { data: defaultData, timestamp });
+      }
+
       const getParams = aaguidsToGet.map((aaguid) => ({ aaguid }));
       const aaguidsDetail = await AAGUIDs.get(getParams).go();
 
+      // Update cache with the known AAGUIDs we found
       for (const aaguidDetail of aaguidsDetail.data) {
          aaguidCache.set(aaguidDetail.aaguid, {
             data: {

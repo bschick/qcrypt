@@ -19,15 +19,23 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { type ApplicationConfig, inject, provideAppInitializer } from '@angular/core';
+import {
+   type ApplicationConfig,
+   inject,
+   isDevMode,
+   provideAppInitializer,
+   provideBrowserGlobalErrorListeners,
+   provideCheckNoChangesConfig,
+} from '@angular/core';
 import { OVERLAY_DEFAULT_CONFIG } from '@angular/cdk/overlay';
 import { MatIconRegistry } from '@angular/material/icon';
-import { provideRouter } from '@angular/router';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { provideRouter, withComponentInputBinding } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
 import { routes } from './qcrypt.routes';
 
 export const appConfig: ApplicationConfig = {
    providers: [
+      provideBrowserGlobalErrorListeners(),
       {
          provide: OVERLAY_DEFAULT_CONFIG,
          useValue: {
@@ -36,10 +44,12 @@ export const appConfig: ApplicationConfig = {
             usePopover: false,
          },
       },
-      provideRouter(routes),
-      provideHttpClient(withXhr()),
+      provideRouter(routes, withComponentInputBinding()),
+      provideHttpClient(),
       provideAppInitializer(() => {
          inject(MatIconRegistry).setDefaultFontSetClass('material-symbols-rounded');
       }),
+      // Helps detect views that stop updating because a displayed value is not a signal
+      ...(isDevMode() ? [provideCheckNoChangesConfig({ exhaustive: true, interval: 1000 })] : []),
    ],
 };

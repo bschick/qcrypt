@@ -1,8 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { CoreComponent } from './core.component';
-import { RouterModule } from '@angular/router';
-import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { routes } from '../qcrypt.routes';
 
 describe('CoreComponent', () => {
@@ -11,8 +11,8 @@ describe('CoreComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [CoreComponent, RouterModule.forRoot(routes)],
-         providers: [provideHttpClient(withXhr(), withInterceptorsFromDi()), provideHttpClientTesting()],
+         imports: [CoreComponent],
+         providers: [provideRouter(routes), provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()],
       }).compileComponents();
 
       fixture = TestBed.createComponent(CoreComponent);

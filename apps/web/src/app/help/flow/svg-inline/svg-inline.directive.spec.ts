@@ -1,6 +1,6 @@
-import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { bufferToBase64URLString } from '@qcrypt/crypto';
 import { SvgInlineDirective } from './svg-inline.directive';
@@ -9,7 +9,6 @@ import { FLOW_SVG_HASHES } from '../flow.config';
 @Component({
    standalone: true,
    imports: [SvgInlineDirective],
-   changeDetection: ChangeDetectionStrategy.Eager,
    template: `<div [svgInline]="url()"></div>`,
 })
 class HostComponent {
@@ -36,8 +35,10 @@ describe('SvgInlineDirective', () => {
    beforeEach(async () => {
       await TestBed.configureTestingModule({
          imports: [HostComponent],
-         providers: [provideHttpClient(withXhr()), provideHttpClientTesting()],
+         providers: [provideHttpClient(), provideHttpClientTesting()],
       }).compileComponents();
+      // The fixture renders and requests the host's URL during a test's first await, so a test with a different
+      // URL sets it before awaiting
       fixture = TestBed.createComponent(HostComponent);
       httpController = TestBed.inject(HttpTestingController);
    });
@@ -134,8 +135,8 @@ describe('SvgInlineDirective', () => {
          '<use href="http://evil.example/y.svg#b"/>' +
          '<g class="qc-clickable" data-target="01" onclick="globalThis.__pwn = true">' +
          '<use xlink:href="#g"/></g></svg>';
-      const buf = await registerHash('/danger.svg', dirty);
       fixture.componentInstance.url.set('/danger.svg');
+      const buf = await registerHash('/danger.svg', dirty);
       fixture.detectChanges();
       httpController.expectOne('/danger.svg').flush(buf);
 
@@ -159,8 +160,8 @@ describe('SvgInlineDirective', () => {
          '<script>globalThis.__pwn = true;</script>' +
          '<rect width="10" height="10" onload="globalThis.__pwn = true"/>' +
          '</svg>';
-      const buf = await registerHash('/script.svg', dirty);
       fixture.componentInstance.url.set('/script.svg');
+      const buf = await registerHash('/script.svg', dirty);
       fixture.detectChanges();
       httpController.expectOne('/script.svg').flush(buf);
 
@@ -178,8 +179,8 @@ describe('SvgInlineDirective', () => {
          '<style>rect { fill: red; }</style>' +
          '<rect width="10" height="10" style="fill: red"/>' +
          '</svg>';
-      const buf = await registerHash('/style.svg', dirty);
       fixture.componentInstance.url.set('/style.svg');
+      const buf = await registerHash('/style.svg', dirty);
       fixture.detectChanges();
       httpController.expectOne('/style.svg').flush(buf);
 
@@ -199,8 +200,8 @@ describe('SvgInlineDirective', () => {
          '<foreignObject width="10" height="10"><div>pwn</div></foreignObject>' +
          '<rect width="10" height="10" fill="#333"><animate attributeName="fill" to="#fff"/></rect>' +
          '</svg>';
-      const buf = await registerHash('/active.svg', dirty);
       fixture.componentInstance.url.set('/active.svg');
+      const buf = await registerHash('/active.svg', dirty);
       fixture.detectChanges();
       httpController.expectOne('/active.svg').flush(buf);
 

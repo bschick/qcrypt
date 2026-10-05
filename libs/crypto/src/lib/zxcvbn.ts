@@ -61,7 +61,11 @@ export function zxcvbnReady(): Promise<ZxcvbnBundle> {
             pwnedLookup: pwned.haveIBeenPwned,
          };
          return _bundle;
-      })();
+      })().catch((err) => {
+         // Clear the cache so a later call retries the download
+         _zxcvbnReady = undefined;
+         throw err;
+      });
    }
    return _zxcvbnReady;
 }

@@ -39,41 +39,29 @@ export const helpRoutes: Routes = [
    {
       path: 'protocol',
       loadComponent: () =>
-         guardedImport(() => import('./protocol/protocol.component').then((m) => m.Protocol8Component)),
+         guardedImport(() => import('./protocol/protocol8.component').then((m) => m.Protocol8Component)),
    },
    {
       path: 'flow',
       loadComponent: () => guardedImport(() => import('./flow/flow.component').then((m) => m.FlowComponent)),
    },
-   {
-      path: 'protocol1',
-      loadComponent: () =>
-         guardedImport(() => import('./protocol/protocol.component').then((m) => m.ProtocolComponent)),
-   },
-   {
-      path: 'protocol4',
-      loadComponent: () =>
-         guardedImport(() => import('./protocol/protocol.component').then((m) => m.Protocol4Component)),
-   },
-   {
-      path: 'protocol5',
-      loadComponent: () =>
-         guardedImport(() => import('./protocol/protocol.component').then((m) => m.Protocol5Component)),
-   },
+   { path: 'protocol1', redirectTo: 'protocol' },
+   { path: 'protocol4', redirectTo: 'protocol' },
+   { path: 'protocol5', redirectTo: 'protocol' },
    {
       path: 'protocol6',
       loadComponent: () =>
-         guardedImport(() => import('./protocol/protocol.component').then((m) => m.Protocol6Component)),
+         guardedImport(() => import('./protocol/protocol6.component').then((m) => m.Protocol6Component)),
    },
    {
       path: 'protocol7',
       loadComponent: () =>
-         guardedImport(() => import('./protocol/protocol.component').then((m) => m.Protocol7Component)),
+         guardedImport(() => import('./protocol/protocol7.component').then((m) => m.Protocol7Component)),
    },
    {
       path: 'protocol8',
       loadComponent: () =>
-         guardedImport(() => import('./protocol/protocol.component').then((m) => m.Protocol8Component)),
+         guardedImport(() => import('./protocol/protocol8.component').then((m) => m.Protocol8Component)),
    },
    { path: '', redirectTo: 'faqs', pathMatch: 'full' },
 ];

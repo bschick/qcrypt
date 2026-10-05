@@ -20,45 +20,41 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, inject, type OnDestroy, type OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, DestroyRef, inject, type OnInit, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AuthEvent, AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCardModule } from '@angular/material/card';
-import { Subscription } from 'rxjs';
 
 @Component({
    selector: 'app-regenrecovery',
    templateUrl: './regenrecovery.component.html',
    styleUrl: './regenrecovery.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatIconModule, MatButtonModule, MatProgressSpinnerModule, MatCardModule, RouterLink],
 })
-export class RegenrecoveryComponent implements OnInit, OnDestroy {
-   public showProgress = false;
-   public error = '';
-   public readonly authSvc = inject(AuthenticatorService);
-   private readonly router = inject(Router);
-   private _authSub!: Subscription;
+export class RegenrecoveryComponent implements OnInit {
+   protected readonly showProgress = signal(false);
+   protected readonly error = signal('');
+   protected readonly authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
+   private readonly _destroyRef = inject(DestroyRef);
 
    ngOnInit() {
-      this._authSub = this.authSvc.on([AuthEvent.Logout], () => {
-         this.error = '';
-         this.router.navigateByUrl('/');
-      });
+      this.authSvc
+         .on([AuthEvent.Logout, AuthEvent.Forget])
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(() => {
+            this.error.set('');
+            this._router.navigateByUrl('/');
+         });
    }
 
-   ngOnDestroy() {
-      if (this._authSub) {
-         this._authSub.unsubscribe();
-      }
-   }
-
-   onClickGenerate() {
-      this.showProgress = true;
-      this.error = '';
+   protected onClickGenerate() {
+      this.showProgress.set(true);
+      this.error.set('');
 
       // changeRecoveryWords flips hasRecoveryId true, so capture which prior recovery
       // method is being replaced before calling it. Note that other navigators to
@@ -70,22 +66,22 @@ export class RegenrecoveryComponent implements OnInit, OnDestroy {
          .changeRecoveryWords()
          .then((state) => {
             if (state === 'match' || state === 'unknown') {
-               this.router.navigateByUrl('/showrecovery', {
+               this._router.navigateByUrl('/showrecovery', {
                   state: { replacedLink, replacedWords, unconfirmed: state !== 'match' },
                });
             } else {
                // Reachable only if a future state reports the new words were not stored
-               this.error = 'Recovery words update did not complete. You must retry to avoid losing access.';
+               this.error.set('Recovery words update did not complete. You must retry to avoid losing access.');
             }
          })
          .catch((err) => {
             console.error(err);
             if (err instanceof Error && err.message.includes('fetch')) {
-               this.error = 'Could not replace recovery words, check your connection and try again';
+               this.error.set('Could not replace recovery words, check your connection and try again');
             } else {
-               this.error = 'Could not replace recovery words, try again';
+               this.error.set('Could not replace recovery words, try again');
             }
          })
-         .finally(() => (this.showProgress = false));
+         .finally(() => this.showProgress.set(false));
    }
 }

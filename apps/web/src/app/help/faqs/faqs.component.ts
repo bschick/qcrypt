@@ -19,23 +19,15 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import {
-   Component,
-   ViewEncapsulation,
-   inject,
-   type OnInit,
-   type OnDestroy,
-   ChangeDetectionStrategy,
-} from '@angular/core';
+import { Component, ViewEncapsulation, effect, inject, input, type OnInit, signal, untracked } from '@angular/core';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ClipboardModule } from '@angular/cdk/clipboard';
-import { ActivatedRoute, RouterModule } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import type { Subscription } from 'rxjs';
 import { CopyrightComponent } from '../../ui/copyright/copyright.component';
 
 export interface FAQElement {
@@ -50,36 +42,42 @@ export interface FAQElement {
    templateUrl: './faqs.component.html',
    styleUrl: './faqs.component.scss',
    encapsulation: ViewEncapsulation.None,
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       MatTableModule,
       MatIconModule,
       MatButtonModule,
       MatTooltipModule,
       FormsModule,
-      RouterModule,
+      RouterLink,
       ClipboardModule,
       CopyrightComponent,
    ],
 })
-export class FaqsComponent implements OnInit, OnDestroy {
-   private readonly route = inject(ActivatedRoute);
-   private readonly snackBar = inject(MatSnackBar);
-   private routeSub?: Subscription;
+export class FaqsComponent implements OnInit {
+   private readonly _snackBar = inject(MatSnackBar);
 
-   public allExpanded = false;
-   public searchTerm = '';
-   public singleFaqId: string | null = null;
-   public notFound = false;
-   public expandedPositions: number[] = [];
-   public displayedColumns: string[] = ['position', 'question'];
-   public dataSource: MatTableDataSource<FAQElement>;
+   // Set by the router from the :id route parameter and the search query parameter
+   readonly id = input<string>();
+   readonly search = input<string>();
+
+   protected readonly allExpanded = signal(false);
+   public readonly searchTerm = signal('');
+   public readonly singleFaqId = signal<string | null>(null);
+   public readonly notFound = signal(false);
+   public readonly expandedPositions = signal<number[]>([]);
+   protected readonly displayedColumns: readonly string[] = ['position', 'question'];
+   public readonly dataSource: MatTableDataSource<FAQElement>;
 
    constructor() {
       for (const [index, element] of ELEMENT_DATA.entries()) {
          element.position = index + 1;
       }
       this.dataSource = new MatTableDataSource(ELEMENT_DATA);
+
+      effect(() => {
+         const id = this.id();
+         untracked(() => this._handleRouteId(id ?? null));
+      });
    }
 
    ngOnInit() {
@@ -120,90 +118,81 @@ export class FaqsComponent implements OnInit, OnDestroy {
             (neutralTerms.length === 0 || neutralTerms.some((term) => dataStr.includes(term)))
          );
       };
-
-      this.routeSub = this.route.paramMap.subscribe((params) => {
-         const id = params.get('id');
-         this.handleRouteId(id);
-      });
    }
 
-   ngOnDestroy(): void {
-      this.routeSub?.unsubscribe();
-   }
-
-   private handleRouteId(id: string | null): void {
+   private _handleRouteId(id: string | null): void {
       if (id) {
          const targetId = id.trim().toLowerCase();
          const match = ELEMENT_DATA.find((faq) => faq.id.toLowerCase() === targetId);
          if (match) {
-            this.singleFaqId = match.id;
-            this.notFound = false;
+            this.singleFaqId.set(match.id);
+            this.notFound.set(false);
             this.dataSource.data = [match];
-            this.expandedPositions = [match.position];
-            this.allExpanded = true;
+            this.expandedPositions.set([match.position]);
+            this.allExpanded.set(true);
          } else {
-            this.singleFaqId = targetId;
-            this.notFound = true;
+            this.singleFaqId.set(targetId);
+            this.notFound.set(true);
             this.dataSource.data = [];
-            this.expandedPositions = [];
-            this.allExpanded = false;
+            this.expandedPositions.set([]);
+            this.allExpanded.set(false);
          }
       } else {
-         this.singleFaqId = null;
-         this.notFound = false;
+         this.singleFaqId.set(null);
+         this.notFound.set(false);
          this.dataSource.data = ELEMENT_DATA;
-         this.checkQueryParams();
+         this._checkQueryParams();
       }
    }
 
-   private checkQueryParams(): void {
-      const search = this.route.snapshot.queryParamMap.get('search');
+   private _checkQueryParams(): void {
+      const search = this.search();
       if (search) {
-         this.searchTerm = search;
+         this.searchTerm.set(search);
          this.applyFilter(search);
          this.onToggleExpand();
       } else {
-         this.searchTerm = '';
+         this.searchTerm.set('');
          this.applyFilter('');
-         this.expandedPositions = [];
-         this.allExpanded = false;
+         this.expandedPositions.set([]);
+         this.allExpanded.set(false);
       }
    }
 
-   applyFilter(filter: string | null = null) {
+   protected applyFilter(filter: string | null = null) {
       filter = filter ?? '';
       this.dataSource.filter = filter.trim().toLowerCase();
    }
 
-   addOrRemove(position: number) {
-      if (this.expandedPositions.includes(position)) {
-         this.expandedPositions = this.expandedPositions.filter((e) => e !== position);
+   protected addOrRemove(position: number) {
+      if (this.expandedPositions().includes(position)) {
+         this.expandedPositions.update((positions) => positions.filter((pos) => pos !== position));
       } else {
-         this.expandedPositions.push(position);
+         this.expandedPositions.update((positions) => [...positions, position]);
       }
    }
 
-   onToggleExpand() {
-      if (this.allExpanded) {
-         this.expandedPositions = [];
+   protected onToggleExpand() {
+      if (this.allExpanded()) {
+         this.expandedPositions.set([]);
       } else {
          // extra 0 at the front doesn't hurt
-         this.expandedPositions = [...Array(ELEMENT_DATA.length).keys(), ELEMENT_DATA.length];
+         this.expandedPositions.set([...Array(ELEMENT_DATA.length).keys(), ELEMENT_DATA.length]);
       }
-      this.allExpanded = !this.allExpanded;
+      this.allExpanded.set(!this.allExpanded());
    }
 
    getFaqUrl(id: string): string {
       return `${window.location.origin}/help/faqs/${id}`;
    }
 
-   onCopyLink(event: MouseEvent) {
+   protected onCopyLink(event: MouseEvent) {
       event.stopPropagation();
       this.toastMessage('Link copied to clipboard');
    }
 
    toastMessage(msg: string) {
-      this.snackBar.open(msg, '', {
+      this._snackBar.open(msg, '', {
          duration: 2000,
       });
    }

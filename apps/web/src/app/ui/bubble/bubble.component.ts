@@ -19,14 +19,13 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { ChangeDetectorRef, Component, type OnInit, ChangeDetectionStrategy } from '@angular/core';
-import { NgClass } from '@angular/common';
+import { ChangeDetectorRef, Component, inject, signal } from '@angular/core';
 
 export const BubblePosition = {
    ABOVE: 'above',
-   UPPER: 'upper',
+   BELOW: 'below',
    RIGHT: 'right',
-   DEFAULT: 'upper',
+   DEFAULT: 'above',
 } as const;
 
 export type BubblePosition = (typeof BubblePosition)[keyof typeof BubblePosition];
@@ -35,24 +34,23 @@ export type BubblePosition = (typeof BubblePosition)[keyof typeof BubblePosition
    selector: 'bubble',
    templateUrl: './bubble.component.html',
    styleUrl: './bubble.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
-   imports: [NgClass],
+   imports: [],
 })
-export class BubbleComponent implements OnInit {
-   position: BubblePosition = BubblePosition.DEFAULT;
-   theme = 'light';
-   tip = '';
-   left = 0;
-   top = 0;
-   width?: string;
-   height?: string;
-   visible = false;
+export class BubbleComponent {
+   // BubbleDirective creates this component dynamically and drives its change detection from outside
+   public readonly changeRef = inject(ChangeDetectorRef);
 
-   constructor(public changeRef: ChangeDetectorRef) {}
-
-   ngOnInit(): void {}
+   readonly position = signal<BubblePosition>(BubblePosition.DEFAULT);
+   protected readonly theme = signal('light');
+   readonly tip = signal('');
+   readonly left = signal(0);
+   readonly top = signal(0);
+   readonly width = signal<string | undefined>(undefined);
+   readonly height = signal<string | undefined>(undefined);
+   readonly fontSize = signal<string | undefined>(undefined);
+   readonly visible = signal(false);
 
    close(): void {
-      this.visible = false;
+      this.visible.set(false);
    }
 }

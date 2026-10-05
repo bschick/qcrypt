@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Injectable } from '@angular/core';
+import { Service } from '@angular/core';
 import * as cc from '@qcrypt/crypto/consts';
 import { Ciphers, encryptStream, decryptStream, getCipherStreamInfo, cryptoReady } from '@qcrypt/crypto';
 import type { EContext, CipherDataInfo, CipherDone, KeyProvider } from '@qcrypt/crypto';
@@ -35,9 +35,7 @@ an Angular service. Must of that functionality was previously in this
 class directly, and perhaps this class could now be removed, but keeping
 it for now to avoid having to update other code and many tests */
 
-@Injectable({
-   providedIn: 'root',
-})
+@Service()
 export class CipherService {
    private _iCount = 0;
    private _hashRate = 0;

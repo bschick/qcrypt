@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Component, ChangeDetectionStrategy } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthenticatorService } from '../services/authenticator.service';
@@ -40,41 +40,36 @@ function paramsToQueryString(): string {
    selector: 'app-welcome',
    templateUrl: './welcome.component.html',
    styleUrl: './welcome.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatButtonModule, MatProgressSpinnerModule, MatIconModule, MatDividerModule, RouterLink],
 })
 export class WelcomeComponent {
-   public error: string = '';
-   public showProgress: boolean = false;
+   private readonly _dialog = inject(MatDialog);
+   private readonly _authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
 
-   constructor(
-      private dialog: MatDialog,
-      private authSvc: AuthenticatorService,
-      private router: Router,
-   ) {}
+   protected readonly error = signal('');
+   protected readonly showProgress = signal(false);
 
-   async onClickExisting(_event: MouseEvent) {
+   protected async onClickExisting(_event: MouseEvent) {
       try {
-         this.error = '';
-         this.showProgress = true;
-         await this.authSvc.createSession();
-         this.router.navigateByUrl(`/${paramsToQueryString()}`);
+         this.error.set('');
+         this.showProgress.set(true);
+         await this._authSvc.createSession();
+         this._router.navigateByUrl(`/${paramsToQueryString()}`);
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
-            this.error = 'Sign in failed, check your internet connection';
+            this.error.set('Sign in failed, check your internet connection');
          } else {
-            this.error = 'Passkey not recognized. Either try again or select another option above.';
+            this.error.set('Passkey not recognized. Either try again or select another option above.');
          }
       } finally {
-         this.showProgress = false;
+         this.showProgress.set(false);
       }
    }
 
-   onClickNew(_event: MouseEvent) {}
-
-   onClickRecovery(_event: MouseEvent) {
-      this.dialog.open(RecoveryDialog);
+   protected onClickRecovery(_event: MouseEvent) {
+      this._dialog.open(RecoveryDialog);
    }
 }
 
@@ -82,24 +77,21 @@ export class WelcomeComponent {
    selector: 'recovery-dialog',
    templateUrl: './recovery-dialog.html',
    styleUrl: './welcome.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatDialogModule, MatIconModule, MatTooltipModule, MatButtonModule, RouterLink],
 })
 export class RecoveryDialog {
-   constructor(
-      public dialogRef: MatDialogRef<RecoveryDialog>,
-      private router: Router,
-   ) {}
+   private readonly _dialogRef = inject<MatDialogRef<RecoveryDialog>>(MatDialogRef);
+   private readonly _router = inject(Router);
 
-   onClickNewUser(event: Event) {
+   protected onClickNewUser(event: Event) {
       event.stopPropagation();
-      this.dialogRef.close();
-      this.router.navigateByUrl('/newuser');
+      this._dialogRef.close();
+      this._router.navigateByUrl('/newuser');
    }
 
-   onClickRecovery3(event: Event) {
+   protected onClickRecovery3(event: Event) {
       event.stopPropagation();
-      this.dialogRef.close();
-      this.router.navigateByUrl('/recovery3');
+      this._dialogRef.close();
+      this._router.navigateByUrl('/recovery3');
    }
 }

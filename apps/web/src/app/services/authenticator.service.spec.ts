@@ -158,7 +158,7 @@ describe('AuthenticatorService', () => {
       const createSpy = vi.spyOn(keystoreSvc, 'create');
       const getSpy = vi.spyOn(keystoreSvc, 'get');
       const events: AuthEvent[] = [];
-      service.on(allAuthEvents, (ed) => events.push(ed.event));
+      service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
       await service._restoreSession(loadCrypto);
 
@@ -193,7 +193,7 @@ describe('AuthenticatorService', () => {
       const createSpy = vi.spyOn(keystoreSvc, 'create');
       const getSpy = vi.spyOn(keystoreSvc, 'get');
       const events: AuthEvent[] = [];
-      service.on(allAuthEvents, (ed) => events.push(ed.event));
+      service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
       await service._restoreSession(loadCrypto);
 
@@ -220,7 +220,7 @@ describe('AuthenticatorService', () => {
       const createSpy = vi.spyOn(keystoreSvc, 'create');
       const getSpy = vi.spyOn(keystoreSvc, 'get');
       const events: AuthEvent[] = [];
-      service.on(allAuthEvents, (ed) => events.push(ed.event));
+      service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
       await service._restoreSession(loadCrypto);
 
@@ -242,7 +242,7 @@ describe('AuthenticatorService', () => {
       const createSpy = vi.spyOn(keystoreSvc, 'create');
       const getSpy = vi.spyOn(keystoreSvc, 'get');
       const events: AuthEvent[] = [];
-      service.on(allAuthEvents, (ed) => events.push(ed.event));
+      service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
       // Step 1: invoke _loginUser directly to populate IndexedDB and write
       // a userCredEnc to sessionStorage.
@@ -316,7 +316,7 @@ describe('AuthenticatorService', () => {
       const createSpy = vi.spyOn(keystoreSvc, 'create');
       const getSpy = vi.spyOn(keystoreSvc, 'get');
       const events: AuthEvent[] = [];
-      service.on(allAuthEvents, (ed) => events.push(ed.event));
+      service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
       await service._restoreSession(loadCrypto);
 
@@ -415,7 +415,8 @@ describe('AuthenticatorService', () => {
          primeLocalStorage();
          await login(false, userCred);
 
-         const recoveryWords = entropyToMnemonic(api.recoverySecret(getRandom(api.RECOVERYID_BYTES), userId), wordlist);
+         const secret = api.recoverySecret(getRandom(api.RECOVERYID_BYTES), userId);
+         const recoveryWords = entropyToMnemonic(secret, wordlist);
          const startResp = {
             prf: false,
             challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)),
@@ -426,12 +427,24 @@ describe('AuthenticatorService', () => {
             json: async () => (url.pathname.endsWith('/recover3') ? startResp : sessionResponse),
          }));
 
-         // Recovery still fails, because the passkey ceremony that follows cannot run
-         // here, but only after reaching the step that replaces the passkeys
-         await expect(service.recover3(recoveryWords)).rejects.toThrow();
-         expect(service.halted).toBe(false);
-         const paths = fetchMock.mock.calls.map((call) => (call[0] as URL).pathname);
-         expect(paths.some((path) => path.endsWith('/recover/confirm'))).toBe(true);
+         for (const words of [recoveryWords, copiedFromPdf(recoveryWords)]) {
+            fetchMock.mockClear();
+
+            // Recovery still fails, because the passkey ceremony that follows cannot run
+            // here, but only after reaching the step that replaces the passkeys
+            await expect(service.recover3(words)).rejects.toThrow();
+            expect(service.halted).toBe(false);
+            const paths = fetchMock.mock.calls.map((call) => (call[0] as URL).pathname);
+            expect(paths.some((path) => path.endsWith('/recover/confirm'))).toBe(true);
+
+            const startCall = fetchMock.mock.calls.find((call) => (call[0] as URL).pathname.endsWith('/recover3'));
+            const body: api.Recover3Request = JSON.parse((startCall![1] as RequestInit).body as string);
+            expect(body.userId).toBe(userId);
+            const pubKey = api.getRecoveryPubKey(secret);
+            expect(() =>
+               api.verifyRecoveryProof(pubKey, userId, body.timestamp, body.nonce, body.signature, 'recover'),
+            ).not.toThrow();
+         }
       });
 
       it('halts when account is downgraded during recovery', async () => {
@@ -501,12 +514,18 @@ describe('AuthenticatorService', () => {
          .map((call) => JSON.parse((call[1] as RequestInit).body as string));
    }
 
+   function copiedFromPdf(words: string): string {
+      const separators = ['  ', '\n', ' ', '\t ', '\r\n'];
+      const parts = words.split(' ').map((word, i) => (i % 4 === 0 ? word.toUpperCase() : word));
+      return ` ${parts.map((word, i) => word + separators[i % separators.length]).join('')}`;
+   }
+
    describe('recovery words state', () => {
       beforeEach(async () => {
          primeLocalStorage();
          // @ts-expect-error — exercising private path
          await service._loginUser(sessionResponse, base64ToBytes(userCred));
-         vi.spyOn(service, 'reauthenticate').mockResolvedValue(service.userInfo()!);
+         vi.spyOn(service, 'reauthenticate').mockResolvedValue(service.getUserInfo());
       });
 
       it('stores words that check out against the key the server reports', async () => {
@@ -516,7 +535,10 @@ describe('AuthenticatorService', () => {
          expect(service.hasRecoveryWords()).toBe(true);
 
          // Re-checking the displayed words proves they derive the key the server now holds
-         await expect(service.checkRecoveryWords(service.consumeRecoveryWords())).resolves.toEqual('match');
+         const words = service.consumeRecoveryWords();
+         for (const entered of [words, copiedFromPdf(words)]) {
+            await expect(service.checkRecoveryWords(entered)).resolves.toEqual('match');
+         }
       });
 
       it('reports a match when the retry succeeds', async () => {
@@ -571,7 +593,7 @@ describe('AuthenticatorService', () => {
          const prfSession = { ...sessionResponse, prf: true };
          // @ts-expect-error — exercising private path
          await service._loginUser(prfSession, base64ToBytes(userCred));
-         vi.spyOn(service, 'reauthenticate').mockResolvedValue(service.userInfo()!);
+         vi.spyOn(service, 'reauthenticate').mockResolvedValue(service.getUserInfo());
       });
 
       it('re-encrypts the user credential under the new recovery secret', async () => {
@@ -591,6 +613,80 @@ describe('AuthenticatorService', () => {
          expect(sent.length).toBe(2);
          expect(sent[0].signature).not.toEqual(sent[1].signature);
       });
+   });
+
+   describe('PRF read after registration', () => {
+      const userPresent = 0x01;
+      const userVerified = 0x04;
+
+      function assertionWithFlags(flags: number): Credential {
+         const authenticatorData = new Uint8Array(37);
+         authenticatorData[32] = flags;
+         return {
+            id: 'Y3JlZA',
+            rawId: base64ToBytes('Y3JlZA').buffer,
+            type: 'public-key',
+            authenticatorAttachment: 'platform',
+            response: {
+               authenticatorData: authenticatorData.buffer,
+               clientDataJSON: new Uint8Array(1).buffer,
+               signature: new Uint8Array(1).buffer,
+               userHandle: null,
+            },
+            getClientExtensionResults: () => ({ prf: { results: { first: getRandom(cc.KEY_BYTES).buffer } } }),
+         } as unknown as Credential;
+      }
+
+      it.skipIf(!window.PublicKeyCredential || !navigator.credentials)(
+         'rejects a PRF read from an assertion without user verification',
+         async () => {
+            vi.spyOn(navigator.credentials, 'get')
+               .mockResolvedValueOnce(assertionWithFlags(userPresent | userVerified))
+               .mockResolvedValueOnce(assertionWithFlags(userPresent));
+
+            // @ts-expect-error — exercising private path
+            await expect(service._readPrfViaAssertion('Y3JlZA')).resolves.toBeTruthy();
+            // @ts-expect-error — exercising private path
+            await expect(service._readPrfViaAssertion('Y3JlZA')).rejects.toThrow(/user verification/);
+         },
+      );
+   });
+
+   describe('user verification requests', () => {
+      function serveAuthOptions() {
+         fetchMock.mockResolvedValue({
+            ok: true,
+            json: async () => ({
+               challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)),
+               userVerification: 'preferred',
+            }),
+         });
+      }
+
+      it.skipIf(!window.PublicKeyCredential || !navigator.credentials)(
+         'passes the server user verification request through at sign-in',
+         async () => {
+            serveAuthOptions();
+            const getSpy = vi.spyOn(navigator.credentials, 'get').mockRejectedValue(new Error('stopped'));
+
+            await expect(service.createSession()).rejects.toThrow();
+            expect(getSpy.mock.calls[0][0]?.publicKey?.userVerification).toBe('preferred');
+         },
+      );
+
+      it.skipIf(!window.PublicKeyCredential || !navigator.credentials)(
+         'requires user verification to re-authenticate',
+         async () => {
+            primeLocalStorage();
+            // @ts-expect-error — exercising private path
+            await service._loginUser(sessionResponse, base64ToBytes(userCred));
+            serveAuthOptions();
+            const getSpy = vi.spyOn(navigator.credentials, 'get').mockRejectedValue(new Error('stopped'));
+
+            await expect(service.reauthenticate()).rejects.toThrow();
+            expect(getSpy.mock.calls[0][0]?.publicKey?.userVerification).toBe('required');
+         },
+      );
    });
 
    describe('session user binding', () => {
@@ -626,7 +722,7 @@ describe('AuthenticatorService', () => {
          const keystoreSvc = TestBed.inject(KeystoreService);
          const createSpy = vi.spyOn(keystoreSvc, 'create');
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.setCredentialProvider(() => ({
             pkId,
@@ -660,7 +756,7 @@ describe('AuthenticatorService', () => {
 
          fetchMock.mockClear();
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogin({
             pkId,
@@ -685,7 +781,7 @@ describe('AuthenticatorService', () => {
          const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
          const strangerPkId = bytesToBase64(getRandom(cc.PKID_MIN_BYTES));
          const events: AuthEvent[] = [];
-         service.on([AuthEvent.Logout, AuthEvent.Forget], (ed) => events.push(ed.event));
+         service.on([AuthEvent.Logout, AuthEvent.Forget]).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogin({
             pkId: strangerPkId,
@@ -705,7 +801,7 @@ describe('AuthenticatorService', () => {
          const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
          const strangerPkId = bytesToBase64(getRandom(cc.PKID_MIN_BYTES));
          const events: AuthEvent[] = [];
-         service.on([AuthEvent.Logout, AuthEvent.Forget], (ed) => events.push(ed.event));
+         service.on([AuthEvent.Logout, AuthEvent.Forget]).subscribe((ed) => events.push(ed.event));
 
          // Simulate another tab signing in as a different user.
          localStorage.setItem('userid', bytesToBase64(getRandom(cc.USERID_BYTES)));
@@ -727,7 +823,7 @@ describe('AuthenticatorService', () => {
          await service._loginUser(sessionResponse, base64ToBytes(userCred));
          const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogout({ pkId, version: phase1.version });
 
@@ -741,7 +837,7 @@ describe('AuthenticatorService', () => {
          await service._loginUser(sessionResponse, base64ToBytes(userCred));
          const phase1 = JSON.parse(sessionStorage.getItem('sessionstate')!);
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          fetchMock.mockClear();
          peerResponder.sendLogout({ pkId, version: phase1.version - 1 });
@@ -758,7 +854,7 @@ describe('AuthenticatorService', () => {
          await service._loginUser(sessionResponse, base64ToBytes(userCred));
          expect(service.hasSession()).toBe(true);
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          // Real sender of forget clears shared localStorage before broadcasting.
          localStorage.removeItem('userid');
@@ -795,7 +891,7 @@ describe('AuthenticatorService', () => {
 
       it('forget with no session emits forget', async () => {
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendForget();
 
@@ -805,7 +901,7 @@ describe('AuthenticatorService', () => {
       it('forget when not logged in - same user emits forget', async () => {
          primeLocalStorage();
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendForget();
 
@@ -814,14 +910,10 @@ describe('AuthenticatorService', () => {
 
       it('forget when not logged in - different user emits forget', async () => {
          primeLocalStorage();
-         sessionStorage.setItem(
-            'sessionstate',
-            JSON.stringify({
-               userId: bytesToBase64(getRandom(cc.USERID_BYTES)),
-            }),
-         );
+         // @ts-expect-error — exercising private path
+         service._setSessionState({ userId: bytesToBase64(getRandom(cc.USERID_BYTES)) });
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendForget();
 
@@ -830,7 +922,7 @@ describe('AuthenticatorService', () => {
 
       it('logout with no session is no action', async () => {
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogout({ pkId, version: 1 });
 
@@ -841,7 +933,7 @@ describe('AuthenticatorService', () => {
       it('logout when not logged in - same user is no action', async () => {
          primeLocalStorage();
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogout({ pkId, version: 1 });
 
@@ -851,14 +943,10 @@ describe('AuthenticatorService', () => {
 
       it('logout when not logged in - different user is no action', async () => {
          primeLocalStorage();
-         sessionStorage.setItem(
-            'sessionstate',
-            JSON.stringify({
-               userId: bytesToBase64(getRandom(cc.USERID_BYTES)),
-            }),
-         );
+         // @ts-expect-error — exercising private path
+         service._setSessionState({ userId: bytesToBase64(getRandom(cc.USERID_BYTES)) });
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogout({ pkId, version: 1 });
 
@@ -868,7 +956,7 @@ describe('AuthenticatorService', () => {
 
       it('login with no session emits forget', async () => {
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogin({
             pkId,
@@ -883,7 +971,7 @@ describe('AuthenticatorService', () => {
       it('login when not logged in - same user is no action', async () => {
          primeLocalStorage();
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogin({
             pkId,
@@ -898,15 +986,11 @@ describe('AuthenticatorService', () => {
 
       it('login when not logged in - different user emits forget', async () => {
          primeLocalStorage();
-         // Simulate sessionStorage preserved from a previous session as a different user.
-         sessionStorage.setItem(
-            'sessionstate',
-            JSON.stringify({
-               userId: bytesToBase64(getRandom(cc.USERID_BYTES)),
-            }),
-         );
+         // Simulate session state preserved from a previous session as a different user.
+         // @ts-expect-error — exercising private path
+         service._setSessionState({ userId: bytesToBase64(getRandom(cc.USERID_BYTES)) });
          const events: AuthEvent[] = [];
-         service.on(allAuthEvents, (ed) => events.push(ed.event));
+         service.on(allAuthEvents).subscribe((ed) => events.push(ed.event));
 
          peerResponder.sendLogin({
             pkId,
@@ -959,7 +1043,6 @@ describe('AuthenticatorService', () => {
 
       it('signing in signals passkey update', async () => {
          service.logout(false);
-         // @ts-expect-error — exercising private path
          vi.spyOn(service, '_createSessionImpl').mockResolvedValue({
             serverLoginUserInfo: withPasskeys(pkId, newPkId),
             prfKey: null,

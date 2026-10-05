@@ -1,8 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Recovery3Component } from './recovery3.component';
-import { RouterModule } from '@angular/router';
-import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 describe('RecoveryComponent', () => {
    let component: Recovery3Component;
@@ -10,8 +10,8 @@ describe('RecoveryComponent', () => {
 
    beforeEach(async () => {
       await TestBed.configureTestingModule({
-         imports: [Recovery3Component, RouterModule.forRoot([])],
-         providers: [provideHttpClient(withXhr(), withInterceptorsFromDi()), provideHttpClientTesting()],
+         imports: [Recovery3Component],
+         providers: [provideRouter([]), provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()],
       }).compileComponents();
 
       fixture = TestBed.createComponent(Recovery3Component);
@@ -24,7 +24,7 @@ describe('RecoveryComponent', () => {
    });
 
    it('keeps the recovery words away from browser text assistance', () => {
-      component.ready = true;
+      component['ready'].set(true);
       fixture.detectChanges();
 
       const wordsArea = fixture.nativeElement.querySelector('#wordsArea');

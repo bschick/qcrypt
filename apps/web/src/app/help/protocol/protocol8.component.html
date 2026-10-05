@@ -36,14 +36,9 @@
       The table below illustrates the byte-level structure of cipher data created by Quick Crypt's version 8 protocol.
       When output to the browser UI, this data is base64url encoded and displayed as JSON or a URL. When saved to a
       file, the binary structure is streamed directly to the file. The subscript values below indicate which fields are
-      used to generate and validate the MAC tags.
+      used to generate and validate the MAC tags. To be compatible with version 1 data, the starting fixed length
+      256-bit MAC is preserved.
     </p>
-    <p>
-      To be compatible with version 1 data, the starting fixed length 256-bit MAC was preserved. If future versions
-      create larger MACs, they may need to be split across the header and payload sections to keep the header length
-      consistent across versions.
-    </p>
-
     <table class="bytes">
       <thead>
         <tr>

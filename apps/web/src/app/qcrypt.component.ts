@@ -20,23 +20,23 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnDestroy, type OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { filter, map } from 'rxjs';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatToolbarModule } from '@angular/material/toolbar';
-import { Router, RouterOutlet, RouterLink } from '@angular/router';
+import { NavigationEnd, Router, RouterOutlet, RouterLink } from '@angular/router';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSidenav, MatSidenavModule } from '@angular/material/sidenav';
 import { CredentialsComponent } from './credentials/credentials.component';
 import { HaltedComponent } from './halted/halted.component';
-import { AuthEvent, type AuthEventData, AuthenticatorService } from './services/authenticator.service';
-import { Subscription } from 'rxjs';
+import { AuthenticatorService } from './services/authenticator.service';
 
 @Component({
    selector: 'qcrypt-root',
    templateUrl: './qcrypt.component.html',
    styleUrl: './qcrypt.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       RouterOutlet,
       MatToolbarModule,
@@ -49,39 +49,34 @@ import { Subscription } from 'rxjs';
       HaltedComponent,
    ],
 })
-export class QCryptComponent implements OnInit, OnDestroy {
-   private authSub!: Subscription;
-   public bgColorDefault = '';
-   public bgColorFocus = 'color-mix(in srgb,var(--mat-sys-primary) 10%,transparent)';
-   public showPKButton = false;
+export class QCryptComponent {
+   private readonly _router = inject(Router);
+   private readonly _authSvc = inject(AuthenticatorService);
 
-   constructor(
-      public router: Router,
-      public authSvc: AuthenticatorService,
-   ) {}
+   private readonly _bgColorDefault = '';
+   private readonly _bgColorFocus = 'color-mix(in srgb,var(--mat-sys-primary) 10%,transparent)';
+   protected readonly showPKButton = this._authSvc.hasSession;
 
-   ngOnInit(): void {
-      this.showPKButton = this.authSvc.hasSession();
-      this.authSub = this.authSvc.on([AuthEvent.Logout, AuthEvent.Login], this.onAuthEvent.bind(this));
-   }
-
-   onAuthEvent(data: AuthEventData) {
-      this.showPKButton = data.event === AuthEvent.Login;
-   }
-
-   ngOnDestroy(): void {
-      if (this.authSub) {
-         this.authSub.unsubscribe();
-      }
-   }
-
+   // router.url and window.location are not signals, so the computeds below read the path from here
+   private readonly _path = toSignal(
+      this._router.events.pipe(
+         filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+         map((event) => new URL(event.urlAfterRedirects, window.location.origin).pathname),
+      ),
+      { initialValue: window.location.pathname },
+   );
+   protected readonly isWelcomePage = computed(() => this._path().startsWith('/welcome'));
+   protected readonly homeButtonColor = computed(() =>
+      this._path() === '/' ? this._bgColorFocus : this._bgColorDefault,
+   );
+   protected readonly helpButtonColor = computed(() =>
+      this._path().startsWith('/help') ? this._bgColorFocus : this._bgColorDefault,
+   );
    // Help stays readable so the user can look up what the halt means
-   showHalted(): boolean {
-      return this.authSvc.halted && !window.location.pathname.startsWith('/help');
-   }
+   protected readonly showHalted = computed(() => this._authSvc.halted && !this._path().startsWith('/help'));
 
-   toggleNav(nav: MatSidenav) {
-      if (this.authSvc.hasSession()) {
+   protected toggleNav(nav: MatSidenav) {
+      if (this._authSvc.hasSession()) {
          // Open with a mouse focus origin so the focus restored to this toggle when the
          // panel closes doesn't leave the keyboard-focus highlight on the button.
          nav.toggle(!nav.opened, 'mouse');
@@ -90,20 +85,5 @@ export class QCryptComponent implements OnInit, OnDestroy {
       }
    }
 
-   focusColor(test?: string) {
-      const location = window.location;
-      if (test) {
-         return location.pathname.startsWith(test) ? this.bgColorFocus : this.bgColorDefault;
-      } else {
-         return ['', '/newuser', '/welcome', '/', undefined].includes(location.pathname)
-            ? this.bgColorFocus
-            : this.bgColorDefault;
-      }
-   }
-
-   isWelcomePage(): boolean {
-      return this.router.url.startsWith('/welcome');
-   }
-
-   onOpenedCredentials() {}
+   protected onOpenedCredentials() {}
 }

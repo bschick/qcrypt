@@ -1,10 +1,11 @@
+<!-- The route guard only covers entry, and a session can end while this page is still displayed -->
+@if (authSvc.hasSession()) {
 <div class="container">
   <div class="content">
     <mat-progress-spinner
       class="lower-spinner"
-      color="primary"
       mode="indeterminate"
-      [style.visibility]="showProgress ? 'visible' : 'hidden'">
+      [style.visibility]="showProgress() ? 'visible' : 'hidden'">
     </mat-progress-spinner>
     <h1>Check Recovery Words</h1>
     <p>
@@ -23,22 +24,22 @@
           matInput
           noAssist
           type="text"
-          [formControl]="recoveryWords"
+          [(ngModel)]="recoveryWords"
           class="words-area"></textarea>
       </mat-form-field>
       <div class="button-stack">
         <button
           class="task-button"
           mat-raised-button
-          [disabled]="showProgress"
+          [disabled]="showProgress()"
           (click)="onClickCheck()">
           Check recovery words
         </button>
-        @if (result === "match") {
+        @if (result() === "match") {
           <button
             class="task-button"
             mat-raised-button
-            [disabled]="showProgress"
+            [disabled]="showProgress()"
             (click)="onClickPrint()">
             Print emergency recovery sheet
           </button>
@@ -46,7 +47,7 @@
       </div>
     </div>
 
-    @if (result === "match") {
+    @if (result() === "match") {
       <mat-card appearance="outlined">
         <mat-card-header>
           <mat-card-title>
@@ -64,7 +65,7 @@
         </mat-card-content>
       </mat-card>
     }
-    @if (result === "invalid") {
+    @if (result() === "invalid") {
       <mat-card appearance="outlined">
         <mat-card-header>
           <mat-card-title>
@@ -86,7 +87,7 @@
         </mat-card-content>
       </mat-card>
     }
-    @if (result === "wrongwords") {
+    @if (result() === "wrongwords") {
       <mat-card appearance="outlined">
         <mat-card-header>
           <mat-card-title>
@@ -106,7 +107,7 @@
         </mat-card-content>
       </mat-card>
     }
-    @if (result === "wronguser") {
+    @if (result() === "wronguser") {
       <mat-card appearance="outlined">
         <mat-card-header>
           <mat-card-title>
@@ -125,7 +126,7 @@
         </mat-card-content>
       </mat-card>
     }
-    @if (result === "unknown") {
+    @if (result() === "unknown") {
       <mat-card appearance="outlined">
         <mat-card-header>
           <mat-card-title>⚠️ Not Determined</mat-card-title>
@@ -147,13 +148,14 @@
     }
 
     <div class="error-msg">
-      <p>{{ error }}</p>
+      <p>{{ error() }}</p>
     </div>
   </div>
 </div>
-@if (sheetUserCred) {
+@if (sheetUserCred()) {
   <app-recovery-sheet
     [userName]="authSvc.userName"
-    [recoveryWords]="recoveryWords.value!"
-    [userCred]="sheetUserCred" />
+    [recoveryWords]="recoveryWords()"
+    [userCred]="sheetUserCred()" />
+}
 }

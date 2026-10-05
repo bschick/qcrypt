@@ -3,7 +3,7 @@ import { playwright } from '@vitest/browser-playwright';
 
 export default defineConfig({
    optimizeDeps: {
-      include: ['@angular/core/testing', '@angular/platform-browser-dynamic/testing'],
+      include: ['@angular/core/testing'],
    },
    test: {
       globals: true,

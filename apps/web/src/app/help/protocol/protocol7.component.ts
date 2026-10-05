@@ -19,16 +19,14 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-
 import { Component } from '@angular/core';
-import { MatIconModule } from '@angular/material/icon';
-import { MatCardModule } from '@angular/material/card';
-import { RouterLink } from '@angular/router';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { CopyrightComponent } from '../../ui/copyright/copyright.component';
 
 @Component({
-   selector: 'app-halted',
-   templateUrl: './halted.component.html',
-   styleUrl: './halted.component.scss',
-   imports: [MatIconModule, MatCardModule, RouterLink],
+   selector: 'app-protocol7',
+   imports: [MatTooltipModule, CopyrightComponent],
+   templateUrl: './protocol7.component.html',
+   styleUrl: './protocol.component.scss',
 })
-export class HaltedComponent {}
+export class Protocol7Component {}

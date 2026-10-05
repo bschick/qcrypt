@@ -3,16 +3,17 @@
     #editableInput
     noAssist
     type='text'
-    [id]="id"
-    [readonly]="readonly"
-    [ngClass]="writing ? 'writing' : (readonly ? 'readonly' : 'writable')"
-    [style.color]="color || null"
-    [style.background-color]="backgroundColor || null"
+    [id]="id()"
+    [readonly]="readonly()"
+    [class]="writing() ? 'writing' : (readonly() ? 'readonly' : 'writable')"
+    [style.color]="color() || null"
+    [style.background-color]="backgroundColor() || null"
     [(ngModel)]='text'
+    (input)='valueEdited.emit()'
     (focusout)='onFocusOut()'
     (focus)='tryMakeEditable()'
-    [minlength]='minlength'
-    [maxlength]='maxlength'
+    [minlength]='minlength()'
+    [maxlength]='maxlength()'
     (keydown.enter)='acceptEdit($event)'
     (keydown.escape)='cancelEdit($event)'
     data-1p-ignore
@@ -23,7 +24,7 @@
   <mat-icon
     aria-label="Accept"
     class="check"
-    [style.visibility]="writing ? 'visible' : 'hidden'"
+    [style.visibility]="writing() ? 'visible' : 'hidden'"
     (click)='editableInput.blur()'>
         check
   </mat-icon>

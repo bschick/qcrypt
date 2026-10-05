@@ -22,17 +22,18 @@ SOFTWARE. */
 import {
    type AfterViewInit,
    Component,
+   DestroyRef,
    ElementRef,
-   EventEmitter,
    type OnInit,
-   Input,
-   Output,
-   ViewChild,
-   ChangeDetectionStrategy,
+   computed,
+   inject,
+   output,
+   signal,
+   viewChild,
 } from '@angular/core';
 import { CdkAccordionModule } from '@angular/cdk/accordion';
 import { MatExpansionModule } from '@angular/material/expansion';
-import { AlgorithmsComponent } from '../algorithms/algorithms.component';
+import { AlgorithmsComponent, fillModes } from '../algorithms/algorithms.component';
 import { MatRippleModule } from '@angular/material/core';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -43,12 +44,11 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { AuthenticatorService, ACTIVITY_TIMEOUT_SEC } from '../../services/authenticator.service';
 import { CipherService } from '../../services/cipher.service';
 import { Ciphers, makeTookMsg } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
-import { HttpParams } from '@angular/common/http';
 
 // Set only if num is betwee min and max (inclusive) when min and max are not null
 function setIfBetween(
@@ -94,16 +94,17 @@ function setIfBoolean(check: boolean | string | null, setter: (bool: boolean) =>
       MatSlideToggleModule,
       FormsModule,
       MatButtonModule,
-      ReactiveFormsModule,
    ],
    templateUrl: './options.component.html',
-   changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './options.component.scss',
 })
 export class OptionsComponent implements OnInit, AfterViewInit {
-   public expandOptions = false;
-   public cipherPanelExpanded = false;
-   public hashTimeWarning = '';
+   private readonly _authSvc = inject(AuthenticatorService);
+   private readonly _cipherSvc = inject(CipherService);
+   private readonly _destroyRef = inject(DestroyRef);
+
+   protected readonly cipherPanelExpanded = signal(false);
+   protected readonly hashTimeWarning = signal('');
 
    public readonly ACTIVITY_TIMEOUT = ACTIVITY_TIMEOUT_SEC;
    public readonly LOOPS_MAX = 6;
@@ -117,128 +118,104 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    public readonly VIS_CLEAR_DEFAULT = true;
    public readonly HIDE_PWD_DEFAULT = true;
 
-   public ICOUNT_MAX = cc.ICOUNT_MAX; // Default since benchmark is async
+   protected readonly icountMax = signal<number>(cc.ICOUNT_MAX); // Default since benchmark is async
    public ICOUNT_DEFAULT = cc.ICOUNT_DEFAULT; // Default since benchmark is async
 
-   public loopsInput = new FormControl(this.LOOPS_DEFAULT);
-   public cacheTimeInput = new FormControl(this.CACHE_TIME_DEFAULT);
-   public icountInput = new FormControl(cc.ICOUNT_DEFAULT);
+   protected readonly loopsInput = signal<number | null>(this.LOOPS_DEFAULT);
+   protected readonly cacheTimeInput = signal<number | null>(this.CACHE_TIME_DEFAULT);
+   protected readonly icountInput = signal<number | null>(cc.ICOUNT_DEFAULT);
 
-   public strengthSelect = new FormControl(this.PWD_STRENGTH_DEFAULT);
-   public checkPwnedToggle = new FormControl(this.CHECK_PWNED_DEFAULT);
-   public visClearToggle = new FormControl(this.VIS_CLEAR_DEFAULT);
-   public hidePwdToggle = new FormControl(this.HIDE_PWD_DEFAULT);
-   public formatSelect = new FormControl(this.FORMAT_DEFAULT);
-   public reminderToggle = new FormControl(this.REMINDER_DEFAULT);
+   protected readonly strengthSelect = signal<string>(this.PWD_STRENGTH_DEFAULT);
+   protected readonly checkPwnedToggle = signal<boolean>(this.CHECK_PWNED_DEFAULT);
+   protected readonly visClearToggle = signal<boolean>(this.VIS_CLEAR_DEFAULT);
+   protected readonly hidePwdToggle = signal<boolean>(this.HIDE_PWD_DEFAULT);
+   protected readonly formatSelect = signal<string>(this.FORMAT_DEFAULT);
+   protected readonly reminderToggle = signal<boolean>(this.REMINDER_DEFAULT);
+   protected readonly reminderLocked = computed(() => this.formatSelect() === 'link');
+
+   protected readonly algorithmList = signal<cc.CipherAlgs[]>(['X20-PLY']);
+   protected readonly loopCount = signal<number>(this.LOOPS_DEFAULT);
 
    private _optionsLoaded = false;
    private _lastReminder = this.REMINDER_DEFAULT;
-   private _algorithmList: cc.CipherAlgs[] = ['X20-PLY'];
    private _userId: string | null = null;
 
-   @ViewChild('formatLabel') formatLabel!: ElementRef;
-   @ViewChild('minStrLabel') minStrLabel!: ElementRef;
-   @ViewChild('algorithms') algorithmsCmp!: AlgorithmsComponent;
+   readonly formatLabel = viewChild.required<ElementRef>('formatLabel');
+   readonly minStrLabel = viewChild.required<ElementRef>('minStrLabel');
 
-   constructor(
-      private authSvc: AuthenticatorService,
-      private cipherSvc: CipherService,
-   ) {}
+   readonly loopsChange = output<number>();
+   readonly icountChange = output<number>();
+   readonly cacheTimeChange = output<number>();
+   readonly pwdOptionsChange = output<boolean>();
+   readonly formatOptionsChange = output<boolean>();
 
-   @Input() set expand(expandOptions: boolean) {
-      this.expandOptions = expandOptions;
-   }
-
-   @Output() loopsChange = new EventEmitter<number>();
-   @Output() icountChange = new EventEmitter<number>();
-   @Output() cacheTimeChange = new EventEmitter<number>();
-   @Output() pwdOptionsChange = new EventEmitter<boolean>();
-   @Output() formatOptionsChange = new EventEmitter<boolean>();
-
-   ngOnInit() {
-      this.cacheTimeInput.valueChanges.subscribe(this.onCacheTimeChange.bind(this));
-      this.strengthSelect.valueChanges.subscribe(this.onPwdStrengthChange.bind(this));
-      this.checkPwnedToggle.valueChanges.subscribe(this.onCheckPwnedChange.bind(this));
-
-      this.visClearToggle.valueChanges.subscribe(this.onVisClearChnage.bind(this));
-      this.hidePwdToggle.valueChanges.subscribe(this.onHidePwdChange.bind(this));
-      this.formatSelect.valueChanges.subscribe(this.onFormatChange.bind(this));
-      this.reminderToggle.valueChanges.subscribe(this.onReminderChange.bind(this));
-
+   async ngOnInit() {
       // This can be greatly delayed is there is a long running async benchmark or
       // encrpt or decrypt from a previous instance (tab that has not fully closed).
       // Seems to be no way to prevent that or abort an ongoing SubtleCrypto action.
-      this.cipherSvc
-         .benchmark(this.ICOUNT_MIN)
-         .then(([icount, icountMax, _hashRate]) => {
-            this.setIcount(icount);
-            this.ICOUNT_DEFAULT = icount;
-            this.ICOUNT_MAX = icountMax;
-         })
-         .finally(() => {
-            // load after benchmark to overwrite benchmarks with saved values
-            this.authSvc.ready.then(() => {
-               if (this.authSvc.hasSession()) {
-                  this.loadOptions(this.authSvc.userId);
-               } else {
-                  this.defaultOptions();
-               }
-            });
-         });
+      const benchmark = this._cipherSvc.benchmark(this.ICOUNT_MIN).catch((err) => console.error(err));
+
+      // Load options before the benchmark completes so user change are saved while the benchmark runs
+      await this._authSvc.ready;
+      if (this._authSvc.hasSession()) {
+         this.loadOptions(this._authSvc.userId);
+      }
+
+      const result = await benchmark;
+
+      // The benchmark can finish after this component is destroyed, and loading then emits to
+      // destroyed outputs
+      if (this._destroyRef.destroyed) {
+         return;
+      }
+
+      if (result) {
+         const [icount, icountMax] = result;
+         this.ICOUNT_DEFAULT = icount;
+         this.icountMax.set(icountMax);
+      }
+
+      // A saved iteration count takes precedence over the benchmark
+      if (this._authSvc.hasSession()) {
+         if (this._lsGet('icount') === null) {
+            this._setIcount(this.ICOUNT_DEFAULT);
+         }
+         this._setIcountWarning();
+      } else {
+         this._defaultOptions();
+      }
    }
 
    ngAfterViewInit() {
       // ugly hack to make angular not clip the label for dropdown select elements
-      this.formatLabel.nativeElement.parentElement.style.maxWidth = 'calc(100%/0.7)';
-      this.minStrLabel.nativeElement.parentElement.style.maxWidth = 'calc(100%/0.7)';
+      this.formatLabel().nativeElement.parentElement.style.maxWidth = 'calc(100%/0.7)';
+      this.minStrLabel().nativeElement.parentElement.style.maxWidth = 'calc(100%/0.7)';
    }
 
    loadOptions(userId: string) {
-      // First check localStorage, then apply params (which take president)
-      // (note that changes are not presisted until the encrypt button is used)
       /* debug
       for (let i = 0; i < localStorage.length; i++) {
         let key = localStorage.key(i)!;
-        console.log(`${key}: ${this.authSvc.lsGet(key)}`);
+        console.log(`${key}: ${this._authSvc.lsGet(key)}`);
        } */
       this._userId = userId;
       if (!this._optionsLoaded) {
          this._optionsLoaded = true;
 
          // set reminder first to reload _lastReminder, which get used in other settings
-         this.setReminder(this.lsGet('reminder'));
-         this.setAlgorithm(this.lsGet('algorithm'));
-         this.setIcount(this.lsGet('icount'));
-         this.setHidePwd(this.lsGet('hidepwd'));
-         this.setCacheTime(this.lsGet('cachetime'));
-         this.setCheckPwned(this.lsGet('checkpwned'));
-         this.setMinPwdStrength(this.lsGet('minpwdstrength'));
-         this.setLoops(this.lsGet('loops'));
-         this.setCTFormat(this.lsGet('ctformat'));
-         this.setVisibilityClear(this.lsGet('vclear'));
+         this._setReminder(this._lsGet('reminder'));
+         this._setAlgorithm(this._lsGet('algorithm'));
+         this._setIcount(this._lsGet('icount'));
+         this._setHidePwd(this._lsGet('hidepwd'));
+         this._setCacheTime(this._lsGet('cachetime'));
+         this._setCheckPwned(this._lsGet('checkpwned'));
+         this._setMinPwdStrength(this._lsGet('minpwdstrength'));
+         this._setLoops(this._lsGet('loops'));
+         this._setCTFormat(this._lsGet('ctformat'));
+         this._setVisibilityClear(this._lsGet('vclear'));
 
-         const params = new HttpParams({ fromString: window.location.search });
-
-         // If there are customized options, expand the panel by default
-         if (params.keys().some((p) => !['cipherarmor', 'cleartext'].includes(p))) {
-            this.expandOptions = true;
-         }
-
-         this.setReminder(params.get('reminder'));
-         this.setAlgorithm(params.get('algorithm'));
-         this.setIcount(params.get('icount'));
-         this.setHidePwd(params.get('hidepwd'));
-         this.setCacheTime(params.get('cachetime'));
-         this.setCheckPwned(params.get('checkpwned'));
-         this.setMinPwdStrength(params.get('minpwdstrength'));
-         this.setLoops(params.get('loops'));
-         this.setCTFormat(params.get('ctformat'));
-         this.setVisibilityClear(params.get('vclear'));
-
-         this.setIcountWarning();
-         // order is important, set modes first
-         this.algorithmsCmp.modes = this._algorithmList;
-         this.algorithmsCmp.count = this.loopsInput.value || this.LOOPS_DEFAULT;
+         this._setIcountWarning();
+         this.loopCount.set(this.loops);
       }
    }
 
@@ -248,40 +225,38 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       }
    }
 
-   defaultOptions(): void {
-      this.setIcount(this.ICOUNT_DEFAULT);
-      this.setHidePwd(this.HIDE_PWD_DEFAULT);
-      this.setCacheTime(this.CACHE_TIME_DEFAULT);
-      this.setCheckPwned(this.CHECK_PWNED_DEFAULT);
-      this.setMinPwdStrength(this.PWD_STRENGTH_DEFAULT);
-      this.setLoops(this.LOOPS_DEFAULT);
-      this.setCTFormat(this.FORMAT_DEFAULT);
-      this.setVisibilityClear(this.VIS_CLEAR_DEFAULT);
+   private _defaultOptions(): void {
+      this._setIcount(this.ICOUNT_DEFAULT);
+      this._setHidePwd(this.HIDE_PWD_DEFAULT);
+      this._setCacheTime(this.CACHE_TIME_DEFAULT);
+      this._setCheckPwned(this.CHECK_PWNED_DEFAULT);
+      this._setMinPwdStrength(this.PWD_STRENGTH_DEFAULT);
+      this._setLoops(this.LOOPS_DEFAULT);
+      this._setCTFormat(this.FORMAT_DEFAULT);
+      this._setVisibilityClear(this.VIS_CLEAR_DEFAULT);
       // set reminder last to override other changes above
-      this.setReminder(this.REMINDER_DEFAULT);
+      this._setReminder(this.REMINDER_DEFAULT);
 
-      // order is important, set modes first
-      this._algorithmList = ['X20-PLY'];
-      this.algorithmsCmp.modes = this._algorithmList;
-      this.algorithmsCmp.count = this.loopsInput.value || this.LOOPS_DEFAULT;
-      this.lsSet('algorithm', JSON.stringify(this._algorithmList));
+      this.algorithmList.set(['X20-PLY']);
+      this.loopCount.set(this.loops);
+      this._lsSet('algorithm', JSON.stringify(this.algorithmList()));
 
       // these values are only stored when during onblur, so set manually
-      this.lsSet('loops', this.LOOPS_DEFAULT);
-      this.lsSet('icount', this.ICOUNT_DEFAULT);
+      this._lsSet('loops', this.LOOPS_DEFAULT);
+      this._lsSet('icount', this.ICOUNT_DEFAULT);
    }
 
    detachOptions(): void {
       this._optionsLoaded = false;
       this._userId = null;
-      this.defaultOptions();
+      this._defaultOptions();
    }
 
    nukeSensitiveOptions(): void {
       try {
-         this.lsDel('algorithm');
-         this.lsDel('minpwdstrength');
-         this.lsDel('loops');
+         this._lsDel('algorithm');
+         this._lsDel('minpwdstrength');
+         this._lsDel('loops');
          this.detachOptions();
       } catch (err) {
          console.error(err);
@@ -291,16 +266,16 @@ export class OptionsComponent implements OnInit, AfterViewInit {
 
    nukeAllOptions(): void {
       try {
-         this.lsDel('algorithm');
-         this.lsDel('icount');
-         this.lsDel('hidepwd');
-         this.lsDel('cachetime');
-         this.lsDel('checkpwned');
-         this.lsDel('minpwdstrength');
-         this.lsDel('loops');
-         this.lsDel('ctformat');
-         this.lsDel('vclear');
-         this.lsDel('reminder');
+         this._lsDel('algorithm');
+         this._lsDel('icount');
+         this._lsDel('hidepwd');
+         this._lsDel('cachetime');
+         this._lsDel('checkpwned');
+         this._lsDel('minpwdstrength');
+         this._lsDel('loops');
+         this._lsDel('ctformat');
+         this._lsDel('vclear');
+         this._lsDel('reminder');
          this.detachOptions();
       } catch (err) {
          console.error(err);
@@ -309,46 +284,46 @@ export class OptionsComponent implements OnInit, AfterViewInit {
    }
 
    get loops(): number {
-      return this.loopsInput.value || this.LOOPS_DEFAULT;
+      return this.loopsInput() || this.LOOPS_DEFAULT;
    }
 
    get algorithms(): cc.CipherAlgs[] {
-      return this._algorithmList.slice(0, this.loops);
+      return fillModes(this.algorithmList(), this.loops);
    }
 
    get cacheTime(): number {
-      return this.cacheTimeInput.value || this.CACHE_TIME_DEFAULT;
+      return this.cacheTimeInput() || this.CACHE_TIME_DEFAULT;
    }
 
    get icount(): number {
-      return this.icountInput.value || this.ICOUNT_DEFAULT;
+      return this.icountInput() || this.ICOUNT_DEFAULT;
    }
 
    get minPwdStrength(): string {
-      return this.strengthSelect.value || this.PWD_STRENGTH_DEFAULT;
+      return this.strengthSelect() || this.PWD_STRENGTH_DEFAULT;
    }
 
    get checkPwned(): boolean {
-      return this.checkPwnedToggle.value || false;
+      return this.checkPwnedToggle() || false;
    }
 
    get visClear(): boolean {
-      return this.visClearToggle.value || false;
+      return this.visClearToggle() || false;
    }
 
    get hidePwd(): boolean {
-      return this.hidePwdToggle.value || false;
+      return this.hidePwdToggle() || false;
    }
 
    get format(): string {
-      return this.formatSelect.value || this.FORMAT_DEFAULT;
+      return this.formatSelect() || this.FORMAT_DEFAULT;
    }
 
    get reminder(): boolean {
-      return this.reminderToggle.value || false;
+      return this.reminderToggle() || false;
    }
 
-   private setAlgorithm(alg: string | null): void {
+   private _setAlgorithm(alg: string | null): void {
       if (alg) {
          let algs: string[] | undefined;
          try {
@@ -360,186 +335,193 @@ export class OptionsComponent implements OnInit, AfterViewInit {
             algs = [alg];
          }
 
-         this._algorithmList = Ciphers.validateAlgs(algs);
+         this.algorithmList.set(Ciphers.validateAlgs(algs));
       }
    }
 
-   private setIcount(ic: number | string | null): void {
+   // Where an option has a change handler, its setter calls it directly so the value is saved and
+   // announced even when set programmatically
+   private _setIcount(ic: number | string | null): void {
       // Ignores if out of range or NaN
-      setIfBetween(ic, this.ICOUNT_MIN, this.ICOUNT_MAX, (num) => {
-         this.icountInput.setValue(num);
+      setIfBetween(ic, this.ICOUNT_MIN, this.icountMax(), (num) => {
+         this.icountInput.set(num);
       });
    }
 
-   private setHidePwd(hide: boolean | string | null) {
+   private _setHidePwd(hide: boolean | string | null) {
       setIfBoolean(hide, (bool) => {
-         this.hidePwdToggle.setValue(bool);
+         this.hidePwdToggle.set(bool);
+         this.onHidePwdChange(bool);
       });
    }
 
-   private setCacheTime(tm: number | string | null): void {
+   private _setCacheTime(tm: number | string | null): void {
       setIfBetween(tm, 0, this.ACTIVITY_TIMEOUT, (num) => {
          //         this._cacheTime = num;
-         this.cacheTimeInput.setValue(num);
+         this.cacheTimeInput.set(num);
+         this.onCacheTimeChange(num);
       });
    }
 
-   private setCheckPwned(check: boolean | string | null): void {
+   private _setCheckPwned(check: boolean | string | null): void {
       setIfBoolean(check, (bool) => {
-         this.checkPwnedToggle.setValue(bool);
+         this.checkPwnedToggle.set(bool);
+         this.onCheckPwnedChange(bool);
       });
    }
 
-   private setMinPwdStrength(stren: string | null): void {
+   private _setMinPwdStrength(stren: string | null): void {
       if (['0', '1', '2', '3', '4'].includes(stren!)) {
-         this.strengthSelect.setValue(stren!);
+         this.strengthSelect.set(stren!);
+         this.onPwdStrengthChange(stren);
       }
    }
 
-   private setLoops(lpEnd: number | string | null): void {
+   private _setLoops(lpEnd: number | string | null): void {
       setIfBetween(lpEnd, 1, this.LOOPS_MAX, (num) => {
-         this.loopsInput.setValue(num);
+         this.loopsInput.set(num);
       });
    }
 
-   private setCTFormat(ctFormat: string | null): void {
+   private _setCTFormat(ctFormat: string | null): void {
       if (['link', 'compact', 'indent'].includes(ctFormat!)) {
-         this.formatSelect.setValue(ctFormat!);
+         this.formatSelect.set(ctFormat!);
+         this.onFormatChange(ctFormat);
       }
    }
 
-   private setReminder(reminder: boolean | string | null): void {
+   private _setReminder(reminder: boolean | string | null): void {
       setIfBoolean(reminder, (bool) => {
-         this.reminderToggle.setValue(bool);
+         this.reminderToggle.set(bool);
+         this.onReminderChange(bool);
       });
    }
 
-   private setVisibilityClear(clear: boolean | string | null): void {
+   private _setVisibilityClear(clear: boolean | string | null): void {
       setIfBoolean(clear, (bool) => {
-         this.visClearToggle.setValue(bool);
+         this.visClearToggle.set(bool);
+         this.onVisClearChnage(bool);
       });
    }
 
-   private setIcountWarning() {
-      this.hashTimeWarning = '';
-      if (this.icountInput.value) {
-         const hashMillis = this.icountInput.value / this.cipherSvc.hashRate;
+   private _setIcountWarning() {
+      this.hashTimeWarning.set('');
+      const icount = this.icountInput();
+      if (icount) {
+         const hashMillis = icount / this._cipherSvc.hashRate;
 
          // if greater than 15 seconds show message
          if (hashMillis > 15 * 1000) {
             const takeMsg = makeTookMsg(0, hashMillis, 'take');
-            this.hashTimeWarning = `*password hash may ${takeMsg}`;
+            this.hashTimeWarning.set(`*password hash may ${takeMsg}`);
          }
       }
    }
 
-   onHidePwdChange(hide: boolean | null): void {
-      this.lsSet('hidepwd', hide);
+   protected onHidePwdChange(hide: boolean | null): void {
+      this._lsSet('hidepwd', hide);
    }
 
-   onModesChange(modes: cc.CipherAlgs[]): void {
+   protected onModesChange(modes: cc.CipherAlgs[]): void {
       // Note that modes length is the max number of modes that have
       // been set, which may be larger than the current # of loops
       // This is done to preserve default values
-      if (this.lsSet('algorithm', JSON.stringify(modes))) {
-         this._algorithmList = modes;
-      }
+      this.algorithmList.set(modes);
+      this._lsSet('algorithm', JSON.stringify(modes));
    }
 
-   onBlurLoops() {
-      let loops = this.loopsInput.value || this.LOOPS_DEFAULT;
+   protected onBlurLoops() {
+      let loops = this.loopsInput() || this.LOOPS_DEFAULT;
       loops = Math.max(loops, 1);
       loops = Math.min(loops, this.LOOPS_MAX);
 
-      this.algorithmsCmp.count = loops;
-      this.setLoops(loops);
-      this.lsSet('loops', loops);
+      this.loopCount.set(loops);
+      this._setLoops(loops);
+      this._lsSet('loops', loops);
 
       this.loopsChange.emit(loops);
    }
 
-   onBlurICount() {
-      let icount = this.icountInput.value || this.ICOUNT_MIN;
+   protected onBlurICount() {
+      let icount = this.icountInput() || this.ICOUNT_MIN;
       icount = Math.max(icount, this.ICOUNT_MIN);
-      icount = Math.min(icount, this.ICOUNT_MAX);
+      icount = Math.min(icount, this.icountMax());
 
-      this.setIcount(icount);
-      this.lsSet('icount', icount);
-      this.setIcountWarning();
+      this._setIcount(icount);
+      this._lsSet('icount', icount);
+      this._setIcountWarning();
 
       this.icountChange.emit(icount);
    }
 
-   onBlurCacheTime() {
-      if (this.cacheTimeInput.value == null) {
+   protected onBlurCacheTime() {
+      if (this.cacheTimeInput() == null) {
          this.onCacheTimeChange(this.CACHE_TIME_DEFAULT);
       }
    }
 
-   onCacheTimeChange(cacheTime: number | null) {
+   protected onCacheTimeChange(cacheTime: number | null) {
       if (cacheTime != null) {
          cacheTime = Math.max(cacheTime, 0);
          cacheTime = Math.min(cacheTime, this.ACTIVITY_TIMEOUT);
 
-         if (cacheTime !== this.cacheTimeInput.value) {
-            this.setCacheTime(cacheTime);
+         if (cacheTime !== this.cacheTimeInput()) {
+            this._setCacheTime(cacheTime);
          } else {
-            this.lsSet('cachetime', cacheTime);
+            this._lsSet('cachetime', cacheTime);
             this.cacheTimeChange.emit(cacheTime);
          }
       }
    }
 
-   onPwdStrengthChange(minStrength: string | null): void {
-      this.lsSet('minpwdstrength', minStrength);
+   protected onPwdStrengthChange(minStrength: string | null): void {
+      this._lsSet('minpwdstrength', minStrength);
       this.pwdOptionsChange.emit(true);
    }
 
-   onCheckPwnedChange(check: boolean | null): void {
-      this.lsSet('checkpwned', check);
+   protected onCheckPwnedChange(check: boolean | null): void {
+      this._lsSet('checkpwned', check);
       this.pwdOptionsChange.emit(true);
    }
 
-   onReminderChange(reminder: boolean | null) {
+   protected onReminderChange(reminder: boolean | null) {
       // don't save reminder state if in link format (reminder is always false)
-      if (this.formatSelect.value !== 'link') {
-         if (this.lsSet('reminder', reminder)) {
+      if (this.formatSelect() !== 'link') {
+         if (this._lsSet('reminder', reminder)) {
             this._lastReminder = reminder!;
          }
          this.formatOptionsChange.emit(true);
       }
    }
 
-   onVisClearChnage(vclear: boolean | null) {
-      this.lsSet('vclear', vclear);
+   protected onVisClearChnage(vclear: boolean | null) {
+      this._lsSet('vclear', vclear);
    }
 
-   onFormatChange(selected: string | null) {
+   protected onFormatChange(selected: string | null) {
       if (selected === 'link') {
-         const saved = this.reminderToggle.value || false;
-         this.setReminder(false);
-         this.reminderToggle.disable();
+         const saved = this.reminderToggle() || false;
+         this._setReminder(false);
          this._lastReminder = saved;
       } else {
-         this.setReminder(this._lastReminder);
-         this.reminderToggle.enable();
+         this._setReminder(this._lastReminder);
       }
-      this.lsSet('ctformat', selected);
+      this._lsSet('ctformat', selected);
       this.formatOptionsChange.emit(true);
    }
 
-   onClickResetOptions(): void {
-      this.defaultOptions();
+   protected onClickResetOptions(): void {
+      this._defaultOptions();
    }
 
-   lsGet(key: string): string | null {
+   private _lsGet(key: string): string | null {
       if (this._userId) {
          return localStorage.getItem(this._userId + key);
       }
       return null;
    }
 
-   lsSet(key: string, value: string | number | boolean | null): boolean {
+   private _lsSet(key: string, value: string | number | boolean | null): boolean {
       if (value != null && this._userId) {
          localStorage.setItem(this._userId + key, value.toString());
          return true;
@@ -547,7 +529,7 @@ export class OptionsComponent implements OnInit, AfterViewInit {
       return false;
    }
 
-   lsDel(key: string) {
+   private _lsDel(key: string) {
       if (this._userId) {
          localStorage.removeItem(this._userId + key);
       }

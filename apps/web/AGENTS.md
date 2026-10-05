@@ -62,10 +62,21 @@ pnpm test
 **End-to-End Tests using AWS hosted test API backend:**
 ```bash
 # You must first run the One-time setup steps above.
-# pnpm test:e2e starts its own dev server (no watch or live-reload) and stops it when done.
-# Do not run pnpm serve at the same time; the run fails if port 4200 is already in use.
+# No separate serve is needed: for --project local (the default), run_e2e.sh starts a frozen
+# dev serve itself (no watch, no live-reload, so a file save mid-run cannot restart it), waits
+# for the port, and tears the whole process tree down on exit. Do not run pnpm serve at the
+# same time; the run fails if port 4200 is already in use.
 pnpm test:e2e
+
+# Append --reporter=list when the output is captured rather than shown in a terminal
+# (background jobs, pipes, CI logs), so results stay parseable.
+pnpm test:e2e --reporter=list
 ```
+
+E2E is the **only** check that covers rendered output: user-visible strings, element labels,
+stacking and clipping, and anything that repaints in response to an async event. `pnpm check` and
+`pnpm test` cannot see any of it. Run e2e alongside them before finishing a piece of work, not only
+before a release.
 
 ### c. Running Manual Tests
 
@@ -93,16 +104,28 @@ Before submitting any changes, run the following test suites to ensure that the 
 pnpm test
 ```
 
-### b. End-to-End Tests (starts its own local server, see 4.b)
+### b. End-to-End Tests (starts and stops its own dev serve, see 4.b)
 ```bash
 pnpm test:e2e
 ```
 If a test fails, view the trace with `pnpm exec playwright show-trace playwright-report/<path-to-trace>`
+
+Treat this as part of the normal gate, not a release-only step. It is the only check that sees
+rendered output, so a renamed label, a restyled control or a binding that stops repainting passes
+`pnpm check` and `pnpm test` unnoticed.
 ---
 
 ## 6. Key Patterns & Conventions
 
 - **Component-Based Architecture:** The application follows Angular's component-based architecture. New features should be encapsulated in their own components where appropriate.
+- **Forms:** Use `[(ngModel)]` bound to a `signal()` for every form control, and `(ngModelChange)` to react to user edits. The signal is the only copy of the value, so every binding that reads it stays current under OnPush and zoneless change detection. Keep `ngModel` rather than binding a text input's `[value]` and `(input)` directly, because its value accessor holds updates back while an IME is composing text. When a control needs validation, derive it with a `computed()` from the signal rather than reading `ngModel`'s own state (`#field="ngModel"`, `.errors`) in the template: the `computed()` is current as soon as the signal changes, while `ngModel` updates its state a microtask after code sets the value. Reactive Forms (`FormControl`) are not used, and we are going back to remove all Reactive Forms from the codebase: a control's `value` is a plain field rather than a signal, so a value that code writes and another binding displays needs a second `toSignal` copy to stay current. Signal Forms (`@angular/forms/signals`) were evaluated and not adopted. `form()` accepts a single signal, but each field then needs a second declaration, `[formField]` rejects `disabled`, `readonly`, `min`/`max`, `minlength`/`maxlength` and `required` on its element so they move into a schema, and the directive has no change event. That pays off for a form with real structure — several fields, cross-field or async validation, submit state — and this app has none. Reach for Signal Forms only if such a form appears.
+- **Signals — keep it simple, prefer literal code over reactive magic.** The governing rule is KISS: when a reactive construct and plain code both work, take the plain code, even when it is longer. Indirection has to earn its place, because the cost lands on whoever debugs this later, not on whoever writes it. Concretely:
+  - **Signals for what the template renders. Plain fields for bookkeeping.** A queue, a timer id, an in-flight promise or a "already checked" flag that no binding reads stays an ordinary field. Making it a signal adds ceremony and buys nothing.
+  - **`computed()` for derived values.** It is pure, reads top-to-bottom, and recomputes on read, so it cannot go stale the way a field written from an effect can.
+  - **A value the template displays that is derived from signals is a `computed()`, not a method the template calls.** Angular also tracks signals read inside a method a binding calls, so both work. But the method hides the dependency: the template never names the signal, and a later cleanup will turn it back into a plain field with nothing failing until a view stops updating.
+  - **`effect()` last, and only for side effects** — scheduling work, emitting an output, writing a plain field. An effect that computes a value should have been a `computed()`.
+  - **Inside an effect, read dependencies at the top and wrap the work in `untracked()`.** Any signal read *anywhere* inside an effect becomes a dependency, including reads inside methods it calls, several levels down. Nothing in the compiler or lint catches this. The symptom is an effect that re-runs more than expected, or one that depends on a signal it also writes. `untracked()` around the work makes the dependency list exactly what the top of the effect says it is.
+  - **`linkedSignal()` only for a value that genuinely mirrors a source and also accepts local writes** — `editable.text` following `value`, `strengthmeter._strengthMin` following the `minStrength` input while the slider overrides it. Do not use it as a reset hook for a private field; a `computation` that ignores its own arguments is the sign you are reaching for the wrong tool, and a plain assignment says the same thing more clearly.
 - **Client-Side Logic:** All sensitive operations, especially cryptography, must remain strictly on the client-side. No sensitive data should be sent to any server.
 - **Testing:** Any new feature or bug fix should be accompanied by corresponding unit or e2e tests to prevent regressions.
 - **Immutability:** Follow best practices for immutability, especially when dealing with application state.

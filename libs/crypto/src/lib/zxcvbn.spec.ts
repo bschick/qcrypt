@@ -34,6 +34,28 @@ describe('zxcvbn lazy loader', () => {
       expect(zxcvbnReady()).toBe(zxcvbnReady());
    });
 
+   it('retries the download after a failed load', async () => {
+      vi.resetModules();
+      let attempts = 0;
+      vi.doMock('@zxcvbn-ts/core', async (importOriginal) => {
+         attempts += 1;
+         if (attempts === 1) {
+            throw new Error('chunk load failed');
+         }
+         return await importOriginal<typeof import('@zxcvbn-ts/core')>();
+      });
+
+      try {
+         const retried = await import('./zxcvbn');
+         await expect(retried.zxcvbnReady()).rejects.toThrow();
+         await expect(retried.zxcvbnReady()).resolves.toBeDefined();
+         expect(attempts).toBe(2);
+      } finally {
+         vi.doUnmock('@zxcvbn-ts/core');
+         vi.resetModules();
+      }
+   });
+
    it('isPwned reports a listed password', async () => {
       expect(await isPwned('one2many')).toBe(true);
    });

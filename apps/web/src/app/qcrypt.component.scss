@@ -29,6 +29,10 @@ SOFTWARE. */
 .toolbar {
   flex: 0;
   min-height:48px;
+  // Must exceed the bubble tip's 999 so tips pass under the toolbar rather than over it.
+  // The CDK overlay also uses 1000 and renders later in the DOM, so menus and dialogs stay above.
+  z-index: 1000;
+  overflow: hidden;
 }
 
 .toolbar-hidden {

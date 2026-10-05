@@ -19,8 +19,8 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Component, Output, Input, EventEmitter, ViewChild, ElementRef, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, ElementRef, input, linkedSignal, model, output, signal, viewChild } from '@angular/core';
+
 import { MatInputModule } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
 
@@ -31,76 +31,69 @@ import { NoAssistDirective } from '../noassist.directive';
 
 @Component({
    selector: 'app-editable',
-   imports: [
-      CommonModule,
-      MatInputModule,
-      FormsModule,
-      MatFormFieldModule,
-      MatIconModule,
-      MatButtonModule,
-      NoAssistDirective,
-   ],
+   imports: [MatInputModule, FormsModule, MatFormFieldModule, MatIconModule, MatButtonModule, NoAssistDirective],
    templateUrl: './editable.component.html',
-   changeDetection: ChangeDetectionStrategy.Eager,
    styleUrl: './editable.component.scss',
 })
 export class EditableComponent {
-   @Input() id = '';
-   @Input() minlength = '0';
-   @Input() maxlength = '50';
-   @Input() readonly = false;
-   @Input() writing = false;
-   @Input() color = '';
-   @Input() backgroundColor = '';
-   @Output() valueChanged = new EventEmitter<EditableComponent>();
-   @ViewChild('editableInput', { static: true }) editInput!: ElementRef;
-   public text = '';
-   private _value = '';
+   readonly id = input('');
+   readonly minlength = input('0');
+   readonly maxlength = input('50');
+   readonly readonly = input(false);
+   readonly color = input('');
+   readonly backgroundColor = input('');
+   readonly value = model('');
+   readonly valueChanged = output<EditableComponent>();
+   readonly valueEdited = output<void>();
+   readonly editInput = viewChild.required<ElementRef>('editableInput');
 
-   @Input() set value(value: string) {
-      this._value = value;
-      this.text = value;
+   protected readonly writing = signal(false);
+   // A new committed value replaces whatever is being typed
+   protected readonly text = linkedSignal(() => this.value());
+
+   readonly typed = this.text.asReadonly();
+
+   focus(): void {
+      this.editInput().nativeElement.focus();
    }
 
-   get value(): string {
-      return this._value;
+   commit(saved: string): void {
+      this.value.set(saved);
+      // text is set explicitly because a linked signal does not update when assigned an equal value
+      this.text.set(saved);
    }
 
-   onFocusOut() {
-      if (!this.readonly && this._value !== this.text) {
-         this._value = this.text;
+   protected onFocusOut() {
+      if (!this.readonly() && this.value() !== this.text()) {
          this.valueChanged.emit(this);
       }
-      this.writing = false;
+      this.writing.set(false);
    }
 
-   tryMakeEditable() {
-      if (!this.readonly) {
-         this.writing = true;
+   protected tryMakeEditable() {
+      if (!this.readonly()) {
+         this.writing.set(true);
       }
    }
 
    /* Blurring returns focus to whatever the surrounding focus trap prefers, so the key must
     * also be consumed or its default action fires against that newly focused element.
     */
-   cancelEdit(event: Event) {
+   protected cancelEdit(event: Event) {
       event.stopPropagation();
       event.preventDefault();
-      if (this.writing) {
-         this.text = this._value;
-         this.editInput.nativeElement.blur();
+      if (this.writing()) {
+         this.text.set(this.value());
+         this.valueEdited.emit();
+         this.editInput().nativeElement.blur();
       }
    }
 
-   acceptEdit(event: Event) {
+   protected acceptEdit(event: Event) {
       event.stopPropagation();
       event.preventDefault();
-      if (this.writing) {
-         this.editInput.nativeElement.blur();
+      if (this.writing()) {
+         this.editInput().nativeElement.blur();
       }
-   }
-
-   focus() {
-      this.editInput?.nativeElement?.focus();
    }
 }

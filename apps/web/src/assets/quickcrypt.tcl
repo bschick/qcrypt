@@ -19,7 +19,7 @@ proc Header {} {
     set headerVer 0
     set plen 0
     section "header" {
-        hex 32 "hmac"
+        hex 32 "mac"
         set headerVer [uint16 "version"]
         set plen [uint24 "payload len"]
         if {$headerVer == 4} {

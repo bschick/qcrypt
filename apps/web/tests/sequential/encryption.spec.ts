@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { hosts, keeperDir, haveKeeperCreds, testWithAuth, fillPwdAndAccept } from '.././common';
+import { hosts, keeperDir, haveKeeperCreds, testWithAuth, fillPwdAndAccept, setSwitch } from '.././common';
 
 // Uses shared KeeperOne. A parallel sign-in (other test in another session or
 // another runner) can invalidate this session before the test finishes —
@@ -20,7 +20,7 @@ testWithAuth('encrypt decrypt', async ({ authFixture }) => {
    await expect(page).toHaveURL(/\/$/);
    await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({ timeout: 10000 });
    await page.getByRole('button', { name: 'Advanced Options' }).click();
-   await page.getByRole('switch', { name: 'Hide Password' }).uncheck();
+   await setSwitch(page.getByRole('switch', { name: 'Hide Password' }), false);
    await page.locator('mat-select#pwdStrength').click();
    await page.locator('mat-option').filter({ hasText: 'Terrible' }).click();
 
@@ -38,10 +38,10 @@ testWithAuth('encrypt decrypt', async ({ authFixture }) => {
    await expect(page.locator('textarea#cipherInput')).not.toBeEmpty();
    await page.getByRole('button', { name: 'Info', exact: true }).click();
 
-   await expect(page.getByLabel('Decryption Parameters').getByText('XChaCha20 Poly1305')).toBeVisible({
+   await expect(page.getByLabel('Cipher Armor Info').getByText('XChaCha20 Poly1305')).toBeVisible({
       timeout: 10000,
    });
-   await expect(page.getByLabel('Decryption Parameters').getByText(hint)).toBeVisible({ timeout: 10000 });
+   await expect(page.getByLabel('Cipher Armor Info').getByText(hint)).toBeVisible({ timeout: 10000 });
    await page.keyboard.press('Escape');
 
    await page.getByRole('button', { name: 'Decrypt Text' }).click();
@@ -76,7 +76,7 @@ testWithAuth('loop encrypt decrypt', async ({ authFixture }) => {
    await expect(page).toHaveURL(/\/$/);
    await page.getByRole('button', { name: 'Encryption Mode' }).click();
    await page.getByRole('button', { name: 'Advanced Options' }).click();
-   await page.getByRole('switch', { name: 'Hide Password' }).uncheck();
+   await setSwitch(page.getByRole('switch', { name: 'Hide Password' }), false);
    await page.locator('mat-select#pwdStrength').click();
    await page.locator('mat-option').filter({ hasText: 'Terrible' }).click();
 

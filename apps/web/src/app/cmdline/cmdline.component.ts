@@ -20,10 +20,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnDestroy, type OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, DestroyRef, type OnDestroy, type OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import { Router } from '@angular/router';
@@ -31,8 +31,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { AuthEvent, AuthenticatorService } from '../services/authenticator.service';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { Subscription } from 'rxjs';
-import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { bytesToBase64 } from '@qcrypt/crypto';
 import { NoAssistDirective } from '../ui/noassist.directive';
@@ -41,7 +40,6 @@ import { NoAssistDirective } from '../ui/noassist.directive';
    selector: 'app-cmd-line',
    templateUrl: './cmdline.component.html',
    styleUrl: './cmdline.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       MatIconModule,
       MatButtonModule,
@@ -51,65 +49,57 @@ import { NoAssistDirective } from '../ui/noassist.directive';
       MatFormFieldModule,
       MatTooltipModule,
       FormsModule,
-      ReactiveFormsModule,
       RouterLink,
       NoAssistDirective,
    ],
 })
 export class CmdLineComponent implements OnInit, OnDestroy {
-   public showProgress = true;
-   public hideCred = true;
-   public error = '';
-   private authSub!: Subscription;
-   public userCredential = new FormControl<string>('');
+   protected readonly authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
+   private readonly _destroyRef = inject(DestroyRef);
 
-   constructor(
-      public authSvc: AuthenticatorService,
-      private router: Router,
-      private snackBar: MatSnackBar,
-   ) {}
+   protected readonly showProgress = signal(true);
+   protected readonly hideCred = signal(true);
+   protected readonly error = signal('');
+   protected readonly userCredential = signal('');
 
    ngOnInit() {
-      this.authSub = this.authSvc.on([AuthEvent.Logout], () => {
-         this.error = '';
-         this.router.navigateByUrl('/');
-      });
+      this.authSvc
+         .on([AuthEvent.Logout, AuthEvent.Forget])
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(() => {
+            this.error.set('');
+            // Clear before navigating so the credential is not briefly visible during the transition
+            this.userCredential.set('');
+            this._router.navigateByUrl('/');
+         });
 
       this.reloadData();
    }
 
    ngOnDestroy() {
-      this.userCredential.setValue('');
-      if (this.authSub) {
-         this.authSub.unsubscribe();
-      }
+      this.userCredential.set('');
    }
 
-   reloadData() {
-      this.showProgress = true;
-      this.error = '';
+   protected reloadData() {
+      this.showProgress.set(true);
+      this.error.set('');
 
       this.authSvc
          .reauthenticate()
          .then(async () => {
             const userCred = await this.authSvc.getUserCred();
-            this.userCredential.setValue(bytesToBase64(userCred));
+            this.userCredential.set(bytesToBase64(userCred));
             userCred.fill(0);
          })
          .catch((err) => {
             console.error(err);
             if (err instanceof Error && err.message.includes('fetch')) {
-               this.error = 'Retrieval failed, check your connection try again';
+               this.error.set('Retrieval failed, check your connection try again');
             } else {
-               this.error = 'Retrieval failed, try again';
+               this.error.set('Retrieval failed, try again');
             }
          })
-         .finally(() => (this.showProgress = false));
-   }
-
-   toastMessage(msg: string) {
-      this.snackBar.open(msg, '', {
-         duration: 2000,
-      });
+         .finally(() => this.showProgress.set(false));
    }
 }

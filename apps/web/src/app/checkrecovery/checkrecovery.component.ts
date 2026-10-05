@@ -20,15 +20,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnDestroy, type OnInit, ChangeDetectionStrategy } from '@angular/core';
-import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { Component, DestroyRef, type OnDestroy, type OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { Subscription } from 'rxjs';
 import { bytesToBase64 } from '@qcrypt/crypto';
 import { AuthEvent, AuthenticatorService, type RecoveryWordsState } from '../services/authenticator.service';
 import { RecoverySheetComponent } from '../ui/recoverysheet/recoverysheet.component';
@@ -40,9 +40,8 @@ const SHEET_TITLE = 'quick_crypt_account_recovery';
    selector: 'app-checkrecovery',
    templateUrl: './checkrecovery.component.html',
    styleUrl: './checkrecovery.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
-      ReactiveFormsModule,
+      FormsModule,
       RouterLink,
       MatButtonModule,
       MatCardModule,
@@ -54,50 +53,50 @@ const SHEET_TITLE = 'quick_crypt_account_recovery';
    ],
 })
 export class CheckRecoveryComponent implements OnInit, OnDestroy {
-   public showProgress = false;
-   public error = '';
-   public result?: RecoveryWordsState;
-   public sheetUserCred = '';
-   public recoveryWords = new FormControl<string>('');
-   private _authSub!: Subscription;
+   protected readonly authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
+
+   protected readonly showProgress = signal(false);
+   protected readonly error = signal('');
+   protected readonly result = signal<RecoveryWordsState | undefined>(undefined);
+   protected readonly sheetUserCred = signal('');
+   protected readonly recoveryWords = signal('');
+   private readonly _destroyRef = inject(DestroyRef);
    private _priorTitle?: string;
 
-   constructor(
-      public authSvc: AuthenticatorService,
-      private router: Router,
-   ) {}
-
    ngOnInit() {
-      this._authSub = this.authSvc.on([AuthEvent.Logout], () => {
-         this.error = '';
-         this.router.navigateByUrl('/');
-      });
+      this.authSvc
+         .on([AuthEvent.Logout, AuthEvent.Forget])
+         .pipe(takeUntilDestroyed(this._destroyRef))
+         .subscribe(() => {
+            this.error.set('');
+            // Clear before navigating so the credential is not briefly visible during the transition
+            this._clearSheet();
+            this._router.navigateByUrl('/');
+         });
    }
 
    ngOnDestroy() {
-      this.recoveryWords.setValue('');
+      this.recoveryWords.set('');
       this._clearSheet();
-      if (this._authSub) {
-         this._authSub.unsubscribe();
-      }
    }
 
-   async onClickPrint(): Promise<void> {
-      this.error = '';
+   protected async onClickPrint(): Promise<void> {
+      this.error.set('');
 
       try {
          const userCred = await this.authSvc.getUserCred();
          try {
-            this.sheetUserCred = bytesToBase64(userCred);
+            this.sheetUserCred.set(bytesToBase64(userCred));
          } finally {
             userCred.fill(0);
          }
       } catch (err) {
          console.error(err);
-         this.error = 'Could not build the backup sheet, try again';
+         this.error.set('Could not build the backup sheet, try again');
       }
 
-      if (this.sheetUserCred) {
+      if (this.sheetUserCred()) {
          this._priorTitle = document.title;
          document.title = SHEET_TITLE;
 
@@ -109,7 +108,7 @@ export class CheckRecoveryComponent implements OnInit, OnDestroy {
    }
 
    private _clearSheet = (): void => {
-      this.sheetUserCred = '';
+      this.sheetUserCred.set('');
       if (this._priorTitle !== undefined) {
          document.title = this._priorTitle;
          this._priorTitle = undefined;
@@ -117,23 +116,23 @@ export class CheckRecoveryComponent implements OnInit, OnDestroy {
       window.removeEventListener('afterprint', this._clearSheet);
    };
 
-   onClickCheck() {
-      this.error = '';
-      this.result = undefined;
-      const words = this.recoveryWords.value;
+   protected onClickCheck() {
+      this.error.set('');
+      this.result.set(undefined);
+      const words = this.recoveryWords();
 
       if (words) {
-         this.showProgress = true;
+         this.showProgress.set(true);
          this.authSvc
             .checkRecoveryWords(words)
-            .then((state) => (this.result = state))
+            .then((state) => this.result.set(state))
             .catch((err) => {
                console.error(err);
-               this.error = 'Could not validate recovery words, check your connection and try again';
+               this.error.set('Could not validate recovery words, check your connection and try again');
             })
-            .finally(() => (this.showProgress = false));
+            .finally(() => this.showProgress.set(false));
       } else {
-         this.error = 'Enter your recovery words to check them';
+         this.error.set('Enter your recovery words to check them');
       }
    }
 }

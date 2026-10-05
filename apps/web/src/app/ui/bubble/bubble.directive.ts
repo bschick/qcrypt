@@ -19,7 +19,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Directive, Input, ComponentRef, ElementRef, Injector, ViewContainerRef, NgZone } from '@angular/core';
+import {
+   Directive,
+   ComponentRef,
+   ElementRef,
+   Injector,
+   ViewContainerRef,
+   inject,
+   input,
+   numberAttribute,
+} from '@angular/core';
 import { BubbleComponent, BubblePosition } from './bubble.component';
 
 @Directive({
@@ -28,35 +37,32 @@ import { BubbleComponent, BubblePosition } from './bubble.component';
    standalone: true,
 })
 export class BubbleDirective {
-   private bubbleIndex!: number;
+   private readonly _elementRef = inject(ElementRef);
+   private readonly _viewContainerRef = inject(ViewContainerRef);
+   private readonly _injector = inject(Injector);
 
-   @Input() bubbleTip = 'this is a QC tip';
-   @Input() bubblePosition: BubblePosition = BubblePosition.DEFAULT;
-   @Input() bubbleWidth?: string;
-   @Input() bubbleHeight?: string;
+   private _bubbleIndex!: number;
 
-   private componentRef: ComponentRef<BubbleComponent> | null = null;
-   private scrollHandler: (() => void) | null = null;
-   private resizeHandler: (() => void) | null = null;
-   private clampedLeft = 0;
-   private clampedTop = 0;
-   private initialScrollLeft = 0;
-   private initialScrollTop = 0;
+   readonly bubbleTip = input('this is a QC tip');
+   readonly bubblePosition = input<BubblePosition>(BubblePosition.DEFAULT);
+   readonly bubbleWidth = input<string>();
+   readonly bubbleHeight = input<string>();
+   readonly bubbleFontSize = input<string>();
+   readonly bubbleShiftX = input(0, { transform: numberAttribute });
+   readonly bubbleShiftY = input(0, { transform: numberAttribute });
 
-   constructor(
-      private elementRef: ElementRef,
-      private viewContainerRef: ViewContainerRef,
-      private injector: Injector,
-      private ngZone: NgZone,
-   ) {}
+   private _componentRef: ComponentRef<BubbleComponent> | null = null;
+   private _scrollHandler: (() => void) | null = null;
+   private _resizeHandler: (() => void) | null = null;
+   private _pendingFrame = false;
 
    public show() {
-      this.initializeBubble();
+      this._initializeBubble();
       setTimeout(() => {
-         if (this.componentRef !== null) {
-            this.positionAndClamp();
-            this.addEventListeners();
-            this.componentRef.instance.visible = true;
+         if (this._componentRef !== null) {
+            this._positionAndClamp();
+            this._addEventListeners();
+            this._componentRef.instance.visible.set(true);
          }
       }, 200);
    }
@@ -65,136 +71,138 @@ export class BubbleDirective {
       this.destroy();
    }
 
-   private getScrollContainer(): Element | null {
+   private _getScrollContainer(): Element | null {
       return document.getElementById('scrollContent');
    }
 
-   private initializeBubble() {
-      if (this.componentRef === null) {
-         this.componentRef = this.viewContainerRef.createComponent(BubbleComponent, { injector: this.injector });
-         this.setComponentProperties();
-         this.bubbleIndex = this.viewContainerRef.indexOf(this.componentRef.hostView);
+   private _initializeBubble() {
+      if (this._componentRef === null) {
+         this._componentRef = this._viewContainerRef.createComponent(BubbleComponent, { injector: this._injector });
+         this._setComponentProperties();
+         this._bubbleIndex = this._viewContainerRef.indexOf(this._componentRef.hostView);
       }
    }
 
-   private setComponentProperties() {
-      if (this.componentRef !== null) {
-         this.componentRef.instance.tip = this.bubbleTip;
-         this.componentRef.instance.position = this.bubblePosition;
-         this.componentRef.instance.width = this.bubbleWidth;
-         this.componentRef.instance.height = this.bubbleHeight;
-         this.positionAndClamp();
+   private _setComponentProperties() {
+      if (this._componentRef !== null) {
+         this._componentRef.instance.tip.set(this.bubbleTip());
+         this._componentRef.instance.position.set(this.bubblePosition());
+         this._componentRef.instance.width.set(this.bubbleWidth());
+         this._componentRef.instance.height.set(this.bubbleHeight());
+         this._componentRef.instance.fontSize.set(this.bubbleFontSize());
+         this._positionAndClamp();
       }
    }
 
-   private positionAndClamp() {
-      if (this.componentRef === null) {
+   private _positionAndClamp() {
+      if (this._componentRef === null) {
          return;
       }
 
-      const { left, right, top, bottom } = this.elementRef.nativeElement.getBoundingClientRect();
+      const { left, right, top, bottom } = this._elementRef.nativeElement.getBoundingClientRect();
 
-      switch (this.bubblePosition) {
-         case BubblePosition.UPPER:
+      const bubblePosition = this.bubblePosition();
+      switch (bubblePosition) {
          case BubblePosition.ABOVE: {
-            this.componentRef.instance.left = Math.round((right - left) / 2 + left);
-            this.componentRef.instance.top = Math.round(top);
+            this._componentRef.instance.left.set(Math.round((right - left) / 2 + left));
+            this._componentRef.instance.top.set(Math.round(top));
             break;
          }
          case BubblePosition.RIGHT: {
-            this.componentRef.instance.left = Math.round(right);
-            this.componentRef.instance.top = Math.round(top + (bottom - top) / 2);
+            this._componentRef.instance.left.set(Math.round(right));
+            this._componentRef.instance.top.set(Math.round(top + (bottom - top) / 2));
+            break;
+         }
+         case BubblePosition.BELOW: {
+            this._componentRef.instance.left.set(Math.round((right - left) / 2 + left));
+            this._componentRef.instance.top.set(Math.round(bottom));
             break;
          }
          default: {
-            console.error('unknown bubble position', this.bubblePosition);
+            console.error('unknown bubble position', bubblePosition);
          }
       }
 
-      this.componentRef.instance.changeRef.detectChanges();
+      this._componentRef.instance.left.update((value) => value + this.bubbleShiftX());
+      this._componentRef.instance.top.update((value) => value + this.bubbleShiftY());
 
-      const bubbleEl = this.componentRef.location.nativeElement.querySelector('.bubble');
-      if (!bubbleEl) {
-         return;
-      }
+      this._componentRef.instance.changeRef.detectChanges();
 
-      const rect = bubbleEl.getBoundingClientRect();
-      const vw = window.visualViewport?.width ?? window.innerWidth;
-      const vh = window.visualViewport?.height ?? window.innerHeight;
-      const margin = 8;
+      // Only clamp to the viewport when the anchor is outside the scroll container, since elements
+      // inside the container move with it and should not be clamped.
+      const container = this._getScrollContainer();
+      const clampToViewport = !container?.contains(this._elementRef.nativeElement);
 
-      let adjustLeft = 0;
-      let adjustTop = 0;
+      if (clampToViewport) {
+         const bubbleEl = this._componentRef.location.nativeElement.querySelector('.bubble');
+         if (bubbleEl) {
+            const rect = bubbleEl.getBoundingClientRect();
+            const vw = window.visualViewport?.width ?? window.innerWidth;
+            const vh = window.visualViewport?.height ?? window.innerHeight;
+            const margin = 8;
 
-      if (rect.left < margin) {
-         adjustLeft = margin - rect.left;
-      } else if (rect.right > vw - margin) {
-         adjustLeft = vw - margin - rect.right;
-      }
+            let adjustLeft = 0;
+            let adjustTop = 0;
 
-      if (rect.top < margin) {
-         adjustTop = margin - rect.top;
-      } else if (rect.bottom > vh - margin) {
-         adjustTop = vh - margin - rect.bottom;
-      }
-
-      if (adjustLeft !== 0 || adjustTop !== 0) {
-         this.componentRef.instance.left += adjustLeft;
-         this.componentRef.instance.top += adjustTop;
-         this.componentRef.instance.changeRef.detectChanges();
-      }
-
-      // Store clamped position and initial scroll state for scroll tracking
-      this.clampedLeft = this.componentRef.instance.left;
-      this.clampedTop = this.componentRef.instance.top;
-      const container = this.getScrollContainer();
-      this.initialScrollLeft = container?.scrollLeft ?? 0;
-      this.initialScrollTop = container?.scrollTop ?? 0;
-   }
-
-   private addEventListeners() {
-      if (this.scrollHandler || this.resizeHandler) {
-         return;
-      }
-
-      const container = this.getScrollContainer();
-      if (container?.contains(this.elementRef.nativeElement)) {
-         // Inside scroll container: track scroll to maintain page-relative position
-         this.scrollHandler = () => {
-            if (this.componentRef) {
-               this.componentRef.instance.left = this.clampedLeft - (container.scrollLeft - this.initialScrollLeft);
-               this.componentRef.instance.top = this.clampedTop - (container.scrollTop - this.initialScrollTop);
-               this.componentRef.instance.changeRef.detectChanges();
+            if (rect.left < margin) {
+               adjustLeft = margin - rect.left;
+            } else if (rect.right > vw - margin) {
+               adjustLeft = vw - margin - rect.right;
             }
-         };
 
-         this.ngZone.runOutsideAngular(() => {
-            container.addEventListener('scroll', this.scrollHandler!);
-         });
-      } else {
-         // Outside scroll container (e.g. dialog): reposition on resize
-         // Use requestAnimationFrame to let the dialog complete its layout first
-         this.resizeHandler = () => {
-            if (this.componentRef) {
-               this.positionAndClamp();
+            if (rect.top < margin) {
+               adjustTop = margin - rect.top;
+            } else if (rect.bottom > vh - margin) {
+               adjustTop = vh - margin - rect.bottom;
             }
-         };
 
-         this.ngZone.runOutsideAngular(() => {
-            window.addEventListener('resize', this.resizeHandler!);
-         });
+            if (adjustLeft !== 0 || adjustTop !== 0) {
+               this._componentRef.instance.left.update((value) => value + adjustLeft);
+               this._componentRef.instance.top.update((value) => value + adjustTop);
+               this._componentRef.instance.changeRef.detectChanges();
+            }
+         }
       }
    }
 
-   private removeEventListeners() {
-      if (this.scrollHandler) {
-         const container = this.getScrollContainer();
-         container?.removeEventListener('scroll', this.scrollHandler);
-         this.scrollHandler = null;
+   private _addEventListeners() {
+      if (this._scrollHandler || this._resizeHandler) {
+         return;
       }
-      if (this.resizeHandler) {
-         window.removeEventListener('resize', this.resizeHandler);
-         this.resizeHandler = null;
+
+      const container = this._getScrollContainer();
+      if (container?.contains(this._elementRef.nativeElement)) {
+         this._scrollHandler = () => this._reposition();
+         container.addEventListener('scroll', this._scrollHandler);
+      }
+
+      this._resizeHandler = () => this._reposition();
+      window.addEventListener('resize', this._resizeHandler);
+   }
+
+   // Scroll fires far more often than a frame renders, so coalesce to one measurement per frame
+   private _reposition() {
+      if (this._pendingFrame || this._componentRef === null) {
+         return;
+      }
+      this._pendingFrame = true;
+      requestAnimationFrame(() => {
+         this._pendingFrame = false;
+         if (this._componentRef !== null) {
+            this._positionAndClamp();
+         }
+      });
+   }
+
+   private _removeEventListeners() {
+      if (this._scrollHandler) {
+         const container = this._getScrollContainer();
+         container?.removeEventListener('scroll', this._scrollHandler);
+         this._scrollHandler = null;
+      }
+      if (this._resizeHandler) {
+         window.removeEventListener('resize', this._resizeHandler);
+         this._resizeHandler = null;
       }
    }
 
@@ -203,12 +211,12 @@ export class BubbleDirective {
    }
 
    destroy(): void {
-      this.removeEventListeners();
-      if (this.componentRef !== null) {
-         this.componentRef.instance.visible = false;
-         this.viewContainerRef.remove(this.bubbleIndex);
-         this.componentRef.destroy();
-         this.componentRef = null;
+      this._removeEventListeners();
+      if (this._componentRef !== null) {
+         this._componentRef.instance.visible.set(false);
+         this._viewContainerRef.remove(this._bubbleIndex);
+         this._componentRef.destroy();
+         this._componentRef = null;
       }
    }
 }

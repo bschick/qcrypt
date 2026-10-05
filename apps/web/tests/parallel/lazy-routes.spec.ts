@@ -9,10 +9,9 @@ test.describe('lazy routes render', () => {
       '/help/faqs',
       '/help/faqs/bad',
       '/help/protocol',
-      '/help/protocol1',
-      '/help/protocol4',
-      '/help/protocol5',
       '/help/protocol6',
+      '/help/protocol7',
+      '/help/protocol8',
    ];
 
    for (const path of smokeRoutes) {
@@ -20,6 +19,14 @@ test.describe('lazy routes render', () => {
          await page.goto(path);
          await expect(page).toHaveURL(new RegExp(`${path.replace(/\//g, '\\/')}$`));
          await expect(page.locator('mat-sidenav-content')).toBeVisible({ timeout: 10000 });
+      });
+   }
+
+   for (const path of ['/help/protocol1', '/help/protocol4', '/help/protocol5']) {
+      test(`redirects ${path} to /help/protocol`, async ({ page }) => {
+         await page.goto(path);
+         await expect(page).toHaveURL(/\/help\/protocol$/);
+         await expect(page.getByRole('heading', { name: /Protocol Description/ })).toBeVisible({ timeout: 10000 });
       });
    }
 });
@@ -47,5 +54,23 @@ test.describe('help page content', () => {
    test('/help/protocol shows its top header', async ({ page }) => {
       await page.goto('/help/protocol');
       await expect(page.getByRole('heading', { name: /Protocol Description/ })).toBeVisible({ timeout: 10000 });
+   });
+});
+
+test.describe('URL values reach the page', () => {
+   test('/help/faqs?search= fills the search box', async ({ page }) => {
+      await page.goto('/help/faqs?search=recovery');
+      await expect(page.locator('.search-input')).toHaveValue('recovery', { timeout: 10000 });
+   });
+
+   test('/recovery with userid and usercred offers to start recovery', async ({ page }) => {
+      await page.goto('/recovery?userid=dXNlcmlk&usercred=dXNlcmNyZWQ');
+      await expect(page.getByRole('button', { name: 'Start the recovery process' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText('The recovery link is not valid')).toHaveCount(0);
+   });
+
+   test('/recovery without usercred reports an invalid link', async ({ page }) => {
+      await page.goto('/recovery?userid=dXNlcmlk');
+      await expect(page.getByText('The recovery link is not valid')).toBeVisible({ timeout: 10000 });
    });
 });

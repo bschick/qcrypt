@@ -20,9 +20,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, type OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, type OnInit, inject, input, signal } from '@angular/core';
 import { AuthenticatorService } from '../services/authenticator.service';
-import { Router, RouterLink, ActivatedRoute } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -33,102 +33,107 @@ import { bytesToBase64 } from '@qcrypt/crypto';
    selector: 'app-recovery',
    templateUrl: './recovery.component.html',
    styleUrl: './recovery.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatIconModule, MatButtonModule, RouterLink, MatProgressSpinnerModule, MatCardModule],
 })
 export class RecoveryComponent implements OnInit {
-   public validRecoveryLink = false;
-   public error = '';
-   public hasRecoveryWords = false;
-   public ready = false;
-   public showProgress = false;
-   public authenticated = false;
-   public selfRecovery = false;
-   public currentUserName: string | null = null;
-   private recoveryUserId: string | null = null;
-   private recoverUserCred: string | null = null;
+   protected readonly validRecoveryLink = signal(false);
+   protected readonly error = signal('');
+   protected readonly hasRecoveryWords = signal(false);
+   protected readonly ready = signal(false);
+   protected readonly showProgress = signal(false);
+   protected readonly authenticated = signal(false);
+   protected readonly selfRecovery = signal(false);
+   protected readonly currentUserName = signal<string | null>(null);
+   private _recoveryUserId: string | null = null;
+   private _recoverUserCred: string | null = null;
 
-   private authSvc = inject<AuthenticatorService>(AuthenticatorService);
-   private router = inject<Router>(Router);
-   private activeRoute = inject<ActivatedRoute>(ActivatedRoute);
+   private readonly _authSvc = inject<AuthenticatorService>(AuthenticatorService);
+   private readonly _router = inject<Router>(Router);
+
+   // Set by the router from the recovery link's query parameters
+   readonly linkUserId = input<string>(undefined, { alias: 'userid' });
+   readonly linkUserCred = input<string>(undefined, { alias: 'usercred' });
 
    ngOnInit() {
-      const [userId, userName] = this.authSvc.loadKnownUser();
+      const [userId, userName] = this._authSvc.loadKnownUser();
       if (userId && userName) {
-         this.currentUserName = userName;
+         this.currentUserName.set(userName);
       }
 
-      this.showProgress = true;
+      this.showProgress.set(true);
 
-      this.authSvc.ready
+      this._authSvc.ready
          .then(async () => {
-            this.authenticated = this.authSvc.hasSession();
+            this.authenticated.set(this._authSvc.hasSession());
 
-            if (this.authenticated && this.authSvc.hasRecoveryId()) {
-               this.router.navigateByUrl('/recovery3');
+            if (this.authenticated() && this._authSvc.hasRecoveryId()) {
+               this._router.navigateByUrl('/recovery3');
             } else {
-               try {
-                  this.recoveryUserId = this.activeRoute.snapshot.queryParamMap.get('userid');
-                  this.recoverUserCred = this.activeRoute.snapshot.queryParamMap.get('usercred');
-                  if (!this.recoveryUserId || !this.recoverUserCred) {
-                     throw new Error(
-                        `recovery link missing userid or usercred: ${this.activeRoute.snapshot.toString()}`,
-                     );
-                  }
-                  this.validRecoveryLink = true;
-                  if (this.authenticated) {
-                     const userCred = await this.authSvc.getUserCred();
-                     this.selfRecovery = this.recoverUserCred === bytesToBase64(userCred);
+               this._recoveryUserId = this.linkUserId() ?? null;
+               this._recoverUserCred = this.linkUserCred() ?? null;
+
+               if (this._recoveryUserId && this._recoverUserCred) {
+                  this.validRecoveryLink.set(true);
+               } else {
+                  console.error('recovery link missing userid or usercred');
+                  this.error.set('Recovery link is invalid');
+                  this.validRecoveryLink.set(false);
+               }
+
+               // A failed credential read says nothing about the link, so it leaves validity alone
+               if (this.validRecoveryLink() && this.authenticated()) {
+                  try {
+                     const userCred = await this._authSvc.getUserCred();
+                     this.selfRecovery.set(this._recoverUserCred === bytesToBase64(userCred));
                      userCred.fill(0);
+                  } catch (err) {
+                     console.error(err);
+                     this.error.set('Could not read your user credential, try again');
                   }
-               } catch (err) {
-                  console.error(err);
-                  this.error = 'Recovery link is invalid';
-                  this.validRecoveryLink = false;
                }
             }
          })
          .finally(() => {
-            this.ready = true;
-            this.showProgress = false;
+            this.ready.set(true);
+            this.showProgress.set(false);
          });
    }
 
-   async onClickSignin(): Promise<void> {
+   protected async onClickSignin(): Promise<void> {
       try {
-         this.error = '';
-         this.showProgress = true;
-         await this.authSvc.createDefaultSession();
-         this.router.navigateByUrl('/');
+         this.error.set('');
+         this.showProgress.set(true);
+         await this._authSvc.createDefaultSession();
+         this._router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
-            this.error = 'Sign in failed, check your connection';
+            this.error.set('Sign in failed, check your connection');
          } else {
-            this.error = 'Sign in failed, try again or change users';
+            this.error.set('Sign in failed, try again or change users');
          }
       } finally {
-         this.showProgress = false;
+         this.showProgress.set(false);
       }
    }
 
-   async onClickStartRecovery(_event: MouseEvent) {
+   protected async onClickStartRecovery(_event: MouseEvent) {
       try {
-         this.showProgress = true;
-         await this.authSvc.recover(this.recoveryUserId!, this.recoverUserCred!);
-         this.recoverUserCred = null;
-         this.recoveryUserId = null;
-         this.router.navigateByUrl('/');
+         this.showProgress.set(true);
+         await this._authSvc.recover(this._recoveryUserId!, this._recoverUserCred!);
+         this._recoverUserCred = null;
+         this._recoveryUserId = null;
+         this._router.navigateByUrl('/');
       } catch (err) {
          if (err instanceof Error && err.message.includes('instead')) {
-            this.error = 'You must user recovery words';
-            this.hasRecoveryWords = true;
+            this.error.set('You must user recovery words');
+            this.hasRecoveryWords.set(true);
          } else {
             console.error(err);
-            this.error = 'The operation was not allowed or timed out';
+            this.error.set('The operation was not allowed or timed out');
          }
       } finally {
-         this.showProgress = false;
+         this.showProgress.set(false);
       }
    }
 }

@@ -19,16 +19,34 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
-import { MatCardModule } from '@angular/material/card';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
+import { CopyrightComponent } from '../../ui/copyright/copyright.component';
 
 @Component({
-   selector: 'app-halted',
-   templateUrl: './halted.component.html',
-   styleUrl: './halted.component.scss',
-   imports: [MatIconModule, MatCardModule, RouterLink],
+   selector: 'app-protocol6',
+   imports: [MatTooltipModule, RouterLink, CopyrightComponent],
+   templateUrl: './protocol6.component.html',
+   styleUrl: './protocol.component.scss',
 })
-export class HaltedComponent {}
+export class Protocol6Component {
+   private readonly _dialog = inject(MatDialog);
+
+   protected openFlowImage(flowImage: string) {
+      this._dialog.open(FlowDialog, { data: flowImage });
+   }
+}
+
+@Component({
+   selector: 'flow-dialog',
+   templateUrl: './flow-dialog.html',
+   styleUrl: './protocol.component.scss',
+   imports: [MatDialogModule, MatIconModule, MatTooltipModule, MatButtonModule],
+})
+export class FlowDialog {
+   protected readonly flowImage = inject<string>(MAT_DIALOG_DATA);
+}

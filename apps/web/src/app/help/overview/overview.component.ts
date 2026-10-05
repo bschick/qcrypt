@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule, MatIconRegistry } from '@angular/material/icon';
@@ -11,20 +11,19 @@ import { environment } from '../../../environments/environment';
    selector: 'app-overview',
    templateUrl: './overview.component.html',
    styleUrl: './overview.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [RouterLink, MatButtonModule, MatIconModule, MatTooltipModule, CopyrightComponent],
 })
 export class OverviewComponent {
-   private readonly matIconRegistry = inject(MatIconRegistry);
-   private readonly domSanitizer = inject(DomSanitizer);
+   private readonly _matIconRegistry = inject(MatIconRegistry);
+   private readonly _domSanitizer = inject(DomSanitizer);
 
-   public version = environment.clientVersion;
-   public copyright = environment.copyright;
+   public readonly version = environment.clientVersion;
+   public readonly copyright = environment.copyright;
 
    constructor() {
-      this.matIconRegistry.addSvgIcon(
+      this._matIconRegistry.addSvgIcon(
          'github',
-         this.domSanitizer.bypassSecurityTrustResourceUrl('../assets/github-circle.svg'),
+         this._domSanitizer.bypassSecurityTrustResourceUrl('../assets/github-circle.svg'),
       );
    }
 }

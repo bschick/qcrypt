@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { type AfterViewInit, Component, type OnInit, Renderer2, ChangeDetectionStrategy } from '@angular/core';
+import { type AfterViewInit, Component, type OnInit, Renderer2, inject, signal } from '@angular/core';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatInputModule } from '@angular/material/input';
@@ -32,7 +32,6 @@ import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import { NoAssistDirective } from '../ui/noassist.directive';
@@ -41,7 +40,6 @@ import { NoAssistDirective } from '../ui/noassist.directive';
    selector: 'app-newuser',
    templateUrl: './newuser.component.html',
    styleUrl: './newuser.component.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [
       MatIconModule,
       MatButtonModule,
@@ -56,98 +54,91 @@ import { NoAssistDirective } from '../ui/noassist.directive';
    ],
 })
 export class NewUserComponent implements OnInit, AfterViewInit {
-   public showProgress = false;
-   public error = '';
-   public newUserName = '';
-   public currentUserName: string | null = null;
-   public recoveryLink = '';
-   public authenticated = false;
+   private readonly _r2 = inject(Renderer2);
+   private readonly _authSvc = inject(AuthenticatorService);
+   private readonly _router = inject(Router);
+   private readonly _dialog = inject(MatDialog);
 
-   constructor(
-      private r2: Renderer2,
-      private authSvc: AuthenticatorService,
-      private router: Router,
-      private dialog: MatDialog,
-      private snackBar: MatSnackBar,
-   ) {}
+   protected readonly showProgress = signal(false);
+   protected readonly error = signal('');
+   protected readonly newUserName = signal('');
+   protected readonly currentUserName = signal<string | null>(null);
+   protected readonly authenticated = signal(false);
 
    ngOnInit() {
-      const [userId, userName] = this.authSvc.loadKnownUser();
+      const [userId, userName] = this._authSvc.loadKnownUser();
       if (userId && userName) {
-         this.currentUserName = userName;
+         this.currentUserName.set(userName);
       }
-      this.authenticated = this.authSvc.hasSession();
+      this.authenticated.set(this._authSvc.hasSession());
    }
 
    ngAfterViewInit(): void {
       // Make this async to avoid ExpressionChangedAfterItHasBeenCheckedError errors
       setTimeout(() => {
          try {
-            this.r2.selectRootElement('#userName').focus();
+            this._r2.selectRootElement('#userName').focus();
          } catch (err) {
             console.error(err);
          }
       }, 0);
    }
 
-   toastMessage(msg: string): void {
-      this.snackBar.open(msg, '', {
-         duration: 2000,
-      });
-   }
-
-   async onClickSignin(): Promise<void> {
+   protected async onClickSignin(): Promise<void> {
       try {
-         this.error = '';
-         this.showProgress = true;
-         await this.authSvc.createDefaultSession();
-         this.router.navigateByUrl('/');
+         this.error.set('');
+         this.showProgress.set(true);
+         await this._authSvc.createDefaultSession();
+         this._router.navigateByUrl('/');
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
-            this.error = 'Sign in failed, check your connection';
+            this.error.set('Sign in failed, check your connection');
          } else {
-            this.error = 'Sign in failed, try again or change users';
+            this.error.set('Sign in failed, try again or change users');
          }
       } finally {
-         this.showProgress = false;
+         this.showProgress.set(false);
       }
    }
 
-   async onClickNewUser(_event: MouseEvent): Promise<void> {
-      this.error = '';
+   protected async onClickNewUser(_event: MouseEvent): Promise<void> {
+      this.error.set('');
+      const userName = this.newUserName();
 
-      if (!this.newUserName || this.newUserName.length < 6 || this.newUserName.length > 31) {
-         this.error = 'User name must be 6 to 31 characters long';
+      if (!userName || userName.length < 6 || userName.length > 31) {
+         this.error.set('User name must be 6 to 31 characters long');
          return;
       }
 
       try {
-         this.showProgress = true;
+         this.showProgress.set(true);
          // Session will be replaced, so don't need to kill direclty
-         this.authSvc.forgetUser(false);
-         await this.authSvc.newUser(this.newUserName, () => this._decidePrfFallback());
-         this.router.navigateByUrl('/showrecovery');
+         this._authSvc.forgetUser(false);
+         await this._authSvc.newUser(userName, () => this._decidePrfFallback());
+         this._router.navigateByUrl('/showrecovery');
       } catch (err) {
          console.error(err);
          if (err instanceof Error && err.message.includes('fetch')) {
-            this.error = 'New user creation failed, check your internet connection';
+            this.error.set('New user creation failed, check your internet connection');
          } else {
-            this.error = 'New user creation failed, please try again';
+            this.error.set(
+               'New user creation failed, the name must be 6 to 31 characters after unsupported characters are removed',
+            );
          }
       } finally {
-         this.showProgress = false;
+         this.showProgress.set(false);
       }
    }
 
    // The dialog cannot be dismissed, so it always resolves to a definite choice.
    private async _decidePrfFallback(): Promise<'standard' | 'different'> {
-      this.showProgress = false;
-      const choice = await firstValueFrom(this.dialog.open(PrfFallbackDialog, { disableClose: true }).afterClosed());
+      this.showProgress.set(false);
+      const choice = await firstValueFrom(this._dialog.open(PrfFallbackDialog, { disableClose: true }).afterClosed());
       if (choice !== 'standard' && choice !== 'different') {
          throw new Error('PRF fallback dialog returned an invalid choice');
       }
-      this.showProgress = true;
+      this.showProgress.set(true);
       return choice;
    }
 }
@@ -156,7 +147,6 @@ export class NewUserComponent implements OnInit, AfterViewInit {
    selector: 'prf-fallback-dialog',
    templateUrl: './prf-fallback-dialog.html',
    styleUrl: './prf-fallback-dialog.scss',
-   changeDetection: ChangeDetectionStrategy.Eager,
    imports: [MatDialogModule, MatButtonModule, RouterLink],
 })
 export class PrfFallbackDialog {}

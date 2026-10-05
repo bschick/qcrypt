@@ -29,7 +29,7 @@ describe('EditableComponent', () => {
 
    it('consumes the enter and escape keys that end an edit', () => {
       for (const method of ['acceptEdit', 'cancelEdit'] as const) {
-         component.tryMakeEditable();
+         component['tryMakeEditable']();
          const event = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
          component[method](event);
          expect(event.defaultPrevented).toBe(true);

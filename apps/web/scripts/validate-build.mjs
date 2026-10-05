@@ -199,8 +199,9 @@ export function validateBuild(browserDir) {
    if (!moduleEntries.some((s) => /(?:^|\/)main-[A-Za-z0-9]+\.js$/.test(s))) {
       problems.push('no main-*.js module entry found in index.html');
    }
-   if (!moduleEntries.some((s) => /(?:^|\/)polyfills-[A-Za-z0-9]+\.js$/.test(s))) {
-      problems.push('no polyfills-*.js module entry found in index.html');
+   // The app is zoneless and builds without polyfills, so this bundle appears only if zone.js or another polyfill is added
+   if (moduleEntries.some((s) => /(?:^|\/)polyfills-[A-Za-z0-9]+\.js$/.test(s))) {
+      problems.push('unexpected polyfills-*.js module entry found in index.html');
    }
 
    return problems;
