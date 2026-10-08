@@ -100,7 +100,7 @@ and each such trace was read to confirm it is the attack named in the table.
 | C-K1-v7 | The same game on V7 | AEGIS-256 | AES-GCM and XChaCha20-Poly1305 (`commit-v7`) |
 | C-D1 | A V8 message is never accepted through the V7 decode path, and the reverse | u_c leaks, p secret | — |
 
-**About `commit-v7`.** It reproduces the externally reported V7 key-commitment attack: one u_c,
+**About `commit-v7`.** It reproduces the externally reported V7 key-commitment incompleteness: one u_c,
 two passwords, and one block 0 accepted under both. It fails for exactly the algorithms the
 report names, and holds for AEGIS. V8 closes it for every algorithm.
 

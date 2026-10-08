@@ -175,7 +175,10 @@ encoding can be parsed back into its fields in exactly one way. The argument for
 
 ---
 
-## 6. Tex notation proposal (for approval)
+## 6. Tex notation proposal
+
+**Status:** N1-N9 approved 2026-10-08. They will be applied after the account models (Phases
+3-4), so the auth stanzas are rewritten once, with each `main.tex` diff reviewed individually.
 
 The aim is a tex that reads almost line for line as the model, so `conformance.md` stays
 mechanical. Each change also notes whether it would affect the flow SVGs. Those are Lucidchart
