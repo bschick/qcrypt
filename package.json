@@ -30,6 +30,7 @@
     "build:cli:min": "nx build-min cli",
     "build:libs:crux": "node libs/crypto/crux/regen.mjs",
     "verify:libs:crux": "node libs/crypto/crux/regen.mjs --check",
+    "verify:proverif": "node formal/proverif/run.mjs",
     "test:cli": "nx test cli",
     "vectors:ciphers": "TSX_TSCONFIG_PATH=apps/web/scripts/tsconfig.json tsx apps/web/scripts/gen_ciphers_vectors.ts",
     "vectors:ciphersvc": "TSX_TSCONFIG_PATH=apps/web/scripts/tsconfig.json tsx apps/web/scripts/gen_ciphersvc_vectors.ts",

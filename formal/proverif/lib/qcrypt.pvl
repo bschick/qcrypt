@@ -1,0 +1,165 @@
+(* Quick Crypt primitives shared by every model in this directory.
+
+   Each symbol corresponds to a primitive in apps/web/src/assets-src/main.tex. Free constructors
+   are injective, which is how the models assume collision resistance; conformance.md section 4
+   records why the real byte encodings are injective too.
+
+   Every attacker-side extra here, such as nc_forge and sig_msg, makes the attacker stronger,
+   never weaker, so a proof that holds with them also holds without them. *)
+
+free c: channel.
+
+type key.
+type alg.
+type password.
+
+fun key2bs(key): bitstring [typeConverter].
+fun bs2key(bitstring): key [typeConverter].
+
+const EMPTY: bitstring [data].
+
+(* Protocol versions *)
+const V7: bitstring [data].
+const V8: bitstring [data].
+
+(* Block flags f *)
+const F0: bitstring [data].
+const F1: bitstring [data].
+
+(* e_l values: 0 for messages, 16 for u_c at rest *)
+const EL0: bitstring [data].
+const EL16: bitstring [data].
+
+(* t_L at the start of every loop: the single byte 0x00 *)
+const TL0: bitstring [data].
+
+(* Loop counters lp and le *)
+const LP1: bitstring [data].
+const LP2: bitstring [data].
+
+(* Subkey ids for D_H. Block keys use their block number N, so B1 and B2 double as N. *)
+const ID0: bitstring [data].
+const ID1: bitstring [data].
+const ID2: bitstring [data].
+const B1: bitstring [data].
+const B2: bitstring [data].
+
+(* PBKDF2 iteration counts: IC for an honest value, IC0 for the i = 0 used at rest *)
+const IC: bitstring [data].
+const IC0: bitstring [data].
+
+(* Key purpose strings *)
+const kpS: bitstring [data].
+const kpH: bitstring [data].
+const kpB: bitstring [data].
+const kpC: bitstring [data].
+const kpM: bitstring [data].
+const kpU: bitstring [data].
+const kpR: bitstring [data].
+
+(* k_C field when absent (k_Cl = 0), and h_E when there is no hint (h_El = 0) *)
+const NOKC: key [data].
+const NOHINT: bitstring [data].
+
+(* AEAD algorithms a: 1 AES-256-GCM, 2 XChaCha20-Poly1305, 3 AEGIS-256 *)
+const GCM: alg [data].
+const XCC: alg [data].
+const AEGIS: alg [data].
+
+(* H_k(d): keyed BLAKE2b-256 over the field tuple. It mixes n_S and the context into the master
+   key before D_H, since D_H takes no salt. *)
+fun hmix(key, bitstring): key.
+
+(* X = n_S || a || v || lp || e_l || e, the context mixed into every V8 subkey *)
+fun xctx8(bitstring, alg, bitstring, bitstring, bitstring, bitstring): bitstring [data].
+
+(* V7 context: n_S || a || v || lp || e, with no e_l byte *)
+fun xctx7(bitstring, alg, bitstring, bitstring, bitstring): bitstring [data].
+
+(* D_H(id, purpose, key): crypto_kdf_derive_from_key. The id and purpose sit in separate BLAKE2b
+   fields, so no purpose can collide with a block number. *)
+fun kdf(bitstring, bitstring, key): key.
+
+(* D_P(material, salt, iterations): PBKDF2-HMAC-SHA512 *)
+fun pbkdf(bitstring, bitstring, bitstring): key.
+
+(* V8 PBKDF2 material: p_l || p || u_c || a || v || lp || e_l || e. Here p_l is implicit in the
+   password term. *)
+fun pwmat8(password, key, alg, bitstring, bitstring, bitstring, bitstring): bitstring.
+
+(* V7 PBKDF2 material: p || u_c || a || v || lp || e *)
+fun pwmat7(password, key, alg, bitstring, bitstring, bitstring): bitstring.
+
+(* H_k(...) as the outer MAC, checked by recomputing and comparing in constant time *)
+fun mac(key, bitstring): bitstring.
+
+(* MAC input v || l || ad_F || m_E || t_L. l is a function of ad_F and m_E, so it is left out. *)
+fun macin(bitstring, bitstring, bitstring, bitstring): bitstring [data].
+
+(* ad_F for block 0: f, a, n_IV, n_S, i, le, lp, h_E, k_C. V7 has no k_C field. *)
+fun ad0(bitstring, alg, bitstring, bitstring, bitstring, bitstring, bitstring, bitstring, key): bitstring [data].
+fun ad0v7(bitstring, alg, bitstring, bitstring, bitstring, bitstring, bitstring, bitstring): bitstring [data].
+
+(* ad_F for block N: f, a, n_IV *)
+fun adN(bitstring, alg, bitstring): bitstring [data].
+
+(* The bytes V7 passes to the AEAD as AD: ad_F || e || k_C, where k_C is derived, never sent *)
+fun aadv7(bitstring, bitstring, key): bitstring [data].
+
+(* One wire block: t, v, ad_F, m_E *)
+fun blk(bitstring, bitstring, bitstring, bitstring): bitstring [data].
+
+(* AEAD E_a(message, IV, AD, key) as aead_enc(a, key, IV, AD, message).
+
+   AES-GCM and Poly1305 are not key-committing: an attacker who knows two keys can build one
+   ciphertext that decrypts under both, even with different AD (Albertini et al., USENIX 2022).
+   nc_forge gives the attacker exactly that for GCM and XCC. AEGIS-256 gets no forging rule, so it
+   is committing. The rules are ordered with otherwise, so the destructor is deterministic.
+   Letting the attacker pick both plaintexts is stronger than the real attack, which is the safe
+   direction. *)
+fun aead_enc(alg, key, bitstring, bitstring, bitstring): bitstring.
+fun nc_forge(alg, key, key, bitstring, bitstring, bitstring, bitstring, bitstring): bitstring.
+
+fun aead_dec(alg, key, bitstring, bitstring, bitstring): bitstring
+reduc forall a: alg, k: key, n: bitstring, ad: bitstring, m: bitstring;
+      aead_dec(a, k, n, ad, aead_enc(a, k, n, ad, m)) = m
+otherwise forall k1: key, k2: key, n: bitstring, ad1: bitstring, ad2: bitstring, m1: bitstring, m2: bitstring;
+      aead_dec(GCM, k1, n, ad1, nc_forge(GCM, k1, k2, n, ad1, ad2, m1, m2)) = m1
+otherwise forall k1: key, k2: key, n: bitstring, ad1: bitstring, ad2: bitstring, m1: bitstring, m2: bitstring;
+      aead_dec(GCM, k2, n, ad2, nc_forge(GCM, k1, k2, n, ad1, ad2, m1, m2)) = m2
+otherwise forall k1: key, k2: key, n: bitstring, ad1: bitstring, ad2: bitstring, m1: bitstring, m2: bitstring;
+      aead_dec(XCC, k1, n, ad1, nc_forge(XCC, k1, k2, n, ad1, ad2, m1, m2)) = m1
+otherwise forall k1: key, k2: key, n: bitstring, ad1: bitstring, ad2: bitstring, m1: bitstring, m2: bitstring;
+      aead_dec(XCC, k2, n, ad2, nc_forge(XCC, k1, k2, n, ad1, ad2, m1, m2)) = m2.
+
+(* ML-DSA-65. P_K(seed) is (sig_pk(seed), seed), so the seed stands in for the secret key.
+   P_S(sk, m, ctx) is randomized; the randomness is the last argument. *)
+fun sig_pk(key): bitstring.
+fun sig_sign(key, bitstring, bitstring, bitstring): bitstring.
+
+fun sig_verify(bitstring, bitstring, bitstring, bitstring): bool
+reduc forall s: key, m: bitstring, ctx: bitstring, r: bitstring;
+      sig_verify(sig_pk(s), m, sig_sign(s, m, ctx, r), ctx) = true.
+
+(* A signature is not assumed to hide its message *)
+reduc forall s: key, m: bitstring, ctx: bitstring, r: bitstring;
+      sig_msg(sig_sign(s, m, ctx, r)) = m.
+
+(* WebAuthn credential: an authenticator key that signs assertions and computes the PRF *)
+fun wa_pk(key): bitstring.
+fun wa_sign(key, bitstring): bitstring.
+
+fun wa_verify(bitstring, bitstring, bitstring): bool
+reduc forall k: key, m: bitstring;
+      wa_verify(wa_pk(k), m, wa_sign(k, m)) = true.
+
+reduc forall k: key, m: bitstring;
+      wa_msg(wa_sign(k, m)) = m.
+
+fun wa_prf(key, bitstring): key.
+
+(* D_S(data, key)[256:512): HMAC-SHA-512 under the non-extractable k_KS *)
+fun dsl(key, bitstring): key.
+
+(* H_2: SHA-256 *)
+fun sha256(bitstring): bitstring.

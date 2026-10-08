@@ -171,6 +171,7 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 | Crypto library unit tests | `pnpm test:libs:crypto` | `pnpm nx test crypto` | |
 | API library unit tests | `pnpm test:libs:api` | `pnpm nx test api` | |
 | CLI unit tests | `pnpm test:cli` | `pnpm nx test cli` | |
+| ProVerif protocol models | `pnpm verify:proverif` | | *needs ProVerif 2.05 from opam; not in any aggregate. See [`formal/proverif/README.md`](formal/proverif/README.md)* |
 
 > **Note:** When passing flags through `nx`, use camelCase for config options (e.g., `--runnerConfig=` not `--runner-config`).
 > **Note:** To run specific test files, use `--include`.
