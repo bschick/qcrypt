@@ -617,7 +617,7 @@ async function _createAuthenticator(
       throw new ParamError('invalid passkey userCred ciphertext');
    }
 
-   const transports = passkeyVerify.response.transports;
+   const transports = passkeyVerify.response?.transports;
    if (transports) {
       if (transports.length > TRANSPORT_MAX_COUNT || !transports.every((tport) => TRANSPORT_PATTERN.test(tport))) {
          throw new ParamError('invalid transports');
@@ -1192,8 +1192,7 @@ async function putPrfUpgrade(httpDetails: HttpDetails, verifiedUser?: VerifiedUs
    return { content };
 }
 
-// Completes the account update to PRF started by PUT prfupgrade. Account to PRF as the final step,
-// so a failure before that point leaves a usable no-PRF account.
+// Completes the account update to PRF started by PUT prfupgrade.
 async function postPrfUpgradeConfirm(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
    const confirm = httpDetails.body as api.PrfUpgradeConfirmRequest;
 
@@ -1238,9 +1237,10 @@ async function postPrfUpgradeConfirm(httpDetails: HttpDetails, verifiedUser?: Ve
 
    await deleteAuthenticators(verifiedUser, verifiedUser.lastCredentialId);
 
-   // A non-PRF passkey could be added concurrently between the delete above and the following
-   // account switch to PRF. The time window is small, and the impact is only that new PK
-   // being unusable, so accepting the race.
+   // Between the reads above and the following account switch to PRF, a concurrent request could
+   // add a non-PRF passkey or replace the kept passkey's encrypted userCred with PUT prfupgrade.
+   // The time window is small, however, and the impact is only that the affected PK is unusable
+   // (the recovery words still work), so accepting the race.
    const switched = await Users.patch({
       userId: verifiedUser.userId,
    })
