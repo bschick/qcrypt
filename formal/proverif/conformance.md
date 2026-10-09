@@ -6,8 +6,8 @@ This file ties three descriptions of the protocol together:
 - the code that implements it;
 - the ProVerif models in this directory.
 
-It also holds the issue log for every difference found between them, and the proposed changes to
-the tex notation.
+It also holds the issue log for every difference found between them, the proposed changes to the
+tex notation, and the design of the planned fixes.
 
 **References.** Tex line numbers and code `file:line` references are as of commit `48c26a6`. The
 model column is filled in as each model is written.
@@ -144,11 +144,11 @@ encoding can be parsed back into its fields in exactly one way. The argument for
 
 | ID | Observation | Code / tex | Class | Model impact | Decision |
 |---|---|---|---|---|---|
-| I-01 | B never compares the server-returned u_i with the authenticator's userHandle, with the u_i it asked for, or (before pinning and encrypting) with the u_i decoded from the recovery words. The pk_U pin is keyed by that server-asserted u_i. A malicious API server could therefore assert an unpinned u_i. <br>**Confirmed by `account/malicious` (A-S3).** Alice signs in on the browser that registered her account. The server replies with a different account id, "no-PRF", and a u_c of its choosing. The browser has no pin for that id, so it accepts, pins it, and starts a session with the server's u_c. Every message Alice then encrypts in that session is protected by her password alone, against a server that can guess it offline. The trace matches the code: the user handle is passed to the server and never compared (`auth:1326-1329`), and both pin checks are keyed by the server's `userId` (`auth:290-311`, `auth:712`). <br>`account/malicious-fixui` adds the check `server u_i = userHandle`, and A-S3 then **proves**. | `auth:712-724`, `auth:1326-1329`, `auth:1486-1488`; tex 492 | **confirmed** weakness (malicious server) | A-S3: attack; with fix: proved | pending: proposed fix below |
+| I-01 | B never compares the server-returned u_i with the authenticator's userHandle, with the u_i it asked for, or (before pinning and encrypting) with the u_i decoded from the recovery words. The pk_U pin is keyed by that server-asserted u_i. A malicious API server could therefore assert an unpinned u_i. <br>**Confirmed by `account/malicious` (A-S3).** Alice signs in on the browser that registered her account. The server replies with a different user id (`sui` in the model), "no-PRF", and a u_c of its choosing. The browser has no pin for that user id, so it accepts, pins it, and starts a session with the server's u_c. Every message Alice then encrypts in that session is protected by her password alone, against a server that can guess it offline. The trace matches the code: the user handle is passed to the server and never compared (`auth:1326-1329`), and both pin checks are keyed by the server's `userId` (`auth:290-311`, `auth:712`). <br>`account/malicious-fixui` adds the check `server u_i = userHandle`, and A-S3 then **proves**. | `auth:712-724`, `auth:1326-1329`, `auth:1486-1488`; tex 492 | **confirmed** weakness (malicious server) | A-S3: attack; with fix: proved | **fix code (planned):** the user-id check in §7.1, at sign-in, registration, add passkey and recovery. Failing unit tests are in [remediation-tests.md](remediation-tests.md). |
 | I-02 | pkId, an input to k_L, is supplied by the server and never compared with the credential id the authenticator actually used. <br>Under a malicious server choosing pkId, u_c stays secret (`account/malicious`, A-S2), because k_KS never leaves IndexedDB. | `auth:755`, `ks:113-134` | no effect found | A-S2, A-K1 | accept, or bind as hygiene |
-| I-03 | Account mode is trusted on first use per browser. A no-PRF→PRF pin upgrade is allowed. A missing PRF output on a PRF account is an ordinary error, not a halt. <br>**Trust on first use is inherent** (`account/malicious-fixui`, A-S4). Even with the I-01 fix, a browser holding no pin for the account accepts the server's "no-PRF" plus a server-chosen u_c for Alice's real u_i. That browser could be a new device, a new profile, cleared storage, or a registration that never completed. Closing this needs the account mode to reach the browser through a channel the server cannot alter. One option is a PRF marker in the WebAuthn user handle of new PRF accounts. The authenticator returns the handle to the browser directly, though the handle format is a compatibility constraint. | `auth:290-311`, `auth:716-718`, `auth:1546-1555`; tex 462, 492 | inherent limit; design option | A-S4: attack, with or without the fix | pending |
+| I-03 | Account mode is trusted on first use per browser. A no-PRF→PRF pin upgrade is allowed. A missing PRF output on a PRF account is an ordinary error, not a halt. <br>**Trust on first use is inherent** (`account/malicious-fixui`, A-S4). Even with the I-01 fix, a browser holding no pin for the account accepts the server's "no-PRF" plus a server-chosen u_c for Alice's real u_i. That browser could be a new device, a new profile, cleared storage, or a registration that never completed. Closing this needs the account mode and an id for u_c to reach the browser through a channel the server cannot alter. The WebAuthn user handle is one such channel, because the authenticator returns it to the browser directly. The recovery words are another. | `auth:290-311`, `auth:716-718`, `auth:1546-1555`; tex 462, 492 | fixable with a tag the server never sees | A-S4: attack; `malicious-fixhandle`: proved for the u_c id in passkey handles | **fix code (planned):** account tags (§7.2), holding the account mode and a 31-bit u_c id, in passkey handles and recovery words, for PRF and no-PRF accounts. Design constraints and open compatibility questions are in §7.2. |
 | I-04 | The legacy context `qcrypt/recovery/nonce/v1` is accepted for both recover and replace. With it, separation rests only on the shared `'nonce'` replay store. <br>**Confirmed by the `account/recovery-replay-*` variants.** Either layer alone prevents the cross-use: per-operation contexts for current clients, the shared store for legacy ones. With the legacy context and separate stores, a replace-words signature is accepted by recover3. Removing the legacy context, as the code's BACKWARD COMPAT note plans, leaves the contexts as the guard. | `aproof:38-40`, `aproof:170-175`, `sutil:152`; tex 404-406 | doc (known backward compatibility) | A-V1 in `recovery-replay-*` | pending |
-| I-05 | Legacy `POST /v1/recover` takes a plaintext u_c. It works only for accounts without a recovery key. | `srv:1389-1454`, `auth:1438-1452` | doc | optional variant | pending |
+| I-05 | Legacy `POST /v1/recover` takes a plaintext u_c. It works only for accounts without a recovery key. | `srv:1389-1454`, `auth:1438-1452` | doc | not modeled (decided 2026-10-09) | fix tex: document or mark deprecated (N5) |
 | I-06 | `authCount` and `lastCredentialId` rotation, and the `deleteSession` calls inside recover3 and confirm, are absent from the tex. The tex's "sign-in count" (626) is `authCount`. | `srv:246-282`, `srv:1491`, `srv:1581`, `srv:588` | doc | abstracted; not provable in ProVerif | pending |
 | I-07 | An auth challenge created without a u_i matches any user. Tex 427 says "for that purpose and user". | `sutil:102`, `srv:731`, `srv:784` | doc | A-L1 models the discoverable flow | pending |
 | I-08 | Challenges are consumed before the WebAuthn or signature check. The tex says "verify; remove ch". | `sutil:86-111` | divergence (fails closed) | single-use session names | pending |
@@ -178,8 +178,12 @@ encoding can be parsed back into its fields in exactly one way. The argument for
 
 ## 6. Tex notation proposal
 
-**Status:** N1-N9 approved 2026-10-08. They will be applied after the account models (Phases
-3-4), so the auth stanzas are rewritten once, with each `main.tex` diff reviewed individually.
+**Status:**
+- N1-N9 were approved on 2026-10-08.
+- They are applied once the remaining models are done (README, "Remaining work", items 1-4), so
+  the auth stanzas are rewritten only once. Each `main.tex` diff is reviewed on its own.
+- They describe the protocol as it runs today. The tex for the planned fixes in §7 goes in with
+  the code.
 
 The aim is a tex that reads almost line for line as the model, so `conformance.md` stays
 mechanical. Each change also notes whether it would affect the flow SVGs. Those are Lucidchart
@@ -237,3 +241,84 @@ exports, so any change there means re-exporting from Lucidchart and then running
     static site are honest, S may be malicious for the u_c-at-rest claims, and M is honest.
   - Gives the threat model the claims are made under.
   - Flow SVGs: none.
+
+---
+
+## 7. Planned fix: user-id check and account tags (I-01, I-03)
+
+**Status:**
+- Proposed 2026-10-09 and not implemented.
+- The code changes happen separately, and the tex for them goes in with the code.
+- This section records the design the models check (README, "Remaining work", item 4).
+
+### 7.1 User-id check (I-01)
+
+The browser halts when the server names a user id other than the one the browser already holds:
+
+| Flow | Server value | Compared with |
+|---|---|---|
+| Sign-in and reauthentication | user id from `auth/verify` | the passkey's user handle |
+| Registration | user id from `reg/verify` | the user id in the registration options |
+| Add passkey | user id in the `passkeys/options` reply, before the ceremony | the session's user id |
+| Recovery | user id in the `recover/confirm` reply, before the ceremony, then the user id from `recover/verify` | the user id in the recovery words |
+
+[remediation-tests.md](remediation-tests.md) has failing unit tests for every row except the
+`recover/verify` comparison. `malicious-fixui` models the sign-in row.
+
+### 7.2 Account tags (I-03)
+
+A tag is 4 bytes: 1 bit for the account mode (PRF or no-PRF), and a 31-bit u_c id. The id is
+derived from u_c with D_H under its own purpose, then truncated.
+
+- **Where tags are written:**
+  - in the user handle of every new passkey, in PRF and no-PRF accounts;
+  - in every new recovery word set. 27 words carry 288 bits: u_r (16 bytes), u_i (16 bytes) and
+    the tag. Existing 24-word sets stay valid.
+- **Where tags are checked.** Wherever the browser resolves u_c:
+  - after sign-in, against the tag in the passkey's user handle;
+  - after recover3, against the tag in the words.
+
+  The browser halts when the server's account mode or the resolved u_c does not match the tag.
+- **The tag never reaches the server.**
+  - The browser builds `user.id` for a registration itself.
+  - It strips the tag from the user handle before sending an assertion.
+  - The assertion signature does not cover the user handle, so the server's verification does
+    not change.
+- **When a tag changes:**
+  - u_c never changes. Replacing recovery words re-encrypts the same u_c (`srv:1128-1132`).
+  - The account mode is set at registration (`srv:544`). It changes only through the one-way
+    no-PRF → PRF upgrade, which replaces every passkey and recovery word set and so writes new
+    tags. There is no PRF → no-PRF path.
+- **Why 31 bits are enough:** see README, "About `malicious-fixhandle`".
+
+**Design constraints:**
+- **Write a tag only from a u_c and mode that were checked.**
+  - A browser can resolve u_c on trust: through an untagged passkey or a 24-word set, with no pin
+    for the account. The u_c in that session may be one the server chose.
+  - If that session writes tags into new passkeys or recovery words, the server's u_c then passes
+    every later check.
+  - So a session writes tags only when its u_c and mode were checked against a tag or a pin. The
+    mode bit comes from that same check, never from the server's `prf` field.
+  - The transition variant tests this.
+- **Old credentials remain a fallback path.**
+  - A server can still accept an untagged passkey, including one it removed from its own records
+    but that an authenticator still holds. It can steer sign-in to that passkey through
+    `allowCredentials`.
+  - A fresh browser using such a passkey falls back to trust on first use.
+  - An account is fully covered only once no authenticator holds an untagged credential for it.
+    Removing old credentials through the Signal API (`signalAllAcceptedCredentials`) narrows the
+    gap.
+- **Upgraded accounts.**
+  - Before the upgrade, the server can decrypt u_c. A no-PRF registration stores it twice, under
+    the main and the backup KMS keys (`userCredEnc` and `userCredEncOld`, `srv:476-487`).
+  - The PRF guarantees for an upgraded account hold only against a server compromised after the
+    upgrade, and only if the upgrade deletes every server copy of u_c.
+
+**Open compatibility questions, for remediation:**
+- **Encoding:** the byte format of a tagged user handle, and how the browser tells it apart from
+  an untagged one.
+- **Signal API:** `signalAllAcceptedCredentials` and `signalCurrentUserDetails` name one exact
+  user handle. An account whose passkeys use both formats needs a call for each.
+- **Duplicate passkeys:** CTAP 2 overwrites a discoverable credential only when the user handle
+  matches. A new tagged passkey therefore does not replace an untagged one on the same
+  authenticator, and the passkey picker can show both.

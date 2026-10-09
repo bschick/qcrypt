@@ -27,6 +27,7 @@ m4_changequote({{,}})m4_dnl
      login-tls            SCN_LOGIN LEAK_TLS KEY_UI STORE UNIQUSER NOBT
      malicious            SCN_MALICIOUS
      malicious-fixui      SCN_MALICIOUS FIX_UI
+     malicious-fixhandle  SCN_MALICIOUS FIX_UI FIX_HANDLE
      recovery-net         SCN_RECOVERY
      recovery-session     SCN_RECOVERY LEAK_SESSION
      recovery-words       SCN_RECOVERY LEAK_WORDS RCV NOBT
@@ -466,7 +467,26 @@ let Server() = Endpoints(tls) | Endpoints(c).
    aid identifies one Alice, with her authenticator; bid identifies one of her browsers. Her
    first browser has bid = aid. *)
 
-table passkeys(bitstring, bitstring, bitstring, key).
+(* FIX_HANDLE models the proposed fix for I-01 and I-03: each passkey's user handle also carries
+   an id derived from u_c, and the browser compares it with the u_c it resolves at sign-in. The
+   authenticator returns the handle to the browser, so the server cannot alter it. The id is an
+   unguessable hash here; the real one is 4 bytes, and README.md states the argument for that. *)
+m4_ifdef({{FIX_HANDLE}}, {{
+fun hidOf(key): bitstring.
+m4_define({{HID_T}}, {{, bitstring}})
+m4_define({{HID_OF}}, {{, hidOf($1)}})
+m4_define({{HID_VAR}}, {{, hid: bitstring}})
+m4_define({{HID_ARG}}, {{, hid}})
+m4_define({{HID_CHECK}}, {{if hidOf($1) = hid then}})
+}}, {{
+m4_define({{HID_T}}, {{}})
+m4_define({{HID_OF}}, {{}})
+m4_define({{HID_VAR}}, {{}})
+m4_define({{HID_ARG}}, {{}})
+m4_define({{HID_CHECK}}, {{}})
+}})
+
+table passkeys(bitstring, bitstring, bitstring, key HID_T).
 table registered(bitstring, bitstring).
 table words(bitstring, bitstring, bitstring).
 table sessions(bitstring, bitstring, bitstring, key, bitstring, bitstring, bitstring).
@@ -509,7 +529,7 @@ let AddPasskey(aid: bitstring) =
    in(rc1, ch: bitstring);
    let credPk = wa_pk(credKey) in
    event AliceCredCreated(ui, credId, credPk);
-   insert passkeys(aid, ui, credId, credKey);
+   insert passkeys(aid, ui, credId, credKey HID_OF(uc));
    let rr = regr(credId, credPk, adata(RPID, UV1), cdj(WA_CREATE, ch, ORIGIN)) in
    let bd = (rr, ch, mkAtRest(wa_prf(credKey, PS), ui, nS, key2bs(uc)), ui) in
    event ClientSigned(ui, POST, PATH_PKVER, bd, nP2);
@@ -517,7 +537,7 @@ let AddPasskey(aid: bitstring) =
    in(rc2, resp: bitstring).
 
 (* Sign in from browser bid with the given passkey (auth:1256-1338, 701-785) *)
-let LoginWith(aid: bitstring, bid: bitstring, ui: bitstring, credId: bitstring, credKey: key, rc1: channel, rc2: channel, kKS: key, nS: bitstring) =
+let LoginWith(aid: bitstring, bid: bitstring, ui: bitstring, credId: bitstring, credKey: key HID_VAR, rc1: channel, rc2: channel, kKS: key, nS: bitstring) =
    out(tls, ((AUTHOPT, UNKNOWN), rc1));
    in(rc1, ch: bitstring);
    event UserApproves(ui, credId, ch);
@@ -533,6 +553,7 @@ m4_ifdef({{FIX_UI}}, {{
       sends u_c itself. Then _pinAccount. *)
    get pins(=bid, =sui, =PRF1, ppk: bitstring) suchthat sprf = PRF0 in 0 else
    let uc = (if sprf = PRF1 then openAtRest(wa_prf(credKey, PS), sui, sdata) else if sprf = PRF0 then bs2key(sdata)) in
+   HID_CHECK(uc)
    get pins(=bid, =sui, pprf: bitstring, ppk: bitstring) suchthat ppk <> sig_pk(proofKey(uc)) in 0 else
    insert pins(bid, sui, sprf, sig_pk(proofKey(uc)));
    event ClientSignedIn(bid, sui);
@@ -541,15 +562,15 @@ m4_ifdef({{FIX_UI}}, {{
 (* Sign in from browser bid, at any time, with any passkey Alice holds *)
 let Login(aid: bitstring, bid: bitstring) =
    new rc1: channel; new rc2: channel; new kKS: key; new nS: bitstring;
-   get passkeys(=aid, ui: bitstring, credId: bitstring, credKey: key) in
-   LoginWith(aid, bid, ui, credId, credKey, rc1, rc2, kKS, nS).
+   get passkeys(=aid, ui: bitstring, credId: bitstring, credKey: key HID_VAR) in
+   LoginWith(aid, bid, ui, credId, credKey HID_ARG, rc1, rc2, kKS, nS).
 
 (* Sign in from the browser that registered, once registration has completed there and so
    pinned the account *)
 let LoginRegistered(aid: bitstring) =
    new rc1: channel; new rc2: channel; new kKS: key; new nS: bitstring;
    get registered(=aid, ui: bitstring) in
-   get passkeys(=aid, =ui, credId: bitstring, credKey: key) in
+   get passkeys(=aid, =ui, credId: bitstring, credKey: key HID_VAR) in
 m4_ifdef({{FIX_UI}}, {{
    (* With the I-01 fix the server must sign in ui itself, and registration pinned ui in this
       browser, so the pin checks become a positive lookup of that pin. ProVerif treats the
@@ -566,12 +587,13 @@ m4_ifdef({{FIX_UI}}, {{
    get pins(=aid, =ui, pprf: bitstring, ppk: bitstring) in
    if pprf = PRF1 && sprf = PRF0 then 0 else
    let uc = (if sprf = PRF1 then openAtRest(wa_prf(credKey, PS), sui, sdata) else if sprf = PRF0 then bs2key(sdata)) in
+   HID_CHECK(uc)
    if ppk = sig_pk(proofKey(uc)) then
    insert pins(aid, ui, sprf, sig_pk(proofKey(uc)));
    event ClientSignedIn(aid, ui);
    StartSession(aid, aid, ui, uc, spkId, ck, cs, kKS, nS).
 }}, {{
-   LoginWith(aid, aid, ui, credId, credKey, rc1, rc2, kKS, nS).
+   LoginWith(aid, aid, ui, credId, credKey HID_ARG, rc1, rc2, kKS, nS).
 }})
 
 (* recover3, recover/confirm, then recover/verify with a new passkey (auth:1340-1495), using
@@ -597,7 +619,7 @@ m4_ifdef({{LEGACY_CLIENT}}, {{
    in(rc2, ch: bitstring);
    let credPk = wa_pk(credKey) in
    event AliceCredCreated(ui, credId, credPk);
-   insert passkeys(aid, ui, credId, credKey);
+   insert passkeys(aid, ui, credId, credKey HID_OF(uc));
    let rr = regr(credId, credPk, adata(RPID, UV1), cdj(WA_CREATE, ch, ORIGIN)) in
    out(tls, ((RECVER, rr, ui, ch, mkAtRest(wa_prf(credKey, PS), ui, nS, key2bs(uc))), rc3));
    in(rc3, (=ui, ck: bitstring, cs: bitstring));
@@ -643,7 +665,7 @@ let Register(aid: bitstring) =
    let cdr = mkAtRest(rsec(ur, ui), ui, nS2, key2bs(uc)) in
    let rr = regr(credId, credPk, adata(RPID, UV1), cdj(WA_CREATE, ch, ORIGIN)) in
    event AliceCredCreated(ui, credId, credPk);
-   insert passkeys(aid, ui, credId, credKey);
+   insert passkeys(aid, ui, credId, credKey HID_OF(uc));
    insert words(aid, ui, ur);
 m4_ifdef({{LEAK_WORDS}}, {{   out(c, ur); }})
    out(tls, ((REGVER, rr, ui, ch, sig_pk(recoveryKey(ur, ui)), sig_pk(proofKey(uc)), cdp, cdr), rc2));
@@ -655,7 +677,7 @@ m4_ifdef({{LEAK_WORDS}}, {{   out(c, ur); }})
 
 (* An unlocked device without the user: assertions without UV, and PRF output *)
 let DeviceAccess(aid: bitstring) =
-   !get passkeys(=aid, ui: bitstring, credId: bitstring, credKey: key) in
+   !get passkeys(=aid, ui: bitstring, credId: bitstring, credKey: key HID_VAR) in
    in(c, dch: bitstring);
    out(c, (credId, wa_sign(credKey, (adata(RPID, UV0), cdj(WA_GET, dch, ORIGIN))), wa_prf(credKey, PS))).
 
@@ -808,8 +830,9 @@ query u: bitstring, x: key; event(ClientLoggedIn(new aid, u, x)) && attacker(x).
 (* A-S4: a browser with no pin for the account trusts the server's account mode on first use *)
 query u: bitstring, x: key; event(ClientLoggedIn(new bidF, u, x)) && attacker(x).
 
-(* Reachability: the registering browser can sign in again *)
+(* Reachability: the registering browser can sign in again, and so can a browser with no pin *)
 query u: bitstring; event(ClientSignedIn(new aid, u)).
+query u: bitstring; event(ClientSignedIn(new bidF, u)).
 
 process
    !Alice()
@@ -1007,10 +1030,19 @@ RESULT not attacker(ucA[!1 = v_2]) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_2],u,x)) && attacker(x)) is false.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_2,!1 = v_3],u,x)) && attacker(x)) is false.
 RESULT not event(ClientSignedIn(aid[!1 = v_2],u)) is false.
+RESULT not event(ClientSignedIn(bidF[!2 = v_2,!1 = v_3],u)) is false.
 END *)}})
 m4_ifdef({{VARIANT_malicious_fixui}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_2]) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_2],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_2,!1 = v_3],u,x)) && attacker(x)) is false.
 RESULT not event(ClientSignedIn(aid[!1 = v_2],u)) is false.
+RESULT not event(ClientSignedIn(bidF[!2 = v_2,!1 = v_3],u)) is false.
+END *)}})
+m4_ifdef({{VARIANT_malicious_fixhandle}}, {{(* EXPECTPV
+RESULT not attacker(ucA[!1 = v_2]) is true.
+RESULT not (event(ClientLoggedIn(aid[!1 = v_2],u,x)) && attacker(x)) is true.
+RESULT not (event(ClientLoggedIn(bidF[!2 = v_2,!1 = v_3],u,x)) && attacker(x)) is true.
+RESULT not event(ClientSignedIn(aid[!1 = v_2],u)) is false.
+RESULT not event(ClientSignedIn(bidF[!2 = v_2,!1 = v_3],u)) is false.
 END *)}})

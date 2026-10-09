@@ -5,6 +5,38 @@ checked with [ProVerif](https://bblanche.gitlabpages.inria.fr/proverif/) 2.05. T
 the **code** wherever it differs from the tex. `conformance.md` maps every tex step to its code
 and model, and keeps the issue log.
 
+## Findings
+
+**What holds.**
+- **Message format:**
+  - V8 is key-committing for all three algorithms.
+  - An attacker holding u_c but not the password cannot truncate, reorder, splice or strip loops.
+  - Reading a message takes both the password and u_c.
+- **Honest server:**
+  - Sign-in, passkey binding and per-request proofs hold even when the session cookie and CSRF
+    token leak.
+  - Per-request proofs limit the damage of the C1 unbound-challenge bug.
+  - Recovery requires the recovery words.
+  - u_c stays secret against the network, a leaked cd_u, a leaked session, and broken TLS.
+- **Malicious server:** in PRF mode, the server never learns u_c (A-S2).
+
+**What does not hold, or holds only through a dependency.** Each item was confirmed against the
+code. `conformance.md` §5 has the details and code locations:
+
+| Issue | Finding | Evidence | Status |
+|---|---|---|---|
+| I-01 | The browser accepts whatever user id the server names at sign-in, registration, add passkey and recovery. A malicious server can switch Alice's browser to an account whose u_c it chose, so messages she then encrypts rest on her password alone. This breaks the tex's claim that PRF accounts protect u_c from the server. | `malicious`: A-S3 attack; `malicious-fixui` proves the fix | fix planned (`conformance.md` §7) |
+| I-03 | Account mode and u_c are trusted on first use in each browser. Even with the I-01 fix, a browser with no pin for the account accepts "no-PRF" and a u_c the server chose. | `malicious-fixui`: A-S4 attack; `malicious-fixhandle` proves a passkey-handle id | fix planned (§7) |
+| I-04 | Recovery and replace-words signatures are kept apart by two layers: per-operation contexts, and the shared nonce store for the legacy context. Either one alone is enough. | `recovery-replay-*` | the store stops being needed once the legacy context is removed |
+| I-14 | Truncation resistance depends on the encryptor never writing an empty block before the last one, because the decryptor does not check f on an empty block. | `integrity-net-emptymid` | hardening, pending |
+| I-17 | The inner le is not compared with the outer le. An attacker holding u_c and the outer password can wrap a one-loop message as the inner layer of a two-loop message. The plaintext is still authentic. | `loops-uc-pout` | low, pending |
+| I-29 | With TLS broken, an attacker can win the registration race and hold Alice's user id. Her u_c and words stay secret, and her browser notices on first use. | `login-tls`, `recovery-tls` | accepted |
+| — | The externally reported V7 key-commitment incompleteness, reproduced. V8 closes it. | `commit-v7` | known |
+
+The other issue-log entries are gaps in the tex, or ordering differences between the tex and the
+code. None of them has a security effect the models found. The approved notation changes
+(`conformance.md` §6) address most of them.
+
 ## Running
 
 ```bash
@@ -35,7 +67,8 @@ Run it after any change to the protocol code, the tex, or a model.
 | `lib/qcrypt.pvl` | Primitives shared by every model |
 | `cipher.pv.m4` | The V8 message format: block 0, block N, loops, hint, the V7 decode path, and u_c at rest |
 | `account.pv.m4` | Registration, sign-in, authorized requests, passkeys, recovery words, recovery; honest and malicious server |
-| `conformance.md` | Tex ↔ code ↔ model trace, encoding-injectivity arguments, issue log, notation proposal |
+| `conformance.md` | Tex ↔ code ↔ model trace, encoding-injectivity arguments, issue log, notation proposal, planned fixes |
+| `remediation-tests.md` | Failing unit tests for planned code fixes, kept out of the source tree until each fix ships |
 | `run.mjs` | Builds each variant with `m4 -P` and checks its results |
 
 Each template lists its variants in a `VARIANTS` block, one per line: a name followed by m4
@@ -237,11 +270,35 @@ restrictions, reconstructing that trace runs for hours.
 
 ### Results: malicious server
 
-| ID | Property | `malicious` | `malicious-fixui` (I-01 fix) |
-|---|---|---|---|
-| A-S2 | In PRF mode the server never learns Alice's u_c | **true** | **true** |
-| A-S3 | Once registration has completed in a browser, that browser never adopts a u_c the server knows | **attack (I-01)** | **true** |
-| A-S4 | The same, for a browser that holds no pin for the account | attack | attack (trust on first use) |
+| ID | Property | `malicious` | `malicious-fixui` (I-01 fix) | `malicious-fixhandle` (I-01 and I-03 fix) |
+|---|---|---|---|---|
+| A-S2 | In PRF mode the server never learns Alice's u_c | **true** | **true** | **true** |
+| A-S3 | Once registration has completed in a browser, that browser never adopts a u_c the server knows | **attack (I-01)** | **true** | **true** |
+| A-S4 | The same, for a browser that holds no pin for the account | attack | attack (trust on first use) | **true** |
+
+In all three variants, sign-in on both the registering browser and a fresh one is reachable, so
+the proofs are not vacuous.
+
+**About `malicious-fixhandle`.** Each passkey's user handle also carries an id derived from u_c
+(`hidOf`), and the browser checks the u_c it resolves against it. The authenticator returns the
+handle to the browser directly, so the server cannot alter it.
+
+The variant models the u_c-id half of the planned account tag (`conformance.md` §7) in passkey
+handles only. The other parts are not modeled yet:
+- the mode bit;
+- the tag in recovery words;
+- no-PRF accounts;
+- old untagged passkeys and 24-word sets still in use.
+
+The model treats the id as an unguessable hash. The planned real id is 31 bits, derived with its
+own KDF purpose, and that is enough for three reasons:
+- **It never reaches the server.** The browser strips it from the handle before sending, and
+  builds `user.id` itself rather than taking it from the server's options.
+- **Guessing is blind and costly.** Pk_U is public, but u_c is not, so in a PRF account a
+  malicious server can only guess the id. Each guess costs a fresh-device sign-in or a recovery
+  by Alice.
+- **A wrong guess shows.** The browser halts on a mismatch, so the first failure exposes the
+  attack. A successful attack has probability about 2^-31.
 
 **About A-S3 in `malicious`.** Alice signs in on the browser that registered her account. The
 server replies with a different user id (`sui` in the model), "no-PRF", and its own u_c. The
@@ -295,3 +352,43 @@ use. A second copy on the public channel only multiplies clauses.
 
 **What these variants' "true" results mean.** In these variants they hold for runs that respect
 the real server's uniqueness guarantees. The unrestricted proofs are in the base variants.
+
+## Remaining work
+
+As of 2026-10-09:
+
+1. **Recovery against a malicious server.** `SCN_MALICIOUS` models only sign-in. Recovery has the
+   same I-01 pattern: the browser pins and encrypts under the server's user id. Recovery also
+   has its own trust-on-first-use point, because the words carry u_i but neither the account
+   mode nor anything that identifies u_c.
+2. **No-PRF accounts.** Everything so far is PRF mode. This adds:
+   - a no-PRF variant of each scenario;
+   - a passive database-leak variant, where u_c is expected to stay secret in PRF mode and to be
+     exposed in no-PRF mode;
+   - the one-way no-PRF → PRF upgrade. That server held u_c before the upgrade, so the PRF
+     guarantees can hold only against a server compromised after the upgrade with no copy of u_c
+     kept.
+3. **A-S5: messages Alice encrypts under a pinned account stay secret from a server that does
+   not know her password.** This needs the cipher and account models together. If the combined
+   model does not terminate, A-S5 becomes a two-part argument: the account model shows u_c stays
+   secret, and the cipher model shows messages stay secret while u_c is secret.
+4. **The planned fix, next to current behavior** (`conformance.md` §7). This covers:
+   - the I-01 user-id check;
+   - account tags in passkey handles and recovery words, for PRF and no-PRF accounts;
+   - a transition variant where old untagged passkeys and 24-word sets are still in use.
+5. **After remediation:**
+   - make the fixed behavior the default;
+   - keep current behavior as variants that must still find their attacks;
+   - model the I-14 and I-17 changes, if those fixes are made.
+
+Not planned: the legacy `/v1/recover` path (I-05).
+
+The approved tex notation changes (`conformance.md` §6) follow items 1-4. The tex for the planned
+fix goes in with the code, so the published protocol never describes behavior that has not
+shipped.
+
+**Independent reviews.** A sub-agent reviews the models, traces and claims at four points:
+- after items 1 and 2, where new findings are most likely;
+- after item 4, before the fix design goes to remediation;
+- after the `main.tex` changes;
+- after item 5.
