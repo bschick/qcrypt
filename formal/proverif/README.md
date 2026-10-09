@@ -151,9 +151,16 @@ it public.
 **Abstractions, each chosen so the attacker is at least as strong as in the real system:**
 - **Server state lives in tables, which can only grow.** Deleted passkeys and replaced recovery
   keys therefore stay usable.
-- **Two uniqueness restrictions are opt-in (`STORE`).** One makes each challenge single-use,
-  modeling the atomic delete-on-read. The other makes each replay nonce single-use. Without them,
-  replays are unrestricted.
+- **Uniqueness restrictions are opt-in, and off wherever a variant proves something.** Each
+  mirrors a guarantee of the real system:
+  - `STORE`: each challenge and each replay nonce is used once (the atomic delete-on-read and
+    conditional put).
+  - `RCV`: each private request is received by one server session.
+  - `UNIQUSER`: each user id is registered once.
+
+  Without them, the attacker gets more traces, so a proof made without them also holds with them.
+  The variants that look for an attack, or for reachability, turn them on (see "Attack variants"
+  below).
 - **Not modeled:** timestamps, the skew window, TTLs, and `authCount`. Recovery's challenge
   binding is modeled as binding to pk_R only.
 - **WebAuthn registration is unsigned**, as with attestation `none`.
@@ -168,15 +175,17 @@ tables for the same reason. This also lets Alice sign in with any passkey she ho
 ones added later or created by recovery.
 
 **Choosing Alice's accounts.** Queries identify Alice's accounts as those whose pk_U is derived
-from a u_c she created (`new ucA`).
+from a u_c she created (`new ucA`). With TLS broken, the attacker can copy that pk_U into an
+account of its own. So the `KEY_UI` variants identify Alice's accounts by the user id her browser
+received at registration instead.
 
 ### Results: honest server
 
 | ID | Property | Holds in | Attack, as expected, in |
 |---|---|---|---|
-| A-L1 | The server signs Alice in only with a passkey she approved, for that challenge | `net`, `session`, `cdu`, `device` | `device-nouv` (an unlocked device without UV); `unbound`, `session-noproof`, `tls` (each via the passkey A-R1 lets the attacker bind) |
-| A-R1 | Every passkey bound to Alice's account is one she created | `net`, `session`, `cdu`, `device` | `unbound` (C1); `session-noproof`; `tls` |
-| A-Z1 | Every authorized request on Alice's account is one her browser signed | every variant except `session-noproof` and `device-nouv`, **including** `unbound` and `tls` | `session-noproof` (cookie and CSRF alone) |
+| A-L1 | The server signs Alice in only with a passkey she approved, for that challenge | `net`, `session`, `cdu`, `device` | `device-nouv` (an unlocked device without UV); `unbound`, `session-noproof` (each via the passkey A-R1 lets the attacker bind); `tls` (registration race) |
+| A-R1 | Every passkey bound to Alice's account is one she created | `net`, `session`, `cdu`, `device` | `unbound` (C1); `session-noproof`; `device-nouv` (once u_c leaks); `tls` |
+| A-Z1 | Every authorized request on Alice's account is one her browser signed | `net`, `session`, `cdu`, `device`, **and** `unbound` | `session-noproof` (cookie and CSRF alone); `device-nouv` (once u_c leaks); `tls` (the attacker holds Alice's user id) |
 | A-S1, A-K1 | Alice's u_c stays secret, including when cd_u or the session cookie leaks, or TLS is broken | every variant except `device-nouv` | `device-nouv` (sign-in without UV yields cd_p, and the device yields the PRF output) |
 
 **What the mutations and leaks show:**
@@ -184,17 +193,22 @@ from a u_c she created (`new ucA`).
   `passkeys/verify` with a body naming Alice's u_i and any outstanding challenge. The mutated
   server takes the user from the body and binds the attacker's passkey to Alice's account. Even
   then, A-Z1 holds and u_c stays secret: the proof of userCred contains the damage.
-- **`login-tls`.** With TLS broken, the attacker sees Alice's registration challenge and submits
-  `reg/verify` first, with her u_i, challenge and pk_U but its own passkey. With attestation
-  `none`, nothing in a registration response says who built it. A-Z1 and u_c secrecy still hold.
+- **`login-tls` and `recovery-tls` show the registration race (I-29).**
+  - With TLS broken, the attacker sees the reply to Alice's registration options. It submits
+    `reg/verify` first, with her user id and challenge but its own passkey, pk_U and recovery
+    key.
+  - With attestation `none`, nothing in a registration response says who built it. The attacker
+    then holds Alice's user id and can sign in, make requests, and recover on it.
+  - Alice's u_c and words stay secret, and her own proofs fail, so she notices.
+  - Registration integrity rests on TLS.
 
 ### Results: recovery
 
 | ID | Property | Holds in | Attack, as expected, in |
 |---|---|---|---|
 | A-V1 | recover3 accepts a proof on Alice's account only from her browser recovering it | `net`, `session`, every `replay` variant except the one below | `words` (words leaked); `tls` (registration race); `replay-legacy-splitnonce` |
-| A-V2 | recover/confirm on Alice's account is one her browser signed, for that challenge | every variant except `words` | `words` |
-| A-V3 | New recovery words on Alice's account are ones her browser created | every variant except `words` | `words` (the original words give recovery, then a session) |
+| A-V2 | recover/confirm on Alice's account is one her browser signed, for that challenge | every variant except `words` and `tls` | `words`; `tls` (registration race) |
+| A-V3 | New recovery words on Alice's account are ones her browser created | every variant except `words` and `tls` | `words` (the original words give recovery, then a session); `tls` |
 | A-R1 | Every passkey bound to Alice's account, including by recovery, is one she created | every variant except `words` and `tls` | `words`; `tls` (registration race) |
 | A-S1 | u_c, the original words, and replaced words stay secret | every variant, except u_c and the original words in `words` | `words` |
 
@@ -217,9 +231,9 @@ The trace for the last row replays a legacy replace-words signature to recover3 
 replace completed, which the shared store would have refused. Once the legacy context is
 removed, the shared store stops being load-bearing.
 
-**Reachability.** Each step of Alice's recovery is reachable in every non-`NOTRACE` variant.
-The final step (`ServerRecovered`) is checked in `recovery-tls-reach`, because reconstructing
-that trace with TLS private runs for hours.
+**Reachability.** Each step of Alice's recovery is reachable in every variant. The final step
+(`ServerRecovered`) is checked in `recovery-tls-reach`, with `STORE` on. Without the
+restrictions, reconstructing that trace runs for hours.
 
 ### Results: malicious server
 
@@ -230,26 +244,54 @@ that trace with TLS private runs for hours.
 | A-S4 | The same, for a browser that holds no pin for the account | attack | attack (trust on first use) |
 
 **About A-S3 in `malicious`.** Alice signs in on the browser that registered her account. The
-server replies with a different account id, "no-PRF", and its own u_c. The browser has no pin
-for that id, so it accepts, and every message Alice then encrypts in that session rests on her
-password alone. `conformance.md` I-01 has the code paths.
+server replies with a different user id (`sui` in the model), "no-PRF", and its own u_c. The
+browser has no pin for that user id, so it accepts, and every message Alice then encrypts in
+that session rests on her password alone. `conformance.md` I-01 has the code paths.
 
 **About A-S3 in `malicious-fixui`.** In this variant the browser checks that the server's u_i
 equals the passkey's user handle. The registered-browser pin check is written as a positive
 lookup of the pin registration stored. ProVerif treats the "no entry" branch of any table lookup
 as always possible, so it cannot prove anything through the negative form the code uses.
 
-### Evidence for NOTRACE variants
+### Attack variants
 
-In `login-session-noproof`, `login-device-nouv`, `login-tls`, `recovery-words` and
-`recovery-tls`, one trace-reconstruction attempt takes over 20 minutes. These variants set
-`NOTRACE`, so their attacks read "cannot be proved". The evidence is the derivation ProVerif
-prints, and each was read. The two recovery variants show the expected consequence of leaked
-words, and the registration race confirmed as a trace in an earlier run. The login variants:
-- **`session-noproof` (A-R1, A-Z1):** the attacker sends Alice's stolen cookie and CSRF token
-  with an arbitrary signature to `passkeys/options`, `passkeys/verify`, and the generic
-  endpoint.
-- **`device-nouv` (A-L1, A-S1):** the attacker submits an assertion the device made without UV,
-  is signed in, and decrypts the returned cd_p with the device's PRF output.
-- **`tls` (A-L1, A-R1):** the registration race described above. It was confirmed as a full
-  trace before `NOTRACE` was added.
+Every attack in the account model is reported as a concrete trace ("is false"), and each trace
+was read to confirm it is the attack its variant names.
+
+**Why restrictions are needed.** Without the uniqueness restrictions, the derivations ProVerif
+finds in these variants cannot be followed by any real run:
+- In the Horn-clause abstraction, one request on the private TLS channel can be "received" by
+  several server sessions.
+- The "no such user yet" branch of a table lookup is always available, so a derivation can
+  register one user id twice.
+
+Reconstructing a trace from such a derivation searches away from it, and a single attempt ran
+past 20 minutes. Under the restrictions the derivations are executable, so traces come back in
+seconds without backtracking (`NOBT`).
+
+**Which restrictions each variant uses:**
+
+| Variant | Restrictions |
+|---|---|
+| `login-session-noproof` | `STORE` |
+| `login-device-nouv` | `RCV`, `STORE` |
+| `recovery-words` | `RCV` |
+| `login-tls` | `STORE`, `UNIQUSER` |
+| `recovery-tls` | `UNIQUSER` |
+
+With TLS public, the server endpoints run only on the TLS channel, which the attacker can already
+use. A second copy on the public channel only multiplies clauses.
+
+**What each trace shows:**
+- **`session-noproof`:** the attacker sends Alice's stolen cookie and CSRF token, with an
+  arbitrary signature, to `passkeys/options`, `passkeys/verify`, and the generic endpoint. It
+  then signs in with the passkey it bound.
+- **`device-nouv`:** the attacker feeds an auth challenge to the unlocked device, posts the
+  assertion it made without UV, is signed in, and decrypts the returned cd_p with the device's
+  PRF output.
+- **`recovery-words`:** leaked words, then recover3, then confirm with the u_c from cd_r, then
+  recover/verify with the attacker's passkey.
+- **`login-tls` and `recovery-tls`:** the registration race above.
+
+**What these variants' "true" results mean.** In these variants they hold for runs that respect
+the real server's uniqueness guarantees. The unrestricted proofs are in the base variants.
