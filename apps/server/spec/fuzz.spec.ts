@@ -239,6 +239,18 @@ describe('api fuzzing (authenticated)', () => {
       await smallFuzz(cookie, csrf, userId);
    }, 60000);
 
+   it('rejects request bodies that are not JSON objects', async () => {
+      const headers = { 'x-csrf-token': csrf };
+      for (const body of [[], 5, 'text']) {
+         expect((await patchJson('/v1/user', body, headers, cookie)).status).toBe(400);
+         expect((await patchJson(`/v1/passkeys/${credId}`, body, headers, cookie)).status).toBe(400);
+         expect((await postJson('/v1/passkeys/verify', body, headers, cookie)).status).toBe(400);
+         expect((await putJson('/v1/recover3/key', body, headers, cookie)).status).toBe(400);
+         expect((await putJson('/v1/prfupgrade', body, headers, cookie)).status).toBe(400);
+         expect((await postJson('/v1/prfupgrade/confirm', body, headers, cookie)).status).toBe(400);
+      }
+   });
+
    it.skipIf(!FULL_FUZZ)(
       'full fuzz',
       async () => {

@@ -24,7 +24,7 @@ import { describe, it, afterEach, expect } from 'vitest';
 import type WebAuthnEmulator from 'nid-webauthn-emulator';
 import * as api from '@qcrypt/api';
 import { bytesToBase64, base64ToBytes, getRandom } from '@qcrypt/crypto';
-import * as cc from '@qcrypt/crypto/consts';
+import { USERCRED_ENC_MIN_BYTES, USERCRED_ENC_MAX_BYTES } from '../src/consts';
 import {
    registerTestUser,
    registerNewCredential,
@@ -47,8 +47,6 @@ import {
    type PrfTestUser,
 } from './common';
 import { recoverAccount3, recoveryKeyBody, startRecovery3, finishRecovery3 } from './recovery.suite';
-
-const MIN_ENC_BYTES = cc.USERCRED_BYTES + cc.PAYLOAD_SIZE_MIN + cc.HEADER_BYTES_6P;
 
 type Session = { cookie: string; csrf: string };
 
@@ -209,9 +207,7 @@ describe('PRF upgrade', () => {
          const repeatPut = await putPrfUpgrade(user, user);
          expect(repeatPut.status).toBe(400);
 
-         const userRes = await getJson('/v1/user', { 'x-csrf-token': user.csrf }, user.cookie);
-         expect(userRes.status).toBe(200);
-         expect(userRes.data.prf).toBe(true);
+         await expectPrfLogin(user);
       });
 
       it('adds a PRF passkey after the upgrade and both passkeys sign in', async () => {
@@ -421,7 +417,7 @@ describe('PRF upgrade', () => {
          expect(putRes.status).toBe(400);
       });
 
-      it('rejects a confirm with an unknown challenge', async () => {
+      it('rejects a confirm with an unknown or wrong-length challenge', async () => {
          const user = await registerUpgradable();
          const putRes = await putPrfUpgrade(user, user);
          expect(putRes.status).toBe(200);
@@ -430,31 +426,48 @@ describe('PRF upgrade', () => {
          const unknownConfirm = await postPrfUpgradeConfirm(user, await prfUpgradeConfirmBody(user, unknown));
          expect(unknownConfirm.status).toBe(400);
 
+         // A valid body for the issued challenge, with only the challenge field replaced
+         const validBody = await prfUpgradeConfirmBody(user, putRes.data.challenge);
+         for (const badChallenge of [bytesToBase64(getRandom(api.CHALLENGE_BYTES - 1)), 'A'.repeat(3000)]) {
+            const badConfirm = await postPrfUpgradeConfirm(user, { ...validBody, challenge: badChallenge });
+            expect(badConfirm.status).toBe(400);
+         }
+
          const confirmRes = await postPrfUpgradeConfirm(user, await prfUpgradeConfirmBody(user, putRes.data.challenge));
          expect(confirmRes.status).toBe(200);
       });
 
-      it('rejects malformed encrypted userCred values', async () => {
+      it('rejects malformed encrypted userCred values and still completes with the original challenge', async () => {
          const user = await registerUpgradable();
-         const shortEnc = bytesToBase64(getRandom(MIN_ENC_BYTES - 1));
+         const shortEnc = bytesToBase64(getRandom(USERCRED_ENC_MIN_BYTES - 1));
+         const longEnc = bytesToBase64(getRandom(USERCRED_ENC_MAX_BYTES + 1));
 
          const putRes = await putPrfUpgrade(user, user);
          expect(putRes.status).toBe(200);
+         const challenge = putRes.data.challenge;
 
          const shortConfirm = await postPrfUpgradeConfirm(
             user,
-            await prfUpgradeConfirmBody(user, putRes.data.challenge, { recoveryUserCredEnc: shortEnc }),
+            await prfUpgradeConfirmBody(user, challenge, { recoveryUserCredEnc: shortEnc }),
          );
          expect(shortConfirm.status).toBe(400);
 
          const shortPut = await putPrfUpgrade(user, user, { passkeyUserCredEnc: shortEnc });
          expect(shortPut.status).toBe(400);
 
-         const repeatShortConfirm = await postPrfUpgradeConfirm(
+         const longConfirm = await postPrfUpgradeConfirm(
             user,
-            await prfUpgradeConfirmBody(user, putRes.data.challenge, { recoveryUserCredEnc: shortEnc }),
+            await prfUpgradeConfirmBody(user, challenge, { recoveryUserCredEnc: longEnc }),
          );
-         expect(repeatShortConfirm.status).toBe(400);
+         expect(longConfirm.status).toBe(400);
+
+         const longPut = await putPrfUpgrade(user, user, { passkeyUserCredEnc: longEnc });
+         expect(longPut.status).toBe(400);
+
+         const confirmRes = await postPrfUpgradeConfirm(user, await prfUpgradeConfirmBody(user, challenge));
+         expect(confirmRes.status).toBe(200);
+
+         await expectPrfLogin(user);
       });
 
       it('rejects the first challenge after a second PUT prfupgrade with a different encrypted userCred', async () => {
@@ -471,11 +484,8 @@ describe('PRF upgrade', () => {
    });
 
    describe('races', () => {
-      // R5
-      it('accepts only one of two concurrent confirms', async () => {
-         const user = await registerUpgradable();
-
-         // The same encrypted userCred in both PUTs leaves both challenges usable
+      // Two PUTs with the same encrypted userCred, returning both challenges
+      async function putTwiceWithSameEnc(user: TestUser): Promise<string[]> {
          const passkeyUserCredEnc = await prfEncrypt(
             base64ToBytes(user.userCred),
             user.prfOutput!.slice(0),
@@ -487,10 +497,45 @@ describe('PRF upgrade', () => {
             expect(putRes.status).toBe(200);
             challenges.push(putRes.data.challenge);
          }
+         return challenges;
+      }
+
+      // R5
+      it('accepts only one of two concurrent confirms with challenges from identical PUTs', async () => {
+         const user = await registerUpgradable();
+         const challenges = await putTwiceWithSameEnc(user);
 
          const bodies = await Promise.all(challenges.map((challenge) => prfUpgradeConfirmBody(user, challenge)));
          const results = await Promise.all(bodies.map((body) => postPrfUpgradeConfirm(user, body)));
          expect(results.map((res) => res.status).sort()).toEqual([200, 400]);
+
+         await expectPrfLogin(user);
+      });
+
+      it('accepts only one of two concurrent confirms with the same challenge', async () => {
+         const user = await registerUpgradable();
+         const putRes = await putPrfUpgrade(user, user);
+         expect(putRes.status).toBe(200);
+
+         const bodies = await Promise.all([
+            prfUpgradeConfirmBody(user, putRes.data.challenge),
+            prfUpgradeConfirmBody(user, putRes.data.challenge),
+         ]);
+         const results = await Promise.all(bodies.map((body) => postPrfUpgradeConfirm(user, body)));
+         expect(results.map((res) => res.status).sort()).toEqual([200, 400]);
+
+         await expectPrfLogin(user);
+      });
+
+      it('rejects the challenge from a second identical PUT after the first confirm completes', async () => {
+         const user = await registerUpgradable();
+         const [firstChallenge, secondChallenge] = await putTwiceWithSameEnc(user);
+
+         const firstConfirm = await postPrfUpgradeConfirm(user, await prfUpgradeConfirmBody(user, firstChallenge));
+         expect(firstConfirm.status).toBe(200);
+
+         const secondConfirm = await postPrfUpgradeConfirm(user, await prfUpgradeConfirmBody(user, secondChallenge));
+         expect(secondConfirm.status).toBe(400);
 
          await expectPrfLogin(user);
       });
