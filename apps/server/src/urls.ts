@@ -177,6 +177,10 @@ export function matchEvent(event: APIGatewayProxyEventV2, methodMap: MethodMap):
                   rawBody = new TextDecoder().decode(base64Decode(rawBody));
                }
                body = JSON.parse(rawBody);
+               // Handlers read fields from the body, so null, arrays and other JSON values are rejected
+               if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+                  throw new Error('json body is not an object');
+               }
             } catch (err) {
                console.error(err);
                throw new ParamError('invalid json in body');
