@@ -23,8 +23,10 @@ m4_changequote({{,}})m4_dnl
      login-cdu            SCN_LOGIN LEAK_CDU
      login-device         SCN_LOGIN LEAK_DEVICE
      login-device-nouv    SCN_LOGIN LEAK_DEVICE MUT_NOUV RCV STORE NOBT
-     login-unbound        SCN_LOGIN MUT_UNBOUND
+     login-unbound        SCN_LOGIN MUT_UNBOUND NOBT
+     login-unbound-trace  SCN_LOGIN MUT_UNBOUND UNIQUSER NOBT
      login-tls            SCN_LOGIN LEAK_TLS KEY_UI STORE UNIQUSER NOBT
+     login-reach          SCN_LOGIN REACH_ONLY RCV STORE UNIQUSER NOBT
      malicious            SCN_MALICIOUS
      malicious-fixui      SCN_MALICIOUS FIX_UI
      malicious-fixhandle  SCN_MALICIOUS FIX_UI FIX_HANDLE
@@ -32,7 +34,8 @@ m4_changequote({{,}})m4_dnl
      recovery-session     SCN_RECOVERY LEAK_SESSION
      recovery-words       SCN_RECOVERY LEAK_WORDS RCV NOBT
      recovery-tls         SCN_RECOVERY LEAK_TLS KEY_UI UNIQUSER NOBT
-     recovery-tls-reach   SCN_RECOVERY LEAK_TLS REACH_ONLY STORE
+     recovery-reach       SCN_RECOVERY REACH_ONLY RCV STORE UNIQUSER NOBT
+     recovery-reach-legacy  SCN_RECOVERY REACH_ONLY RCV STORE UNIQUSER NOBT LEGACY_CLIENT
      recovery-replay      SCN_RECOVERY LEAK_REPLACE STORE
      recovery-replay-splitnonce  SCN_RECOVERY LEAK_REPLACE STORE MUT_SPLITNONCE
      recovery-replay-legacy  SCN_RECOVERY LEAK_REPLACE STORE LEGACY_CLIENT
@@ -143,7 +146,7 @@ event AliceCredCreated(bitstring, bitstring, bitstring).
 event UserApproves(bitstring, bitstring, bitstring).
 event ClientSigned(bitstring, bitstring, bitstring, bitstring, bitstring).
 event ClientLoggedIn(bitstring, bitstring, key).
-event ClientSignedIn(bitstring, bitstring).
+event ClientSignedIn(bitstring, bitstring, key).
 (* Server events end with the account's pk_U, which is how the queries pick out Alice's
    accounts: hers are the ones whose pk_U comes from her own u_c. *)
 event ServerCredAdded(bitstring, bitstring, bitstring, bitstring).
@@ -556,7 +559,7 @@ m4_ifdef({{FIX_UI}}, {{
    HID_CHECK(uc)
    get pins(=bid, =sui, pprf: bitstring, ppk: bitstring) suchthat ppk <> sig_pk(proofKey(uc)) in 0 else
    insert pins(bid, sui, sprf, sig_pk(proofKey(uc)));
-   event ClientSignedIn(bid, sui);
+   event ClientSignedIn(bid, sui, uc);
    StartSession(aid, bid, sui, uc, spkId, ck, cs, kKS, nS).
 
 (* Sign in from browser bid, at any time, with any passkey Alice holds *)
@@ -590,7 +593,7 @@ m4_ifdef({{FIX_UI}}, {{
    HID_CHECK(uc)
    if ppk = sig_pk(proofKey(uc)) then
    insert pins(aid, ui, sprf, sig_pk(proofKey(uc)));
-   event ClientSignedIn(aid, ui);
+   event ClientSignedIn(aid, ui, uc);
    StartSession(aid, aid, ui, uc, spkId, ck, cs, kKS, nS).
 }}, {{
    LoginWith(aid, aid, ui, credId, credKey HID_ARG, rc1, rc2, kKS, nS).
@@ -706,6 +709,7 @@ m4_ifdef({{SCN_LOGIN}}, {{
 (* ======================================================================================== *)
 (* A-L1, A-R1, A-Z1, A-K1, A-S1 *)
 
+m4_ifdef({{REACH_ONLY}}, {{}}, {{
 m4_ifdef({{KEY_UI}}, {{
 (* With TLS broken the attacker can copy Alice's pk_U into an account of its own, so Alice's
    accounts are the ones with the user id her browser received at registration *)
@@ -739,13 +743,31 @@ query u: bitstring, m: bitstring, p: bitstring, b: bitstring, n: bitstring;
 
 (* A-S1, A-K1: u_c stays secret *)
 query attacker(new ucA).
+}})
 
-(* Reachability *)
-query u: bitstring, id: bitstring, ch: bitstring, pk: bitstring; event(ServerLogin(u, id, ch, pk)).
-query u: bitstring, m: bitstring, p: bitstring, b: bitstring, n: bitstring, pk: bitstring;
-   event(ServerAccept(u, m, p, b, n, pk)).
-query u: bitstring, id: bitstring, pk: bitstring, pkU: bitstring; event(ServerCredAdded(u, id, pk, pkU)).
-query u: bitstring, b: bitstring, x: key; event(ClientLoggedIn(b, u, x)).
+m4_ifdef({{REACH_ONLY}}, {{
+(* Reachability of Alice's own runs. Each server event is paired with an event that only Alice's
+   browser or authenticator emits, so a run on an attacker's account does not satisfy the query.
+   Without the uniqueness restrictions, trace reconstruction for these runs does not finish, so
+   they are checked only in the REACH_ONLY variant. Restrictions only remove traces, and the other
+   login variants only add attacker knowledge, relax server checks, change queries, or make TLS
+   public. So each trace found here, less the Rcv events that RCV records, is also a trace of
+   every other login variant. *)
+query user: bitstring, credId: bitstring, chal: bitstring, pkU: bitstring;
+   event(ServerLogin(user, credId, chal, pkU)) && event(UserApproves(user, credId, chal)).
+query user: bitstring, method: bitstring, body: bitstring, nonce: bitstring, pkU: bitstring;
+   event(ServerAccept(user, method, PATH_API, body, nonce, pkU))
+   && event(ClientSigned(user, method, PATH_API, body, nonce)).
+(* The added passkey is the one in Alice's signed passkeys/verify body, not her registration
+   passkey *)
+query user: bitstring, credId: bitstring, credPk: bitstring, pkU: bitstring, authData: bitstring,
+      clientData: bitstring, chal: bitstring, cdp: bitstring, bodyUser: bitstring, nonce: bitstring;
+   event(ServerCredAdded(user, credId, credPk, pkU))
+   && event(ClientSigned(user, POST, PATH_PKVER, (regr(credId, credPk, authData, clientData), chal, cdp, bodyUser), nonce)).
+(* Alice's browser signs in holding her own u_c. "!1 = alice" requires both names to come from
+   the same Alice. *)
+query user: bitstring, alice: sid; event(ClientSignedIn(new aid[!1 = alice], user, new ucA[!1 = alice])).
+}})
 
 process
    Server() | !Alice()
@@ -798,16 +820,25 @@ query attacker(new ur).
 query attacker(new ur2).
 }})
 
-(* Reachability of each step of Alice's own recovery, and of replacing her words *)
-query u: bitstring, pk: bitstring; event(ServerReplaced(u, pk, sig_pk(kdf(ID1, kpU, new ucA)))).
-query u: bitstring, n: bitstring; event(ServerRecover3(u, n, sig_pk(kdf(ID1, kpU, new ucA)))).
-query u: bitstring, ch: bitstring; event(ServerConfirm(u, ch, sig_pk(kdf(ID1, kpU, new ucA)))).
-
-(* The last step, recover/verify on Alice's account, follows only from confirm, which needs her
-   u_c. Reconstructing its trace runs for hours unless the TLS channel is public, so it is checked
-   only in the REACH_ONLY variant. *)
 m4_ifdef({{REACH_ONLY}}, {{
-query u: bitstring, id: bitstring; event(ServerRecovered(u, id, sig_pk(kdf(ID1, kpU, new ucA)))).
+(* Reachability of each step of Alice's own recovery, and of replacing her words. Each server
+   event is paired with an event that only Alice's browser emits, and the passkey recover/verify
+   binds must be one she created. Without the uniqueness restrictions, trace reconstruction for
+   these runs does not finish, so they are checked only in the REACH_ONLY variants. Restrictions
+   only remove traces, and the other recovery variants only add attacker knowledge, relax server
+   checks, change queries, or make TLS public. So each trace found here, less the Rcv events that
+   RCV records, is also a trace of every other recovery variant. LEGACY_CLIENT is the exception,
+   because it changes the context Alice's browser signs with, so recovery-reach-legacy checks
+   the same runs with that flag. *)
+query user: bitstring, recoveryPk: bitstring, pkU: bitstring;
+   event(ServerReplaced(user, recoveryPk, pkU)) && event(ClientReplace(user, recoveryPk)).
+query user: bitstring, nonce: bitstring, pkU: bitstring;
+   event(ServerRecover3(user, nonce, pkU)) && event(ClientRecoverIntent(user, nonce)).
+query user: bitstring, chal: bitstring, pkU: bitstring;
+   event(ServerConfirm(user, chal, pkU)) && event(ClientConfirm(user, chal)).
+query user: bitstring, credId: bitstring, credPk: bitstring, pkU: bitstring;
+   event(ServerRecovered(user, credId, pkU)) && event(AliceCredCreated(user, credId, credPk)).
+query user: bitstring, alice: sid; event(ClientRecovered(new aid[!1 = alice], user, new ucA[!1 = alice])).
 }})
 
 process
@@ -830,98 +861,80 @@ query u: bitstring, x: key; event(ClientLoggedIn(new aid, u, x)) && attacker(x).
 (* A-S4: a browser with no pin for the account trusts the server's account mode on first use *)
 query u: bitstring, x: key; event(ClientLoggedIn(new bidF, u, x)) && attacker(x).
 
-(* Reachability: the registering browser can sign in again, and so can a browser with no pin *)
-query u: bitstring; event(ClientSignedIn(new aid, u)).
-query u: bitstring; event(ClientSignedIn(new bidF, u)).
+(* Reachability of honest sign-ins: the registering browser, and a browser with no pin, each sign
+   in holding Alice's own u_c. "!1 = alice" requires the browser and u_c to come from the same
+   Alice. *)
+query user: bitstring, alice: sid; event(ClientSignedIn(new aid[!1 = alice], user, new ucA[!1 = alice])).
+query user: bitstring, alice: sid; event(ClientSignedIn(new bidF[!1 = alice], user, new ucA[!1 = alice])).
 
 process
    !Alice()
 }})
 
 (* ======================================================================================== *)
-(* Expected results, one block per variant. "is false" on a "not event" query means an honest
-   run reaches that event. Every other "is false" is an attack the variant exists to show, and
-   ProVerif reconstructed a trace for each one. *)
+(* Expected results, one block per variant. On a reachability query, "is false" means a run
+   reaches the events; the README says what each of those traces shows. Every other "is false" is
+   an attack the variant exists to show, and ProVerif reconstructed a trace for each one. *)
 
 m4_ifdef({{VARIANT_login_net}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(UserApproves(u,id,ch_15)) is true.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(AliceCredCreated(u,id,pk)) is true.
 RESULT event(ServerAccept(u,m,p,b,n_3,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(ClientSigned(u,m,p,b,n_3)) is true.
 RESULT not attacker(ucA[!1 = v_25]) is true.
-RESULT not event(ServerLogin(u,id,ch_15,pk)) is false.
-RESULT not event(ServerAccept(u,m,p,b,n_3,pk)) is false.
-RESULT not event(ServerCredAdded(u,id,pk,pkU_10)) is false.
-RESULT not event(ClientLoggedIn(b,u,x)) is false.
 END *)}})
 m4_ifdef({{VARIANT_login_session}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(UserApproves(u,id,ch_15)) is true.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(AliceCredCreated(u,id,pk)) is true.
 RESULT event(ServerAccept(u,m,p,b,n_3,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(ClientSigned(u,m,p,b,n_3)) is true.
 RESULT not attacker(ucA[!1 = v_25]) is true.
-RESULT not event(ServerLogin(u,id,ch_15,pk)) is false.
-RESULT not event(ServerAccept(u,m,p,b,n_3,pk)) is false.
-RESULT not event(ServerCredAdded(u,id,pk,pkU_10)) is false.
-RESULT not event(ClientLoggedIn(b,u,x)) is false.
 END *)}})
 m4_ifdef({{VARIANT_login_session_noproof}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(UserApproves(u,id,ch_15)) is false.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(AliceCredCreated(u,id,pk)) is false.
 RESULT event(ServerAccept(u,m,p,b,n_3,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(ClientSigned(u,m,p,b,n_3)) is false.
 RESULT not attacker(ucA[!1 = v_25]) is true.
-RESULT not event(ServerLogin(u,id,ch_15,pk)) is false.
-RESULT not event(ServerAccept(u,m,p,b,n_3,pk)) is false.
-RESULT not event(ServerCredAdded(u,id,pk,pkU_10)) is false.
-RESULT not event(ClientLoggedIn(b,u,x)) is false.
 END *)}})
 m4_ifdef({{VARIANT_login_cdu}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(UserApproves(u,id,ch_15)) is true.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(AliceCredCreated(u,id,pk)) is true.
 RESULT event(ServerAccept(u,m,p,b,n_3,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(ClientSigned(u,m,p,b,n_3)) is true.
 RESULT not attacker(ucA[!1 = v_25]) is true.
-RESULT not event(ServerLogin(u,id,ch_15,pk)) is false.
-RESULT not event(ServerAccept(u,m,p,b,n_3,pk)) is false.
-RESULT not event(ServerCredAdded(u,id,pk,pkU_10)) is false.
-RESULT not event(ClientLoggedIn(b,u,x)) is false.
 END *)}})
 m4_ifdef({{VARIANT_login_device}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(UserApproves(u,id,ch_15)) is true.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(AliceCredCreated(u,id,pk)) is true.
 RESULT event(ServerAccept(u,m,p,b,n_3,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(ClientSigned(u,m,p,b,n_3)) is true.
 RESULT not attacker(ucA[!1 = v_25]) is true.
-RESULT not event(ServerLogin(u,id,ch_15,pk)) is false.
-RESULT not event(ServerAccept(u,m,p,b,n_3,pk)) is false.
-RESULT not event(ServerCredAdded(u,id,pk,pkU_10)) is false.
-RESULT not event(ClientLoggedIn(b,u,x)) is false.
 END *)}})
 m4_ifdef({{VARIANT_login_device_nouv}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(UserApproves(u,id,ch_15)) is false.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(AliceCredCreated(u,id,pk)) is false.
 RESULT event(ServerAccept(u,m,p,b,n_3,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(ClientSigned(u,m,p,b,n_3)) is false.
 RESULT not attacker(ucA[!1 = v_25]) is false.
-RESULT not event(ServerLogin(u,id,ch_15,pk)) is false.
-RESULT not event(ServerAccept(u,m,p,b,n_3,pk)) is false.
-RESULT not event(ServerCredAdded(u,id,pk,pkU_10)) is false.
-RESULT not event(ClientLoggedIn(b,u,x)) is false.
 END *)}})
 m4_ifdef({{VARIANT_login_unbound}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(UserApproves(u,id,ch_15)) cannot be proved.
+RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(AliceCredCreated(u,id,pk)) cannot be proved.
+RESULT event(ServerAccept(u,m,p,b,n_3,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(ClientSigned(u,m,p,b,n_3)) is true.
+RESULT not attacker(ucA[!1 = v_25]) is true.
+END *)}})
+m4_ifdef({{VARIANT_login_unbound_trace}}, {{(* EXPECTPV
+RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(UserApproves(u,id,ch_15)) is false.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(AliceCredCreated(u,id,pk)) is false.
 RESULT event(ServerAccept(u,m,p,b,n_3,sig_pk(kdf(ID1,kpU,ucA[!1 = v_25])))) ==> event(ClientSigned(u,m,p,b,n_3)) is true.
 RESULT not attacker(ucA[!1 = v_25]) is true.
-RESULT not event(ServerLogin(u,id,ch_15,pk)) is false.
-RESULT not event(ServerAccept(u,m,p,b,n_3,pk)) is false.
-RESULT not event(ServerCredAdded(u,id,pk,pkU_10)) is false.
-RESULT not event(ClientLoggedIn(b,u,x)) is false.
 END *)}})
 m4_ifdef({{VARIANT_login_tls}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_9,pkU_5)) && event(AliceUi(u)) ==> event(UserApproves(u,id,ch_9)) is false.
 RESULT event(ServerCredAdded(u,id,pk,pkU_5)) && event(AliceUi(u)) ==> event(AliceCredCreated(u,id,pk)) is false.
 RESULT event(ServerAccept(u,m,p,b,n_3,pkU_5)) && event(AliceUi(u)) ==> event(ClientSigned(u,m,p,b,n_3)) is false.
 RESULT not attacker(ucA[!1 = v_13]) is true.
-RESULT not event(ServerLogin(u,id,ch_9,pk)) is false.
-RESULT not event(ServerAccept(u,m,p,b,n_3,pk)) is false.
-RESULT not event(ServerCredAdded(u,id,pk,pkU_5)) is false.
-RESULT not event(ClientLoggedIn(b,u,x)) is false.
+END *)}})
+m4_ifdef({{VARIANT_login_reach}}, {{(* EXPECTPV
+RESULT not (event(ServerLogin(user,credId_9,chal_1,pkU_10)) && event(UserApproves(user,credId_9,chal_1))) is false.
+RESULT not (event(ServerAccept(user,method,PATH_API,body,nonce,pkU_10)) && event(ClientSigned(user,method,PATH_API,body,nonce))) is false.
+RESULT not (event(ServerCredAdded(user,credId_9,credPk_8,pkU_10)) && event(ClientSigned(user,POST,PATH_PKVER,(regr(credId_9,credPk_8,authData,clientData),chal_1,cdp_7,bodyUser),nonce))) is false.
+RESULT not event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) is false.
 END *)}})
 m4_ifdef({{VARIANT_recovery_net}}, {{(* EXPECTPV
 RESULT event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) ==> event(ClientRecoverIntent(u,n_4)) is true.
@@ -931,9 +944,6 @@ RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) ==> ev
 RESULT not attacker(ucA[!1 = v_8]) is true.
 RESULT not attacker(ur[!1 = v_8]) is true.
 RESULT not attacker(ur2[!2 = v_8,!1 = v_9]) is true.
-RESULT not event(ServerReplaced(u,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
-RESULT not event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
-RESULT not event(ServerConfirm(u,ch_10,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
 END *)}})
 m4_ifdef({{VARIANT_recovery_session}}, {{(* EXPECTPV
 RESULT event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) ==> event(ClientRecoverIntent(u,n_4)) is true.
@@ -943,9 +953,6 @@ RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) ==> ev
 RESULT not attacker(ucA[!1 = v_8]) is true.
 RESULT not attacker(ur[!1 = v_8]) is true.
 RESULT not attacker(ur2[!2 = v_8,!1 = v_9]) is true.
-RESULT not event(ServerReplaced(u,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
-RESULT not event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
-RESULT not event(ServerConfirm(u,ch_10,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
 END *)}})
 m4_ifdef({{VARIANT_recovery_words}}, {{(* EXPECTPV
 RESULT event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) ==> event(ClientRecoverIntent(u,n_4)) is false.
@@ -955,9 +962,6 @@ RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) ==> ev
 RESULT not attacker(ucA[!1 = v_8]) is false.
 RESULT not attacker(ur[!1 = v_8]) is false.
 RESULT not attacker(ur2[!2 = v_8,!1 = v_9]) is true.
-RESULT not event(ServerReplaced(u,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
-RESULT not event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
-RESULT not event(ServerConfirm(u,ch_10,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
 END *)}})
 m4_ifdef({{VARIANT_recovery_tls}}, {{(* EXPECTPV
 RESULT event(ServerRecover3(u,n_4,pkU_5)) && event(AliceUi(u)) ==> event(ClientRecoverIntent(u,n_4)) is false.
@@ -967,15 +971,20 @@ RESULT event(ServerCredAdded(u,id,pk,pkU_5)) && event(AliceUi(u)) ==> event(Alic
 RESULT not attacker(ucA[!1 = v_4]) is true.
 RESULT not attacker(ur[!1 = v_4]) is true.
 RESULT not attacker(ur2[!2 = v_4,!1 = v_5]) is true.
-RESULT not event(ServerReplaced(u,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_4])))) is false.
-RESULT not event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_4])))) is false.
-RESULT not event(ServerConfirm(u,ch_6,sig_pk(kdf(ID1,kpU,ucA[!1 = v_4])))) is false.
 END *)}})
-m4_ifdef({{VARIANT_recovery_tls_reach}}, {{(* EXPECTPV
-RESULT not event(ServerReplaced(u,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_4])))) is false.
-RESULT not event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_4])))) is false.
-RESULT not event(ServerConfirm(u,ch_6,sig_pk(kdf(ID1,kpU,ucA[!1 = v_4])))) is false.
-RESULT not event(ServerRecovered(u,id,sig_pk(kdf(ID1,kpU,ucA[!1 = v_4])))) is false.
+m4_ifdef({{VARIANT_recovery_reach}}, {{(* EXPECTPV
+RESULT not (event(ServerReplaced(user,recoveryPk,pkU_10)) && event(ClientReplace(user,recoveryPk))) is false.
+RESULT not (event(ServerRecover3(user,nonce,pkU_10)) && event(ClientRecoverIntent(user,nonce))) is false.
+RESULT not (event(ServerConfirm(user,chal_1,pkU_10)) && event(ClientConfirm(user,chal_1))) is false.
+RESULT not (event(ServerRecovered(user,credId_6,pkU_10)) && event(AliceCredCreated(user,credId_6,credPk_6))) is false.
+RESULT not event(ClientRecovered(aid[!1 = alice],user,ucA[!1 = alice])) is false.
+END *)}})
+m4_ifdef({{VARIANT_recovery_reach_legacy}}, {{(* EXPECTPV
+RESULT not (event(ServerReplaced(user,recoveryPk,pkU_10)) && event(ClientReplace(user,recoveryPk))) is false.
+RESULT not (event(ServerRecover3(user,nonce,pkU_10)) && event(ClientRecoverIntent(user,nonce))) is false.
+RESULT not (event(ServerConfirm(user,chal_1,pkU_10)) && event(ClientConfirm(user,chal_1))) is false.
+RESULT not (event(ServerRecovered(user,credId_6,pkU_10)) && event(AliceCredCreated(user,credId_6,credPk_6))) is false.
+RESULT not event(ClientRecovered(aid[!1 = alice],user,ucA[!1 = alice])) is false.
 END *)}})
 m4_ifdef({{VARIANT_recovery_replay}}, {{(* EXPECTPV
 RESULT event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) ==> event(ClientRecoverIntent(u,n_4)) is true.
@@ -985,9 +994,6 @@ RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) ==> ev
 RESULT not attacker(ucA[!1 = v_8]) is true.
 RESULT not attacker(ur[!1 = v_8]) is true.
 RESULT not attacker(ur2[!2 = v_8,!1 = v_9]) is true.
-RESULT not event(ServerReplaced(u,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
-RESULT not event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
-RESULT not event(ServerConfirm(u,ch_10,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
 END *)}})
 m4_ifdef({{VARIANT_recovery_replay_splitnonce}}, {{(* EXPECTPV
 RESULT event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) ==> event(ClientRecoverIntent(u,n_4)) is true.
@@ -997,9 +1003,6 @@ RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) ==> ev
 RESULT not attacker(ucA[!1 = v_8]) is true.
 RESULT not attacker(ur[!1 = v_8]) is true.
 RESULT not attacker(ur2[!2 = v_8,!1 = v_9]) is true.
-RESULT not event(ServerReplaced(u,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
-RESULT not event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
-RESULT not event(ServerConfirm(u,ch_10,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
 END *)}})
 m4_ifdef({{VARIANT_recovery_replay_legacy}}, {{(* EXPECTPV
 RESULT event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) ==> event(ClientRecoverIntent(u,n_4)) is true.
@@ -1009,9 +1012,6 @@ RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) ==> ev
 RESULT not attacker(ucA[!1 = v_8]) is true.
 RESULT not attacker(ur[!1 = v_8]) is true.
 RESULT not attacker(ur2[!2 = v_8,!1 = v_9]) is true.
-RESULT not event(ServerReplaced(u,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
-RESULT not event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
-RESULT not event(ServerConfirm(u,ch_10,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
 END *)}})
 m4_ifdef({{VARIANT_recovery_replay_legacy_splitnonce}}, {{(* EXPECTPV
 RESULT event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) ==> event(ClientRecoverIntent(u,n_4)) is false.
@@ -1021,28 +1021,25 @@ RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) ==> ev
 RESULT not attacker(ucA[!1 = v_8]) is true.
 RESULT not attacker(ur[!1 = v_8]) is true.
 RESULT not attacker(ur2[!2 = v_8,!1 = v_9]) is true.
-RESULT not event(ServerReplaced(u,pk,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
-RESULT not event(ServerRecover3(u,n_4,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
-RESULT not event(ServerConfirm(u,ch_10,sig_pk(kdf(ID1,kpU,ucA[!1 = v_8])))) is false.
 END *)}})
 m4_ifdef({{VARIANT_malicious}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_2]) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_2],u,x)) && attacker(x)) is false.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_2,!1 = v_3],u,x)) && attacker(x)) is false.
-RESULT not event(ClientSignedIn(aid[!1 = v_2],u)) is false.
-RESULT not event(ClientSignedIn(bidF[!2 = v_2,!1 = v_3],u)) is false.
+RESULT not event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) is false.
+RESULT not event(ClientSignedIn(bidF[!2 = v_2,!1 = alice],user,ucA[!1 = alice])) is false.
 END *)}})
 m4_ifdef({{VARIANT_malicious_fixui}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_2]) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_2],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_2,!1 = v_3],u,x)) && attacker(x)) is false.
-RESULT not event(ClientSignedIn(aid[!1 = v_2],u)) is false.
-RESULT not event(ClientSignedIn(bidF[!2 = v_2,!1 = v_3],u)) is false.
+RESULT not event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) is false.
+RESULT not event(ClientSignedIn(bidF[!2 = v_2,!1 = alice],user,ucA[!1 = alice])) is false.
 END *)}})
 m4_ifdef({{VARIANT_malicious_fixhandle}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_2]) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_2],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_2,!1 = v_3],u,x)) && attacker(x)) is true.
-RESULT not event(ClientSignedIn(aid[!1 = v_2],u)) is false.
-RESULT not event(ClientSignedIn(bidF[!2 = v_2,!1 = v_3],u)) is false.
+RESULT not event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) is false.
+RESULT not event(ClientSignedIn(bidF[!2 = v_2,!1 = alice],user,ucA[!1 = alice])) is false.
 END *)}})

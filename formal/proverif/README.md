@@ -17,7 +17,9 @@ and model, and keeps the issue log.
     token leak.
   - Per-request proofs limit the damage of the C1 unbound-challenge bug.
   - Recovery requires the recovery words.
-  - u_c stays secret against the network, a leaked cd_u, a leaked session, and broken TLS.
+  - u_c stays secret against the network, a leaked cd_u, a leaked session, and broken TLS. The
+    broken-TLS result assumes the server's uniqueness guarantees (single-use challenges, one
+    registration per user id).
 - **Malicious server:** in PRF mode, the server never learns u_c (A-S2).
 
 **What does not hold, or holds only through a dependency.** Each item was confirmed against the
@@ -70,6 +72,7 @@ Run it after any change to the protocol code, the tex, or a model.
 | `conformance.md` | Tex ↔ code ↔ model trace, encoding-injectivity arguments, issue log, notation proposal, planned fixes |
 | `remediation-tests.md` | Failing unit tests for planned code fixes, kept out of the source tree until each fix ships |
 | `run.mjs` | Builds each variant with `m4 -P` and checks its results |
+| `traces.mjs` | Lists every trace in the saved output, query by query, for review |
 
 Each template lists its variants in a `VARIANTS` block, one per line: a name followed by m4
 flags. The flags fall into three groups:
@@ -83,10 +86,21 @@ The expected results for each variant sit at the end of the template in ProVerif
 **To add or change a query:**
 1. Edit the template.
 2. Run with `--print`.
-3. Read the trace for every result that changed.
+3. Read every trace in each variant the change affects, not only the results that changed.
+   `node formal/proverif/traces.mjs --compact <variant>` lists each trace's events, requests and
+   state changes. Confirm three things:
+   - **Attack traces:** each one is the attack the variant names, and uses only steps the real
+     system allows.
+   - **Reachability traces:** each one is the honest run the related proof is about, for example
+     Alice's own sign-in rather than one on the attacker's account. A proof without such a trace
+     may hold only because the path it covers never runs.
+   - **"cannot be proved" results:** each one has a written reason, and another variant shows the
+     trace.
 4. Paste the new block.
+5. Record in this README what each trace shows.
 
-Never paste a result you have not explained.
+A result that matches its `EXPECTPV` line is not evidence on its own. The expected line can encode
+a mistake, so never paste a result whose trace you have not read and explained.
 
 ## Attacker and abstractions
 
@@ -144,6 +158,12 @@ and each such trace was read to confirm it is the attack named in the table.
 two passwords, and one block 0 accepted under both. It fails for exactly the algorithms the
 report names, and holds for AEGIS. V8 closes it for every algorithm.
 
+**About `loops-uc-pout`.** The attacker holds u_c and the outer password, so as expected it can
+replace the outer layer of Alice's two-loop message. It can also wrap her one-loop message as
+the inner layer of a two-loop message (I-17). In both traces the inner layer, and so the
+plaintext, is still hers. The reachability traces in this variant use a message the attacker
+built under the leaked outer password. `loops-uc` shows honest acceptance for the same processes.
+
 ### Mutations
 
 Each mutation removes one mechanism, and each must turn a proof into an attack:
@@ -152,7 +172,7 @@ Each mutation removes one mechanism, and each must turn a proof into an attack:
 |---|---|---|
 | `commit-v8-nokc` | Comparing the stored k_C | Two passwords accepted for one ciphertext (GCM, XChaCha) |
 | `integrity-uc-nof` | f in the AEAD AD (kept in the MAC) | An attacker holding u_c flips f on block 0 and truncates a 3-block message |
-| `integrity-uc-non` | Block number in the k_MN derivation | Block 2 replayed at position 1, dropping the middle block |
+| `integrity-uc-non` | Block number in the k_MN derivation | A later block replayed one position early, dropping the block before it: block 2 of a three-block message, or the empty final block of a two-block message |
 | `integrity-net-emptymid` | The encryptor writing an empty block only as the last one | Truncation with no secret leaked (I-14) |
 | `loops-uc-pout-nolple` | The outermost lp = le check | The inner layer of a two-loop message accepted on its own |
 
@@ -192,8 +212,8 @@ it public.
   - `UNIQUSER`: each user id is registered once.
 
   Without them, the attacker gets more traces, so a proof made without them also holds with them.
-  The variants that look for an attack, or for reachability, turn them on (see "Attack variants"
-  below).
+  The variants that look for an attack, or for reachability, turn them on (see "Attack and
+  reachability variants" below).
 - **Not modeled:** timestamps, the skew window, TTLs, and `authCount`. Recovery's challenge
   binding is modeled as binding to pk_R only.
 - **WebAuthn registration is unsigned**, as with attestation `none`.
@@ -216,16 +236,18 @@ received at registration instead.
 
 | ID | Property | Holds in | Attack, as expected, in |
 |---|---|---|---|
-| A-L1 | The server signs Alice in only with a passkey she approved, for that challenge | `net`, `session`, `cdu`, `device` | `device-nouv` (an unlocked device without UV); `unbound`, `session-noproof` (each via the passkey A-R1 lets the attacker bind); `tls` (registration race) |
-| A-R1 | Every passkey bound to Alice's account is one she created | `net`, `session`, `cdu`, `device` | `unbound` (C1); `session-noproof`; `device-nouv` (once u_c leaks); `tls` |
+| A-L1 | The server signs Alice in only with a passkey she approved, for that challenge | `net`, `session`, `cdu`, `device` | `device-nouv` (an unlocked device without UV); `unbound-trace`, `session-noproof` (each via the passkey A-R1 lets the attacker bind); `tls` (registration race) |
+| A-R1 | Every passkey bound to Alice's account is one she created | `net`, `session`, `cdu`, `device` | `unbound-trace` (C1); `session-noproof`; `device-nouv` (once u_c leaks); `tls` |
 | A-Z1 | Every authorized request on Alice's account is one her browser signed | `net`, `session`, `cdu`, `device`, **and** `unbound` | `session-noproof` (cookie and CSRF alone); `device-nouv` (once u_c leaks); `tls` (the attacker holds Alice's user id) |
 | A-S1, A-K1 | Alice's u_c stays secret, including when cd_u or the session cookie leaks, or TLS is broken | every variant except `device-nouv` | `device-nouv` (sign-in without UV yields cd_p, and the device yields the PRF output) |
 
 **What the mutations and leaks show:**
-- **`login-unbound` rediscovers C1**, as a full trace. A signed-in attacker posts
+- **`login-unbound-trace` rediscovers C1**, as a full trace. A signed-in attacker posts
   `passkeys/verify` with a body naming Alice's u_i and any outstanding challenge. The mutated
-  server takes the user from the body and binds the attacker's passkey to Alice's account. Even
-  then, A-Z1 holds and u_c stays secret: the proof of userCred contains the damage.
+  server takes the user from the body and binds the attacker's passkey to Alice's account, and
+  the attacker then signs in to her account with it. Even then, A-Z1 holds and u_c stays secret:
+  the proof of userCred contains the damage. `login-unbound` proves those two properties with no
+  restrictions.
 - **`login-tls` and `recovery-tls` show the registration race (I-29).**
   - With TLS broken, the attacker sees the reply to Alice's registration options. It submits
     `reg/verify` first, with her user id and challenge but its own passkey, pk_U and recovery
@@ -234,6 +256,25 @@ received at registration instead.
     then holds Alice's user id and can sign in, make requests, and recover on it.
   - Alice's u_c and words stay secret, and her own proofs fail, so she notices.
   - Registration integrity rests on TLS.
+  - With TLS broken, the attacker can also act as the server toward Alice's browser, so the
+    malicious-server results apply. Through I-01 it can sign her browser in to an account it
+    chose.
+
+**Reachability.** `login-reach` shows Alice's own runs reaching the server:
+- her sign-in with her passkey;
+- a request she signed;
+- a passkey she added through `passkeys/verify`;
+- her browser completing a sign-in while holding her own u_c.
+
+Each server-side query pairs the server's event with an event that only Alice's browser or
+authenticator emits, so the attacker's own account cannot satisfy it. The browser query requires
+the browser and the u_c to come from the same Alice (`!1 = alice`).
+
+The variant turns on the uniqueness restrictions, because without them reconstructing these
+traces does not finish. A restriction only removes traces. The other login variants only add
+attacker knowledge (`LEAK_*`), relax server checks (`MUT_*`), change queries (`KEY_UI`), or make
+TLS public, and with TLS public the attacker can forward Alice's messages unchanged. So each trace
+is also a run of every other login variant, apart from the `Rcv` events that `RCV` records.
 
 ### Results: recovery
 
@@ -264,9 +305,17 @@ The trace for the last row replays a legacy replace-words signature to recover3 
 replace completed, which the shared store would have refused. Once the legacy context is
 removed, the shared store stops being load-bearing.
 
-**Reachability.** Each step of Alice's recovery is reachable in every variant. The final step
-(`ServerRecovered`) is checked in `recovery-tls-reach`, with `STORE` on. Without the
-restrictions, reconstructing that trace runs for hours.
+**Reachability.** `recovery-reach` shows each step of Alice's own recovery:
+- her recover3, with her nonce;
+- her confirm;
+- `recover/verify` binding a passkey she created;
+- her browser finishing with her own u_c.
+
+It also shows her replacing her words. As in `login-reach`, each server event is paired with
+Alice's client event, and the uniqueness restrictions are on. By the same argument, each trace
+is also a run of every other recovery variant except the two `replay-legacy` variants.
+`LEGACY_CLIENT` changes the context Alice's browser signs with, so `recovery-reach-legacy` checks
+the same five runs with that flag.
 
 ### Results: malicious server
 
@@ -276,8 +325,12 @@ restrictions, reconstructing that trace runs for hours.
 | A-S3 | Once registration has completed in a browser, that browser never adopts a u_c the server knows | **attack (I-01)** | **true** | **true** |
 | A-S4 | The same, for a browser that holds no pin for the account | attack | attack (trust on first use) | **true** |
 
-In all three variants, sign-in on both the registering browser and a fresh one is reachable, so
-the proofs are not vacuous.
+**Reachability.** In all three variants, an honest sign-in is reachable on the registering
+browser and on a browser with no pin. Each one signs in holding Alice's own u_c, and the query
+requires the browser and the u_c to come from the same Alice. In each trace the server answers
+"PRF" for Alice's own user id, with her cd_p. These traces show the proofs do not hold only
+because the sign-in path never runs. A sign-in that ends in the I-01 attack does not satisfy
+these queries, because the browser then holds the server's u_c.
 
 **About `malicious-fixhandle`.** Each passkey's user handle also carries an id derived from u_c
 (`hidOf`), and the browser checks the u_c it resolves against it. The authenticator returns the
@@ -310,10 +363,16 @@ equals the passkey's user handle. The registered-browser pin check is written as
 lookup of the pin registration stored. ProVerif treats the "no entry" branch of any table lookup
 as always possible, so it cannot prove anything through the negative form the code uses.
 
-### Attack variants
+### Attack and reachability variants
 
 Every attack in the account model is reported as a concrete trace ("is false"), and each trace
 was read to confirm it is the attack its variant names.
+
+The one exception is `login-unbound`. It runs without restrictions so that its A-Z1 and u_c
+secrecy proofs hold for every run, and without backtracking (`NOBT`). Its two attack queries
+therefore end in "cannot be proved". `login-unbound-trace` adds `UNIQUSER`, and returns those as
+traces. A restriction only removes traces, so each of those traces is also a trace of
+`login-unbound`.
 
 **Why restrictions are needed.** Without the uniqueness restrictions, the derivations ProVerif
 finds in these variants cannot be followed by any real run:
@@ -332,9 +391,12 @@ seconds without backtracking (`NOBT`).
 |---|---|
 | `login-session-noproof` | `STORE` |
 | `login-device-nouv` | `RCV`, `STORE` |
+| `login-unbound` | none |
+| `login-unbound-trace` | `UNIQUSER` |
 | `recovery-words` | `RCV` |
 | `login-tls` | `STORE`, `UNIQUSER` |
 | `recovery-tls` | `UNIQUSER` |
+| `login-reach`, `recovery-reach`, `recovery-reach-legacy` | `RCV`, `STORE`, `UNIQUSER` |
 
 With TLS public, the server endpoints run only on the TLS channel, which the attacker can already
 use. A second copy on the public channel only multiplies clauses.
@@ -343,6 +405,7 @@ use. A second copy on the public channel only multiplies clauses.
 - **`session-noproof`:** the attacker sends Alice's stolen cookie and CSRF token, with an
   arbitrary signature, to `passkeys/options`, `passkeys/verify`, and the generic endpoint. It
   then signs in with the passkey it bound.
+- **`unbound-trace`:** C1, as described under "What the mutations and leaks show".
 - **`device-nouv`:** the attacker feeds an auth challenge to the unlocked device, posts the
   assertion it made without UV, is signed in, and decrypts the returned cd_p with the device's
   PRF output.
@@ -351,7 +414,10 @@ use. A second copy on the public channel only multiplies clauses.
 - **`login-tls` and `recovery-tls`:** the registration race above.
 
 **What these variants' "true" results mean.** In these variants they hold for runs that respect
-the real server's uniqueness guarantees. The unrestricted proofs are in the base variants.
+the real server's uniqueness guarantees. Most also have an unrestricted proof in a base variant.
+The exception is broken TLS: `login-tls` and `recovery-tls` are the only variants with TLS
+public, so u_c and recovery-word secrecy under broken TLS is proved only under their
+restrictions.
 
 ## Remaining work
 
