@@ -52,6 +52,33 @@ function readVariants(template) {
       .map(([name, ...flags]) => ({ template, name, flags }));
 }
 
+// The templates are the *.pv.m4 files in this directory, which model the current code, and in
+// each fixes/<version> directory, which model a version of the planned fixes
+function findTemplates() {
+   const fixesDir = path.join(modelDir, 'fixes');
+   const dirs = [modelDir];
+   if (fs.existsSync(fixesDir)) {
+      dirs.push(
+         ...fs
+            .readdirSync(fixesDir)
+            .sort()
+            .map((version) => path.join(fixesDir, version)),
+      );
+   }
+   return dirs.flatMap((dir) =>
+      fs
+         .readdirSync(dir)
+         .filter((file) => file.endsWith('.pv.m4'))
+         .sort()
+         .map((file) => path.join(dir, file)),
+   );
+}
+
+// A template's path relative to this directory, without the extension, e.g. "fixes/v1/account"
+function templateId(template) {
+   return path.relative(modelDir, template).replace(/\.pv\.m4$/, '');
+}
+
 // The flag VARIANT_<name> selects the variant's EXPECTPV block in the template
 function generate(variant) {
    const defines = [...variant.flags, `VARIANT_${variant.name.replaceAll('-', '_')}`].map((flag) => `-D${flag}`);
@@ -59,7 +86,7 @@ function generate(variant) {
    if (result.status !== 0) {
       throw new Error(`m4 failed for ${variant.name}: ${result.stderr}`);
    }
-   const base = path.basename(variant.template, '.pv.m4');
+   const base = templateId(variant.template).replaceAll('/', '-');
    const pvFile = path.join(outDir, `${base}-${variant.name}.pv`);
    fs.writeFileSync(pvFile, result.stdout);
    return pvFile;
@@ -156,11 +183,7 @@ async function main() {
    const proverif = findProverif();
    fs.mkdirSync(outDir, { recursive: true });
 
-   const templates = fs
-      .readdirSync(modelDir)
-      .filter((file) => file.endsWith('.pv.m4'))
-      .sort()
-      .map((file) => path.join(modelDir, file));
+   const templates = findTemplates();
    const variants = templates
       .flatMap(readVariants)
       .filter((variant) => !filters.length || filters.some((filter) => variant.name.includes(filter)));
@@ -172,7 +195,7 @@ async function main() {
 
    let failures = 0;
    for (const outcome of outcomes) {
-      const label = `${path.basename(outcome.variant.template, '.pv.m4')}/${outcome.variant.name}`;
+      const label = `${templateId(outcome.variant.template)}/${outcome.variant.name}`;
       if (printMode) {
          if (outcome.timedOut || outcome.signal || outcome.code !== 0) {
             console.error(`${label} did not finish: ${report(outcome).join('; ')}`);
