@@ -275,7 +275,7 @@ export const Challenges = new Entity(
             required: true,
          },
          purpose: {
-            type: ['reg', 'add', 'auth', 'recover', 'confirm', 'api', 'nonce'] as const,
+            type: ['reg', 'add', 'auth', 'recover', 'confirm', 'prfupgrade', 'api', 'nonce'] as const,
             required: true,
             readOnly: true,
          },

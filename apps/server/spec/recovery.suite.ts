@@ -36,9 +36,10 @@ import {
    createCredential,
    prfEncrypt,
    prfDecrypt,
-   loginWithPasskey,
+   expectLogin,
    addPasskey,
    registerNewCredential,
+   randomRecoverySecret,
    sha256Hex,
    type TestUser,
 } from './common';
@@ -47,7 +48,7 @@ const CONFIRM_PATH = '/v1/recover/confirm';
 
 // Body for recover3/key. A PRF account keeps userCred encrypted under the recovery secret, so a
 // key change must re-encrypt and send it under the new secret; no-PRF sends only the public key.
-async function recoveryKeyBody(
+export async function recoveryKeyBody(
    user: TestUser,
    secret: Uint8Array,
    opts: { proofSecret?: Uint8Array } = {},
@@ -135,7 +136,7 @@ type StartResponse = {
 
 // Spends the recovery challenge on confirm, which deletes the old passkeys, then registers
 // the replacement that recovery promises.
-async function finishRecovery3(
+export async function finishRecovery3(
    user: TestUser,
    startRes: StartResponse,
    recoveredUserCred: Uint8Array<ArrayBuffer>,
@@ -196,7 +197,7 @@ async function finishRecovery3(
 }
 
 // Starts recovery and rebuilds userCred from what recover3 returns.
-async function startRecovery3(
+export async function startRecovery3(
    user: TestUser,
 ): Promise<{ startRes: StartResponse; recoveredUserCred: Uint8Array<ArrayBuffer> }> {
    const startRes: StartResponse = await postJson('/v1/recover3', recover3Body(user), {}, '');
@@ -224,7 +225,7 @@ async function startRecovery3(
 
 // Drives the whole two-phase recovery and returns the resulting session; unless keepSession is
 // set the new passkey is deleted before returning.
-async function recoverAccount3(user: TestUser, opts: { keepSession?: boolean } = {}): Promise<RecoverySession> {
+export async function recoverAccount3(user: TestUser, opts: { keepSession?: boolean } = {}): Promise<RecoverySession> {
    const { startRes, recoveredUserCred } = await startRecovery3(user);
    const session = await finishRecovery3(user, startRes, recoveredUserCred);
 
@@ -257,7 +258,7 @@ export function recoverySuite(prf: boolean): void {
          if (user?.credId) {
             setSessionSigner(user.userId, user.userCred);
             // Starting a recovery revokes the session, and several tests above do
-            const session = await loginWithPasskey(user);
+            const session = await expectLogin(user);
             await expectPasskeyDeleted(user.credId, session.csrf, session.cookie);
          }
          setSessionSigner(undefined);
@@ -272,7 +273,7 @@ export function recoverySuite(prf: boolean): void {
       });
 
       it('updates the recovery public key with a new key', async () => {
-         const newSecret = api.recoverySecret(getRandom(api.RECOVERYID_BYTES), user.userId);
+         const newSecret = randomRecoverySecret(user.userId);
          const body = await recoveryKeyBody(user, newSecret);
          const res = await putJson('/v1/recover3/key', body, { 'x-csrf-token': user.csrf }, user.cookie);
          expect(res.status).toBe(200);
@@ -307,7 +308,7 @@ export function recoverySuite(prf: boolean): void {
       });
 
       it('rejects a recovery key change that drops userCredEnc', async () => {
-         const newSecret = api.recoverySecret(getRandom(api.RECOVERYID_BYTES), user.userId);
+         const newSecret = randomRecoverySecret(user.userId);
          const body = await recoveryKeyBody(user, newSecret);
          delete body.userCredEnc;
 
@@ -327,7 +328,7 @@ export function recoverySuite(prf: boolean): void {
             return;
          }
 
-         const newSecret = api.recoverySecret(getRandom(api.RECOVERYID_BYTES), user.userId);
+         const newSecret = randomRecoverySecret(user.userId);
          const body = await recoveryKeyBody(user, newSecret);
          body.userCredEnc = bytesToBase64(base64ToBytes(body.userCredEnc!).slice(0, 4));
 
@@ -337,7 +338,7 @@ export function recoverySuite(prf: boolean): void {
 
       // The body is otherwise complete so that only the absent proof is under test.
       it('rejects a recovery public key with no proof of its secret', async () => {
-         const newSecret = api.recoverySecret(getRandom(api.RECOVERYID_BYTES), user.userId);
+         const newSecret = randomRecoverySecret(user.userId);
          const good = await recoveryKeyBody(user, newSecret);
          const okRes = await putJson('/v1/recover3/key', good, { 'x-csrf-token': user.csrf }, user.cookie);
          expect(okRes.status).toBe(200);
@@ -356,14 +357,14 @@ export function recoverySuite(prf: boolean): void {
       });
 
       it('rejects a recovery public key proved with the wrong secret', async () => {
-         const otherSecret = api.recoverySecret(getRandom(api.RECOVERYID_BYTES), user.userId);
+         const otherSecret = randomRecoverySecret(user.userId);
          const body = await recoveryKeyBody(user, user.recoverySecret, { proofSecret: otherSecret });
          const res = await putJson('/v1/recover3/key', body, { 'x-csrf-token': user.csrf }, user.cookie);
          expect(res.status).toBe(400);
       });
 
       it('rejects a replayed recovery key proof', async () => {
-         const newSecret = api.recoverySecret(getRandom(api.RECOVERYID_BYTES), user.userId);
+         const newSecret = randomRecoverySecret(user.userId);
          const body = await recoveryKeyBody(user, newSecret);
          const okRes = await putJson('/v1/recover3/key', body, { 'x-csrf-token': user.csrf }, user.cookie);
          expect(okRes.status).toBe(200);
@@ -387,7 +388,7 @@ export function recoverySuite(prf: boolean): void {
          // The original key recovers the account before it is replaced.
          const session = await recoverAccount3(recoverUser, { keepSession: true });
 
-         const newSecret = api.recoverySecret(getRandom(api.RECOVERYID_BYTES), recoverUser.userId);
+         const newSecret = randomRecoverySecret(recoverUser.userId);
          setSessionSigner(recoverUser.userId, session.userCred);
          const keyRes = await putJson(
             '/v1/recover3/key',
@@ -413,8 +414,8 @@ export function recoverySuite(prf: boolean): void {
 
          // Passkeys remain until confirm, so the owner signs back in and replaces the words.
          // The sign-in alone also invalidates the attacker's pending confirm.
-         const victimSession = await loginWithPasskey(recoverUser);
-         const newSecret = api.recoverySecret(getRandom(api.RECOVERYID_BYTES), recoverUser.userId);
+         const victimSession = await expectLogin(recoverUser);
+         const newSecret = randomRecoverySecret(recoverUser.userId);
          const keyRes = await putJson(
             '/v1/recover3/key',
             await recoveryKeyBody(recoverUser, newSecret),
@@ -546,7 +547,7 @@ export function recoverySuite(prf: boolean): void {
             );
             expect(attackVerify.status).toBe(401);
 
-            const victimLogin = await loginWithPasskey(recoverUser);
+            const victimLogin = await expectLogin(recoverUser);
             await expectUserPasskeys(
                [recoverUser.credId],
                recoverUser.userId,
@@ -569,7 +570,7 @@ export function recoverySuite(prf: boolean): void {
          setSessionSigner(recoverUser.userId, recoverUser.userCred);
 
          try {
-            session = await loginWithPasskey(recoverUser);
+            session = await expectLogin(recoverUser);
             const userRes = await getJson('/v1/user', { 'x-csrf-token': session.csrf }, session.cookie);
             expect(userRes.status).toBe(200);
          } finally {
@@ -585,7 +586,7 @@ export function recoverySuite(prf: boolean): void {
          await startRecovery3(recoverUser);
 
          // Abandon the recovery here, then sign in with the original passkey to show it survived.
-         const session = await loginWithPasskey(recoverUser);
+         const session = await expectLogin(recoverUser);
          await expectUserPasskeys(
             [recoverUser.credId],
             recoverUser.userId,
@@ -624,7 +625,7 @@ export function recoverySuite(prf: boolean): void {
       it('rejects a recover3 proof signed with the wrong secret', async () => {
          await startRecovery3(user);
 
-         const wrongSecret = api.recoverySecret(getRandom(api.RECOVERYID_BYTES), user.userId);
+         const wrongSecret = randomRecoverySecret(user.userId);
          const res = await postJson('/v1/recover3', recover3Body(user, { secret: wrongSecret }), {}, '');
          expect(res.status).toBe(401);
       });
@@ -758,7 +759,7 @@ export function recoverySuite(prf: boolean): void {
          const res = await postJson('/v1/recover/confirm', unproven, {}, '');
          expect(res.status).toBe(401);
 
-         const session = await loginWithPasskey(recoverUser);
+         const session = await expectLogin(recoverUser);
          await expectPasskeyDeleted(recoverUser.credId, session.csrf, session.cookie);
       });
 
@@ -804,7 +805,7 @@ export function recoverySuite(prf: boolean): void {
          expect(res.status).toBe(401);
 
          // Confirm the original credential still works
-         const session = await loginWithPasskey(recoverUser);
+         const session = await expectLogin(recoverUser);
          await expectUserPasskeys(
             [recoverUser.credId],
             recoverUser.userId,
@@ -860,7 +861,7 @@ export function recoverySuite(prf: boolean): void {
          );
          expect(res.status).toBe(401);
 
-         const session = await loginWithPasskey(recoverUser);
+         const session = await expectLogin(recoverUser);
          await expectPasskeyDeleted(recoverUser.credId, session.csrf, session.cookie);
       });
 

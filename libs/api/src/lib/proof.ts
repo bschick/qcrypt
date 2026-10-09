@@ -28,11 +28,12 @@ const USERCRED_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
 
 const RECOVERY_KEY_CONTEXT = 'RecovKey';
 
-export type RecoveryOp = 'replace' | 'recover';
+export type RecoveryOp = 'replace' | 'recover' | 'prfupgrade';
 
 const RECOVERY_SIG_CONTEXTS: Readonly<Record<RecoveryOp, string>> = {
    replace: 'qcrypt/recovery/replace/v1',
    recover: 'qcrypt/recovery/recover/v1',
+   prfupgrade: 'qcrypt/recovery/prfupgrade/v1',
 };
 
 export const RECOVERYID_BYTES = 16;

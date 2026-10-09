@@ -47,6 +47,7 @@ export type HttpDetails = {
    handler: HttpHandler;
    version: Version;
    checkCsrf: boolean;
+   consistentReadUser: boolean;
    cookie?: string;
    userAgent?: string;
    proofSignature?: string;
@@ -60,6 +61,7 @@ type HandlerInfo = {
    version: Version;
    authorize: boolean;
    checkCsrf?: boolean;
+   consistentReadUser?: boolean;
    handler: HttpHandler;
 };
 
@@ -95,6 +97,12 @@ export const Patterns = {
    }),
    recoverVerify: new URLPattern({
       pathname: '/v:ver/recover/verify',
+   }),
+   prfUpgrade: new URLPattern({
+      pathname: `/v:ver/prfupgrade`,
+   }),
+   prfUpgradeConfirm: new URLPattern({
+      pathname: `/v:ver/prfupgrade/confirm`,
    }),
    session: new URLPattern({
       pathname: `/v:ver/session`,
@@ -206,6 +214,7 @@ export function matchEvent(event: APIGatewayProxyEventV2, methodMap: MethodMap):
             rpOrigin,
             authorize: handerInfo.authorize,
             checkCsrf: !(handerInfo.checkCsrf === false), // true or undefined make it required
+            consistentReadUser: handerInfo.consistentReadUser === true,
             resources: match.pathname.groups,
             handler: handerInfo.handler,
             version: handerInfo.version,

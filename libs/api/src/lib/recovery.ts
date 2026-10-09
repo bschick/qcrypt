@@ -58,3 +58,19 @@ export type RecoverInfoResponse = RegOptionsResponse & {
 export type RecoverStartResponse =
    | { prf: true; challenge: string; userCredEnc: string }
    | { prf: false; challenge: string; userCred: string };
+
+export type PrfUpgradeRequest = {
+   credentialId: string;
+   passkeyUserCredEnc: string;
+};
+
+export type PrfUpgradeResponse = {
+   challenge: string;
+};
+
+export type PrfUpgradeConfirmRequest = {
+   challenge: string;
+   recoveryUserCredEnc: string;
+   timestamp: string;
+   signature: string;
+};

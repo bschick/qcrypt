@@ -26,7 +26,7 @@ import {
    postJson,
    RP_ORIGIN,
    registerTestUser,
-   loginWithPasskey,
+   expectLogin,
    expectPasskeyDeleted,
    setSessionSigner,
    type TestUser,
@@ -311,7 +311,7 @@ describe('auth/verify response parity', () => {
       const other = await registerTestUser();
       const target = await registerTestUser();
       try {
-         await loginWithPasskey(other);
+         await expectLogin(other);
 
          const real = await verifyWithOtherPasskey(other, target.userId);
          const guessed = await verifyWithOtherPasskey(other, guessedUserId());
@@ -321,7 +321,7 @@ describe('auth/verify response parity', () => {
       } finally {
          for (const user of [other, target]) {
             setSessionSigner(user.userId, user.userCred);
-            const session = await loginWithPasskey(user);
+            const session = await expectLogin(user);
             await expectPasskeyDeleted(user.credId, session.csrf, session.cookie);
          }
       }

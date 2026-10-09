@@ -23,6 +23,7 @@ SOFTWARE. */
 import { FilterXSS } from 'xss';
 import { Buffer } from 'node:buffer';
 import * as crypto from 'node:crypto';
+import { KMSClient, GenerateRandomCommand } from '@aws-sdk/client-kms';
 import * as api from '@qcrypt/api';
 import { Challenges, type ChallengeItem } from './models';
 import {
@@ -42,6 +43,17 @@ export class AuthError extends Error {
 }
 
 export class NotFoundError extends Error {}
+
+export const kmsClient = new KMSClient({ region: 'us-east-1' });
+
+export async function kmsRandomBytes(byteCount: number): Promise<Uint8Array> {
+   const result = await kmsClient.send(new GenerateRandomCommand({ NumberOfBytes: byteCount }));
+   const randomBytes = result.Plaintext;
+   if (randomBytes?.byteLength !== byteCount) {
+      throw new Error('GenerateRandomCommand failure');
+   }
+   return randomBytes;
+}
 
 const filter = new FilterXSS({
    whiteList: {},
@@ -79,7 +91,7 @@ export function isReservedTestUserName(userName: string): boolean {
 
 export type ChallengeSpec =
    | { purpose: 'auth' | 'reg' | 'add'; userId: string; binding?: never }
-   | { purpose: 'recover' | 'confirm'; userId: string; binding: string };
+   | { purpose: 'recover' | 'confirm' | 'prfupgrade'; userId: string; binding: string };
 
 // The challenge must match the given userId, unless it is an auth challenge created with UNKNOWN_USER_ID.
 // The binding must also match; an omitted binding matches only a challenge created without one.
@@ -150,11 +162,8 @@ export async function verifyRecoverProof(
    }
 
    const outcome = await storeSingleUseNonce(nonce, 'nonce', userId);
-   if (outcome === 'replayed') {
-      throw new ParamError(`user account ${userId} replayed recovery proof`);
-   }
-   if (outcome === 'failed') {
-      throw new ParamError(`user account ${userId} recovery proof nonce store failed`);
+   if (outcome !== 'ok') {
+      throw new ParamError(`user account ${userId} recovery proof nonce ${outcome}`);
    }
 }
 

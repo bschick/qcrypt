@@ -35,9 +35,7 @@ import {
    expectPasskeyDeleted,
    setSessionSigner,
    prfDecrypt,
-   readPrfOutput,
-   PRF_EXTENSION,
-   RP_ORIGIN,
+   expectLogin,
 } from './common';
 
 // The full authorized-API and recovery contract against a client-side (PRF) userCred account.
@@ -64,33 +62,21 @@ describe('PRF account', () => {
          setSessionSigner(undefined);
       };
 
-      const optsRes = await postJson('/v1/auth/options', { userId: account.userId }, {}, '');
-      expect(optsRes.status).toBe(200);
-
-      const assertion = account.emulator.getJSON(RP_ORIGIN, {
-         ...optsRes.data,
-         challenge: optsRes.data.challenge,
-         extensions: PRF_EXTENSION,
-      });
-
-      const verifyRes = await postJson('/v1/auth/verify', { ...assertion, challenge: optsRes.data.challenge }, {}, '');
-      expect(verifyRes.status).toBe(200);
+      const session = await expectLogin(account);
       // The login supersedes the registration session, so clean up with the login session.
       cleanup = async () => {
          setSessionSigner(account.userId, account.userCred);
-         await expectPasskeyDeleted(account.credId, verifyRes.data.csrf, verifyRes.cookie);
+         await expectPasskeyDeleted(account.credId, session.csrf, session.cookie);
          setSessionSigner(undefined);
       };
-      expect(verifyRes.data.verified).toBe(true);
-      expect(verifyRes.data.prf).toBe(true);
-      expect(verifyRes.data.userCred).toBeUndefined();
-      expect(verifyRes.data.passkeyUserCredEnc).toBeDefined();
+      expect(session.data.prf).toBe(true);
+      expect(session.data.userCred).toBeUndefined();
+      expect(session.data.passkeyUserCredEnc).toBeDefined();
 
       // The login assertion reproduces the registration PRF output, so it decrypts the
       // server-stored per-passkey ciphertext back to the userCred the client generated.
-      const prfOutput = readPrfOutput(assertion.clientExtensionResults);
-      expect(prfOutput).not.toBeNull();
-      const decrypted = await prfDecrypt(verifyRes.data.passkeyUserCredEnc, prfOutput!, account.userId);
+      expect(session.prfOutput).not.toBeNull();
+      const decrypted = await prfDecrypt(session.data.passkeyUserCredEnc, session.prfOutput!, account.userId);
       expect(bytesToBase64(decrypted)).toBe(account.userCred);
    });
 

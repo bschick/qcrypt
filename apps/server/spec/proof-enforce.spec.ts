@@ -25,6 +25,8 @@ import { randomBytes } from 'node:crypto';
 import {
    getJson,
    patchJson,
+   putJson,
+   postJson,
    expectPasskeyDeleted,
    makeProofHeaders,
    registerTestUser,
@@ -62,6 +64,27 @@ describe('proof of userCred enforcement', () => {
       const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId);
       const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(200);
+   });
+
+   it('requires a proof on the PRF upgrade endpoints', async () => {
+      const putBody = { credentialId: credId, passkeyUserCredEnc: '' };
+      const proof = await makeProofHeaders(
+         'PUT',
+         '/v1/prfupgrade',
+         Buffer.from(JSON.stringify(putBody)),
+         userCred,
+         userId,
+      );
+
+      // This account is already PRF, so a request with a valid proof gets 400 rather than 401
+      const withProof = await putJson('/v1/prfupgrade', putBody, { 'x-csrf-token': csrf, ...proof }, cookie);
+      expect(withProof.status).toBe(400);
+
+      const withoutProof = await putJson('/v1/prfupgrade', putBody, { 'x-csrf-token': csrf }, cookie);
+      expect(withoutProof.status).toBe(401);
+
+      const confirmWithoutProof = await postJson('/v1/prfupgrade/confirm', {}, { 'x-csrf-token': csrf }, cookie);
+      expect(confirmWithoutProof.status).toBe(401);
    });
 
    it('rejects a replayed proof on a mutating request', async () => {

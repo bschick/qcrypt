@@ -302,6 +302,27 @@ export async function expectPasskeyDeleted(credId: string, csrf: string, cookie:
    expect(res.status).toBe(200);
 }
 
+// Deletes every passkey on the account, the primary last; deleting the final passkey deletes the account
+export async function expectAllPasskeysDeleted(user: TestUser): Promise<void> {
+   setSessionSigner(user.userId, user.userCred);
+   const session = await expectLogin(user);
+
+   const userRes = await getJson('/v1/user', { 'x-csrf-token': session.csrf }, session.cookie);
+   expect(userRes.status).toBe(200);
+
+   for (const auth of userRes.data.authenticators as api.AuthenticatorInfoResponse[]) {
+      if (auth.credentialId !== user.credId) {
+         await deleteJson(`/v1/passkeys/${auth.credentialId}`, { 'x-csrf-token': session.csrf }, session.cookie);
+      }
+   }
+
+   // The server deletes the account, and returns verified false, only when no passkey remains
+   const res = await deleteJson(`/v1/passkeys/${user.credId}`, { 'x-csrf-token': session.csrf }, session.cookie);
+   expect(res.status).toBe(200);
+   expect(res.data.verified).toBe(false);
+   setSessionSigner(undefined);
+}
+
 // Polls because session and user reads list passkeys eventually consistently
 export async function expectListedPasskeys(
    path: '/v1/session' | '/v1/user',
@@ -382,6 +403,7 @@ interface TestUserBase {
 // The prf discriminant narrows to the extra fields a PRF account carries.
 export interface NoPrfTestUser extends TestUserBase {
    prf: false;
+   prfOutput?: Uint8Array<ArrayBuffer>;
 }
 export interface PrfTestUser extends TestUserBase {
    prf: true;
@@ -390,12 +412,20 @@ export interface PrfTestUser extends TestUserBase {
 }
 export type TestUser = NoPrfTestUser | PrfTestUser;
 
+export function randomRecoverySecret(userId: string): Uint8Array<ArrayBuffer> {
+   return api.recoverySecret(getRandom(api.RECOVERYID_BYTES), userId);
+}
+
 // Register a fresh account (reg/options + reg/verify) and return everything needed to make
 // authorized, proof-signed requests. The recovery secret is generated here as the real client
 // does and only its public key is sent; the secret is returned for recovery flows. When prf is
 // true the client generates userCred locally and sends only opaque ciphertexts (the server never
 // sees plaintext userCred); when false the server generates and returns userCred as before.
-export async function registerTestUser(prf: boolean = false, label?: string): Promise<TestUser> {
+export async function registerTestUser(
+   prf: boolean = false,
+   label?: string,
+   opts: { prfCapable?: boolean } = {},
+): Promise<TestUser> {
    await cryptoReady();
 
    const userName = testUserName(label);
@@ -444,16 +474,19 @@ export async function registerTestUser(prf: boolean = false, label?: string): Pr
       const userId: string = regOpts.data.user.id;
       const recoveryId = getRandom(api.RECOVERYID_BYTES);
       const secret = api.recoverySecret(recoveryId, userId);
-      const emulator = getWebAuthnEmulator();
-      const { attestation } = createCredential(
-         emulator,
-         {
-            ...regOpts.data,
-            user: { ...regOpts.data.user, id: userId },
-            challenge: regOpts.data.challenge,
-         },
-         false,
-      );
+      const createOptions = {
+         ...regOpts.data,
+         user: { ...regOpts.data.user, id: userId },
+         challenge: regOpts.data.challenge,
+      };
+      const emulator = opts.prfCapable ? getWebAuthnEmulator(false, 'hmac-secret-mc') : getWebAuthnEmulator();
+      let attestation: EmulatorAttestation;
+      let prfOutput: Uint8Array<ArrayBuffer> | undefined;
+      if (opts.prfCapable) {
+         ({ attestation, prfOutput } = createCredential(emulator, createOptions, true));
+      } else {
+         ({ attestation } = createCredential(emulator, createOptions, false));
+      }
 
       const body = api.makeRegVerifyRequest(attestation as api.RegistrationFields, {
          userId,
@@ -480,6 +513,7 @@ export async function registerTestUser(prf: boolean = false, label?: string): Pr
          emulator,
          recoverySecret: secret,
          recoveryId,
+         prfOutput,
       };
    }
 
@@ -489,19 +523,38 @@ export async function registerTestUser(prf: boolean = false, label?: string): Pr
    return user;
 }
 
-// Signs in with an account's existing passkey
-export async function loginWithPasskey(user: TestUser): Promise<{ cookie: string; csrf: string }> {
-   const optsRes = await postJson('/v1/auth/options', { userId: user.userId }, {}, '');
+export type LoginResult = Awaited<ReturnType<typeof postJson>> & {
+   csrf: string;
+   body: Record<string, unknown>;
+   prfOutput: Uint8Array<ArrayBuffer> | null;
+};
+
+// Requests an auth challenge, posts an assertion for it with PRF output requested via extensions.
+// Returns the HTTP response, the request body sent, and the PRF output, or null if the passkey has none.
+export async function login(
+   emulator: WebAuthnEmulator,
+   optionsBody: Record<string, unknown>,
+   cookie: string = '',
+): Promise<LoginResult> {
+   const optsRes = await postJson('/v1/auth/options', optionsBody, {}, '');
    expect(optsRes.status).toBe(200);
 
-   const assertion = user.emulator.getJSON(RP_ORIGIN, { ...optsRes.data, challenge: optsRes.data.challenge });
-   const body = api.makeAuthVerifyRequest(assertion as api.AuthenticationFields, {
+   const assertion = emulator.getJSON(RP_ORIGIN, {
+      ...optsRes.data,
       challenge: optsRes.data.challenge,
+      extensions: PRF_EXTENSION,
    });
-   const verifyRes = await postJson('/v1/auth/verify', body, {}, '');
-   expect(verifyRes.status).toBe(200);
-   expect(verifyRes.data.verified).toBe(true);
-   return { cookie: verifyRes.cookie, csrf: verifyRes.data.csrf };
+   const body = { ...assertion, challenge: optsRes.data.challenge };
+   const res = await postJson('/v1/auth/verify', body, {}, cookie);
+   return { ...res, csrf: res.data?.csrf, body, prfOutput: readPrfOutput(assertion.clientExtensionResults) };
+}
+
+// Signs in with an account's existing passkey
+export async function expectLogin(user: TestUser, emulator: WebAuthnEmulator = user.emulator): Promise<LoginResult> {
+   const result = await login(emulator, { userId: user.userId });
+   expect(result.status).toBe(200);
+   expect(result.data.verified).toBe(true);
+   return result;
 }
 
 // Register an additional credential and return its attestation. Without an emulator override, a
@@ -536,12 +589,17 @@ export async function registerNewCredential(
 }
 
 // Adds a passkey to an account holding a live session, returning the new credential id.
-export async function addPasskey(user: TestUser, csrf: string, cookie: string): Promise<string> {
+export async function addPasskey(
+   user: TestUser,
+   csrf: string,
+   cookie: string,
+   emulator?: WebAuthnEmulator,
+): Promise<string> {
    setSessionSigner(user.userId, user.userCred);
    const optsRes = await getJson('/v1/passkeys/options', { 'x-csrf-token': csrf }, cookie);
    expect(optsRes.status).toBe(200);
 
-   const { attestation, passkeyUserCredEnc } = await registerNewCredential(user, optsRes.data);
+   const { attestation, passkeyUserCredEnc } = await registerNewCredential(user, optsRes.data, emulator);
    const body = api.makeAddVerifyRequest(attestation as api.RegistrationFields, {
       challenge: optsRes.data.challenge,
       passkeyUserCredEnc,

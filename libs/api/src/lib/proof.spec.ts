@@ -125,6 +125,13 @@ describe('recovery nonce proof', () => {
       expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, signature, 'recover')).not.toThrow();
    });
 
+   it('sign prfupgrade nonce and verify with derived public key', () => {
+      const secret = getRandom(32);
+      const pubKey = getRecoveryPubKey(secret);
+      const signature = createRecoveryProof(secret, userId, timestamp, nonce, 'prfupgrade');
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, signature, 'prfupgrade')).not.toThrow();
+   });
+
    it('derives the pinned public key for a fixed secret', () => {
       const secret = new Uint8Array(32);
       for (let pos = 0; pos < secret.length; pos++) {
@@ -147,14 +154,28 @@ describe('recovery nonce proof', () => {
 
       const replaceSig = createRecoveryProof(secret, userId, timestamp, nonce, 'replace');
       const recoverSig = createRecoveryProof(secret, userId, timestamp, nonce, 'recover');
+      const upgradeSig = createRecoveryProof(secret, userId, timestamp, nonce, 'prfupgrade');
       expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, replaceSig, 'replace')).not.toThrow();
       expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, recoverSig, 'recover')).not.toThrow();
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, upgradeSig, 'prfupgrade')).not.toThrow();
 
-      // Both operations sign identical bytes, so only the context separates them
+      // All operations sign identical bytes, so only the context separates them
       expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, replaceSig, 'recover')).toThrow(
          /proof verification failed/,
       );
       expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, recoverSig, 'replace')).toThrow(
+         /proof verification failed/,
+      );
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, upgradeSig, 'replace')).toThrow(
+         /proof verification failed/,
+      );
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, upgradeSig, 'recover')).toThrow(
+         /proof verification failed/,
+      );
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, replaceSig, 'prfupgrade')).toThrow(
+         /proof verification failed/,
+      );
+      expect(() => verifyRecoveryProof(pubKey, userId, timestamp, nonce, recoverSig, 'prfupgrade')).toThrow(
          /proof verification failed/,
       );
    });

@@ -53,7 +53,7 @@ import {
 } from './models';
 
 import { ElectroError } from 'electrodb';
-import { KMSClient, EncryptCommand, DecryptCommand, GenerateRandomCommand } from '@aws-sdk/client-kms';
+import { EncryptCommand, DecryptCommand } from '@aws-sdk/client-kms';
 
 import { hkdfSync, randomInt, randomBytes, createHash } from 'node:crypto';
 import { setTimeout } from 'node:timers/promises';
@@ -74,6 +74,8 @@ import {
    consumeChallenge,
    createChallenge,
    storeSingleUseNonce,
+   kmsClient,
+   kmsRandomBytes,
 } from './utils';
 
 export type Response = {
@@ -117,11 +119,11 @@ enum EventNames {
    PutDescription = 'PutDescription',
    PutUserName = 'PutUserName',
    PutRecover3Key = 'PutRecover3Key',
+   PrfUpgrade = 'PrfUpgrade',
    Recover = 'Recover',
    GetRecovery = 'GetRecovery',
 }
 
-export const kmsClient = new KMSClient({ region: 'us-east-1' });
 let jwtMaterial: Uint8Array | undefined;
 const INTERNAL_PHRASE = "Yup, I'm internal";
 
@@ -266,6 +268,10 @@ async function _setLastCredential(user: UnverifiedUserItem, credentialId: string
 
 function _recoveryBinding(user: UnverifiedUserItem): string {
    return hashString(`${user.recoveryPubKey ?? ''}:${user.authCount}`);
+}
+
+function _prfUpgradeBinding(user: VerifiedUserItem, passkeyUserCredEnc: string): string {
+   return hashString(`${user.recoveryPubKey}:${user.authCount}:${passkeyUserCredEnc}`);
 }
 
 async function deleteSession(_httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
@@ -460,17 +466,8 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
 
    // To reduces calls to KMS when user creation
    // is abandonded, delay creation of random values unit here
-   const rparams = {
-      NumberOfBytes: cc.USERCRED_BYTES + cc.INVITABLEID_BYTES * cc.RETRIES,
-   };
-   const rand = new GenerateRandomCommand(rparams);
-   const result = await kmsClient.send(rand);
-
-   const randData = result.Plaintext;
+   const randData = await kmsRandomBytes(cc.USERCRED_BYTES + cc.INVITABLEID_BYTES * cc.RETRIES);
    let randOffset = 0;
-   if (!randData || randData.byteLength !== rparams.NumberOfBytes) {
-      throw new Error('GenerateRandomCommand failure');
-   }
 
    let userCredEnc: string | undefined;
    let userCredEncBackup: string | undefined;
@@ -824,17 +821,7 @@ async function postRegOptions(httpDetails: HttpDetails): Promise<Response> {
 
    // Reduce round-trips by getting enough data for 3 x 16 bytes ID tries
    // and 1 x 32 bytes userCred
-   const rparams = {
-      NumberOfBytes: cc.RETRIES * cc.USERID_BYTES,
-   };
-   const rand = new GenerateRandomCommand(rparams);
-   const result = await kmsClient.send(rand);
-
-   const randData = result.Plaintext;
-   if (!randData || randData.byteLength !== rparams.NumberOfBytes) {
-      throw new Error('GenerateRandomCommand failure');
-   }
-
+   const randData = await kmsRandomBytes(cc.RETRIES * cc.USERID_BYTES);
    let randOffset = 0;
 
    // Loop in the very unlikley event that we randomly pick
@@ -1031,7 +1018,6 @@ async function patchPasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUse
       throw new ParamError('invalid credential id');
    }
 
-   // This will raise if credId is invalid, catch to return a consistend error
    try {
       await Authenticators.patch({
          userId: verifiedUser.userId,
@@ -1105,19 +1091,19 @@ async function patchUser(httpDetails: HttpDetails, verifiedUser?: VerifiedUserIt
 
 // Updates a user's recovery public key after they regenerate their recovery words.
 async function putRecover3Key(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
-   const recover3Key = httpDetails.body as api.Recover3KeyRequest;
+   const recover3Request = httpDetails.body as api.Recover3KeyRequest;
 
    if (!verifiedUser) {
       throw new AuthError();
    }
 
-   const recoveryPubKey = recover3Key?.recoveryPubKey;
+   const recoveryPubKey = recover3Request?.recoveryPubKey;
    if (!validB64(recoveryPubKey) || base64UrlDecode(recoveryPubKey)!.length !== api.PROOF_PUBKEY_BYTES) {
       throw new ParamError('invalid recovery public key');
    }
 
    // Verified against the submitted key, so the caller must hold its secret.
-   await verifyRecoverProof(recoveryPubKey, verifiedUser.userId, recover3Key, 'replace');
+   await verifyRecoverProof(recoveryPubKey, verifiedUser.userId, recover3Request, 'replace');
 
    const updates: { recoveryPubKey: string; userCredEnc?: string } = {
       recoveryPubKey,
@@ -1126,17 +1112,22 @@ async function putRecover3Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
    // A PRF account keeps userCred encrypted with the recovery secret in userCredEnc, so new
    // recovery words re-encrypt and send it.
    if (verifiedUser.prf) {
-      if (!validUserCredEnc(recover3Key.userCredEnc)) {
+      if (!validUserCredEnc(recover3Request.userCredEnc)) {
          throw new ParamError('invalid user credential');
       }
-      updates.userCredEnc = recover3Key.userCredEnc;
+      updates.userCredEnc = recover3Request.userCredEnc;
    }
 
-   await Users.patch({
+   const replaced = await Users.patch({
       userId: verifiedUser.userId,
    })
       .set(updates)
-      .go();
+      .where((attrs, { eq }) => eq(attrs.prf, verifiedUser.prf))
+      .go({ returnOnConditionCheckFailure: true });
+
+   if (replaced.rejected) {
+      throw new ParamError(`user account ${verifiedUser.userId} prf changed during recovery key update`);
+   }
 
    // Let this happen async
    recordEvent(EventNames.PutRecover3Key, verifiedUser.userId, verifiedUser.lastCredentialId);
@@ -1145,6 +1136,134 @@ async function putRecover3Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
    // success as proof of commit, so only return after the write
    verifiedUser.recoveryPubKey = recoveryPubKey!;
    const response = await makeUserInfoResponse(verifiedUser);
+   return { content: response };
+}
+
+// Must be followed-up by a POST to prfupgrade/confirm to complete the update to PRF.
+async function putPrfUpgrade(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
+   const prfUpgrade = httpDetails.body as api.PrfUpgradeRequest;
+
+   if (!verifiedUser) {
+      throw new AuthError();
+   }
+   if (verifiedUser.prf) {
+      throw new ParamError(`user account ${verifiedUser.userId} already uses PRF`);
+   }
+   if (!verifiedUser.recoveryPubKey) {
+      throw new ParamError(`user account ${verifiedUser.userId} has no recovery key`);
+   }
+
+   const { credentialId, passkeyUserCredEnc } = prfUpgrade;
+   if (credentialId !== verifiedUser.lastCredentialId) {
+      throw new ParamError('passkey is not the current passkey');
+   }
+   if (!validUserCredEnc(passkeyUserCredEnc)) {
+      throw new ParamError('invalid encrypted user credential');
+   }
+
+   try {
+      await Authenticators.patch({
+         userId: verifiedUser.userId,
+         credentialId,
+      })
+         .set({
+            userCredEnc: passkeyUserCredEnc,
+         })
+         .go();
+   } catch (err) {
+      if (err instanceof ElectroError) {
+         console.error(err);
+         throw new ParamError('passkey update failed');
+      }
+      throw err;
+   }
+
+   const challengeBytes = await kmsRandomBytes(cc.CHALLENGE_BYTES);
+
+   // Redeemed by POST /prfupgrade/confirm
+   const challenge = base64UrlEncode(challengeBytes)!;
+   await createChallenge(challenge, {
+      purpose: 'prfupgrade',
+      userId: verifiedUser.userId,
+      binding: _prfUpgradeBinding(verifiedUser, passkeyUserCredEnc),
+   });
+
+   const content: api.PrfUpgradeResponse = { challenge };
+   return { content };
+}
+
+// Completes the account update to PRF started by PUT prfupgrade. Account to PRF as the final step,
+// so a failure before that point leaves a usable no-PRF account.
+async function postPrfUpgradeConfirm(httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem): Promise<Response> {
+   const confirm = httpDetails.body as api.PrfUpgradeConfirmRequest;
+
+   if (!verifiedUser) {
+      throw new AuthError();
+   }
+   if (verifiedUser.prf) {
+      throw new ParamError(`user account ${verifiedUser.userId} already uses PRF`);
+   }
+   const recoveryPubKey = verifiedUser.recoveryPubKey;
+   if (!recoveryPubKey) {
+      throw new ParamError(`user account ${verifiedUser.userId} has no recovery key`);
+   }
+
+   const { challenge, recoveryUserCredEnc, timestamp, signature } = confirm;
+   if (!validUserCredEnc(recoveryUserCredEnc)) {
+      throw new ParamError('invalid encrypted user credential');
+   }
+
+   const keep = await Authenticators.get({
+      userId: verifiedUser.userId,
+      credentialId: verifiedUser.lastCredentialId!,
+   }).go({ consistent: true });
+
+   const passkeyUserCredEnc = keep?.data?.userCredEnc;
+   if (!passkeyUserCredEnc) {
+      throw new ParamError(`user account ${verifiedUser.userId} passkey has no encrypted user credential`);
+   }
+
+   await consumeChallenge(challenge, {
+      purpose: 'prfupgrade',
+      userId: verifiedUser.userId,
+      binding: _prfUpgradeBinding(verifiedUser, passkeyUserCredEnc),
+   });
+
+   await verifyRecoverProof(
+      recoveryPubKey,
+      verifiedUser.userId,
+      { timestamp, nonce: challenge, signature },
+      'prfupgrade',
+   );
+
+   await deleteAuthenticators(verifiedUser, verifiedUser.lastCredentialId);
+
+   // A non-PRF passkey could be added concurrently between the delete above and the following
+   // account switch to PRF. The time window is small, and the impact is only that new PK
+   // being unusable, so accepting the race.
+   const switched = await Users.patch({
+      userId: verifiedUser.userId,
+   })
+      .set({
+         prf: true,
+         userCredEnc: recoveryUserCredEnc,
+      })
+      .remove(['userCredEncOld'])
+      .where(
+         (attrs, { eq }) =>
+            `${eq(attrs.prf, false)} AND ${eq(attrs.recoveryPubKey, recoveryPubKey)} AND ${eq(attrs.authCount, verifiedUser.authCount)}`,
+      )
+      .go({ returnOnConditionCheckFailure: true });
+
+   if (switched.rejected) {
+      throw new ParamError(`user account ${verifiedUser.userId} changed during PRF upgrade`);
+   }
+
+   recordEvent(EventNames.PrfUpgrade, verifiedUser.userId, verifiedUser.lastCredentialId);
+
+   verifiedUser.prf = true;
+   const authenticators = await loadAuthenticators(verifiedUser, true);
+   const response = await makeUserInfoResponse(verifiedUser, authenticators);
    return { content: response };
 }
 
@@ -1188,17 +1307,17 @@ async function getUser(_httpDetails: HttpDetails, verifiedUser?: VerifiedUserIte
    return { content: response };
 }
 
-// Ensures every passkey is deleted, raising an exception to abort the caller if any survive.
-// Reads 'all' pages because the 1MB query budget is charged against full items, and reads
-// consistently so no passkeys are missed
-async function deleteAllAuthenticators(verifiedUser: VerifiedUserItem): Promise<void> {
+// Ensures every passkey except keepCredentialId is deleted, raising an exception to abort the
+// caller if any remain. Reads 'all' pages because the 1MB query budget is charged against full
+// items, and reads consistently so no passkeys are missed
+async function deleteAuthenticators(verifiedUser: VerifiedUserItem, keepCredentialId?: string): Promise<void> {
    const auths = await Authenticators.query
       .byUserId({
          userId: verifiedUser.userId,
       })
       .go({ attributes: ['userId', 'credentialId'], pages: 'all', consistent: true });
 
-   let pending = auths?.data ?? [];
+   let pending = (auths?.data ?? []).filter((auth) => auth.credentialId !== keepCredentialId);
    for (let attempt = 0; pending.length !== 0 && attempt < cc.RETRIES; attempt++) {
       // A batch delete skips items rather than failing, reporting them as unprocessed
       const deleted = await Authenticators.delete(pending).go();
@@ -1432,7 +1551,7 @@ async function postRecover(httpDetails: HttpDetails): Promise<Response> {
    // account will be left with no passkeys. Recovery can be run again to create a new
    // passkey. Could alternatively address this by marking passkey for deletion and
    // cleaning up after, but then recovery may be less certain in a security incident.
-   await deleteAllAuthenticators(verifiedUser);
+   await deleteAuthenticators(verifiedUser);
 
    const rcount = verifiedUser.recovered ? verifiedUser.recovered + 1 : 1;
 
@@ -1455,9 +1574,9 @@ async function postRecover(httpDetails: HttpDetails): Promise<Response> {
 
 // Interleaved recover3 flows are not allowed.
 async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
-   const recover3 = httpDetails.body as api.Recover3Request;
+   const recover3Request = httpDetails.body as api.Recover3Request;
 
-   const { userId } = recover3;
+   const { userId } = recover3Request;
    if (!validB64(userId)) {
       throw new ParamError('invalid recovery proof');
    }
@@ -1471,20 +1590,12 @@ async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
 
    // This call takes < 1ms to run on a warm server, so detecting timing
    // differences to guess valid userId is not practicle
-   await verifyRecoverProof(unverifiedUser.recoveryPubKey, userId, recover3, 'recover');
+   await verifyRecoverProof(unverifiedUser.recoveryPubKey, userId, recover3Request, 'recover');
 
    // Now the user is confirmed
    const verifiedUser = checkVerified(unverifiedUser, userId);
 
-   const rand = new GenerateRandomCommand({
-      NumberOfBytes: cc.CHALLENGE_BYTES,
-   });
-   const result = await kmsClient.send(rand);
-   const challengeBytes = result.Plaintext;
-
-   if (!challengeBytes || challengeBytes.byteLength !== cc.CHALLENGE_BYTES) {
-      throw new Error('GenerateRandomCommand failure');
-   }
+   const challengeBytes = await kmsRandomBytes(cc.CHALLENGE_BYTES);
 
    // The recovery binding must reflect the incremented authCount, which requires deleteSession to run
    // before challenge creation
@@ -1564,7 +1675,7 @@ async function postRecoverConfirm(httpDetails: HttpDetails): Promise<Response> {
    // account will be left with no passkeys. Recovery can be run again to create a new
    // passkey. Could alternatively address this by marking passkey for deletion and
    // cleaning up after, but then recovery may be less certain in a security incident.
-   await deleteAllAuthenticators(verifiedUser);
+   await deleteAuthenticators(verifiedUser);
 
    const rcount = verifiedUser.recovered ? verifiedUser.recovered + 1 : 1;
 
@@ -1682,7 +1793,7 @@ async function verifyCsrf(verifiedUser: VerifiedUserItem, checkCsrf: boolean, he
    }
 }
 
-async function verifyCookie(cookie: string, rpID: string): Promise<VerifiedUserItem> {
+async function verifyCookie(cookie: string, rpID: string, consistentReadUser: boolean): Promise<VerifiedUserItem> {
    try {
       const match = /^__Host-JWT=(.+)$/.exec(cookie);
       if (!match?.[1] || match[1].length < 10) {
@@ -1717,12 +1828,11 @@ async function verifyCookie(cookie: string, rpID: string): Promise<VerifiedUserI
       };
 
       try {
-         // Default to eventually consistent user read to reduce cost
-         return await verifyWithUser(await getUnverifiedUser(unverifiedPayload.userId));
+         return await verifyWithUser(await getUnverifiedUser(unverifiedPayload.userId, consistentReadUser));
       } catch (err) {
-         // Retry as consistent user read if within RECENT_COOKIE_SEC window
+         // Retry as consistent read if within RECENT_COOKIE_SEC and not already a consistent read
          const cookieAgeSec = Date.now() / 1000 - (unverifiedPayload.iat ?? 0);
-         if (cookieAgeSec < 0 || cookieAgeSec > RECENT_COOKIE_SEC) {
+         if (consistentReadUser || cookieAgeSec < 0 || cookieAgeSec > RECENT_COOKIE_SEC) {
             throw err;
          }
          console.warn('cookie verification using a consistent read after the first check failed', err);
@@ -1830,7 +1940,7 @@ export async function handler(event: APIGatewayProxyEventV2, _context: Context) 
          const headerCsrf = event.headers['x-csrf-token'];
 
          // these throw an exception if cookie or headerCsrf is invalid
-         verifiedUser = await verifyCookie(httpDetails.cookie, httpDetails.rpID);
+         verifiedUser = await verifyCookie(httpDetails.cookie, httpDetails.rpID, httpDetails.consistentReadUser);
          await verifyCsrf(verifiedUser, httpDetails.checkCsrf, headerCsrf);
          await verifyProof(verifiedUser, httpDetails);
       }
@@ -1917,6 +2027,7 @@ const METHODMAP: MethodMap = {
          pattern: Patterns.passkeyVerify,
          version: 1,
          authorize: true,
+         consistentReadUser: true,
          handler: postPasskeyVerify,
       },
       { name: 'postRegOptions', pattern: Patterns.regOptions, version: 1, authorize: false, handler: postRegOptions },
@@ -1949,6 +2060,14 @@ const METHODMAP: MethodMap = {
          authorize: false,
          handler: postRecover3,
       },
+      {
+         name: 'postPrfUpgradeConfirm',
+         pattern: Patterns.prfUpgradeConfirm,
+         version: 1,
+         authorize: true,
+         consistentReadUser: true,
+         handler: postPrfUpgradeConfirm,
+      },
       // Internal only endpoints that are not exposed in cloudfront and require special auth
       {
          name: 'postMunge',
@@ -1980,7 +2099,22 @@ const METHODMAP: MethodMap = {
       },
    ],
    PUT: [
-      { name: 'putRecover3Key', pattern: Patterns.recover3Key, version: 1, authorize: true, handler: putRecover3Key },
+      {
+         name: 'putRecover3Key',
+         pattern: Patterns.recover3Key,
+         version: 1,
+         authorize: true,
+         consistentReadUser: true,
+         handler: putRecover3Key,
+      },
+      {
+         name: 'putPrfUpgrade',
+         pattern: Patterns.prfUpgrade,
+         version: 1,
+         authorize: true,
+         consistentReadUser: true,
+         handler: putPrfUpgrade,
+      },
    ],
    PATCH: [
       { name: 'patchPasskey', pattern: Patterns.passkey, version: 1, authorize: true, handler: patchPasskey },
