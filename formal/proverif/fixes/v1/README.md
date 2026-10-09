@@ -12,6 +12,8 @@ flags. It is a snapshot, not kept in step with the parent model.
 | `FIX_UI` | I-01 user-id checks. At sign-in, the account the server names must be the passkey's user handle. At recovery, the `recover/confirm` options and `recover/verify` must name the recovery words' user. | `conformance.md` §7.1 |
 | `FIX_HANDLE` | An early form of the I-03 tag. Each passkey's user handle also carries an id derived from u_c, and the browser compares it with the u_c it resolves at sign-in. There is no account-mode bit and no tag in the recovery words. | `conformance.md` §7.2 |
 
+The `fixhandle` variants set both flags.
+
 The planned design (`conformance.md` §7.2) goes further than `FIX_HANDLE`. Its tag carries an
 account-mode bit as well as the u_c id, appears in the recovery words too, and is written only
 from a u_c that was checked. A later version models that design.
@@ -44,10 +46,11 @@ What the traces show:
 
   So the tag must also be in the recovery words, and a tag may be written only from a u_c that
   was checked (`conformance.md` §7.2).
-- **A-S4R stays an attack in every variant.** The recovery words carry no tag in this version.
+- **A-S4R stays an attack in both recovery variants.** The recovery words carry no tag in this
+  version.
 
-**Reachability.** In every variant, honest sign-ins and honest recoveries are reachable on both
-the registering browser and a browser with no pin. Each ends holding Alice's own u_c, on her own
+**Reachability.** In every variant honest sign-ins, and in the recovery variants honest
+recoveries, are reachable on both the registering browser and a browser with no pin. Each ends holding Alice's own u_c, on her own
 user id. The queries require the browser and the u_c to come from the same Alice.
 
 **Modeling note.** Under `FIX_UI`, the registering browser signs in through `LoginRegistered`

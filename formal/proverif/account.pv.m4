@@ -1,5 +1,5 @@
 m4_changequote({{,}})m4_dnl
-(* Quick Crypt accounts with an honest server, PRF mode: main.tex lines 277-631.
+(* Quick Crypt accounts, PRF mode, with an honest or a malicious server: main.tex lines 277-631.
 
    Each honest user (Alice) registers once from her browser, then logs in with any passkey she
    holds, sends authorized requests, adds passkeys, replaces her recovery words, and recovers.
@@ -166,9 +166,11 @@ event ServerRecovered(bitstring, bitstring, bitstring).
 (* The user id Alice's browser received at registration *)
 event AliceUi(bitstring).
 
-(* Restrictions mirror what the real system guarantees. Every variant whose results are proofs
-   runs without them: leaving them off gives the attacker more traces, so a property proved
-   without them also holds with them. Variants that look for an attack turn them on. Without
+(* Restrictions mirror what the real system guarantees. The base variants, whose results are
+   proofs, run without them: leaving them off gives the attacker more traces, so a property
+   proved without them also holds with them. Variants that look for an attack or for
+   reachability turn them on, and so do the replay variants, where STORE is the nonce store
+   under test. Without
    them, ProVerif finds derivations no real run can follow, such as one private request received
    by two server sessions, or one user id registered twice. Reconstructing a trace from such a
    derivation then runs for hours, while a trace found under the restrictions is a trace of the

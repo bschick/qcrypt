@@ -2,7 +2,7 @@
 
 These are unit tests for fixes that the models motivate. Each test is ready to use but is not in
 the source tree yet, because the code fixes ship separately. Each test fails against the code as it
-stands. Restore a test together with its fix, and confirm it fails before the fix is applied.
+stands. Add a test together with its fix, and confirm it fails before the fix is applied.
 
 ## I-01: the browser accepts any user id the server names
 

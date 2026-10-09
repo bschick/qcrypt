@@ -244,7 +244,7 @@ m4_ifdef({{LEAK_P}}, {{   out(c, p); }})
 
 m4_ifdef({{SCN_SECRECY}}, {{
 (* ======================================================================================== *)
-(* C-S1, C-S2, C-H1, C-W1, C-W2: Alice encrypts the secret blocks MSG0..MSG2 and decrypts
+(* C-S1, C-H1, C-W1: Alice encrypts the secret blocks MSG0..MSG2 and decrypts
    whatever she is sent. Decryption produces no output, so it gives the attacker no oracle. *)
 
 query attacker(MSG0).

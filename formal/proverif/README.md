@@ -15,7 +15,8 @@ and model, and keeps the issue log.
 - **Honest server:**
   - Sign-in, passkey binding and per-request proofs hold even when the session cookie and CSRF
     token leak.
-  - Per-request proofs limit the damage of the C1 unbound-challenge bug.
+  - Per-request proofs limit the damage of an unbound passkey challenge (C1, a bug fixed
+    earlier; see `vibes/security_review.md`).
   - Recovery requires the recovery words.
   - u_c stays secret against the network, a leaked cd_u, a leaked session, and broken TLS. The
     broken-TLS result assumes the server's uniqueness guarantees (single-use challenges, one
@@ -35,8 +36,8 @@ code. `conformance.md` §5 has the details and code locations:
 | I-29 | With TLS broken, an attacker can win the registration race and hold Alice's user id. Her u_c and words stay secret, and her browser notices on first use. | `login-tls`, `recovery-tls` | accepted |
 | — | The externally reported V7 key-commitment incompleteness, reproduced. V8 closes it. | `commit-v7` | known |
 
-The other issue-log entries are gaps in the tex, or ordering differences between the tex and the
-code. None of them has a security effect the models found. The approved notation changes
+The other issue-log entries are gaps in the tex, differences between the tex and the code, or
+modeling notes. None of them has a security effect the models found. The approved notation changes
 (`conformance.md` §6) address most of them.
 
 ## Running
@@ -51,9 +52,10 @@ node formal/proverif/run.mjs loops # only variants whose name contains "loops"
 node formal/proverif/run.mjs --print commit   # show actual results as EXPECTPV blocks
 ```
 
-The runner finds `proverif` on `PATH`, or in `~/.opam/default/bin`, or in `$PROVERIF`.
-`QC_PROVERIF_TIMEOUT` sets the timeout for each variant in seconds; the default is 900.
-`QC_PROVERIF_JOBS` sets how many variants run at once; the default allows 4 GB of RAM per run.
+The runner uses `$PROVERIF` if set, then `proverif` on `PATH`, then
+`~/.opam/default/bin/proverif`. `QC_PROVERIF_TIMEOUT` sets the timeout for each variant in
+seconds; the default is 900. `QC_PROVERIF_JOBS` sets how many variants run at once; the default
+is half the CPU count, capped so each run has 4 GB of RAM.
 A runaway saturation can use all available memory, so when experimenting with a model, run it
 under `ulimit -v` (for example `ulimit -v 2000000` for 2 GB). The runner reports a process that
 was killed, rather than a result. Generated `.pv` files and the full ProVerif output, including
@@ -76,10 +78,12 @@ Run it after any change to the protocol code, the tex, or a model.
 | `traces.mjs` | Lists every trace in the saved output, query by query, for review |
 
 Each template lists its variants in a `VARIANTS` block, one per line: a name followed by m4
-flags. The flags fall into three groups:
+flags. The main flag groups are:
 - `SCN_*` selects the scenario.
 - `LEAK_*` gives the attacker a secret.
 - `MUT_*` deliberately breaks one protocol mechanism.
+- The rest set options, described where they are used: `STORE`, `RCV`, `UNIQUSER`, `NOBT`,
+  `KEY_UI`, `REACH_ONLY`, `MAL_RECOVERY`, `LEGACY_CLIENT`, `USE_V7`, and `FIX_*` in `fixes/`.
 
 The expected results for each variant sit at the end of the template in ProVerif's own
 `EXPECTPV … END` comment format, so each generated `.pv` file is self-checking.
@@ -88,8 +92,10 @@ The expected results for each variant sit at the end of the template in ProVerif
 1. Edit the template.
 2. Run with `--print`.
 3. Read every trace in each variant the change affects, not only the results that changed.
-   `node formal/proverif/traces.mjs --compact <variant>` lists each trace's events, requests and
-   state changes. Confirm three things:
+   `node formal/proverif/traces.mjs --compact <variant>` lists each trace's events, the messages
+   received, and the writes to the `users`, `recov`, `creds` and `pins` tables. The filter
+   matches output file names such as `account-login-tls` or `fixes-v1-account-malicious-fixui`.
+   Confirm three things:
    - **Attack traces:** each one is the attack the variant names, and uses only steps the real
      system allows.
    - **Reachability traces:** each one is the honest run the related proof is about, for example
@@ -98,7 +104,8 @@ The expected results for each variant sit at the end of the template in ProVerif
    - **"cannot be proved" results:** each one has a written reason, and another variant shows the
      trace.
 4. Paste the new block.
-5. Record in this README what each trace shows.
+5. Record what each trace shows in this README, or in the `fixes/<version>/` README for a fix
+   model.
 
 A result that matches its `EXPECTPV` line is not evidence on its own. The expected line can encode
 a mistake, so never paste a result whose trace you have not read and explained.
@@ -145,8 +152,8 @@ and each such trace was read to confirm it is the attack named in the table.
 | C-W1 | p cannot be guessed offline | u_c is secret | u_c leaks (`secrecy-uc`): k_C and the AEAD give an offline test |
 | C-H1 | The hint stays secret | u_c is secret | u_c leaks |
 | C-H2 | A shown hint is one Alice wrote | u_c is secret | u_c leaks: the hint is authenticated only under u_c |
-| C-I1/2 | An accepted 1-, 2- or 3-block message is exactly one honest encryption: no truncation, extension, reorder or splice | p is secret, even when u_c leaks | — |
-| C-I2 | Each block released while streaming is a prefix of an honest message | p is secret, even when u_c leaks | — |
+| C-I1/2 | An accepted 1-, 2- or 3-block message is exactly one honest encryption: no truncation, extension, reorder or splice | p or u_c is secret (`integrity-uc`, `integrity-p`) | — |
+| C-I2 | Each block released while streaming is a prefix of an honest message | p or u_c is secret (`integrity-uc`, `integrity-p`) | — |
 | C-I2 | No loop is stripped from a two-loop message | the inner password is secret, even when u_c and the outer password leak | — |
 | C-K1 | No block 0 is accepted under two different (p, u_c) | V8: always, for all three algorithms | — |
 | C-K1-v7 | The same game on V7 | AEGIS-256 | AES-GCM and XChaCha20-Poly1305 (`commit-v7`) |
@@ -200,13 +207,13 @@ Each mutation removes one mechanism, and each must turn a proof into an attack:
 `SCN_MALICIOUS` it is the server. The browser and the static site that serves its code are
 always honest.
 
-**Channels.** TLS is a private channel with a fresh reply channel per request. `LEAK_TLS` makes
-it public.
+**Channels.** TLS is a private channel with a fresh reply channel per request. `LEAK_TLS` and
+`SCN_MALICIOUS` make it public.
 
 **Abstractions, each chosen so the attacker is at least as strong as in the real system:**
 - **Server state lives in tables, which can only grow.** Deleted passkeys and replaced recovery
   keys therefore stay usable.
-- **Uniqueness restrictions are opt-in, and off wherever a variant proves something.** Each
+- **Uniqueness restrictions are opt-in, and off in the base variants that make the proofs.** Each
   mirrors a guarantee of the real system:
   - `STORE`: each challenge and each replay nonce is used once (the atomic delete-on-read and
     conditional put).
@@ -214,8 +221,9 @@ it public.
   - `UNIQUSER`: each user id is registered once.
 
   Without them, the attacker gets more traces, so a proof made without them also holds with them.
-  The variants that look for an attack, or for reachability, turn them on (see "Attack and
-  reachability variants" below).
+  The variants that look for an attack or for reachability turn them on (see "Attack and
+  reachability variants" below). So do the `replay` variants, where `STORE` stands for the
+  nonce store under test.
 - **Not modeled:** timestamps, the skew window, TTLs, and `authCount`. Recovery's challenge
   binding is modeled as binding to pk_R only.
 - **WebAuthn registration is unsigned**, as with attestation `none`.
@@ -244,7 +252,8 @@ received at registration instead.
 | A-S1, A-K1 | Alice's u_c stays secret, including when cd_u or the session cookie leaks, or TLS is broken | every variant except `device-nouv` | `device-nouv` (sign-in without UV yields cd_p, and the device yields the PRF output) |
 
 **What the mutations and leaks show:**
-- **`login-unbound-trace` rediscovers C1**, as a full trace. A signed-in attacker posts
+- **`login-unbound-trace` rediscovers C1** (a bug fixed earlier, `vibes/security_review.md`), as
+  a full trace. A signed-in attacker posts
   `passkeys/verify` with a body naming Alice's u_i and any outstanding challenge. The mutated
   server takes the user from the body and binds the attacker's passkey to Alice's account, and
   the attacker then signs in to her account with it. Even then, A-Z1 holds and u_c stays secret:
@@ -289,8 +298,8 @@ is also a run of every other login variant, apart from the `Rcv` events that `RC
 | A-S1 | u_c, the original words, and replaced words stay secret | every variant, except u_c and the original words in `words` | `words` |
 
 **Cross-use of recovery proofs (I-04).** The `replay` variants give the attacker Alice's
-replace-words request, as a log or a TLS-terminating proxy would, and turn the uniqueness
-restrictions on:
+replace-words request, as a log or a TLS-terminating proxy would, and turn the `STORE`
+restriction on:
 
 | Variant | Client signs with | Replace and recover nonces | A-V1 |
 |---|---|---|---|
@@ -388,8 +397,8 @@ finds in these variants cannot be followed by any real run:
 - The "no such user yet" branch of a table lookup is always available, so a derivation can
   register one user id twice.
 
-Reconstructing a trace from such a derivation searches away from it, and a single attempt ran
-past 20 minutes. Under the restrictions the derivations are executable, so traces come back in
+Reconstructing a trace from such a derivation searches away from it and does not finish in
+practical time. Under the restrictions the derivations are executable, so traces come back in
 seconds without backtracking (`NOBT`).
 
 **Which restrictions each variant uses:**
@@ -404,6 +413,7 @@ seconds without backtracking (`NOBT`).
 | `login-tls` | `STORE`, `UNIQUSER` |
 | `recovery-tls` | `UNIQUSER` |
 | `login-reach`, `recovery-reach`, `recovery-reach-legacy` | `RCV`, `STORE`, `UNIQUSER` |
+| `recovery-replay`, `recovery-replay-splitnonce`, `recovery-replay-legacy`, `recovery-replay-legacy-splitnonce` | `STORE` |
 
 With TLS public, the server endpoints run only on the TLS channel, which the attacker can already
 use. A second copy on the public channel only multiplies clauses.
@@ -424,21 +434,22 @@ use. A second copy on the public channel only multiplies clauses.
 the real server's uniqueness guarantees. Most also have an unrestricted proof in a base variant.
 The exception is broken TLS: `login-tls` and `recovery-tls` are the only variants with TLS
 public, so u_c and recovery-word secrecy under broken TLS is proved only under their
-restrictions.
+restrictions. The `replay` variants are the other exception: their results, with Alice's
+replace request leaked, hold only under `STORE`, the shared nonce store they test.
 
 ## Remaining work
 
 As of 2026-10-09.
 
 The work runs as separate steps:
-1. model the current code;
-2. document the findings;
-3. model the fixes;
-4. implement the fixes and their tests;
-5. document the outcomes.
+- model the current code;
+- document the findings;
+- model the fixes;
+- implement the fixes and their tests;
+- document the outcomes.
 
-A fix model goes in its own variants and README section, and never replaces a current-code
-model, so each finding keeps its evidence until its fix ships.
+A fix model goes in its own `fixes/<version>/` directory, with its own variants and README, and
+never replaces a current-code model, so each finding keeps its evidence until its fix ships.
 
 **Current code:**
 
@@ -453,13 +464,16 @@ model, so each finding keeps its evidence until its fix ships.
    - the one-way no-PRF → PRF upgrade. That server held u_c before the upgrade, so the PRF
      guarantees can hold only against a server compromised after the upgrade with no copy of u_c
      kept.
-3. **A-S5: messages Alice encrypts under a pinned account stay secret from a server that does
-   not know her password.** This needs the cipher and account models together. If the combined
-   model does not terminate, A-S5 becomes a two-part argument: the account model shows u_c stays
-   secret, and the cipher model shows messages stay secret while u_c is secret.
-**Planned fixes, as a separate step after items 1-3:**
 
-4. **Model the planned fix** (`conformance.md` §7), in its own variants, next to the current-code
+For the current code, A-S5 is expected to fail, through I-01 alone. A-S5 says that messages Alice
+encrypts while her browser holds a pin for her account stay secret from a server that does not
+know her password. I-01 lets the server switch even a pinned browser to an account whose u_c it
+chose, and from then on Alice's messages rest on her password alone. So A-S5 is modeled with the
+fixes (item 3), where it shows end-to-end message secrecy.
+
+**Planned fixes, as a separate step after items 1-2:**
+
+3. **Model the planned fix** (`conformance.md` §7), in its own variants, next to the current-code
    ones. This covers:
    - **User-id checks:** the I-01 checks at sign-in, registration, add passkey and recovery,
      with a mutation for each check to show it is needed. Add passkey under a malicious server
@@ -467,24 +481,29 @@ model, so each finding keeps its evidence until its fix ships.
    - **Account tags:** in passkey handles and recovery words, for PRF and no-PRF accounts,
      written only from a u_c that was checked.
    - **Transition:** a variant where old untagged passkeys and 24-word sets are still in use.
+   - **A-S5, end to end:** with the fixes, messages Alice encrypts under a pinned account stay
+     secret from a server that does not know her password. This needs the cipher and account
+     models together. If the combined model does not terminate, A-S5 becomes a two-part
+     argument: the account model shows u_c stays secret, and the cipher model shows messages stay
+     secret while u_c is secret.
 
    `fixes/v1` already checks the user-id checks at sign-in and recovery, and an early form of
    the tag: a u_c id in the passkey handle only. This step adds a new version for the planned
    design.
-5. **After remediation:**
+4. **After remediation:**
    - make the fixed behavior the default;
    - keep current behavior as variants that must still find their attacks;
    - model the I-14 and I-17 changes, if those fixes are made.
 
 Not planned: the legacy `/v1/recover` path (I-05).
 
-The approved tex notation changes (`conformance.md` §6) follow items 1-3. The tex for the planned
+The approved tex notation changes (`conformance.md` §6) follow items 1-2. The tex for the planned
 fix goes in with the code, so the published protocol never describes behavior that has not
 shipped.
 
 **Independent reviews.** A sub-agent reviews the models, traces and claims at four points:
 - after items 1 and 2, together with the malicious-server recovery results above, where new
   findings are most likely;
-- after item 4, before the fix design goes to remediation;
+- after item 3, including A-S5, before the fix design goes to remediation;
 - after the `main.tex` changes;
-- after item 5.
+- after item 4.

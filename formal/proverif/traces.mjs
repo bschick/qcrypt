@@ -10,9 +10,9 @@ import * as path from 'node:path';
 // A filter keeps the output files whose name contains it, for example `account-login-net`.
 // Each trace lists its events, the messages received from the attacker or over a private channel,
 // and its table operations, in trace order. A failed reconstruction prints the partial trace it
-// built. --compact shortens each message to its channel and label, and keeps only the writes to
-// server and pin tables. --all-steps adds outputs to the attacker and fresh names. --width sets
-// where long lines are cut (default 220).
+// built. --compact shortens each message to its channel and label, keeps only the writes to the
+// users, recov, creds and pins tables, and drops Rcv events. --all-steps adds outputs to the
+// attacker and fresh names. --width sets where long lines are cut (default 220).
 
 const modelDir = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.resolve(modelDir, '../../dist/proverif');
