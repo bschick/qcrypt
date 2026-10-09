@@ -60,31 +60,31 @@ model column is filled in as each model is written.
 
 | Tex | Step | Code | Model |
 |---|---|---|---|
-| 330-332 | k_KS = G(); k_L = D_S(s‖pkId, k_KS)[256:512) | `ks:74-83`, `ks:113-152`; called from `_loginUser` `auth:755` | |
-| 341-351 | u_c encryption under k | `MasterKeyKeyProvider` `keys:469-630`; `encryptBlock0` | |
-| 344-345 | k_M and k_S from H_k(n_S,a,v,lp,e_l,e) | `keys:542-551`, `keys:585-629` | |
-| 361-368 | cd_x decryption | `_decodeBlock0Impl` `cur:1007-1095`. Callers: `auth:355-376` (cd_u), `auth:719` (cd_p), `auth:1391` (cd_r) | |
+| 330-332 | k_KS = G(); k_L = D_S(s‖pkId, k_KS)[256:512) | `ks:74-83`, `ks:113-152`; called from `_loginUser` `auth:755` | account: `StartSession` (`dsl`) |
+| 341-351 | u_c encryption under k | `MasterKeyKeyProvider` `keys:469-630`; `encryptBlock0` | cipher: `mkAR`; account: `ar_enc` |
+| 344-345 | k_M and k_S from H_k(n_S,a,v,lp,e_l,e) | `keys:542-551`, `keys:585-629` | cipher: `mkAR`, `openAR` |
+| 361-368 | cd_x decryption | `_decodeBlock0Impl` `cur:1007-1095`. Callers: `auth:355-376` (cd_u), `auth:719` (cd_p), `auth:1391` (cd_r) | cipher: `openAR`; account: `openAtRest` |
 
 ## 3. Account protocol
 
 | Tex | Step | Client | Server | Model |
 |---|---|---|---|---|
-| 434-437 | Registration options | `newUser` `auth:1500-1563` | `postRegOptions` `srv:807-877`, `registrationOptions` `srv:879-936` | |
-| 438-447 | Ceremony, u_r, pk_R, u_c, cd_p, cd_r, pk_U | `auth:1520-1555`, `_newRecoverySecret` `auth:545-561` | | |
-| 448-451 | Registration verify | `makeRegVerifyRequest` | `postRegVerify` `srv:422-564`, `_createAuthenticator` `srv:608-691` | |
-| 452-453 | cd_u, BIP39 words | `_loginUser` `auth:736-785` | | |
-| 469-471 | Auth options | `_startAuthentication` `auth:1293-1338` | `postAuthOptions` `srv:727-795` | |
-| 476-479 | Auth verify | `_createSessionImpl` `auth:1268-1291` | `postAuthVerify` `srv:284-396` | |
-| 480-483 | cd_p decrypt, pk_U pin, cd_u | `_resolveUserCred` `auth:701-733`, `_pinAccount` `auth:302-311` | | |
-| 499-505 | Per-request proof | `_doFetch` `auth:385-459`; `aproof:49-97` | | |
-| 506-513 | Cookie, CSRF, skew, proof verify | | `handler` `srv:1826-1836`, `verifyProof` `srv:1737-1791` | |
-| 518 | Replay nonce for non-GET requests | | `storeSingleUseNonce` `sutil:162-176`, called at `srv:1781-1790` | |
-| 527-537 | Add passkey | `addPasskey` `auth:1565-1604` | `getPasskeyOptions` `srv:797-805`, `postPasskeyVerify` `srv:398-420` | |
-| 551-569 | Replace recovery words | `changeRecoveryWords` `auth:599-646`, `_putRecoveryKey` `auth:564-595` | `putRecover3Key` `srv:1107-1149`, `verifyRecoverProof` `sutil:123-159` | |
-| 581-596 | recover3 | `recover3` `auth:1361-1436` | `postRecover3` `srv:1457-1512` | |
-| 597-611 | recover/confirm | `auth:1399-1421` | `postRecoverConfirm` `srv:1514-1585` | |
-| 612-621 | recover/verify | `_finishRecovery` `auth:1456-1495` | `postRecoverVerify` `srv:566-606` | |
-| 626 | Recovery challenge binding | | `_recoveryBinding` `srv:267-269`, `consumeChallenge` `sutil:86-111` | |
+| 434-437 | Registration options | `newUser` `auth:1500-1563` | `postRegOptions` `srv:807-877`, `registrationOptions` `srv:879-936` | `Register`, `SRegOptions` |
+| 438-447 | Ceremony, u_r, pk_R, u_c, cd_p, cd_r, pk_U | `auth:1520-1555`, `_newRecoverySecret` `auth:545-561` | | `Register` |
+| 448-451 | Registration verify | `makeRegVerifyRequest` | `postRegVerify` `srv:422-564`, `_createAuthenticator` `srv:608-691` | `SRegVerify` |
+| 452-453 | cd_u, BIP39 words | `_loginUser` `auth:736-785` | | `Register`, `StartSession` |
+| 469-471 | Auth options | `_startAuthentication` `auth:1293-1338` | `postAuthOptions` `srv:727-795` | `LoginWith`, `SAuthOptions` |
+| 476-479 | Auth verify | `_createSessionImpl` `auth:1268-1291` | `postAuthVerify` `srv:284-396` | `SAuthVerify` |
+| 480-483 | cd_p decrypt, pk_U pin, cd_u | `_resolveUserCred` `auth:701-733`, `_pinAccount` `auth:302-311` | | `LoginWith`, `LoginRegistered` |
+| 499-505 | Per-request proof | `_doFetch` `auth:385-459`; `aproof:49-97` | | `ApiRequests`, `mkProof` |
+| 506-513 | Cookie, CSRF, skew, proof verify | | `handler` `srv:1826-1836`, `verifyProof` `srv:1737-1791` | `authorized`, `SApi` (no skew) |
+| 518 | Replay nonce for non-GET requests | | `storeSingleUseNonce` `sutil:162-176`, called at `srv:1781-1790` | `NonceStored` + `STORE` restriction |
+| 527-537 | Add passkey | `addPasskey` `auth:1565-1604` | `getPasskeyOptions` `srv:797-805`, `postPasskeyVerify` `srv:398-420` | `AddPasskey`, `SPasskeyOptions`, `SPasskeyVerify` |
+| 551-569 | Replace recovery words | `changeRecoveryWords` `auth:599-646`, `_putRecoveryKey` `auth:564-595` | `putRecover3Key` `srv:1107-1149`, `verifyRecoverProof` `sutil:123-159` | `ReplaceWords`, `SReplaceWords` |
+| 581-596 | recover3 | `recover3` `auth:1361-1436` | `postRecover3` `srv:1457-1512` | `Recovery`, `SRecover3` |
+| 597-611 | recover/confirm | `auth:1399-1421` | `postRecoverConfirm` `srv:1514-1585` | `Recovery`, `SRecoverConfirm` |
+| 612-621 | recover/verify | `_finishRecovery` `auth:1456-1495` | `postRecoverVerify` `srv:566-606` | `Recovery`, `SRecoverVerify` |
+| 626 | Recovery challenge binding | | `_recoveryBinding` `srv:267-269`, `consumeChallenge` `sutil:86-111` | binding = pk_R; `authCount` not modeled |
 
 ---
 
@@ -144,10 +144,10 @@ encoding can be parsed back into its fields in exactly one way. The argument for
 
 | ID | Observation | Code / tex | Class | Model impact | Decision |
 |---|---|---|---|---|---|
-| I-01 | B never compares the server-returned u_i with the authenticator's userHandle, with the u_i it asked for, or (before pinning and encrypting) with the u_i decoded from the recovery words. The pk_U pin is keyed by that server-asserted u_i. A malicious API server could therefore assert an unpinned u_i. | `auth:712-724`, `auth:1326-1329`, `auth:1486-1488`; tex 492 | candidate | A-S3, A-S4 | pending |
-| I-02 | pkId, an input to k_L, is supplied by the server and never compared with the credential id the authenticator actually used. | `auth:755`, `ks:113-134` | candidate (likely benign: k_KS stays secret) | A-K1 | pending |
-| I-03 | Account mode is trusted on first use per browser. A no-PRF→PRF pin upgrade is allowed. A missing PRF output on a PRF account is an ordinary error, not a halt. | `auth:290-311`, `auth:716-718`, `auth:1546-1555`; tex 462 | candidate (tied to I-01) | A-S4 | pending |
-| I-04 | The legacy context `qcrypt/recovery/nonce/v1` is accepted for both recover and replace. With it, separation rests only on the shared `'nonce'` replay store. | `aproof:38-40`, `aproof:170-175`, `sutil:152`; tex 404-406 | doc (known backward compatibility) | A-V3 variant | pending |
+| I-01 | B never compares the server-returned u_i with the authenticator's userHandle, with the u_i it asked for, or (before pinning and encrypting) with the u_i decoded from the recovery words. The pk_U pin is keyed by that server-asserted u_i. A malicious API server could therefore assert an unpinned u_i. <br>**Confirmed by `account/malicious` (A-S3).** Alice signs in on the browser that registered her account. The server replies with a different account id, "no-PRF", and a u_c of its choosing. The browser has no pin for that id, so it accepts, pins it, and starts a session with the server's u_c. Every message Alice then encrypts in that session is protected by her password alone, against a server that can guess it offline. The trace matches the code: the user handle is passed to the server and never compared (`auth:1326-1329`), and both pin checks are keyed by the server's `userId` (`auth:290-311`, `auth:712`). <br>`account/malicious-fixui` adds the check `server u_i = userHandle`, and A-S3 then **proves**. | `auth:712-724`, `auth:1326-1329`, `auth:1486-1488`; tex 492 | **confirmed** weakness (malicious server) | A-S3: attack; with fix: proved | pending: proposed fix below |
+| I-02 | pkId, an input to k_L, is supplied by the server and never compared with the credential id the authenticator actually used. <br>Under a malicious server choosing pkId, u_c stays secret (`account/malicious`, A-S2), because k_KS never leaves IndexedDB. | `auth:755`, `ks:113-134` | no effect found | A-S2, A-K1 | accept, or bind as hygiene |
+| I-03 | Account mode is trusted on first use per browser. A no-PRF→PRF pin upgrade is allowed. A missing PRF output on a PRF account is an ordinary error, not a halt. <br>**Trust on first use is inherent** (`account/malicious-fixui`, A-S4). Even with the I-01 fix, a browser holding no pin for the account accepts the server's "no-PRF" plus a server-chosen u_c for Alice's real u_i. That browser could be a new device, a new profile, cleared storage, or a registration that never completed. Closing this needs the account mode to reach the browser through a channel the server cannot alter. One option is a PRF marker in the WebAuthn user handle of new PRF accounts. The authenticator returns the handle to the browser directly, though the handle format is a compatibility constraint. | `auth:290-311`, `auth:716-718`, `auth:1546-1555`; tex 462, 492 | inherent limit; design option | A-S4: attack, with or without the fix | pending |
+| I-04 | The legacy context `qcrypt/recovery/nonce/v1` is accepted for both recover and replace. With it, separation rests only on the shared `'nonce'` replay store. <br>**Confirmed by the `account/recovery-replay-*` variants.** Either layer alone prevents the cross-use: per-operation contexts for current clients, the shared store for legacy ones. With the legacy context and separate stores, a replace-words signature is accepted by recover3. Removing the legacy context, as the code's BACKWARD COMPAT note plans, leaves the contexts as the guard. | `aproof:38-40`, `aproof:170-175`, `sutil:152`; tex 404-406 | doc (known backward compatibility) | A-V1 in `recovery-replay-*` | pending |
 | I-05 | Legacy `POST /v1/recover` takes a plaintext u_c. It works only for accounts without a recovery key. | `srv:1389-1454`, `auth:1438-1452` | doc | optional variant | pending |
 | I-06 | `authCount` and `lastCredentialId` rotation, and the `deleteSession` calls inside recover3 and confirm, are absent from the tex. The tex's "sign-in count" (626) is `authCount`. | `srv:246-282`, `srv:1491`, `srv:1581`, `srv:588` | doc | abstracted; not provable in ProVerif | pending |
 | I-07 | An auth challenge created without a u_i matches any user. Tex 427 says "for that purpose and user". | `sutil:102`, `srv:731`, `srv:784` | doc | A-L1 models the discoverable flow | pending |
@@ -172,6 +172,7 @@ encoding can be parsed back into its fields in exactly one way. The argument for
 | I-26 | WebAuthn sign counters are ignored (`counter: 0`), so there is no clone detection. | `srv:343` | model | — | pending |
 | I-27 | Session cookie and CSRF derivation (HKDF over lastCredentialId and jwtMaterial) is not in the tex, which says only "create ck, cs". | `srv:1613-1683` | doc | tokens are server-keyed MACs | pending |
 | I-28 | Endpoints not in the tex: <br>• GET and DELETE session; <br>• DELETE passkeys/:id (deleting the last passkey deletes the account); <br>• PATCH passkey and user; <br>• GET user; <br>• invitables; <br>• internal v0 routes. | `srv:1884-1993` | doc | getSession and logout only | pending |
+| I-29 | **Registration race when TLS is broken** (`account/login-tls`, `account/recovery-tls`). <br>WebAuthn registration with attestation `none` carries no signature. An attacker who sees Alice's registration challenge can submit `reg/verify` first, with her u_i, challenge and pk_U but its own passkey, recovery key, cd_p and cd_r. <br>The damage is bounded: A-Z1, A-V2 and u_c secrecy all still hold, so the attacker gets sessions it cannot use and a recover3 it cannot complete. <br>Possible hardening: in PRF mode, require a userCred proof at reg/verify over the challenge, credential id and pk_R. An account could then carry Alice's pk_U only if Alice's browser registered it. | `srv:422-564`; tex 448-449 | model (requires TLS compromise) | `login-tls`, `recovery-tls` | pending |
 
 ---
 

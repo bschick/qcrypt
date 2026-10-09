@@ -19,8 +19,11 @@ node formal/proverif/run.mjs --print commit   # show actual results as EXPECTPV 
 
 The runner finds `proverif` on `PATH`, or in `~/.opam/default/bin`, or in `$PROVERIF`.
 `QC_PROVERIF_TIMEOUT` sets the timeout for each variant in seconds; the default is 900.
-Generated `.pv` files and the full ProVerif output, including attack traces, go to
-`dist/proverif/`.
+`QC_PROVERIF_JOBS` sets how many variants run at once; the default allows 4 GB of RAM per run.
+A runaway saturation can use all available memory, so when experimenting with a model, run it
+under `ulimit -v` (for example `ulimit -v 2000000` for 2 GB). The runner reports a process that
+was killed, rather than a result. Generated `.pv` files and the full ProVerif output, including
+attack traces and derivations, go to `dist/proverif/`.
 
 `verify:proverif` is not part of any aggregate build or test script, because it needs opam.
 Run it after any change to the protocol code, the tex, or a model.
@@ -30,7 +33,8 @@ Run it after any change to the protocol code, the tex, or a model.
 | File | Contents |
 |---|---|
 | `lib/qcrypt.pvl` | Primitives shared by every model |
-| `cipher.pv.m4` | The V8 message format: block 0, block N, loops, hint, and the V7 decode path |
+| `cipher.pv.m4` | The V8 message format: block 0, block N, loops, hint, the V7 decode path, and u_c at rest |
+| `account.pv.m4` | Registration, sign-in, authorized requests, passkeys, recovery words, recovery; honest and malicious server |
 | `conformance.md` | Tex ↔ code ↔ model trace, encoding-injectivity arguments, issue log, notation proposal |
 | `run.mjs` | Builds each variant with `m4 -P` and checks its results |
 
@@ -80,7 +84,7 @@ sound.
 
 ## Results: message format (`cipher.pv.m4`)
 
-All 18 variants pass. Each takes under 15 s.
+All 19 variants pass. Each takes under 15 s.
 
 In the tables below, **true** means the property holds. **attack** means ProVerif found a trace,
 and each such trace was read to confirm it is the attack named in the table.
@@ -99,6 +103,9 @@ and each such trace was read to confirm it is the attack named in the table.
 | C-K1 | No block 0 is accepted under two different (p, u_c) | V8: always, for all three algorithms | — |
 | C-K1-v7 | The same game on V7 | AEGIS-256 | AES-GCM and XChaCha20-Poly1305 (`commit-v7`) |
 | C-D1 | A V8 message is never accepted through the V7 decode path, and the reverse | u_c leaks, p secret | — |
+| C-A1 | u_c at rest stays secret, and an accepted blob was encrypted under k for that same u_i | k is secret (`atrest-net`) | — |
+| C-A2 | The at-rest format commits to (k, u_i) | always (`commit-*`) | — |
+| C-A3 | No block is accepted both as a message and as u_c at rest | always, under any keys (`commit-*`) | — |
 
 **About `commit-v7`.** It reproduces the externally reported V7 key-commitment incompleteness: one u_c,
 two passwords, and one block 0 accepted under both. It fails for exactly the algorithms the
@@ -124,3 +131,125 @@ Each mutation removes one mechanism, and each must turn a proof into an attack:
 - **I-17, low.** Nothing compares the inner le with the outer le. An attacker holding u_c and
   the outer password can wrap a one-loop message as the inner layer of a two-loop message. The
   plaintext is still authentic.
+
+## Account model (`account.pv.m4`)
+
+### What is modeled
+
+**Scenarios:**
+- **`SCN_LOGIN`:** registration, sign-in, authorized requests, and adding passkeys.
+- **`SCN_RECOVERY`:** registration, replacing recovery words, and recovery.
+- **`SCN_MALICIOUS`:** registration and sign-in against a malicious server.
+
+**Who the attacker is.** The attacker is a full client of the server, with its own accounts. In
+`SCN_MALICIOUS` it is the server. The browser and the static site that serves its code are
+always honest.
+
+**Channels.** TLS is a private channel with a fresh reply channel per request. `LEAK_TLS` makes
+it public.
+
+**Abstractions, each chosen so the attacker is at least as strong as in the real system:**
+- **Server state lives in tables, which can only grow.** Deleted passkeys and replaced recovery
+  keys therefore stay usable.
+- **Two uniqueness restrictions are opt-in (`STORE`).** One makes each challenge single-use,
+  modeling the atomic delete-on-read. The other makes each replay nonce single-use. Without them,
+  replays are unrestricted.
+- **Not modeled:** timestamps, the skew window, TTLs, and `authCount`. Recovery's challenge
+  binding is modeled as binding to pk_R only.
+- **WebAuthn registration is unsigned**, as with attestation `none`.
+- **The PRF output does not depend on user verification.**
+- **u_c at rest uses an abstract committing encryption.** Its three assumed properties are proved
+  on the real format in `cipher.pv.m4` (C-A1 to C-A3).
+
+**Termination.** Every process creates its fresh names before reading any input or table. A
+name created after an attacker-influenced value can nest through the attacker without bound, and
+then saturation never finishes. The browser keeps its state (passkeys, words, sessions, pins) in
+tables for the same reason. This also lets Alice sign in with any passkey she holds, including
+ones added later or created by recovery.
+
+**Choosing Alice's accounts.** Queries identify Alice's accounts as those whose pk_U is derived
+from a u_c she created (`new ucA`).
+
+### Results: honest server
+
+| ID | Property | Holds in | Attack, as expected, in |
+|---|---|---|---|
+| A-L1 | The server signs Alice in only with a passkey she approved, for that challenge | `net`, `session`, `cdu`, `device` | `device-nouv` (an unlocked device without UV); `unbound`, `session-noproof`, `tls` (each via the passkey A-R1 lets the attacker bind) |
+| A-R1 | Every passkey bound to Alice's account is one she created | `net`, `session`, `cdu`, `device` | `unbound` (C1); `session-noproof`; `tls` |
+| A-Z1 | Every authorized request on Alice's account is one her browser signed | every variant except `session-noproof` and `device-nouv`, **including** `unbound` and `tls` | `session-noproof` (cookie and CSRF alone) |
+| A-S1, A-K1 | Alice's u_c stays secret, including when cd_u or the session cookie leaks, or TLS is broken | every variant except `device-nouv` | `device-nouv` (sign-in without UV yields cd_p, and the device yields the PRF output) |
+
+**What the mutations and leaks show:**
+- **`login-unbound` rediscovers C1**, as a full trace. A signed-in attacker posts
+  `passkeys/verify` with a body naming Alice's u_i and any outstanding challenge. The mutated
+  server takes the user from the body and binds the attacker's passkey to Alice's account. Even
+  then, A-Z1 holds and u_c stays secret: the proof of userCred contains the damage.
+- **`login-tls`.** With TLS broken, the attacker sees Alice's registration challenge and submits
+  `reg/verify` first, with her u_i, challenge and pk_U but its own passkey. With attestation
+  `none`, nothing in a registration response says who built it. A-Z1 and u_c secrecy still hold.
+
+### Results: recovery
+
+| ID | Property | Holds in | Attack, as expected, in |
+|---|---|---|---|
+| A-V1 | recover3 accepts a proof on Alice's account only from her browser recovering it | `net`, `session`, every `replay` variant except the one below | `words` (words leaked); `tls` (registration race); `replay-legacy-splitnonce` |
+| A-V2 | recover/confirm on Alice's account is one her browser signed, for that challenge | every variant except `words` | `words` |
+| A-V3 | New recovery words on Alice's account are ones her browser created | every variant except `words` | `words` (the original words give recovery, then a session) |
+| A-R1 | Every passkey bound to Alice's account, including by recovery, is one she created | every variant except `words` and `tls` | `words`; `tls` (registration race) |
+| A-S1 | u_c, the original words, and replaced words stay secret | every variant, except u_c and the original words in `words` | `words` |
+
+**Cross-use of recovery proofs (I-04).** The `replay` variants give the attacker Alice's
+replace-words request, as a log or a TLS-terminating proxy would, and turn the uniqueness
+restrictions on:
+
+| Variant | Client signs with | Replace and recover nonces | A-V1 |
+|---|---|---|---|
+| `replay` | per-operation contexts | one shared store | true |
+| `replay-splitnonce` | per-operation contexts | separate stores | true |
+| `replay-legacy` | the legacy context, for both | one shared store | true |
+| `replay-legacy-splitnonce` | the legacy context, for both | separate stores | **attack** |
+
+Each of the two layers is enough on its own:
+- **Per-operation contexts** stop the cross-use for current clients.
+- **The shared `'nonce'` store** stops it for legacy clients.
+
+The trace for the last row replays a legacy replace-words signature to recover3 after the
+replace completed, which the shared store would have refused. Once the legacy context is
+removed, the shared store stops being load-bearing.
+
+**Reachability.** Each step of Alice's recovery is reachable in every non-`NOTRACE` variant.
+The final step (`ServerRecovered`) is checked in `recovery-tls-reach`, because reconstructing
+that trace with TLS private runs for hours.
+
+### Results: malicious server
+
+| ID | Property | `malicious` | `malicious-fixui` (I-01 fix) |
+|---|---|---|---|
+| A-S2 | In PRF mode the server never learns Alice's u_c | **true** | **true** |
+| A-S3 | Once registration has completed in a browser, that browser never adopts a u_c the server knows | **attack (I-01)** | **true** |
+| A-S4 | The same, for a browser that holds no pin for the account | attack | attack (trust on first use) |
+
+**About A-S3 in `malicious`.** Alice signs in on the browser that registered her account. The
+server replies with a different account id, "no-PRF", and its own u_c. The browser has no pin
+for that id, so it accepts, and every message Alice then encrypts in that session rests on her
+password alone. `conformance.md` I-01 has the code paths.
+
+**About A-S3 in `malicious-fixui`.** In this variant the browser checks that the server's u_i
+equals the passkey's user handle. The registered-browser pin check is written as a positive
+lookup of the pin registration stored. ProVerif treats the "no entry" branch of any table lookup
+as always possible, so it cannot prove anything through the negative form the code uses.
+
+### Evidence for NOTRACE variants
+
+In `login-session-noproof`, `login-device-nouv`, `login-tls`, `recovery-words` and
+`recovery-tls`, one trace-reconstruction attempt takes over 20 minutes. These variants set
+`NOTRACE`, so their attacks read "cannot be proved". The evidence is the derivation ProVerif
+prints, and each was read. The two recovery variants show the expected consequence of leaked
+words, and the registration race confirmed as a trace in an earlier run. The login variants:
+- **`session-noproof` (A-R1, A-Z1):** the attacker sends Alice's stolen cookie and CSRF token
+  with an arbitrary signature to `passkeys/options`, `passkeys/verify`, and the generic
+  endpoint.
+- **`device-nouv` (A-L1, A-S1):** the attacker submits an assertion the device made without UV,
+  is signed in, and decrypts the returned cd_p with the device's PRF output.
+- **`tls` (A-L1, A-R1):** the registration race described above. It was confirmed as a full
+  trace before `NOTRACE` was added.

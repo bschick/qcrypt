@@ -28,6 +28,7 @@ m4_changequote({{,}})m4_dnl
      loops-uc-pout      SCN_LOOPS LEAK_UC LEAK_POUT
      loops-uc-pout-nolple  SCN_LOOPS LEAK_UC LEAK_POUT MUT_NOLPLE
      downgrade-uc       SCN_DOWNGRADE LEAK_UC
+     atrest-net         SCN_ATREST
    END VARIANTS}} *)
 
 free p: password [private].
@@ -108,6 +109,24 @@ letfun mkBlockN(a: alg, nS: bitstring, n: bitstring, nIV: bitstring, f: bitstrin
    blk(mac(mkKS(uc, x), macin(V8, adf, mE, tL)), V8, adf, mE).
 
 letfun tagOf(b: bitstring) = let blk(t: bitstring, v: bitstring, adf: bitstring, mE: bitstring) = b in t.
+
+(* u_c at rest (tex 336-370, keys:469-630): the same block format, with both the cipher and
+   signing keys derived from the master key k, e = u_i (so e_l = 16), i = 0, and no commitment
+   field from V8 on. Decryption accepts any algorithm and loop fields (conformance.md I-21). *)
+letfun xAR(nS: bitstring, a: alg, lp: bitstring, e: bitstring) = xctx8(nS, a, V8, lp, EL16, e).
+
+letfun mkAR(k: key, e: bitstring, nS: bitstring, nIV: bitstring, m: bitstring) =
+   let x = xAR(nS, XCC, LP1, e) in
+   let adf = ad0(F1, XCC, nIV, nS, IC0, LP1, LP1, NOHINT, NOKC) in
+   let mE = aead_enc(XCC, kdf(ID0, kpM, hmix(k, x)), nIV, adf, m) in
+   blk(mac(kdf(ID1, kpS, hmix(k, x)), macin(V8, adf, mE, TL0)), V8, adf, mE).
+
+letfun openAR(k: key, e: bitstring, b: bitstring) =
+   let blk(t: bitstring, v: bitstring, adf: bitstring, mE: bitstring) = b in
+   let ad0(f: bitstring, a: alg, nIV: bitstring, nS: bitstring, i: bitstring, le: bitstring, lp: bitstring, hE: bitstring, kC: key) = adf in
+   let x = xAR(nS, a, lp, e) in
+   if v = V8 && i = IC0 && kC = NOKC && lp = le && t = mac(kdf(ID1, kpS, hmix(k, x)), macin(v, adf, mE, TL0))
+   then aead_dec(a, kdf(ID0, kpM, hmix(k, x)), nIV, adf, mE).
 
 (* The encryptor never writes an empty block 0 (cur:427-431), and keeps reading until a later
    block has data or the stream ends (cur:520-530). So only the terminal block can be empty, and
@@ -296,6 +315,27 @@ query b: bitstring, p1: password, u1: key, p2: password, u2: key;
 (* Reachability: an honest round trip is accepted *)
 query a: alg, b: bitstring, p1: password, u1: key; event(AccK(a, b, p1, u1)).
 
+(* The u_c-at-rest format commits to both the master key and e = u_i *)
+event AccARK(bitstring, key, bitstring).
+query b: bitstring, k1: key, e1: bitstring, k2: key, e2: bitstring;
+   event(AccARK(b, k1, e1)) && event(AccARK(b, k2, e2)) ==> k1 = k2 && e1 = e2.
+
+(* No block is accepted both as a message and as u_c at rest, under any keys *)
+query a: alg, b: bitstring, p1: password, u1: key, k: key, e: bitstring;
+   event(AccK(a, b, p1, u1)) && event(AccARK(b, k, e)).
+
+query b: bitstring, k: key, e: bitstring; event(AccARK(b, k, e)).
+
+let DecARK() =
+   in(c, (b0: bitstring, k: key, e: bitstring));
+   let m = openAR(k, e, b0) in
+   event AccARK(b0, k, e).
+
+let EncARK() =
+   new nS: bitstring; new nIV: bitstring;
+   in(c, (m: bitstring, k: key, e: bitstring));
+   out(c, mkAR(k, e, nS, nIV, m)).
+
 m4_ifdef({{USE_V7}}, {{
 (* V7 block 0 (keys.ts:632-793): no e_l in the context, no p_l in the PBKDF2 material, and k_C is
    folded into the AEAD AD instead of being stored and compared. *)
@@ -351,7 +391,44 @@ let EncK(a: alg) =
 }})
 
 process
-   !DecK() | !EncK(GCM) | !EncK(XCC) | !EncK(AEGIS)
+   !DecK() | !EncK(GCM) | !EncK(XCC) | !EncK(AEGIS) | !DecARK() | !EncARK()
+}})
+
+m4_ifdef({{SCN_ATREST}}, {{
+(* ======================================================================================== *)
+(* u_c at rest under a secret master key k (k_L, p_R, or u_r || u_i). Alice encrypts u_c and
+   attacker-chosen plaintexts, and decrypts anything, using whatever u_i she is given. *)
+
+free kAR: key [private].
+free UCX: bitstring [private].
+const UI: bitstring [data].
+
+event EncAR(bitstring, bitstring).
+event AccAR(bitstring, bitstring).
+
+query attacker(UCX).
+(* An accepted plaintext was encrypted under k for the same u_i *)
+query e: bitstring, m: bitstring; event(AccAR(e, m)) ==> event(EncAR(e, m)).
+query e: bitstring, m: bitstring; event(AccAR(e, m)).
+
+let EncUC() =
+   new nS: bitstring; new nIV: bitstring;
+   event EncAR(UI, UCX);
+   out(c, mkAR(kAR, UI, nS, nIV, UCX)).
+
+let EncChosen() =
+   new nS: bitstring; new nIV: bitstring;
+   in(c, (e: bitstring, m: bitstring));
+   event EncAR(e, m);
+   out(c, mkAR(kAR, e, nS, nIV, m)).
+
+let DecAR() =
+   in(c, (b: bitstring, e: bitstring));
+   let m = openAR(kAR, e, b) in
+   event AccAR(e, m).
+
+process
+   !EncUC() | !EncChosen() | !DecAR()
 }})
 
 m4_ifdef({{SCN_LOOPS}}, {{
@@ -608,19 +685,28 @@ m4_ifdef({{VARIANT_commit_v8}}, {{(* EXPECTPV
 RESULT event(AccK(GCM,b,p1,u1)) && event(AccK(GCM,b,p2,u2)) ==> p1 = p2 && u1 = u2 is true.
 RESULT event(AccK(XCC,b,p1,u1)) && event(AccK(XCC,b,p2,u2)) ==> p1 = p2 && u1 = u2 is true.
 RESULT event(AccK(AEGIS,b,p1,u1)) && event(AccK(AEGIS,b,p2,u2)) ==> p1 = p2 && u1 = u2 is true.
-RESULT not event(AccK(a_4,b,p1,u1)) is false.
+RESULT not event(AccK(a_6,b,p1,u1)) is false.
+RESULT event(AccARK(b,k1,e1)) && event(AccARK(b,k2,e2)) ==> k1 = k2 && e1 = e2 is true.
+RESULT not (event(AccK(a_6,b,p1,u1)) && event(AccARK(b,k_2,e_2))) is true.
+RESULT not event(AccARK(b,k_2,e_2)) is false.
 END *)}})
 m4_ifdef({{VARIANT_commit_v8_nokc}}, {{(* EXPECTPV
 RESULT event(AccK(GCM,b,p1,u1)) && event(AccK(GCM,b,p2,u2)) ==> p1 = p2 && u1 = u2 is false.
 RESULT event(AccK(XCC,b,p1,u1)) && event(AccK(XCC,b,p2,u2)) ==> p1 = p2 && u1 = u2 is false.
 RESULT event(AccK(AEGIS,b,p1,u1)) && event(AccK(AEGIS,b,p2,u2)) ==> p1 = p2 && u1 = u2 is true.
-RESULT not event(AccK(a_4,b,p1,u1)) is false.
+RESULT not event(AccK(a_6,b,p1,u1)) is false.
+RESULT event(AccARK(b,k1,e1)) && event(AccARK(b,k2,e2)) ==> k1 = k2 && e1 = e2 is true.
+RESULT not (event(AccK(a_6,b,p1,u1)) && event(AccARK(b,k_2,e_2))) is true.
+RESULT not event(AccARK(b,k_2,e_2)) is false.
 END *)}})
 m4_ifdef({{VARIANT_commit_v7}}, {{(* EXPECTPV
 RESULT event(AccK(GCM,b,p1,u1)) && event(AccK(GCM,b,p2,u2)) ==> p1 = p2 && u1 = u2 is false.
 RESULT event(AccK(XCC,b,p1,u1)) && event(AccK(XCC,b,p2,u2)) ==> p1 = p2 && u1 = u2 is false.
 RESULT event(AccK(AEGIS,b,p1,u1)) && event(AccK(AEGIS,b,p2,u2)) ==> p1 = p2 && u1 = u2 is true.
-RESULT not event(AccK(a_4,b,p1,u1)) is false.
+RESULT not event(AccK(a_6,b,p1,u1)) is false.
+RESULT event(AccARK(b,k1,e1)) && event(AccARK(b,k2,e2)) ==> k1 = k2 && e1 = e2 is true.
+RESULT not (event(AccK(a_6,b,p1,u1)) && event(AccARK(b,k_2,e_2))) is true.
+RESULT not event(AccARK(b,k_2,e_2)) is false.
 END *)}})
 m4_ifdef({{VARIANT_loops_net}}, {{(* EXPECTPV
 RESULT event(AccL1(pIn[],nS_12,m_2)) ==> event(EncL1(nS_12,m_2)) is true.
@@ -659,4 +745,9 @@ RESULT event(AccV7(nS_17,m0_8)) ==> event(EncV7(nS_17,m0_8)) is true.
 RESULT event(AccV8(nS_17,m0_8)) ==> event(EncV8(nS_17,m0_8)) is true.
 RESULT not event(AccV7(nS_17,m0_8)) is false.
 RESULT not event(AccV8(nS_17,m0_8)) is false.
+END *)}})
+m4_ifdef({{VARIANT_atrest_net}}, {{(* EXPECTPV
+RESULT not attacker(UCX[]) is true.
+RESULT event(AccAR(e_3,m_3)) ==> event(EncAR(e_3,m_3)) is true.
+RESULT not event(AccAR(e_3,m_3)) is false.
 END *)}})

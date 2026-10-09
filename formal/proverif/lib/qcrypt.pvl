@@ -137,9 +137,12 @@ otherwise forall k1: key, k2: key, n: bitstring, ad1: bitstring, ad2: bitstring,
 fun sig_pk(key): bitstring.
 fun sig_sign(key, bitstring, bitstring, bitstring): bitstring.
 
+(* Returns false rather than failing, so a verifier can try a second context *)
 fun sig_verify(bitstring, bitstring, bitstring, bitstring): bool
 reduc forall s: key, m: bitstring, ctx: bitstring, r: bitstring;
-      sig_verify(sig_pk(s), m, sig_sign(s, m, ctx, r), ctx) = true.
+      sig_verify(sig_pk(s), m, sig_sign(s, m, ctx, r), ctx) = true
+otherwise forall pk: bitstring, m: bitstring, sg: bitstring, ctx: bitstring;
+      sig_verify(pk, m, sg, ctx) = false.
 
 (* A signature is not assumed to hide its message *)
 reduc forall s: key, m: bitstring, ctx: bitstring, r: bitstring;

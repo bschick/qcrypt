@@ -12,12 +12,18 @@ import * as path from 'node:path';
 //
 // A filter keeps the variants whose name contains it. --print shows each variant's actual RESULT
 // lines as an EXPECTPV block, for reviewing and pasting into the template; it never edits a file.
+//
+// QC_PROVERIF_TIMEOUT sets the per-variant timeout in seconds. QC_PROVERIF_JOBS sets how many
+// variants run at once; the default allows 4 GB per run, since account-model saturation can use
+// several GB and an out-of-memory kill would otherwise take down the others.
 
 const modelDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(modelDir, '../..');
 const outDir = path.join(repoRoot, 'dist/proverif');
 const libPath = path.join(modelDir, 'lib/qcrypt');
 const timeoutSecs = Number(process.env.QC_PROVERIF_TIMEOUT ?? 900);
+const defaultJobs = Math.min(os.availableParallelism() / 2, os.totalmem() / 2 ** 32);
+const jobs = Math.max(1, Math.floor(Number(process.env.QC_PROVERIF_JOBS ?? defaultJobs)));
 const args = process.argv.slice(2);
 const printMode = args.includes('--print');
 const filters = args.filter((arg) => !arg.startsWith('--'));
@@ -85,14 +91,14 @@ function runProverif(proverif, pvFile) {
       child.stderr.on('data', (data) => {
          output += data;
       });
-      child.on('close', (code) => {
+      child.on('close', (code, signal) => {
          clearTimeout(timer);
          fs.writeFileSync(pvFile.replace(/\.pv$/, '.out'), output);
          const results = output
             .split('\n')
             .map((line) => line.trim())
             .filter((line) => line.startsWith('RESULT'));
-         resolve({ code, timedOut, results, output, secs: (Date.now() - started) / 1000 });
+         resolve({ code, signal, timedOut, results, output, secs: (Date.now() - started) / 1000 });
       });
    });
 }
@@ -126,6 +132,9 @@ function report(outcome) {
    const problems = [];
    if (outcome.timedOut) {
       problems.push(`timed out after ${timeoutSecs}s`);
+   } else if (outcome.signal) {
+      // The kernel's out-of-memory killer is the usual source of an unexpected SIGKILL
+      problems.push(`killed by ${outcome.signal}${outcome.signal === 'SIGKILL' ? ' (out of memory?)' : ''}`);
    } else if (outcome.code !== 0) {
       const error = outcome.output.split('\n').find((line) => line.startsWith('Error')) ?? `exit ${outcome.code}`;
       problems.push(error);
@@ -156,16 +165,18 @@ async function main() {
       .flatMap(readVariants)
       .filter((variant) => !filters.length || filters.some((filter) => variant.name.includes(filter)));
 
-   const limit = Math.max(1, Math.floor(os.availableParallelism() / 2));
    console.error(
-      `Running ${variants.length} variants, ${limit} at a time (output in ${path.relative(repoRoot, outDir)})`,
+      `Running ${variants.length} variants, ${jobs} at a time (output in ${path.relative(repoRoot, outDir)})`,
    );
-   const outcomes = await runAll(proverif, variants, limit);
+   const outcomes = await runAll(proverif, variants, jobs);
 
    let failures = 0;
    for (const outcome of outcomes) {
       const label = `${path.basename(outcome.variant.template, '.pv.m4')}/${outcome.variant.name}`;
       if (printMode) {
+         if (outcome.timedOut || outcome.signal || outcome.code !== 0) {
+            console.error(`${label} did not finish: ${report(outcome).join('; ')}`);
+         }
          console.log(`m4_ifdef({{VARIANT_${outcome.variant.name.replaceAll('-', '_')}}}, {{(* EXPECTPV`);
          console.log(outcome.results.join('\n'));
          console.log('END *)}})');
