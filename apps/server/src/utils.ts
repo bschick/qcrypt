@@ -96,7 +96,7 @@ export type ChallengeSpec =
 // The challenge must match the given userId, unless it is an auth challenge created with UNKNOWN_USER_ID.
 // The binding must also match; an omitted binding matches only a challenge created without one.
 export async function consumeChallenge(challenge: string, check: ChallengeSpec): Promise<ChallengeItem> {
-   if (!validB64(challenge)) {
+   if (!validB64(challenge) || base64UrlDecode(challenge)!.byteLength !== CHALLENGE_BYTES) {
       throw new ParamError('challenge not valid');
    }
 
