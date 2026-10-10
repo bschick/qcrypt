@@ -183,10 +183,26 @@ encoding can be parsed back into its fields in exactly one way. The argument for
 
 **Status:**
 - N1-N9 were approved on 2026-10-08.
-- They are applied once the remaining models are done (README, "Remaining work", items 1-2), so
-  the auth stanzas are rewritten only once. Each `main.tex` diff is reviewed on its own.
+- The models they waited on (README, "Remaining work", items 1-2) and the first review are done,
+  so they are being applied, from 2026-10-10. Each `main.tex` diff is reviewed on its own, and
+  details are decided diff by diff.
 - They describe the protocol as it runs today. The tex for the planned fixes in §7 goes in with
   the code.
+
+**Points the models raised after approval, to settle during the pass:**
+- **N6 and N9:** two tex notes claim more than the current code gives.
+  - Tex 492 says a later cd_p substitution fails authentication. That holds only while the
+    server names the same user id: the server can name another (I-01), and a browser with no pin
+    trusts the first u_c it sees (I-03).
+  - Tex 462 says S requires every passkey to match the account's mode, but at registration S
+    picks the mode from the fields that arrive (I-29).
+
+  A header saying S may be malicious for the u_c-at-rest claims needs these limits beside it.
+- **N3:** the challenge store's 300 s lifetime (I-30), and the no-PRF u_c kept under two KMS
+  keys.
+- **N5:** whether `/v1/recover` (I-05) is documented or marked deprecated.
+- **N8:** the name table goes in the README. Open: whether the models adopt the names now or
+  with `fixes/v2`.
 
 The aim is a tex that reads almost line for line as the model, so `conformance.md` stays
 mechanical. Each change also notes whether it would affect the flow SVGs. Those are Lucidchart

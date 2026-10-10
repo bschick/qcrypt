@@ -647,14 +647,18 @@ use. A second copy on the public channel only multiplies clauses.
 
 **What these variants' "true" results mean.** In these variants they hold for runs that respect
 the real server's uniqueness guarantees. Most also have an unrestricted proof in a base variant.
-The exception is broken TLS: `login-tls` and `recovery-tls` are the only variants with TLS
-public, so u_c and recovery-word secrecy under broken TLS is proved only under their
-restrictions. The `replay` variants are the other exception: their results, with Alice's
-replace request leaked, hold only under `STORE`, the shared nonce store they test.
+Three groups have none, so their results hold only under the restrictions:
+- **Broken TLS:** every variant with TLS public is restricted (`login-tls`, `recovery-tls`, the
+  two no-PRF `tls` variants, `login-tls-dualmode` and `login-tls-stripped`). So u_c and
+  recovery-word secrecy under broken TLS is proved only under their restrictions.
+- **Live challenge reads:** u_c and word secrecy in the `db-chal` variants, and the recover3,
+  confirm and new-words results of `recovery-db-chalrec`.
+- **Replay:** the `replay` variants' results, with Alice's replace request leaked, hold only
+  under `STORE`, the shared nonce store they test.
 
 ## Remaining work
 
-As of 2026-10-09.
+As of 2026-10-10.
 
 The work runs as separate steps:
 - model the current code;
@@ -674,13 +678,35 @@ never replaces a current-code model, so each finding keeps its evidence until it
 2. **Done: no-PRF accounts and database leaks** ("Results: no-PRF accounts", "Results: database
    leak"). The no-PRF → PRF upgrade is item 5.
 
+**Done: the first independent review**, on 2026-10-10, of items 1 and 2 and the
+malicious-server recovery results. It rated nothing High or Medium, and each of its follow-ups
+is now in the current-code model:
+- PRF fields stripped at registration (I-29), traced through Alice's later sign-in
+  (`login-tls-dualmode`, `login-tls-stripped`);
+- live reads of the challenge table (I-30: `login-db-chal`, `recovery-db-chal`,
+  `recovery-db-chalrec`);
+- a passkey Alice adds carrying the user id the server names (I-01, in `malicious` and
+  `malicious-recovery`);
+- a second no-PRF u_c secrecy query, on the u_c Alice's browser received;
+- the account mode in the recover/verify reply limited to PRF or no-PRF, as the code's boolean
+  reads it.
+
+The review also confirmed that the challenge and replay-nonce stores fail closed, as `STORE`
+assumes. It found that two accounts in one browser open no new attack class against the current
+code, and recommended covering them, and reauthentication, in the fix models (item 3).
+
+**Next: the approved tex notation changes** (`conformance.md` §6), applied to `main.tex` one
+diff at a time, with details decided diff by diff. They describe the code as it runs today. The
+tex for the planned fix goes in with the code, so the published protocol never describes
+behavior that has not shipped.
+
 For the current code, A-S5 is expected to fail, through I-01 alone. A-S5 says that messages Alice
 encrypts while her browser holds a pin for her account stay secret from a server that does not
 know her password. I-01 lets the server switch even a pinned browser to an account whose u_c it
 chose, and from then on Alice's messages rest on her password alone. So A-S5 is modeled with the
 fixes (item 3), where it shows end-to-end message secrecy.
 
-**Planned fixes, as a separate step after items 1-2:**
+**Planned fixes, as a separate step after the tex changes:**
 
 3. **Model the planned fix** (`conformance.md` §7) as `fixes/v2`, in its own variants, next to
    the current-code ones. Its headline goals, for PRF accounts:
@@ -698,6 +724,8 @@ fixes (item 3), where it shows end-to-end message secrecy.
      registration of I-29.
    - **Read-access fixes:** the candidates in `conformance.md` §7.3 for I-30.
    - **Transition:** a variant where old untagged passkeys and 24-word sets are still in use.
+   - **Two accounts in one browser,** since each fix keys its check on the account.
+   - **Reauthentication,** which in the current code is another route to A-S3.
    - **A-S5, end to end:** with the fixes, messages Alice encrypts under a pinned account stay
      secret from a server that does not know her password. This needs the cipher and account
      models together. If the combined model does not terminate, A-S5 becomes a two-part
@@ -718,13 +746,9 @@ fixes (item 3), where it shows end-to-end message secrecy.
 
 Not planned: the legacy `/v1/recover` path (I-05).
 
-The approved tex notation changes (`conformance.md` §6) follow items 1-2. The tex for the planned
-fix goes in with the code, so the published protocol never describes behavior that has not
-shipped.
-
 **Independent reviews.** A sub-agent reviews the models, traces and claims at five points:
 - after items 1 and 2, together with the malicious-server recovery results above, where new
-  findings are most likely;
+  findings are most likely (done, above);
 - after item 3, including A-S5, before the fix design goes to remediation;
 - after the `main.tex` changes;
 - after item 4;
