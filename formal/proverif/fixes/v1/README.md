@@ -59,5 +59,11 @@ With the negative form the code uses, A-S3 cannot be proved, because ProVerif tr
 "no entry" branch of a table lookup as always possible. The two forms are equivalent there,
 because that browser's pin exists before Alice has her words.
 
+**Registration.** This snapshot's `Register` accepts a reg/verify reply only when it names the
+user id from the registration options. So every variant here includes the registration row of
+the user-id checks (`conformance.md` §7.1), whatever its flags. The current-code model pins
+whatever user id the reply names, and there A-S3R is an attack (`../../README.md`, "Results:
+malicious server").
+
 **Why the id can be modeled as an unguessable hash:** see `conformance.md` §7.2, "Why 31 bits
 are enough".

@@ -23,16 +23,17 @@ and model, and keeps the issue log.
     registration per user id).
 - **Malicious server:**
   - In PRF mode, the server never learns u_c (A-S2).
-  - Recovery on the browser that registered never adopts a u_c the server knows (A-S3R). At
-    recover3 that browser compares the u_c it receives with its pin. Only sign-in (I-01) can
-    switch it to the server's u_c.
+  - Recovery on the browser that registered never adopts a u_c the server knows, provided the
+    reg/verify reply named Alice's user id (A-S3R). At recover3 that browser compares the u_c it
+    receives with its pin. The browser does not check that reply's user id (I-01), so without
+    the proviso recovery can adopt the server's u_c.
 
 **What does not hold, or holds only through a dependency.** Each item was confirmed against the
 code. `conformance.md` §5 has the details and code locations:
 
 | Issue | Finding | Evidence | Status |
 |---|---|---|---|
-| I-01 | The browser accepts whatever user id the server names at sign-in, registration, add passkey and recovery. A malicious server can switch Alice's browser to an account whose u_c it chose, so messages she then encrypts rest on her password alone. This breaks the tex's claim that PRF accounts protect u_c from the server. | `malicious`: A-S3 attack; `malicious-recovery`: the server names another user at `recover/verify` | fix planned (`conformance.md` §7) |
+| I-01 | The browser accepts whatever user id the server names at sign-in, registration, add passkey and recovery. A malicious server can switch Alice's browser to an account whose u_c it chose, so messages she then encrypts rest on her password alone. This breaks the tex's claim that PRF accounts protect u_c from the server. | `malicious`: A-S3 attack; `malicious-recovery`: A-S3R attack, where the server names another user at reg/verify, and the server names another user at `recover/verify` | fix planned (`conformance.md` §7) |
 | I-03 | Account mode and u_c are trusted on first use in each browser, at sign-in and at recovery. A browser with no pin accepts "no-PRF" and a u_c the server chose, even for Alice's own user id. | `malicious`: A-S4 attack; `malicious-recovery`: A-S4R attack, where recover3 pins the server's u_c under Alice's own user id | fix planned (§7) |
 | I-04 | Recovery and replace-words signatures are kept apart by two layers: per-operation contexts, and the shared nonce store for the legacy context. Either one alone is enough. | `recovery-replay-*` | the store stops being needed once the legacy context is removed |
 | I-14 | Truncation resistance depends on the encryptor never writing an empty block before the last one, because the decryptor does not check f on an empty block. | `integrity-net-emptymid` | hardening, pending |
@@ -341,9 +342,14 @@ These variants model the code as it is. Models of proposed fixes are kept apart,
 |---|---|---|---|
 | A-S2 | In PRF mode the server never learns Alice's u_c | **true** | **true** |
 | A-S3 | Once registration has completed in a browser, that browser never adopts a u_c the server knows | attack (I-01) | attack (I-01, by sign-in) |
-| A-S3R | The same, by recovery alone | — | **true** |
+| A-S3R | The same, by recovery alone | — | attack (I-01, at registration) |
+| A-S3R, own id | A-S3R, when the reg/verify reply named Alice's user id | — | **true** |
 | A-S4 | The same, for a browser with no pin that signs in | attack | attack |
 | A-S4R | The same, for a browser with no pin that recovers | — | attack |
+
+In both variants, registration follows the code: the browser pins and signs in under the user
+id the reg/verify reply names (`auth:1545-1557`). The recovery words and the passkey's user
+handle carry the user id from the registration options.
 
 `malicious-recovery` adds recovery from both browsers (`MAL_RECOVERY`). The browser's recovery
 follows the code:
@@ -366,7 +372,13 @@ What the traces show:
     under Alice's own user id from the words.
   - The server then names a different user at `recover/verify` (I-01).
   - The words carry the user id, but nothing about the account mode or u_c.
-- **A-S3R (recovery on the registering browser), proved.**
+- **A-S3R (I-01, at registration).**
+  - At registration the server's reg/verify reply names a different user id. The browser pins
+    that one, holding Alice's own u_c, and has no pin for the user id in her words and passkey.
+  - Later, on the same browser, Alice recovers with her words. recover3 answers "no-PRF" with
+    the server's u_c. The browser has no pin for that user id, so it accepts, and the recovery
+    ends holding the server's u_c.
+- **A-S3R when reg/verify named Alice's user id, proved.**
   - At recover3 that browser compares the u_c it receives with the pk_U it pinned at
     registration. So the server must return Alice's own cd_r, which it cannot forge without the
     words.
@@ -385,23 +397,26 @@ What the traces show:
 - **Recoveries:** in `malicious-recovery`, a recovery that ends holding Alice's own u_c is
   reachable on both browsers. In those traces the server names a different user at
   `recover/verify`. That is the I-01 effect in recovery: the u_c is still hers.
+- **The registering browser:** its two queries also require a registration whose reg/verify
+  reply named Alice's user id, so their traces are the runs the A-S3R proof covers. Both take
+  the positive-lookup branch described below.
 
 **Modeling note: the registering browser.** It signs in through `LoginRegistered` and recovers
-through `RecoveryRegistered`. Two choices there make A-S3R provable:
-- **Positive pin lookups under its own user id:** at sign-in when the server names the
-  registered account, and at recovery under the words' user id. ProVerif treats the "no entry"
-  branch of a table lookup as always possible. Through that branch, a sign-in with the code's
-  negative form could pin a u_c the server chose under Alice's own user id, and recovery would
-  then read that pin. On this browser the positive form drops no run of the code, because its
-  pin exists from registration on. Under any other user id the server names, the checks keep
-  the code's negative form.
-- **`[precise]` on the registration input that receives the user id.** Without it, ProVerif
-  combines two registrations of one browser, under different user ids, into one derivation that
-  no run follows. `[precise]` adds no assumption, since an input receives one message per run.
-  The honest sign-in on this browser also needs it to reconstruct its trace.
+through `RecoveryRegistered`. Two choices there make A-S3R provable for a registration that
+pinned Alice's user id:
+- **Positive pin lookups under the user id registration pinned:** at sign-in when the server
+  names that account, and at recover3 when it is the words' user id. ProVerif treats the "no
+  entry" branch of a table lookup as always possible. Through that branch, a sign-in with the
+  code's negative form could pin a u_c the server chose under that user id, and recovery would
+  then read that pin. The positive form drops no run of the code, because that pin exists from
+  registration on. Under any other user id, the checks keep the code's negative form.
+- **`[precise]` on both registration inputs:** the options and the reg/verify reply. Without
+  it, ProVerif combines two registrations of one browser, under different user ids, into one
+  derivation that no run follows. `[precise]` adds no assumption, since an input receives one
+  message per run.
 
-Leaving out any one of these, including the positive lookup at sign-in alone, leaves A-S3R at
-"cannot be proved".
+Leaving out any one of the four (either positive lookup, either `[precise]`) leaves A-S3R, for a
+registration that pinned Alice's user id, at "cannot be proved".
 
 ### Attack and reachability variants
 
@@ -477,8 +492,9 @@ never replaces a current-code model, so each finding keeps its evidence until it
 
 **Current code:**
 
-1. **Done: recovery on the registering browser, under a malicious server.** A-S3R is proved in
-   `malicious-recovery` ("Results: malicious server").
+1. **Done: recovery on the registering browser, under a malicious server.** In
+   `malicious-recovery`, A-S3R is an attack through I-01 at registration, and holds when the
+   reg/verify reply named Alice's user id ("Results: malicious server").
 2. **No-PRF accounts.** Everything so far is PRF mode. This adds:
    - a no-PRF variant of each scenario;
    - a passive database-leak variant, where u_c is expected to stay secret in PRF mode and to be
