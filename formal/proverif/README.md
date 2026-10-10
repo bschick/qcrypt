@@ -38,19 +38,20 @@ and model, and keeps the issue log.
 - **Database leak:** a copy of the server's account tables reveals u_c in neither mode, and does
   not let anyone sign in. In no-PRF mode, u_c is exposed to anyone who can also use either KMS
   key: the main key, or the backup key, which holds a second copy that the server never
-  decrypts.
+  decrypts. The challenge table is not part of that result (I-30).
 
 **What does not hold, or holds only through a dependency.** Each item was confirmed against the
 code. `conformance.md` §5 has the details and code locations:
 
 | Issue | Finding | Evidence | Status |
 |---|---|---|---|
-| I-01 | The browser accepts whatever user id the server names at sign-in, registration, add passkey and recovery. A malicious server can switch Alice's browser to an account whose u_c it chose, so messages she then encrypts rest on her password alone. This breaks the tex's claim that PRF accounts protect u_c from the server. | `malicious`: A-S3 attack; `malicious-recovery`: A-S3R attack, where the server names another user at reg/verify, and the server names another user at `recover/verify` | fix planned (`conformance.md` §7) |
+| I-01 | The browser accepts whatever user id the server names at sign-in, registration, add passkey and recovery. A malicious server can switch Alice's browser to an account whose u_c it chose, so messages she then encrypts rest on her password alone. This breaks the tex's claim that PRF accounts protect u_c from the server. | `malicious`: A-S3 attack, and a passkey Alice adds carries the user id the server names; `malicious-recovery`: A-S3R attack, where the server names another user at reg/verify, and the server names another user at `recover/verify` | fix planned (`conformance.md` §7) |
 | I-03 | Account mode and u_c are trusted on first use in each browser, at sign-in and at recovery. A browser with no pin accepts "no-PRF" and a u_c the server chose, even for Alice's own user id. | `malicious`: A-S4 attack; `malicious-recovery`: A-S4R attack, where recover3 pins the server's u_c under Alice's own user id | fix planned (§7) |
 | I-04 | Recovery and replace-words signatures are kept apart by two layers: per-operation contexts, and the shared nonce store for the legacy context. Either one alone is enough. | `recovery-replay-*` | the store stops being needed once the legacy context is removed |
 | I-14 | Truncation resistance depends on the encryptor never writing an empty block before the last one, because the decryptor does not check f on an empty block. | `integrity-net-emptymid` | hardening, pending |
 | I-17 | The inner le is not compared with the outer le. An attacker holding u_c and the outer password can wrap a one-loop message as the inner layer of a two-loop message. The plaintext is still authentic. | `loops-uc-pout` | low, pending |
-| I-29 | With TLS broken, an attacker can win the registration race and hold Alice's user id. Her u_c and words stay secret, and her browser notices on first use. | `login-tls`, `recovery-tls` | accepted |
+| I-29 | With TLS broken, an attacker can win the registration race and hold Alice's user id. Her u_c and words stay secret, and her browser notices on first use. It can also strip the PRF fields from her reg/verify. The server then registers her user id and passkey as a no-PRF account and returns its u_c, which the attacker sees. Her browser halts, but a later sign-in with that passkey, over intact TLS, receives that u_c, and with no pin she accepts it. | `login-tls`, `recovery-tls`; `login-tls-dualmode` | race accepted; stripping pending, and the planned handle tag (§7.2) targets it |
+| I-30 | A live read of the challenge table hijacks registration without breaking TLS: the attacker submits reg/verify with Alice's user id and outstanding challenge, and its own passkey and keys, before she does. A read of her recover/verify challenge likewise lets it bind its own passkey to her account. Her u_c and words stay secret. | `login-db-chal`, `recovery-db-chal`, `recovery-db-chalrec` | pending; fix candidates in `conformance.md` §7.3 |
 | — | The externally reported V7 key-commitment incompleteness, reproduced. V8 closes it. | `commit-v7` | known |
 
 The other issue-log entries are gaps in the tex, differences between the tex and the code, or
@@ -99,7 +100,7 @@ flags. The main flag groups are:
 - `SCN_*` selects the scenario.
 - `LEAK_*` gives the attacker a secret.
 - `MUT_*` deliberately breaks one protocol mechanism.
-- The rest set options, described where they are used: `NOPRF`, `STORE`, `RCV`, `UNIQUSER`,
+- The rest set options, described where they are used: `NOPRF`, `DUALMODE`, `STORE`, `RCV`, `UNIQUSER`,
   `NOBT`, `PRECISE`, `KEY_UI`, `REACH_ONLY`, `MAL_RECOVERY`, `LEGACY_CLIENT`, `USE_V7`, and
   `FIX_*` in `fixes/`.
 
@@ -229,7 +230,10 @@ authenticator has no PRF and the server takes the code's no-PRF branches:
 
 Each variant's server serves one mode, for every account. An account's mode never changes, and
 the server never decrypts a ciphertext a client supplied, so the attacker gains nothing from
-accounts of the other mode. The no-PRF → PRF upgrade is not modeled yet.
+accounts of the other mode. The exception is reg/verify itself: the server picks the mode from
+which fields the request carries (`srv:438`), so with TLS broken the attacker picks Alice's mode.
+`DUALMODE` gives `login-tls-dualmode` a server that accepts both request shapes, with Alice's
+PRF registration halting on a no-PRF reply (I-29). The no-PRF → PRF upgrade is not modeled yet.
 
 **Who the attacker is.** The attacker is a full client of the server, with its own accounts. In
 `SCN_MALICIOUS` it is the server. The browser and the static site that serves its code are
@@ -253,7 +257,10 @@ always honest.
   reachability variants" below). So do the `replay` variants, where `STORE` stands for the
   nonce store under test.
 - **Not modeled:** timestamps, the skew window, TTLs, and `authCount`. Recovery's challenge
-  binding is modeled as binding to pk_R only.
+  binding is carried as pk_R but never compared. The code binds H(pk_R : authCount) and
+  re-derives it at confirm and recover/verify, so a sign-in, a logout, another recover3 or new
+  words void the challenge, and recover/verify also requires an empty `lastCredentialId`.
+  Leaving these out only adds attacker runs.
 - **WebAuthn registration is unsigned**, as with attestation `none`.
 - **The PRF output does not depend on user verification.**
 - **u_c at rest uses an abstract committing encryption.** Its three assumed properties are proved
@@ -306,6 +313,15 @@ the server derives it.
   - With TLS broken, the attacker can also act as the server toward Alice's browser, so the
     malicious-server results apply. Through I-01 it can sign her browser in to an account it
     chose.
+- **`login-tls-dualmode` shows the attacker choosing Alice's account mode (I-29).** The server
+  picks the mode from which fields reg/verify carries, so the attacker strips the PRF fields
+  from her request. The trace shows the honest server registering her own user id and passkey
+  as a no-PRF account and sending its u_c in the reply, which the attacker sees. Her browser
+  halts on that reply. The rest follows from the code but is not traced: a later sign-in with
+  that passkey, over intact TLS, gets the same u_c from auth/verify, and her browser, with no
+  pin, accepts it (A-S4). ProVerif finds a trace for that sign-in only under the hypothesis that
+  the attacker holds her passkey's key, which no run allows, so the variant leaves that query
+  out. Her own PRF u_c stays secret throughout.
 
 **Reachability.** `login-reach` shows Alice's own runs reaching the server:
 - her sign-in with her passkey;
@@ -377,6 +393,7 @@ These variants model the code as it is. Models of proposed fixes are kept apart,
 | A-S3R, own id | A-S3R, when the reg/verify reply named Alice's user id | — | **true** |
 | A-S4 | The same, for a browser with no pin that signs in | attack | attack |
 | A-S4R | The same, for a browser with no pin that recovers | — | attack |
+| — | A passkey Alice adds carries the user id of the session she added it in | attack (I-01) | attack (I-01) |
 
 In both variants, registration follows the code: the browser pins and signs in under the user
 id the reg/verify reply names (`auth:1545-1557`). The recovery words and the passkey's user
@@ -398,6 +415,10 @@ What the traces show:
   has no pin for that user id, so it accepts, and every message Alice then encrypts in that
   session rests on her password alone. `conformance.md` I-01 has the code paths.
 - **A-S4.** A browser with no pin accepts the server's "no-PRF" and u_c at sign-in.
+- **Add passkey (I-01).** Alice signs in to her own account, holding her own u_c, and adds a
+  passkey. The `passkeys/options` reply names another user id, which becomes the new passkey's
+  user handle (`auth:1576`). A later sign-in with that passkey then starts from the account the
+  server named. The planned fix checks that user id before the ceremony (`conformance.md` §7.1).
 - **A-S4R (trust on first use in recovery).**
   - On a browser with no pin, recover3 accepts "no-PRF" and a u_c the server chose, and pins it
     under Alice's own user id from the words.
@@ -463,9 +484,9 @@ account mode. Results in bold differ from PRF mode.
 |---|---|---|---|
 | A-L1, A-R1 | Sign-in only with a passkey Alice approved; only passkeys she created are bound | `login-noprf-net`, `-session`, `-cdu`, `-device` | `-device-nouv`, `-unbound`, `-session-noproof`, `-tls` |
 | A-Z1 | Every authorized request on Alice's account is one her browser signed | `login-noprf-net`, `-session`, `-cdu`, `-device` | `-device-nouv`, **`-unbound`**, `-session-noproof`, `-tls` |
-| A-S1, A-K1 | Alice's u_c stays secret | `login-noprf-net`, `-session`, `-cdu`, `-device` | `-device-nouv`, **`-unbound`**, **`-session-noproof`**, **`-tls`** |
+| A-S1, A-K1 | Alice's u_c stays secret: the u_c the server drew when it registered her passkey, and the u_c her browser received | `login-noprf-net`, `-session`, `-cdu`, `-device` | `-device-nouv`, **`-unbound`**, **`-session-noproof`**, **`-tls`** |
 | A-V1-3, A-R1 | Recovery steps and new words on Alice's account are her browser's | `recovery-noprf-net`, `-session` | `-words`, `-tls` |
-| A-S1 | u_c and both word sets stay secret | `recovery-noprf-net`, `-session`; the replaced words in every variant | `-words` (u_c, original words); **`-tls`** (u_c) |
+| A-S1 | u_c, in both forms, and both word sets stay secret | `recovery-noprf-net`, `-session`; the replaced words in every variant | `-words` (u_c, original words); **`-tls`** (u_c) |
 | — | The server knows the u_c Alice's browser holds | — | `malicious-noprf`, by design |
 
 What the traces show:
@@ -478,17 +499,26 @@ What the traces show:
 - **`login-noprf-device-nouv`.** A sign-in without user verification is enough. No PRF output is
   needed, since the reply carries u_c.
 - **`login-noprf-tls`.** For the correspondence queries, the attacker, acting as the server,
-  gives Alice's browser the user id of an account it registered (I-29). For u_c, the server's
-  reg/verify reply to Alice's own registration carries it in plaintext.
+  gives Alice's browser the user id of an account it registered (I-29). For the u_c the server
+  drew for her passkey, the server's reg/verify reply to her own registration carries it in
+  plaintext. For the u_c her browser received, the attacker answers her reg/verify itself with
+  a u_c of its own, which a no-PRF registration takes from whoever replies.
 - **`recovery-noprf-words`.** recover3 returns u_c itself to anyone holding the words. The
   attacker then confirms, binds its own passkey at recover/verify, and replaces the words. The
   replaced words stay secret.
-- **`recovery-noprf-tls`.** The correspondence traces are as in `login-noprf-tls`. The u_c trace
-  is a registration race with one of Alice's passkeys:
-  1. The attacker answers her recover/confirm with registration options it requested itself.
-  2. It submits the response from the passkey she creates as its own reg/verify.
-  3. The server registers an account with her user id and passkey, and sends the attacker the
-     u_c it drew. A later sign-in with that passkey returns that same u_c to Alice.
+- **`recovery-noprf-tls`.** The correspondence traces, and the trace for the u_c her browser
+  received, are as in `login-noprf-tls`. The trace for the u_c the server drew is a
+  registration race:
+  1. The attacker answers Alice's own reg/verify itself, so her registration challenge stays
+     unused.
+  2. It answers her recover/confirm with registration options it requested itself, so the
+     passkey she creates has the attacker's user id as its handle.
+  3. It pairs that passkey's credential id and public key with her registration challenge and
+     user id in a reg/verify of its own. Unsigned attestation allows this.
+  4. The server registers the account and sends the attacker the u_c it drew.
+
+  The account is one the attacker completed and Alice cannot sign in to, since her passkey's
+  handle names another account. `login-noprf-tls` shows the direct exposure.
 - **`malicious-noprf`.** The server's reg/verify reply supplies u_c.
 
 **Reachability.** `login-noprf-reach` and `recovery-noprf-reach` show the same runs of Alice's as
@@ -503,9 +533,9 @@ browser received at registration.
 - passkeys, with the credential id, public key and cd_p;
 - for a no-PRF account, u_c under both KMS keys.
 
-Challenges and replay nonces are short-lived and not in the copy. `LEAK_KMS_NEW` and
-`LEAK_KMS_OLD` add the use of the main or the backup KMS key. PRF mode keeps nothing under KMS,
-so the PRF variants leave the keys out.
+Replay nonces are not in the copy. `LEAK_CHAL` adds live reads of the challenge table, whose
+entries last 300 s (`consts.ts:63`). `LEAK_KMS_NEW` and `LEAK_KMS_OLD` add the use of the main or
+the backup KMS key. PRF mode keeps nothing under KMS, so the PRF variants leave the keys out.
 
 | Variant | Mode | Leaked | u_c | Sign-in, binding, requests, recovery |
 |---|---|---|---|---|
@@ -514,10 +544,25 @@ so the PRF variants leave the keys out.
 | `login-noprf-db` | no-PRF | tables | secret | hold |
 | `login-noprf-db-kms` | no-PRF | tables and the main KMS key | **exposed** | hold |
 | `login-noprf-db-kmsold` | no-PRF | tables and the backup KMS key | **exposed** | hold |
+| `login-db-chal` | PRF | tables and live challenges | secret | **attack** (I-30) |
+| `recovery-db-chal` | PRF | tables and live challenges | secret, as are both word sets | **attack** (I-30) |
+| `recovery-db-chalrec` | PRF | tables and live recover/verify challenges only | secret, as are both word sets | A-R1 **attack** (I-30); recover3, confirm and new words hold |
 
 In both exposure traces the attacker decrypts the copy of u_c under the key it holds. The
 correspondence properties still hold there, because signing in still takes one of Alice's
 passkeys.
+
+The `db-chal` traces are a registration hijack without breaking TLS. The attacker reads
+Alice's registration challenge, with her user id, from the table, and submits reg/verify with
+them and its own passkey and keys before she does. It then holds her user id: it signs in, makes
+requests, recovers, and replaces the words.
+
+`recovery-db-chalrec` leaks only recover/verify challenges, so the registration hijack cannot
+hide anything later. Alice runs recover3 and recover/confirm. The attacker reads the challenge
+recover/confirm stored for her, and submits recover/verify with its own passkey before she does,
+since recover/verify carries no u_c proof. The server binds that passkey to her account. Its cd_p
+is the attacker's own, so signing in with it reveals nothing about her u_c, and every authorized
+request still needs her proof.
 
 ### Attack and reachability variants
 
@@ -562,13 +607,16 @@ seconds without backtracking (`NOBT`).
 | `recovery-noprf-words` | `RCV`, `STORE`, `UNIQUSER`, and `PRECISE` |
 | `recovery-noprf-tls` | `STORE`, `UNIQUSER`, and `PRECISE` |
 | `recovery-noprf-reach` | `RCV`, `STORE`, `UNIQUSER`, and `PRECISE` |
+| `login-db-chal`, `recovery-db-chal`, `recovery-db-chalrec`, `login-tls-dualmode` | `STORE`, `UNIQUSER` |
 
 `PRECISE` is not a restriction. It marks three actions `[precise]`: the inputs of auth/verify
 and recover3, and the lookup of the words a recovery uses. Each of them receives or reads one
 value per run, so it adds no assumption and removes no trace. In no-PRF mode, recover3's reply
 does not depend on the words, and without it reconstruction combines two requests in one server
 session, or two sets of words in one recovery, and fails. Marking every action precise
-(`preciseActions`) does not finish in practical time.
+(`preciseActions`) does not finish in practical time. The recover/verify reply that ends every
+recovery is always `[precise]`, since the browser reads its mode as a boolean and constraining
+it to PRF or no-PRF otherwise breaks reconstruction.
 
 `login-noprf-unbound` has no unrestricted counterpart. Its counterpart in PRF mode exists to
 prove A-Z1 and u_c secrecy, and in no-PRF mode both are attacks.
@@ -625,13 +673,21 @@ fixes (item 3), where it shows end-to-end message secrecy.
 
 **Planned fixes, as a separate step after items 1-2:**
 
-3. **Model the planned fix** (`conformance.md` §7), in its own variants, next to the current-code
-   ones. This covers:
+3. **Model the planned fix** (`conformance.md` §7) as `fixes/v2`, in its own variants, next to
+   the current-code ones. Its headline goals, for PRF accounts:
+   - **An attacker that controls the network, as if every call were plain HTTP:** Alice's
+     browser never holds a u_c the attacker knows, and her account's u_c stays secret. The
+     registration race (I-29) remains, but Alice detects it.
+   - **Live read access to every server table:** opens no attack. The current code fails this
+     through the challenge table (I-30).
+
+   This covers:
    - **User-id checks:** the I-01 checks at sign-in, registration, add passkey and recovery,
-     with a mutation for each check to show it is needed. Add passkey under a malicious server
-     needs modeling first, since the options' user id becomes the new passkey's handle.
+     with a mutation for each check to show it is needed.
    - **Account tags:** in passkey handles and recovery words, for PRF and no-PRF accounts,
-     written only from a u_c that was checked.
+     written only from a u_c that was checked. The handle tag must also close the stripped
+     registration of I-29.
+   - **Read-access fixes:** the candidates in `conformance.md` §7.3 for I-30.
    - **Transition:** a variant where old untagged passkeys and 24-word sets are still in use.
    - **A-S5, end to end:** with the fixes, messages Alice encrypts under a pinned account stay
      secret from a server that does not know her password. This needs the cipher and account

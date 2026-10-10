@@ -61,6 +61,10 @@ m4_changequote({{,}})m4_dnl
      recovery-noprf-tls   SCN_RECOVERY NOPRF LEAK_TLS KEY_UI STORE UNIQUSER NOBT PRECISE
      recovery-noprf-reach  SCN_RECOVERY NOPRF REACH_ONLY RCV STORE UNIQUSER NOBT PRECISE
      malicious-noprf      SCN_MALICIOUS NOPRF
+     login-db-chal        SCN_LOGIN LEAK_DB LEAK_CHAL KEY_UI STORE UNIQUSER NOBT
+     recovery-db-chal     SCN_RECOVERY LEAK_DB LEAK_CHAL KEY_UI STORE UNIQUSER NOBT
+     login-tls-dualmode   SCN_LOGIN LEAK_TLS KEY_UI DUALMODE STORE UNIQUSER NOBT
+     recovery-db-chalrec  SCN_RECOVERY LEAK_DB LEAK_CHAL_RECOVER KEY_UI STORE UNIQUSER NOBT
    END VARIANTS}} *)
 
 (* NOBT turns off backtracking in trace reconstruction. Under the restrictions, a derivation can
@@ -214,6 +218,9 @@ event Registered(bitstring, bitstring, bitstring).
 event ServerUc(bitstring, bitstring, bitstring, key).
 event AliceUc(bitstring, key).
 
+(* A passkey Alice added in a session: the session's user id, and the passkey's user handle *)
+event PasskeyHandle(bitstring, bitstring).
+
 (* Restrictions mirror what the real system guarantees. The base variants, whose results are
    proofs, run without them: leaving them off gives the attacker more traces, so a property
    proved without them also holds with them. Variants that look for an attack or for
@@ -272,20 +279,14 @@ let SRegOptions(net: channel) =
    insert chal(PREG, ch, ui, NOBIND);
    out(rc, (ch, ui)).
 
-(* POST reg/verify (srv:422-564, 608-691) *)
+(* POST reg/verify for a PRF registration, which carries pk_U, cd_p and cd_r (srv:422-564,
+   608-691) *)
 let SRegVerify(net: channel) =
    new st: bitstring; new sid: bitstring;
    new rq: bitstring;
-m4_ifdef({{NOPRF}}, {{
-   new ucS: key;
-   in(net, (req: bitstring, rc: channel));
-   RECEIVED
-   let (=REGVER, rr: bitstring, ui: bitstring, ch: bitstring, pkR: bitstring) = req in
-}}, {{
    in(net, (req: bitstring, rc: channel));
    RECEIVED
    let (=REGVER, rr: bitstring, ui: bitstring, ch: bitstring, pkR: bitstring, pkU: bitstring, cdp: bitstring, cdr: bitstring) = req in
-}})
    get unverified(=ui) in
    get users(=ui, pkU0: bitstring) in 0 else
 m4_ifdef({{MUT_UNBOUND}}, {{
@@ -297,9 +298,37 @@ m4_ifdef({{MUT_UNBOUND}}, {{
 }})
    let regr(credId: bitstring, credPk: bitstring, adata(=RPID, =UV1), cdj(=WA_CREATE, =ch, =ORIGIN)) = rr in
    event UserCreated(ui, st);
-m4_ifdef({{NOPRF}}, {{
-   (* A no-PRF client sends no pk_U, cd_p or cd_r. The server draws u_c, keeps it under both KMS
-      keys, and returns it in the reply (srv:475-490, srv:556). *)
+   insert users(ui, pkU);
+   insert recov(ui, pkR, cdr);
+   insert creds(ui, credId, credPk, cdp);
+   event ServerCredAdded(ui, credId, credPk, pkU);
+m4_ifdef({{DUALMODE}}, {{
+   out(rc, (ui, PRF1, EMPTY, cookie(ui, sid), csmac(skJWT, ui, sid))).
+}}, {{
+   out(rc, (ui, cookie(ui, sid), csmac(skJWT, ui, sid))).
+}})
+
+(* POST reg/verify for a no-PRF registration, which carries none of them. The server draws u_c,
+   keeps it under both KMS keys, and returns it in the reply (srv:475-490, srv:556). The server
+   picks the mode from which fields the request carries (srv:438). *)
+let SRegVerifyNoPrf(net: channel) =
+   new st: bitstring; new sid: bitstring;
+   new rq: bitstring;
+   new ucS: key;
+   in(net, (req: bitstring, rc: channel));
+   RECEIVED
+   let (=REGVER, rr: bitstring, ui: bitstring, ch: bitstring, pkR: bitstring) = req in
+   get unverified(=ui) in
+   get users(=ui, pkU0: bitstring) in 0 else
+m4_ifdef({{MUT_UNBOUND}}, {{
+   get chal(pu: bitstring, =ch, cu: bitstring, bnd: bitstring) in
+   event Consumed(pu, ch, st);
+}}, {{
+   get chal(=PREG, =ch, =ui, =NOBIND) in
+   event Consumed(PREG, ch, st);
+}})
+   let regr(credId: bitstring, credPk: bitstring, adata(=RPID, =UV1), cdj(=WA_CREATE, =ch, =ORIGIN)) = rr in
+   event UserCreated(ui, st);
    let pkU = sig_pk(proofKey(ucS)) in
    insert users(ui, pkU);
    insert ucenc(ui, kms_enc(kmsNew, ui, ucS), kms_enc(kmsOld, ui, ucS));
@@ -308,13 +337,6 @@ m4_ifdef({{NOPRF}}, {{
    event ServerUc(ui, credId, credPk, ucS);
    event ServerCredAdded(ui, credId, credPk, pkU);
    out(rc, (ui, PRF0, key2bs(ucS), cookie(ui, sid), csmac(skJWT, ui, sid))).
-}}, {{
-   insert users(ui, pkU);
-   insert recov(ui, pkR, cdr);
-   insert creds(ui, credId, credPk, cdp);
-   event ServerCredAdded(ui, credId, credPk, pkU);
-   out(rc, (ui, cookie(ui, sid), csmac(skJWT, ui, sid))).
-}})
 
 (* POST auth/options: an auth challenge, bound to a user only if one was named (srv:727-795) *)
 let SAuthOptions(net: channel) =
@@ -352,7 +374,14 @@ m4_ifdef({{NOPRF}}, {{
    get ucenc(=uh, enc: bitstring, encOld: bitstring) in
    out(rc, (uh, PRF0, credId, key2bs(kms_dec(kmsNew, uh, enc)), cookie(uh, sid), csmac(skJWT, uh, sid))).
 }}, {{
+m4_ifdef({{DUALMODE}}, {{
+   (* Only a no-PRF account has a KMS copy of u_c *)
+   get ucenc(=uh, enc: bitstring, encOld: bitstring) in
+   out(rc, (uh, PRF0, credId, key2bs(kms_dec(kmsNew, uh, enc)), cookie(uh, sid), csmac(skJWT, uh, sid)))
+   else out(rc, (uh, PRF1, credId, cdp, cookie(uh, sid), csmac(skJWT, uh, sid))).
+}}, {{
    out(rc, (uh, PRF1, credId, cdp, cookie(uh, sid), csmac(skJWT, uh, sid))).
+}})
 }})
 
 (* Cookie, CSRF, and proof checks for every authorized request (srv:1826-1836, 1737-1791). The
@@ -401,7 +430,8 @@ let SPasskeyOptions(net: channel) =
    if authorized(ck, cs, pkU, GET, PATH_PKOPT, EMPTY, nP, sig) then
    event ServerAccept(ui, GET, PATH_PKOPT, EMPTY, nP, pkU);
    insert chal(PADD, ch, ui, NOBIND);
-   out(rc, ch).
+   (* Registration options, whose user.id becomes the new passkey's user handle *)
+   out(rc, (ch, ui)).
 
 (* POST passkeys/verify, authorized. The user is the session's, never the body's (srv:398-420). *)
 let SPasskeyVerify(net: channel) =
@@ -473,7 +503,9 @@ m4_ifdef({{NOPRF}}, {{
 
 (* POST recover3: proof of the recovery words, then a confirm challenge and cd_r
    (srv:1457-1512). Every recovery key ever stored for the user is accepted, since tables only
-   grow. The challenge binding stands for H(pk_R : authCount); authCount is not modeled. *)
+   grow. The challenge records pk_R as its binding but nothing compares it. The code binds
+   H(pk_R : authCount) and re-derives it at confirm and recover/verify, so a sign-in, a logout,
+   another recover3 or new words void the challenge. Leaving that out only adds attacker runs. *)
 let SRecover3(net: channel) =
    new st: bitstring; new chR: bitstring;
    new rq: bitstring;
@@ -540,13 +572,17 @@ m4_ifdef({{NOPRF}}, {{
 (* Each endpoint serves honest browsers over TLS and the attacker's own client on c. Forwarding
    attacker requests into the TLS channel through a relay process gives the same access but
    makes query solving take hours. *)
+(* Each variant's server serves one account mode, or with DUALMODE both, picked at reg/verify *)
+m4_ifdef({{NOPRF}}, {{m4_define({{REGVERIFY}}, {{!SRegVerifyNoPrf(net)}})}},
+   {{m4_ifdef({{DUALMODE}}, {{m4_define({{REGVERIFY}}, {{!SRegVerify(net) | !SRegVerifyNoPrf(net)}})}},
+   {{m4_define({{REGVERIFY}}, {{!SRegVerify(net)}})}})}})
 m4_ifdef({{SCN_RECOVERY}}, {{
 let Endpoints(net: channel) =
-   !SRegOptions(net) | !SRegVerify(net) | !SReplaceWords(net) | !SRecover3(net) | !SRecoverConfirm(net) |
+   !SRegOptions(net) | REGVERIFY | !SReplaceWords(net) | !SRecover3(net) | !SRecoverConfirm(net) |
    !SRecoverVerify(net).
 }}, {{
 let Endpoints(net: channel) =
-   !SRegOptions(net) | !SRegVerify(net) | !SAuthOptions(net) | !SAuthVerify(net) | !SApi(net) |
+   !SRegOptions(net) | REGVERIFY | !SAuthOptions(net) | !SAuthVerify(net) | !SApi(net) |
    !SPasskeyOptions(net) | !SPasskeyVerify(net).
 }})
 
@@ -605,7 +641,9 @@ let ApiRequests(aid: bitstring) =
    out(tls, ((API, ck, cs, mth, pth, bd, nP, mkProof(uc, ui, mth, pth, bd, nP, r)), rc));
    in(rc, resp: bitstring).
 
-(* addPasskey (auth:1565-1604). The authenticator keeps the passkey once created. *)
+(* addPasskey (auth:1565-1604). The authenticator keeps the passkey once created. Its user handle
+   is the user.id in the passkeys/options reply (auth:1576), which the browser never compares
+   with the session's user id (I-01). *)
 let AddPasskey(aid: bitstring) =
    !new nP1: bitstring; new r1: bitstring; new rc1: channel;
    new credKey: key; new credId: bitstring; new nS: bitstring;
@@ -613,10 +651,11 @@ let AddPasskey(aid: bitstring) =
    get sessions(=aid, bid: bitstring, ui: bitstring, uc: key, pkId: bitstring, ck: bitstring, cs: bitstring) in
    event ClientSigned(ui, GET, PATH_PKOPT, EMPTY, nP1);
    out(tls, ((PKOPT, ck, cs, nP1, mkProof(uc, ui, GET, PATH_PKOPT, EMPTY, nP1, r1)), rc1));
-   in(rc1, ch: bitstring);
+   in(rc1, (ch: bitstring, hui: bitstring));
    let credPk = wa_pk(credKey) in
    event AliceCredCreated(ui, credId, credPk);
-   insert passkeys(aid, ui, credId, credKey);
+   event PasskeyHandle(ui, hui);
+   insert passkeys(aid, hui, credId, credKey);
    let rr = regr(credId, credPk, adata(RPID, UV1), cdj(WA_CREATE, ch, ORIGIN)) in
 m4_ifdef({{NOPRF}}, {{
    (* A no-PRF account sends no cd_p (auth:1575-1598) *)
@@ -708,10 +747,13 @@ let FinishRecovery(aid: bitstring, bid: bitstring, ui: bitstring, uc: key, sprf:
    out(tls, ((RECVER, rr, ui, ch, cdp), rc3));
 m4_ifdef({{NOPRF}}, {{
    (* The browser does not read the u_c a no-PRF reply also carries (auth:1485-1488) *)
-   in(rc3, (sui: bitstring, sprf2: bitstring, ck: bitstring, cs: bitstring, sdata2: bitstring));
+   in(rc3, (sui: bitstring, sprf2: bitstring, ck: bitstring, cs: bitstring, sdata2: bitstring)) [precise];
 }}, {{
-   in(rc3, (sui: bitstring, sprf2: bitstring, ck: bitstring, cs: bitstring));
+   in(rc3, (sui: bitstring, sprf2: bitstring, ck: bitstring, cs: bitstring)) [precise];
 }})
+   (* The browser reads prf as a boolean (auth:290-311), so the mode it pins is one of the two.
+      [precise] keeps that constraint from breaking trace reconstruction. *)
+   if sprf2 = PRF0 || sprf2 = PRF1 then
    (* The account-mode pin check under the words' u_i (auth:1486), then _loginUser, which pins
       under the server's u_i (auth:1488, auth:302-311) *)
    get pins(=bid, =ui, =PRF1, ppk2: bitstring) suchthat sprf2 = PRF0 in 0 else
@@ -860,10 +902,19 @@ m4_ifdef({{SCN_MALICIOUS}}, {{
    event Registered(aid, ui, sui);
    insert pins(aid, sui, PRF0, sig_pk(proofKey(uc)));
 }}, {{
+   (* _pinAccount also halts on an existing pin for sui with another pk_U, and this browser holds
+      no pin before it registers. newUser halts when the reply to a PRF registration says no-PRF
+      (auth:1546-1549). The model reads that field only under DUALMODE, where an honest server
+      can send it; elsewhere, ignoring it only adds runs. *)
 m4_ifdef({{SCN_MALICIOUS}}, {{
    in(rc2, (sui: bitstring, ck: bitstring, cs: bitstring)) [precise];
 }}, {{
+m4_ifdef({{DUALMODE}}, {{
+   in(rc2, (sui: bitstring, sprf: bitstring, sdata: bitstring, ck: bitstring, cs: bitstring));
+   if sprf = PRF1 then
+}}, {{
    in(rc2, (sui: bitstring, ck: bitstring, cs: bitstring));
+}})
 }})
    event Registered(aid, ui, sui);
    insert pins(aid, sui, PRF1, sig_pk(proofKey(uc)));
@@ -882,13 +933,16 @@ let DeviceAccess(aid: bitstring) =
    out(c, (credId, wa_sign(credKey, (adata(RPID, UV0), cdj(WA_GET, dch, ORIGIN))), wa_prf(credKey, PS))).
 
 m4_ifdef({{LEAK_DB}}, {{
-(* A copy of the server's account tables. Challenges and replay nonces are short-lived, so they
-   are not in it. LEAK_KMS_NEW and LEAK_KMS_OLD add the use of a KMS key. *)
+(* A copy of the server's account tables. Replay nonces are not in it. LEAK_CHAL adds live reads
+   of the challenge table, and LEAK_CHAL_RECOVER of only its recover/verify challenges.
+   LEAK_KMS_NEW and LEAK_KMS_OLD add the use of a KMS key. *)
 let DbLeak() =
    (!get users(ui: bitstring, pkU: bitstring) in out(c, (ui, pkU)))
    | (!get recov(ui: bitstring, pkR: bitstring, cdr: bitstring) in out(c, (ui, pkR, cdr)))
    | (!get creds(ui: bitstring, credId: bitstring, credPk: bitstring, cdp: bitstring) in out(c, (ui, credId, credPk, cdp)))
    | (!get ucenc(ui: bitstring, enc: bitstring, encOld: bitstring) in out(c, (ui, enc, encOld)))
+m4_ifdef({{LEAK_CHAL}}, {{   | (!get chal(pu: bitstring, ch: bitstring, cu: bitstring, bnd: bitstring) in out(c, (pu, ch, cu, bnd)))}})
+m4_ifdef({{LEAK_CHAL_RECOVER}}, {{   | (!get chal(=PRECOVER, ch: bitstring, cu: bitstring, bnd: bitstring) in out(c, (ch, cu, bnd)))}})
 m4_ifdef({{LEAK_KMS_NEW}}, {{   | out(c, kmsNew)}})
 m4_ifdef({{LEAK_KMS_OLD}}, {{   | out(c, kmsOld)}})
    .
@@ -905,7 +959,7 @@ m4_ifdef({{SCN_LOGIN}}, {{
     | !Login(aid, aid) | ApiRequests(aid) | AddPasskey(aid)
 }})
 m4_ifdef({{SCN_MALICIOUS}}, {{
-    | !LoginRegistered(aid)
+    | !LoginRegistered(aid) | AddPasskey(aid)
     (* Sign-ins from browsers with no pin: a new device or profile, cleared storage, or the
        registering browser before registration completed *)
     | (!new bidF: bitstring; Login(aid, bidF))
@@ -978,12 +1032,21 @@ query u: bitstring, m: bitstring, p: bitstring, b: bitstring, n: bitstring;
 }})
 
 (* A-S1, A-K1: u_c stays secret. In no-PRF mode it is the u_c the server drew when it registered
-   Alice's passkey. *)
+   Alice's passkey, and the u_c her browser received. With TLS broken the attacker can send her
+   browser a u_c of its own, so only the first is about her account. *)
 m4_ifdef({{NOPRF}}, {{
 query u: bitstring, id: bitstring, pk: bitstring, x: key;
    event(ServerUc(u, id, pk, x)) && event(AliceCredCreated(u, id, pk)) && attacker(x).
+query a: bitstring, x: key; event(AliceUc(a, x)) && attacker(x).
 }}, {{
 query attacker(new ucA).
+}})
+
+m4_ifdef({{DUALMODE}}, {{
+(* Alice registers in PRF mode, yet the honest server registers her user id and passkey as a
+   no-PRF account whose u_c the attacker knows *)
+query u: bitstring, id: bitstring, pk: bitstring, x: key;
+   event(AliceUi(u)) && event(ServerUc(u, id, pk, x)) && event(AliceCredCreated(u, id, pk)) && attacker(x).
 }})
 }})
 
@@ -1091,6 +1154,7 @@ query u: bitstring, id: bitstring, pk: bitstring;
 m4_ifdef({{NOPRF}}, {{
 query u: bitstring, id: bitstring, pk: bitstring, x: key;
    event(ServerUc(u, id, pk, x)) && event(AliceCredCreated(u, id, pk)) && attacker(x).
+query a: bitstring, x: key; event(AliceUc(a, x)) && attacker(x).
 }}, {{
 query attacker(new ucA).
 }})
@@ -1148,6 +1212,10 @@ query u: bitstring, x: key; event(ClientLoggedIn(new aid, u, x)) && attacker(x).
 
 (* A-S4: a browser with no pin for the account trusts the server's account mode on first use *)
 query u: bitstring, x: key; event(ClientLoggedIn(new bidF, u, x)) && attacker(x).
+
+(* A passkey Alice adds carries the user id of the session she added it in. I-01 breaks this:
+   the passkeys/options reply names the handle. *)
+query u: bitstring, h: bitstring; event(PasskeyHandle(u, h)) ==> u = h.
 
 (* Reachability of honest sign-ins: the registering browser, after a registration whose reply
    named Alice's own user id, and a browser with no pin, each sign in holding Alice's own u_c.
@@ -1338,19 +1406,21 @@ m4_ifdef({{VARIANT_malicious}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_3]) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_3],u,x)) && attacker(x)) is false.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_3,!1 = v_4],u,x)) && attacker(x)) is false.
-RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_3,ui_3))) is false.
+RESULT event(PasskeyHandle(u,h)) ==> u = h is false.
+RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_4,ui_4))) is false.
 RESULT not event(ClientSignedIn(bidF[!2 = v_3,!1 = alice],user,ucA[!1 = alice])) is false.
 END *)}})
 m4_ifdef({{VARIANT_malicious_recovery}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_8]) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_8],u,x)) && attacker(x)) is false.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_8,!1 = v_9],u,x)) && attacker(x)) is false.
-RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_5,ui_5))) is false.
+RESULT event(PasskeyHandle(u,h)) ==> u = h is false.
+RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
 RESULT not event(ClientSignedIn(bidF[!2 = v_8,!1 = alice],user,ucA[!1 = alice])) is false.
 RESULT not (event(ClientLoggedIn(bidR[!2 = v_8,!1 = v_9],user,userCred)) && attacker(userCred)) is false.
 RESULT not (event(ClientRecovered(aid[!1 = v_8],user,userCred)) && attacker(userCred)) is false.
-RESULT not (event(ClientRecovered(aid[!1 = alice],user,userCred)) && event(Registered(aid[!1 = alice],ui_5,ui_5)) && attacker(userCred)) is true.
-RESULT not (event(ClientRecovered(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_5,ui_5))) is false.
+RESULT not (event(ClientRecovered(aid[!1 = alice],user,userCred)) && event(Registered(aid[!1 = alice],ui_6,ui_6)) && attacker(userCred)) is true.
+RESULT not (event(ClientRecovered(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
 RESULT not event(ClientRecovered(bidR[!2 = v_8,!1 = alice],user,ucA[!1 = alice])) is false.
 END *)}})
 m4_ifdef({{VARIANT_login_db}}, {{(* EXPECTPV
@@ -1373,48 +1443,56 @@ RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(a
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(AliceCredCreated(u,id,pk)) is true.
 RESULT event(ServerAccept(u,m,p,b,n,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(ClientSigned(u,m,p,b,n)) is true.
 RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is true.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is true.
 END *)}})
 m4_ifdef({{VARIANT_login_noprf_session}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(UserApproves(u,id,ch_15)) is true.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(AliceCredCreated(u,id,pk)) is true.
 RESULT event(ServerAccept(u,m,p,b,n,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(ClientSigned(u,m,p,b,n)) is true.
 RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is true.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is true.
 END *)}})
 m4_ifdef({{VARIANT_login_noprf_session_noproof}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(UserApproves(u,id,ch_15)) is false.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(AliceCredCreated(u,id,pk)) is false.
 RESULT event(ServerAccept(u,m,p,b,n,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(ClientSigned(u,m,p,b,n)) is false.
 RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is false.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is false.
 END *)}})
 m4_ifdef({{VARIANT_login_noprf_cdu}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(UserApproves(u,id,ch_15)) is true.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(AliceCredCreated(u,id,pk)) is true.
 RESULT event(ServerAccept(u,m,p,b,n,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(ClientSigned(u,m,p,b,n)) is true.
 RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is true.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is true.
 END *)}})
 m4_ifdef({{VARIANT_login_noprf_device}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_6,apk,x)) && event(AliceCredCreated(au,aid_6,apk)) ==> event(UserApproves(u,id,ch_15)) is true.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_6,apk,x)) && event(AliceCredCreated(au,aid_6,apk)) ==> event(AliceCredCreated(u,id,pk)) is true.
 RESULT event(ServerAccept(u,m,p,b,n,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_6,apk,x)) && event(AliceCredCreated(au,aid_6,apk)) ==> event(ClientSigned(u,m,p,b,n)) is true.
 RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is true.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is true.
 END *)}})
 m4_ifdef({{VARIANT_login_noprf_device_nouv}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_6,apk,x)) && event(AliceCredCreated(au,aid_6,apk)) ==> event(UserApproves(u,id,ch_15)) is false.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_6,apk,x)) && event(AliceCredCreated(au,aid_6,apk)) ==> event(AliceCredCreated(u,id,pk)) is false.
 RESULT event(ServerAccept(u,m,p,b,n,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_6,apk,x)) && event(AliceCredCreated(au,aid_6,apk)) ==> event(ClientSigned(u,m,p,b,n)) is false.
 RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is false.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is false.
 END *)}})
 m4_ifdef({{VARIANT_login_noprf_unbound}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(UserApproves(u,id,ch_15)) is false.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(AliceCredCreated(u,id,pk)) is false.
 RESULT event(ServerAccept(u,m,p,b,n,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(ClientSigned(u,m,p,b,n)) is false.
 RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is false.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is false.
 END *)}})
 m4_ifdef({{VARIANT_login_noprf_tls}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_9,pkU_5)) && event(AliceUi(u)) ==> event(UserApproves(u,id,ch_9)) is false.
 RESULT event(ServerCredAdded(u,id,pk,pkU_5)) && event(AliceUi(u)) ==> event(AliceCredCreated(u,id,pk)) is false.
 RESULT event(ServerAccept(u,m,p,b,n,pkU_5)) && event(AliceUi(u)) ==> event(ClientSigned(u,m,p,b,n)) is false.
 RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is false.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is false.
 END *)}})
 m4_ifdef({{VARIANT_login_noprf_reach}}, {{(* EXPECTPV
 RESULT not (event(ServerLogin(user,credId_9,chal_1,pkU_10)) && event(UserApproves(user,credId_9,chal_1))) is false.
@@ -1427,18 +1505,21 @@ RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(a
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(AliceCredCreated(u,id,pk)) is true.
 RESULT event(ServerAccept(u,m,p,b,n,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(ClientSigned(u,m,p,b,n)) is true.
 RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is true.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is true.
 END *)}})
 m4_ifdef({{VARIANT_login_noprf_db_kms}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(UserApproves(u,id,ch_15)) is true.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(AliceCredCreated(u,id,pk)) is true.
 RESULT event(ServerAccept(u,m,p,b,n,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(ClientSigned(u,m,p,b,n)) is true.
 RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is false.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is false.
 END *)}})
 m4_ifdef({{VARIANT_login_noprf_db_kmsold}}, {{(* EXPECTPV
 RESULT event(ServerLogin(u,id,ch_15,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(UserApproves(u,id,ch_15)) is true.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(AliceCredCreated(u,id,pk)) is true.
 RESULT event(ServerAccept(u,m,p,b,n,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_5,apk,x)) && event(AliceCredCreated(au,aid_5,apk)) ==> event(ClientSigned(u,m,p,b,n)) is true.
 RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is false.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is false.
 END *)}})
 m4_ifdef({{VARIANT_recovery_noprf_net}}, {{(* EXPECTPV
 RESULT event(ServerRecover3(u,n,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_4,apk,x)) && event(AliceCredCreated(au,aid_4,apk)) ==> event(ClientRecoverIntent(u,n)) is true.
@@ -1446,6 +1527,7 @@ RESULT event(ServerConfirm(u,ch_10,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au
 RESULT event(ServerReplaced(u,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_4,apk,x)) && event(AliceCredCreated(au,aid_4,apk)) ==> event(ClientReplace(u,pk)) is true.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_4,apk,x)) && event(AliceCredCreated(au,aid_4,apk)) ==> event(AliceCredCreated(u,id,pk)) is true.
 RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is true.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is true.
 RESULT not attacker(ur[!1 = v_10]) is true.
 RESULT not attacker(ur2[!2 = v_10,!1 = v_11]) is true.
 END *)}})
@@ -1455,6 +1537,7 @@ RESULT event(ServerConfirm(u,ch_10,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au
 RESULT event(ServerReplaced(u,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_4,apk,x)) && event(AliceCredCreated(au,aid_4,apk)) ==> event(ClientReplace(u,pk)) is true.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_4,apk,x)) && event(AliceCredCreated(au,aid_4,apk)) ==> event(AliceCredCreated(u,id,pk)) is true.
 RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is true.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is true.
 RESULT not attacker(ur[!1 = v_10]) is true.
 RESULT not attacker(ur2[!2 = v_10,!1 = v_11]) is true.
 END *)}})
@@ -1464,6 +1547,7 @@ RESULT event(ServerConfirm(u,ch_10,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au
 RESULT event(ServerReplaced(u,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_4,apk,x)) && event(AliceCredCreated(au,aid_4,apk)) ==> event(ClientReplace(u,pk)) is false.
 RESULT event(ServerCredAdded(u,id,pk,sig_pk(kdf(ID1,kpU,x)))) && event(ServerUc(au,aid_4,apk,x)) && event(AliceCredCreated(au,aid_4,apk)) ==> event(AliceCredCreated(u,id,pk)) is false.
 RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is false.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is false.
 RESULT not attacker(ur[!1 = v_10]) is false.
 RESULT not attacker(ur2[!2 = v_10,!1 = v_11]) is true.
 END *)}})
@@ -1473,6 +1557,7 @@ RESULT event(ServerConfirm(u,ch_6,pkU_5)) && event(AliceUi(u)) ==> event(ClientC
 RESULT event(ServerReplaced(u,pk,pkU_5)) && event(AliceUi(u)) ==> event(ClientReplace(u,pk)) is false.
 RESULT event(ServerCredAdded(u,id,pk,pkU_5)) && event(AliceUi(u)) ==> event(AliceCredCreated(u,id,pk)) is false.
 RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is false.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is false.
 RESULT not attacker(ur[!1 = v_6]) is true.
 RESULT not attacker(ur2[!2 = v_6,!1 = v_7]) is true.
 END *)}})
@@ -1485,4 +1570,35 @@ RESULT not (event(ClientRecovered(aid[!1 = alice],user,x)) && event(AliceUc(aid[
 END *)}})
 m4_ifdef({{VARIANT_malicious_noprf}}, {{(* EXPECTPV
 RESULT not (event(AliceUc(a,x)) && attacker(x)) is false.
+END *)}})
+m4_ifdef({{VARIANT_login_db_chal}}, {{(* EXPECTPV
+RESULT event(ServerLogin(u,id,ch_16,pkU_11)) && event(AliceUi(u)) ==> event(UserApproves(u,id,ch_16)) is false.
+RESULT event(ServerCredAdded(u,id,pk,pkU_11)) && event(AliceUi(u)) ==> event(AliceCredCreated(u,id,pk)) is false.
+RESULT event(ServerAccept(u,m,p,b,n_3,pkU_11)) && event(AliceUi(u)) ==> event(ClientSigned(u,m,p,b,n_3)) is false.
+RESULT not attacker(ucA[!1 = v_25]) is true.
+END *)}})
+m4_ifdef({{VARIANT_recovery_db_chal}}, {{(* EXPECTPV
+RESULT event(ServerRecover3(u,n_3,pkU_11)) && event(AliceUi(u)) ==> event(ClientRecoverIntent(u,n_3)) is false.
+RESULT event(ServerConfirm(u,ch_11,pkU_11)) && event(AliceUi(u)) ==> event(ClientConfirm(u,ch_11)) is false.
+RESULT event(ServerReplaced(u,pk,pkU_11)) && event(AliceUi(u)) ==> event(ClientReplace(u,pk)) is false.
+RESULT event(ServerCredAdded(u,id,pk,pkU_11)) && event(AliceUi(u)) ==> event(AliceCredCreated(u,id,pk)) is false.
+RESULT not attacker(ucA[!1 = v_10]) is true.
+RESULT not attacker(ur[!1 = v_10]) is true.
+RESULT not attacker(ur2[!2 = v_10,!1 = v_11]) is true.
+END *)}})
+m4_ifdef({{VARIANT_login_tls_dualmode}}, {{(* EXPECTPV
+RESULT event(ServerLogin(u,id,ch_10,pkU_6)) && event(AliceUi(u)) ==> event(UserApproves(u,id,ch_10)) is false.
+RESULT event(ServerCredAdded(u,id,pk,pkU_6)) && event(AliceUi(u)) ==> event(AliceCredCreated(u,id,pk)) is false.
+RESULT event(ServerAccept(u,m,p,b,n_3,pkU_6)) && event(AliceUi(u)) ==> event(ClientSigned(u,m,p,b,n_3)) is false.
+RESULT not attacker(ucA[!1 = v_13]) is true.
+RESULT not (event(AliceUi(u)) && event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is false.
+END *)}})
+m4_ifdef({{VARIANT_recovery_db_chalrec}}, {{(* EXPECTPV
+RESULT event(ServerRecover3(u,n_3,pkU_11)) && event(AliceUi(u)) ==> event(ClientRecoverIntent(u,n_3)) is true.
+RESULT event(ServerConfirm(u,ch_11,pkU_11)) && event(AliceUi(u)) ==> event(ClientConfirm(u,ch_11)) is true.
+RESULT event(ServerReplaced(u,pk,pkU_11)) && event(AliceUi(u)) ==> event(ClientReplace(u,pk)) is true.
+RESULT event(ServerCredAdded(u,id,pk,pkU_11)) && event(AliceUi(u)) ==> event(AliceCredCreated(u,id,pk)) is false.
+RESULT not attacker(ucA[!1 = v_10]) is true.
+RESULT not attacker(ur[!1 = v_10]) is true.
+RESULT not attacker(ur2[!2 = v_10,!1 = v_11]) is true.
 END *)}})
