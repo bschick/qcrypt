@@ -547,12 +547,40 @@ let Login(aid: bitstring, bid: bitstring) =
    LoginWith(aid, bid, ui, credId, credKey, rc1, rc2, kKS, nS).
 
 (* Sign in from the browser that registered, once registration has completed there and so
-   pinned the account *)
+   pinned the account. When the server names that account, the pin checks read its pin with a
+   positive lookup, which drops no run because the pin exists from registration on. That lookup
+   is what lets A-S3R be proved: ProVerif treats the "no entry" branch of a negative lookup as
+   always possible, and through it a sign-in could pin a u_c the server chose under Alice's own
+   user id. When the server names another account, the checks are the code's negative lookups. *)
 let LoginRegistered(aid: bitstring) =
    new rc1: channel; new rc2: channel; new kKS: key; new nS: bitstring;
    get registered(=aid, ui: bitstring) in
    get passkeys(=aid, =ui, credId: bitstring, credKey: key) in
-   LoginWith(aid, aid, ui, credId, credKey, rc1, rc2, kKS, nS).
+   out(tls, ((AUTHOPT, UNKNOWN), rc1));
+   in(rc1, ch: bitstring);
+   event UserApproves(ui, credId, ch);
+   let ad = adata(RPID, UV1) in
+   let cd = cdj(WA_GET, ch, ORIGIN) in
+   out(tls, ((AUTHVER, credId, ui, ad, cd, wa_sign(credKey, (ad, cd)), ch), rc2));
+   in(rc2, (sui: bitstring, sprf: bitstring, spkId: bitstring, sdata: bitstring, ck: bitstring, cs: bitstring));
+   (* _checkAccountPinPrf, then _resolveUserCred: a PRF account sends cd_p, a no-PRF account
+      sends u_c itself. Then _pinAccount. *)
+   if sui = ui then (
+      get pins(=aid, =ui, pprf: bitstring, ppk: bitstring) in
+      if pprf = PRF1 && sprf = PRF0 then 0 else
+      let uc = (if sprf = PRF1 then openAtRest(wa_prf(credKey, PS), sui, sdata) else if sprf = PRF0 then bs2key(sdata)) in
+      if ppk = sig_pk(proofKey(uc)) then
+      insert pins(aid, ui, sprf, sig_pk(proofKey(uc)));
+      event ClientSignedIn(aid, ui, uc);
+      StartSession(aid, aid, ui, uc, spkId, ck, cs, kKS, nS)
+   ) else (
+      get pins(=aid, =sui, =PRF1, ppk: bitstring) suchthat sprf = PRF0 in 0 else
+      let uc = (if sprf = PRF1 then openAtRest(wa_prf(credKey, PS), sui, sdata) else if sprf = PRF0 then bs2key(sdata)) in
+      get pins(=aid, =sui, pprf: bitstring, ppk: bitstring) suchthat ppk <> sig_pk(proofKey(uc)) in 0 else
+      insert pins(aid, sui, sprf, sig_pk(proofKey(uc)));
+      event ClientSignedIn(aid, sui, uc);
+      StartSession(aid, aid, sui, uc, spkId, ck, cs, kKS, nS)
+   ).
 
 (* recover3, recover/confirm, then recover/verify with a new passkey (auth:1340-1495), using
    any recovery words Alice has written down *)
@@ -597,6 +625,55 @@ m4_ifdef({{LEGACY_CLIENT}}, {{
    event ClientRecovered(bid, sui, uc);
    StartSession(aid, bid, sui, uc, credId, ck, cs, kKS, nS2).
 
+(* Recovery from the browser that registered, once registration has completed there. As in
+   LoginRegistered, the pin checks under the words' user id read the pin registration left with a
+   positive lookup at recover3, and the account-mode check at recover/verify reuses that read.
+   Under the user id the server names at recover/verify, the checks are the code's negative
+   lookups. u_c is fixed at recover3, so their "no entry" branch pins the u_c that passed the
+   recover3 check. *)
+let RecoveryRegistered(aid: bitstring) =
+   new nPR: bitstring; new r1: bitstring; new r2: bitstring;
+   new credKey: key; new credId: bitstring; new nS: bitstring;
+   new rc1: channel; new rc2: channel; new rc3: channel;
+   new kKS: key; new nS2: bitstring;
+   get registered(=aid, ui: bitstring) in
+   get words(=aid, =ui, ur: bitstring) in
+   event ClientRecoverIntent(ui, nPR);
+m4_ifdef({{LEGACY_CLIENT}}, {{
+   out(tls, ((REC3, ui, nPR, sig_sign(recoveryKey(ur, ui), mrc(ui, nPR), SCLEG, r1)), rc1));
+}}, {{
+   out(tls, ((REC3, ui, nPR, sig_sign(recoveryKey(ur, ui), mrc(ui, nPR), SCR, r1)), rc1));
+}})
+   in(rc1, (sprf: bitstring, chR: bitstring, sdata: bitstring));
+   (* A PRF account sends cd_r, a no-PRF account sends u_c itself (auth:1387-1397). Then
+      _pinAccount under the words' u_i (auth:1399): the account-mode pin check, then the userCred
+      compare. *)
+   let uc = (if sprf = PRF1 then openAtRest(rsec(ur, ui), ui, sdata) else if sprf = PRF0 then bs2key(sdata)) in
+   get pins(=aid, =ui, pprf: bitstring, ppk: bitstring) in
+   if pprf = PRF1 && sprf = PRF0 then 0 else
+   if ppk = sig_pk(proofKey(uc)) then
+   insert pins(aid, ui, sprf, sig_pk(proofKey(uc)));
+   event ClientConfirm(ui, chR);
+   out(tls, ((CONFIRM, ui, chR, sig_sign(proofKey(uc), muc(ui, POST, PATH_CONFIRM, chR, sha256(EMPTY)), SCU, r2)), rc2));
+   (* Registration options. Their user.id becomes the new passkey's user handle (auth:1610). *)
+   in(rc2, (ch: bitstring, hui: bitstring));
+   let credPk = wa_pk(credKey) in
+   event AliceCredCreated(ui, credId, credPk);
+   insert passkeys(aid, hui, credId, credKey);
+   let rr = regr(credId, credPk, adata(RPID, UV1), cdj(WA_CREATE, ch, ORIGIN)) in
+   (* cd_p is sent only for a PRF account (auth:1470-1477) *)
+   let cdp = (if sprf = PRF1 then mkAtRest(wa_prf(credKey, PS), ui, nS, key2bs(uc)) else EMPTY) in
+   out(tls, ((RECVER, rr, ui, ch, cdp), rc3));
+   in(rc3, (sui: bitstring, sprf2: bitstring, ck: bitstring, cs: bitstring));
+   (* The account-mode pin check under the words' u_i (auth:1486), then _loginUser, which pins
+      under the server's u_i (auth:1488, auth:302-311) *)
+   if pprf = PRF1 && sprf2 = PRF0 then 0 else
+   get pins(=aid, =sui, =PRF1, ppk3: bitstring) suchthat sprf2 = PRF0 in 0 else
+   get pins(=aid, =sui, pprf4: bitstring, ppk4: bitstring) suchthat ppk4 <> sig_pk(proofKey(uc)) in 0 else
+   insert pins(aid, sui, sprf2, sig_pk(proofKey(uc)));
+   event ClientRecovered(aid, sui, uc);
+   StartSession(aid, aid, sui, uc, credId, ck, cs, kKS, nS2).
+
 (* changeRecoveryWords (auth:564-646). The words are shown, and so written down, even when the
    server does not confirm them (auth:639-641). *)
 let ReplaceWords(aid: bitstring) =
@@ -628,7 +705,15 @@ let Register(aid: bitstring) =
    new credKey: key; new credId: bitstring; new ur: bitstring; new ucA: key;
    new nS1: bitstring; new nS2: bitstring; new kKS: key; new nS3: bitstring;
    out(tls, (REGOPT, rc1));
+m4_ifdef({{SCN_MALICIOUS}}, {{
+   (* [precise] tells ProVerif that one registration receives one user id. Without it, the
+      Horn-clause abstraction can combine two registrations of this browser, under different user
+      ids the server chose, into one derivation that no run follows. It adds no assumption, and
+      only the malicious-server variants need it. *)
+   in(rc1, (ch: bitstring, ui: bitstring)) [precise];
+}}, {{
    in(rc1, (ch: bitstring, ui: bitstring));
+}})
    event AliceUi(ui);
    let uc = ucA in
    let credPk = wa_pk(credKey) in
@@ -672,7 +757,7 @@ m4_ifdef({{SCN_MALICIOUS}}, {{
 m4_ifdef({{MAL_RECOVERY}}, {{
     (* Recovery from the registering browser, and from a browser with no pin, the usual case
        after losing every passkey *)
-    | !Recovery(aid, aid)
+    | !RecoveryRegistered(aid)
     | (!new bidR: bitstring; Recovery(aid, bidR))
 }})
 }})
@@ -847,6 +932,10 @@ m4_ifdef({{MAL_RECOVERY}}, {{
 (* A-S4R: a browser with no pin that recovers trusts the server's account mode on first use *)
 query user: bitstring, userCred: key; event(ClientLoggedIn(new bidR, user, userCred)) && attacker(userCred).
 
+(* A-S3R: recovery on the browser that registered never adopts a u_c the server knows. At
+   recover3 that browser compares the u_c it receives with the pk_U it pinned at registration. *)
+query user: bitstring, userCred: key; event(ClientRecovered(new aid, user, userCred)) && attacker(userCred).
+
 (* Reachability of honest recoveries, on the registering browser and on a browser with no pin,
    each ending with Alice's own u_c *)
 query user: bitstring, alice: sid; event(ClientRecovered(new aid[!1 = alice], user, new ucA[!1 = alice])).
@@ -1009,19 +1098,20 @@ RESULT not attacker(ur[!1 = v_10]) is true.
 RESULT not attacker(ur2[!2 = v_10,!1 = v_11]) is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious}}, {{(* EXPECTPV
-RESULT not attacker(ucA[!1 = v_2]) is true.
-RESULT not (event(ClientLoggedIn(aid[!1 = v_2],u,x)) && attacker(x)) is false.
-RESULT not (event(ClientLoggedIn(bidF[!2 = v_2,!1 = v_3],u,x)) && attacker(x)) is false.
+RESULT not attacker(ucA[!1 = v_3]) is true.
+RESULT not (event(ClientLoggedIn(aid[!1 = v_3],u,x)) && attacker(x)) is false.
+RESULT not (event(ClientLoggedIn(bidF[!2 = v_3,!1 = v_4],u,x)) && attacker(x)) is false.
 RESULT not event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) is false.
-RESULT not event(ClientSignedIn(bidF[!2 = v_2,!1 = alice],user,ucA[!1 = alice])) is false.
+RESULT not event(ClientSignedIn(bidF[!2 = v_3,!1 = alice],user,ucA[!1 = alice])) is false.
 END *)}})
 m4_ifdef({{VARIANT_malicious_recovery}}, {{(* EXPECTPV
-RESULT not attacker(ucA[!1 = v_6]) is true.
-RESULT not (event(ClientLoggedIn(aid[!1 = v_6],u,x)) && attacker(x)) is false.
-RESULT not (event(ClientLoggedIn(bidF[!2 = v_6,!1 = v_7],u,x)) && attacker(x)) is false.
+RESULT not attacker(ucA[!1 = v_7]) is true.
+RESULT not (event(ClientLoggedIn(aid[!1 = v_7],u,x)) && attacker(x)) is false.
+RESULT not (event(ClientLoggedIn(bidF[!2 = v_7,!1 = v_8],u,x)) && attacker(x)) is false.
 RESULT not event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) is false.
-RESULT not event(ClientSignedIn(bidF[!2 = v_6,!1 = alice],user,ucA[!1 = alice])) is false.
-RESULT not (event(ClientLoggedIn(bidR[!2 = v_6,!1 = v_7],user,userCred)) && attacker(userCred)) is false.
+RESULT not event(ClientSignedIn(bidF[!2 = v_7,!1 = alice],user,ucA[!1 = alice])) is false.
+RESULT not (event(ClientLoggedIn(bidR[!2 = v_7,!1 = v_8],user,userCred)) && attacker(userCred)) is false.
+RESULT not (event(ClientRecovered(aid[!1 = v_7],user,userCred)) && attacker(userCred)) is true.
 RESULT not event(ClientRecovered(aid[!1 = alice],user,ucA[!1 = alice])) is false.
-RESULT not event(ClientRecovered(bidR[!2 = v_6,!1 = alice],user,ucA[!1 = alice])) is false.
+RESULT not event(ClientRecovered(bidR[!2 = v_7,!1 = alice],user,ucA[!1 = alice])) is false.
 END *)}})
