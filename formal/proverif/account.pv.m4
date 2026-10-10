@@ -65,6 +65,7 @@ m4_changequote({{,}})m4_dnl
      recovery-db-chal     SCN_RECOVERY LEAK_DB LEAK_CHAL KEY_UI STORE UNIQUSER NOBT
      login-tls-dualmode   SCN_LOGIN LEAK_TLS KEY_UI DUALMODE STORE UNIQUSER NOBT
      recovery-db-chalrec  SCN_RECOVERY LEAK_DB LEAK_CHAL_RECOVER KEY_UI STORE UNIQUSER NOBT
+     login-tls-stripped   SCN_LOGIN LEAK_TLS KEY_UI DUALMODE STORE UNIQUSER NOBT STRIPLOGIN
    END VARIANTS}} *)
 
 (* NOBT turns off backtracking in trace reconstruction. Under the restrictions, a derivation can
@@ -221,6 +222,22 @@ event AliceUc(bitstring, key).
 (* A passkey Alice added in a session: the session's user id, and the passkey's user handle *)
 event PasskeyHandle(bitstring, bitstring).
 
+m4_ifdef({{STRIPLOGIN}}, {{
+(* A browser sign-in that passed the pin checks: browser, the user id the server named, the
+   passkey and challenge the assertion used, the cookie the reply carried, and the u_c the
+   session holds *)
+event SignedInWith(bitstring, bitstring, bitstring, bitstring, bitstring, key).
+(* auth/verify answered an assertion with u_c in plaintext: user, passkey, challenge, the
+   session cookie of the reply, and that u_c *)
+event ServerReplyUc(bitstring, bitstring, bitstring, bitstring, key).
+(* One request per reg/verify session, and one options message and one reply per registration.
+   Without them, reconstruction of the stripped sign-in merges two runs that no execution can
+   join. They add no assumption. *)
+m4_define({{PREC_STRIP}}, {{ [precise]}})
+}}, {{
+m4_define({{PREC_STRIP}}, {{}})
+}})
+
 (* Restrictions mirror what the real system guarantees. The base variants, whose results are
    proofs, run without them: leaving them off gives the attacker more traces, so a property
    proved without them also holds with them. Variants that look for an attack or for
@@ -284,7 +301,7 @@ let SRegOptions(net: channel) =
 let SRegVerify(net: channel) =
    new st: bitstring; new sid: bitstring;
    new rq: bitstring;
-   in(net, (req: bitstring, rc: channel));
+   in(net, (req: bitstring, rc: channel))PREC_STRIP;
    RECEIVED
    let (=REGVER, rr: bitstring, ui: bitstring, ch: bitstring, pkR: bitstring, pkU: bitstring, cdp: bitstring, cdr: bitstring) = req in
    get unverified(=ui) in
@@ -315,7 +332,7 @@ let SRegVerifyNoPrf(net: channel) =
    new st: bitstring; new sid: bitstring;
    new rq: bitstring;
    new ucS: key;
-   in(net, (req: bitstring, rc: channel));
+   in(net, (req: bitstring, rc: channel))PREC_STRIP;
    RECEIVED
    let (=REGVER, rr: bitstring, ui: bitstring, ch: bitstring, pkR: bitstring) = req in
    get unverified(=ui) in
@@ -376,9 +393,16 @@ m4_ifdef({{NOPRF}}, {{
 }}, {{
 m4_ifdef({{DUALMODE}}, {{
    (* Only a no-PRF account has a KMS copy of u_c *)
+m4_ifdef({{STRIPLOGIN}}, {{
+   get ucenc(=uh, enc: bitstring, encOld: bitstring) in (
+      event ServerReplyUc(uh, credId, ch, (uh, sid, ckmac(skJWT, uh, sid)), kms_dec(kmsNew, uh, enc));
+      out(rc, (uh, PRF0, credId, key2bs(kms_dec(kmsNew, uh, enc)), cookie(uh, sid), csmac(skJWT, uh, sid)))
+   ) else out(rc, (uh, PRF1, credId, cdp, cookie(uh, sid), csmac(skJWT, uh, sid))).
+}}, {{
    get ucenc(=uh, enc: bitstring, encOld: bitstring) in
    out(rc, (uh, PRF0, credId, key2bs(kms_dec(kmsNew, uh, enc)), cookie(uh, sid), csmac(skJWT, uh, sid)))
    else out(rc, (uh, PRF1, credId, cdp, cookie(uh, sid), csmac(skJWT, uh, sid))).
+}})
 }}, {{
    out(rc, (uh, PRF1, credId, cdp, cookie(uh, sid), csmac(skJWT, uh, sid))).
 }})
@@ -581,9 +605,16 @@ let Endpoints(net: channel) =
    !SRegOptions(net) | REGVERIFY | !SReplaceWords(net) | !SRecover3(net) | !SRecoverConfirm(net) |
    !SRecoverVerify(net).
 }}, {{
+m4_ifdef({{STRIPLOGIN}}, {{
+(* Registration and sign-in only: with requests and added passkeys present, saturation of the
+   stripped sign-in does not finish. Leaving out honest processes only removes runs. *)
+let Endpoints(net: channel) =
+   !SRegOptions(net) | REGVERIFY | !SAuthOptions(net) | !SAuthVerify(net).
+}}, {{
 let Endpoints(net: channel) =
    !SRegOptions(net) | REGVERIFY | !SAuthOptions(net) | !SAuthVerify(net) | !SApi(net) |
    !SPasskeyOptions(net) | !SPasskeyVerify(net).
+}})
 }})
 
 (* With the TLS channel public, the attacker already reaches every endpoint through it, and the
@@ -682,6 +713,7 @@ let LoginWith(aid: bitstring, bid: bitstring, ui: bitstring, credId: bitstring, 
    let uc = (if sprf = PRF1 then openAtRest(wa_prf(credKey, PS), sui, sdata) else if sprf = PRF0 then bs2key(sdata)) in
    get pins(=bid, =sui, pprf: bitstring, ppk: bitstring) suchthat ppk <> sig_pk(proofKey(uc)) in 0 else
    insert pins(bid, sui, sprf, sig_pk(proofKey(uc)));
+m4_ifdef({{STRIPLOGIN}}, {{   event SignedInWith(bid, sui, credId, ch, ck, uc);}})
    event ClientSignedIn(bid, sui, uc);
    StartSession(aid, bid, sui, uc, spkId, ck, cs, kKS, nS).
 
@@ -865,7 +897,7 @@ m4_ifdef({{SCN_MALICIOUS}}, {{
       variants need it. *)
    in(rc1, (ch: bitstring, ui: bitstring)) [precise];
 }}, {{
-   in(rc1, (ch: bitstring, ui: bitstring));
+   in(rc1, (ch: bitstring, ui: bitstring))PREC_STRIP;
 }})
    event AliceUi(ui);
 m4_ifdef({{NOPRF}}, {{
@@ -910,7 +942,7 @@ m4_ifdef({{SCN_MALICIOUS}}, {{
    in(rc2, (sui: bitstring, ck: bitstring, cs: bitstring)) [precise];
 }}, {{
 m4_ifdef({{DUALMODE}}, {{
-   in(rc2, (sui: bitstring, sprf: bitstring, sdata: bitstring, ck: bitstring, cs: bitstring));
+   in(rc2, (sui: bitstring, sprf: bitstring, sdata: bitstring, ck: bitstring, cs: bitstring))PREC_STRIP;
    if sprf = PRF1 then
 }}, {{
    in(rc2, (sui: bitstring, ck: bitstring, cs: bitstring));
@@ -956,7 +988,11 @@ m4_ifdef({{SCN_RECOVERY}}, {{
     | ReplaceWords(aid) | !Recovery(aid, aid)
 }})
 m4_ifdef({{SCN_LOGIN}}, {{
+m4_ifdef({{STRIPLOGIN}}, {{
+    | !Login(aid, aid)
+}}, {{
     | !Login(aid, aid) | ApiRequests(aid) | AddPasskey(aid)
+}})
 }})
 m4_ifdef({{SCN_MALICIOUS}}, {{
     | !LoginRegistered(aid) | AddPasskey(aid)
@@ -980,6 +1016,14 @@ m4_ifdef({{SCN_LOGIN}}, {{
 (* A-L1, A-R1, A-Z1, A-K1, A-S1 *)
 
 m4_ifdef({{REACH_ONLY}}, {{}}, {{
+m4_ifdef({{STRIPLOGIN}}, {{
+(* The rest of the stripped registration: Alice's own browser signs in with that passkey, the
+   honest server's auth/verify answers her assertion with the account's u_c, and her browser
+   accepts that reply. The cookie ties the two: only that server session can make it. *)
+query b: bitstring, u: bitstring, id: bitstring, ch: bitstring, ck: bitstring, pk: bitstring, x: key;
+   event(SignedInWith(b, u, id, ch, ck, x)) && event(ServerReplyUc(u, id, ch, ck, x))
+   && event(ServerUc(u, id, pk, x)) && event(AliceCredCreated(u, id, pk)) && attacker(x).
+}}, {{
 m4_ifdef({{KEY_UI}}, {{
 (* With TLS broken the attacker can copy Alice's pk_U into an account of its own, so Alice's
    accounts are the ones with the user id her browser received at registration *)
@@ -1047,6 +1091,7 @@ m4_ifdef({{DUALMODE}}, {{
    no-PRF account whose u_c the attacker knows *)
 query u: bitstring, id: bitstring, pk: bitstring, x: key;
    event(AliceUi(u)) && event(ServerUc(u, id, pk, x)) && event(AliceCredCreated(u, id, pk)) && attacker(x).
+}})
 }})
 }})
 
@@ -1592,6 +1637,9 @@ RESULT event(ServerCredAdded(u,id,pk,pkU_6)) && event(AliceUi(u)) ==> event(Alic
 RESULT event(ServerAccept(u,m,p,b,n_3,pkU_6)) && event(AliceUi(u)) ==> event(ClientSigned(u,m,p,b,n_3)) is false.
 RESULT not attacker(ucA[!1 = v_13]) is true.
 RESULT not (event(AliceUi(u)) && event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is false.
+END *)}})
+m4_ifdef({{VARIANT_login_tls_stripped}}, {{(* EXPECTPV
+RESULT not (event(SignedInWith(b,u,id,ch_7,ck_2,x)) && event(ServerReplyUc(u,id,ch_7,ck_2,x)) && event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is false.
 END *)}})
 m4_ifdef({{VARIANT_recovery_db_chalrec}}, {{(* EXPECTPV
 RESULT event(ServerRecover3(u,n_3,pkU_11)) && event(AliceUi(u)) ==> event(ClientRecoverIntent(u,n_3)) is true.

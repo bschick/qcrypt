@@ -50,7 +50,7 @@ code. `conformance.md` §5 has the details and code locations:
 | I-04 | Recovery and replace-words signatures are kept apart by two layers: per-operation contexts, and the shared nonce store for the legacy context. Either one alone is enough. | `recovery-replay-*` | the store stops being needed once the legacy context is removed |
 | I-14 | Truncation resistance depends on the encryptor never writing an empty block before the last one, because the decryptor does not check f on an empty block. | `integrity-net-emptymid` | hardening, pending |
 | I-17 | The inner le is not compared with the outer le. An attacker holding u_c and the outer password can wrap a one-loop message as the inner layer of a two-loop message. The plaintext is still authentic. | `loops-uc-pout` | low, pending |
-| I-29 | With TLS broken, an attacker can win the registration race and hold Alice's user id. Her u_c and words stay secret, and her browser notices on first use. It can also strip the PRF fields from her reg/verify. The server then registers her user id and passkey as a no-PRF account and returns its u_c, which the attacker sees. Her browser halts, but a later sign-in with that passkey, over intact TLS, receives that u_c, and with no pin she accepts it. | `login-tls`, `recovery-tls`; `login-tls-dualmode` | race accepted; stripping pending, and the planned handle tag (§7.2) targets it |
+| I-29 | With TLS broken, an attacker can win the registration race and hold Alice's user id. Her u_c and words stay secret, and her browser notices on first use. It can also strip the PRF fields from her reg/verify. The server then registers her user id and passkey as a no-PRF account and returns its u_c, which the attacker sees. Her browser halts, but a later sign-in with that passkey, over intact TLS, receives that u_c, and with no pin she accepts it. | `login-tls`, `recovery-tls`; `login-tls-dualmode`, `login-tls-stripped` | race accepted; stripping pending, and the planned handle tag (§7.2) targets it |
 | I-30 | A live read of the challenge table hijacks registration without breaking TLS: the attacker submits reg/verify with Alice's user id and outstanding challenge, and its own passkey and keys, before she does. A read of her recover/verify challenge likewise lets it bind its own passkey to her account. Her u_c and words stay secret. | `login-db-chal`, `recovery-db-chal`, `recovery-db-chalrec` | pending; fix candidates in `conformance.md` §7.3 |
 | — | The externally reported V7 key-commitment incompleteness, reproduced. V8 closes it. | `commit-v7` | known |
 
@@ -100,7 +100,7 @@ flags. The main flag groups are:
 - `SCN_*` selects the scenario.
 - `LEAK_*` gives the attacker a secret.
 - `MUT_*` deliberately breaks one protocol mechanism.
-- The rest set options, described where they are used: `NOPRF`, `DUALMODE`, `STORE`, `RCV`, `UNIQUSER`,
+- The rest set options, described where they are used: `NOPRF`, `DUALMODE`, `STRIPLOGIN`, `STORE`, `RCV`, `UNIQUSER`,
   `NOBT`, `PRECISE`, `KEY_UI`, `REACH_ONLY`, `MAL_RECOVERY`, `LEGACY_CLIENT`, `USE_V7`, and
   `FIX_*` in `fixes/`.
 
@@ -313,15 +313,23 @@ the server derives it.
   - With TLS broken, the attacker can also act as the server toward Alice's browser, so the
     malicious-server results apply. Through I-01 it can sign her browser in to an account it
     chose.
-- **`login-tls-dualmode` shows the attacker choosing Alice's account mode (I-29).** The server
-  picks the mode from which fields reg/verify carries, so the attacker strips the PRF fields
-  from her request. The trace shows the honest server registering her own user id and passkey
-  as a no-PRF account and sending its u_c in the reply, which the attacker sees. Her browser
-  halts on that reply. The rest follows from the code but is not traced: a later sign-in with
-  that passkey, over intact TLS, gets the same u_c from auth/verify, and her browser, with no
-  pin, accepts it (A-S4). ProVerif finds a trace for that sign-in only under the hypothesis that
-  the attacker holds her passkey's key, which no run allows, so the variant leaves that query
-  out. Her own PRF u_c stays secret throughout.
+- **`login-tls-dualmode` and `login-tls-stripped` show the attacker choosing Alice's account
+  mode (I-29).** The server picks the mode from which fields reg/verify carries, so the
+  attacker strips the PRF fields from her request.
+  - `login-tls-dualmode` traces the registration: the honest server registers her own user id
+    and passkey as a no-PRF account and sends its u_c in the reply, which the attacker sees. Her
+    browser never completes the registration, so it pins nothing.
+  - `login-tls-stripped` traces the rest. Alice later signs in with that passkey, with no
+    attacker involved. The honest server's auth/verify answers her assertion with that u_c, and
+    her browser, with no pin, accepts it and signs in to her own user id holding a u_c the
+    attacker knows. The query ties the reply her browser accepted to that server session by
+    its cookie, which only that session can make. Without the tie, ProVerif satisfies the
+    browser half with a reply the attacker builds, and reconstruction fails.
+  - `login-tls-stripped` leaves out API requests and added passkeys, on both sides, because
+    with them saturation does not finish. Leaving out honest processes only removes runs, so
+    its trace is a trace of the full system.
+
+  Her own PRF u_c stays secret throughout.
 
 **Reachability.** `login-reach` shows Alice's own runs reaching the server:
 - her sign-in with her passkey;
@@ -608,6 +616,7 @@ seconds without backtracking (`NOBT`).
 | `recovery-noprf-tls` | `STORE`, `UNIQUSER`, and `PRECISE` |
 | `recovery-noprf-reach` | `RCV`, `STORE`, `UNIQUSER`, and `PRECISE` |
 | `login-db-chal`, `recovery-db-chal`, `recovery-db-chalrec`, `login-tls-dualmode` | `STORE`, `UNIQUSER` |
+| `login-tls-stripped` | `STORE`, `UNIQUSER`, and `STRIPLOGIN`'s `[precise]` on Register's two inputs and the reg/verify input |
 
 `PRECISE` is not a restriction. It marks three actions `[precise]`: the inputs of auth/verify
 and recover3, and the lookup of the words a recovery uses. Each of them receives or reads one
