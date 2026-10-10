@@ -409,6 +409,10 @@ What the traces show:
   - Later, on the same browser, Alice recovers with her words. recover3 answers "no-PRF" with
     the server's u_c. The browser has no pin for that user id, so it accepts, and the recovery
     ends holding the server's u_c.
+  - From recover3 on, this is the trust on first use of A-S4R (I-03): the browser that
+    registered is in the position of one with no pin for Alice's account. The planned fixes
+    target it twice: the registration user-id check (`conformance.md` §7.1), and the account
+    tag in the recovery words (§7.2).
 - **A-S3R when reg/verify named Alice's user id, proved.**
   - At recover3 that browser compares the u_c it receives with the pk_U it pinned at
     registration. So the server must return Alice's own cd_r, which it cannot forge without the
