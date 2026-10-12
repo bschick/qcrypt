@@ -33,7 +33,7 @@
 
 \begin{tabular}{@{}p{5mm} l}
 $A$ & \textrm{ - Alice} \\
-$B$ & \textrm{ - Browser with Session storage, IndexedDB, WebCrypto API, and} \\
+$B$ & \textrm{ - Browser with session and local storage, IndexedDB, WebCrypto API, and} \\
 & \phantom{\textrm{ - }}\textrm{libsodium and libcrux libraries} \\
 $M$ & \textrm{ - WebAuthn authenticator (passkey manager)} \\
 $S$ & \textrm{ - Quick Crypt server} \\
@@ -54,7 +54,8 @@ $S$ & \textrm{ - Quick Crypt server} \\
 $C$ & \textrm{ - Constant-time comparator from libsodium} \\
 & \phantom{\textrm{ - }}$C$\textrm{(value1, value2)} \\
 $D_H$ & \textrm{ - BLAKE2b KDF from libsodium (}\texttt{crypto\_kdf\_derive\_from\_key}\textrm{)} \\
-& \phantom{\textrm{ - }}$D_H$\textrm{(subkey number, purpose, key), truncated if }$<$\textrm{ 128 bits} \\
+& \phantom{\textrm{ - }}$D_H$\textrm{(subkey number, purpose, key), 256 bit output, except }$n_{IVH}$\textrm{:} \\
+& \phantom{\textrm{ - }}\textrm{as long as }$n_{IV}$\textrm{, derived as at least 128 bits, then truncated to that length} \\
 $D_P$ & \textrm{ - PBKDF2-HMAC-SHA512 key derivation FIPS-180-4 from WebCrypto} \\
 & \phantom{\textrm{ - }}$D_P$\textrm{(material, salt, iterations)} \\
 $D_S$ & \textrm{ - HMAC-SHA-512 from WebCrypto} \\
@@ -80,7 +81,8 @@ $P_S$ & \textrm{ - ML-DSA-65 (FIPS 204) randomized signature generator from libc
 & \phantom{\textrm{ - }}$P_S$\textrm{(secret key, message, context)} \\
 $P_V$ & \textrm{ - ML-DSA-65 (FIPS 204) signature verifier from libcrux} \\
 & \phantom{\textrm{ - }}$P_V$\textrm{(public key, message, signature, context)} \\
-$R$ & \textrm{ - Cryptographic pseudo-random generator from libsodium} \\
+$R$ & \textrm{ - Cryptographic pseudo-random generator: libsodium in }$B$\textrm{, AWS KMS} \\
+& \phantom{\textrm{ - }}\textrm{or WebCrypto in }$S$ \\
 & \phantom{\textrm{ - }}$R$\textrm{(bits)} \\
 $V$ & \textrm{ - MAC validator: recomputes the }$H$\textrm{ tag of data under key and} \\
 & \phantom{\textrm{ - }}\textrm{compares it to tag using }$C$ \\
@@ -102,8 +104,8 @@ $ad_F$ & \textrm{ - Additional data included in ciphertext}\\
 $cd$ & \textrm{ - Cipher data}\\
 $cd_0$ & \textrm{ - Cipher data block 0}\\
 $cd_N$ & \textrm{ - Cipher data block N}\\
-$cd_u$ & \textrm{ - }$u_c$\textrm{ encrypted under session key }$k_L$\textrm{, both defined in }$u_c$\\
-& \phantom{\textrm{ - }}\textrm{Encryption at Rest}\\
+$cd_u$ & \textrm{ - }$u_c$\textrm{ encrypted under session key }$k_L$\textrm{. See }$u_c$\textrm{ Encryption at Rest}\\
+& \phantom{\textrm{ - }}\textrm{for }$k_L, k_{KS}, pkId, s$\textrm{, and Persisted State for }$B.sess, B.key$\\
 $e_l$ & \textrm{ - Extra key material length: 0 (fixed)}\\
 $err$ & \textrm{ - Error message and exit}\\
 $f$ & \textrm{ - Block flags: 1 (TERM) on the final block of a loop, else 0}\\
@@ -155,8 +157,12 @@ $v$ & \textrm{ - Cipher data version: 8}\\
 \begin{stanza}
 \underline{Message Encryption by A}\\
 
+{\leftskip=\parindent\noindent\textit{A is authenticated}\par}
+
 \begin{tabular}{@{}p{5mm} l}
-\multicolumn{2}{@{}l}{$A\overset{\textrm{WebAuthn}}{\leftrightarrow} B,M \overset{\textrm{WebAuthn}}{\leftrightarrow} S$}\\
+\multicolumn{2}{@{}l}{$B\leftarrow B.sess : u_i, pkId, cd_u$}\\
+\multicolumn{2}{@{}l}{$B\leftarrow B.key[s] : k_{KS}$}\\
+\multicolumn{2}{@{}l}{$B : k_L = D_S(s \mathbin\Vert pkId, k_{KS})[256:512)$}\\
 \multicolumn{2}{@{}l}{$B : u_c = cd_u\textrm{ decryption under }k_L$}\\
 \multicolumn{2}{@{}l}{$A\rightarrow B: m,i,le$}\\
 \multicolumn{2}{@{}l}{$v = 8$}\\
@@ -219,8 +225,12 @@ $v$ & \textrm{ - Cipher data version: 8}\\
 \begin{stanza}
 \underline{Message Decryption by A}\\
 
+{\leftskip=\parindent\noindent\textit{A is authenticated}\par}
+
 \begin{tabular}{@{}p{5mm} l}
-\multicolumn{2}{@{}l}{$A \overset{\textrm{WebAuthn}}{\leftrightarrow} B, M \overset{\textrm{WebAuthn}}{\leftrightarrow} S$}\\
+\multicolumn{2}{@{}l}{$B\leftarrow B.sess : u_i, pkId, cd_u$}\\
+\multicolumn{2}{@{}l}{$B\leftarrow B.key[s] : k_{KS}$}\\
+\multicolumn{2}{@{}l}{$B : k_L = D_S(s \mathbin\Vert pkId, k_{KS})[256:512)$}\\
 \multicolumn{2}{@{}l}{$B : u_c = cd_u\textrm{ decryption under }k_L$}\\
 \multicolumn{2}{@{}l}{$A \rightarrow B: cd$}\\
 \multicolumn{2}{@{}l}{$LOOP: B\textrm{ compute} $}\\
@@ -401,14 +411,14 @@ $u_i$ & \textrm{ - 128 bit user id guaranteed to be unique} \\
 $u_n$ & \textrm{ - A's chosen user name} \\
 $u_r$ & \textrm{ - 128 bit recovery id} \\
 $\Delta$ & \textrm{ - Maximum request timestamp skew: 120 seconds} \\
-$\delta$ & \textrm{ - Delimiter byte: \texttt{\textbackslash n}}\\
+$\delta$ & \textrm{ - Delimiter byte: \texttt{\symbol{92}n}}\\
 $\sigma_R$ & \textrm{ - ML-DSA-65 recovery proof signature} \\
 $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \end{tabular}
 
 \vspace{\notegap}
 
-{\leftskip=\parindent\noindent\textit{Encodings:} Every field of $m_U$ and $m_R$ is ASCII text: $u_i$ and $n_P$ are base64url, $mth$ is uppercase, $pth$ is percent encoded, $ts_U$ and $ts_R$ are decimal milliseconds, and $H_2(bd)$ is lowercase hex.\par}
+{\leftskip=\parindent\noindent\textit{Encodings:} Every field of $m_U$ and $m_R$ is ASCII text: $u_i$ and $n_P$ are base64url, $mth$ is uppercase, $pth$ is percent encoded, $ts_U$ and $ts_R$ are decimal milliseconds, and $H_2(bd)$ is lowercase hex. In $b$, $pk_R$ is base64url and $c_A$ is decimal.\par}
 
 \vspace{\notegap}
 
@@ -434,7 +444,7 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 
 \vspace{\notegap}
 
-{\leftskip=\parindent\noindent\textit{Notes:} Reading an absent key gives $\emptyset$. $X \twoheadleftarrow T[k] : v$ reads $v$ and deletes it from $T$ in one step, or gives $err$ if $k$ is absent or expired. $X \twoheadrightarrow T[k] : v$ stores $v$ in one step, or gives $err$ if $k$ is present.\par}
+{\leftskip=\parindent\noindent\textit{Notes:} Reading an absent key gives $\emptyset$. $X \twoheadleftarrow T[x] : y$ reads $y$ and deletes it from $T$ in one step, or gives $err$ if $x$ is absent or expired. $X \twoheadrightarrow T[x] : y$ stores $y$ in one step, or gives $err$ if $x$ is present.\par}
 
 \vspace{\notegap}
 
@@ -445,10 +455,10 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \underline{Session Start by B}\\
 
 \begin{tabular}{@{}p{5mm} l}
-\multicolumn{2}{@{}l}{$(pk_U, ) = P_K(D_H(1, kp_U, u_c))$}\\
 \multicolumn{2}{@{}l}{$B \leftarrow B.pin[u_i] : prf', pk_U'$}\\
-\multicolumn{2}{@{}l}{$\textrm{check }pk_U' \in \{\emptyset, pk_U\}\textrm{ else }err$}\\
 \multicolumn{2}{@{}l}{$\textrm{check }prf' \in \{\emptyset, 0, prf\}\textrm{ else }err$}\\
+\multicolumn{2}{@{}l}{$(pk_U, ) = P_K(D_H(1, kp_U, u_c))$}\\
+\multicolumn{2}{@{}l}{$\textrm{check }pk_U' \in \{\emptyset, pk_U\}\textrm{ else }err$}\\
 \multicolumn{2}{@{}l}{$B \rightarrow B.pin[u_i] : prf, pk_U$}\\
 \multicolumn{2}{@{}l}{$k_{KS} = G()$}\\
 \multicolumn{2}{@{}l}{$B \rightarrow B.key[s] : k_{KS}$}\\
@@ -488,7 +498,7 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \multicolumn{2}{@{}l}{$S\rightarrow S.pk[u_i, pkId] : pk_M, cd_p$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.user[u_i] : prf, pk_U, pk_R, cd_r, c_A$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ create }ck, cs$} \\
-\multicolumn{2}{@{}l}{$B\leftarrow S : u_i^*, u_n, prf, pkId, cs, ck$} \\
+\multicolumn{2}{@{}l}{$B\leftarrow S : u_i^*, u_n, prf, pkId^*, cs, ck$} \\
 \multicolumn{2}{@{}l}{$B\textrm{ check }prf == 1\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$B\textrm{ run Session Start for }u_i^*$} \\
 \multicolumn{2}{@{}l}{$A\leftarrow B : u_r\mathbin\Vert u_i\textrm{ as BIP39}$} \\
@@ -519,10 +529,11 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \multicolumn{2}{@{}l}{$S\twoheadleftarrow S.chal[\textrm{``auth''}, ch] : u_i'$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check }u_i' \in \{\emptyset, u_i\}\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$S\leftarrow S.pk[u_i, pkId] : pk_M, cd_p$} \\
+\multicolumn{2}{@{}l}{$S\leftarrow S.user[u_i] : u_n, prf$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check WebAuthn validates }ar\textrm{ against }ch, o, pk_M\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.user[u_i] : c_A + 1$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ create }ck, cs$} \\
-\multicolumn{2}{@{}l}{$B\leftarrow S : u_i^*, u_n, prf, pkId, cd_p, cs, ck$} \\
+\multicolumn{2}{@{}l}{$B\leftarrow S : u_i^*, u_n, prf, pkId^*, cd_p, cs, ck$} \\
 \multicolumn{2}{@{}l}{$B : u_c = cd_p\textrm{ decryption under }p_R$} \\
 \multicolumn{2}{@{}l}{$B\textrm{ run Session Start for }u_i^*$} \\
 \end{tabular}
@@ -636,14 +647,14 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \multicolumn{2}{@{}l}{$S\twoheadrightarrow S.nonce[\textrm{``nonce''}, n_P] : u_i$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.user[u_i] : c_A + 1$} \\
 \multicolumn{2}{@{}l}{$S\leftarrow S.user[u_i] : c_A$} \\
-\multicolumn{2}{@{}l}{$S : ch_R = R(256);\ b = H_\emptyset(pk_R, c_A)$} \\
+\multicolumn{2}{@{}l}{$S : ch_R = R(256);\ b = H_\emptyset(pk_R \mathbin\Vert \textrm{``:''} \mathbin\Vert c_A)$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.chal[\textrm{``confirm''}, ch_R] : u_i, b$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : prf, ch_R, cd_r$} \\
 \multicolumn{2}{@{}l}{$B : u_c = cd_r\textrm{ decryption under }u_r \mathbin\Vert u_i$} \\
-\multicolumn{2}{@{}l}{$B : (pk_U, sk_U) = P_K(D_H(1, kp_U, u_c))$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow B.pin[u_i] : prf', pk_U'$} \\
-\multicolumn{2}{@{}l}{$B\textrm{ check }pk_U' \in \{\emptyset, pk_U\}\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$B\textrm{ check }prf' \in \{\emptyset, 0, prf\}\textrm{ else }err$} \\
+\multicolumn{2}{@{}l}{$B : (pk_U, sk_U) = P_K(D_H(1, kp_U, u_c))$} \\
+\multicolumn{2}{@{}l}{$B\textrm{ check }pk_U' \in \{\emptyset, pk_U\}\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow B.pin[u_i] : prf, pk_U$} \\
 \multicolumn{2}{@{}l}{$B : ts_U = \textrm{current time}$} \\
 \multicolumn{2}{@{}l}{$B : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert ch_R \delta \mathbin\Vert H_2(\emptyset)$} \\
@@ -651,7 +662,7 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \multicolumn{2}{@{}l}{$B\rightarrow S : u_i, o, ch_R, ts_U, \sigma_U$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check }ts_U\textrm{ within }\Delta\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$S\leftarrow S.user[u_i] : pk_R, pk_U, c_A$} \\
-\multicolumn{2}{@{}l}{$S : b = H_\emptyset(pk_R, c_A)$} \\
+\multicolumn{2}{@{}l}{$S : b = H_\emptyset(pk_R \mathbin\Vert \textrm{``:''} \mathbin\Vert c_A)$} \\
 \multicolumn{2}{@{}l}{$S\twoheadleftarrow S.chal[\textrm{``confirm''}, ch_R] : u_i', b'$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check }u_i' == u_i\textrm{ and }b' == b\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$S : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert ch_R \delta \mathbin\Vert H_2(\emptyset)$} \\
@@ -659,7 +670,7 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \multicolumn{2}{@{}l}{$S\textrm{ delete }S.pk[u_i, pkId]\textrm{ for every }pkId$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.user[u_i] : c_A + 1$} \\
 \multicolumn{2}{@{}l}{$S\leftarrow S.user[u_i] : c_A$} \\
-\multicolumn{2}{@{}l}{$S : ch = R(256);\ b = H_\emptyset(pk_R, c_A)$} \\
+\multicolumn{2}{@{}l}{$S : ch = R(256);\ b = H_\emptyset(pk_R \mathbin\Vert \textrm{``:''} \mathbin\Vert c_A)$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.chal[\textrm{``recover''}, ch] : u_i, b$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : ro$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow M : ro, p_S$} \\
@@ -669,14 +680,14 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \multicolumn{2}{@{}l}{$B : cd_p = u_c\textrm{ encryption under }p_R$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow S : rr, u_i, ch, cd_p$} \\
 \multicolumn{2}{@{}l}{$S\leftarrow S.user[u_i] : pk_R, c_A$} \\
-\multicolumn{2}{@{}l}{$S : b = H_\emptyset(pk_R, c_A)$} \\
+\multicolumn{2}{@{}l}{$S : b = H_\emptyset(pk_R \mathbin\Vert \textrm{``:''} \mathbin\Vert c_A)$} \\
 \multicolumn{2}{@{}l}{$S\twoheadleftarrow S.chal[\textrm{``recover''}, ch] : u_i', b'$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check }u_i' == u_i\textrm{ and }b' == b\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check WebAuthn validates }rr\textrm{ against }ch, o\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.pk[u_i, pkId] : pk_M, cd_p$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.user[u_i] : c_A + 1$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ create }ck, cs$} \\
-\multicolumn{2}{@{}l}{$B\leftarrow S : u_i^*, u_n, prf^*, pkId, cs, ck$} \\
+\multicolumn{2}{@{}l}{$B\leftarrow S : u_i^*, u_n, prf^*, pkId^*, cs, ck$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow B.pin[u_i] : prf'$} \\
 \multicolumn{2}{@{}l}{$B\textrm{ check }prf' \in \{\emptyset, 0, prf^*\}\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$B\textrm{ run Session Start for }u_i^*, prf^*$} \\
