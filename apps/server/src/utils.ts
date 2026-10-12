@@ -149,6 +149,7 @@ export async function verifyRecoverProof(
       throw new ParamError(`user account ${userId} invalid recovery proof`);
    }
 
+   // Only needed for unauthenticated callers, but harmless for authenticated
    const outcome = await storeSingleUseNonce(nonce, 'nonce', userId);
    if (outcome === 'replayed') {
       throw new ParamError(`user account ${userId} replayed recovery proof`);

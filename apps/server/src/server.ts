@@ -589,7 +589,7 @@ async function postRecoverVerify(httpDetails: HttpDetails): Promise<Response> {
 
    const verifiedUser = checkVerified(unverifiedUser, auth.userId);
 
-   // force consistent read to capture recent create
+   // force consistent read to capture just created authenticator
    const authenticators = await loadAuthenticators(verifiedUser, true);
    const responseContent = await makeLoginUserInfoResponse(
       verifiedUser,
