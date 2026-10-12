@@ -9,8 +9,9 @@ This file ties three descriptions of the protocol together:
 It also holds the issue log for every difference found between them, the proposed changes to the
 tex notation, and the design of the planned fixes.
 
-**References.** Tex line numbers and code `file:line` references are as of commit `48c26a6`. The
-model column names the model function or process for each step.
+**References.** Tex references name the `main.tex` stanza, so they survive edits to the tex. Code
+`file:line` references are as of commit `48c26a6`. The model column names the model function or
+process for each step.
 
 **Code paths** are abbreviated as follows.
 
@@ -34,57 +35,58 @@ model column names the model function or process for each step.
 
 | Tex | Step | Code | Model |
 |---|---|---|---|
-| 167 | n_IVH = D_H(2, kp_H, H_{n_IV}(n_S,a,v,lp,e_l)) | `keys:742`, called at `cur:461` and `cur:1072` | `mkNIVH` |
-| 168 | k_H = D_H(1, kp_H, H_{u_c}(…)) | `keys:741` | `mkKH` |
-| 169 | k_S = D_H(1, kp_S, H_{u_c}(…)) | `keys:721-726` | `mkKS` |
-| 170 | k_M0 = D_P(p_l‖p‖u_c‖a‖v‖lp‖e_l, n_S, i) | `keys:686-719`, material from `keys:829-836`, PBKDF2 at `keys:280-314` | `mkKM0`, `pwmat8` |
-| 171 | k_C = D_H(1, kp_C, H_{k_M0}(n_S)) | `keys:746-749` | `mkKC` |
-| 185 | h_E = E_a(PAD(h), n_IVH, ∅, k_H); empty hint means no h_E | `cur:444-461` | `mkBlock0L` |
-| 188 | ad_F for block 0 | `cur:472-482`, `cur:251-300` | `ad0` |
-| 189 | m_E = E_a(m_0, n_IV, ad_F, k_M0) | `encryptBlock0` `cur:419-504` | `mkBlock0L` |
-| 191 | t = H_{k_S}(v‖l‖ad_F‖m_E‖t_L) | `_createHeader` `cur:622-647` | `mac`, `macin` |
-| 205-206 | ad_F = f‖a‖n_IV; k_MN = D_H(N, kp_B, H_{k_M0}(…)) | `cur:535-539`, `keys:838-842` | `adN`, `mkKMN`, `mkBlockN` |
-| 224 | t_L = 0x00 at the start of each loop | `cur:394` (encrypt), `cur:929` (decrypt), with a fresh instance per loop at `cs:73` and `cs:173` | `TL0` |
-| 229 | MAC verify | `_verifyMAC` `cur:1223-1256`, called at `cur:1061` | `Dec`, `BlockN1`, `BlockN2` |
-| 233 | k_Cl = 32 and i ≥ 420,000 | Runs **before** the MAC: `cur:1324-1330`, `keys:86-106`. See I-13 | `Dec`: `kC <> NOKC`, `i <> IC0` |
-| 234 | lp sequencing across loops | `cs:176-185`, after the hint is decrypted. See I-13 | `Dec`: `lp = le`; `open0` |
-| 235-237 | Hint decrypt | `cur:1071-1084` | `Dec`: `HintShown` |
-| 240-241 | k_M0, then the k_C compare | `decryptBlock0` `cur:717-772`; compare at `cur:745-750` | `Dec`: `kC = mkKC(...)` |
-| 245, 264 | TERM flag checks | `_decodeBlockN` `cur:1155-1221`. See I-14 | `Dec`, `BlockN1`, `BlockN2` |
-| 271 | a and v equal block 0's values | `cur:1207-1213` | `BlockN1`, `BlockN2` |
-| 273 | Block N AEAD decrypt | `cur:1110-1140` | `BlockN1`, `BlockN2` |
-| 247 | Recurse while lp > 1 | `cs:221-223` | `DecL` |
+| Message Encryption by A | n_IVH = D_H(2, kp_H, H_{n_IV}(n_S,a,v,lp,e_l)) | `keys:742`, called at `cur:461` and `cur:1072` | `mkNIVH` |
+| Message Encryption by A | k_H = D_H(1, kp_H, H_{u_c}(…)) | `keys:741` | `mkKH` |
+| Message Encryption by A | k_S = D_H(1, kp_S, H_{u_c}(…)) | `keys:721-726` | `mkKS` |
+| Message Encryption by A | k_M0 = D_P(p_l‖p‖u_c‖a‖v‖lp‖e_l, n_S, i) | `keys:686-719`, material from `keys:829-836`, PBKDF2 at `keys:280-314` | `mkKM0`, `pwmat8` |
+| Message Encryption by A | k_C = D_H(1, kp_C, H_{k_M0}(n_S)) | `keys:746-749` | `mkKC` |
+| cd_0 Encryption by B | h_E = E_a(PAD(h), n_IVH, ∅, k_H); empty hint means no h_E | `cur:444-461` | `mkBlock0L` |
+| cd_0 Encryption by B | ad_F for block 0 | `cur:472-482`, `cur:251-300` | `ad0` |
+| cd_0 Encryption by B | m_E = E_a(m_0, n_IV, ad_F, k_M0) | `encryptBlock0` `cur:419-504` | `mkBlock0L` |
+| cd_0 Encryption by B | t = H_{k_S}(v‖l‖ad_F‖m_E‖t_L) | `_createHeader` `cur:622-647` | `mac`, `macin` |
+| cd_N Encryption by B | ad_F = f‖a‖n_IV; k_MN = D_H(N, kp_B, H_{k_M0}(…)) | `cur:535-539`, `keys:838-842` | `adN`, `mkKMN`, `mkBlockN` |
+| Message Encryption by A, Message Decryption by A | t_L = 0x00 at the start of each loop | `cur:394` (encrypt), `cur:929` (decrypt), with a fresh instance per loop at `cs:73` and `cs:173` | `TL0` |
+| Message Decryption by A | MAC verify | `_verifyMAC` `cur:1223-1256`, called at `cur:1061` | `Dec`, `BlockN1`, `BlockN2` |
+| Message Decryption by A | k_Cl == 32 after the MAC, and i ≥ 420,000 just before k_M0 | k_Cl: `cur:1063-1069`; before the MAC, unpacking accepts only k_Cl ∈ {0, 32} (`cur:1324-1330`). i: before the MAC, `setCipherDataInfo` applies the floor to a nonzero i (`keys:93`); the complete check, which also rejects i = 0, is in `_pbkdf2CipherKey` (`keys:284`). See I-13 | `Dec`: `kC <> NOKC`, `i <> IC0` |
+| Message Decryption by A | lp sequencing across loops | `cs:176-185`, after the hint is decrypted | `Dec`: `lp = le`; `open0` |
+| Message Decryption by A | Hint decrypt | `cur:1071-1084` | `Dec`: `HintShown` |
+| Message Decryption by A | k_M0, then the k_C compare | `decryptBlock0` `cur:717-772`; compare at `cur:745-750` | `Dec`: `kC = mkKC(...)` |
+| Message Decryption by A, m_N Decryption by B | TERM flag checks | `_decodeBlockN` `cur:1155-1221`. See I-14 | `Dec`, `BlockN1`, `BlockN2` |
+| m_N Decryption by B | a and v equal block 0's values | `cur:1207-1213` | `BlockN1`, `BlockN2` |
+| m_N Decryption by B | Block N AEAD decrypt | `cur:1110-1140` | `BlockN1`, `BlockN2` |
+| Message Decryption by A | Recurse while lp > 1 | `cs:221-223` | `DecL` |
 | — | V7 decode path (I-16) | `keys:632-793`, `cur:948-967` | `DecV`, `DecK` with `USE_V7` |
 
 ## 2. u_c at rest
 
 | Tex | Step | Code | Model |
 |---|---|---|---|
-| 330-332 | k_KS = G(); k_L = D_S(s‖pkId, k_KS)[256:512) | `ks:74-83`, `ks:113-152`; called from `_loginUser` `auth:755` | account: `StartSession` (`dsl`) |
-| 341-351 | u_c encryption under k | `MasterKeyKeyProvider` `keys:469-630`; `encryptBlock0` | cipher: `mkAR`; account: `ar_enc` |
-| 344-345 | k_M and k_S from H_k(n_S,a,v,lp,e_l,e) | `keys:542-551`, `keys:585-629` | cipher: `mkAR`, `openAR` |
-| 361-368 | cd_x decryption | `_decodeBlock0Impl` `cur:1007-1095`. Callers: `auth:355-376` (cd_u), `auth:719` (cd_p), `auth:1391` (cd_r) | cipher: `openAR`; account: `openAtRest` |
+| Session Start by B | k_KS = G(); B → B.key[s] : k_KS; k_L = D_S(s‖pkId, k_KS)[256:512) | `keystore.create` `ks:74-83`, `ks:113-152`; called from `_loginUser` `auth:755` | account: `StartSession` (`dsl`) |
+| Authorization by B, Add Passkey by A, Replace Recovery Words by A | B ← B.key[s] : k_KS, then k_L derived again | `keystore.get` `ks:54-71`; called from `_decryptUserCredEnc` `auth:360` | abstracted: `sessions` holds u_c itself |
+| u_c Encryption Under k by B | u_c encryption under k | `MasterKeyKeyProvider` `keys:469-630`; `encryptBlock0` | cipher: `mkAR`; account: `ar_enc` |
+| u_c Encryption Under k by B | k_M and k_S from H_k(n_S,a,v,lp,e_l,e) | `keys:542-551`, `keys:585-629` | cipher: `mkAR`, `openAR` |
+| cd_x Decryption Under k by B | cd_x decryption | `_decodeBlock0Impl` `cur:1007-1095`. Callers, with the source of e = u_i: `auth:355-376` (cd_u, from `B.sess`), `auth:719` (cd_p, from S's reply), `auth:1391` (cd_r, from the words) | cipher: `openAR`; account: `openAtRest` |
 
 ## 3. Account protocol
 
 | Tex | Step | Client | Server | Model |
 |---|---|---|---|---|
-| 434-437 | Registration options | `newUser` `auth:1500-1563` | `postRegOptions` `srv:807-877`, `registrationOptions` `srv:879-936` | `Register`, `SRegOptions` |
-| 438-447 | Ceremony, u_r, pk_R, u_c, cd_p, cd_r, pk_U | `auth:1520-1555`, `_newRecoverySecret` `auth:545-561` | | `Register` |
-| 448-451 | Registration verify | `makeRegVerifyRequest` | `postRegVerify` `srv:422-564`, `_createAuthenticator` `srv:608-691` | `SRegVerify` |
-| 452-453 | cd_u, BIP39 words | `_loginUser` `auth:736-785` | | `Register`, `StartSession` |
-| 469-471 | Auth options | `_startAuthentication` `auth:1293-1338` | `postAuthOptions` `srv:727-795` | `LoginWith`, `SAuthOptions` |
-| 476-479 | Auth verify | `_createSessionImpl` `auth:1268-1291` | `postAuthVerify` `srv:284-396` | `SAuthVerify` |
-| 480-483 | cd_p decrypt, pk_U pin, cd_u | `_resolveUserCred` `auth:701-733`, `_pinAccount` `auth:302-311` | | `LoginWith`, `LoginRegistered` |
-| 499-505 | Per-request proof | `_doFetch` `auth:385-459`; `aproof:49-97` | | `ApiRequests`, `mkProof` |
-| 506-513 | Cookie, CSRF, skew, proof verify | | `handler` `srv:1826-1836`, `verifyProof` `srv:1737-1791` | `authorized`, `SApi` (no skew) |
-| 518 | Replay nonce for non-GET requests | | `storeSingleUseNonce` `sutil:162-176`, called at `srv:1781-1790` | `NonceStored` + `STORE` restriction |
-| 527-537 | Add passkey | `addPasskey` `auth:1565-1604` | `getPasskeyOptions` `srv:797-805`, `postPasskeyVerify` `srv:398-420` | `AddPasskey`, `SPasskeyOptions`, `SPasskeyVerify` |
-| 551-569 | Replace recovery words | `changeRecoveryWords` `auth:599-646`, `_putRecoveryKey` `auth:564-595` | `putRecover3Key` `srv:1107-1149`, `verifyRecoverProof` `sutil:123-159` | `ReplaceWords`, `SReplaceWords` |
-| 581-596 | recover3 | `recover3` `auth:1361-1436` | `postRecover3` `srv:1457-1512` | `Recovery`, `SRecover3` |
-| 597-611 | recover/confirm | `auth:1399-1421` | `postRecoverConfirm` `srv:1514-1585` | `Recovery`, `SRecoverConfirm` |
-| 612-621 | recover/verify | `_finishRecovery` `auth:1456-1495` | `postRecoverVerify` `srv:566-606` | `Recovery`, `SRecoverVerify` |
-| 626 | Recovery challenge binding | | `_recoveryBinding` `srv:267-269`, `consumeChallenge` `sutil:86-111` | binding carried as pk_R, never compared; `authCount` and the empty-`lastCredentialId` check (`srv:573`) not modeled |
+| Registration by A | Registration options | `newUser` `auth:1500-1563` | `postRegOptions` `srv:807-877`, `registrationOptions` `srv:879-936` | `Register`, `SRegOptions` |
+| Registration by A | Ceremony, u_r, pk_R, u_c, cd_p, cd_r, pk_U | `auth:1520-1555`, `_newRecoverySecret` `auth:545-561` | | `Register` |
+| Registration by A | Registration verify | `makeRegVerifyRequest` | `postRegVerify` `srv:422-564`, `_createAuthenticator` `srv:608-691` | `SRegVerify` |
+| Registration by A, Session Start by B | Pin, cd_u, BIP39 words | `_loginUser` `auth:736-785` | | `Register`, `StartSession` |
+| Authentication by A | Auth options | `_startAuthentication` `auth:1293-1338` | `postAuthOptions` `srv:727-795` | `LoginWith`, `SAuthOptions` |
+| Authentication by A | Auth verify | `_createSessionImpl` `auth:1268-1291` | `postAuthVerify` `srv:284-396` | `SAuthVerify` |
+| Authentication by A, Session Start by B | cd_p decrypt, pk_U pin, cd_u | `_resolveUserCred` `auth:701-733`, `_pinAccount` `auth:302-311` | | `LoginWith`, `LoginRegistered` |
+| Authorization by B | Per-request proof | `_doFetch` `auth:385-459`; `aproof:49-97` | | `ApiRequests`, `mkProof` |
+| Authorization by B | Cookie, CSRF, skew, proof verify | | `handler` `srv:1826-1836`, `verifyProof` `srv:1737-1791` | `authorized`, `SApi` (no skew) |
+| Authorization by B | Replay nonce for non-GET requests | | `storeSingleUseNonce` `sutil:162-176`, called at `srv:1781-1790` | `NonceStored` + `STORE` restriction |
+| Add Passkey by A | Add passkey | `addPasskey` `auth:1565-1604` | `getPasskeyOptions` `srv:797-805`, `postPasskeyVerify` `srv:398-420` | `AddPasskey`, `SPasskeyOptions`, `SPasskeyVerify` |
+| Replace Recovery Words by A | Replace recovery words | `changeRecoveryWords` `auth:599-646`, `_putRecoveryKey` `auth:564-595` | `putRecover3Key` `srv:1107-1149`, `verifyRecoverProof` `sutil:123-159` | `ReplaceWords`, `SReplaceWords` |
+| Recovery from Lost Passkey by A | recover3 | `recover3` `auth:1361-1436` | `postRecover3` `srv:1457-1512` | `Recovery`, `SRecover3` |
+| Recovery from Lost Passkey by A | recover/confirm | `auth:1399-1421` | `postRecoverConfirm` `srv:1514-1585` | `Recovery`, `SRecoverConfirm` |
+| Recovery from Lost Passkey by A | recover/verify | `_finishRecovery` `auth:1456-1495` | `postRecoverVerify` `srv:566-606` | `Recovery`, `SRecoverVerify` |
+| Recovery from Lost Passkey by A, Persisted State | Recovery challenge binding | | `_recoveryBinding` `srv:267-269`, `consumeChallenge` `sutil:86-111` | binding carried as pk_R, never compared; `authCount` and the empty-`lastCredentialId` check (`srv:573`) not modeled |
 
 ---
 
@@ -146,35 +148,35 @@ encoding can be parsed back into its fields in exactly one way. The argument for
 
 | ID | Observation | Code / tex | Class | Model impact | Decision |
 |---|---|---|---|---|---|
-| I-01 | B never compares the server-returned u_i with the authenticator's userHandle, with the u_i it asked for, or (before pinning and encrypting) with the u_i decoded from the recovery words. The pk_U pin is keyed by that server-asserted u_i. A malicious API server could therefore assert an unpinned u_i. <br>**Confirmed by `account/malicious` (A-S3).** Alice signs in on the browser that registered her account. The server replies with a different user id (`sui` in the model), "no-PRF", and a u_c of its choosing. The browser has no pin for that user id, so it accepts, pins it, and starts a session with the server's u_c. Every message Alice then encrypts in that session is protected by her password alone, against a server that can guess it offline. The trace matches the code: the user handle is passed to the server and never compared (`auth:1326-1329`), and both pin checks are keyed by the server's `userId` (`auth:290-311`, `auth:712`). <br>**Recovery (`account/malicious-recovery`).** The server can name a different user in the `recover/confirm` options, which become the new passkey's user handle, and at `recover/verify`, where the browser pins and signs in under it. In the traces, the recovering browser still holds Alice's own u_c. <br>**Registration (`account/malicious-recovery`, A-S3R).** The browser pins and signs in under the user id the reg/verify reply names, without comparing it with the user id in the options (`auth:1545-1557`). The server names another user there, so the browser that registered holds no pin for Alice's user id, which her words and passkey carry. A later recovery with her words on that browser then accepts "no-PRF" and the server's u_c at recover3. From recover3 on, this is the trust on first use of I-03 (A-S4R), so the account tag in the recovery words (§7.2) targets it as well as the registration check (§7.1). When the reply named Alice's user id, recovery on that browser always keeps her u_c, because recover3 compares the u_c with the pk_U pinned at registration (`auth:1399`). <br>**Add passkey (`account/malicious`).** The user id in the `passkeys/options` reply becomes the new passkey's user handle (`auth:1576`), and the browser never compares it with the session's. A passkey Alice adds can therefore name an account the server chose. | `auth:712-724`, `auth:1326-1329`, `auth:1486-1488`, `auth:1545-1557`, `auth:1576`; tex 492 | **confirmed** weakness (malicious server) | A-S3: attack; A-S3R: attack, and true when reg/verify named Alice's user id; add-passkey handle: attack | **fix code (planned):** the user-id check in §7.1, at sign-in, registration, add passkey and recovery. Failing unit tests are in [remediation-tests.md](remediation-tests.md). |
+| I-01 | B never compares the server-returned u_i with the authenticator's userHandle, with the u_i it asked for, or (before pinning and encrypting) with the u_i decoded from the recovery words. The pk_U pin is keyed by that server-asserted u_i. A malicious API server could therefore assert an unpinned u_i. <br>**Confirmed by `account/malicious` (A-S3).** Alice signs in on the browser that registered her account. The server replies with a different user id (`sui` in the model), "no-PRF", and a u_c of its choosing. The browser has no pin for that user id, so it accepts, pins it, and starts a session with the server's u_c. Every message Alice then encrypts in that session is protected by her password alone, against a server that can guess it offline. The trace matches the code: the user handle is passed to the server and never compared (`auth:1326-1329`), and both pin checks are keyed by the server's `userId` (`auth:290-311`, `auth:712`). <br>**Recovery (`account/malicious-recovery`).** The server can name a different user in the `recover/confirm` options, which become the new passkey's user handle, and at `recover/verify`, where the browser pins and signs in under it. In the traces, the recovering browser still holds Alice's own u_c. <br>**Registration (`account/malicious-recovery`, A-S3R).** The browser pins and signs in under the user id the reg/verify reply names, without comparing it with the user id in the options (`auth:1545-1557`). The server names another user there, so the browser that registered holds no pin for Alice's user id, which her words and passkey carry. A later recovery with her words on that browser then accepts "no-PRF" and the server's u_c at recover3. From recover3 on, this is the trust on first use of I-03 (A-S4R), so the account tag in the recovery words (§7.2) targets it as well as the registration check (§7.1). When the reply named Alice's user id, recovery on that browser always keeps her u_c, because recover3 compares the u_c with the pk_U pinned at registration (`auth:1399`). <br>**Add passkey (`account/malicious`).** The user id in the `passkeys/options` reply becomes the new passkey's user handle (`auth:1576`), and the browser never compares it with the session's. A passkey Alice adds can therefore name an account the server chose. | `auth:712-724`, `auth:1326-1329`, `auth:1486-1488`, `auth:1545-1557`, `auth:1576`; tex: shown as `u_i^*` in Registration, Authentication, Add Passkey and Recovery | **confirmed** weakness (malicious server) | A-S3: attack; A-S3R: attack, and true when reg/verify named Alice's user id; add-passkey handle: attack | **fix code (planned):** the user-id check in §7.1, at sign-in, registration, add passkey and recovery. Failing unit tests are in [remediation-tests.md](remediation-tests.md). |
 | I-02 | pkId, an input to k_L, is supplied by the server and never compared with the credential id the authenticator actually used. <br>Under a malicious server choosing pkId, u_c stays secret (`account/malicious`, A-S2), because k_KS never leaves IndexedDB. | `auth:755`, `ks:113-134` | no effect found | A-S2, A-K1 | accept, or bind as hygiene |
-| I-03 | Account mode is trusted on first use per browser. A no-PRF→PRF pin upgrade is allowed. A missing PRF output on a PRF account is an ordinary error, not a halt. <br>**Trust on first use** (`account/malicious`, A-S4; `account/malicious-recovery`, A-S4R). A browser holding no pin for the account accepts the server's "no-PRF" plus a server-chosen u_c. In the recovery trace this happens under Alice's own user id, at recover3 (`auth:1387-1399`), so a user-id check alone cannot close it. That browser could be a new device, a new profile, or cleared storage. Closing this needs the account mode and an id for u_c to reach the browser through a channel the server cannot alter. The WebAuthn user handle is one such channel, because the authenticator returns it to the browser directly. The recovery words are another. | `auth:290-311`, `auth:716-718`, `auth:1546-1555`, `auth:1387-1399`; tex 462, 492 | **confirmed** weakness (malicious server); fixable with a tag the server never sees | A-S4: attack; A-S4R: attack | **fix code (planned):** account tags (§7.2), holding the account mode and a 31-bit u_c id, in passkey handles and recovery words, for PRF and no-PRF accounts. Design constraints and open compatibility questions are in §7.2. |
-| I-04 | The legacy context `qcrypt/recovery/nonce/v1` is accepted for both recover and replace. With it, separation rests only on the shared `'nonce'` replay store. <br>**Confirmed by the `account/recovery-replay-*` variants.** Either layer alone prevents the cross-use: per-operation contexts for current clients, the shared store for legacy ones. With the legacy context and separate stores, a replace-words signature is accepted by recover3. Removing the legacy context, as the code's BACKWARD COMPAT note plans, leaves the contexts as the guard. | `aproof:38-40`, `aproof:170-175`, `sutil:152`; tex 404-406 | doc (known backward compatibility) | A-V1 in `recovery-replay-*` | pending |
-| I-05 | Legacy `POST /v1/recover` takes a plaintext u_c. It works only for accounts without a recovery key. | `srv:1389-1454`, `auth:1438-1452` | doc | not modeled (decided 2026-10-09) | fix tex: document or mark deprecated (N5) |
-| I-06 | `authCount` and `lastCredentialId` rotation, and the `deleteSession` calls inside recover3 and confirm, are absent from the tex. The tex's "sign-in count" (626) is `authCount`. | `srv:246-282`, `srv:1491`, `srv:1581`, `srv:588` | doc | abstracted; not provable in ProVerif | pending |
-| I-07 | An auth challenge created without a u_i matches any user. Tex 427 says "for that purpose and user". | `sutil:102`, `srv:731`, `srv:784` | doc | A-L1 models the discoverable flow | pending |
-| I-08 | Challenges are consumed before the WebAuthn or signature check. The tex says "verify; remove ch". | `sutil:86-111` | divergence (fails closed) | single-use session names | pending |
-| I-09 | GET requests carry proofs, but their nonces are not single-use. This includes `GET passkeys/options`, which creates an `add` challenge. | `srv:1781-1783`; tex 518 | doc | not a query; `SApi` stores no nonce for GET | pending |
-| I-10 | No-PRF recover/verify returns u_c a second time. | `srv:596`, `srv:960-968`; tex 630 | doc | modeled under `NOPRF`. No variant shows an exposure through it beyond recover3's reply, which also carries u_c. | pending |
+| I-03 | Account mode is trusted on first use per browser. A no-PRF→PRF pin upgrade is allowed. A missing PRF output on a PRF account is an ordinary error, not a halt. <br>**Trust on first use** (`account/malicious`, A-S4; `account/malicious-recovery`, A-S4R). A browser holding no pin for the account accepts the server's "no-PRF" plus a server-chosen u_c. In the recovery trace this happens under Alice's own user id, at recover3 (`auth:1387-1399`), so a user-id check alone cannot close it. That browser could be a new device, a new profile, or cleared storage. Closing this needs the account mode and an id for u_c to reach the browser through a channel the server cannot alter. The WebAuthn user handle is one such channel, because the authenticator returns it to the browser directly. The recovery words are another. | `auth:290-311`, `auth:716-718`, `auth:1546-1555`, `auth:1387-1399`; tex: the pin checks in Session Start and Recovery accept `∅` | **confirmed** weakness (malicious server); fixable with a tag the server never sees | A-S4: attack; A-S4R: attack | **fix code (planned):** account tags (§7.2), holding the account mode and a 31-bit u_c id, in passkey handles and recovery words, for PRF and no-PRF accounts. Design constraints and open compatibility questions are in §7.2. |
+| I-04 | The legacy context `qcrypt/recovery/nonce/v1` is accepted for both recover and replace. With it, separation rests only on the shared `'nonce'` replay store. <br>**Confirmed by the `account/recovery-replay-*` variants.** Either layer alone prevents the cross-use: per-operation contexts for current clients, the shared store for legacy ones. With the legacy context and separate stores, a replace-words signature is accepted by recover3. Removing the legacy context, as the code's BACKWARD COMPAT note plans, leaves the contexts as the guard. | `aproof:38-40`, `aproof:170-175`, `sutil:152`; tex: Authentication Variables (sc_R, sc_W) | doc (known backward compatibility) | A-V1 in `recovery-replay-*` | **accept: treated as removed** (decided 2026-10-12). No client creates the legacy context, and `14f4511` on `prf-phase4` removes it from the server. The tex omits it, and the models drop `SCLEG` next (README, "Remaining work"). |
+| I-05 | Legacy `POST /v1/recover` takes a plaintext u_c. It works only for accounts without a recovery key. | `srv:1389-1454`, `auth:1438-1452` | doc | not modeled (decided 2026-10-09) | **accept:** left out of the tex (decided 2026-10-12) |
+| I-06 | `authCount` and `lastCredentialId` rotation, and the `deleteSession` calls inside recover3 and confirm, are absent from the tex. The tex's sign-in count c_A is `authCount`. | `srv:246-282`, `srv:1491`, `srv:1581`, `srv:588`; tex: Authentication, Recovery | doc | abstracted; not provable in ProVerif | **fixed in tex:** c_A + 1 at auth/verify, recover3, recover/confirm and recover/verify, and b built from it. lastCredentialId stays out: it keys only the session tokens (I-27) and the recover/verify check that no model `if` relies on. |
+| I-07 | An auth challenge created without a u_i matches any user. The tex said "for that purpose and user". | `sutil:102`, `srv:731`, `srv:784`; tex: Authentication | doc | A-L1 models the discoverable flow | **fixed in tex:** S stores `[u_i]` and checks `u_i' ∈ {∅, u_i}` |
+| I-08 | Challenges are consumed before the WebAuthn or signature check. The tex says "verify; remove ch". | `sutil:86-111` | divergence (fails closed) | single-use session names | **fixed in tex:** ↞ consumes the challenge before the WebAuthn and signature checks |
+| I-09 | GET requests carry proofs, but their nonces are not single-use. This includes `GET passkeys/options`, which creates an `add` challenge. | `srv:1781-1783`; tex: Authorization | doc | not a query; `SApi` stores no nonce for GET | **fixed in tex:** S stores n_P in S.nonce only if mth ≠ GET |
+| I-10 | No-PRF recover/verify returns u_c a second time. | `srv:596`, `srv:960-968`; tex: Recovery No-PRF note | doc | modeled under `NOPRF`. No variant shows an exposure through it beyond recover3's reply, which also carries u_c. | pending |
 | I-11 | No-PRF replace words silently ignores a cd_r in the body instead of rejecting it. | `srv:1107-1149` | divergence | modeled under `NOPRF`, where `SReplaceWords` stores no cd_r | pending |
-| I-12 | Origin and rpId are built from headers that CloudFront sets. The tex fixes o. | `urls.ts:134-150`; tex 393 | model (infrastructure trust) | origin constant | pending |
-| I-13 | Decrypt-side check ordering differs from the tex: <br>• i and k_Cl are checked before the MAC; <br>• i = 0 is rejected only inside PBKDF2, after the password prompt; <br>• lp/le is checked after the hint is decrypted; <br>• the info path skips lp/le entirely. | `keys:86-106`, `keys:284`, `cur:1326`, `cs:176-185`, `cs:135-149`; tex 233-234 | divergence | decrypter follows the code's order | pending |
+| I-12 | Origin and rpId are built from headers that CloudFront sets. The tex fixes o. | `urls.ts:134-150`; tex: Authentication Variables (o) | model (infrastructure trust) | origin constant | pending |
+| I-13 | Decrypt-side check ordering differs from the tex: <br>• i and k_Cl are checked before the MAC; <br>• i = 0 is rejected only inside PBKDF2, after the password prompt; <br>• lp/le is checked after the hint is decrypted; <br>• the info path skips lp/le entirely. | `keys:86-106`, `keys:284`, `cur:1326`, `cs:176-185`, `cs:135-149`; tex: Message Decryption by A | divergence | decrypter follows the code's order | **fixed in tex:** k_Cl == 32 after the MAC, lp/le after the hint, and i ≥ 420,000 just before k_M0, where the code completes each check. The checks made while unpacking, before the MAC, stay out (N2). The info path decrypts nothing and is not in the tex. |
 | I-14 | A block that decrypts to empty ends the stream without checking its own f. An empty block 0 with no `onDone` ends quietly. Producing either requires k_M0. <br>Truncation resistance therefore depends on an encryptor invariant: only the terminal block may be empty, which holds because `encryptBlockN` keeps reading until it has data or the stream ends (`cur:520-530`). The `integrity-net-emptymid` variant drops that invariant, and ProVerif then truncates a three-block message to one block with no secret leaked. Checking f = 1 on an empty block in the decryptor would remove the dependency. | `cur:1137-1140`, `cs:195-204` | candidate (hardening) | C-I1/2 holds; `integrity-net-emptymid` (`MUT_EMPTYMID`) shows the dependency | pending |
-| I-15 | Plaintext is released block by block, before the final TERM check. The tex treats the checks and the output as one atomic step. | `cs:191-200`; tex 244-245 | model | per-block release events plus a final accept event | pending |
+| I-15 | Plaintext is released block by block, before the final TERM check. The tex treats the checks and the output as one atomic step. | `cs:191-200`; tex: Message Decryption by A | model | per-block release events plus a final accept event | pending |
 | I-16 | v1 and v4-v7 are still decodable. The version is picked from an unauthenticated v field. The tex describes only v8. | `ciph:87-100`, `keys:386-394` | doc | V7 path for C-D1 and C-K1-v7 | pending |
 | I-17 | Nothing checks that v or le stay the same across loops; only lp is chained. <br>The `loops-uc-pout` variant shows a consequence. An attacker who holds u_c and the **outer** password can wrap an honest one-loop message (le = 1) in a new outer layer, and the decryptor accepts it as the inner layer of a two-loop message. The plaintext is still authentic Alice content; only the layering is forged. Comparing the inner le with the outer le would close it. | `cs:181-185` | candidate (low) | loop queries in `cipher.pv.m4` | pending |
-| I-18 | The tex calls D_H a "BLAKE2b-512 KDF". It is `crypto_kdf_derive_from_key` with 32-byte output; n_IVH for AES-GCM derives 16 bytes and cuts them to 12. | `keys:783-791`; tex 54 | doc | — | pending |
-| I-19 | The tex writes H(data…, key) with the key last, so it reads like another data argument. For example, n_IVH uses n_IV as the key. | tex 69, 167-171, 344-345 | doc (notation N1) | — | pending |
-| I-20 | Hint details the tex doesn't capture: <br>• an empty hint produces no h_E at all; <br>• the hint is silently cut to 223 bytes; <br>• PAD⁻¹ strips any number of 0xFF bytes and fails on an empty result. | `cur:447-456`, `cur:1076-1082`; tex 72, 185, 237 | doc | — | pending |
+| I-18 | The tex calls D_H a "BLAKE2b-512 KDF". It is `crypto_kdf_derive_from_key` with 32-byte output; n_IVH for AES-GCM derives 16 bytes and cuts them to 12. | `keys:783-791`; tex: Browser and Libsodium Functions | doc | — | **fixed in tex (N7)** |
+| I-19 | The tex writes H(data…, key) with the key last, so it reads like another data argument. For example, n_IVH uses n_IV as the key. | tex: Browser and Libsodium Functions, Message Encryption by A, u_c Encryption Under k by B | doc (notation N1) | — | **fixed in tex (N1)** |
+| I-20 | Hint details the tex doesn't capture: <br>• an empty hint produces no h_E at all; <br>• the hint is silently cut to 223 bytes; <br>• PAD⁻¹ strips any number of 0xFF bytes and fails on an empty result. | `cur:447-456`, `cur:1076-1082`; tex: Browser and Libsodium Functions (PAD), cd_0 Encryption by B, Message Decryption by A | doc | — | **fix doc:** a callout on the protocol page's Encrypted Hint row, not in the tex (pending) |
 | I-21 | cd_x decryption does not enforce the fixed at-rest profile: it accepts v6-v8, any algorithm, lpEnd up to 16, a hint, and multiple blocks. u_c is checked to be 32 bytes only on some paths. | `ciph:89`, `keys:604-609`, `auth:411`, `auth:750`, `auth:1462` | divergence | at-rest decrypter accepts any algorithm, loop count and hint (V8 only) | pending |
-| I-22 | The pin is stored after reg/verify. Tex 447 stores pk_U before the B→S message. | `auth:1557`, `auth:753`; tex 447 | doc | — | pending |
-| I-23 | The WebAuthn user handle is base64url(UTF-8(base64url(u_i))). This is permanent for compatibility. | `auth:139-145` | doc (notation) | — | pending |
+| I-22 | The pin is stored after reg/verify. The tex stored pk_U before the B→S message. | `auth:1557`, `auth:753`; tex: Registration, Session Start | doc | — | **fixed in tex:** Session Start stores the pin, after the reply |
+| I-23 | The WebAuthn user handle is base64url(UTF-8(base64url(u_i))). This is permanent for compatibility. | `auth:139-145` | doc (notation) | — | **accept:** recorded here only; the tex treats the handle as u_i |
 | I-24 | The tex draws one r = R(384) and splits it. The code draws n_S and n_IV separately. | `ciph:53`, `cur:443`, `cur:531` | divergence | fresh names | pending |
-| I-25 | Step order differs from the tex: <br>• add passkey decrypts u_c after the ceremony; <br>• replace words encrypts cd_r before signing m_R; <br>• registration creates u_r, pk_R and u_c before the ceremony. | `auth:1587`, `auth:599-646`, `auth:1520-1522`; tex 530, 552-559, 442-447 | doc | follows the code | pending |
+| I-25 | Step order differs from the tex: <br>• add passkey decrypts u_c after the ceremony; <br>• replace words encrypts cd_r before signing m_R; <br>• registration creates u_r, pk_R and u_c before the ceremony. | `auth:1587`, `auth:599-646`, `auth:1520-1522`; tex: Add Passkey, Replace Recovery Words, Registration | doc | follows the code | **fixed in tex:** each stanza follows the code's order |
 | I-26 | WebAuthn sign counters are ignored (`counter: 0`), so there is no clone detection. | `srv:343` | model | — | pending |
-| I-27 | Session cookie and CSRF derivation (HKDF over lastCredentialId and jwtMaterial) is not in the tex, which says only "create ck, cs". | `srv:1613-1683` | doc | tokens are server-keyed MACs | pending |
+| I-27 | Session cookie and CSRF derivation (HKDF over lastCredentialId and jwtMaterial) is not in the tex, which says only "create ck, cs". | `srv:1613-1683` | doc | tokens are server-keyed MACs | **accept:** server-internal; the tex keeps "S create ck, cs" |
 | I-28 | Endpoints not in the tex: <br>• GET and DELETE session; <br>• DELETE passkeys/:id (deleting the last passkey deletes the account); <br>• PATCH passkey and user; <br>• GET user; <br>• invitables; <br>• internal v0 routes. | `srv:1884-1993` | doc | not modeled | pending |
-| I-29 | **Registration race when TLS is broken** (`account/login-tls`, `account/recovery-tls`, traces). <br>WebAuthn registration with attestation `none` carries no signature. An attacker who sees the reply to Alice's registration options can submit `reg/verify` first, with her user id and challenge but its own passkey, pk_U and recovery key. The server registers Alice's user id to the attacker's keys, and the attacker can then sign in and make authorized requests on it. <br>Alice's u_c and recovery words stay secret, and her browser notices on first use, because its proofs fail. <br>Registration integrity rests on TLS alone. A u_c proof at `reg/verify` would not change that, because the attacker uses its own u_c. <br>**Stripping the PRF fields** (`account/login-tls-dualmode`). The server picks the account mode from which fields `reg/verify` carries (`srv:438`). The attacker strips `userCredPubKey`, `passkeyUserCredEnc` and `recoveryUserCredEnc` from Alice's request, so the server registers her own user id and passkey as a no-PRF account and returns its u_c in plaintext. Her browser halts on the no-PRF reply (`auth:1546-1549`) without pinning. A later sign-in with that passkey, over intact TLS, receives that u_c, and with no pin her browser accepts it (`auth:712-724`). Both halves are traced: the registration by `login-tls-dualmode`, and the later sign-in, answered by the honest server, by `account/login-tls-stripped`. The §7.1 registration check would not stop this, since the reply names her own user id; the §7.2 handle tag would. | `srv:422-564`, `srv:438`, `auth:1546-1549`; tex 448-449 | model (requires TLS compromise) | A-L1, A-R1, A-Z1 and A-V1-3 keyed on Alice's user id; stripped registration: attack | race: accept; stripping: pending |
+| I-29 | **Registration race when TLS is broken** (`account/login-tls`, `account/recovery-tls`, traces). <br>WebAuthn registration with attestation `none` carries no signature. An attacker who sees the reply to Alice's registration options can submit `reg/verify` first, with her user id and challenge but its own passkey, pk_U and recovery key. The server registers Alice's user id to the attacker's keys, and the attacker can then sign in and make authorized requests on it. <br>Alice's u_c and recovery words stay secret, and her browser notices on first use, because its proofs fail. <br>Registration integrity rests on TLS alone. A u_c proof at `reg/verify` would not change that, because the attacker uses its own u_c. <br>**Stripping the PRF fields** (`account/login-tls-dualmode`). The server picks the account mode from which fields `reg/verify` carries (`srv:438`). The attacker strips `userCredPubKey`, `passkeyUserCredEnc` and `recoveryUserCredEnc` from Alice's request, so the server registers her own user id and passkey as a no-PRF account and returns its u_c in plaintext. Her browser halts on the no-PRF reply (`auth:1546-1549`) without pinning. A later sign-in with that passkey, over intact TLS, receives that u_c, and with no pin her browser accepts it (`auth:712-724`). Both halves are traced: the registration by `login-tls-dualmode`, and the later sign-in, answered by the honest server, by `account/login-tls-stripped`. The §7.1 registration check would not stop this, since the reply names her own user id; the §7.2 handle tag would. | `srv:422-564`, `srv:438`, `auth:1546-1549`; tex: Registration (Account mode note) | model (requires TLS compromise) | A-L1, A-R1, A-Z1 and A-V1-3 keyed on Alice's user id; stripped registration: attack | race: accept; stripping: pending. The tex's Account mode note stays, under the Agents stanza's assumption of honest parties and intact TLS. |
 | I-30 | **A live read of the challenge table hijacks registration** (`account/login-db-chal`, `account/recovery-db-chal`). A challenge entry holds its purpose, the challenge, the user id and the binding, and lasts 300 s (`consts.ts:63`). An attacker who can read the table while Alice registers submits `reg/verify` with her user id and challenge, and its own passkey, pk_U and recovery key, before she does. It then holds her user id, as in I-29, without breaking TLS. <br>**Recovery** (`account/recovery-db-chalrec`). A read of the challenge recover/confirm stores lets the attacker submit recover/verify with its own passkey before Alice does, since recover/verify carries no u_c proof (`srv:566-606`). The server binds that passkey to her account. <br>Alice's u_c and words stay secret in both. A copy of the account tables without the challenge table gives none of this. | `sutil:86-111`, `consts.ts:63`, `srv:422-564`, `srv:566-606` | **confirmed** weakness (needs live database read access) | A-L1, A-R1, A-Z1 and A-V1-3 keyed on Alice's user id: attack; recover/verify alone: A-R1 attack | **fix code (candidate):** §7.3 |
 
 ---
@@ -182,27 +184,35 @@ encoding can be parsed back into its fields in exactly one way. The argument for
 ## 6. Tex notation proposal
 
 **Status:**
-- N1-N9 were approved on 2026-10-08.
-- The models they waited on (README, "Remaining work", items 1-2) and the first review are done,
-  so they are being applied, from 2026-10-10. Each `main.tex` diff is reviewed on its own, and
-  details are decided diff by diff.
+- N1-N9 were approved on 2026-10-08 and applied from 2026-10-10 to 2026-10-12, each `main.tex`
+  diff reviewed on its own.
 - They describe the protocol as it runs today. The tex for the planned fixes in §7 goes in with
   the code.
 
-**Points the models raised after approval, to settle during the pass:**
-- **N6 and N9:** two tex notes claim more than the current code gives.
-  - Tex 492 says a later cd_p substitution fails authentication. That holds only while the
-    server names the same user id: the server can name another (I-01), and a browser with no pin
-    trusts the first u_c it sees (I-03).
-  - Tex 462 says S requires every passkey to match the account's mode, but at registration S
-    picks the mode from the fields that arrive (I-29).
-
-  A header saying S may be malicious for the u_c-at-rest claims needs these limits beside it.
-- **N3:** the challenge store's 300 s lifetime (I-30), and the no-PRF u_c kept under two KMS
-  keys.
-- **N5:** whether `/v1/recover` (I-05) is documented or marked deprecated.
-- **N8:** the name table goes in the README. Open: whether the models adopt the names now or
-  with `fixes/v2`.
+**Outcomes:**
+- **N1:** applied. H_key takes the key as a subscript, with key ∅ for unkeyed.
+- **N2:** applied. Each check reads `check <cond> else err` where the code completes it. `==`
+  compares and `=` assigns. Only checks a security property depends on appear.
+- **N3:** applied as a Persisted State stanza: S.chal, S.nonce, S.user, S.pk, B.pin, B.sess and
+  B.key. A store is a passive party: → stores and ← reads, ↞ reads and deletes in one step, and
+  ↠ stores only a key that is absent. A value read from a store is primed when the stanza
+  compares it; a value B takes from S without a comparison is starred (u_i^*, prf^*). The stanza
+  gives the 300 s lifetime of challenges and nonces (I-30) and the no-PRF u_c under two KMS keys.
+- **N4:** the Encodings note covers m_U and m_R, and the Byte layout note points to the protocol
+  page's table and the Hex Fiend template. The hint details (I-20) go in a callout on the
+  protocol page. The user-handle encoding (I-23) stays here.
+- **N5:** session rotation appears through c_A, and a Session Start stanza serves registration,
+  sign-in and recovery. Not added: getSession and the other endpoints in I-28, the legacy
+  recovery context (treated as removed, I-04) and `/v1/recover` (left out, I-05).
+- **N6:** each reply lists the fields B uses, and the checks B makes on them appear. A field B
+  uses without a check is starred.
+- **N7:** applied (I-18).
+- **N8:** the name table is in the README and uses the models' current names. Renaming a
+  misleading name waits for `fixes/v2`.
+- **N9:** one Assumptions line in the Agents stanza (honest parties over intact TLS, with a link
+  to these models) replaces the per-stanza headers. The First use note, which claimed more than
+  the code gives (I-01, I-03), is gone. The Account mode note stays under that assumption
+  (I-29).
 
 The aim is a tex that reads almost line for line as the model, so `conformance.md` stays
 mechanical. Each change also notes whether it would affect the flow SVGs. Those are Lucidchart
@@ -215,9 +225,13 @@ exports, so any change there means re-exporting from Lucidchart and then running
   - Fixes I-19.
   - Flow SVGs: the cipher diagrams show these derivations, so check them; v7 diagrams are pinned.
 - **N2. Name each check and place it where the code runs it.**
-  - Write every check as `B check <cond> else err`, in the order the code runs it. For block 0
-    decryption, the parameter checks move before the MAC and lp/le moves after the hint.
-  - Each check maps to one model `if`.
+  - Write each check as `check <cond> else err`, placed where the code guarantees it, and
+    named for its party (`B check`, `S check`) only in stanzas where several parties act. For
+    block 0 decryption, lp/le moves after the hint, and i ≥ 420,000 moves to just before k_M0,
+    since i = 0 is rejected only inside D_P.
+  - The tex holds only checks a security property depends on, which are the checks the model
+    has as an `if`. Range checks while unpacking (a, f, v, field lengths) are well-formedness,
+    covered by the MAC, and stay out (decided 2026-10-10).
   - Fixes I-13.
   - Flow SVGs: none.
 - **N3. Name the state stores and their operations.**

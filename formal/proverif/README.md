@@ -129,6 +129,87 @@ The expected results for each variant sit at the end of the template in ProVerif
 A result that matches its `EXPECTPV` line is not evidence on its own. The expected line can encode
 a mistake, so never paste a result whose trace you have not read and explained.
 
+## Names
+
+The name each model uses for a `main.tex` symbol (`conformance.md` N8). These are the models'
+current names; renaming any that mislead waits for `fixes/v2`.
+
+**Message format** (`cipher.pv.m4`, `lib/qcrypt.pvl`):
+
+| Tex | Model | Notes |
+|---|---|---|
+| u_c, p, h | `uc`, `p`, `HINT` | |
+| m_0, m_N | `MSG0`, `MSG1`, `MSG2` | fixed secret messages |
+| a | `GCM`, `XCC`, `AEGIS` | type `alg` |
+| v | `V8`, `V7` | |
+| f | `F0`, `F1` | |
+| e_l | `EL0`, `EL16` | messages, data at rest |
+| i | `IC`, `IC0` | a valid count, and 0 |
+| lp, le | `lp`, `le` (`LP1`, `LP2`) | |
+| n_S, n_IV | `nS`, `nIV` | |
+| t_L at the start of a loop | `TL0` | |
+| kp_S, kp_H, kp_B, kp_C, kp_M, kp_U, kp_R | `kpS`, `kpH`, `kpB`, `kpC`, `kpM`, `kpU`, `kpR` | |
+| D_H(n, kp, k) | `kdf(n, kp, k)` | subkey numbers `ID0`-`ID2`, blocks `B1`, `B2` |
+| H_k(n_S, a, v, lp, e_l[, e]) | `hmix(k, xctx8(...))` | `mkX8`, `xAR` build the second argument |
+| D_P and its material | `pbkdf`, `pwmat8` (`pwmat7`) | |
+| E_a, E_a⁻¹ | `aead_enc`, `aead_dec` | |
+| H_{k_S}(v‖l‖ad_F‖m_E‖t_L) | `mac(kS, macin(...))` | |
+| n_IVH, k_H, k_S, k_M0, k_C, k_MN | `mkNIVH`, `mkKH`, `mkKS`, `mkKM0`, `mkKC`, `mkKMN` | `NOKC` for no k_C |
+| ad_F for block 0 and block N | `ad0`, `adN` | |
+| cd_0, cd_N | `blk(t, v, ad_F, m_E)` | built by `mkBlock0L`, `mkBlockN` |
+
+**u_c at rest:**
+
+| Tex | Model | Notes |
+|---|---|---|
+| cd_x | `mkAR`, `openAR` (cipher); `mkAtRest`, `openAtRest` over `ar_enc` (account) | |
+| e | `UI` (cipher), the user id (account) | |
+| k_KS, s | `kKS`, `SLOT` | |
+| k_L | `dsl(kKS, (SLOT, pkId))` | |
+
+**Account** (`account.pv.m4`):
+
+| Tex | Model | Notes |
+|---|---|---|
+| u_i | `ui` | |
+| u_i^* in a reply | `sui` | |
+| u_i^* in ro, the new passkey's handle | `hui` | |
+| u_i in ar, the user handle | `uh` | |
+| u_r, u_r‖u_i | `ur`, `rsec(ur, ui)` | |
+| sk_U, pk_U | `proofKey(uc)`, `pkU` = `sig_pk(proofKey(uc))` | |
+| sk_R, pk_R | `recoveryKey(ur, ui)`, `pkR` | |
+| p_S, p_R | `PS`, `wa_prf(credKey, PS)` | |
+| cd_p, cd_r, cd_u | `cdp`, `cdr`, `cdu` | |
+| prf | `PRF0`, `PRF1`; `sprf`, `sprf2` in replies | `sprf2` is the tex's prf^* |
+| pkId, pk_M | `credId`, `credPk` = `wa_pk(credKey)` | `spkId` in a reply |
+| M's passkey secret | `credKey` | |
+| ro, rr | `(ch, hui)`, `regr(credId, credPk, adata(RPID, UV1), cdj(WA_CREATE, ch, ORIGIN))` | |
+| ar | `(credId, uh, ad, cd, wa_sign(credKey, (ad, cd)))` | `cdj(WA_GET, ch, ORIGIN)` |
+| o | `ORIGIN` | |
+| ch, ch_R | `ch`, `chR` | |
+| n_P | `nP` (API), `nPR` (recovery proofs) | |
+| m_U, m_R | `muc(ui, mth, pth, nP, sha256(bd))`, `mrc(ui, nP)` | no timestamps |
+| σ_U, σ_R | `sig_sign(proofKey(uc), ...)`, `sig_sign(recoveryKey(ur, ui), ...)` | |
+| sc_U, sc_R, sc_W | `SCU`, `SCR`, `SCW` | `SCLEG` is the legacy context (I-04) |
+| ck, cs | `cookie(ui, sid)`, `csmac(skJWT, ui, sid)` | |
+| H_2 | `sha256` | |
+| b | the binding slot of `chal`: `pkR` for "confirm" and "recover", `NOBIND` otherwise | never compared; c_A is not modeled |
+| "reg", "add", "auth", "recover", "confirm" | `PREG`, `PADD`, `PAUTH`, `PRECOVER`, `PCONFIRM` | |
+| "api", "nonce" | `NAPI`, `NREC` | |
+
+**Persisted state:**
+
+| Tex | Model | Notes |
+|---|---|---|
+| S.chal | `chal(purpose, ch, ui, binding)` | |
+| S.nonce | `NonceStored(purpose, nP, st)` events, made unique by the `STORE` restriction | |
+| S.user | `unverified(ui)`, `users(ui, pkU)`, `recov(ui, pkR, cdr)`; no-PRF `ucenc(ui, enc, encOld)` | |
+| S.pk | `creds(ui, credId, credPk, cdp)` | |
+| B.pin | `pins(bid, ui, prf, pkU)` | |
+| B.sess | `sessions(aid, bid, ui, uc, pkId, ck, cs)` | holds u_c rather than cd_u |
+| B.key | not a table; `kKS` per session | |
+| M's passkeys, Alice's words | `passkeys(aid, handle, credId, credKey)`, `words(aid, ui, ur)` | |
+
 ## Attacker and abstractions
 
 **Attacker.** The attacker controls the network and every ciphertext. It can ask Alice to
@@ -658,7 +739,7 @@ Three groups have none, so their results hold only under the restrictions:
 
 ## Remaining work
 
-As of 2026-10-10.
+As of 2026-10-12.
 
 The work runs as separate steps:
 - model the current code;
@@ -695,10 +776,15 @@ The review also confirmed that the challenge and replay-nonce stores fail closed
 assumes. It found that two accounts in one browser open no new attack class against the current
 code, and recommended covering them, and reauthentication, in the fix models (item 3).
 
-**Next: the approved tex notation changes** (`conformance.md` §6), applied to `main.tex` one
-diff at a time, with details decided diff by diff. They describe the code as it runs today. The
-tex for the planned fix goes in with the code, so the published protocol never describes
+**Done: the approved tex notation changes** (`conformance.md` §6), applied to `main.tex` from
+2026-10-10 to 2026-10-12, one reviewed diff at a time. They describe the code as it runs today.
+The tex for the planned fix goes in with the code, so the published protocol never describes
 behavior that has not shipped.
+
+**Next: drop the legacy recovery context** (I-04, treated as removed on 2026-10-12). Remove
+`SCLEG` from `recoveryProofOK`, retire the `LEGACY_CLIENT` variants, and add a mutation that
+removes the replace-words proof's nonce store, which should change no result. Then the
+independent review that follows the `main.tex` changes.
 
 For the current code, A-S5 is expected to fail, through I-01 alone. A-S5 says that messages Alice
 encrypts while her browser holds a pin for her account stay secret from a server that does not
