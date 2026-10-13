@@ -55,7 +55,7 @@ code. `conformance.md` §5 has the details and code locations:
 |---|---|---|---|
 | I-01 | The browser accepts whatever user id the server names at sign-in, registration, add passkey and recovery. A malicious server can switch Alice's browser to an account whose u_c it chose, so messages she then encrypts rest on her password alone. This breaks the tex's claim that PRF accounts protect u_c from the server. | `malicious`: A-S3 attack, and a passkey Alice adds carries the user id the server names; `malicious-recovery`: A-S3R attack, where the server names another user at reg/verify, and the server names another user at `recover/verify` | fix planned (`conformance.md` §7) |
 | I-03 | Account mode and u_c are trusted on first use in each browser, at sign-in and at recovery. A browser with no pin accepts "no-PRF" and a u_c the server chose, even for Alice's own user id. | `malicious`: A-S4 attack; `malicious-recovery`: A-S4R attack, where recover3 pins the server's u_c under Alice's own user id | fix planned (§7) |
-| I-04 | The server also accepts the legacy context `qcrypt/recovery/nonce/v1` for both recover and replace, which leaves only the shared nonce store to keep the two apart. No client creates it, so the models treat it as removed. | `recovery-log-noreplnonce`: the per-operation contexts alone keep the two apart; `recovery-log-onectx-noreplnonce`: with one context and no replace-words nonce store, a logged replace-words proof passes recover3 | accepted: treated as removed |
+| I-04 | The server also accepts the legacy context `qcrypt/recovery/nonce/v1` for both recover and replace, which leaves only the shared nonce store to keep the two apart. No client creates it, so the models treat it as removed. | `recovery-log-noreplnonce`: the per-operation contexts alone keep the two apart; `recovery-log-onectx-noreplnonce`: with one context and no replace-words nonce store, a logged replace-words proof passes recover3. That recover3 logs Alice out and voids any recovery in progress; in no-PRF mode its reply also gives the attacker u_c and then the account (`recovery-noprf-log-onectx-noreplnonce`) | accepted: treated as removed |
 | I-14 | Truncation resistance depends on the encryptor never writing an empty block before the last one, because the decryptor does not check f on an empty block. | `integrity-net-emptymid` | hardening, pending |
 | I-17 | The inner le is not compared with the outer le. An attacker holding u_c and the outer password can wrap a one-loop message as the inner layer of a two-loop message. The plaintext is still authentic. | `loops-uc-pout` | low, pending |
 | I-29 | With TLS broken, an attacker can win the registration race and hold Alice's user id. Her u_c and words stay secret, and her browser notices on first use. It can also strip the PRF fields from her reg/verify. The server then registers her user id and passkey as a no-PRF account and returns its u_c, which the attacker sees. Her browser halts, but a later sign-in with that passkey, over intact TLS, receives that u_c, and with no pin she accepts it. | `login-tls`, `recovery-tls`; `login-tls-dualmode`, `login-tls-stripped` | race accepted; stripping pending, and the planned handle tag (§7.2) targets it |
@@ -382,7 +382,9 @@ from a u_c she created (`new ucA`). With TLS broken, the attacker can copy that 
 account of its own, since a PRF registration takes pk_U from the client. So the `KEY_UI`
 variants identify Alice's accounts by the user id her browser received at registration
 instead. A database leak also gives the attacker pk_U, so the PRF `db` variants use `KEY_UI`
-too. So does a request log, and the `log` variants use `KEY_UI` in both account modes.
+too. So does a request log in PRF mode, where reg/verify carries pk_U. In no-PRF mode no request
+carries pk_U, but those `log` variants use `KEY_UI` as well, so both modes answer the same
+queries. `login-noprf-log` and `recovery-noprf-log` give the same results with or without it.
 
 In no-PRF mode the server draws u_c. Alice's accounts are then the ones whose pk_U is derived
 from the u_c the server drew when it registered her passkey: the registration whose user id,
@@ -478,7 +480,8 @@ is also a run of every other recovery variant.
 that records traffic would. The copy is made after the server accepts the request. A copy made
 on receipt could be forwarded and accepted before the original, which is the race that broken TLS
 already covers, not a replay. GET requests are not logged, since the server lets them repeat
-(`srv:1778-1783`).
+(`srv:1778-1783`). Nor are reg/options and auth/options, which need no credentials, so the
+attacker can send its own.
 
 A-N1 asks, for each request type, whether Alice's account accepts a request on the attacker's
 channel. The attacker cannot produce her signatures or passkey assertions, so that happens only
@@ -511,6 +514,7 @@ nonce. recover/confirm and recover/verify also check their challenge's authCount
 | `recovery-noprf-log-norecnonce` | no-PRF | `'nonce'` | **attack**: all but registration | all **attack** except word secrecy |
 | `recovery-noprf-log-noconfirmchal` | no-PRF | confirm challenge | holds: the authCount binding blocks it | hold |
 | `recovery-noprf-log-noconfirmchal-nobind` | no-PRF | confirm challenge, and no binding check | **attack**: all but registration | all **attack** except word secrecy |
+| `recovery-noprf-log-onectx-noreplnonce` | no-PRF | replace words' nonce, with one context | **attack**: all but registration | all **attack** except word secrecy |
 
 The logged requests also carry the session cookie, CSRF token and pk_U, so the base variants show
 that a full request log breaks none of the other properties.
@@ -526,12 +530,13 @@ stores its nonce or consumes its challenge a second time. Three go further:
 
 A passkey the attacker binds in PRF mode carries its own cd_p, so it reveals nothing about u_c,
 and every authorized request still needs Alice's proof. In no-PRF mode a replay hands the
-attacker u_c: a replayed auth/verify or recover3 in its reply, and, with the binding check also
-off, a replayed confirm through the recover/verify reply for the passkey the attacker then binds
-(I-10). With u_c the attacker signs requests of its own, so the other A-N1 attacks in those
-variants are its own requests, not replays. `recovery-noprf-log-norecoverchal-nobind` is left
-out, since its reconstruction does not finish in 300 s, and `recovery-log-norecoverchal-nobind`
-shows the same reuse.
+attacker u_c: a replayed auth/verify or recover3 in its reply; with the binding check also off,
+a replayed confirm through the recover/verify reply for the passkey the attacker then binds
+(I-10); and with one context and no replace-words nonce store, Alice's logged replace-words
+proof sent to recover3, in that reply (I-04). With u_c the attacker signs requests of its own,
+so the other A-N1 attacks in those variants are its own requests, not replays.
+`recovery-noprf-log-norecoverchal-nobind` is left out, since its reconstruction does not finish
+in 300 s, and `recovery-log-norecoverchal-nobind` shows the same reuse.
 
 **Cross-use of recovery proofs (I-04).** The per-operation contexts alone keep a replace-words
 proof from passing recover3: `recovery-log-noreplnonce` holds without replace words' nonce store.
@@ -541,7 +546,14 @@ replace-words proof passes recover3. So the tex leaves the replace proof's store
 request that carries the proof has its own `'api'` nonce, and the contexts do the rest.
 
 **What A-N1 does not cover.**
-- **GET requests,** which may repeat.
+- **GET requests,** which may repeat. A recorded `GET passkeys/options`, sent again within the
+  120 s skew window, gives the attacker a new add challenge for Alice's account (`srv:797-805`).
+  Using that challenge takes a passkeys/verify request with a new proof over its body, which
+  needs u_c.
+- **Rejected requests,** which are not logged. A replay of one is rejected again, unless the
+  first attempt failed from a transient error, such as a failed database read, before its
+  challenge was consumed or its nonce stored. That replay can be accepted once, within the skew
+  window or the challenge's lifetime, and it carries only what Alice sent.
 - **Replies,** since each goes to a fresh private reply channel.
 - **The timestamp check,** since the stores never forget (see "What is modeled").
 - **A replay inside one handler,** sent after recover/confirm or recover/verify reads authCount
@@ -660,8 +672,8 @@ PRF mode.
 | A-L1, A-R1 | Sign-in only with a passkey Alice approved; only passkeys she created are bound | `login-noprf-net`, `-session`, `-cdu`, `-device`, `-log` | `-device-nouv`, `-unbound`, `-session-noproof`, `-tls`, **`-log-noauthchal`** |
 | A-Z1 | Every authorized request on Alice's account is one her browser signed | `login-noprf-net`, `-session`, `-cdu`, `-device`, `-log` | `-device-nouv`, **`-unbound`**, `-session-noproof`, `-tls`, **`-log-noauthchal`** |
 | A-S1, A-K1 | Alice's u_c stays secret: the u_c the server drew when it registered her passkey, and the u_c her browser received | `login-noprf-net`, `-session`, `-cdu`, `-device`, `-log` | `-device-nouv`, **`-unbound`**, **`-session-noproof`**, **`-tls`**, **`-log-noauthchal`** |
-| A-V1-3, A-R1 | Recovery steps and new words on Alice's account are her browser's | `recovery-noprf-net`, `-session`, `-log`, `-log-noconfirmchal` | `-words`, `-tls`, **`-log-norecnonce`**, **`-log-noconfirmchal-nobind`** |
-| A-S1 | u_c, in both forms, and both word sets stay secret | `recovery-noprf-net`, `-session`, `-log`, `-log-noconfirmchal`; the replaced words in every variant | `-words` (u_c, original words); **`-tls`** (u_c); **`-log-norecnonce`**, **`-log-noconfirmchal-nobind`** (u_c) |
+| A-V1-3, A-R1 | Recovery steps and new words on Alice's account are her browser's | `recovery-noprf-net`, `-session`, `-log`, `-log-noconfirmchal` | `-words`, `-tls`, **`-log-norecnonce`**, **`-log-noconfirmchal-nobind`**, **`-log-onectx-noreplnonce`** |
+| A-S1 | u_c, in both forms, and both word sets stay secret | `recovery-noprf-net`, `-session`, `-log`, `-log-noconfirmchal`; the replaced words in every variant | `-words` (u_c, original words); **`-tls`** (u_c); **`-log-norecnonce`**, **`-log-noconfirmchal-nobind`**, **`-log-onectx-noreplnonce`** (u_c) |
 | — | The server knows the u_c Alice's browser holds | — | `malicious-noprf`, by design |
 
 What the traces show:
@@ -775,7 +787,7 @@ seconds without backtracking (`NOBT`).
 | `login-reach`, `recovery-reach` | `RCV`, `STORE`, `UNIQUSER` |
 | `login-log`, `recovery-log`, `login-noprf-log`, `recovery-noprf-log`, `login-log-noaddchal`, `recovery-log-noapinonce`, `recovery-log-noreplnonce`, `recovery-log-onectx` | `STORE` |
 | `login-log-noregchal` | `STORE`, `UNIQUSER`; without `UNIQUSER` a derivation registers Alice's user id twice and the existing-user check never applies |
-| the other `log` mutations in PRF mode, and `login-noprf-log-noauthchal` | `RCV`, `STORE`, `UNIQUSER` |
+| the other `log` mutations in PRF mode, `login-noprf-log-noauthchal` and `recovery-noprf-log-onectx-noreplnonce` | `RCV`, `STORE`, `UNIQUSER` |
 | `recovery-noprf-log-norecnonce`, `recovery-noprf-log-noconfirmchal`, `recovery-noprf-log-noconfirmchal-nobind` | `RCV`, `STORE`, `UNIQUSER`, and `PRECISE` |
 | `login-noprf-session-noproof` | `STORE` |
 | `login-noprf-device-nouv` | `RCV`, `STORE` |
@@ -876,7 +888,17 @@ replay covered. No query had tested the single-use stores, since none gave the a
 request to send again. The `log` variants do, with a mutation for each store ("Results: replay"),
 and replace the earlier `replay` variants, which leaked only the replace-words body.
 
-**Next: the independent review** that follows the `main.tex` changes.
+**Done: the second independent review**, on 2026-10-13, after the `main.tex` changes and the
+replay work. It rated nothing High or Medium, and each of its follow-ups is now in the
+current-code model or its docs:
+- the authCount binding of the confirm and recover/verify challenges, which blocks a replay
+  there even with the challenge store off (the `-nobind` variants show the attacks without it);
+- the effect of an I-04 cross-use: Alice is logged out, and in no-PRF mode the attacker gets u_c
+  and the account (`recovery-noprf-log-onectx-noreplnonce`);
+- what A-N1 leaves out: repeated GET requests, rejected requests, and the options requests that
+  need no credentials;
+- a `STORE` guard for `MUT_NOREPLNONCE`, the reason the no-PRF `log` variants use `KEY_UI`, and
+  conformance gaps (I-04, I-06, I-10, the replace-words nonce store, the B.key stanzas).
 
 For the current code, A-S5 is expected to fail, through I-01 alone. A-S5 says that messages Alice
 encrypts while her browser holds a pin for her account stay secret from a server that does not
@@ -928,6 +950,6 @@ Not planned: the legacy `/v1/recover` path (I-05).
 - after items 1 and 2, together with the malicious-server recovery results above, where new
   findings are most likely (done, above);
 - after item 3, including A-S5, before the fix design goes to remediation;
-- after the `main.tex` changes;
+- after the `main.tex` changes (done, above);
 - after item 4;
 - after item 5.

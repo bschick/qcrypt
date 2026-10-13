@@ -80,6 +80,7 @@ m4_changequote({{,}})m4_dnl
      recovery-noprf-log-norecnonce  SCN_RECOVERY NOPRF LEAK_LOG KEY_UI STORE MUT_NOSTORE_NREC RCV UNIQUSER NOBT PRECISE
      recovery-noprf-log-noconfirmchal  SCN_RECOVERY NOPRF LEAK_LOG KEY_UI STORE MUT_NOSTORE_PCONFIRM RCV UNIQUSER NOBT PRECISE
      recovery-noprf-log-noconfirmchal-nobind  SCN_RECOVERY NOPRF LEAK_LOG KEY_UI STORE MUT_NOSTORE_PCONFIRM MUT_NOBIND RCV UNIQUSER NOBT PRECISE
+     recovery-noprf-log-onectx-noreplnonce  SCN_RECOVERY NOPRF LEAK_LOG KEY_UI STORE MUT_ONECTX MUT_NOREPLNONCE RCV UNIQUSER NOBT
      malicious-noprf      SCN_MALICIOUS NOPRF
      login-db-chal        SCN_LOGIN LEAK_DB LEAK_CHAL KEY_UI STORE UNIQUSER NOBT
      recovery-db-chal     SCN_RECOVERY LEAK_DB LEAK_CHAL KEY_UI STORE UNIQUSER NOBT
@@ -294,6 +295,8 @@ m4_ifelse(REUSABLE, {{}}, {{}}, {{m4_errprint({{MUT_NOSTORE_<purpose> needs STOR
 }})m4_m4exit(1)}})
 m4_ifdef({{MUT_NOBIND}}, {{m4_errprint({{MUT_NOBIND needs STORE
 }})m4_m4exit(1)}})
+m4_ifdef({{MUT_NOREPLNONCE}}, {{m4_errprint({{MUT_NOREPLNONCE needs STORE
+}})m4_m4exit(1)}})
 }})
 
 (* RCV: each request, identified by its fresh reply channel, is received by one server session.
@@ -311,8 +314,10 @@ m4_define({{RECEIVED}}, {{}})
 (* LEAK_LOG: each request a handler accepts is then copied to the attacker, as by a request log
    or a proxy that records traffic. A copy made on receipt instead could be forwarded and
    accepted before the original, which is the race LEAK_TLS covers, not a replay. GET requests
-   are not logged, since repeating one is allowed. The copies carry cookies, CSRF tokens and
-   pk_U, which is why these variants use KEY_UI.
+   are not logged, since repeating one is allowed. Nor are reg/options and auth/options, which
+   need no credentials. The copies carry cookies and CSRF tokens, and in PRF mode pk_U, which is
+   why these variants use KEY_UI. The no-PRF ones use it too, so both modes answer the same
+   queries.
 
    A-N1: the attacker cannot produce Alice's signatures or passkey assertions, so her account
    accepts a request on the public channel only when a logged request is used again, at the
@@ -1935,6 +1940,21 @@ RESULT not attacker(ur[!1 = v_10]) is true.
 RESULT not attacker(ur2[!2 = v_10,!1 = v_11]) is true.
 END *)}})
 m4_ifdef({{VARIANT_recovery_noprf_log_noconfirmchal_nobind}}, {{(* EXPECTPV
+RESULT not (event(Accepted(c[],REGVER,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT not (event(Accepted(c[],REPLACE,ui_19)) && event(AliceUi(ui_19))) is false.
+RESULT not (event(Accepted(c[],REC3,ui_19)) && event(AliceUi(ui_19))) is false.
+RESULT not (event(Accepted(c[],CONFIRM,ui_19)) && event(AliceUi(ui_19))) is false.
+RESULT not (event(Accepted(c[],RECVER,ui_19)) && event(AliceUi(ui_19))) is false.
+RESULT event(ServerRecover3(u,n,pkU_10)) && event(AliceUi(u)) ==> event(ClientRecoverIntent(u,n)) is false.
+RESULT event(ServerConfirm(u,ch_10,pkU_10)) && event(AliceUi(u)) ==> event(ClientConfirm(u,ch_10)) is false.
+RESULT event(ServerReplaced(u,pk,pkU_10)) && event(AliceUi(u)) ==> event(ClientReplace(u,pk)) is false.
+RESULT event(ServerCredAdded(u,id,pk,pkU_10)) && event(AliceUi(u)) ==> event(AliceCredCreated(u,id,pk)) is false.
+RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is false.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is false.
+RESULT not attacker(ur[!1 = v_10]) is true.
+RESULT not attacker(ur2[!2 = v_10,!1 = v_11]) is true.
+END *)}})
+m4_ifdef({{VARIANT_recovery_noprf_log_onectx_noreplnonce}}, {{(* EXPECTPV
 RESULT not (event(Accepted(c[],REGVER,ui_19)) && event(AliceUi(ui_19))) is true.
 RESULT not (event(Accepted(c[],REPLACE,ui_19)) && event(AliceUi(ui_19))) is false.
 RESULT not (event(Accepted(c[],REC3,ui_19)) && event(AliceUi(ui_19))) is false.
