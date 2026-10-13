@@ -20,7 +20,8 @@ and model, and keeps the issue log.
   - Recovery requires the recovery words.
   - A log of every request the server accepted gives the attacker nothing it can reuse: no
     logged request is accepted again, at its own endpoint or another (A-N1). Switching off a
-    challenge or nonce store opens the replay that store guards.
+    challenge or nonce store opens the replay that store guards, except at recover/confirm and
+    recover/verify, where the challenge's authCount binding still blocks it.
   - u_c stays secret against the network, a leaked cd_u, a leaked session, and broken TLS. The
     broken-TLS result assumes the server's uniqueness guarantees (single-use challenges, one
     registration per user id).
@@ -37,6 +38,10 @@ and model, and keeps the issue log.
   - Every sign-in, recover3 and recover/verify reply carries u_c in plaintext. So u_c is exposed
     with TLS broken, or to anyone who can bind a passkey to the account, as with C1 or a stolen
     session and no proof check. PRF mode keeps u_c secret in all three cases.
+  - The single-use stores are what keep a logged sign-in or recovery request from exposing u_c.
+    With the auth challenge or recovery nonce store switched off, one replay reaches u_c and the
+    account. The confirm challenge also has its authCount binding, which blocks the replay on
+    its own ("Results: replay").
   - The server knows u_c by design.
 - **Database leak:** a copy of the server's account tables reveals u_c in neither mode, and does
   not let anyone sign in. In no-PRF mode, u_c is exposed to anyone who can also use either KMS
@@ -196,7 +201,8 @@ current names; renaming any that mislead waits for `fixes/v2`.
 | sc_U, sc_R, sc_W | `SCU`, `SCR`, `SCW` | |
 | ck, cs | `cookie(ui, sid)`, `csmac(skJWT, ui, sid)` | |
 | H_2 | `sha256` | |
-| b | the binding slot of `chal`: `pkR` for "confirm" and "recover", `NOBIND` otherwise | never compared; c_A is not modeled |
+| b | the binding slot of `chal`: `(pkR, cnt)` for "confirm" and "recover", `NOBIND` otherwise | only `cnt` is compared |
+| c_A | `cnt`, a fresh name for each value an increment produces | only the values a challenge is bound to |
 | "reg", "add", "auth", "recover", "confirm" | `PREG`, `PADD`, `PAUTH`, `PRECOVER`, `PCONFIRM` | |
 | "api", "nonce" | `NAPI`, `NREC` | |
 
@@ -206,6 +212,7 @@ current names; renaming any that mislead waits for `fixes/v2`.
 |---|---|---|
 | S.chal | `chal(purpose, ch, ui, binding)` | |
 | S.nonce | `NonceStored(purpose, nP, st)` events, made unique by the `STORE` restriction | |
+| S.user's c_A | `Incremented(cnt, st)` events, made unique by the `STORE` restriction | an increment by recover/confirm or recover/verify of the value its challenge is bound to |
 | S.user | `unverified(ui)`, `users(ui, pkU)`, `recov(ui, pkR, cdr)`; no-PRF `ucenc(ui, enc, encOld)` | |
 | S.pk | `creds(ui, credId, credPk, cdp)` | |
 | B.pin | `pins(bid, ui, prf, pkU)` | |
@@ -331,8 +338,8 @@ always honest.
   keys therefore stay usable.
 - **Uniqueness restrictions are opt-in, and off in the base variants that make the proofs.** Each
   mirrors a guarantee of the real system:
-  - `STORE`: each challenge and each replay nonce is used once (the atomic delete-on-read and
-    conditional put).
+  - `STORE`: each challenge and each replay nonce is used once, and each authCount value is
+    incremented once (the atomic delete-on-read, conditional put and add).
   - `RCV`: each private request is received by one server session.
   - `UNIQUSER`: each user id is registered once.
 
@@ -340,11 +347,21 @@ always honest.
   The variants that look for an attack or for reachability turn them on (see "Attack and
   reachability variants" below). So do the `log` variants, whose replay queries test the
   stores.
-- **Not modeled:** timestamps, the skew window, TTLs, and `authCount`. Recovery's challenge
-  binding is carried as pk_R but never compared. The code binds H(pk_R : authCount) and
-  re-derives it at confirm and recover/verify, so a sign-in, a logout, another recover3 or new
-  words void the challenge, and recover/verify also requires an empty `lastCredentialId`.
-  Leaving these out only adds attacker runs.
+- **Not modeled:** timestamps, the skew window and TTLs.
+- **authCount only where a challenge is bound to it.** The code binds the confirm and recover
+  challenges to H(pk_R : authCount). The model binds each to a fresh value for the authCount
+  that recover3's or recover/confirm's increment produces, and the handler that consumes the
+  challenge increments that value. The model leaves out the other increments and the comparison
+  of pk_R, so a sign-in, a logout, another recover3 or new words leave a challenge valid where
+  the code voids it. It also leaves out recover/verify's check for an empty `lastCredentialId`,
+  which fails only where the binding check already fails, since the write that sets it also
+  increments authCount. These only add attacker runs.
+
+  One choice here removes runs instead: the model makes the binding check and the increment one
+  step. The code reads authCount before it consumes the challenge and increments it at the end
+  of the handler. With the challenge store on, no second request passes in that window. With it
+  off, a replay sent inside the window would pass the binding, and the `log` variants, whose
+  copy comes after the increment, do not cover it.
 - **The stores never forget.** `STORE` keeps every challenge and nonce for good. The code keeps
   a nonce for the challenge TTL (300 s) and rejects a proof whose timestamp is more than 120 s
   off (`consts.ts:61-63`), so replay stays closed while twice the skew fits in the TTL. The
@@ -442,7 +459,7 @@ is also a run of every other login variant, apart from the `Rcv` events that `RC
 | A-V1 | recover3 accepts a proof on Alice's account only from her browser recovering it | `net`, `session`, every `log` variant except `log-onectx-noreplnonce` | `words` (words leaked); `tls` (registration race); `log-onectx-noreplnonce` (a replace-words proof under one shared context) |
 | A-V2 | recover/confirm on Alice's account is one her browser signed, for that challenge | every variant except `words` and `tls` | `words`; `tls` (registration race) |
 | A-V3 | New recovery words on Alice's account are ones her browser created | every variant except `words` and `tls` | `words` (the original words give recovery, then a session); `tls` |
-| A-R1 | Every passkey bound to Alice's account, including by recovery, is one she created | every variant except `words`, `tls`, `log-noconfirmchal` and `log-norecoverchal` | `words`; `tls` (registration race); `log-noconfirmchal`, `log-norecoverchal` (a reused challenge, see "Results: replay") |
+| A-R1 | Every passkey bound to Alice's account, including by recovery, is one she created | every variant except `words`, `tls`, `log-noconfirmchal-nobind` and `log-norecoverchal-nobind` | `words`; `tls` (registration race); `log-noconfirmchal-nobind`, `log-norecoverchal-nobind` (a reused challenge with no binding check, see "Results: replay") |
 | A-S1 | u_c, the original words, and replaced words stay secret | every variant, except u_c and the original words in `words` | `words` |
 
 **Reachability.** `recovery-reach` shows each step of Alice's own recovery:
@@ -468,7 +485,8 @@ channel. The attacker cannot produce her signatures or passkey assertions, so th
 when a logged request is used again, at its own endpoint or another. The mutations then switch
 off one store at a time: `MUT_NOSTORE_<purpose>` lifts `STORE` for one challenge purpose or nonce
 namespace, at every endpoint that uses it, and `MUT_NOREPLNONCE` removes only replace words'
-nonce.
+nonce. recover/confirm and recover/verify also check their challenge's authCount binding, and
+`MUT_NOBIND` removes that check.
 
 | Variant | Mode | Store switched off | A-N1 | Other properties |
 |---|---|---|---|---|
@@ -480,8 +498,10 @@ nonce.
 | `login-log-noapinonce-noaddchal` | PRF | both of those | **attack**: authorized requests, passkeys/verify | hold |
 | `login-log-noregchal` | PRF | registration challenge | holds: the existing-user check blocks it | hold |
 | `recovery-log-norecnonce` | PRF | `'nonce'`, used by recover3 and replace words | **attack**: recover3 | hold |
-| `recovery-log-noconfirmchal` | PRF | confirm challenge | **attack**: confirm, recover/verify | A-R1 **attack** |
-| `recovery-log-norecoverchal` | PRF | recover/verify challenge | **attack**: recover/verify | A-R1 **attack** |
+| `recovery-log-noconfirmchal` | PRF | confirm challenge | holds: the authCount binding blocks it | hold |
+| `recovery-log-noconfirmchal-nobind` | PRF | confirm challenge, and no binding check | **attack**: confirm, recover/verify | A-R1 **attack** |
+| `recovery-log-norecoverchal` | PRF | recover/verify challenge | holds: the authCount binding blocks it | hold |
+| `recovery-log-norecoverchal-nobind` | PRF | recover/verify challenge, and no binding check | **attack**: recover/verify | A-R1 **attack** |
 | `recovery-log-noapinonce` | PRF | `'api'` nonce | holds: replace words' own nonce blocks it | hold |
 | `recovery-log-noreplnonce` | PRF | replace words' nonce | holds: the `'api'` nonce blocks it | hold |
 | `recovery-log-noreplnonce-noapinonce` | PRF | both of replace words' nonces | **attack**: replace words | hold |
@@ -489,27 +509,29 @@ nonce.
 | `recovery-log-onectx-noreplnonce` | PRF | replace words' nonce, with one context | **attack**: recover3 | A-V1 **attack** |
 | `login-noprf-log-noauthchal` | no-PRF | auth challenge | **attack**: all but registration | A-L1, A-R1, A-Z1 and u_c secrecy **attack** |
 | `recovery-noprf-log-norecnonce` | no-PRF | `'nonce'` | **attack**: all but registration | all **attack** except word secrecy |
-| `recovery-noprf-log-noconfirmchal` | no-PRF | confirm challenge | **attack**: all but registration | all **attack** except word secrecy |
+| `recovery-noprf-log-noconfirmchal` | no-PRF | confirm challenge | holds: the authCount binding blocks it | hold |
+| `recovery-noprf-log-noconfirmchal-nobind` | no-PRF | confirm challenge, and no binding check | **attack**: all but registration | all **attack** except word secrecy |
 
 The logged requests also carry the session cookie, CSRF token and pk_U, so the base variants show
 that a full request log breaks none of the other properties.
 
 **What the traces show.** Most PRF traces replay one logged request unchanged, and the server
 stores its nonce or consumes its challenge a second time. Three go further:
-- **`recovery-log-noconfirmchal`:** the replayed confirm returns a fresh recover/verify challenge
-  to the attacker, which binds its own passkey to Alice's account with it.
-- **`recovery-log-norecoverchal`:** the attacker sends recover/verify again with Alice's logged
-  challenge and its own passkey.
+- **`recovery-log-noconfirmchal-nobind`:** the replayed confirm returns a fresh recover/verify
+  challenge to the attacker, which binds its own passkey to Alice's account with it.
+- **`recovery-log-norecoverchal-nobind`:** the attacker sends recover/verify again with Alice's
+  logged challenge and its own passkey.
 - **`recovery-log-onectx-noreplnonce`:** the attacker sends the proof from Alice's logged
   replace-words request to recover3, which accepts it once her new recovery key is stored.
 
 A passkey the attacker binds in PRF mode carries its own cd_p, so it reveals nothing about u_c,
 and every authorized request still needs Alice's proof. In no-PRF mode a replay hands the
-attacker u_c: a replayed auth/verify or recover3 in its reply, and a replayed confirm through the
-recover/verify reply for the passkey the attacker then binds (I-10). With u_c the attacker signs
-requests of its own, so the other A-N1 attacks in those variants are its own requests, not
-replays. `recovery-noprf-log-norecoverchal` is left out, since its reconstruction does not finish
-in 300 s, and `recovery-log-norecoverchal` shows the same reuse.
+attacker u_c: a replayed auth/verify or recover3 in its reply, and, with the binding check also
+off, a replayed confirm through the recover/verify reply for the passkey the attacker then binds
+(I-10). With u_c the attacker signs requests of its own, so the other A-N1 attacks in those
+variants are its own requests, not replays. `recovery-noprf-log-norecoverchal-nobind` is left
+out, since its reconstruction does not finish in 300 s, and `recovery-log-norecoverchal-nobind`
+shows the same reuse.
 
 **Cross-use of recovery proofs (I-04).** The per-operation contexts alone keep a replace-words
 proof from passing recover3: `recovery-log-noreplnonce` holds without replace words' nonce store.
@@ -522,6 +544,9 @@ request that carries the proof has its own `'api'` nonce, and the contexts do th
 - **GET requests,** which may repeat.
 - **Replies,** since each goes to a fresh private reply channel.
 - **The timestamp check,** since the stores never forget (see "What is modeled").
+- **A replay inside one handler,** sent after recover/confirm or recover/verify reads authCount
+  and before it increments, which the model makes one step. It can pass only with that
+  challenge's store off (see "What is modeled").
 
 **Why not injective queries.** An `inj-event` correspondence states one-to-one acceptance
 directly, but on the login queries saturation had not finished after 300 s. Queries that a
@@ -626,16 +651,17 @@ registration that pinned Alice's user id, at "cannot be proved".
 ### Results: no-PRF accounts
 
 The `noprf` variants repeat the login and recovery variants in no-PRF mode. The `log` variants
-are repeated with the mutations whose replay hands the attacker u_c in this mode ("Results:
-replay"). Results in bold differ from PRF mode.
+are repeated with the mutations whose replay hands the attacker u_c in this mode, and with the
+confirm challenge store off but its binding kept ("Results: replay"). Results in bold differ from
+PRF mode.
 
 | ID | Property | Holds in | Attack, as expected, in |
 |---|---|---|---|
 | A-L1, A-R1 | Sign-in only with a passkey Alice approved; only passkeys she created are bound | `login-noprf-net`, `-session`, `-cdu`, `-device`, `-log` | `-device-nouv`, `-unbound`, `-session-noproof`, `-tls`, **`-log-noauthchal`** |
 | A-Z1 | Every authorized request on Alice's account is one her browser signed | `login-noprf-net`, `-session`, `-cdu`, `-device`, `-log` | `-device-nouv`, **`-unbound`**, `-session-noproof`, `-tls`, **`-log-noauthchal`** |
 | A-S1, A-K1 | Alice's u_c stays secret: the u_c the server drew when it registered her passkey, and the u_c her browser received | `login-noprf-net`, `-session`, `-cdu`, `-device`, `-log` | `-device-nouv`, **`-unbound`**, **`-session-noproof`**, **`-tls`**, **`-log-noauthchal`** |
-| A-V1-3, A-R1 | Recovery steps and new words on Alice's account are her browser's | `recovery-noprf-net`, `-session`, `-log` | `-words`, `-tls`, **`-log-norecnonce`**, **`-log-noconfirmchal`** |
-| A-S1 | u_c, in both forms, and both word sets stay secret | `recovery-noprf-net`, `-session`, `-log`; the replaced words in every variant | `-words` (u_c, original words); **`-tls`** (u_c); **`-log-norecnonce`**, **`-log-noconfirmchal`** (u_c) |
+| A-V1-3, A-R1 | Recovery steps and new words on Alice's account are her browser's | `recovery-noprf-net`, `-session`, `-log`, `-log-noconfirmchal` | `-words`, `-tls`, **`-log-norecnonce`**, **`-log-noconfirmchal-nobind`** |
+| A-S1 | u_c, in both forms, and both word sets stay secret | `recovery-noprf-net`, `-session`, `-log`, `-log-noconfirmchal`; the replaced words in every variant | `-words` (u_c, original words); **`-tls`** (u_c); **`-log-norecnonce`**, **`-log-noconfirmchal-nobind`** (u_c) |
 | — | The server knows the u_c Alice's browser holds | — | `malicious-noprf`, by design |
 
 What the traces show:
@@ -749,8 +775,8 @@ seconds without backtracking (`NOBT`).
 | `login-reach`, `recovery-reach` | `RCV`, `STORE`, `UNIQUSER` |
 | `login-log`, `recovery-log`, `login-noprf-log`, `recovery-noprf-log`, `login-log-noaddchal`, `recovery-log-noapinonce`, `recovery-log-noreplnonce`, `recovery-log-onectx` | `STORE` |
 | `login-log-noregchal` | `STORE`, `UNIQUSER`; without `UNIQUSER` a derivation registers Alice's user id twice and the existing-user check never applies |
-| `log` mutations with an attack, in PRF mode and `login-noprf-log-noauthchal` | `RCV`, `STORE`, `UNIQUSER` |
-| `recovery-noprf-log-norecnonce`, `recovery-noprf-log-noconfirmchal` | `RCV`, `STORE`, `UNIQUSER`, and `PRECISE` |
+| the other `log` mutations in PRF mode, and `login-noprf-log-noauthchal` | `RCV`, `STORE`, `UNIQUSER` |
+| `recovery-noprf-log-norecnonce`, `recovery-noprf-log-noconfirmchal`, `recovery-noprf-log-noconfirmchal-nobind` | `RCV`, `STORE`, `UNIQUSER`, and `PRECISE` |
 | `login-noprf-session-noproof` | `STORE` |
 | `login-noprf-device-nouv` | `RCV`, `STORE` |
 | `login-noprf-unbound` | `RCV`, `STORE`, `UNIQUSER`, and `PRECISE` |
@@ -798,7 +824,8 @@ Three groups have none, so their results hold only under the restrictions:
 - **Live challenge reads:** u_c and word secrecy in the `db-chal` variants, and the recover3,
   confirm and new-words results of `recovery-db-chalrec`.
 - **Replay:** the `log` variants' results, with every accepted request leaked, hold only under
-  `STORE`, the stores they test. `login-log-noregchal` also needs `UNIQUSER`.
+  `STORE`, the stores and authCount binding they test. `login-log-noregchal` also needs
+  `UNIQUSER`.
 
 ## Remaining work
 

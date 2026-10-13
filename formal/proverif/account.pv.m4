@@ -8,9 +8,10 @@ m4_changequote({{,}})m4_dnl
    holds, sends authorized requests, adds passkeys, replaces her recovery words, and recovers.
    The server keeps its state in tables, which in ProVerif can only grow. So deletions are not
    modeled: old passkeys and recovery keys stay usable, which only helps the attacker.
-   Single-use challenges and replay nonces are uniqueness restrictions; they stand for the atomic
-   DynamoDB delete-on-read in consumeChallenge (sutil:86-111) and the conditional put in
-   storeSingleUseNonce (sutil:162-176). Timestamps and the skew window are not modeled.
+   Single-use challenges, replay nonces and authCount values are uniqueness restrictions; they
+   stand for the atomic DynamoDB delete-on-read in consumeChallenge (sutil:86-111), the
+   conditional put in storeSingleUseNonce (sutil:162-176) and the atomic add in
+   _setLastCredential (srv:245-265). Timestamps and the skew window are not modeled.
 
    TLS is a private channel, with a fresh reply channel per request. Every server handler also
    runs on the public channel, where the attacker is a client like any other and names its own
@@ -46,7 +47,9 @@ m4_changequote({{,}})m4_dnl
      recovery-log         SCN_RECOVERY LEAK_LOG KEY_UI STORE
      recovery-log-norecnonce  SCN_RECOVERY LEAK_LOG KEY_UI STORE MUT_NOSTORE_NREC RCV UNIQUSER NOBT
      recovery-log-noconfirmchal  SCN_RECOVERY LEAK_LOG KEY_UI STORE MUT_NOSTORE_PCONFIRM RCV UNIQUSER NOBT
+     recovery-log-noconfirmchal-nobind  SCN_RECOVERY LEAK_LOG KEY_UI STORE MUT_NOSTORE_PCONFIRM MUT_NOBIND RCV UNIQUSER NOBT
      recovery-log-norecoverchal  SCN_RECOVERY LEAK_LOG KEY_UI STORE MUT_NOSTORE_PRECOVER RCV UNIQUSER NOBT
+     recovery-log-norecoverchal-nobind  SCN_RECOVERY LEAK_LOG KEY_UI STORE MUT_NOSTORE_PRECOVER MUT_NOBIND RCV UNIQUSER NOBT
      recovery-log-noapinonce  SCN_RECOVERY LEAK_LOG KEY_UI STORE MUT_NOSTORE_NAPI
      recovery-log-noreplnonce  SCN_RECOVERY LEAK_LOG KEY_UI STORE MUT_NOREPLNONCE
      recovery-log-noreplnonce-noapinonce  SCN_RECOVERY LEAK_LOG KEY_UI STORE MUT_NOREPLNONCE MUT_NOSTORE_NAPI RCV UNIQUSER NOBT
@@ -76,6 +79,7 @@ m4_changequote({{,}})m4_dnl
      recovery-noprf-log   SCN_RECOVERY NOPRF LEAK_LOG KEY_UI STORE
      recovery-noprf-log-norecnonce  SCN_RECOVERY NOPRF LEAK_LOG KEY_UI STORE MUT_NOSTORE_NREC RCV UNIQUSER NOBT PRECISE
      recovery-noprf-log-noconfirmchal  SCN_RECOVERY NOPRF LEAK_LOG KEY_UI STORE MUT_NOSTORE_PCONFIRM RCV UNIQUSER NOBT PRECISE
+     recovery-noprf-log-noconfirmchal-nobind  SCN_RECOVERY NOPRF LEAK_LOG KEY_UI STORE MUT_NOSTORE_PCONFIRM MUT_NOBIND RCV UNIQUSER NOBT PRECISE
      malicious-noprf      SCN_MALICIOUS NOPRF
      login-db-chal        SCN_LOGIN LEAK_DB LEAK_CHAL KEY_UI STORE UNIQUSER NOBT
      recovery-db-chal     SCN_RECOVERY LEAK_DB LEAK_CHAL KEY_UI STORE UNIQUSER NOBT
@@ -211,6 +215,7 @@ event ServerLogin(bitstring, bitstring, bitstring, bitstring).
 event ServerAccept(bitstring, bitstring, bitstring, bitstring, bitstring, bitstring).
 event Consumed(bitstring, bitstring, bitstring).
 event NonceStored(bitstring, bitstring, bitstring).
+event Incremented(bitstring, bitstring).
 
 event ClientRecoverIntent(bitstring, bitstring).
 event ClientConfirm(bitstring, bitstring).
@@ -264,8 +269,16 @@ m4_define({{PREC_STRIP}}, {{}})
    STORE: a challenge is consumed at most once, and a replay nonce is stored at most once
    (sutil:86-111, sutil:162-176). A MUT_NOSTORE_<purpose> mutation lifts this for one challenge
    purpose or nonce namespace, at every handler that uses it: MUT_NOSTORE_NREC opens both
-   recover3 and replace words, while MUT_NOREPLNONCE removes only replace words' nonce. Without
-   STORE such a flag would change nothing, so m4 stops with an error instead. *)
+   recover3 and replace words, while MUT_NOREPLNONCE removes only replace words' nonce.
+
+   STORE also increments each authCount value at most once, as the code's atomic add does
+   (srv:245-265). recover3 and recover/confirm bind the challenge they create to the value their
+   own increment produced (srv:267-269). recover/confirm and recover/verify increment the value
+   their challenge is bound to, so a second use of one challenge fails. The code reads authCount
+   before it consumes the challenge and increments at the end of the handler; the model makes
+   these one step. MUT_NOBIND removes the binding check.
+
+   Without STORE these mutations would change nothing, so m4 stops with an error instead. *)
 m4_define({{REUSE}}, {{m4_ifdef({{MUT_NOSTORE_$1}}, {{ || pu = $1 }})}})
 m4_define({{REUSABLE}},
    REUSE(NAPI)REUSE(NREC)REUSE(PREG)REUSE(PAUTH)REUSE(PADD)REUSE(PCONFIRM)REUSE(PRECOVER))
@@ -274,8 +287,12 @@ restriction pu: bitstring, ch: bitstring, s1: bitstring, s2: bitstring;
    event(Consumed(pu, ch, s1)) && event(Consumed(pu, ch, s2)) ==> s1 = s2 REUSABLE.
 restriction pu: bitstring, n: bitstring, s1: bitstring, s2: bitstring;
    event(NonceStored(pu, n, s1)) && event(NonceStored(pu, n, s2)) ==> s1 = s2 REUSABLE.
+restriction n: bitstring, s1: bitstring, s2: bitstring;
+   event(Incremented(n, s1)) && event(Incremented(n, s2)) ==> s1 = s2.
 }}, {{
 m4_ifelse(REUSABLE, {{}}, {{}}, {{m4_errprint({{MUT_NOSTORE_<purpose> needs STORE
+}})m4_m4exit(1)}})
+m4_ifdef({{MUT_NOBIND}}, {{m4_errprint({{MUT_NOBIND needs STORE
 }})m4_m4exit(1)}})
 }})
 
@@ -587,11 +604,12 @@ m4_ifdef({{NOPRF}}, {{
 
 (* POST recover3: proof of the recovery words, then a confirm challenge and cd_r
    (srv:1457-1512). Every recovery key ever stored for the user is accepted, since tables only
-   grow. The challenge records pk_R as its binding but nothing compares it. The code binds
-   H(pk_R : authCount) and re-derives it at confirm and recover/verify, so a sign-in, a logout,
-   another recover3 or new words void the challenge. Leaving that out only adds attacker runs. *)
+   grow. The challenge is bound to pk_R and cnt, the authCount value this handler's increment
+   produces (srv:1489-1495). Only cnt is compared, so unlike the code, the model lets a sign-in,
+   a logout, another recover3 or new words leave the challenge valid. Leaving that out only adds
+   attacker runs. *)
 let SRecover3(net: channel) =
-   new st: bitstring; new chR: bitstring;
+   new st: bitstring; new chR: bitstring; new cnt: bitstring;
    new rq: bitstring;
    in(net, (req: bitstring, rc: channel))PREC;
    RECEIVED
@@ -602,7 +620,7 @@ let SRecover3(net: channel) =
    get users(=ui, pkU: bitstring) in
    event ServerRecover3(ui, nPR, pkU);
    LOGGED(REC3, ui)
-   insert chal(PCONFIRM, chR, ui, pkR);
+   insert chal(PCONFIRM, chR, ui, (pkR, cnt));
 m4_ifdef({{NOPRF}}, {{
    (* A no-PRF reply carries u_c itself, decrypted with the main KMS key (srv:1501-1507) *)
    get ucenc(=ui, enc: bitstring, encOld: bitstring) in
@@ -614,7 +632,7 @@ m4_ifdef({{NOPRF}}, {{
 (* POST recover/confirm: a userCred proof over ch_R, then a registration challenge
    (srv:1514-1585) *)
 let SRecoverConfirm(net: channel) =
-   new st: bitstring; new ch: bitstring;
+   new st: bitstring; new ch: bitstring; new st2: bitstring; new cnt: bitstring;
    new rq: bitstring;
    in(net, (req: bitstring, rc: channel));
    RECEIVED
@@ -623,15 +641,24 @@ let SRecoverConfirm(net: channel) =
    event Consumed(PCONFIRM, chR, st);
    get users(=ui, pkU: bitstring) in
    if sig_verify(pkU, muc(ui, POST, PATH_CONFIRM, chR, sha256(EMPTY)), sigU, SCU) then
+   let (pkRb: bitstring, cntb: bitstring) = bnd in
+m4_ifdef({{MUT_NOBIND}}, {{
+   (* MUTATION: the binding is not compared *)
+}}, {{
+   (* The binding check and the increment, as one step (srv:1537, srv:1581) *)
+   event Incremented(cntb, st2);
+}})
    event ServerConfirm(ui, chR, pkU);
    LOGGED(CONFIRM, ui)
-   insert chal(PRECOVER, ch, ui, bnd);
+   insert chal(PRECOVER, ch, ui, (pkRb, cnt));
    (* Registration options, whose user.id becomes the new passkey's user handle *)
    out(rc, (ch, ui)).
 
-(* POST recover/verify: the new passkey (srv:566-606, 608-691) *)
+(* POST recover/verify: the new passkey (srv:566-606, 608-691). The check for an empty
+   lastCredentialId (srv:573) is left out: the write that sets it also increments authCount
+   (srv:245-265), so it fails only where the binding check already fails. *)
 let SRecoverVerify(net: channel) =
-   new st: bitstring; new sid: bitstring;
+   new st: bitstring; new sid: bitstring; new st2: bitstring;
    new rq: bitstring;
    in(net, (req: bitstring, rc: channel));
    RECEIVED
@@ -643,6 +670,13 @@ m4_ifdef({{NOPRF}}, {{
    get chal(=PRECOVER, =ch, =ui, bnd: bitstring) in
    event Consumed(PRECOVER, ch, st);
    let regr(credId: bitstring, credPk: bitstring, adata(=RPID, =UV1), cdj(=WA_CREATE, =ch, =ORIGIN)) = rr in
+   let (pkRb: bitstring, cntb: bitstring) = bnd in
+m4_ifdef({{MUT_NOBIND}}, {{
+   (* MUTATION: the binding is not compared *)
+}}, {{
+   (* The binding check and the increment, as one step (srv:630-634, srv:588) *)
+   event Incremented(cntb, st2);
+}})
    get users(=ui, pkU: bitstring) in
    insert creds(ui, credId, credPk, cdp);
    event ServerCredAdded(ui, credId, credPk, pkU);
@@ -1545,6 +1579,20 @@ m4_ifdef({{VARIANT_recovery_log_noconfirmchal}}, {{(* EXPECTPV
 RESULT not (event(Accepted(c[],REGVER,ui_19)) && event(AliceUi(ui_19))) is true.
 RESULT not (event(Accepted(c[],REPLACE,ui_19)) && event(AliceUi(ui_19))) is true.
 RESULT not (event(Accepted(c[],REC3,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT not (event(Accepted(c[],CONFIRM,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT not (event(Accepted(c[],RECVER,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT event(ServerRecover3(u,n_3,pkU_10)) && event(AliceUi(u)) ==> event(ClientRecoverIntent(u,n_3)) is true.
+RESULT event(ServerConfirm(u,ch_10,pkU_10)) && event(AliceUi(u)) ==> event(ClientConfirm(u,ch_10)) is true.
+RESULT event(ServerReplaced(u,pk,pkU_10)) && event(AliceUi(u)) ==> event(ClientReplace(u,pk)) is true.
+RESULT event(ServerCredAdded(u,id,pk,pkU_10)) && event(AliceUi(u)) ==> event(AliceCredCreated(u,id,pk)) is true.
+RESULT not attacker(ucA[!1 = v_10]) is true.
+RESULT not attacker(ur[!1 = v_10]) is true.
+RESULT not attacker(ur2[!2 = v_10,!1 = v_11]) is true.
+END *)}})
+m4_ifdef({{VARIANT_recovery_log_noconfirmchal_nobind}}, {{(* EXPECTPV
+RESULT not (event(Accepted(c[],REGVER,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT not (event(Accepted(c[],REPLACE,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT not (event(Accepted(c[],REC3,ui_19)) && event(AliceUi(ui_19))) is true.
 RESULT not (event(Accepted(c[],CONFIRM,ui_19)) && event(AliceUi(ui_19))) is false.
 RESULT not (event(Accepted(c[],RECVER,ui_19)) && event(AliceUi(ui_19))) is false.
 RESULT event(ServerRecover3(u,n_3,pkU_10)) && event(AliceUi(u)) ==> event(ClientRecoverIntent(u,n_3)) is true.
@@ -1556,6 +1604,20 @@ RESULT not attacker(ur[!1 = v_10]) is true.
 RESULT not attacker(ur2[!2 = v_10,!1 = v_11]) is true.
 END *)}})
 m4_ifdef({{VARIANT_recovery_log_norecoverchal}}, {{(* EXPECTPV
+RESULT not (event(Accepted(c[],REGVER,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT not (event(Accepted(c[],REPLACE,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT not (event(Accepted(c[],REC3,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT not (event(Accepted(c[],CONFIRM,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT not (event(Accepted(c[],RECVER,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT event(ServerRecover3(u,n_3,pkU_10)) && event(AliceUi(u)) ==> event(ClientRecoverIntent(u,n_3)) is true.
+RESULT event(ServerConfirm(u,ch_10,pkU_10)) && event(AliceUi(u)) ==> event(ClientConfirm(u,ch_10)) is true.
+RESULT event(ServerReplaced(u,pk,pkU_10)) && event(AliceUi(u)) ==> event(ClientReplace(u,pk)) is true.
+RESULT event(ServerCredAdded(u,id,pk,pkU_10)) && event(AliceUi(u)) ==> event(AliceCredCreated(u,id,pk)) is true.
+RESULT not attacker(ucA[!1 = v_10]) is true.
+RESULT not attacker(ur[!1 = v_10]) is true.
+RESULT not attacker(ur2[!2 = v_10,!1 = v_11]) is true.
+END *)}})
+m4_ifdef({{VARIANT_recovery_log_norecoverchal_nobind}}, {{(* EXPECTPV
 RESULT not (event(Accepted(c[],REGVER,ui_19)) && event(AliceUi(ui_19))) is true.
 RESULT not (event(Accepted(c[],REPLACE,ui_19)) && event(AliceUi(ui_19))) is true.
 RESULT not (event(Accepted(c[],REC3,ui_19)) && event(AliceUi(ui_19))) is true.
@@ -1858,6 +1920,21 @@ RESULT not attacker(ur[!1 = v_10]) is true.
 RESULT not attacker(ur2[!2 = v_10,!1 = v_11]) is true.
 END *)}})
 m4_ifdef({{VARIANT_recovery_noprf_log_noconfirmchal}}, {{(* EXPECTPV
+RESULT not (event(Accepted(c[],REGVER,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT not (event(Accepted(c[],REPLACE,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT not (event(Accepted(c[],REC3,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT not (event(Accepted(c[],CONFIRM,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT not (event(Accepted(c[],RECVER,ui_19)) && event(AliceUi(ui_19))) is true.
+RESULT event(ServerRecover3(u,n,pkU_10)) && event(AliceUi(u)) ==> event(ClientRecoverIntent(u,n)) is true.
+RESULT event(ServerConfirm(u,ch_10,pkU_10)) && event(AliceUi(u)) ==> event(ClientConfirm(u,ch_10)) is true.
+RESULT event(ServerReplaced(u,pk,pkU_10)) && event(AliceUi(u)) ==> event(ClientReplace(u,pk)) is true.
+RESULT event(ServerCredAdded(u,id,pk,pkU_10)) && event(AliceUi(u)) ==> event(AliceCredCreated(u,id,pk)) is true.
+RESULT not (event(ServerUc(u,id,pk,x)) && event(AliceCredCreated(u,id,pk)) && attacker(x)) is true.
+RESULT not (event(AliceUc(a,x)) && attacker(x)) is true.
+RESULT not attacker(ur[!1 = v_10]) is true.
+RESULT not attacker(ur2[!2 = v_10,!1 = v_11]) is true.
+END *)}})
+m4_ifdef({{VARIANT_recovery_noprf_log_noconfirmchal_nobind}}, {{(* EXPECTPV
 RESULT not (event(Accepted(c[],REGVER,ui_19)) && event(AliceUi(ui_19))) is true.
 RESULT not (event(Accepted(c[],REPLACE,ui_19)) && event(AliceUi(ui_19))) is false.
 RESULT not (event(Accepted(c[],REC3,ui_19)) && event(AliceUi(ui_19))) is false.
