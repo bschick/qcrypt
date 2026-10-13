@@ -1,5 +1,6 @@
 m4_changequote({{,}})m4_dnl
-(* Quick Crypt V8 message format: main.tex lines 152-275.
+(* Quick Crypt V8 message format: the main.tex stanzas from Message Encryption by A through m_N
+   Decryption by B.
 
    Alice owns the password p and the user credential uc. She encrypts messages of 1 to 3 blocks
    under every AEAD algorithm, and decrypts any block stream the attacker sends her. The
@@ -41,7 +42,7 @@ free MSG1: bitstring [private].
 free MSG2: bitstring [private].
 
 (* ---------------------------------------------------------------------------------------- *)
-(* Key schedule, tex 165-171 and 206 *)
+(* Key schedule (tex: Message Encryption by A, cd_N Encryption by B) *)
 
 letfun mkX8(nS: bitstring, a: alg, lp: bitstring) = xctx8(nS, a, V8, lp, EL0, EMPTY).
 letfun mkKS(u: key, x: bitstring) = kdf(ID1, kpS, hmix(u, x)).
@@ -88,7 +89,8 @@ event HintMade(bitstring, bitstring).
 event HintShown(bitstring, bitstring).
 
 (* ---------------------------------------------------------------------------------------- *)
-(* Alice encrypts: tex 152-213. Block 0 and the block-N chain, with le = lp = 1. *)
+(* Alice encrypts (tex: Message Encryption by A, cd_0 Encryption by B, cd_N Encryption by B).
+   Block 0 and the block-N chain, with le = lp = 1. *)
 
 letfun mkBlock0L(pw: password, a: alg, nS: bitstring, nIV0: bitstring, f0: bitstring, lp: bitstring, le: bitstring, m0: bitstring) =
    let x = mkX8(nS, a, lp) in
@@ -110,9 +112,10 @@ letfun mkBlockN(a: alg, nS: bitstring, n: bitstring, nIV: bitstring, f: bitstrin
 
 letfun tagOf(b: bitstring) = let blk(t: bitstring, v: bitstring, adf: bitstring, mE: bitstring) = b in t.
 
-(* u_c at rest (tex 336-370, keys:469-630): the same block format, with both the cipher and
-   signing keys derived from the master key k, e = u_i (so e_l = 16), i = 0, and no commitment
-   field from V8 on. Decryption accepts any algorithm and loop fields (conformance.md I-21). *)
+(* u_c at rest (tex: u_c Encryption Under k by B, cd_x Decryption Under k by B; keys:469-630):
+   the same block format, with both the cipher and signing keys derived from the master key k,
+   e = u_i (so e_l = 16), i = 0, and no commitment field from V8 on. Decryption accepts any
+   algorithm and loop fields (conformance.md I-21). *)
 letfun xAR(nS: bitstring, a: alg, lp: bitstring, e: bitstring) = xctx8(nS, a, V8, lp, EL16, e).
 
 letfun mkAR(k: key, e: bitstring, nS: bitstring, nIV: bitstring, m: bitstring) =
@@ -180,9 +183,10 @@ m4_ifdef({{MUT_EMPTYMID}}, {{
    ).
 
 (* ---------------------------------------------------------------------------------------- *)
-(* Alice decrypts: tex 216-275, in the code's order (cur:1007-1095, cur:717-772,
-   cur:1155-1221, cs:165-205). A block that decrypts to empty ends the stream without checking
-   its own f, as the code does (conformance.md I-14). *)
+(* Alice decrypts (tex: Message Decryption by A, m_0 Decryption by B, m_N Decryption by B), in
+   the code's order (cur:1007-1095, cur:717-772, cur:1155-1221, cs:165-205). A block that
+   decrypts to empty ends the stream without checking its own f, as the code does
+   (conformance.md I-14). *)
 
 let BlockN2(a: alg, x: bitstring, kS: key, kM0: key, nS: bitstring, m0: bitstring, m1: bitstring, t1: bitstring) =
    in(c, b2: bitstring);
@@ -433,10 +437,11 @@ process
 
 m4_ifdef({{SCN_LOOPS}}, {{
 (* ======================================================================================== *)
-(* C-I2, loops (tex 161-176, 223-247): a loop re-encrypts the previous loop's cipher data under
-   its own password, with lp counting up to le. Decryption recurses while lp > 1 (cs:221-223),
-   and only the outermost layer is checked for lp = le (cs:180-185). The inner layer is checked
-   against the outer lp - 1. Each loop here is a single block.
+(* C-I2, loops (tex: the LOOP in Message Encryption by A and in Message Decryption by A): a loop
+   re-encrypts the previous loop's cipher data under its own password, with lp counting up to
+   le. Decryption recurses while lp > 1 (cs:221-223), and only the outermost layer is checked
+   for lp = le (cs:180-185). The inner layer is checked against the outer lp - 1. Each loop here
+   is a single block.
 
    pIn protects one-loop messages and the inner layer of two-loop messages. pOut protects the
    outer layer. LEAK_POUT gives the attacker pOut, so it can open and rebuild outer layers. *)

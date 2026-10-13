@@ -69,11 +69,9 @@ const PREG, PADD, PAUTH, PCONFIRM, PRECOVER: bitstring [data].
 (* Replay-nonce namespaces: 'api' for authorized requests, 'nonce' for both recovery proofs *)
 const NAPI, NREC: bitstring [data].
 
-(* Used only by the MUT_SPLITNONCE mutation *)
-const NREPL: bitstring [data].
-
-(* Recovery signature contexts: sc_R, sc_W, and the legacy context still accepted for both *)
-const SCR, SCW, SCLEG: bitstring [data].
+(* Recovery signature contexts: sc_R, sc_W. The code also accepts a legacy context for both,
+   which no client creates; it is treated as removed (I-04). *)
+const SCR, SCW: bitstring [data].
 
 (* m_R = u_i, n_P; the timestamp is not modeled *)
 fun mrc(bitstring, bitstring): bitstring [data].
@@ -352,10 +350,9 @@ m4_ifdef({{MUT_UNBOUND}}, {{
    event ServerCredAdded(ui, credId, credPk, pkUi);
    out(rc, OK).
 
-(* A recovery proof verifies under the operation's own context or the legacy one that old
-   clients use for both operations (aproof:158-176) *)
+(* A recovery proof verifies under the operation's own context (aproof:158-176) *)
 letfun recoveryProofOK(pkR: bitstring, ui: bitstring, nP: bitstring, sig: bitstring, ctx: bitstring) =
-   sig_verify(pkR, mrc(ui, nP), sig, ctx) || sig_verify(pkR, mrc(ui, nP), sig, SCLEG).
+   sig_verify(pkR, mrc(ui, nP), sig, ctx).
 
 (* PUT recover3/key, authorized: new recovery words, proved by a signature under the submitted
    key (srv:1107-1149, sutil:123-159) *)
@@ -372,12 +369,7 @@ let SReplaceWords(net: channel) =
    event ServerAccept(ui, PUT, PATH_REPLACE, bd, nP, pkU);
    event NonceStored(NAPI, nP, st);
    if recoveryProofOK(pkR, ui, nPR, sigR, SCW) then
-m4_ifdef({{MUT_SPLITNONCE}}, {{
-   (* MUTATION: replace proofs get their own nonce namespace *)
-   event NonceStored(NREPL, nPR, st2);
-}}, {{
    event NonceStored(NREC, nPR, st2);
-}})
    insert recov(ui, pkR, cdr);
    event ServerReplaced(ui, pkR, pkU);
    out(rc, OK).
@@ -604,11 +596,7 @@ let Recovery(aid: bitstring, bid: bitstring) =
    new kKS: key; new nS2: bitstring;
    get words(=aid, ui: bitstring, ur: bitstring) in
    event ClientRecoverIntent(ui, nPR);
-m4_ifdef({{LEGACY_CLIENT}}, {{
-   out(tls, ((REC3, ui, nPR, sig_sign(recoveryKey(ur, ui), mrc(ui, nPR), SCLEG, r1)), rc1));
-}}, {{
    out(tls, ((REC3, ui, nPR, sig_sign(recoveryKey(ur, ui), mrc(ui, nPR), SCR, r1)), rc1));
-}})
    in(rc1, (sprf: bitstring, chR: bitstring, sdata: bitstring));
    (* A PRF account sends cd_r, a no-PRF account sends u_c itself (auth:1387-1397). Then
       _pinAccount under the words' u_i (auth:1399): the account-mode pin check, then the userCred
@@ -659,11 +647,7 @@ let RecoveryRegistered(aid: bitstring) =
    get words(=aid, =ui, ur: bitstring) in
    get pins(=aid, =ui, pprf: bitstring, ppk: bitstring) in
    event ClientRecoverIntent(ui, nPR);
-m4_ifdef({{LEGACY_CLIENT}}, {{
-   out(tls, ((REC3, ui, nPR, sig_sign(recoveryKey(ur, ui), mrc(ui, nPR), SCLEG, r1)), rc1));
-}}, {{
    out(tls, ((REC3, ui, nPR, sig_sign(recoveryKey(ur, ui), mrc(ui, nPR), SCR, r1)), rc1));
-}})
    in(rc1, (sprf: bitstring, chR: bitstring, sdata: bitstring));
    let uc = (if sprf = PRF1 then openAtRest(rsec(ur, ui), ui, sdata) else if sprf = PRF0 then bs2key(sdata)) in
    if pprf = PRF1 && sprf = PRF0 then 0 else
@@ -695,20 +679,11 @@ let ReplaceWords(aid: bitstring) =
    get sessions(=aid, bid: bitstring, ui: bitstring, uc: key, pkId: bitstring, ck: bitstring, cs: bitstring) in
    insert words(aid, ui, ur2);
    let skR = recoveryKey(ur2, ui) in
-m4_ifdef({{LEGACY_CLIENT}}, {{
-   let sigR = sig_sign(skR, mrc(ui, nPR), SCLEG, rR) in
-}}, {{
    let sigR = sig_sign(skR, mrc(ui, nPR), SCW, rR) in
-}})
    let bd = (sig_pk(skR), nPR, sigR, mkAtRest(rsec(ur2, ui), ui, nS, key2bs(uc))) in
    event ClientReplace(ui, sig_pk(skR));
    event ClientSigned(ui, PUT, PATH_REPLACE, bd, nP);
    out(tls, ((REPLACE, ck, cs, nP, mkProof(uc, ui, PUT, PATH_REPLACE, bd, nP, r), bd), rc));
-m4_ifdef({{LEAK_REPLACE}}, {{
-   (* The attacker sees the recovery proof in this request, as a log or a TLS-terminating proxy
-      would *)
-   out(c, bd);
-}})
    in(rc, resp: bitstring).
 
 (* Registration (tex 431-463, auth:1500-1563). u_i is public: it is in the recovery words and
@@ -897,9 +872,7 @@ m4_ifdef({{REACH_ONLY}}, {{
    these runs does not finish, so they are checked only in the REACH_ONLY variants. Restrictions
    only remove traces, and the other recovery variants only add attacker knowledge, relax server
    checks, change queries, or make TLS public. So each trace found here, less the Rcv events that
-   RCV records, is also a trace of every other recovery variant. LEGACY_CLIENT is the exception,
-   because it changes the context Alice's browser signs with, so recovery-reach-legacy checks
-   the same runs with that flag. *)
+   RCV records, is also a trace of every other recovery variant. *)
 query user: bitstring, recoveryPk: bitstring, pkU: bitstring;
    event(ServerReplaced(user, recoveryPk, pkU)) && event(ClientReplace(user, recoveryPk)).
 query user: bitstring, nonce: bitstring, pkU: bitstring;
