@@ -52,29 +52,15 @@ function readVariants(template) {
       .map(([name, ...flags]) => ({ template, name, flags }));
 }
 
-// The templates are the *.pv.m4 files in this directory, which model the current code, and in
-// each fixes/<version> directory, which model a version of the planned fixes
 function findTemplates() {
-   const fixesDir = path.join(modelDir, 'fixes');
-   const dirs = [modelDir];
-   if (fs.existsSync(fixesDir)) {
-      dirs.push(
-         ...fs
-            .readdirSync(fixesDir)
-            .sort()
-            .map((version) => path.join(fixesDir, version)),
-      );
-   }
-   return dirs.flatMap((dir) =>
-      fs
-         .readdirSync(dir)
-         .filter((file) => file.endsWith('.pv.m4'))
-         .sort()
-         .map((file) => path.join(dir, file)),
-   );
+   return fs
+      .readdirSync(modelDir)
+      .filter((file) => file.endsWith('.pv.m4'))
+      .sort()
+      .map((file) => path.join(modelDir, file));
 }
 
-// A template's path relative to this directory, without the extension, e.g. "fixes/v1/account"
+// A template's path relative to this directory, without the extension, e.g. "account"
 function templateId(template) {
    return path.relative(modelDir, template).replace(/\.pv\.m4$/, '');
 }
