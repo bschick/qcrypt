@@ -34,6 +34,7 @@ m4_changequote({{,}})m4_dnl
      login-unbound        SCN_LOGIN MUT_UNBOUND NOBT
      login-unbound-trace  SCN_LOGIN MUT_UNBOUND UNIQUSER NOBT
      login-tls            SCN_LOGIN LEAK_TLS KEY_UI STORE UNIQUSER NOBT
+     login-tls-regsigr-nopku  SCN_LOGIN LEAK_TLS KEY_UI STORE UNIQUSER NOBT MUT_REGSIGR_NOPKU
      login-reach          SCN_LOGIN REACH_ONLY RCV STORE UNIQUSER NOBT
      login-log            SCN_LOGIN LEAK_LOG KEY_UI STORE
      login-log-sharedctx  SCN_LOGIN LEAK_LOG KEY_UI STORE MUT_SHAREDCTX
@@ -171,6 +172,14 @@ const SCR, SCW, SCG: bitstring [data].
 
 (* m_R = u_i, n_P; the timestamp is not modeled *)
 fun mrc(bitstring, bitstring): bitstring [data].
+(* The message of the proof under sk_R at registration: u_i, the registration challenge and pk_U *)
+fun mrg(bitstring, bitstring, bitstring): bitstring [data].
+m4_ifdef({{MUT_REGSIGR_NOPKU}}, {{
+(* MUTATION: the proof under sk_R leaves out pk_U *)
+m4_define({{REGSIGR_PKU}}, {{EMPTY}})
+}}, {{
+m4_define({{REGSIGR_PKU}}, {{$1}})
+}})
 const UNKNOWN, NOBIND: bitstring [data].
 const PRF0, PRF1: bitstring [data].
 const ORIGIN, RPID, UV0, UV1, WA_CREATE, WA_GET: bitstring [data].
@@ -453,9 +462,10 @@ m4_ifdef({{MUT_NOREGBIND}}, {{
    out(rc, (ch, ui)).
 
 (* The checks both reg/verify handlers make on the body bd, which carries the user id ui, the
-   challenge ch, pk_U and pk_R (srv:postRegVerify). First proofs under sk_U and under sk_R, each
-   over the user id, the challenge and the body. A proof under sk_R that left out the body would
-   let an attacker with TLS broken move it into a body of its own, with its own pk_U. Then the
+   challenge ch, pk_U, pk_R and the proof under sk_R (srv:postRegVerify). First the proof under
+   sk_U, over the user id, the challenge and the whole body, and the proof under sk_R, over the
+   user id, the challenge and pk_U. A proof under sk_R that left out pk_U would let an attacker
+   with TLS broken pair it with its own pk_U, on a challenge it opened with that pk_U. Then the
    challenge is consumed only if it is bound to that user id and pk_U, as one conditional delete,
    so a request that fails either check leaves the challenge for Alice. *)
 m4_define({{REGCHECKS}}, {{
@@ -467,7 +477,7 @@ m4_ifdef({{MUT_NOREGSIG_U}}, {{
 m4_ifdef({{MUT_NOREGSIG_R}}, {{
    (* MUTATION: the proof under sk_R is not checked *)
 }}, {{
-   if sig_verify(pkR, muc(ui, POST, PATH_REGVER, ch, sha256(bd)), sigR, SCG) then
+   if sig_verify(pkR, mrg(ui, ch, REGSIGR_PKU(pkU)), sigR, SCG) then
 }})
 m4_ifdef({{MUT_UNBOUND}}, {{
    get chal(pu: bitstring, =ch, cu: bitstring, bnd: bitstring) in
@@ -489,8 +499,8 @@ let SRegVerify(net: channel) =
    new rq: bitstring;
    in(net, (req: bitstring, rc: channel))PREC_STRIP;
    RECEIVED
-   let (=REGVER, bd: bitstring, sigU: bitstring, sigR: bitstring) = req in
-   let (rr: bitstring, ui: bitstring, ch: bitstring, pkR: bitstring, pkU: bitstring, cdp: bitstring, cdr: bitstring) = bd in
+   let (=REGVER, bd: bitstring, sigU: bitstring) = req in
+   let (rr: bitstring, ui: bitstring, ch: bitstring, pkR: bitstring, pkU: bitstring, cdp: bitstring, cdr: bitstring, sigR: bitstring) = bd in
    get unverified(=ui) in
    get users(=ui, pkU0: bitstring) in 0 else
 REGCHECKS
@@ -519,8 +529,8 @@ let SRegVerifyNoPrf(net: channel) =
    new rq: bitstring;
    in(net, (req: bitstring, rc: channel))PREC_STRIP;
    RECEIVED
-   let (=REGVER, bd: bitstring, sigU: bitstring, sigR: bitstring) = req in
-   let (rr: bitstring, ui: bitstring, ch: bitstring, pkR: bitstring, pkU: bitstring, ucbs: bitstring) = bd in
+   let (=REGVER, bd: bitstring, sigU: bitstring) = req in
+   let (rr: bitstring, ui: bitstring, ch: bitstring, pkR: bitstring, pkU: bitstring, ucbs: bitstring, sigR: bitstring) = bd in
    get unverified(=ui) in
    get users(=ui, pkU0: bitstring) in 0 else
 REGCHECKS
@@ -1201,18 +1211,18 @@ m4_ifdef({{SCN_MALICIOUS}}, {{
    insert passkeys(aid, ui, tg, credId, credKey);
 m4_ifdef({{LEAK_WORDS}}, {{   out(c, ur); }})
    let skR = recoveryKey(ur, ui) in
+   let sigR = sig_sign(skR, mrg(ui, ch, REGSIGR_PKU(pkU)), SCG, rR) in
 m4_ifdef({{NOPRF}}, {{
    (* A no-PRF registration sends u_c itself in place of cd_p and cd_r *)
    event AliceUc(aid, uc);
-   let bd = (rr, ui, ch, sig_pk(skR), pkU, key2bs(uc)) in
+   let bd = (rr, ui, ch, sig_pk(skR), pkU, key2bs(uc), sigR) in
 }}, {{
    let cdp = mkAtRest(wa_prf(credKey, PS), ui, nS1, key2bs(uc)) in
    let cdr = mkAtRest(rsec(ur, ui), ui, nS2, key2bs(uc)) in
-   let bd = (rr, ui, ch, sig_pk(skR), pkU, cdp, cdr) in
+   let bd = (rr, ui, ch, sig_pk(skR), pkU, cdp, cdr, sigR) in
 }})
    event RegSigned(ui, ch, pkU, sig_pk(skR));
-   out(tls, ((REGVER, bd, sig_sign(proofKey(uc), muc(ui, POST, PATH_REGVER, ch, sha256(bd)), SCP, rU),
-              sig_sign(skR, muc(ui, POST, PATH_REGVER, ch, sha256(bd)), SCG, rR)), rc2));
+   out(tls, ((REGVER, bd, sig_sign(proofKey(uc), muc(ui, POST, PATH_REGVER, ch, sha256(bd)), SCP, rU)), rc2));
 m4_ifdef({{NOPRF}}, {{
    (* The browser does not read the u_c a no-PRF reply carries *)
 m4_ifdef({{SCN_MALICIOUS}}, {{
@@ -1859,6 +1869,14 @@ RESULT event(ServerCredAdded(u,id,pk,pkU_7)) && event(AliceUi(u)) ==> event(Alic
 RESULT event(ServerAccept(u,m,p,b,n_3,pkU_7)) && event(AliceUi(u)) ==> event(ClientSigned(u,m,p,b,n_3)) is false.
 RESULT event(ServerRegistered(u,ch_9,sig_pk(kdf(ID1,kpU,ucA[!1 = v_13])),pr)) ==> event(RegSigned(u,ch_9,sig_pk(kdf(ID1,kpU,ucA[!1 = v_14])),pr)) is true.
 RESULT event(ServerRegistered(u,ch_9,pu,sig_pk(kdf(ID1,kpR,rsec(ur[!1 = v_13],v_14))))) ==> event(RegSigned(u,ch_9,pu,sig_pk(kdf(ID1,kpR,rsec(ur[!1 = v_15],v_14))))) is true.
+RESULT not attacker(ucA[!1 = v_13]) is true.
+END *)}})
+m4_ifdef({{VARIANT_login_tls_regsigr_nopku}}, {{(* EXPECTPV
+RESULT event(ServerLogin(u,id,ch_9,pkU_7)) && event(AliceUi(u)) ==> event(UserApproves(u,id,ch_9)) is false.
+RESULT event(ServerCredAdded(u,id,pk,pkU_7)) && event(AliceUi(u)) ==> event(AliceCredCreated(u,id,pk)) is false.
+RESULT event(ServerAccept(u,m,p,b,n_3,pkU_7)) && event(AliceUi(u)) ==> event(ClientSigned(u,m,p,b,n_3)) is false.
+RESULT event(ServerRegistered(u,ch_9,sig_pk(kdf(ID1,kpU,ucA[!1 = v_13])),pr)) ==> event(RegSigned(u,ch_9,sig_pk(kdf(ID1,kpU,ucA[!1 = v_14])),pr)) is true.
+RESULT event(ServerRegistered(u,ch_9,pu,sig_pk(kdf(ID1,kpR,rsec(ur[!1 = v_13],v_14))))) ==> event(RegSigned(u,ch_9,pu,sig_pk(kdf(ID1,kpR,rsec(ur[!1 = v_15],v_14))))) is false.
 RESULT not attacker(ucA[!1 = v_13]) is true.
 END *)}})
 m4_ifdef({{VARIANT_login_reach}}, {{(* EXPECTPV
