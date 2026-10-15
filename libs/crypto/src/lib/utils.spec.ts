@@ -98,6 +98,15 @@ describe('Base64 encode decode', () => {
       const badLen = 'SGVsbG8Mw';
       expect(() => base64ToBytes(badLen)).toThrow();
    });
+
+   it('checks the decoded length when one is given', () => {
+      const good = 'SGVsbG8-Mw';
+      expect(base64ToBytes(good, 7, 'greeting').byteLength).toBe(7);
+
+      expect(() => base64ToBytes(good, 8, 'greeting')).toThrow(/invalid greeting length/);
+      expect(() => base64ToBytes('', 7, 'greeting')).toThrow(/invalid greeting length/);
+      expect(() => base64ToBytes('SGVsbG8.Mw', 7, 'greeting')).toThrow(/invalid greeting encoding/);
+   });
 });
 
 describe('getRandom48 tests', () => {

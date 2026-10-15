@@ -4,9 +4,14 @@ import {
    getUserCredPubKey,
    createUserCredProof,
    verifyUserCredProof,
+   createSessionlessProof,
+   verifySessionlessProof,
    getRecoveryPubKey,
    createRecoveryProof,
    verifyRecoveryProof,
+   createRecoveryRegisterProof,
+   verifyRecoveryRegisterProof,
+   PROOF_SKEW_MS,
 } from './proof';
 
 // Public keys derived from the fixed secret bytes 0..31, pinned to catch any
@@ -24,19 +29,21 @@ function flipSigBit(signature: string): string {
 
 describe('userCred proof', () => {
    let userId: string;
+   let timestamp: string;
 
    beforeEach(async () => {
       await cryptoReady();
       userId = bytesToBase64(getRandom(16));
+      timestamp = String(Date.now());
    });
 
    it('sign request and verfiy with derived public key', () => {
       const userCred = getRandom(32);
       const pubKey = getUserCredPubKey(userCred);
       const nonce = bytesToBase64(getRandom(32));
-      const signature = createUserCredProof(userCred, userId, 'GET', '/v1/user', '1730000000000', nonce, 'abc');
+      const signature = createUserCredProof(userCred, userId, 'GET', '/v1/user', timestamp, nonce, 'abc');
       expect(() =>
-         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '1730000000000', nonce, 'abc', signature),
+         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', timestamp, nonce, 'abc', signature),
       ).not.toThrow();
    });
 
@@ -44,14 +51,16 @@ describe('userCred proof', () => {
       const userCred = getRandom(32);
       const pubKey = getUserCredPubKey(userCred);
       const nonce = bytesToBase64(getRandom(32));
-      const signature = createUserCredProof(userCred, userId, 'GET', '/v1/user', '100', nonce, 'aa', 'a=b');
+      const signature = createUserCredProof(userCred, userId, 'GET', '/v1/user', timestamp, nonce, 'aa', 'a=b');
       expect(() =>
-         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature, 'a=b'),
+         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', timestamp, nonce, 'aa', signature, 'a=b'),
       ).not.toThrow();
       expect(() =>
-         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature, 'a=c'),
-      ).toThrow();
-      expect(() => verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature)).toThrow();
+         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', timestamp, nonce, 'aa', signature, 'a=c'),
+      ).toThrow(/proof verification failed/);
+      expect(() => verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', timestamp, nonce, 'aa', signature)).toThrow(
+         /proof verification failed/,
+      );
    });
 
    it('derives the pinned public key for a fixed secret', () => {
@@ -67,42 +76,108 @@ describe('userCred proof', () => {
       const userCred = getRandom(32);
       const pubKey = getUserCredPubKey(userCred);
       const nonce = bytesToBase64(getRandom(32));
-      const signature = createUserCredProof(userCred, userId, 'POST', '/v1/passkeys', '100', nonce, 'aa');
+      const signature = createUserCredProof(userCred, userId, 'POST', '/v1/passkeys', timestamp, nonce, 'aa');
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'POST', '/v1/passkeys', timestamp, nonce, 'aa', signature),
+      ).not.toThrow();
+
       const otherUserId = bytesToBase64(getRandom(16));
-      expect(() =>
-         verifyUserCredProof(pubKey, otherUserId, 'POST', '/v1/passkeys', '100', nonce, 'aa', signature),
-      ).toThrow();
-      expect(() =>
-         verifyUserCredProof(pubKey, userId, 'DELETE', '/v1/passkeys', '100', nonce, 'aa', signature),
-      ).toThrow();
-      expect(() => verifyUserCredProof(pubKey, userId, 'POST', '/v1/other', '100', nonce, 'aa', signature)).toThrow();
-      expect(() =>
-         verifyUserCredProof(pubKey, userId, 'POST', '/v1/passkeys', '101', nonce, 'aa', signature),
-      ).toThrow();
+      const otherTimestamp = String(Number(timestamp) + 1);
       const otherNonce = bytesToBase64(getRandom(32));
       expect(() =>
-         verifyUserCredProof(pubKey, userId, 'POST', '/v1/passkeys', '100', otherNonce, 'aa', signature),
-      ).toThrow();
+         verifyUserCredProof(pubKey, otherUserId, 'POST', '/v1/passkeys', timestamp, nonce, 'aa', signature),
+      ).toThrow(/proof verification failed/);
       expect(() =>
-         verifyUserCredProof(pubKey, userId, 'POST', '/v1/passkeys', '100', nonce, 'bb', signature),
-      ).toThrow();
+         verifyUserCredProof(pubKey, userId, 'DELETE', '/v1/passkeys', timestamp, nonce, 'aa', signature),
+      ).toThrow(/proof verification failed/);
+      expect(() => verifyUserCredProof(pubKey, userId, 'POST', '/v1/other', timestamp, nonce, 'aa', signature)).toThrow(
+         /proof verification failed/,
+      );
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'POST', '/v1/passkeys', otherTimestamp, nonce, 'aa', signature),
+      ).toThrow(/proof verification failed/);
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'POST', '/v1/passkeys', timestamp, otherNonce, 'aa', signature),
+      ).toThrow(/proof verification failed/);
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'POST', '/v1/passkeys', timestamp, nonce, 'bb', signature),
+      ).toThrow(/proof verification failed/);
    });
 
    it('throw when a the wrong public key is used', () => {
+      const userCred = getRandom(32);
       const nonce = bytesToBase64(getRandom(32));
-      const signature = createUserCredProof(getRandom(32), userId, 'GET', '/v1/user', '100', nonce, 'aa');
+      const signature = createUserCredProof(userCred, userId, 'GET', '/v1/user', timestamp, nonce, 'aa');
+      expect(() =>
+         verifyUserCredProof(getUserCredPubKey(userCred), userId, 'GET', '/v1/user', timestamp, nonce, 'aa', signature),
+      ).not.toThrow();
+
       const otherPubKey = getUserCredPubKey(getRandom(32));
       expect(() =>
-         verifyUserCredProof(otherPubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature),
-      ).toThrow();
+         verifyUserCredProof(otherPubKey, userId, 'GET', '/v1/user', timestamp, nonce, 'aa', signature),
+      ).toThrow(/proof verification failed/);
    });
 
    it('thow when the signature is manipulated', () => {
       const userCred = getRandom(32);
       const pubKey = getUserCredPubKey(userCred);
       const nonce = bytesToBase64(getRandom(32));
-      const signature = flipSigBit(createUserCredProof(userCred, userId, 'GET', '/v1/user', '100', nonce, 'aa'));
-      expect(() => verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '100', nonce, 'aa', signature)).toThrow();
+      const signature = createUserCredProof(userCred, userId, 'GET', '/v1/user', timestamp, nonce, 'aa');
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', timestamp, nonce, 'aa', signature),
+      ).not.toThrow();
+
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', timestamp, nonce, 'aa', flipSigBit(signature)),
+      ).toThrow(/proof verification failed/);
+   });
+
+   it('throw when the timestamp is outside the skew window', () => {
+      const userCred = getRandom(32);
+      const pubKey = getUserCredPubKey(userCred);
+      const nonce = bytesToBase64(getRandom(32));
+      const signature = createUserCredProof(userCred, userId, 'GET', '/v1/user', timestamp, nonce, 'aa');
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', timestamp, nonce, 'aa', signature),
+      ).not.toThrow();
+
+      for (const offsetMs of [-PROOF_SKEW_MS - 1000, PROOF_SKEW_MS + 1000]) {
+         const staleTimestamp = String(Date.now() + offsetMs);
+         const staleSig = createUserCredProof(userCred, userId, 'GET', '/v1/user', staleTimestamp, nonce, 'aa');
+         expect(() =>
+            verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', staleTimestamp, nonce, 'aa', staleSig),
+         ).toThrow(/proof timestamp outside skew window/);
+      }
+      expect(() => verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', '', nonce, 'aa', signature)).toThrow(
+         /proof timestamp outside skew window/,
+      );
+   });
+
+   it('throw when an input is not the expected length or encoding', () => {
+      const userCred = getRandom(32);
+      const pubKey = getUserCredPubKey(userCred);
+      const nonce = bytesToBase64(getRandom(32));
+      const signature = createUserCredProof(userCred, userId, 'GET', '/v1/user', timestamp, nonce, 'aa');
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', timestamp, nonce, 'aa', signature),
+      ).not.toThrow();
+
+      expect(() =>
+         verifyUserCredProof(pubKey.slice(4), userId, 'GET', '/v1/user', timestamp, nonce, 'aa', signature),
+      ).toThrow(/invalid public key length/);
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', timestamp, nonce, 'aa', signature.slice(4)),
+      ).toThrow(/invalid signature length/);
+      expect(() => verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', timestamp, nonce, 'aa', '')).toThrow(
+         /invalid signature length/,
+      );
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', timestamp, nonce, 'aa', `!${signature}`),
+      ).toThrow(/invalid signature encoding/);
+      const shortNonce = bytesToBase64(getRandom(31));
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'GET', '/v1/user', timestamp, shortNonce, 'aa', signature),
+      ).toThrow(/invalid nonce length/);
    });
 });
 
@@ -220,6 +295,145 @@ describe('recovery nonce proof', () => {
       const shortUserId = bytesToBase64(getRandom(15));
       expect(() => createRecoveryProof(secret, shortUserId, timestamp, nonce, 'recover')).toThrow(
          /invalid userId length/,
+      );
+   });
+});
+
+describe('sessionless proof', () => {
+   let userId: string;
+   let nonce: string;
+   let timestamp: string;
+
+   beforeEach(async () => {
+      await cryptoReady();
+      userId = bytesToBase64(getRandom(16));
+      nonce = bytesToBase64(getRandom(32));
+      timestamp = String(Date.now());
+   });
+
+   it('sign request and verify with derived public key', () => {
+      const userCred = getRandom(32);
+      const pubKey = getUserCredPubKey(userCred);
+      const signature = createSessionlessProof(userCred, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa');
+      expect(() =>
+         verifySessionlessProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa', signature),
+      ).not.toThrow();
+   });
+
+   it('throw when a sessionless proof is verified as a session proof, or the reverse', () => {
+      const userCred = getRandom(32);
+      const pubKey = getUserCredPubKey(userCred);
+      const sessionlessSig = createSessionlessProof(userCred, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa');
+      const sessionSig = createUserCredProof(userCred, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa');
+      expect(() =>
+         verifySessionlessProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa', sessionlessSig),
+      ).not.toThrow();
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa', sessionSig),
+      ).not.toThrow();
+
+      // Both sign identical bytes, so only the context separates them
+      expect(() =>
+         verifyUserCredProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa', sessionlessSig),
+      ).toThrow(/proof verification failed/);
+      expect(() =>
+         verifySessionlessProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa', sessionSig),
+      ).toThrow(/proof verification failed/);
+   });
+
+   it('throw when signed fields differ', () => {
+      const userCred = getRandom(32);
+      const pubKey = getUserCredPubKey(userCred);
+      const signature = createSessionlessProof(userCred, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa');
+      expect(() =>
+         verifySessionlessProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa', signature),
+      ).not.toThrow();
+      expect(() =>
+         verifySessionlessProof(pubKey, userId, 'POST', '/v1/recover/verify', timestamp, nonce, 'aa', signature),
+      ).toThrow(/proof verification failed/);
+      expect(() =>
+         verifySessionlessProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'bb', signature),
+      ).toThrow(/proof verification failed/);
+   });
+});
+
+describe('recovery register proof', () => {
+   let userId: string;
+   let challenge: string;
+   let userCredPubKey: string;
+
+   beforeEach(async () => {
+      await cryptoReady();
+      userId = bytesToBase64(getRandom(16));
+      challenge = bytesToBase64(getRandom(32));
+      userCredPubKey = getUserCredPubKey(getRandom(32));
+   });
+
+   it('sign and verify with derived public key', () => {
+      const secret = getRandom(32);
+      const pubKey = getRecoveryPubKey(secret);
+      const signature = createRecoveryRegisterProof(secret, userId, challenge, userCredPubKey);
+      expect(() => verifyRecoveryRegisterProof(pubKey, userId, challenge, userCredPubKey, signature)).not.toThrow();
+   });
+
+   it('throw when the userCredPubKey differs', () => {
+      const secret = getRandom(32);
+      const pubKey = getRecoveryPubKey(secret);
+      const signature = createRecoveryRegisterProof(secret, userId, challenge, userCredPubKey);
+      expect(() => verifyRecoveryRegisterProof(pubKey, userId, challenge, userCredPubKey, signature)).not.toThrow();
+
+      const otherUserCredPubKey = getUserCredPubKey(getRandom(32));
+      expect(() => verifyRecoveryRegisterProof(pubKey, userId, challenge, otherUserCredPubKey, signature)).toThrow(
+         /proof verification failed/,
+      );
+   });
+
+   it('throw when the userId or challenge differs', () => {
+      const secret = getRandom(32);
+      const pubKey = getRecoveryPubKey(secret);
+      const signature = createRecoveryRegisterProof(secret, userId, challenge, userCredPubKey);
+      expect(() => verifyRecoveryRegisterProof(pubKey, userId, challenge, userCredPubKey, signature)).not.toThrow();
+
+      const otherUserId = bytesToBase64(getRandom(16));
+      const otherChallenge = bytesToBase64(getRandom(32));
+      expect(() => verifyRecoveryRegisterProof(pubKey, otherUserId, challenge, userCredPubKey, signature)).toThrow(
+         /proof verification failed/,
+      );
+      expect(() => verifyRecoveryRegisterProof(pubKey, userId, otherChallenge, userCredPubKey, signature)).toThrow(
+         /proof verification failed/,
+      );
+   });
+
+   it('throw when the same message is signed with the recover or replace context', () => {
+      const secret = getRandom(32);
+      const pubKey = getRecoveryPubKey(secret);
+      const { secKey } = getProofKeyPair(secret, 'RecovKey');
+      const message = new TextEncoder().encode([userId, challenge, userCredPubKey].join('\n'));
+
+      const registerSig = bytesToBase64(createProof(secKey, message, 'qcrypt/recovery/register/v1'));
+      expect(() => verifyRecoveryRegisterProof(pubKey, userId, challenge, userCredPubKey, registerSig)).not.toThrow();
+
+      for (const context of ['qcrypt/recovery/recover/v1', 'qcrypt/recovery/replace/v1']) {
+         const otherSig = bytesToBase64(createProof(secKey, message, context));
+         expect(() => verifyRecoveryRegisterProof(pubKey, userId, challenge, userCredPubKey, otherSig)).toThrow(
+            /proof verification failed/,
+         );
+      }
+   });
+
+   it('throw when a field is not the expected length', () => {
+      const secret = getRandom(32);
+      const shortUserId = bytesToBase64(getRandom(15));
+      const shortChallenge = bytesToBase64(getRandom(31));
+      const shortPubKey = bytesToBase64(getRandom(32));
+      expect(() => createRecoveryRegisterProof(secret, shortUserId, challenge, userCredPubKey)).toThrow(
+         /invalid userId length/,
+      );
+      expect(() => createRecoveryRegisterProof(secret, userId, shortChallenge, userCredPubKey)).toThrow(
+         /invalid challenge length/,
+      );
+      expect(() => createRecoveryRegisterProof(secret, userId, challenge, shortPubKey)).toThrow(
+         /invalid userCredPubKey length/,
       );
    });
 });

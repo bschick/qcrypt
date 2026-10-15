@@ -33,7 +33,7 @@ export const RETRIES = 3;
 export const RPNAME = 'Quick Crypt';
 export const ALGIDS: number[] = [COSEALG.ML_DSA_65, COSEALG.ML_DSA_44, COSEALG.EdDSA, COSEALG.ES256, COSEALG.RS256];
 
-export { RECOVERYID_BYTES, CHALLENGE_BYTES } from '@qcrypt/api';
+export { RECOVERYID_BYTES, CHALLENGE_BYTES, PROOF_SKEW_MS } from '@qcrypt/api';
 
 export const USERID_BYTES = 16;
 export const INVITABLEID_BYTES = 16;
@@ -59,5 +59,4 @@ export const KMS_KEYID_NEW = process.env.KMSKeyId_New!;
 export const KMS_KEYID_BACKUP = process.env.KMSKeyId_Old!;
 
 // 2 * PROOF_SKEW_MS / 1000 must not exceed CHALLENGE_TTL_SECS or proof nonces expire and replay becomes possible
-export const PROOF_SKEW_MS = 120 * 1000;
 export const CHALLENGE_TTL_SECS = 300;

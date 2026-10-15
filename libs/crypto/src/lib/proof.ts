@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { getCrux, getSodium } from './crypto';
-import { getRandom } from './utils';
+import { getRandom, ParamError } from './utils';
 
 export function getProofKeyPair(
    secret: Uint8Array,
@@ -55,5 +55,5 @@ export function verifyProof(pubKey: Uint8Array, message: Uint8Array, signature: 
    if (getCrux().ml_dsa_65_verify(pubKey, message, new TextEncoder().encode(context), signature)) {
       return;
    }
-   throw new Error('proof verification failed');
+   throw new ParamError('proof verification failed');
 }

@@ -37,6 +37,7 @@ export {
    makeTookMsg,
    expired,
    ProcessCancelled,
+   ParamError,
    BYOBStreamReader,
    readStreamAll,
    streamWriteBYOD,

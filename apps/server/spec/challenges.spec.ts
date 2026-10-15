@@ -24,32 +24,57 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const go = vi.fn();
 const created = vi.fn();
+let condition = '';
+const op = {
+   eq: (name: string, value: unknown) => `${name}=${value}`,
+   notExists: (name: string) => `notExists(${name})`,
+};
 vi.mock('../src/models', () => ({
-   Challenges: { delete: () => ({ go }), create: (item: unknown) => ({ go: () => created(item) }) },
+   Challenges: {
+      delete: () => ({
+         where: (build: (attr: Record<string, string>, ops: typeof op) => string) => {
+            condition = build({ userId: 'userId', binding: 'binding' }, op);
+            return { go };
+         },
+      }),
+      create: (item: unknown) => ({ go: () => created(item) }),
+   },
 }));
 
-import { consumeChallenge, createChallenge, ParamError, AuthError, type ChallengeSpec } from '../src/utils';
+import { consumeChallenge, storeChallenge, ParamError, AuthError, type Challenge } from '../src/utils';
 import { UNKNOWN_USER_ID, CHALLENGE_TTL_SECS } from '../src/consts';
 
 const VALID_B64_CHALLENGE = 'aGVsbG8td29ybGQ'; // base64url
+const activeExpiresAt = Math.floor(Date.now() / 1000) + CHALLENGE_TTL_SECS;
 
 describe('consumeChallenge', () => {
    beforeEach(() => go.mockReset());
 
-   it('rejects an invalid base64 challenge', async () => {
-      await expect(consumeChallenge('has space!', { purpose: 'auth', userId: 'user1' })).rejects.toThrow(ParamError);
-      await expect(consumeChallenge('', { purpose: 'auth', userId: 'user1' })).rejects.toThrow(ParamError);
-   });
-
-   it('rejects when challenge is not found in table', async () => {
-      go.mockResolvedValueOnce({ data: null });
-      await expect(consumeChallenge(VALID_B64_CHALLENGE, { purpose: 'auth', userId: 'user1' })).rejects.toThrow(
+   it('rejects an invalid base64 challenge without a delete', async () => {
+      await expect(consumeChallenge({ challenge: 'has space!', purpose: 'auth', userId: 'user1' })).rejects.toThrow(
          ParamError,
       );
+      await expect(consumeChallenge({ challenge: '', purpose: 'auth', userId: 'user1' })).rejects.toThrow(ParamError);
+      expect(go).not.toHaveBeenCalled();
+   });
+
+   it('rejects a missing userId without a delete', async () => {
+      await expect(
+         consumeChallenge({ challenge: VALID_B64_CHALLENGE, purpose: 'auth', userId: undefined as unknown as string }),
+      ).rejects.toThrow(ParamError);
+      expect(go).not.toHaveBeenCalled();
+   });
+
+   it('rejects when the delete is rejected', async () => {
+      go.mockResolvedValueOnce({ rejected: true });
+      await expect(
+         consumeChallenge({ challenge: VALID_B64_CHALLENGE, purpose: 'auth', userId: 'user1' }),
+      ).rejects.toThrow(ParamError);
    });
 
    it('rejects an expired challenge', async () => {
       go.mockResolvedValueOnce({
+         rejected: false,
          data: {
             challenge: VALID_B64_CHALLENGE,
             purpose: 'auth',
@@ -57,168 +82,61 @@ describe('consumeChallenge', () => {
             expiresAt: Math.floor(Date.now() / 1000) - 10,
          },
       });
-      await expect(consumeChallenge(VALID_B64_CHALLENGE, { purpose: 'auth', userId: 'user1' })).rejects.toThrow(
-         AuthError,
+      await expect(
+         consumeChallenge({ challenge: VALID_B64_CHALLENGE, purpose: 'auth', userId: 'user1' }),
+      ).rejects.toThrow(AuthError);
+   });
+
+   it('returns the consumed challenge', async () => {
+      const item = {
+         challenge: VALID_B64_CHALLENGE,
+         purpose: 'auth' as const,
+         userId: 'user1',
+         expiresAt: activeExpiresAt,
+      };
+      go.mockResolvedValueOnce({ rejected: false, data: item });
+      expect(await consumeChallenge({ challenge: VALID_B64_CHALLENGE, purpose: 'auth', userId: 'user1' })).toEqual(
+         item,
       );
    });
 
-   describe('userId checks', () => {
-      const activeExpiresAt = Math.floor(Date.now() / 1000) + CHALLENGE_TTL_SECS;
+   describe('delete condition', () => {
+      const cases: [string, Challenge, string][] = [
+         [
+            'auth matches the caller or UNKNOWN_USER_ID, and no binding',
+            { challenge: VALID_B64_CHALLENGE, purpose: 'auth', userId: 'user1' },
+            `(userId=user1 OR userId=${UNKNOWN_USER_ID}) AND notExists(binding)`,
+         ],
+         [
+            'reg without a binding matches only the caller and no binding',
+            { challenge: VALID_B64_CHALLENGE, purpose: 'reg', userId: 'user1' },
+            'userId=user1 AND notExists(binding)',
+         ],
+         [
+            'reg with a binding matches only the caller and that binding',
+            { challenge: VALID_B64_CHALLENGE, purpose: 'reg', userId: 'user1', binding: 'bind123' },
+            'userId=user1 AND binding=bind123',
+         ],
+         [
+            'recover matches only the caller and its binding',
+            { challenge: VALID_B64_CHALLENGE, purpose: 'recover', userId: 'user1', binding: 'bind123' },
+            'userId=user1 AND binding=bind123',
+         ],
+      ];
 
-      it('accepts matching userId on a user-bound challenge', async () => {
-         const item = {
-            challenge: VALID_B64_CHALLENGE,
-            purpose: 'auth' as const,
-            userId: 'user1',
-            expiresAt: activeExpiresAt,
-         };
-         go.mockResolvedValueOnce({ data: item });
-         const result = await consumeChallenge(VALID_B64_CHALLENGE, { purpose: 'auth', userId: 'user1' });
-         expect(result).toEqual(item);
-      });
-
-      it('rejects when challenge is bound to a userId but caller provides a different userId', async () => {
-         go.mockResolvedValueOnce({
-            data: {
-               challenge: VALID_B64_CHALLENGE,
-               purpose: 'auth',
-               userId: 'user1',
-               expiresAt: activeExpiresAt,
-            },
-         });
-         await expect(consumeChallenge(VALID_B64_CHALLENGE, { purpose: 'auth', userId: 'user2' })).rejects.toThrow(
-            AuthError,
-         );
-      });
-
-      it('rejects when challenge is bound to a userId but caller provides undefined', async () => {
-         go.mockResolvedValueOnce({
-            data: {
-               challenge: VALID_B64_CHALLENGE,
-               purpose: 'auth',
-               userId: 'user1',
-               expiresAt: activeExpiresAt,
-            },
-         });
-         await expect(
-            consumeChallenge(VALID_B64_CHALLENGE, { purpose: 'auth', userId: undefined as unknown as string }),
-         ).rejects.toThrow(AuthError);
-      });
-
-      it('accepts when challenge is unbound (UNKNOWN_USER_ID) and caller provides any userId', async () => {
-         const item = {
-            challenge: VALID_B64_CHALLENGE,
-            purpose: 'auth' as const,
-            userId: UNKNOWN_USER_ID,
-            expiresAt: activeExpiresAt,
-         };
-         go.mockResolvedValueOnce({ data: item });
-         const result = await consumeChallenge(VALID_B64_CHALLENGE, { purpose: 'auth', userId: 'anyUser' });
-         expect(result).toEqual(item);
-      });
-
-      it('rejects an UNKNOWN_USER_ID challenge for a purpose other than auth', async () => {
-         go.mockResolvedValueOnce({
-            data: {
-               challenge: VALID_B64_CHALLENGE,
-               purpose: 'reg',
-               userId: UNKNOWN_USER_ID,
-               expiresAt: activeExpiresAt,
-            },
-         });
-         await expect(consumeChallenge(VALID_B64_CHALLENGE, { purpose: 'reg', userId: 'user1' })).rejects.toThrow(
-            AuthError,
-         );
-      });
-   });
-
-   describe('binding checks', () => {
-      const activeExpiresAt = Math.floor(Date.now() / 1000) + CHALLENGE_TTL_SECS;
-
-      it('accepts matching binding', async () => {
-         const item = {
-            challenge: VALID_B64_CHALLENGE,
-            purpose: 'recover' as const,
-            userId: 'user1',
-            binding: 'bind123',
-            expiresAt: activeExpiresAt,
-         };
-         go.mockResolvedValueOnce({ data: item });
-         const result = await consumeChallenge(VALID_B64_CHALLENGE, {
-            purpose: 'recover',
-            userId: 'user1',
-            binding: 'bind123',
-         });
-         expect(result).toEqual(item);
-      });
-
-      it('accepts when neither challenge nor caller has a binding', async () => {
-         const item = {
-            challenge: VALID_B64_CHALLENGE,
-            purpose: 'reg' as const,
-            userId: 'user1',
-            expiresAt: activeExpiresAt,
-         };
-         go.mockResolvedValueOnce({ data: item });
-         const result = await consumeChallenge(VALID_B64_CHALLENGE, { purpose: 'reg', userId: 'user1' });
-         expect(result).toEqual(item);
-      });
-
-      it('rejects when challenge has a binding but caller provides no binding', async () => {
-         go.mockResolvedValueOnce({
-            data: {
-               challenge: VALID_B64_CHALLENGE,
-               purpose: 'recover',
-               userId: 'user1',
-               binding: 'bind123',
-               expiresAt: activeExpiresAt,
-            },
-         });
-         await expect(
-            consumeChallenge(VALID_B64_CHALLENGE, { purpose: 'recover', userId: 'user1' } as unknown as ChallengeSpec),
-         ).rejects.toThrow(AuthError);
-      });
-
-      it('rejects when challenge has no binding but caller provides a binding', async () => {
-         go.mockResolvedValueOnce({
-            data: {
-               challenge: VALID_B64_CHALLENGE,
-               purpose: 'reg',
-               userId: 'user1',
-               expiresAt: activeExpiresAt,
-            },
-         });
-         await expect(
-            consumeChallenge(VALID_B64_CHALLENGE, {
-               purpose: 'reg',
-               userId: 'user1',
-               binding: 'bind123',
-            } as unknown as ChallengeSpec),
-         ).rejects.toThrow(AuthError);
-      });
-
-      it('rejects when challenge has a binding but caller provides a different binding', async () => {
-         go.mockResolvedValueOnce({
-            data: {
-               challenge: VALID_B64_CHALLENGE,
-               purpose: 'recover',
-               userId: 'user1',
-               binding: 'bind123',
-               expiresAt: activeExpiresAt,
-            },
-         });
-         await expect(
-            consumeChallenge(VALID_B64_CHALLENGE, { purpose: 'recover', userId: 'user1', binding: 'bindWrong' }),
-         ).rejects.toThrow(AuthError);
+      it.each(cases)('%s', async (_name, check, expected) => {
+         go.mockResolvedValueOnce({ rejected: false, data: { ...check, expiresAt: activeExpiresAt } });
+         await consumeChallenge(check);
+         expect(condition).toBe(expected);
       });
    });
 });
 
-describe('createChallenge', () => {
+describe('storeChallenge', () => {
    beforeEach(() => created.mockReset());
 
-   it('creates an auth challenge for UNKNOWN_USER_ID', async () => {
-      await createChallenge(VALID_B64_CHALLENGE, { purpose: 'auth', userId: UNKNOWN_USER_ID });
+   it('stores an auth challenge for UNKNOWN_USER_ID', async () => {
+      await storeChallenge({ challenge: VALID_B64_CHALLENGE, purpose: 'auth', userId: UNKNOWN_USER_ID });
       expect(created).toHaveBeenCalledWith({
          challenge: VALID_B64_CHALLENGE,
          purpose: 'auth',
@@ -227,15 +145,17 @@ describe('createChallenge', () => {
    });
 
    it('rejects UNKNOWN_USER_ID for a purpose other than auth', async () => {
-      await createChallenge(VALID_B64_CHALLENGE, { purpose: 'reg', userId: 'user1' });
+      await storeChallenge({ challenge: VALID_B64_CHALLENGE, purpose: 'reg', userId: 'user1' });
       expect(created).toHaveBeenCalledTimes(1);
 
-      await expect(createChallenge(VALID_B64_CHALLENGE, { purpose: 'reg', userId: UNKNOWN_USER_ID })).rejects.toThrow();
+      await expect(
+         storeChallenge({ challenge: VALID_B64_CHALLENGE, purpose: 'reg', userId: UNKNOWN_USER_ID }),
+      ).rejects.toThrow();
       expect(created).toHaveBeenCalledTimes(1);
    });
 
-   it('creates a confirm challenge with its binding', async () => {
-      await createChallenge(VALID_B64_CHALLENGE, { purpose: 'confirm', userId: 'user1', binding: 'bind123' });
+   it('stores a confirm challenge with its binding', async () => {
+      await storeChallenge({ challenge: VALID_B64_CHALLENGE, purpose: 'confirm', userId: 'user1', binding: 'bind123' });
       expect(created).toHaveBeenCalledWith({
          challenge: VALID_B64_CHALLENGE,
          purpose: 'confirm',
