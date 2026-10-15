@@ -90,7 +90,7 @@ async function recomputeUserCred(
    return Buffer.from(userCredBytes).toString('base64url');
 }
 
-function readPrfKey(
+export function readPrfKey(
    emulator: WebAuthnEmulator,
    origin: string,
    rpId: string,
@@ -154,6 +154,8 @@ export type CreatedTestUser = {
    userCred: string;
    recoveryWords: string;
    prf: boolean;
+   // The registration passkey
+   credentialId: string;
 };
 
 // Info passed to trackUser by tests that create users outside createTestUser
@@ -198,8 +200,8 @@ export type AuthFixture = {
    untrackUser: (userId: string) => void;
    // Runs a UI trigger that creates a passkey on the authenticator for an
    // already-tracked user ("New Passkey", recovery, etc.) — the app calls
-   // navigator.credentials.create, which the authenticator fulfills — then captures
-   // the verify response for the new credentialId and registers it.
+   // navigator.credentials.create, which the authenticator fulfills — then waits for
+   // the verify response and registers the new credentialId taken from the verify request.
    addPasskey: (userId: string, authenticator: Authenticator, trigger: () => Promise<void>) => Promise<string>;
    // Directs the next create at the authenticator and runs a UI trigger the client
    // is expected to refuse (e.g. a no-PRF passkey on a PRF account), which never
@@ -461,7 +463,14 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
          await page.getByRole('button', { name: /I saved my/ }).click();
          await expect(page).toHaveURL(/\/$/);
          await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({ timeout: 10000 });
-         return { userId: body.userId, userName, userCred, recoveryWords, prf: !!body.prf };
+         return {
+            userId: body.userId,
+            userName,
+            userCred,
+            recoveryWords,
+            prf: !!body.prf,
+            credentialId: body.pkId,
+         };
       };
 
       const trackUser = (info: TrackUserInfo): void => {
@@ -509,12 +518,18 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
                r.request().method() === 'POST',
          );
          await trigger();
-         const body = await (await verifyPromise).json();
-         if (!body.pkId) {
-            throw new Error(`addPasskey: missing pkId in verify response for ${userId}`);
+         const verifyResponse = await verifyPromise;
+         if (!verifyResponse.ok()) {
+            throw new Error(`addPasskey: verify failed with ${verifyResponse.status()} for ${userId}`);
          }
-         trackPasskey(userId, body.pkId);
-         return body.pkId;
+         // The response's pkId is the session's passkey, which is not the new one when a signed-in account
+         // adds a passkey. The request always carries the new credential.
+         const request = verifyResponse.request().postDataJSON() as api.PasskeyVerifyRequest | null;
+         if (!request?.id) {
+            throw new Error(`addPasskey: missing credential id in verify request for ${userId}`);
+         }
+         trackPasskey(userId, request.id);
+         return request.id;
       };
 
       const expectPasskeyRejected = async (
@@ -675,6 +690,13 @@ export async function toggleCredentials(page: Page): Promise<void> {
    await expect(page.locator('table.credtable tbody tr').first()).toBeVisible();
 }
 
+// Opens the credentials sidenav unless it is already open, where a toggle would close it.
+export async function openCredentials(page: Page): Promise<void> {
+   if (!(await page.locator('table.credtable tbody tr').first().isVisible())) {
+      await toggleCredentials(page);
+   }
+}
+
 // YUCK. This works around a race caused by Angular Zoneless + Material 3 controls +
 // Playwright. Use this rather than check() or uncheck(), which read the state once
 // right after the click and fail because zoneless renders aria-checked a moment later.
@@ -700,9 +722,7 @@ export async function expectPrfBadge(page: Page, prf: boolean): Promise<void> {
 // Triggers the credentials sidenav Refresh and asserts the resulting
 // /user request returned 200.
 export async function expectActiveServerSession(page: Page, expectedUserName?: string): Promise<void> {
-   if (!(await page.locator('table.credtable tbody tr').first().isVisible())) {
-      await toggleCredentials(page);
-   }
+   await openCredentials(page);
    const userResponse = waitForApiResponse(
       page,
       (response) => response.url().includes('/v1/user') && response.request().method() === 'GET',
