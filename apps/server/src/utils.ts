@@ -122,14 +122,14 @@ export async function storeChallenge(challenge: Challenge): Promise<void> {
 
 // Throws unless the proof is well formed, within the skew window, verifies, and its nonce has
 // not been seen before. Retaining the nonce is what bounds replay to the skew window.
-export async function verifyRecoverProof(
+export async function verifyRecoveryNonceProof(
    recoveryPubKey: string,
    userId: string,
    proof: api.RecoverProof,
    op: api.RecoveryOp,
 ): Promise<void> {
    const { timestamp, nonce, signature } = proof;
-   api.verifyRecoveryProof(recoveryPubKey, userId, timestamp, nonce, signature, op);
+   api.verifyRecoveryNonceProof(recoveryPubKey, userId, timestamp, nonce, signature, op);
 
    // Only needed for unauthenticated callers, but harmless for authenticated
    const outcome = await storeSingleUseNonce(nonce, 'nonce', userId);
@@ -141,11 +141,14 @@ export async function verifyRecoverProof(
    }
 }
 
-export async function verifySessionProof(verifiedUser: VerifiedUserItem, httpDetails: HttpDetails): Promise<void> {
+export async function verifyUserCredNonceProof(
+   verifiedUser: VerifiedUserItem,
+   httpDetails: HttpDetails,
+): Promise<void> {
    const bodyHashHex = crypto.createHash('sha256').update(httpDetails.rawBody, 'utf8').digest('hex');
    try {
       // A stale userCredPubKey after rotation surfaces here as a spurious 401.
-      api.verifyUserCredProof(
+      api.verifyUserCredNonceProof(
          verifiedUser.userCredPubKey!,
          verifiedUser.userId,
          httpDetails.method,
@@ -173,28 +176,7 @@ export async function verifySessionProof(verifiedUser: VerifiedUserItem, httpDet
    }
 }
 
-// The single-use challenge is the proof's nonce, so the proof needs no nonce store of its own
-export function verifySessionlessProof(
-   userId: string,
-   userCredPubKey: string,
-   challenge: string,
-   httpDetails: HttpDetails,
-): void {
-   const bodyHashHex = crypto.createHash('sha256').update(httpDetails.rawBody, 'utf8').digest('hex');
-   api.verifySessionlessProof(
-      userCredPubKey,
-      userId,
-      httpDetails.method,
-      httpDetails.path,
-      httpDetails.proofTimestamp!,
-      challenge,
-      bodyHashHex,
-      httpDetails.proofSignature!,
-      httpDetails.rawQueryString,
-   );
-}
-
-// BACKWARD COMPAT: exists only for the session-context fallback below
+// BACKWARD COMPAT: exists only for the nonce-context fallback below
 export function verifyRecoverConfirmProof(
    confirm: api.RecoverConfirmRequest,
    userCredPubKey: string,
@@ -204,7 +186,7 @@ export function verifyRecoverConfirmProof(
    // There is no body beyond the signature fields, so hash is for empty string
    const bodyHashHex = crypto.createHash('sha256').update('', 'utf8').digest('hex');
    try {
-      api.verifySessionlessProof(
+      api.verifyUserCredChallengeProof(
          userCredPubKey,
          userId,
          httpDetails.method,
@@ -216,8 +198,8 @@ export function verifyRecoverConfirmProof(
          httpDetails.rawQueryString,
       );
    } catch {
-      // BACKWARD COMPAT: accepts a confirm proof signed with the session context
-      api.verifyUserCredProof(
+      // BACKWARD COMPAT: accepts a confirm proof signed with the nonce context
+      api.verifyUserCredNonceProof(
          userCredPubKey,
          userId,
          httpDetails.method,

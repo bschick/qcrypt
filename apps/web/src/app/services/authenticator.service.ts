@@ -413,7 +413,7 @@ export class AuthenticatorService {
          try {
             const proofTs = String(Date.now());
             const proofNonce = bytesToBase64(getRandom(api.CHALLENGE_BYTES));
-            const proofSig = api.createUserCredProof(
+            const proofSig = api.createUserCredNonceProof(
                userCred,
                session.userId,
                method,
@@ -577,7 +577,7 @@ export class AuthenticatorService {
          recoveryPubKey,
          timestamp,
          nonce,
-         signature: api.createRecoveryProof(secret, this.userId, timestamp, nonce, 'replace'),
+         signature: api.createRecoveryNonceProof(secret, this.userId, timestamp, nonce, 'replace'),
          userCredEnc,
       };
 
@@ -1372,7 +1372,7 @@ export class AuthenticatorService {
             userId,
             timestamp: timestamp1,
             nonce,
-            signature: api.createRecoveryProof(secret, userId, timestamp1, nonce, 'recover'),
+            signature: api.createRecoveryNonceProof(secret, userId, timestamp1, nonce, 'recover'),
          };
 
          const startResp = await this._doFetch<api.RecoverStartResponse>({
@@ -1403,7 +1403,7 @@ export class AuthenticatorService {
 
          // No body beyond the signature fields, so hash empty string
          const bodyHashHex = bufferToHexString(await crypto.subtle.digest('SHA-256', new Uint8Array(0)));
-         const signature = api.createUserCredProof(
+         const signature = api.createUserCredNonceProof(
             userCred,
             userId,
             'POST',

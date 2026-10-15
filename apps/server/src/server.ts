@@ -55,7 +55,7 @@ import {
 import { ElectroError } from 'electrodb';
 import { KMSClient, EncryptCommand, DecryptCommand, GenerateRandomCommand } from '@aws-sdk/client-kms';
 
-import { hkdfSync, randomInt, randomBytes } from 'node:crypto';
+import { hkdfSync, randomInt, randomBytes, createHash } from 'node:crypto';
 import { setTimeout } from 'node:timers/promises';
 import { sign, verify, decode, type JwtPayload } from 'jsonwebtoken';
 import { postCleanupTestUsers, postConsistency, postLoadAAGUIDs, postMunge } from './internal';
@@ -66,9 +66,8 @@ import {
    sanitizeString,
    validB64,
    validUserCredEnc,
-   verifyRecoverProof,
-   verifySessionProof,
-   verifySessionlessProof,
+   verifyRecoveryNonceProof,
+   verifyUserCredNonceProof,
    verifyRecoverConfirmProof,
    base64UrlEncode,
    base64UrlDecode,
@@ -512,13 +511,18 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
    // BACKWARD COMPAT: support requests without proofSignature until clients update
    const hasProof = !!httpDetails.proofSignature;
    if (hasProof) {
-      verifySessionlessProof(
-         unverifiedUser.userId,
+      api.verifyUserCredChallengeProof(
          regVerifyRequest.userCredPubKey!,
+         unverifiedUser.userId,
+         httpDetails.method,
+         httpDetails.path,
+         httpDetails.proofTimestamp!,
          regVerifyRequest.challenge,
-         httpDetails,
+         createHash('sha256').update(httpDetails.rawBody, 'utf8').digest('hex'),
+         httpDetails.proofSignature!,
+         httpDetails.rawQueryString,
       );
-      api.verifyRecoveryRegisterProof(
+      api.verifyRecoveryChallengeProof(
          recoveryPubKey,
          unverifiedUser.userId,
          regVerifyRequest.challenge,
@@ -669,11 +673,16 @@ async function postRecoverVerify(httpDetails: HttpDetails): Promise<Response> {
 
    // BACKWARD COMPAT: a request without a proof is not checked
    if (httpDetails.proofSignature) {
-      verifySessionlessProof(
-         unverifiedUser.userId,
+      api.verifyUserCredChallengeProof(
          unverifiedUser.userCredPubKey!,
+         unverifiedUser.userId,
+         httpDetails.method,
+         httpDetails.path,
+         httpDetails.proofTimestamp!,
          recoverVerifyRequest.challenge,
-         httpDetails,
+         createHash('sha256').update(httpDetails.rawBody, 'utf8').digest('hex'),
+         httpDetails.proofSignature!,
+         httpDetails.rawQueryString,
       );
    }
 
@@ -1215,7 +1224,7 @@ async function putRecover3Key(httpDetails: HttpDetails, verifiedUser?: VerifiedU
    }
 
    // Verified against the submitted key, so the caller must hold its secret.
-   await verifyRecoverProof(recoveryPubKey, verifiedUser.userId, recover3KeyRequest, 'replace');
+   await verifyRecoveryNonceProof(recoveryPubKey, verifiedUser.userId, recover3KeyRequest, 'replace');
 
    const updates: { recoveryPubKey: string; userCredEnc?: string } = {
       recoveryPubKey,
@@ -1571,7 +1580,7 @@ async function postRecover3(httpDetails: HttpDetails): Promise<Response> {
 
    // This call takes < 1ms to run on a warm server, so detecting timing
    // differences to guess valid userId is not practicle
-   await verifyRecoverProof(unverifiedUser.recoveryPubKey, userId, recover3Request, 'recover');
+   await verifyRecoveryNonceProof(unverifiedUser.recoveryPubKey, userId, recover3Request, 'recover');
 
    // Now the user is confirmed
    const verifiedUser = checkVerified(unverifiedUser, userId);
@@ -1852,7 +1861,7 @@ export async function handler(event: APIGatewayProxyEventV2, _context: Context) 
          // these throw an exception if cookie or headerCsrf is invalid
          verifiedUser = await verifyCookie(httpDetails.cookie, httpDetails.rpID);
          await verifyCsrf(verifiedUser, httpDetails.checkCsrf, headerCsrf);
-         await verifySessionProof(verifiedUser, httpDetails);
+         await verifyUserCredNonceProof(verifiedUser, httpDetails);
       }
 
       if (httpDetails.version === INTERNAL_VERSION) {

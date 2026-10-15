@@ -36,8 +36,8 @@ import * as cc from '@qcrypt/crypto/consts';
 // sends the wrong key before anything depends on it.
 
 const USERCRED_KEY_CONTEXT = 'UCredKey';
-const USERCRED_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
-const USERCRED_SESSIONLESS_SIG_CONTEXT = 'qcrypt/usercred/sessionless/v1';
+const USERCRED_NONCE_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
+const USERCRED_CHALLENGE_SIG_CONTEXT = 'qcrypt/usercred/challenge/v1';
 
 const RECOVERY_KEY_CONTEXT = 'RecovKey';
 const RECOVERY_REGISTER_SIG_CONTEXT = 'qcrypt/recovery/register/v1';
@@ -107,7 +107,7 @@ function signUserCredMessage(userCred: Uint8Array, message: Uint8Array, context:
    }
 }
 
-export function createUserCredProof(
+export function createUserCredNonceProof(
    userCred: Uint8Array,
    userId: string,
    method: string,
@@ -120,11 +120,11 @@ export function createUserCredProof(
    return signUserCredMessage(
       userCred,
       buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
-      USERCRED_SIG_CONTEXT,
+      USERCRED_NONCE_SIG_CONTEXT,
    );
 }
 
-export function createSessionlessProof(
+export function createUserCredChallengeProof(
    userCred: Uint8Array,
    userId: string,
    method: string,
@@ -137,11 +137,11 @@ export function createSessionlessProof(
    return signUserCredMessage(
       userCred,
       buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
-      USERCRED_SESSIONLESS_SIG_CONTEXT,
+      USERCRED_CHALLENGE_SIG_CONTEXT,
    );
 }
 
-export function verifyUserCredProof(
+export function verifyUserCredNonceProof(
    pubKey: string,
    userId: string,
    method: string,
@@ -158,11 +158,11 @@ export function verifyUserCredProof(
       base64ToBytes(pubKey),
       buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
       base64ToBytes(signature),
-      USERCRED_SIG_CONTEXT,
+      USERCRED_NONCE_SIG_CONTEXT,
    );
 }
 
-export function verifySessionlessProof(
+export function verifyUserCredChallengeProof(
    pubKey: string,
    userId: string,
    method: string,
@@ -179,7 +179,7 @@ export function verifySessionlessProof(
       base64ToBytes(pubKey),
       buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
       base64ToBytes(signature),
-      USERCRED_SESSIONLESS_SIG_CONTEXT,
+      USERCRED_CHALLENGE_SIG_CONTEXT,
    );
 }
 
@@ -190,7 +190,7 @@ export function recoverySecret(recoveryId: Uint8Array, userId: string): Uint8Arr
    return concatArrays([recoveryId, base64ToBytes(userId)]);
 }
 
-function buildRecoveryMessage(userId: string, timestampMs: string, nonce: string): Uint8Array<ArrayBuffer> {
+function buildRecoveryNonceMessage(userId: string, timestampMs: string, nonce: string): Uint8Array<ArrayBuffer> {
    base64ToBytes(userId, cc.USERID_BYTES, 'userId');
    base64ToBytes(nonce, CHALLENGE_BYTES, 'nonce');
    const message = [userId, timestampMs, nonce].join('\n');
@@ -203,7 +203,7 @@ export function getRecoveryPubKey(recoverySecret: Uint8Array): string {
    return bytesToBase64(pubKey);
 }
 
-export function createRecoveryProof(
+export function createRecoveryNonceProof(
    recoverySecret: Uint8Array,
    userId: string,
    timestampMs: string,
@@ -212,14 +212,14 @@ export function createRecoveryProof(
 ): string {
    const { secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
    try {
-      const message = buildRecoveryMessage(userId, timestampMs, nonce);
+      const message = buildRecoveryNonceMessage(userId, timestampMs, nonce);
       return bytesToBase64(createProof(secKey, message, RECOVERY_SIG_CONTEXTS[op]));
    } finally {
       secKey.fill(0);
    }
 }
 
-export function verifyRecoveryProof(
+export function verifyRecoveryNonceProof(
    pubKey: string,
    userId: string,
    timestampMs: string,
@@ -230,7 +230,7 @@ export function verifyRecoveryProof(
    checkKeyAndSignature(pubKey, signature);
    checkTimestamp(timestampMs);
    const keyBytes = base64ToBytes(pubKey);
-   const message = buildRecoveryMessage(userId, timestampMs, nonce);
+   const message = buildRecoveryNonceMessage(userId, timestampMs, nonce);
    const signatureBytes = base64ToBytes(signature);
 
    try {
@@ -243,7 +243,7 @@ export function verifyRecoveryProof(
 
 // Signed message includes userCredPubKey so each of the two keys a registration stores is covered
 // by a proof from the other. The single-use registration challenge serves as the nonce.
-function buildRecoveryRegisterMessage(
+function buildRecoveryChallengeMessage(
    userId: string,
    challenge: string,
    userCredPubKey: string,
@@ -255,7 +255,7 @@ function buildRecoveryRegisterMessage(
    return new TextEncoder().encode(message);
 }
 
-export function createRecoveryRegisterProof(
+export function createRecoveryChallengeProof(
    recoverySecret: Uint8Array,
    userId: string,
    challenge: string,
@@ -263,14 +263,14 @@ export function createRecoveryRegisterProof(
 ): string {
    const { secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
    try {
-      const message = buildRecoveryRegisterMessage(userId, challenge, userCredPubKey);
+      const message = buildRecoveryChallengeMessage(userId, challenge, userCredPubKey);
       return bytesToBase64(createProof(secKey, message, RECOVERY_REGISTER_SIG_CONTEXT));
    } finally {
       secKey.fill(0);
    }
 }
 
-export function verifyRecoveryRegisterProof(
+export function verifyRecoveryChallengeProof(
    pubKey: string,
    userId: string,
    challenge: string,
@@ -280,7 +280,7 @@ export function verifyRecoveryRegisterProof(
    checkKeyAndSignature(pubKey, signature);
    verifyProof(
       base64ToBytes(pubKey),
-      buildRecoveryRegisterMessage(userId, challenge, userCredPubKey),
+      buildRecoveryChallengeMessage(userId, challenge, userCredPubKey),
       base64ToBytes(signature),
       RECOVERY_REGISTER_SIG_CONTEXT,
    );

@@ -442,7 +442,7 @@ describe('AuthenticatorService', () => {
             expect(body.userId).toBe(userId);
             const pubKey = api.getRecoveryPubKey(secret);
             expect(() =>
-               api.verifyRecoveryProof(pubKey, userId, body.timestamp, body.nonce, body.signature, 'recover'),
+               api.verifyRecoveryNonceProof(pubKey, userId, body.timestamp, body.nonce, body.signature, 'recover'),
             ).not.toThrow();
          }
       });

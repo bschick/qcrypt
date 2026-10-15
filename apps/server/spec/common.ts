@@ -87,7 +87,7 @@ export async function makeProofHeaders(
    // re-encoded URL pathname.
    const pathname = path.split('?')[0];
    const queryString = path.split('?')[1] || '';
-   const signature = api.createUserCredProof(
+   const signature = api.createUserCredNonceProof(
       Buffer.from(userCred, 'base64url'),
       userId,
       method,

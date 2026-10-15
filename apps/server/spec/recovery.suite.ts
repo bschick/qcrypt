@@ -60,7 +60,7 @@ async function recoveryKeyBody(
       recoveryPubKey: api.getRecoveryPubKey(secret),
       timestamp,
       nonce,
-      signature: api.createRecoveryProof(proofSecret, user.userId, timestamp, nonce, 'replace'),
+      signature: api.createRecoveryNonceProof(proofSecret, user.userId, timestamp, nonce, 'replace'),
    };
    if (user.prf) {
       body.userCredEnc = await prfEncrypt(base64ToBytes(user.userCred), secret.slice(0), user.userId);
@@ -88,7 +88,7 @@ function recover3Body(
       userId: user.userId,
       timestamp,
       nonce,
-      signature: api.createRecoveryProof(secret, user.userId, timestamp, nonce, 'recover'),
+      signature: api.createRecoveryNonceProof(secret, user.userId, timestamp, nonce, 'recover'),
    };
 }
 
@@ -105,7 +105,7 @@ function confirmBody(
       userId: user.userId,
       challenge,
       timestamp,
-      signature: api.createUserCredProof(
+      signature: api.createUserCredNonceProof(
          base64ToBytes(userCred),
          user.userId,
          'POST',
@@ -648,7 +648,7 @@ export function recoverySuite(prf: boolean): void {
                userId: unknown,
                timestamp,
                nonce,
-               signature: api.createRecoveryProof(user.recoverySecret, unknown, timestamp, nonce, 'recover'),
+               signature: api.createRecoveryNonceProof(user.recoverySecret, unknown, timestamp, nonce, 'recover'),
             },
             {},
             '',
