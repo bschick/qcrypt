@@ -162,6 +162,8 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 | Web unit tests (all browsers) | `pnpm test:web:all` | `pnpm nx test web --runnerConfig=apps/web/vitest-all.config.ts` | |
 | Web E2E tests (local) | `pnpm test:e2e` | | *Playwright; starts and stops its own dev server, so port 4200 must be free* |
 | Web E2E tests (prod) | `pnpm test:e2e:prod` | | *Playwright against quickcrypt.org* |
+| Web heap secret scans (local) | `pnpm test:secrets` | | *Playwright, Chromium only; scans the page's memory for secrets after each operation. Serves the optimized `test` build, because the dev build keeps destroyed views reachable and the scans report them as leaks. Port 4200 must be free* |
+| Web heap secret scans (prod) | `pnpm test:secrets:prod` | | *Playwright against quickcrypt.org; creates and deletes two test accounts* |
 | API full fuzz tests (test) | `pnpm test:fuzz` | | *Vitest against test.quickcrypt.org (`QC_FULL_FUZZ=true`); the small fuzz also runs in every `pnpm test:server`* |
 | API full fuzz tests (prod) | `pnpm test:fuzz:prod` | | *Vitest against quickcrypt.org* |
 | Server unit tests | `pnpm test:server` | `pnpm nx test server` | |
