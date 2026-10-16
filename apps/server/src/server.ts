@@ -498,7 +498,11 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
       throw new ParamError('invalid user credential data');
    }
    if (hasUserCred) {
-      base64ToBytes(regVerifyRequest.userCred!, cc.USERCRED_BYTES, 'user credential');
+      const userCred = base64ToBytes(regVerifyRequest.userCred!, cc.USERCRED_BYTES, 'user credential');
+      // Confirm the userCred derives the public key provided
+      if (api.getUserCredPubKey(userCred) !== regVerifyRequest.userCredPubKey) {
+         throw new ParamError('user credential does not match its public key');
+      }
    }
    if (hasPrf || hasUserCred) {
       base64ToBytes(regVerifyRequest.userCredPubKey!, api.PROOF_PUBKEY_BYTES, 'user credential public key');
@@ -508,8 +512,9 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
    const recoveryPubKey = regVerifyRequest.recoveryPubKey;
    base64ToBytes(recoveryPubKey, api.PROOF_PUBKEY_BYTES, 'recovery public key');
 
-   // BACKWARD COMPAT: support requests without proofSignature until clients update
-   const hasProof = !!httpDetails.proofSignature;
+   // BACKWARD COMPAT: only a challenge proof carries the challenge as its nonce. Until clients update,
+   // a request without one is the old format, and any nonce proof it carries is ignored.
+   const hasProof = httpDetails.proofNonce === regVerifyRequest.challenge;
    if (hasProof) {
       api.verifyUserCredChallengeProof(
          regVerifyRequest.userCredPubKey!,
@@ -671,8 +676,9 @@ async function postRecoverVerify(httpDetails: HttpDetails): Promise<Response> {
       throw new ParamError(`unexpected passkey userCred ciphertext ${unverifiedUser.userId}`);
    }
 
-   // BACKWARD COMPAT: a request without a proof is not checked
-   if (httpDetails.proofSignature) {
+   // BACKWARD COMPAT: a request without a challenge proof is not checked, and any nonce proof it
+   // carries is ignored
+   if (httpDetails.proofNonce === recoverVerifyRequest.challenge) {
       api.verifyUserCredChallengeProof(
          unverifiedUser.userCredPubKey!,
          unverifiedUser.userId,
