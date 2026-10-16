@@ -130,13 +130,13 @@ export function createUserCredChallengeProof(
    method: string,
    path: string,
    timestampMs: string,
-   nonce: string,
+   challenge: string,
    bodyHashHex: string,
    queryString: string = '',
 ): string {
    return signUserCredMessage(
       userCred,
-      buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
+      buildUserCredMessage(userId, method, path, timestampMs, challenge, bodyHashHex, queryString),
       USERCRED_CHALLENGE_SIG_CONTEXT,
    );
 }
@@ -168,7 +168,7 @@ export function verifyUserCredChallengeProof(
    method: string,
    path: string,
    timestampMs: string,
-   nonce: string,
+   challenge: string,
    bodyHashHex: string,
    signature: string,
    queryString: string = '',
@@ -177,7 +177,7 @@ export function verifyUserCredChallengeProof(
    checkTimestamp(timestampMs);
    verifyProof(
       base64ToBytes(pubKey),
-      buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
+      buildUserCredMessage(userId, method, path, timestampMs, challenge, bodyHashHex, queryString),
       base64ToBytes(signature),
       USERCRED_CHALLENGE_SIG_CONTEXT,
    );

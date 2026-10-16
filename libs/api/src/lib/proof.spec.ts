@@ -310,13 +310,13 @@ describe('recovery nonce proof', () => {
 
 describe('userCred challenge proof', () => {
    let userId: string;
-   let nonce: string;
+   let challenge: string;
    let timestamp: string;
 
    beforeEach(async () => {
       await cryptoReady();
       userId = bytesToBase64(getRandom(16));
-      nonce = bytesToBase64(getRandom(32));
+      challenge = bytesToBase64(getRandom(32));
       timestamp = String(Date.now());
    });
 
@@ -329,29 +329,39 @@ describe('userCred challenge proof', () => {
          'POST',
          '/v1/reg/verify',
          timestamp,
-         nonce,
+         challenge,
          'aa',
       );
       expect(() =>
-         verifyUserCredChallengeProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa', signature),
+         verifyUserCredChallengeProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, challenge, 'aa', signature),
       ).not.toThrow();
    });
 
    it('throw when a challenge proof is verified as a nonce proof, or the reverse', () => {
       const userCred = getRandom(32);
       const pubKey = getUserCredPubKey(userCred);
+      const nonce = challenge;
       const challengeSig = createUserCredChallengeProof(
          userCred,
          userId,
          'POST',
          '/v1/reg/verify',
          timestamp,
-         nonce,
+         challenge,
          'aa',
       );
       const nonceSig = createUserCredNonceProof(userCred, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa');
       expect(() =>
-         verifyUserCredChallengeProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa', challengeSig),
+         verifyUserCredChallengeProof(
+            pubKey,
+            userId,
+            'POST',
+            '/v1/reg/verify',
+            timestamp,
+            challenge,
+            'aa',
+            challengeSig,
+         ),
       ).not.toThrow();
       expect(() =>
          verifyUserCredNonceProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa', nonceSig),
@@ -362,7 +372,7 @@ describe('userCred challenge proof', () => {
          verifyUserCredNonceProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa', challengeSig),
       ).toThrow(/proof verification failed/);
       expect(() =>
-         verifyUserCredChallengeProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa', nonceSig),
+         verifyUserCredChallengeProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, challenge, 'aa', nonceSig),
       ).toThrow(/proof verification failed/);
    });
 
@@ -375,17 +385,26 @@ describe('userCred challenge proof', () => {
          'POST',
          '/v1/reg/verify',
          timestamp,
-         nonce,
+         challenge,
          'aa',
       );
       expect(() =>
-         verifyUserCredChallengeProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'aa', signature),
+         verifyUserCredChallengeProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, challenge, 'aa', signature),
       ).not.toThrow();
       expect(() =>
-         verifyUserCredChallengeProof(pubKey, userId, 'POST', '/v1/recover/verify', timestamp, nonce, 'aa', signature),
+         verifyUserCredChallengeProof(
+            pubKey,
+            userId,
+            'POST',
+            '/v1/recover/verify',
+            timestamp,
+            challenge,
+            'aa',
+            signature,
+         ),
       ).toThrow(/proof verification failed/);
       expect(() =>
-         verifyUserCredChallengeProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, nonce, 'bb', signature),
+         verifyUserCredChallengeProof(pubKey, userId, 'POST', '/v1/reg/verify', timestamp, challenge, 'bb', signature),
       ).toThrow(/proof verification failed/);
    });
 });
