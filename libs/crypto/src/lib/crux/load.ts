@@ -15,19 +15,30 @@ export interface Crux {
 }
 
 export async function loadCrux(): Promise<Crux> {
-   await init({ module_or_path: new Uint8Array(base64URLStringToBuffer(CRUX_WASM_BASE64)) });
+   const { memory } = await init({ module_or_path: new Uint8Array(base64URLStringToBuffer(CRUX_WASM_BASE64)) });
+   const [stackLow, stackHigh] = crux.stack_bounds();
+   // libcrux leaves key material in its stack frames. No frame is live once a call returns, so the whole stack
+   // can be zeroed then. memory.buffer is read each time because growing the memory replaces it.
+   const zeroStackAfter = <T>(call: () => T): T => {
+      try {
+         return call();
+      } finally {
+         new Uint8Array(memory.buffer, stackLow, stackHigh - stackLow).fill(0);
+      }
+   };
    return {
-      ml_dsa_65_keygen(seed: Uint8Array) {
-         const pair = crux.ml_dsa_65_keygen(seed);
-         // getters copy pk/sk out of wasm, so free() releases the wasm keypair (and the secret) without invalidating them
-         try {
-            return { pubKey: ensureArrayBuffer(pair.pk), secKey: ensureArrayBuffer(pair.sk) };
-         } finally {
-            pair.free();
-         }
-      },
+      ml_dsa_65_keygen: (seed: Uint8Array) =>
+         zeroStackAfter(() => {
+            const pair = crux.ml_dsa_65_keygen(seed);
+            // getters copy pk/sk out of wasm, so free() releases the wasm keypair (and the secret) without invalidating them
+            try {
+               return { pubKey: ensureArrayBuffer(pair.pk), secKey: ensureArrayBuffer(pair.sk) };
+            } finally {
+               pair.free();
+            }
+         }),
       ml_dsa_65_sign: (sk, message, context, randomness) =>
-         ensureArrayBuffer(crux.ml_dsa_65_sign(sk, message, context, randomness)),
+         zeroStackAfter(() => ensureArrayBuffer(crux.ml_dsa_65_sign(sk, message, context, randomness))),
       ml_dsa_65_verify: crux.ml_dsa_65_verify,
    };
 }

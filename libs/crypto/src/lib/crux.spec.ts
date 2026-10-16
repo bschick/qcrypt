@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { cryptoReady, getCrux } from './crypto';
+import init, { stack_bounds } from './crux/qc_crux.js';
 
 const CONTEXT = new TextEncoder().encode('qcrypt/proof/v1');
 
@@ -36,6 +37,63 @@ describe('crux ML-DSA-65', () => {
       tampered[0] ^= 0x01;
       expect(crux.ml_dsa_65_verify(pair.pubKey, message, CONTEXT, tampered)).toBe(false);
       expect(crux.ml_dsa_65_verify(pair.pubKey, new TextEncoder().encode('different'), CONTEXT, signature)).toBe(false);
+   });
+});
+
+// wasm memory outlives each call, so anything a call leaves there is readable until a later call overwrites it
+describe('crux memory after each call', () => {
+   let memory: WebAssembly.Memory;
+
+   beforeEach(async () => {
+      await cryptoReady();
+      // Returns the instance that cryptoReady created
+      memory = (await init()).memory;
+   });
+
+   function indexOf(haystack: Uint8Array, needle: Uint8Array): number {
+      for (let pos = haystack.indexOf(needle[0]); pos !== -1; pos = haystack.indexOf(needle[0], pos + 1)) {
+         if (needle.every((byte, offset) => haystack[pos + offset] === byte)) {
+            return pos;
+         }
+      }
+      return -1;
+   }
+
+   it('holds no seed or signing key bytes, and an all-zero stack, after keygen and sign', () => {
+      // The stack can hold transformed key material that a search for the key bytes misses.
+      // stack_bounds runs before keygen, so the stack zeroing after keygen also clears its frame.
+      const [stackLow, stackHigh] = stack_bounds();
+      expect(stackHigh).toBeGreaterThan(stackLow);
+      const crux = getCrux();
+      const seed = new Uint8Array(randomBytes(32));
+      const { secKey } = crux.ml_dsa_65_keygen(seed);
+      // ML-DSA-65 signing keys start with rho (32 bytes), K (32 bytes) and tr (64 bytes), then s1
+      const secrets = {
+         seed,
+         K: secKey.slice(32, 64),
+         s1: secKey.slice(128, 160),
+         secKeyEnd: secKey.slice(-32),
+      };
+      const nowhere = { seed: -1, K: -1, s1: -1, secKeyEnd: -1 };
+      const expectNoResidue = (step: string) => {
+         const bytes = new Uint8Array(memory.buffer);
+         const found = Object.fromEntries(
+            Object.entries(secrets).map(([name, secret]) => [name, indexOf(bytes, secret)]),
+         );
+         expect(found, `${step}: offsets of secrets in wasm memory`).toEqual(nowhere);
+         expect(
+            bytes.subarray(stackLow, stackHigh).findIndex((byte) => byte !== 0),
+            `${step}: stack`,
+         ).toBe(-1);
+      };
+
+      expectNoResidue('keygen');
+      const message = new TextEncoder().encode('the exact request');
+      crux.ml_dsa_65_sign(secKey, message, CONTEXT, new Uint8Array(randomBytes(32)));
+      expectNoResidue('sign');
+      // Copies the signing key onto the stack before rejecting the randomness
+      expect(() => crux.ml_dsa_65_sign(secKey, message, CONTEXT, new Uint8Array(31))).toThrow();
+      expectNoResidue('failed sign');
    });
 });
 
