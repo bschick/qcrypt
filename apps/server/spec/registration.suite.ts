@@ -24,14 +24,15 @@ import { describe, it, expect } from 'vitest';
 import { bytesToBase64, getRandom } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import * as api from '@qcrypt/api';
-import { USERCRED_ENC_MIN_BYTES, USERCRED_ENC_MAX_BYTES } from '../src/consts';
+import { USERCRED_ENC_MIN_BYTES, USERCRED_ENC_MAX_BYTES, PROOF_SKEW_MS } from '../src/consts';
 import {
    type Registration,
    type RegVerifyOpts,
    buildRegBody,
    expectRegistered,
    expectRegRejected,
-   makeProofHeaders,
+   makeChallengeProofHeaders,
+   makeNonceProofHeaders,
    postJson,
    postRegVerify,
    testUserName,
@@ -39,11 +40,12 @@ import {
 
 function recoverySignature(
    reg: Registration,
-   opts: { recoverySecret?: Uint8Array; challenge?: string; userCredPubKey?: string },
+   opts: { recoverySecret?: Uint8Array; timestampMs?: string; challenge?: string; userCredPubKey?: string },
 ): string {
    return api.createRecoveryChallengeProof(
       opts.recoverySecret ?? reg.recoverySecret,
       reg.userId,
+      opts.timestampMs ?? reg.body.recoveryTimestamp!,
       opts.challenge ?? reg.body.challenge,
       opts.userCredPubKey ?? reg.body.userCredPubKey!,
    );
@@ -55,6 +57,7 @@ function oldFormat(reg: Registration, prf: boolean): RegVerifyOpts {
    return {
       body: {
          userCred: undefined,
+         recoveryTimestamp: undefined,
          recoverySignature: undefined,
          userCredPubKey: prf ? reg.body.userCredPubKey : undefined,
       },
@@ -110,7 +113,8 @@ export function registrationSuite(prf: boolean): void {
          });
       });
 
-      // Both proofs come from the other userCred, so they match the substitute userCredPubKey
+      // Both proofs come from the other userCred. For PRF, only the challenge binding rejects this
+      // request. For no-PRF, the original userCred in the body fails to match the new key first.
       it('rejects a userCredPubKey other than the one sent to reg/options', async () => {
          const reg = await buildRegBody(testUserName(), prf);
          const otherUserCred = getRandom(cc.USERCRED_BYTES);
@@ -149,6 +153,60 @@ export function registrationSuite(prf: boolean): void {
       it('rejects a request without its userCred proof', async () => {
          const reg = await buildRegBody(testUserName(), prf);
          await expectRegRejected(reg, { headers: {} });
+      });
+
+      it('rejects a request with a proof but without userCred or its ciphertexts', async () => {
+         const reg = await buildRegBody(testUserName(), prf);
+         await expectRegRejected(reg, {
+            body: { userCred: undefined, passkeyUserCredEnc: undefined, recoveryUserCredEnc: undefined },
+         });
+      });
+
+      it('rejects a userCred proof timestamp outside the skew window', async () => {
+         const reg = await buildRegBody(testUserName(), prf);
+         const stale = String(Date.now() - 2 * PROOF_SKEW_MS);
+         const headers = makeChallengeProofHeaders(
+            '/v1/reg/verify',
+            reg.body,
+            reg.userCred,
+            reg.userId,
+            reg.body.challenge,
+            { timestampMs: stale },
+         );
+         await expectRegRejected(reg, { headers });
+      });
+
+      it('rejects a recovery proof timestamp outside the skew window', async () => {
+         const reg = await buildRegBody(testUserName(), prf);
+         const stale = String(Date.now() - 2 * PROOF_SKEW_MS);
+         await expectRegRejected(reg, {
+            body: { recoveryTimestamp: stale, recoverySignature: recoverySignature(reg, { timestampMs: stale }) },
+         });
+      });
+
+      it('rejects a recovery proof in nonce form', async () => {
+         const reg = await buildRegBody(testUserName(), prf);
+         const nonceSig = api.createRecoveryNonceProof(
+            reg.recoverySecret,
+            reg.userId,
+            reg.body.recoveryTimestamp!,
+            reg.body.challenge,
+            'recover',
+         );
+         await expectRegRejected(reg, { body: { recoverySignature: nonceSig } });
+      });
+
+      it('rejects a userCred proof in nonce form', async () => {
+         const reg = await buildRegBody(testUserName(), prf);
+         const headers = await makeNonceProofHeaders(
+            'POST',
+            '/v1/reg/verify',
+            Buffer.from(JSON.stringify(reg.body), 'utf8'),
+            bytesToBase64(reg.userCred),
+            reg.userId,
+            { nonce: reg.body.challenge },
+         );
+         await expectRegRejected(reg, { headers });
       });
 
       it('rejects an old-format request after reg/options received userCredPubKey', async () => {
@@ -290,7 +348,7 @@ export function registrationSuite(prf: boolean): void {
       // A client signed in to another account sends that session's proof with every request
       it('ignores a session proof on an old-format request', async () => {
          const reg = await buildRegBody(testUserName(), prf, false);
-         const sessionProof = await makeProofHeaders(
+         const sessionProof = await makeNonceProofHeaders(
             'POST',
             '/v1/reg/verify',
             undefined,

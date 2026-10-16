@@ -25,7 +25,7 @@ import { bytesToBase64, cryptoReady, getRandom } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import * as api from '@qcrypt/api';
 import { postJson, testUserName } from './common';
-import { ALGIDS } from '../src/consts';
+import { ALGIDS, UNAME_MIN_LEN, UNAME_MAX_LEN } from '../src/consts';
 
 const ML_DSA_65 = -49;
 
@@ -55,7 +55,7 @@ describe('registration options input validation', () => {
 
    // reg/options is unauthenticated, so every rejection is a uniform 401. A valid request goes first
    // to show that the replaced fields alone cause the rejection.
-   async function expectRejected(fields: Record<string, string>): Promise<void> {
+   async function expectRejected(fields: Record<string, string | null>): Promise<void> {
       const valid = { userName: testUserName(), userCredPubKey: api.getUserCredPubKey(getRandom(cc.USERCRED_BYTES)) };
       const ok = await postJson('/v1/reg/options', valid, {}, '');
       expect(ok.status).toBe(200);
@@ -64,10 +64,14 @@ describe('registration options input validation', () => {
    }
 
    it('rejects a user name shorter than 6 or longer than 31 characters', async () => {
-      await expectRejected({ userName: 'abcde' });
-      await expectRejected({ userName: 'a'.repeat(32) });
+      await expectRejected({ userName: 'a'.repeat(UNAME_MIN_LEN - 1) });
+      await expectRejected({ userName: 'a'.repeat(UNAME_MAX_LEN + 1) });
    });
    it('rejects a wrong-length userCredPubKey', () =>
       expectRejected({ userCredPubKey: bytesToBase64(getRandom(cc.USERCRED_BYTES)) }));
    it('rejects a non-base64 userCredPubKey', () => expectRejected({ userCredPubKey: 'not b64 $$$' }));
+   it('rejects an empty or null userCredPubKey', async () => {
+      await expectRejected({ userCredPubKey: '' });
+      await expectRejected({ userCredPubKey: null });
+   });
 });

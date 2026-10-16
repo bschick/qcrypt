@@ -196,6 +196,46 @@ export function coreSuite(prf: boolean): void {
             expect(delRes.status).toBe(200);
          });
 
+         it("should reject a passkey add with another account's challenge", async () => {
+            const other = await registerTestUser(prf);
+            try {
+               const otherOpts = await getJson('/v1/passkeys/options', { 'x-csrf-token': other.csrf }, other.cookie);
+               expect(otherOpts.status).toBe(200);
+
+               setSessionSigner(userId, userCred);
+               const stolen = await registerNewCredential(user, otherOpts.data);
+               const stolenRes = await postJson(
+                  '/v1/passkeys/verify',
+                  api.makeAddVerifyRequest(stolen.attestation as api.RegistrationFields, {
+                     challenge: otherOpts.data.challenge,
+                     passkeyUserCredEnc: stolen.passkeyUserCredEnc,
+                  }),
+                  { 'x-csrf-token': csrfToken },
+                  sessCookie,
+               );
+               expect(stolenRes.status).toBe(400);
+
+               // The rejection left the challenge unused, so the account it was issued to can still use it
+               setSessionSigner(other.userId, other.userCred);
+               const added = await registerNewCredential(other, otherOpts.data);
+               const addedRes = await postJson(
+                  '/v1/passkeys/verify',
+                  api.makeAddVerifyRequest(added.attestation as api.RegistrationFields, {
+                     challenge: otherOpts.data.challenge,
+                     passkeyUserCredEnc: added.passkeyUserCredEnc,
+                  }),
+                  { 'x-csrf-token': other.csrf },
+                  other.cookie,
+               );
+               expect(addedRes.status).toBe(200);
+               await expectPasskeyDeleted(added.attestation.id, other.csrf, other.cookie);
+            } finally {
+               setSessionSigner(other.userId, other.userCred);
+               await expectPasskeyDeleted(other.credId, other.csrf, other.cookie);
+               setSessionSigner(userId, userCred);
+            }
+         });
+
          it('should 404 fetching an unknown user', async () => {
             let res = await getJson(`/v1/user`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);

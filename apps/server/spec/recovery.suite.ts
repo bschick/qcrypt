@@ -24,7 +24,7 @@ import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest';
 import { cryptoReady, bytesToBase64, base64ToBytes, getRandom, hashString } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import * as api from '@qcrypt/api';
-import { USERCRED_ENC_MIN_BYTES } from '../src/consts';
+import { USERCRED_ENC_MIN_BYTES, PROOF_SKEW_MS } from '../src/consts';
 import {
    postJson,
    putJson,
@@ -41,7 +41,7 @@ import {
    addPasskey,
    registerNewCredential,
    makeChallengeProofHeaders,
-   makeProofHeaders,
+   makeNonceProofHeaders,
    sha256Hex,
    testUserName,
    type TestUser,
@@ -434,6 +434,24 @@ export function recoverySuite(prf: boolean): void {
          expect(res.status).toBe(400);
       });
 
+      it('rejects a recovery key proof made for recover3', async () => {
+         const body = await recoveryKeyBody(user, user.recoverySecret);
+         const recoverSig = api.createRecoveryNonceProof(
+            user.recoverySecret,
+            user.userId,
+            body.timestamp,
+            body.nonce,
+            'recover',
+         );
+         const res = await putJson(
+            '/v1/recover3/key',
+            { ...body, signature: recoverSig },
+            { 'x-csrf-token': user.csrf },
+            user.cookie,
+         );
+         expect(res.status).toBe(400);
+      });
+
       it('rejects a replayed recovery key proof', async () => {
          const newSecret = api.recoverySecret(getRandom(api.RECOVERYID_BYTES), user.userId);
          const body = await recoveryKeyBody(user, newSecret);
@@ -711,6 +729,21 @@ export function recoverySuite(prf: boolean): void {
          expect(res.status).toBe(401);
       });
 
+      it('rejects a recover3 proof made for a recovery key change', async () => {
+         await startRecovery3(user);
+
+         const body = recover3Body(user);
+         const replaceSig = api.createRecoveryNonceProof(
+            user.recoverySecret,
+            user.userId,
+            body.timestamp,
+            body.nonce,
+            'replace',
+         );
+         const res = await postJson('/v1/recover3', { ...body, signature: replaceSig }, {}, '');
+         expect(res.status).toBe(401);
+      });
+
       it('rejects a recover3 request missing any recovery proof', async () => {
          await startRecovery3(user);
 
@@ -778,7 +811,7 @@ export function recoverySuite(prf: boolean): void {
       it('rejects a recover3 timestamp outside the skew window', async () => {
          await startRecovery3(user);
 
-         const stale = String(Date.now() - 10 * 60 * 1000);
+         const stale = String(Date.now() - 2 * PROOF_SKEW_MS);
          const res = await postJson('/v1/recover3', recover3Body(user, { timestamp: stale }), {}, '');
          expect(res.status).toBe(401);
       });
@@ -996,7 +1029,7 @@ export function recoverySuite(prf: boolean): void {
 
          const { startRes } = await startRecovery3(recoverUser);
 
-         const stale = String(Date.now() - 10 * 60 * 1000);
+         const stale = String(Date.now() - 2 * PROOF_SKEW_MS);
          const res = await postJson(
             '/v1/recover/confirm',
             confirmBody(recoverUser, startRes.data.challenge, { timestamp: stale }),
@@ -1036,6 +1069,32 @@ export function recoverySuite(prf: boolean): void {
       it('rejects a recover/verify proof from another userCred', async () => {
          const { user, pending } = await pendingRecovery(prf);
          await expectRecoverVerifyRejected(user, pending, { keySecret: getRandom(cc.USERCRED_BYTES) });
+      });
+
+      it('rejects a recover/verify proof in nonce form', async () => {
+         const { user, pending } = await pendingRecovery(prf);
+         const headers = await makeNonceProofHeaders(
+            'POST',
+            '/v1/recover/verify',
+            Buffer.from(JSON.stringify(pending.body), 'utf8'),
+            bytesToBase64(pending.recoveredUserCred),
+            user.userId,
+            { nonce: pending.body.challenge },
+         );
+         await expectRecoverVerifyRejected(user, pending, { headers });
+      });
+
+      it('rejects a recover/verify proof timestamp outside the skew window', async () => {
+         const { user, pending } = await pendingRecovery(prf);
+         const headers = makeChallengeProofHeaders(
+            '/v1/recover/verify',
+            pending.body,
+            pending.recoveredUserCred,
+            user.userId,
+            pending.body.challenge,
+            { timestampMs: String(Date.now() - 2 * PROOF_SKEW_MS) },
+         );
+         await expectRecoverVerifyRejected(user, pending, { headers });
       });
 
       it('rejects a recover/verify body changed after its proof was signed', async () => {
@@ -1145,7 +1204,7 @@ export function recoverySuite(prf: boolean): void {
       // A client signed in to another account sends that session's proof with every request
       it('ignores a session proof on a recover/verify', async () => {
          const { user, pending } = await pendingRecovery(prf);
-         const sessionProof = await makeProofHeaders(
+         const sessionProof = await makeNonceProofHeaders(
             'POST',
             '/v1/recover/verify',
             undefined,

@@ -63,14 +63,14 @@ export function setSessionSigner(userId: string | undefined, userCred?: string):
 async function proofHeaders(method: string, path: string, body: Buffer | undefined): Promise<Record<string, string>> {
    let headers: Record<string, string> = {};
    if (sessionUserCred && sessionUserId) {
-      headers = await makeProofHeaders(method, path, body, sessionUserCred, sessionUserId);
+      headers = await makeNonceProofHeaders(method, path, body, sessionUserCred, sessionUserId);
    }
    return headers;
 }
 
 // Craft proof-of-userCred headers with an explicit credential and userId. opts let
 // enforcement tests forge a bad proof: an out-of-window timestamp or a flipped signature.
-export async function makeProofHeaders(
+export async function makeNonceProofHeaders(
    method: string,
    path: string,
    body: Buffer | undefined,
@@ -118,8 +118,9 @@ export function makeChallengeProofHeaders(
    userCred: Uint8Array,
    userId: string,
    challenge: string,
+   opts: { timestampMs?: string } = {},
 ): Record<string, string> {
-   const timestamp = String(Date.now());
+   const timestamp = opts.timestampMs ?? String(Date.now());
    const signature = api.createUserCredChallengeProof(
       userCred,
       userId,
@@ -567,12 +568,14 @@ export async function buildRegBody(
    const recoveryId = getRandom(api.RECOVERYID_BYTES);
    const secret = api.recoverySecret(recoveryId, userId);
 
+   const recoveryTimestamp = String(Date.now());
    const riders: api.RegVerifyRiders = {
       userId,
       challenge,
       userCredPubKey,
       recoveryPubKey: api.getRecoveryPubKey(secret),
-      recoverySignature: api.createRecoveryChallengeProof(secret, userId, challenge, userCredPubKey),
+      recoveryTimestamp,
+      recoverySignature: api.createRecoveryChallengeProof(secret, userId, recoveryTimestamp, challenge, userCredPubKey),
    };
    if (prf) {
       riders.passkeyUserCredEnc = await prfEncrypt(userCred.slice(0), prfOutput!.slice(0), userId);
