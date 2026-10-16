@@ -33,7 +33,15 @@ export const RETRIES = 3;
 export const RPNAME = 'Quick Crypt';
 export const ALGIDS: number[] = [COSEALG.ML_DSA_65, COSEALG.ML_DSA_44, COSEALG.EdDSA, COSEALG.ES256, COSEALG.RS256];
 
-export { RECOVERYID_BYTES, CHALLENGE_BYTES, PROOF_SKEW_MS } from '@qcrypt/api';
+export {
+   RECOVERYID_BYTES,
+   CHALLENGE_BYTES,
+   PROOF_SKEW_MS,
+   UNAME_MIN_LEN,
+   UNAME_MAX_LEN,
+   DESC_MIN_LEN,
+   DESC_MAX_LEN,
+} from '@qcrypt/api';
 
 export const USERID_BYTES = 16;
 export const INVITABLEID_BYTES = 16;
@@ -42,10 +50,9 @@ export const USERCRED_ENC_MIN_BYTES = USERCRED_BYTES + PAYLOAD_SIZE_MIN + HEADER
 export const USERCRED_ENC_MAX_BYTES =
    USERCRED_BYTES + AUTH_TAG_MAX_BYTES + ADDIONTAL_DATA_MAX_BYTES + HEADER_BYTES_6P - ENCRYPTED_HINT_MAX_BYTES;
 export const JWTMATERIAL_BYTES = 32;
+export const SESSION_KEY_BYTES = 32;
 export const LINKID_BYTES = 16;
 export const UNAME_LEN_BYTES = 1;
-export const UNAME_MIN_LEN = 6;
-export const UNAME_MAX_LEN = 31;
 
 // export const CERT_VERSION = 1;
 // export const CERT_VERSION_BYTES = 2;

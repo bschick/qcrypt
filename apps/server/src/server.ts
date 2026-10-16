@@ -514,8 +514,13 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
 
    // BACKWARD COMPAT: only a challenge proof carries the challenge as its nonce. Until clients update,
    // a request without one is the old format, and any nonce proof it carries is ignored.
-   const hasProof = httpDetails.proofNonce === regVerifyRequest.challenge;
+   const hasProof = !!httpDetails.proofNonce && httpDetails.proofNonce === regVerifyRequest.challenge;
    if (hasProof) {
+      // A request with a proof must carry userCred or both ciphertexts. BACKWARD COMPAT: delete this
+      // check when the one above changes to `hasPrf === hasUserCred`, which covers it.
+      if (!hasPrf && !hasUserCred) {
+         throw new ParamError('missing user credential data');
+      }
       api.verifyUserCredChallengeProof(
          regVerifyRequest.userCredPubKey!,
          unverifiedUser.userId,
@@ -530,6 +535,7 @@ async function postRegVerify(httpDetails: HttpDetails): Promise<Response> {
       api.verifyRecoveryChallengeProof(
          recoveryPubKey,
          unverifiedUser.userId,
+         regVerifyRequest.recoveryTimestamp!,
          regVerifyRequest.challenge,
          regVerifyRequest.userCredPubKey!,
          regVerifyRequest.recoverySignature!,
@@ -678,7 +684,7 @@ async function postRecoverVerify(httpDetails: HttpDetails): Promise<Response> {
 
    // BACKWARD COMPAT: a request without a challenge proof is not checked, and any nonce proof it
    // carries is ignored
-   if (httpDetails.proofNonce === recoverVerifyRequest.challenge) {
+   if (httpDetails.proofNonce && httpDetails.proofNonce === recoverVerifyRequest.challenge) {
       api.verifyUserCredChallengeProof(
          unverifiedUser.userCredPubKey!,
          unverifiedUser.userId,
@@ -774,7 +780,7 @@ async function _createAuthenticator(
 
    if (aaguidDetails?.data) {
       description = aaguidDetails.data.name ?? 'Passkey';
-      description = description.slice(0, 42);
+      description = description.slice(0, cc.DESC_MAX_LEN);
    } else {
       console.error('aaguid not found:', JSON.stringify(aaguid));
    }
@@ -806,6 +812,7 @@ async function dummyAllowedCreds(inputUserId: string): Promise<PublicKeyCredenti
       jwtMaterial = await setupJwtMaterial();
    }
 
+   // Must cover the 2-byte profile pick plus the longest dummy credential id (48 bytes)
    const material = Buffer.from(hkdfSync('sha256', jwtMaterial, Buffer.from(inputUserId), 'dummy-auth-options', 64));
 
    // Cumulative weights reflect the observed (len, transports) distribution
@@ -920,7 +927,7 @@ async function postRegOptions(httpDetails: HttpDetails): Promise<Response> {
 
    // Totally new user, must provide a username
    const userName = sanitizeString(regOptionsRequest.userName);
-   if (userName.length < 6 || userName.length > 31) {
+   if (userName.length < cc.UNAME_MIN_LEN || userName.length > cc.UNAME_MAX_LEN) {
       throw new ParamError('user name must greater than 5 and less than 32 characters');
    }
 
@@ -1135,8 +1142,10 @@ async function patchPasskey(httpDetails: HttpDetails, verifiedUser?: VerifiedUse
 
    // only desciption can be changed
    const description = sanitizeString(patchPasskeyRequest.description);
-   if (description.length < 6 || description.length > 42) {
-      throw new ParamError('description must be more than 5 and less than 43 character');
+   if (description.length < cc.DESC_MIN_LEN || description.length > cc.DESC_MAX_LEN) {
+      throw new ParamError(
+         `description must be more than ${cc.DESC_MIN_LEN - 1} and less than ${cc.DESC_MAX_LEN + 1} character`,
+      );
    }
 
    const credId = resources.credid;
@@ -1182,8 +1191,10 @@ async function patchUser(httpDetails: HttpDetails, verifiedUser?: VerifiedUserIt
 
    // Only support userName changes
    const userName = sanitizeString(patchUserRequest.userName);
-   if (userName.length < 6 || userName.length > 31) {
-      throw new ParamError('username must be more than 5 and less than 32 character');
+   if (userName.length < cc.UNAME_MIN_LEN || userName.length > cc.UNAME_MAX_LEN) {
+      throw new ParamError(
+         `username must be more than ${cc.UNAME_MIN_LEN - 1} and less than ${cc.UNAME_MAX_LEN + 1} character`,
+      );
    }
 
    // Same guardrail as postRegOptions, reserved for testing (and cleanup)
@@ -1717,7 +1728,9 @@ async function getSessionKey(user: UnverifiedUserItem, purpose: string): Promise
    const combined = Buffer.concat([userMaterial, jwtMaterial]);
    const sessionVersion = process.env.SessionVersion ?? '0';
 
-   return Buffer.from(hkdfSync('sha512', combined, salt, `${purpose}:${user.authCount}:${sessionVersion}`, 32));
+   return Buffer.from(
+      hkdfSync('sha512', combined, salt, `${purpose}:${user.authCount}:${sessionVersion}`, cc.SESSION_KEY_BYTES),
+   );
 }
 
 function killCookie(): string {
