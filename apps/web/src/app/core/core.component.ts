@@ -20,6 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import {
+   ChangeDetectorRef,
    Component,
    DestroyRef,
    Renderer2,
@@ -112,6 +113,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
    private readonly _authSvc = inject(AuthenticatorService);
    private readonly _cipherSvc = inject(CipherService);
    private readonly _r2 = inject(Renderer2);
+   private readonly _cdr = inject(ChangeDetectorRef);
    private readonly _dialog = inject(MatDialog);
    private readonly _snackBar = inject(MatSnackBar);
    private readonly _matIconRegistry = inject(MatIconRegistry);
@@ -377,10 +379,17 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cipherWarning.set('');
    }
 
+   // NgModel keeps a previous value, so replace twice with a change detection to truly clear
+   private _emptyClearText(): void {
+      this.clearText.set(' ');
+      this._cdr.detectChanges();
+      this.clearText.set('');
+   }
+
    protected onClearClear() {
       this.clearMsg.set('');
       this._clearFile = undefined;
-      this.clearText.set('');
+      this._emptyClearText();
       this.clearLabel.set('Clear Text');
       this.clearWarning.set('');
       if (!this._welcomed && this._authSvc.hasSession()) {
@@ -888,7 +897,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
 
    private _showClearMsg(cls: string, label: string, msg: string, hdr: string | null = null): void {
       //      this._clearFile = undefined;
-      this.clearText.set('');
+      this._emptyClearText();
       let clearMsg = '';
 
       if (hdr) {
