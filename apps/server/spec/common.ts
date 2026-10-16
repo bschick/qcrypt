@@ -110,6 +110,28 @@ export async function makeProofHeaders(
    };
 }
 
+// The x-proof for a POST that answers a server-issued challenge, which the proof signs as its
+// nonce. The body hash must match the JSON that postJson sends for the same object.
+export function makeChallengeProofHeaders(
+   path: string,
+   bodyObj: object,
+   userCred: Uint8Array,
+   userId: string,
+   challenge: string,
+): Record<string, string> {
+   const timestamp = String(Date.now());
+   const signature = api.createUserCredChallengeProof(
+      userCred,
+      userId,
+      'POST',
+      path,
+      timestamp,
+      challenge,
+      sha256Hex(Buffer.from(JSON.stringify(bodyObj), 'utf8')),
+   );
+   return { 'x-proof': `${signature},${timestamp},${challenge}` };
+}
+
 export function getWebAuthnEmulator(
    persistent: boolean = false,
    hmacSecret: HmacSecretMode = 'none',
@@ -215,6 +237,11 @@ export function createCredential(
    createOptions: PublicKeyCredentialCreationOptionsJSON,
    prf: false,
 ): { attestation: EmulatorAttestation };
+export function createCredential(
+   emulator: WebAuthnEmulator,
+   createOptions: PublicKeyCredentialCreationOptionsJSON,
+   prf: boolean,
+): { attestation: EmulatorAttestation; prfOutput?: Uint8Array<ArrayBuffer> };
 export function createCredential(
    emulator: WebAuthnEmulator,
    createOptions: PublicKeyCredentialCreationOptionsJSON,
@@ -390,98 +417,43 @@ export interface PrfTestUser extends TestUserBase {
 }
 export type TestUser = NoPrfTestUser | PrfTestUser;
 
-// Register a fresh account (reg/options + reg/verify) and return everything needed to make
-// authorized, proof-signed requests. The recovery secret is generated here as the real client
-// does and only its public key is sent; the secret is returned for recovery flows. When prf is
-// true the client generates userCred locally and sends only opaque ciphertexts (the server never
-// sees plaintext userCred); when false the server generates and returns userCred as before.
+// Registers a fresh account the way the current client does, and returns what later requests need:
+// the session, the userCred that signs proofs, and the recovery secret. userCred is created here in
+// both modes. A PRF account sends only ciphertexts of it, and a no-PRF account sends it in plaintext.
 export async function registerTestUser(prf: boolean = false, label?: string): Promise<TestUser> {
    await cryptoReady();
 
    const userName = testUserName(label);
-   let user: TestUser;
-   if (prf) {
-      const {
-         userId,
-         body,
-         emulator,
-         userCred,
-         recoverySecret: secret,
-         recoveryId,
-         prfOutput,
-      } = await buildPrfRegBody(userName);
+   const { userId, body, headers, emulator, userCred, recoverySecret, recoveryId, prfOutput } = await buildRegBody(
+      userName,
+      prf,
+   );
 
-      const verifyRes = await postJson('/v1/reg/verify', body, {}, '');
-      expect(verifyRes.status).toBe(200);
-      expect(verifyRes.data.verified).toBe(true);
-      expect(verifyRes.data.prf).toBe(true);
-      expect(verifyRes.data.passkeyUserCredEnc).toBeUndefined();
-      expect(verifyRes.data.userCred).toBeUndefined();
-      expect(verifyRes.data.csrf).toBeDefined();
-      expect(verifyRes.data.pkId).toBeDefined();
-      expect(verifyRes.data.recoveryKeyId).toEqual(hashString(api.getRecoveryPubKey(secret)));
-      expect(verifyRes.cookie).toBeTruthy();
+   const verifyRes = await postJson('/v1/reg/verify', body, headers, '');
+   expect(verifyRes.status).toBe(200);
+   expect(verifyRes.data.verified).toBe(true);
+   expect(verifyRes.data.prf).toBe(prf);
+   expect(verifyRes.data.passkeyUserCredEnc).toBeUndefined();
+   expect(verifyRes.data.userCred).toBe(prf ? undefined : bytesToBase64(userCred));
+   expect(verifyRes.data.csrf).toBeDefined();
+   expect(verifyRes.data.pkId).toBeDefined();
+   expect(verifyRes.data.recoveryKeyId).toEqual(hashString(api.getRecoveryPubKey(recoverySecret)));
+   expect(verifyRes.cookie).toBeTruthy();
 
-      user = {
-         prf: true,
-         userId,
-         userName,
-         userCred: bytesToBase64(userCred),
-         cookie: verifyRes.cookie,
-         csrf: verifyRes.data.csrf,
-         credId: verifyRes.data.pkId,
-         emulator,
-         recoverySecret: secret,
-         recoveryId,
-         passkeyUserCredEnc: body.passkeyUserCredEnc!,
-         prfOutput,
-      };
-   } else {
-      const regOpts = await postJson('/v1/reg/options', { userName }, {}, '');
-      expect(regOpts.status).toBe(200);
-      expect(regOpts.data.user.name).toBe(userName);
-
-      const userId: string = regOpts.data.user.id;
-      const recoveryId = getRandom(api.RECOVERYID_BYTES);
-      const secret = api.recoverySecret(recoveryId, userId);
-      const emulator = getWebAuthnEmulator();
-      const { attestation } = createCredential(
-         emulator,
-         {
-            ...regOpts.data,
-            user: { ...regOpts.data.user, id: userId },
-            challenge: regOpts.data.challenge,
-         },
-         false,
-      );
-
-      const body = api.makeRegVerifyRequest(attestation as api.RegistrationFields, {
-         userId,
-         challenge: regOpts.data.challenge,
-         recoveryPubKey: api.getRecoveryPubKey(secret),
-      });
-      const verifyRes = await postJson('/v1/reg/verify', body, {}, '');
-      expect(verifyRes.status).toBe(200);
-      expect(verifyRes.data.verified).toBe(true);
-      expect(verifyRes.data.csrf).toBeDefined();
-      expect(verifyRes.data.pkId).toBeDefined();
-      expect(verifyRes.data.userCred).toBeDefined();
-      expect(verifyRes.data.recoveryKeyId).toEqual(hashString(api.getRecoveryPubKey(secret)));
-      expect(verifyRes.cookie).toBeTruthy();
-
-      user = {
-         prf: false,
-         userId,
-         userName,
-         userCred: verifyRes.data.userCred,
-         cookie: verifyRes.cookie,
-         csrf: verifyRes.data.csrf,
-         credId: verifyRes.data.pkId,
-         emulator,
-         recoverySecret: secret,
-         recoveryId,
-      };
-   }
+   const base: TestUserBase = {
+      userId,
+      userName,
+      userCred: bytesToBase64(userCred),
+      cookie: verifyRes.cookie,
+      csrf: verifyRes.data.csrf,
+      credId: verifyRes.data.pkId,
+      emulator,
+      recoverySecret,
+      recoveryId,
+   };
+   const user: TestUser = prf
+      ? { ...base, prf: true, passkeyUserCredEnc: body.passkeyUserCredEnc!, prfOutput: prfOutput! }
+      : { ...base, prf: false };
 
    // Make this user the current session signer
    setSessionSigner(user.userId, user.userCred);
@@ -554,45 +526,100 @@ export async function addPasskey(user: TestUser, csrf: string, cookie: string): 
    return attestation.id;
 }
 
-// Run reg/options and build a valid PRF reg/verify body, returning it with the material behind it:
-// the plaintext userCred, the recovery secret and id, the primary credential's PRF output, and the
-// emulator holding that credential.
-export async function buildPrfRegBody(userName: string): Promise<{
+// Prepares a registration up to, but not including, reg/verify. reg/options has already run, so the
+// challenge is live and bound to userCred's public key. Any change to the returned body invalidates
+// the proof in the returned headers. A PRF registration sends only ciphertexts of userCred, and a
+// no-PRF registration sends it in plaintext.
+export async function buildRegBody(
+   userName: string,
+   prf: boolean,
+   // BACKWARD COMPAT: false leaves the challenge unbound, as reg/options does for clients that omit userCredPubKey
+   bindKey: boolean = true,
+): Promise<{
    userId: string;
    body: api.RegVerifyRequest;
+   headers: Record<string, string>;
    emulator: WebAuthnEmulator;
    userCred: Uint8Array<ArrayBuffer>;
    recoverySecret: Uint8Array;
    recoveryId: Uint8Array;
-   prfOutput: Uint8Array<ArrayBuffer>;
+   prfOutput?: Uint8Array<ArrayBuffer>;
 }> {
    await cryptoReady();
-   const regOpts = await postJson('/v1/reg/options', { userName }, {}, '');
+   const userCred = getRandom(cc.USERCRED_BYTES);
+   const userCredPubKey = api.getUserCredPubKey(userCred);
+   const regOpts = await postJson('/v1/reg/options', bindKey ? { userName, userCredPubKey } : { userName }, {}, '');
    expect(regOpts.status).toBe(200);
    expect(regOpts.data.user.name).toBe(userName);
 
    const userId: string = regOpts.data.user.id;
-   const emulator = getWebAuthnEmulator(false, 'hmac-secret-mc');
-   const userCred = getRandom(cc.USERCRED_BYTES);
+   const challenge: string = regOpts.data.challenge;
+   const emulator = getWebAuthnEmulator(false, prf ? 'hmac-secret-mc' : 'none');
    const { attestation, prfOutput } = createCredential(
       emulator,
       {
          ...regOpts.data,
          user: { ...regOpts.data.user, id: userId },
-         challenge: regOpts.data.challenge,
+         challenge,
       },
-      true,
+      prf,
    );
    const recoveryId = getRandom(api.RECOVERYID_BYTES);
    const secret = api.recoverySecret(recoveryId, userId);
 
-   const body = api.makeRegVerifyRequest(attestation as api.RegistrationFields, {
+   const riders: api.RegVerifyRiders = {
       userId,
-      challenge: regOpts.data.challenge,
-      passkeyUserCredEnc: await prfEncrypt(userCred.slice(0), prfOutput.slice(0), userId),
-      recoveryUserCredEnc: await prfEncrypt(userCred.slice(0), secret.slice(0), userId),
-      userCredPubKey: api.getUserCredPubKey(userCred),
+      challenge,
+      userCredPubKey,
       recoveryPubKey: api.getRecoveryPubKey(secret),
-   });
-   return { userId, body, emulator, userCred, recoverySecret: secret, recoveryId, prfOutput };
+      recoverySignature: api.createRecoveryChallengeProof(secret, userId, challenge, userCredPubKey),
+   };
+   if (prf) {
+      riders.passkeyUserCredEnc = await prfEncrypt(userCred.slice(0), prfOutput!.slice(0), userId);
+      riders.recoveryUserCredEnc = await prfEncrypt(userCred.slice(0), secret.slice(0), userId);
+   } else {
+      riders.userCred = bytesToBase64(userCred);
+   }
+
+   const body = api.makeRegVerifyRequest(attestation as api.RegistrationFields, riders);
+   const headers = makeChallengeProofHeaders('/v1/reg/verify', body, userCred, userId, challenge);
+   return { userId, body, headers, emulator, userCred, recoverySecret: secret, recoveryId, prfOutput };
+}
+
+export type Registration = Awaited<ReturnType<typeof buildRegBody>>;
+
+// Overrides for a request built by buildRegBody. Fields in body replace the built ones. The x-proof
+// over the final body is signed with the private key derived from keySecret, which defaults to the
+// built userCred. Headers that are passed are sent in place of the x-proof.
+export interface RegVerifyOpts {
+   body?: Partial<api.RegVerifyRequest>;
+   keySecret?: Uint8Array;
+   headers?: Record<string, string>;
+}
+
+export function postRegVerify(reg: Registration, opts: RegVerifyOpts) {
+   const body = { ...reg.body, ...opts.body };
+   const headers =
+      opts.headers ??
+      makeChallengeProofHeaders('/v1/reg/verify', body, opts.keySecret ?? reg.userCred, reg.userId, body.challenge);
+   return postJson('/v1/reg/verify', body, headers, '');
+}
+
+// Deletes the account a successful registration creates
+export async function expectRegistered(reg: Registration, opts: RegVerifyOpts = {}): Promise<void> {
+   const res = await postRegVerify(reg, opts);
+   expect(res.status).toBe(200);
+   // A no-PRF response returns the account's userCred
+   setSessionSigner(reg.userId, res.data.userCred ?? bytesToBase64(reg.userCred));
+   await expectPasskeyDeleted(res.data.pkId, res.data.csrf, res.cookie);
+   setSessionSigner(undefined);
+}
+
+// reg/verify reports every rejection as a uniform 401 because it is unauthenticated. The request
+// without overrides is then sent on the same challenge and must succeed. Its success proves the
+// rejection did not consume the challenge, and that the overrides alone caused the rejection.
+export async function expectRegRejected(reg: Registration, opts: RegVerifyOpts): Promise<void> {
+   const bad = await postRegVerify(reg, opts);
+   expect(bad.status).toBe(401);
+   await expectRegistered(reg);
 }

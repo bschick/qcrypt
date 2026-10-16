@@ -25,6 +25,7 @@ import { bytesToBase64, getRandom } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import { coreSuite } from './core.suite';
 import { recoverySuite } from './recovery.suite';
+import { registrationSuite } from './registration.suite';
 import {
    registerTestUser,
    registerNewCredential,
@@ -34,7 +35,8 @@ import {
    setSessionSigner,
 } from './common';
 
-// The full authorized-API and recovery contract against a server-side (no-PRF) userCred account.
+// The full registration, authorized-API and recovery contract against a server-side (no-PRF) userCred account.
+registrationSuite(false);
 coreSuite(false);
 recoverySuite(false);
 

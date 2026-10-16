@@ -21,15 +21,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { describe, it, afterEach, expect } from 'vitest';
-import { bytesToBase64, getRandom } from '@qcrypt/crypto';
-import * as cc from '@qcrypt/crypto/consts';
+import { bytesToBase64 } from '@qcrypt/crypto';
 import { coreSuite } from './core.suite';
 import { recoverySuite } from './recovery.suite';
+import { registrationSuite } from './registration.suite';
 import {
    registerTestUser,
    registerNewCredential,
-   buildPrfRegBody,
-   testUserName,
    getJson,
    postJson,
    expectPasskeyDeleted,
@@ -40,7 +38,8 @@ import {
    RP_ORIGIN,
 } from './common';
 
-// The full authorized-API and recovery contract against a client-side (PRF) userCred account.
+// The full registration, authorized-API and recovery contract against a client-side (PRF) userCred account.
+registrationSuite(true);
 coreSuite(true);
 recoverySuite(true);
 
@@ -127,56 +126,4 @@ describe('PRF account', () => {
       );
       expect(bad.status).toBe(400);
    });
-});
-
-// reg/verify rejects malformed PRF credential fields. Each test builds a valid PRF body (its
-// reg/options is the opening 200) and tampers a single field, so the rejection is that field alone.
-describe('PRF registration input validation', () => {
-   const minEncBytes = cc.USERCRED_BYTES + cc.PAYLOAD_SIZE_MIN + cc.HEADER_BYTES_6P;
-
-   // reg/verify is unauthenticated, so enumeration-hardening reports every rejection as a uniform 401.
-   async function rejectsRegBody(mutate: (body: Record<string, any>) => void): Promise<void> {
-      const { userId, body, userCred } = await buildPrfRegBody(testUserName());
-      const tampered = { ...body };
-      mutate(tampered);
-      const bad = await postJson('/v1/reg/verify', tampered, {}, '');
-      expect(bad.status).toBe(401);
-
-      // The field is rejected before the challenge is consumed, so the untampered body still
-      // completes registration (proving the tamper was the only cause); delete it to leave no account.
-      const ok = await postJson('/v1/reg/verify', body, {}, '');
-      expect(ok.status).toBe(200);
-      setSessionSigner(userId, bytesToBase64(userCred));
-      await expectPasskeyDeleted(ok.data.pkId, ok.data.csrf, ok.cookie);
-      setSessionSigner(undefined);
-   }
-
-   it('rejects an empty passkeyUserCredEnc', () =>
-      rejectsRegBody((b) => {
-         b.passkeyUserCredEnc = '';
-      }));
-   it('rejects an empty recoveryUserCredEnc', () =>
-      rejectsRegBody((b) => {
-         b.recoveryUserCredEnc = '';
-      }));
-   it('rejects a non-base64 passkeyUserCredEnc', () =>
-      rejectsRegBody((b) => {
-         b.passkeyUserCredEnc = 'not b64 $$$';
-      }));
-   it('rejects a too-short passkeyUserCredEnc', () =>
-      rejectsRegBody((b) => {
-         b.passkeyUserCredEnc = bytesToBase64(getRandom(minEncBytes - 1));
-      }));
-   it('rejects a too-short recoveryUserCredEnc', () =>
-      rejectsRegBody((b) => {
-         b.recoveryUserCredEnc = bytesToBase64(getRandom(minEncBytes - 1));
-      }));
-   it('rejects a wrong-length userCredPubKey', () =>
-      rejectsRegBody((b) => {
-         b.userCredPubKey = bytesToBase64(getRandom(cc.USERCRED_BYTES));
-      }));
-   it('rejects a non-base64 userCredPubKey', () =>
-      rejectsRegBody((b) => {
-         b.userCredPubKey = 'not b64 $$$';
-      }));
 });

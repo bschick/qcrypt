@@ -20,7 +20,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, beforeAll, expect } from 'vitest';
+import { bytesToBase64, cryptoReady, getRandom } from '@qcrypt/crypto';
+import * as cc from '@qcrypt/crypto/consts';
+import * as api from '@qcrypt/api';
 import { postJson, testUserName } from './common';
 import { ALGIDS } from '../src/consts';
 
@@ -45,4 +48,26 @@ describe('registration options', () => {
          expect(param.type).toBe('public-key');
       }
    });
+});
+
+describe('registration options input validation', () => {
+   beforeAll(cryptoReady);
+
+   // reg/options is unauthenticated, so every rejection is a uniform 401. A valid request goes first
+   // to show that the replaced fields alone cause the rejection.
+   async function expectRejected(fields: Record<string, string>): Promise<void> {
+      const valid = { userName: testUserName(), userCredPubKey: api.getUserCredPubKey(getRandom(cc.USERCRED_BYTES)) };
+      const ok = await postJson('/v1/reg/options', valid, {}, '');
+      expect(ok.status).toBe(200);
+      const bad = await postJson('/v1/reg/options', { ...valid, ...fields }, {}, '');
+      expect(bad.status).toBe(401);
+   }
+
+   it('rejects a user name shorter than 6 or longer than 31 characters', async () => {
+      await expectRejected({ userName: 'abcde' });
+      await expectRejected({ userName: 'a'.repeat(32) });
+   });
+   it('rejects a wrong-length userCredPubKey', () =>
+      expectRejected({ userCredPubKey: bytesToBase64(getRandom(cc.USERCRED_BYTES)) }));
+   it('rejects a non-base64 userCredPubKey', () => expectRejected({ userCredPubKey: 'not b64 $$$' }));
 });
