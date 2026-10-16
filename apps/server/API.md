@@ -25,7 +25,7 @@ This document provides documentation for the passkey-based authentication server
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body, and 'x-proof': a [user credential proof](#proofs) in challenge form, made with the user credential whose public key was sent to `/v1/reg/options`
 - **Authorization:** Not required
 - **Description:** Verifies a registration response from a client, creating a new user and passkey. Response contains a `csrf` token that must be sent in the `x-csrf-token` header for authorized requests.
-- **Request Body:** A [`RegVerify`](#regverify) object created by the client from the previous POST to `/v1/reg/options`: the SimpleWebAuthn/client `RegistrationResponseJSON` response, `userId`, `challenge`, `userCredPubKey`, `recoveryPubKey`, `recoverySignature`, and either the plaintext `userCred` or the client-encrypted credential fields `passkeyUserCredEnc` and `recoveryUserCredEnc`.
+- **Request Body:** A [`RegVerify`](#regverify) object created by the client from the previous POST to `/v1/reg/options`: the SimpleWebAuthn/client `RegistrationResponseJSON` response, `userId`, `challenge`, `userCredPubKey`, `recoveryPubKey`, `recoveryTimestamp`, `recoverySignature`, and either the plaintext `userCred` or the client-encrypted credential fields `passkeyUserCredEnc` and `recoveryUserCredEnc`.
 - **Read consistency:** Consistent.
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object including `csrf` and session cookie.
@@ -257,7 +257,8 @@ Sent to `POST /v1/reg/verify` to create a new user and passkey.
 - `challenge` (string): A string that must be sent back to the server for verification.
 - `userCredPubKey` (string): The ML-DSA-65 public key derived from the client-generated user credential. Must equal the key sent to `/v1/reg/options`.
 - `recoveryPubKey` (string): The ML-DSA-65 public key derived from the client's recovery secret.
-- `recoverySignature` (string): A [recovery proof](#proofs) in challenge form, over `userId`, `challenge`, and `userCredPubKey`.
+- `recoveryTimestamp` (string): Milliseconds since the epoch, as a decimal string, when `recoverySignature` was made.
+- `recoverySignature` (string): A [recovery proof](#proofs) in challenge form, over `userId`, `recoveryTimestamp`, `challenge`, and `userCredPubKey`.
 - `userCred` (string): The plaintext user credential. Sent for no-PRF accounts, and must derive `userCredPubKey`.
 - `passkeyUserCredEnc` (string): The user credential encrypted under the new passkey's key. Sent for PRF accounts.
 - `recoveryUserCredEnc` (string): The user credential encrypted under the recovery secret. Sent for PRF accounts.
@@ -405,6 +406,6 @@ A proof is an ML-DSA-65 signature that shows the client holds the private key fo
   - *Challenge form:* Uses a challenge the server returned from the preceding call rather than a nonce, so the proof cannot outlive that challenge. `POST /v1/reg/verify` and `POST /v1/recover/verify` send it in the `x-proof` header as a `signature,timestamp,challenge` value, with the challenge from `POST /v1/reg/options` or `POST /v1/recover/confirm`. `POST /v1/recover/confirm` sends it in its body instead, signed over an empty body, with the challenge from `POST /v1/recover3`.
 - **Recovery proofs:** Made with the key derived from the recovery secret, and sent in the request body. There are two forms:
   - *Nonce form:* `POST /v1/recover3` and `PUT /v1/recover3/key` sign `userId`, `timestamp`, and a client-chosen `nonce`. A nonce is accepted only once within the timestamp window.
-  - *Challenge form:* `POST /v1/reg/verify` signs `userId`, the challenge returned by `POST /v1/reg/options`, and `userCredPubKey` in its `recoverySignature` field.
+  - *Challenge form:* `POST /v1/reg/verify` signs `userId`, a timestamp, the challenge returned by `POST /v1/reg/options`, and `userCredPubKey`, sending the timestamp in its `recoveryTimestamp` field and the signature in its `recoverySignature` field.
 
 For details, see the `apps/web/src/app/services/authenticator.service.ts` and `libs/api/src/lib/proof.ts` source files.
