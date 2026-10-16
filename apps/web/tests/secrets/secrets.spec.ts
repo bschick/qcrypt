@@ -20,20 +20,22 @@ import {
    type Finding,
    type Secret,
 } from './heapscan';
-import { cipherSecrets, recoverySecrets, userCredSecrets } from './derive';
+import { cipherSecrets, decodeRecoveryWords, masterKeySecrets, recoverySecrets, userCredSecrets } from './derive';
 
 test.use(HEAP_SCAN_TEST_OPTIONS);
 // A secret left in memory is found on every attempt, so a retry would only double the run time and the accounts
 test.describe.configure({ retries: 0 });
 
-// Every tracked secret has one of these lifetimes, which set when finding it is a leak:
+// Every secret the scans search for has one of these lifetimes, which set when finding it is a leak:
 // - 'gone': values the app can derive again only from new user input, such as passwords and the keys derived
-//   from them, hint text, recovery words and the values derived from them, and PRF outputs. Each must leave
-//   memory when the operation that used it ends, so every scan flags it, including the scan right after that
-//   operation.
+//   from them, clear text, hint text, recovery words and the values derived from them, and PRF outputs and the
+//   keys derived from them. Each must leave memory when the operation that used it ends, so every scan flags it,
+//   including the scan right after that operation. Clear text and hint text are in use until the text box that
+//   holds them is cleared.
 // - 'session': values the app can derive again without user input while signed in, such as userCred, its proof
-//   seed and ML-DSA signing key, and the cipher signing and hint keys. A breakpoint in the running app can read
-//   them at any time during the session, so only scans after sign-out flag them.
+//   seed and ML-DSA signing key, the cipher signing and hint keys, and each session's keystore key and the keys
+//   derived from it. A breakpoint in the running app can read them at any time during the session, so only scans
+//   after sign-out flag them.
 // - 'canary': bytes planted next to a secret as a positive control. A canary is never a leak; a checkpoint
 //   can require that the scan finds it.
 type Lifetime = 'session' | 'gone' | 'canary';
@@ -118,7 +120,8 @@ const CIPHERS: [string, string][] = [
 ];
 
 // The first encrypted block holds at most 1 MiB of clear text, so a longer message also uses a block key
-const LONG_TEXT_CHARS = 1048576 + 4096;
+const FIRST_BLOCK_CHARS = 1048576;
+const LONG_TEXT_CHARS = FIRST_BLOCK_CHARS + 4096;
 
 type Message = {
    // Prefix for the names of this message's secrets
@@ -133,7 +136,8 @@ function newPassword(): string {
    return `Pw-${randomBytes(12).toString('base64url')}`;
 }
 
-// A long message also has a hint, so its encryption derives a hint key and a block key besides the cipher key
+// A long message also has a hint, so its encryption derives a hint key and a block key besides the cipher key.
+// Its clear text is random throughout, so a slice from any block matches nothing else in memory.
 function newMessage(label: string, alg: string, long: boolean): Message {
    const clearText = `heap scan ${label} ${randomBytes(6).toString('hex')} `;
    return {
@@ -141,8 +145,21 @@ function newMessage(label: string, alg: string, long: boolean): Message {
       alg,
       password: newPassword(),
       hint: long ? `hint ${randomBytes(4).toString('hex')}` : undefined,
-      clearText: long ? clearText.padEnd(LONG_TEXT_CHARS, '0123456789abcdef') : clearText,
+      clearText: long
+         ? (clearText + randomBytes(LONG_TEXT_CHARS).toString('base64url')).slice(0, LONG_TEXT_CHARS)
+         : clearText,
    };
+}
+
+// The ciphers read and write clear text one block at a time, and a buffer holding only the second block does not
+// contain the start of the text
+function clearTextSecrets(message: Message): Secret[] {
+   const secrets = [textSecret(`${message.label}.clearText`, message.clearText.slice(0, 64))];
+   if (message.clearText.length > FIRST_BLOCK_CHARS) {
+      const block1 = message.clearText.slice(FIRST_BLOCK_CHARS, FIRST_BLOCK_CHARS + 64);
+      secrets.push(textSecret(`${message.label}.clearTextBlock1`, block1));
+   }
+   return secrets;
 }
 
 // The page's keys are found by decrypting its cipher armor in Node, because decryption derives the same keys
@@ -153,7 +170,7 @@ async function encrypt(
    user: CreatedTestUser,
    message: Message,
 ): Promise<{ armor: string; keyNames: string[] }> {
-   tracker.add([textSecret(`${message.label}.password`, message.password)], 'gone');
+   tracker.add([textSecret(`${message.label}.password`, message.password), ...clearTextSecrets(message)], 'gone');
    if (message.hint) {
       tracker.add([textSecret(`${message.label}.hint`, message.hint)], 'gone');
    }
@@ -189,9 +206,45 @@ async function decrypt(page: Page, user: CreatedTestUser, message: Message, armo
 
 // The app decrypts the hint from the cipher armor without user input, so the hint is only gone once the cipher
 // armor is cleared
-async function clearCipherArmor(page: Page): Promise<void> {
+async function clearTextBoxes(page: Page): Promise<void> {
+   await page.locator('button[mattooltip="Clear text"]').click();
    await page.locator('button[mattooltip="Clear cipher armor"]').click();
+   await expect(page.locator('textarea#clearInput')).toBeEmpty();
    await expect(page.locator('textarea#cipherInput')).toBeEmpty();
+}
+
+// Must match the IndexedDB names in keystore.service.ts and the slot in authenticator.service.ts. A wrong name
+// throws in the page, and a wrong key fails to decrypt the session's copy of userCred.
+const KEYSTORE_DB = 'quickcrypt';
+const KEYSTORE_STORE = 'keys';
+const KEYSTORE_SLOT = 'user-cred-key';
+
+// Derives the session's keystore key the way the app does. The copies this leaves in the page are unreachable,
+// so the next scan's garbage collection removes them.
+async function readKeystoreKey(page: Page, pkId: string): Promise<Uint8Array> {
+   const hmacInput = [...Buffer.concat([Buffer.from(KEYSTORE_SLOT), Buffer.from(pkId, 'base64url')])];
+   const hmac = await page.evaluate(
+      async ({ dbName, storeName, slot, input }) => {
+         const db = await new Promise<IDBDatabase>((resolve, reject) => {
+            const request = indexedDB.open(dbName);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+         });
+         try {
+            const entry = await new Promise<{ masterKey: CryptoKey }>((resolve, reject) => {
+               const request = db.transaction(storeName, 'readonly').objectStore(storeName).get(slot);
+               request.onsuccess = () => resolve(request.result);
+               request.onerror = () => reject(request.error);
+            });
+            return [...new Uint8Array(await crypto.subtle.sign('HMAC', entry.masterKey, new Uint8Array(input)))];
+         } finally {
+            db.close();
+         }
+      },
+      { dbName: KEYSTORE_DB, storeName: KEYSTORE_STORE, slot: KEYSTORE_SLOT, input: hmacInput },
+   );
+   // The app uses the second half of the HMAC output as the key
+   return new Uint8Array(hmac.slice(32));
 }
 
 for (const prf of [true, false]) {
@@ -205,19 +258,108 @@ for (const prf of [true, false]) {
       const origin = new URL(baseURL).origin;
       const rpId = new URL(baseURL).hostname;
       const tracker = new SecretTracker(page);
+      // A PRF account encrypts copies of userCred with each PRF output and recovery secret as the master key
+      const masterKeys: { name: string; key: Uint8Array; copies: number }[] = [];
       const trackPrfOutput = (name: string, authenticator: Authenticator, credentialId: string) => {
          if (prf) {
             const prfOutput = readPrfKey(authenticator.emulator, origin, rpId, credentialId);
             tracker.add([byteSecret(name, prfOutput)], 'gone');
+            masterKeys.push({ name, key: prfOutput, copies: 0 });
          }
       };
+      const trackRecoveryWords = async (prefix: string, words: string) => {
+         tracker.add(await recoverySecrets(prefix, words), 'gone');
+         if (prf) {
+            masterKeys.push({ name: `${prefix}.secret`, key: decodeRecoveryWords(words), copies: 0 });
+         }
+      };
+
+      // Encrypted copies of userCred from API request and response bodies
+      const userCredEncs = new Set<string>();
+      const pendingBodies: Promise<void>[] = [];
+      const collectUserCredEncs = (body: unknown) => {
+         if (body && typeof body === 'object') {
+            for (const [key, value] of Object.entries(body)) {
+               if (/userCredEnc$/i.test(key) && typeof value === 'string') {
+                  userCredEncs.add(value);
+               } else {
+                  collectUserCredEncs(value);
+               }
+            }
+         }
+      };
+      page.on('request', (request) => {
+         if (request.resourceType() === 'fetch') {
+            collectUserCredEncs(request.postDataJSON());
+         }
+      });
+      page.on('response', (response) => {
+         if (response.request().resourceType() === 'fetch') {
+            pendingBodies.push(response.json().then(collectUserCredEncs, () => {}));
+         }
+      });
 
       try {
          const authenticator1 = authFixture.memAuthenticator(mode);
          const user = await authFixture.createTestUser(authenticator1);
          tracker.add(await userCredSecrets(user.userCred), 'session');
-         tracker.add(await recoverySecrets('recovery1', user.recoveryWords), 'gone');
+         await trackRecoveryWords('recovery1', user.recoveryWords);
          trackPrfOutput('passkey1.prfOutput', authenticator1, user.credentialId);
+
+         // Each sign-in creates a new keystore key, which encrypts the session's copy of userCred in sessionStorage.
+         // trackAppKeys tracks the keys derived from every keystore key, and from every master key that decrypts a
+         // captured copy of userCred.
+         const triedCopies = new Set<string>();
+         let keystoreKeyHex = '';
+         let sessions = 0;
+         const trackAppKeys = async () => {
+            await Promise.all(pendingBodies.splice(0));
+            for (const master of masterKeys) {
+               for (const userCredEnc of userCredEncs) {
+                  const pair = `${master.name} ${userCredEnc}`;
+                  if (!triedCopies.has(pair)) {
+                     triedCopies.add(pair);
+                     const prefix = `${master.name}.copy${master.copies + 1}`;
+                     const secrets = await masterKeySecrets(
+                        prefix,
+                        userCredEnc,
+                        master.key,
+                        user.userId,
+                        user.userCred,
+                     );
+                     if (secrets) {
+                        master.copies++;
+                        tracker.add(secrets, 'gone');
+                     }
+                  }
+               }
+            }
+
+            const sessionState = await page.evaluate(() => sessionStorage.getItem('sessionstate'));
+            const state = JSON.parse(sessionState ?? '{}') as { pkId?: string; userId: string; userCredEnc?: string };
+            // Sign-out keeps the session state but removes pkId and userCredEnc from it
+            if (state.pkId && state.userCredEnc) {
+               const keystoreKey = await readKeystoreKey(page, state.pkId);
+               if (Buffer.from(keystoreKey).toString('hex') !== keystoreKeyHex) {
+                  keystoreKeyHex = Buffer.from(keystoreKey).toString('hex');
+                  sessions++;
+                  const prefix = `session${sessions}`;
+                  const secrets = await masterKeySecrets(
+                     prefix,
+                     state.userCredEnc,
+                     keystoreKey,
+                     state.userId,
+                     user.userCred,
+                  );
+                  expect(secrets, `${prefix}: the keystore key does not decrypt the session's userCred`).toBeDefined();
+                  tracker.add([byteSecret(`${prefix}.keystoreKey`, keystoreKey), ...secrets!], 'session');
+               }
+            }
+         };
+         const checkpoint = async (label: string, options?: CheckpointOptions) => {
+            await trackAppKeys();
+            await tracker.checkpoint(label, options);
+         };
 
          // Each part of the test below starts with a page load, scans once its operation completes, then signs out
          // and scans again. The load clears the page heap, so both scans show what the part's own operation left in
@@ -228,12 +370,15 @@ for (const prf of [true, false]) {
                await page.getByRole('button', { name: new RegExp(`Sign in as ${user.userName}`) }).click();
             });
             await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({ timeout: 10000 });
+            await trackAppKeys();
          };
+         // The session's keystore key is readable only until sign-out
          const signOut = async (operation: string) => {
+            await trackAppKeys();
             await openCredentials(page);
             await page.getByRole('button', { name: /Sign out/ }).click();
             await expect(page.locator('.signin div.success-msg')).toContainText(/Sign out succeeded/);
-            await tracker.checkpoint(`after ${operation} and sign-out`, { signedOut: true });
+            await checkpoint(`after ${operation} and sign-out`, { signedOut: true });
          };
          // Option panels are closed after every page load
          const selectCipher = async (description: string) => {
@@ -246,7 +391,7 @@ for (const prf of [true, false]) {
             await page.keyboard.press('Tab');
          };
 
-         await tracker.checkpoint('after account creation');
+         await checkpoint('after account creation');
          await signOut('account creation');
 
          // Users reach /cmdline only by URL, and loading it signs in with the passkey again
@@ -257,11 +402,11 @@ for (const prf of [true, false]) {
          const credentialInput = page.locator('input#credential');
          await expect(credentialInput).toBeVisible();
          expect(await credentialInput.inputValue()).toBe(user.userCred);
-         await tracker.checkpoint('/cmdline showing userCred', { present: [{ secret: 'userCred', kind: 'string' }] });
+         await checkpoint('/cmdline showing userCred', { present: [{ secret: 'userCred', kind: 'string' }] });
 
          await page.getByRole('link', { name: /command-line/ }).click();
          await expect(page).toHaveURL(/\/help\/faqs/);
-         await tracker.checkpoint('after leaving /cmdline', { gone: [{ secret: 'userCred', kind: 'string' }] });
+         await checkpoint('after leaving /cmdline', { gone: [{ secret: 'userCred', kind: 'string' }] });
          await page.getByRole('button', { name: 'Quick Crypt' }).click();
          await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({ timeout: 10000 });
          await signOut('/cmdline');
@@ -281,14 +426,14 @@ for (const prf of [true, false]) {
                   );
                   hinted = { message, armor };
                }
-               await clearCipherArmor(page);
-               await tracker.checkpoint(`after ${message.label} encryption`);
+               await clearTextBoxes(page);
+               await checkpoint(`after ${message.label} encryption`);
                await signOut(`${message.label} encryption`);
 
                await signIn(authenticator1);
                await decrypt(page, user, message, armor);
-               await clearCipherArmor(page);
-               await tracker.checkpoint(`after ${message.label} decryption`);
+               await clearTextBoxes(page);
+               await checkpoint(`after ${message.label} decryption`);
                await signOut(`${message.label} decryption`);
             }
          }
@@ -302,8 +447,8 @@ for (const prf of [true, false]) {
          await expect.poll(() => infoDialog.innerText()).toContain(infoMessage.hint!);
          await infoDialog.getByRole('button', { name: 'Close' }).click();
          await expect(infoDialog).toBeHidden();
-         await clearCipherArmor(page);
-         await tracker.checkpoint('after showing cipher info');
+         await clearTextBoxes(page);
+         await checkpoint('after showing cipher info');
          await signOut('showing cipher info');
 
          // While caching is on, the app stores the password by design, so its bytes serve as the positive
@@ -313,8 +458,9 @@ for (const prf of [true, false]) {
          await selectCipher('AEGIS 256');
          await setCacheTime(600);
          await encrypt(page, tracker, user, cached);
+         await clearTextBoxes(page);
          await tracker.plantCanaryNextTo('cached.canary', Buffer.from(cached.password, 'utf8'));
-         await tracker.checkpoint('password cached', {
+         await checkpoint('password cached', {
             present: [
                { secret: 'cached.password', kind: 'bytes' },
                { secret: 'cached.canary', kind: 'bytes' },
@@ -323,7 +469,7 @@ for (const prf of [true, false]) {
 
          await page.locator('button.clear-button').click();
          await expect(page.locator('button.clear-button')).toBeHidden();
-         await tracker.checkpoint('after flushing the cached password', {
+         await checkpoint('after flushing the cached password', {
             present: [{ secret: 'cached.canary', kind: 'bytes' }],
          });
          await signOut('flushing the cached password');
@@ -345,7 +491,7 @@ for (const prf of [true, false]) {
          });
          await expect(page.locator('table.credtable tbody tr')).toHaveCount(2);
          trackPrfOutput('passkey2.prfOutput', authenticator2, credentialId2);
-         await tracker.checkpoint('after adding a passkey');
+         await checkpoint('after adding a passkey');
          await signOut('adding a passkey');
 
          await signIn(authenticator1);
@@ -357,14 +503,14 @@ for (const prf of [true, false]) {
          });
          await expect(page).toHaveURL(/\/showrecovery$/, { timeout: 10000 });
          const newWords = await page.locator('textarea#wordsArea').inputValue();
-         tracker.add(await recoverySecrets('recovery2', newWords), 'gone');
-         await tracker.checkpoint('/showrecovery showing new words', {
+         await trackRecoveryWords('recovery2', newWords);
+         await checkpoint('/showrecovery showing new words', {
             present: [{ secret: 'recovery2.words', kind: 'string' }],
          });
 
          await page.getByRole('button', { name: /I saved my recovery words securely/ }).click();
          await expect(page).toHaveURL(/\/$/);
-         await tracker.checkpoint('after replacing recovery words');
+         await checkpoint('after replacing recovery words');
          await signOut('replacing recovery words');
 
          await page.goto('/');
@@ -381,7 +527,15 @@ for (const prf of [true, false]) {
          await expect(page).toHaveURL(/\/$/);
          await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({ timeout: 10000 });
          trackPrfOutput('passkey3.prfOutput', authenticator3, credentialId3);
-         await tracker.checkpoint('after recovery');
+         await checkpoint('after recovery');
+         // Every master key encrypted a copy of userCred that the API traffic carried, so a key without one shows
+         // that the capture missed it
+         expect
+            .soft(
+               masterKeys.filter((master) => !master.copies).map((master) => master.name),
+               'master keys with no captured copy of userCred',
+            )
+            .toEqual([]);
          await signOut('recovery');
 
          // Recovery removed the registration passkey, so the account is deleted here with the recovery passkey

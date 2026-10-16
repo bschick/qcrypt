@@ -3,13 +3,16 @@ import { wordlist } from '@scure/bip39/wordlists/english.js';
 import sodium from 'libsodium-wrappers';
 import * as api from '@qcrypt/api';
 import {
+   base64ToBytes,
    bytesToBase64,
    cryptoReady,
    decryptStream,
    getProofKeyPair,
+   MasterKeyKeyProvider,
    parseCipherArmor,
    PWDKeyProvider,
    readStreamAll,
+   setLogErrors,
    streamFromBytes,
    type KeyProvider,
 } from '@qcrypt/crypto';
@@ -48,15 +51,23 @@ export async function userCredSecrets(userCred: string): Promise<Secret[]> {
    ];
 }
 
+function spacedWords(words: string): string {
+   return words.trim().split(/\s+/).join(' ');
+}
+
+export function decodeRecoveryWords(words: string): Uint8Array {
+   return mnemonicToEntropy(spacedWords(words), wordlist);
+}
+
 // The words encode recoveryId followed by the userId. Only recoveryId is secret.
 export async function recoverySecrets(prefix: string, words: string): Promise<Secret[]> {
    await ready();
-   const spaced = words.trim().split(/\s+/).join(' ');
+   const spaced = spacedWords(words);
    const wordsSecret = textSecret(`${prefix}.words`, words);
    if (spaced !== words) {
       wordsSecret.texts.push(['spaced', spaced]);
    }
-   const secret = mnemonicToEntropy(spaced, wordlist);
+   const secret = decodeRecoveryWords(words);
    return [
       wordsSecret,
       byteSecret(`${prefix}.id`, secret.slice(0, api.RECOVERYID_BYTES)),
@@ -132,6 +143,39 @@ class RecordingKeyProvider implements KeyProvider {
    }
 }
 
+// Decrypts cipherData in Node and records every key the decryption used. Each key derived by
+// crypto_kdf_derive_from_key also gets an entry named `<key>.mixedKey`, holding the key that call received: the
+// hash of the master key, the salt and the context.
+async function decryptRecording(
+   cipherData: Uint8Array<ArrayBuffer>,
+   keyProvider: KeyProvider,
+): Promise<RecordedKeys & { clear: Uint8Array }> {
+   const recorded: RecordedKeys = { keys: new Map() };
+   const kdfCalls: { key: Uint8Array; output: Uint8Array }[] = [];
+   const kdf = sodium.crypto_kdf_derive_from_key;
+   // libs/crypto looks the function up on this same object at each call
+   const mutableSodium = sodium as { crypto_kdf_derive_from_key: typeof kdf };
+   mutableSodium.crypto_kdf_derive_from_key = ((length: number, id: number, context: string, key: Uint8Array) => {
+      const output = kdf(length, id, context, key);
+      kdfCalls.push({ key: key.slice(), output: output.slice() });
+      return output;
+   }) as typeof kdf;
+   try {
+      const clear = await readStreamAll(
+         await decryptStream(streamFromBytes(cipherData), new RecordingKeyProvider(keyProvider, recorded)),
+      );
+      for (const [name, key] of [...recorded.keys]) {
+         const call = kdfCalls.find((kdfCall) => Buffer.from(kdfCall.output.subarray(0, key.length)).equals(key));
+         if (call) {
+            recorded.keys.set(`${name}.mixedKey`, call.key);
+         }
+      }
+      return { ...recorded, clear };
+   } finally {
+      mutableSodium.crypto_kdf_derive_from_key = kdf;
+   }
+}
+
 export type CipherSecrets = {
    alg: string;
    // Keys derived from the password, which a breakpoint during a later operation cannot recover
@@ -150,28 +194,56 @@ export async function cipherSecrets(
    clearText: string,
 ): Promise<CipherSecrets> {
    await ready();
-   const recorded: RecordedKeys = { keys: new Map() };
-   const keyProvider = new RecordingKeyProvider(
+   const recorded = await decryptRecording(
+      parseCipherArmor(armor),
       new PWDKeyProvider(new Uint8Array(Buffer.from(userCred, 'base64url')), [password]),
-      recorded,
    );
-   const decrypted = await readStreamAll(await decryptStream(streamFromBytes(parseCipherArmor(armor)), keyProvider));
-   if (new TextDecoder().decode(decrypted) !== clearText) {
+   if (new TextDecoder().decode(recorded.clear) !== clearText) {
       throw new Error(`${prefix}: decrypting the cipher armor in Node did not reproduce the clear text`);
+   }
+   // Mixed keys are missing when libs/crypto loads a different libsodium module than this file
+   if (!recorded.keys.has('signingKey.mixedKey')) {
+      throw new Error(`${prefix}: recorded no mixed keys`);
    }
 
    const userCredKeyNames = ['signingKey', 'hintKey'];
    const passwordKeys: Secret[] = [];
    const userCredKeys: Secret[] = [];
-   // The key commitment is stored in the cipher armor, so it is public
+   // The key commitment is stored in the cipher armor, so it is public. Its mixed key derives nothing else.
    recorded.keys.delete('commitKey');
+   recorded.keys.delete('commitKey.mixedKey');
    for (const [name, key] of recorded.keys) {
       const secret = byteSecret(`${prefix}.${name}`, key);
-      if (userCredKeyNames.includes(name)) {
+      if (userCredKeyNames.includes(name.replace(/\.mixedKey$/, ''))) {
          userCredKeys.push(secret);
       } else {
          passwordKeys.push(secret);
       }
    }
    return { alg: recorded.alg ?? 'unknown', passwordKeys, userCredKeys };
+}
+
+// Returns the keys masterKey derives to decrypt userCredEnc. Decryption with any other master key fails
+// authentication, which returns undefined.
+export async function masterKeySecrets(
+   prefix: string,
+   userCredEnc: string,
+   masterKey: Uint8Array,
+   userId: string,
+   userCred: string,
+): Promise<Secret[] | undefined> {
+   await ready();
+   // Failures are expected for every other master key, so the library does not log them
+   setLogErrors(false);
+   // The key provider takes ownership of its master key and wipes it
+   const recorded = await decryptRecording(
+      base64ToBytes(userCredEnc),
+      new MasterKeyKeyProvider(new Uint8Array(masterKey), userId),
+   )
+      .catch(() => undefined)
+      .finally(() => setLogErrors(true));
+   if (recorded && !Buffer.from(recorded.clear).equals(Buffer.from(userCred, 'base64url'))) {
+      throw new Error(`${prefix}: decrypting userCredEnc in Node did not reproduce userCred`);
+   }
+   return recorded && [...recorded.keys].map(([name, key]) => byteSecret(`${prefix}.${name}`, key));
 }
