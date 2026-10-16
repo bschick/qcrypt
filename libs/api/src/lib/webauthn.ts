@@ -111,7 +111,8 @@ export type RegVerifyRiders = {
    userId: string;
    challenge: string;
    recoveryPubKey: string;
-   // BACKWARD COMPAT: make required once clients that omit it are gone
+   // BACKWARD COMPAT: make both required once clients that omit them are gone
+   recoveryTimestamp?: string;
    recoverySignature?: string;
    passkeyUserCredEnc?: string;
    recoveryUserCredEnc?: string;
@@ -149,6 +150,7 @@ export function makeRegVerifyRequest(source: RegistrationFields, riders: RegVeri
       userId: riders.userId,
       challenge: riders.challenge,
       recoveryPubKey: riders.recoveryPubKey,
+      recoveryTimestamp: riders.recoveryTimestamp,
       recoverySignature: riders.recoverySignature,
       passkeyUserCredEnc: riders.passkeyUserCredEnc,
       recoveryUserCredEnc: riders.recoveryUserCredEnc,

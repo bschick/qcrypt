@@ -20,6 +20,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
+// Length bounds, in characters after sanitizing, that the server enforces
+export const UNAME_MIN_LEN = 6;
+export const UNAME_MAX_LEN = 31;
+export const DESC_MIN_LEN = 6;
+export const DESC_MAX_LEN = 42;
+
 export type PatchUserRequest = {
    userName: string;
 };

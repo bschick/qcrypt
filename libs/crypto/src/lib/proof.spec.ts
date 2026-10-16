@@ -4,7 +4,7 @@ import { getRandom, bufferToHexString } from './utils';
 import { getProofKeyPair, createProof, verifyProof } from './proof';
 
 const KEY_CONTEXT = 'ProofKey';
-const SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
+const SIG_CONTEXT = 'qcrypt/test/proof/v1';
 
 // ML-DSA-65 sizes from FIPS 204
 const PUBKEY_BYTES = 1952;
