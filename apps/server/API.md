@@ -11,7 +11,7 @@ This document provides documentation for the passkey-based authentication server
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
 - **Authorization:** Not required
 - **Description:** Start registration of a new user and returns registration options for creating a passkey.
-- **Request Body:** A JSON object with `userName` and `userCredPubKey` keys. Example: `{"userName": "New User", "userCredPubKey": "base64key"}`. User name must be greater than 5 and less than 32 characters and may not contain HTML tags. `userCredPubKey` is the ML-DSA-65 public key derived from the user credential the client generated for the new account. The returned challenge is bound to that key, and `/v1/reg/verify` accepts it only with the same key.
+- **Request Body:** A JSON object with `userName` and `userCredPubKey` keys. Example: `{"userName": "New User", "userCredPubKey": "base64key"}`. User name must be greater than 5 and less than 32 characters and may not contain HTML tags. `userCredPubKey` is the ML-DSA-65 public key derived from the user credential the client generated for the new account. `/v1/reg/verify` must carry a proof made with that user credential.
 - **Read consistency:** Not applicable. Options are built for the user this call creates.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
@@ -22,15 +22,15 @@ This document provides documentation for the passkey-based authentication server
 
 - **Method:** `POST`
 - **Path:** `/v1/reg/verify`
-- **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body, and 'x-proof': a [user credential proof](#proofs) in challenge form, made with the user credential whose public key was sent to `/v1/reg/options`
+- **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body, and 'x-challenge-proof': a [user credential proof](#proofs) in challenge form, made with the user credential whose public key was sent to `/v1/reg/options`
 - **Authorization:** Not required
 - **Description:** Verifies a registration response from a client, creating a new user and passkey. Response contains a `csrf` token that must be sent in the `x-csrf-token` header for authorized requests.
-- **Request Body:** A [`RegVerify`](#regverify) object created by the client from the previous POST to `/v1/reg/options`: the SimpleWebAuthn/client `RegistrationResponseJSON` response, `userId`, `challenge`, `userCredPubKey`, `recoveryPubKey`, `recoveryTimestamp`, `recoverySignature`, and either the plaintext `userCred` or the client-encrypted credential fields `passkeyUserCredEnc` and `recoveryUserCredEnc`.
+- **Request Body:** A [`RegVerify`](#regverify) object created by the client from the previous POST to `/v1/reg/options`: the SimpleWebAuthn/client `RegistrationResponseJSON` response, `userId`, `challenge`, `recoveryPubKey`, `recoveryTimestamp`, `recoverySignature`, and either the plaintext `userCred` or the client-encrypted credential fields `passkeyUserCredEnc` and `recoveryUserCredEnc`.
 - **Read consistency:** Consistent.
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object including `csrf` and session cookie.
   - `400 Bad Request`: The body is not valid JSON.
-  - `401 Unauthorized`: Returned for every other failure, including an invalid request body, an invalid or missing proof, a `userCredPubKey` other than the one sent to `/v1/reg/options`, or an expired or invalid registration challenge.
+  - `401 Unauthorized`: Returned for every other failure, including an invalid request body, a body that carries `userCredPubKey`, an invalid or missing proof, or an invalid registration challenge.
 
 ## Authentication Endpoints
 
@@ -59,7 +59,7 @@ This document provides documentation for the passkey-based authentication server
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object including `csrf` and session cookie.
   - `400 Bad Request`: The body is not valid JSON.
-  - `401 Unauthorized`: Returned for every other failure, including an invalid request body, an unknown passkey, or an expired or invalid challenge.
+  - `401 Unauthorized`: Returned for every other failure, including an invalid request body, an unknown passkey, or an invalid challenge.
 
 ## Passkey Endpoints
 
@@ -67,7 +67,7 @@ This document provides documentation for the passkey-based authentication server
 
 - **Method:** `GET`
 - **Path:** `/v1/passkeys/options`
-- **Authorization:** Required (cookie, x-csrf-token, and x-proof)
+- **Authorization:** Required (cookie, x-csrf-token, and x-nonce-proof)
 - **Description:** Returns registration options for adding a new passkey to the currently authenticated user.
 - **Read consistency:** `excludeCredentials` is consistent. The `user` fields are eventually consistent.
 - **Responses:**
@@ -79,21 +79,21 @@ This document provides documentation for the passkey-based authentication server
 - **Method:** `POST`
 - **Path:** `/v1/passkeys/verify`
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
-- **Authorization:** Required (cookie, x-csrf-token, and x-proof)
+- **Authorization:** Required (cookie, x-csrf-token, and x-challenge-proof, a [user credential proof](#proofs) in challenge form over the challenge from `/v1/passkeys/options`)
 - **Description:** Verifies a registration response from a client and adds a new passkey to the currently authenticated user.
 - **Request Body:** An [`AddVerify`](#addverify) object created by the client from the previous GET to `/v1/passkeys/options`: the SimpleWebAuthn/client `RegistrationResponseJSON` response, `challenge`, and the client-encrypted credential field `passkeyUserCredEnc`.
 - **Read consistency:** `authenticators` is consistent and includes the new passkey. The other `UserInfo` fields are eventually consistent.
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object.
   - `400 Bad Request`: The request was malformed or the request body is invalid.
-  - `401 Unauthorized`: The registration challenge has expired or is invalid.
+  - `401 Unauthorized`: The request is not authorized, or the registration challenge is invalid.
 
 ### PATCH /v1/passkeys/{credid}
 
 - **Method:** `PATCH`
 - **Path:** `/v1/passkeys/{credid}`
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
-- **Authorization:** Required (cookie, x-csrf-token, and x-proof)
+- **Authorization:** Required (cookie, x-csrf-token, and x-nonce-proof)
 - **Description:** Updates the description of the passkey specified by `credid` for the currently authenticated user.
 - **Request Body:** A JSON object with a `description` key. Example: `{"description": "My Yubikey"}`. Passkey description must be greater than 5 and less than 43 characters and may not contain HTML tags.
 - **Read consistency:** `authenticators` is consistent and includes the new description. The other `UserInfo` fields are eventually consistent.
@@ -106,7 +106,7 @@ This document provides documentation for the passkey-based authentication server
 
 - **Method:** `DELETE`
 - **Path:** `/v1/passkeys/{credid}`
-- **Authorization:** Required (cookie, x-csrf-token, and x-proof)
+- **Authorization:** Required (cookie, x-csrf-token, and x-nonce-proof)
 - **Description:** Deletes the passkey specified by `credid` for the currently authenticated user. When a user's last passkey is deleted, the entire user account is permanently deleted and cannot be recovered.
 - **Read consistency:** `authenticators` is consistent and omits the deleted passkey. The other `UserInfo` fields are eventually consistent.
 - **Responses:**
@@ -120,7 +120,7 @@ This document provides documentation for the passkey-based authentication server
 
 - **Method:** `GET`
 - **Path:** `/v1/user`
-- **Authorization:** Required (cookie, x-csrf-token, and x-proof)
+- **Authorization:** Required (cookie, x-csrf-token, and x-nonce-proof)
 - **Description:** Retrieves information about the currently authenticated user.
 - **Read consistency:** Eventually consistent.
 - **Responses:**
@@ -133,7 +133,7 @@ This document provides documentation for the passkey-based authentication server
 - **Method:** `PATCH`
 - **Path:** `/v1/user`
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
-- **Authorization:** Required (cookie, x-csrf-token, and x-proof)
+- **Authorization:** Required (cookie, x-csrf-token, and x-nonce-proof)
 - **Description:** Updates the username of the currently authenticated user.
 - **Request Body:** A JSON object with a `userName` key. Example: `{"userName": "Some Name"}`. User name must be greater than 5 and less than 32 characters and may not contain HTML tags.
 - **Read consistency:** `userName` reflects this change. The other `UserInfo` fields, including `authenticators`, are eventually consistent.
@@ -167,21 +167,21 @@ session. The first two calls end an existing session. Interleaved recover3 flows
 
 - **Method:** `POST`
 - **Path:** `/v1/recover/confirm`
-- **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
+- **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body, and 'x-challenge-proof': a [user credential proof](#proofs) in challenge form over the challenge returned by `/v1/recover3`, made with the account's user credential
 - **Authorization:** Not required
-- **Description:** Confirms that a client has the expected user credential by verifying a signature over the challenge returned by `/v1/recover3`, created by the client with a key derived from that credential. On success the server deletes all existing passkeys for the account and returns registration options to create a new passkey.
+- **Description:** Confirms that a client has the expected user credential. On success the server deletes all existing passkeys for the account and returns registration options to create a new passkey.
 - **Request Body:** A [`RecoverConfirm`](#recoverconfirm) object.
 - **Read consistency:** Consistent.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
   - `400 Bad Request`: The body is not valid JSON.
-  - `401 Unauthorized`: Returned for every other failure, including a challenge that is unknown or already spent, or an invalid signature.
+  - `401 Unauthorized`: Returned for every other failure, including a challenge that is unknown or already spent, or an invalid or missing proof.
 
 ### POST /v1/recover/verify
 
 - **Method:** `POST`
 - **Path:** `/v1/recover/verify`
-- **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body, and 'x-proof': a [user credential proof](#proofs) in challenge form, made with the account's user credential
+- **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body, and 'x-challenge-proof': a [user credential proof](#proofs) in challenge form, made with the account's user credential
 - **Authorization:** Not required
 - **Description:** Completes account recovery by verifying the registration of the new passkey created from the registration options returned by `/v1/recover/confirm`, and establishes a new session.
 - **Request Body:** A [`RecoverVerify`](#recoververify) object: the SimpleWebAuthn/client `RegistrationResponseJSON` response, `userId`, `challenge`, and the client-encrypted credential field `passkeyUserCredEnc`.
@@ -189,14 +189,14 @@ session. The first two calls end an existing session. Interleaved recover3 flows
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object including `csrf` and session cookie.
   - `400 Bad Request`: The body is not valid JSON.
-  - `401 Unauthorized`: Returned for every other failure, including an invalid request body, an invalid proof, or an expired or invalid recovery challenge.
+  - `401 Unauthorized`: Returned for every other failure, including an invalid request body, an invalid proof, or an invalid recovery challenge.
 
 ### PUT /v1/recover3/key
 
 - **Method:** `PUT`
 - **Path:** `/v1/recover3/key`
 - **Headers:** 'x-amz-content-sha256': SHA-256 Hex string digest of request body
-- **Authorization:** Required (cookie, x-csrf-token, and x-proof)
+- **Authorization:** Required (cookie, x-csrf-token, and x-nonce-proof)
 - **Description:** Replaces the account's recovery key with a new public key derived by the client app from new recovery words. The caller must also include a signature, created with the new keypair, over the authenticated `userId` and a timestamp and nonce it chooses. For PRF accounts, the user credential re-encrypted under the new recovery secret must also be supplied.
 - **Request Body:** A [`Recover3Key`](#recover3key) object.
 - **Read consistency:** `recoveryKeyId` reflects this change. The other `UserInfo` fields, including `authenticators`, are eventually consistent.
@@ -225,7 +225,7 @@ session. The first two calls end an existing session. Interleaved recover3 flows
 
 - **Method:** `GET`
 - **Path:** `/v1/session`
-- **Authorization:** Required (cookie and x-proof)
+- **Authorization:** Required (cookie and x-nonce-proof)
 - **Description:** If a session exists and is valid, returns information for the currently authenticated user which includes a `csrf` token that must be sent in a `x-csrf-token` header for all other authorized requests.
 - **Read consistency:** Eventually consistent.
 - **Responses:**
@@ -237,7 +237,7 @@ session. The first two calls end an existing session. Interleaved recover3 flows
 
 - **Method:** `DELETE`
 - **Path:** `/v1/session`
-- **Authorization:** Required (cookie, x-csrf-token, and x-proof)
+- **Authorization:** Required (cookie, x-csrf-token, and x-nonce-proof)
 - **Description:** Ends the current session and invalidates the session cookie and csrf token. Sessions will expire automatically, this endpoint is only needed to force early termination.
 - **Read consistency:** Not applicable.
 - **Responses:**
@@ -247,7 +247,7 @@ session. The first two calls end an existing session. Interleaved recover3 flows
 
 ## Request Data Models
 
-These are the objects sent by the client in request bodies. Each `*Verify` object is a SimpleWebAuthn/client `RegistrationResponseJSON` object with the additional fields below. The client-encrypted credential fields hold a user credential the client generated and encrypted itself; the server stores them as opaque values it cannot decrypt.
+These are the objects sent by the client in request bodies. Each `*Verify` object is a SimpleWebAuthn/client `RegistrationResponseJSON` object with the additional fields below. The client-encrypted credential fields hold a user credential the client generated and encrypted itself.
 
 ### RegVerify
 
@@ -255,15 +255,14 @@ Sent to `POST /v1/reg/verify` to create a new user and passkey.
 
 - `userId` (string): The unique identifier for the user.
 - `challenge` (string): A string that must be sent back to the server for verification.
-- `userCredPubKey` (string): The ML-DSA-65 public key derived from the client-generated user credential. Must equal the key sent to `/v1/reg/options`.
 - `recoveryPubKey` (string): The ML-DSA-65 public key derived from the client's recovery secret.
 - `recoveryTimestamp` (string): Milliseconds since the epoch, as a decimal string, when `recoverySignature` was made.
-- `recoverySignature` (string): A [recovery proof](#proofs) in challenge form, over `userId`, `recoveryTimestamp`, `challenge`, and `userCredPubKey`.
-- `userCred` (string): The plaintext user credential. Sent for no-PRF accounts, and must derive `userCredPubKey`.
+- `recoverySignature` (string): A [recovery proof](#proofs) in challenge form, over `userId`, `recoveryTimestamp`, `challenge`, and the `userCredPubKey` sent to `/v1/reg/options`.
+- `userCred` (string): The plaintext user credential. Sent for no-PRF accounts, and must derive the `userCredPubKey` sent to `/v1/reg/options`.
 - `passkeyUserCredEnc` (string): The user credential encrypted under the new passkey's key. Sent for PRF accounts.
 - `recoveryUserCredEnc` (string): The user credential encrypted under the recovery secret. Sent for PRF accounts.
 
-A request carries either `userCred` or both encrypted fields, never both. The server stores `userCred` encrypted under its own key, and the encrypted fields as opaque values it cannot decrypt.
+A request carries either `userCred` or both encrypted fields, never both.
 
 ### RecoverVerify
 
@@ -294,9 +293,7 @@ Sent to `POST /v1/recover3` to start account recovery.
 Sent to `POST /v1/recover/confirm` to show the caller has the user credential.
 
 - `userId` (string): The unique identifier for the user.
-- `challenge` (string): The challenge returned by `/v1/recover3`, which the signature covers.
-- `timestamp` (string): Milliseconds since the epoch, as a decimal string, when the signature was made.
-- `signature` (string): A [user credential proof](#proofs) in challenge form.
+- `challenge` (string): The challenge returned by `/v1/recover3`.
 
 ### Recover3Key
 
@@ -393,19 +390,27 @@ consistent read may miss a recent write, usually one from within the last second
 
 ## Authorization
 
-Endpoints that require authorization expect a `__Host-JWT` cookie, a `x-csrf-token` header, and a `x-proof` header to be sent with the request. The cookie and `csrf` token are issued by the `POST /v1/auth/verify` and `POST /v1/reg/verify` endpoints upon successful authentication. Once a session cookie is obtained, the `csrf` token is also returned by the `GET /v1/session` endpoint. The cookie contains a JSON Web Token (JWT) for authorization. The JWT is valid for a limited time or until `DELETE /v1/session` is called which returns a `__Host-JWT` cookie without a JWT, ending a session and invalidating the `csrf` token immediately.
+Endpoints that require authorization expect a `__Host-JWT` cookie, a `x-csrf-token` header, and a proof header to be sent with the request. The cookie and `csrf` token are issued by the `POST /v1/auth/verify` and `POST /v1/reg/verify` endpoints upon successful authentication. Once a session cookie is obtained, the `csrf` token is also returned by the `GET /v1/session` endpoint. The cookie contains a JSON Web Token (JWT) for authorization. The JWT is valid for a limited time or until `DELETE /v1/session` is called which returns a `__Host-JWT` cookie without a JWT, ending a session and invalidating the `csrf` token immediately.
 
-The `x-proof` header carries a [user credential proof](#proofs) in nonce form, which proves possession of the user credential.
+Most authorized endpoints require a `x-nonce-proof` header, which carries a [user credential proof](#proofs) in nonce form, except `POST /v1/passkeys/verify`, which requires a `x-challenge-proof` header, which carries a [user credential proof](#proofs) in challenge form.
 
 ## Proofs
 
-A proof is an ML-DSA-65 signature that shows the client holds the private key for a public key the server stores. Each kind of proof is signed under its own context string, so a signature made for one purpose never verifies as another. Every timestamp is milliseconds since the epoch, as a decimal string, and must be within 2 minutes of the server's clock.
+A proof is an ML-DSA-65 signature that shows the client holds the private key for a public key the server stores. Each kind of proof is signed under its own context string. Every timestamp is milliseconds since the epoch, as a decimal string, and must be within 2 minutes of the server's clock.
 
 - **User credential proofs:** Made with the key derived from the user credential. The signature covers `userId`, the HTTP method, path, `timestamp`, a nonce or challenge, the SHA-256 digest of the request body, and the query string. There are two forms:
-  - *Nonce form:* Sent in the `x-proof` header of every authorized request as a comma-separated `signature,timestamp,nonce` value. The client chooses a new random `nonce` for each request. On requests that change state, a nonce is accepted only once within the timestamp window.
-  - *Challenge form:* Uses a challenge the server returned from the preceding call rather than a nonce, so the proof cannot outlive that challenge. `POST /v1/reg/verify` and `POST /v1/recover/verify` send it in the `x-proof` header as a `signature,timestamp,challenge` value, with the challenge from `POST /v1/reg/options` or `POST /v1/recover/confirm`. `POST /v1/recover/confirm` sends it in its body instead, signed over an empty body, with the challenge from `POST /v1/recover3`.
+  - *Nonce form:* Sent in the `x-nonce-proof` header as a comma-separated `signature,timestamp,nonce` value. The client chooses a new random `nonce` for each request. On requests that change state, a nonce is accepted only once within the timestamp window.
+  - *Challenge form:* Sent in the `x-challenge-proof` header as a comma-separated `signature,timestamp` value. In place of a nonce, it signs the `challenge` in the request body, which the server returned from the preceding call:
+    - `POST /v1/reg/verify`: the challenge from `POST /v1/reg/options`
+    - `POST /v1/recover/confirm`: the challenge from `POST /v1/recover3`
+    - `POST /v1/recover/verify`: the challenge from `POST /v1/recover/confirm`
+    - `POST /v1/passkeys/verify`: the challenge from `GET /v1/passkeys/options`
+
+    It signs the `userId` in the request body, or for `POST /v1/passkeys/verify` the authenticated user's `userId`.
 - **Recovery proofs:** Made with the key derived from the recovery secret, and sent in the request body. There are two forms:
   - *Nonce form:* `POST /v1/recover3` and `PUT /v1/recover3/key` sign `userId`, `timestamp`, and a client-chosen `nonce`. A nonce is accepted only once within the timestamp window.
-  - *Challenge form:* `POST /v1/reg/verify` signs `userId`, a timestamp, the challenge returned by `POST /v1/reg/options`, and `userCredPubKey`, sending the timestamp in its `recoveryTimestamp` field and the signature in its `recoverySignature` field.
+  - *Challenge form:* `POST /v1/reg/verify` signs `userId`, a timestamp, the challenge returned by `POST /v1/reg/options`, and the `userCredPubKey` sent to `POST /v1/reg/options`, sending the timestamp in its `recoveryTimestamp` field and the signature in its `recoverySignature` field.
+
+A request carries at most one proof header, of the form its endpoint requires. A request with any other proof header is rejected, with `400 Bad Request` from an authenticated endpoint and `401 Unauthorized` from the others.
 
 For details, see the `apps/web/src/app/services/authenticator.service.ts` and `libs/api/src/lib/proof.ts` source files.
