@@ -26,7 +26,9 @@ import * as api from '@qcrypt/api';
 import {
    getJson,
    patchJson,
+   postJson,
    expectPasskeyDeleted,
+   makeChallengeProofHeaders,
    makeNonceProofHeaders,
    registerTestUser,
    setSessionSigner,
@@ -161,29 +163,29 @@ describe('proof of userCred enforcement', () => {
          challenge,
          sha256Hex(Buffer.alloc(0)),
       );
-      const proof = { 'x-proof': `${signature},${timestamp},${challenge}` };
+      const proof = { 'x-nonce-proof': `${signature},${timestamp},${challenge}` };
       const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
 
    it('rejects requests with missing proof parts', async () => {
       const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId);
-      const parts = proof['x-proof'].split(',');
+      const parts = proof['x-nonce-proof'].split(',');
       expect(parts.length).toBe(3);
 
-      proof['x-proof'] = parts.join(',');
+      proof['x-nonce-proof'] = parts.join(',');
       let res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(200);
 
-      proof['x-proof'] = parts.slice(1).join(',');
+      proof['x-nonce-proof'] = parts.slice(1).join(',');
       res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
 
-      proof['x-proof'] = parts.slice(0, 1).join(',');
+      proof['x-nonce-proof'] = parts.slice(0, 1).join(',');
       res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
 
-      proof['x-proof'] = [parts[0], parts[2]].join(',');
+      proof['x-nonce-proof'] = [parts[0], parts[2]].join(',');
       res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
@@ -252,5 +254,99 @@ describe('proof of userCred enforcement', () => {
       );
       expect(results.filter((r) => r.status === 200).length).toBe(1);
       expect(results.filter((r) => r.status === 401).length).toBe(4);
+   });
+
+   describe('proof headers', () => {
+      async function userProof(): Promise<Record<string, string>> {
+         return makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId);
+      }
+
+      // BACKWARD COMPAT
+      it('accepts a nonce proof in x-proof', async () => {
+         const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId, {
+            legacyHeader: true,
+         });
+         const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
+         expect(res.status).toBe(200);
+      });
+
+      // BACKWARD COMPAT
+      it('rejects a tampered nonce proof in x-proof', async () => {
+         const ok = await getJson('/v1/user', { 'x-csrf-token': csrf, ...(await userProof()) }, cookie);
+         expect(ok.status).toBe(200);
+
+         const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId, {
+            legacyHeader: true,
+            tamperSig: true,
+         });
+         const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
+         expect(res.status).toBe(401);
+      });
+
+      // BACKWARD COMPAT. Two full proofs exceed the edge's request header limit, which returns 413
+      // before the server sees them, so x-proof carries a short placeholder.
+      it('rejects a request carrying both x-nonce-proof and x-proof', async () => {
+         const proof = await userProof();
+         const ok = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
+         expect(ok.status).toBe(200);
+
+         const legacy = { 'x-proof': 'signature,timestamp,nonce' };
+         const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof, ...legacy }, cookie);
+         expect(res.status).toBe(400);
+      });
+
+      // Two full proofs exceed the edge's request header limit, which returns 413 before the server
+      // sees them, so x-challenge-proof carries a short placeholder
+      it('rejects an x-challenge-proof on a route that takes a nonce proof', async () => {
+         const proof = await userProof();
+         const ok = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
+         expect(ok.status).toBe(200);
+
+         const challengeProof = { 'x-challenge-proof': 'signature,timestamp' };
+         const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof, ...challengeProof }, cookie);
+         expect(res.status).toBe(400);
+      });
+
+      // auth/options takes no proof, and as an unauthenticated route reports any rejection as 401
+      it('rejects a proof header on a route that takes no proof', async () => {
+         const body = { userId };
+         const ok = await postJson('/v1/auth/options', body, {}, '');
+         expect(ok.status).toBe(200);
+
+         const nonceProof = await makeNonceProofHeaders(
+            'POST',
+            '/v1/auth/options',
+            Buffer.from(JSON.stringify(body)),
+            userCred,
+            userId,
+         );
+         const withNonce = await postJson('/v1/auth/options', body, nonceProof, '');
+         expect(withNonce.status).toBe(401);
+
+         const challengeProof = makeChallengeProofHeaders(
+            '/v1/auth/options',
+            body,
+            Buffer.from(userCred, 'base64url'),
+            userId,
+            randomBytes(api.CHALLENGE_BYTES).toString('base64url'),
+         );
+         const withChallenge = await postJson('/v1/auth/options', body, challengeProof, '');
+         expect(withChallenge.status).toBe(401);
+      });
+
+      // BACKWARD COMPAT: a signed-in client sends x-proof with every request
+      it('ignores x-proof on a route that takes no proof', async () => {
+         const body = { userId };
+         const legacy = await makeNonceProofHeaders(
+            'POST',
+            '/v1/auth/options',
+            Buffer.from(JSON.stringify(body)),
+            userCred,
+            userId,
+            { legacyHeader: true },
+         );
+         const res = await postJson('/v1/auth/options', body, legacy, '');
+         expect(res.status).toBe(200);
+      });
    });
 });

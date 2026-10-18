@@ -56,6 +56,7 @@ export const Users = new Entity(
             type: 'string',
             required: false,
          },
+         // BACKWARD COMPAT: make userCredPubKey required after clients update
          userCredPubKey: {
             type: 'string',
             required: false,

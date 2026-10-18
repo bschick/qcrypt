@@ -55,6 +55,18 @@ export const sha256Hex = (buf: Buffer): string => crypto.createHash('sha256').up
 let sessionUserCred: string | undefined;
 let sessionUserId: string | undefined;
 
+// Routes that reject a nonce proof, so the session nonce proof is never added to them
+const NO_NONCE_PROOF = [
+   '/v1/auth/options',
+   '/v1/auth/verify',
+   '/v1/reg/options',
+   '/v1/reg/verify',
+   '/v1/recover',
+   '/v1/recover3',
+   '/v1/recover/confirm',
+   '/v1/recover/verify',
+];
+
 export function setSessionSigner(userId: string | undefined, userCred?: string): void {
    sessionUserId = userId;
    sessionUserCred = userCred;
@@ -76,7 +88,8 @@ export async function makeNonceProofHeaders(
    body: Buffer | undefined,
    userCred: string,
    userId: string,
-   opts: { timestampMs?: string; tamperSig?: boolean; nonce?: string } = {},
+   // BACKWARD COMPAT: legacyHeader sends the proof in the x-proof header
+   opts: { timestampMs?: string; tamperSig?: boolean; nonce?: string; legacyHeader?: boolean } = {},
 ): Promise<Record<string, string>> {
    await cryptoReady();
    const timestamp = opts.timestampMs ?? String(Date.now());
@@ -106,12 +119,13 @@ export async function makeNonceProofHeaders(
    }
 
    return {
-      'x-proof': `${sigStr},${timestamp},${nonce}`,
+      // BACKWARD COMPAT: x-proof only when legacyHeader is set
+      [opts.legacyHeader ? 'x-proof' : 'x-nonce-proof']: `${sigStr},${timestamp},${nonce}`,
    };
 }
 
-// The x-proof for a POST that answers a server-issued challenge, which the proof signs as its
-// nonce. The body hash must match the JSON that postJson sends for the same object.
+// The x-challenge-proof for a POST that answers a server-issued challenge, which the proof signs
+// in place of a nonce. The body hash must match the JSON that postJson sends for the same object.
 export function makeChallengeProofHeaders(
    path: string,
    bodyObj: object,
@@ -121,16 +135,18 @@ export function makeChallengeProofHeaders(
    opts: { timestampMs?: string } = {},
 ): Record<string, string> {
    const timestamp = opts.timestampMs ?? String(Date.now());
+   const [pathname, queryString = ''] = path.split('?');
    const signature = api.createUserCredChallengeProof(
       userCred,
       userId,
       'POST',
-      path,
+      pathname,
       timestamp,
       challenge,
       sha256Hex(Buffer.from(JSON.stringify(bodyObj), 'utf8')),
+      queryString,
    );
-   return { 'x-proof': `${signature},${timestamp},${challenge}` };
+   return { 'x-challenge-proof': `${signature},${timestamp}` };
 }
 
 export function getWebAuthnEmulator(
@@ -289,7 +305,10 @@ async function request(
       headers['x-amz-content-sha256'] = sha256Hex(body);
    }
 
-   if (cookie) {
+   // The server rejects a request with more than one proof header, so a proof header passed in
+   // replaces the session nonce proof. BACKWARD COMPAT: x-proof is the compat nonce proof header.
+   const hasProof = ['x-nonce-proof', 'x-challenge-proof', 'x-proof'].some((name) => name in headers);
+   if (cookie && !hasProof && !NO_NONCE_PROOF.includes(path)) {
       Object.assign(headers, await proofHeaders(method, path, body));
    }
 
@@ -520,11 +539,23 @@ export async function addPasskey(user: TestUser, csrf: string, cookie: string): 
       passkeyUserCredEnc,
    });
 
-   const verifyRes = await postJson('/v1/passkeys/verify', body, { 'x-csrf-token': csrf }, cookie);
+   const verifyRes = await postPasskeyVerify(user, body, csrf, cookie);
    expect(verifyRes.status).toBe(200);
    expect(verifyRes.data.verified).toBe(true);
 
    return attestation.id;
+}
+
+// Sends passkeys/verify with a challenge proof over the body's challenge, signed with user's userCred
+export function postPasskeyVerify(
+   user: TestUser,
+   body: Record<string, unknown> & { challenge: string },
+   csrf: string,
+   cookie: string,
+   path: string = '/v1/passkeys/verify',
+) {
+   const headers = makeChallengeProofHeaders(path, body, base64ToBytes(user.userCred), user.userId, body.challenge);
+   return postJson(path, body, { 'x-csrf-token': csrf, ...headers }, cookie);
 }
 
 // Prepares a registration up to, but not including, reg/verify. reg/options has already run, so the
@@ -542,6 +573,7 @@ export async function buildRegBody(
    headers: Record<string, string>;
    emulator: WebAuthnEmulator;
    userCred: Uint8Array<ArrayBuffer>;
+   userCredPubKey: string;
    recoverySecret: Uint8Array;
    recoveryId: Uint8Array;
    prfOutput?: Uint8Array<ArrayBuffer>;
@@ -572,7 +604,8 @@ export async function buildRegBody(
    const riders: api.RegVerifyRiders = {
       userId,
       challenge,
-      userCredPubKey,
+      // BACKWARD COMPAT: a client that omits userCredPubKey from reg/options sends it here
+      userCredPubKey: bindKey ? undefined : userCredPubKey,
       recoveryPubKey: api.getRecoveryPubKey(secret),
       recoveryTimestamp,
       recoverySignature: api.createRecoveryChallengeProof(secret, userId, recoveryTimestamp, challenge, userCredPubKey),
@@ -586,14 +619,14 @@ export async function buildRegBody(
 
    const body = api.makeRegVerifyRequest(attestation as api.RegistrationFields, riders);
    const headers = makeChallengeProofHeaders('/v1/reg/verify', body, userCred, userId, challenge);
-   return { userId, body, headers, emulator, userCred, recoverySecret: secret, recoveryId, prfOutput };
+   return { userId, body, headers, emulator, userCred, userCredPubKey, recoverySecret: secret, recoveryId, prfOutput };
 }
 
 export type Registration = Awaited<ReturnType<typeof buildRegBody>>;
 
-// Overrides for a request built by buildRegBody. Fields in body replace the built ones. The x-proof
-// over the final body is signed with the private key derived from keySecret, which defaults to the
-// built userCred. Headers that are passed are sent in place of the x-proof.
+// Overrides for a request built by buildRegBody. Fields in body replace the built ones. The
+// x-challenge-proof over the final body is signed with the private key derived from keySecret, which
+// defaults to the built userCred. Headers that are passed are sent in place of the x-challenge-proof.
 export interface RegVerifyOpts {
    body?: Partial<api.RegVerifyRequest>;
    keySecret?: Uint8Array;

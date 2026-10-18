@@ -30,7 +30,7 @@ import {
    registerTestUser,
    registerNewCredential,
    getJson,
-   postJson,
+   postPasskeyVerify,
    expectPasskeyDeleted,
    setSessionSigner,
 } from './common';
@@ -64,10 +64,10 @@ describe('no-PRF account', () => {
       const opts = await getJson('/v1/passkeys/options', auth, account.cookie);
       expect(opts.status).toBe(200);
       const add = await registerNewCredential(account, opts.data);
-      const ok = await postJson(
-         '/v1/passkeys/verify',
+      const ok = await postPasskeyVerify(
+         account,
          { ...add.attestation, challenge: opts.data.challenge },
-         auth,
+         account.csrf,
          account.cookie,
       );
       expect(ok.status).toBe(200);
@@ -76,14 +76,14 @@ describe('no-PRF account', () => {
       // ...but the same add carrying a passkeyUserCredEnc ciphertext is rejected.
       const opts2 = await getJson('/v1/passkeys/options', auth, account.cookie);
       const add2 = await registerNewCredential(account, opts2.data);
-      const bad = await postJson(
-         '/v1/passkeys/verify',
+      const bad = await postPasskeyVerify(
+         account,
          {
             ...add2.attestation,
             challenge: opts2.data.challenge,
             passkeyUserCredEnc: bytesToBase64(getRandom(cc.USERCRED_BYTES)),
          },
-         auth,
+         account.csrf,
          account.cookie,
       );
       expect(bad.status).toBe(400);

@@ -24,7 +24,7 @@ import { FilterXSS } from 'xss';
 import { Buffer } from 'node:buffer';
 import * as crypto from 'node:crypto';
 import * as api from '@qcrypt/api';
-import { Challenges, type ChallengeItem, type VerifiedUserItem } from './models';
+import { Challenges, type ChallengeItem, type UnverifiedUserItem, type VerifiedUserItem } from './models';
 import type { HttpDetails } from './urls';
 import { USERCRED_ENC_MIN_BYTES, USERCRED_ENC_MAX_BYTES, UNKNOWN_USER_ID } from './consts';
 
@@ -141,10 +141,23 @@ export async function verifyRecoveryNonceProof(
    }
 }
 
+function proofFields(header: string | undefined, count: number, label: string): string[] {
+   const fields = header?.split(',').map((field) => field.trim());
+   if (fields?.length !== count) {
+      console.error(`proof header ${label} missing or malformed`);
+      throw new AuthError();
+   }
+   return fields;
+}
+
+// proofHeader is "signature,timestamp,nonce"
 export async function verifyUserCredNonceProof(
    verifiedUser: VerifiedUserItem,
    httpDetails: HttpDetails,
+   proofHeader: string | undefined,
 ): Promise<void> {
+   const label = `${httpDetails.name} ${verifiedUser.userId}`;
+   const [signature, timestamp, nonce] = proofFields(proofHeader, 3, label);
    const bodyHashHex = crypto.createHash('sha256').update(httpDetails.rawBody, 'utf8').digest('hex');
    try {
       // A stale userCredPubKey after rotation surfaces here as a spurious 401.
@@ -153,14 +166,14 @@ export async function verifyUserCredNonceProof(
          verifiedUser.userId,
          httpDetails.method,
          httpDetails.path,
-         httpDetails.proofTimestamp!,
-         httpDetails.proofNonce!,
+         timestamp,
+         nonce,
          bodyHashHex,
-         httpDetails.proofSignature!,
+         signature,
          httpDetails.rawQueryString,
       );
    } catch (err) {
-      console.error(`proof ${httpDetails.name} ${verifiedUser.userId}`, err);
+      console.error(`nonce proof ${label}`, err);
       throw new AuthError();
    }
 
@@ -168,15 +181,46 @@ export async function verifyUserCredNonceProof(
    // single-use of the nonce only for state-changing requests
    // TODO: Consider moving this to AWS Elastic cache when usage increases
    if (httpDetails.method !== 'GET') {
-      const outcome = await storeSingleUseNonce(httpDetails.proofNonce!, 'api', verifiedUser.userId);
+      const outcome = await storeSingleUseNonce(nonce, 'api', verifiedUser.userId);
       if (outcome !== 'ok') {
-         console.error(`proof ${outcome} ${httpDetails.name} ${verifiedUser.userId}`);
+         console.error(`nonce proof ${outcome} ${label}`);
          throw new AuthError();
       }
    }
 }
 
-// BACKWARD COMPAT: exists only for the nonce-context fallback below
+// proofHeader is "signature,timestamp", and the proof signs the challenge in the request body.
+// No single use nonce is stored, because the route consumes that challenge, which makes the proof
+// single use.
+export function verifyUserCredChallengeProof(
+   user: UnverifiedUserItem,
+   httpDetails: HttpDetails,
+   proofHeader: string | undefined,
+): void {
+   const label = `${httpDetails.name} ${user.userId}`;
+   const [signature, timestamp] = proofFields(proofHeader, 2, label);
+   const { challenge } = httpDetails.body as api.ChallengeRiders;
+   const bodyHashHex = crypto.createHash('sha256').update(httpDetails.rawBody, 'utf8').digest('hex');
+   try {
+      api.verifyUserCredChallengeProof(
+         user.userCredPubKey!,
+         user.userId,
+         httpDetails.method,
+         httpDetails.path,
+         timestamp,
+         challenge,
+         bodyHashHex,
+         signature,
+         httpDetails.rawQueryString,
+      );
+   } catch (err) {
+      console.error(`challenge proof ${label}`, err);
+      throw new AuthError();
+   }
+}
+
+// BACKWARD COMPAT: checks a recover/confirm proof carried in the body, signed with the nonce
+// context. Delete once x-challenge-proof is required.
 export function verifyRecoverConfirmProof(
    confirm: api.RecoverConfirmRequest,
    userCredPubKey: string,
@@ -185,32 +229,17 @@ export function verifyRecoverConfirmProof(
    const { userId, challenge, timestamp, signature } = confirm;
    // There is no body beyond the signature fields, so hash is for empty string
    const bodyHashHex = crypto.createHash('sha256').update('', 'utf8').digest('hex');
-   try {
-      api.verifyUserCredChallengeProof(
-         userCredPubKey,
-         userId,
-         httpDetails.method,
-         httpDetails.path,
-         timestamp,
-         challenge,
-         bodyHashHex,
-         signature,
-         httpDetails.rawQueryString,
-      );
-   } catch {
-      // BACKWARD COMPAT: accepts a confirm proof signed with the nonce context
-      api.verifyUserCredNonceProof(
-         userCredPubKey,
-         userId,
-         httpDetails.method,
-         httpDetails.path,
-         timestamp,
-         challenge,
-         bodyHashHex,
-         signature,
-         httpDetails.rawQueryString,
-      );
-   }
+   api.verifyUserCredNonceProof(
+      userCredPubKey,
+      userId,
+      httpDetails.method,
+      httpDetails.path,
+      timestamp!,
+      challenge,
+      bodyHashHex,
+      signature!,
+      httpDetails.rawQueryString,
+   );
 }
 
 // Never throws: an error from the store itself is reported as 'failed'.

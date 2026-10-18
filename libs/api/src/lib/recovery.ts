@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import type { RegOptionsResponse } from './webauthn';
+import type { ChallengeRiders, RegOptionsResponse } from './webauthn';
 
 // The pre-recovery-words path, which proves possession by sending userCred itself.
 export type RecoverRequest = {
@@ -43,11 +43,10 @@ export type Recover3KeyRequest = RecoverProof & {
    userCredEnc?: string;
 };
 
-export type RecoverConfirmRequest = {
-   userId: string;
-   challenge: string;
-   timestamp: string;
-   signature: string;
+export type RecoverConfirmRequest = ChallengeRiders & {
+   // BACKWARD COMPAT: the proof of a request that carries no x-challenge-proof header
+   timestamp?: string;
+   signature?: string;
 };
 
 export type RecoverInfoResponse = RegOptionsResponse & {

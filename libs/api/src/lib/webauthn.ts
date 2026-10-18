@@ -107,9 +107,12 @@ export type AuthVerifyRiders = {
    challenge: string;
 };
 
-export type RegVerifyRiders = {
+export type ChallengeRiders = {
    userId: string;
    challenge: string;
+};
+
+export type RegVerifyRiders = ChallengeRiders & {
    recoveryPubKey: string;
    // BACKWARD COMPAT: make both required once clients that omit them are gone
    recoveryTimestamp?: string;
@@ -120,9 +123,7 @@ export type RegVerifyRiders = {
    userCred?: string;
 };
 
-export type RecoverVerifyRiders = {
-   userId: string;
-   challenge: string;
+export type RecoverVerifyRiders = ChallengeRiders & {
    passkeyUserCredEnc?: string;
 };
 

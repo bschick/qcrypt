@@ -30,6 +30,7 @@ import {
    registerNewCredential,
    getJson,
    postJson,
+   postPasskeyVerify,
    expectPasskeyDeleted,
    setSessionSigner,
    prfDecrypt,
@@ -106,10 +107,10 @@ describe('PRF account', () => {
       const opts = await getJson('/v1/passkeys/options', auth, account.cookie);
       expect(opts.status).toBe(200);
       const add = await registerNewCredential(account, opts.data);
-      const ok = await postJson(
-         '/v1/passkeys/verify',
+      const ok = await postPasskeyVerify(
+         account,
          { ...add.attestation, challenge: opts.data.challenge, passkeyUserCredEnc: add.passkeyUserCredEnc },
-         auth,
+         account.csrf,
          account.cookie,
       );
       expect(ok.status).toBe(200);
@@ -118,10 +119,10 @@ describe('PRF account', () => {
       // ...but the same add with the passkeyUserCredEnc ciphertext omitted is rejected.
       const opts2 = await getJson('/v1/passkeys/options', auth, account.cookie);
       const add2 = await registerNewCredential(account, opts2.data);
-      const bad = await postJson(
-         '/v1/passkeys/verify',
+      const bad = await postPasskeyVerify(
+         account,
          { ...add2.attestation, challenge: opts2.data.challenge },
-         auth,
+         account.csrf,
          account.cookie,
       );
       expect(bad.status).toBe(400);

@@ -35,6 +35,7 @@ import {
    makeNonceProofHeaders,
    postJson,
    postRegVerify,
+   sha256Hex,
    testUserName,
 } from './common';
 
@@ -47,7 +48,7 @@ function recoverySignature(
       reg.userId,
       opts.timestampMs ?? reg.body.recoveryTimestamp!,
       opts.challenge ?? reg.body.challenge,
-      opts.userCredPubKey ?? reg.body.userCredPubKey!,
+      opts.userCredPubKey ?? reg.userCredPubKey,
    );
 }
 
@@ -59,7 +60,7 @@ function oldFormat(reg: Registration, prf: boolean): RegVerifyOpts {
          userCred: undefined,
          recoveryTimestamp: undefined,
          recoverySignature: undefined,
-         userCredPubKey: prf ? reg.body.userCredPubKey : undefined,
+         userCredPubKey: prf ? reg.userCredPubKey : undefined,
       },
       headers: {},
    };
@@ -113,8 +114,7 @@ export function registrationSuite(prf: boolean): void {
          });
       });
 
-      // Both proofs come from the other userCred. For PRF, only the challenge binding rejects this
-      // request. For no-PRF, the original userCred in the body fails to match the new key first.
+      // Both proofs come from the other userCred, whose key the body carries
       it('rejects a userCredPubKey other than the one sent to reg/options', async () => {
          const reg = await buildRegBody(testUserName(), prf);
          const otherUserCred = getRandom(cc.USERCRED_BYTES);
@@ -196,7 +196,23 @@ export function registrationSuite(prf: boolean): void {
          await expectRegRejected(reg, { body: { recoverySignature: nonceSig } });
       });
 
+      // A nonce-form signature over the same request, sent as the challenge proof
       it('rejects a userCred proof in nonce form', async () => {
+         const reg = await buildRegBody(testUserName(), prf);
+         const timestamp = String(Date.now());
+         const signature = api.createUserCredNonceProof(
+            reg.userCred,
+            reg.userId,
+            'POST',
+            '/v1/reg/verify',
+            timestamp,
+            reg.body.challenge,
+            sha256Hex(Buffer.from(JSON.stringify(reg.body), 'utf8')),
+         );
+         await expectRegRejected(reg, { headers: { 'x-challenge-proof': `${signature},${timestamp}` } });
+      });
+
+      it('rejects a nonce proof header in place of the challenge proof', async () => {
          const reg = await buildRegBody(testUserName(), prf);
          const headers = await makeNonceProofHeaders(
             'POST',
@@ -204,9 +220,15 @@ export function registrationSuite(prf: boolean): void {
             Buffer.from(JSON.stringify(reg.body), 'utf8'),
             bytesToBase64(reg.userCred),
             reg.userId,
-            { nonce: reg.body.challenge },
          );
          await expectRegRejected(reg, { headers });
+      });
+
+      // Two full proofs exceed the edge's request header limit, which returns 413 before the server
+      // sees them, so the nonce header carries a short placeholder
+      it('rejects a nonce proof header alongside the challenge proof', async () => {
+         const reg = await buildRegBody(testUserName(), prf);
+         await expectRegRejected(reg, { headers: { ...reg.headers, 'x-nonce-proof': 'signature,timestamp,nonce' } });
       });
 
       it('rejects an old-format request after reg/options received userCredPubKey', async () => {
@@ -228,7 +250,7 @@ export function registrationSuite(prf: boolean): void {
          const reg = await buildRegBody(testUserName(), prf);
          const other = await postJson(
             '/v1/reg/options',
-            { userName: testUserName(), userCredPubKey: reg.body.userCredPubKey },
+            { userName: testUserName(), userCredPubKey: reg.userCredPubKey },
             {},
             '',
          );
@@ -266,9 +288,9 @@ export function registrationSuite(prf: boolean): void {
          const reg = await buildRegBody(testUserName(), prf);
          await expectRegRejected(reg, { body: { userCredPubKey: 'not b64 $$$' } });
       });
-      it('rejects a missing userCredPubKey', async () => {
+      it('rejects the userCredPubKey sent to reg/options repeated in the body', async () => {
          const reg = await buildRegBody(testUserName(), prf);
-         await expectRegRejected(reg, { body: { userCredPubKey: undefined } });
+         await expectRegRejected(reg, { body: { userCredPubKey: reg.userCredPubKey } });
       });
       it('rejects a wrong-length recoveryPubKey', async () => {
          const reg = await buildRegBody(testUserName(), prf);
@@ -346,7 +368,7 @@ export function registrationSuite(prf: boolean): void {
       });
 
       // A client signed in to another account sends that session's proof with every request
-      it('ignores a session proof on an old-format request', async () => {
+      it('ignores an x-proof nonce proof on an old-format request', async () => {
          const reg = await buildRegBody(testUserName(), prf, false);
          const sessionProof = await makeNonceProofHeaders(
             'POST',
@@ -354,6 +376,7 @@ export function registrationSuite(prf: boolean): void {
             undefined,
             bytesToBase64(getRandom(cc.USERCRED_BYTES)),
             bytesToBase64(getRandom(cc.USERID_BYTES)),
+            { legacyHeader: true },
          );
          await expectRegistered(reg, { ...oldFormat(reg, prf), headers: sessionProof });
       });
