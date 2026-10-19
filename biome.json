@@ -14,7 +14,10 @@
       "!apps/server/assets",
       "!libs/crypto/src/lib/crux/qc_crux.js",
       "!libs/crypto/src/lib/crux/qc_crux.d.ts",
-      "!libs/crypto/src/lib/crux/wasm.ts"
+      "!libs/crypto/src/lib/crux/wasm.ts",
+      "!libs/crypto/sodium/build",
+      "!libs/crypto/sodium/libsodium",
+      "!libs/crypto/sodium/libsodium-wrappers"
     ]
   },
   "formatter": {

@@ -184,22 +184,24 @@ export type CipherSecrets = {
    userCredKeys: Secret[];
 };
 
-// Decrypts the cipher armor in Node and records every key the decryption used. Encryption used the same keys,
-// since they derive from the salt in the armor. Throws unless the decryption reproduces clearText.
+// Decrypts the cipher armor, or the bytes of an encrypted file, in Node and records every key the decryption used.
+// Encryption used the same keys, since they derive from the salt in the cipher data. Throws unless the decryption
+// reproduces clear.
 export async function cipherSecrets(
    prefix: string,
-   armor: string,
+   cipher: string | Uint8Array<ArrayBuffer>,
    userCred: string,
    password: string,
-   clearText: string,
+   clear: string | Uint8Array,
 ): Promise<CipherSecrets> {
    await ready();
    const recorded = await decryptRecording(
-      parseCipherArmor(armor),
+      typeof cipher === 'string' ? parseCipherArmor(cipher) : cipher,
       new PWDKeyProvider(new Uint8Array(Buffer.from(userCred, 'base64url')), [password]),
    );
-   if (new TextDecoder().decode(recorded.clear) !== clearText) {
-      throw new Error(`${prefix}: decrypting the cipher armor in Node did not reproduce the clear text`);
+   const clearBytes = typeof clear === 'string' ? new TextEncoder().encode(clear) : clear;
+   if (!Buffer.from(recorded.clear).equals(clearBytes)) {
+      throw new Error(`${prefix}: decrypting the cipher data in Node did not reproduce the clear data`);
    }
    // Mixed keys are missing when libs/crypto loads a different libsodium module than this file
    if (!recorded.keys.has('signingKey.mixedKey')) {

@@ -7,8 +7,14 @@ import {
    openCredentials,
    deleteFirstPasskey,
    readPrfKey,
+   downloadFileAccess,
+   selectClearFile,
+   selectCipherFile,
+   encryptToFile,
+   decryptToFile,
    type Authenticator,
    type CreatedTestUser,
+   type FileAccess,
 } from '../common';
 import {
    HEAP_SCAN_TEST_OPTIONS,
@@ -213,6 +219,63 @@ async function clearTextBoxes(page: Page): Promise<void> {
    await expect(page.locator('textarea#cipherInput')).toBeEmpty();
 }
 
+// The ciphers read 1 MiB first and double that up to 4 MiB, so 20 MiB fills several 4 MiB blocks
+const FILE_BYTES = 20 * 1024 * 1024;
+// Closer than the smallest block, so every copy of a block holds at least one slice
+const FILE_SLICE_SPACING = 512 * 1024;
+
+type FileMessage = {
+   label: string;
+   alg: string;
+   password: string;
+   clear: Uint8Array<ArrayBuffer>;
+};
+
+function newFileMessage(label: string, alg: string): FileMessage {
+   return { label, alg, password: newPassword(), clear: new Uint8Array(randomBytes(FILE_BYTES)) };
+}
+
+function fileSlices(message: FileMessage): Secret[] {
+   const slices: Secret[] = [];
+   for (let offset = 0; offset < message.clear.length; offset += FILE_SLICE_SPACING) {
+      const slice = message.clear.slice(offset, offset + 64);
+      slices.push(byteSecret(`${message.label}.clearAt${offset / 1024}KiB`, slice, false));
+   }
+   return slices;
+}
+
+// Returns the encrypted file's bytes. Their keys are found the same way as for cipher armor.
+async function encryptFile(
+   page: Page,
+   files: FileAccess,
+   tracker: SecretTracker,
+   user: CreatedTestUser,
+   message: FileMessage,
+): Promise<Uint8Array<ArrayBuffer>> {
+   tracker.add([textSecret(`${message.label}.password`, message.password), ...fileSlices(message)], 'gone');
+   await selectClearFile(page, files, `${message.label}.bin`, message.clear);
+   const cipherData = await encryptToFile(page, files, new RegExp(user.userName), message.password);
+   const keys = await cipherSecrets(message.label, cipherData, user.userCred, message.password, message.clear);
+   expect(keys.alg).toBe(message.alg);
+   const blockKeys = keys.passwordKeys.filter((secret) => /\.blockKey\d+$/.test(secret.name));
+   expect(blockKeys.length, `${message.label}: block keys`).toBeGreaterThanOrEqual(5);
+   tracker.add(keys.passwordKeys, 'gone');
+   tracker.add(keys.userCredKeys, 'session');
+   return cipherData;
+}
+
+async function decryptFile(
+   page: Page,
+   files: FileAccess,
+   user: CreatedTestUser,
+   message: FileMessage,
+   cipherData: Uint8Array,
+): Promise<void> {
+   await selectCipherFile(page, files, `${message.label}.bin.qq`, cipherData);
+   const clearData = await decryptToFile(page, files, new RegExp(user.userName), message.password);
+   expect(Buffer.from(clearData).equals(message.clear), `${message.label}: decrypted file`).toBe(true);
+}
+
 // Must match the IndexedDB names in keystore.service.ts and the slot in authenticator.service.ts. A wrong name
 // throws in the page, and a wrong key fails to decrypt the session's copy of userCred.
 const KEYSTORE_DB = 'quickcrypt';
@@ -257,6 +320,7 @@ for (const prf of [true, false]) {
       const baseURL = (testInfo.project.use as { baseURL: string }).baseURL;
       const origin = new URL(baseURL).origin;
       const rpId = new URL(baseURL).hostname;
+      const files = await downloadFileAccess(page);
       const tracker = new SecretTracker(page);
       // A PRF account encrypts copies of userCred with each PRF output and recovery secret as the master key
       const masterKeys: { name: string; key: Uint8Array; copies: number }[] = [];
@@ -436,6 +500,24 @@ for (const prf of [true, false]) {
                await checkpoint(`after ${message.label} decryption`);
                await signOut(`${message.label} decryption`);
             }
+         }
+
+         // Text messages here reach two blocks at most. A file reaches seven, the first one 1 MiB and the rest up to
+         // 4 MiB, with a block key for each block after the first.
+         for (const [alg, description] of CIPHERS) {
+            const message = newFileMessage(`${alg}.file`, alg);
+            await signIn(authenticator1);
+            await selectCipher(description);
+            const cipherData = await encryptFile(page, files, tracker, user, message);
+            await clearTextBoxes(page);
+            await checkpoint(`after ${message.label} encryption`);
+            await signOut(`${message.label} encryption`);
+
+            await signIn(authenticator1);
+            await decryptFile(page, files, user, message, cipherData);
+            await clearTextBoxes(page);
+            await checkpoint(`after ${message.label} decryption`);
+            await signOut(`${message.label} decryption`);
          }
 
          // The cipher info dialog decrypts and shows the hint without asking for the password
