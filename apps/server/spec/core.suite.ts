@@ -40,6 +40,7 @@ import {
    RP_ORIGIN,
    type TestUser,
 } from './common';
+import { PROOF_SKEW_MS } from '../src/consts';
 import jwtPkg from 'jsonwebtoken';
 import { randomBytes } from 'node:crypto';
 
@@ -274,6 +275,37 @@ export function coreSuite(prf: boolean): void {
                randomBytes(api.CHALLENGE_BYTES).toString('base64url'),
             );
             expect((await post(otherChallenge)).status).toBe(401);
+
+            const stale = makeChallengeProofHeaders(
+               '/v1/passkeys/verify',
+               body,
+               Buffer.from(userCred, 'base64url'),
+               userId,
+               body.challenge,
+               { timestampMs: String(Date.now() - 2 * PROOF_SKEW_MS) },
+            );
+            expect((await post(stale)).status).toBe(401);
+
+            const signed = makeChallengeProofHeaders(
+               '/v1/passkeys/verify',
+               body,
+               Buffer.from(userCred, 'base64url'),
+               userId,
+               body.challenge,
+            );
+            const changed = {
+               ...body,
+               response: { ...body.response, transports: [...(body.response.transports ?? []), 'hybrid'] },
+            };
+            const changedRes = await postJson(
+               '/v1/passkeys/verify',
+               changed,
+               { 'x-csrf-token': csrfToken, ...signed },
+               sessCookie,
+            );
+            expect(changedRes.status).toBe(401);
+
+            expect((await post({})).status).toBe(401);
 
             const nonceProof = await makeNonceProofHeaders(
                'POST',

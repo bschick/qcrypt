@@ -16,7 +16,7 @@ This document provides documentation for the passkey-based authentication server
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
   - `400 Bad Request`: The body is not valid JSON.
-  - `401 Unauthorized`: Returned for every other failure, including an invalid username or public key.
+  - `401 Unauthorized`: Returned for every other failure.
 
 ### POST /v1/reg/verify
 
@@ -30,7 +30,7 @@ This document provides documentation for the passkey-based authentication server
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object including `csrf` and session cookie.
   - `400 Bad Request`: The body is not valid JSON.
-  - `401 Unauthorized`: Returned for every other failure, including an invalid request body, a body that carries `userCredPubKey`, an invalid or missing proof, or an invalid registration challenge.
+  - `401 Unauthorized`: Returned for every other failure.
 
 ## Authentication Endpoints
 
@@ -45,7 +45,7 @@ This document provides documentation for the passkey-based authentication server
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialRequestOptionsJSON`](#publickeycredentialrequestoptionsjson) JSON object.
   - `400 Bad Request`: The body is not valid JSON.
-  - `401 Unauthorized`: Returned for every other failure, including an invalid `userId`.
+  - `401 Unauthorized`: Returned for every other failure.
 
 ### POST /v1/auth/verify
 
@@ -59,7 +59,7 @@ This document provides documentation for the passkey-based authentication server
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object including `csrf` and session cookie.
   - `400 Bad Request`: The body is not valid JSON.
-  - `401 Unauthorized`: Returned for every other failure, including an invalid request body, an unknown passkey, or an invalid challenge.
+  - `401 Unauthorized`: Returned for every other failure.
 
 ## Passkey Endpoints
 
@@ -85,8 +85,8 @@ This document provides documentation for the passkey-based authentication server
 - **Read consistency:** `authenticators` is consistent and includes the new passkey. The other `UserInfo` fields are eventually consistent.
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object.
-  - `400 Bad Request`: The request was malformed or the request body is invalid.
-  - `401 Unauthorized`: The request is not authorized, or the registration challenge is invalid.
+  - `400 Bad Request`: The request body or challenge is invalid.
+  - `401 Unauthorized`: The registration response failed verification, or the challenge expired.
 
 ### PATCH /v1/passkeys/{credid}
 
@@ -161,7 +161,7 @@ session. The first two calls end an existing session. Interleaved recover3 flows
 - **Responses:**
   - `200 OK`: A [`RecoverStart`](#recoverstart) JSON object.
   - `400 Bad Request`: The body is not valid JSON.
-  - `401 Unauthorized`: Returned for every other failure, including a recovery signature that is invalid, replayed, or outside the timestamp skew window.
+  - `401 Unauthorized`: Returned for every other failure.
 
 ### POST /v1/recover/confirm
 
@@ -175,7 +175,7 @@ session. The first two calls end an existing session. Interleaved recover3 flows
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
   - `400 Bad Request`: The body is not valid JSON.
-  - `401 Unauthorized`: Returned for every other failure, including a challenge that is unknown or already spent, or an invalid or missing proof.
+  - `401 Unauthorized`: Returned for every other failure.
 
 ### POST /v1/recover/verify
 
@@ -189,7 +189,7 @@ session. The first two calls end an existing session. Interleaved recover3 flows
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object including `csrf` and session cookie.
   - `400 Bad Request`: The body is not valid JSON.
-  - `401 Unauthorized`: Returned for every other failure, including an invalid request body, an invalid proof, or an invalid recovery challenge.
+  - `401 Unauthorized`: Returned for every other failure.
 
 ### PUT /v1/recover3/key
 
@@ -202,7 +202,7 @@ session. The first two calls end an existing session. Interleaved recover3 flows
 - **Read consistency:** `recoveryKeyId` reflects this change. The other `UserInfo` fields, including `authenticators`, are eventually consistent.
 - **Responses:**
   - `200 OK`: A [`UserInfo`](#userinfo) JSON object.
-  - `400 Bad Request`: The request was malformed, or the recovery signature is invalid, replayed, or outside the timestamp skew window.
+  - `400 Bad Request`: The request body or recovery signature is invalid.
   - `401 Unauthorized`: The request is not authorized.
 
 ### POST /v1/recover
@@ -217,7 +217,7 @@ session. The first two calls end an existing session. Interleaved recover3 flows
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
   - `400 Bad Request`: The body is not valid JSON.
-  - `401 Unauthorized`: Returned for every other failure, including an invalid user credential or an account that must use recovery words.
+  - `401 Unauthorized`: Returned for every other failure.
 
 ## Session Endpoints
 

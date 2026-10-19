@@ -1246,6 +1246,23 @@ export function recoverySuite(prf: boolean): void {
          await expectPasskeyDeleted(user.credId, session.csrf, session.cookie);
       });
 
+      // BACKWARD COMPAT: a rejected body proof leaves the challenge in place, so the account holder can still confirm
+      it('leaves the confirm challenge usable after invalid old format proof', async () => {
+         const user = await registerTestUser(prf);
+         const { startRes, recoveredUserCred } = await startRecovery3(user);
+         const otherUserCred = bytesToBase64(getRandom(cc.USERCRED_BYTES));
+         const bad = await postJson(
+            CONFIRM_PATH,
+            legacyConfirmBody(user, startRes.data.challenge, otherUserCred),
+            {},
+            '',
+         );
+         expect(bad.status).toBe(401);
+
+         const session = await finishRecovery3(user, startRes, recoveredUserCred);
+         await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
+      });
+
       it('rejects a confirm body proof in the userCred challenge context', async () => {
          const user = await registerTestUser(prf);
          const { startRes } = await startRecovery3(user);

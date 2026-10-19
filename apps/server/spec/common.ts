@@ -65,6 +65,7 @@ const NO_NONCE_PROOF = [
    '/v1/recover3',
    '/v1/recover/confirm',
    '/v1/recover/verify',
+   '/v1/passkeys/verify',
 ];
 
 export function setSessionSigner(userId: string | undefined, userCred?: string): void {
@@ -654,8 +655,14 @@ export async function expectRegistered(reg: Registration, opts: RegVerifyOpts = 
 // reg/verify reports every rejection as a uniform 401 because it is unauthenticated. The request
 // without overrides is then sent on the same challenge and must succeed. Its success proves the
 // rejection did not consume the challenge, and that the overrides alone caused the rejection.
-export async function expectRegRejected(reg: Registration, opts: RegVerifyOpts): Promise<void> {
+export async function expectRegRejected(
+   reg: Registration,
+   opts: RegVerifyOpts,
+   // BACKWARD COMPAT: the old-format request to send after the rejection
+   retry: RegVerifyOpts = {},
+): Promise<void> {
    const bad = await postRegVerify(reg, opts);
    expect(bad.status).toBe(401);
-   await expectRegistered(reg);
+   // BACKWARD COMPAT: send the request without overrides once old-format requests are gone
+   await expectRegistered(reg, retry);
 }

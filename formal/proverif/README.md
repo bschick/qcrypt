@@ -46,7 +46,8 @@ and model, and keeps the issue log.
 - **Database leak:** a copy of the server's account tables reveals u_c in neither mode, and does
   not let anyone sign in. In no-PRF mode, u_c is exposed to anyone who can also use either KMS
   key: the main key, or the backup key, which holds a second copy that the server never
-  decrypts. The challenge table is not part of that result (I-30).
+  decrypts. Adding live reads of the challenge table opens no attack in the variants that model
+  them (I-30).
 
 **What does not hold, or holds only through a dependency.** Each item was confirmed against the
 code. `conformance.md` §5 has the details and code locations:
@@ -59,7 +60,7 @@ code. `conformance.md` §5 has the details and code locations:
 | I-14 | Truncation resistance depends on the encryptor never writing an empty block before the last one, because the decryptor does not check f on an empty block. | `integrity-net-emptymid` | hardening, pending |
 | I-17 | The inner le is not compared with the outer le. An attacker holding u_c and the outer password can wrap a one-loop message as the inner layer of a two-loop message. The plaintext is still authentic. | `loops-uc-pout` | low, pending |
 | I-29 | With TLS broken, an attacker can win the registration race and hold Alice's user id. Her u_c and words stay secret, and her browser notices on first use. It can also strip the PRF fields from her reg/verify. The server then registers her user id and passkey as a no-PRF account and returns its u_c, which the attacker sees. Her browser halts, but a later sign-in with that passkey, over intact TLS, receives that u_c, and with no pin she accepts it. | `login-tls`, `recovery-tls`; `login-tls-dualmode`, `login-tls-stripped` | race accepted; stripping pending, and the planned handle tag (§7.2) targets it |
-| I-30 | A live read of the challenge table hijacks registration without breaking TLS: the attacker submits reg/verify with Alice's user id and outstanding challenge, and its own passkey and keys, before she does. A read of her recover/verify challenge likewise lets it bind its own passkey to her account. Her u_c and words stay secret. | `login-db-chal`, `recovery-db-chal`, `recovery-db-chalrec` | pending; fix candidates in `conformance.md` §7.3 |
+| I-30 | A live read of the challenge table hijacks registration without breaking TLS: the attacker submits reg/verify with Alice's user id and outstanding challenge, and its own passkey and keys, before she does. A read of her recover/verify challenge likewise lets it bind its own passkey to her account. In PRF mode her u_c, recovery words, and encryption password stay secret. In no-PRF mode the recover/verify reply gives the attacker u_c, and then the account, while her recovery words and encryption password stay secret. | `login-db-chal-noregbind`, `login-db-chal-noregsigu`, `recovery-db-chalrec-norecverifyproof`, `recovery-noprf-db-chalrec-norecverifyproof` | fixed in the model and server (`login-db-chal`, `recovery-db-chal`, `recovery-db-chalrec` hold). Registration is protected once the client sends pk_U to reg/options, and recover/verify once the server requires its proof |
 | — | The externally reported V7 key-commitment incompleteness, reproduced. V8 closes it. | `commit-v7` | known |
 
 The other issue-log entries are gaps in the tex, differences between the tex and the code, or
@@ -497,7 +498,7 @@ nonce. recover/confirm and recover/verify also check their challenge's authCount
 | `login-noprf-log`, `recovery-noprf-log` | no-PRF | none | holds | hold |
 | `login-log-noapinonce` | PRF | `'api'` nonce | **attack**: authorized requests | hold |
 | `login-log-noauthchal` | PRF | auth challenge | **attack**: auth/verify | hold |
-| `login-log-noaddchal` | PRF | passkey-add challenge | holds: the request's `'api'` nonce blocks it | hold |
+| `login-log-noaddchal` | PRF | passkey-add challenge | **attack**: passkeys/verify | hold |
 | `login-log-noapinonce-noaddchal` | PRF | both of those | **attack**: authorized requests, passkeys/verify | hold |
 | `login-log-noregchal` | PRF | registration challenge | holds: the existing-user check blocks it | hold |
 | `recovery-log-norecnonce` | PRF | `'nonce'`, used by recover3 and replace words | **attack**: recover3 | hold |
@@ -724,6 +725,10 @@ Replay nonces are not in the copy. `LEAK_CHAL` adds live reads of the challenge 
 entries last 300 s (`consts.ts:63`). `LEAK_KMS_NEW` and `LEAK_KMS_OLD` add the use of the main or
 the backup KMS key. PRF mode keeps nothing under KMS, so the PRF variants leave the keys out.
 
+The client in these variants sends pk_U to reg/options and proves u_c at reg/verify and
+recover/verify. The released client does neither, and the server still accepts its requests, so
+against the released client the mutation variants below describe what a challenge reader can do.
+
 | Variant | Mode | Leaked | u_c | Sign-in, binding, requests, recovery |
 |---|---|---|---|---|
 | `login-db` | PRF | tables | secret | hold |
@@ -731,25 +736,41 @@ the backup KMS key. PRF mode keeps nothing under KMS, so the PRF variants leave 
 | `login-noprf-db` | no-PRF | tables | secret | hold |
 | `login-noprf-db-kms` | no-PRF | tables and the main KMS key | **exposed** | hold |
 | `login-noprf-db-kmsold` | no-PRF | tables and the backup KMS key | **exposed** | hold |
-| `login-db-chal` | PRF | tables and live challenges | secret | **attack** (I-30) |
-| `recovery-db-chal` | PRF | tables and live challenges | secret, as are both word sets | **attack** (I-30) |
-| `recovery-db-chalrec` | PRF | tables and live recover/verify challenges only | secret, as are both word sets | A-R1 **attack** (I-30); recover3, confirm and new words hold |
+| `login-db-chal` | PRF | tables and live challenges | secret | hold |
+| `recovery-db-chal` | PRF | tables and live challenges | secret, as are both word sets | hold |
+| `recovery-db-chalrec` | PRF | tables and live recover/verify challenges only | secret, as are both word sets | hold |
+| `recovery-noprf-db-chalrec` | no-PRF | tables and live recover/verify challenges only | secret, as are both word sets | hold |
 
 In both exposure traces the attacker decrypts the copy of u_c under the key it holds. The
 correspondence properties still hold there, because signing in still takes one of Alice's
 passkeys.
 
-The `db-chal` traces are a registration hijack without breaking TLS. The attacker reads
-Alice's registration challenge, with her user id, from the table, and submits reg/verify with
-them and its own passkey and keys before she does. It then holds her user id: it signs in, makes
-requests, recovers, and replaces the words.
+Each check that keeps a challenge reader out has a mutation that removes it:
 
-`recovery-db-chalrec` leaks only recover/verify challenges, so the registration hijack cannot
-hide anything later. Alice runs recover3 and recover/confirm. The attacker reads the challenge
-recover/confirm stored for her, and submits recover/verify with its own passkey before she does,
-since recover/verify carries no u_c proof. The server binds that passkey to her account. Its cd_p
-is the attacker's own, so signing in with it reveals nothing about her u_c, and every authorized
-request still needs her proof.
+| Variant | Check removed | Result |
+|---|---|---|
+| `login-db-chal-noregbind` | reg/options stores pk_U and binds the challenge to it | **attack** (I-30): sign-in, binding and requests |
+| `login-db-chal-noregsigu` | reg/verify checks the u_c proof | **attack** (I-30): sign-in and binding; requests hold |
+| `recovery-db-chalrec-norecverifyproof` | recover/verify checks the u_c proof | A-R1 **attack** (I-30) |
+| `recovery-noprf-db-chalrec-norecverifyproof` | recover/verify checks the u_c proof | **attack** (I-30) on every property but word secrecy |
+| `login-db-noregsigr` | reg/verify checks the proof of sk_R | **attack**: the registration of pk_R |
+
+The `-noregbind` trace is a registration hijack without breaking TLS. The attacker reads Alice's
+registration challenge, with her user id, from the table, and submits reg/verify with them and
+its own passkey and keys before she does. It then holds her user id: it signs in and makes
+requests. In the `-noregsigu` trace the challenge is bound to Alice's pk_U, but nothing checks
+that the request comes from her u_c. The attacker registers her user id with her pk_U and its
+own passkey and recovery key, so it signs in, but its requests still need her proof.
+
+The `-norecverifyproof` variants leak only recover/verify challenges, so the registration hijack
+cannot hide anything later. Alice runs recover3 and recover/confirm. The attacker reads the
+challenge recover/confirm stored for her, and submits recover/verify with its own passkey before
+she does. The server binds that passkey to her account. In PRF mode its cd_p is the attacker's
+own, so signing in with it reveals nothing about her u_c, and every authorized request still
+needs her proof. In no-PRF mode the reply carries u_c, which gives the attacker the account.
+
+`login-db-noregsigr` needs no challenge read. Without the check of the sk_R proof, the attacker
+registers an account of its own that carries Alice's recovery public key from the tables.
 
 ### Attack and reachability variants
 
@@ -797,7 +818,8 @@ seconds without backtracking (`NOBT`).
 | `recovery-noprf-words` | `RCV`, `STORE`, `UNIQUSER`, and `PRECISE` |
 | `recovery-noprf-tls` | `STORE`, `UNIQUSER`, and `PRECISE` |
 | `recovery-noprf-reach` | `RCV`, `STORE`, `UNIQUSER`, and `PRECISE` |
-| `login-db-chal`, `recovery-db-chal`, `recovery-db-chalrec`, `login-tls-dualmode` | `STORE`, `UNIQUSER` |
+| `login-db-chal`, `recovery-db-chal`, `recovery-db-chalrec`, `login-db-chal-noregbind`, `login-db-chal-noregsigu`, `login-db-noregsigr`, `recovery-db-chalrec-norecverifyproof`, `login-tls-dualmode` | `STORE`, `UNIQUSER` |
+| `recovery-noprf-db-chalrec`, `recovery-noprf-db-chalrec-norecverifyproof` | `STORE`, `UNIQUSER`, and `PRECISE` |
 | `login-tls-stripped` | `STORE`, `UNIQUSER`, and `STRIPLOGIN`'s `[precise]` on Register's two inputs and the reg/verify input |
 
 `PRECISE` is not a restriction. It marks three actions `[precise]`: the inputs of auth/verify
@@ -833,8 +855,7 @@ Three groups have none, so their results hold only under the restrictions:
 - **Broken TLS:** every variant with TLS public is restricted (`login-tls`, `recovery-tls`, the
   two no-PRF `tls` variants, `login-tls-dualmode` and `login-tls-stripped`). So u_c and
   recovery-word secrecy under broken TLS is proved only under their restrictions.
-- **Live challenge reads:** u_c and word secrecy in the `db-chal` variants, and the recover3,
-  confirm and new-words results of `recovery-db-chalrec`.
+- **Live challenge reads:** every result of the `db-chal` variants.
 - **Replay:** the `log` variants' results, with every accepted request leaked, hold only under
   `STORE`, the stores and authCount binding they test. `login-log-noregchal` also needs
   `UNIQUSER`.

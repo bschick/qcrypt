@@ -468,20 +468,6 @@ async function postRegVerify(
       throw new ParamError(`unexpected user credential for ${unverifiedUser.userId}`);
    }
 
-   // BACKWARD COMPAT: a request without a challenge proof must find no userCredPubKey stored by
-   // reg/options, and supplies the key in its body. A proved request must not carry a key of its
-   // own. Once x-challenge-proof is required, reject any key in the body.
-   if (
-      (!proved && unverifiedUser.userCredPubKey !== undefined) ||
-      (proved && regVerifyRequest.userCredPubKey !== undefined)
-   ) {
-      throw new ParamError('invalid registration proof');
-   }
-   // BACKWARD COMPAT: use only the stored key once x-challenge-proof is required
-   let userCredPubKey = unverifiedUser.userCredPubKey ?? regVerifyRequest.userCredPubKey;
-
-   // Validate the client credential fields before creating the passkey so invalid input
-   // never leaves a passkey behind.
    const hasPrf = !!regVerifyRequest.recoveryUserCredEnc || !!regVerifyRequest.passkeyUserCredEnc;
    const hasUserCred = regVerifyRequest.userCred !== undefined;
 
@@ -497,39 +483,61 @@ async function postRegVerify(
    ) {
       throw new ParamError('invalid user credential data');
    }
-   if (hasUserCred) {
-      const userCred = base64ToBytes(regVerifyRequest.userCred!, cc.USERCRED_BYTES, 'user credential');
-      // Confirm the userCred derives the public key provided
-      if (api.getUserCredPubKey(userCred) !== userCredPubKey) {
-         throw new ParamError('user credential does not match its public key');
-      }
-   }
-   if (hasPrf || hasUserCred) {
-      base64ToBytes(userCredPubKey!, api.PROOF_PUBKEY_BYTES, 'user credential public key');
-   }
 
    // The client generates the recovery secret and sends only its public key
    const recoveryPubKey = regVerifyRequest.recoveryPubKey;
    base64ToBytes(recoveryPubKey, api.PROOF_PUBKEY_BYTES, 'recovery public key');
 
+   let userCredPubKey: string | undefined;
+
    // BACKWARD COMPAT: run this block unconditionally, and drop the else, once x-challenge-proof is
    // required
    if (proved) {
-      // A request with a proof must carry userCred or both ciphertexts. BACKWARD COMPAT: delete this
-      // check when the one above changes to `hasPrf === hasUserCred`, which covers it.
+      if (regVerifyRequest.userCredPubKey !== undefined) {
+         throw new ParamError('invalid registration proof');
+      }
+
+      // BACKWARD COMPAT: a request with a proof must carry userCred or be PRF. Delete this
+      // check once the `hasPrf && hasUserCred` check above becomes `hasPrf === hasUserCred`.
       if (!hasPrf && !hasUserCred) {
          throw new ParamError('missing user credential data');
       }
+
+      userCredPubKey = unverifiedUser.userCredPubKey!;
+      if (hasUserCred) {
+         const userCred = base64ToBytes(regVerifyRequest.userCred!, cc.USERCRED_BYTES, 'user credential');
+         // The userCred must derive the key that signed x-challenge-proof
+         if (api.getUserCredPubKey(userCred) !== userCredPubKey) {
+            throw new ParamError('user credential does not match its public key');
+         }
+      }
+
+      // Proves the registering client holds the secret used to derive recoveryPubKey
       api.verifyRecoveryChallengeProof(
          recoveryPubKey,
          unverifiedUser.userId,
          regVerifyRequest.recoveryTimestamp!,
          regVerifyRequest.challenge,
-         userCredPubKey!,
+         userCredPubKey,
          regVerifyRequest.recoverySignature!,
       );
-   } else if (hasUserCred) {
-      throw new ParamError('missing registration proof');
+   } else {
+      // BACKWARD COMPAT: a request without a proof comes from a client that sends no userCredPubKey
+      // to reg/options
+      if (unverifiedUser.userCredPubKey !== undefined) {
+         throw new ParamError('invalid registration proof');
+      }
+      if (hasUserCred) {
+         throw new ParamError('missing registration proof');
+      }
+
+      if (hasPrf) {
+         userCredPubKey = regVerifyRequest.userCredPubKey;
+         base64ToBytes(userCredPubKey!, api.PROOF_PUBKEY_BYTES, 'user credential public key');
+      } else if (regVerifyRequest.userCredPubKey !== undefined) {
+         // BACKWARD COMPAT: the server creates the userCred of this account and derives its key
+         throw new ParamError('invalid registration proof');
+      }
    }
 
    const auth = await _createAuthenticator(
@@ -552,23 +560,27 @@ async function postRegVerify(
       throw new Error('GenerateRandomCommand failure');
    }
 
+   // BACKWARD COMPAT: move this code up near userCredPubKey check once old code is removed
    let userCredEnc: string | undefined;
    let userCredEncBackup: string | undefined;
 
    if (hasPrf) {
       userCredEnc = regVerifyRequest.recoveryUserCredEnc;
    } else {
-      // BACKWARD COMPAT: a no-PRF request without userCred gets one from the server
-      const userCred = hasUserCred
-         ? base64ToBytes(regVerifyRequest.userCred!)
-         : randData.slice(randOffset, randOffset + cc.USERCRED_BYTES);
+      let userCred: Uint8Array;
+      // BACKWARD COMPAT: run this block unconditionally, and drop the else, once x-challenge-proof is
+      // required
+      if (proved) {
+         userCred = base64ToBytes(regVerifyRequest.userCred!);
+      } else {
+         // BACKWARD COMPAT: a no-PRF request without a proof gets its userCred from the server
+         userCred = randData.slice(randOffset, randOffset + cc.USERCRED_BYTES);
+         userCredPubKey = api.getUserCredPubKey(userCred);
+      }
       randOffset += cc.USERCRED_BYTES;
       userCredEnc = await encryptField(userCred, { userId: unverifiedUser.userId });
 
       userCredEncBackup = await encryptField(userCred, { userId: unverifiedUser.userId }, cc.KMS_KEYID_BACKUP);
-
-      // BACKWARD COMPAT: derive the key of a userCred the server created
-      userCredPubKey ??= api.getUserCredPubKey(userCred);
    }
 
    // Loop in the very unlikley event that we randomly pick
@@ -1586,18 +1598,18 @@ async function postRecoverConfirm(
    const { rpID } = httpDetails;
    const confirmRequest = httpDetails.body as api.RecoverConfirmRequest;
 
-   // handler() read the user consistently
-   await consumeChallenge(buildChallenge(confirmRequest.challenge, { purpose: 'confirm', user: unverifiedUser }));
-
    if (!unverifiedUser.verified || !validB64(unverifiedUser.userCredPubKey)) {
       throw new AuthError();
    }
 
-   // BACKWARD COMPAT: a request without x-challenge-proof carries its proof in the body, which is
-   // checked after the consume. Remove once x-challenge-proof is required.
+   // BACKWARD COMPAT: a request without x-challenge-proof carries its proof in the body. Remove once
+   // x-challenge-proof is rolled out.
    if (!proved) {
       verifyRecoverConfirmProof(confirmRequest, unverifiedUser.userCredPubKey, httpDetails);
    }
+
+   // handler() read the user consistently
+   await consumeChallenge(buildChallenge(confirmRequest.challenge, { purpose: 'confirm', user: unverifiedUser }));
 
    const verifiedUser = checkVerified(unverifiedUser, unverifiedUser.userId);
 

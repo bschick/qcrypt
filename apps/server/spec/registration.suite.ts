@@ -114,7 +114,8 @@ export function registrationSuite(prf: boolean): void {
          });
       });
 
-      // Both proofs come from the other userCred, whose key the body carries
+      // Both proofs come from the other userCred, whose key the body carries. The userCred proof does not
+      // match the userCredPubKey sent to reg/options.
       it('rejects a userCredPubKey other than the one sent to reg/options', async () => {
          const reg = await buildRegBody(testUserName(), prf);
          const otherUserCred = getRandom(cc.USERCRED_BYTES);
@@ -135,6 +136,8 @@ export function registrationSuite(prf: boolean): void {
             await expectRegRejected(reg, { body: { userCred: bytesToBase64(getRandom(cc.USERCRED_BYTES)) } });
          });
 
+         // Both proofs come from the other userCred, which the body carries with its key. The userCred proof
+         // does not match the userCredPubKey sent to reg/options.
          it('rejects a userCred and userCredPubKey other than those sent to reg/options', async () => {
             const reg = await buildRegBody(testUserName(), prf);
             const otherUserCred = getRandom(cc.USERCRED_BYTES);
@@ -280,14 +283,6 @@ export function registrationSuite(prf: boolean): void {
    describe(`registration input validation (${label})`, () => {
       const randomB64 = (byteLength: number) => bytesToBase64(getRandom(byteLength));
 
-      it('rejects a wrong-length userCredPubKey', async () => {
-         const reg = await buildRegBody(testUserName(), prf);
-         await expectRegRejected(reg, { body: { userCredPubKey: randomB64(cc.USERCRED_BYTES) } });
-      });
-      it('rejects a non-base64 userCredPubKey', async () => {
-         const reg = await buildRegBody(testUserName(), prf);
-         await expectRegRejected(reg, { body: { userCredPubKey: 'not b64 $$$' } });
-      });
       it('rejects the userCredPubKey sent to reg/options repeated in the body', async () => {
          const reg = await buildRegBody(testUserName(), prf);
          await expectRegRejected(reg, { body: { userCredPubKey: reg.userCredPubKey } });
@@ -380,5 +375,32 @@ export function registrationSuite(prf: boolean): void {
          );
          await expectRegistered(reg, { ...oldFormat(reg, prf), headers: sessionProof });
       });
+
+      it('rejects a challenge proof after reg/options received no userCredPubKey', async () => {
+         const reg = await buildRegBody(testUserName(), prf, false);
+         await expectRegRejected(reg, { body: { userCredPubKey: undefined } }, oldFormat(reg, prf));
+      });
+
+      if (prf) {
+         it('rejects an invalid userCredPubKey', async () => {
+            const reg = await buildRegBody(testUserName(), prf, false);
+            const old = oldFormat(reg, prf);
+            const userCredPubKey = bytesToBase64(getRandom(cc.USERCRED_BYTES));
+            await expectRegRejected(reg, { ...old, body: { ...old.body, userCredPubKey } }, old);
+         });
+         it('rejects a non-base64 userCredPubKey', async () => {
+            const reg = await buildRegBody(testUserName(), prf, false);
+            const old = oldFormat(reg, prf);
+            await expectRegRejected(reg, { ...old, body: { ...old.body, userCredPubKey: 'not b64 $$$' } }, old);
+         });
+      } else {
+         // BACKWARD COMPAT: old format creates userCred on the server therefore callers cannot provide userCredPubKey
+         it('rejects a userCredPubKey in the body', async () => {
+            const reg = await buildRegBody(testUserName(), prf, false);
+            const old = oldFormat(reg, prf);
+            const userCredPubKey = api.getUserCredPubKey(getRandom(cc.USERCRED_BYTES));
+            await expectRegRejected(reg, { ...old, body: { ...old.body, userCredPubKey } }, old);
+         });
+      }
    });
 }
