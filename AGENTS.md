@@ -78,6 +78,8 @@ The `pnpm` scripts in `package.json` call `nx` under the hood. You can use eithe
 | CLI build (minified) | `pnpm build:cli:min` | `pnpm nx build-min cli` |
 | libcrux WASM (`crux`) rebuild | `pnpm build:libs:crux` | *(node + wasm-pack; see below — not part of any aggregate build)* |
 | libcrux WASM (`crux`) verify | `pnpm verify:libs:crux` | *(rebuilds to a temp dir and compares with the committed files; see below)* |
+| libsodium.js (`sodium`) rebuild | `pnpm build:libs:sodium` | *(Docker; see below — not part of any aggregate build)* |
+| libsodium.js (`sodium`) verify | `pnpm verify:libs:sodium` | *(rebuilds in Docker and compares with the committed files; see below)* |
 
 `build:server` writes `dist/server-test` unminified; `build:server:prod` writes `dist/server` minified.
 Either takes `--min` or `--no-min` to override the minification default, and `QC_SERVER_OUT` to
@@ -100,6 +102,20 @@ cargo install wasm-pack --version 0.15.0 --locked
 **Verify:** `pnpm verify:libs:crux` rebuilds into a temp directory and fails unless the committed artifacts and manifest match that rebuild exactly, listing any manifest entries that differ. Run it when reviewing any change to crux sources or artifacts, and before bumping a pin. Separately, `crux.spec.ts` (no Rust needed) fails when a file listed in `manifest.json` no longer matches its recorded SHA-256, when the manifest does not list every `src/**/*.rs` file, or when its tool versions differ from the pins, so `pnpm test` catches a source, pin, or artifact change made without a rebuild.
 
 **Commit after a rebuild:** the regenerated `libs/crypto/src/lib/crux/{qc_crux.js,qc_crux.d.ts,wasm.ts}` and `libs/crypto/crux/manifest.json`, plus `libs/crypto/crux/Cargo.lock` if dependency versions changed, and `rust-toolchain.toml` or `regen.mjs` if a pin changed. **Do not commit** `libs/crypto/crux/pkg/` or `libs/crypto/crux/target/` (gitignored build outputs).
+
+#### Rebuilding the vendored libsodium.js (`sodium`)
+
+`libs/crypto/sodium/` holds qcrypt's own build of [libsodium.js](https://github.com/jedisct1/libsodium.js). The root `package.json` links `libsodium` and `libsodium-wrappers` to `libs/crypto/sodium/libsodium/` and `libs/crypto/sodium/libsodium-wrappers/` instead of the npm releases, because this build adds `sodium.stackzero()`, which zeroes libsodium's WebAssembly stack and is not in an npm release. Both packages are **committed**, so normal builds, tests, and CI need **no Docker or Emscripten**. Each holds the files npm publishes minus the CommonJS build, which nothing in qcrypt loads: libsodium.js's own `package.json` (version 0.8.4, still listing the CommonJS paths), its `LICENSE`, and the `dist/modules-esm` build. When an npm release of libsodium.js includes `stackzero()`, switch back to the npm packages.
+
+**Sources:** `regen.mjs` pins one commit on each of two forks. [bschick/libsodium](https://github.com/bschick/libsodium) branch `feat/stackzero-stable` is libsodium's `stable` branch, which libsodium.js builds, plus the `sodium_stackzero` and `emscripten_stack_get_free` exports. [bschick/libsodium.js](https://github.com/bschick/libsodium.js) branch `feat/stackzero` is libsodium.js `master` plus `stackzero()`.
+
+**One-time prerequisite** — Docker, with your user in the `docker` group.
+
+**Rebuild:** `pnpm build:libs:sodium` — runs `libs/crypto/sodium/regen.mjs`. It fetches the two pinned commits and builds the `qcrypt-sodium` image from `libs/crypto/sodium/Dockerfile`, which pins the emsdk image by digest, autotools by exact Ubuntu package version, and bun by release hash. In that image it runs libsodium's `autogen.sh`, libsodium.js's `make pack`, and libsodium.js's `bun test`, then rewrites both packages and `libs/crypto/sodium/manifest.json`. It fails if any of those steps fail. The build tree goes in the gitignored `libs/crypto/sodium/build/` (about 170 MB) rather than the system temp directory. Rebuilds from the same pins are byte-for-byte identical across fresh containers and build directories, and match an emsdk 6.0.12 build outside Docker. That has been checked on arm64, but not across CPU architectures. It is intentionally **not** wired into any `build:*` aggregate, since it requires Docker.
+
+**Verify:** `pnpm verify:libs:sodium` rebuilds and fails unless the committed packages and manifest match that rebuild exactly, listing any manifest entries that differ. Run it when reviewing any change to `libs/crypto/sodium/`. Separately, `sodium.spec.ts` (no Docker needed) fails when a file listed in `manifest.json` no longer matches its recorded SHA-256, or when the manifest does not list every file in the two package directories, so `pnpm test` catches a pin or package change made without a rebuild. Only `verify` shows that the packages come from the pinned commits.
+
+**Commit after a rebuild:** both package directories and `libs/crypto/sodium/manifest.json`, plus `regen.mjs` or `Dockerfile` if a pin changed. **Do not commit** `libs/crypto/sodium/build/` (gitignored build tree).
 
 ### Code Quality (Biome)
 
