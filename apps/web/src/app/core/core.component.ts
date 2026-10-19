@@ -1048,6 +1048,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       alink.click();
 
       document.body.removeChild(alink);
+      // Revoke frees the file's bytes without cancelling the download
+      URL.revokeObjectURL(alink.href);
    }
 
    protected async onSaveCipherFile(): Promise<void> {
