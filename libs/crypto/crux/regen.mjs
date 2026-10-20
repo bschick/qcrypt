@@ -5,19 +5,15 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-// Rebuilds the committed crux artifacts and manifest.json from source. With --check, rebuilds into a
-// temp directory and verifies the committed files match, without writing anything.
+// Rebuilds the committed crux artifacts and manifest.json from source, in the Docker image that Dockerfile defines.
+// With --check, rebuilds into a temp directory and verifies the committed files match, without writing anything.
 
-// rustc is pinned by rust-toolchain.toml. WASM_OPT_VERSION must equal the binaryen version that
-// WASM_PACK_VERSION downloads, which it uses unless a wasm-opt is on PATH that must match instead
-const WASM_PACK_VERSION = '0.15.0';
-const WASM_OPT_VERSION = '117';
+const IMAGE = 'qcrypt-crux';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const crateDir = path.join(repoRoot, 'libs/crypto/crux');
 const outDir = path.join(repoRoot, 'libs/crypto/src/lib/crux');
 const manifestPath = path.join(crateDir, 'manifest.json');
-const cargoHome = process.env.CARGO_HOME ?? path.join(os.homedir(), '.cargo');
 const check = process.argv.includes('--check');
 
 const sha256 = (data) => createHash('sha256').update(data).digest('hex');
@@ -31,129 +27,70 @@ function inputFiles() {
       .filter((file) => file.endsWith('.rs'))
       .map((file) => path.join('src', file))
       .sort();
-   return ['Cargo.lock', 'Cargo.toml', 'regen.mjs', 'rust-toolchain.toml', ...sources];
+   return ['Cargo.lock', 'Cargo.toml', 'Dockerfile', 'regen.mjs', 'rust-toolchain.toml', ...sources];
 }
 
-// Removes rustflags, profile, and compiler overrides and turns off incremental builds, so Cargo.toml
-// and the remap flags set before the build are the only build settings
-function buildEnv() {
-   const env = { ...process.env };
-   for (const name of Object.keys(env)) {
-      const targetSetting = name.startsWith('CARGO_TARGET_') && name !== 'CARGO_TARGET_DIR';
-      if (
-         targetSetting ||
-         /^(RUSTFLAGS|RUSTC|RUSTC_.+|CARGO_ENCODED_RUSTFLAGS|CARGO_BUILD_.+|CARGO_PROFILE_.+)$/.test(name)
-      ) {
-         delete env[name];
-      }
-   }
-   env.CARGO_INCREMENTAL = '0';
-   return env;
+execFileSync('docker', ['build', '-q', '-t', IMAGE, '-'], {
+   input: readCrate('Dockerfile'),
+   stdio: ['pipe', 'ignore', 'inherit'],
+});
+
+// Runs a bash script in the image with the crate at /crux as the working directory, so rustup applies
+// rust-toolchain.toml. RUSTUP_AUTO_INSTALL=0 makes rustup fail instead of downloading a toolchain the image lacks.
+function inImage(script, mounts = []) {
+   const volumes = [`${crateDir}:/crux`, ...mounts].flatMap((mount) => ['-v', mount]);
+   const args = ['run', '--rm', '-e', 'RUSTUP_AUTO_INSTALL=0', ...volumes, '-w', '/crux', IMAGE, 'bash', '-c', script];
+   return spawnSync('docker', args, { encoding: 'utf8' });
 }
 
-const env = buildEnv();
-
-// Run in the crate directory so rustup applies rust-toolchain.toml
-const run = (tool, args) => execFileSync(tool, args, { cwd: crateDir, env, encoding: 'utf8' }).trim();
-
-// Cargo config files with release profile, compiler, or wasm32 target settings in any TOML form, none
-// of which the manifest records. Comment lines are skipped
-function cargoConfigOverrides() {
-   const configDirs = new Set([cargoHome]);
-   for (let dir = crateDir; dir !== path.dirname(dir); dir = path.dirname(dir)) {
-      configDirs.add(path.join(dir, '.cargo'));
-   }
-   return [...configDirs]
-      .flatMap((dir) => [path.join(dir, 'config.toml'), path.join(dir, 'config')])
-      .filter((file) => fs.existsSync(file) && fs.statSync(file).isFile())
-      .filter((file) =>
-         /^(?!\s*#).*(\bprofile\.release\b|\bprofile\s*=|\brustc(-wrapper|-workspace-wrapper)?\s*=|wasm32)/m.test(
-            fs.readFileSync(file, 'utf8'),
-         ),
-      );
+const versions = inImage('rustc --version && wasm-pack --version && wasm-opt --version && wasm-bindgen --version');
+if (versions.status !== 0) {
+   throw new Error(`regen: could not read tool versions in ${IMAGE}: ${versions.stderr}`);
 }
-
-// Version of the wasm-opt on PATH, or undefined when there is none
-function pathWasmOptVersion() {
-   try {
-      return run('wasm-opt', ['--version']).match(/version (\d+)/)?.[1] ?? 'unknown';
-   } catch (err) {
-      if (err.code === 'ENOENT') {
-         return undefined;
-      }
-      throw err;
-   }
-}
+const [rustcVersion, wasmPackVersion, wasmOptVersion, wasmBindgenVersion] = versions.stdout.trim().split('\n');
 
 const toolchain = {
-   rustc: run('rustc', ['--version']).split(' ')[1],
-   'wasm-pack': run('wasm-pack', ['--version']).split(' ')[1],
-   'wasm-opt': WASM_OPT_VERSION,
+   rustc: rustcVersion.split(' ')[1],
+   'wasm-pack': wasmPackVersion.split(' ')[1],
+   'wasm-opt': wasmOptVersion.match(/version (\d+)/)[1],
    'wasm-bindgen': readCrate('Cargo.lock').match(/name = "wasm-bindgen"\nversion = "([^"]+)"/)[1],
 };
 
 const pinnedRustc = readCrate('rust-toolchain.toml').match(/channel = "([^"]+)"/)[1];
-const pathWasmOpt = pathWasmOptVersion();
-const configOverrides = cargoConfigOverrides();
+const imageWasmBindgen = wasmBindgenVersion.split(' ')[1];
 const problems = [
-   toolchain.rustc !== pinnedRustc && `rustc ${pinnedRustc} is pinned, found ${toolchain.rustc}`,
-   toolchain['wasm-pack'] !== WASM_PACK_VERSION &&
-      `wasm-pack ${WASM_PACK_VERSION} is pinned, found ${toolchain['wasm-pack']}`,
-   pathWasmOpt !== undefined &&
-      pathWasmOpt !== WASM_OPT_VERSION &&
-      `wasm-opt ${WASM_OPT_VERSION} is pinned, found version ${pathWasmOpt} on PATH`,
-   configOverrides.length > 0 &&
-      `cargo config sets release profile, compiler, or wasm32 target settings in ${configOverrides.join(', ')}`,
+   toolchain.rustc !== pinnedRustc && `rustc ${pinnedRustc} is pinned, the image has ${toolchain.rustc}`,
+   imageWasmBindgen !== toolchain['wasm-bindgen'] &&
+      `Cargo.lock has wasm-bindgen ${toolchain['wasm-bindgen']}, the image has ${imageWasmBindgen}`,
+   fs.existsSync(path.join(crateDir, '.cargo')) &&
+      `${relative(path.join(crateDir, '.cargo'))} can change build settings that the manifest does not record`,
 ].filter(Boolean);
 if (problems.length > 0) {
    throw new Error(`regen: ${problems.join('; ')}`);
 }
 
-// wasm-pack runs cargo without --locked, so first confirm Cargo.lock needs no update
-const metadata = JSON.parse(
-   execFileSync('cargo', ['metadata', '--locked', '--format-version', '1'], {
-      cwd: crateDir,
-      env,
-      encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'inherit'],
-   }),
-);
-
-// Collect source directories so registry paths can be remapped below, since they vary by registry
-// protocol or mirror
-const registryDirs = new Set(
-   metadata.packages
-      .filter((pkg) => pkg.source?.startsWith('registry+') || pkg.source?.startsWith('sparse+'))
-      .map((pkg) => path.dirname(path.dirname(pkg.manifest_path))),
-);
-
-// Remaps local paths in panic messages compiled into the wasm. rustc applies the last matching remap,
-// so list the registry remaps after the cargo home remap for correct precedence
-env.CARGO_ENCODED_RUSTFLAGS = [
-   `--remap-path-prefix=${cargoHome}=/cargo`,
-   ...[...registryDirs].map((dir) => `--remap-path-prefix=${dir}=/registry`),
-   `--remap-path-prefix=${crateDir}=/crux`,
-].join('\x1f');
-
 // Builds into pkgDir and returns the contents of the committed artifacts
 function buildArtifacts(pkgDir) {
-   const build = spawnSync(
-      'wasm-pack',
-      ['build', '--target', 'web', '--release', '--out-dir', pkgDir, '--', '--locked'],
-      {
-         cwd: crateDir,
-         env,
-         encoding: 'utf8',
-      },
-   );
+   // Remaps local paths in panic messages compiled into the wasm. rustc applies the last matching remap, so the
+   // registry remaps follow the cargo home remap for correct precedence. Container paths have no spaces, so
+   // RUSTFLAGS can hold them. The container runs as root, so chown gives the files it writes back to the host user.
+   const script = [
+      'set -euo pipefail',
+      `trap 'chown -R ${process.getuid()}:${process.getgid()} /pkg /crux/target 2>/dev/null || true' EXIT`,
+      'cargo fetch --locked',
+      'flags=--remap-path-prefix=/usr/local/cargo=/cargo',
+      'for dir in /usr/local/cargo/registry/src/*; do flags="$flags --remap-path-prefix=$dir=/registry"; done',
+      'export RUSTFLAGS="$flags" CARGO_INCREMENTAL=0',
+      'wasm-pack build --target web --release --out-dir /pkg -- --locked',
+   ].join('\n');
+   const build = inImage(script, [`${pkgDir}:/pkg`]);
    process.stdout.write(build.stdout ?? '');
    process.stderr.write(build.stderr ?? '');
    if (build.error) {
       throw build.error;
    }
    if (build.status !== 0) {
-      throw new Error(`regen: wasm-pack exited with status ${build.status}`);
+      throw new Error(`regen: the build in ${IMAGE} exited with status ${build.status}`);
    }
    if (!`${build.stdout}${build.stderr}`.includes('Optimizing wasm binaries with')) {
       throw new Error('regen: wasm-pack did not run wasm-opt');
@@ -175,6 +112,7 @@ function buildArtifacts(pkgDir) {
 }
 
 const pkgDir = check ? fs.mkdtempSync(path.join(os.tmpdir(), 'crux-check-')) : path.join(crateDir, 'pkg');
+fs.mkdirSync(pkgDir, { recursive: true });
 let artifacts;
 try {
    artifacts = buildArtifacts(pkgDir);

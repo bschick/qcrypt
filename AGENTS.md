@@ -76,8 +76,8 @@ The `pnpm` scripts in `package.json` call `nx` under the hood. You can use eithe
 | Server build (prod) | `pnpm build:server:prod` | `pnpm nx build-min server` |
 | CLI build | `pnpm build:cli` | `pnpm nx build cli` |
 | CLI build (minified) | `pnpm build:cli:min` | `pnpm nx build-min cli` |
-| libcrux WASM (`crux`) rebuild | `pnpm build:libs:crux` | *(node + wasm-pack; see below — not part of any aggregate build)* |
-| libcrux WASM (`crux`) verify | `pnpm verify:libs:crux` | *(rebuilds to a temp dir and compares with the committed files; see below)* |
+| libcrux WASM (`crux`) rebuild | `pnpm build:libs:crux` | *(Docker; see below — not part of any aggregate build)* |
+| libcrux WASM (`crux`) verify | `pnpm verify:libs:crux` | *(rebuilds in Docker to a temp dir and compares with the committed files; see below)* |
 | libsodium.js (`sodium`) rebuild | `pnpm build:libs:sodium` | *(Docker; see below — not part of any aggregate build)* |
 | libsodium.js (`sodium`) verify | `pnpm verify:libs:sodium` | *(rebuilds in Docker and compares with the committed files; see below)* |
 
@@ -88,20 +88,15 @@ override the directory. Do not call the Nx targets directly — the pnpm scripts
 
 #### Rebuilding the libcrux WASM (`crux`)
 
-`libs/crypto/crux/` is a `wasm-bindgen` wrapper around [libcrux](https://github.com/cryspen/libcrux) (currently ML-DSA-65) compiled to WebAssembly. Its generated outputs are **committed** (`libs/crypto/src/lib/crux/{qc_crux.js,qc_crux.d.ts,wasm.ts}` — the glue, types, and base64-embedded wasm), so normal builds, tests, and CI need **no Rust toolchain**. Rebuild only when you change the Rust wrapper (`libs/crypto/crux/src/lib.rs`), bump the `libcrux-ml-dsa` version, or add a libcrux feature.
+`libs/crypto/crux/` is a `wasm-bindgen` wrapper around [libcrux](https://github.com/cryspen/libcrux) (currently ML-DSA-65) compiled to WebAssembly. Its generated outputs are **committed** (`libs/crypto/src/lib/crux/{qc_crux.js,qc_crux.d.ts,wasm.ts}` — the glue, types, and base64-embedded wasm), so normal builds, tests, and CI need **no Rust toolchain or Docker**. Rebuild only when you change the Rust wrapper (`libs/crypto/crux/src/lib.rs`), bump the `libcrux-ml-dsa` version, or add a libcrux feature.
 
-**One-time prerequisites** — rustup + the pinned wasm-pack. `libs/crypto/crux/rust-toolchain.toml` pins the Rust version, and rustup installs that toolchain with its wasm target the first time it is used in that directory:
+**One-time prerequisite** — Docker, with your user in the `docker` group. The Rust toolchain, wasm-pack, `wasm-opt`, and `wasm-bindgen` all come from the image that `libs/crypto/crux/Dockerfile` defines, so none of them needs to be installed locally.
 
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && . "$HOME/.cargo/env"
-cargo install wasm-pack --version 0.15.0 --locked
-```
+**Rebuild:** `pnpm build:libs:crux` — runs `libs/crypto/crux/regen.mjs`. It builds the `qcrypt-crux` image from `libs/crypto/crux/Dockerfile`, which pins the Rust image by digest and the wasm-pack, binaryen `wasm-opt`, and `wasm-bindgen` release binaries by SHA-256. In that image it runs `cargo fetch --locked` and `wasm-pack build --target web`, then regenerates the committed TS and `libs/crypto/crux/manifest.json`. It refuses to run when the image's rustc differs from `rust-toolchain.toml`, when the image's `wasm-bindgen` differs from the version in `Cargo.lock`, when `Cargo.lock` needs an update, or when the crate has a `.cargo` directory, whose settings the manifest would not record. It turns off incremental builds, strips the wasm `producers` section, and remaps cargo and registry paths out of the wasm, so rebuilds from the same sources are byte-for-byte identical. That has been checked on arm64, but not across CPU architectures. A rustc bump changes both `rust-toolchain.toml` and the `FROM` line of the Dockerfile, with the new image's digest. It is intentionally **not** wired into any `build:*` aggregate, since it requires Docker.
 
-**Rebuild:** `pnpm build:libs:crux` — runs `libs/crypto/crux/regen.mjs` (`wasm-pack build --target web`, then regenerates the committed TS and `libs/crypto/crux/manifest.json`). It refuses to run when rustc, wasm-pack, or a `wasm-opt` on `PATH` differs from its pin (`rust-toolchain.toml`, and `WASM_PACK_VERSION` and `WASM_OPT_VERSION` in `regen.mjs`), when `Cargo.lock` needs an update, or when a cargo config file sets release profile, compiler, or wasm32 target settings. It ignores `RUSTFLAGS`, `CARGO_PROFILE_*`, and similar environment overrides, turns off incremental builds, strips the wasm `producers` section, and remaps local and registry paths out of the wasm, so rebuilds from the same sources are byte-for-byte identical. That has been checked across checkout paths, `CARGO_HOME` locations, a vendored crates.io replacement, and a locally built `wasm-bindgen`, but not across operating systems or CPU architectures. It is intentionally **not** wired into any `build:*` aggregate, since it requires Rust.
+**Verify:** `pnpm verify:libs:crux` rebuilds into a temp directory and fails unless the committed artifacts and manifest match that rebuild exactly, listing any manifest entries that differ. Run it when reviewing any change to crux sources or artifacts, and before bumping a pin. Separately, `crux.spec.ts` (no Docker needed) fails when a file listed in `manifest.json` no longer matches its recorded SHA-256, when the manifest does not list every `src/**/*.rs` file, or when its tool versions differ from the pins in `rust-toolchain.toml`, the Dockerfile, and `Cargo.lock`, so `pnpm test` catches a source, pin, or artifact change made without a rebuild.
 
-**Verify:** `pnpm verify:libs:crux` rebuilds into a temp directory and fails unless the committed artifacts and manifest match that rebuild exactly, listing any manifest entries that differ. Run it when reviewing any change to crux sources or artifacts, and before bumping a pin. Separately, `crux.spec.ts` (no Rust needed) fails when a file listed in `manifest.json` no longer matches its recorded SHA-256, when the manifest does not list every `src/**/*.rs` file, or when its tool versions differ from the pins, so `pnpm test` catches a source, pin, or artifact change made without a rebuild.
-
-**Commit after a rebuild:** the regenerated `libs/crypto/src/lib/crux/{qc_crux.js,qc_crux.d.ts,wasm.ts}` and `libs/crypto/crux/manifest.json`, plus `libs/crypto/crux/Cargo.lock` if dependency versions changed, and `rust-toolchain.toml` or `regen.mjs` if a pin changed. **Do not commit** `libs/crypto/crux/pkg/` or `libs/crypto/crux/target/` (gitignored build outputs).
+**Commit after a rebuild:** the regenerated `libs/crypto/src/lib/crux/{qc_crux.js,qc_crux.d.ts,wasm.ts}` and `libs/crypto/crux/manifest.json`, plus `libs/crypto/crux/Cargo.lock` if dependency versions changed, and `rust-toolchain.toml`, `Dockerfile`, or `regen.mjs` if a pin changed. **Do not commit** `libs/crypto/crux/pkg/` or `libs/crypto/crux/target/` (gitignored build outputs).
 
 #### Rebuilding the vendored libsodium.js (`sodium`)
 

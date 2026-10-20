@@ -8,7 +8,8 @@
   "inputs": {
     "libs/crypto/crux/Cargo.lock": "5c1928d0fed19e8743ae98d42342f48fa694daa300542ba8b458e592c3574368",
     "libs/crypto/crux/Cargo.toml": "e7d462db6e811faff5f6d3f27a620263fe4cbe9bf70e0b4a80a2ac04f32fa18a",
-    "libs/crypto/crux/regen.mjs": "c6f1634604c241e73634dc3ea595c2912abd3554dbb02b73887d21f0ee653c9d",
+    "libs/crypto/crux/Dockerfile": "da74bbc4bb6e0b81f3676b5d8d0cb1c7e5d8bceaeccf5b8ea6558f2288d6ef44",
+    "libs/crypto/crux/regen.mjs": "3f41b3a1b4450d19a42134a81ccbb36d0e1f117b789ad69695afd3552076892e",
     "libs/crypto/crux/rust-toolchain.toml": "7b75996631e0ec43ba9fc22160dfca992bc059cacf57ae8d3cd31f940214b739",
     "libs/crypto/crux/src/lib.rs": "3673c379fa79dd4f2a8f7c508409be01e09a61391154c5bb2fb029783231887f"
   },

@@ -1,0 +1,48 @@
+# Toolchain for the crux build. regen.mjs builds this image and runs cargo and wasm-pack in it.
+# Every tool is pinned by image digest or release hash. The rustc version must match rust-toolchain.toml.
+FROM rust:1.99.0-slim-trixie@sha256:2752b332db73fdbb7dc576f06c82ed1f312005784ef913d7e04a28f5f55dc581
+
+RUN rustup target add wasm32-unknown-unknown
+
+# curl only fetches files checked against a SHA-256 below, so its version does not affect the build
+RUN apt-get update \
+   && apt-get install -y --no-install-recommends curl \
+   && rm -rf /var/lib/apt/lists/*
+
+# wasm-pack runs wasm-opt and wasm-bindgen from PATH instead of downloading them. The binaryen and wasm-bindgen
+# hashes are from their releases' checksum files. wasm-pack publishes none, so its hashes are of the downloads.
+ARG WASM_PACK_VERSION=0.15.0
+ARG WASM_OPT_VERSION=117
+ARG WASM_BINDGEN_VERSION=0.2.129
+RUN set -eu; \
+   case "$(uname -m)" in \
+      aarch64) \
+         arch=aarch64; \
+         pack_sum=e17ef0806381c3a0acb9c9ddad643a49facaa5a2ecf657a421d4d8f3357a24b7; \
+         opt_sum=ad560204426015a815faa45693c83bef7d58677d38a39422c272a30ba4b6da2a; \
+         bindgen_sum=2ed4351c35dd9440308bbb02767d47ea278efe851a52465300f3c94f5b6c2a87 ;; \
+      x86_64) \
+         arch=x86_64; \
+         pack_sum=c09f971ecaed9a2efc80fdcea7a00ef6b53c7fadc8c57d1f61b53a6aa66b668a; \
+         opt_sum=3dc677006555b355ea2da5e82602065a161d5e83eaefd3f759afa00b96e83212; \
+         bindgen_sum=82d12bb940e2d4e72e0d5605387fc1b8ca179044e012b620f0ce4e7440e8320e ;; \
+      *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;; \
+   esac; \
+   fetch() { \
+      curl -fsSL -o /tmp/download.tar.gz "$1"; \
+      echo "$2  /tmp/download.tar.gz" | sha256sum -c -; \
+      tar -xzf /tmp/download.tar.gz -C /tmp; \
+      rm /tmp/download.tar.gz; \
+   }; \
+   fetch "https://github.com/wasm-bindgen/wasm-pack/releases/download/v${WASM_PACK_VERSION}/wasm-pack-v${WASM_PACK_VERSION}-${arch}-unknown-linux-musl.tar.gz" "$pack_sum"; \
+   fetch "https://github.com/WebAssembly/binaryen/releases/download/version_${WASM_OPT_VERSION}/binaryen-version_${WASM_OPT_VERSION}-${arch}-linux.tar.gz" "$opt_sum"; \
+   fetch "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/${WASM_BINDGEN_VERSION}/wasm-bindgen-${WASM_BINDGEN_VERSION}-${arch}-unknown-linux-musl.tar.gz" "$bindgen_sum"; \
+   install -m 755 \
+      "/tmp/wasm-pack-v${WASM_PACK_VERSION}-${arch}-unknown-linux-musl/wasm-pack" \
+      "/tmp/binaryen-version_${WASM_OPT_VERSION}/bin/wasm-opt" \
+      "/tmp/wasm-bindgen-${WASM_BINDGEN_VERSION}-${arch}-unknown-linux-musl/wasm-bindgen" \
+      /usr/local/bin/; \
+   rm -rf /tmp/*; \
+   wasm-pack --version; \
+   wasm-opt --version; \
+   wasm-bindgen --version

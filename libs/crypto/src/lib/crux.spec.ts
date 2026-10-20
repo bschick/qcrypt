@@ -107,7 +107,7 @@ describe('crux manifest', () => {
       const sources = readdirSync(`${repoRoot}libs/crypto/crux/src`, { recursive: true, encoding: 'utf8' })
          .filter((file) => file.endsWith('.rs'))
          .map((file) => `libs/crypto/crux/src/${file}`);
-      const configs = ['Cargo.lock', 'Cargo.toml', 'regen.mjs', 'rust-toolchain.toml'].map(
+      const configs = ['Cargo.lock', 'Cargo.toml', 'Dockerfile', 'regen.mjs', 'rust-toolchain.toml'].map(
          (file) => `libs/crypto/crux/${file}`,
       );
       expect(Object.keys(manifest.inputs).sort()).toEqual([...configs, ...sources].sort());
@@ -117,15 +117,17 @@ describe('crux manifest', () => {
    });
 
    it('records the pinned tool versions', () => {
-      const regen = readRepo('libs/crypto/crux/regen.mjs');
+      const dockerfile = readRepo('libs/crypto/crux/Dockerfile');
+      const dockerPin = (name: string) => dockerfile.match(new RegExp(`^ARG ${name}=(\\S+)$`, 'm'))?.[1];
       expect(manifest.toolchain).toEqual({
          rustc: readRepo('libs/crypto/crux/rust-toolchain.toml').match(/channel = "([^"]+)"/)?.[1],
-         'wasm-pack': regen.match(/WASM_PACK_VERSION = '([^']+)'/)?.[1],
-         'wasm-opt': regen.match(/WASM_OPT_VERSION = '([^']+)'/)?.[1],
+         'wasm-pack': dockerPin('WASM_PACK_VERSION'),
+         'wasm-opt': dockerPin('WASM_OPT_VERSION'),
          'wasm-bindgen': readRepo('libs/crypto/crux/Cargo.lock').match(
             /name = "wasm-bindgen"\nversion = "([^"]+)"/,
          )?.[1],
       });
+      expect(dockerPin('WASM_BINDGEN_VERSION')).toBe(manifest.toolchain['wasm-bindgen']);
    });
 
    // A mismatch means crux source or artifacts changed without running pnpm build:libs:crux
