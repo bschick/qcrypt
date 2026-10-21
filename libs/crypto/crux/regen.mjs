@@ -7,6 +7,7 @@ import * as path from 'node:path';
 
 // Rebuilds the committed crux artifacts and manifest.json from source, in the Docker image that Dockerfile defines.
 // With --check, rebuilds into a temp directory and verifies the committed files match, without writing anything.
+// Verified reproducible on arm64 only.
 
 const IMAGE = 'qcrypt-crux';
 
@@ -20,16 +21,17 @@ const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 const relative = (file) => path.relative(repoRoot, file);
 const readCrate = (file) => fs.readFileSync(path.join(crateDir, file), 'utf8');
 
-// Every crate file whose content can change the artifacts, relative to the crate directory
+// Every crate file the build can read, except build outputs and macOS .DS_Store files
 function inputFiles() {
-   const sources = fs
-      .readdirSync(path.join(crateDir, 'src'), { recursive: true })
-      .filter((file) => file.endsWith('.rs'))
-      .map((file) => path.join('src', file))
+   return fs
+      .readdirSync(crateDir, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name !== '.DS_Store')
+      .map((entry) => path.relative(crateDir, path.join(entry.parentPath, entry.name)))
+      .filter((file) => !['manifest.json', 'pkg', 'target'].includes(file.split(path.sep)[0]))
       .sort();
-   return ['Cargo.lock', 'Cargo.toml', 'Dockerfile', 'regen.mjs', 'rust-toolchain.toml', ...sources];
 }
 
+console.log('crux: building the Docker image');
 execFileSync('docker', ['build', '-q', '-t', IMAGE, '-'], {
    input: readCrate('Dockerfile'),
    stdio: ['pipe', 'ignore', 'inherit'],
@@ -37,13 +39,33 @@ execFileSync('docker', ['build', '-q', '-t', IMAGE, '-'], {
 
 // Runs a bash script in the image with the crate at /crux as the working directory, so rustup applies
 // rust-toolchain.toml. RUSTUP_AUTO_INSTALL=0 makes rustup fail instead of downloading a toolchain the image lacks.
-function inImage(script, mounts = []) {
-   const volumes = [`${crateDir}:/crux`, ...mounts].flatMap((mount) => ['-v', mount]);
-   const args = ['run', '--rm', '-e', 'RUSTUP_AUTO_INSTALL=0', ...volumes, '-w', '/crux', IMAGE, 'bash', '-c', script];
+function inImage(script, { mounts = [], offline = false } = {}) {
+   const args = [
+      'run',
+      '--rm',
+      '--user',
+      `${process.getuid()}:${process.getgid()}`,
+      '-e',
+      'HOME=/tmp',
+      '-e',
+      'RUSTUP_AUTO_INSTALL=0',
+      ...(offline ? ['--network', 'none'] : []),
+      ...[`${crateDir}:/crux:ro`, ...mounts].flatMap((mount) => ['-v', mount]),
+      '-w',
+      '/crux',
+      IMAGE,
+      'bash',
+      '-c',
+      script,
+   ];
    return spawnSync('docker', args, { encoding: 'utf8' });
 }
 
-const versions = inImage('rustc --version && wasm-pack --version && wasm-opt --version && wasm-bindgen --version');
+// Outside the crate, rustc is the image's default toolchain rather than the one rust-toolchain.toml selects
+const versions = inImage(
+   'cd / && rustc --version && wasm-pack --version && wasm-opt --version && wasm-bindgen --version',
+   { offline: true },
+);
 if (versions.status !== 0) {
    throw new Error(`regen: could not read tool versions in ${IMAGE}: ${versions.stderr}`);
 }
@@ -62,37 +84,44 @@ const problems = [
    toolchain.rustc !== pinnedRustc && `rustc ${pinnedRustc} is pinned, the image has ${toolchain.rustc}`,
    imageWasmBindgen !== toolchain['wasm-bindgen'] &&
       `Cargo.lock has wasm-bindgen ${toolchain['wasm-bindgen']}, the image has ${imageWasmBindgen}`,
-   fs.existsSync(path.join(crateDir, '.cargo')) &&
-      `${relative(path.join(crateDir, '.cargo'))} can change build settings that the manifest does not record`,
 ].filter(Boolean);
 if (problems.length > 0) {
    throw new Error(`regen: ${problems.join('; ')}`);
 }
 
-// Builds into pkgDir and returns the contents of the committed artifacts
-function buildArtifacts(pkgDir) {
+function buildStep(name, script, options) {
+   console.log(`crux: running ${name}`);
+   const step = inImage(script, options);
+   if (step.error) {
+      throw step.error;
+   }
+   if (step.status !== 0) {
+      process.stderr.write(`${step.stdout}${step.stderr}`);
+      throw new Error(`regen: ${name} in ${IMAGE} exited with status ${step.status}`);
+   }
+   return `${step.stdout}${step.stderr}`;
+}
+
+// Builds into pkgDir and returns the contents of the committed artifacts. Only cargo fetch --locked has network access.
+function buildArtifacts(pkgDir, registryDir) {
+   const registry = `${registryDir}:/usr/local/cargo/registry`;
+   buildStep('cargo fetch', 'cargo fetch --locked', { mounts: [registry] });
    // Remaps local paths in panic messages compiled into the wasm. rustc applies the last matching remap, so the
    // registry remaps follow the cargo home remap for correct precedence. Container paths have no spaces, so
-   // RUSTFLAGS can hold them. The container runs as root, so chown gives the files it writes back to the host user.
+   // RUSTFLAGS can hold them.
    const script = [
       'set -euo pipefail',
-      `trap 'chown -R ${process.getuid()}:${process.getgid()} /pkg /crux/target 2>/dev/null || true' EXIT`,
-      'cargo fetch --locked',
       'flags=--remap-path-prefix=/usr/local/cargo=/cargo',
       'for dir in /usr/local/cargo/registry/src/*; do flags="$flags --remap-path-prefix=$dir=/registry"; done',
-      'export RUSTFLAGS="$flags" CARGO_INCREMENTAL=0',
-      'wasm-pack build --target web --release --out-dir /pkg -- --locked',
+      'export RUSTFLAGS="$flags" CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=/tmp/target',
+      // Offline, wasm-pack's update check prints the harmless warning "failed to get wasm-pack version"
+      'wasm-pack build --target web --release --out-dir /pkg -- --frozen',
    ].join('\n');
-   const build = inImage(script, [`${pkgDir}:/pkg`]);
-   process.stdout.write(build.stdout ?? '');
-   process.stderr.write(build.stderr ?? '');
-   if (build.error) {
-      throw build.error;
-   }
-   if (build.status !== 0) {
-      throw new Error(`regen: the build in ${IMAGE} exited with status ${build.status}`);
-   }
-   if (!`${build.stdout}${build.stderr}`.includes('Optimizing wasm binaries with')) {
+   const output = buildStep('wasm-pack build', script, {
+      mounts: [`${registry}:ro`, `${pkgDir}:/pkg`],
+      offline: true,
+   });
+   if (!output.includes('Optimizing wasm binaries with')) {
       throw new Error('regen: wasm-pack did not run wasm-opt');
    }
 
@@ -111,15 +140,18 @@ function buildArtifacts(pkgDir) {
    };
 }
 
-const pkgDir = check ? fs.mkdtempSync(path.join(os.tmpdir(), 'crux-check-')) : path.join(crateDir, 'pkg');
-fs.mkdirSync(pkgDir, { recursive: true });
+const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crux-'));
+const pkgDir = check ? path.join(workDir, 'pkg') : path.join(crateDir, 'pkg');
+const registryDir = path.join(workDir, 'registry');
+// Docker would create missing mount sources owned by root
+for (const dir of [pkgDir, registryDir]) {
+   fs.mkdirSync(dir, { recursive: true });
+}
 let artifacts;
 try {
-   artifacts = buildArtifacts(pkgDir);
+   artifacts = buildArtifacts(pkgDir, registryDir);
 } finally {
-   if (check) {
-      fs.rmSync(pkgDir, { recursive: true, force: true });
-   }
+   fs.rmSync(workDir, { recursive: true, force: true });
 }
 
 // Hashes of what went in and what came out, checked by crux.spec.ts
@@ -162,7 +194,7 @@ if (check) {
       .filter(([file, content]) => !fs.existsSync(file) || fs.readFileSync(file, 'utf8') !== content)
       .map(([file]) => relative(file));
    if (differ.length > 0) {
-      console.error(`crux check: a rebuild from source does not match ${differ.join(', ')}`);
+      console.error(`crux check: a rebuild from source on ${os.machine()} does not match ${differ.join(', ')}`);
       if (changes.length > 0) {
          console.error(`crux check: manifest entries that differ:\n${changes.join('\n')}`);
       }

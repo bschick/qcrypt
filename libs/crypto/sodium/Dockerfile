@@ -2,9 +2,10 @@
 # Every tool is pinned by image digest, exact package version, or release hash.
 FROM emscripten/emsdk:6.0.12@sha256:77638e6c215a65f25a704c0c831d5c2463a8c0468a58c6cb82489dbe621dfa05
 
-# Versions from the noble release pocket, which Ubuntu never changes
+# Versions from the noble release pocket, which Ubuntu never changes, including every dependency the base image lacks
 RUN apt-get update \
    && apt-get install -y --no-install-recommends autoconf=2.71-3 automake=1:1.16.5-1.3ubuntu1 libtool=2.4.7-7build1 \
+      autotools-dev=20220109.1 file=1:5.45-3build1 libmagic1t64=1:5.45-3build1 libmagic-mgc=1:5.45-3build1 m4=1.4.19-4build1 \
    && rm -rf /var/lib/apt/lists/*
 
 # Hashes from the release's SHASUMS256.txt. The baseline x64 build runs on CPUs without AVX2.

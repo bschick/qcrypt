@@ -11,7 +11,7 @@ describe('sodium manifest', () => {
 
    it('lists every sodium input and vendored package file', () => {
       expect(Object.keys(manifest.inputs).sort()).toEqual(
-         ['Dockerfile', 'regen.mjs'].map((file) => `libs/crypto/sodium/${file}`),
+         ['Dockerfile', 'bun.lock', 'regen.mjs'].map((file) => `libs/crypto/sodium/${file}`),
       );
       const packaged = ['libsodium', 'libsodium-wrappers'].flatMap((name) =>
          readdirSync(`${repoRoot}libs/crypto/sodium/${name}`, { recursive: true, withFileTypes: true })

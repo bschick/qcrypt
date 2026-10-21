@@ -1,5 +1,6 @@
 # Toolchain for the crux build. regen.mjs builds this image and runs cargo and wasm-pack in it.
-# Every tool is pinned by image digest or release hash. The rustc version must match rust-toolchain.toml.
+# Tools are pinned by image digest or release hash, except the wasm32 standard library, which rustup pins by version.
+# Bump rustc here and in rust-toolchain.toml together.
 FROM rust:1.99.0-slim-trixie@sha256:2752b332db73fdbb7dc576f06c82ed1f312005784ef913d7e04a28f5f55dc581
 
 RUN rustup target add wasm32-unknown-unknown

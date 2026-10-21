@@ -2,11 +2,12 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Rebuilds the vendored libsodium and libsodium-wrappers packages and manifest.json from the pinned commits, in the
 // Docker image that Dockerfile defines. With --check, rebuilds and verifies the committed files match, without
-// writing them.
+// writing them. Verified reproducible on arm64 only.
 
 // Branch feat/stackzero-stable: libsodium's stable branch, which libsodium.js builds, plus the sodium_stackzero and
 // emscripten_stack_get_free exports
@@ -21,7 +22,7 @@ const IMAGE = 'qcrypt-sodium';
 // this time instead.
 const SOURCE_TIME = 946684800;
 
-// The files npm publishes in each package, minus the CommonJS build
+// The files npm publishes in each package, minus the CommonJS build that package.json still lists
 const PACKAGES = {
    libsodium: {
       packageJson: 'package-libsodium.json',
@@ -35,9 +36,11 @@ const PACKAGES = {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const sodiumDir = path.join(repoRoot, 'libs/crypto/sodium');
+// About 170 MB, too large for a temp directory that may be in RAM
 const buildDir = path.join(sodiumDir, 'build');
 const srcDir = path.join(buildDir, 'src');
 const manifestPath = path.join(sodiumDir, 'manifest.json');
+const lockPath = path.join(sodiumDir, 'bun.lock');
 const check = process.argv.includes('--check');
 
 const sha256 = (data) => createHash('sha256').update(data).digest('hex');
@@ -62,39 +65,80 @@ function exportCommit(repo, commit, name, dest) {
 }
 
 function buildPackages() {
+   console.log('sodium: fetching sources');
    fs.rmSync(buildDir, { recursive: true, force: true });
    exportCommit(LIBSODIUM_JS_REPO, LIBSODIUM_JS_COMMIT, 'libsodium.js', srcDir);
    // The libsodium submodule archives as an empty directory, and the committed dist/ would keep make from rebuilding
    fs.rmSync(path.join(srcDir, 'libsodium'), { recursive: true, force: true });
    fs.rmSync(path.join(srcDir, 'dist'), { recursive: true, force: true });
    exportCommit(LIBSODIUM_REPO, LIBSODIUM_COMMIT, 'libsodium', path.join(srcDir, 'libsodium'));
+   // libsodium.js has no lockfile, so bun.lock pins its packages, including terser. Delete bun.lock to re-resolve them.
+   const haveLock = fs.existsSync(lockPath);
+   if (haveLock) {
+      fs.copyFileSync(lockPath, path.join(srcDir, 'bun.lock'));
+   } else if (check) {
+      throw new Error(`regen: --check needs ${relative(lockPath)}`);
+   }
    for (const entry of ['', ...fs.readdirSync(srcDir, { recursive: true })]) {
       fs.lutimesSync(path.join(srcDir, entry), SOURCE_TIME, SOURCE_TIME);
    }
 
+   console.log('sodium: building the Docker image');
    run('docker', ['build', '-q', '-t', IMAGE, '-'], { input: dockerfile, stdio: ['pipe', 'pipe', 'inherit'] });
-   // The container runs as root, so chown gives the files it writes back to the host user
-   const script = [
-      'set -euo pipefail',
-      `trap 'chown -R ${process.getuid()}:${process.getgid()} /work' EXIT`,
-      '(cd libsodium && ./autogen.sh -s -b) > build.log 2>&1',
-      '(bun install --frozen-lockfile && make pack) >> build.log 2>&1',
-      'bun test > test.log 2>&1',
-   ].join('\n');
-   const dockerArgs = ['run', '--rm', '-v', `${srcDir}:/work`, '-w', '/work', IMAGE, 'bash', '-c', script];
-   const build = spawnSync('docker', dockerArgs, { stdio: 'inherit' });
-   if (build.error) {
-      throw build.error;
-   }
-   if (build.status !== 0) {
-      for (const log of ['build.log', 'test.log']) {
-         const logPath = path.join(srcDir, log);
-         if (fs.existsSync(logPath)) {
-            console.error(`--- last lines of ${relative(logPath)}`);
-            console.error(fs.readFileSync(logPath, 'utf8').split('\n').slice(-40).join('\n'));
-         }
+   // Only bun install has network access
+   const steps = [
+      {
+         status: 'installing packages',
+         script: `bun install ${haveLock ? '--frozen-lockfile ' : ''}> build.log 2>&1`,
+         offline: false,
+      },
+      {
+         status: 'building and testing',
+         script: [
+            'set -euo pipefail',
+            '(cd libsodium && ./autogen.sh -s -b) >> build.log 2>&1',
+            'make pack >> build.log 2>&1',
+            'bun test > test.log 2>&1',
+         ].join('\n'),
+         offline: true,
+      },
+   ];
+   for (const { status, script, offline } of steps) {
+      console.log(`sodium: ${status}`);
+      const dockerArgs = [
+         'run',
+         '--rm',
+         '--user',
+         `${process.getuid()}:${process.getgid()}`,
+         '-e',
+         'HOME=/tmp',
+         ...(offline ? ['--network', 'none'] : []),
+         '-v',
+         `${srcDir}:/work`,
+         '-w',
+         '/work',
+         IMAGE,
+         'bash',
+         '-c',
+         script,
+      ];
+      const build = spawnSync('docker', dockerArgs, { stdio: 'inherit' });
+      if (build.error) {
+         throw build.error;
       }
-      throw new Error(`regen: the build in ${IMAGE} exited with status ${build.status}`);
+      if (build.status !== 0) {
+         for (const log of ['build.log', 'test.log']) {
+            const logPath = path.join(srcDir, log);
+            if (fs.existsSync(logPath)) {
+               console.error(`--- last lines of ${relative(logPath)}`);
+               console.error(fs.readFileSync(logPath, 'utf8').split('\n').slice(-40).join('\n'));
+            }
+         }
+         throw new Error(`regen: the build in ${IMAGE} exited with status ${build.status}`);
+      }
+   }
+   if (!haveLock) {
+      fs.copyFileSync(path.join(srcDir, 'bun.lock'), lockPath);
    }
 
    const outputs = {};
@@ -119,7 +163,7 @@ const manifest = {
    },
    toolchain,
    inputs: Object.fromEntries(
-      ['Dockerfile', 'regen.mjs'].map((file) => [
+      ['Dockerfile', 'bun.lock', 'regen.mjs'].map((file) => [
          relative(path.join(sodiumDir, file)),
          sha256(fs.readFileSync(path.join(sodiumDir, file))),
       ]),
@@ -149,7 +193,7 @@ if (check) {
       .filter(([file, content]) => !fs.existsSync(file) || !fs.readFileSync(file).equals(content))
       .map(([file]) => relative(file));
    if (differ.length > 0) {
-      console.error(`sodium check: a rebuild from source does not match ${differ.join(', ')}`);
+      console.error(`sodium check: a rebuild from source on ${os.machine()} does not match ${differ.join(', ')}`);
       if (changes.length > 0) {
          console.error(`sodium check: manifest entries that differ:\n${changes.join('\n')}`);
       }

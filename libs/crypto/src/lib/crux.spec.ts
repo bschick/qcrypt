@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createHash, randomBytes } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cryptoReady, getCrux } from './crypto';
 import init, { stack_bounds } from './crux/qc_crux.js';
@@ -104,13 +105,14 @@ describe('crux manifest', () => {
    const recorded: [string, string][] = Object.entries({ ...manifest.inputs, ...manifest.outputs });
 
    it('lists every crux input and artifact', () => {
-      const sources = readdirSync(`${repoRoot}libs/crypto/crux/src`, { recursive: true, encoding: 'utf8' })
-         .filter((file) => file.endsWith('.rs'))
-         .map((file) => `libs/crypto/crux/src/${file}`);
-      const configs = ['Cargo.lock', 'Cargo.toml', 'Dockerfile', 'regen.mjs', 'rust-toolchain.toml'].map(
-         (file) => `libs/crypto/crux/${file}`,
-      );
-      expect(Object.keys(manifest.inputs).sort()).toEqual([...configs, ...sources].sort());
+      // Every crate file the build can read, except build outputs and macOS .DS_Store files
+      const crateDir = `${repoRoot}libs/crypto/crux`;
+      const inputs = readdirSync(crateDir, { recursive: true, withFileTypes: true })
+         .filter((entry) => entry.isFile() && entry.name !== '.DS_Store')
+         .map((entry) => relative(crateDir, join(entry.parentPath, entry.name)))
+         .filter((file) => !['manifest.json', 'pkg', 'target'].includes(file.split(sep)[0]))
+         .map((file) => `libs/crypto/crux/${file}`);
+      expect(Object.keys(manifest.inputs).sort()).toEqual(inputs.sort());
       expect(Object.keys(manifest.outputs).sort()).toEqual(
          ['qc_crux.d.ts', 'qc_crux.js', 'wasm.ts'].map((file) => `libs/crypto/src/lib/crux/${file}`),
       );

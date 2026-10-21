@@ -8,8 +8,9 @@
     "bun": "1.3.14"
   },
   "inputs": {
-    "libs/crypto/sodium/Dockerfile": "424aa8d7c2626e6af3f96c2dd983517cb35c31620e49cb4d825bca604eb4ebac",
-    "libs/crypto/sodium/regen.mjs": "3aebff73e7de7651d359bfd0d908222c00b116deb6866d674df2ca2c6ba44b8a"
+    "libs/crypto/sodium/Dockerfile": "aea5486653b37ed2ff3afc7f0586daf96020eacfee2c97ab9dc1fa0141d07835",
+    "libs/crypto/sodium/bun.lock": "03ae57b7e04dcc2c1d8c9dd03d8ae8e062b3bb36ac5149de6cc9f1dc10af1614",
+    "libs/crypto/sodium/regen.mjs": "3c01a56aaefcfde524961a5b2675fb72c215451fc5210fd9469b65c7c277a6f4"
   },
   "outputs": {
     "libs/crypto/sodium/libsodium/package.json": "8ebfa69209645f8ae8c6e03cb079cfc69a5a0094f4b4aaacd6131c77fe81d92c",
