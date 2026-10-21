@@ -110,10 +110,9 @@ function buildPackages() {
       const runArgs = [
          'run',
          '--rm',
-         // Without keep-id, rootless Podman maps --user to a host ID that cannot write to the mounts
-         ...(ENGINE === 'podman' ? ['--userns=keep-id'] : []),
-         '--user',
-         `${process.getuid()}:${process.getgid()}`,
+         // Rootless Podman runs the container's root as the invoking user, so only Docker needs --user. Podman with
+         // --user needs keep-id, which copies and chowns the whole image where the kernel cannot idmap mounts.
+         ...(ENGINE === 'docker' ? ['--user', `${process.getuid()}:${process.getgid()}`] : []),
          '-e',
          'HOME=/tmp',
          ...(offline ? ['--network', 'none'] : []),
