@@ -36,7 +36,7 @@ function inputFiles() {
 console.log(`crux: building the ${ENGINE} image`);
 execFileSync(ENGINE, ['build', '-q', '-t', IMAGE, '-'], {
    input: readCrate('Containerfile'),
-   stdio: ['pipe', 'ignore', 'inherit'],
+   stdio: ['pipe', 'ignore', 'pipe'],
 });
 
 // Runs a bash script in the image with the crate at /crux as the working directory, so rustup applies

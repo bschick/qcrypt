@@ -35,7 +35,7 @@ sudo snap install lxd
 sudo adduser $USER lxd
 newgrp lxd
 lxd init --auto
-lxc launch ubuntu:24.04 qcrypt
+lxc launch ubuntu:24.04 qcrypt -c security.nesting=true
 lxc exec qcrypt -- /bin/bash
 ```
 

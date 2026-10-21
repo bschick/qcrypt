@@ -10,7 +10,7 @@
   "inputs": {
     "libs/crypto/sodium/Containerfile": "8c7a1c472eca0d73a08eb7ceda7fddce8b5de9f2e2b4d4fd39fb9899aac7dea6",
     "libs/crypto/sodium/bun.lock": "03ae57b7e04dcc2c1d8c9dd03d8ae8e062b3bb36ac5149de6cc9f1dc10af1614",
-    "libs/crypto/sodium/regen.mjs": "1a06e5201642d67cdda999abd3c76f6bd52c3bd2bf32bf0bacc74980cd68684b"
+    "libs/crypto/sodium/regen.mjs": "799a5d83b92c8dea9c2bf5012157b59cf97bbf8374d6db1214b89c50bb736032"
   },
   "outputs": {
     "libs/crypto/sodium/libsodium/package.json": "8ebfa69209645f8ae8c6e03cb079cfc69a5a0094f4b4aaacd6131c77fe81d92c",

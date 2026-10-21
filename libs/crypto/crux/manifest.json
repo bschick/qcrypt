@@ -10,7 +10,7 @@
     "libs/crypto/crux/Cargo.lock": "5c1928d0fed19e8743ae98d42342f48fa694daa300542ba8b458e592c3574368",
     "libs/crypto/crux/Cargo.toml": "e7d462db6e811faff5f6d3f27a620263fe4cbe9bf70e0b4a80a2ac04f32fa18a",
     "libs/crypto/crux/Containerfile": "5afbaaa7ab30c1c2301941bcda2692daa61106114e8f26f87c0d3972ad54b6b9",
-    "libs/crypto/crux/regen.mjs": "6c28694c6c1ed93a6212133e6c6b4ea741365de224cca1d4bb8ab6f6cac66164",
+    "libs/crypto/crux/regen.mjs": "29513c069aeba79ae2411bfade84beb6af90bca4abb636cc33a45ee8bc6696a3",
     "libs/crypto/crux/rust-toolchain.toml": "7b75996631e0ec43ba9fc22160dfca992bc059cacf57ae8d3cd31f940214b739",
     "libs/crypto/crux/src/lib.rs": "3673c379fa79dd4f2a8f7c508409be01e09a61391154c5bb2fb029783231887f"
   },

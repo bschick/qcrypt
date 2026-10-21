@@ -86,7 +86,7 @@ function buildPackages() {
    }
 
    console.log(`sodium: building the ${ENGINE} image`);
-   run(ENGINE, ['build', '-q', '-t', IMAGE, '-'], { input: containerfile, stdio: ['pipe', 'pipe', 'inherit'] });
+   run(ENGINE, ['build', '-q', '-t', IMAGE, '-'], { input: containerfile, stdio: ['pipe', 'pipe', 'pipe'] });
    // Only bun install has network access
    const steps = [
       {
