@@ -119,17 +119,17 @@ describe('crux manifest', () => {
    });
 
    it('records the pinned tool versions', () => {
-      const dockerfile = readRepo('libs/crypto/crux/Dockerfile');
-      const dockerPin = (name: string) => dockerfile.match(new RegExp(`^ARG ${name}=(\\S+)$`, 'm'))?.[1];
+      const containerfile = readRepo('libs/crypto/crux/Containerfile');
+      const containerPin = (name: string) => containerfile.match(new RegExp(`^ARG ${name}=(\\S+)$`, 'm'))?.[1];
       expect(manifest.toolchain).toEqual({
          rustc: readRepo('libs/crypto/crux/rust-toolchain.toml').match(/channel = "([^"]+)"/)?.[1],
-         'wasm-pack': dockerPin('WASM_PACK_VERSION'),
-         'wasm-opt': dockerPin('WASM_OPT_VERSION'),
+         'wasm-pack': containerPin('WASM_PACK_VERSION'),
+         'wasm-opt': containerPin('WASM_OPT_VERSION'),
          'wasm-bindgen': readRepo('libs/crypto/crux/Cargo.lock').match(
             /name = "wasm-bindgen"\nversion = "([^"]+)"/,
          )?.[1],
       });
-      expect(dockerPin('WASM_BINDGEN_VERSION')).toBe(manifest.toolchain['wasm-bindgen']);
+      expect(containerPin('WASM_BINDGEN_VERSION')).toBe(manifest.toolchain['wasm-bindgen']);
    });
 
    // A mismatch means crux source or artifacts changed without running pnpm build:libs:crux

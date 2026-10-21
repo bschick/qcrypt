@@ -5,11 +5,13 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-// Rebuilds the committed crux artifacts and manifest.json from source, in the Docker image that Dockerfile defines.
+// Rebuilds the committed crux artifacts and manifest.json from source, in the image that Containerfile defines.
 // With --check, rebuilds into a temp directory and verifies the committed files match, without writing anything.
 // Verified reproducible on arm64 only.
 
 const IMAGE = 'qcrypt-crux';
+// Rootless Podman needs no daemon or docker group membership, so it is used when installed
+const ENGINE = spawnSync('podman', ['--version']).error ? 'docker' : 'podman';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const crateDir = path.join(repoRoot, 'libs/crypto/crux');
@@ -31,9 +33,9 @@ function inputFiles() {
       .sort();
 }
 
-console.log('crux: building the Docker image');
-execFileSync('docker', ['build', '-q', '-t', IMAGE, '-'], {
-   input: readCrate('Dockerfile'),
+console.log(`crux: building the ${ENGINE} image`);
+execFileSync(ENGINE, ['build', '-q', '-t', IMAGE, '-'], {
+   input: readCrate('Containerfile'),
    stdio: ['pipe', 'ignore', 'inherit'],
 });
 
@@ -43,6 +45,8 @@ function inImage(script, { mounts = [], offline = false } = {}) {
    const args = [
       'run',
       '--rm',
+      // Without keep-id, rootless Podman maps --user to a host ID that cannot write to the mounts
+      ...(ENGINE === 'podman' ? ['--userns=keep-id'] : []),
       '--user',
       `${process.getuid()}:${process.getgid()}`,
       '-e',
@@ -58,7 +62,7 @@ function inImage(script, { mounts = [], offline = false } = {}) {
       '-c',
       script,
    ];
-   return spawnSync('docker', args, { encoding: 'utf8' });
+   return spawnSync(ENGINE, args, { encoding: 'utf8' });
 }
 
 // Outside the crate, rustc is the image's default toolchain rather than the one rust-toolchain.toml selects

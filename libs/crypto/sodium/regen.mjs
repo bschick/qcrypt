@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Rebuilds the vendored libsodium and libsodium-wrappers packages and manifest.json from the pinned commits, in the
-// Docker image that Dockerfile defines. With --check, rebuilds and verifies the committed files match, without
+// image that Containerfile defines. With --check, rebuilds and verifies the committed files match, without
 // writing them. Verified reproducible on arm64 only.
 
 // Branch feat/stackzero-stable: libsodium's stable branch, which libsodium.js builds, plus the sodium_stackzero and
@@ -18,6 +18,8 @@ const LIBSODIUM_JS_REPO = 'https://github.com/bschick/libsodium.js.git';
 const LIBSODIUM_JS_COMMIT = 'e8f6411500386a30f80f296fc9091b2d416647eb';
 
 const IMAGE = 'qcrypt-sodium';
+// Rootless Podman needs no daemon or docker group membership, so it is used when installed
+const ENGINE = spawnSync('podman', ['--version']).error ? 'docker' : 'podman';
 // git archive dates each tree by its commit, so make would treat the older tree as stale. Every extracted file gets
 // this time instead.
 const SOURCE_TIME = 946684800;
@@ -48,10 +50,10 @@ const relative = (file) => path.relative(repoRoot, file);
 const run = (tool, args, options = {}) =>
    execFileSync(tool, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], ...options }).trim();
 
-const dockerfile = fs.readFileSync(path.join(sodiumDir, 'Dockerfile'), 'utf8');
+const containerfile = fs.readFileSync(path.join(sodiumDir, 'Containerfile'), 'utf8');
 const toolchain = {
-   image: dockerfile.match(/^FROM (\S+)$/m)[1],
-   bun: dockerfile.match(/^ARG BUN_VERSION=(\S+)$/m)[1],
+   image: containerfile.match(/^FROM (\S+)$/m)[1],
+   bun: containerfile.match(/^ARG BUN_VERSION=(\S+)$/m)[1],
 };
 
 function exportCommit(repo, commit, name, dest) {
@@ -83,8 +85,8 @@ function buildPackages() {
       fs.lutimesSync(path.join(srcDir, entry), SOURCE_TIME, SOURCE_TIME);
    }
 
-   console.log('sodium: building the Docker image');
-   run('docker', ['build', '-q', '-t', IMAGE, '-'], { input: dockerfile, stdio: ['pipe', 'pipe', 'inherit'] });
+   console.log(`sodium: building the ${ENGINE} image`);
+   run(ENGINE, ['build', '-q', '-t', IMAGE, '-'], { input: containerfile, stdio: ['pipe', 'pipe', 'inherit'] });
    // Only bun install has network access
    const steps = [
       {
@@ -105,9 +107,11 @@ function buildPackages() {
    ];
    for (const { status, script, offline } of steps) {
       console.log(`sodium: ${status}`);
-      const dockerArgs = [
+      const runArgs = [
          'run',
          '--rm',
+         // Without keep-id, rootless Podman maps --user to a host ID that cannot write to the mounts
+         ...(ENGINE === 'podman' ? ['--userns=keep-id'] : []),
          '--user',
          `${process.getuid()}:${process.getgid()}`,
          '-e',
@@ -122,7 +126,7 @@ function buildPackages() {
          '-c',
          script,
       ];
-      const build = spawnSync('docker', dockerArgs, { stdio: 'inherit' });
+      const build = spawnSync(ENGINE, runArgs, { stdio: 'inherit' });
       if (build.error) {
          throw build.error;
       }
@@ -163,7 +167,7 @@ const manifest = {
    },
    toolchain,
    inputs: Object.fromEntries(
-      ['Dockerfile', 'bun.lock', 'regen.mjs'].map((file) => [
+      ['Containerfile', 'bun.lock', 'regen.mjs'].map((file) => [
          relative(path.join(sodiumDir, file)),
          sha256(fs.readFileSync(path.join(sodiumDir, file))),
       ]),

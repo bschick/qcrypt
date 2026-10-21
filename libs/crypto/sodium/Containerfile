@@ -1,6 +1,6 @@
 # Toolchain for the vendored libsodium.js build. regen.mjs builds this image and runs the build in it.
 # Every tool is pinned by image digest, exact package version, or release hash.
-FROM emscripten/emsdk:6.0.12@sha256:77638e6c215a65f25a704c0c831d5c2463a8c0468a58c6cb82489dbe621dfa05
+FROM docker.io/emscripten/emsdk:6.0.12@sha256:77638e6c215a65f25a704c0c831d5c2463a8c0468a58c6cb82489dbe621dfa05
 
 # Versions from the noble release pocket, which Ubuntu never changes, including every dependency the base image lacks
 RUN apt-get update \

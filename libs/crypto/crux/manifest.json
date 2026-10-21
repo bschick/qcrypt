@@ -9,8 +9,8 @@
     "libs/crypto/crux/.gitignore": "9eb814f52c86cefd87f51c7fe5a314516d9a466d6efb38f07c3c7659324472f7",
     "libs/crypto/crux/Cargo.lock": "5c1928d0fed19e8743ae98d42342f48fa694daa300542ba8b458e592c3574368",
     "libs/crypto/crux/Cargo.toml": "e7d462db6e811faff5f6d3f27a620263fe4cbe9bf70e0b4a80a2ac04f32fa18a",
-    "libs/crypto/crux/Dockerfile": "c84d5282c8aecf4a71d85976b2eb62c3cdd659b16961b16f372ca3c44bcf8f78",
-    "libs/crypto/crux/regen.mjs": "ee2b4d1cb01b104a7bad68b4e2d575e7fb13f4693a4baaa6a6d10e644df78d23",
+    "libs/crypto/crux/Containerfile": "5afbaaa7ab30c1c2301941bcda2692daa61106114e8f26f87c0d3972ad54b6b9",
+    "libs/crypto/crux/regen.mjs": "6c28694c6c1ed93a6212133e6c6b4ea741365de224cca1d4bb8ab6f6cac66164",
     "libs/crypto/crux/rust-toolchain.toml": "7b75996631e0ec43ba9fc22160dfca992bc059cacf57ae8d3cd31f940214b739",
     "libs/crypto/crux/src/lib.rs": "3673c379fa79dd4f2a8f7c508409be01e09a61391154c5bb2fb029783231887f"
   },

@@ -76,10 +76,10 @@ The `pnpm` scripts in `package.json` call `nx` under the hood. You can use eithe
 | Server build (prod) | `pnpm build:server:prod` | `pnpm nx build-min server` |
 | CLI build | `pnpm build:cli` | `pnpm nx build cli` |
 | CLI build (minified) | `pnpm build:cli:min` | `pnpm nx build-min cli` |
-| libcrux WASM (`crux`) rebuild | `pnpm build:libs:crux` | *(Docker; see below)* |
-| libcrux WASM (`crux`) verify | `pnpm verify:libs:crux` | *(Docker; see below)* |
-| libsodium.js (`sodium`) rebuild | `pnpm build:libs:sodium` | *(Docker; see below)* |
-| libsodium.js (`sodium`) verify | `pnpm verify:libs:sodium` | *(Docker; see below)* |
+| libcrux WASM (`crux`) rebuild | `pnpm build:libs:crux` | *(container; see below)* |
+| libcrux WASM (`crux`) verify | `pnpm verify:libs:crux` | *(container; see below)* |
+| libsodium.js (`sodium`) rebuild | `pnpm build:libs:sodium` | *(container; see below)* |
+| libsodium.js (`sodium`) verify | `pnpm verify:libs:sodium` | *(container; see below)* |
 
 `build:server` writes `dist/server-test` unminified; `build:server:prod` writes `dist/server` minified.
 Either takes `--min` or `--no-min` to override the minification default, and `QC_SERVER_OUT` to
@@ -88,18 +88,18 @@ override the directory. Do not call the Nx targets directly — the pnpm scripts
 
 #### Rebuilding the WebAssembly libraries (`crux`, `sodium`)
 
-Two libraries are built in Docker. Their outputs are committed, so normal builds, tests, and CI do not need Docker.
+Two libraries are built in a container. Their outputs are committed, so normal builds, tests, and CI do not need one.
 
 - `libs/crypto/crux/` wraps [libcrux](https://github.com/cryspen/libcrux) ML-DSA-65 for WebAssembly and generates `libs/crypto/src/lib/crux/`.
 - `libs/crypto/sodium/` is qcrypt's build of [libsodium.js](https://github.com/jedisct1/libsodium.js) with `sodium.stackzero()` added. The root `package.json` links `libsodium` and `libsodium-wrappers` to it instead of the npm releases. Switch back once an npm release includes `stackzero()`.
 
-**Prerequisite:** Docker, with your user in the `docker` group.
+**Prerequisite:** Podman, which `ubsetup.sh` installs. Without Podman, the scripts use Docker, which needs your user in the `docker` group.
 
 **Rebuild** with `pnpm build:libs:crux` or `pnpm build:libs:sodium` after changing any of that library's inputs; `pnpm test` fails until you do. Then commit the regenerated files, the library's `manifest.json`, and the inputs you changed. Neither script is part of an aggregate build.
 
 **Verify** with `pnpm verify:libs:crux` or `pnpm verify:libs:sodium` when reviewing a change to either library. They rebuild and fail unless the committed files match.
 
-Each library's `regen.mjs` and `Dockerfile` describe how its build pins and checks its inputs.
+Each library's `regen.mjs` and `Containerfile` describe how its build pins and checks its inputs.
 
 ### Code Quality (Biome)
 
