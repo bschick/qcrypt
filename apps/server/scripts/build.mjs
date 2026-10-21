@@ -36,8 +36,8 @@ const defaultOut = prod
    : (process.env.QC_TEST_SERVER_DIST ?? 'dist/server-test');
 const outDir = process.env.QC_SERVER_OUT ?? defaultOut;
 
-function run(command, args, env = {}) {
-   const result = spawnSync(command, args, { stdio: 'inherit', env: { ...process.env, ...env } });
+function run(command, args, { env = {}, cwd } = {}) {
+   const result = spawnSync(command, args, { stdio: 'inherit', cwd, env: { ...process.env, ...env } });
    if (result.error) {
       console.error(`build:server: failed to spawn ${command}: ${result.error.message}`);
       process.exit(1);
@@ -50,17 +50,13 @@ function run(command, args, env = {}) {
 // zip only warns when an input is missing, so an absent generated asset would otherwise ship a
 // silently incomplete artifact
 const AAGUID_INDEX = 'apps/server/assets/aaguid/combined.json';
-try {
-   if (!statSync(AAGUID_INDEX).isFile()) {
-      throw new Error('not a file');
-   }
-} catch {
-   console.error(`build:server: missing ${AAGUID_INDEX}, which is bundled into server.zip.`);
-   console.error('build:server: generate it by running `./extractimg.py` from apps/server.');
-   process.exit(1);
+if (!statSync(AAGUID_INDEX, { throwIfNoEntry: false })?.isFile()) {
+   console.log(`build:server: generating ${AAGUID_INDEX}`);
+   // extractimg.py reads and writes paths relative to apps/server
+   run('python3', ['extractimg.py'], { cwd: 'apps/server' });
 }
 
 console.log(`build:server: ${prod ? 'prod' : 'test'}, ${min ? 'minified' : 'unminified'}, into ${outDir}`);
 
 run('pnpm', ['check']);
-run('pnpm', ['nx', min ? 'build-min' : 'build', 'server'], { QC_SERVER_OUT: outDir });
+run('pnpm', ['nx', min ? 'build-min' : 'build', 'server'], { env: { QC_SERVER_OUT: outDir } });
