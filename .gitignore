@@ -4,6 +4,7 @@
 !**/localssl/localssl.sh
 !**/localssl/backup.sh
 *.qq
+ubsetup.log
 
 # Compiled output
 /dist
