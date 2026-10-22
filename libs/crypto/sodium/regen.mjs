@@ -7,7 +7,7 @@ import * as path from 'node:path';
 
 // Rebuilds the vendored libsodium and libsodium-wrappers packages and manifest.json from the pinned commits, in the
 // image that Containerfile defines. With --check, rebuilds and verifies the committed files match, without
-// writing them. Verified reproducible on arm64 only.
+// writing them. Verified reproducible on arm64 and x86_64.
 
 // Branch feat/stackzero-stable: libsodium's stable branch, which libsodium.js builds, plus the sodium_stackzero and
 // emscripten_stack_get_free exports
@@ -49,6 +49,13 @@ const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 const relative = (file) => path.relative(repoRoot, file);
 const run = (tool, args, options = {}) =>
    execFileSync(tool, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], ...options }).trim();
+
+// A build without --check overwrites the packages and manifest.json, so checking after one would compare the rebuild
+// with that build's output instead of with the committed files
+if (check && run('git', ['status', '--porcelain', '--', manifestPath], { cwd: repoRoot })) {
+   console.error(`sodium check: ${relative(manifestPath)} has uncommitted changes, commit or restore it first`);
+   process.exit(1);
+}
 
 const containerfile = fs.readFileSync(path.join(sodiumDir, 'Containerfile'), 'utf8');
 const toolchain = {

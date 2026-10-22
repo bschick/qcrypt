@@ -7,11 +7,13 @@ import * as path from 'node:path';
 
 // Rebuilds the committed crux artifacts and manifest.json from source, in the image that Containerfile defines.
 // With --check, rebuilds into a temp directory and verifies the committed files match, without writing anything.
-// Verified reproducible on arm64 only.
+// Verified reproducible on arm64 and x86_64.
 
 const IMAGE = 'qcrypt-crux';
 // Rootless Podman needs no daemon or docker group membership, so it is used when installed
 const ENGINE = spawnSync('podman', ['--version']).error ? 'docker' : 'podman';
+// The host triple cargo sees on every architecture, the one the committed artifacts were first built on
+const CARGO_HOST = 'aarch64-unknown-linux-gnu';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const crateDir = path.join(repoRoot, 'libs/crypto/crux');
@@ -31,6 +33,13 @@ function inputFiles() {
       .map((entry) => path.relative(crateDir, path.join(entry.parentPath, entry.name)))
       .filter((file) => !['manifest.json', 'pkg', 'target'].includes(file.split(path.sep)[0]))
       .sort();
+}
+
+// A build without --check overwrites the artifacts and manifest.json, so checking after one would compare the rebuild
+// with that build's output instead of with the committed files
+if (check && execFileSync('git', ['status', '--porcelain', '--', manifestPath], { cwd: repoRoot }).length > 0) {
+   console.error(`crux check: ${relative(manifestPath)} has uncommitted changes, commit or restore it first`);
+   process.exit(1);
 }
 
 console.log(`crux: building the ${ENGINE} image`);
@@ -116,7 +125,14 @@ function buildArtifacts(pkgDir, registryDir) {
       'set -euo pipefail',
       'flags=--remap-path-prefix=/usr/local/cargo=/cargo',
       'for dir in /usr/local/cargo/registry/src/*; do flags="$flags --remap-path-prefix=$dir=/registry"; done',
-      'export RUSTFLAGS="$flags" CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=/tmp/target',
+      // Cargo hashes the host triple from rustc -vV into crate metadata, which reorders data in the wasm on each
+      // architecture. This wrapper reports CARGO_HOST instead.
+      "cat > /tmp/rustc-host <<'EOF'",
+      '#!/bin/bash',
+      `if [ "$*" = -vV ]; then rustc -vV | sed 's/^host: .*/host: ${CARGO_HOST}/'; else exec rustc "$@"; fi`,
+      'EOF',
+      'chmod +x /tmp/rustc-host',
+      'export RUSTFLAGS="$flags" RUSTC=/tmp/rustc-host CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=/tmp/target',
       // Offline, wasm-pack's update check prints the harmless warning "failed to get wasm-pack version"
       'wasm-pack build --target web --release --out-dir /pkg -- --frozen',
    ].join('\n');
