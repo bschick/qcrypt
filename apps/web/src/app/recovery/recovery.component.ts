@@ -71,7 +71,7 @@ export class RecoveryComponent implements OnInit {
             } else {
                this._recoveryUserId = this.linkUserId() ?? null;
                this._recoverUserCred = this.linkUserCred() ?? null;
-               // Clears userCred and userId from the address bar (and future Referer headers)q
+               // Clears userCred and userId from the address bar (and future Referer headers)
                this._router.navigate([], { queryParams: {}, replaceUrl: true });
 
                if (this._recoveryUserId && this._recoverUserCred) {
