@@ -125,17 +125,17 @@
     border-top: 1px dotted lightsteelblue;
   }
 
+  .element-answer {
+    overflow: hidden;
+    font-size: 16px;
+  }
+
   .element-detail.expanded {
     grid-template-rows: 1fr;
 
     .element-answer {
       padding: 9px 0 9px 0;
     }
-  }
-
-  .element-answer {
-    overflow: hidden;
-    font-size: 16px;
   }
 
   .empty-data {

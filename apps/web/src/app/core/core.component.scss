@@ -107,6 +107,7 @@ SOFTWARE. */
 }
 
 .warn-icon {
+  // biome-ignore lint/correctness/noUnknownUnit: Biome parses this hex color as a unit
   --mat-icon-button-icon-color: #8b0000;
 }
 

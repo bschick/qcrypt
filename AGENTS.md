@@ -103,7 +103,7 @@ Each library's `regen.mjs` and `Containerfile` describe how its build pins and c
 
 ### Code Quality (Biome)
 
-Formatting and linting use [Biome](https://biomejs.dev) (config: `biome.json`). Biome covers **TS/JS/JSON only** — it does **not** format SCSS (nothing in this repo does), and the e2e specs keep their own ESLint check (`lint:e2e`). Angular HTML templates are formatted by Prettier (`.prettierrc.json`, 2-space indent, `.prettierignore` limits it to `*.html`) via the editor's Prettier extension only; Prettier is not a package dependency and `pnpm check` does not cover templates.
+Formatting and linting use [Biome](https://biomejs.dev) (config: `biome.json`). Biome covers **TS/JS, JSON, SCSS and YAML**, and the e2e specs keep their own ESLint check (`lint:e2e`). Angular HTML templates are formatted by Prettier (`.prettierrc.json`, 2-space indent, `.prettierignore` limits it to `*.html`) via the editor's Prettier extension only; Prettier is not a package dependency and `pnpm check` does not cover templates. Biome's HTML support is experimental and does not parse Angular template syntax, so it stays off.
 
 | What | pnpm script | Notes |
 |------|------------|-------|
@@ -122,7 +122,7 @@ pnpm check:fix libs/crypto/src/lib/keys.ts   # auto-fix one file
 
 `pnpm check` (no path) gates `build:web`, `build:web:prod`, `build:server`, and `build:server:prod` — it runs first, so a format or lint error blocks the build. `bdeploy` builds through those same scripts, so a deploy is gated too.
 
-**Style:** 3-space indent, 120 columns, single quotes, semicolons, trailing commas. JSON stays 2-space (nx/ng-managed), and HTML templates are 2-space (Prettier, see above). Excluded: `**/*.html`, `**/*.svg`, `apps/server/assets/`, generated crux files.
+**Style:** 3-space indent, 120 columns, single quotes, semicolons, trailing commas. JSON stays 2-space (nx/ng-managed). SCSS and YAML are 2-space with double quotes, and HTML templates are 2-space (Prettier, see above). Excluded: `**/*.html`, `**/*.svg`, `pnpm-lock.yaml` and `pnpm-workspace.yaml` (pnpm writes them), `apps/server/assets/`, generated crux files.
 
 **Rules deliberately disabled** (they fight this codebase's patterns — do not re-enable without cause):
 
@@ -133,6 +133,8 @@ pnpm check:fix libs/crypto/src/lib/keys.ts   # auto-fix one file
 | `useArrayLiterals` | `new Array()` → `[]` infers `never[]` on untyped class fields |
 | `useLiteralKeys` | `apps/web/tsconfig.json` sets `noPropertyAccessFromIndexSignature`, which *requires* bracket access on index-signature types (`TS4111`) |
 | `noNonNullAssertion` | House style: deliberate `!` non-null assertions |
+| `noImportantStyles` | Each `!important` overrides styles the app doesn't control: Angular Material internals, a third-party component, or (in the print layout) every component's styles |
+| `useDomNodeTextContent` (e2e only) | Playwright's `Locator.innerText()` returns the rendered text that e2e assertions check; the rule is meant for DOM nodes |
 
 `noExplicitAny` is enforced. Lambda handlers use real `@types/aws-lambda` types (`APIGatewayProxyEventV2`, `Context`, `APIGatewayProxyStructuredResultV2`); the few remaining `any` uses carry an inline `biome-ignore` naming the reason (yargs' dynamically-built argv, arbitrary JSON request/response bodies, untrusted `JSON.parse` output).
 

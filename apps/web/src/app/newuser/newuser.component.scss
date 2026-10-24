@@ -1,5 +1,5 @@
 @use "../common.scss";
-@use '@angular/material' as mat;
+@use "@angular/material" as mat;
 
 .error-msg {
   color: var(--mat-sys-error);
@@ -17,7 +17,6 @@
 
   .user-name {
     width: 280px;
-    margin-top: 1x;
     @include mat.form-field-density(-3);
   }
 
@@ -27,7 +26,6 @@
     width: 280px;
   }
 }
-
 
 .help-icon {
   font-size: 17px;
