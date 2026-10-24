@@ -1,12 +1,12 @@
 #!/bin/bash
 
-sudo apt install -y zip curl tmux
+sudo apt install -y zip curl tmux podman
 curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 node -v
 
-sudo npm install -g pnpm@latest
+sudo corepack enable pnpm
 
 pnpm install
 

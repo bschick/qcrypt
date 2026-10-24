@@ -1,20 +1,22 @@
 {
   "toolchain": {
-    "rustc": "1.99.0",
+    "rustc": "1.99.1",
     "wasm-pack": "0.15.0",
     "wasm-opt": "117",
     "wasm-bindgen": "0.2.129"
   },
   "inputs": {
-    "libs/crypto/crux/Cargo.lock": "51b688b4dfc542e4ecda459d3b66a4df03fc3963fb0dcfdb3a2e75600738c23e",
+    "libs/crypto/crux/.gitignore": "9eb814f52c86cefd87f51c7fe5a314516d9a466d6efb38f07c3c7659324472f7",
+    "libs/crypto/crux/Cargo.lock": "5c1928d0fed19e8743ae98d42342f48fa694daa300542ba8b458e592c3574368",
     "libs/crypto/crux/Cargo.toml": "e7d462db6e811faff5f6d3f27a620263fe4cbe9bf70e0b4a80a2ac04f32fa18a",
-    "libs/crypto/crux/regen.mjs": "c6f1634604c241e73634dc3ea595c2912abd3554dbb02b73887d21f0ee653c9d",
-    "libs/crypto/crux/rust-toolchain.toml": "7b75996631e0ec43ba9fc22160dfca992bc059cacf57ae8d3cd31f940214b739",
-    "libs/crypto/crux/src/lib.rs": "76ab86d8cccd4bad8d72890958293c6340dfec28a61a0a7233556e27a78d98bb"
+    "libs/crypto/crux/Containerfile": "0737d34acfadd9f7b799b03aab8b62e0df372bb412e47f7966e984f1c59bc2c4",
+    "libs/crypto/crux/regen.mjs": "c95f82c11212c9343d7fd27595f61b855916ea9f3477c3ba4c47b314167c67c0",
+    "libs/crypto/crux/rust-toolchain.toml": "fe5250750e64cf34e748eedd9aa28cb95f89c8b4dd7867484efb70727c80799c",
+    "libs/crypto/crux/src/lib.rs": "3673c379fa79dd4f2a8f7c508409be01e09a61391154c5bb2fb029783231887f"
   },
   "outputs": {
-    "libs/crypto/src/lib/crux/qc_crux.d.ts": "bac45258728f98b3c4091f9e7d1a3a0539d20b23ccedbf2176817f29a1297e40",
-    "libs/crypto/src/lib/crux/qc_crux.js": "d4f17c467099516cec417c056f7a72221d6e37c7565878cb78a21841ef04ec5a",
-    "libs/crypto/src/lib/crux/wasm.ts": "6cb60095524ff9d3fdad40a4e8c4f3d51eb9bd6f08abbb83a864731e138ce6f2"
+    "libs/crypto/src/lib/crux/qc_crux.d.ts": "2c0e21af4e83afb54de7f79b778e2fc351c03bb070dff089c1ab3a6f73c22eb9",
+    "libs/crypto/src/lib/crux/qc_crux.js": "94adc058d7e85599939b4175399807dfe78bde76eec887320d840271194e906d",
+    "libs/crypto/src/lib/crux/wasm.ts": "9cc04b1d1037c2bb04b592c047fa0ec9b2f3309e7b5192e92fd9e8706d6fc5d5"
   }
 }

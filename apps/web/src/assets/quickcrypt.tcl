@@ -11,8 +11,7 @@ include "Utility/General.tcl"
 #
 # So V4/V5 headers are 38 bytes (32 mac + 2 ver + 3 size + 1 flags);
 # V6 and later are 37 bytes (32 mac + 2 ver + 3 size). V8 appends a
-# length prefixed key commitment to block0's additional data, absent
-# from every earlier version.
+# length prefixed key commitment to block0's additional data
 
 # Reads the per-block header. Returns [list payloadSize headerVersion].
 proc Header {} {

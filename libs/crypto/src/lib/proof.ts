@@ -44,6 +44,7 @@ export function getProofKeyPair(
       return keyPair;
    } finally {
       seed.fill(0);
+      sodium.stackzero();
    }
 }
 

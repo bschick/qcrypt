@@ -69,6 +69,12 @@ test.describe('URL values reach the page', () => {
       await expect(page.getByText('The recovery link is not valid')).toHaveCount(0);
    });
 
+   test('/recovery removes userid and usercred from the URL', async ({ page }) => {
+      await page.goto('/recovery?userid=dXNlcmlk&usercred=dXNlcmNyZWQ');
+      await expect(page).toHaveURL(/\/recovery$/, { timeout: 10000 });
+      await expect(page.getByRole('button', { name: 'Start the recovery process' })).toBeVisible();
+   });
+
    test('/recovery without usercred reports an invalid link', async ({ page }) => {
       await page.goto('/recovery?userid=dXNlcmlk');
       await expect(page.getByText('The recovery link is not valid')).toBeVisible({ timeout: 10000 });

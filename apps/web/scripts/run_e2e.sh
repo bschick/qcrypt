@@ -8,8 +8,12 @@
 # a file save during a run can't trigger a reload that aborts in-flight
 # requests; the serve is stopped on exit.
 #
+# --suite secrets runs the heap secret scans in tests/secrets instead. Locally
+# those are served from the optimized test build, because the development build
+# keeps destroyed views reachable and the scans would report them as leaks.
+#
 # Usage:
-#   run_e2e.sh --project local|prod [--loops N] [extra playwright args...]
+#   run_e2e.sh --project local|prod [--suite e2e|secrets] [--loops N] [extra playwright args...]
 
 set -euo pipefail
 
@@ -17,6 +21,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO_ROOT"
 
 PROJECT=""
+SUITE="e2e"
 LOOPS=1
 PASSTHROUGH=()
 
@@ -24,6 +29,10 @@ while [[ $# -gt 0 ]]; do
    case "$1" in
       --project)
          PROJECT="$2"
+         shift 2
+         ;;
+      --suite)
+         SUITE="$2"
          shift 2
          ;;
       --loops)
@@ -42,6 +51,11 @@ done
 
 if [[ -z "$PROJECT" ]]; then
    echo "run_e2e.sh: --project local|prod is required" >&2
+   exit 2
+fi
+
+if [[ "$SUITE" != "e2e" && "$SUITE" != "secrets" ]]; then
+   echo "run_e2e.sh: --suite must be e2e or secrets (got: $SUITE)" >&2
    exit 2
 fi
 
@@ -102,7 +116,7 @@ serve_ready() {
    curl -sk -o /dev/null --max-time 3 "$SERVE_URL"
 }
 
-# Start a dev serve with watch and live-reload off, so a file save during a run
+# Start a serve with watch and live-reload off, so a file save during a run
 # can't reload the page and abort an in-flight request. setsid isolates it in its
 # own process group so stop_serve can take down the whole tree; where setsid is
 # absent (e.g. macOS) it runs without it and stop_serve tree-kills instead.
@@ -115,7 +129,12 @@ start_frozen_serve() {
    if command -v setsid >/dev/null 2>&1; then
       setsid_prefix="setsid"
    fi
-   $setsid_prefix pnpm exec nx serve web --hmr false --live-reload false --watch false \
+   local build_target=()
+   if [[ "$SUITE" == "secrets" ]]; then
+      build_target=(--buildTarget=web:build:test)
+   fi
+   $setsid_prefix pnpm exec nx serve web ${build_target[@]+"${build_target[@]}"} \
+      --hmr false --live-reload false --watch false \
       --host 0.0.0.0 --ssl \
       --ssl-cert apps/web/localssl/localhost.crt \
       --ssl-key apps/web/localssl/localhost.key > "$SERVE_LOG" 2>&1 &
@@ -170,12 +189,18 @@ for ((i = 1; i <= LOOPS; i++)); do
    if [[ "$LOOPS" -gt 1 ]]; then
       echo "===== run_e2e.sh: iteration $i of $LOOPS ====="
    fi
-   run_stage "sequential" \
+   if [[ "$SUITE" == "secrets" ]]; then
       pnpm exec playwright test --config apps/web/playwright.config.ts \
-      --project="$PROJECT" --workers=1 apps/web/tests/sequential \
-      ${PASSTHROUGH[@]+"${PASSTHROUGH[@]}"}
-   pnpm exec playwright test --config apps/web/playwright.config.ts \
-      --project="$PROJECT" apps/web/tests/parallel \
-      --grep-invert "/@fullfuzz/" \
-      ${PASSTHROUGH[@]+"${PASSTHROUGH[@]}"}
+         --project="$PROJECT" apps/web/tests/secrets \
+         ${PASSTHROUGH[@]+"${PASSTHROUGH[@]}"}
+   else
+      run_stage "sequential" \
+         pnpm exec playwright test --config apps/web/playwright.config.ts \
+         --project="$PROJECT" --workers=1 apps/web/tests/sequential \
+         ${PASSTHROUGH[@]+"${PASSTHROUGH[@]}"}
+      pnpm exec playwright test --config apps/web/playwright.config.ts \
+         --project="$PROJECT" apps/web/tests/parallel \
+         --grep-invert "/@fullfuzz/" \
+         ${PASSTHROUGH[@]+"${PASSTHROUGH[@]}"}
+   fi
 done
