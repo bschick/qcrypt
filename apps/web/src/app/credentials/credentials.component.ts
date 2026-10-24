@@ -74,7 +74,7 @@ export class CredentialsComponent implements OnInit {
    protected readonly passKeys = computed<api.AuthenticatorInfoResponse[]>(() => this.authSvc.authenticators);
    protected readonly maxPasskeys = computed(() => this.passKeys().length >= api.MAX_PASSKEYS);
    protected readonly passkeyLimitTip =
-      `Accounts can have up to ${api.MAX_PASSKEYS} passkeys, delete one to add another`;
+      `A maximum of ${api.MAX_PASSKEYS} passkeys are allowed`;
    protected readonly displayedColumns: readonly string[] = ['image', 'description', 'delete'];
    readonly done = output<boolean>();
 
