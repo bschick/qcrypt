@@ -301,7 +301,6 @@ describe('Replay window constants', () => {
 });
 
 describe('dummyCredCount', () => {
-
    // Fixed seeds keep these distribution checks reproducible
    const seeds = Array.from({ length: 100000 }, (_entry, index) =>
       createHash('sha256').update(`seed-${index}`).digest(),
