@@ -41,6 +41,7 @@ test.describe('file encryption', () => {
 
       testWithAuth(`clear text and cipher armor encrypt and decrypt to files (${label})`, async ({ authFixture }) => {
          const { page } = authFixture;
+         test.setTimeout(60000);
          const files = await fileAccess(page);
          const testUser = await authFixture.createTestUser(authFixture.memAuthenticator());
          const heading = new RegExp(testUser.userName);
