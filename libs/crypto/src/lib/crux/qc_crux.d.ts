@@ -15,6 +15,8 @@ export function ml_dsa_65_sign(sk: Uint8Array, message: Uint8Array, context: Uin
 
 export function ml_dsa_65_verify(pk: Uint8Array, message: Uint8Array, context: Uint8Array, signature: Uint8Array): boolean;
 
+export function stack_bounds(): Uint32Array;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -25,6 +27,7 @@ export interface InitOutput {
     readonly ml_dsa_65_verify: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
     readonly mldsa65keypair_pk: (a: number) => [number, number];
     readonly mldsa65keypair_sk: (a: number) => [number, number];
+    readonly stack_bounds: () => [number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __externref_table_dealloc: (a: number) => void;

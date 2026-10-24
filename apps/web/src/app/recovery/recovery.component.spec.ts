@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { RecoveryComponent } from './recovery.component';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { AuthenticatorService } from '../services/authenticator.service';
 import { bytesToBase64, cryptoReady, getRandom } from '@qcrypt/crypto';
@@ -19,6 +19,7 @@ describe('RecoveryComponent', () => {
       hasSession: () => boolean;
       hasRecoveryId: () => boolean;
       getUserCred: () => Promise<Uint8Array>;
+      recover: (userId: string, userCred: string) => Promise<void>;
    };
 
    beforeEach(async () => {
@@ -34,6 +35,7 @@ describe('RecoveryComponent', () => {
          hasSession: () => true,
          hasRecoveryId: () => false,
          getUserCred: () => getUserCred(),
+         recover: () => Promise.resolve(),
       };
 
       await TestBed.configureTestingModule({
@@ -99,5 +101,18 @@ describe('RecoveryComponent', () => {
       expect(component.validRecoveryLink()).toBe(false);
       // @ts-expect-error — asserting protected state
       expect(component.error()).toBe('Recovery link is invalid');
+   });
+
+   it('opens account backup after a successful recovery', async () => {
+      const navigateSpy = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      const recoverSpy = vi.spyOn(authStub, 'recover');
+
+      await authStub.ready;
+      await fixture.whenStable();
+      // @ts-expect-error — calling a protected handler
+      await component.onClickStartRecovery(new MouseEvent('click'));
+
+      expect(recoverSpy).toHaveBeenCalledWith(userId, userCred);
+      expect(navigateSpy).toHaveBeenCalledWith('/regenrecovery');
    });
 });

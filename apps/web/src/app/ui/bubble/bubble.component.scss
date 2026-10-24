@@ -25,7 +25,7 @@
   }
 
   &::before {
-    content: '';
+    content: "";
     position: absolute;
     background-color: inherit;
   }
@@ -47,7 +47,7 @@
   }
 
   &--above {
-    transform:translate(-50%, -100%);
+    transform: translate(-50%, -100%);
     margin-bottom: 7px;
 
     &::before {
@@ -56,12 +56,12 @@
       clip-path: polygon(50% 100%, 0% 0%, 100% 0%);
       left: calc(25% - 8px);
       bottom: -15px;
-      transform:rotate(10deg);
+      transform: rotate(10deg);
     }
   }
 
   &--below {
-    transform:translate(-50%, 0%);
+    transform: translate(-50%, 0%);
     margin-top: 7px;
 
     &::before {
@@ -70,12 +70,12 @@
       clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
       left: calc(25% - 8px);
       top: -17px;
-      transform:rotate(10deg);
+      transform: rotate(10deg);
     }
   }
 
   &--right {
-    transform:translate(0, -50%);
+    transform: translate(0, -50%);
     margin-left: 7px;
 
     &::before {
@@ -86,5 +86,4 @@
       top: calc(50% - 8px);
     }
   }
-
 }

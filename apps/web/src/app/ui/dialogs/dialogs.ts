@@ -120,6 +120,11 @@ export class PasswordDialog implements AfterViewInit, OnDestroy {
    }
 
    ngOnDestroy(): void {
+      // A pending timer keeps this dialog in memory (including password and hint)
+      if (this._timerId >= 0) {
+         window.clearTimeout(this._timerId);
+         this._timerId = -1;
+      }
       if (!this._welcomed) {
          this.bubbleTip().hide();
       }

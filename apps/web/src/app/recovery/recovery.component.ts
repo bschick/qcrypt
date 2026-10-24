@@ -71,6 +71,8 @@ export class RecoveryComponent implements OnInit {
             } else {
                this._recoveryUserId = this.linkUserId() ?? null;
                this._recoverUserCred = this.linkUserCred() ?? null;
+               // Clears userCred and userId from the address bar (and future Referer headers)
+               this._router.navigate([], { queryParams: {}, replaceUrl: true });
 
                if (this._recoveryUserId && this._recoverUserCred) {
                   this.validRecoveryLink.set(true);
@@ -123,7 +125,8 @@ export class RecoveryComponent implements OnInit {
          await this._authSvc.recover(this._recoveryUserId!, this._recoverUserCred!);
          this._recoverUserCred = null;
          this._recoveryUserId = null;
-         this._router.navigateByUrl('/');
+         // Encourage the user to adopt recovery words
+         this._router.navigateByUrl('/regenrecovery');
       } catch (err) {
          if (err instanceof Error && err.message.includes('instead')) {
             this.error.set('You must user recovery words');

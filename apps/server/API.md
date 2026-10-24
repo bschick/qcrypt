@@ -72,6 +72,7 @@ This document provides documentation for the passkey-based authentication server
 - **Read consistency:** `excludeCredentials` is consistent. The `user` fields are eventually consistent.
 - **Responses:**
   - `200 OK`: A SimpleWebAuthn/server [`PublicKeyCredentialCreationOptionsJSON`](#publickeycredentialcreationoptionsjson) JSON object.
+  - `400 Bad Request`: The user already has the maximum allowed passkeys (currently 5).
   - `401 Unauthorized`: The request is not authorized.
 
 ### POST /v1/passkeys/verify
@@ -85,7 +86,7 @@ This document provides documentation for the passkey-based authentication server
 - **Read consistency:** `authenticators` is consistent and includes the new passkey. The other `UserInfo` fields are eventually consistent.
 - **Responses:**
   - `200 OK`: A [`LoginUserInfo`](#loginuserinfo) JSON object.
-  - `400 Bad Request`: The request was malformed or the request body is invalid.
+  - `400 Bad Request`: The request was malformed, the request body is invalid, or the user already has the maximum allowed passkeys (currently 5).
   - `401 Unauthorized`: The registration challenge has expired or is invalid.
 
 ### PATCH /v1/passkeys/{credid}

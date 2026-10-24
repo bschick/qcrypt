@@ -289,7 +289,7 @@ export class FlowComponent {
          case 'Enter': {
             if (this.searchOpen() && count) {
                // Default to the first result unless one is chosen with the arrows.
-               const index = this.searchActiveIndex() >= 0 ? this.searchActiveIndex() : 0;
+               const index = Math.max(this.searchActiveIndex(), 0);
                this.selectSearchResult(this.searchData.filteredData[index].key, event);
             }
             break;

@@ -21,6 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { describe, it, expect } from 'vitest';
+import { createHash } from 'node:crypto';
 import {
    ParamError,
    AuthError,
@@ -31,6 +32,8 @@ import {
    base64UrlDecode,
    base64Decode,
    knownLenTimingSafeEqual,
+   dummyCredCount,
+   ONE_PK_SHARE,
 } from '../src/utils';
 import { CHALLENGE_TTL_SECS, PROOF_SKEW_MS } from '../src/consts';
 
@@ -294,5 +297,36 @@ describe('Replay window constants', () => {
    it('challenge records outlive the proof skew window', () => {
       // A nonce forgotten while its proof is still in the window can be replayed
       expect(CHALLENGE_TTL_SECS * 1000).toBeGreaterThan(PROOF_SKEW_MS);
+   });
+});
+
+describe('dummyCredCount', () => {
+   // Fixed seeds keep these distribution checks reproducible
+   const seeds = Array.from({ length: 100000 }, (_entry, index) =>
+      createHash('sha256').update(`seed-${index}`).digest(),
+   );
+
+   function countShares(maxCount: number): Map<number, number> {
+      const shares = new Map<number, number>();
+      for (const seed of seeds) {
+         const count = dummyCredCount(seed, maxCount);
+         shares.set(count, (shares.get(count) ?? 0) + 1 / seeds.length);
+      }
+      return shares;
+   }
+
+   it('returns one for about 95% of seeds and each higher count less often', () => {
+      const shares = countShares(4);
+      expect([...shares.keys()].sort((left, right) => left - right)).toEqual([1, 2, 3, 4]);
+      expect(shares.get(1)).toBeGreaterThan(ONE_PK_SHARE - 0.01);
+      expect(shares.get(1)).toBeLessThan(ONE_PK_SHARE + 0.01);
+      for (let count = 2; count < 4; count++) {
+         expect(shares.get(count)!).toBeGreaterThan(shares.get(count + 1)!);
+      }
+   });
+
+   it('never exceeds the maximum', () => {
+      expect([...countShares(1).keys()]).toEqual([1]);
+      expect([...countShares(2).keys()].sort((left, right) => left - right)).toEqual([1, 2]);
    });
 });

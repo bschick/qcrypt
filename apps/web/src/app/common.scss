@@ -57,12 +57,8 @@
   z-index: 999;
 }
 
-
 @mixin strong-button {
-  background-color: var(
-    --mat-button-filled-container-color,
-    var(--mat-sys-primary)
-  );
+  background-color: var(--mat-button-filled-container-color, var(--mat-sys-primary));
 
   color: var(--mat-button-filled-label-text-color, var(--mat-sys-on-primary));
 }
@@ -88,4 +84,3 @@
     margin-top: 0;
   }
 }
-
