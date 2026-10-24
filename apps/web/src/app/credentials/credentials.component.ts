@@ -72,6 +72,9 @@ export class CredentialsComponent implements OnInit {
    protected readonly error = signal<ErrorPart[]>([]);
    protected readonly userName = signal('');
    protected readonly passKeys = computed<api.AuthenticatorInfoResponse[]>(() => this.authSvc.authenticators);
+   protected readonly maxPasskeys = computed(() => this.passKeys().length >= api.MAX_PASSKEYS);
+   protected readonly passkeyLimitTip =
+      `Accounts can have up to ${api.MAX_PASSKEYS} passkeys, delete one to add another`;
    protected readonly displayedColumns: readonly string[] = ['image', 'description', 'delete'];
    readonly done = output<boolean>();
 
@@ -147,22 +150,25 @@ export class CredentialsComponent implements OnInit {
    }
 
    protected async onClickAdd() {
-      try {
-         this.clearError();
-         await this.authSvc.addPasskey();
-      } catch (err) {
-         if (err instanceof PrfUnsupportedError) {
-            this._setError(
-               'This account requires passkeys that support',
-               { text: 'local key creation.', routerLink: '/help/faqs/2f8' },
-               'Please use a passkey with the PRF extension.',
-            );
-         } else {
-            console.error(err);
-            if (err instanceof Error && err.name === 'InvalidStateError') {
-               this._setError('Your passkey manager only allows one credential');
+      // disabledInteractive keeps the button clickable so its tooltip can show
+      if (!this.maxPasskeys()) {
+         try {
+            this.clearError();
+            await this.authSvc.addPasskey();
+         } catch (err) {
+            if (err instanceof PrfUnsupportedError) {
+               this._setError(
+                  'This account requires passkeys that support',
+                  { text: 'local key creation.', routerLink: '/help/faqs/2f8' },
+                  'Please use a passkey with the PRF extension.',
+               );
             } else {
-               this._setError('Passkey not created, try again');
+               console.error(err);
+               if (err instanceof Error && err.name === 'InvalidStateError') {
+                  this._setError('Your passkey manager only allows one credential');
+               } else {
+                  this._setError('Passkey not created, try again');
+               }
             }
          }
       }

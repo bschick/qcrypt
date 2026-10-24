@@ -74,6 +74,7 @@ import {
    consumeChallenge,
    createChallenge,
    storeSingleUseNonce,
+   dummyCredCount,
 } from './utils';
 
 export type Response = {
@@ -634,6 +635,18 @@ async function _createAuthenticator(
          : { purpose: expectedPurpose, userId: unverifiedUser.userId },
    );
 
+   // Consistent so the list matches recently registered passkeys
+   const auths = await Authenticators.query
+      .byUserId({
+         userId: unverifiedUser.userId,
+      })
+      .go({ consistent: true, attributes: ['credentialId'] });
+
+   // TODO: consider optimizing with a count on Users
+   if (auths.data.length >= api.MAX_PASSKEYS) {
+      throw new ParamError(`passkey limit reached for ${unverifiedUser.userId}`);
+   }
+
    let verification: VerifiedRegistrationResponse;
    try {
       verification = await verifyRegistrationResponse({
@@ -698,11 +711,13 @@ async function dummyAllowedCreds(inputUserId: string): Promise<PublicKeyCredenti
       jwtMaterial = await setupJwtMaterial();
    }
 
-   const material = Buffer.from(hkdfSync('sha256', jwtMaterial, Buffer.from(inputUserId), 'dummy-auth-options', 64));
+   const userIdBytes = Buffer.from(inputUserId);
+   const countSeed = Buffer.from(hkdfSync('sha256', jwtMaterial, userIdBytes, 'dummy-auth-count', api.MAX_PASSKEYS));
+   const count = dummyCredCount(countSeed, api.MAX_PASSKEYS);
+   const material = Buffer.from(hkdfSync('sha256', jwtMaterial, userIdBytes, 'dummy-auth-options', 64 * count));
 
    // Cumulative weights reflect the observed (len, transports) distribution
-   // in the Authenticators table. Ceil is summed weights. Since 98% of users have
-   // exactly one credential, we return a single entry. Resample and retune
+   // in the Authenticators table. Ceil is summed weights. Resample to retune
    // as the mix shifts.
    const profiles: { ceil: number; len: number; transports: string[] }[] = [
       { ceil: 82, len: 16, transports: ['hybrid', 'internal'] },
@@ -712,16 +727,20 @@ async function dummyAllowedCreds(inputUserId: string): Promise<PublicKeyCredenti
       { ceil: 149, len: 48, transports: ['usb'] },
    ];
 
-   const pick = material.readUInt16BE(0) % 149;
-   const profile = profiles.find((p) => pick < p.ceil)!;
-   const id = material.subarray(2, 2 + profile.len);
-   return [
-      {
-         id: base64UrlEncode(id)!,
+   const creds: PublicKeyCredentialDescriptorJSON[] = [];
+   for (let index = 0; index < count; index++) {
+      const block = material.subarray(index * 64);
+      const pick = block.readUInt16BE(0) % 149;
+      const profile = profiles.find((candidate) => pick < candidate.ceil)!;
+      creds.push({
+         id: base64UrlEncode(block.subarray(2, 2 + profile.len))!,
          type: 'public-key',
          transports: profile.transports,
-      },
-   ];
+      });
+   }
+
+   // Real lists come back in credentialId order, the byUserId sort key
+   return creds.sort((left, right) => (left.id < right.id ? -1 : 1));
 }
 
 async function postAuthOptions(httpDetails: HttpDetails): Promise<Response> {
@@ -886,12 +905,17 @@ async function registrationOptions(
    }
 
    try {
-      // Consistent so the list matches the stored passkeys
+      // Consistent so the list matches recently registered passkeys
       const auths = await Authenticators.query
          .byUserId({
             userId: unverifiedUser.userId,
          })
          .go({ consistent: true });
+
+      // TODO: consider optimizing with a count on Users
+      if (auths.data.length >= api.MAX_PASSKEYS) {
+         throw new ParamError(`passkey limit reached for ${unverifiedUser.userId}`);
+      }
 
       let excludeCreds: {
          id: string;
@@ -930,6 +954,9 @@ async function registrationOptions(
       recordEvent(EventNames.RegOptions, unverifiedUser.userId);
       return { content: api.makeRegOptionsResponse(options) };
    } catch (err) {
+      if (err instanceof ParamError) {
+         throw err;
+      }
       console.error(err);
       throw new Error('unable to generate registration options');
    }

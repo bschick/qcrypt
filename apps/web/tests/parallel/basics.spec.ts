@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { testWithAuth, toggleCredentials, waitForApiResponse } from '.././common';
+import * as api from '@qcrypt/api';
+import { testWithAuth, toggleCredentials, waitForApiResponse, deleteLastPasskey } from '.././common';
 
 test('has title', async ({ page }) => {
    await page.goto('/');
@@ -74,4 +75,32 @@ testWithAuth('username is sanitized on create', async ({ authFixture }) => {
 
    await toggleCredentials(page);
    await expect(page.locator('mat-sidenav input').first()).toHaveValue(sanitizedName);
+});
+
+testWithAuth('new passkey is disabled at the passkey limit', async ({ authFixture }) => {
+   const { page } = authFixture;
+   test.setTimeout(90000);
+
+   const testUser = await authFixture.createTestUser(authFixture.memAuthenticator('none'));
+   await toggleCredentials(page);
+   const tableBody = page.locator('table.credtable tbody');
+   const newPasskey = page.getByRole('button', { name: /New Passkey/ });
+   const limitTip = page.locator('.mat-mdc-tooltip', { hasText: `up to ${api.MAX_PASSKEYS} passkeys` });
+
+   for (let count = 1; count < api.MAX_PASSKEYS; count++) {
+      await expect(newPasskey).toBeEnabled();
+      await authFixture.addPasskey(testUser.userId, authFixture.memAuthenticator('none'), async () => {
+         await newPasskey.click();
+      });
+      await expect(tableBody.locator('tr')).toHaveCount(count + 1);
+   }
+   await expect(newPasskey).toBeDisabled();
+   await newPasskey.hover();
+   await expect(limitTip).toBeVisible();
+
+   await deleteLastPasskey(page);
+   await expect(tableBody.locator('tr')).toHaveCount(api.MAX_PASSKEYS - 1);
+   await expect(newPasskey).toBeEnabled();
+   await newPasskey.hover();
+   await expect(limitTip).not.toBeVisible();
 });
