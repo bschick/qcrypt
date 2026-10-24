@@ -85,7 +85,7 @@ testWithAuth('new passkey is disabled at the passkey limit', async ({ authFixtur
    await toggleCredentials(page);
    const tableBody = page.locator('table.credtable tbody');
    const newPasskey = page.getByRole('button', { name: /New Passkey/ });
-   const limitTip = page.locator('.mat-mdc-tooltip', { hasText: `up to ${api.MAX_PASSKEYS} passkeys` });
+   const limitTip = page.locator('.mat-mdc-tooltip', { hasText: `${api.MAX_PASSKEYS} passkeys` });
 
    for (let count = 1; count < api.MAX_PASSKEYS; count++) {
       await expect(newPasskey).toBeEnabled();
