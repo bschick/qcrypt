@@ -17,6 +17,7 @@ apps/web/src/assets/prf-spike
 
 # Node
 /node_modules
+/.pnpm-store
 pnpm-debug.log
 
 # IDEs,  editors, AI
