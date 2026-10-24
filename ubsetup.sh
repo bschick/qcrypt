@@ -6,7 +6,7 @@ sudo apt-get install -y nodejs
 
 node -v
 
-sudo npm install -g pnpm@latest
+sudo corepack enable pnpm
 
 pnpm install
 

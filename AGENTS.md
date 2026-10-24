@@ -51,6 +51,8 @@ git clone https://github.com/bschick/qcrypt.git && cd qcrypt
 ./ubsetup.sh 2>&1 | tee ubsetup.log
 ```
 
+**pnpm comes from Corepack**, which ships with Node 24. `ubsetup.sh` runs `sudo corepack enable pnpm`, and Corepack's `pnpm` command then runs the version pinned in `package.json`'s `packageManager` field. On macOS, run `corepack enable pnpm` (first `brew install corepack` if `corepack --version` fails). Do not also install pnpm with npm, Homebrew or `pnpm self-update`.
+
 ### d. Background Environment (Non-Interactive Shells)
 
 When AI agents or automated tooling execute commands, they often spawn non-interactive background shells. These environments typically ignore `.zshrc`, `.bashrc`, and `.zprofile` and dynamically linked binaries (like Homebrew's `pnpm` or NVM's `node`) may fail to resolve.
@@ -58,6 +60,8 @@ When AI agents or automated tooling execute commands, they often spawn non-inter
 To ensure non-interactive shells works, export the required paths in a profile evaluated by all execution modes:
 - **Zsh:** Add the exports to `~/.zshenv` (e.g., `echo 'export PATH="/opt/homebrew/bin:/opt/homebrew/opt/node@24/bin:$PATH"' >> ~/.zshenv`).
 - **Bash:** Use `~/.bash_env` and ensure `BASH_ENV` points to it.
+
+Corepack asks before it downloads a pnpm version for the first time, and a non-interactive shell cannot answer. After the `packageManager` pin changes, run `pnpm -v` once in an interactive shell in the repo.
 
 **Very important (particularly for AI agents):** After setup, you must successfully run both the Unit and End-to-End test suites described in [`apps/web/AGENTS.md`](apps/web/AGENTS.md) with all tests passing *before* making any other changes. This helps distinguish environment setup problems from errors introduced by your changes.
 
@@ -297,6 +301,7 @@ The wrappers exit with a clear error when a required var is missing. The AWS CLI
 | Upgrade all to latest | `pnpm update --latest` |
 | Upgrade a specific package | `pnpm update <package> --latest` |
 | **Upgrade Nx** (use Nx migrate tool) | `pnpm nx migrate latest && pnpm install && pnpm nx migrate --run-migrations --if-exists` |
+| **Upgrade pnpm** (rewrites the `packageManager` pin and its hash) | `corepack use pnpm@<version>` |
 
 - `--latest` allows major version bumps; without it, pnpm stays within existing semver ranges.
 - Always upgrade Nx via `nx migrate` rather than `pnpm update` — it runs code migrations that update config files and source code for breaking changes.
