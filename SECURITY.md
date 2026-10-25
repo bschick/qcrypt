@@ -52,7 +52,7 @@ Thanks to the following security researchers:
 
 | Researcher                                                          | Bounties |
 | ------------------------------------------------------------------- | -------- |
-| Rajat Shukla (@rajat4722)                                           | 8        |
+| Rajat Shukla (@rajat4722)                                           | 9        |
 | Blake Prins (@prins1bap-ui)                                         | 3        |
 | destro4evr                                                          | 3        |
 | CapsenR                                                             | 2        |
