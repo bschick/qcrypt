@@ -39,13 +39,10 @@ type AllowCred = {
    transports: string[];
 };
 
-// WebAuthn AuthenticatorTransport values (W3C + CTAP). Any transport outside
-// this set is itself a shape failure.
+// WebAuthn AuthenticatorTransport values (W3C + CTAP).
 const VALID_TRANSPORTS = new Set(['usb', 'nfc', 'ble', 'internal', 'hybrid', 'cable', 'smart-card']);
 
-// Loose credentialId byte-length bounds. MIN is 16 to cover the observed
-// minimum in the Authenticators table (also the smallest DUMMY_PROFILES entry)
-// so both real and dummy responses pass the same shape check.
+// Loose credentialId byte-length bounds
 const MIN_CRED_BYTES = 16;
 const MAX_CRED_BYTES = 96;
 
@@ -64,14 +61,8 @@ const DUMMY_PROFILES: { len: number; transports: string[] }[] = [
 // uses this ID is skipped when QC_ENV=prod.
 const REAL_TEST_USER_ID = 'U1hfQPpLzjCXvaRQ-2hVDg';
 
-// Hardcoded unknown userId that decodes to exactly 16 bytes (matches real
-// server-assigned userId size, passes current and future decoded-length
-// validation). Decodes to ASCII "test-pinned-usr1".
 const PINNED_GUESSED_USER_ID = 'dGVzdC1waW5uZWQtdXNyMQ';
 
-// Expected dummy credential for PINNED_GUESSED_USER_ID. Replace placeholders
-// with the actual values returned by the test server on first run. Update if
-// EncMaterial (the KMS-encrypted jwtMaterial seed) is rotated.
 const EXPECTED_PINNED_CRED_TEST: AllowCred = {
    id: 'mNcU4fpleZNUSgbS3pSfnQ',
    type: 'public-key',
@@ -92,10 +83,10 @@ const PINNED_MULTI_TEST: PinnedMulti = {
    ],
 };
 const PINNED_MULTI_PROD: PinnedMulti = {
-   userId: 'STAND-IN-PROD-USER-ID',
+   userId: 'qXkjA8KUiBWaTIYvFGdQ6A',
    creds: [
-      { id: 'STAND-IN-PROD-CRED-ID-1', type: 'public-key', transports: ['hybrid', 'internal'] },
-      { id: 'STAND-IN-PROD-CRED-ID-2', type: 'public-key', transports: ['internal'] },
+      { id: '1BXY1tlxX_YjYb7loAQ6FA', type: 'public-key', transports: ['hybrid', 'internal'] },
+      { id: 'FDSJ1xb_iGJcMp5M1y2UkQ', type: 'public-key', transports: ['hybrid', 'internal'] },
    ],
 };
 
@@ -189,17 +180,22 @@ describe('auth/options credential shape', () => {
       }
    });
 
-   it('multiple unknown userIds each return sorted dummy credentials matching known profiles', async () => {
-      for (let i = 0; i < 5; i++) {
+   it('unknown userIds return sorted dummy credentials matching known profiles, with no id repeated', async () => {
+      const seen = new Set<string>();
+      let total = 0;
+      for (let i = 0; i < 8; i++) {
          const creds = await getAllowCredentials(guessedUserId(), 'invalid');
          expect(creds.length).toBeGreaterThanOrEqual(1);
          expect(creds.length).toBeLessThanOrEqual(api.MAX_PASSKEYS);
          for (const cred of creds) {
             expect(matchesAnyDummyProfile(cred), `unexpected dummy cred: ${JSON.stringify(cred)}`).toBe(true);
+            seen.add(cred.id);
          }
+         total += creds.length;
          const ids = creds.map((cred) => cred.id);
          expect(ids).toEqual([...ids].sort());
       }
+      expect(seen.size).toBe(total);
    });
 
    it('pinned unknown userId returns the expected hardcoded dummy credential on every call', async () => {
@@ -220,20 +216,6 @@ describe('auth/options credential shape', () => {
       const second = await getAllowCredentials(pinned.userId, 'invalid');
       expect(first).toStrictEqual(pinned.creds);
       expect(second).toStrictEqual(pinned.creds);
-   });
-
-   it('different unknown userIds return different credential ids', async () => {
-      const samples = 8;
-      const ids = new Set<string>();
-      let total = 0;
-      for (let i = 0; i < samples; i++) {
-         const creds = await getAllowCredentials(guessedUserId(), 'invalid');
-         total += creds.length;
-         for (const cred of creds) {
-            ids.add(cred.id);
-         }
-      }
-      expect(ids.size).toBe(total);
    });
 });
 

@@ -181,6 +181,7 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 | CLI unit tests | `pnpm test:cli` | `pnpm nx test cli` | |
 | ProVerif protocol models | `pnpm verify:proverif` | | *needs ProVerif 2.05 from opam; not in any aggregate. See [`formal/proverif/README.md`](formal/proverif/README.md)* |
 
+> **Note:** Every `test:*:prod` script first asks whether the prod WAF `APIRateLimit` rule is set to Count, because a blocking rule fails many prod tests, and reminds you to set it back to Block when the run ends. Pipe the answer to run one non-interactively: `echo y | pnpm test:server:prod`. With `CI` set, it does not ask.
 > **Note:** When passing flags through `nx`, use camelCase for config options (e.g., `--runnerConfig=` not `--runner-config`).
 > **Note:** To run specific test files, use `--include`.
 >   - For `test:web` (Angular builder), `--include` expects a file glob. You must use the `**/` prefix to find nested files. Example: `pnpm test:web -- --include='**/keystore.service.spec.ts'`
