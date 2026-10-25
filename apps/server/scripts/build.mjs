@@ -16,7 +16,6 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { statSync } from 'node:fs';
 
 const argv = process.argv.slice(2);
 const prod = argv.includes('--prod');
@@ -36,8 +35,8 @@ const defaultOut = prod
    : (process.env.QC_TEST_SERVER_DIST ?? 'dist/server-test');
 const outDir = process.env.QC_SERVER_OUT ?? defaultOut;
 
-function run(command, args, { env = {}, cwd } = {}) {
-   const result = spawnSync(command, args, { stdio: 'inherit', cwd, env: { ...process.env, ...env } });
+function run(command, args, { env = {} } = {}) {
+   const result = spawnSync(command, args, { stdio: 'inherit', env: { ...process.env, ...env } });
    if (result.error) {
       console.error(`build:server: failed to spawn ${command}: ${result.error.message}`);
       process.exit(1);
@@ -49,12 +48,7 @@ function run(command, args, { env = {}, cwd } = {}) {
 
 // zip only warns when an input is missing, so an absent generated asset would otherwise ship a
 // silently incomplete artifact
-const AAGUID_INDEX = 'apps/server/assets/aaguid/combined.json';
-if (!statSync(AAGUID_INDEX, { throwIfNoEntry: false })?.isFile()) {
-   console.log(`build:server: generating ${AAGUID_INDEX}`);
-   // extractimg.py reads and writes paths relative to apps/server
-   run('python3', ['extractimg.py'], { cwd: 'apps/server' });
-}
+run('node', ['scripts/ensure-aaguids.mjs']);
 
 console.log(`build:server: ${prod ? 'prod' : 'test'}, ${min ? 'minified' : 'unminified'}, into ${outDir}`);
 

@@ -358,13 +358,17 @@ function getScope(argv) {
 function checkEssentialFiles(scope, keys) {
    const problems = [];
    const hasMatch = (re) => [...keys].some((key) => re.test(key));
-   if (scope.label === 'aaguids') {
+   // A full-site deploy includes assets/aaguid, so a build without those files would schedule the deployed copies
+   // for deletion
+   if (scope.label === 'aaguids' || scope.label === 'all') {
       if (!keys.has('assets/aaguid/combined.json')) {
          problems.push('missing assets/aaguid/combined.json');
       }
       if (!hasMatch(/^assets\/aaguid\/img\//)) {
          problems.push('missing assets/aaguid/img/ (no files found)');
       }
+   }
+   if (scope.label === 'aaguids') {
       return problems;
    }
    if (!keys.has('index.html')) {

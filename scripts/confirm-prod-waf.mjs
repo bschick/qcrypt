@@ -19,7 +19,7 @@ async function confirmed() {
    if (!process.stdin.isTTY) {
       console.log(answer.trim());
    }
-   return answer.trim().toLowerCase() === 'y';
+   return ['y', 'yes'].includes(answer.trim().toLowerCase());
 }
 
 if (process.env.CI) {

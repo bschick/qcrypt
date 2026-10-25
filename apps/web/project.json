@@ -20,6 +20,11 @@
         "assets": [
           "apps/web/src/favicon.ico",
           "apps/web/src/assets",
+          {
+            "glob": "**/*",
+            "input": "apps/server/assets/aaguid",
+            "output": "assets/aaguid"
+          },
           "apps/web/src/robots.txt",
           "apps/web/src/maintenance.html",
           "apps/web/src/sitemap.xml",
