@@ -1199,7 +1199,10 @@ export class AuthenticatorService {
          this._deletedUser();
          return 0;
       } else if (wasCurrentPk) {
-         this.logout(true);
+         // The server already ended the session, so sign out every tab without a DELETE /session
+         this._pendingLogout = Promise.resolve('success');
+         this.clearSession(true);
+         this.logout(false);
       } else {
          const userInfo = this._updateLoggedInUser(serverUserInfo);
          this._broadcastSvc.sendUserInfoChanged({ pkId: userInfo.pkId });
