@@ -1058,7 +1058,10 @@ describe('AuthenticatorService', () => {
       });
 
       it('adding a passkey signals the verified list', async () => {
-         fetchMock.mockResolvedValue({ ok: true, json: async () => withPasskeys(pkId, otherPkId, newPkId) });
+         const options = { challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)) };
+         fetchMock
+            .mockResolvedValueOnce({ ok: true, json: async () => options })
+            .mockResolvedValueOnce({ ok: true, json: async () => withPasskeys(pkId, otherPkId, newPkId) });
 
          await service.addPasskey();
 

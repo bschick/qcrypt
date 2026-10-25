@@ -53,6 +53,7 @@ import * as api from '@qcrypt/api';
 import { KeystoreService } from './keystore.service';
 import { CipherService } from './cipher.service';
 import { injectPrfExtension, prfEnabled, prfReadKey, prfEncrypt, prfDecrypt } from './prf';
+import { plainFetch, nonceFetch, challengeFetch } from './apifetch';
 import {
    BroadcastService,
    type CredentialPayload,
@@ -79,16 +80,6 @@ export type VerifiedUserInfo = {
    recoveryKeyId?: string;
    prf: boolean;
    authenticators: api.AuthenticatorInfoResponse[];
-};
-
-type FetchArgs = {
-   method: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH';
-   resource?: string;
-   userId?: string | null;
-   resourceId?: string;
-   params?: string;
-   bodyJSON?: string;
-   session?: SessionState;
 };
 
 type SessionState = Partial<CredentialPayload> & { userId: string };
@@ -165,6 +156,7 @@ export class AuthenticatorService {
    private _cachedRecoveryWords?: string;
    private _pendingLogout: Promise<LogoutResult> = Promise.resolve('none');
    private readonly _halted = signal(false);
+   private readonly _errorLogout = (global: boolean) => this.logout(global);
 
    constructor() {
       this._broadcastSvc.setCredentialProvider(() => this._getCredentialPayload());
@@ -382,82 +374,6 @@ export class AuthenticatorService {
       return this._userInfo()!;
    }
 
-   private async _doFetch<T>(args: FetchArgs): Promise<T> {
-      const { method, userId, resource, resourceId, params, bodyJSON } = args;
-      const session = args.session ?? this._sessionState();
-
-      const headers = new Headers({
-         'Content-Type': 'application/json',
-         'x-csrf-token': this._csrf()!,
-      });
-
-      const bodyData = new TextEncoder().encode(bodyJSON ?? '');
-      const bodyHashHex = bufferToHexString(await crypto.subtle.digest('SHA-256', bodyData));
-
-      // required for AWS OAC (access control to lambda).
-      if (method === 'PUT' || method === 'POST' || method === 'PATCH') {
-         headers.append('x-amz-content-sha256', bodyHashHex);
-      }
-
-      let path = `${environment.apiVersion}`;
-      path += userId ? `/users/${userId}` : '';
-      path += resource ? `/${resource}` : '';
-      path += resourceId ? `/${resourceId}` : '';
-      path += params ? `?${params}` : '';
-
-      const url = new URL(path, baseUrl);
-
-      if (session?.userCredEnc) {
-         const userCred = await this._decryptUserCredEnc(session.userCredEnc, session.pkId!, session.userId);
-
-         try {
-            const proofTs = String(Date.now());
-            const proofNonce = bytesToBase64(getRandom(api.CHALLENGE_BYTES));
-            const proofSig = api.createUserCredNonceProof(
-               userCred,
-               session.userId,
-               method,
-               url.pathname,
-               proofTs,
-               proofNonce,
-               bodyHashHex,
-               url.search.slice(1),
-            );
-            headers.append('x-proof', `${proofSig},${proofTs},${proofNonce}`);
-         } finally {
-            userCred.fill(0);
-         }
-      }
-
-      let response: Response;
-      try {
-         response = await fetch(url, {
-            method,
-            mode: 'cors',
-            cache: 'no-store',
-            credentials: 'include',
-            body: bodyJSON,
-            headers,
-         });
-      } catch (err) {
-         console.error(err);
-         throw new Error(`fetch error: ${url}`);
-      }
-
-      if (!response.ok) {
-         if (response.status === 401) {
-            // currently 401 only comes back when auth failed, so logout
-            // make sure to pass false to deleteSession to avoid doFetch loop
-            this.logout(false);
-            throw new Error('logged out');
-         } else {
-            throw new Error(`response error: ${await response.text()}`);
-         }
-      }
-
-      return response.json() as T;
-   }
-
    // public to simplify testing, normal clients shouldn't call
    public async _restoreSession(loadCrypto: () => Promise<void>): Promise<void> {
       if (!this.potentialSession()) {
@@ -493,13 +409,14 @@ export class AuthenticatorService {
       // the main thread, which would otherwise stall this tab's relay message handling.
       await loadCrypto();
 
-      // pass session directly because it came from relay and is not yet in
-      // sessionStorage for _doFetch to load
-      const serverLoginUserInfo = await this._doFetch<api.LoginUserInfoResponse>({
-         method: 'GET',
-         resource: 'session',
-         session,
-      });
+      // session may come from the relay and is not yet in sessionStorage, so decrypt its
+      // userCredEnc directly rather than through getUserCred
+      const serverLoginUserInfo = await nonceFetch<api.LoginUserInfoResponse>(
+         { method: 'GET', resource: 'session', errorLogout: this._errorLogout },
+         undefined,
+         session.userId,
+         await this._decryptUserCredEnc(session.userCredEnc, session.pkId!, session.userId),
+      );
 
       if (!serverLoginUserInfo?.verified) {
          console.error('restore aborted: getSession returned unverified');
@@ -582,11 +499,12 @@ export class AuthenticatorService {
       };
 
       this._updateLoggedInUser(
-         await this._doFetch<api.UserInfoResponse>({
-            method: 'PUT',
-            resource: 'recover3/key',
-            bodyJSON: JSON.stringify(body),
-         }),
+         await nonceFetch<api.UserInfoResponse>(
+            { method: 'PUT', resource: 'recover3/key', bodyJSON: JSON.stringify(body), errorLogout: this._errorLogout },
+            this._csrf(),
+            this.userId,
+            await this.getUserCred(),
+         ),
       );
 
       // No exception means it committed. This should always 'match' unless we've hit an
@@ -911,18 +829,12 @@ export class AuthenticatorService {
    private async _adoptPeerLogin(msg: LoginPayload): Promise<void> {
       // must use new peer session state to access userCred and GET the session csrf
       // from the server
-      const session: SessionState = {
-         userId: this.userId,
-         pkId: msg.pkId,
-         userCredEnc: msg.userCredEnc,
-         userCredExpiry: msg.userCredExpiry,
-         version: msg.version,
-      };
-      const serverLoginUserInfo = await this._doFetch<api.LoginUserInfoResponse>({
-         method: 'GET',
-         resource: 'session',
-         session,
-      });
+      const serverLoginUserInfo = await nonceFetch<api.LoginUserInfoResponse>(
+         { method: 'GET', resource: 'session', errorLogout: this._errorLogout },
+         undefined,
+         this.userId,
+         await this._decryptUserCredEnc(msg.userCredEnc, msg.pkId, this.userId),
+      );
       if (!serverLoginUserInfo?.verified) {
          this.logout(false);
       } else {
@@ -1029,14 +941,23 @@ export class AuthenticatorService {
       this._emit(eventData);
    }
 
+   // Sync so the local session is cleared before this returns. The server DELETE completes later,
+   // and logoutResult reports how it ended.
    logout(global: boolean, emit: boolean = true) {
       const eventData = this._captureEventData(AuthEvent.Logout);
 
       if (global && this.hasSession()) {
-         this._pendingLogout = this._doFetch<string>({
-            method: 'DELETE',
-            resource: 'session',
-         })
+         const csrf = this._csrf();
+         const userId = this.userId;
+         this._pendingLogout = this.getUserCred()
+            .then((userCred) =>
+               nonceFetch<string>(
+                  { method: 'DELETE', resource: 'session', errorLogout: this._errorLogout },
+                  csrf,
+                  userId,
+                  userCred,
+               ),
+            )
             .then<LogoutResult>(() => 'success')
             .catch<LogoutResult>(() => 'error');
       }
@@ -1102,12 +1023,18 @@ export class AuthenticatorService {
       }
 
       const patchPasskeyRequest: api.PatchPasskeyRequest = { description };
-      const serverUserInfo = await this._doFetch<api.UserInfoResponse>({
-         method: 'PATCH',
-         resource: 'passkeys',
-         resourceId: credentialId,
-         bodyJSON: JSON.stringify(patchPasskeyRequest),
-      });
+      const serverUserInfo = await nonceFetch<api.UserInfoResponse>(
+         {
+            method: 'PATCH',
+            resource: 'passkeys',
+            resourceId: credentialId,
+            bodyJSON: JSON.stringify(patchPasskeyRequest),
+            errorLogout: this._errorLogout,
+         },
+         this._csrf(),
+         this.userId,
+         await this.getUserCred(),
+      );
 
       if (!serverUserInfo) {
          throw new Error('authentication failed');
@@ -1130,11 +1057,17 @@ export class AuthenticatorService {
       }
 
       const patchUserRequest: api.PatchUserRequest = { userName };
-      const serverUserInfo = await this._doFetch<api.UserInfoResponse>({
-         method: 'PATCH',
-         resource: 'user',
-         bodyJSON: JSON.stringify(patchUserRequest),
-      });
+      const serverUserInfo = await nonceFetch<api.UserInfoResponse>(
+         {
+            method: 'PATCH',
+            resource: 'user',
+            bodyJSON: JSON.stringify(patchUserRequest),
+            errorLogout: this._errorLogout,
+         },
+         this._csrf(),
+         this.userId,
+         await this.getUserCred(),
+      );
 
       if (!serverUserInfo) {
          throw new Error('authentication failed');
@@ -1180,11 +1113,12 @@ export class AuthenticatorService {
 
       const wasCurrentPk = this.isCurrentPk(credentialId);
 
-      const serverUserInfo = await this._doFetch<api.UserInfoResponse>({
-         method: 'DELETE',
-         resource: 'passkeys',
-         resourceId: credentialId,
-      });
+      const serverUserInfo = await nonceFetch<api.UserInfoResponse>(
+         { method: 'DELETE', resource: 'passkeys', resourceId: credentialId, errorLogout: this._errorLogout },
+         this._csrf(),
+         this.userId,
+         await this.getUserCred(),
+      );
 
       if (!serverUserInfo) {
          throw new Error('authentication failed');
@@ -1213,10 +1147,12 @@ export class AuthenticatorService {
          throw new Error('no active user');
       }
 
-      const serverUserInfo = await this._doFetch<api.UserInfoResponse>({
-         method: 'GET',
-         resource: 'user',
-      });
+      const serverUserInfo = await nonceFetch<api.UserInfoResponse>(
+         { method: 'GET', resource: 'user', errorLogout: this._errorLogout },
+         this._csrf(),
+         this.userId,
+         await this.getUserCred(),
+      );
 
       if (!serverUserInfo) {
          throw new Error('authentication failed');
@@ -1230,11 +1166,12 @@ export class AuthenticatorService {
          throw new Error('no active user');
       }
 
-      const invitableInfo = await this._doFetch<api.InvitableInfoResponse>({
-         method: 'GET',
-         resource: 'invitables',
-         resourceId: invitableId,
-      });
+      const invitableInfo = await nonceFetch<api.InvitableInfoResponse>(
+         { method: 'GET', resource: 'invitables', resourceId: invitableId, errorLogout: this._errorLogout },
+         this._csrf(),
+         this.userId,
+         await this.getUserCred(),
+      );
 
       if (!invitableInfo) {
          throw new Error('missing invitable');
@@ -1271,7 +1208,7 @@ export class AuthenticatorService {
    ): Promise<{ serverLoginUserInfo: api.LoginUserInfoResponse; prfKey: Uint8Array<ArrayBuffer> | null }> {
       const { verifyBody, prfKey } = await this._startAuthentication(userId, requireVerification);
       try {
-         const serverLoginUserInfo = await this._doFetch<api.LoginUserInfoResponse>({
+         const serverLoginUserInfo = await plainFetch<api.LoginUserInfoResponse>({
             method: 'POST',
             resource: 'auth/verify',
             bodyJSON: JSON.stringify(verifyBody),
@@ -1297,7 +1234,7 @@ export class AuthenticatorService {
       // Start the process without userId prevents limiting authenticator creds
       // so the user can look for an existing credential
       const authOptionsRequest: api.AuthOptionsRequest = { userId };
-      const optionsJson = await this._doFetch<api.AuthOptionsResponse>({
+      const optionsJson = await plainFetch<api.AuthOptionsResponse>({
          method: 'POST',
          resource: 'auth/options',
          bodyJSON: JSON.stringify(authOptionsRequest),
@@ -1375,7 +1312,7 @@ export class AuthenticatorService {
             signature: api.createRecoveryNonceProof(secret, userId, timestamp1, nonce, 'recover'),
          };
 
-         const startResp = await this._doFetch<api.RecoverStartResponse>({
+         const startResp = await plainFetch<api.RecoverStartResponse>({
             method: 'POST',
             resource: 'recover3',
             bodyJSON: JSON.stringify(startBody),
@@ -1420,7 +1357,7 @@ export class AuthenticatorService {
             signature,
          };
 
-         const confirmResp = await this._doFetch<api.RegOptionsResponse>({
+         const confirmResp = await plainFetch<api.RegOptionsResponse>({
             method: 'POST',
             resource: 'recover/confirm',
             bodyJSON: JSON.stringify(confirmBody),
@@ -1442,7 +1379,7 @@ export class AuthenticatorService {
 
       await this._pendingLogout;
       const recoverRequest: api.RecoverRequest = { userId, userCred };
-      const recoverResp = await this._doFetch<api.RecoverInfoResponse>({
+      const recoverResp = await plainFetch<api.RecoverInfoResponse>({
          method: 'POST',
          resource: 'recover',
          bodyJSON: JSON.stringify(recoverRequest),
@@ -1482,7 +1419,12 @@ export class AuthenticatorService {
             passkeyUserCredEnc,
          });
 
-         const serverLoginUserInfo = await this._passkeyVerify('recover/verify', body);
+         const serverLoginUserInfo = await plainFetch<api.LoginUserInfoResponse>({
+            method: 'POST',
+            resource: 'recover/verify',
+            bodyJSON: JSON.stringify(body),
+         });
+         this._requireVerified(serverLoginUserInfo);
          this._checkAccountPinPrf(userId, serverLoginUserInfo.prf);
 
          return await this._loginUser(serverLoginUserInfo, userCred);
@@ -1510,7 +1452,7 @@ export class AuthenticatorService {
       const regOptionsRequest: api.RegOptionsRequest = { userName };
 
       while (true) {
-         const optionsJson = await this._doFetch<api.RegOptionsResponse>({
+         const optionsJson = await plainFetch<api.RegOptionsResponse>({
             method: 'POST',
             resource: 'reg/options',
             bodyJSON: JSON.stringify(regOptionsRequest),
@@ -1542,7 +1484,12 @@ export class AuthenticatorService {
             }
 
             const body = api.makeRegVerifyRequest(regResponse, riders);
-            const serverLoginUserInfo = await this._passkeyVerify('reg/verify', body);
+            const serverLoginUserInfo = await plainFetch<api.LoginUserInfoResponse>({
+               method: 'POST',
+               resource: 'reg/verify',
+               bodyJSON: JSON.stringify(body),
+            });
+            this._requireVerified(serverLoginUserInfo);
             if (prfKey) {
                if (!serverLoginUserInfo.prf) {
                   this._halt(`server rejected PRF for ${userId}`);
@@ -1567,10 +1514,12 @@ export class AuthenticatorService {
          throw new Error('no active user');
       }
 
-      const optionsJson = await this._doFetch<api.RegOptionsResponse>({
-         method: 'GET',
-         resource: 'passkeys/options',
-      });
+      const optionsJson = await nonceFetch<api.RegOptionsResponse>(
+         { method: 'GET', resource: 'passkeys/options', errorLogout: this._errorLogout },
+         this._csrf(),
+         this.userId,
+         await this.getUserCred(),
+      );
 
       const accountPrf = this.prf;
       const { regResponse, prfKey } = await this._startRegistration(optionsJson, accountPrf);
@@ -1596,7 +1545,19 @@ export class AuthenticatorService {
       }
 
       const body = api.makeAddVerifyRequest(regResponse, { challenge: optionsJson.challenge, passkeyUserCredEnc });
-      const serverLoginUserInfo = await this._passkeyVerify('passkeys/verify', body);
+      const serverLoginUserInfo = await challengeFetch<api.LoginUserInfoResponse>(
+         {
+            method: 'POST',
+            resource: 'passkeys/verify',
+            bodyJSON: JSON.stringify(body),
+            errorLogout: this._errorLogout,
+         },
+         this._csrf(),
+         this.userId,
+         await this.getUserCred(),
+         body.challenge,
+      );
+      this._requireVerified(serverLoginUserInfo);
       const userInfo = this._updateLoggedInUser(serverLoginUserInfo);
       this._signalAcceptedCredentials(userInfo.userId, userInfo.authenticators);
       this._broadcastSvc.sendUserInfoChanged({ pkId: userInfo.pkId });
@@ -1669,23 +1630,14 @@ export class AuthenticatorService {
       return prfReadKey(startAuth.clientExtensionResults);
    }
 
-   private async _passkeyVerify(
-      resource: string,
-      body: api.PasskeyVerifyRequest,
-   ): Promise<Extract<api.LoginUserInfoResponse, { verified: true }>> {
-      const serverLoginUserInfo = await this._doFetch<api.LoginUserInfoResponse>({
-         method: 'POST',
-         resource,
-         bodyJSON: JSON.stringify(body),
-      });
-
+   private _requireVerified(
+      serverLoginUserInfo: api.LoginUserInfoResponse,
+   ): asserts serverLoginUserInfo is Extract<api.LoginUserInfoResponse, { verified: true }> {
       if (!serverLoginUserInfo) {
          throw new Error('registration failed');
       }
       if (!serverLoginUserInfo.verified) {
          throw new Error('unverified user');
       }
-
-      return serverLoginUserInfo;
    }
 }
