@@ -68,3 +68,4 @@ export type LoginUserInfoResponse = UserInfoResponse & {
 
 export const TOPIC_USERS_MAX = 255;
 export const SESSION_TIMEOUT_SEC = 60 * 60 * 3;
+export const MAX_PASSKEYS = 5;

@@ -171,6 +171,8 @@ export function lifecycleSuite(prf: boolean): void {
       // so the client drops to the Sign In dialog.
       await deleteFirstPasskey(page);
       await expect(page.getByRole('heading', { name: /Quick Crypt Sign In/ })).toBeVisible({ timeout: 10000 });
+      // Deleting the passkey ended the session, so the sign out is reported as succeeded
+      await expect(page.locator('.signin div.success-msg')).toContainText(/Sign out succeeded/);
 
       await authFixture.passkeyAuth(authenticator2, async () => {
          await page.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();

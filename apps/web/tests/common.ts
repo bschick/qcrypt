@@ -29,6 +29,7 @@ import {
 } from 'nid-webauthn-emulator';
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -90,7 +91,7 @@ async function recomputeUserCred(
    return Buffer.from(userCredBytes).toString('base64url');
 }
 
-function readPrfKey(
+export function readPrfKey(
    emulator: WebAuthnEmulator,
    origin: string,
    rpId: string,
@@ -154,6 +155,8 @@ export type CreatedTestUser = {
    userCred: string;
    recoveryWords: string;
    prf: boolean;
+   // The registration passkey
+   credentialId: string;
 };
 
 // Info passed to trackUser by tests that create users outside createTestUser
@@ -198,8 +201,8 @@ export type AuthFixture = {
    untrackUser: (userId: string) => void;
    // Runs a UI trigger that creates a passkey on the authenticator for an
    // already-tracked user ("New Passkey", recovery, etc.) — the app calls
-   // navigator.credentials.create, which the authenticator fulfills — then captures
-   // the verify response for the new credentialId and registers it.
+   // navigator.credentials.create, which the authenticator fulfills — then waits for
+   // the verify response and registers the new credentialId taken from the verify request.
    addPasskey: (userId: string, authenticator: Authenticator, trigger: () => Promise<void>) => Promise<string>;
    // Directs the next create at the authenticator and runs a UI trigger the client
    // is expected to refuse (e.g. a no-PRF passkey on a PRF account), which never
@@ -461,7 +464,14 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
          await page.getByRole('button', { name: /I saved my/ }).click();
          await expect(page).toHaveURL(/\/$/);
          await expect(page.getByRole('button', { name: 'Encryption Mode' })).toBeVisible({ timeout: 10000 });
-         return { userId: body.userId, userName, userCred, recoveryWords, prf: !!body.prf };
+         return {
+            userId: body.userId,
+            userName,
+            userCred,
+            recoveryWords,
+            prf: !!body.prf,
+            credentialId: body.pkId,
+         };
       };
 
       const trackUser = (info: TrackUserInfo): void => {
@@ -509,12 +519,18 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
                r.request().method() === 'POST',
          );
          await trigger();
-         const body = await (await verifyPromise).json();
-         if (!body.pkId) {
-            throw new Error(`addPasskey: missing pkId in verify response for ${userId}`);
+         const verifyResponse = await verifyPromise;
+         if (!verifyResponse.ok()) {
+            throw new Error(`addPasskey: verify failed with ${verifyResponse.status()} for ${userId}`);
          }
-         trackPasskey(userId, body.pkId);
-         return body.pkId;
+         // The response's pkId is the session's passkey, which is not the new one when a signed-in account
+         // adds a passkey. The request always carries the new credential.
+         const request = verifyResponse.request().postDataJSON() as api.PasskeyVerifyRequest | null;
+         if (!request?.id) {
+            throw new Error(`addPasskey: missing credential id in verify request for ${userId}`);
+         }
+         trackPasskey(userId, request.id);
+         return request.id;
       };
 
       const expectPasskeyRejected = async (
@@ -675,6 +691,13 @@ export async function toggleCredentials(page: Page): Promise<void> {
    await expect(page.locator('table.credtable tbody tr').first()).toBeVisible();
 }
 
+// Opens the credentials sidenav unless it is already open, where a toggle would close it.
+export async function openCredentials(page: Page): Promise<void> {
+   if (!(await page.locator('table.credtable tbody tr').first().isVisible())) {
+      await toggleCredentials(page);
+   }
+}
+
 // YUCK. This works around a race caused by Angular Zoneless + Material 3 controls +
 // Playwright. Use this rather than check() or uncheck(), which read the state once
 // right after the click and fail because zoneless renders aria-checked a moment later.
@@ -700,9 +723,7 @@ export async function expectPrfBadge(page: Page, prf: boolean): Promise<void> {
 // Triggers the credentials sidenav Refresh and asserts the resulting
 // /user request returned 200.
 export async function expectActiveServerSession(page: Page, expectedUserName?: string): Promise<void> {
-   if (!(await page.locator('table.credtable tbody tr').first().isVisible())) {
-      await toggleCredentials(page);
-   }
+   await openCredentials(page);
    const userResponse = waitForApiResponse(
       page,
       (response) => response.url().includes('/v1/user') && response.request().method() === 'GET',
@@ -789,4 +810,162 @@ export async function fillPwdAndAccept(
    }
 
    await page.getByRole('button', { name: 'Accept' }).click();
+}
+
+export type FileAccess = {
+   // select must click the control that opens a file selection. The selected file is called name and holds data.
+   open(select: () => Promise<void>, name: string, data: Uint8Array): Promise<void>;
+   // Resolves once the app finishes writing the one file it saves during action, which can be after action returns
+   save(action: () => Promise<void>): Promise<Uint8Array<ArrayBuffer>>;
+};
+
+// Playwright cannot drive the File System Access pickers. Without them the app reads files through a file input and
+// saves them as downloads, which Playwright handles as file chooser and download events. Call before the page loads.
+export async function downloadFileAccess(page: Page): Promise<FileAccess> {
+   await page.addInitScript(() => {
+      for (const name of ['showOpenFilePicker', 'showSaveFilePicker']) {
+         Object.defineProperty(window, name, { value: undefined, configurable: true });
+      }
+   });
+   return {
+      async open(select, name, data) {
+         const chooser = page.waitForEvent('filechooser');
+         await select();
+         // Browsers set a file's MIME type from its extension, and the app reads a JSON cipher file as cipher armor
+         const mimeType = name.endsWith('.json') ? 'application/json' : 'application/octet-stream';
+         await (await chooser).setFiles({ name, mimeType, buffer: Buffer.from(data) });
+      },
+      async save(action) {
+         const downloadEvent = page.waitForEvent('download', { timeout: 60000 });
+         await action();
+         const download = await downloadEvent;
+         const data = new Uint8Array(await readFile(await download.path()));
+         // A blob keeps the file's bytes in browser memory until its URL is revoked
+         const blobResolves = () =>
+            page.evaluate(async (url) => {
+               try {
+                  await fetch(url);
+                  return true;
+               } catch {
+                  return false;
+               }
+            }, download.url());
+         await expect.poll(blobResolves, { message: `${download.suggestedFilename()}: blob URL revoked` }).toBe(false);
+         return data;
+      },
+   };
+}
+
+type FakePickerWindow = Window & { pickName: string; savedNames: string[] };
+
+// Replaces the File System Access pickers with ones that open and save files in the origin private file system, so
+// the app's picker code runs against real file handles. Saved files go in their own folder, so saving a decrypted
+// file never overwrites the picked file of the same name. Call before the page loads.
+export async function pickerFileAccess(page: Page): Promise<FileAccess> {
+   await page.addInitScript(() => {
+      const fakeWindow = window as unknown as FakePickerWindow;
+      const folder = async (name: string) =>
+         (await navigator.storage.getDirectory()).getDirectoryHandle(name, { create: true });
+      fakeWindow.pickName = '';
+      fakeWindow.savedNames = [];
+      Object.defineProperty(window, 'showOpenFilePicker', {
+         value: async () => [await (await folder('picks')).getFileHandle(fakeWindow.pickName)],
+         configurable: true,
+      });
+      Object.defineProperty(window, 'showSaveFilePicker', {
+         value: async (options: { suggestedName: string }) => {
+            fakeWindow.savedNames.push(options.suggestedName);
+            const saved = await folder('saved');
+            // A replaced file keeps its old bytes until the new writable closes, so start every save from no file
+            await saved.removeEntry(options.suggestedName).catch(() => {});
+            return saved.getFileHandle(options.suggestedName, { create: true });
+         },
+         configurable: true,
+      });
+   });
+   return {
+      async open(select, name, data) {
+         await page.evaluate(
+            async ([fileName, base64]) => {
+               const root = await navigator.storage.getDirectory();
+               const picks = await root.getDirectoryHandle('picks', { create: true });
+               const writable = await (await picks.getFileHandle(fileName, { create: true })).createWritable();
+               await writable.write(Uint8Array.from(atob(base64), (ch) => ch.charCodeAt(0)));
+               await writable.close();
+               (window as unknown as FakePickerWindow).pickName = fileName;
+            },
+            [name, Buffer.from(data).toString('base64')],
+         );
+         await select();
+      },
+      async save(action) {
+         const savedCount = await page.evaluate(() => (window as unknown as FakePickerWindow).savedNames.length);
+         await action();
+         // A writable's data replaces the file only when it closes, so the first non-empty read is the whole file
+         const readSaved = () =>
+            page.evaluate(async (index) => {
+               let base64 = '';
+               const name = (window as unknown as FakePickerWindow).savedNames[index];
+               if (name) {
+                  const saved = await (await navigator.storage.getDirectory()).getDirectoryHandle('saved');
+                  const file = await (await saved.getFileHandle(name)).getFile();
+                  const bytes = new Uint8Array(await file.arrayBuffer());
+                  let binary = '';
+                  for (let pos = 0; pos < bytes.length; pos += 0x8000) {
+                     binary += String.fromCharCode(...bytes.subarray(pos, pos + 0x8000));
+                  }
+                  base64 = btoa(binary);
+               }
+               return base64;
+            }, savedCount);
+         let base64 = '';
+         const savedLength = async () => {
+            base64 = await readSaved();
+            return base64.length;
+         };
+         await expect.poll(savedLength, { message: 'saved file', timeout: 60000 }).toBeGreaterThan(0);
+         return new Uint8Array(Buffer.from(base64, 'base64'));
+      },
+   };
+}
+
+const FILE_MENU_TOOLTIPS = { clear: 'File actions', cipher: 'File Actions' };
+
+export async function clickFileMenuItem(page: Page, side: 'clear' | 'cipher', item: string): Promise<void> {
+   await page.locator(`button[mattooltip="${FILE_MENU_TOOLTIPS[side]}"]`).click();
+   await page.getByRole('menuitem', { name: item }).click();
+}
+
+export async function selectClearFile(page: Page, files: FileAccess, name: string, data: Uint8Array): Promise<void> {
+   await files.open(() => clickFileMenuItem(page, 'clear', 'Select Clear File'), name, data);
+}
+
+export async function selectCipherFile(page: Page, files: FileAccess, name: string, data: Uint8Array): Promise<void> {
+   await files.open(() => clickFileMenuItem(page, 'cipher', 'Select Cipher File'), name, data);
+}
+
+// Encrypts the selected clear file, or the clear text when no file is selected
+export async function encryptToFile(
+   page: Page,
+   files: FileAccess,
+   heading: RegExp,
+   pwd: string,
+): Promise<Uint8Array<ArrayBuffer>> {
+   return files.save(async () => {
+      await clickFileMenuItem(page, 'clear', 'Encrypt to File');
+      await fillPwdAndAccept(page, heading, pwd, undefined, 'enc', async () => {});
+   });
+}
+
+// Decrypts the selected cipher file, or the cipher armor when no file is selected
+export async function decryptToFile(
+   page: Page,
+   files: FileAccess,
+   heading: RegExp,
+   pwd: string,
+): Promise<Uint8Array<ArrayBuffer>> {
+   return files.save(async () => {
+      await clickFileMenuItem(page, 'cipher', 'Decrypt to File');
+      await fillPwdAndAccept(page, heading, pwd, undefined, 'dec', async () => {});
+   });
 }

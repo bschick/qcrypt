@@ -319,3 +319,19 @@ export function bytesToNum(arr: Uint8Array): number {
    }
    return num;
 }
+
+export const ONE_PK_SHARE = 0.95;
+export const NEXT_PK_SHARE = 0.09;
+
+// Returns 1 for about ONE_PK_SHARE% of seeds
+// Each count above 2 is about NEXT_PK_SHARE% as likely
+export function dummyCredCount(seed: Uint8Array, maxCount: number): number {
+   let count = 1;
+   if (maxCount > 1 && seed[1] / 0x100 >= ONE_PK_SHARE) {
+      count = 2;
+      while (count < maxCount && seed[count] / 0x100 < NEXT_PK_SHARE) {
+         count++;
+      }
+   }
+   return count;
+}

@@ -1,8 +1,8 @@
 @use "../common.scss";
 
 .button-host {
-  margin-top:50px;
-  width:100%;
+  margin-top: 50px;
+  width: 100%;
   display: flex;
   align-items: start;
   justify-content: space-evenly;
@@ -13,10 +13,8 @@
     width: 280px;
     margin-top: 5px;
   }
-
 }
 
 .error-msg {
   color: var(--mat-sys-error);
 }
-

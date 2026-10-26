@@ -95,6 +95,7 @@ export abstract class Ciphers {
    protected _purge() {
       this._keyProvider.purge();
       this._reader.cleanup();
+      getSodium().stackzero();
    }
 
    public abstract protocolVersion(): number;

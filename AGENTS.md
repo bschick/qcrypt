@@ -35,7 +35,7 @@ sudo snap install lxd
 sudo adduser $USER lxd
 newgrp lxd
 lxd init --auto
-lxc launch ubuntu:24.04 qcrypt
+lxc launch ubuntu:24.04 qcrypt -c security.nesting=true
 lxc exec qcrypt -- /bin/bash
 ```
 
@@ -51,6 +51,8 @@ git clone https://github.com/bschick/qcrypt.git && cd qcrypt
 ./ubsetup.sh 2>&1 | tee ubsetup.log
 ```
 
+**pnpm comes from Corepack**, which ships with Node 24. `ubsetup.sh` runs `sudo corepack enable pnpm`, and Corepack's `pnpm` command then runs the version pinned in `package.json`'s `packageManager` field. On macOS, run `corepack enable pnpm` (first `brew install corepack` if `corepack --version` fails). Do not also install pnpm with npm, Homebrew or `pnpm self-update`.
+
 ### d. Background Environment (Non-Interactive Shells)
 
 When AI agents or automated tooling execute commands, they often spawn non-interactive background shells. These environments typically ignore `.zshrc`, `.bashrc`, and `.zprofile` and dynamically linked binaries (like Homebrew's `pnpm` or NVM's `node`) may fail to resolve.
@@ -58,6 +60,8 @@ When AI agents or automated tooling execute commands, they often spawn non-inter
 To ensure non-interactive shells works, export the required paths in a profile evaluated by all execution modes:
 - **Zsh:** Add the exports to `~/.zshenv` (e.g., `echo 'export PATH="/opt/homebrew/bin:/opt/homebrew/opt/node@24/bin:$PATH"' >> ~/.zshenv`).
 - **Bash:** Use `~/.bash_env` and ensure `BASH_ENV` points to it.
+
+Corepack asks before it downloads a pnpm version for the first time, and a non-interactive shell cannot answer. After the `packageManager` pin changes, run `pnpm -v` once in an interactive shell in the repo.
 
 **Very important (particularly for AI agents):** After setup, you must successfully run both the Unit and End-to-End test suites described in [`apps/web/AGENTS.md`](apps/web/AGENTS.md) with all tests passing *before* making any other changes. This helps distinguish environment setup problems from errors introduced by your changes.
 
@@ -76,34 +80,34 @@ The `pnpm` scripts in `package.json` call `nx` under the hood. You can use eithe
 | Server build (prod) | `pnpm build:server:prod` | `pnpm nx build-min server` |
 | CLI build | `pnpm build:cli` | `pnpm nx build cli` |
 | CLI build (minified) | `pnpm build:cli:min` | `pnpm nx build-min cli` |
-| libcrux WASM (`crux`) rebuild | `pnpm build:libs:crux` | *(node + wasm-pack; see below — not part of any aggregate build)* |
-| libcrux WASM (`crux`) verify | `pnpm verify:libs:crux` | *(rebuilds to a temp dir and compares with the committed files; see below)* |
+| libcrux WASM (`crux`) rebuild | `pnpm build:libs:crux` | *(container; see below)* |
+| libcrux WASM (`crux`) verify | `pnpm verify:libs:crux` | *(container; see below)* |
+| libsodium.js (`sodium`) rebuild | `pnpm build:libs:sodium` | *(container; see below)* |
+| libsodium.js (`sodium`) verify | `pnpm verify:libs:sodium` | *(container; see below)* |
 
 `build:server` writes `dist/server-test` unminified; `build:server:prod` writes `dist/server` minified.
 Either takes `--min` or `--no-min` to override the minification default, and `QC_SERVER_OUT` to
 override the directory. Do not call the Nx targets directly — the pnpm scripts are what run
 `pnpm check` and pick the output directory.
 
-#### Rebuilding the libcrux WASM (`crux`)
+#### Rebuilding the WebAssembly libraries (`crux`, `sodium`)
 
-`libs/crypto/crux/` is a `wasm-bindgen` wrapper around [libcrux](https://github.com/cryspen/libcrux) (currently ML-DSA-65) compiled to WebAssembly. Its generated outputs are **committed** (`libs/crypto/src/lib/crux/{qc_crux.js,qc_crux.d.ts,wasm.ts}` — the glue, types, and base64-embedded wasm), so normal builds, tests, and CI need **no Rust toolchain**. Rebuild only when you change the Rust wrapper (`libs/crypto/crux/src/lib.rs`), bump the `libcrux-ml-dsa` version, or add a libcrux feature.
+Two libraries are built in a container. Their outputs are committed, so normal builds, tests, and CI do not need one.
 
-**One-time prerequisites** — rustup + the pinned wasm-pack. `libs/crypto/crux/rust-toolchain.toml` pins the Rust version, and rustup installs that toolchain with its wasm target the first time it is used in that directory:
+- `libs/crypto/crux/` wraps [libcrux](https://github.com/cryspen/libcrux) ML-DSA-65 for WebAssembly and generates `libs/crypto/src/lib/crux/`.
+- `libs/crypto/sodium/` is qcrypt's build of [libsodium.js](https://github.com/jedisct1/libsodium.js) with `sodium.stackzero()` added. The root `package.json` links `libsodium` and `libsodium-wrappers` to it instead of the npm releases. Switch back once an npm release includes `stackzero()`.
 
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && . "$HOME/.cargo/env"
-cargo install wasm-pack --version 0.15.0 --locked
-```
+**Prerequisite:** Podman, which `ubsetup.sh` installs. Without Podman, the scripts use Docker, which needs your user in the `docker` group.
 
-**Rebuild:** `pnpm build:libs:crux` — runs `libs/crypto/crux/regen.mjs` (`wasm-pack build --target web`, then regenerates the committed TS and `libs/crypto/crux/manifest.json`). It refuses to run when rustc, wasm-pack, or a `wasm-opt` on `PATH` differs from its pin (`rust-toolchain.toml`, and `WASM_PACK_VERSION` and `WASM_OPT_VERSION` in `regen.mjs`), when `Cargo.lock` needs an update, or when a cargo config file sets release profile, compiler, or wasm32 target settings. It ignores `RUSTFLAGS`, `CARGO_PROFILE_*`, and similar environment overrides, turns off incremental builds, strips the wasm `producers` section, and remaps local and registry paths out of the wasm, so rebuilds from the same sources are byte-for-byte identical. That has been checked across checkout paths, `CARGO_HOME` locations, a vendored crates.io replacement, and a locally built `wasm-bindgen`, but not across operating systems or CPU architectures. It is intentionally **not** wired into any `build:*` aggregate, since it requires Rust.
+**Rebuild** with `pnpm build:libs:crux` or `pnpm build:libs:sodium` after changing any of that library's inputs; `pnpm test` fails until you do. Then commit the regenerated files, the library's `manifest.json`, and the inputs you changed. Neither script is part of an aggregate build.
 
-**Verify:** `pnpm verify:libs:crux` rebuilds into a temp directory and fails unless the committed artifacts and manifest match that rebuild exactly, listing any manifest entries that differ. Run it when reviewing any change to crux sources or artifacts, and before bumping a pin. Separately, `crux.spec.ts` (no Rust needed) fails when a file listed in `manifest.json` no longer matches its recorded SHA-256, when the manifest does not list every `src/**/*.rs` file, or when its tool versions differ from the pins, so `pnpm test` catches a source, pin, or artifact change made without a rebuild.
+**Verify** with `pnpm verify:libs:crux` or `pnpm verify:libs:sodium` when reviewing a change to either library. They rebuild and fail unless the committed files match.
 
-**Commit after a rebuild:** the regenerated `libs/crypto/src/lib/crux/{qc_crux.js,qc_crux.d.ts,wasm.ts}` and `libs/crypto/crux/manifest.json`, plus `libs/crypto/crux/Cargo.lock` if dependency versions changed, and `rust-toolchain.toml` or `regen.mjs` if a pin changed. **Do not commit** `libs/crypto/crux/pkg/` or `libs/crypto/crux/target/` (gitignored build outputs).
+Each library's `regen.mjs` and `Containerfile` describe how its build pins and checks its inputs.
 
 ### Code Quality (Biome)
 
-Formatting and linting use [Biome](https://biomejs.dev) (config: `biome.json`). Biome covers **TS/JS/JSON only** — it does **not** format SCSS (nothing in this repo does), and the e2e specs keep their own ESLint check (`lint:e2e`). Angular HTML templates are formatted by Prettier (`.prettierrc.json`, 2-space indent, `.prettierignore` limits it to `*.html`) via the editor's Prettier extension only; Prettier is not a package dependency and `pnpm check` does not cover templates.
+Formatting and linting use [Biome](https://biomejs.dev) (config: `biome.json`). Biome covers **TS/JS, JSON, SCSS and YAML**, and the e2e specs keep their own ESLint check (`lint:e2e`). Angular HTML templates are formatted by Prettier (`.prettierrc.json`, 2-space indent, `.prettierignore` limits it to `*.html`) via the editor's Prettier extension only; Prettier is not a package dependency and `pnpm check` does not cover templates. Biome's HTML support is experimental and does not parse Angular template syntax, so it stays off.
 
 | What | pnpm script | Notes |
 |------|------------|-------|
@@ -122,7 +126,7 @@ pnpm check:fix libs/crypto/src/lib/keys.ts   # auto-fix one file
 
 `pnpm check` (no path) gates `build:web`, `build:web:prod`, `build:server`, and `build:server:prod` — it runs first, so a format or lint error blocks the build. `bdeploy` builds through those same scripts, so a deploy is gated too.
 
-**Style:** 3-space indent, 120 columns, single quotes, semicolons, trailing commas. JSON stays 2-space (nx/ng-managed), and HTML templates are 2-space (Prettier, see above). Excluded: `**/*.html`, `**/*.svg`, `apps/server/assets/`, generated crux files.
+**Style:** 3-space indent, 120 columns, single quotes, semicolons, trailing commas. JSON stays 2-space (nx/ng-managed). SCSS and YAML are 2-space with double quotes, and HTML templates are 2-space (Prettier, see above). Excluded: `**/*.html`, `**/*.svg`, `pnpm-lock.yaml` and `pnpm-workspace.yaml` (pnpm writes them), `apps/server/assets/`, generated crux files.
 
 **Rules deliberately disabled** (they fight this codebase's patterns — do not re-enable without cause):
 
@@ -133,6 +137,8 @@ pnpm check:fix libs/crypto/src/lib/keys.ts   # auto-fix one file
 | `useArrayLiterals` | `new Array()` → `[]` infers `never[]` on untyped class fields |
 | `useLiteralKeys` | `apps/web/tsconfig.json` sets `noPropertyAccessFromIndexSignature`, which *requires* bracket access on index-signature types (`TS4111`) |
 | `noNonNullAssertion` | House style: deliberate `!` non-null assertions |
+| `noImportantStyles` | Each `!important` overrides styles the app doesn't control: Angular Material internals, a third-party component, or (in the print layout) every component's styles |
+| `useDomNodeTextContent` (e2e only) | Playwright's `Locator.innerText()` returns the rendered text that e2e assertions check; the rule is meant for DOM nodes |
 
 `noExplicitAny` is enforced. Lambda handlers use real `@types/aws-lambda` types (`APIGatewayProxyEventV2`, `Context`, `APIGatewayProxyStructuredResultV2`); the few remaining `any` uses carry an inline `biome-ignore` naming the reason (yargs' dynamically-built argv, arbitrary JSON request/response bodies, untrusted `JSON.parse` output).
 
@@ -162,6 +168,8 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 | Web unit tests (all browsers) | `pnpm test:web:all` | `pnpm nx test web --runnerConfig=apps/web/vitest-all.config.ts` | |
 | Web E2E tests (local) | `pnpm test:e2e` | | *Playwright; starts and stops its own dev server, so port 4200 must be free* |
 | Web E2E tests (prod) | `pnpm test:e2e:prod` | | *Playwright against quickcrypt.org* |
+| Web heap secret scans (local) | `pnpm test:secrets` | | *Playwright, Chromium only; scans the page's memory for secrets after each operation. Serves the optimized `test` build, because the dev build keeps destroyed views reachable and the scans report them as leaks. Port 4200 must be free* |
+| Web heap secret scans (prod) | `pnpm test:secrets:prod` | | *Playwright against quickcrypt.org; creates and deletes two test accounts* |
 | API full fuzz tests (test) | `pnpm test:fuzz` | | *Vitest against test.quickcrypt.org (`QC_FULL_FUZZ=true`); the small fuzz also runs in every `pnpm test:server`* |
 | API full fuzz tests (prod) | `pnpm test:fuzz:prod` | | *Vitest against quickcrypt.org* |
 | Server unit tests | `pnpm test:server` | `pnpm nx test server` | |
@@ -173,6 +181,7 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 | CLI unit tests | `pnpm test:cli` | `pnpm nx test cli` | |
 | ProVerif protocol models | `pnpm verify:proverif` | | *needs ProVerif 2.05 from opam; not in any aggregate. See [`formal/proverif/README.md`](formal/proverif/README.md)* |
 
+> **Note:** Every `test:*:prod` script first asks whether the prod WAF `APIRateLimit` rule is set to Count, because a blocking rule fails many prod tests, and reminds you to set it back to Block when the run ends. Pipe the answer to run one non-interactively: `echo y | pnpm test:server:prod`. With `CI` set, it does not ask.
 > **Note:** When passing flags through `nx`, use camelCase for config options (e.g., `--runnerConfig=` not `--runner-config`).
 > **Note:** To run specific test files, use `--include`.
 >   - For `test:web` (Angular builder), `--include` expects a file glob. You must use the `**/` prefix to find nested files. Example: `pnpm test:web -- --include='**/keystore.service.spec.ts'`
@@ -184,6 +193,7 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 >   - For the Vitest projects (`test:server`, `test:cli`, `test:libs:crypto`, `test:libs:api`), use `--name` (a placeholder each `nx test` target forwards to Vitest's `-t`). Example: `pnpm test:server -- --name="should reject manipulated csrf"` (combine with `--include` to also scope the file). **Do not use `-t`** through these wrappers — nx claims `-t` as its own `--targets` flag, so it never reaches Vitest. `-t` works only when calling Vitest directly: `pnpm exec vitest run --config apps/server/vitest.config.ts nonprf.spec.ts -t "manipulated csrf"`.
 >   - For `test:e2e` (Playwright), use `-g` (see the file-filter note above).
 > **Note:** A passing `test:e2e` run shows no browser console output. The `testWithAuth` fixture collects `console.error` and uncaught page errors but prints them only for failing tests. Set `QC_E2E_BROWSER_ERRORS=all` to print them for passing tests too, along with `console.warn`: `QC_E2E_BROWSER_ERRORS=all pnpm test:e2e --reporter=list`. Use it for change-detection or lifecycle work, and compare against the same run on `main`, since several tests trigger errors on purpose. Specs written with plain `test` rather than `testWithAuth` are not covered.
+> **Note:** When Nx detects an AI agent from the environment (for example `AI_AGENT` or `CLAUDECODE`), the Nx-run test scripts print only task counts and, for a failed task, the path of its full log. Set `NX_DEFAULT_OUTPUT_STYLE=static-failures-only` to print a failing task's output inline, or `static` to print every task's output: `NX_DEFAULT_OUTPUT_STYLE=static pnpm test:server`. Passing `--output-style` after `--` does not work, because the `--` forwards it to the test runner instead of Nx.
 
 ### Test Vector Commands
 
@@ -293,6 +303,7 @@ The wrappers exit with a clear error when a required var is missing. The AWS CLI
 | Upgrade all to latest | `pnpm update --latest` |
 | Upgrade a specific package | `pnpm update <package> --latest` |
 | **Upgrade Nx** (use Nx migrate tool) | `pnpm nx migrate latest && pnpm install && pnpm nx migrate --run-migrations --if-exists` |
+| **Upgrade pnpm** (rewrites the `packageManager` pin and its hash) | `corepack use pnpm@<version>` |
 
 - `--latest` allows major version bumps; without it, pnpm stays within existing semver ranges.
 - Always upgrade Nx via `nx migrate` rather than `pnpm update` — it runs code migrations that update config files and source code for breaking changes.

@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.2/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -11,10 +11,15 @@
       "!**/*.html",
       "!**/*.md",
       "!**/*.svg",
+      "!pnpm-lock.yaml",
+      "!pnpm-workspace.yaml",
       "!apps/server/assets",
       "!libs/crypto/src/lib/crux/qc_crux.js",
       "!libs/crypto/src/lib/crux/qc_crux.d.ts",
-      "!libs/crypto/src/lib/crux/wasm.ts"
+      "!libs/crypto/src/lib/crux/wasm.ts",
+      "!libs/crypto/sodium/build",
+      "!libs/crypto/sodium/libsodium",
+      "!libs/crypto/sodium/libsodium-wrappers"
     ]
   },
   "formatter": {
@@ -29,7 +34,8 @@
     "rules": {
       "preset": "recommended",
       "complexity": {
-        "useLiteralKeys": "off"
+        "useLiteralKeys": "off",
+        "noImportantStyles": "off"
       },
       "style": {
         "useBlockStatements": "error",
@@ -57,9 +63,14 @@
       "arrowParentheses": "always"
     }
   },
+  "yaml": {
+    "formatter": {
+      "bracketSpacing": true
+    }
+  },
   "overrides": [
     {
-      "includes": ["**/*.json", "**/*.jsonc"],
+      "includes": ["**/*.json", "**/*.jsonc", "**/*.scss", "**/*.yml", "**/*.yaml"],
       "formatter": {
         "indentWidth": 2
       }
@@ -70,6 +81,16 @@
         "rules": {
           "suspicious": {
             "noExplicitAny": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/web/tests/**"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "useDomNodeTextContent": "off"
           }
         }
       }

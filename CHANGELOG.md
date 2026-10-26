@@ -1,5 +1,20 @@
 # CHANGELOG.md
 
+## 8.0.4 (2026-10-24)
+
+#### Changes
+
+- limited maximum number of passkeys to 5
+- improved libsodium and libcrux build isolation and repeatability
+- navigate old recovery link users to recovery words creation page
+
+#### Security
+
+- extended secrets web app clearing to wasm heap and stack memory
+- fixed password dialog and file download data lingering in memory after use
+- dummy auth/options now returns >1 credential ~5% of the time [thanks to Rajat Shukla (@rajat4722)]
+- updated packages
+
 ## 8.0.3 (2026-10-05)
 
 #### Changes

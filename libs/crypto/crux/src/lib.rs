@@ -1,5 +1,48 @@
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::sync::atomic::{compiler_fence, Ordering};
 use wasm_bindgen::prelude::*;
 use libcrux_ml_dsa::ml_dsa_65;
+
+// wasm memory outlives each call, so a freed block keeps its contents readable from JS until a later
+// allocation overwrites it. This allocator zeroes every block it frees, which covers keys copied into
+// Vecs, the input copies that wasm-bindgen frees, and anything libcrux allocates.
+struct ZeroOnFree;
+
+// The trait's default realloc allocates, copies, and calls dealloc, so blocks moved by realloc are zeroed too
+unsafe impl GlobalAlloc for ZeroOnFree {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        System.alloc(layout)
+    }
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        System.alloc_zeroed(layout)
+    }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        for i in 0..layout.size() {
+            ptr.add(i).write_volatile(0);
+        }
+        compiler_fence(Ordering::SeqCst);
+        System.dealloc(ptr, layout)
+    }
+}
+
+#[global_allocator]
+static ALLOCATOR: ZeroOnFree = ZeroOnFree;
+
+// Defined by wasm-ld
+extern "C" {
+    static __stack_low: u8;
+    static __stack_high: u8;
+}
+
+// Returns the [low, high) addresses of the shadow stack. libcrux leaves key material in its stack
+// frames, and no frame is live between calls, so JS zeroes this whole range after each call.
+#[wasm_bindgen]
+pub fn stack_bounds() -> Vec<u32> {
+    vec![
+        core::ptr::addr_of!(__stack_low) as u32,
+        core::ptr::addr_of!(__stack_high) as u32,
+    ]
+}
 
 #[wasm_bindgen]
 pub struct MlDsa65KeyPair {
