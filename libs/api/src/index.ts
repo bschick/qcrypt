@@ -37,6 +37,8 @@ export {
    PROOF_SKEW_MS,
    PROOF_PUBKEY_BYTES,
    PROOF_SIG_BYTES,
+   USERCRED_KEY_CONTEXT,
+   RECOVERY_KEY_CONTEXT,
 } from './lib/proof';
 
 export type { RecoveryOp } from './lib/proof';

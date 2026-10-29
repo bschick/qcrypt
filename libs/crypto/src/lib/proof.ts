@@ -23,6 +23,9 @@ SOFTWARE. */
 import { getCrux, getSodium } from './crypto';
 import { getRandom, ParamError } from './utils';
 
+export const PROOF_SEED_BYTES = 32;
+export const PROOF_RND_BYTES = 32;
+
 export function getProofKeyPair(
    secret: Uint8Array,
    context: string,
@@ -38,7 +41,7 @@ export function getProofKeyPair(
       throw new Error('proof context must be 8 bytes');
    }
 
-   const seed = sodium.crypto_kdf_derive_from_key(32, 1, context, secret);
+   const seed = sodium.crypto_kdf_derive_from_key(PROOF_SEED_BYTES, 1, context, secret);
    try {
       const keyPair = getCrux().ml_dsa_65_keygen(seed);
       return keyPair;
@@ -49,7 +52,7 @@ export function getProofKeyPair(
 }
 
 export function createProof(secKey: Uint8Array, message: Uint8Array, context: string): Uint8Array<ArrayBuffer> {
-   return getCrux().ml_dsa_65_sign(secKey, message, new TextEncoder().encode(context), getRandom(32));
+   return getCrux().ml_dsa_65_sign(secKey, message, new TextEncoder().encode(context), getRandom(PROOF_RND_BYTES));
 }
 
 export function verifyProof(pubKey: Uint8Array, message: Uint8Array, signature: Uint8Array, context: string): void {

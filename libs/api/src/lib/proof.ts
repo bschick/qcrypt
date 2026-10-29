@@ -35,7 +35,7 @@ import * as cc from '@qcrypt/crypto/consts';
 // matching private key. The signature proves the client holds that key, and catches a client that
 // sends the wrong key before anything depends on it.
 
-const USERCRED_KEY_CONTEXT = 'UCredKey';
+export const USERCRED_KEY_CONTEXT = 'UCredKey';
 const USERCRED_NONCE_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
 const USERCRED_CHALLENGE_SIG_CONTEXT = 'qcrypt/usercred/challenge/v1';
 
