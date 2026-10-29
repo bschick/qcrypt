@@ -20,7 +20,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { environment } from '../../environments/environment';
 import { afterNextRender, computed, signal, inject, Service } from '@angular/core';
 import {
    type PublicKeyCredentialRequestOptionsJSON,
@@ -34,7 +33,6 @@ import { Observable, Subject, filter } from 'rxjs';
 import {
    base64ToBytes,
    bytesToBase64,
-   bufferToHexString,
    expired,
    cryptoReady,
    zxcvbnReady,
@@ -64,7 +62,6 @@ import {
    type PeerMessage,
 } from './broadcast.service';
 
-const baseUrl = environment.apiHost;
 export const ACTIVITY_TIMEOUT_SEC = 60 * 60 * 1.5;
 const EXPIRY_CHECK_INTERVAL_MS = 1000 * 60 * 2;
 const RECOVERY_RETRY_DELAY_MS = 1000;
@@ -413,9 +410,11 @@ export class AuthenticatorService {
       // userCredEnc directly rather than through getUserCred
       const serverLoginUserInfo = await nonceFetch<api.LoginUserInfoResponse>(
          { method: 'GET', resource: 'session', errorLogout: this._errorLogout },
+         {
+            userId: session.userId,
+            userCred: await this._decryptUserCredEnc(session.userCredEnc, session.pkId!, session.userId),
+         },
          undefined,
-         session.userId,
-         await this._decryptUserCredEnc(session.userCredEnc, session.pkId!, session.userId),
       );
 
       if (!serverLoginUserInfo?.verified) {
@@ -501,9 +500,8 @@ export class AuthenticatorService {
       this._updateLoggedInUser(
          await nonceFetch<api.UserInfoResponse>(
             { method: 'PUT', resource: 'recover3/key', bodyJSON: JSON.stringify(body), errorLogout: this._errorLogout },
+            { userId: this.userId, userCred: await this.getUserCred() },
             this._csrf(),
-            this.userId,
-            await this.getUserCred(),
          ),
       );
 
@@ -831,9 +829,11 @@ export class AuthenticatorService {
       // from the server
       const serverLoginUserInfo = await nonceFetch<api.LoginUserInfoResponse>(
          { method: 'GET', resource: 'session', errorLogout: this._errorLogout },
+         {
+            userId: this.userId,
+            userCred: await this._decryptUserCredEnc(msg.userCredEnc, msg.pkId, this.userId),
+         },
          undefined,
-         this.userId,
-         await this._decryptUserCredEnc(msg.userCredEnc, msg.pkId, this.userId),
       );
       if (!serverLoginUserInfo?.verified) {
          this.logout(false);
@@ -953,9 +953,8 @@ export class AuthenticatorService {
             .then((userCred) =>
                nonceFetch<string>(
                   { method: 'DELETE', resource: 'session', errorLogout: this._errorLogout },
+                  { userId, userCred },
                   csrf,
-                  userId,
-                  userCred,
                ),
             )
             .then<LogoutResult>(() => 'success')
@@ -1031,9 +1030,8 @@ export class AuthenticatorService {
             bodyJSON: JSON.stringify(patchPasskeyRequest),
             errorLogout: this._errorLogout,
          },
+         { userId: this.userId, userCred: await this.getUserCred() },
          this._csrf(),
-         this.userId,
-         await this.getUserCred(),
       );
 
       if (!serverUserInfo) {
@@ -1064,9 +1062,8 @@ export class AuthenticatorService {
             bodyJSON: JSON.stringify(patchUserRequest),
             errorLogout: this._errorLogout,
          },
+         { userId: this.userId, userCred: await this.getUserCred() },
          this._csrf(),
-         this.userId,
-         await this.getUserCred(),
       );
 
       if (!serverUserInfo) {
@@ -1115,9 +1112,8 @@ export class AuthenticatorService {
 
       const serverUserInfo = await nonceFetch<api.UserInfoResponse>(
          { method: 'DELETE', resource: 'passkeys', resourceId: credentialId, errorLogout: this._errorLogout },
+         { userId: this.userId, userCred: await this.getUserCred() },
          this._csrf(),
-         this.userId,
-         await this.getUserCred(),
       );
 
       if (!serverUserInfo) {
@@ -1152,9 +1148,8 @@ export class AuthenticatorService {
 
       const serverUserInfo = await nonceFetch<api.UserInfoResponse>(
          { method: 'GET', resource: 'user', errorLogout: this._errorLogout },
+         { userId: this.userId, userCred: await this.getUserCred() },
          this._csrf(),
-         this.userId,
-         await this.getUserCred(),
       );
 
       if (!serverUserInfo) {
@@ -1171,9 +1166,8 @@ export class AuthenticatorService {
 
       const invitableInfo = await nonceFetch<api.InvitableInfoResponse>(
          { method: 'GET', resource: 'invitables', resourceId: invitableId, errorLogout: this._errorLogout },
+         { userId: this.userId, userCred: await this.getUserCred() },
          this._csrf(),
-         this.userId,
-         await this.getUserCred(),
       );
 
       if (!invitableInfo) {
@@ -1338,33 +1332,12 @@ export class AuthenticatorService {
 
          this._pinAccount(userId, startResp.prf, userCred);
 
-         const timestamp2 = String(Date.now());
-         const confirmPath = new URL(`${environment.apiVersion}/recover/confirm`, baseUrl).pathname;
-
-         // No body beyond the signature fields, so hash empty string
-         const bodyHashHex = bufferToHexString(await crypto.subtle.digest('SHA-256', new Uint8Array(0)));
-         const signature = api.createUserCredNonceProof(
-            userCred,
-            userId,
-            'POST',
-            confirmPath,
-            timestamp2,
-            startResp.challenge,
-            bodyHashHex,
+         const confirmBody: api.RecoverConfirmRequest = { userId, challenge: startResp.challenge };
+         const confirmResp = await challengeFetch<api.RegOptionsResponse>(
+            { method: 'POST', resource: 'recover/confirm', bodyJSON: JSON.stringify(confirmBody) },
+            { userId, userCred: userCred.slice(), challenge: startResp.challenge },
+            undefined,
          );
-
-         const confirmBody: api.RecoverConfirmRequest = {
-            userId,
-            challenge: startResp.challenge,
-            timestamp: timestamp2,
-            signature,
-         };
-
-         const confirmResp = await plainFetch<api.RegOptionsResponse>({
-            method: 'POST',
-            resource: 'recover/confirm',
-            bodyJSON: JSON.stringify(confirmBody),
-         });
 
          return await this._finishRecovery(confirmResp, userId, startResp.prf, userCred);
       } finally {
@@ -1387,6 +1360,9 @@ export class AuthenticatorService {
          resource: 'recover',
          bodyJSON: JSON.stringify(recoverRequest),
       });
+
+      // server ends the session, so drop local session state to match
+      this.clearSession(true);
 
       return await this._finishRecovery(recoverResp, userId, !!recoverResp.prf, base64ToBytes(userCred));
    }
@@ -1422,11 +1398,11 @@ export class AuthenticatorService {
             passkeyUserCredEnc,
          });
 
-         const serverLoginUserInfo = await plainFetch<api.LoginUserInfoResponse>({
-            method: 'POST',
-            resource: 'recover/verify',
-            bodyJSON: JSON.stringify(body),
-         });
+         const serverLoginUserInfo = await challengeFetch<api.LoginUserInfoResponse>(
+            { method: 'POST', resource: 'recover/verify', bodyJSON: JSON.stringify(body) },
+            { userId, userCred: userCred.slice(), challenge: regOptions.challenge },
+            undefined,
+         );
          this._requireVerified(serverLoginUserInfo);
          this._checkAccountPinPrf(userId, serverLoginUserInfo.prf);
 
@@ -1452,21 +1428,24 @@ export class AuthenticatorService {
 
       await this._pendingLogout;
 
-      const regOptionsRequest: api.RegOptionsRequest = { userName };
-
       while (true) {
-         const optionsJson = await plainFetch<api.RegOptionsResponse>({
-            method: 'POST',
-            resource: 'reg/options',
-            bodyJSON: JSON.stringify(regOptionsRequest),
-         });
-
-         const userId = optionsJson.user.id;
-         const { secret, recoveryPubKey, recoveryWords } = this._newRecoverySecret(userId);
-         this._cachedRecoveryWords = recoveryWords;
-         let userCred: Uint8Array<ArrayBuffer> = getRandom(cc.USERCRED_BYTES);
+         const userCred = getRandom(cc.USERCRED_BYTES);
+         let secret: Uint8Array<ArrayBuffer> | undefined;
 
          try {
+            const userCredPubKey = api.getUserCredPubKey(userCred);
+            const regOptionsRequest: api.RegOptionsRequest = { userName, userCredPubKey };
+            const optionsJson = await plainFetch<api.RegOptionsResponse>({
+               method: 'POST',
+               resource: 'reg/options',
+               bodyJSON: JSON.stringify(regOptionsRequest),
+            });
+
+            const userId = optionsJson.user.id;
+            const recoveryInfo = this._newRecoverySecret(userId);
+            secret = recoveryInfo.secret;
+            this._cachedRecoveryWords = recoveryInfo.recoveryWords;
+
             const { regResponse, prfKey } = await this._startRegistration(optionsJson, true);
 
             if (!prfKey && (await onPrfUnavailable()) === 'different') {
@@ -1475,23 +1454,33 @@ export class AuthenticatorService {
                continue;
             }
 
+            const recoveryTimestamp = String(Date.now());
             const riders: api.RegVerifyRiders = {
                userId,
                challenge: optionsJson.challenge,
-               recoveryPubKey,
+               recoveryPubKey: recoveryInfo.recoveryPubKey,
+               recoveryTimestamp,
+               recoverySignature: api.createRecoveryChallengeProof(
+                  secret,
+                  userId,
+                  recoveryTimestamp,
+                  optionsJson.challenge,
+                  userCredPubKey,
+               ),
             };
             if (prfKey) {
                riders.passkeyUserCredEnc = await prfEncrypt(userCred, prfKey, userId);
                riders.recoveryUserCredEnc = await prfEncrypt(userCred, secret, userId);
-               riders.userCredPubKey = api.getUserCredPubKey(userCred);
+            } else {
+               riders.userCred = bytesToBase64(userCred);
             }
 
             const body = api.makeRegVerifyRequest(regResponse, riders);
-            const serverLoginUserInfo = await plainFetch<api.LoginUserInfoResponse>({
-               method: 'POST',
-               resource: 'reg/verify',
-               bodyJSON: JSON.stringify(body),
-            });
+            const serverLoginUserInfo = await challengeFetch<api.LoginUserInfoResponse>(
+               { method: 'POST', resource: 'reg/verify', bodyJSON: JSON.stringify(body) },
+               { userId, userCred: userCred.slice(), challenge: optionsJson.challenge },
+               undefined,
+            );
             this._requireVerified(serverLoginUserInfo);
             if (prfKey) {
                if (!serverLoginUserInfo.prf) {
@@ -1501,13 +1490,14 @@ export class AuthenticatorService {
                if (serverLoginUserInfo.prf || !serverLoginUserInfo.userCred) {
                   throw new Error('invalid credential state');
                }
-               userCred = base64ToBytes(serverLoginUserInfo.userCred);
             }
 
             return await this._loginUser(serverLoginUserInfo, userCred);
          } finally {
             userCred.fill(0);
-            secret.fill(0);
+            if (secret) {
+               secret.fill(0);
+            }
          }
       }
    }
@@ -1519,9 +1509,8 @@ export class AuthenticatorService {
 
       const optionsJson = await nonceFetch<api.RegOptionsResponse>(
          { method: 'GET', resource: 'passkeys/options', errorLogout: this._errorLogout },
+         { userId: this.userId, userCred: await this.getUserCred() },
          this._csrf(),
-         this.userId,
-         await this.getUserCred(),
       );
 
       const accountPrf = this.prf;
@@ -1555,10 +1544,8 @@ export class AuthenticatorService {
             bodyJSON: JSON.stringify(body),
             errorLogout: this._errorLogout,
          },
+         { userId: this.userId, userCred: await this.getUserCred(), challenge: body.challenge },
          this._csrf(),
-         this.userId,
-         await this.getUserCred(),
-         body.challenge,
       );
       this._requireVerified(serverLoginUserInfo);
       const userInfo = this._updateLoggedInUser(serverLoginUserInfo);

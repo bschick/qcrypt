@@ -51,25 +51,29 @@ type RequestInfo = {
    bodyHashHex: string;
 };
 
+type NonceInfo = {
+   userId: string;
+   userCred: Uint8Array;
+};
+
+type ChallengeInfo = NonceInfo & {
+   challenge: string;
+};
+
 export async function plainFetch<T>(request: ApiRequest): Promise<T> {
    return _doFetch<T>(request, await _prepareRequest(request));
 }
 
-// Takes ownership of and clears the `userCred` parameter
-export async function nonceFetch<T>(
-   request: ApiRequest,
-   csrf: string | undefined,
-   userId: string,
-   userCred: Uint8Array,
-): Promise<T> {
+// Takes ownership of and clears `nonceInfo.userCred`
+export async function nonceFetch<T>(request: ApiRequest, nonceInfo: NonceInfo, csrf: string | undefined): Promise<T> {
    let requestInfo: RequestInfo;
    try {
       requestInfo = await _prepareRequest(request, csrf);
       const timestamp = String(Date.now());
       const nonce = bytesToBase64(getRandom(api.CHALLENGE_BYTES));
       const signature = api.createUserCredNonceProof(
-         userCred,
-         userId,
+         nonceInfo.userCred,
+         nonceInfo.userId,
          request.method,
          requestInfo.url.pathname,
          timestamp,
@@ -79,37 +83,35 @@ export async function nonceFetch<T>(
       );
       requestInfo.headers.append('x-nonce-proof', `${signature},${timestamp},${nonce}`);
    } finally {
-      userCred.fill(0);
+      nonceInfo.userCred.fill(0);
    }
 
    return _doFetch<T>(request, requestInfo);
 }
 
-// Takes ownership of and clears the `userCred` parameter
+// Takes ownership of and clears `challengeInfo.userCred`
 export async function challengeFetch<T>(
    request: ApiRequest,
+   challengeInfo: ChallengeInfo,
    csrf: string | undefined,
-   userId: string,
-   userCred: Uint8Array,
-   challenge: string,
 ): Promise<T> {
    let requestInfo: RequestInfo;
    try {
       requestInfo = await _prepareRequest(request, csrf);
       const timestamp = String(Date.now());
       const signature = api.createUserCredChallengeProof(
-         userCred,
-         userId,
+         challengeInfo.userCred,
+         challengeInfo.userId,
          request.method,
          requestInfo.url.pathname,
          timestamp,
-         challenge,
+         challengeInfo.challenge,
          requestInfo.bodyHashHex,
          requestInfo.url.search.slice(1),
       );
       requestInfo.headers.append('x-challenge-proof', `${signature},${timestamp}`);
    } finally {
-      userCred.fill(0);
+      challengeInfo.userCred.fill(0);
    }
 
    return _doFetch<T>(request, requestInfo);

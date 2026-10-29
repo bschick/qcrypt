@@ -130,9 +130,8 @@ describe('apifetch', () => {
       const bodyJSON = JSON.stringify({ description: 'test passkey' });
       await nonceFetch(
          { method: 'PATCH', resource: 'passkeys', resourceId: 'pk1', params: 'limit=2', bodyJSON },
+         { userId, userCred },
          'csrf-token',
-         userId,
-         userCred,
       );
 
       const sent = sentRequest();
@@ -145,7 +144,7 @@ describe('apifetch', () => {
    });
 
    it('a nonce request without a CSRF token sends only a proof', async () => {
-      await nonceFetch({ method: 'GET', resource: 'session' }, undefined, userId, newUserCred().userCred);
+      await nonceFetch({ method: 'GET', resource: 'session' }, { userId, userCred: newUserCred().userCred }, undefined);
 
       const { headers } = sentRequest();
       expect(headers.has('x-csrf-token')).toBe(false);
@@ -158,10 +157,8 @@ describe('apifetch', () => {
       const bodyJSON = JSON.stringify({ userId, challenge });
       await challengeFetch(
          { method: 'POST', resource: 'recover/verify', bodyJSON },
+         { userId, userCred, challenge },
          undefined,
-         userId,
-         userCred,
-         challenge,
       );
 
       const sent = sentRequest();
@@ -178,10 +175,8 @@ describe('apifetch', () => {
       const challenge = bytesToBase64(getRandom(api.CHALLENGE_BYTES));
       await challengeFetch(
          { method: 'POST', resource: 'passkeys/verify', bodyJSON: JSON.stringify({ challenge }) },
+         { userId, userCred: newUserCred().userCred, challenge },
          'csrf-token',
-         userId,
-         newUserCred().userCred,
-         challenge,
       );
 
       const { headers } = sentRequest();
@@ -191,28 +186,30 @@ describe('apifetch', () => {
 
    it('nonce and challenge requests wipe userCred', async () => {
       const nonceCred = newUserCred().userCred;
-      await nonceFetch({ method: 'GET', resource: 'user' }, 'csrf-token', userId, nonceCred);
+      await nonceFetch({ method: 'GET', resource: 'user' }, { userId, userCred: nonceCred }, 'csrf-token');
       expect(nonceCred.every((byte) => byte === 0)).toBe(true);
 
       const challengeCred = newUserCred().userCred;
       const challenge = bytesToBase64(getRandom(api.CHALLENGE_BYTES));
       await challengeFetch(
          { method: 'POST', resource: 'reg/verify', bodyJSON: '{}' },
+         { userId, userCred: challengeCred, challenge },
          undefined,
-         userId,
-         challengeCred,
-         challenge,
       );
       expect(challengeCred.every((byte) => byte === 0)).toBe(true);
    });
 
    it('a request that fails to sign wipes userCred and sends nothing', async () => {
-      await nonceFetch({ method: 'GET', resource: 'user' }, 'csrf-token', userId, newUserCred().userCred);
+      await nonceFetch({ method: 'GET', resource: 'user' }, { userId, userCred: newUserCred().userCred }, 'csrf-token');
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
       const nonceCred = newUserCred().userCred;
       await expect(
-         nonceFetch({ method: 'GET', resource: 'user' }, 'csrf-token', 'not-a-user-id', nonceCred),
+         nonceFetch(
+            { method: 'GET', resource: 'user' },
+            { userId: 'not-a-user-id', userCred: nonceCred },
+            'csrf-token',
+         ),
       ).rejects.toThrow();
       expect(nonceCred.every((byte) => byte === 0)).toBe(true);
 
@@ -220,10 +217,8 @@ describe('apifetch', () => {
       await expect(
          challengeFetch(
             { method: 'POST', resource: 'reg/verify', bodyJSON: '{}' },
+            { userId, userCred: challengeCred, challenge: 'not-a-challenge' },
             undefined,
-            userId,
-            challengeCred,
-            'not-a-challenge',
          ),
       ).rejects.toThrow();
       expect(challengeCred.every((byte) => byte === 0)).toBe(true);

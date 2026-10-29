@@ -1100,7 +1100,11 @@ describe('AuthenticatorService', () => {
             challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)),
             userCred,
          };
-         const recovered = { ...withPasskeys(newPkId), pkId: newPkId };
+         const recovered = {
+            ...withPasskeys(newPkId),
+            pkId: newPkId,
+            challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)),
+         };
          fetchMock.mockImplementation((url: URL) => ({
             ok: true,
             json: async () => (url.pathname.endsWith('/recover3') ? startResp : recovered),
