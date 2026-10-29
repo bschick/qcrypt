@@ -10,6 +10,7 @@ import {
    getProofKeyPair,
    MasterKeyKeyProvider,
    parseCipherArmor,
+   PROOF_SEED_BYTES,
    PWDKeyProvider,
    readStreamAll,
    setLogErrors,
@@ -18,27 +19,29 @@ import {
 } from '@qcrypt/crypto';
 import { byteSecret, textSecret, type Secret } from './heapscan';
 
-// Must match the proof key contexts in libs/api. Each derivation below is checked against the public key
-// that libs/api computes, so a mismatch throws instead of silently searching for the wrong bytes.
-const USERCRED_KEY_CONTEXT = 'UCredKey';
-const RECOVERY_KEY_CONTEXT = 'RecovKey';
-
 async function ready(): Promise<void> {
    await cryptoReady();
    await sodium.ready;
 }
 
-// The seed mirrors the derivation inside getProofKeyPair. ML-DSA-65 signing keys start with rho (32 bytes),
-// K (32 bytes) and tr (64 bytes), then s1, so K and the first 32 bytes of s1 stand in for the whole key.
+const MLDSA_RHO_BYTES = 32;
+const MLDSA_K_BYTES = 32;
+const MLDSA_TR_BYTES = 64;
+const MLDSA_S1_OFFSET = MLDSA_RHO_BYTES + MLDSA_K_BYTES + MLDSA_TR_BYTES;
+const S1_SAMPLE_BYTES = 32;
+
+// The seed mirrors the derivation inside getProofKeyPair. ML-DSA-65 signing keys start with rho, K and tr,
+// then s1, so K and the start of s1 stand in for the whole key. Each key pair is checked against the public
+// key that libs/api computes, so a mismatch throws instead of silently searching for the wrong bytes.
 function proofSecrets(prefix: string, secret: Uint8Array, context: string, expectedPubKey: string): Secret[] {
    const { pubKey, secKey } = getProofKeyPair(secret, context);
    if (bytesToBase64(pubKey) !== expectedPubKey) {
       throw new Error(`${prefix}: proof key derivation does not match libs/api`);
    }
    return [
-      byteSecret(`${prefix}.proofSeed`, sodium.crypto_kdf_derive_from_key(32, 1, context, secret)),
-      byteSecret(`${prefix}.proofKeyK`, secKey.slice(32, 64), false),
-      byteSecret(`${prefix}.proofKeyS1`, secKey.slice(128, 160), false),
+      byteSecret(`${prefix}.proofSeed`, sodium.crypto_kdf_derive_from_key(PROOF_SEED_BYTES, 1, context, secret)),
+      byteSecret(`${prefix}.proofKeyK`, secKey.slice(MLDSA_RHO_BYTES, MLDSA_RHO_BYTES + MLDSA_K_BYTES), false),
+      byteSecret(`${prefix}.proofKeyS1`, secKey.slice(MLDSA_S1_OFFSET, MLDSA_S1_OFFSET + S1_SAMPLE_BYTES), false),
    ];
 }
 
@@ -47,7 +50,7 @@ export async function userCredSecrets(userCred: string): Promise<Secret[]> {
    const bytes = new Uint8Array(Buffer.from(userCred, 'base64url'));
    return [
       byteSecret('userCred', bytes),
-      ...proofSecrets('userCred', bytes, USERCRED_KEY_CONTEXT, api.getUserCredPubKey(bytes)),
+      ...proofSecrets('userCred', bytes, api.USERCRED_KEY_CONTEXT, api.getUserCredPubKey(bytes)),
    ];
 }
 
@@ -72,7 +75,7 @@ export async function recoverySecrets(prefix: string, words: string): Promise<Se
       wordsSecret,
       byteSecret(`${prefix}.id`, secret.slice(0, api.RECOVERYID_BYTES)),
       byteSecret(`${prefix}.secret`, secret),
-      ...proofSecrets(prefix, secret, RECOVERY_KEY_CONTEXT, api.getRecoveryPubKey(secret)),
+      ...proofSecrets(prefix, secret, api.RECOVERY_KEY_CONTEXT, api.getRecoveryPubKey(secret)),
    ];
 }
 

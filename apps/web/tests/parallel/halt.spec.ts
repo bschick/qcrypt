@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
+import * as cc from '@qcrypt/crypto/consts';
 import { testWithAuth, toggleCredentials, prfEncryptForPasskey } from '.././common';
 
 // A response body is rewritten mid-flight to stand in for a server that contradicts what
@@ -35,7 +36,7 @@ testWithAuth('stops when a PRF account is reported as no-PRF at sign in', async 
       const response = await route.fetch();
       const body = (await response.json()) as LoginBody;
       body.prf = false;
-      body.userCred = randomBytes(32).toString('base64url');
+      body.userCred = randomBytes(cc.USERCRED_BYTES).toString('base64url');
       body.passkeyUserCredEnc = undefined;
       await route.fulfill({ response, json: body });
    });
@@ -80,7 +81,7 @@ testWithAuth('stops when a PRF account returns a substituted credential', async 
          rpId,
          body.pkId,
          body.userId,
-         new Uint8Array(randomBytes(32)),
+         new Uint8Array(randomBytes(cc.USERCRED_BYTES)),
       );
       await route.fulfill({ response, json: body });
    });

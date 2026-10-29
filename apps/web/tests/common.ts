@@ -56,7 +56,7 @@ async function proofHeaders(
 ): Promise<Record<string, string>> {
    await cryptoReady();
    const timestamp = String(Date.now());
-   const nonce = randomBytes(32).toString('base64url');
+   const nonce = randomBytes(api.CHALLENGE_BYTES).toString('base64url');
    const bodyHashHex = createHash('sha256').update('').digest('hex');
    const signature = api.createUserCredNonceProof(
       Buffer.from(userCred, 'base64url'),
@@ -69,7 +69,7 @@ async function proofHeaders(
       new URL(url).search.slice(1),
    );
    return {
-      'x-proof': `${signature},${timestamp},${nonce}`,
+      'x-nonce-proof': `${signature},${timestamp},${nonce}`,
    };
 }
 
@@ -99,7 +99,7 @@ export function readPrfKey(
 ): Uint8Array<ArrayBuffer> {
    const assertion = emulator.getJSON(origin, {
       rpId,
-      challenge: randomBytes(32).toString('base64url'),
+      challenge: randomBytes(api.CHALLENGE_BYTES).toString('base64url'),
       allowCredentials: [{ id: credentialId, type: 'public-key' }],
       userVerification: 'preferred',
       extensions: { prf: { eval: { first: PRF_SALT_B64URL } } },

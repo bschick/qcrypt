@@ -1,6 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
-import { HEAP_SCAN_TEST_OPTIONS, byteSecret, callInPage, scanHeap, textSecret, type Secret } from './heapscan';
+import {
+   HEAP_SCAN_TEST_OPTIONS,
+   byteSecret,
+   callInPage,
+   holdInDevTools,
+   scanHeap,
+   textSecret,
+   type Secret,
+} from './heapscan';
 
 test.use(HEAP_SCAN_TEST_OPTIONS);
 // A shape the scan cannot reach fails the same way on every attempt
@@ -129,15 +137,24 @@ test('heap scan finds canaries in every holding shape', async ({ page }) => {
    secrets.push(textSecret('string', text));
 
    expect(await callInPage<number>(page, PLANT_FN, [canaries, text])).toBe(SHAPES.length);
-   const scan = await scanHeap(page, 'canaries', secrets);
+   const devToolsCanary = randomBytes(32);
+   const devTools = await holdInDevTools(page, devToolsCanary);
+   const scan = await scanHeap(page, 'canaries', [...secrets, byteSecret('devToolsHandle', devToolsCanary, false)]);
+   await devTools.detach();
 
    for (const secret of secrets) {
       expect
          .soft(
-            scan.findings.some((finding) => finding.secret === secret.name),
+            scan.findings.some((finding) => finding.secret === secret.name && finding.reachable),
             `canary held as ${secret.name}`,
          )
          .toBe(true);
    }
+   expect
+      .soft(
+         scan.findings.filter((finding) => finding.secret === 'devToolsHandle').map((finding) => finding.reachable),
+         'canary held only by a DevTools handle',
+      )
+      .toEqual([false]);
    expect.soft(scan.unresolved, 'buffers the scan could not read').toEqual([]);
 });
