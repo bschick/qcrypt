@@ -1,7 +1,7 @@
 (* Quick Crypt primitives shared by every model in this directory.
 
    Each symbol corresponds to a primitive in apps/web/src/assets-src/main.tex. Free constructors
-   are injective, which is how the models assume collision resistance; conformance.md section 4
+   are injective, which is how the models assume collision resistance; "Encodings" in README.md
    records why the real byte encodings are injective too.
 
    Every attacker-side extra here, such as nc_forge and sig_msg, makes the attacker stronger,

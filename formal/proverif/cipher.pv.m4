@@ -4,8 +4,8 @@ m4_changequote({{,}})m4_dnl
 
    Alice owns the password p and the user credential uc. She encrypts messages of 1 to 3 blocks
    under every AEAD algorithm, and decrypts any block stream the attacker sends her. The
-   decryptor follows the order of checks in the code, not the order in the tex (conformance.md
-   I-13), and releases each block as soon as it decrypts, as the streaming code does (I-15).
+   decryptor follows the order of checks in the code, not the order in the tex, and releases each
+   block as soon as it decrypts, as the streaming code does.
 
    Each scenario is selected by an m4 flag; run.mjs builds one .pv per entry in VARIANTS. The
    list is m4-quoted so the flag names survive into the generated files.
@@ -112,10 +112,11 @@ letfun mkBlockN(a: alg, nS: bitstring, n: bitstring, nIV: bitstring, f: bitstrin
 
 letfun tagOf(b: bitstring) = let blk(t: bitstring, v: bitstring, adf: bitstring, mE: bitstring) = b in t.
 
-(* u_c at rest (tex: u_c Encryption Under k by B, cd_x Decryption Under k by B; keys:469-630):
+(* u_c at rest (tex: u_c Encryption Under k by B, cd_x Decryption Under k by B;
+   keys.ts:MasterKeyKeyProvider):
    the same block format, with both the cipher and signing keys derived from the master key k,
    e = u_i (so e_l = 16), i = 0, and no commitment field from V8 on. Decryption accepts any
-   algorithm and loop fields (conformance.md I-21). *)
+   algorithm and loop fields. *)
 letfun xAR(nS: bitstring, a: alg, lp: bitstring, e: bitstring) = xctx8(nS, a, V8, lp, EL16, e).
 
 letfun mkAR(k: key, e: bitstring, nS: bitstring, nIV: bitstring, m: bitstring) =
@@ -131,9 +132,10 @@ letfun openAR(k: key, e: bitstring, b: bitstring) =
    if v = V8 && i = IC0 && kC = NOKC && lp = le && t = mac(kdf(ID1, kpS, hmix(k, x)), macin(v, adf, mE, TL0))
    then aead_dec(a, kdf(ID0, kpM, hmix(k, x)), nIV, adf, mE).
 
-(* The encryptor never writes an empty block 0 (cur:427-431), and keeps reading until a later
-   block has data or the stream ends (cur:520-530). So only the terminal block can be empty, and
-   an empty terminal block carries no plaintext: the message is the blocks before it. *)
+(* The encryptor never writes an empty block 0 (ciphers-current.ts:encryptBlock0), and keeps
+   reading until a later block has data or the stream ends (ciphers-current.ts:encryptBlockN). So
+   only the terminal block can be empty, and an empty terminal block carries no plaintext: the
+   message is the blocks before it. *)
 
 let Enc1P(a: alg, m0: bitstring) =
    if m0 <> EMPTY then
@@ -184,9 +186,9 @@ m4_ifdef({{MUT_EMPTYMID}}, {{
 
 (* ---------------------------------------------------------------------------------------- *)
 (* Alice decrypts (tex: Message Decryption by A, m_0 Decryption by B, m_N Decryption by B), in
-   the code's order (cur:1007-1095, cur:717-772, cur:1155-1221, cs:165-205). A block that
-   decrypts to empty ends the stream without checking its own f, as the code does
-   (conformance.md I-14). *)
+   the code's order (_decodeBlock0Impl, decryptBlock0 and _decodeBlockN in ciphers-current.ts,
+   and cipher-streams.ts:_decryptStreamImpl). A block that decrypts to empty ends the stream
+   without checking its own f, as the code does. *)
 
 let BlockN2(a: alg, x: bitstring, kS: key, kM0: key, nS: bitstring, m0: bitstring, m1: bitstring, t1: bitstring) =
    in(c, b2: bitstring);
@@ -341,8 +343,8 @@ let EncARK() =
    out(c, mkAR(k, e, nS, nIV, m)).
 
 m4_ifdef({{USE_V7}}, {{
-(* V7 block 0 (keys.ts:632-793): no e_l in the context, no p_l in the PBKDF2 material, and k_C is
-   folded into the AEAD AD instead of being stored and compared. *)
+(* V7 block 0 (keys.ts:PWDKeyProviderV7): no e_l in the context, no p_l in the PBKDF2 material,
+   and k_C is folded into the AEAD AD instead of being stored and compared. *)
 let DecK() =
    in(c, (b0: bitstring, pw: password, u: key));
    let blk(t0: bitstring, v0: bitstring, adf0: bitstring, mE0: bitstring) = b0 in
@@ -439,9 +441,9 @@ m4_ifdef({{SCN_LOOPS}}, {{
 (* ======================================================================================== *)
 (* C-I2, loops (tex: the LOOP in Message Encryption by A and in Message Decryption by A): a loop
    re-encrypts the previous loop's cipher data under its own password, with lp counting up to
-   le. Decryption recurses while lp > 1 (cs:221-223), and only the outermost layer is checked
-   for lp = le (cs:180-185). The inner layer is checked against the outer lp - 1. Each loop here
-   is a single block.
+   le. Decryption recurses while lp > 1, and only the outermost layer is checked for lp = le
+   (cipher-streams.ts:_decryptStreamImpl). The inner layer is checked against the outer lp - 1.
+   Each loop here is a single block.
 
    pIn protects one-loop messages and the inner layer of two-loop messages. pOut protects the
    outer layer. LEAK_POUT gives the attacker pOut, so it can open and rebuild outer layers. *)
@@ -464,7 +466,7 @@ query nSo: bitstring, nSi: bitstring, m: bitstring;
    event(AccL2(pOut, pIn, nSo, nSi, m)) ==> event(EncL2(nSo, nSi, m)).
 (* An inner layer under pIn came from a two-loop encryption, even when the outer one has been
    rebuilt. This fails once the attacker knows pOut: nothing compares the inner le with the
-   outer one (conformance.md I-17), so a one-loop message can be wrapped as an inner layer. *)
+   outer one, so a one-loop message can be wrapped as an inner layer. *)
 query pw: password, nSo: bitstring, nSi: bitstring, m: bitstring, nSo2: bitstring;
    event(AccL2(pw, pIn, nSo, nSi, m)) ==> event(EncL2(nSo2, nSi, m)).
 (* The inner plaintext under pIn is always something Alice encrypted under pIn *)
@@ -527,9 +529,9 @@ m4_ifdef({{LEAK_POUT}}, {{   out(c, pOut) | }})
 
 m4_ifdef({{SCN_DOWNGRADE}}, {{
 (* ======================================================================================== *)
-(* C-D1: the decryptor picks V7 or V8 from the unauthenticated v (ciph:87-100). Alice also has
-   legacy V7 ciphertexts under the same p and uc. An accepted plaintext must come from an honest
-   encryption of the same version with the same n_S. *)
+(* C-D1: the decryptor picks V7 or V8 from the unauthenticated v (ciphers.ts:getStreamDecipher).
+   Alice also has legacy V7 ciphertexts under the same p and uc. An accepted plaintext must come
+   from an honest encryption of the same version with the same n_S. *)
 
 event EncV7(bitstring, bitstring).
 event EncV8(bitstring, bitstring).

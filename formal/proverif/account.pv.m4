@@ -7,15 +7,14 @@ m4_changequote({{,}})m4_dnl
    Each honest user (Alice) registers once from her browser, then logs in with any passkey she
    holds, sends authorized requests, adds passkeys, replaces her recovery words, and recovers.
    Her browser checks the user id in every server reply, and checks the u_c it resolves against
-   the tag in her passkey's user handle or her recovery words (vibes/user-id-checks.md,
-   vibes/credential-tags.md). Every challenge that creates a passkey is bound to pk_U and
-   answered with a proof under sk_U (vibes/challenge-binding.md).
+   the tag in her passkey's user handle or her recovery words. Every challenge that creates a
+   passkey is bound to pk_U and answered with a proof under sk_U.
    The server keeps its state in tables, which in ProVerif can only grow. So deletions are not
    modeled: old passkeys and recovery keys stay usable, which only helps the attacker.
    Single-use challenges, replay nonces and authCount values are uniqueness restrictions; they
-   stand for the atomic DynamoDB delete-on-read in consumeChallenge (sutil:86-111), the
-   conditional put in storeSingleUseNonce (sutil:162-176) and the atomic add in
-   _setLastCredential (srv:245-265). Timestamps and the skew window are not modeled.
+   stand for the atomic DynamoDB conditional delete in utils.ts:consumeChallenge, the
+   conditional put in utils.ts:storeSingleUseNonce and the atomic add in
+   server.ts:_setLastCredential. Timestamps and the skew window are not modeled.
 
    TLS is a private channel, with a fresh reply channel per request. Every server handler also
    runs on the public channel, where the attacker is a client like any other and chooses its own
@@ -150,7 +149,7 @@ free tls: channel.
 free tls: channel [private].
 }})
 
-(* Server secret behind the session cookie and CSRF token (srv:1613-1683) *)
+(* Server secret behind the session cookie and CSRF token (server.ts:getSessionKey) *)
 free skJWT: key [private].
 
 (* ---------------------------------------------------------------------------------------- *)
@@ -167,7 +166,7 @@ const NAPI, NREC: bitstring [data].
 
 (* Recovery signature contexts: sc_R, sc_W, and sc_G for the proof of sk_R at registration. The
    code also accepts a legacy context for recover and replace, which no client creates; it is
-   treated as removed (I-04). *)
+   treated as removed. *)
 const SCR, SCW, SCG: bitstring [data].
 
 (* m_R = u_i, n_P; the timestamp is not modeled *)
@@ -249,15 +248,15 @@ letfun proofKey(uc: key) = kdf(ID1, kpU, uc).
 letfun recoveryKey(ur: bitstring, ui: bitstring) = kdf(ID1, kpR, rsec(ur, ui)).
 
 (* The account tag in a passkey's user handle and in a recovery word set: the u_c id, D_H keyed
-   with u_c under its own purpose and truncated to 32 bits (vibes/credential-tags.md). Modeled as
+   with u_c under its own purpose and truncated to 32 bits. Modeled as
    a one-way function of u_c with no inverse, so the attacker computes a tag only from a u_c it
    knows; the 2^-32 chance of a guess matching is outside the model. NOTAG marks an untagged
    handle or a 24-word set. *)
 fun ucid(key): bitstring.
 const NOTAG: bitstring [data].
 
-(* KMS (srv:152-198): encryption under a key only the server's role can use, with the user id
-   as encryption context. A no-PRF account keeps u_c under a main and a backup key. *)
+(* KMS (server.ts:encryptField): encryption under a key only the server's role can use, with the
+   user id as encryption context. A no-PRF account keeps u_c under a main and a backup key. *)
 fun kms_enc(key, bitstring, key): bitstring.
 reduc forall k: key, ctx: bitstring, m: key; kms_dec(k, ctx, kms_enc(k, ctx, m)) = m.
 free kmsNew, kmsOld: key [private].
@@ -272,11 +271,11 @@ table recov(bitstring, bitstring, bitstring).
 table creds(bitstring, bitstring, bitstring, bitstring).
 table chal(bitstring, bitstring, bitstring, bitstring).
 
-(* A no-PRF account's u_c under the main and the backup KMS keys (srv:475-490). The server
-   decrypts only the main copy. *)
+(* A no-PRF account's u_c under the main and the backup KMS keys (server.ts:postRegVerify). The
+   server decrypts only the main copy. *)
 table ucenc(bitstring, bitstring, bitstring).
 
-(* Per-browser pin: browser, u_i, account mode, pk_U (auth:302-311) *)
+(* Per-browser pin: browser, u_i, account mode, pk_U (authenticator.service.ts:_pinAccount) *)
 table pins(bitstring, bitstring, bitstring, bitstring).
 
 (* ---------------------------------------------------------------------------------------- *)
@@ -362,16 +361,17 @@ m4_define({{PREC_STRIP}}, {{}})
    of the real system.
 
    STORE: a challenge is consumed at most once, and a replay nonce is stored at most once
-   (sutil:86-111, sutil:162-176). A MUT_NOSTORE_<purpose> mutation lifts this for one challenge
-   purpose or nonce namespace, at every handler that uses it: MUT_NOSTORE_NREC opens both
-   recover3 and replace words, while MUT_NOREPLNONCE removes only replace words' nonce.
+   (utils.ts:consumeChallenge, utils.ts:storeSingleUseNonce). A MUT_NOSTORE_<purpose> mutation
+   lifts this for one challenge purpose or nonce namespace, at every handler that uses it:
+   MUT_NOSTORE_NREC opens both recover3 and replace words, while MUT_NOREPLNONCE removes only
+   replace words' nonce.
 
    STORE also increments each authCount value at most once, as the code's atomic add does
-   (srv:245-265). recover3 and recover/confirm bind the challenge they create to the value their
-   own increment produced (srv:267-269). recover/confirm and recover/verify increment the value
-   their challenge is bound to, so a second use of one challenge fails. The code reads authCount
-   before it consumes the challenge and increments at the end of the handler; the model makes
-   these one step. MUT_NOBIND removes the binding check.
+   (server.ts:_setLastCredential). recover3 and recover/confirm bind the challenge they create to
+   the value their own increment produced (server.ts:buildChallenge). recover/confirm and
+   recover/verify increment the value their challenge is bound to, so a second use of one
+   challenge fails. The code reads authCount before it consumes the challenge and increments at
+   the end of the handler; the model makes these one step. MUT_NOBIND removes the binding check.
 
    Without STORE these mutations would change nothing, so m4 stops with an error instead. *)
 m4_define({{REUSE}}, {{m4_ifdef({{MUT_NOSTORE_$1}}, {{ || pu = $1 }})}})
@@ -444,7 +444,7 @@ m4_define({{LOGGED}}, {{}})
 }})
 
 (* UNIQUSER:a user id is registered at most once, as the server's check for an existing
-   verified user ensures (srv:426-434) *)
+   verified user ensures (server.ts:postRegVerify) *)
 event UserCreated(bitstring, bitstring).
 m4_ifdef({{UNIQUSER}}, {{
 restriction ui: bitstring, s1: bitstring, s2: bitstring;
@@ -452,7 +452,7 @@ restriction ui: bitstring, s1: bitstring, s2: bitstring;
 }})
 
 (* ---------------------------------------------------------------------------------------- *)
-(* Server endpoints (srv:1884-1993).
+(* Server endpoints (METHODMAP in server.ts).
 
    Each handler creates its fresh names before its input. ProVerif parameterizes a name by the
    inputs received before it, so a name created after an attacker-chosen request can be fed back
@@ -460,7 +460,7 @@ restriction ui: bitstring, s1: bitstring, s2: bitstring;
    same one-fresh-value-per-request semantics. *)
 
 (* POST reg/options: a new unverified user that stores the pk_U in the request, and a challenge
-   bound to that user and pk_U (srv:postRegOptions, srv:registrationOptions) *)
+   bound to that user and pk_U (server.ts:postRegOptions, server.ts:registrationOptions) *)
 let SRegOptions(net: channel) =
    new ui: bitstring; new ch: bitstring;
    new rq: bitstring;
@@ -472,9 +472,9 @@ let SRegOptions(net: channel) =
    out(rc, (ch, ui)).
 
 (* The checks both reg/verify handlers make on the body bd, which carries the user id ui, the
-   challenge ch, pk_R and the proof under sk_R (srv:postRegVerify). pk_U is the one reg/options
-   stored for ui. First the proof under sk_U, over the user id, the challenge and the whole body,
-   and the proof under sk_R, over the user id, the challenge and pk_U. A proof under sk_R that
+   challenge ch, pk_R and the proof under sk_R (server.ts:postRegVerify). pk_U is the one
+   reg/options stored for ui. First the proof under sk_U, over the user id, the challenge and the
+   whole body, and the proof under sk_R, over the user id, the challenge and pk_U. A proof under sk_R that
    left out pk_U would let an attacker with TLS broken pair it with its own pk_U, on an account
    it opened with that pk_U. Then the challenge is consumed only if it is bound to that user id
    and pk_U, as one conditional delete, so a request that fails either check leaves the challenge
@@ -499,8 +499,8 @@ m4_ifdef({{MUT_UNBOUND}}, {{
 }})
 }})
 
-(* POST reg/verify for a PRF registration, which carries cd_p and cd_r (srv:postRegVerify,
-   srv:_createAuthenticator) *)
+(* POST reg/verify for a PRF registration, which carries cd_p and cd_r (server.ts:postRegVerify,
+   server.ts:_createAuthenticator) *)
 let SRegVerify(net: channel) =
    new st: bitstring; new sid: bitstring;
    new rq: bitstring;
@@ -529,8 +529,8 @@ m4_ifdef({{DUALMODE}}, {{
 
 (* POST reg/verify for a no-PRF registration, which carries u_c itself in place of cd_p and
    cd_r. The server keeps u_c under both KMS keys and returns it in the reply, which the browser
-   does not read (srv:postRegVerify). The server picks the mode from which fields the request
-   carries. *)
+   does not read (server.ts:postRegVerify). The server picks the mode from which fields the
+   request carries. *)
 let SRegVerifyNoPrf(net: channel) =
    new st: bitstring; new sid: bitstring;
    new rq: bitstring;
@@ -557,7 +557,7 @@ m4_ifdef({{LOG_NOREGVER}}, {{}}, {{
    out(rc, (ui, PRF0, ucbs, cookie(ui, sid), csmac(skJWT, ui, sid))).
 
 (* POST auth/options: an auth challenge, bound to a user only if the request carries one
-   (srv:727-795) *)
+   (server.ts:postAuthOptions) *)
 let SAuthOptions(net: channel) =
    new ch: bitstring;
    new rq: bitstring;
@@ -567,7 +567,8 @@ let SAuthOptions(net: channel) =
    insert chal(PAUTH, ch, cu, NOBIND);
    out(rc, ch).
 
-(* POST auth/verify (srv:284-396). The user is the assertion's userHandle; UNKNOWN matches any. *)
+(* POST auth/verify (server.ts:postAuthVerify). The user is the assertion's userHandle; UNKNOWN
+   matches any. *)
 let SAuthVerify(net: channel) =
    new st: bitstring; new sid: bitstring;
    new rq: bitstring;
@@ -590,7 +591,8 @@ m4_ifdef({{MUT_NOUV}}, {{
    event ServerLogin(uh, credId, ch, pkU);
    LOGGED(AUTHVER, uh)
 m4_ifdef({{NOPRF}}, {{
-   (* A no-PRF reply carries u_c, decrypted with the main KMS key (srv:960-967) *)
+   (* A no-PRF reply carries u_c, decrypted with the main KMS key
+      (server.ts:makeLoginUserInfoResponse) *)
    get ucenc(=uh, enc: bitstring, encOld: bitstring) in
    out(rc, (uh, PRF0, credId, key2bs(kms_dec(kmsNew, uh, enc)), cookie(uh, sid), csmac(skJWT, uh, sid))).
 }}, {{
@@ -611,7 +613,7 @@ m4_ifdef({{STRIPLOGIN}}, {{
 }})
 }})
 
-(* Cookie, CSRF, and proof checks for every authorized request (srv:handler). The caller has
+(* Cookie, CSRF, and proof checks for every authorized request (server.ts:handler). The caller has
    taken u_i from the cookie and looked up its pk_U. nP is the nonce or the challenge the proof
    signs, and ctx the context of that proof form. The caller makes nP single use: a non-GET nonce
    through the nonce store, a challenge by consuming it. *)
@@ -648,7 +650,7 @@ let SApi(net: channel) =
       out(rc, OK)
    ).
 
-(* GET passkeys/options, authorized (srv:797-805) *)
+(* GET passkeys/options, authorized (server.ts:getPasskeyOptions) *)
 let SPasskeyOptions(net: channel) =
    new ch: bitstring;
    new rq: bitstring;
@@ -664,8 +666,8 @@ let SPasskeyOptions(net: channel) =
    out(rc, (ch, ui)).
 
 (* POST passkeys/verify, authorized, with a challenge-form proof over the add challenge. The user
-   is the session's, never the body's (srv:postPasskeyVerify). Consuming the challenge makes the
-   proof single use, so no nonce is stored. *)
+   is the session's, never the body's (server.ts:postPasskeyVerify). Consuming the challenge makes
+   the proof single use, so no nonce is stored. *)
 let SPasskeyVerify(net: channel) =
    new st: bitstring;
    new rq: bitstring;
@@ -678,7 +680,7 @@ let SPasskeyVerify(net: channel) =
    if authorized(ck, cs, pkU, POST, PATH_PKVER, bd, ch, sig, SCP) then
    event ServerAccept(sui, POST, PATH_PKVER, bd, ch, pkU);
 m4_ifdef({{NOPRF}}, {{
-   (* A no-PRF account takes no cd_p (srv:407-409) *)
+   (* A no-PRF account takes no cd_p (server.ts:postPasskeyVerify) *)
    if cdp = EMPTY then
 }})
 m4_ifdef({{MUT_UNBOUND}}, {{
@@ -698,12 +700,13 @@ m4_ifdef({{MUT_UNBOUND}}, {{
    LOGGED(PKVER, ui)
    out(rc, OK).
 
-(* A recovery proof verifies under the operation's own context (aproof:158-176) *)
+(* A recovery proof verifies under the operation's own context (verifyRecoveryNonceProof in
+   libs/api) *)
 letfun recoveryProofOK(pkR: bitstring, ui: bitstring, nP: bitstring, sig: bitstring, ctx: bitstring) =
    sig_verify(pkR, mrc(ui, nP), sig, ctx).
 
 (* PUT recover3/key, authorized: new recovery words, proved by a signature under the submitted
-   key (srv:1107-1149, sutil:123-159) *)
+   key (server.ts:putRecover3Key, utils.ts:verifyRecoveryNonceProof) *)
 let SReplaceWords(net: channel) =
    new st: bitstring; new st2: bitstring;
    new rq: bitstring;
@@ -718,7 +721,7 @@ let SReplaceWords(net: channel) =
    event NonceStored(NAPI, nP, st);
 m4_ifdef({{MUT_ONECTX}}, {{
    (* MUTATION: replace words verifies under sc_R, as with one context for both operations, so
-      only the nonce stores keep its proof from passing recover3 (I-04) *)
+      only the nonce stores keep its proof from passing recover3 *)
    if recoveryProofOK(pkR, ui, nPR, sigR, SCR) then
 }}, {{
    if recoveryProofOK(pkR, ui, nPR, sigR, SCW) then
@@ -729,7 +732,7 @@ m4_ifdef({{MUT_NOREPLNONCE}}, {{
    event NonceStored(NREC, nPR, st2);
 }})
 m4_ifdef({{NOPRF}}, {{
-   (* A no-PRF account ignores the cd_r in the body (srv:1126-1133, I-11) *)
+   (* A no-PRF account ignores the cd_r in the body (server.ts:putRecover3Key) *)
    insert recov(ui, pkR, EMPTY);
 }}, {{
    insert recov(ui, pkR, cdr);
@@ -739,9 +742,9 @@ m4_ifdef({{NOPRF}}, {{
    out(rc, OK).
 
 (* POST recover3: proof of the recovery words, then a confirm challenge and cd_r
-   (srv:1457-1512). Every recovery key ever stored for the user is accepted, since tables only
-   grow. The challenge is bound to pk_R and cnt, the authCount value this handler's increment
-   produces (srv:1489-1495). Only cnt is compared, so unlike the code, the model lets a sign-in,
+   (server.ts:postRecover3). Every recovery key ever stored for the user is accepted, since tables
+   only grow. The challenge is bound to pk_R and cnt, the authCount value this handler's increment
+   produces. Only cnt is compared, so unlike the code, the model lets a sign-in,
    a logout, another recover3 or new words leave the challenge valid. Leaving that out only adds
    attacker runs. *)
 let SRecover3(net: channel) =
@@ -758,7 +761,7 @@ let SRecover3(net: channel) =
    LOGGED(REC3, ui)
    insert chal(PCONFIRM, chR, ui, (pkR, cnt));
 m4_ifdef({{NOPRF}}, {{
-   (* A no-PRF reply carries u_c itself, decrypted with the main KMS key (srv:1501-1507) *)
+   (* A no-PRF reply carries u_c itself, decrypted with the main KMS key (server.ts:postRecover3) *)
    get ucenc(=ui, enc: bitstring, encOld: bitstring) in
    out(rc, (PRF0, chR, key2bs(kms_dec(kmsNew, ui, enc)))).
 }}, {{
@@ -766,7 +769,7 @@ m4_ifdef({{NOPRF}}, {{
 }})
 
 (* POST recover/confirm: a proof under sk_U over the user id, ch_R and the body, then a
-   registration challenge (srv:postRecoverConfirm). The proof comes before the consume, as at
+   registration challenge (server.ts:postRecoverConfirm). The proof comes before the consume, as at
    recover/verify, so a request that fails it leaves the challenge for Alice. *)
 let SRecoverConfirm(net: channel) =
    new st: bitstring; new ch: bitstring; new st2: bitstring; new cnt: bitstring;
@@ -783,7 +786,7 @@ let SRecoverConfirm(net: channel) =
 m4_ifdef({{MUT_NOBIND}}, {{
    (* MUTATION: the binding is not compared *)
 }}, {{
-   (* The binding check and the increment, as one step (srv:1537, srv:1581) *)
+   (* The binding check and the increment, as one step (server.ts:postRecoverConfirm) *)
    event Incremented(cntb, st2);
 }})
    event ServerConfirm(ui, chR, pkU);
@@ -793,10 +796,10 @@ m4_ifdef({{MUT_NOBIND}}, {{
    out(rc, (ch, ui)).
 
 (* POST recover/verify: the new passkey, with a proof under sk_U over the user id, the challenge
-   and the body (srv:postRecoverVerify, srv:_createAuthenticator). The challenge is bound to the
-   account's pk_R, authCount and pk_U. The check for an empty lastCredentialId is left out: the
-   write that sets it also increments authCount (srv:_setLastCredential), so it fails only where
-   the binding check already fails. *)
+   and the body (server.ts:postRecoverVerify, server.ts:_createAuthenticator). The challenge is
+   bound to the account's pk_R, authCount and pk_U. The check for an empty lastCredentialId is left
+   out: the write that sets it also increments authCount (server.ts:_setLastCredential), so it
+   fails only where the binding check already fails. *)
 let SRecoverVerify(net: channel) =
    new st: bitstring; new sid: bitstring; new st2: bitstring;
    new rq: bitstring;
@@ -805,7 +808,7 @@ let SRecoverVerify(net: channel) =
    let (=RECVER, bd: bitstring, sigU: bitstring) = req in
    let (rr: bitstring, ui: bitstring, ch: bitstring, cdp: bitstring) = bd in
 m4_ifdef({{NOPRF}}, {{
-   (* A no-PRF account takes no cd_p (srv:postRecoverVerify) *)
+   (* A no-PRF account takes no cd_p (server.ts:postRecoverVerify) *)
    if cdp = EMPTY then
 }})
    get users(=ui, pkU: bitstring) in
@@ -826,8 +829,8 @@ m4_ifdef({{MUT_NORECVERIFYPROOF}}, {{
 m4_ifdef({{MUT_NOBIND}}, {{
    (* MUTATION: the authCount binding is not compared *)
 }}, {{
-   (* The authCount binding check and the increment, as one step (srv:_createAuthenticator,
-      srv:_setLastCredential) *)
+   (* The authCount binding check and the increment, as one step (server.ts:_createAuthenticator,
+      server.ts:_setLastCredential) *)
    event Incremented(cntb, st2);
 }})
    insert creds(ui, credId, credPk, cdp);
@@ -835,7 +838,7 @@ m4_ifdef({{MUT_NOBIND}}, {{
    event ServerRecovered(ui, credId, pkU);
    LOGGED(RECVER, ui)
 m4_ifdef({{NOPRF}}, {{
-   (* A no-PRF reply carries u_c again (srv:596, I-10) *)
+   (* A no-PRF reply carries u_c again (server.ts:postRecoverVerify) *)
    get ucenc(=ui, enc: bitstring, encOld: bitstring) in
    out(rc, (ui, PRF0, cookie(ui, sid), csmac(skJWT, ui, sid), key2bs(kms_dec(kmsNew, ui, enc)))).
 }}, {{
@@ -905,13 +908,13 @@ table registered(bitstring, bitstring, bitstring).
 table words(bitstring, bitstring, bitstring, bitstring).
 table sessions(bitstring, bitstring, bitstring, key, bitstring, bitstring, bitstring).
 
-(* A signed authorized request, as _doFetch builds it (auth:385-459) *)
+(* A signed authorized request, as apifetch.ts:nonceFetch builds it *)
 letfun mkProof(uc: key, ui: bitstring, mth: bitstring, pth: bitstring, bd: bitstring, nP: bitstring, r: bitstring) =
    sig_sign(proofKey(uc), muc(ui, mth, pth, nP, sha256(bd)), SCU, r).
 
-(* Records a signed-in browser session. k_KS is replaced at every login (auth:755), and cd_u
-   is u_c under k_L. ctag is the tag of the credential the session started from, and sprf the
-   account mode the server returned. *)
+(* Records a signed-in browser session. k_KS is replaced at every login
+   (authenticator.service.ts:_loginUser), and cd_u is u_c under k_L. ctag is the tag of the
+   credential the session started from, and sprf the account mode the server returned. *)
 let StartSession(aid: bitstring, bid: bitstring, ui: bitstring, uc: key, pkId: bitstring, ck: bitstring, cs: bitstring, kKS: key, nS: bitstring, ctag: bitstring, sprf: bitstring) =
    insert sessions(aid, bid, ui, uc, pkId, ck, cs);
    event ClientLoggedIn(bid, ui, uc);
@@ -934,9 +937,10 @@ let ApiRequests(aid: bitstring) =
    out(tls, ((API, ck, cs, mth, pth, bd, nP, mkProof(uc, ui, mth, pth, bd, nP, r)), rc));
    in(rc, resp: bitstring).
 
-(* The user id in a new passkey's handle (auth:_startRegistration). The browser stops before the
-   ceremony unless the options carry the user id it already holds, and builds the handle from
-   that user id. MUT_SERVERHANDLE takes the options' user id instead, unchecked. *)
+(* The user id in a new passkey's handle (authenticator.service.ts:_startRegistration). The
+   browser stops before the ceremony unless the options carry the user id it already holds, and
+   builds the handle from that user id. MUT_SERVERHANDLE takes the options' user id instead,
+   unchecked. *)
 m4_define({{HANDLEUSER}}, {{
 m4_ifdef({{MUT_SERVERHANDLE}}, {{
    (* MUTATION: the handle carries the options' user id *)
@@ -947,8 +951,8 @@ m4_ifdef({{MUT_SERVERHANDLE}}, {{
 }})
 }})
 
-(* addPasskey (auth:addPasskey). The authenticator keeps the passkey once created. Its handle
-   carries the session's user id and the tag of the session's u_c. passkeys/options carries a
+(* addPasskey (authenticator.service.ts:addPasskey). The authenticator keeps the passkey once
+   created. Its handle carries the session's user id and the tag of the session's u_c. passkeys/options carries a
    nonce-form proof, and passkeys/verify a challenge-form proof over the add challenge. *)
 let AddPasskey(aid: bitstring) =
    !new nP1: bitstring; new r1: bitstring; new rc1: channel;
@@ -965,7 +969,7 @@ HANDLEUSER(oui, ui)
    insert passkeys(aid, hui, ucid(uc), credId, credKey);
    let rr = regr(credId, credPk, adata(RPID, UV1), cdj(WA_CREATE, ch, ORIGIN)) in
 m4_ifdef({{NOPRF}}, {{
-   (* A no-PRF account sends no cd_p (auth:1575-1598) *)
+   (* A no-PRF account sends no cd_p (authenticator.service.ts:addPasskey) *)
    let bd = (rr, ch, EMPTY, ui) in
 }}, {{
    let bd = (rr, ch, mkAtRest(wa_prf(credKey, PS), ui, nS, key2bs(uc)), ui) in
@@ -976,9 +980,9 @@ m4_ifdef({{NOPRF}}, {{
 
 (* The tag check on a credential with tag $2, for the u_c $3 the browser resolved: a tagged
    credential's tag must be that u_c's id. MUT_NO$1TAG removes it. On a mismatch the process
-   stops. The browser then completes the flow it was in (vibes/credential-tags.md, "A halt must
-   tell the server nothing"), but those messages carry only the server's own u_c and fresh
-   values, so the model leaves them out. *)
+   stops. The browser then completes the flow it was in, so that a halt tells the server nothing,
+   but those messages carry only the server's own u_c and fresh values, so the model leaves them
+   out. *)
 m4_define({{TAGCHECK}}, {{
 m4_ifdef({{MUT_NO$1TAG}}, {{
    (* MUTATION: the tag is not checked *)
@@ -998,7 +1002,7 @@ m4_ifdef({{MUT_NOUICHECK_$1}}, {{
 }})
 
 (* Sign in from browser bid with the given passkey, whose handle carries ui and the tag tg
-   (auth:createSession, auth:_resolveUserCred, auth:_loginUser) *)
+   (authenticator.service.ts:createSession, _resolveUserCred and _loginUser) *)
 let LoginWith(aid: bitstring, bid: bitstring, ui: bitstring, tg: bitstring, credId: bitstring, credKey: key, rc1: channel, rc2: channel, kKS: key, nS: bitstring) =
    out(tls, ((AUTHOPT, UNKNOWN), rc1));
    in(rc1, ch: bitstring);
@@ -1086,24 +1090,26 @@ HANDLEUSER(oui, ui)
    event PasskeyHandle(ui, hui);
    insert passkeys(aid, hui, ucid(uc), credId, credKey);
    let rr = regr(credId, credPk, adata(RPID, UV1), cdj(WA_CREATE, ch, ORIGIN)) in
-   (* cd_p is sent only for a PRF account (auth:_finishRecovery) *)
+   (* cd_p is sent only for a PRF account (authenticator.service.ts:_finishRecovery) *)
    let cdp = (if sprf = PRF1 then mkAtRest(wa_prf(credKey, PS), ui, nS, key2bs(uc)) else EMPTY) in
    let bd = (rr, ui, ch, cdp) in
    out(tls, ((RECVER, bd, sig_sign(proofKey(uc), muc(ui, POST, PATH_RECVER, ch, sha256(bd)), SCP, r3)), rc3));
 m4_ifdef({{NOPRF}}, {{
-   (* The browser does not read the u_c a no-PRF reply also carries (auth:1485-1488) *)
+   (* The browser does not read the u_c a no-PRF reply also carries
+      (authenticator.service.ts:_finishRecovery) *)
    in(rc3, (sui: bitstring, sprf2: bitstring, ck: bitstring, cs: bitstring, sdata2: bitstring)) [precise];
 }}, {{
    in(rc3, (sui: bitstring, sprf2: bitstring, ck: bitstring, cs: bitstring)) [precise];
 }})
-   (* The browser reads prf as a boolean (auth:290-311), so the mode it pins is one of the two.
-      [precise] keeps that constraint from breaking trace reconstruction. *)
+   (* The browser reads prf as a boolean (authenticator.service.ts:_checkAccountPinPrf), so the
+      mode it pins is one of the two. [precise] keeps that constraint from breaking trace
+      reconstruction. *)
    if sprf2 = PRF0 || sprf2 = PRF1 then
 UICHECK({{RECOVERVERIFY}}, ui, sui)
-   (* The account-mode pin check under the words' u_i (auth:_finishRecovery), then _loginUser,
-      which pins under the reply's u_i (auth:_loginUser, auth:_pinAccount). The pin under the
-      words' u_i is the one inserted above, so its mode is compared directly: ProVerif's negative
-      lookup also allows a run where that entry is missing. *)
+   (* The account-mode pin check under the words' u_i (authenticator.service.ts:_finishRecovery),
+      then _loginUser, which pins under the reply's u_i (_loginUser and _pinAccount in the same
+      file). The pin under the words' u_i is the one inserted above, so its mode is compared
+      directly: ProVerif's negative lookup also allows a run where that entry is missing. *)
    if sprf = PRF1 && sprf2 = PRF0 then 0 else
    get pins(=bid, =ui, =PRF1, ppk2: bitstring) suchthat sprf2 = PRF0 in 0 else
    get pins(=bid, =sui, =PRF1, ppk3: bitstring) suchthat sprf2 = PRF0 in 0 else
@@ -1113,8 +1119,8 @@ UICHECK({{RECOVERVERIFY}}, ui, sui)
    event ClientRecovered(bid, sui, uc);
    StartSession(aid, bid, sui, uc, credId, ck, cs, kKS, nS2, wtg, sprf2).
 
-(* recover3, recover/confirm, then recover/verify with a new passkey (auth:recover3), using any
-   recovery words Alice has written down *)
+(* recover3, recover/confirm, then recover/verify with a new passkey
+   (authenticator.service.ts:recover3), using any recovery words Alice has written down *)
 let Recovery(aid: bitstring, bid: bitstring) =
    new nPR: bitstring; new r1: bitstring; new r2: bitstring; new r3: bitstring;
    new credKey: key; new credId: bitstring; new nS: bitstring;
@@ -1124,9 +1130,9 @@ let Recovery(aid: bitstring, bid: bitstring) =
    event ClientRecoverIntent(ui, nPR);
    out(tls, ((REC3, ui, nPR, sig_sign(recoveryKey(ur, ui), mrc(ui, nPR), SCR, r1)), rc1));
    in(rc1, (sprf: bitstring, chR: bitstring, sdata: bitstring));
-   (* A PRF account sends cd_r, a no-PRF account sends u_c itself (auth:recover3). Then the
-      words' tag check, and _pinAccount under the words' u_i: the account-mode pin check, then
-      the userCred compare. *)
+   (* A PRF account sends cd_r, a no-PRF account sends u_c itself
+      (authenticator.service.ts:recover3). Then the words' tag check, and _pinAccount under the
+      words' u_i: the account-mode pin check, then the userCred compare. *)
    let uc = (if sprf = PRF1 then openAtRest(rsec(ur, ui), ui, sdata) else if sprf = PRF0 then bs2key(sdata)) in
 TAGCHECK({{WORDS}}, wtg, uc)
    get pins(=bid, =ui, =PRF1, ppk: bitstring) suchthat sprf = PRF0 in 0 else
@@ -1149,9 +1155,9 @@ let RecoveryRegistered(aid: bitstring) =
    event ClientRecoverIntent(ui, nPR);
    out(tls, ((REC3, ui, nPR, sig_sign(recoveryKey(ur, ui), mrc(ui, nPR), SCR, r1)), rc1));
    in(rc1, (sprf: bitstring, chR: bitstring, sdata: bitstring));
-   (* A PRF account sends cd_r, a no-PRF account sends u_c itself (auth:recover3). Then the
-      words' tag check, and _pinAccount under the words' u_i: the account-mode pin check, then
-      the userCred compare. *)
+   (* A PRF account sends cd_r, a no-PRF account sends u_c itself
+      (authenticator.service.ts:recover3). Then the words' tag check, and _pinAccount under the
+      words' u_i: the account-mode pin check, then the userCred compare. *)
    let uc = (if sprf = PRF1 then openAtRest(rsec(ur, ui), ui, sdata) else if sprf = PRF0 then bs2key(sdata)) in
 TAGCHECK({{WORDS}}, wtg, uc)
    if rui = ui then (
@@ -1165,8 +1171,8 @@ TAGCHECK({{WORDS}}, wtg, uc)
       FinishRecovery(aid, aid, ui, uc, sprf, chR, r2, r3, credKey, credId, nS, rc2, rc3, kKS, nS2, wtg)
    ).
 
-(* changeRecoveryWords (auth:564-646). The words are shown, and so written down, even when the
-   server does not confirm them (auth:639-641). *)
+(* changeRecoveryWords and _putRecoveryKey in authenticator.service.ts. The words are shown, and
+   so written down, even when the server does not confirm them. *)
 let ReplaceWords(aid: bitstring) =
    !new ur2: bitstring; new nPR: bitstring; new rR: bitstring; new nP: bitstring; new r: bitstring;
    new nS: bitstring; new rc: channel;
@@ -1181,7 +1187,7 @@ m4_ifdef({{MUT_ONECTX}}, {{
    let sigR = sig_sign(skR, mrc(ui, nPR), SCW, rR) in
 }})
 m4_ifdef({{NOPRF}}, {{
-   (* A no-PRF account sends no cd_r (auth:609-619) *)
+   (* A no-PRF account sends no cd_r (authenticator.service.ts:changeRecoveryWords) *)
    let bd = (sig_pk(skR), nPR, sigR, EMPTY) in
 }}, {{
    let bd = (sig_pk(skR), nPR, sigR, mkAtRest(rsec(ur2, ui), ui, nS, key2bs(uc))) in
@@ -1194,10 +1200,10 @@ m4_ifdef({{NOPRF}}, {{
 (* The account mode the browser pins at registration *)
 m4_ifdef({{NOPRF}}, {{m4_define({{ACCTMODE}}, {{PRF0}})}}, {{m4_define({{ACCTMODE}}, {{PRF1}})}})
 
-(* Registration (tex: Registration by A; auth:newUser). The browser creates u_c in both modes and
-   sends pk_U in reg/options. The passkey's handle and the words carry the tag of that u_c, and
-   reg/verify carries proofs under sk_U and sk_R. u_i is public: it is in the recovery words and
-   in URLs. *)
+(* Registration (tex: Registration by A; authenticator.service.ts:newUser). The browser creates
+   u_c in both modes and sends pk_U in reg/options. The passkey's handle and the words carry the
+   tag of that u_c, and reg/verify carries proofs under sk_U and sk_R. u_i is public: it is in the
+   recovery words and in URLs. *)
 let Register(aid: bitstring) =
    new rc1: channel; new rc2: channel;
    new credKey: key; new credId: bitstring; new ur: bitstring; new ucA: key;
@@ -1245,9 +1251,9 @@ m4_ifdef({{SCN_MALICIOUS}}, {{
 }})
    if sprf = PRF0 then
 }}, {{
-   (* newUser halts when the reply to a PRF registration says no-PRF (auth:newUser). The model
-      reads that field only under DUALMODE, where an honest server can send it; elsewhere,
-      ignoring it only adds runs. *)
+   (* newUser halts when the reply to a PRF registration says no-PRF
+      (authenticator.service.ts:newUser). The model reads that field only under DUALMODE, where
+      an honest server can send it; elsewhere, ignoring it only adds runs. *)
 m4_ifdef({{SCN_MALICIOUS}}, {{
    in(rc2, (sui: bitstring, ck: bitstring, cs: bitstring)) [precise];
 }}, {{
@@ -1267,7 +1273,7 @@ UICHECK({{REG}}, ui, sui)
    insert pins(aid, sui, ACCTMODE, pkU);
    insert registered(aid, ui, sui);
    (* The words are shown only in a signed-in session, so Alice has them only once registration
-      completes (auth:530-541) *)
+      completes (authenticator.service.ts:consumeRecoveryWords) *)
    insert words(aid, ui, ur, tg);
    out(c, ui);
    event SessionUser(ui, sui);
@@ -1332,9 +1338,9 @@ let SecondAccount(aid: bitstring) =
 }})
 
 m4_ifdef({{REAUTH}}, {{
-(* reauthenticate (auth:reauthenticate): a browser with a session signs in again, as it does
-   before operations such as replacing the recovery words. The reply's user id must be the
-   passkey handle's and the session's. *)
+(* reauthenticate (authenticator.service.ts:reauthenticate): a browser with a session signs in
+   again, as it does before operations such as replacing the recovery words. The reply's user id
+   must be the passkey handle's and the session's. *)
 event Reauthenticated(bitstring, bitstring, key).
 
 let Reauth(aid: bitstring) =
