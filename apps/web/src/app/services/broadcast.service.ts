@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { Service } from '@angular/core';
+import { type OnDestroy, Service } from '@angular/core';
 
 const CHANNEL_NAME = 'qcrypt-encrypted-credentials';
 const COLLECTION_WINDOW_MS = 120;
@@ -74,7 +74,7 @@ type Responses = {
 };
 
 @Service()
-export class BroadcastService {
+export class BroadcastService implements OnDestroy {
    private _channel?: BroadcastChannel;
    private _pending = new Map<string, Responses>();
    private _unfulfilledNonce?: string;
@@ -100,6 +100,10 @@ export class BroadcastService {
          this._channel.close();
       }
       this._channel = undefined;
+   }
+
+   ngOnDestroy() {
+      this.close();
    }
 
    public setCredentialProvider(credentialProvider: () => CredentialPayload | undefined) {
