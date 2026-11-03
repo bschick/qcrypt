@@ -132,7 +132,7 @@ export async function verifyRecoveryNonceProof(
    api.verifyRecoveryNonceProof(recoveryPubKey, userId, timestamp, nonce, signature, op);
 
    // Only needed for unauthenticated callers, but harmless for authenticated
-   const outcome = await storeSingleUseNonce(nonce, 'nonce', userId);
+   const outcome = await storeSingleUseNonce(nonce, 'words', userId);
    if (outcome === 'replayed') {
       throw new ParamError(`user account ${userId} replayed recovery proof`);
    }
@@ -245,7 +245,7 @@ export function verifyRecoverConfirmProof(
 // Never throws: an error from the store itself is reported as 'failed'.
 export async function storeSingleUseNonce(
    nonce: string,
-   purpose: 'api' | 'nonce',
+   purpose: 'api' | 'words',
    userId: string,
 ): Promise<'ok' | 'replayed' | 'failed'> {
    try {
