@@ -1,5 +1,19 @@
 # CHANGELOG.md
 
+## 8.0.5 (2026-11-03)
+
+#### Changes
+
+- updated the protocol description with proof variables and request authorization stanzas
+
+#### Security
+
+- added ProVerif formal models of the account and encryption protocols
+- PRF accounts now remain secure even after a full server database compromise
+- passkey registration, add, and recovery challenges each bound to account keys
+- the browser now proves it holds every key it registers
+- updated packages
+
 ## 8.0.4 (2026-10-24)
 
 #### Changes
