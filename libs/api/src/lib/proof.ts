@@ -31,13 +31,14 @@ import {
 } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 
-// Every public key a client sends for the server to store must come with a signature from the
-// matching private key. The signature proves the client holds that key, and catches a client that
-// sends the wrong key before anything depends on it.
+// Every public key a client sends for the server to store must come with a signature from
+// the matching private key, and each operation type must have its own context
+// following 'qcrypt/<signing key>/<operation>/v<n>'. USERCRED_CHALLENGE_SIG_CONTEXT is the
+// exception and covers every challenge-form route, since the signed message includes the path.
 
 export const USERCRED_KEY_CONTEXT = 'UCredKey';
 const USERCRED_NONCE_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
-const USERCRED_CHALLENGE_SIG_CONTEXT = 'qcrypt/usercred/challenge/v1';
+const USERCRED_CHALLENGE_SIG_CONTEXT = 'qcrypt/usercred/register/v1';
 
 export const RECOVERY_KEY_CONTEXT = 'RecovKey';
 export const RECOVERY_REGISTER_SIG_CONTEXT = 'qcrypt/recovery/register/v1';
