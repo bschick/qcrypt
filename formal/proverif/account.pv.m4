@@ -161,7 +161,7 @@ const GET, POST, PUT: bitstring [data].
 const PATH_API, PATH_PKOPT, PATH_PKVER, PATH_REPLACE, PATH_CONFIRM, PATH_REGVER, PATH_RECVER: bitstring [data].
 const PREG, PADD, PAUTH, PCONFIRM, PRECOVER: bitstring [data].
 
-(* Replay-nonce namespaces: 'api' for authorized requests, 'nonce' for both recovery proofs *)
+(* Replay-nonce namespaces: 'api' for authorized requests, 'words' for both recovery proofs *)
 const NAPI, NREC: bitstring [data].
 
 (* Recovery signature contexts: sc_R, sc_W, and sc_G for the proof of sk_R at registration. The
@@ -169,7 +169,7 @@ const NAPI, NREC: bitstring [data].
    treated as removed. *)
 const SCR, SCW, SCG: bitstring [data].
 
-(* m_R = u_i, n_P; the timestamp is not modeled *)
+(* m_R = u_i, n_R; the timestamp is not modeled *)
 fun mrc(bitstring, bitstring): bitstring [data].
 (* The message of the proof under sk_R at registration: u_i, the registration challenge and pk_U *)
 fun mrg(bitstring, bitstring, bitstring): bitstring [data].
@@ -1816,7 +1816,7 @@ m4_ifdef({{FIRSTUSE}}, {{
 
 (* ======================================================================================== *)
 (* Expected results, one block per variant. On a reachability query, "is false" means a run
-   reaches the events; the README says what each of those traces shows. Every other "is false" is
+   reaches the events; RESULTS.md says what each of those traces shows. Every other "is false" is
    an attack the variant exists to show, and ProVerif reconstructed a trace for each one. *)
 
 m4_ifdef({{VARIANT_login_net}}, {{(* EXPECTPV
