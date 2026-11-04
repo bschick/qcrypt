@@ -432,6 +432,44 @@ describe('Stream encryption and decryption', () => {
       await expect(cipherSvc.decryptStream(innerStream, strippedKeyProvider)).rejects.toThrow(/Invalid loop/);
    });
 
+   it('detect a forged outer loop layer', async () => {
+      const srcString = 'This is a secret 🦆';
+      const [clearStream] = streamFromStr(srcString);
+      const userCred = getRandom(cc.USERCRED_BYTES);
+
+      const innerKeyProvider = new PWDKeyProvider(userCred.slice(0), ['pwd1', 'pwd1']);
+      const inner = await readStreamAll(
+         await cipherSvc.encryptStream(clearStream, innerKeyProvider, { algs: ['AES-GCM'], ic: cc.ICOUNT_MIN }),
+      );
+
+      // Wrapping the one-loop message as loop 2 of 2 needs the userCred but not the inner password
+      const [innerStream] = streamFromBytes(inner);
+      const outerKeyProvider = new PWDKeyProvider(userCred.slice(0), ['pwd2', 'pwd2']);
+      const encipher = getLatestEncipher(innerStream, outerKeyProvider, 'AES-GCM', 2, 2, cc.ICOUNT_MIN);
+      const parts: Uint8Array[] = [];
+      let block = await encipher.encryptBlock();
+      parts.push(...block.parts);
+      while (block.state !== CipherState.Finished) {
+         block = await encipher.encryptBlock();
+         parts.push(...block.parts);
+      }
+      const wrapped = concatArrays(parts);
+
+      // Control: the forged outer layer decrypts to the honest one-loop message
+      const [controlStream] = streamFromBytes(wrapped);
+      const controlKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         return [cdinfo.hint!];
+      });
+      const controlDecipher = await getStreamDecipher(controlStream, controlKeyProvider);
+      await expect(controlDecipher.decryptBlock()).resolves.toEqual(inner);
+
+      const [wrappedStream] = streamFromBytes(wrapped);
+      const wrappedKeyProvider = new PWDKeyProvider(userCred.slice(0), async (cdinfo) => {
+         return [cdinfo.hint!];
+      });
+      await expect(cipherSvc.decryptStream(wrappedStream, wrappedKeyProvider)).rejects.toThrow(/Invalid loop end/);
+   });
+
    it('successful round trip, lpEnd=LP_MAX', { timeout: 60000 }, async () => {
       const algs: cc.CipherAlgs[] = Array(cc.LP_MAX).fill('AES-GCM');
       const srcString = 'This is a secret 🦆';
