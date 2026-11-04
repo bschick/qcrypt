@@ -8,6 +8,7 @@
 //   - "detect extra terminal block indicator, multi-version"
 //   - "detect flipped terminal block indicator, multi-version"
 //   - "detect appended data after terminal block, multi-version"
+//   - "detect empty blocks without valid termination, multi-version"
 //   - "detect corrupt cipher text, all algs, multi-version"
 //   - "Stream manipulation, multi-version"
 //   - "Block order change and deletion detection, multi-version"
@@ -23,6 +24,7 @@ import {
    base64ToBytes,
    getStreamDecipher,
    Ciphers,
+   EncipherV8,
 } from '@qcrypt/crypto';
 import type { EContext } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
@@ -33,6 +35,7 @@ import {
    bytesFromStr,
    withTermOverride,
    withTermOverrideEvery,
+   withEmptyClearData,
    encryptOneLoop,
    encryptOneLoopMaster,
    uint8ArrayLiteral,
@@ -235,6 +238,51 @@ async function genAppendedAfterTerminal(): Promise<void> {
    console.log();
 }
 
+// Vectors for "detect empty blocks without valid termination, multi-version". The encipher
+// never writes these, so each comes from a patched encipher:
+//   - emptyLastNoTerm: data in block0, then an empty block without the terminal flag
+//   - emptyBlock0Term: a single empty block0 with the terminal flag
+//   - emptyBlock0NoTerm: a single empty block0 without the terminal flag
+async function genEmptyBlocks(): Promise<void> {
+   const PLAIN = 'This clear text stops exactly where the first cipher block does.';
+   const PWD = 'a good pwd';
+   const HINT = 'empty';
+   const CRED = base64ToBytes('7Ef58ZW_sp30ZHm1I0kp4KzfJkzUIN_FpQjBeCTU2w8');
+   const ALGS: cc.CipherAlgs[] = ['AES-GCM', 'X20-PLY', 'AEGIS-256'];
+   const BLOCK_SIZE = bytesFromStr(PLAIN).byteLength;
+   // Clear text that exactly fills block0 makes the encipher append an empty terminal block
+   const READ_OPTS = { startSize: BLOCK_SIZE, maxSize: BLOCK_SIZE };
+
+   printBanner(`detect empty blocks without valid termination, multi-version (V${VER})`);
+
+   const lines = ['            cts: ['];
+   for (const alg of ALGS) {
+      const encrypt = (readOpts?: typeof READ_OPTS) =>
+         encryptOneLoop(streamFromStr(PLAIN), CRED, PWD, HINT, alg, cc.ICOUNT_MIN, readOpts);
+
+      const vectors: [string, Uint8Array][] = [
+         ['emptyLastNoTerm', await withTermOverride(null, false, () => encrypt(READ_OPTS))],
+         ['emptyBlock0Term', await withEmptyClearData(EncipherV8, () => encrypt())],
+         [
+            'emptyBlock0NoTerm',
+            await withTermOverride(false, null, () => withEmptyClearData(EncipherV8, () => encrypt())),
+         ],
+      ];
+
+      lines.push(`               //${alg}`);
+      lines.push('               {');
+      for (const [name, bytes] of vectors) {
+         lines.push(`                  ${name}:`);
+         lines.push(`                     '${toBase64(bytes)}',`);
+      }
+      lines.push('               },');
+   }
+   lines.push('            ],');
+
+   printVersionedBlock('emptyBlocks', '         ', VER, 'vectors:ciphersvc', lines);
+   console.log();
+}
+
 async function genCorruptCipherText(): Promise<void> {
    const PLAIN = 'this 🐞 is encrypted';
    const PWD = 'asdf';
@@ -411,6 +459,7 @@ async function main() {
    await genMissingTerminal();
    await genExtraAndFlippedTerminal();
    await genAppendedAfterTerminal();
+   await genEmptyBlocks();
    await genCorruptCipherText();
    await genStreamManipulation(CLEAR_DATA);
 

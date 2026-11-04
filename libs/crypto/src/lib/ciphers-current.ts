@@ -586,7 +586,7 @@ export class EncipherV8 extends Encipher {
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
             const msg = err instanceof Error ? err.message : '';
-            throw new DOMException(msg, 'OperationError ');
+            throw new DOMException(msg, 'OperationError');
          }
       } else if (alg === 'AEGIS-256') {
          try {
@@ -594,7 +594,7 @@ export class EncipherV8 extends Encipher {
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
             const msg = err instanceof Error ? err.message : '';
-            throw new DOMException(msg, 'OperationError ');
+            throw new DOMException(msg, 'OperationError');
          }
       } else {
          let ek: CryptoKey | undefined = await crypto.subtle.importKey('raw', getArrayBuffer(key), 'AES-GCM', false, [
@@ -761,6 +761,10 @@ export abstract class Decipher extends Ciphers {
             aeadAd,
          );
 
+         if (decrypted.byteLength === 0) {
+            throw new Error('Empty block0 data');
+         }
+
          this._state = CipherState.Block0Done;
          return decrypted;
       } catch (err) {
@@ -832,7 +836,7 @@ export abstract class Decipher extends Ciphers {
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
             const msg = err instanceof Error ? err.message : '';
-            throw new DOMException(msg, 'OperationError ');
+            throw new DOMException(msg, 'OperationError');
          }
       } else if (alg === 'AEGIS-256') {
          try {
@@ -840,7 +844,7 @@ export abstract class Decipher extends Ciphers {
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
             const msg = err instanceof Error ? err.message : '';
-            throw new DOMException(msg, 'OperationError ');
+            throw new DOMException(msg, 'OperationError');
          }
       } else {
          let dk: CryptoKey | undefined = await crypto.subtle.importKey('raw', getArrayBuffer(key), 'AES-GCM', false, [
@@ -1136,6 +1140,9 @@ export class DecipherV678 extends Decipher {
 
          // Occurs when the last block was only present to mark termination (in v5+)
          if (decrypted.byteLength === 0) {
+            if (this._lastFlags !== 1) {
+               throw new Error('Missing terminal data block');
+            }
             await this._verifyEmptyReader();
             this.finishedState();
          }

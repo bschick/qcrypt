@@ -178,9 +178,8 @@ export class DecipherV1 extends Decipher {
 }
 
 export class DecipherV4 extends Decipher {
-   /* V4 CipherData Layout (hopefully less brain dead). Tags are just notation...
-    * and are not actually in the data stream. All encodings have one block0 instance
-    * followed by zero or more blockN instances
+   /* V4 CipherData Layout. Tags are just notation  and are not actually in the data stream.
+    * All encodings have one block0 instance followed by zero or more blockN instances
 
       <Document>
          <Block0>
@@ -225,6 +224,7 @@ export class DecipherV4 extends Decipher {
    */
 
    private _header?: Uint8Array;
+   protected _lastFlags = 0;
 
    constructor(keyProvider: KeyProvider, reader: BYOBStreamReader, header?: Uint8Array) {
       super(keyProvider, reader);
@@ -380,6 +380,9 @@ export class DecipherV4 extends Decipher {
 
          // Occurs when the last block was only present to mark termination (in v5+)
          if (decrypted.byteLength === 0) {
+            if (this._lastFlags !== 1) {
+               throw new Error('Missing terminal data block');
+            }
             await this._verifyEmptyReader();
             this.finishedState();
          }
@@ -477,7 +480,6 @@ export class DecipherV4 extends Decipher {
 
 export class DecipherV5 extends DecipherV4 {
    private _lastMac?: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
-   private _lastFlags = 0;
 
    public override protocolVersion(): number {
       return cc.VERSION5;
