@@ -76,6 +76,9 @@ export type {
    CipherDataBlock,
 } from './lib/ciphers-current';
 
+// Decryption failures
+export { WrongPasswordError, ModifiedDataError, ForgedDataError, decryptionErrorMessage } from './lib/errors';
+
 // Cipher factory functions
 export {
    getLatestEncipher,

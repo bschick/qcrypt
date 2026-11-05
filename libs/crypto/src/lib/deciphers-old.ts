@@ -24,6 +24,7 @@ import * as cc from './cipher.consts';
 import { numToBytes, BYOBStreamReader, ensureArrayBuffer, concatArrays, logError } from './utils';
 
 import { Decipher, CipherState, Extractor, type CipherDataInfo } from './ciphers-current';
+import { ModifiedDataError, ForgedDataError } from './errors';
 import type { KeyProvider } from './keys';
 
 export class DecipherV1 extends Decipher {
@@ -163,7 +164,7 @@ export class DecipherV1 extends Decipher {
          return;
       }
 
-      throw new Error('Invalid HMAC signature');
+      throw new ModifiedDataError();
    }
 
    public override async decryptBlockN(): Promise<Uint8Array> {
@@ -370,13 +371,19 @@ export class DecipherV4 extends Decipher {
          }
 
          const ek = await this._keyProvider.getCipherKey(false);
-         const decrypted = await Decipher._doDecrypt(
-            this._blockData.alg,
-            ek,
-            this._blockData.iv,
-            this._blockData.encryptedData,
-            this._blockData.additionalData,
-         );
+         let decrypted: Uint8Array;
+         try {
+            decrypted = await Decipher._doDecrypt(
+               this._blockData.alg,
+               ek,
+               this._blockData.iv,
+               this._blockData.encryptedData,
+               this._blockData.additionalData,
+            );
+         } catch (err) {
+            // block0 already decrypted with this password and this block passed its MAC, so the data is forged
+            throw new ForgedDataError({ cause: err });
+         }
 
          // Occurs when the last block was only present to mark termination (in v5+)
          if (decrypted.byteLength === 0) {
@@ -474,7 +481,7 @@ export class DecipherV4 extends Decipher {
          return;
       }
 
-      throw new Error('Invalid MAC signature');
+      throw new ModifiedDataError();
    }
 }
 
@@ -560,6 +567,6 @@ export class DecipherV5 extends DecipherV4 {
          return;
       }
 
-      throw new Error('Invalid MAC signature');
+      throw new ModifiedDataError();
    }
 }

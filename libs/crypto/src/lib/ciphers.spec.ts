@@ -33,6 +33,9 @@ import {
    bytesToNum,
    base64ToBytes,
    CipherState,
+   WrongPasswordError,
+   ModifiedDataError,
+   ForgedDataError,
 } from '../index';
 import type { CipherDataBlock, KeyProvider } from '../index';
 import { MasterKeyKeyProvider, PWDKeyProvider } from './keys';
@@ -173,11 +176,11 @@ describe('Encryption and decryption', () => {
          // should succeed since we repacked with correct userCredA (ensure logic is valid)
          await expect(decipherA.decryptBlock0()).resolves.toEqual(clearData);
 
-         // The big moment... perhaps should have better validation that the decryption
-         // failed, but not much else returns DOMException from cipher.service. Note that
+         // The big moment... the restamped commitment matches userCredB's key, so the AEAD
+         // failure is reported as forged cipher data. Note that
          // this is using the correct PWD because we assume the evil site has tricked
          // Alice into providing it and just doesn't have userCred since site cannot retrieve
-         await expect(decipherB.decryptBlock0()).rejects.toThrow(DOMException);
+         await expect(decipherB.decryptBlock0()).rejects.toThrow(ForgedDataError);
       }
    });
 
@@ -302,6 +305,50 @@ describe('Encryption and decryption', () => {
       }
    });
 
+   it('a blockN changed before its MAC should fail as forged', async () => {
+      for (const alg of Ciphers.algs()) {
+         const clearData = getRandom(64);
+         const block1Clear = getRandom(16);
+         const pwd = 'a good pwd';
+         const userCred = getRandom(cc.USERCRED_BYTES);
+
+         // Writes block1 the way the encipher does, optionally changing a byte before the MAC
+         // is computed so that only the AEAD can reject it
+         async function encryptWithBlock1(change: boolean): Promise<Uint8Array> {
+            const [clearStream] = streamFromBytes(clearData);
+            const encKeyProvider = new PWDKeyProvider(userCred.slice(0), [pwd]);
+            const encipher = getLatestEncipher(clearStream, encKeyProvider, alg, 1, 1, cc.ICOUNT_MIN, {
+               startSize: 64,
+               maxSize: 64,
+            }) as EncipherV8;
+
+            // parts are [header, additional data, encrypted data]
+            const block0 = await encipher.encryptBlock();
+
+            const blockKey = await encKeyProvider.getBlockCipherKey(1);
+            const block1IV = getRandom(Ciphers.algIVByteLength(alg));
+            const aeadAD = Ciphers['_encodeAD']({ alg, iv: block1IV, term: true });
+            const encryptedData = await EncipherV8['_doEncrypt'](alg, blockKey, block1IV, block1Clear, aeadAD);
+            if (change) {
+               encryptedData[0] ^= 1;
+            }
+            const header1 = await encipher._createHeader(encryptedData, aeadAD);
+            return concatArrays([...block0.parts, header1, aeadAD, encryptedData]);
+         }
+
+         // Control, so a failure below cannot come from the forging itself
+         let [cipherStream] = streamFromBytes(await encryptWithBlock1(false));
+         const controlDec = await getStreamDecipher(cipherStream, new PWDKeyProvider(userCred.slice(0), [pwd]));
+         await expect(controlDec.decryptBlock0()).resolves.toEqual(clearData);
+         await expect(controlDec.decryptBlockN()).resolves.toEqual(block1Clear);
+
+         [cipherStream] = streamFromBytes(await encryptWithBlock1(true));
+         const forgedDec = await getStreamDecipher(cipherStream, new PWDKeyProvider(userCred.slice(0), [pwd]));
+         await expect(forgedDec.decryptBlock0()).resolves.toEqual(clearData);
+         await expect(forgedDec.decryptBlockN()).rejects.toThrow(ForgedDataError);
+      }
+   });
+
    it('an empty block0 should fail', async () => {
       for (const alg of Ciphers.algs()) {
          const pwd = 'a good pwd';
@@ -394,7 +441,7 @@ describe('Encryption and decryption', () => {
          tamperedAD[0] = 1;
          [cipherStream] = streamFromBytes(await reforge(tamperedAD));
          const forgedDec = await getStreamDecipher(cipherStream, makeKP(false));
-         await expect(forgedDec.decryptBlock0()).rejects.toThrow(DOMException);
+         await expect(forgedDec.decryptBlock0()).rejects.toThrow(ForgedDataError);
       }
    });
 
@@ -1425,7 +1472,7 @@ describe('Decryption known values', () => {
       keyProvider = new PWDKeyProvider(userCredBad.slice(0), [pwdGood]);
       decipher = await getStreamDecipher(cipherStream, keyProvider);
 
-      await expect(decipher.decryptBlock0()).rejects.toThrow(/Invalid MAC.+/);
+      await expect(decipher.decryptBlock0()).rejects.toThrow(ModifiedDataError);
    });
 
    it('bad pwd to cipherdata info and decrypt, v5', async () => {
@@ -1478,7 +1525,7 @@ describe('Decryption known values', () => {
       keyProvider = new PWDKeyProvider(userCredBad, undefined);
       decipher = await getStreamDecipher(cipherStream, keyProvider);
 
-      await expect(decipher.getCipherDataInfo()).rejects.toThrow(/MAC/);
+      await expect(decipher.getCipherDataInfo()).rejects.toThrow(ModifiedDataError);
 
       // Does not get MAC error because the decipher instance is now in a
       // bad state and will remain so... forever...
@@ -1555,14 +1602,14 @@ describe('Decryption known values', () => {
             keyProvider = new PWDKeyProvider(userCred.slice(0), [pwdBad]);
             decipher = await getStreamDecipher(cipherStream, keyProvider);
             await expect(decipher.decryptBlock0()).rejects.toThrow(
-               ver >= cc.VERSION8 ? /key commitment/ : DOMException,
+               ver >= cc.VERSION8 ? WrongPasswordError : DOMException,
             );
 
             // Test wrong userCred
             [cipherStream] = streamFromBytes(cipherData);
             keyProvider = new PWDKeyProvider(userCredBad.slice(0), [pwdGood]);
             decipher = await getStreamDecipher(cipherStream, keyProvider);
-            await expect(decipher.getCipherDataInfo()).rejects.toThrow(/MAC/);
+            await expect(decipher.getCipherDataInfo()).rejects.toThrow(ModifiedDataError);
 
             // Does not get MAC error because the decipher instance is now in a
             // bad state and will remain so... forever...
@@ -2144,8 +2191,8 @@ describe('Detect changed cipher data', () => {
 
          // This should fail (even though MAC check is skipped) because
          // encrypted data was modified. Note that this should
-         // fail with DOMException rather than Error with MAC in message
-         await expect(decipher.decryptBlock0()).rejects.toThrow(DOMException);
+         // fail with ForgedDataError rather than Error with MAC in message
+         await expect(decipher.decryptBlock0()).rejects.toThrow(ForgedDataError);
       }
    });
 });

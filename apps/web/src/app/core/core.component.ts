@@ -34,7 +34,7 @@ import {
    viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { makeCipherArmor, parseCipherArmor, PWDKeyProvider } from '@qcrypt/crypto';
+import { decryptionErrorMessage, makeCipherArmor, parseCipherArmor, PWDKeyProvider } from '@qcrypt/crypto';
 
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -752,7 +752,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             console.error(something);
             this._clearPassword();
             this._showClearError(
-               'Could not decrypt cipher armor text. You may be using the wrong password or passkey, or the cipher armor is invalid',
+               decryptionErrorMessage(something, 'passkey') ??
+                  'Decryption failed because the password or passkey is incorrect, or the cipher armor is not valid.',
             );
          }
       } finally {
@@ -837,7 +838,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             console.error(something);
             this._clearPassword();
             this._showClearError(
-               'Could not decrypt cipher armor text. You may be using the wrong password or passkey, or the cipher armor is invalid',
+               decryptionErrorMessage(something, 'passkey') ??
+                  'Decryption failed because the password or passkey is incorrect, or the cipher armor is not valid.',
             );
          }
       } finally {
