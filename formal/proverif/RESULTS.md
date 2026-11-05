@@ -7,7 +7,7 @@ in the `VARIANTS` block of its template.
 
 ## Message format (`cipher.pv.m4`)
 
-All 19 variants pass. Each takes under 15 s.
+All 22 variants pass. Each takes under 20 s.
 
 ### Properties
 
@@ -19,7 +19,7 @@ All 19 variants pass. Each takes under 15 s.
 | C-H2 | A shown hint is one Alice wrote | u_c is secret | u_c leaks: the hint is authenticated only under u_c |
 | C-I1/2 | An accepted 1-, 2- or 3-block message is exactly one honest encryption: no truncation, extension, reorder or splice | p or u_c is secret (`integrity-uc`, `integrity-p`) | — |
 | C-I2 | Each block released while streaming is a prefix of an honest message | p or u_c is secret (`integrity-uc`, `integrity-p`) | — |
-| C-I2 (loops) | No loop is stripped from a two-loop message | the inner password is secret, even when u_c and the outer password leak | — |
+| C-I2 (loops) | No loop is stripped from a two-loop message, and no one-loop message is accepted as an inner layer | the inner password is secret, even when u_c and the outer password leak | — |
 | C-K1 | No block 0 is accepted under two different (p, u_c) | V8: always, for all three algorithms | — |
 | C-K1-v7 | The same game on V7 | AEGIS-256 | AES-GCM and XChaCha20-Poly1305 (`commit-v7`) |
 | C-D1 | A V8 message is never accepted through the V7 decode path, and the reverse | u_c leaks, p secret | — |
@@ -33,23 +33,28 @@ accepted under both. It fails for exactly the algorithms the report names, and h
 V8 closes it for every algorithm.
 
 **About `loops-uc-pout`.** The attacker holds u_c and the outer password, so as expected it can
-replace the outer layer of Alice's two-loop message. It can also wrap her one-loop message as
-the inner layer of a two-loop message, since nothing compares the inner le with the outer le. In
-both traces the inner layer, and so the plaintext, is still hers. The reachability traces in this
-variant use a message the attacker built under the leaked outer password. `loops-uc` shows honest
-acceptance for the same processes.
+replace the outer layer of Alice's two-loop message. In that trace the inner layer, and so the
+plaintext, is still hers. It cannot wrap her one-loop message as an inner layer, because the
+inner layer's le must equal the outer layer's, and the outermost layer must have lp = le. The
+reachability traces in this variant use a message the attacker built under the leaked outer
+password. `loops-uc` shows honest acceptance for the same processes.
 
 ### Mutations
 
-Each mutation removes one mechanism, and each must turn a proof into an attack:
+Each mutation removes one mechanism, and each must turn a proof into an attack. Where two
+mechanisms each block the same attack, removing one alone must still hold, and removing both
+must find the attack:
 
 | Variant | Mechanism removed | Attack found |
 |---|---|---|
 | `commit-v8-nokc` | Comparing the stored k_C | Two passwords accepted for one ciphertext (GCM, XChaCha) |
 | `integrity-uc-nof` | f in the AEAD AD (kept in the MAC) | An attacker holding u_c flips f on block 0 and truncates a 3-block message |
 | `integrity-uc-non` | Block number in the k_MN derivation | A later block replayed one position early, dropping the block before it: block 2 of a three-block message, or the empty final block of a two-block message |
-| `integrity-net-emptymid` | The encryptor writing an empty block only as the last one | Truncation with no secret leaked, since the decryptor does not check f on an empty block |
-| `loops-uc-pout-nolple` | The outermost lp = le check | The inner layer of a two-loop message accepted on its own |
+| `integrity-net-emptymid` | The encryptor writing an empty block only as the last one | None: the decryptor rejects an empty block without f = 1 |
+| `integrity-net-noemptyf` | The decryptor checking f on an empty block | None: the encryptor writes an empty block only as the last one |
+| `integrity-net-emptymid-noemptyf` | Both of the above | Truncation with no secret leaked: an empty middle block ends a 3-block message after block 0 |
+| `loops-uc-pout-nolple` | The outermost lp = le check | The inner layer of a two-loop message accepted on its own, and a one-loop message wrapped under an outer layer with lp = 2 and le = 1 |
+| `loops-uc-pout-nole` | Comparing the inner layer's le with the outer layer's | A one-loop message wrapped as the inner layer of a two-loop message |
 
 ## Account model (`account.pv.m4`)
 

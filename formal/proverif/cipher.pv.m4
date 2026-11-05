@@ -21,6 +21,8 @@ m4_changequote({{,}})m4_dnl
      integrity-uc-nof   SCN_INTEGRITY LEAK_UC MUT_NOF
      integrity-uc-non   SCN_INTEGRITY LEAK_UC MUT_NON
      integrity-net-emptymid  SCN_INTEGRITY MUT_EMPTYMID
+     integrity-net-noemptyf  SCN_INTEGRITY MUT_NOEMPTYF
+     integrity-net-emptymid-noemptyf  SCN_INTEGRITY MUT_EMPTYMID MUT_NOEMPTYF
      commit-v8          SCN_COMMIT
      commit-v8-nokc     SCN_COMMIT MUT_NOKC
      commit-v7          SCN_COMMIT USE_V7
@@ -28,6 +30,7 @@ m4_changequote({{,}})m4_dnl
      loops-uc           SCN_LOOPS LEAK_UC
      loops-uc-pout      SCN_LOOPS LEAK_UC LEAK_POUT
      loops-uc-pout-nolple  SCN_LOOPS LEAK_UC LEAK_POUT MUT_NOLPLE
+     loops-uc-pout-nole  SCN_LOOPS LEAK_UC LEAK_POUT MUT_NOLE
      downgrade-uc       SCN_DOWNGRADE LEAK_UC
      atrest-net         SCN_ATREST
    END VARIANTS}} *)
@@ -70,6 +73,13 @@ letfun aadN(adf: bitstring) =
 }}, {{
 letfun aad0(adf: bitstring) = adf.
 letfun aadN(adf: bitstring) = adf.
+}})
+
+m4_ifdef({{MUT_NOEMPTYF}}, {{
+(* MUTATION: an empty block ends the data without checking its own f *)
+letfun endsData(f: bitstring) = true.
+}}, {{
+letfun endsData(f: bitstring) = f = F1.
 }})
 
 (* ---------------------------------------------------------------------------------------- *)
@@ -135,7 +145,8 @@ letfun openAR(k: key, e: bitstring, b: bitstring) =
 (* The encryptor never writes an empty block 0 (ciphers-current.ts:encryptBlock0), and keeps
    reading until a later block has data or the stream ends (ciphers-current.ts:encryptBlockN). So
    only the terminal block can be empty, and an empty terminal block carries no plaintext: the
-   message is the blocks before it. *)
+   message is the blocks before it. The decryptor checks the same rule on its own, so truncation
+   resistance needs only one of the two (integrity-net-emptymid, integrity-net-noemptyf). *)
 
 let Enc1P(a: alg, m0: bitstring) =
    if m0 <> EMPTY then
@@ -187,8 +198,9 @@ m4_ifdef({{MUT_EMPTYMID}}, {{
 (* ---------------------------------------------------------------------------------------- *)
 (* Alice decrypts (tex: Message Decryption by A, m_0 Decryption by B, m_N Decryption by B), in
    the code's order (_decodeBlock0Impl, decryptBlock0 and _decodeBlockN in ciphers-current.ts,
-   and cipher-streams.ts:_decryptStreamImpl). A block that decrypts to empty ends the stream
-   without checking its own f, as the code does. *)
+   and cipher-streams.ts:_decryptStreamImpl). Block 0 must not be empty
+   (ciphers-current.ts:Decipher.decryptBlock0), and a later block that decrypts to empty ends
+   the data only if its own f is set (ciphers-current.ts:DecipherV678.decryptBlockN). *)
 
 let BlockN2(a: alg, x: bitstring, kS: key, kM0: key, nS: bitstring, m0: bitstring, m1: bitstring, t1: bitstring) =
    in(c, b2: bitstring);
@@ -197,7 +209,7 @@ let BlockN2(a: alg, x: bitstring, kS: key, kM0: key, nS: bitstring, m0: bitstrin
    if t2 = mac(kS, macin(v2, adf2, mE2, t1)) then
    if a2 = a && v2 = V8 then
    let m2 = aead_dec(a2, mkKMN(kM0, B2, x), nIV2, aadN(adf2), mE2) in
-   if m2 = EMPTY then event Acc2(nS, m0, m1)
+   if m2 = EMPTY then (if endsData(f2) then event Acc2(nS, m0, m1))
    else if f2 = F1 then event Acc3(nS, m0, m1, m2).
 
 let BlockN1(a: alg, x: bitstring, kS: key, kM0: key, nS: bitstring, m0: bitstring, t0: bitstring) =
@@ -207,7 +219,7 @@ let BlockN1(a: alg, x: bitstring, kS: key, kM0: key, nS: bitstring, m0: bitstrin
    if t1 = mac(kS, macin(v1, adf1, mE1, t0)) then
    if a1 = a && v1 = V8 then
    let m1 = aead_dec(a1, mkKMN(kM0, B1, x), nIV1, aadN(adf1), mE1) in
-   if m1 = EMPTY then event Acc1(nS, m0)
+   if m1 = EMPTY then (if endsData(f1) then event Acc1(nS, m0))
    else (
       event Rel2(nS, m0, m1);
       if f1 = F1 then event Acc2(nS, m0, m1)
@@ -442,8 +454,8 @@ m4_ifdef({{SCN_LOOPS}}, {{
 (* C-I2, loops (tex: the LOOP in Message Encryption by A and in Message Decryption by A): a loop
    re-encrypts the previous loop's cipher data under its own password, with lp counting up to
    le. Decryption recurses while lp > 1, and only the outermost layer is checked for lp = le
-   (cipher-streams.ts:_decryptStreamImpl). The inner layer is checked against the outer lp - 1.
-   Each loop here is a single block.
+   (cipher-streams.ts:_decryptStreamImpl). The inner layer is checked against the outer lp - 1
+   and the outer le. Each loop here is a single block.
 
    pIn protects one-loop messages and the inner layer of two-loop messages. pOut protects the
    outer layer. LEAK_POUT gives the attacker pOut, so it can open and rebuild outer layers. *)
@@ -465,8 +477,8 @@ query nS: bitstring, m: bitstring; event(AccL1(pIn, nS, m)) ==> event(EncL1(nS, 
 query nSo: bitstring, nSi: bitstring, m: bitstring;
    event(AccL2(pOut, pIn, nSo, nSi, m)) ==> event(EncL2(nSo, nSi, m)).
 (* An inner layer under pIn came from a two-loop encryption, even when the outer one has been
-   rebuilt. This fails once the attacker knows pOut: nothing compares the inner le with the
-   outer one, so a one-loop message can be wrapped as an inner layer. *)
+   rebuilt. Without the inner le check, an attacker who knows pOut can wrap a one-loop message
+   as an inner layer (loops-uc-pout-nole). *)
 query pw: password, nSo: bitstring, nSi: bitstring, m: bitstring, nSo2: bitstring;
    event(AccL2(pw, pIn, nSo, nSi, m)) ==> event(EncL2(nSo2, nSi, m)).
 (* The inner plaintext under pIn is always something Alice encrypted under pIn *)
@@ -477,9 +489,16 @@ query pw: password, pw2: password, nSo: bitstring, nSi: bitstring, m: bitstring;
 
 letfun validAlg(a: alg) = a = GCM || a = XCC || a = AEGIS.
 
-(* Opens one single-block layer and returns (n_S, lp, m_0). The outermost layer must have
-   lp = le; an inner layer must have lp = expLp. *)
-letfun open0(pw: password, b0: bitstring, outermost: bool, expLp: bitstring) =
+(* Opens one single-block layer and returns (n_S, lp, le, m_0). The outermost layer must have
+   lp = le; an inner layer must have lp = expLp and le = expLe. *)
+m4_ifdef({{MUT_NOLE}}, {{
+(* MUTATION: an inner layer's le is not compared with the outer layer's *)
+letfun innerLeOk(le: bitstring, expLe: bitstring) = true.
+}}, {{
+letfun innerLeOk(le: bitstring, expLe: bitstring) = le = expLe.
+}})
+
+letfun open0(pw: password, b0: bitstring, outermost: bool, expLp: bitstring, expLe: bitstring) =
    let blk(t0: bitstring, v0: bitstring, adf0: bitstring, mE0: bitstring) = b0 in
    let ad0(f0: bitstring, a: alg, nIV0: bitstring, nS: bitstring, i: bitstring, le: bitstring, lp: bitstring, hE: bitstring, kC: key) = adf0 in
    let x = mkX8(nS, a, lp) in
@@ -489,20 +508,20 @@ letfun open0(pw: password, b0: bitstring, outermost: bool, expLp: bitstring) =
 m4_ifdef({{MUT_NOLPLE}}, {{
    (* MUTATION: the outermost layer is not checked for lp = le *)
    if v0 = V8 && t0 = mac(mkKS(uc, x), macin(v0, adf0, mE0, TL0)) && kC <> NOKC &&
-      (outermost || lp = expLp) &&
+      (outermost || (lp = expLp && innerLeOk(le, expLe))) &&
 }}, {{
    if v0 = V8 && t0 = mac(mkKS(uc, x), macin(v0, adf0, mE0, TL0)) && kC <> NOKC &&
-      ((outermost && lp = le) || (not(outermost) && lp = expLp)) &&
+      ((outermost && lp = le) || (not(outermost) && lp = expLp && innerLeOk(le, expLe))) &&
 }})
       i <> IC0 && kC = mkKC(kM0, nS) && f0 = F1 && m0 <> EMPTY
-   then (nS, lp, m0).
+   then (nS, lp, le, m0).
 
 let DecL(pwO: password, pwI: password) =
    in(c, b: bitstring);
-   let (nSo: bitstring, lpO: bitstring, mO: bitstring) = open0(pwO, b, true, EMPTY) in
+   let (nSo: bitstring, lpO: bitstring, leO: bitstring, mO: bitstring) = open0(pwO, b, true, EMPTY, EMPTY) in
    if lpO = LP1 then event AccL1(pwO, nSo, mO)
    else if lpO = LP2 then
-   let (nSi: bitstring, lpI: bitstring, mI: bitstring) = open0(pwI, mO, false, LP1) in
+   let (nSi: bitstring, lpI: bitstring, leI: bitstring, mI: bitstring) = open0(pwI, mO, false, LP1, leO) in
    event AccL2(pwO, pwI, nSo, nSi, mI).
 
 let EncL1P(pw: password) =
@@ -678,6 +697,28 @@ RESULT not event(Acc2(nS_28,m0_10,m1_7)) is false.
 RESULT not event(Acc3(nS_28,m0_10,m1_7,m2_4)) is false.
 END *)}})
 m4_ifdef({{VARIANT_integrity_net_emptymid}}, {{(* EXPECTPV
+RESULT event(Acc1(nS_28,m0_10)) ==> event(Enc1(nS_28,m0_10)) is true.
+RESULT event(Acc2(nS_28,m0_10,m1_7)) ==> event(Enc2(nS_28,m0_10,m1_7)) is true.
+RESULT event(Acc3(nS_28,m0_10,m1_7,m2_4)) ==> event(Enc3(nS_28,m0_10,m1_7,m2_4)) is true.
+RESULT event(Rel1(nS_28,m0_10)) ==> event(EncPre1(nS_28,m0_10)) is true.
+RESULT event(Rel2(nS_28,m0_10,m1_7)) ==> event(EncPre2(nS_28,m0_10,m1_7)) is true.
+RESULT event(HintShown(nS_28,h_1)) ==> event(HintMade(nS_28,h_1)) is true.
+RESULT not event(Acc1(nS_28,m0_10)) is false.
+RESULT not event(Acc2(nS_28,m0_10,m1_7)) is false.
+RESULT not event(Acc3(nS_28,m0_10,m1_7,m2_4)) is false.
+END *)}})
+m4_ifdef({{VARIANT_integrity_net_noemptyf}}, {{(* EXPECTPV
+RESULT event(Acc1(nS_28,m0_10)) ==> event(Enc1(nS_28,m0_10)) is true.
+RESULT event(Acc2(nS_28,m0_10,m1_7)) ==> event(Enc2(nS_28,m0_10,m1_7)) is true.
+RESULT event(Acc3(nS_28,m0_10,m1_7,m2_4)) ==> event(Enc3(nS_28,m0_10,m1_7,m2_4)) is true.
+RESULT event(Rel1(nS_28,m0_10)) ==> event(EncPre1(nS_28,m0_10)) is true.
+RESULT event(Rel2(nS_28,m0_10,m1_7)) ==> event(EncPre2(nS_28,m0_10,m1_7)) is true.
+RESULT event(HintShown(nS_28,h_1)) ==> event(HintMade(nS_28,h_1)) is true.
+RESULT not event(Acc1(nS_28,m0_10)) is false.
+RESULT not event(Acc2(nS_28,m0_10,m1_7)) is false.
+RESULT not event(Acc3(nS_28,m0_10,m1_7,m2_4)) is false.
+END *)}})
+m4_ifdef({{VARIANT_integrity_net_emptymid_noemptyf}}, {{(* EXPECTPV
 RESULT event(Acc1(nS_28,m0_10)) ==> event(Enc1(nS_28,m0_10)) is false.
 RESULT event(Acc2(nS_28,m0_10,m1_7)) ==> event(Enc2(nS_28,m0_10,m1_7)) is true.
 RESULT event(Acc3(nS_28,m0_10,m1_7,m2_4)) ==> event(Enc3(nS_28,m0_10,m1_7,m2_4)) is true.
@@ -734,13 +775,21 @@ END *)}})
 m4_ifdef({{VARIANT_loops_uc_pout}}, {{(* EXPECTPV
 RESULT event(AccL1(pIn[],nS_12,m_2)) ==> event(EncL1(nS_12,m_2)) is true.
 RESULT event(AccL2(pOut[],pIn[],nSo_5,nSi_5,m_2)) ==> event(EncL2(nSo_5,nSi_5,m_2)) is false.
-RESULT event(AccL2(pw_1,pIn[],nSo_5,nSi_5,m_2)) ==> event(EncL2(nSo2,nSi_5,m_2)) is false.
+RESULT event(AccL2(pw_1,pIn[],nSo_5,nSi_5,m_2)) ==> event(EncL2(nSo2,nSi_5,m_2)) is true.
 RESULT event(AccL2(pw_1,pIn[],nSo_5,nSi_5,m_2)) ==> event(EncL2(nSo2,nSi_5,m_2)) || event(EncL1(nSi_5,m_2)) is true.
 RESULT not event(AccL1(pw_1,nS_12,m_2)) is false.
 RESULT not event(AccL2(pw_1,pw2,nSo_5,nSi_5,m_2)) is false.
 END *)}})
 m4_ifdef({{VARIANT_loops_uc_pout_nolple}}, {{(* EXPECTPV
 RESULT event(AccL1(pIn[],nS_12,m_2)) ==> event(EncL1(nS_12,m_2)) is false.
+RESULT event(AccL2(pOut[],pIn[],nSo_5,nSi_5,m_2)) ==> event(EncL2(nSo_5,nSi_5,m_2)) is false.
+RESULT event(AccL2(pw_1,pIn[],nSo_5,nSi_5,m_2)) ==> event(EncL2(nSo2,nSi_5,m_2)) is false.
+RESULT event(AccL2(pw_1,pIn[],nSo_5,nSi_5,m_2)) ==> event(EncL2(nSo2,nSi_5,m_2)) || event(EncL1(nSi_5,m_2)) is true.
+RESULT not event(AccL1(pw_1,nS_12,m_2)) is false.
+RESULT not event(AccL2(pw_1,pw2,nSo_5,nSi_5,m_2)) is false.
+END *)}})
+m4_ifdef({{VARIANT_loops_uc_pout_nole}}, {{(* EXPECTPV
+RESULT event(AccL1(pIn[],nS_12,m_2)) ==> event(EncL1(nS_12,m_2)) is true.
 RESULT event(AccL2(pOut[],pIn[],nSo_5,nSi_5,m_2)) ==> event(EncL2(nSo_5,nSi_5,m_2)) is false.
 RESULT event(AccL2(pw_1,pIn[],nSo_5,nSi_5,m_2)) ==> event(EncL2(nSo2,nSi_5,m_2)) is false.
 RESULT event(AccL2(pw_1,pIn[],nSo_5,nSi_5,m_2)) ==> event(EncL2(nSo2,nSi_5,m_2)) || event(EncL1(nSi_5,m_2)) is true.
