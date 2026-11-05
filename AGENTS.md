@@ -204,7 +204,7 @@ files. Each generator prints its blocks and only edits a spec when given `--writ
 | What | pnpm script | Writes to | Blocks |
 |------|------------|-----------|--------|
 | Cipher text vectors | `pnpm vectors:ciphers` | `libs/crypto/src/lib/ciphers.spec.ts` | 6 |
-| CipherService vectors | `pnpm vectors:ciphersvc` | `apps/web/src/app/services/cipher.service.spec.ts` | 9 |
+| CipherService vectors | `pnpm vectors:ciphersvc` | `apps/web/src/app/services/cipher.service.spec.ts` | 11 |
 | Key derivation vectors | `pnpm vectors:keys` | `libs/crypto/src/lib/keys.spec.ts` | 8 |
 
 | Flag | Effect |
