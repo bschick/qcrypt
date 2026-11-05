@@ -392,26 +392,28 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this._emptyClearText();
       this.clearLabel.set('Clear Text');
       this.clearWarning.set('');
-      if (!this._welcomed && this._authSvc.hasSession()) {
-         this.bubbleTip1().show();
-         this.bubbleTip2().hide();
-         this.bubbleTip3().hide();
-      }
+      this._updateInputTips();
    }
 
    protected onClearInput() {
       if (!this.clearText()) {
          this.clearWarning.set('');
       }
+      this._updateInputTips();
+   }
+
+   private _updateInputTips() {
       if (!this._welcomed && this._authSvc.hasSession()) {
-         if (this.clearText()) {
+         if (this._dialog.openDialogs.length > 0) {
+            this.bubbleTip1().hide();
+            this.bubbleTip2().hide();
+         } else if (this.clearText().length > 0 || this._clearFile) {
             this.bubbleTip1().hide();
             this.bubbleTip2().show();
          } else {
             this.bubbleTip1().show();
             this.bubbleTip2().hide();
          }
-         this.bubbleTip3().hide();
       }
    }
 
@@ -511,12 +513,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this._clearFile = clearFile;
       const msg = saved ? 'file saved and ' : '';
       this._showClearFile(`${msg}selected for encryption`, saved, clearFile.name);
-
-      if (!this._welcomed) {
-         this.bubbleTip1().hide();
-         this.bubbleTip2().show();
-         this.bubbleTip3().hide();
-      }
+      this._updateInputTips();
    }
 
    protected async onEncrypt(): Promise<void> {
@@ -538,7 +535,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this._welcomed) {
          this.bubbleTip1().hide();
          this.bubbleTip2().hide();
-         this.bubbleTip3().hide();
       }
 
       try {
@@ -588,9 +584,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             }
             this._showCipherError(msg);
          }
-         if (!this._welcomed) {
-            this.bubbleTip2().show();
-         }
+         this._updateInputTips();
       } finally {
          this.showProgress.set(false);
          this._usingFile = false;
@@ -616,7 +610,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this._welcomed) {
          this.bubbleTip1().hide();
          this.bubbleTip2().hide();
-         this.bubbleTip3().hide();
       }
 
       try {
@@ -675,9 +668,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             }
             this._showCipherError(msg);
          }
-         if (!this._welcomed) {
-            this.bubbleTip2().show();
-         }
+         this._updateInputTips();
       } finally {
          this.showProgress.set(false);
          this._usingFile = false;
