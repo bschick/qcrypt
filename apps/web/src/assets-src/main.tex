@@ -128,7 +128,9 @@ $kp_H$ & \textrm{ - Key purpose text: ``Hint\_Key''}\\
 $kp_S$ & \textrm{ - Key purpose text: ``Sign\_Key''}\\
 $l$ & \textrm{ - Payload length}\\
 $le$ & \textrm{ - Loop end (1-16), stored as }$le-1$\textrm{ in the high nibble of one byte}\\
+$le_L$ & \textrm{ - Preceding loop's }$le$\\
 $lp$ & \textrm{ - Loop count (1-16), stored as }$lp-1$\textrm{ in the low nibble of that byte}\\
+$lp_L$ & \textrm{ - Preceding loop's }$lp$\\
 $m$ & \textrm{ - Clear text}\\
 $m_0$ & \textrm{ - Clear text block 0}\\
 $m_N$ & \textrm{ - Clear text block N}\\
@@ -248,7 +250,9 @@ $v$ & \textrm{ - Cipher data version: 8}\\
 &$n_{IVH} = D_H(2,kp_H,H_{n_{IV}}(n_S,a,v,lp,e_l))$\\
 &$k_H = D_H(1,kp_H,H_{u_c}(n_S,a,v,lp,e_l))$\\
 &$h = PAD^{-1}(E_a^{-1}(h_E,n_{IVH},\emptyset,k_H))$\\
-&$\textrm{check }lp == le\textrm{ in the first loop and }lp-1\textrm{ in each successive loop else }err$\\
+&$\textrm{check }lp == le\textrm{ for the outermost loop else }err$\\
+&$\textrm{check }lp == lp_L-1\textrm{ and }le == le_L\textrm{ for each inner loop else }err$\\
+&$lp_L = lp;\ le_L = le$\\
 &$B \rightarrow A: h$\\
 &$B \leftarrow A: p$\\
 &$\textrm{check }i \geq 420{,}000\textrm{ else }err$\\
