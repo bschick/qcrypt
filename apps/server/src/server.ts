@@ -398,9 +398,7 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
    }
 
    const verifiedUser = checkVerified(unverifiedUser, authenticator.userId);
-   const startSession = verifiedUser;
 
-   // ok if this fails
    const patchAuths = Authenticators.patch({
       userId: authenticator.userId,
       credentialId: authenticator.credentialId,
@@ -423,7 +421,7 @@ async function postAuthVerify(httpDetails: HttpDetails): Promise<Response> {
 
    return {
       content: responseContent,
-      startSession,
+      startSession: verifiedUser,
    };
 }
 
@@ -1783,7 +1781,10 @@ async function verifyCookie(cookie: string, rpID: string): Promise<VerifiedUserI
          throw new Error('invalid cookie');
       }
 
-      const verifyWithUser = async (unverifiedUser: UnverifiedUserItem): Promise<VerifiedUserItem> => {
+      const verifyWithUser = async (
+         unverifiedUser: UnverifiedUserItem,
+         consistent: boolean,
+      ): Promise<VerifiedUserItem> => {
          const jwtKey = await getSessionKey(unverifiedUser, 'jwt_key');
 
          // Internally verifies exp date set with expiresIn during cookie creation
@@ -1797,20 +1798,32 @@ async function verifyCookie(cookie: string, rpID: string): Promise<VerifiedUserI
             throw new Error('invalid cookie');
          }
 
-         return checkVerified(unverifiedUser, verifiedPayload.userId);
+         const verifiedUser = checkVerified(unverifiedUser, verifiedPayload.userId);
+
+         // This can happen if a passkey deletion interleaves with a signin using that passkey
+         const sessionPasskey = await Authenticators.get({
+            userId: verifiedUser.userId,
+            credentialId: verifiedUser.lastCredentialId!,
+         }).go({ attributes: ['credentialId'], consistent });
+
+         if (!sessionPasskey.data) {
+            throw new Error('session passkey not found');
+         }
+
+         return verifiedUser;
       };
 
       try {
-         // Default to eventually consistent user read to reduce cost
-         return await verifyWithUser(await getUnverifiedUser(unverifiedPayload.userId));
+         // Default to eventually consistent user and passkey reads to reduce cost
+         return await verifyWithUser(await getUnverifiedUser(unverifiedPayload.userId), false);
       } catch (err) {
-         // Retry as consistent user read if within RECENT_COOKIE_SEC window
+         // Retry with consistent reads when the cookie is younger than RECENT_COOKIE_SEC
          const cookieAgeSec = Date.now() / 1000 - (unverifiedPayload.iat ?? 0);
          if (cookieAgeSec < 0 || cookieAgeSec > RECENT_COOKIE_SEC) {
             throw err;
          }
          console.warn('cookie verification using a consistent read after the first check failed', err);
-         return await verifyWithUser(await getUnverifiedUser(unverifiedPayload.userId, true));
+         return await verifyWithUser(await getUnverifiedUser(unverifiedPayload.userId, true), true);
       }
    } catch (err) {
       console.error(err);
