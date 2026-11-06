@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-## 8.0.5 (2026-11-05)
+## 8.0.5 (2026-11-06)
 
 #### Changes
 
@@ -12,8 +12,9 @@
 
 - added ProVerif formal models of the account and encryption protocols
 - bound passkey registration, add, and recovery challenges to the account's keys
-- the browser now proves it holds every key it registers
+- browsers now prove possession of every key they register
 - detect added outer encryption loops even with a stolen user credential
+- closed a race allowing session creation during passkey deletion [thanks to Leonardo Oliveira (@L30N4RDO-D)]
 - updated packages
 
 ## 8.0.4 (2026-10-24)

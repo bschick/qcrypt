@@ -56,6 +56,7 @@ Thanks to the following security researchers:
 | Blake Prins (@prins1bap-ui)                                         | 3        |
 | destro4evr                                                          | 3        |
 | CapsenR                                                             | 2        |
+| Leonardo Oliveira (@L30N4RDO-D)                                     | 1        |
 | David (@pythonyx135793)                                             | 1        |
 | Prashikshit Saini (@PrashikshitSaini)                               | 1        |
 | Damir (@Evelynkaz)                                                  | 1        |
