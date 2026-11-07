@@ -31,12 +31,16 @@ import {
    expectListedPasskeys,
    getJson,
    getIsolatedWebAuthnEmulator,
+   makeChallengeProofHeaders,
+   makeNonceProofHeaders,
    patchJson,
    postJson,
+   postPasskeyVerify,
    setSessionSigner,
    RP_ORIGIN,
    type TestUser,
 } from './common';
+import { PROOF_SKEW_MS } from '../src/consts';
 import jwtPkg from 'jsonwebtoken';
 import { randomBytes } from 'node:crypto';
 
@@ -173,11 +177,12 @@ export function coreSuite(prf: boolean): void {
             if (passkeyUserCredEnc) {
                verifyBody.passkeyUserCredEnc = passkeyUserCredEnc;
             }
-            const verifyRes = await postJson(
-               `/v1/passkeys/verify?usercred=true`, // old flag that should be ignored
-               verifyBody,
-               { 'x-csrf-token': csrfToken },
+            const verifyRes = await postPasskeyVerify(
+               user,
+               verifyBody as { challenge: string },
+               csrfToken,
                sessCookie,
+               `/v1/passkeys/verify?usercred=true`, // old flag that should be ignored
             );
 
             expect(verifyRes.status).toBe(200);
@@ -194,6 +199,147 @@ export function coreSuite(prf: boolean): void {
                sessCookie,
             );
             expect(delRes.status).toBe(200);
+         });
+
+         it("should reject a passkey add with another account's challenge", async () => {
+            const other = await registerTestUser(prf);
+            try {
+               const otherOpts = await getJson('/v1/passkeys/options', { 'x-csrf-token': other.csrf }, other.cookie);
+               expect(otherOpts.status).toBe(200);
+
+               setSessionSigner(userId, userCred);
+               const stolen = await registerNewCredential(user, otherOpts.data);
+               const stolenRes = await postPasskeyVerify(
+                  user,
+                  api.makeAddVerifyRequest(stolen.attestation as api.RegistrationFields, {
+                     challenge: otherOpts.data.challenge,
+                     passkeyUserCredEnc: stolen.passkeyUserCredEnc,
+                  }),
+                  csrfToken,
+                  sessCookie,
+               );
+               expect(stolenRes.status).toBe(400);
+
+               // The rejection left the challenge unused, so the account it was issued to can still use it
+               setSessionSigner(other.userId, other.userCred);
+               const added = await registerNewCredential(other, otherOpts.data);
+               const addedRes = await postPasskeyVerify(
+                  other,
+                  api.makeAddVerifyRequest(added.attestation as api.RegistrationFields, {
+                     challenge: otherOpts.data.challenge,
+                     passkeyUserCredEnc: added.passkeyUserCredEnc,
+                  }),
+                  other.csrf,
+                  other.cookie,
+               );
+               expect(addedRes.status).toBe(200);
+               await expectPasskeyDeleted(added.attestation.id, other.csrf, other.cookie);
+            } finally {
+               setSessionSigner(other.userId, other.userCred);
+               await expectPasskeyDeleted(other.credId, other.csrf, other.cookie);
+               setSessionSigner(userId, userCred);
+            }
+         });
+
+         async function prepareAdd(): Promise<{ credId: string; body: api.AddVerifyRequest }> {
+            const optsRes = await getJson('/v1/passkeys/options', { 'x-csrf-token': csrfToken }, sessCookie);
+            expect(optsRes.status).toBe(200);
+            const { attestation, passkeyUserCredEnc } = await registerNewCredential(user, optsRes.data);
+            const body = api.makeAddVerifyRequest(attestation as api.RegistrationFields, {
+               challenge: optsRes.data.challenge,
+               passkeyUserCredEnc,
+            });
+            return { credId: attestation.id, body };
+         }
+
+         // The valid request at the end shows that none of the rejected ones used up the challenge
+         it('should reject a passkey add without a valid challenge proof', async () => {
+            const { credId, body } = await prepareAdd();
+            const post = (headers: Record<string, string>) =>
+               postJson('/v1/passkeys/verify', body, { 'x-csrf-token': csrfToken, ...headers }, sessCookie);
+
+            const otherKey = makeChallengeProofHeaders(
+               '/v1/passkeys/verify',
+               body,
+               randomBytes(32),
+               userId,
+               body.challenge,
+            );
+            expect((await post(otherKey)).status).toBe(401);
+
+            const otherChallenge = makeChallengeProofHeaders(
+               '/v1/passkeys/verify',
+               body,
+               Buffer.from(userCred, 'base64url'),
+               userId,
+               randomBytes(api.CHALLENGE_BYTES).toString('base64url'),
+            );
+            expect((await post(otherChallenge)).status).toBe(401);
+
+            const stale = makeChallengeProofHeaders(
+               '/v1/passkeys/verify',
+               body,
+               Buffer.from(userCred, 'base64url'),
+               userId,
+               body.challenge,
+               { timestampMs: String(Date.now() - 2 * PROOF_SKEW_MS) },
+            );
+            expect((await post(stale)).status).toBe(401);
+
+            const signed = makeChallengeProofHeaders(
+               '/v1/passkeys/verify',
+               body,
+               Buffer.from(userCred, 'base64url'),
+               userId,
+               body.challenge,
+            );
+            const changed = {
+               ...body,
+               response: { ...body.response, transports: [...(body.response.transports ?? []), 'hybrid'] },
+            };
+            const changedRes = await postJson(
+               '/v1/passkeys/verify',
+               changed,
+               { 'x-csrf-token': csrfToken, ...signed },
+               sessCookie,
+            );
+            expect(changedRes.status).toBe(401);
+
+            expect((await post({})).status).toBe(401);
+
+            const nonceProof = await makeNonceProofHeaders(
+               'POST',
+               '/v1/passkeys/verify',
+               Buffer.from(JSON.stringify(body), 'utf8'),
+               userCred,
+               userId,
+            );
+            expect((await post(nonceProof)).status).toBe(400);
+
+            const good = await postPasskeyVerify(user, body, csrfToken, sessCookie);
+            expect(good.status).toBe(200);
+            await expectPasskeyDeleted(credId, csrfToken, sessCookie);
+         });
+
+         // BACKWARD COMPAT: passkeys/verify also takes a nonce proof in x-proof
+         it('should accept a passkey add with a nonce proof in x-proof', async () => {
+            const { credId, body } = await prepareAdd();
+            const legacy = await makeNonceProofHeaders(
+               'POST',
+               '/v1/passkeys/verify',
+               Buffer.from(JSON.stringify(body), 'utf8'),
+               userCred,
+               userId,
+               { legacyHeader: true },
+            );
+            const res = await postJson(
+               '/v1/passkeys/verify',
+               body,
+               { 'x-csrf-token': csrfToken, ...legacy },
+               sessCookie,
+            );
+            expect(res.status).toBe(200);
+            await expectPasskeyDeleted(credId, csrfToken, sessCookie);
          });
 
          it('should 404 fetching an unknown user', async () => {
@@ -345,7 +491,7 @@ export function coreSuite(prf: boolean): void {
                challenge: optsRes.data.challenge,
                passkeyUserCredEnc,
             });
-            const addRes = await postJson(`/v1/passkeys/verify`, addBody, { 'x-csrf-token': csrfToken }, sessCookie);
+            const addRes = await postPasskeyVerify(user, addBody, csrfToken, sessCookie);
             expect(addRes.status).toBe(200);
 
             try {

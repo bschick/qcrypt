@@ -20,7 +20,18 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { Component, DestroyRef, type OnInit, computed, effect, Renderer2, inject, output, signal } from '@angular/core';
+import {
+   Component,
+   DestroyRef,
+   ElementRef,
+   type OnInit,
+   computed,
+   effect,
+   inject,
+   output,
+   signal,
+   viewChild,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -29,14 +40,16 @@ import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatInputModule } from '@angular/material/input';
+import { ErrorStateMatcher } from '@angular/material/core';
 import { AuthenticatorService, AuthEvent, PrfUnsupportedError } from '../services/authenticator.service';
 import * as api from '@qcrypt/api';
 import { EditableComponent } from '../ui/editable/editable.component';
+import { NoAssistDirective } from '../ui/noassist.directive';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { Router, RouterLink, NavigationStart } from '@angular/router';
 import type { Event as RouterEvent } from '@angular/router';
-import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatFormField, MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 
@@ -233,11 +246,6 @@ export interface ConfirmData {
    userName: string;
 }
 
-/*
-Starting to expiriment with reactive forms.
-https://angular.dev/guide/forms
-https://angular.dev/guide/forms/reactive-forms
-*/
 @Component({
    selector: 'confirm-dialog',
    templateUrl: 'confirm-dialog.html',
@@ -250,16 +258,19 @@ https://angular.dev/guide/forms/reactive-forms
       MatFormFieldModule,
       MatInputModule,
       FormsModule,
+      NoAssistDirective,
    ],
 })
 export class ConfirmDialog {
    private readonly _dialogRef = inject<MatDialogRef<ConfirmDialog>>(MatDialogRef);
-   private readonly _r2 = inject(Renderer2);
    private readonly _data = inject<ConfirmData>(MAT_DIALOG_DATA);
+   private readonly _confirmField = viewChild.required(MatFormField, { read: ElementRef });
 
    protected readonly pkState = this._data.pkState;
    protected readonly userName = this._data.userName;
    protected readonly confirmInput = signal('');
+   protected readonly nameMismatch = computed(() => !this.confirmInput() || this.confirmInput() !== this.userName);
+   protected readonly mismatchMatcher: ErrorStateMatcher = { isErrorState: () => this.nameMismatch() };
 
    static readonly NONE_PK = 0;
    static readonly LAST_PK = 1;
@@ -277,14 +288,14 @@ export class ConfirmDialog {
    }
 
    protected onYesClicked() {
-      if (this.pkState !== this.LAST_PK || (this.confirmInput() && this.confirmInput() === this.userName)) {
+      if (this.pkState !== this.LAST_PK || !this.nameMismatch()) {
          this._dialogRef.close('Yes');
       } else {
-         try {
-            this._r2.selectRootElement('#confirmInput').focus();
-         } catch (err) {
-            console.error(err);
+         const formField: HTMLElement = this._confirmField().nativeElement;
+         if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            formField.animate({ translate: ['0', '-6px', '6px', '-6px', '6px', '0'] }, 400);
          }
+         formField.querySelector('input')!.focus();
       }
    }
 }

@@ -22,13 +22,17 @@ SOFTWARE. */
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { randomBytes } from 'node:crypto';
+import * as api from '@qcrypt/api';
 import {
    getJson,
    patchJson,
+   postJson,
    expectPasskeyDeleted,
-   makeProofHeaders,
+   makeChallengeProofHeaders,
+   makeNonceProofHeaders,
    registerTestUser,
    setSessionSigner,
+   sha256Hex,
 } from './common';
 import { PROOF_SKEW_MS } from '../src/consts';
 
@@ -59,14 +63,14 @@ describe('proof of userCred enforcement', () => {
    });
 
    it('accepts a valid proof', async () => {
-      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId);
+      const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId);
       const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(200);
    });
 
    it('rejects a replayed proof on a mutating request', async () => {
       const body = Buffer.from(JSON.stringify({ userName: testUser }));
-      const proof = await makeProofHeaders('PATCH', '/v1/user', body, userCred, userId);
+      const proof = await makeNonceProofHeaders('PATCH', '/v1/user', body, userCred, userId);
       const res1 = await patchJson('/v1/user', { userName: testUser }, { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res1.status).toBe(200);
 
@@ -75,7 +79,7 @@ describe('proof of userCred enforcement', () => {
    });
 
    it('allow replayed proof on a read within time window', async () => {
-      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId);
+      const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId);
       const res1 = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res1.status).toBe(200);
 
@@ -89,14 +93,16 @@ describe('proof of userCred enforcement', () => {
    });
 
    it('rejects a tampered signature', async () => {
-      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId, { tamperSig: true });
+      const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId, { tamperSig: true });
       const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
 
    it('rejects a proof timestamp outside the skew window', async () => {
-      const expired = String(Date.now() - 10 * 60 * 1000);
-      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId, { timestampMs: expired });
+      const expired = String(Date.now() - 2 * PROOF_SKEW_MS);
+      const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId, {
+         timestampMs: expired,
+      });
       const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
@@ -108,7 +114,7 @@ describe('proof of userCred enforcement', () => {
 
    async function requestWithProofAt(offsetMs: number): Promise<number> {
       const timestampMs = String(Date.now() + offsetMs);
-      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId, { timestampMs });
+      const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId, { timestampMs });
       const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       return res.status;
    }
@@ -133,36 +139,53 @@ describe('proof of userCred enforcement', () => {
 
    it('rejects a proof signed with the wrong userCred', async () => {
       const wrongCred = randomBytes(32).toString('base64url');
-      const proof = await makeProofHeaders('GET', '/v1/user', undefined, wrongCred, userId);
+      const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, wrongCred, userId);
       const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
 
    it('rejects a proof bound to a different userId', async () => {
       const wrongUserId = randomBytes(16).toString('base64url');
-      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, wrongUserId);
+      const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, wrongUserId);
+      const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
+      expect(res.status).toBe(401);
+   });
+
+   it('rejects a proof in challenge form', async () => {
+      const timestamp = String(Date.now());
+      const challenge = randomBytes(api.CHALLENGE_BYTES).toString('base64url');
+      const signature = api.createUserCredChallengeProof(
+         Buffer.from(userCred, 'base64url'),
+         userId,
+         'GET',
+         '/v1/user',
+         timestamp,
+         challenge,
+         sha256Hex(Buffer.alloc(0)),
+      );
+      const proof = { 'x-nonce-proof': `${signature},${timestamp},${challenge}` };
       const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
 
    it('rejects requests with missing proof parts', async () => {
-      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId);
-      const parts = proof['x-proof'].split(',');
+      const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId);
+      const parts = proof['x-nonce-proof'].split(',');
       expect(parts.length).toBe(3);
 
-      proof['x-proof'] = parts.join(',');
+      proof['x-nonce-proof'] = parts.join(',');
       let res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(200);
 
-      proof['x-proof'] = parts.slice(1).join(',');
+      proof['x-nonce-proof'] = parts.slice(1).join(',');
       res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
 
-      proof['x-proof'] = parts.slice(0, 1).join(',');
+      proof['x-nonce-proof'] = parts.slice(0, 1).join(',');
       res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
 
-      proof['x-proof'] = [parts[0], parts[2]].join(',');
+      proof['x-nonce-proof'] = [parts[0], parts[2]].join(',');
       res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
@@ -174,13 +197,13 @@ describe('proof of userCred enforcement', () => {
    });
 
    it('accepts a proof that binds a query string the handler ignores', async () => {
-      const proof = await makeProofHeaders('GET', '/v1/user?ignored=1', undefined, userCred, userId);
+      const proof = await makeNonceProofHeaders('GET', '/v1/user?ignored=1', undefined, userCred, userId);
       const res = await getJson('/v1/user?ignored=1', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(200);
    });
 
    it('rejects when the request query differs from the signed query', async () => {
-      const proof = await makeProofHeaders('GET', '/v1/user?ignored=1', undefined, userCred, userId);
+      const proof = await makeNonceProofHeaders('GET', '/v1/user?ignored=1', undefined, userCred, userId);
       const res = await getJson('/v1/user?ignored=2', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(res.status).toBe(401);
    });
@@ -188,7 +211,7 @@ describe('proof of userCred enforcement', () => {
    it('rejects a proof reused on a different method or path', async () => {
       // A GET proof replays within the skew window, so the nonce doesn't prevent reuse here — the
       // signed method and path do.
-      const proof = await makeProofHeaders('GET', '/v1/user', undefined, userCred, userId);
+      const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId);
 
       const own = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
       expect(own.status).toBe(200);
@@ -204,12 +227,12 @@ describe('proof of userCred enforcement', () => {
       const signed = { userName: testUser };
       const signedBuf = Buffer.from(JSON.stringify(signed));
 
-      const good = await makeProofHeaders('PATCH', '/v1/user', signedBuf, userCred, userId);
+      const good = await makeNonceProofHeaders('PATCH', '/v1/user', signedBuf, userCred, userId);
       const ok = await patchJson('/v1/user', signed, { 'x-csrf-token': csrf, ...good }, cookie);
       expect(ok.status).toBe(200);
 
       // Fresh proof (the one above spent its nonce) so this 401 is the body mismatch, not a replay.
-      const proof = await makeProofHeaders('PATCH', '/v1/user', signedBuf, userCred, userId);
+      const proof = await makeNonceProofHeaders('PATCH', '/v1/user', signedBuf, userCred, userId);
       const res = await patchJson(
          '/v1/user',
          { userName: `${testUser}_x` },
@@ -221,7 +244,7 @@ describe('proof of userCred enforcement', () => {
 
    it('admits only one of several concurrent replays of one proof', async () => {
       const body = Buffer.from(JSON.stringify({ userName: testUser }));
-      const proof = await makeProofHeaders('PATCH', '/v1/user', body, userCred, userId);
+      const proof = await makeNonceProofHeaders('PATCH', '/v1/user', body, userCred, userId);
 
       // The nonce store is a conditional insert, so racing the same proof still admits exactly one.
       const results = await Promise.all(
@@ -231,5 +254,99 @@ describe('proof of userCred enforcement', () => {
       );
       expect(results.filter((r) => r.status === 200).length).toBe(1);
       expect(results.filter((r) => r.status === 401).length).toBe(4);
+   });
+
+   describe('proof headers', () => {
+      async function userProof(): Promise<Record<string, string>> {
+         return makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId);
+      }
+
+      // BACKWARD COMPAT
+      it('accepts a nonce proof in x-proof', async () => {
+         const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId, {
+            legacyHeader: true,
+         });
+         const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
+         expect(res.status).toBe(200);
+      });
+
+      // BACKWARD COMPAT
+      it('rejects a tampered nonce proof in x-proof', async () => {
+         const ok = await getJson('/v1/user', { 'x-csrf-token': csrf, ...(await userProof()) }, cookie);
+         expect(ok.status).toBe(200);
+
+         const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId, {
+            legacyHeader: true,
+            tamperSig: true,
+         });
+         const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
+         expect(res.status).toBe(401);
+      });
+
+      // BACKWARD COMPAT. Two full proofs exceed the edge's request header limit, which returns 413
+      // before the server sees them, so x-proof carries a short placeholder.
+      it('rejects a request carrying both x-nonce-proof and x-proof', async () => {
+         const proof = await userProof();
+         const ok = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
+         expect(ok.status).toBe(200);
+
+         const legacy = { 'x-proof': 'signature,timestamp,nonce' };
+         const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof, ...legacy }, cookie);
+         expect(res.status).toBe(400);
+      });
+
+      // Two full proofs exceed the edge's request header limit, which returns 413 before the server
+      // sees them, so x-challenge-proof carries a short placeholder
+      it('rejects an x-challenge-proof on a route that takes a nonce proof', async () => {
+         const proof = await userProof();
+         const ok = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
+         expect(ok.status).toBe(200);
+
+         const challengeProof = { 'x-challenge-proof': 'signature,timestamp' };
+         const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof, ...challengeProof }, cookie);
+         expect(res.status).toBe(400);
+      });
+
+      // auth/options takes no proof, and as an unauthenticated route reports any rejection as 401
+      it('rejects a proof header on a route that takes no proof', async () => {
+         const body = { userId };
+         const ok = await postJson('/v1/auth/options', body, {}, '');
+         expect(ok.status).toBe(200);
+
+         const nonceProof = await makeNonceProofHeaders(
+            'POST',
+            '/v1/auth/options',
+            Buffer.from(JSON.stringify(body)),
+            userCred,
+            userId,
+         );
+         const withNonce = await postJson('/v1/auth/options', body, nonceProof, '');
+         expect(withNonce.status).toBe(401);
+
+         const challengeProof = makeChallengeProofHeaders(
+            '/v1/auth/options',
+            body,
+            Buffer.from(userCred, 'base64url'),
+            userId,
+            randomBytes(api.CHALLENGE_BYTES).toString('base64url'),
+         );
+         const withChallenge = await postJson('/v1/auth/options', body, challengeProof, '');
+         expect(withChallenge.status).toBe(401);
+      });
+
+      // BACKWARD COMPAT: a signed-in client sends x-proof with every request
+      it('ignores x-proof on a route that takes no proof', async () => {
+         const body = { userId };
+         const legacy = await makeNonceProofHeaders(
+            'POST',
+            '/v1/auth/options',
+            Buffer.from(JSON.stringify(body)),
+            userCred,
+            userId,
+            { legacyHeader: true },
+         );
+         const res = await postJson('/v1/auth/options', body, legacy, '');
+         expect(res.status).toBe(200);
+      });
    });
 });

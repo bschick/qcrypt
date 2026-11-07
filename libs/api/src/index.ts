@@ -22,16 +22,23 @@ SOFTWARE. */
 
 export {
    getUserCredPubKey,
-   createUserCredProof,
-   verifyUserCredProof,
+   createUserCredNonceProof,
+   verifyUserCredNonceProof,
+   createUserCredChallengeProof,
+   verifyUserCredChallengeProof,
    getRecoveryPubKey,
-   createRecoveryProof,
-   verifyRecoveryProof,
+   createRecoveryNonceProof,
+   verifyRecoveryNonceProof,
+   createRecoveryChallengeProof,
+   verifyRecoveryChallengeProof,
    recoverySecret,
    RECOVERYID_BYTES,
    CHALLENGE_BYTES,
+   PROOF_SKEW_MS,
    PROOF_PUBKEY_BYTES,
    PROOF_SIG_BYTES,
+   USERCRED_KEY_CONTEXT,
+   RECOVERY_KEY_CONTEXT,
 } from './lib/proof';
 
 export type { RecoveryOp } from './lib/proof';

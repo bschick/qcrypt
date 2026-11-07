@@ -1207,6 +1207,32 @@ describe('Key generation', () => {
       keyProvider.purge();
    });
 
+   it('PWDKeyProvider getBlockCipherKey zeroes the previous block key', async () => {
+      const keyProvider = new PWDKeyProvider(getRandom(cc.USERCRED_BYTES), ['a pwd']);
+      keyProvider.setCipherDataInfo({
+         ver: cc.CURRENT_VERSION,
+         alg: 'AES-GCM',
+         ic: cc.ICOUNT_MIN,
+         slt: getRandom(cc.SLT_BYTES),
+         lp: 1,
+         lpEnd: 1,
+      });
+      await keyProvider.getCipherKey(false);
+
+      const firstBk = await keyProvider.getBlockCipherKey(1);
+      expect(firstBk.every((byte) => byte === 0)).toBe(false);
+      // A repeated request for the current block must not zero the key the caller holds
+      expect(await keyProvider.getBlockCipherKey(1)).toBe(firstBk);
+      expect(firstBk.every((byte) => byte === 0)).toBe(false);
+
+      const secondBk = await keyProvider.getBlockCipherKey(2);
+      expect(firstBk.every((byte) => byte === 0)).toBe(true);
+      expect(secondBk.every((byte) => byte === 0)).toBe(false);
+
+      keyProvider.purge();
+      expect(secondBk.every((byte) => byte === 0)).toBe(true);
+   });
+
    it('MasterKeyKeyProvider getBlockCipherKey block number range', async () => {
       const slt = getRandom(cc.SLT_BYTES);
       const baseInfo = {

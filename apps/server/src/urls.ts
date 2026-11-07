@@ -22,14 +22,30 @@ SOFTWARE. */
 
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { base64Decode, NotFoundError, ParamError } from './utils';
-import type { VerifiedUserItem } from './models';
+import type { UnverifiedUserItem, VerifiedUserItem } from './models';
 import type { Response } from './server';
 export type QParams = Record<string, string>;
 export const INTERNAL_VERSION = 0;
 export type Method = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 export type Version = typeof INTERNAL_VERSION | 1;
 
-type HttpHandler = (httpDetails: HttpDetails, verifiedUser?: VerifiedUserItem) => Promise<Response>;
+type AuthorizedHandler = (httpDetails: HttpDetails, verifiedUser: VerifiedUserItem) => Promise<Response>;
+// BACKWARD COMPAT: proved is false when the request has no x-challenge-proof header, which older
+// clients do not send. Whether such a request is accepted depends on the route. Remove proved
+// once the header is required.
+type ChallengeHandler = (
+   httpDetails: HttpDetails,
+   unverifiedUser: UnverifiedUserItem,
+   proved: boolean,
+) => Promise<Response>;
+type OpenHandler = (httpDetails: HttpDetails) => Promise<Response>;
+
+// authorize means the route needs a session cookie and CSRF token. proof is the userCred proof
+// form the route takes.
+type Route =
+   | { authorize: true; proof: 'nonce' | 'challenge'; handler: AuthorizedHandler }
+   | { authorize: false; proof: 'challenge'; handler: ChallengeHandler }
+   | { authorize: false; proof: 'none'; handler: OpenHandler };
 
 export type HttpDetails = {
    name: string;
@@ -38,30 +54,24 @@ export type HttpDetails = {
    rawQueryString: string;
    rpID: string;
    rpOrigin: string;
-   authorize: boolean;
+   route: Route;
    resources: Record<string, string | undefined>;
    params: QParams;
    // biome-ignore lint/suspicious/noExplicitAny: request bodies are arbitrary JSON
    body: Record<string, any>;
    rawBody: string;
-   handler: HttpHandler;
    version: Version;
    checkCsrf: boolean;
    cookie?: string;
    userAgent?: string;
-   proofSignature?: string;
-   proofTimestamp?: string;
-   proofNonce?: string;
 };
 
 type HandlerInfo = {
    name: string;
    pattern: URLPattern;
    version: Version;
-   authorize: boolean;
    checkCsrf?: boolean;
-   handler: HttpHandler;
-};
+} & Route;
 
 export type MethodMap = Record<Method, HandlerInfo[]>;
 
@@ -178,19 +188,6 @@ export function matchEvent(event: APIGatewayProxyEventV2, methodMap: MethodMap):
          const params = (event.queryStringParameters ?? {}) as QParams;
          const cookie: string | undefined = event.headers.cookie;
          const userAgent: string | undefined = event.headers['user-agent'];
-         const proofHeader: string | undefined = event.headers['x-proof'];
-         let proofSignature: string | undefined;
-         let proofTimestamp: string | undefined;
-         let proofNonce: string | undefined;
-
-         if (proofHeader) {
-            const parts = proofHeader.split(',');
-            if (parts.length === 3) {
-               proofSignature = parts[0].trim();
-               proofTimestamp = parts[1].trim();
-               proofNonce = parts[2].trim();
-            }
-         }
 
          // Uncomment for debugging
          // console.log('resources: ' + JSON.stringify(params));
@@ -204,19 +201,15 @@ export function matchEvent(event: APIGatewayProxyEventV2, methodMap: MethodMap):
             rawQueryString: event.rawQueryString || '',
             rpID,
             rpOrigin,
-            authorize: handerInfo.authorize,
+            route: handerInfo,
             checkCsrf: !(handerInfo.checkCsrf === false), // true or undefined make it required
             resources: match.pathname.groups,
-            handler: handerInfo.handler,
             version: handerInfo.version,
             params,
             body,
             rawBody,
             cookie,
             userAgent,
-            proofSignature,
-            proofTimestamp,
-            proofNonce,
          };
       }
    }

@@ -24,6 +24,7 @@ import * as cc from './cipher.consts';
 import { numToBytes, BYOBStreamReader, ensureArrayBuffer, concatArrays, logError } from './utils';
 
 import { Decipher, CipherState, Extractor, type CipherDataInfo } from './ciphers-current';
+import { ModifiedDataError, ForgedDataError } from './errors';
 import type { KeyProvider } from './keys';
 
 export class DecipherV1 extends Decipher {
@@ -163,7 +164,7 @@ export class DecipherV1 extends Decipher {
          return;
       }
 
-      throw new Error('Invalid HMAC signature');
+      throw new ModifiedDataError();
    }
 
    public override async decryptBlockN(): Promise<Uint8Array> {
@@ -178,9 +179,8 @@ export class DecipherV1 extends Decipher {
 }
 
 export class DecipherV4 extends Decipher {
-   /* V4 CipherData Layout (hopefully less brain dead). Tags are just notation...
-    * and are not actually in the data stream. All encodings have one block0 instance
-    * followed by zero or more blockN instances
+   /* V4 CipherData Layout. Tags are just notation  and are not actually in the data stream.
+    * All encodings have one block0 instance followed by zero or more blockN instances
 
       <Document>
          <Block0>
@@ -225,6 +225,7 @@ export class DecipherV4 extends Decipher {
    */
 
    private _header?: Uint8Array;
+   protected _lastFlags = 0;
 
    constructor(keyProvider: KeyProvider, reader: BYOBStreamReader, header?: Uint8Array) {
       super(keyProvider, reader);
@@ -370,16 +371,25 @@ export class DecipherV4 extends Decipher {
          }
 
          const ek = await this._keyProvider.getCipherKey(false);
-         const decrypted = await Decipher._doDecrypt(
-            this._blockData.alg,
-            ek,
-            this._blockData.iv,
-            this._blockData.encryptedData,
-            this._blockData.additionalData,
-         );
+         let decrypted: Uint8Array;
+         try {
+            decrypted = await Decipher._doDecrypt(
+               this._blockData.alg,
+               ek,
+               this._blockData.iv,
+               this._blockData.encryptedData,
+               this._blockData.additionalData,
+            );
+         } catch (err) {
+            // block0 already decrypted with this password and this block passed its MAC, so the data is forged
+            throw new ForgedDataError({ cause: err });
+         }
 
          // Occurs when the last block was only present to mark termination (in v5+)
          if (decrypted.byteLength === 0) {
+            if (this._lastFlags !== 1) {
+               throw new Error('Missing terminal data block');
+            }
             await this._verifyEmptyReader();
             this.finishedState();
          }
@@ -471,13 +481,12 @@ export class DecipherV4 extends Decipher {
          return;
       }
 
-      throw new Error('Invalid MAC signature');
+      throw new ModifiedDataError();
    }
 }
 
 export class DecipherV5 extends DecipherV4 {
    private _lastMac?: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
-   private _lastFlags = 0;
 
    public override protocolVersion(): number {
       return cc.VERSION5;
@@ -558,6 +567,6 @@ export class DecipherV5 extends DecipherV4 {
          return;
       }
 
-      throw new Error('Invalid MAC signature');
+      throw new ModifiedDataError();
    }
 }

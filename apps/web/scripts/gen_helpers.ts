@@ -76,6 +76,25 @@ export async function withTermOverrideEvery<T>(force: boolean, fn: () => Promise
    }
 }
 
+// Monkey-patches encipherClass._doEncrypt to replace block clear text with an empty array.
+// Only block data is encrypted with additional data, so hint encryption is unchanged.
+// Restores the original on return.
+export async function withEmptyClearData<T>(encipherClass: object, fn: () => Promise<T>): Promise<T> {
+   const original = (encipherClass as any)._doEncrypt.bind(encipherClass);
+   (encipherClass as any)._doEncrypt = (
+      alg: cc.CipherAlgs,
+      key: Uint8Array,
+      iv: Uint8Array,
+      clear: Uint8Array,
+      additionalData?: Uint8Array,
+   ) => original(alg, key, iv, additionalData ? new Uint8Array(0) : clear, additionalData);
+   try {
+      return await fn();
+   } finally {
+      (encipherClass as any)._doEncrypt = original;
+   }
+}
+
 // Encrypts everything in `clearStream` through a single getLatestEncipher
 // invocation (single loop), repeatedly calling encryptBlockN until done.
 // Returns the concatenated cipher bytes.

@@ -75,7 +75,9 @@
     justify-content: center;
     opacity: 0.35;
     color: #555;
-    transition: opacity 150ms ease, color 150ms ease;
+    transition:
+      opacity 150ms ease,
+      color 150ms ease;
 
     &:hover {
       opacity: 1;
