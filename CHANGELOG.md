@@ -5,7 +5,7 @@
 #### Changes
 
 - expanded protocol documentation with proof variables and request authorization stanzas
-- decryption errors now distinguish a wrong password, modified data, and forged data
+- decryption errors now distinguish wrong password, modified data, and forged data
 - added a clear indication of user name mismatch to the delete passkey dialog
 
 #### Security
