@@ -2,6 +2,7 @@ import './setup-color';
 import {
    cryptoReady,
    decryptStream,
+   decryptionErrorMessage,
    encryptStream,
    getCipherStreamInfo,
    makeCipherArmor,
@@ -412,9 +413,6 @@ async function encrypt(
    }
 }
 
-// TODO: This is fragile... update crypto lib to return a typed error to fix
-const DECRYPT_FAILURES = ['Invalid key commitment', 'Invalid MAC signature', 'Invalid MAC data'];
-
 async function decrypt(
    args: {
       cred?: string;
@@ -468,17 +466,17 @@ async function decrypt(
          throw new Error('decrypted output was empty');
       }
    } catch (err) {
-      if (args.debug) {
-         console.error(err);
-      } else if (DECRYPT_FAILURES.some((failure) => (err as Error).message?.startsWith(failure))) {
-         console.error(
-            '\ndecryption failed: You may be using the wrong password or user credential, or the cipher armor is invalid',
-         );
+      const failureMsg = decryptionErrorMessage(err, 'user credential');
+      if (failureMsg) {
+         console.error(`\n${failureMsg}`);
          if (args.pwds && args.pwds.length > 1) {
             console.error('check --pwds order, decryption is the reverse of encryption order');
          }
       } else {
          console.error('decryption failed: ', (err as Error).message);
+      }
+      if (args.debug) {
+         console.error(err);
       }
       process.exitCode = 1;
    }

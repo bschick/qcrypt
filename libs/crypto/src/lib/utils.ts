@@ -76,9 +76,25 @@ export function bytesToBase64(bytes: Uint8Array): string {
    return bufferToBase64URLString(getArrayBuffer(bytes));
 }
 
+export class ParamError extends Error {}
+
 // Accepts either base64 or base64Url text
-export function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
-   return new Uint8Array(base64URLStringToBuffer(b64));
+export function base64ToBytes(b64: string): Uint8Array<ArrayBuffer>;
+export function base64ToBytes(b64: string, length: number, description: string): Uint8Array<ArrayBuffer>;
+export function base64ToBytes(b64: string, length?: number, description?: string): Uint8Array<ArrayBuffer> {
+   let bytes: Uint8Array<ArrayBuffer>;
+   try {
+      bytes = new Uint8Array(base64URLStringToBuffer(b64));
+   } catch (err) {
+      if (length === undefined) {
+         throw err;
+      }
+      throw new ParamError(`invalid ${description} encoding`);
+   }
+   if (length !== undefined && bytes.byteLength !== length) {
+      throw new ParamError(`invalid ${description} length`);
+   }
+   return bytes;
 }
 
 export function bufferToHexString(buffer: ArrayBuffer): string {

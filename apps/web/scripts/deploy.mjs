@@ -111,8 +111,9 @@
  * actions without performing them for every command.
  */
 
-import { readdirSync, statSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import yargs from 'yargs/yargs';
@@ -127,6 +128,9 @@ import { validateBuild } from './validate-build.mjs';
 // Known OS/editor metadata files we don't want to upload, but without
 // blanket-skipping dotfiles (e.g. `.well-known/` is legitimate).
 const METADATA_SKIP_RE = /^(?:\.DS_Store|\._.*|Thumbs\.db|desktop\.ini)$/;
+
+// Bundles named by a hash of their content, which index.html pins with sha384 and browsers cache as immutable
+const HASHED_BUNDLE_RE = /^(?:main|chunk|styles)-[A-Za-z0-9_-]+\.(?:js|css)$/;
 
 function collectLocalFiles(root, recursive) {
    const out = [];
@@ -231,16 +235,20 @@ function writeManifest(argv, m) {
 // command family doesn't produce structured JSON output; `s3api` maps
 // directly to the S3 API and returns the JSON we need to parse.
 //
-// Returned keys are filtered through getScope so the same scope rule
+// Returned objects are filtered through getScope so the same scope rule
 // applies everywhere (deploy/prune/leaks/info/bootstrap).
-function listBucket(argv) {
+function listBucketObjects(argv) {
    const r = aws(argv, ['s3api', 'list-objects-v2', '--bucket', argv.bucket, '--output', 'json'], { readOnly: true });
    if (!r.stdout) {
       return [];
    }
    const parsed = JSON.parse(r.stdout);
-   const keys = (parsed.Contents ?? []).map((o) => o.Key);
-   return keys.filter(getScope(argv).inScope);
+   const inScope = getScope(argv).inScope;
+   return (parsed.Contents ?? []).filter((entry) => inScope(entry.Key));
+}
+
+function listBucket(argv) {
+   return listBucketObjects(argv).map((entry) => entry.Key);
 }
 
 // Convert a shell-style glob to an anchored RegExp. `*` matches any run of
@@ -387,6 +395,24 @@ function checkEssentialFiles(scope, keys) {
    return problems;
 }
 
+// Returns the hashed bundles whose bytes differ from the bucket object with the same key. Replacing those bytes
+// breaks SRI for any browser that cached the old object. The comparison uses the S3 ETag, which is the content MD5
+// for single-part uploads without SSE-KMS. Any other ETag never matches, so that file counts as changed.
+function changedHashedFiles(argv, files) {
+   const etags = new Map(listBucketObjects(argv).map((entry) => [entry.Key, entry.ETag]));
+   const changed = [];
+   for (const file of files) {
+      const etag = etags.get(file.relKey);
+      if (etag && HASHED_BUNDLE_RE.test(file.relKey)) {
+         const md5 = createHash('md5').update(readFileSync(file.absPath)).digest('hex');
+         if (etag !== `"${md5}"`) {
+            changed.push(file.relKey);
+         }
+      }
+   }
+   return changed;
+}
+
 function inScopeFor(argv) {
    return getScope(argv).inScope;
 }
@@ -528,7 +554,7 @@ async function runDeploy(argv) {
    // scopes like --aaguids, which legitimately have no index.html.
    if (newKeys.has('index.html')) {
       if (argv.skipValidate) {
-         console.warn('⚠  deploy: build validation SKIPPED (--skip-validate)');
+         console.warn('⚠  deploy: build validation and hashed bundle check SKIPPED (--skip-validate)');
       } else {
          const problems = validateBuild(argv.buildDir);
          if (problems.length > 0) {
@@ -543,6 +569,24 @@ async function runDeploy(argv) {
          }
          console.log(`deploy: build validation passed (${relToRoot(argv.buildDir)}/index.html)`);
       }
+   }
+
+   if (!argv.skipValidate) {
+      const changed = changedHashedFiles(argv, files);
+      if (changed.length > 0) {
+         console.error(
+            `deploy: refusing to deploy — ${changed.length} hashed bundle(s) would replace a bucket object of the same name with different bytes:`,
+         );
+         for (const key of changed) {
+            console.error(`  - ${key}`);
+         }
+         console.error(
+            'Browsers that cached the old bytes would fail the new index.html SRI check. Find what changed the bytes ' +
+               'without changing the name, or override with --skip-validate.',
+         );
+         process.exit(1);
+      }
+      console.log('deploy: hashed bundle check passed (no existing bundle name gets new bytes)');
    }
 
    // 2. Upload everything except index.html, then index.html last.
@@ -1187,7 +1231,8 @@ const deployOpts = (y) =>
          type: 'boolean',
          default: false,
          describe:
-            'Break-glass: skip the pre-upload index.html validation (SRI, nonce, chunk checks). Only when you know the build is good.',
+            'Break-glass: skip the pre-upload index.html validation (SRI, nonce, chunk checks) and the check that no ' +
+            'hashed bundle replaces a bucket object of the same name with different bytes. Only when you know the build is good.',
       })
       .check((argv) => {
          if (!Number.isFinite(argv.expirationDays) || argv.expirationDays < 0) {

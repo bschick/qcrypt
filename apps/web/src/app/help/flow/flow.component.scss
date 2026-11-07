@@ -187,7 +187,10 @@
   border-radius: 8px;
   background: white;
   cursor: pointer;
-  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
   box-sizing: border-box;
 
   img {

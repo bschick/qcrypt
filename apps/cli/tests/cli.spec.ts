@@ -551,7 +551,7 @@ describe('CLI App', () => {
             'WRONGPASS',
          ]);
          expect(result.status).toBe(1);
-         expect(result.stderr).toContain('decryption failed');
+         expect(result.stderr).toMatch(/decryption failed/i);
       });
 
       it('should decrypt successfully from file', () => {
@@ -641,7 +641,7 @@ describe('CLI App', () => {
             'pass',
          ]);
          expect(result.status).toBe(1);
-         expect(result.stderr).toContain('decryption failed');
+         expect(result.stderr).toMatch(/decryption failed/i);
       });
 
       it('should fail when given fewer passwords than loops', () => {

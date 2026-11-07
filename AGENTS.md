@@ -193,6 +193,7 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 >   - For the Vitest projects (`test:server`, `test:cli`, `test:libs:crypto`, `test:libs:api`), use `--name` (a placeholder each `nx test` target forwards to Vitest's `-t`). Example: `pnpm test:server -- --name="should reject manipulated csrf"` (combine with `--include` to also scope the file). **Do not use `-t`** through these wrappers — nx claims `-t` as its own `--targets` flag, so it never reaches Vitest. `-t` works only when calling Vitest directly: `pnpm exec vitest run --config apps/server/vitest.config.ts nonprf.spec.ts -t "manipulated csrf"`.
 >   - For `test:e2e` (Playwright), use `-g` (see the file-filter note above).
 > **Note:** A passing `test:e2e` run shows no browser console output. The `testWithAuth` fixture collects `console.error` and uncaught page errors but prints them only for failing tests. Set `QC_E2E_BROWSER_ERRORS=all` to print them for passing tests too, along with `console.warn`: `QC_E2E_BROWSER_ERRORS=all pnpm test:e2e --reporter=list`. Use it for change-detection or lifecycle work, and compare against the same run on `main`, since several tests trigger errors on purpose. Specs written with plain `test` rather than `testWithAuth` are not covered.
+> **Note:** When Nx detects an AI agent from the environment (for example `AI_AGENT` or `CLAUDECODE`), the Nx-run test scripts print only task counts and, for a failed task, the path of its full log. Set `NX_DEFAULT_OUTPUT_STYLE=static-failures-only` to print a failing task's output inline, or `static` to print every task's output: `NX_DEFAULT_OUTPUT_STYLE=static pnpm test:server`. Passing `--output-style` after `--` does not work, because the `--` forwards it to the test runner instead of Nx.
 
 ### Test Vector Commands
 
@@ -203,7 +204,7 @@ files. Each generator prints its blocks and only edits a spec when given `--writ
 | What | pnpm script | Writes to | Blocks |
 |------|------------|-----------|--------|
 | Cipher text vectors | `pnpm vectors:ciphers` | `libs/crypto/src/lib/ciphers.spec.ts` | 6 |
-| CipherService vectors | `pnpm vectors:ciphersvc` | `apps/web/src/app/services/cipher.service.spec.ts` | 9 |
+| CipherService vectors | `pnpm vectors:ciphersvc` | `apps/web/src/app/services/cipher.service.spec.ts` | 11 |
 | Key derivation vectors | `pnpm vectors:keys` | `libs/crypto/src/lib/keys.spec.ts` | 8 |
 
 | Flag | Effect |

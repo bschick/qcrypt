@@ -18,3 +18,4 @@ SVG Download and Resize
 
 * Make changes in LucidChart
 * Export SVG with transparent background (manually crop)
+* For a flow diagram, save it in apps/web/src/assets/flow and run "pnpm svgo:flow <file>.svg", which tags the clickable regions, optimizes the SVG and updates the integrity hashes in flow.config.ts

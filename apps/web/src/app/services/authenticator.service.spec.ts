@@ -442,7 +442,7 @@ describe('AuthenticatorService', () => {
             expect(body.userId).toBe(userId);
             const pubKey = api.getRecoveryPubKey(secret);
             expect(() =>
-               api.verifyRecoveryProof(pubKey, userId, body.timestamp, body.nonce, body.signature, 'recover'),
+               api.verifyRecoveryNonceProof(pubKey, userId, body.timestamp, body.nonce, body.signature, 'recover'),
             ).not.toThrow();
          }
       });
@@ -1058,7 +1058,10 @@ describe('AuthenticatorService', () => {
       });
 
       it('adding a passkey signals the verified list', async () => {
-         fetchMock.mockResolvedValue({ ok: true, json: async () => withPasskeys(pkId, otherPkId, newPkId) });
+         const options = { challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)) };
+         fetchMock
+            .mockResolvedValueOnce({ ok: true, json: async () => options })
+            .mockResolvedValueOnce({ ok: true, json: async () => withPasskeys(pkId, otherPkId, newPkId) });
 
          await service.addPasskey();
 
@@ -1097,7 +1100,11 @@ describe('AuthenticatorService', () => {
             challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)),
             userCred,
          };
-         const recovered = { ...withPasskeys(newPkId), pkId: newPkId };
+         const recovered = {
+            ...withPasskeys(newPkId),
+            pkId: newPkId,
+            challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)),
+         };
          fetchMock.mockImplementation((url: URL) => ({
             ok: true,
             json: async () => (url.pathname.endsWith('/recover3') ? startResp : recovered),

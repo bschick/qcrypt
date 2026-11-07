@@ -34,7 +34,7 @@ import {
    viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { makeCipherArmor, parseCipherArmor, PWDKeyProvider } from '@qcrypt/crypto';
+import { decryptionErrorMessage, makeCipherArmor, parseCipherArmor, PWDKeyProvider } from '@qcrypt/crypto';
 
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -392,26 +392,28 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this._emptyClearText();
       this.clearLabel.set('Clear Text');
       this.clearWarning.set('');
-      if (!this._welcomed && this._authSvc.hasSession()) {
-         this.bubbleTip1().show();
-         this.bubbleTip2().hide();
-         this.bubbleTip3().hide();
-      }
+      this._updateInputTips();
    }
 
    protected onClearInput() {
       if (!this.clearText()) {
          this.clearWarning.set('');
       }
+      this._updateInputTips();
+   }
+
+   private _updateInputTips() {
       if (!this._welcomed && this._authSvc.hasSession()) {
-         if (this.clearText()) {
+         if (this._dialog.openDialogs.length > 0) {
+            this.bubbleTip1().hide();
+            this.bubbleTip2().hide();
+         } else if (this.clearText().length > 0 || this._clearFile) {
             this.bubbleTip1().hide();
             this.bubbleTip2().show();
          } else {
             this.bubbleTip1().show();
             this.bubbleTip2().hide();
          }
-         this.bubbleTip3().hide();
       }
    }
 
@@ -511,12 +513,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       this._clearFile = clearFile;
       const msg = saved ? 'file saved and ' : '';
       this._showClearFile(`${msg}selected for encryption`, saved, clearFile.name);
-
-      if (!this._welcomed) {
-         this.bubbleTip1().hide();
-         this.bubbleTip2().show();
-         this.bubbleTip3().hide();
-      }
+      this._updateInputTips();
    }
 
    protected async onEncrypt(): Promise<void> {
@@ -538,7 +535,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this._welcomed) {
          this.bubbleTip1().hide();
          this.bubbleTip2().hide();
-         this.bubbleTip3().hide();
       }
 
       try {
@@ -588,9 +584,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             }
             this._showCipherError(msg);
          }
-         if (!this._welcomed) {
-            this.bubbleTip2().show();
-         }
+         this._updateInputTips();
       } finally {
          this.showProgress.set(false);
          this._usingFile = false;
@@ -616,7 +610,6 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!this._welcomed) {
          this.bubbleTip1().hide();
          this.bubbleTip2().hide();
-         this.bubbleTip3().hide();
       }
 
       try {
@@ -675,9 +668,7 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             }
             this._showCipherError(msg);
          }
-         if (!this._welcomed) {
-            this.bubbleTip2().show();
-         }
+         this._updateInputTips();
       } finally {
          this.showProgress.set(false);
          this._usingFile = false;
@@ -752,7 +743,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             console.error(something);
             this._clearPassword();
             this._showClearError(
-               'Could not decrypt cipher armor text. You may be using the wrong password or passkey, or the cipher armor is invalid',
+               decryptionErrorMessage(something, 'passkey') ??
+                  'Decryption failed because the password or passkey is incorrect, or the cipher armor is not valid.',
             );
          }
       } finally {
@@ -837,7 +829,8 @@ export class CoreComponent implements OnInit, AfterViewInit, OnDestroy {
             console.error(something);
             this._clearPassword();
             this._showClearError(
-               'Could not decrypt cipher armor text. You may be using the wrong password or passkey, or the cipher armor is invalid',
+               decryptionErrorMessage(something, 'passkey') ??
+                  'Decryption failed because the password or passkey is incorrect, or the cipher armor is not valid.',
             );
          }
       } finally {

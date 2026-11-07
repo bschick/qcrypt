@@ -17,12 +17,15 @@
 \newlength{\stanzawidth}
 \setlength{\stanzawidth}{368pt}         % <-- max stanza width (1300px @ 255 PPI)
 
+\newlength{\widestanzawidth}
+\setlength{\widestanzawidth}{388pt}     % <-- max width for a stanza whose note wraps badly at \stanzawidth
+
 \newlength{\stanzabox}
 
-\newenvironment{stanza}
+\newenvironment{stanza}[1][\stanzawidth]
   {\par\addvspace{\stanzagap}%
    \setlength{\stanzabox}{\dimexpr\linewidth-\parindent\relax}%
-   \ifdim\stanzabox>\stanzawidth\setlength{\stanzabox}{\stanzawidth}\fi
+   \ifdim\stanzabox>#1\setlength{\stanzabox}{#1}\fi
    \noindent\hspace*{\parindent}\begin{minipage}{\stanzabox}}
   {\end{minipage}\par\addvspace{\stanzagap}}
 
@@ -125,7 +128,9 @@ $kp_H$ & \textrm{ - Key purpose text: ``Hint\_Key''}\\
 $kp_S$ & \textrm{ - Key purpose text: ``Sign\_Key''}\\
 $l$ & \textrm{ - Payload length}\\
 $le$ & \textrm{ - Loop end (1-16), stored as }$le-1$\textrm{ in the high nibble of one byte}\\
+$le_L$ & \textrm{ - Preceding loop's }$le$\\
 $lp$ & \textrm{ - Loop count (1-16), stored as }$lp-1$\textrm{ in the low nibble of that byte}\\
+$lp_L$ & \textrm{ - Preceding loop's }$lp$\\
 $m$ & \textrm{ - Clear text}\\
 $m_0$ & \textrm{ - Clear text block 0}\\
 $m_N$ & \textrm{ - Clear text block N}\\
@@ -188,7 +193,7 @@ $v$ & \textrm{ - Cipher data version: 8}\\
 \end{stanza}
 
 \begin{stanza}
-\underline{$cd_0$ Encryption by B}\\
+\underline{Block 0 ($cd_0$) Encryption by B}\\
 
 \begin{tabular}{@{}p{5mm} l}
 \multicolumn{2}{@{}l}{$h_E = E_a(PAD(h),n_{IVH},\emptyset,k_H)$}\\
@@ -204,7 +209,7 @@ $v$ & \textrm{ - Cipher data version: 8}\\
 \end{stanza}
 
 \begin{stanza}
-\underline{$cd_N$ Encryption by B}\\
+\underline{Block N ($cd_N$) Encryption by B}\\
 
 \begin{tabular}{@{}p{5mm} l}
 
@@ -245,7 +250,9 @@ $v$ & \textrm{ - Cipher data version: 8}\\
 &$n_{IVH} = D_H(2,kp_H,H_{n_{IV}}(n_S,a,v,lp,e_l))$\\
 &$k_H = D_H(1,kp_H,H_{u_c}(n_S,a,v,lp,e_l))$\\
 &$h = PAD^{-1}(E_a^{-1}(h_E,n_{IVH},\emptyset,k_H))$\\
-&$\textrm{check }lp == le\textrm{ in the first loop and }lp-1\textrm{ in each successive loop else }err$\\
+&$\textrm{check }lp == le\textrm{ for the outermost loop else }err$\\
+&$\textrm{check }lp == lp_L-1\textrm{ and }le == le_L\textrm{ for each inner loop else }err$\\
+&$lp_L = lp;\ le_L = le$\\
 &$B \rightarrow A: h$\\
 &$B \leftarrow A: p$\\
 &$\textrm{check }i \geq 420{,}000\textrm{ else }err$\\
@@ -260,7 +267,7 @@ $v$ & \textrm{ - Cipher data version: 8}\\
 \end{stanza}
 
 \begin{stanza}
-\underline{$m_0$ Decryption by B}\\
+\underline{Block 0 ($m_0$) Decryption by B}\\
 
 \begin{tabular}{@{}p{5mm} l}
 \multicolumn{2}{@{}l}{$m_0 = E_a^{-1}(m_E, n_{IV},ad_F,k_{M0})$}\\
@@ -268,7 +275,7 @@ $v$ & \textrm{ - Cipher data version: 8}\\
 \end{stanza}
 
 \begin{stanza}
-\underline{$m_N$ Decryption by B}\\
+\underline{Block N ($m_N$) Decryption by B}\\
 
 \begin{tabular}{@{}p{5mm} l}
 \multicolumn{2}{@{}l}{$\textrm{check the preceding block had }f == 0\textrm{ else }err$}\\
@@ -368,30 +375,22 @@ h_El \mathbin\Vert k_Cl$}\\
 \begin{tabular}{@{}p{5mm} l}
 $ao$ & \textrm{ - WebAuthn authentication options, including }$ch$\\
 $ar$ & \textrm{ - WebAuthn authentication response, including }$pkId, u_i$\\
-$b$ & \textrm{ - Challenge binding}\\
+$b$ & \textrm{ - Hash binding challenges to account state}\\
 $bd$ & \textrm{ - HTTP request body} \\
 $c_A$ & \textrm{ - Sign-in count} \\
 $cd_p$ & \textrm{ - }$u_c$\textrm{ encrypted under PRF output }$p_R$\\
 $cd_r$ & \textrm{ - }$u_c$\textrm{ encrypted under recovery secret }$u_r \mathbin\Vert u_i$\\
 $cd_u$ & \textrm{ - }$u_c$\textrm{ encrypted under session key }$k_L$\\
 $ch$ & \textrm{ - 256 bit challenge value} \\
-$ch_R$ & \textrm{ - 256 bit recovery challenge value} \\
 $ck$ & \textrm{ - Session cookie, a signed JWT including }$u_i$\\
 $cs$ & \textrm{ - CSRF token} \\
 $cw$ & \textrm{ - Alice's WebAuthn authenticator credentials} \\
-$kp_R$ & \textrm{ - Key purpose text: ``RecovKey''} \\
-$kp_U$ & \textrm{ - Key purpose text: ``UCredKey''} \\
-$m_R$ & \textrm{ - Recovery proof message} \\
-$m_U$ & \textrm{ - userCred proof message} \\
 $mth$ & \textrm{ - HTTP request method} \\
-$n_P$ & \textrm{ - 256 bit proof nonce value} \\
 $o$ & \textrm{ - Quick Crypt origin ``https://quickcrypt.org''} \\
 $p_R$ & \textrm{ - 256 bit passkey PRF output } \\
 $p_S$ & \textrm{ - Fixed 256 bit PRF salt, as base64url } \\
 & \phantom{\textrm{ - }}\texttt{T89fTIZ37DRI-udjI\_MBqc39I4yCyWJWHndLuYpD8yE} \\
 $pk_M$ & \textrm{ - Passkey public key} \\
-$pk_R$ & \textrm{ - ML-DSA-65 recovery proof public key} \\
-$pk_U$ & \textrm{ - ML-DSA-65 userCred proof public key} \\
 $pkId$ & \textrm{ - Passkey credential identifier} \\
 $prf$ & \textrm{ - Account mode: 1 for PRF, 0 for no-PRF} \\
 $pth$ & \textrm{ - HTTP request path} \\
@@ -399,30 +398,54 @@ $qs$ & \textrm{ - HTTP request query string, omitted when empty} \\
 $ro$ & \textrm{ - WebAuthn registration options, including }$ch, u_i$\\
 $rq$ & \textrm{ - Authorized request, including }$mth, pth, bd, qs$\\
 $rr$ & \textrm{ - WebAuthn registration response, including }$pkId, pk_M$\\
-$sc_R$ & \textrm{ - Recovery signature context: ``qcrypt/recovery/recover/v1''} \\
-$sc_U$ & \textrm{ - userCred signature context: ``qcrypt/usercred/proof/v1''} \\
-$sc_W$ & \textrm{ - Replace words signature context: ``qcrypt/recovery/replace/v1''} \\
-$sk_R$ & \textrm{ - ML-DSA-65 recovery proof secret key} \\
-$sk_U$ & \textrm{ - ML-DSA-65 userCred proof secret key} \\
-$ts_R$ & \textrm{ - Recovery proof timestamp in milliseconds} \\
-$ts_U$ & \textrm{ - userCred proof timestamp in milliseconds} \\
 $u_c$ & \textrm{ - 256 bit user credential in memory}\\
 $u_i$ & \textrm{ - 128 bit user id guaranteed to be unique} \\
 $u_n$ & \textrm{ - A's chosen user name} \\
 $u_r$ & \textrm{ - 128 bit recovery id} \\
-$\Delta$ & \textrm{ - Maximum request timestamp skew: 120 seconds} \\
-$\delta$ & \textrm{ - Delimiter byte: \texttt{\symbol{92}n}}\\
-$\sigma_R$ & \textrm{ - ML-DSA-65 recovery proof signature} \\
-$\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 \end{tabular}
 
 \vspace{\notegap}
 
-{\leftskip=\parindent\noindent\textit{Encodings:} Every field of $m_U$ and $m_R$ is ASCII text: $u_i$ and $n_P$ are base64url, $mth$ is uppercase, $pth$ is percent encoded, $ts_U$ and $ts_R$ are decimal milliseconds, and $H_2(bd)$ is lowercase hex. In $b$, $pk_R$ is base64url and $c_A$ is decimal.\par}
+{\leftskip=\parindent\noindent\textit{Primes and stars:} $x'$ is a value read from persisted state, and $x^*$ is a value received from another party. Either may differ from $x$.\par}
+\end{stanza}
+
+\begin{stanza}
+\underline{Proof Variables}\\
+
+\begin{tabular}{@{}p{5mm} l}
+$kp_R$ & \textrm{ - Key purpose text: ``RecovKey''} \\
+$kp_U$ & \textrm{ - Key purpose text: ``UCredKey''} \\
+$m_G$ & \textrm{ - Recovery proof message for registration} \\
+$m_R$ & \textrm{ - Recovery proof message for account recovery and replacing words} \\
+$m_U$ & \textrm{ - userCred proof message for a request} \\
+$n_P$ & \textrm{ - 256 bit userCred proof nonce value} \\
+$n_R$ & \textrm{ - 256 bit recovery proof nonce value} \\
+$pk_R$ & \textrm{ - ML-DSA-65 recovery proof public key} \\
+$pk_U$ & \textrm{ - ML-DSA-65 userCred proof public key} \\
+$sc_G$ & \textrm{ - Recovery signature context for registration} \\
+& \phantom{\textrm{ - }}\textrm{``qcrypt/recovery/register/v1''} \\
+$sc_P$ & \textrm{ - userCred signature context for registration, add passkey and recovery} \\
+& \phantom{\textrm{ - }}\textrm{``qcrypt/usercred/register/v1''} \\
+$sc_R$ & \textrm{ - Recovery signature context for account recovery} \\
+& \phantom{\textrm{ - }}\textrm{``qcrypt/recovery/recover/v1''} \\
+$sc_U$ & \textrm{ - userCred signature context for authorized requests} \\
+& \phantom{\textrm{ - }}\textrm{``qcrypt/usercred/proof/v1''} \\
+$sc_W$ & \textrm{ - Recovery signature context for replacing words} \\
+& \phantom{\textrm{ - }}\textrm{``qcrypt/recovery/replace/v1''} \\
+$sk_R$ & \textrm{ - ML-DSA-65 recovery proof secret key} \\
+$sk_U$ & \textrm{ - ML-DSA-65 userCred proof secret key} \\
+$ts_R$ & \textrm{ - Recovery proof timestamp in milliseconds} \\
+$ts_U$ & \textrm{ - userCred proof timestamp in milliseconds} \\
+$\Delta$ & \textrm{ - Maximum request timestamp skew: 120 seconds} \\
+$\delta$ & \textrm{ - Delimiter byte: \texttt{\symbol{92}n}}\\
+$\sigma_G$ & \textrm{ - ML-DSA-65 signature for registration} \\
+$\sigma_R$ & \textrm{ - ML-DSA-65 signature for account recovery and replacing words} \\
+$\sigma_U$ & \textrm{ - ML-DSA-65 signature for an authorized request} \\
+\end{tabular}
 
 \vspace{\notegap}
 
-{\leftskip=\parindent\noindent\textit{Primes and stars:} $x'$ is a value read from persisted state, and $x^*$ is a value received from another party. Either may differ from $x$.\par}
+{\leftskip=\parindent\noindent\textit{Encodings:} Every field of $m_U$, $m_R$ and $m_G$ is ASCII text: $u_i$, $n_P$, $n_R$, $ch$ and $pk_U$ are base64url, $mth$ is uppercase, $pth$ is percent encoded, $ts_U$ and $ts_R$ are decimal milliseconds, and $H_2(bd)$ is lowercase hex. In $b$, $pk_R$ and $pk_U$ are base64url and $c_A$ is decimal.\par}
 \end{stanza}
 
 \begin{stanza}
@@ -432,8 +455,8 @@ $\sigma_U$ & \textrm{ - ML-DSA-65 userCred proof signature} \\
 $S.chal$ & \textrm{ - Challenges by }$[purpose, ch] : u_i, b$\\
 & \phantom{\textrm{ - }}$purpose$\textrm{ is one of ``reg'', ``add'', ``auth'', ``recover'', ``confirm''}\\
 & \phantom{\textrm{ - }}\textrm{Each expires 300 seconds after it is stored}\\
-$S.nonce$ & \textrm{ - Proof nonces by }$[purpose, n_P] : u_i$\\
-& \phantom{\textrm{ - }}$purpose$\textrm{ is ``api'' for authorized requests, ``nonce'' for recovery proofs}\\
+$S.nonce$ & \textrm{ - Proof nonces by }$[purpose, n_P\textrm{ or }n_R] : u_i$\\
+& \phantom{\textrm{ - }}$purpose$\textrm{ is ``api'' for }$n_P$\textrm{, ``words'' for }$n_R$\\
 & \phantom{\textrm{ - }}\textrm{Each expires 300 seconds after it is stored}\\
 $S.user$ & \textrm{ - Accounts by }$[u_i] : u_n, prf, pk_U, pk_R, cd_r, c_A$\\
 $S.pk$ & \textrm{ - Passkeys by }$[u_i, pkId] : pk_M, cd_p$\\
@@ -444,7 +467,7 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 
 \vspace{\notegap}
 
-{\leftskip=\parindent\noindent\textit{Notes:} Reading an absent key gives $\emptyset$. $X \twoheadleftarrow T[x] : y$ reads $y$ and deletes it from $T$ in one step, or gives $err$ if $x$ is absent or expired. $X \twoheadrightarrow T[x] : y$ stores $y$ in one step, or gives $err$ if $x$ is present.\par}
+{\leftskip=\parindent\noindent\textit{Notes:} Reading an absent key gives $\emptyset$. $X \twoheadleftarrow T[x, y]$ deletes the entry at key $x$ in one step if it holds $y$, or gives $err$ if $x$ is absent, expired or holds other values. $X \twoheadrightarrow T[x] : y$ stores $y$ in one step, or gives $err$ if $x$ is present.\par}
 
 \vspace{\notegap}
 
@@ -473,30 +496,37 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 
 \begin{tabular}{@{}p{5mm} l}
 \multicolumn{2}{@{}l}{$A\rightarrow B : u_n$} \\
-\multicolumn{2}{@{}l}{$B\rightarrow S : u_n, o$} \\
-\multicolumn{2}{@{}l}{$S : u_i = R(128);\ ch = R(256)$} \\
-\multicolumn{2}{@{}l}{$S\rightarrow S.user[u_i] : u_n$} \\
-\multicolumn{2}{@{}l}{$S\rightarrow S.chal[\textrm{``reg''}, ch] : u_i$} \\
+\multicolumn{2}{@{}l}{$B : u_c = R(256)$} \\
+\multicolumn{2}{@{}l}{$B : (pk_U, ) = P_K(D_H(1, kp_U, u_c))$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : u_n, o, pk_U$} \\
+\multicolumn{2}{@{}l}{$S : u_i = R(128);\ ch = R(256);\ b = H_\emptyset(pk_U)$} \\
+\multicolumn{2}{@{}l}{$S\rightarrow S.user[u_i] : u_n, pk_U$} \\
+\multicolumn{2}{@{}l}{$S\rightarrow S.chal[\textrm{``reg''}, ch] : u_i, b$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : ro$} \\
 \multicolumn{2}{@{}l}{$B : u_r = R(128)$} \\
-\multicolumn{2}{@{}l}{$B : (pk_R, ) = P_K(D_H(1, kp_R, u_r \mathbin\Vert u_i))$} \\
-\multicolumn{2}{@{}l}{$B : u_c = R(256)$} \\
+\multicolumn{2}{@{}l}{$B : (pk_R, sk_R) = P_K(D_H(1, kp_R, u_r \mathbin\Vert u_i))$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow M : ro, p_S$} \\
 \multicolumn{2}{@{}l}{$A\rightarrow M : cw$} \\
 \multicolumn{2}{@{}l}{$M\textrm{ create and store passkey}$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow M : rr, p_R$} \\
 \multicolumn{2}{@{}l}{$B : cd_p = u_c\textrm{ encryption under }p_R$} \\
 \multicolumn{2}{@{}l}{$B : cd_r = u_c\textrm{ encryption under }u_r \mathbin\Vert u_i$} \\
-\multicolumn{2}{@{}l}{$B : (pk_U, ) = P_K(D_H(1, kp_U, u_c))$} \\
-\multicolumn{2}{@{}l}{$B\rightarrow S : rr, u_i, ch, pk_R, pk_U, cd_p, cd_r$} \\
+\multicolumn{2}{@{}l}{$B : ts_R = \textrm{current time}$} \\
+\multicolumn{2}{@{}l}{$B : m_G = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert ch \delta \mathbin\Vert pk_U$} \\
+\multicolumn{2}{@{}l}{$B : \sigma_G = P_S(sk_R, m_G, sc_G)$} \\
+\multicolumn{2}{@{}l}{$B : bd = (rr, u_i, ch, pk_R, ts_R, \sigma_G, cd_p, cd_r);\ rq = (\textrm{POST}, \textrm{/v1/reg/verify}, bd)$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow_C S : rq$} \\
 \multicolumn{2}{@{}l}{$S\leftarrow S.user[u_i] : cd_r'$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check }cd_r' == \emptyset\textrm{ else }err$} \\
-\multicolumn{2}{@{}l}{$S\twoheadleftarrow S.chal[\textrm{``reg''}, ch] : u_i'$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ check }u_i' == u_i\textrm{ else }err$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ check }ts_R\textrm{ within }\Delta\textrm{ else }err$} \\
+\multicolumn{2}{@{}l}{$S : m_G = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert ch \delta \mathbin\Vert pk_U$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ check }P_V(pk_R, m_G, \sigma_G, sc_G)\textrm{ else }err$} \\
+\multicolumn{2}{@{}l}{$S : b = H_\emptyset(pk_U)$} \\
+\multicolumn{2}{@{}l}{$S\twoheadleftarrow S.chal[\textrm{``reg''}, ch, u_i, b]$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check WebAuthn validates }rr\textrm{ against }ch, o\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$S : prf = 1;\ c_A = 1$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.pk[u_i, pkId] : pk_M, cd_p$} \\
-\multicolumn{2}{@{}l}{$S\rightarrow S.user[u_i] : prf, pk_U, pk_R, cd_r, c_A$} \\
+\multicolumn{2}{@{}l}{$S\rightarrow S.user[u_i] : prf, pk_R, cd_r, c_A$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ create }ck, cs$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : u_i^*, u_n, prf, pkId^*, cs, ck$} \\
 \multicolumn{2}{@{}l}{$B\textrm{ check }prf == 1\textrm{ else }err$} \\
@@ -506,7 +536,7 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 
 \vspace{\notegap}
 
-{\leftskip=\parindent\noindent\textit{No-PRF fallback:} If $M$ returns no $p_R$, $B$ sends $rr, u_i, ch, pk_R$ only. $S$ sets $prf = 0$, generates $u_c = R(256)$ and derives $(pk_U, )$ from it, stores both, and returns $u_c$. $B$ checks $prf == 0$ in place of $prf == 1$ and runs Session Start with the returned $u_c$.\par}
+{\leftskip=\parindent\noindent\textit{No-PRF fallback:} If $M$ returns no $p_R$, $bd$ carries $u_c$ in place of $cd_p, cd_r$. $S$ checks that $u_c$ derives $pk_U$, sets $prf = 0$, stores $u_c$, and also returns it. $B$ checks $prf == 0$ in place of $prf == 1$ and runs Session Start with its own $u_c$.\par}
 
 \vspace{\notegap}
 
@@ -519,15 +549,14 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \begin{tabular}{@{}p{5mm} l}
 \multicolumn{2}{@{}l}{$B\rightarrow S : o [,u_i]$} \\
 \multicolumn{2}{@{}l}{$S : ch = R(256)$} \\
-\multicolumn{2}{@{}l}{$S\rightarrow S.chal[\textrm{``auth''}, ch] : [u_i]$} \\
+\multicolumn{2}{@{}l}{$S\rightarrow S.chal[\textrm{``auth''}, ch] : u_i\textrm{ or }\emptyset, \emptyset$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : ao$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow M : ao, p_S$} \\
 \multicolumn{2}{@{}l}{$A\rightarrow M : cw$} \\
 \multicolumn{2}{@{}l}{$M\textrm{ sign }ch $} \\
 \multicolumn{2}{@{}l}{$B\leftarrow M : ar, p_R$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow S : ar, ch$} \\
-\multicolumn{2}{@{}l}{$S\twoheadleftarrow S.chal[\textrm{``auth''}, ch] : u_i'$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ check }u_i' \in \{\emptyset, u_i\}\textrm{ else }err$} \\
+\multicolumn{2}{@{}l}{$S\twoheadleftarrow S.chal[\textrm{``auth''}, ch, u_i\textrm{ or }\emptyset, \emptyset]$} \\
 \multicolumn{2}{@{}l}{$S\leftarrow S.pk[u_i, pkId] : pk_M, cd_p$} \\
 \multicolumn{2}{@{}l}{$S\leftarrow S.user[u_i] : u_n, prf$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check WebAuthn validates }ar\textrm{ against }ch, o, pk_M\textrm{ else }err$} \\
@@ -544,7 +573,7 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \end{stanza}
 
 \begin{stanza}
-\underline{Authorization by B}\\
+\underline{Nonce Authorized Requests \smash{($B \rightarrow_N S$)}}\\
 
 \begin{tabular}{@{}p{5mm} l}
 \multicolumn{2}{@{}l}{$B\leftarrow B.sess : u_i, pkId, cd_u$} \\
@@ -563,19 +592,44 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \multicolumn{2}{@{}l}{$S : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert n_P \delta \mathbin\Vert H_2(bd) [\delta \mathbin\Vert qs]$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check }P_V(pk_U, m_U, \sigma_U, sc_U)\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$S\twoheadrightarrow S.nonce[\textrm{``api''}, n_P] : u_i\textrm{ if }mth \neq \textrm{GET}$} \\
-\multicolumn{2}{@{}l}{$B\leftarrow S : \textrm{rq response}$} \\
 \end{tabular}
+
+\vspace{\notegap}
+
+{\leftskip=\parindent\noindent\textit{Notes:} $mth$, $pth$, $bd$, $qs$, $rq$, $ck$ and $cs$ come from the calling stanza. $S$ takes $u_i$ from $ck$, and $u_i$ and $pk_U$ are provided to the calling stanza.\par}
 \end{stanza}
 
 \begin{stanza}
-\underline{Add Passkey by A}\\
-
-{\leftskip=\parindent\noindent\textit{A is authenticated; requests authorized per Authorization by B}\par}
+\underline{Challenge Authorized Requests \smash{($B \rightarrow_C S$)}}\\
 
 \begin{tabular}{@{}p{5mm} l}
-\multicolumn{2}{@{}l}{$B\rightarrow S : o$} \\
-\multicolumn{2}{@{}l}{$S : ch = R(256)$} \\
-\multicolumn{2}{@{}l}{$S\rightarrow S.chal[\textrm{``add''}, ch] : u_i$} \\
+\multicolumn{2}{@{}l}{$B : (pk_U, sk_U) = P_K(D_H(1, kp_U, u_c))$} \\
+\multicolumn{2}{@{}l}{$B : ts_U = \textrm{current time}$} \\
+\multicolumn{2}{@{}l}{$B : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert ch \delta \mathbin\Vert H_2(bd) [\delta \mathbin\Vert qs]$} \\
+\multicolumn{2}{@{}l}{$B : \sigma_U = P_S(sk_U, m_U, sc_P)$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : rq [, ck, cs], ts_U, \sigma_U$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ check }ck, cs\textrm{ valid for }u_i\textrm{ else }err\textrm{ if }rq\textrm{ requires a session}$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ check }ts_U\textrm{ within }\Delta\textrm{ else }err$} \\
+\multicolumn{2}{@{}l}{$S\leftarrow S.user[u_i] : pk_U$} \\
+\multicolumn{2}{@{}l}{$S : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert ch \delta \mathbin\Vert H_2(bd) [\delta \mathbin\Vert qs]$} \\
+\multicolumn{2}{@{}l}{$S\textrm{ check }P_V(pk_U, m_U, \sigma_U, sc_P)\textrm{ else }err$} \\
+\end{tabular}
+
+\vspace{\notegap}
+
+{\leftskip=\parindent\noindent\textit{Notes:} $u_c$, $u_i$, $mth$, $pth$, $ch$, $bd$, $qs$, $rq$, $ck$ and $cs$ come from the calling stanza. $S$ takes $u_i$ from $ck$ if present, else $bd$, and $u_i$ and $pk_U$ are provided to the calling stanza.\par}
+\end{stanza}
+
+\begin{stanza}[\widestanzawidth]
+\underline{Add Passkey by A}\\
+
+{\leftskip=\parindent\noindent\textit{A is authenticated}\par}
+
+\begin{tabular}{@{}p{5mm} l}
+\multicolumn{2}{@{}l}{$B : bd = \emptyset;\ rq = (\textrm{GET}, \textrm{/v1/passkeys/options}, bd)$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow_N S : rq, o, ck, cs$} \\
+\multicolumn{2}{@{}l}{$S : ch = R(256);\ b = H_\emptyset(pk_U)$} \\
+\multicolumn{2}{@{}l}{$S\rightarrow S.chal[\textrm{``add''}, ch] : u_i, b$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : ro$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow M : ro, p_S$} \\
 \multicolumn{2}{@{}l}{$A\rightarrow M : cw$} \\
@@ -586,22 +640,23 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \multicolumn{2}{@{}l}{$B : k_L = D_S(s \mathbin\Vert pkId, k_{KS})[256:512)$} \\
 \multicolumn{2}{@{}l}{$B : u_c = cd_u\textrm{ decryption under }k_L$} \\
 \multicolumn{2}{@{}l}{$B : cd_p = u_c\textrm{ encryption under }p_R$} \\
-\multicolumn{2}{@{}l}{$B\rightarrow S : rr, ch, cd_p$} \\
-\multicolumn{2}{@{}l}{$S\twoheadleftarrow S.chal[\textrm{``add''}, ch] : u_i'$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ check }u_i' == u_i\textrm{ else }err$} \\
+\multicolumn{2}{@{}l}{$B : bd = (rr, ch, cd_p);\ rq = (\textrm{POST}, \textrm{/v1/passkeys/verify}, bd)$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow_C S : rq, ck, cs$} \\
+\multicolumn{2}{@{}l}{$S : b = H_\emptyset(pk_U)$} \\
+\multicolumn{2}{@{}l}{$S\twoheadleftarrow S.chal[\textrm{``add''}, ch, u_i, b]$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check WebAuthn validates }rr\textrm{ against }ch, o\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.pk[u_i, pkId] : pk_M, cd_p$} \\
 \end{tabular}
 
 \vspace{\notegap}
 
-{\leftskip=\parindent\noindent\textit{No-PRF fallback:} $B$ omits $p_S$ and does not decrypt $u_c$ or send $cd_p$; $S$ stores the new passkey without encrypted $u_c$.\par}
+{\leftskip=\parindent\noindent\textit{No-PRF fallback:} $B$ omits $p_S$ and $cd_p$; $S$ stores the new passkey without encrypted $u_c$.\par}
 \end{stanza}
 
 \begin{stanza}
 \underline{Replace Recovery Words by A}\\
 
-{\leftskip=\parindent\noindent\textit{A is authenticated; requests authorized per Authorization by B}\par}
+{\leftskip=\parindent\noindent\textit{A is authenticated}\par}
 
 \begin{tabular}{@{}p{5mm} l}
 \multicolumn{2}{@{}l}{$B\textrm{ repeat Authentication of A (}B\textrm{ policy, not checked by }S\textrm{)}$} \\
@@ -613,13 +668,15 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \multicolumn{2}{@{}l}{$B : u_c = cd_u\textrm{ decryption under }k_L$} \\
 \multicolumn{2}{@{}l}{$B : cd_r = u_c\textrm{ encryption under }u_r \mathbin\Vert u_i$} \\
 \multicolumn{2}{@{}l}{$B : ts_R = \textrm{current time}$} \\
-\multicolumn{2}{@{}l}{$B : n_P = R(256)$} \\
-\multicolumn{2}{@{}l}{$B : m_R = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert n_P$} \\
+\multicolumn{2}{@{}l}{$B : n_R = R(256)$} \\
+\multicolumn{2}{@{}l}{$B : m_R = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert n_R$} \\
 \multicolumn{2}{@{}l}{$B : \sigma_R = P_S(sk_R, m_R, sc_W)$} \\
-\multicolumn{2}{@{}l}{$B\rightarrow S : pk_R, ts_R, n_P, \sigma_R, cd_r$} \\
+\multicolumn{2}{@{}l}{$B : bd = (pk_R, ts_R, n_R, \sigma_R, cd_r);\ rq = (\textrm{PUT}, \textrm{/v1/recover3/key}, bd)$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow_N S : rq, ck, cs$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check }ts_R\textrm{ within }\Delta\textrm{ else }err$} \\
-\multicolumn{2}{@{}l}{$S : m_R = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert n_P$} \\
+\multicolumn{2}{@{}l}{$S : m_R = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert n_R$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check }P_V(pk_R, m_R, \sigma_R, sc_W)\textrm{ else }err$} \\
+\multicolumn{2}{@{}l}{$S\twoheadrightarrow S.nonce[\textrm{``words''}, n_R] : u_i$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.user[u_i] : pk_R, cd_r$} \\
 \multicolumn{2}{@{}l}{$A\leftarrow B : u_r\mathbin\Vert u_i\textrm{ as BIP39}$} \\
 \end{tabular}
@@ -636,41 +693,35 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \multicolumn{2}{@{}l}{$A\rightarrow B : u_r\mathbin\Vert u_i\textrm{ as BIP39}$} \\
 \multicolumn{2}{@{}l}{$B : (pk_R, sk_R) = P_K(D_H(1, kp_R, u_r \mathbin\Vert u_i))$} \\
 \multicolumn{2}{@{}l}{$B : ts_R = \textrm{current time}$} \\
-\multicolumn{2}{@{}l}{$B : n_P = R(256)$} \\
-\multicolumn{2}{@{}l}{$B : m_R = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert n_P$} \\
+\multicolumn{2}{@{}l}{$B : n_R = R(256)$} \\
+\multicolumn{2}{@{}l}{$B : m_R = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert n_R$} \\
 \multicolumn{2}{@{}l}{$B : \sigma_R = P_S(sk_R, m_R, sc_R)$} \\
-\multicolumn{2}{@{}l}{$B\rightarrow S : u_i, ts_R, n_P, \sigma_R$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow S : u_i, ts_R, n_R, \sigma_R$} \\
 \multicolumn{2}{@{}l}{$S\leftarrow S.user[u_i] : pk_R$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check }ts_R\textrm{ within }\Delta\textrm{ else }err$} \\
-\multicolumn{2}{@{}l}{$S : m_R = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert n_P$} \\
+\multicolumn{2}{@{}l}{$S : m_R = u_i \delta \mathbin\Vert ts_R \delta \mathbin\Vert n_R$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check }P_V(pk_R, m_R, \sigma_R, sc_R)\textrm{ else }err$} \\
-\multicolumn{2}{@{}l}{$S\twoheadrightarrow S.nonce[\textrm{``nonce''}, n_P] : u_i$} \\
+\multicolumn{2}{@{}l}{$S\twoheadrightarrow S.nonce[\textrm{``words''}, n_R] : u_i$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.user[u_i] : c_A + 1$} \\
-\multicolumn{2}{@{}l}{$S\leftarrow S.user[u_i] : c_A$} \\
-\multicolumn{2}{@{}l}{$S : ch_R = R(256);\ b = H_\emptyset(pk_R \mathbin\Vert \textrm{``:''} \mathbin\Vert c_A)$} \\
-\multicolumn{2}{@{}l}{$S\rightarrow S.chal[\textrm{``confirm''}, ch_R] : u_i, b$} \\
-\multicolumn{2}{@{}l}{$B\leftarrow S : prf, ch_R, cd_r$} \\
+\multicolumn{2}{@{}l}{$S\leftarrow S.user[u_i] : pk_U, c_A$} \\
+\multicolumn{2}{@{}l}{$S : ch = R(256);\ b = H_\emptyset(pk_R \mathbin\Vert \textrm{``:''} \mathbin\Vert c_A \mathbin\Vert \textrm{``:''} \mathbin\Vert pk_U)$} \\
+\multicolumn{2}{@{}l}{$S\rightarrow S.chal[\textrm{``confirm''}, ch] : u_i, b$} \\
+\multicolumn{2}{@{}l}{$B\leftarrow S : prf, ch, cd_r$} \\
 \multicolumn{2}{@{}l}{$B : u_c = cd_r\textrm{ decryption under }u_r \mathbin\Vert u_i$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow B.pin[u_i] : prf', pk_U'$} \\
 \multicolumn{2}{@{}l}{$B\textrm{ check }prf' \in \{\emptyset, 0, prf\}\textrm{ else }err$} \\
-\multicolumn{2}{@{}l}{$B : (pk_U, sk_U) = P_K(D_H(1, kp_U, u_c))$} \\
+\multicolumn{2}{@{}l}{$B : (pk_U, ) = P_K(D_H(1, kp_U, u_c))$} \\
 \multicolumn{2}{@{}l}{$B\textrm{ check }pk_U' \in \{\emptyset, pk_U\}\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow B.pin[u_i] : prf, pk_U$} \\
-\multicolumn{2}{@{}l}{$B : ts_U = \textrm{current time}$} \\
-\multicolumn{2}{@{}l}{$B : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert ch_R \delta \mathbin\Vert H_2(\emptyset)$} \\
-\multicolumn{2}{@{}l}{$B : \sigma_U = P_S(sk_U, m_U, sc_U)$} \\
-\multicolumn{2}{@{}l}{$B\rightarrow S : u_i, o, ch_R, ts_U, \sigma_U$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ check }ts_U\textrm{ within }\Delta\textrm{ else }err$} \\
-\multicolumn{2}{@{}l}{$S\leftarrow S.user[u_i] : pk_R, pk_U, c_A$} \\
-\multicolumn{2}{@{}l}{$S : b = H_\emptyset(pk_R \mathbin\Vert \textrm{``:''} \mathbin\Vert c_A)$} \\
-\multicolumn{2}{@{}l}{$S\twoheadleftarrow S.chal[\textrm{``confirm''}, ch_R] : u_i', b'$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ check }u_i' == u_i\textrm{ and }b' == b\textrm{ else }err$} \\
-\multicolumn{2}{@{}l}{$S : m_U = u_i \delta \mathbin\Vert mth \delta \mathbin\Vert pth \delta \mathbin\Vert ts_U \delta \mathbin\Vert ch_R \delta \mathbin\Vert H_2(\emptyset)$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ check }P_V(pk_U, m_U, \sigma_U, sc_U)\textrm{ else }err$} \\
+\multicolumn{2}{@{}l}{$B : bd = (u_i, ch);\ rq = (\textrm{POST}, \textrm{/v1/recover/confirm}, bd)$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow_C S : rq, o$} \\
+\multicolumn{2}{@{}l}{$S\leftarrow S.user[u_i] : pk_R, c_A$} \\
+\multicolumn{2}{@{}l}{$S : b = H_\emptyset(pk_R \mathbin\Vert \textrm{``:''} \mathbin\Vert c_A \mathbin\Vert \textrm{``:''} \mathbin\Vert pk_U)$} \\
+\multicolumn{2}{@{}l}{$S\twoheadleftarrow S.chal[\textrm{``confirm''}, ch, u_i, b]$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ delete }S.pk[u_i, pkId]\textrm{ for every }pkId$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.user[u_i] : c_A + 1$} \\
 \multicolumn{2}{@{}l}{$S\leftarrow S.user[u_i] : c_A$} \\
-\multicolumn{2}{@{}l}{$S : ch = R(256);\ b = H_\emptyset(pk_R \mathbin\Vert \textrm{``:''} \mathbin\Vert c_A)$} \\
+\multicolumn{2}{@{}l}{$S : ch = R(256);\ b = H_\emptyset(pk_R \mathbin\Vert \textrm{``:''} \mathbin\Vert c_A \mathbin\Vert \textrm{``:''} \mathbin\Vert pk_U)$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.chal[\textrm{``recover''}, ch] : u_i, b$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow S : ro$} \\
 \multicolumn{2}{@{}l}{$B\rightarrow M : ro, p_S$} \\
@@ -678,11 +729,11 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \multicolumn{2}{@{}l}{$M\textrm{ create and store passkey for }u_i^*$} \\
 \multicolumn{2}{@{}l}{$B\leftarrow M : rr, p_R$} \\
 \multicolumn{2}{@{}l}{$B : cd_p = u_c\textrm{ encryption under }p_R$} \\
-\multicolumn{2}{@{}l}{$B\rightarrow S : rr, u_i, ch, cd_p$} \\
+\multicolumn{2}{@{}l}{$B : bd = (rr, u_i, ch, cd_p);\ rq = (\textrm{POST}, \textrm{/v1/recover/verify}, bd)$} \\
+\multicolumn{2}{@{}l}{$B\rightarrow_C S : rq$} \\
 \multicolumn{2}{@{}l}{$S\leftarrow S.user[u_i] : pk_R, c_A$} \\
-\multicolumn{2}{@{}l}{$S : b = H_\emptyset(pk_R \mathbin\Vert \textrm{``:''} \mathbin\Vert c_A)$} \\
-\multicolumn{2}{@{}l}{$S\twoheadleftarrow S.chal[\textrm{``recover''}, ch] : u_i', b'$} \\
-\multicolumn{2}{@{}l}{$S\textrm{ check }u_i' == u_i\textrm{ and }b' == b\textrm{ else }err$} \\
+\multicolumn{2}{@{}l}{$S : b = H_\emptyset(pk_R \mathbin\Vert \textrm{``:''} \mathbin\Vert c_A \mathbin\Vert \textrm{``:''} \mathbin\Vert pk_U)$} \\
+\multicolumn{2}{@{}l}{$S\twoheadleftarrow S.chal[\textrm{``recover''}, ch, u_i, b]$} \\
 \multicolumn{2}{@{}l}{$S\textrm{ check WebAuthn validates }rr\textrm{ against }ch, o\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.pk[u_i, pkId] : pk_M, cd_p$} \\
 \multicolumn{2}{@{}l}{$S\rightarrow S.user[u_i] : c_A + 1$} \\
@@ -694,8 +745,8 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \end{tabular}
 \end{stanza}
 
-\begin{stanza}
-{\leftskip=\parindent\noindent\textit{No-PRF fallback:} $S$ returns $prf = 0$ and $u_c$ in place of $cd_r$; $B$ omits $p_S$ and the $cd_r$ decryption. After the new passkey, $B$ sends $rr, u_i, ch$ only and $S$ stores it without encrypted $u_c$.\par}
+\begin{stanza}[\widestanzawidth]
+{\leftskip=\parindent\noindent\textit{No-PRF fallback:} $S$ returns $prf = 0$ and $u_c$ in place of $cd_r$; $B$ omits $p_S$ and the $cd_r$ decryption. After the new passkey, $bd$ is $(rr, u_i, ch)$ and $S$ stores it without encrypted $u_c$.\par}
 \end{stanza}
 
 \end{document}

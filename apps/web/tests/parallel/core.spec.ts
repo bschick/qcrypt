@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { testWithAuth, fillPwdAndAccept } from '.././common';
+import { testWithAuth, fillPwdAndAccept, setSwitch } from '.././common';
 
 const TEXT_AREA_TIP = 'To encrypt some data, type or paste text here';
 const ENCRYPT_TIP = 'When you have finished entering text, click the Encrypt button';
@@ -21,6 +21,37 @@ test.describe('main page', () => {
 
       await clearInput.selectText();
       await clearInput.press('Backspace');
+      await expect(textAreaBubble).toBeVisible();
+      await expect(encryptBubble).toHaveCount(0);
+   });
+
+   testWithAuth('help bubbles follow clear text that hiding the window erases', async ({ authFixture }) => {
+      const { page } = authFixture;
+      const testUser = await authFixture.createTestUser(authFixture.memAuthenticator());
+
+      const textAreaBubble = page.locator('.bubble--visible', { hasText: TEXT_AREA_TIP });
+      const encryptBubble = page.locator('.bubble--visible', { hasText: ENCRYPT_TIP });
+      await expect(textAreaBubble).toBeVisible({ timeout: 10000 });
+
+      await page.getByRole('button', { name: 'Advanced Options' }).click();
+      await setSwitch(page.getByRole('switch', { name: 'Clear When Hidden' }), true);
+
+      const clearInput = page.locator('textarea#clearInput');
+      await clearInput.pressSequentially('secret');
+      await expect(encryptBubble).toBeVisible();
+      await page.getByRole('button', { name: 'Encrypt Text' }).click();
+      await expect(page.getByRole('heading', { name: new RegExp(testUser.userName) })).toBeVisible();
+
+      // Report the window as hidden while the password dialog is open
+      await page.evaluate(() => {
+         Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+         document.dispatchEvent(new Event('visibilitychange'));
+      });
+      await expect(clearInput).toHaveValue('');
+      await expect(textAreaBubble).toHaveCount(0);
+      await expect(encryptBubble).toHaveCount(0);
+
+      await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
       await expect(textAreaBubble).toBeVisible();
       await expect(encryptBubble).toHaveCount(0);
    });

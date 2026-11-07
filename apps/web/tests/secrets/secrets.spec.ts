@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
 import type { HmacSecretMode } from 'nid-webauthn-emulator';
+import * as cc from '@qcrypt/crypto/consts';
 import {
    testWithAuth,
    fillPwdAndAccept,
@@ -307,7 +308,7 @@ async function readKeystoreKey(page: Page, pkId: string): Promise<Uint8Array> {
       { dbName: KEYSTORE_DB, storeName: KEYSTORE_STORE, slot: KEYSTORE_SLOT, input: hmacInput },
    );
    // The app uses the second half of the HMAC output as the key
-   return new Uint8Array(hmac.slice(32));
+   return new Uint8Array(hmac.slice(cc.KEY_BYTES));
 }
 
 for (const prf of [true, false]) {
@@ -455,6 +456,9 @@ for (const prf of [true, false]) {
             await page.keyboard.press('Tab');
          };
 
+         // Material's form field keeps the recovery words page reachable until 300 ms after it renders, and no person
+         // saves the words that quickly
+         await page.waitForTimeout(1000);
          await checkpoint('after account creation');
          await signOut('account creation');
 

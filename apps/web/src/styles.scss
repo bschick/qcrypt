@@ -137,7 +137,9 @@ body {
   .qc-clickable,
   .qc-clickable rect,
   .qc-clickable path {
-    transition: stroke 120ms ease, stroke-width 120ms ease;
+    transition:
+      stroke 120ms ease,
+      stroke-width 120ms ease;
   }
 
   .qc-clickable:hover,

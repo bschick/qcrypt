@@ -35,6 +35,7 @@ import {
    logError,
 } from './utils';
 import { type KeyProvider, PWDKeyProvider } from './keys';
+import { WrongPasswordError, ModifiedDataError, ForgedDataError } from './errors';
 
 export enum CipherState {
    Error,
@@ -586,7 +587,7 @@ export class EncipherV8 extends Encipher {
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
             const msg = err instanceof Error ? err.message : '';
-            throw new DOMException(msg, 'OperationError ');
+            throw new DOMException(msg, 'OperationError');
          }
       } else if (alg === 'AEGIS-256') {
          try {
@@ -594,7 +595,7 @@ export class EncipherV8 extends Encipher {
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
             const msg = err instanceof Error ? err.message : '';
-            throw new DOMException(msg, 'OperationError ');
+            throw new DOMException(msg, 'OperationError');
          }
       } else {
          let ek: CryptoKey | undefined = await crypto.subtle.importKey('raw', getArrayBuffer(key), 'AES-GCM', false, [
@@ -746,20 +747,34 @@ export abstract class Decipher extends Ciphers {
          if (keyCommitment?.byteLength) {
             const expected = await this._keyProvider.getKeyCommitment();
             if (!getSodium().memcmp(expected, keyCommitment)) {
-               throw new Error('Invalid key commitment');
+               // Mismatch means a wrong password unless the data was forged, but that is rare so don't raise it
+               throw new WrongPasswordError();
             }
          }
 
          const aeadAd = await this._createAeadAd(this._blockData.additionalData);
 
          // Only block0 uses the root cipher key. Simplifies backward compat and is no less secure
-         const decrypted = await Decipher._doDecrypt(
-            this._blockData.alg,
-            ek,
-            this._blockData.iv,
-            this._blockData.encryptedData,
-            aeadAd,
-         );
+         let decrypted: Uint8Array;
+         try {
+            decrypted = await Decipher._doDecrypt(
+               this._blockData.alg,
+               ek,
+               this._blockData.iv,
+               this._blockData.encryptedData,
+               aeadAd,
+            );
+         } catch (err) {
+            // A stored commitment has matched by now, so the password is correct and the data was changed
+            if (keyCommitment?.byteLength) {
+               throw new ForgedDataError({ cause: err });
+            }
+            throw err;
+         }
+
+         if (decrypted.byteLength === 0) {
+            throw new Error('Empty block0 data');
+         }
 
          this._state = CipherState.Block0Done;
          return decrypted;
@@ -832,7 +847,7 @@ export abstract class Decipher extends Ciphers {
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
             const msg = err instanceof Error ? err.message : '';
-            throw new DOMException(msg, 'OperationError ');
+            throw new DOMException(msg, 'OperationError');
          }
       } else if (alg === 'AEGIS-256') {
          try {
@@ -840,7 +855,7 @@ export abstract class Decipher extends Ciphers {
          } catch (err) {
             // Match behavior of Web Crytpo functions that throws limited DOMException
             const msg = err instanceof Error ? err.message : '';
-            throw new DOMException(msg, 'OperationError ');
+            throw new DOMException(msg, 'OperationError');
          }
       } else {
          let dk: CryptoKey | undefined = await crypto.subtle.importKey('raw', getArrayBuffer(key), 'AES-GCM', false, [
@@ -1126,16 +1141,25 @@ export class DecipherV678 extends Decipher {
 
          const aeadAd = await this._createAeadAd(this._blockData.additionalData);
 
-         const decrypted = await Decipher._doDecrypt(
-            this._blockData.alg,
-            bk,
-            this._blockData.iv,
-            this._blockData.encryptedData,
-            aeadAd,
-         );
+         let decrypted: Uint8Array;
+         try {
+            decrypted = await Decipher._doDecrypt(
+               this._blockData.alg,
+               bk,
+               this._blockData.iv,
+               this._blockData.encryptedData,
+               aeadAd,
+            );
+         } catch (err) {
+            // block0 already decrypted with this password and this block passed its MAC, so the data is forged
+            throw new ForgedDataError({ cause: err });
+         }
 
          // Occurs when the last block was only present to mark termination (in v5+)
          if (decrypted.byteLength === 0) {
+            if (this._lastFlags !== 1) {
+               throw new Error('Missing terminal data block');
+            }
             await this._verifyEmptyReader();
             this.finishedState();
          }
@@ -1253,7 +1277,7 @@ export class DecipherV678 extends Decipher {
          return;
       }
 
-      throw new Error('Invalid MAC signature');
+      throw new ModifiedDataError();
    }
 }
 

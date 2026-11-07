@@ -1,5 +1,22 @@
 # CHANGELOG.md
 
+## 8.0.5 (2026-11-06)
+
+#### Changes
+
+- expanded protocol documentation with proof variables and request authorization stanzas
+- decryption errors now distinguish a wrong password, modified data, and forged data
+- added a clear indication of user name mismatch to the delete passkey dialog
+
+#### Security
+
+- added ProVerif formal models of the account and encryption protocols
+- bound passkey registration, add, and recovery challenges to the account's keys
+- browsers now prove possession of every key they register
+- detect added outer encryption loops even with a stolen user credential
+- closed a race allowing session creation during passkey deletion [thanks to Leonardo Oliveira (@L30N4RDO-D)]
+- updated packages
+
 ## 8.0.4 (2026-10-24)
 
 #### Changes
