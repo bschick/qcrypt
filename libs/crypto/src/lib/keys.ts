@@ -144,10 +144,7 @@ export abstract class BaseKeyProvider implements KeyProvider {
          this._cdInfo.hint = undefined;
          this._cdInfo = undefined;
       }
-      for (const bk of this._bks.values()) {
-         bk.fill(0);
-      }
-      this._bks.clear();
+      this._purgeBlockKeys();
       this._extraKeyMaterial = undefined;
    }
 
@@ -169,16 +166,24 @@ export abstract class BaseKeyProvider implements KeyProvider {
       if (!this._ek) {
          throw new Error('Invalid state, getCipherKey() must be called first');
       }
-      // cache block keys primarily to overwrite at purge
+      // only cache the last requested block key and overwrite the previous key at each new request
       let bk = this._bks.get(blockNum);
       if (!bk) {
          bk = await this._genBlockCipherKey(blockNum);
          if (!bk || bk.byteLength !== cc.KEY_BYTES) {
             throw new Error('Invalid block cipher key');
          }
+         this._purgeBlockKeys();
          this._bks.set(blockNum, bk);
       }
       return bk;
+   }
+
+   private _purgeBlockKeys(): void {
+      for (const bk of this._bks.values()) {
+         bk.fill(0);
+      }
+      this._bks.clear();
    }
 
    public async getSigningKey(): Promise<Uint8Array<ArrayBuffer>> {

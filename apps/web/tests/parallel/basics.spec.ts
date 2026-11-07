@@ -104,3 +104,24 @@ testWithAuth('new passkey is disabled at the passkey limit', async ({ authFixtur
    await newPasskey.hover();
    await expect(limitTip).not.toBeVisible();
 });
+
+testWithAuth('last passkey delete needs the exact user name', async ({ authFixture }) => {
+   const { page } = authFixture;
+   const testUser = await authFixture.createTestUser(authFixture.memAuthenticator());
+   await toggleCredentials(page);
+   await page.getByRole('button', { name: 'Delete' }).last().click();
+
+   const dialog = page.getByRole('dialog');
+   const confirmInput = dialog.locator('input#confirmInput');
+   await confirmInput.fill(`${testUser.userName}x`);
+   await expect(confirmInput).toHaveAttribute('aria-invalid', 'true');
+
+   await dialog.getByRole('button', { name: 'Yes' }).click();
+   await expect(dialog).toBeVisible();
+   await expect(confirmInput).toBeFocused();
+
+   await confirmInput.fill(testUser.userName);
+   await expect(confirmInput).toHaveAttribute('aria-invalid', 'false');
+   await dialog.getByRole('button', { name: 'No' }).click();
+   await expect(dialog).toHaveCount(0);
+});

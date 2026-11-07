@@ -24,6 +24,7 @@ import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest';
 import { cryptoReady, bytesToBase64, base64ToBytes, getRandom, hashString } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import * as api from '@qcrypt/api';
+import { USERCRED_ENC_MIN_BYTES, PROOF_SKEW_MS } from '../src/consts';
 import {
    postJson,
    putJson,
@@ -39,7 +40,10 @@ import {
    loginWithPasskey,
    addPasskey,
    registerNewCredential,
+   makeChallengeProofHeaders,
+   makeNonceProofHeaders,
    sha256Hex,
+   testUserName,
    type TestUser,
 } from './common';
 
@@ -60,7 +64,7 @@ async function recoveryKeyBody(
       recoveryPubKey: api.getRecoveryPubKey(secret),
       timestamp,
       nonce,
-      signature: api.createRecoveryProof(proofSecret, user.userId, timestamp, nonce, 'replace'),
+      signature: api.createRecoveryNonceProof(proofSecret, user.userId, timestamp, nonce, 'replace'),
    };
    if (user.prf) {
       body.userCredEnc = await prfEncrypt(base64ToBytes(user.userCred), secret.slice(0), user.userId);
@@ -88,24 +92,43 @@ function recover3Body(
       userId: user.userId,
       timestamp,
       nonce,
-      signature: api.createRecoveryProof(secret, user.userId, timestamp, nonce, 'recover'),
+      signature: api.createRecoveryNonceProof(secret, user.userId, timestamp, nonce, 'recover'),
    };
 }
 
 // Proves possession of the rebuilt userCred over the challenge recover3 issued. opts let tests
 // sign with the wrong credential or a stale timestamp.
-function confirmBody(
+function confirmRequest(
    user: TestUser,
    challenge: string,
    opts: { userCred?: string; timestamp?: string } = {},
-): api.RecoverConfirmRequest {
-   const userCred = opts.userCred ?? user.userCred;
-   const timestamp = opts.timestamp ?? String(Date.now());
+): { body: api.RecoverConfirmRequest; headers: Record<string, string> } {
+   const body = { userId: user.userId, challenge };
+   const headers = makeChallengeProofHeaders(
+      CONFIRM_PATH,
+      body,
+      base64ToBytes(opts.userCred ?? user.userCred),
+      user.userId,
+      challenge,
+      { timestampMs: opts.timestamp },
+   );
+   return { body, headers };
+}
+
+function postConfirm(user: TestUser, challenge: string, opts: { userCred?: string; timestamp?: string } = {}) {
+   const { body, headers } = confirmRequest(user, challenge, opts);
+   return postJson(CONFIRM_PATH, body, headers, '');
+}
+
+// BACKWARD COMPAT: a confirm body with its own proof. The proof uses the userCred nonce context and
+// signs an empty body.
+function legacyConfirmBody(user: TestUser, challenge: string, userCred = user.userCred): api.RecoverConfirmRequest {
+   const timestamp = String(Date.now());
    return {
       userId: user.userId,
       challenge,
       timestamp,
-      signature: api.createUserCredProof(
+      signature: api.createUserCredNonceProof(
          base64ToBytes(userCred),
          user.userId,
          'POST',
@@ -133,6 +156,18 @@ type StartResponse = {
    data: api.RecoverStartResponse;
 };
 
+type PendingRecovery = {
+   body: api.RecoverVerifyRequest;
+   recoveredUserCred: Uint8Array<ArrayBuffer>;
+};
+
+// Overrides for a recover/verify request, with the same meaning as RegVerifyOpts has for reg/verify
+type RecoverVerifyOpts = {
+   body?: Partial<api.RecoverVerifyRequest>;
+   keySecret?: Uint8Array;
+   headers?: Record<string, string>;
+};
+
 // Spends the recovery challenge on confirm, which deletes the old passkeys, then registers
 // the replacement that recovery promises.
 async function finishRecovery3(
@@ -140,7 +175,17 @@ async function finishRecovery3(
    startRes: StartResponse,
    recoveredUserCred: Uint8Array<ArrayBuffer>,
 ): Promise<RecoverySession> {
-   const confirmRes = await postJson('/v1/recover/confirm', confirmBody(user, startRes.data.challenge), {}, '');
+   return verifyRecovery(user, await prepareRecoverVerify(user, startRes, recoveredUserCred));
+}
+
+// Runs confirm and creates the replacement passkey. The recover/verify challenge it returns stays
+// unused until verifyRecovery or postRecoverVerify sends it.
+async function prepareRecoverVerify(
+   user: TestUser,
+   startRes: StartResponse,
+   recoveredUserCred: Uint8Array<ArrayBuffer>,
+): Promise<PendingRecovery> {
+   const confirmRes = await postConfirm(user, startRes.data.challenge);
    expect(confirmRes.status).toBe(200);
    expect(confirmRes.data.challenge).toBeDefined();
    expect(confirmRes.data.excludeCredentials).toEqual([]);
@@ -169,7 +214,30 @@ async function finishRecovery3(
       });
    }
 
-   const verifyRes = await postJson('/v1/recover/verify', verifyBody, {}, '');
+   return { body: verifyBody, recoveredUserCred };
+}
+
+function postRecoverVerify(user: TestUser, pending: PendingRecovery, opts: RecoverVerifyOpts) {
+   const body = { ...pending.body, ...opts.body };
+   const headers =
+      opts.headers ??
+      makeChallengeProofHeaders(
+         '/v1/recover/verify',
+         body,
+         opts.keySecret ?? pending.recoveredUserCred,
+         user.userId,
+         body.challenge,
+      );
+   return postJson('/v1/recover/verify', body, headers, '');
+}
+
+// Ends recovery with a new session on the replacement passkey
+async function verifyRecovery(
+   user: TestUser,
+   pending: PendingRecovery,
+   opts: RecoverVerifyOpts = {},
+): Promise<RecoverySession> {
+   const verifyRes = await postRecoverVerify(user, pending, opts);
    expect(verifyRes.status).toBe(200);
    expect(verifyRes.data.verified).toBe(true);
    expect(verifyRes.data.pkId).toBeDefined();
@@ -234,6 +302,29 @@ async function recoverAccount3(user: TestUser, opts: { keepSession?: boolean } =
    }
 
    return session;
+}
+
+// Registers a new account and recovers it up to, but not including, recover/verify. Confirm has
+// deleted the account's passkeys by then, so only a completed recovery leaves one to delete.
+async function pendingRecovery(prf: boolean): Promise<{ user: TestUser; pending: PendingRecovery }> {
+   const user = await registerTestUser(prf);
+   const { startRes, recoveredUserCred } = await startRecovery3(user);
+   return { user, pending: await prepareRecoverVerify(user, startRes, recoveredUserCred) };
+}
+
+// recover/verify is unauthenticated, so every rejection is a uniform 401. The request without
+// overrides is then sent on the same challenge and must succeed. Its success proves the rejection
+// did not consume the challenge, and that the overrides alone caused the rejection.
+async function expectRecoverVerifyRejected(
+   user: TestUser,
+   pending: PendingRecovery,
+   opts: RecoverVerifyOpts,
+): Promise<void> {
+   const bad = await postRecoverVerify(user, pending, opts);
+   expect(bad.status).toBe(401);
+   const session = await verifyRecovery(user, pending);
+   setSessionSigner(user.userId, session.userCred);
+   await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
 }
 
 export function recoverySuite(prf: boolean): void {
@@ -362,6 +453,24 @@ export function recoverySuite(prf: boolean): void {
          expect(res.status).toBe(400);
       });
 
+      it('rejects a recovery key proof made for recover3', async () => {
+         const body = await recoveryKeyBody(user, user.recoverySecret);
+         const recoverSig = api.createRecoveryNonceProof(
+            user.recoverySecret,
+            user.userId,
+            body.timestamp,
+            body.nonce,
+            'recover',
+         );
+         const res = await putJson(
+            '/v1/recover3/key',
+            { ...body, signature: recoverSig },
+            { 'x-csrf-token': user.csrf },
+            user.cookie,
+         );
+         expect(res.status).toBe(400);
+      });
+
       it('rejects a replayed recovery key proof', async () => {
          const newSecret = api.recoverySecret(getRandom(api.RECOVERYID_BYTES), user.userId);
          const body = await recoveryKeyBody(user, newSecret);
@@ -424,12 +533,7 @@ export function recoverySuite(prf: boolean): void {
          expect(keyRes.status).toBe(200);
 
          try {
-            const attackConfirm = await postJson(
-               CONFIRM_PATH,
-               confirmBody(recoverUser, attack.startRes.data.challenge),
-               {},
-               '',
-            );
+            const attackConfirm = await postConfirm(recoverUser, attack.startRes.data.challenge);
             expect(attackConfirm.status).toBe(401);
 
             await expectUserPasskeys(
@@ -456,12 +560,7 @@ export function recoverySuite(prf: boolean): void {
          const victim = await startRecovery3(recoverUser);
 
          try {
-            const attackConfirm = await postJson(
-               CONFIRM_PATH,
-               confirmBody(recoverUser, attack.startRes.data.challenge),
-               {},
-               '',
-            );
+            const attackConfirm = await postConfirm(recoverUser, attack.startRes.data.challenge);
             expect(attackConfirm.status).toBe(401);
          } finally {
             // Finishing the victim's recovery deletes every passkey on the account, so the
@@ -475,12 +574,7 @@ export function recoverySuite(prf: boolean): void {
          const recoverUser = await registerTestUser(prf);
 
          const attack = await startRecovery3(recoverUser);
-         const attackConfirm = await postJson(
-            CONFIRM_PATH,
-            confirmBody(recoverUser, attack.startRes.data.challenge),
-            {},
-            '',
-         );
+         const attackConfirm = await postConfirm(recoverUser, attack.startRes.data.challenge);
          expect(attackConfirm.status).toBe(200);
 
          const victim = await startRecovery3(recoverUser);
@@ -489,16 +583,21 @@ export function recoverySuite(prf: boolean): void {
             // No server call: this creates the attacker's passkey from the registration options
             // their confirm returned.
             const { attestation, passkeyUserCredEnc } = await registerNewCredential(recoverUser, attackConfirm.data);
-            const attackVerify = await postJson(
+            const attackBody = api.makeRecoverVerifyRequest(attestation as api.RegistrationFields, {
+               userId: recoverUser.userId,
+               challenge: attackConfirm.data.challenge,
+               passkeyUserCredEnc,
+            });
+            // recover3 returned userCred to the attacker as well, so this proof is valid and only the
+            // challenge can cause the rejection
+            const attackHeaders = makeChallengeProofHeaders(
                '/v1/recover/verify',
-               api.makeRecoverVerifyRequest(attestation as api.RegistrationFields, {
-                  userId: recoverUser.userId,
-                  challenge: attackConfirm.data.challenge,
-                  passkeyUserCredEnc,
-               }),
-               {},
-               '',
+               attackBody,
+               base64ToBytes(recoverUser.userCred),
+               recoverUser.userId,
+               attackConfirm.data.challenge,
             );
+            const attackVerify = await postJson('/v1/recover/verify', attackBody, attackHeaders, '');
             expect(attackVerify.status).toBe(401);
          } finally {
             // Finishing the victim's recovery deletes every passkey on the account, including one
@@ -512,12 +611,7 @@ export function recoverySuite(prf: boolean): void {
          const recoverUser = await registerTestUser(prf);
 
          const attack = await startRecovery3(recoverUser);
-         const attackConfirm = await postJson(
-            CONFIRM_PATH,
-            confirmBody(recoverUser, attack.startRes.data.challenge),
-            {},
-            '',
-         );
+         const attackConfirm = await postConfirm(recoverUser, attack.startRes.data.challenge);
          expect(attackConfirm.status).toBe(200);
 
          // The server refuses a recovery registration while the account is signed in, so the
@@ -534,16 +628,21 @@ export function recoverySuite(prf: boolean): void {
             // No server call: this creates the attacker's passkey from the registration options
             // their confirm returned.
             const { attestation, passkeyUserCredEnc } = await registerNewCredential(recoverUser, attackConfirm.data);
-            const attackVerify = await postJson(
+            const attackBody = api.makeRecoverVerifyRequest(attestation as api.RegistrationFields, {
+               userId: recoverUser.userId,
+               challenge: attackConfirm.data.challenge,
+               passkeyUserCredEnc,
+            });
+            // recover3 returned userCred to the attacker as well, so this proof is valid and only the
+            // challenge can cause the rejection
+            const attackHeaders = makeChallengeProofHeaders(
                '/v1/recover/verify',
-               api.makeRecoverVerifyRequest(attestation as api.RegistrationFields, {
-                  userId: recoverUser.userId,
-                  challenge: attackConfirm.data.challenge,
-                  passkeyUserCredEnc,
-               }),
-               {},
-               '',
+               attackBody,
+               base64ToBytes(recoverUser.userCred),
+               recoverUser.userId,
+               attackConfirm.data.challenge,
             );
+            const attackVerify = await postJson('/v1/recover/verify', attackBody, attackHeaders, '');
             expect(attackVerify.status).toBe(401);
 
             const victimLogin = await loginWithPasskey(recoverUser);
@@ -629,6 +728,21 @@ export function recoverySuite(prf: boolean): void {
          expect(res.status).toBe(401);
       });
 
+      it('rejects a recover3 proof made for a recovery key change', async () => {
+         await startRecovery3(user);
+
+         const body = recover3Body(user);
+         const replaceSig = api.createRecoveryNonceProof(
+            user.recoverySecret,
+            user.userId,
+            body.timestamp,
+            body.nonce,
+            'replace',
+         );
+         const res = await postJson('/v1/recover3', { ...body, signature: replaceSig }, {}, '');
+         expect(res.status).toBe(401);
+      });
+
       it('rejects a recover3 request missing any recovery proof', async () => {
          await startRecovery3(user);
 
@@ -648,7 +762,30 @@ export function recoverySuite(prf: boolean): void {
                userId: unknown,
                timestamp,
                nonce,
-               signature: api.createRecoveryProof(user.recoverySecret, unknown, timestamp, nonce, 'recover'),
+               signature: api.createRecoveryNonceProof(user.recoverySecret, unknown, timestamp, nonce, 'recover'),
+            },
+            {},
+            '',
+         );
+         expect(res.status).toBe(401);
+      });
+
+      it('rejects recover3 for an account that never finished registration', async () => {
+         await startRecovery3(user);
+
+         // reg/options creates the account, but only reg/verify gives it a recovery key
+         const regOpts = await postJson('/v1/reg/options', { userName: testUserName() }, {}, '');
+         expect(regOpts.status).toBe(200);
+         const unverifiedId: string = regOpts.data.user.id;
+         const timestamp = String(Date.now());
+         const nonce = bytesToBase64(getRandom(api.CHALLENGE_BYTES));
+         const res = await postJson(
+            '/v1/recover3',
+            {
+               userId: unverifiedId,
+               timestamp,
+               nonce,
+               signature: api.createRecoveryNonceProof(user.recoverySecret, unverifiedId, timestamp, nonce, 'recover'),
             },
             {},
             '',
@@ -673,7 +810,7 @@ export function recoverySuite(prf: boolean): void {
       it('rejects a recover3 timestamp outside the skew window', async () => {
          await startRecovery3(user);
 
-         const stale = String(Date.now() - 10 * 60 * 1000);
+         const stale = String(Date.now() - 2 * PROOF_SKEW_MS);
          const res = await postJson('/v1/recover3', recover3Body(user, { timestamp: stale }), {}, '');
          expect(res.status).toBe(401);
       });
@@ -713,7 +850,7 @@ export function recoverySuite(prf: boolean): void {
 
          // A correctly signed proof over a self-minted challenge: only recover3 can authorize confirm.
          const neverIssued = bytesToBase64(getRandom(api.CHALLENGE_BYTES));
-         const res = await postJson('/v1/recover/confirm', confirmBody(recoverUser, neverIssued), {}, '');
+         const res = await postConfirm(recoverUser, neverIssued);
          expect(res.status).toBe(401);
 
          await expectUserPasskeys(
@@ -735,7 +872,7 @@ export function recoverySuite(prf: boolean): void {
          const authOpts = await postJson('/v1/auth/options', { userId: recoverUser.userId }, {}, '');
          expect(authOpts.status).toBe(200);
 
-         const res = await postJson(CONFIRM_PATH, confirmBody(recoverUser, authOpts.data.challenge), {}, '');
+         const res = await postConfirm(recoverUser, authOpts.data.challenge);
          expect(res.status).toBe(401);
 
          await expectUserPasskeys(
@@ -749,20 +886,60 @@ export function recoverySuite(prf: boolean): void {
          await expectPasskeyDeleted(recoverUser.credId, recoverUser.csrf, recoverUser.cookie);
       });
 
+      // These rejections come before confirm uses its challenge, so the same recovery still completes
+      describe('confirm input validation', () => {
+         it('rejects confirm with a malformed userId', async () => {
+            const recoverUser = await registerTestUser(prf);
+            const { startRes, recoveredUserCred } = await startRecovery3(recoverUser);
+
+            const { body, headers } = confirmRequest(recoverUser, startRes.data.challenge);
+            const res = await postJson(CONFIRM_PATH, { ...body, userId: 'not b64 $$$' }, headers, '');
+            expect(res.status).toBe(401);
+
+            const session = await finishRecovery3(recoverUser, startRes, recoveredUserCred);
+            await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
+         });
+
+         it('rejects confirm for an unknown userId', async () => {
+            const recoverUser = await registerTestUser(prf);
+            const { startRes, recoveredUserCred } = await startRecovery3(recoverUser);
+
+            const unknown = bytesToBase64(getRandom(cc.USERID_BYTES));
+            const { body, headers } = confirmRequest(recoverUser, startRes.data.challenge);
+            const res = await postJson(CONFIRM_PATH, { ...body, userId: unknown }, headers, '');
+            expect(res.status).toBe(401);
+
+            const session = await finishRecovery3(recoverUser, startRes, recoveredUserCred);
+            await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
+         });
+
+         it('rejects confirm with a malformed challenge', async () => {
+            const recoverUser = await registerTestUser(prf);
+            const { startRes, recoveredUserCred } = await startRecovery3(recoverUser);
+
+            const { body, headers } = confirmRequest(recoverUser, startRes.data.challenge);
+            const res = await postJson(CONFIRM_PATH, { ...body, challenge: 'not b64 $$$' }, headers, '');
+            expect(res.status).toBe(401);
+
+            const session = await finishRecovery3(recoverUser, startRes, recoveredUserCred);
+            await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
+         });
+      });
+
       it('rejects confirm carrying no userCred proof', async () => {
          const recoverUser = await registerTestUser(prf);
 
          const { startRes } = await startRecovery3(recoverUser);
 
-         const { signature, ...unproven } = confirmBody(recoverUser, startRes.data.challenge);
-         const res = await postJson('/v1/recover/confirm', unproven, {}, '');
+         const { body } = confirmRequest(recoverUser, startRes.data.challenge);
+         const res = await postJson(CONFIRM_PATH, body, {}, '');
          expect(res.status).toBe(401);
 
          const session = await loginWithPasskey(recoverUser);
          await expectPasskeyDeleted(recoverUser.credId, session.csrf, session.cookie);
       });
 
-      // Only the body proof decides the outcome (session is ignored)
+      // The outcome depends only on the challenge proof (session is ignored)
       it('ignores a session on confirm', async () => {
          const other = await registerTestUser(prf);
          const recoverUser = await registerTestUser(prf);
@@ -771,12 +948,8 @@ export function recoverySuite(prf: boolean): void {
 
          // A live session, just not one belonging to the account being recovered. The fact
          // that this works is not a goal, it just proves the session was ignored.
-         const res = await postJson(
-            '/v1/recover/confirm',
-            confirmBody(recoverUser, startRes.data.challenge),
-            { 'x-csrf-token': other.csrf },
-            other.cookie,
-         );
+         const { body, headers } = confirmRequest(recoverUser, startRes.data.challenge);
+         const res = await postJson(CONFIRM_PATH, body, { 'x-csrf-token': other.csrf, ...headers }, other.cookie);
          expect(res.status).toBe(200);
 
          await expectUserPasskeys([other.credId], other.userId, other.userCred, other.csrf, other.cookie);
@@ -795,12 +968,7 @@ export function recoverySuite(prf: boolean): void {
          const { startRes } = await startRecovery3(recoverUser);
 
          const wrongUserCred = bytesToBase64(getRandom(cc.USERCRED_BYTES));
-         const res = await postJson(
-            '/v1/recover/confirm',
-            confirmBody(recoverUser, startRes.data.challenge, { userCred: wrongUserCred }),
-            {},
-            '',
-         );
+         const res = await postConfirm(recoverUser, startRes.data.challenge, { userCred: wrongUserCred });
          expect(res.status).toBe(401);
 
          // Confirm the original credential still works
@@ -816,6 +984,20 @@ export function recoverySuite(prf: boolean): void {
          await expectPasskeyDeleted(recoverUser.credId, session.csrf, session.cookie);
       });
 
+      // A reader of the challenge table who sends its own proof must not stop the account holder's
+      // recovery
+      it('leaves the confirm challenge usable after a proof from the wrong userCred', async () => {
+         const recoverUser = await registerTestUser(prf);
+         const { startRes, recoveredUserCred } = await startRecovery3(recoverUser);
+
+         const wrongUserCred = bytesToBase64(getRandom(cc.USERCRED_BYTES));
+         const bad = await postConfirm(recoverUser, startRes.data.challenge, { userCred: wrongUserCred });
+         expect(bad.status).toBe(401);
+
+         const session = await finishRecovery3(recoverUser, startRes, recoveredUserCred);
+         await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
+      });
+
       it('rejects a confirm challenge reused after it is spent', async () => {
          const recoverUser = await registerTestUser(prf);
 
@@ -823,7 +1005,7 @@ export function recoverySuite(prf: boolean): void {
          const session = await finishRecovery3(recoverUser, startRes, recoveredUserCred);
          await expectUserPasskeys([session.credId], recoverUser.userId, session.userCred, session.csrf, session.cookie);
 
-         const res = await postJson('/v1/recover/confirm', confirmBody(recoverUser, startRes.data.challenge), {}, '');
+         const res = await postConfirm(recoverUser, startRes.data.challenge);
          expect(res.status).toBe(401);
 
          await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
@@ -835,11 +1017,11 @@ export function recoverySuite(prf: boolean): void {
          const recoverUser = await registerTestUser(prf);
 
          const first = await startRecovery3(recoverUser);
-         const spentBody = confirmBody(recoverUser, first.startRes.data.challenge);
+         const spent = confirmRequest(recoverUser, first.startRes.data.challenge);
          await finishRecovery3(recoverUser, first.startRes, first.recoveredUserCred);
 
          const second = await startRecovery3(recoverUser);
-         const res = await postJson('/v1/recover/confirm', spentBody, {}, '');
+         const res = await postJson(CONFIRM_PATH, spent.body, spent.headers, '');
          expect(res.status).toBe(401);
 
          const session = await finishRecovery3(recoverUser, second.startRes, second.recoveredUserCred);
@@ -851,13 +1033,8 @@ export function recoverySuite(prf: boolean): void {
 
          const { startRes } = await startRecovery3(recoverUser);
 
-         const stale = String(Date.now() - 10 * 60 * 1000);
-         const res = await postJson(
-            '/v1/recover/confirm',
-            confirmBody(recoverUser, startRes.data.challenge, { timestamp: stale }),
-            {},
-            '',
-         );
+         const stale = String(Date.now() - 2 * PROOF_SKEW_MS);
+         const res = await postConfirm(recoverUser, startRes.data.challenge, { timestamp: stale });
          expect(res.status).toBe(401);
 
          const session = await loginWithPasskey(recoverUser);
@@ -877,6 +1054,233 @@ export function recoverySuite(prf: boolean): void {
 
          const session = await finishRecovery3(recoverUser, startRes, recoveredUserCred);
          await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
+      });
+   });
+
+   describe(`recovery registration proof (${label})`, () => {
+      it('accepts a recover/verify with a valid proof', async () => {
+         const { user, pending } = await pendingRecovery(prf);
+         const session = await verifyRecovery(user, pending);
+         setSessionSigner(user.userId, session.userCred);
+         await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
+      });
+
+      it('rejects a recover/verify proof from another userCred', async () => {
+         const { user, pending } = await pendingRecovery(prf);
+         await expectRecoverVerifyRejected(user, pending, { keySecret: getRandom(cc.USERCRED_BYTES) });
+      });
+
+      // A nonce-form signature over the same request, sent as the challenge proof
+      it('rejects a recover/verify proof in nonce form', async () => {
+         const { user, pending } = await pendingRecovery(prf);
+         const timestamp = String(Date.now());
+         const signature = api.createUserCredNonceProof(
+            pending.recoveredUserCred,
+            user.userId,
+            'POST',
+            '/v1/recover/verify',
+            timestamp,
+            pending.body.challenge,
+            sha256Hex(Buffer.from(JSON.stringify(pending.body), 'utf8')),
+         );
+         await expectRecoverVerifyRejected(user, pending, {
+            headers: { 'x-challenge-proof': `${signature},${timestamp}` },
+         });
+      });
+
+      it('rejects a recover/verify proof timestamp outside the skew window', async () => {
+         const { user, pending } = await pendingRecovery(prf);
+         const headers = makeChallengeProofHeaders(
+            '/v1/recover/verify',
+            pending.body,
+            pending.recoveredUserCred,
+            user.userId,
+            pending.body.challenge,
+            { timestampMs: String(Date.now() - 2 * PROOF_SKEW_MS) },
+         );
+         await expectRecoverVerifyRejected(user, pending, { headers });
+      });
+
+      it('rejects a recover/verify body changed after its proof was signed', async () => {
+         const { user, pending } = await pendingRecovery(prf);
+         const headers = makeChallengeProofHeaders(
+            '/v1/recover/verify',
+            pending.body,
+            pending.recoveredUserCred,
+            user.userId,
+            pending.body.challenge,
+         );
+         await expectRecoverVerifyRejected(user, pending, {
+            body: {
+               response: {
+                  ...pending.body.response,
+                  transports: [...(pending.body.response.transports ?? []), 'hybrid'],
+               },
+            },
+            headers,
+         });
+      });
+
+      it('rejects a recover/verify challenge that was never issued', async () => {
+         const { user, pending } = await pendingRecovery(prf);
+         await expectRecoverVerifyRejected(user, pending, {
+            body: { challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)) },
+         });
+      });
+
+      it('rejects a recover/verify challenge minted for another purpose', async () => {
+         const { user, pending } = await pendingRecovery(prf);
+         const authOpts = await postJson('/v1/auth/options', { userId: user.userId }, {}, '');
+         expect(authOpts.status).toBe(200);
+         await expectRecoverVerifyRejected(user, pending, { body: { challenge: authOpts.data.challenge } });
+      });
+
+      // A signed-in account is not mid-recovery, and that check comes before any other field is read
+      it('rejects a recover/verify for a signed-in account', async () => {
+         const user = await registerTestUser(prf);
+         const res = await postJson('/v1/recover/verify', { userId: user.userId }, {}, '');
+         expect(res.status).toBe(401);
+         await expectPasskeyDeleted(user.credId, user.csrf, user.cookie);
+      });
+
+      it('rejects a recover/verify for an unknown userId', async () => {
+         const { user, pending } = await pendingRecovery(prf);
+         await expectRecoverVerifyRejected(user, pending, {
+            body: { userId: bytesToBase64(getRandom(cc.USERID_BYTES)) },
+         });
+      });
+
+      it('rejects a recover/verify with a malformed userId', async () => {
+         const { user, pending } = await pendingRecovery(prf);
+         await expectRecoverVerifyRejected(user, pending, { body: { userId: 'not b64 $$$' } });
+      });
+
+      if (prf) {
+         it('rejects a recover/verify without passkeyUserCredEnc', async () => {
+            const { user, pending } = await pendingRecovery(prf);
+            await expectRecoverVerifyRejected(user, pending, { body: { passkeyUserCredEnc: undefined } });
+         });
+
+         it('rejects a recover/verify with a too-short passkeyUserCredEnc', async () => {
+            const { user, pending } = await pendingRecovery(prf);
+            await expectRecoverVerifyRejected(user, pending, {
+               body: { passkeyUserCredEnc: bytesToBase64(getRandom(USERCRED_ENC_MIN_BYTES - 1)) },
+            });
+         });
+      } else {
+         it('rejects a recover/verify carrying passkeyUserCredEnc', async () => {
+            const { user, pending } = await pendingRecovery(prf);
+            await expectRecoverVerifyRejected(user, pending, {
+               body: { passkeyUserCredEnc: bytesToBase64(getRandom(USERCRED_ENC_MIN_BYTES)) },
+            });
+         });
+      }
+
+      // WebAuthn verification runs after the challenge is consumed, so the unmodified request then fails too
+      it('rejects a recover/verify attestation from another origin', async () => {
+         const { user, pending } = await pendingRecovery(prf);
+         const clientData = JSON.parse(Buffer.from(pending.body.response.clientDataJSON, 'base64url').toString('utf8'));
+         const clientDataJSON = Buffer.from(
+            JSON.stringify({ ...clientData, origin: 'https://example.com' }),
+            'utf8',
+         ).toString('base64url');
+
+         const bad = await postRecoverVerify(user, pending, {
+            body: { response: { ...pending.body.response, clientDataJSON } },
+         });
+         expect(bad.status).toBe(401);
+         const retry = await postRecoverVerify(user, pending, {});
+         expect(retry.status).toBe(401);
+
+         await recoverAccount3(user);
+      });
+   });
+
+   // BACKWARD COMPAT: remove once clients that do not prove userCred are gone
+   describe(`old-format recovery (${label})`, () => {
+      it('accepts a recover/verify without a proof', async () => {
+         const { user, pending } = await pendingRecovery(prf);
+         const session = await verifyRecovery(user, pending, { headers: {} });
+         setSessionSigner(user.userId, session.userCred);
+         await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
+      });
+
+      // A client signed in to another account sends that session's proof with every request
+      it('ignores an x-proof nonce proof on a recover/verify', async () => {
+         const { user, pending } = await pendingRecovery(prf);
+         const sessionProof = await makeNonceProofHeaders(
+            'POST',
+            '/v1/recover/verify',
+            undefined,
+            bytesToBase64(getRandom(cc.USERCRED_BYTES)),
+            bytesToBase64(getRandom(cc.USERID_BYTES)),
+            { legacyHeader: true },
+         );
+         const session = await verifyRecovery(user, pending, { headers: sessionProof });
+         setSessionSigner(user.userId, session.userCred);
+         await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
+      });
+
+      it('accepts a confirm proved in the body in the userCred nonce context', async () => {
+         const user = await registerTestUser(prf);
+         const { startRes } = await startRecovery3(user);
+         const res = await postJson(CONFIRM_PATH, legacyConfirmBody(user, startRes.data.challenge), {}, '');
+         expect(res.status).toBe(200);
+
+         await recoverAccount3(user);
+      });
+
+      it('rejects a confirm body proof from another userCred', async () => {
+         const user = await registerTestUser(prf);
+         const { startRes } = await startRecovery3(user);
+         const otherUserCred = bytesToBase64(getRandom(cc.USERCRED_BYTES));
+         const res = await postJson(
+            CONFIRM_PATH,
+            legacyConfirmBody(user, startRes.data.challenge, otherUserCred),
+            {},
+            '',
+         );
+         expect(res.status).toBe(401);
+
+         const session = await loginWithPasskey(user);
+         await expectPasskeyDeleted(user.credId, session.csrf, session.cookie);
+      });
+
+      // BACKWARD COMPAT: a rejected body proof leaves the challenge in place, so the account holder can still confirm
+      it('leaves the confirm challenge usable after invalid old format proof', async () => {
+         const user = await registerTestUser(prf);
+         const { startRes, recoveredUserCred } = await startRecovery3(user);
+         const otherUserCred = bytesToBase64(getRandom(cc.USERCRED_BYTES));
+         const bad = await postJson(
+            CONFIRM_PATH,
+            legacyConfirmBody(user, startRes.data.challenge, otherUserCred),
+            {},
+            '',
+         );
+         expect(bad.status).toBe(401);
+
+         const session = await finishRecovery3(user, startRes, recoveredUserCred);
+         await expectPasskeyDeleted(session.credId, session.csrf, session.cookie);
+      });
+
+      it('rejects a confirm body proof in the userCred challenge context', async () => {
+         const user = await registerTestUser(prf);
+         const { startRes } = await startRecovery3(user);
+         const body = legacyConfirmBody(user, startRes.data.challenge);
+         body.signature = api.createUserCredChallengeProof(
+            base64ToBytes(user.userCred),
+            user.userId,
+            'POST',
+            CONFIRM_PATH,
+            body.timestamp!,
+            body.challenge,
+            sha256Hex(Buffer.alloc(0)),
+         );
+         const res = await postJson(CONFIRM_PATH, body, {}, '');
+         expect(res.status).toBe(401);
+
+         const session = await loginWithPasskey(user);
+         await expectPasskeyDeleted(user.credId, session.csrf, session.cookie);
       });
    });
 }

@@ -161,12 +161,13 @@ export async function decryptStream(
    }
 }
 
-// expectedLp is undefined for the outermost layer only
+// expectedLp and expectedLpEnd are undefined for the outermost layer only
 async function _decryptStreamImpl(
    cipherStream: ReadableStream<Uint8Array>,
    keyProvider: KeyProvider,
    onDone?: CipherDone,
    expectedLp?: number,
+   expectedLpEnd?: number,
 ): Promise<ReadableStream<Uint8Array>> {
    const keyProviderClone = keyProvider.clone();
    try {
@@ -182,6 +183,12 @@ async function _decryptStreamImpl(
       if (cdInfo.lp !== expectedLp) {
          decipher.errorState();
          throw new Error(`Invalid loop of: ${cdInfo.lp}, expected ${expectedLp}`);
+      }
+
+      expectedLpEnd = expectedLpEnd ?? cdInfo.lpEnd;
+      if (cdInfo.lpEnd !== expectedLpEnd) {
+         decipher.errorState();
+         throw new Error(`Invalid loop end of: ${cdInfo.lpEnd}, expected ${expectedLpEnd}`);
       }
 
       const readableStream = new ReadableStream({
@@ -220,7 +227,7 @@ async function _decryptStreamImpl(
 
       // Recursion moves inward, and only the outermost loop describes the stored bytes, so onDone stops here
       if (cdInfo.lp > 1) {
-         return await _decryptStreamImpl(readableStream, keyProvider, undefined, cdInfo.lp - 1);
+         return await _decryptStreamImpl(readableStream, keyProvider, undefined, cdInfo.lp - 1, cdInfo.lpEnd);
       }
 
       return readableStream;

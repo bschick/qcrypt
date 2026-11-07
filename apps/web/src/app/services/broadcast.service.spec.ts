@@ -393,6 +393,26 @@ describe('BroadcastService', () => {
       expect(received).toEqual([]);
    });
 
+   it('stops dispatching once destroyed', async () => {
+      const received: PeerMessage[] = [];
+      requester.setMessageHandler((msg) => received.push(msg));
+
+      responder.sendForget();
+      await vi.waitFor(
+         () => {
+            expect(received).toEqual([{ kind: MessageKind.Forget }]);
+         },
+         { timeout: 5000 },
+      );
+      received.length = 0;
+
+      TestBed.resetTestingModule();
+      responder.sendForget();
+
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(received).toEqual([]);
+   });
+
    it('different requested pkIds are routed to their own pending', async () => {
       const altResponder = new BroadcastService();
       altResponder.start();

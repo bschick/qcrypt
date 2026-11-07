@@ -24,16 +24,12 @@ import { FilterXSS } from 'xss';
 import { Buffer } from 'node:buffer';
 import * as crypto from 'node:crypto';
 import * as api from '@qcrypt/api';
-import { Challenges, type ChallengeItem } from './models';
-import {
-   USERCRED_ENC_MIN_BYTES,
-   USERCRED_ENC_MAX_BYTES,
-   CHALLENGE_BYTES,
-   PROOF_SKEW_MS,
-   UNKNOWN_USER_ID,
-} from './consts';
+import { Challenges, type ChallengeItem, type UnverifiedUserItem, type VerifiedUserItem } from './models';
+import type { HttpDetails } from './urls';
+import { USERCRED_ENC_MIN_BYTES, USERCRED_ENC_MAX_BYTES, UNKNOWN_USER_ID } from './consts';
 
-export class ParamError extends Error {}
+import { ParamError } from '@qcrypt/crypto';
+export { ParamError };
 
 export class AuthError extends Error {
    constructor(msg: string = 'not authorized') {
@@ -77,80 +73,66 @@ export function isReservedTestUserName(userName: string): boolean {
    return userName.toLowerCase().startsWith('pwtesty_');
 }
 
-export type ChallengeSpec =
-   | { purpose: 'auth' | 'reg' | 'add'; userId: string; binding?: never }
-   | { purpose: 'recover' | 'confirm'; userId: string; binding: string };
+export type Challenge = { challenge: string } & (
+   | { purpose: 'auth'; userId: string; binding?: never }
+   // BACKWARD COMPAT: the binding is optional only for clients that omit userCredPubKey
+   | { purpose: 'reg'; userId: string; binding?: string }
+   | { purpose: 'add' | 'recover' | 'confirm'; userId: string; binding: string }
+);
 
 // The challenge must match the given userId, unless it is an auth challenge created with UNKNOWN_USER_ID.
 // The binding must also match; an omitted binding matches only a challenge created without one.
-export async function consumeChallenge(challenge: string, check: ChallengeSpec): Promise<ChallengeItem> {
-   if (!validB64(challenge)) {
+// A missing challenge and a mismatched one get the same error.
+export async function consumeChallenge(check: Challenge): Promise<ChallengeItem> {
+   if (!validB64(check.challenge) || !check.userId) {
       throw new ParamError('challenge not valid');
    }
 
    const consumed = await Challenges.delete({
       purpose: check.purpose,
-      challenge,
-   }).go({ response: 'all_old' });
+      challenge: check.challenge,
+   })
+      .where((attr, op) => {
+         const user =
+            check.purpose === 'auth'
+               ? `(${op.eq(attr.userId, check.userId)} OR ${op.eq(attr.userId, UNKNOWN_USER_ID)})`
+               : op.eq(attr.userId, check.userId);
+         const binding = check.binding === undefined ? op.notExists(attr.binding) : op.eq(attr.binding, check.binding);
+         return `${user} AND ${binding}`;
+      })
+      .go({ response: 'all_old', returnOnConditionCheckFailure: true });
 
-   if (!consumed?.data) {
+   if (consumed.rejected || !consumed.data) {
       throw new ParamError('challenge not valid');
    }
    if (Date.now() / 1000 > consumed.data.expiresAt) {
-      throw new AuthError();
-   }
-   const anyUser = check.purpose === 'auth' && consumed.data.userId === UNKNOWN_USER_ID;
-   if (!anyUser && consumed.data.userId !== check.userId) {
-      throw new AuthError();
-   }
-   if (consumed.data.binding !== check.binding) {
       throw new AuthError();
    }
 
    return consumed.data;
 }
 
-export async function createChallenge(challenge: string, spec: ChallengeSpec): Promise<void> {
-   if (spec.userId === UNKNOWN_USER_ID && spec.purpose !== 'auth') {
-      throw new Error(`${spec.purpose} challenge cannot use UNKNOWN_USER_ID`);
+export async function storeChallenge(challenge: Challenge): Promise<void> {
+   if (challenge.userId === UNKNOWN_USER_ID && challenge.purpose !== 'auth') {
+      throw new Error(`${challenge.purpose} challenge cannot use UNKNOWN_USER_ID`);
    }
 
-   await Challenges.create({ challenge, ...spec }).go();
+   await Challenges.create(challenge).go();
 }
 
 // Throws unless the proof is well formed, within the skew window, verifies, and its nonce has
 // not been seen before. Retaining the nonce is what bounds replay to the skew window.
-export async function verifyRecoverProof(
+export async function verifyRecoveryNonceProof(
    recoveryPubKey: string,
    userId: string,
    proof: api.RecoverProof,
    op: api.RecoveryOp,
 ): Promise<void> {
    const { timestamp, nonce, signature } = proof;
-   if (!validB64(nonce) || !validB64(signature)) {
-      throw new ParamError('invalid recovery proof');
-   }
-
-   const nonceBytes = base64UrlDecode(nonce)!;
-   const signatureBytes = base64UrlDecode(signature)!;
-   if (nonceBytes.byteLength !== CHALLENGE_BYTES || signatureBytes.byteLength !== api.PROOF_SIG_BYTES) {
-      throw new ParamError('invalid recovery proof');
-   }
-
-   const timestampMs = Number(timestamp);
-   if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > PROOF_SKEW_MS) {
-      throw new ParamError('invalid recovery proof');
-   }
-
-   try {
-      api.verifyRecoveryProof(recoveryPubKey, userId, timestamp, nonce, signature, op);
-   } catch (err) {
-      console.error('verifyRecoveryProof', err);
-      throw new ParamError(`user account ${userId} invalid recovery proof`);
-   }
+   api.verifyRecoveryNonceProof(recoveryPubKey, userId, timestamp, nonce, signature, op);
 
    // Only needed for unauthenticated callers, but harmless for authenticated
-   const outcome = await storeSingleUseNonce(nonce, 'nonce', userId);
+   const outcome = await storeSingleUseNonce(nonce, 'words', userId);
    if (outcome === 'replayed') {
       throw new ParamError(`user account ${userId} replayed recovery proof`);
    }
@@ -159,10 +141,111 @@ export async function verifyRecoverProof(
    }
 }
 
+function proofFields(header: string | undefined, count: number, label: string): string[] {
+   const fields = header?.split(',').map((field) => field.trim());
+   if (fields?.length !== count) {
+      console.error(`proof header ${label} missing or malformed`);
+      throw new AuthError();
+   }
+   return fields;
+}
+
+// proofHeader is "signature,timestamp,nonce"
+export async function verifyUserCredNonceProof(
+   verifiedUser: VerifiedUserItem,
+   httpDetails: HttpDetails,
+   proofHeader: string | undefined,
+): Promise<void> {
+   const label = `${httpDetails.name} ${verifiedUser.userId}`;
+   const [signature, timestamp, nonce] = proofFields(proofHeader, 3, label);
+   const bodyHashHex = crypto.createHash('sha256').update(httpDetails.rawBody, 'utf8').digest('hex');
+   try {
+      // A stale userCredPubKey after rotation surfaces here as a spurious 401.
+      api.verifyUserCredNonceProof(
+         verifiedUser.userCredPubKey!,
+         verifiedUser.userId,
+         httpDetails.method,
+         httpDetails.path,
+         timestamp,
+         nonce,
+         bodyHashHex,
+         signature,
+         httpDetails.rawQueryString,
+      );
+   } catch (err) {
+      console.error(`nonce proof ${label}`, err);
+      throw new AuthError();
+   }
+
+   // Replaying a GET has significantly less risk, so to reduce load enforce
+   // single-use of the nonce only for state-changing requests
+   // TODO: Consider moving this to AWS Elastic cache when usage increases
+   if (httpDetails.method !== 'GET') {
+      const outcome = await storeSingleUseNonce(nonce, 'api', verifiedUser.userId);
+      if (outcome !== 'ok') {
+         console.error(`nonce proof ${outcome} ${label}`);
+         throw new AuthError();
+      }
+   }
+}
+
+// proofHeader is "signature,timestamp", and the proof signs the challenge in the request body.
+// No single use nonce is stored, because the route consumes that challenge, which makes the proof
+// single use.
+export function verifyUserCredChallengeProof(
+   user: UnverifiedUserItem,
+   httpDetails: HttpDetails,
+   proofHeader: string | undefined,
+): void {
+   const label = `${httpDetails.name} ${user.userId}`;
+   const [signature, timestamp] = proofFields(proofHeader, 2, label);
+   const { challenge } = httpDetails.body as api.ChallengeRiders;
+   const bodyHashHex = crypto.createHash('sha256').update(httpDetails.rawBody, 'utf8').digest('hex');
+   try {
+      api.verifyUserCredChallengeProof(
+         user.userCredPubKey!,
+         user.userId,
+         httpDetails.method,
+         httpDetails.path,
+         timestamp,
+         challenge,
+         bodyHashHex,
+         signature,
+         httpDetails.rawQueryString,
+      );
+   } catch (err) {
+      console.error(`challenge proof ${label}`, err);
+      throw new AuthError();
+   }
+}
+
+// BACKWARD COMPAT: checks a recover/confirm proof carried in the body, signed with the nonce
+// context. Delete once x-challenge-proof is required.
+export function verifyRecoverConfirmProof(
+   confirm: api.RecoverConfirmRequest,
+   userCredPubKey: string,
+   httpDetails: HttpDetails,
+): void {
+   const { userId, challenge, timestamp, signature } = confirm;
+   // There is no body beyond the signature fields, so hash is for empty string
+   const bodyHashHex = crypto.createHash('sha256').update('', 'utf8').digest('hex');
+   api.verifyUserCredNonceProof(
+      userCredPubKey,
+      userId,
+      httpDetails.method,
+      httpDetails.path,
+      timestamp!,
+      challenge,
+      bodyHashHex,
+      signature!,
+      httpDetails.rawQueryString,
+   );
+}
+
 // Never throws: an error from the store itself is reported as 'failed'.
 export async function storeSingleUseNonce(
    nonce: string,
-   purpose: 'api' | 'nonce',
+   purpose: 'api' | 'words',
    userId: string,
 ): Promise<'ok' | 'replayed' | 'failed'> {
    try {

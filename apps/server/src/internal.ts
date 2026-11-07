@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import type { HttpDetails } from './urls';
-import { Users, Authenticators, AAGUIDs, Invitables, type VerifiedUserItem } from './models';
+import { Users, Authenticators, AAGUIDs, Invitables } from './models';
 
 import { darkFileDefault, lightFileDefault, type Response } from './server';
 
@@ -67,7 +67,6 @@ export async function postLoadAAGUIDs(_httpDetails: HttpDetails): Promise<Respon
 
 export async function postConsistency(
    httpDetails: HttpDetails,
-   _verifiedUser?: VerifiedUserItem,
    userFilter: { userId: string }[] = [],
 ): Promise<Response> {
    const { params } = httpDetails;
@@ -375,8 +374,7 @@ export async function postCleanupTestUsers(httpDetails: HttpDetails): Promise<Re
 
       // Sweep auths/invitables orphaned by the deletes above.
       httpDetails.params.tables = httpDetails.params.tables.replace('users', '');
-      httpDetails.handler = postConsistency;
-      await postConsistency(httpDetails, undefined, deleteBatch);
+      await postConsistency(httpDetails, deleteBatch);
    }
 
    console.log(`${total} users scanned, ${deleteBatch.length} matched, and ${deleted} deleted`);

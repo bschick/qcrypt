@@ -37,6 +37,7 @@ export {
    makeTookMsg,
    expired,
    ProcessCancelled,
+   ParamError,
    BYOBStreamReader,
    readStreamAll,
    streamWriteBYOD,
@@ -75,6 +76,9 @@ export type {
    CipherDataBlock,
 } from './lib/ciphers-current';
 
+// Decryption failures
+export { WrongPasswordError, ModifiedDataError, ForgedDataError, decryptionErrorMessage } from './lib/errors';
+
 // Cipher factory functions
 export {
    getLatestEncipher,
@@ -109,7 +113,7 @@ export { PWDKeyProvider, MasterKeyKeyProvider, type PWDProvider, type KeyProvide
 // Callers must `await cryptoReady()` before invoking any other crypto export.
 export { cryptoReady, hashString } from './lib/crypto';
 
-export { getProofKeyPair, createProof, verifyProof } from './lib/proof';
+export { getProofKeyPair, createProof, verifyProof, PROOF_SEED_BYTES } from './lib/proof';
 
 // Lazy zxcvbn loader
 export { zxcvbnReady, isPwned, createZxcvbn } from './lib/zxcvbn';

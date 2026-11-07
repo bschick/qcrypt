@@ -74,7 +74,7 @@ export function describeFinding(finding: Finding): string {
    return `${finding.secret}/${finding.form} in ${finding.location}, retained by: ${finding.retainers}`;
 }
 
-type HeapSnapshot = {
+export type HeapSnapshot = {
    snapshot: {
       meta: {
          node_fields: string[];
@@ -89,10 +89,11 @@ type HeapSnapshot = {
 };
 
 type Retainer = { node: number; edge: number };
+type RetainerEdges = 'strong' | 'devTools' | 'all';
 
 const NO_ROOT_PATH = '(no path from the GC roots)';
 
-class HeapGraph {
+export class HeapGraph {
    readonly nodeCount: number;
    private readonly _nodeFields: number;
    private readonly _edgeFields: number;
@@ -104,13 +105,19 @@ class HeapGraph {
    private readonly _edgeTo: number;
    private readonly _nodeTypes: string[];
    private readonly _edgeTypes: string[];
+   private readonly _weakEdge: number;
    private readonly _firstEdge: Uint32Array;
    private readonly _retainerStart: Uint32Array;
    private readonly _retainerNode: Uint32Array;
    private readonly _retainerEdge: Uint32Array;
    private _ordinals: Map<number, number> | undefined;
+   private readonly _scanHandles = new Set<number>();
 
-   constructor(readonly snapshot: HeapSnapshot) {
+   // scanHandleIds contains the heap ids of the objects that the scan's own DevTools handles hold
+   constructor(
+      readonly snapshot: HeapSnapshot,
+      scanHandleIds: number[],
+   ) {
       const meta = snapshot.snapshot.meta;
       this._nodeFields = meta.node_fields.length;
       this._edgeFields = meta.edge_fields.length;
@@ -125,11 +132,11 @@ class HeapGraph {
       this.nodeCount = snapshot.nodes.length / this._nodeFields;
 
       const edgeCountField = meta.node_fields.indexOf('edge_count');
-      const weak = this._edgeTypes.indexOf('weak');
+      this._weakEdge = this._edgeTypes.indexOf('weak');
       const nodes = snapshot.nodes;
       const edges = snapshot.edges;
 
-      // Weak references do not prevent garbage collection, so the retainer index omits them
+      // The retainer index includes weak references, which retainers() leaves out unless asked for them
       this._firstEdge = new Uint32Array(this.nodeCount + 1);
       const counts = new Uint32Array(this.nodeCount + 1);
       let edgePos = 0;
@@ -137,9 +144,7 @@ class HeapGraph {
          this._firstEdge[i] = edgePos;
          const edgeCount = nodes[i * this._nodeFields + edgeCountField];
          for (let k = 0; k < edgeCount; k++, edgePos += this._edgeFields) {
-            if (edges[edgePos + this._edgeType] !== weak) {
-               counts[edges[edgePos + this._edgeTo] / this._nodeFields + 1]++;
-            }
+            counts[edges[edgePos + this._edgeTo] / this._nodeFields + 1]++;
          }
       }
       this._firstEdge[this.nodeCount] = edgePos;
@@ -152,13 +157,21 @@ class HeapGraph {
       this._retainerEdge = new Uint32Array(counts[this.nodeCount]);
       for (let i = 0; i < this.nodeCount; i++) {
          for (let pos = this._firstEdge[i]; pos < this._firstEdge[i + 1]; pos += this._edgeFields) {
-            if (edges[pos + this._edgeType] !== weak) {
-               const target = edges[pos + this._edgeTo] / this._nodeFields;
-               this._retainerNode[next[target]] = i;
-               this._retainerEdge[next[target]] = pos;
-               next[target]++;
-            }
+            const target = edges[pos + this._edgeTo] / this._nodeFields;
+            this._retainerNode[next[target]] = i;
+            this._retainerEdge[next[target]] = pos;
+            next[target]++;
          }
+      }
+
+      // The scan holds an array of nearly every object through a DevTools handle. A path through that handle must
+      // not count, so each scan handle id must match a node.
+      for (const heapId of scanHandleIds) {
+         const ord = this.ordinalOf(heapId);
+         if (ord === undefined) {
+            throw new Error(`heap scan: the snapshot has no object with the scan's handle id ${heapId}`);
+         }
+         this._scanHandles.add(ord);
       }
    }
 
@@ -201,12 +214,17 @@ class HeapGraph {
       return result;
    }
 
-   // Leaves out the handles the scan itself holds through its DevTools session
-   retainers(ord: number): Retainer[] {
+   // 'strong' leaves out weak references, which do not prevent garbage collection, and DevTools handles, which exist
+   // only in tests. 'devTools' adds back the DevTools handles except the scan's own. 'all' also adds weak references.
+   retainers(ord: number, edges: RetainerEdges = 'strong'): Retainer[] {
       const result: Retainer[] = [];
       for (let r = this._retainerStart[ord]; r < this._retainerStart[ord + 1]; r++) {
          const edge = this._retainerEdge[r];
-         if (!this.edgeName(edge)?.includes('DevTools console')) {
+         let included = this.snapshot.edges[edge + this._edgeType] !== this._weakEdge || edges === 'all';
+         if (this.edgeName(edge)?.includes('DevTools console')) {
+            included = edges !== 'strong' && !this._scanHandles.has(ord);
+         }
+         if (included) {
             result.push({ node: this._retainerNode[r], edge });
          }
       }
@@ -229,18 +247,27 @@ class HeapGraph {
       );
    }
 
-   // Returns the last 10 steps of the shortest path from the GC roots, which are node 0 in a V8 snapshot
-   retainerPath(target: number): string {
+   // Returns the last 10 steps of the shortest path from the GC roots, which are node 0 in a V8 snapshot. A caller
+   // can pass isStart to accept a path from the nearest other node it matches.
+   retainerPath(
+      target: number,
+      edges: RetainerEdges = 'strong',
+      isStart: (ord: number) => boolean = (ord) => ord === 0,
+   ): string {
       const previous = new Map<number, Retainer>();
       previous.set(target, { node: -1, edge: -1 });
+      let start: number | undefined;
       let queue = [target];
-      while (queue.length && !previous.has(0)) {
+      while (queue.length && start === undefined) {
          const nextQueue: number[] = [];
          for (const ord of queue) {
-            for (const retainer of this.retainers(ord)) {
+            for (const retainer of this.retainers(ord, edges)) {
                if (!previous.has(retainer.node)) {
                   previous.set(retainer.node, { node: ord, edge: retainer.edge });
                   nextQueue.push(retainer.node);
+                  if (start === undefined && isStart(retainer.node)) {
+                     start = retainer.node;
+                  }
                }
             }
          }
@@ -248,9 +275,9 @@ class HeapGraph {
       }
 
       let path = NO_ROOT_PATH;
-      if (previous.has(0)) {
+      if (start !== undefined) {
          const steps: string[] = [];
-         let current = 0;
+         let current = start;
          while (current !== target) {
             const step = previous.get(current)!;
             steps.push(`${this._nodeLabel(current)} -${this.edgeType(step.edge)}:${this.edgeName(step.edge)}->`);
@@ -262,8 +289,38 @@ class HeapGraph {
       return path;
    }
 
+   // Garbage collection runs before the snapshot, so every copy in it had a holder. A copy is unreachable only if
+   // a DevTools handle is that holder.
+   retention(ord: number): Pick<Finding, 'retainers' | 'reachable'> {
+      let retainers = this.retainerPath(ord);
+      let reachable = true;
+      if (retainers === NO_ROOT_PATH) {
+         const devToolsPath = this.retainerPath(ord, 'devTools');
+         if (devToolsPath !== NO_ROOT_PATH) {
+            retainers = devToolsPath;
+            reachable = false;
+         } else {
+            retainers = `${NO_ROOT_PATH}, held from: ${this._hiddenHolderPath(ord)}`;
+         }
+      }
+      return { retainers, reachable };
+   }
+
+   // The path may use weak references. It starts at the GC roots or at an object with no retainers.
+   private _hiddenHolderPath(ord: number): string {
+      let path = '(nothing in the snapshot retains it)';
+      if (this.retainers(ord, 'all').length) {
+         path = this.retainerPath(ord, 'all', (pos) => this.retainers(pos, 'all').length === 0);
+      }
+      return path;
+   }
+
    private _nodeLabel(ord: number): string {
-      return `${this.nodeType(ord)}:${this.nodeName(ord).slice(0, 50)}`;
+      let label = `${this.nodeType(ord)}:${this.nodeName(ord).slice(0, 50)}`;
+      if (this._scanHandles.has(ord)) {
+         label += ' (held by the scan)';
+      }
+      return label;
    }
 }
 
@@ -643,7 +700,7 @@ async function resolveBuffer(
    return resolved;
 }
 
-function findStrings(graph: HeapGraph, textPatterns: TextPattern[]): Finding[] {
+export function findStrings(graph: HeapGraph, textPatterns: TextPattern[]): Finding[] {
    const findings: Finding[] = [];
    const shortest = Math.min(...textPatterns.map((pattern) => pattern.text.length));
    const stringTypes = new Set(['string', 'concatenated string', 'sliced string']);
@@ -652,13 +709,21 @@ function findStrings(graph: HeapGraph, textPatterns: TextPattern[]): Finding[] {
          const matches = textPatterns.filter((pattern) => str.includes(pattern.text));
          if (matches.length) {
             const owners: number[] = [];
-            for (let i = 0; i < graph.nodeCount && owners.length < 2; i++) {
+            for (let i = 0; i < graph.nodeCount; i++) {
                if (graph.nameIndex(i) === strIdx && stringTypes.has(graph.nodeType(i))) {
                   owners.push(i);
                }
             }
-            const paths = owners.map((ord) => graph.retainerPath(ord));
-            const retainers = paths.length ? paths.join(' | ') : '(only a property or class name)';
+            // Reachable copies sort first, so the report of a leak shows reachable paths
+            const retentions = owners
+               .map((ord) => graph.retention(ord))
+               .sort((left, right) => Number(right.reachable) - Number(left.reachable));
+            const retainers = retentions.length
+               ? retentions
+                    .slice(0, 2)
+                    .map((retention) => retention.retainers)
+                    .join(' | ')
+               : '(only a property or class name)';
             for (const pattern of matches) {
                findings.push({
                   secret: pattern.secret,
@@ -666,7 +731,7 @@ function findStrings(graph: HeapGraph, textPatterns: TextPattern[]): Finding[] {
                   kind: 'string',
                   location: `string(${str.length})`,
                   retainers,
-                  reachable: !paths.length || paths.some((path) => path !== NO_ROOT_PATH),
+                  reachable: !retentions.length || retentions.some((retention) => retention.reachable),
                });
             }
          }
@@ -677,7 +742,8 @@ function findStrings(graph: HeapGraph, textPatterns: TextPattern[]): Finding[] {
 
 // Finds every copy of the secrets in the page's JavaScript heap and WebAssembly memories. Strings come from a
 // heap snapshot and bytes from walking the heap. Any buffer in the snapshot that the walk missed is read
-// through CDP, or reported as unresolved when that fails.
+// through CDP, or reported as unresolved when that fails. The scan cannot read copies the browser keeps in its own
+// memory, such as a text box's value and undo history. It also cannot read freed memory that still holds old bytes.
 export async function scanHeap(page: Page, label: string, secrets: Secret[]): Promise<HeapScan> {
    const started = Date.now();
    const patterns: Pattern[] = secrets.flatMap((secret) =>
@@ -714,9 +780,11 @@ export async function scanHeap(page: Page, label: string, secrets: Secret[]): Pr
       );
       const walked = Date.now();
 
-      const graph = new HeapGraph(await takeSnapshot(cdp));
-      const snapshotted = Date.now();
+      const snapshot = await takeSnapshot(cdp);
       // The snapshot's garbage collection moves objects and renumbers them, so heap ids are read only afterward
+      const scanHandleIds = await Promise.all([objects, memories, walkId].map((objectId) => heapIdOf(cdp, objectId)));
+      const graph = new HeapGraph(snapshot, scanHandleIds);
+      const snapshotted = Date.now();
       const holderIds = summary.value.findings.length
          ? await heapIdsOf(cdp, await propertyHandle(cdp, walkId, 'holders'))
          : [];
@@ -724,14 +792,14 @@ export async function scanHeap(page: Page, label: string, secrets: Secret[]): Pr
 
       const findings: Finding[] = summary.value.findings.map((hit) => {
          const holderOrd = graph.ordinalOf(holderIds[hit.holderIdx]);
-         const retainers = holderOrd === undefined ? '(not in snapshot)' : graph.retainerPath(holderOrd);
+         const retention =
+            holderOrd === undefined ? { retainers: '(not in snapshot)', reachable: true } : graph.retention(holderOrd);
          return {
             secret: patterns[hit.patternIdx].secret,
             form: patterns[hit.patternIdx].form,
             kind: 'bytes',
             location: `${hit.location} @${hit.offset}`,
-            retainers,
-            reachable: retainers !== NO_ROOT_PATH,
+            ...retention,
          };
       });
 
@@ -742,7 +810,7 @@ export async function scanHeap(page: Page, label: string, secrets: Secret[]): Pr
          const isBuffer = graph.nodeType(i) === 'object' && (name === 'ArrayBuffer' || name === 'SharedArrayBuffer');
          if (isBuffer && !scannedIds.has(graph.nodeId(i)) && !graph.isPrototype(i)) {
             unscannedCount++;
-            const retainers = graph.retainerPath(i);
+            const retention = graph.retention(i);
             const resolved = await resolveBuffer(cdp, graph, i, patternBytes);
             if (resolved) {
                for (const hit of resolved.hits) {
@@ -751,12 +819,11 @@ export async function scanHeap(page: Page, label: string, secrets: Secret[]): Pr
                      form: patterns[hit.patternIdx].form,
                      kind: 'bytes',
                      location: `${name} via ${resolved.via} @${hit.offset}`,
-                     retainers,
-                     reachable: retainers !== NO_ROOT_PATH,
+                     ...retention,
                   });
                }
-            } else if (retainers !== NO_ROOT_PATH) {
-               unresolved.push(retainers);
+            } else if (retention.reachable) {
+               unresolved.push(retention.retainers);
             }
          }
       }
@@ -817,4 +884,20 @@ export async function callInPage<T>(page: Page, functionDeclaration: string, arg
    } finally {
       await cdp.detach();
    }
+}
+
+// Puts a copy of bytes in the page, inside an ordinary object because the walk reads buffers only through object
+// properties. Only a handle in the returned DevTools session holds that object. Detaching the session releases it.
+export async function holdInDevTools(page: Page, bytes: Uint8Array): Promise<CDPSession> {
+   const cdp = await page.context().newCDPSession(page);
+   await cdp.send('Runtime.enable');
+   const global = await evaluateHandle(cdp, 'globalThis');
+   await callOn(
+      cdp,
+      global,
+      'function (bytes) { return { bytes: new Uint8Array(bytes) }; }',
+      [{ value: [...bytes] }],
+      false,
+   );
+   return cdp;
 }

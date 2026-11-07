@@ -27,6 +27,7 @@ import {
    expectPasskeyDeleted,
    getJson,
    postJson,
+   postPasskeyVerify,
    registerNewCredential,
    registerTestUser,
    setSessionSigner,
@@ -73,26 +74,26 @@ describe('passkey limit', () => {
       expect(secondOpts.status).toBe(200);
 
       const firstAdd = await registerNewCredential(account, firstOpts.data);
-      const firstRes = await postJson(
-         '/v1/passkeys/verify',
+      const firstRes = await postPasskeyVerify(
+         account,
          api.makeAddVerifyRequest(firstAdd.attestation as api.RegistrationFields, {
             challenge: firstOpts.data.challenge,
             passkeyUserCredEnc: firstAdd.passkeyUserCredEnc,
          }),
-         auth,
+         account.csrf,
          account.cookie,
       );
       expect(firstRes.status).toBe(200);
       credIds.push(firstAdd.attestation.id);
 
       const secondAdd = await registerNewCredential(account, secondOpts.data);
-      const secondRes = await postJson(
-         '/v1/passkeys/verify',
+      const secondRes = await postPasskeyVerify(
+         account,
          api.makeAddVerifyRequest(secondAdd.attestation as api.RegistrationFields, {
             challenge: secondOpts.data.challenge,
             passkeyUserCredEnc: secondAdd.passkeyUserCredEnc,
          }),
-         auth,
+         account.csrf,
          account.cookie,
       );
       expect(secondRes.status).toBe(400);

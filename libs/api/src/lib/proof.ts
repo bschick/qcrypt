@@ -20,17 +20,32 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-import { getProofKeyPair, createProof, verifyProof, base64ToBytes, bytesToBase64, concatArrays } from '@qcrypt/crypto';
+import {
+   getProofKeyPair,
+   createProof,
+   verifyProof,
+   base64ToBytes,
+   bytesToBase64,
+   concatArrays,
+   ParamError,
+} from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 
-const USERCRED_KEY_CONTEXT = 'UCredKey';
-const USERCRED_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
+// Every public key a client sends for the server to store must come with a signature from
+// the matching private key, and each operation type must have its own context
+// following 'qcrypt/<signing key>/<operation>/v<n>'. USERCRED_CHALLENGE_SIG_CONTEXT is the
+// exception and covers every challenge-form route, since the signed message includes the path.
 
-const RECOVERY_KEY_CONTEXT = 'RecovKey';
+export const USERCRED_KEY_CONTEXT = 'UCredKey';
+const USERCRED_NONCE_SIG_CONTEXT = 'qcrypt/usercred/proof/v1';
+const USERCRED_CHALLENGE_SIG_CONTEXT = 'qcrypt/usercred/register/v1';
+
+export const RECOVERY_KEY_CONTEXT = 'RecovKey';
+export const RECOVERY_REGISTER_SIG_CONTEXT = 'qcrypt/recovery/register/v1';
 
 export type RecoveryOp = 'replace' | 'recover';
 
-const RECOVERY_SIG_CONTEXTS: Readonly<Record<RecoveryOp, string>> = {
+export const RECOVERY_SIG_CONTEXTS: Readonly<Record<RecoveryOp, string>> = {
    replace: 'qcrypt/recovery/replace/v1',
    recover: 'qcrypt/recovery/recover/v1',
 };
@@ -41,10 +56,20 @@ const RECOVERY_COMPAT_SIG_CONTEXT = 'qcrypt/recovery/nonce/v1';
 
 export const RECOVERYID_BYTES = 16;
 export const CHALLENGE_BYTES = 32;
+export const PROOF_SKEW_MS = 120 * 1000;
 
 // ML-DSA-65 public key and signature length in bytes.
 export const PROOF_PUBKEY_BYTES = 1952;
 export const PROOF_SIG_BYTES = 3309;
+
+function checkProofValues(pubKey: string, signature: string, timestampMs: string): void {
+   base64ToBytes(pubKey, PROOF_PUBKEY_BYTES, 'public key');
+   base64ToBytes(signature, PROOF_SIG_BYTES, 'signature');
+   const timeMs = Number(timestampMs);
+   if (!timestampMs || !Number.isFinite(timeMs) || Math.abs(Date.now() - timeMs) > PROOF_SKEW_MS) {
+      throw new ParamError('proof timestamp outside skew window');
+   }
+}
 
 function buildUserCredMessage(
    userId: string,
@@ -55,9 +80,8 @@ function buildUserCredMessage(
    bodyHashHex: string,
    queryString: string,
 ): Uint8Array<ArrayBuffer> {
-   if (base64ToBytes(userId).byteLength !== cc.USERID_BYTES) {
-      throw new Error('invalid userId length');
-   }
+   base64ToBytes(userId, cc.USERID_BYTES, 'userId');
+   base64ToBytes(nonce, CHALLENGE_BYTES, 'nonce');
    const fields = [userId, method.toUpperCase(), path, timestampMs, nonce, bodyHashHex.toLowerCase()];
    if (queryString) {
       fields.push(queryString);
@@ -72,7 +96,16 @@ export function getUserCredPubKey(userCred: Uint8Array): string {
    return bytesToBase64(pubKey);
 }
 
-export function createUserCredProof(
+function signUserCredMessage(userCred: Uint8Array, message: Uint8Array, context: string): string {
+   const { secKey } = getProofKeyPair(userCred, USERCRED_KEY_CONTEXT);
+   try {
+      return bytesToBase64(createProof(secKey, message, context));
+   } finally {
+      secKey.fill(0);
+   }
+}
+
+export function createUserCredNonceProof(
    userCred: Uint8Array,
    userId: string,
    method: string,
@@ -82,21 +115,31 @@ export function createUserCredProof(
    bodyHashHex: string,
    queryString: string = '',
 ): string {
-   const { secKey } = getProofKeyPair(userCred, USERCRED_KEY_CONTEXT);
-   try {
-      return bytesToBase64(
-         createProof(
-            secKey,
-            buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
-            USERCRED_SIG_CONTEXT,
-         ),
-      );
-   } finally {
-      secKey.fill(0);
-   }
+   return signUserCredMessage(
+      userCred,
+      buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
+      USERCRED_NONCE_SIG_CONTEXT,
+   );
 }
 
-export function verifyUserCredProof(
+export function createUserCredChallengeProof(
+   userCred: Uint8Array,
+   userId: string,
+   method: string,
+   path: string,
+   timestampMs: string,
+   challenge: string,
+   bodyHashHex: string,
+   queryString: string = '',
+): string {
+   return signUserCredMessage(
+      userCred,
+      buildUserCredMessage(userId, method, path, timestampMs, challenge, bodyHashHex, queryString),
+      USERCRED_CHALLENGE_SIG_CONTEXT,
+   );
+}
+
+export function verifyUserCredNonceProof(
    pubKey: string,
    userId: string,
    method: string,
@@ -107,11 +150,32 @@ export function verifyUserCredProof(
    signature: string,
    queryString: string = '',
 ): void {
+   checkProofValues(pubKey, signature, timestampMs);
    verifyProof(
       base64ToBytes(pubKey),
       buildUserCredMessage(userId, method, path, timestampMs, nonce, bodyHashHex, queryString),
       base64ToBytes(signature),
-      USERCRED_SIG_CONTEXT,
+      USERCRED_NONCE_SIG_CONTEXT,
+   );
+}
+
+export function verifyUserCredChallengeProof(
+   pubKey: string,
+   userId: string,
+   method: string,
+   path: string,
+   timestampMs: string,
+   challenge: string,
+   bodyHashHex: string,
+   signature: string,
+   queryString: string = '',
+): void {
+   checkProofValues(pubKey, signature, timestampMs);
+   verifyProof(
+      base64ToBytes(pubKey),
+      buildUserCredMessage(userId, method, path, timestampMs, challenge, bodyHashHex, queryString),
+      base64ToBytes(signature),
+      USERCRED_CHALLENGE_SIG_CONTEXT,
    );
 }
 
@@ -122,13 +186,9 @@ export function recoverySecret(recoveryId: Uint8Array, userId: string): Uint8Arr
    return concatArrays([recoveryId, base64ToBytes(userId)]);
 }
 
-function buildRecoveryMessage(userId: string, timestampMs: string, nonce: string): Uint8Array<ArrayBuffer> {
-   if (base64ToBytes(userId).byteLength !== cc.USERID_BYTES) {
-      throw new Error('invalid userId length');
-   }
-   if (base64ToBytes(nonce).byteLength !== CHALLENGE_BYTES) {
-      throw new Error('invalid nonce length');
-   }
+function buildRecoveryNonceMessage(userId: string, timestampMs: string, nonce: string): Uint8Array<ArrayBuffer> {
+   base64ToBytes(userId, cc.USERID_BYTES, 'userId');
+   base64ToBytes(nonce, CHALLENGE_BYTES, 'nonce');
    const message = [userId, timestampMs, nonce].join('\n');
    return new TextEncoder().encode(message);
 }
@@ -139,7 +199,7 @@ export function getRecoveryPubKey(recoverySecret: Uint8Array): string {
    return bytesToBase64(pubKey);
 }
 
-export function createRecoveryProof(
+export function createRecoveryNonceProof(
    recoverySecret: Uint8Array,
    userId: string,
    timestampMs: string,
@@ -148,14 +208,14 @@ export function createRecoveryProof(
 ): string {
    const { secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
    try {
-      const message = buildRecoveryMessage(userId, timestampMs, nonce);
+      const message = buildRecoveryNonceMessage(userId, timestampMs, nonce);
       return bytesToBase64(createProof(secKey, message, RECOVERY_SIG_CONTEXTS[op]));
    } finally {
       secKey.fill(0);
    }
 }
 
-export function verifyRecoveryProof(
+export function verifyRecoveryNonceProof(
    pubKey: string,
    userId: string,
    timestampMs: string,
@@ -163,8 +223,9 @@ export function verifyRecoveryProof(
    signature: string,
    op: RecoveryOp,
 ): void {
+   checkProofValues(pubKey, signature, timestampMs);
    const keyBytes = base64ToBytes(pubKey);
-   const message = buildRecoveryMessage(userId, timestampMs, nonce);
+   const message = buildRecoveryNonceMessage(userId, timestampMs, nonce);
    const signatureBytes = base64ToBytes(signature);
 
    try {
@@ -173,4 +234,52 @@ export function verifyRecoveryProof(
       // BACKWARD COMPAT: delete this catch, leaving only the call above
       verifyProof(keyBytes, message, signatureBytes, RECOVERY_COMPAT_SIG_CONTEXT);
    }
+}
+
+// Signed message includes userCredPubKey so each of the two keys a registration stores is covered
+// by a proof from the other. It signs the single-use registration challenge in place of a nonce.
+function buildRecoveryChallengeMessage(
+   userId: string,
+   timestampMs: string,
+   challenge: string,
+   userCredPubKey: string,
+): Uint8Array<ArrayBuffer> {
+   base64ToBytes(userId, cc.USERID_BYTES, 'userId');
+   base64ToBytes(challenge, CHALLENGE_BYTES, 'challenge');
+   base64ToBytes(userCredPubKey, PROOF_PUBKEY_BYTES, 'userCredPubKey');
+   const message = [userId, timestampMs, challenge, userCredPubKey].join('\n');
+   return new TextEncoder().encode(message);
+}
+
+export function createRecoveryChallengeProof(
+   recoverySecret: Uint8Array,
+   userId: string,
+   timestampMs: string,
+   challenge: string,
+   userCredPubKey: string,
+): string {
+   const { secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
+   try {
+      const message = buildRecoveryChallengeMessage(userId, timestampMs, challenge, userCredPubKey);
+      return bytesToBase64(createProof(secKey, message, RECOVERY_REGISTER_SIG_CONTEXT));
+   } finally {
+      secKey.fill(0);
+   }
+}
+
+export function verifyRecoveryChallengeProof(
+   pubKey: string,
+   userId: string,
+   timestampMs: string,
+   challenge: string,
+   userCredPubKey: string,
+   signature: string,
+): void {
+   checkProofValues(pubKey, signature, timestampMs);
+   verifyProof(
+      base64ToBytes(pubKey),
+      buildRecoveryChallengeMessage(userId, timestampMs, challenge, userCredPubKey),
+      base64ToBytes(signature),
+      RECOVERY_REGISTER_SIG_CONTEXT,
+   );
 }

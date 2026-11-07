@@ -23,9 +23,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { cryptoReady, getSodium } from './crypto';
 import { decryptStream, encryptStream } from './cipher-streams';
 import { MasterKeyKeyProvider } from './keys';
-import { getProofKeyPair } from './proof';
+import { getProofKeyPair, PROOF_SEED_BYTES } from './proof';
 import { getRandom, readStreamAll, streamFromBytes } from './utils';
-import type * as cc from './cipher.consts';
+import * as cc from './cipher.consts';
 
 // libsodium-wrappers exposes its wasm module as `libsodium` without declaring it in its types
 type WrapperModule = { libsodium: { HEAPU8: Uint8Array } };
@@ -63,8 +63,8 @@ describe('libsodium memory after library calls', () => {
    });
 
    it('getProofKeyPair leaves no seed', () => {
-      const secret = getRandom(32);
-      const seed = getSodium().crypto_kdf_derive_from_key(32, 1, 'UCredKey', secret);
+      const secret = getRandom(cc.USERCRED_BYTES);
+      const seed = getSodium().crypto_kdf_derive_from_key(PROOF_SEED_BYTES, 1, 'UCredKey', secret);
       getProofKeyPair(secret, 'UCredKey');
       expect(indexOf(libsodiumMemory(), seed)).toBe(-1);
    });
