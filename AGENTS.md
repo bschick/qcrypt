@@ -180,6 +180,7 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 | API library unit tests | `pnpm test:libs:api` | `pnpm nx test api` | |
 | CLI unit tests | `pnpm test:cli` | `pnpm nx test cli` | |
 | ProVerif protocol models | `pnpm verify:proverif` | | *needs ProVerif 2.05 from opam; not in any aggregate. See [`formal/proverif/README.md`](formal/proverif/README.md)* |
+| TLA+ server state models | `pnpm verify:tlaplus` | | *needs a Java 11+ runtime; downloads the TLA+ tools jar into `~/.cache/qcrypt/` once; not in any aggregate. See [`formal/tlaplus/README.md`](formal/tlaplus/README.md)* |
 
 > **Note:** Every `test:*:prod` script first asks whether the prod WAF `APIRateLimit` rule is set to Count, because a blocking rule fails many prod tests, and reminds you to set it back to Block when the run ends. Pipe the answer to run one non-interactively: `echo y | pnpm test:server:prod`. With `CI` set, it does not ask.
 > **Note:** When passing flags through `nx`, use camelCase for config options (e.g., `--runnerConfig=` not `--runner-config`).

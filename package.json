@@ -35,6 +35,7 @@
     "build:libs:sodium": "node libs/crypto/sodium/regen.mjs",
     "verify:libs:sodium": "node libs/crypto/sodium/regen.mjs --check",
     "verify:proverif": "node formal/proverif/run.mjs",
+    "verify:tlaplus": "node formal/tlaplus/run.mjs",
     "test:cli": "nx test cli",
     "vectors:ciphers": "TSX_TSCONFIG_PATH=apps/web/scripts/tsconfig.json tsx apps/web/scripts/gen_ciphers_vectors.ts",
     "vectors:ciphersvc": "TSX_TSCONFIG_PATH=apps/web/scripts/tsconfig.json tsx apps/web/scripts/gen_ciphersvc_vectors.ts",
