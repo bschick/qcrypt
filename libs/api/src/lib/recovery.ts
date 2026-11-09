@@ -43,11 +43,7 @@ export type Recover3KeyRequest = RecoverProof & {
    userCredEnc?: string;
 };
 
-export type RecoverConfirmRequest = ChallengeRiders & {
-   // BACKWARD COMPAT: the proof of a request that carries no x-challenge-proof header
-   timestamp?: string;
-   signature?: string;
-};
+export type RecoverConfirmRequest = ChallengeRiders;
 
 export type RecoverInfoResponse = RegOptionsResponse & {
    prf?: boolean;

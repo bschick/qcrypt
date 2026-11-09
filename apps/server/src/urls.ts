@@ -30,14 +30,7 @@ export type Method = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 export type Version = typeof INTERNAL_VERSION | 1;
 
 type AuthorizedHandler = (httpDetails: HttpDetails, verifiedUser: VerifiedUserItem) => Promise<Response>;
-// BACKWARD COMPAT: proved is false when the request has no x-challenge-proof header, which older
-// clients do not send. Whether such a request is accepted depends on the route. Remove proved
-// once the header is required.
-type ChallengeHandler = (
-   httpDetails: HttpDetails,
-   unverifiedUser: UnverifiedUserItem,
-   proved: boolean,
-) => Promise<Response>;
+type ChallengeHandler = (httpDetails: HttpDetails, unverifiedUser: UnverifiedUserItem) => Promise<Response>;
 type OpenHandler = (httpDetails: HttpDetails) => Promise<Response>;
 
 // authorize means the route needs a session cookie and CSRF token. proof is the userCred proof

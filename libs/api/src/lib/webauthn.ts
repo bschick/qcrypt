@@ -99,8 +99,7 @@ export type AuthOptionsRequest = {
 
 export type RegOptionsRequest = {
    userName: string;
-   // BACKWARD COMPAT: make required once clients that omit it are gone
-   userCredPubKey?: string;
+   userCredPubKey: string;
 };
 
 export type AuthVerifyRiders = {
@@ -114,12 +113,10 @@ export type ChallengeRiders = {
 
 export type RegVerifyRiders = ChallengeRiders & {
    recoveryPubKey: string;
-   // BACKWARD COMPAT: make both required once clients that omit them are gone
-   recoveryTimestamp?: string;
-   recoverySignature?: string;
+   recoveryTimestamp: string;
+   recoverySignature: string;
    passkeyUserCredEnc?: string;
    recoveryUserCredEnc?: string;
-   userCredPubKey?: string;
    userCred?: string;
 };
 
@@ -155,7 +152,6 @@ export function makeRegVerifyRequest(source: RegistrationFields, riders: RegVeri
       recoverySignature: riders.recoverySignature,
       passkeyUserCredEnc: riders.passkeyUserCredEnc,
       recoveryUserCredEnc: riders.recoveryUserCredEnc,
-      userCredPubKey: riders.userCredPubKey,
       userCred: riders.userCred,
    };
 }

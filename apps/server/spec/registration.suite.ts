@@ -27,7 +27,6 @@ import * as api from '@qcrypt/api';
 import { USERCRED_ENC_MIN_BYTES, USERCRED_ENC_MAX_BYTES, PROOF_SKEW_MS } from '../src/consts';
 import {
    type Registration,
-   type RegVerifyOpts,
    buildRegBody,
    expectRegistered,
    expectRegRejected,
@@ -50,20 +49,6 @@ function recoverySignature(
       opts.challenge ?? reg.body.challenge,
       opts.userCredPubKey ?? reg.userCredPubKey,
    );
-}
-
-// BACKWARD COMPAT: a request from a client that does not prove userCred. Only its PRF requests carry
-// userCredPubKey.
-function oldFormat(reg: Registration, prf: boolean): RegVerifyOpts {
-   return {
-      body: {
-         userCred: undefined,
-         recoveryTimestamp: undefined,
-         recoverySignature: undefined,
-         userCredPubKey: prf ? reg.userCredPubKey : undefined,
-      },
-      headers: {},
-   };
 }
 
 export function registrationSuite(prf: boolean): void {
@@ -114,17 +99,12 @@ export function registrationSuite(prf: boolean): void {
          });
       });
 
-      // Both proofs come from the other userCred, whose key the body carries. The userCred proof does not
-      // match the userCredPubKey sent to reg/options.
-      it('rejects a userCredPubKey other than the one sent to reg/options', async () => {
+      it('rejects a registration proved with a different userCred', async () => {
          const reg = await buildRegBody(testUserName(), prf);
          const otherUserCred = getRandom(cc.USERCRED_BYTES);
          const otherPubKey = api.getUserCredPubKey(otherUserCred);
          await expectRegRejected(reg, {
-            body: {
-               userCredPubKey: otherPubKey,
-               recoverySignature: recoverySignature(reg, { userCredPubKey: otherPubKey }),
-            },
+            body: { recoverySignature: recoverySignature(reg, { userCredPubKey: otherPubKey }) },
             keySecret: otherUserCred,
          });
       });
@@ -136,16 +116,13 @@ export function registrationSuite(prf: boolean): void {
             await expectRegRejected(reg, { body: { userCred: bytesToBase64(getRandom(cc.USERCRED_BYTES)) } });
          });
 
-         // Both proofs come from the other userCred, which the body carries with its key. The userCred proof
-         // does not match the userCredPubKey sent to reg/options.
-         it('rejects a userCred and userCredPubKey other than those sent to reg/options', async () => {
+         it('rejects a different userCred in the body and in both proofs', async () => {
             const reg = await buildRegBody(testUserName(), prf);
             const otherUserCred = getRandom(cc.USERCRED_BYTES);
             const otherPubKey = api.getUserCredPubKey(otherUserCred);
             await expectRegRejected(reg, {
                body: {
                   userCred: bytesToBase64(otherUserCred),
-                  userCredPubKey: otherPubKey,
                   recoverySignature: recoverySignature(reg, { userCredPubKey: otherPubKey }),
                },
                keySecret: otherUserCred,
@@ -234,11 +211,6 @@ export function registrationSuite(prf: boolean): void {
          await expectRegRejected(reg, { headers: { ...reg.headers, 'x-nonce-proof': 'signature,timestamp,nonce' } });
       });
 
-      it('rejects an old-format request after reg/options received userCredPubKey', async () => {
-         const reg = await buildRegBody(testUserName(), prf);
-         await expectRegRejected(reg, oldFormat(reg, prf));
-      });
-
       it('rejects a challenge that was never issued', async () => {
          const reg = await buildRegBody(testUserName(), prf);
          const challenge = bytesToBase64(getRandom(api.CHALLENGE_BYTES));
@@ -283,10 +255,6 @@ export function registrationSuite(prf: boolean): void {
    describe(`registration input validation (${label})`, () => {
       const randomB64 = (byteLength: number) => bytesToBase64(getRandom(byteLength));
 
-      it('rejects the userCredPubKey sent to reg/options repeated in the body', async () => {
-         const reg = await buildRegBody(testUserName(), prf);
-         await expectRegRejected(reg, { body: { userCredPubKey: reg.userCredPubKey } });
-      });
       it('rejects a wrong-length recoveryPubKey', async () => {
          const reg = await buildRegBody(testUserName(), prf);
          await expectRegRejected(reg, { body: { recoveryPubKey: randomB64(cc.USERCRED_BYTES) } });
@@ -351,55 +319,6 @@ export function registrationSuite(prf: boolean): void {
          it('rejects a non-base64 userCred', async () => {
             const reg = await buildRegBody(testUserName(), prf);
             await expectRegRejected(reg, { body: { userCred: 'not b64 $$$' } });
-         });
-      }
-   });
-
-   // BACKWARD COMPAT: remove once clients that do not prove userCred are gone
-   describe(`old-format registration (${label})`, () => {
-      it('accepts an old-format request', async () => {
-         const reg = await buildRegBody(testUserName(), prf, false);
-         await expectRegistered(reg, oldFormat(reg, prf));
-      });
-
-      // A client signed in to another account sends that session's proof with every request
-      it('ignores an x-proof nonce proof on an old-format request', async () => {
-         const reg = await buildRegBody(testUserName(), prf, false);
-         const sessionProof = await makeNonceProofHeaders(
-            'POST',
-            '/v1/reg/verify',
-            undefined,
-            bytesToBase64(getRandom(cc.USERCRED_BYTES)),
-            bytesToBase64(getRandom(cc.USERID_BYTES)),
-            { legacyHeader: true },
-         );
-         await expectRegistered(reg, { ...oldFormat(reg, prf), headers: sessionProof });
-      });
-
-      it('rejects a challenge proof after reg/options received no userCredPubKey', async () => {
-         const reg = await buildRegBody(testUserName(), prf, false);
-         await expectRegRejected(reg, { body: { userCredPubKey: undefined } }, oldFormat(reg, prf));
-      });
-
-      if (prf) {
-         it('rejects an invalid userCredPubKey', async () => {
-            const reg = await buildRegBody(testUserName(), prf, false);
-            const old = oldFormat(reg, prf);
-            const userCredPubKey = bytesToBase64(getRandom(cc.USERCRED_BYTES));
-            await expectRegRejected(reg, { ...old, body: { ...old.body, userCredPubKey } }, old);
-         });
-         it('rejects a non-base64 userCredPubKey', async () => {
-            const reg = await buildRegBody(testUserName(), prf, false);
-            const old = oldFormat(reg, prf);
-            await expectRegRejected(reg, { ...old, body: { ...old.body, userCredPubKey: 'not b64 $$$' } }, old);
-         });
-      } else {
-         // BACKWARD COMPAT: old format creates userCred on the server therefore callers cannot provide userCredPubKey
-         it('rejects a userCredPubKey in the body', async () => {
-            const reg = await buildRegBody(testUserName(), prf, false);
-            const old = oldFormat(reg, prf);
-            const userCredPubKey = api.getUserCredPubKey(getRandom(cc.USERCRED_BYTES));
-            await expectRegRejected(reg, { ...old, body: { ...old.body, userCredPubKey } }, old);
          });
       }
    });

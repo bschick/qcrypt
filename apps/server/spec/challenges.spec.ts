@@ -108,11 +108,6 @@ describe('consumeChallenge', () => {
             `(userId=user1 OR userId=${UNKNOWN_USER_ID}) AND notExists(binding)`,
          ],
          [
-            'reg without a binding matches only the caller and no binding',
-            { challenge: VALID_B64_CHALLENGE, purpose: 'reg', userId: 'user1' },
-            'userId=user1 AND notExists(binding)',
-         ],
-         [
             'reg with a binding matches only the caller and that binding',
             { challenge: VALID_B64_CHALLENGE, purpose: 'reg', userId: 'user1', binding: 'bind123' },
             'userId=user1 AND binding=bind123',
@@ -145,11 +140,16 @@ describe('storeChallenge', () => {
    });
 
    it('rejects UNKNOWN_USER_ID for a purpose other than auth', async () => {
-      await storeChallenge({ challenge: VALID_B64_CHALLENGE, purpose: 'reg', userId: 'user1' });
+      await storeChallenge({ challenge: VALID_B64_CHALLENGE, purpose: 'reg', userId: 'user1', binding: 'bind123' });
       expect(created).toHaveBeenCalledTimes(1);
 
       await expect(
-         storeChallenge({ challenge: VALID_B64_CHALLENGE, purpose: 'reg', userId: UNKNOWN_USER_ID }),
+         storeChallenge({
+            challenge: VALID_B64_CHALLENGE,
+            purpose: 'reg',
+            userId: UNKNOWN_USER_ID,
+            binding: 'bind123',
+         }),
       ).rejects.toThrow();
       expect(created).toHaveBeenCalledTimes(1);
    });

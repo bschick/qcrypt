@@ -321,27 +321,6 @@ export function coreSuite(prf: boolean): void {
             await expectPasskeyDeleted(credId, csrfToken, sessCookie);
          });
 
-         // BACKWARD COMPAT: passkeys/verify also takes a nonce proof in x-proof
-         it('should accept a passkey add with a nonce proof in x-proof', async () => {
-            const { credId, body } = await prepareAdd();
-            const legacy = await makeNonceProofHeaders(
-               'POST',
-               '/v1/passkeys/verify',
-               Buffer.from(JSON.stringify(body), 'utf8'),
-               userCred,
-               userId,
-               { legacyHeader: true },
-            );
-            const res = await postJson(
-               '/v1/passkeys/verify',
-               body,
-               { 'x-csrf-token': csrfToken, ...legacy },
-               sessCookie,
-            );
-            expect(res.status).toBe(200);
-            await expectPasskeyDeleted(credId, csrfToken, sessCookie);
-         });
-
          it('should 404 fetching an unknown user', async () => {
             let res = await getJson(`/v1/user`, { 'x-csrf-token': csrfToken }, sessCookie);
             expect(res.status).toBe(200);
