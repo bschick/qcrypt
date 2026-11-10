@@ -302,11 +302,13 @@ The wrappers exit with a clear error when a required var is missing. The AWS CLI
 | Upgrade interactively (pick & choose) | `pnpm update --interactive --latest` |
 | Upgrade all to latest | `pnpm update --latest` |
 | Upgrade a specific package | `pnpm update <package> --latest` |
-| **Upgrade Nx** (use Nx migrate tool) | `pnpm nx migrate latest && pnpm install && pnpm nx migrate --run-migrations --if-exists` |
+| **Upgrade Nx** (use Nx migrate tool) | `pnpm nx migrate <version> && pnpm install && pnpm nx migrate --run-migrations --if-exists --no-agentic` |
 | **Upgrade pnpm** (rewrites the `packageManager` pin and its hash) | `corepack use pnpm@<version>` |
 
 - `--latest` allows major version bumps; without it, pnpm stays within existing semver ranges.
 - Always upgrade Nx via `nx migrate` rather than `pnpm update` — it runs code migrations that update config files and source code for breaking changes.
+- `--no-agentic` is required. Otherwise Nx uses its migrate orchestrator, which wants a git commit per migration and stops on the default branch without applying anything.
+- The migrations reformat the `nx.json` and `project.json` files they touch, since Prettier is deliberately absent, which fails `pnpm check`. Run `pnpm check:fix <file>` on each and review the diff.
 - After any upgrade, run the appropriate `pnpm build:<target>` and `pnpm test:<target>` commands to verify nothing broke.
 
 ---
