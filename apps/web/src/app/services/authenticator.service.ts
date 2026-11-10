@@ -592,7 +592,16 @@ export class AuthenticatorService {
          throw new Error('no active user');
       }
 
-      const { serverLoginUserInfo, prfKey } = await this._createSessionImpl(this.userId, true);
+      const sessionUserId = this.userId;
+      const { serverLoginUserInfo, prfKey } = await this._createSessionImpl(sessionUserId, true);
+
+      if (serverLoginUserInfo.verified && serverLoginUserInfo.userId !== sessionUserId) {
+         if (prfKey) {
+            prfKey.fill(0);
+         }
+         this._halt(`user id mismatch for session ${sessionUserId}`);
+      }
+
       const userCred = await this._resolveUserCred(serverLoginUserInfo, prfKey);
       return await this._loginUser(serverLoginUserInfo, userCred);
    }
@@ -1215,6 +1224,11 @@ export class AuthenticatorService {
             throw new Error('authentication failed');
          }
 
+         // Ensure the returned userId matches the user handle sent to auth/verify
+         if (serverLoginUserInfo.verified && serverLoginUserInfo.userId !== verifyBody.response.userHandle) {
+            this._halt(`user id mismatch for passkey handle ${verifyBody.response.userHandle}`);
+         }
+
          return { serverLoginUserInfo, prfKey };
       } catch (err) {
          if (prfKey) {
@@ -1231,7 +1245,7 @@ export class AuthenticatorService {
       // Start the process without userId prevents limiting authenticator creds
       // so the user can look for an existing credential
       const authOptionsRequest: api.AuthOptionsRequest = { userId };
-      const optionsJson = await plainFetch<api.AuthOptionsResponse>({
+      const authOptions = await plainFetch<api.AuthOptionsResponse>({
          method: 'POST',
          resource: 'auth/options',
          bodyJSON: JSON.stringify(authOptionsRequest),
@@ -1239,17 +1253,17 @@ export class AuthenticatorService {
 
       // The account mode is unknown until auth/verify returns, so request PRF output from
       // every get authentication
-      injectPrfExtension(optionsJson);
+      injectPrfExtension(authOptions);
 
       // Some authenticators treat an unlocked vault as verified unless verification is required
       if (requireVerification) {
-         optionsJson.userVerification = 'required';
+         authOptions.userVerification = 'required';
       }
 
       let startAuth: AuthenticationResponseJSON;
       try {
          startAuth = await startAuthentication({
-            optionsJSON: optionsJson,
+            optionsJSON: authOptions,
             useBrowserAutofill: false,
          });
       } catch (err) {
@@ -1266,7 +1280,7 @@ export class AuthenticatorService {
 
       // Need to return challenge for server lookup w/o userId
       return {
-         verifyBody: api.makeAuthVerifyRequest(startAuth, { challenge: optionsJson.challenge }),
+         verifyBody: api.makeAuthVerifyRequest(startAuth, { challenge: authOptions.challenge }),
          prfKey,
       };
    }
@@ -1380,7 +1394,12 @@ export class AuthenticatorService {
          throw new Error('invalid user credential');
       }
 
-      const { regResponse, prfKey } = await this._startRegistration(regOptions, prf);
+      if (this._getRegOptionsUserId(regOptions) !== userId) {
+         userCred.fill(0);
+         this._halt(`user id mismatch for recovery ${userId}`);
+      }
+
+      const { regResponse, prfKey } = await this._startRegistration(regOptions, prf, userId);
 
       try {
          let passkeyUserCredEnc: string | undefined;
@@ -1404,6 +1423,11 @@ export class AuthenticatorService {
             undefined,
          );
          this._requireVerified(serverLoginUserInfo);
+
+         if (serverLoginUserInfo.userId !== userId) {
+            this._halt(`user id mismatch for recovery ${userId}`);
+         }
+
          this._checkAccountPinPrf(userId, serverLoginUserInfo.prf);
 
          return await this._loginUser(serverLoginUserInfo, userCred);
@@ -1435,18 +1459,18 @@ export class AuthenticatorService {
          try {
             const userCredPubKey = api.getUserCredPubKey(userCred);
             const regOptionsRequest: api.RegOptionsRequest = { userName, userCredPubKey };
-            const optionsJson = await plainFetch<api.RegOptionsResponse>({
+            const regOptions = await plainFetch<api.RegOptionsResponse>({
                method: 'POST',
                resource: 'reg/options',
                bodyJSON: JSON.stringify(regOptionsRequest),
             });
 
-            const userId = optionsJson.user.id;
+            const userId = this._getRegOptionsUserId(regOptions);
             const recoveryInfo = this._newRecoverySecret(userId);
             secret = recoveryInfo.secret;
             this._cachedRecoveryWords = recoveryInfo.recoveryWords;
 
-            const { regResponse, prfKey } = await this._startRegistration(optionsJson, true);
+            const { regResponse, prfKey } = await this._startRegistration(regOptions, true, userId);
 
             if (!prfKey && (await onPrfUnavailable()) === 'different') {
                // discard the created passkey and register a fresh one
@@ -1457,14 +1481,14 @@ export class AuthenticatorService {
             const recoveryTimestamp = String(Date.now());
             const riders: api.RegVerifyRiders = {
                userId,
-               challenge: optionsJson.challenge,
+               challenge: regOptions.challenge,
                recoveryPubKey: recoveryInfo.recoveryPubKey,
                recoveryTimestamp,
                recoverySignature: api.createRecoveryChallengeProof(
                   secret,
                   userId,
                   recoveryTimestamp,
-                  optionsJson.challenge,
+                  regOptions.challenge,
                   userCredPubKey,
                ),
             };
@@ -1478,10 +1502,16 @@ export class AuthenticatorService {
             const body = api.makeRegVerifyRequest(regResponse, riders);
             const serverLoginUserInfo = await challengeFetch<api.LoginUserInfoResponse>(
                { method: 'POST', resource: 'reg/verify', bodyJSON: JSON.stringify(body) },
-               { userId, userCred: userCred.slice(), challenge: optionsJson.challenge },
+               { userId, userCred: userCred.slice(), challenge: regOptions.challenge },
                undefined,
             );
             this._requireVerified(serverLoginUserInfo);
+
+            // Ensure the returned userId matches the one from reg/options
+            if (serverLoginUserInfo.userId !== userId) {
+               this._halt(`user id mismatch for registration ${userId}`);
+            }
+
             if (prfKey) {
                if (!serverLoginUserInfo.prf) {
                   this._halt(`server rejected PRF for ${userId}`);
@@ -1507,14 +1537,20 @@ export class AuthenticatorService {
          throw new Error('no active user');
       }
 
-      const optionsJson = await nonceFetch<api.RegOptionsResponse>(
+      const regOptions = await nonceFetch<api.RegOptionsResponse>(
          { method: 'GET', resource: 'passkeys/options', errorLogout: this._errorLogout },
          { userId: this.userId, userCred: await this.getUserCred() },
          this._csrf(),
       );
 
+      // Ensure the returned userId matches the session's
+      const sessionUserId = this.userId;
+      if (this._getRegOptionsUserId(regOptions) !== sessionUserId) {
+         this._halt(`user id mismatch for session ${sessionUserId}`);
+      }
+
       const accountPrf = this.prf;
-      const { regResponse, prfKey } = await this._startRegistration(optionsJson, accountPrf);
+      const { regResponse, prfKey } = await this._startRegistration(regOptions, accountPrf, sessionUserId);
 
       let passkeyUserCredEnc: string | undefined;
       if (accountPrf) {
@@ -1536,7 +1572,7 @@ export class AuthenticatorService {
          }
       }
 
-      const body = api.makeAddVerifyRequest(regResponse, { challenge: optionsJson.challenge, passkeyUserCredEnc });
+      const body = api.makeAddVerifyRequest(regResponse, { challenge: regOptions.challenge, passkeyUserCredEnc });
       const serverLoginUserInfo = await challengeFetch<api.LoginUserInfoResponse>(
          {
             method: 'POST',
@@ -1556,18 +1592,19 @@ export class AuthenticatorService {
 
    // Starts the registration ceremony, reading the passkey's PRF output only when tryPrf is set
    private async _startRegistration(
-      optionsJson: api.RegOptionsResponse,
+      regOptions: api.RegOptionsResponse,
       tryPrf: boolean,
+      userId: string,
    ): Promise<{ regResponse: RegistrationResponseJSON; prfKey: Uint8Array<ArrayBuffer> | null }> {
-      optionsJson.user.id = userIdToHandle(optionsJson.user.id);
+      const options = { ...regOptions, user: { ...regOptions.user, id: userIdToHandle(userId) } };
 
       if (tryPrf) {
-         injectPrfExtension(optionsJson);
+         injectPrfExtension(options);
       }
 
       let regResponse: RegistrationResponseJSON;
       try {
-         regResponse = await startRegistration({ optionsJSON: optionsJson });
+         regResponse = await startRegistration({ optionsJSON: options });
       } catch (err) {
          console.error('startRegistration', err);
          throw err;
@@ -1580,7 +1617,7 @@ export class AuthenticatorService {
          prfKey = prfReadKey(regResponse.clientExtensionResults);
          if (!prfKey && prfEnabled(regResponse.clientExtensionResults)) {
             try {
-               prfKey = await this._readPrfViaAssertion(regResponse.id, optionsJson.rp.id);
+               prfKey = await this._readPrfViaAssertion(regResponse.id, options.rp.id);
             } catch (err) {
                this._signalUnknownCredential(regResponse.id);
                throw err;
@@ -1618,6 +1655,13 @@ export class AuthenticatorService {
          throw new Error('PRF read without user verification');
       }
       return prfReadKey(startAuth.clientExtensionResults);
+   }
+
+   private _getRegOptionsUserId(regOptions: api.RegOptionsResponse): string {
+      if (!regOptions.user?.id || !regOptions.challenge) {
+         throw new Error('invalid registration options');
+      }
+      return regOptions.user.id;
    }
 
    private _requireVerified(
