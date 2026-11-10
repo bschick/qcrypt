@@ -827,7 +827,7 @@ describe('AuthenticatorService', () => {
          }));
          vi.spyOn(navigator.credentials, 'create').mockResolvedValue(attestation());
 
-         await service.newUser('test-user', async () => 'standard');
+         await service.newUser('test-user', async () => 'accept');
          expect(service.userId).toBe(optionsUserId);
          expect(service.halted).toBe(false);
          service.logout(false);
@@ -835,7 +835,7 @@ describe('AuthenticatorService', () => {
          // The second run registers its own account. reg/options issues each user id once.
          optionsUserId = otherUserId();
          verifyUserId = otherUserId();
-         await expect(service.newUser('test-user', async () => 'standard')).rejects.toThrow();
+         await expect(service.newUser('test-user', async () => 'accept')).rejects.toThrow();
          expect(service.halted).toBe(true);
       });
 
@@ -1366,10 +1366,7 @@ describe('AuthenticatorService', () => {
          // @ts-expect-error — exercising private path
          vi.spyOn(service, '_startRegistration').mockResolvedValueOnce(abandoned);
          // Try a different passkey once, then dismiss the prompt to end registration
-         const onPrfUnavailable = vi
-            .fn()
-            .mockResolvedValueOnce('different')
-            .mockRejectedValueOnce(new Error('dismissed'));
+         const onPrfUnavailable = vi.fn().mockResolvedValueOnce('retry').mockRejectedValueOnce(new Error('dismissed'));
 
          await expect(service.newUser('test-user', onPrfUnavailable)).rejects.toThrow('dismissed');
          expect(signals.signalUnknownCredential).toHaveBeenCalledExactlyOnceWith({

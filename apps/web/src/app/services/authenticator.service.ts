@@ -1442,10 +1442,7 @@ export class AuthenticatorService {
    // Creates new user and first passkey
    // The passkey is always created with PRF requested. If the authenticator has no PRF, onPrfUnavailable
    // chooses to either accept the non-prf passkey or leak it and try another passkey.
-   async newUser(
-      userName: string,
-      onPrfUnavailable: () => Promise<'standard' | 'different'>,
-   ): Promise<VerifiedUserInfo> {
+   async newUser(userName: string, onPrfUnavailable: () => Promise<'accept' | 'retry'>): Promise<VerifiedUserInfo> {
       if (!userName) {
          throw new Error('missing require userName');
       }
@@ -1472,7 +1469,7 @@ export class AuthenticatorService {
 
             const { regResponse, prfKey } = await this._startRegistration(regOptions, true, userId);
 
-            if (!prfKey && (await onPrfUnavailable()) === 'different') {
+            if (!prfKey && (await onPrfUnavailable()) === 'retry') {
                // discard the created passkey and register a fresh one
                this._signalUnknownCredential(regResponse.id);
                continue;

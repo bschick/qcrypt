@@ -132,10 +132,10 @@ export class NewUserComponent implements OnInit, AfterViewInit {
    }
 
    // The dialog cannot be dismissed, so it always resolves to a definite choice.
-   private async _decidePrfFallback(): Promise<'standard' | 'different'> {
+   private async _decidePrfFallback(): Promise<'accept' | 'retry'> {
       this.showProgress.set(false);
       const choice = await firstValueFrom(this._dialog.open(PrfFallbackDialog, { disableClose: true }).afterClosed());
-      if (choice !== 'standard' && choice !== 'different') {
+      if (choice !== 'accept' && choice !== 'retry') {
          throw new Error('PRF fallback dialog returned an invalid choice');
       }
       this.showProgress.set(true);

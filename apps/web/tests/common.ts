@@ -184,10 +184,10 @@ export type AuthFixture = {
    // stored credential.
    loadAuthenticator: (dir: string) => Authenticator;
    // Creates a fresh PWTesty_e2e_<timestamp> user on the authenticator via the UI
-   // registration flow. A 'none' authenticator hits the fallback dialog: without
-   // differentAuth it takes 'standard' (same passkey, no-PRF account); with
-   // differentAuth it takes 'different', discarding that passkey and registering a
-   // fresh one on differentAuth. Returns signed-in on '/' (Encryption Mode visible).
+   // registration flow. A 'none' authenticator reaches the fallback dialog.
+   // Without differentAuth, the new passkey is kept and the account is no-PRF.
+   // With differentAuth, the new passkey is discarded and a fresh one is registered
+   // on differentAuth. Returns signed-in on '/' (Encryption Mode visible).
    createTestUser: (authenticator: Authenticator, differentAuth?: Authenticator) => Promise<CreatedTestUser>;
    // Number of navigator.credentials.create calls the emulators have handled so far.
    credentialCreateCount: () => number;
@@ -423,8 +423,6 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
                await page.getByRole('button', { name: 'Continue with standard protection' }).click();
             }
          }
-         // The emulator that produced the account's passkey (differentAuth's after a
-         // 'different' fallback, otherwise the original).
          const finalEmulator = active;
 
          const verifyResp = await verifyPromise;
