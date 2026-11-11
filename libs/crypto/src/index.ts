@@ -107,7 +107,15 @@ export type {
 
 export { makeCipherArmor, parseCipherArmor } from './lib/armor';
 
-export { PWDKeyProvider, MasterKeyKeyProvider, type PWDProvider, type KeyProvider } from './lib/keys';
+export {
+   PWDKeyProvider,
+   MasterKeyKeyProvider,
+   mixKey,
+   deriveKey,
+   deriveTag,
+   type PWDProvider,
+   type KeyProvider,
+} from './lib/keys';
 
 // Lazy libsodium and libcrux loader
 // Callers must `await cryptoReady()` before invoking any other crypto export.
