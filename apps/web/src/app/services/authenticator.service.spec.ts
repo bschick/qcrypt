@@ -50,7 +50,8 @@ to assert most of the meaninful actions in this table
 */
 
 import { TestBed } from '@angular/core/testing';
-import { AuthenticatorService, AuthEvent, PrfUnsupportedError, userIdToHandle } from './authenticator.service';
+import { AuthenticatorService, AuthEvent, PrfUnsupportedError } from './authenticator.service';
+import { userIdToHandle } from './credentialtag';
 import { BroadcastService } from './broadcast.service';
 import { KEYSTORE_DB_NAME, KeystoreService } from './keystore.service';
 import * as cc from '@qcrypt/crypto/consts';
@@ -1254,7 +1255,7 @@ describe('AuthenticatorService', () => {
 
          expect(signals.signalAllAcceptedCredentials).toHaveBeenCalledExactlyOnceWith({
             rpId: window.location.hostname,
-            userId: userIdToHandle(userId),
+            userId: userIdToHandle(userId, base64ToBytes(userCred)),
             allAcceptedCredentialIds: [pkId, newPkId],
          });
       });
@@ -1272,7 +1273,7 @@ describe('AuthenticatorService', () => {
 
          expect(signals.signalAllAcceptedCredentials).toHaveBeenCalledExactlyOnceWith({
             rpId: window.location.hostname,
-            userId: userIdToHandle(userId),
+            userId: userIdToHandle(userId, base64ToBytes(userCred)),
             allAcceptedCredentialIds: [pkId, otherPkId, newPkId],
          });
       });
@@ -1293,7 +1294,7 @@ describe('AuthenticatorService', () => {
          await expect(service.deletePasskey(otherPkId)).resolves.toBe(0);
          expect(signals.signalAllAcceptedCredentials).toHaveBeenCalledExactlyOnceWith({
             rpId: window.location.hostname,
-            userId: userIdToHandle(userId),
+            userId: userIdToHandle(userId, base64ToBytes(userCred)),
             allAcceptedCredentialIds: [],
          });
       });
@@ -1335,7 +1336,7 @@ describe('AuthenticatorService', () => {
 
          expect(signals.signalCurrentUserDetails).toHaveBeenCalledExactlyOnceWith({
             rpId: window.location.hostname,
-            userId: userIdToHandle(userId),
+            userId: userIdToHandle(userId, base64ToBytes(userCred)),
             name: 'renamed-user',
             displayName: '',
          });

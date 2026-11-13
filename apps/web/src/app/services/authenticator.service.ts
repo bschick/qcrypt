@@ -52,6 +52,7 @@ import { KeystoreService } from './keystore.service';
 import { CipherService } from './cipher.service';
 import { injectPrfExtension, prfEnabled, prfReadKey, prfEncrypt, prfDecrypt } from './prf';
 import { plainFetch, nonceFetch, challengeFetch } from './apifetch';
+import { handleToUserId, userIdToHandle, userIdToUntaggedHandle } from './credentialtag';
 import {
    BroadcastService,
    type CredentialPayload,
@@ -119,17 +120,6 @@ export class PrfUnsupportedError extends Error {
       super(message);
       this.name = 'PrfUnsupportedError';
    }
-}
-
-// SimpleWebAuthn v10+ encodes credential user.id as b64 rather than utf as older versions,
-// so translate to keep the handle stable for passkeys registered under v9.
-// https://github.com/MasterKale/SimpleWebAuthn/discussions/636
-export function userIdToHandle(userId: string): string {
-   return bytesToBase64(new TextEncoder().encode(userId));
-}
-
-export function handleToUserId(handle: string): string {
-   return new TextDecoder('utf-8').decode(base64ToBytes(handle));
 }
 
 export function normalizeRecoveryWords(words: string): string {
@@ -691,7 +681,7 @@ export class AuthenticatorService {
          const userCredEnc = bytesToBase64(cipherData);
          const userCredExpiry = new Date(Date.now() + api.SESSION_TIMEOUT_SEC * 1000).toISOString();
          const userInfo = this._loginRestore(serverLogin, userCredEnc, userCredExpiry, version);
-         this._signalAcceptedCredentials(userInfo.userId, userInfo.authenticators);
+         await this._signalAcceptedCredentials(userInfo.authenticators, userCred);
 
          this._broadcastSvc.sendLogin({
             pkId: serverLogin.pkId,
@@ -889,15 +879,29 @@ export class AuthenticatorService {
 
    // Only call with a passkey list the server read consistently for an action in this tab.
    // Accepted risk: a passkey another tab adds between that read and this signal stays hidden until the next signal
-   private _signalAcceptedCredentials(userId: string, authenticators: api.AuthenticatorInfoResponse[]): void {
-      // WebAuthn signals are "fire and forget"... there is no guarantee that sending
-      // a signal makes its way to a user's credential manager
-      sendSignal({
-         signalName: 'allAcceptedCredentials',
-         rpID: window.location.hostname,
-         userID: userIdToHandle(userId),
-         allAcceptedCredentialIDs: authenticators.map((authenticator) => authenticator.credentialId),
-      }).catch(() => undefined);
+   private async _signalAcceptedCredentials(
+      authenticators: api.AuthenticatorInfoResponse[],
+      userCred?: Uint8Array,
+   ): Promise<void> {
+      let sessionUserCred: Uint8Array<ArrayBuffer> | null = null;
+      try {
+         if (!userCred) {
+            sessionUserCred = await this.getUserCred();
+         }
+         // WebAuthn signals are "fire and forget"... there is no guarantee that sending
+         // a signal makes its way to a user's credential manager
+         sendSignal({
+            signalName: 'allAcceptedCredentials',
+            rpID: window.location.hostname,
+            userID: userIdToHandle(this.userId, userCred ?? sessionUserCred!),
+            allAcceptedCredentialIDs: authenticators.map((authenticator) => authenticator.credentialId),
+         }).catch(() => undefined);
+      } catch {
+         // Signaling is best effort
+      } finally {
+         // Callers overwrite their own userCred
+         sessionUserCred?.fill(0);
+      }
    }
 
    activity() {
@@ -1080,20 +1084,28 @@ export class AuthenticatorService {
       }
 
       const userInfo = this._updateLoggedInUser(serverUserInfo);
-      this._signalUserName(userInfo.userId, userInfo.userName);
+      await this._signalUserName();
       this._broadcastSvc.sendUserInfoChanged({ pkId: userInfo.pkId });
       return userInfo;
    }
 
-   private _signalUserName(userId: string, userName: string): void {
-      // WebAuthn signals are considered "fire and forget". There is no guarantee that sending
-      // a signal make its way to a user's credential manager via the browser and/or platform.
-      sendSignal({
-         signalName: 'currentUserDetails',
-         rpID: window.location.hostname,
-         userID: userIdToHandle(userId),
-         userName,
-      }).catch(() => undefined);
+   private async _signalUserName(): Promise<void> {
+      let userCred: Uint8Array<ArrayBuffer> | null = null;
+      try {
+         userCred = await this.getUserCred();
+         // WebAuthn signals are considered "fire and forget". There is no guarantee that sending
+         // a signal make its way to a user's credential manager via the browser and/or platform.
+         sendSignal({
+            signalName: 'currentUserDetails',
+            rpID: window.location.hostname,
+            userID: userIdToHandle(this.userId, userCred),
+            userName: this.userName,
+         }).catch(() => undefined);
+      } catch {
+         // Signaling is best effort
+      } finally {
+         userCred?.fill(0);
+      }
    }
 
    // Only for passkeys the server never received. If the passkey manager does not support
@@ -1129,7 +1141,7 @@ export class AuthenticatorService {
          throw new Error('authentication failed');
       }
 
-      this._signalAcceptedCredentials(this.userId, serverUserInfo.verified ? serverUserInfo.authenticators : []);
+      await this._signalAcceptedCredentials(serverUserInfo.verified ? serverUserInfo.authenticators : []);
 
       // Unverified response means that was the last PK and the user was deleted.
       // If the user is still valid but we deleted our own current PK, the server
@@ -1274,7 +1286,7 @@ export class AuthenticatorService {
       if (!startAuth.response.userHandle) {
          throw new Error('authenticator missing user handle');
       }
-      startAuth.response.userHandle = handleToUserId(startAuth.response.userHandle);
+      startAuth.response.userHandle = handleToUserId(startAuth.response.userHandle).userId;
 
       const prfKey = prfReadKey(startAuth.clientExtensionResults);
 
@@ -1582,7 +1594,7 @@ export class AuthenticatorService {
       );
       this._requireVerified(serverLoginUserInfo);
       const userInfo = this._updateLoggedInUser(serverLoginUserInfo);
-      this._signalAcceptedCredentials(userInfo.userId, userInfo.authenticators);
+      await this._signalAcceptedCredentials(userInfo.authenticators);
       this._broadcastSvc.sendUserInfoChanged({ pkId: userInfo.pkId });
       return userInfo;
    }
@@ -1593,7 +1605,7 @@ export class AuthenticatorService {
       tryPrf: boolean,
       userId: string,
    ): Promise<{ regResponse: RegistrationResponseJSON; prfKey: Uint8Array<ArrayBuffer> | null }> {
-      const options = { ...regOptions, user: { ...regOptions.user, id: userIdToHandle(userId) } };
+      const options = { ...regOptions, user: { ...regOptions.user, id: userIdToUntaggedHandle(userId) } };
 
       if (tryPrf) {
          injectPrfExtension(options);
