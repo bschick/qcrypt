@@ -1,5 +1,3 @@
-import { mnemonicToEntropy } from '@scure/bip39';
-import { wordlist } from '@scure/bip39/wordlists/english.js';
 import sodium from 'libsodium-wrappers';
 import * as api from '@qcrypt/api';
 import {
@@ -17,6 +15,7 @@ import {
    streamFromBytes,
    type KeyProvider,
 } from '@qcrypt/crypto';
+import { decodeRecovery } from '../../src/app/services/recoverywords';
 import { byteSecret, textSecret, type Secret } from './heapscan';
 
 async function ready(): Promise<void> {
@@ -59,7 +58,7 @@ function spacedWords(words: string): string {
 }
 
 export function decodeRecoveryWords(words: string): Uint8Array {
-   return mnemonicToEntropy(spacedWords(words), wordlist);
+   return decodeRecovery(words).recoverySecret;
 }
 
 // The words encode recoveryId followed by the userId. Only recoveryId is secret.

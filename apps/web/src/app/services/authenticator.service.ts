@@ -41,10 +41,7 @@ import {
    MasterKeyKeyProvider,
    readStreamAll,
    getRandom,
-   hashString,
 } from '@qcrypt/crypto';
-import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
-import { wordlist } from '@scure/bip39/wordlists/english.js';
 import * as cc from '@qcrypt/crypto/consts';
 
 import * as api from '@qcrypt/api';
@@ -53,6 +50,7 @@ import { CipherService } from './cipher.service';
 import { injectPrfExtension, prfEnabled, prfReadKey, prfEncrypt, prfDecrypt } from './prf';
 import { plainFetch, nonceFetch, challengeFetch } from './apifetch';
 import { handleToUserId, userIdToHandle, userIdToUntaggedHandle } from './credentialtag';
+import { decodeRecovery, newRecovery } from './recoverywords';
 import {
    BroadcastService,
    type CredentialPayload,
@@ -120,10 +118,6 @@ export class PrfUnsupportedError extends Error {
       super(message);
       this.name = 'PrfUnsupportedError';
    }
-}
-
-export function normalizeRecoveryWords(words: string): string {
-   return words.trim().toLowerCase().split(/\s+/).join(' ');
 }
 
 @Service()
@@ -446,26 +440,6 @@ export class AuthenticatorService {
       return words;
    }
 
-   // Generates a fresh recovery secret for userId and returns its public key (to store), words
-   // (to show once), and the raw secret. The caller takes ownership of and must wipe secret.
-   private _newRecoverySecret(userId: string): {
-      secret: Uint8Array<ArrayBuffer>;
-      recoveryPubKey: string;
-      recoveryWords: string;
-   } {
-      const recoveryId = getRandom(api.RECOVERYID_BYTES);
-      const secret = api.recoverySecret(recoveryId, userId);
-      try {
-         return {
-            secret,
-            recoveryPubKey: api.getRecoveryPubKey(secret),
-            recoveryWords: entropyToMnemonic(secret, wordlist),
-         };
-      } finally {
-         recoveryId.fill(0);
-      }
-   }
-
    // PUTs recoveryPubKey as the account's recovery key. Safe to repeat for the same secret
    private async _putRecoveryKey(
       secret: Uint8Array<ArrayBuffer>,
@@ -497,7 +471,7 @@ export class AuthenticatorService {
 
       // No exception means it committed. This should always 'match' unless we've hit an
       // unexpected condition
-      return this.recoveryKeyId() === hashString(recoveryPubKey) ? 'match' : 'unknown';
+      return this.recoveryKeyId() === api.getRecoveryKeyId(recoveryPubKey) ? 'match' : 'unknown';
    }
 
    // Generates fresh recovery words and replaces the server-stored public key. The
@@ -510,60 +484,58 @@ export class AuthenticatorService {
       // Force another authentication
       await this.reauthenticate();
 
-      const { secret, recoveryPubKey, recoveryWords } = this._newRecoverySecret(this.userId);
+      const userCred = await this.getUserCred();
       try {
-         // A PRF account keeps userCred encrypted under the recovery secret
-         let userCredEnc: string | undefined;
-         if (this.prf) {
-            const userCred = await this.getUserCred();
-            try {
-               // prfEncrypt wipes the key it is handed
-               userCredEnc = await prfEncrypt(userCred, secret.slice(0), this.userId);
-            } finally {
-               userCred.fill(0);
-            }
-         }
-
-         let state: RecoveryWordsState;
+         const { recoverySecret, recoveryPubKey, recoveryWords } = newRecovery(this.userId, userCred);
          try {
-            state = await this._putRecoveryKey(secret, recoveryPubKey, userCredEnc);
-         } catch (err) {
-            // A lost response does not say whether the server committed
-            console.error(err);
-            state = 'unknown';
-
-            // The first attempt may still be running on the server, so pause before repeating it
-            await new Promise((resolve) => setTimeout(resolve, RECOVERY_RETRY_DELAY_MS));
-            try {
-               state = await this._putRecoveryKey(secret, recoveryPubKey, userCredEnc);
-            } catch (retryErr) {
-               console.error(retryErr);
+            // A PRF account keeps userCred encrypted under the recovery secret
+            let userCredEnc: string | undefined;
+            if (this.prf) {
+               // prfEncrypt wipes the key it is handed
+               userCredEnc = await prfEncrypt(userCred, recoverySecret.slice(0), this.userId);
             }
-         }
 
-         // Stored to present to the user
-         if (state === 'match' || state === 'unknown') {
-            this._cachedRecoveryWords = recoveryWords;
+            let state: RecoveryWordsState;
+            try {
+               state = await this._putRecoveryKey(recoverySecret, recoveryPubKey, userCredEnc);
+            } catch (err) {
+               // A lost response does not say whether the server committed
+               console.error(err);
+               state = 'unknown';
+
+               // The first attempt may still be running on the server, so pause before repeating it
+               await new Promise((resolve) => setTimeout(resolve, RECOVERY_RETRY_DELAY_MS));
+               try {
+                  state = await this._putRecoveryKey(recoverySecret, recoveryPubKey, userCredEnc);
+               } catch (retryErr) {
+                  console.error(retryErr);
+               }
+            }
+
+            // Stored to present to the user
+            if (state === 'match' || state === 'unknown') {
+               this._cachedRecoveryWords = recoveryWords;
+            }
+            return state;
+         } finally {
+            recoverySecret.fill(0);
          }
-         return state;
       } finally {
-         secret.fill(0);
+         userCred.fill(0);
       }
    }
 
    public async checkRecoveryWords(recoveryWords: string): Promise<RecoveryWordsState> {
       let recoveryKeyId: string;
       try {
-         const words = normalizeRecoveryWords(recoveryWords);
-         if (this.getRecoveryUserId(words) !== this.userId) {
-            return 'wronguser';
-         }
-
-         const secret = mnemonicToEntropy(words, wordlist);
+         const { recoverySecret, userId } = decodeRecovery(recoveryWords);
          try {
-            recoveryKeyId = hashString(api.getRecoveryPubKey(secret));
+            if (userId !== this.userId) {
+               return 'wronguser';
+            }
+            recoveryKeyId = api.getRecoveryKeyId(api.getRecoveryPubKey(recoverySecret));
          } finally {
-            secret.fill(0);
+            recoverySecret.fill(0);
          }
       } catch {
          return 'invalid';
@@ -636,7 +608,7 @@ export class AuthenticatorService {
             if (!serverLogin.userCred) {
                throw new Error('missing non-PRF user credential');
             }
-            userCred = base64ToBytes(serverLogin.userCred);
+            userCred = base64ToBytes(serverLogin.userCred, cc.USERCRED_BYTES, 'user credential');
          }
 
          return userCred;
@@ -1297,31 +1269,8 @@ export class AuthenticatorService {
       };
    }
 
-   getRecoveryUserId(recoveryWords: string): string {
-      const words = normalizeRecoveryWords(recoveryWords);
-      if (!words) {
-         throw new Error('missing recovery words');
-      }
-
-      if (!validateMnemonic(words, wordlist)) {
-         throw new Error('invalid recovery words');
-      }
-
-      const recoveryBytes = mnemonicToEntropy(words, wordlist);
-      try {
-         if (recoveryBytes.byteLength !== api.RECOVERYID_BYTES + cc.USERID_BYTES) {
-            throw new Error('invalid recovery words');
-         }
-         return bytesToBase64(recoveryBytes.subarray(api.RECOVERYID_BYTES));
-      } finally {
-         recoveryBytes.fill(0);
-      }
-   }
-
    async recover3(recoveryWords: string): Promise<VerifiedUserInfo> {
-      const words = normalizeRecoveryWords(recoveryWords);
-      const userId = this.getRecoveryUserId(words);
-      const secret = mnemonicToEntropy(words, wordlist);
+      const { recoverySecret: secret, userId } = decodeRecovery(recoveryWords);
       let userCred: Uint8Array<ArrayBuffer> | undefined;
       await this._pendingLogout;
 
@@ -1353,7 +1302,7 @@ export class AuthenticatorService {
             if (!startResp.userCred) {
                throw new Error('missing user credential');
             }
-            userCred = base64ToBytes(startResp.userCred);
+            userCred = base64ToBytes(startResp.userCred, cc.USERCRED_BYTES, 'user credential');
          }
 
          this._pinAccount(userId, startResp.prf, userCred);
@@ -1390,7 +1339,12 @@ export class AuthenticatorService {
       // server ends the session, so drop local session state to match
       this.clearSession(true);
 
-      return await this._finishRecovery(recoverResp, userId, !!recoverResp.prf, base64ToBytes(userCred));
+      return await this._finishRecovery(
+         recoverResp,
+         userId,
+         !!recoverResp.prf,
+         base64ToBytes(userCred, cc.USERCRED_BYTES, 'user credential'),
+      );
    }
 
    // Re-provisions the recovered account's "first" passkey
@@ -1475,8 +1429,8 @@ export class AuthenticatorService {
             });
 
             const userId = this._getRegOptionsUserId(regOptions);
-            const recoveryInfo = this._newRecoverySecret(userId);
-            secret = recoveryInfo.secret;
+            const recoveryInfo = newRecovery(userId, userCred);
+            secret = recoveryInfo.recoverySecret;
             this._cachedRecoveryWords = recoveryInfo.recoveryWords;
 
             const { regResponse, prfKey } = await this._startRegistration(regOptions, true, userId);

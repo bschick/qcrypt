@@ -29,6 +29,10 @@ const USERID_B64_LEN = Math.ceil((cc.USERID_BYTES * 4) / 3);
 const TAG_B64_LEN = Math.ceil((USERCRED_TAG_BYTES * 4) / 3);
 
 export function getUserCredTag(userCred: Uint8Array): string {
+   if (userCred.byteLength !== cc.USERCRED_BYTES) {
+      throw new Error(`Invalid userCred length of: ${userCred.byteLength}`);
+   }
+
    return bytesToBase64(deriveTag(userCred, USERCRED_TAG_PURPOSE, 1, USERCRED_TAG_BYTES));
 }
 
@@ -36,10 +40,18 @@ export function getUserCredTag(userCred: Uint8Array): string {
 // so translate to keep the handle stable for passkeys registered under v9.
 // https://github.com/MasterKale/SimpleWebAuthn/discussions/636
 export function userIdToHandle(userId: string, userCred: Uint8Array): string {
+   if (userId.length !== USERID_B64_LEN) {
+      throw new Error(`Invalid userId length of: ${userId.length}`);
+   }
+
    return bytesToBase64(new TextEncoder().encode(userId + getUserCredTag(userCred)));
 }
 
 export function userIdToUntaggedHandle(userId: string): string {
+   if (userId.length !== USERID_B64_LEN) {
+      throw new Error(`Invalid userId length of: ${userId.length}`);
+   }
+
    return bytesToBase64(new TextEncoder().encode(userId));
 }
 
@@ -49,8 +61,13 @@ export function handleToUserId(handle: string): { userId: string; tag: string | 
       throw new Error('invalid passkey handle');
    }
 
-   return {
-      userId: text.slice(0, USERID_B64_LEN),
-      tag: text.length > USERID_B64_LEN ? text.slice(USERID_B64_LEN) : null,
-   };
+   const userId = text.slice(0, USERID_B64_LEN);
+   const tag = text.length > USERID_B64_LEN ? text.slice(USERID_B64_LEN) : null;
+
+   base64ToBytes(userId, cc.USERID_BYTES, 'userId');
+   if (tag) {
+      base64ToBytes(tag, USERCRED_TAG_BYTES, 'tag');
+   }
+
+   return { userId, tag };
 }

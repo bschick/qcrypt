@@ -46,6 +46,14 @@ describe('credential tag', () => {
       expect(getUserCredTag(getRandom(cc.USERCRED_BYTES))).not.toBe(tag);
    });
 
+   it('rejects a userCred that is not USERCRED_BYTES', () => {
+      expect(getUserCredTag(getRandom(cc.USERCRED_BYTES))).toBeTruthy();
+
+      for (const length of [0, cc.USERCRED_BYTES - 1, cc.USERCRED_BYTES + 1]) {
+         expect(() => getUserCredTag(getRandom(length))).toThrow();
+      }
+   });
+
    it('derived tags match expected values', () => {
       const userCreds = [
          'dJSUi6L-p9ErmjPtEwdnTB2FxeJ3axgAYNB0wyhMgdY',
@@ -75,12 +83,33 @@ describe('passkey handle', () => {
       expect(handleToUserId(userIdToHandle(userId, userCred))).toEqual({ userId, tag });
    });
 
+   it('rejects a user id that is not USERID_BYTES', () => {
+      const userId = bytesToBase64(getRandom(cc.USERID_BYTES));
+      const userCred = getRandom(cc.USERCRED_BYTES);
+      expect(userIdToHandle(userId, userCred)).toBeTruthy();
+
+      for (const bad of ['', userId.slice(1), `${userId}A`]) {
+         expect(() => userIdToHandle(bad, userCred)).toThrow();
+         expect(() => userIdToUntaggedHandle(bad)).toThrow();
+      }
+   });
+
    it('rejects a handle that is neither tagged nor untagged', () => {
       const userId = bytesToBase64(getRandom(cc.USERID_BYTES));
       const tag = getUserCredTag(getRandom(cc.USERCRED_BYTES));
       expect(handleToUserId(userIdToUntaggedHandle(userId)).userId).toBe(userId);
 
       for (const text of [userId.slice(1), userId + tag.slice(1), `${userId}${tag}A`]) {
+         expect(() => handleToUserId(bytesToBase64(new TextEncoder().encode(text)))).toThrow();
+      }
+   });
+
+   it('rejects a handle of the right length that is not base64', () => {
+      const userId = bytesToBase64(getRandom(cc.USERID_BYTES));
+      const tag = getUserCredTag(getRandom(cc.USERCRED_BYTES));
+      expect(handleToUserId(userIdToUntaggedHandle(userId)).userId).toBe(userId);
+
+      for (const text of ['!'.repeat(userId.length), userId + '!'.repeat(tag.length)]) {
          expect(() => handleToUserId(bytesToBase64(new TextEncoder().encode(text)))).toThrow();
       }
    });
