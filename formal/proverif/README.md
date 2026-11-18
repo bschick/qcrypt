@@ -208,7 +208,13 @@ encoding:
   number.
 - **E8. k_L input.** s (the fixed 13-byte string `user-cred-key`) ‖ pkId. Source:
   `keystore.service.ts:_deriveKey`.
-- **E9. Recovery secret.** u_r (16) ‖ u_i (16), taken from 32 bytes of BIP39 entropy.
+- **E9. Recovery secret.** u_r (16) ‖ u_i (16). A tagged word set appends the 4-byte account tag
+  and encodes the 36 bytes as two BIP39 mnemonics, 15 words then 12, each with its own checksum; an
+  untagged set is one 24-word mnemonic. Either form carries the same 32-byte secret, so both
+  recover the same account. Source: `recoverywords.ts`.
+- **E9a. Account tag.** D_H(1, kp_T, u_c), derived at the KDF's 128-bit minimum and truncated to 32
+  bits. No other derivation uses kp_T, so a tag published in a user handle or a word set is the
+  prefix of nothing else. Source: `credentialtag.ts:getUserCredTag`.
 - **E10. Challenge binding.** H(pk_U) for registration and add-passkey challenges. For confirm and
   recover challenges, H(pk_R ‖ ":" ‖ authCount ‖ ":" ‖ pk_U), where pk_R and pk_U are base64 text
   and so contain no ":", authCount is decimal, and pk_R may be empty. Source:
