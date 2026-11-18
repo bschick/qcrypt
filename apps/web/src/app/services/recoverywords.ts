@@ -44,7 +44,7 @@ export type Recovery = {
 export type DecodedRecovery = {
    recoverySecret: Uint8Array<ArrayBuffer>;
    userId: string;
-   tag: string | null;
+   userCredTag: string | null;
 };
 
 function normalizeRecoveryWords(words: string): string {
@@ -60,7 +60,7 @@ function newRecoverySecret(userId: string): Uint8Array<ArrayBuffer> {
    }
 }
 
-// The caller takes ownership of and must overwrite recoverySecret
+// The caller takes ownership of and must overwrite Recovery.recoverySecret
 export function newRecovery(userId: string, userCred: Uint8Array): Recovery {
    const recoverySecret = newRecoverySecret(userId);
    const tagged = new Uint8Array(TAGGED_RECOVERY_SECRET_BYTES);
@@ -80,15 +80,15 @@ export function newRecovery(userId: string, userCred: Uint8Array): Recovery {
    }
 }
 
-// The caller takes ownership of and must overwrite recoverySecret. Older recovery words
-// that do not carry a tag return the DecodedRecovery with a null tag.
+// The caller takes ownership of and must overwrite DecodedRecovery.recoverySecret.
+// Older recovery words that do not carry a tag return DecodedRecovery with a null tag.
 export function decodeRecovery(words: string): DecodedRecovery {
    const normalized = normalizeRecoveryWords(words);
    const allWords = normalized.split(' ');
 
    if (allWords.length === UNTAGGED_RECOVERY_WORD_COUNT) {
       const recoverySecret = mnemonicToEntropy(normalized, wordlist);
-      return { recoverySecret, userId: api.recoverySecretUserId(recoverySecret), tag: null };
+      return { recoverySecret, userId: api.recoverySecretUserId(recoverySecret), userCredTag: null };
    } else if (allWords.length === RECOVERY_WORD_COUNT) {
       const segment1 = mnemonicToEntropy(allWords.slice(0, RECOVERY_PHRASE1_COUNT).join(' '), wordlist);
       const segment2 = mnemonicToEntropy(allWords.slice(RECOVERY_PHRASE1_COUNT).join(' '), wordlist);
@@ -102,7 +102,7 @@ export function decodeRecovery(words: string): DecodedRecovery {
             return {
                recoverySecret,
                userId: api.recoverySecretUserId(recoverySecret),
-               tag: bytesToBase64(tagged.subarray(api.RECOVERY_SECRET_BYTES)),
+               userCredTag: bytesToBase64(tagged.subarray(api.RECOVERY_SECRET_BYTES)),
             };
          } finally {
             tagged.fill(0);

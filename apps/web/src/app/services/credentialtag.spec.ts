@@ -23,13 +23,12 @@ SOFTWARE. */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { base64ToBytes, bytesToBase64, cryptoReady, getRandom } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
-import {
-   getUserCredTag,
-   handleToUserId,
-   userIdToHandle,
-   userIdToUntaggedHandle,
-   USERCRED_TAG_BYTES,
-} from './credentialtag';
+import { createHandle, decodeHandle, getUserCredTag, USERCRED_TAG_BYTES } from './credentialtag';
+
+// Passkeys registered before tagging hold this handle
+function untaggedHandle(userId: string): string {
+   return bytesToBase64(new TextEncoder().encode(userId));
+}
 
 describe('credential tag', () => {
    beforeEach(async () => {
@@ -73,44 +72,45 @@ describe('passkey handle', () => {
 
    it('round trips a user id with no tag', () => {
       const userId = bytesToBase64(getRandom(cc.USERID_BYTES));
-      expect(handleToUserId(userIdToUntaggedHandle(userId))).toEqual({ userId, tag: null });
+      expect(decodeHandle(untaggedHandle(userId))).toEqual({ userId, userCredTag: null });
    });
 
    it('round trips a user id and tag', () => {
       const userId = bytesToBase64(getRandom(cc.USERID_BYTES));
       const userCred = getRandom(cc.USERCRED_BYTES);
-      const tag = getUserCredTag(userCred);
-      expect(handleToUserId(userIdToHandle(userId, userCred))).toEqual({ userId, tag });
+      expect(decodeHandle(createHandle(userId, userCred))).toEqual({
+         userId,
+         userCredTag: getUserCredTag(userCred),
+      });
    });
 
    it('rejects a user id that is not USERID_BYTES', () => {
       const userId = bytesToBase64(getRandom(cc.USERID_BYTES));
       const userCred = getRandom(cc.USERCRED_BYTES);
-      expect(userIdToHandle(userId, userCred)).toBeTruthy();
+      expect(createHandle(userId, userCred)).toBeTruthy();
 
       for (const bad of ['', userId.slice(1), `${userId}A`]) {
-         expect(() => userIdToHandle(bad, userCred)).toThrow();
-         expect(() => userIdToUntaggedHandle(bad)).toThrow();
+         expect(() => createHandle(bad, userCred)).toThrow();
       }
    });
 
    it('rejects a handle that is neither tagged nor untagged', () => {
       const userId = bytesToBase64(getRandom(cc.USERID_BYTES));
       const tag = getUserCredTag(getRandom(cc.USERCRED_BYTES));
-      expect(handleToUserId(userIdToUntaggedHandle(userId)).userId).toBe(userId);
+      expect(decodeHandle(untaggedHandle(userId)).userId).toBe(userId);
 
       for (const text of [userId.slice(1), userId + tag.slice(1), `${userId}${tag}A`]) {
-         expect(() => handleToUserId(bytesToBase64(new TextEncoder().encode(text)))).toThrow();
+         expect(() => decodeHandle(bytesToBase64(new TextEncoder().encode(text)))).toThrow();
       }
    });
 
    it('rejects a handle of the right length that is not base64', () => {
       const userId = bytesToBase64(getRandom(cc.USERID_BYTES));
       const tag = getUserCredTag(getRandom(cc.USERCRED_BYTES));
-      expect(handleToUserId(userIdToUntaggedHandle(userId)).userId).toBe(userId);
+      expect(decodeHandle(untaggedHandle(userId)).userId).toBe(userId);
 
       for (const text of ['!'.repeat(userId.length), userId + '!'.repeat(tag.length)]) {
-         expect(() => handleToUserId(bytesToBase64(new TextEncoder().encode(text)))).toThrow();
+         expect(() => decodeHandle(bytesToBase64(new TextEncoder().encode(text)))).toThrow();
       }
    });
 });

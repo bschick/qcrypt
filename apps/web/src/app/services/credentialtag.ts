@@ -39,7 +39,7 @@ export function getUserCredTag(userCred: Uint8Array): string {
 // SimpleWebAuthn v10+ encodes credential user.id as b64 rather than utf as older versions,
 // so translate to keep the handle stable for passkeys registered under v9.
 // https://github.com/MasterKale/SimpleWebAuthn/discussions/636
-export function userIdToHandle(userId: string, userCred: Uint8Array): string {
+export function createHandle(userId: string, userCred: Uint8Array): string {
    if (userId.length !== USERID_B64_LEN) {
       throw new Error(`Invalid userId length of: ${userId.length}`);
    }
@@ -47,27 +47,19 @@ export function userIdToHandle(userId: string, userCred: Uint8Array): string {
    return bytesToBase64(new TextEncoder().encode(userId + getUserCredTag(userCred)));
 }
 
-export function userIdToUntaggedHandle(userId: string): string {
-   if (userId.length !== USERID_B64_LEN) {
-      throw new Error(`Invalid userId length of: ${userId.length}`);
-   }
-
-   return bytesToBase64(new TextEncoder().encode(userId));
-}
-
-export function handleToUserId(handle: string): { userId: string; tag: string | null } {
+export function decodeHandle(handle: string): { userId: string; userCredTag: string | null } {
    const text = new TextDecoder('utf-8').decode(base64ToBytes(handle));
    if (text.length !== USERID_B64_LEN && text.length !== USERID_B64_LEN + TAG_B64_LEN) {
       throw new Error('invalid passkey handle');
    }
 
    const userId = text.slice(0, USERID_B64_LEN);
-   const tag = text.length > USERID_B64_LEN ? text.slice(USERID_B64_LEN) : null;
+   const userCredTag = text.length > USERID_B64_LEN ? text.slice(USERID_B64_LEN) : null;
 
    base64ToBytes(userId, cc.USERID_BYTES, 'userId');
-   if (tag) {
-      base64ToBytes(tag, USERCRED_TAG_BYTES, 'tag');
+   if (userCredTag) {
+      base64ToBytes(userCredTag, USERCRED_TAG_BYTES, 'userCredTag');
    }
 
-   return { userId, tag };
+   return { userId, userCredTag };
 }

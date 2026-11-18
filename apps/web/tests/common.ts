@@ -11,6 +11,7 @@ import {
 } from '@playwright/test';
 import * as api from '@qcrypt/api';
 import {
+   bytesToBase64,
    cryptoReady,
    MasterKeyKeyProvider,
    decryptStream,
@@ -143,11 +144,25 @@ export function keeperDir(host: hosts, keeper: string): string {
    return join(keeperCredsDir, host, keeper);
 }
 
-// Intended PRF account mode per keeper.
-export const keeperPrf: Record<string, boolean> = {
-   keeper1: false,
-   keeper2: true,
+// Intended account mode and handle format per keeper. Keepers provisioned before tagging hold an
+// untagged handle, which no current client can create, so they are the only coverage of that path.
+export const keepers: Record<string, { prf: boolean; tagged: boolean }> = {
+   keeper1: { prf: false, tagged: false },
+   keeper2: { prf: true, tagged: false },
+   keeper3: { prf: true, tagged: true },
+   keeper4: { prf: false, tagged: true },
 };
+
+// Returns the handle a keeper's passkey holds, in the encoding decodeHandle accepts. This is the
+// credential source field an assertion returns, so it is the value a sign-in checks its tag against.
+export function keeperHandle(host: hosts, keeper: string): string {
+   const stored = new PasskeysCredentialsFileRepository(keeperDir(host, keeper)).loadCredentials();
+   const userHandle = stored[0]?.publicKeyCredentialSource.userHandle;
+   if (!userHandle) {
+      throw new Error(`keeperHandle: no credential with a user handle in ${keeperDir(host, keeper)}`);
+   }
+   return bytesToBase64(userHandle);
+}
 
 export type CreatedTestUser = {
    userId: string;

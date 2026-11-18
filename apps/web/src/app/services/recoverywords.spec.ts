@@ -66,7 +66,7 @@ describe('recovery words', () => {
       expect(decodeRecovery(recoveryWords)).toEqual({
          recoverySecret,
          userId,
-         tag: getUserCredTag(userCred),
+         userCredTag: getUserCredTag(userCred),
       });
    });
 
@@ -77,7 +77,7 @@ describe('recovery words', () => {
       const messy = `  ${recoveryWords.toUpperCase().replace(/ /g, '\n  ')}  `;
 
       expect(validRecoveryWords(messy)).toBe(true);
-      expect(decodeRecovery(messy)).toEqual({ recoverySecret, userId, tag: getUserCredTag(userCred) });
+      expect(decodeRecovery(messy)).toEqual({ recoverySecret, userId, userCredTag: getUserCredTag(userCred) });
    });
 
    it('decodes a word set carrying no tag', () => {
@@ -86,7 +86,7 @@ describe('recovery words', () => {
       const words = entropyToMnemonic(recoverySecret, wordlist);
 
       expect(words.split(' ')).toHaveLength(UNTAGGED_RECOVERY_WORD_COUNT);
-      expect(decodeRecovery(words)).toEqual({ recoverySecret, userId, tag: null });
+      expect(decodeRecovery(words)).toEqual({ recoverySecret, userId, userCredTag: null });
    });
 
    it('rejects a word count that is neither tagged nor untagged', () => {
@@ -136,7 +136,7 @@ describe('recovery words', () => {
       expect(decodeRecovery(PINNED_WORDS)).toEqual({
          recoverySecret,
          userId: api.recoverySecretUserId(recoverySecret),
-         tag: PINNED_TAG,
+         userCredTag: PINNED_TAG,
       });
    });
 });
