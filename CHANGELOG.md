@@ -1,5 +1,16 @@
 # CHANGELOG.md
 
+## 8.1.0 (TBD)
+
+#### Changes
+
+- new recovery word patterns have 27 words to connect them to a specific user credential
+
+#### Security
+
+- passkeys and recovery words now carry a check value so a dishonest server cannot send an alternative user credential
+- updated packages
+
 ## 8.0.5 (2026-11-06)
 
 #### Changes
