@@ -70,6 +70,13 @@ function decodeHandle(userHandle: string): { userId: string; userCredTag: string
    return { userId, userCredTag };
 }
 
+// Returns the tagged and the untagged handle, for WebAuthn signals only.
+export function signalHandles(userId: string, userCred: Uint8Array): string[] {
+   const taggedHandle = createHandle(userId, userCred);
+   const untaggedHandle = bytesToBase64(new TextEncoder().encode(userId));
+   return [taggedHandle, untaggedHandle];
+}
+
 export function userIdFromHandle(userHandle: string): string {
    return decodeHandle(userHandle).userId;
 }

@@ -61,7 +61,7 @@ function newRecoverySecret(userId: string): Uint8Array<ArrayBuffer> {
    }
 }
 
-// Credential tags are short by design and are therefore secret; just like the recovery words they
+// Recovery tags are short by design and are therefore secret; just like the recovery words they
 // are part of. Callers should clear the memory after use.
 function getRecoveryTag(userCred: Uint8Array, recoverySecret: Uint8Array): Uint8Array<ArrayBuffer> {
    if (userCred.byteLength !== cc.USERCRED_BYTES) {

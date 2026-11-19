@@ -49,7 +49,7 @@ import { KeystoreService } from './keystore.service';
 import { CipherService } from './cipher.service';
 import { injectPrfExtension, prfEnabled, prfReadKey, prfEncrypt, prfDecrypt } from './prf';
 import { plainFetch, nonceFetch, challengeFetch } from './apifetch';
-import { checkHandle, createHandle, userIdFromHandle } from './credentialtag';
+import { checkHandle, createHandle, signalHandles, userIdFromHandle } from './credentialtag';
 import { checkRecovery, decodeRecovery, newRecovery } from './recoverywords';
 import {
    BroadcastService,
@@ -544,9 +544,14 @@ export class AuthenticatorService {
       }
 
       // TODO: Recovery words need a refactor to consolidate more of the code into recoverywords.ts.
-      // The following check is needed to confirm the reocvery words match the userCred, and for now,
+      // The following check is needed to confirm the recovery words match the userCred, and for now,
       // we do this after the userId check above for better error reporting.
-      const userCred = await this.getUserCred();
+      let userCred: Uint8Array<ArrayBuffer>;
+      try {
+         userCred = await this.getUserCred();
+      } catch {
+         return 'unknown';
+      }
       try {
          checkRecovery(recoveryWords, userCred);
       } catch {
@@ -885,13 +890,15 @@ export class AuthenticatorService {
          }
          // WebAuthn signals are "fire and forget"... there is no guarantee that sending
          // a signal makes its way to a user's credential manager
-         // Only the tagged handle is signaled; passkeys created before tagging are deliberately left out
-         sendSignal({
-            signalName: 'allAcceptedCredentials',
-            rpID: window.location.hostname,
-            userID: createHandle(this.userId, userCred ?? sessionUserCred!),
-            allAcceptedCredentialIDs: authenticators.map((authenticator) => authenticator.credentialId),
-         }).catch(() => undefined);
+         const allAcceptedCredentialIDs = authenticators.map((authenticator) => authenticator.credentialId);
+         for (const userHandle of signalHandles(this.userId, userCred ?? sessionUserCred!)) {
+            sendSignal({
+               signalName: 'allAcceptedCredentials',
+               rpID: window.location.hostname,
+               userID: userHandle,
+               allAcceptedCredentialIDs,
+            }).catch(() => undefined);
+         }
       } catch {
          // Signaling is best effort
       } finally {
@@ -1091,13 +1098,14 @@ export class AuthenticatorService {
          userCred = await this.getUserCred();
          // WebAuthn signals are considered "fire and forget". There is no guarantee that sending
          // a signal make its way to a user's credential manager via the browser and/or platform.
-         // Only the tagged handle is signaled; passkeys created before tagging are deliberately left out
-         sendSignal({
-            signalName: 'currentUserDetails',
-            rpID: window.location.hostname,
-            userID: createHandle(this.userId, userCred),
-            userName: this.userName,
-         }).catch(() => undefined);
+         for (const userHandle of signalHandles(this.userId, userCred)) {
+            sendSignal({
+               signalName: 'currentUserDetails',
+               rpID: window.location.hostname,
+               userID: userHandle,
+               userName: this.userName,
+            }).catch(() => undefined);
+         }
       } catch {
          // Signaling is best effort
       } finally {
@@ -1441,6 +1449,9 @@ export class AuthenticatorService {
          if (serverLoginUserInfo.userId !== userId) {
             this._halt(`user id mismatch for recovery ${userId}`);
          }
+         if (serverLoginUserInfo.pkId !== regResponse.id) {
+            this._halt(`passkey id mismatch for recovery ${regResponse.id}`);
+         }
 
          this._checkAccountPinPrf(userId, serverLoginUserInfo.prf);
 
@@ -1521,6 +1532,9 @@ export class AuthenticatorService {
             // Ensure the returned userId matches the one from reg/options
             if (serverLoginUserInfo.userId !== userId) {
                this._halt(`user id mismatch for registration ${userId}`);
+            }
+            if (serverLoginUserInfo.pkId !== regResponse.id) {
+               this._halt(`passkey id mismatch for registration ${regResponse.id}`);
             }
 
             if (prfKey) {

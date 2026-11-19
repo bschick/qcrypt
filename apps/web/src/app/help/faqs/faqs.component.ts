@@ -719,9 +719,10 @@ const ELEMENT_DATA: FAQElement[] = [
       question: 'How do I delete passkeys?',
       answer: `Once signed in, delete passkeys from the slide-out panel
       opened with the 3-line button in the toolbar. This will remove the
-      public-key portion of the passkey from Quick Crypt servers. You must then
-      use your local passkey management tool to delete the passkey from your
-      system.`,
+      public-key portion of the passkey from Quick Crypt servers. The private-key portion
+      is stored in your browser, passkey manager, or physical security key.
+      Some browsers and passkey managers remove the passkey automatically, but many do not.
+      Check your passkey management tool and delete the passkey if it remains.`,
    },
 
    {

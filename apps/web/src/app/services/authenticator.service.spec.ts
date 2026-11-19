@@ -72,6 +72,17 @@ function handleTag(id: string, cred: Uint8Array): string {
    return text.slice(id.length);
 }
 
+function wordsSecretTexts(words: string): string[] {
+   const allWords = words.split(' ');
+   const phrase1 = mnemonicToEntropy(allWords.slice(0, RECOVERY_PHRASE1_COUNT).join(' '), wordlist);
+   const phrase2 = mnemonicToEntropy(allWords.slice(RECOVERY_PHRASE1_COUNT).join(' '), wordlist);
+   const tagged = new Uint8Array([...phrase1, ...phrase2]);
+   const recoveryTag = tagged.subarray(api.RECOVERY_SECRET_BYTES);
+   const recoverySecret = tagged.subarray(0, api.RECOVERY_SECRET_BYTES);
+   // Base64 text of a part does not appear inside the text of the whole, so each is listed
+   return [bytesToBase64(recoveryTag), bytesToBase64(recoverySecret), bytesToBase64(tagged)];
+}
+
 describe('AuthenticatorService', () => {
    let service: AuthenticatorService;
    let peerResponder: BroadcastService;
@@ -642,6 +653,20 @@ describe('AuthenticatorService', () => {
          expect(sentRecoveryKeyBodies()[0].userCredEnc).toBeTruthy();
       });
 
+      it('sends no recovery word secrets when replacing the words', async () => {
+         mockRotation({ prf: true });
+
+         await expect(service.changeRecoveryWords()).resolves.toEqual('match');
+
+         const secretTexts = wordsSecretTexts(service.consumeRecoveryWords());
+         for (const call of fetchMock.mock.calls) {
+            const body = String((call[1] as RequestInit)?.body ?? '');
+            for (const secretText of secretTexts) {
+               expect(body).not.toContain(secretText);
+            }
+         }
+      });
+
       // prfEncrypt wipes the key it is handed, so a shared secret would leave nothing to sign with
       it('signs every upload attempt after re-encrypting the user credential', async () => {
          mockRotation({ prf: true, failedPuts: 1 });
@@ -905,6 +930,29 @@ describe('AuthenticatorService', () => {
          expect(service.halted).toBe(true);
       });
 
+      it('halts when registration verify names a different passkey', async () => {
+         let optionsUserId = otherUserId();
+         let verifyPkId = pkId;
+         fetchMock.mockImplementation((url: URL) => ({
+            ok: true,
+            json: async () =>
+               url.pathname.endsWith('/reg/options')
+                  ? regOptions(optionsUserId)
+                  : { ...sessionResponse, userId: optionsUserId, pkId: verifyPkId },
+         }));
+         vi.spyOn(navigator.credentials, 'create').mockResolvedValue(attestation());
+
+         await service.newUser('test-user', async () => 'accept');
+         expect(service.halted).toBe(false);
+         service.logout(false);
+
+         // The second run registers its own account. reg/options issues each user id once.
+         optionsUserId = otherUserId();
+         verifyPkId = bytesToBase64(getRandom(cc.PKID_MIN_BYTES));
+         await expect(service.newUser('test-user', async () => 'accept')).rejects.toThrow();
+         expect(service.halted).toBe(true);
+      });
+
       it('halts when add-passkey options name a different user', async () => {
          primeLocalStorage();
          // @ts-expect-error — exercising private path
@@ -973,6 +1021,30 @@ describe('AuthenticatorService', () => {
          expect(service.halted).toBe(false);
 
          verifyUserId = otherUserId();
+         await expect(service.recover3(recoveryWords)).rejects.toThrow();
+         expect(service.halted).toBe(true);
+      });
+
+      it('halts when recovery verify names a different passkey than the one created', async () => {
+         const recoveryWords = entropyToMnemonic(api.recoverySecret(getRandom(api.RECOVERYID_BYTES), userId), wordlist);
+         let verifyPkId = pkId;
+         fetchMock.mockImplementation((url: URL) => ({
+            ok: true,
+            json: async () => {
+               if (url.pathname.endsWith('/recover3')) {
+                  return { prf: false, challenge: bytesToBase64(getRandom(api.CHALLENGE_BYTES)), userCred };
+               }
+               return url.pathname.endsWith('/recover/confirm')
+                  ? regOptions(userId)
+                  : { ...sessionResponse, pkId: verifyPkId };
+            },
+         }));
+         vi.spyOn(navigator.credentials, 'create').mockResolvedValue(attestation());
+
+         await service.recover3(recoveryWords);
+         expect(service.halted).toBe(false);
+
+         verifyPkId = bytesToBase64(getRandom(cc.PKID_MIN_BYTES));
          await expect(service.recover3(recoveryWords)).rejects.toThrow();
          expect(service.halted).toBe(true);
       });
@@ -1057,7 +1129,7 @@ describe('AuthenticatorService', () => {
          expect(created).toBe(createHandle(userId, base64ToBytes(userCred)));
       });
 
-      it('sends neither the handle nor its tag to reg/verify', async () => {
+      it('sends neither the handle nor the recovery word secrets to reg/verify', async () => {
          const newUserId = otherUserId();
          fetchMock.mockImplementation((url: URL) => ({
             ok: true,
@@ -1072,8 +1144,10 @@ describe('AuthenticatorService', () => {
 
          const call = fetchMock.mock.calls.find((call) => (call[0] as URL).pathname.endsWith('/reg/verify'))!;
          const body = (call[1] as RequestInit).body as string;
-         expect(body).not.toContain(handleTag(newUserId, sentUserCred()));
          expect(body).not.toContain(createHandle(newUserId, sentUserCred()));
+         for (const secretText of wordsSecretTexts(service.consumeRecoveryWords())) {
+            expect(body).not.toContain(secretText);
+         }
       });
 
       it('sends neither the handle nor its tag to auth/verify', async () => {
@@ -1095,7 +1169,7 @@ describe('AuthenticatorService', () => {
          expect(body).toContain(userId);
       });
 
-      it('sends neither the handle nor its tag to the recovery requests', async () => {
+      it('sends neither the handle nor the recovery word secrets to the recovery requests', async () => {
          fetchMock.mockImplementation((url: URL) => ({
             ok: true,
             json: async () => {
@@ -1107,12 +1181,16 @@ describe('AuthenticatorService', () => {
          }));
          vi.spyOn(navigator.credentials, 'create').mockResolvedValue(attestation());
 
-         await service.recover3(newRecovery(userId, base64ToBytes(userCred)).recoveryWords);
+         const recoveryWords = newRecovery(userId, base64ToBytes(userCred)).recoveryWords;
+         await service.recover3(recoveryWords);
 
+         const secretTexts = wordsSecretTexts(recoveryWords);
          for (const call of fetchMock.mock.calls) {
             const body = String((call[1] as RequestInit)?.body ?? '');
-            expect(body).not.toContain(handleTag(userId, base64ToBytes(userCred)));
             expect(body).not.toContain(createHandle(userId, base64ToBytes(userCred)));
+            for (const secretText of secretTexts) {
+               expect(body).not.toContain(secretText);
+            }
          }
       });
 
@@ -1674,6 +1752,14 @@ describe('AuthenticatorService', () => {
          return { ...sessionResponse, authenticators };
       }
 
+      function expectSignaledToBothHandles(signal: ReturnType<typeof vi.fn>, fields: object) {
+         const rpId = window.location.hostname;
+         const taggedHandle = createHandle(userId, base64ToBytes(userCred));
+         expect(signal).toHaveBeenCalledTimes(2);
+         expect(signal).toHaveBeenCalledWith({ rpId, userId: taggedHandle, ...fields });
+         expect(signal).toHaveBeenCalledWith({ rpId, userId: untaggedHandle(userId), ...fields });
+      }
+
       beforeEach(async () => {
          otherPkId = bytesToBase64(getRandom(cc.PKID_MIN_BYTES));
          newPkId = bytesToBase64(getRandom(cc.PKID_MIN_BYTES));
@@ -1706,9 +1792,7 @@ describe('AuthenticatorService', () => {
 
          await service.createSession(userId);
 
-         expect(signals.signalAllAcceptedCredentials).toHaveBeenCalledExactlyOnceWith({
-            rpId: window.location.hostname,
-            userId: createHandle(userId, base64ToBytes(userCred)),
+         expectSignaledToBothHandles(signals.signalAllAcceptedCredentials, {
             allAcceptedCredentialIds: [pkId, newPkId],
          });
       });
@@ -1724,9 +1808,7 @@ describe('AuthenticatorService', () => {
 
          await service.addPasskey();
 
-         expect(signals.signalAllAcceptedCredentials).toHaveBeenCalledExactlyOnceWith({
-            rpId: window.location.hostname,
-            userId: createHandle(userId, base64ToBytes(userCred)),
+         expectSignaledToBothHandles(signals.signalAllAcceptedCredentials, {
             allAcceptedCredentialIds: [pkId, otherPkId, newPkId],
          });
       });
@@ -1735,9 +1817,7 @@ describe('AuthenticatorService', () => {
          fetchMock.mockResolvedValue({ ok: true, json: async () => withPasskeys(pkId) });
 
          await expect(service.deletePasskey(otherPkId)).resolves.toBe(1);
-         expect(signals.signalAllAcceptedCredentials).toHaveBeenCalledExactlyOnceWith(
-            expect.objectContaining({ allAcceptedCredentialIds: [pkId] }),
-         );
+         expectSignaledToBothHandles(signals.signalAllAcceptedCredentials, { allAcceptedCredentialIds: [pkId] });
       });
 
       it('deleting the last passkey signals an empty list', async () => {
@@ -1745,11 +1825,7 @@ describe('AuthenticatorService', () => {
          fetchMock.mockResolvedValue({ ok: true, json: async () => ({ verified: false }) });
 
          await expect(service.deletePasskey(otherPkId)).resolves.toBe(0);
-         expect(signals.signalAllAcceptedCredentials).toHaveBeenCalledExactlyOnceWith({
-            rpId: window.location.hostname,
-            userId: createHandle(userId, base64ToBytes(userCred)),
-            allAcceptedCredentialIds: [],
-         });
+         expectSignaledToBothHandles(signals.signalAllAcceptedCredentials, { allAcceptedCredentialIds: [] });
       });
 
       it('recovery signals the recovered passkey list', async () => {
@@ -1773,9 +1849,7 @@ describe('AuthenticatorService', () => {
          await service.recover3(recoveryWords);
 
          expect(service.hasSession()).toBe(true);
-         expect(signals.signalAllAcceptedCredentials).toHaveBeenCalledExactlyOnceWith(
-            expect.objectContaining({ allAcceptedCredentialIds: [newPkId] }),
-         );
+         expectSignaledToBothHandles(signals.signalAllAcceptedCredentials, { allAcceptedCredentialIds: [newPkId] });
       });
 
       it('renaming the user signals the new name', async () => {
@@ -1787,12 +1861,7 @@ describe('AuthenticatorService', () => {
 
          await service.setUserName('  renamed-user  ');
 
-         expect(signals.signalCurrentUserDetails).toHaveBeenCalledExactlyOnceWith({
-            rpId: window.location.hostname,
-            userId: createHandle(userId, base64ToBytes(userCred)),
-            name: 'renamed-user',
-            displayName: '',
-         });
+         expectSignaledToBothHandles(signals.signalCurrentUserDetails, { name: 'renamed-user', displayName: '' });
       });
 
       it('a passkey without PRF on a PRF account is signaled as unknown', async () => {
