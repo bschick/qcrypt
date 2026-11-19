@@ -2684,4 +2684,10 @@ describe('Key derivation master length', () => {
          expect(() => deriveKey(filled(length), 'Test_Key', 1, cc.KEY_BYTES, [filled(16)])).toThrow();
       }
    });
+
+   it('rejects an empty salt list', () => {
+      expect(deriveKey(filled(32), 'Test_Key', 1, cc.KEY_BYTES, [filled(16)]).byteLength).toBe(cc.KEY_BYTES);
+
+      expect(() => deriveKey(filled(32), 'Test_Key', 1, cc.KEY_BYTES, [])).toThrow();
+   });
 });

@@ -99,6 +99,9 @@ export function deriveKey(
    if (salt === undefined && master.byteLength !== sodium.crypto_kdf_KEYBYTES) {
       throw new Error(`Invalid master key length of: ${master.byteLength}`);
    }
+   if (salt?.length === 0) {
+      throw new Error('Invalid empty salt');
+   }
    if (keyLength < sodium.crypto_kdf_BYTES_MIN || keyLength > sodium.crypto_kdf_BYTES_MAX) {
       throw new Error(`Invalid derived key length of: ${keyLength}`);
    }
