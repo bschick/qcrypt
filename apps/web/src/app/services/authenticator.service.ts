@@ -49,8 +49,8 @@ import { KeystoreService } from './keystore.service';
 import { CipherService } from './cipher.service';
 import { injectPrfExtension, prfEnabled, prfReadKey, prfEncrypt, prfDecrypt } from './prf';
 import { plainFetch, nonceFetch, challengeFetch } from './apifetch';
-import { createHandle, decodeHandle, getUserCredTag } from './credentialtag';
-import { decodeRecovery, newRecovery } from './recoverywords';
+import { checkHandle, createHandle, userIdFromHandle } from './credentialtag';
+import { checkRecovery, decodeRecovery, newRecovery } from './recoverywords';
 import {
    BroadcastService,
    type CredentialPayload,
@@ -494,6 +494,8 @@ export class AuthenticatorService {
                // prfEncrypt wipes the key it is handed
                userCredEnc = await prfEncrypt(userCred, recoverySecret.slice(0), this.userId);
             }
+            // Not needed by the PUTs and retry below
+            userCred.fill(0);
 
             let state: RecoveryWordsState;
             try {
@@ -525,7 +527,7 @@ export class AuthenticatorService {
       }
    }
 
-   public async checkRecoveryWords(recoveryWords: string): Promise<RecoveryWordsState> {
+   public async verifyRecoveryWords(recoveryWords: string): Promise<RecoveryWordsState> {
       let recoveryKeyId: string;
       try {
          const { recoverySecret, userId } = decodeRecovery(recoveryWords);
@@ -539,6 +541,18 @@ export class AuthenticatorService {
          }
       } catch {
          return 'invalid';
+      }
+
+      // TODO: Recovery words need a refactor to consolidate more of the code into recoverywords.ts.
+      // The following check is needed to confirm the reocvery words match the userCred, and for now,
+      // we do this after the userId check above for better error reporting.
+      const userCred = await this.getUserCred();
+      try {
+         checkRecovery(recoveryWords, userCred);
+      } catch {
+         return 'wrongwords';
+      } finally {
+         userCred.fill(0);
       }
 
       try {
@@ -555,7 +569,7 @@ export class AuthenticatorService {
       }
 
       const sessionUserId = this.userId;
-      const { serverLoginUserInfo, prfKey, userCredTag } = await this._createSessionImpl(sessionUserId, true);
+      const { serverLoginUserInfo, prfKey, userHandle } = await this._createSessionImpl(sessionUserId, true);
 
       if (serverLoginUserInfo.verified && serverLoginUserInfo.userId !== sessionUserId) {
          if (prfKey) {
@@ -564,7 +578,7 @@ export class AuthenticatorService {
          this._halt(`user id mismatch for session ${sessionUserId}`);
       }
 
-      const userCred = await this._resolveUserCred(serverLoginUserInfo, prfKey, userCredTag);
+      const userCred = await this._resolveUserCred(serverLoginUserInfo, prfKey, userHandle);
       return await this._loginUser(serverLoginUserInfo, userCred);
    }
 
@@ -588,7 +602,7 @@ export class AuthenticatorService {
    private async _resolveUserCred(
       serverLogin: api.LoginUserInfoResponse,
       prfKey: Uint8Array<ArrayBuffer> | null,
-      userCredTag: string | null,
+      userHandle: string,
    ): Promise<Uint8Array<ArrayBuffer>> {
       try {
          if (!serverLogin.verified) {
@@ -613,7 +627,9 @@ export class AuthenticatorService {
          }
 
          // The tag is locally derived and binds the account to one userCred. If they don't match, the server is suspect
-         if (userCredTag && userCredTag !== getUserCredTag(userCred)) {
+         try {
+            checkHandle(userHandle, userCred);
+         } catch {
             userCred.fill(0);
             this._halt(`user credential does not match the passkey for ${serverLogin.userId}`);
          }
@@ -869,6 +885,7 @@ export class AuthenticatorService {
          }
          // WebAuthn signals are "fire and forget"... there is no guarantee that sending
          // a signal makes its way to a user's credential manager
+         // Only the tagged handle is signaled; passkeys created before tagging are deliberately left out
          sendSignal({
             signalName: 'allAcceptedCredentials',
             rpID: window.location.hostname,
@@ -1074,6 +1091,7 @@ export class AuthenticatorService {
          userCred = await this.getUserCred();
          // WebAuthn signals are considered "fire and forget". There is no guarantee that sending
          // a signal make its way to a user's credential manager via the browser and/or platform.
+         // Only the tagged handle is signaled; passkeys created before tagging are deliberately left out
          sendSignal({
             signalName: 'currentUserDetails',
             rpID: window.location.hostname,
@@ -1193,8 +1211,8 @@ export class AuthenticatorService {
       }
 
       await this._pendingLogout;
-      const { serverLoginUserInfo, prfKey, userCredTag } = await this._createSessionImpl(userId);
-      const userCred = await this._resolveUserCred(serverLoginUserInfo, prfKey, userCredTag);
+      const { serverLoginUserInfo, prfKey, userHandle } = await this._createSessionImpl(userId);
+      const userCred = await this._resolveUserCred(serverLoginUserInfo, prfKey, userHandle);
       return await this._loginUser(serverLoginUserInfo, userCred);
    }
 
@@ -1205,9 +1223,9 @@ export class AuthenticatorService {
    ): Promise<{
       serverLoginUserInfo: api.LoginUserInfoResponse;
       prfKey: Uint8Array<ArrayBuffer> | null;
-      userCredTag: string | null;
+      userHandle: string;
    }> {
-      const { verifyBody, prfKey, userCredTag } = await this._startAuthentication(userId, requireVerification);
+      const { verifyBody, prfKey, userHandle } = await this._startAuthentication(userId, requireVerification);
       try {
          const serverLoginUserInfo = await plainFetch<api.LoginUserInfoResponse>({
             method: 'POST',
@@ -1224,7 +1242,12 @@ export class AuthenticatorService {
             this._halt(`user id mismatch for passkey handle ${verifyBody.response.userHandle}`);
          }
 
-         return { serverLoginUserInfo, prfKey, userCredTag };
+         // Ensure the returned pkId matches the passkey sent to auth/verify
+         if (serverLoginUserInfo.verified && serverLoginUserInfo.pkId !== verifyBody.id) {
+            this._halt(`passkey id mismatch for passkey ${verifyBody.id}`);
+         }
+
+         return { serverLoginUserInfo, prfKey, userHandle };
       } catch (err) {
          if (prfKey) {
             prfKey.fill(0);
@@ -1239,7 +1262,7 @@ export class AuthenticatorService {
    ): Promise<{
       verifyBody: api.AuthVerifyRequest;
       prfKey: Uint8Array<ArrayBuffer> | null;
-      userCredTag: string | null;
+      userHandle: string;
    }> {
       // Start the process without userId prevents limiting authenticator creds
       // so the user can look for an existing credential
@@ -1273,8 +1296,8 @@ export class AuthenticatorService {
       if (!startAuth.response.userHandle) {
          throw new Error('authenticator missing user handle');
       }
-      const { userId: handleUserId, userCredTag } = decodeHandle(startAuth.response.userHandle);
-      startAuth.response.userHandle = handleUserId;
+      const userHandle = startAuth.response.userHandle;
+      startAuth.response.userHandle = userIdFromHandle(userHandle);
 
       const prfKey = prfReadKey(startAuth.clientExtensionResults);
 
@@ -1282,12 +1305,12 @@ export class AuthenticatorService {
       return {
          verifyBody: api.makeAuthVerifyRequest(startAuth, { challenge: authOptions.challenge }),
          prfKey,
-         userCredTag,
+         userHandle,
       };
    }
 
    async recover3(recoveryWords: string): Promise<VerifiedUserInfo> {
-      const { recoverySecret: secret, userId, userCredTag } = decodeRecovery(recoveryWords);
+      const { recoverySecret: secret, userId } = decodeRecovery(recoveryWords);
       let userCred: Uint8Array<ArrayBuffer> | undefined;
       await this._pendingLogout;
 
@@ -1323,7 +1346,9 @@ export class AuthenticatorService {
          }
 
          // The tag is locally derived and binds the account to one userCred. If they don't match, the server is suspect
-         if (userCredTag && userCredTag !== getUserCredTag(userCred)) {
+         try {
+            checkRecovery(recoveryWords, userCred);
+         } catch {
             this._halt(`user credential does not match the recovery words for ${userId}`);
          }
 
@@ -1349,24 +1374,24 @@ export class AuthenticatorService {
       if (!userId || !userCred) {
          throw new Error('missing userid or usercred');
       }
+      const userCredBytes = base64ToBytes(userCred, cc.USERCRED_BYTES, 'user credential');
 
-      await this._pendingLogout;
-      const recoverRequest: api.RecoverRequest = { userId, userCred };
-      const recoverResp = await plainFetch<api.RecoverInfoResponse>({
-         method: 'POST',
-         resource: 'recover',
-         bodyJSON: JSON.stringify(recoverRequest),
-      });
+      try {
+         await this._pendingLogout;
+         const recoverRequest: api.RecoverRequest = { userId, userCred };
+         const recoverResp = await plainFetch<api.RecoverInfoResponse>({
+            method: 'POST',
+            resource: 'recover',
+            bodyJSON: JSON.stringify(recoverRequest),
+         });
 
-      // server ends the session, so drop local session state to match
-      this.clearSession(true);
+         // server ends the session, so drop local session state to match
+         this.clearSession(true);
 
-      return await this._finishRecovery(
-         recoverResp,
-         userId,
-         !!recoverResp.prf,
-         base64ToBytes(userCred, cc.USERCRED_BYTES, 'user credential'),
-      );
+         return await this._finishRecovery(recoverResp, userId, !!recoverResp.prf, userCredBytes);
+      } finally {
+         userCredBytes.fill(0);
+      }
    }
 
    // Re-provisions the recovered account's "first" passkey
@@ -1387,7 +1412,8 @@ export class AuthenticatorService {
          this._halt(`user id mismatch for recovery ${userId}`);
       }
 
-      const { regResponse, prfKey } = await this._startRegistration(regOptions, prf, userId, userCred);
+      const userHandle = createHandle(userId, userCred);
+      const { regResponse, prfKey } = await this._startRegistration(regOptions, prf, userHandle);
 
       try {
          let passkeyUserCredEnc: string | undefined;
@@ -1453,9 +1479,9 @@ export class AuthenticatorService {
             const userId = this._getRegOptionsUserId(regOptions);
             const recoveryInfo = newRecovery(userId, userCred);
             secret = recoveryInfo.recoverySecret;
-            this._cachedRecoveryWords = recoveryInfo.recoveryWords;
 
-            const { regResponse, prfKey } = await this._startRegistration(regOptions, true, userId, userCred);
+            const userHandle = createHandle(userId, userCred);
+            const { regResponse, prfKey } = await this._startRegistration(regOptions, true, userHandle);
 
             if (!prfKey && (await onPrfUnavailable()) === 'retry') {
                // discard the created passkey and register a fresh one
@@ -1507,6 +1533,7 @@ export class AuthenticatorService {
                }
             }
 
+            this._cachedRecoveryWords = recoveryInfo.recoveryWords;
             return await this._loginUser(serverLoginUserInfo, userCred);
          } finally {
             userCred.fill(0);
@@ -1536,18 +1563,14 @@ export class AuthenticatorService {
 
       const accountPrf = this.prf;
       const sessionUserCred = await this.getUserCred();
-      let regResponse: RegistrationResponseJSON;
-      let prfKey: Uint8Array<ArrayBuffer> | null;
+      let userHandle: string;
       try {
-         ({ regResponse, prfKey } = await this._startRegistration(
-            regOptions,
-            accountPrf,
-            sessionUserId,
-            sessionUserCred,
-         ));
+         userHandle = createHandle(sessionUserId, sessionUserCred);
       } finally {
          sessionUserCred.fill(0);
       }
+
+      const { regResponse, prfKey } = await this._startRegistration(regOptions, accountPrf, userHandle);
 
       let passkeyUserCredEnc: string | undefined;
       if (accountPrf) {
@@ -1591,10 +1614,9 @@ export class AuthenticatorService {
    private async _startRegistration(
       regOptions: api.RegOptionsResponse,
       tryPrf: boolean,
-      userId: string,
-      userCred: Uint8Array,
+      userHandle: string,
    ): Promise<{ regResponse: RegistrationResponseJSON; prfKey: Uint8Array<ArrayBuffer> | null }> {
-      const options = { ...regOptions, user: { ...regOptions.user, id: createHandle(userId, userCred) } };
+      const options = { ...regOptions, user: { ...regOptions.user, id: userHandle } };
 
       if (tryPrf) {
          injectPrfExtension(options);
@@ -1659,7 +1681,10 @@ export class AuthenticatorService {
       if (!regOptions.user?.id || !regOptions.challenge) {
          throw new Error('invalid registration options');
       }
-      return regOptions.user.id;
+
+      // Guarantees a canonical browser-side encoding
+      const userIdBytes = base64ToBytes(regOptions.user.id, cc.USERID_BYTES, 'userId');
+      return bytesToBase64(userIdBytes);
    }
 
    private _requireVerified(

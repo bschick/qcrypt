@@ -822,12 +822,17 @@ const ELEMENT_DATA: FAQElement[] = [
       answer: `Quick Crypt remembers a few details about your account the first time it
       is used on a system, including whether the account uses the WebAuthn PRF
       (Pseudo-Random Function) extension and a public key derived from your user credential.
-      If the server later reports a change that should not be possible, Quick Crypt stops
-      because that may indicate a bug or security issue. Continuing could encrypt your data
-      with a user credential that is not yours, which would leave that data unreadable.
+      Your passkeys and recovery word pattern also carry a check value derived from your user
+      credential. If the server later reports something that does not match these details,
+      Quick Crypt stops because that may indicate a bug or security issue. Continuing could
+      encrypt your data with a user credential that is not yours, which would leave that data
+      unreadable.
+      <p>If you see a stop error while entering a recovery word pattern, reload the page and
+      enter the words again carefully. A mistyped word near the end of the pattern can cause
+      this error.</p>
       <p>If you see a stop error, nothing you have already encrypted is affected and your
       recovery word pattern and passkeys are unchanged, but the problem must be resolved
-      before you can continue using the Quick Crypt website. Please
+      before you can continue using the Quick Crypt website. If it continues, please
       <a href="https://github.com/bschick/qcrypt/issues/new/choose" target="_blank">
       report the issue on GitHub</a> so it can be investigated.</p>`,
    },

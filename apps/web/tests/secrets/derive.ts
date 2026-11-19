@@ -61,7 +61,8 @@ export function decodeRecoveryWords(words: string): Uint8Array {
    return decodeRecovery(words).recoverySecret;
 }
 
-// The words encode recoveryId followed by the userId. Only recoveryId is secret.
+// The words encode recoveryId, then the userId, then a 4-byte tag in a 27-word set. Of those
+// parts, only recoveryId is scanned for on its own.
 export async function recoverySecrets(prefix: string, words: string): Promise<Secret[]> {
    await ready();
    const spaced = spacedWords(words);

@@ -153,7 +153,7 @@ export const keepers: Record<string, { prf: boolean; tagged: boolean }> = {
    keeper4: { prf: false, tagged: true },
 };
 
-// Returns the handle a keeper's passkey holds, in the encoding decodeHandle accepts. This is the
+// Returns the handle a keeper's passkey holds, in the encoding checkHandle accepts. This is the
 // credential source field an assertion returns, so it is the value a sign-in checks its tag against.
 export function keeperHandle(host: hosts, keeper: string): string {
    const stored = new PasskeysCredentialsFileRepository(keeperDir(host, keeper)).loadCredentials();

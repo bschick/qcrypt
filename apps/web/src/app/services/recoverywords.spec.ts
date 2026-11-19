@@ -24,10 +24,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { base64ToBytes, bytesToBase64, cryptoReady, getRandom } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 import * as api from '@qcrypt/api';
-import { entropyToMnemonic } from '@scure/bip39';
+import { entropyToMnemonic, mnemonicToEntropy } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
-import { getUserCredTag } from './credentialtag';
 import {
+   checkRecovery,
    decodeRecovery,
    newRecovery,
    validRecoveryWords,
@@ -36,12 +36,14 @@ import {
    UNTAGGED_RECOVERY_WORD_COUNT,
 } from './recoverywords';
 
-// Every word set already written has to keep decoding to the secret it was made from
+// Every word set already written has to keep decoding to the secret it was made from.
+// The invalid-word tests below use these words so that their results do not depend on chance.
 const PINNED_WORDS =
    'film broccoli stem dream horse empty twenty grid quarter excite bundle universe switch pluck annual ' +
-   'spice exhibit shy taxi fresh bus purity oval spare alcohol chronic order';
+   'spice exhibit shy taxi fresh bus purity oval source two display mountain';
 const PINNED_SECRET = 'VkOPVSFG3JJ6yzOvadh5du3DTULRifMebzXMPeuU7dA';
-const PINNED_TAG = 'YMChzg';
+const PINNED_USERCRED = 'dJSUi6L-p9ErmjPtEwdnTB2FxeJ3axgAYNB0wyhMgdY';
+const PHRASE1_BYTES = 20;
 
 function randomUserId(): string {
    return bytesToBase64(getRandom(cc.USERID_BYTES));
@@ -51,23 +53,32 @@ function randomWords(): string[] {
    return newRecovery(randomUserId(), getRandom(cc.USERCRED_BYTES)).recoveryWords.split(' ');
 }
 
+function wordsToBytes(words: string): Uint8Array {
+   const allWords = words.split(' ');
+   const first = mnemonicToEntropy(allWords.slice(0, RECOVERY_PHRASE1_COUNT).join(' '), wordlist);
+   const second = mnemonicToEntropy(allWords.slice(RECOVERY_PHRASE1_COUNT).join(' '), wordlist);
+   return new Uint8Array([...first, ...second]);
+}
+
+function bytesToWords(bytes: Uint8Array): string {
+   const first = entropyToMnemonic(bytes.subarray(0, PHRASE1_BYTES), wordlist);
+   const second = entropyToMnemonic(bytes.subarray(PHRASE1_BYTES), wordlist);
+   return `${first} ${second}`;
+}
+
 describe('recovery words', () => {
    beforeEach(async () => {
       await cryptoReady();
    });
 
-   it('round trips a secret and tag', () => {
+   it('round trips a secret', () => {
       const userId = randomUserId();
       const userCred = getRandom(cc.USERCRED_BYTES);
       const { recoverySecret, recoveryPubKey, recoveryWords } = newRecovery(userId, userCred);
 
       expect(recoveryWords.split(' ')).toHaveLength(RECOVERY_WORD_COUNT);
       expect(recoveryPubKey).toBe(api.getRecoveryPubKey(recoverySecret));
-      expect(decodeRecovery(recoveryWords)).toEqual({
-         recoverySecret,
-         userId,
-         userCredTag: getUserCredTag(userCred),
-      });
+      expect(decodeRecovery(recoveryWords)).toEqual({ recoverySecret, userId });
    });
 
    it('accepts words in any spacing and case', () => {
@@ -77,7 +88,8 @@ describe('recovery words', () => {
       const messy = `  ${recoveryWords.toUpperCase().replace(/ /g, '\n  ')}  `;
 
       expect(validRecoveryWords(messy)).toBe(true);
-      expect(decodeRecovery(messy)).toEqual({ recoverySecret, userId, userCredTag: getUserCredTag(userCred) });
+      expect(decodeRecovery(messy)).toEqual({ recoverySecret, userId });
+      expect(() => checkRecovery(messy, userCred)).not.toThrow();
    });
 
    it('decodes a word set carrying no tag', () => {
@@ -86,11 +98,39 @@ describe('recovery words', () => {
       const words = entropyToMnemonic(recoverySecret, wordlist);
 
       expect(words.split(' ')).toHaveLength(UNTAGGED_RECOVERY_WORD_COUNT);
-      expect(decodeRecovery(words)).toEqual({ recoverySecret, userId, userCredTag: null });
+      expect(decodeRecovery(words)).toEqual({ recoverySecret, userId });
+   });
+
+   it('rejects recovery words created from a different user credential', () => {
+      const userCred = getRandom(cc.USERCRED_BYTES);
+      const { recoveryWords } = newRecovery(randomUserId(), userCred);
+      expect(() => checkRecovery(recoveryWords, userCred)).not.toThrow();
+
+      expect(() => checkRecovery(recoveryWords, getRandom(cc.USERCRED_BYTES))).toThrow();
+   });
+
+   it('accepts recovery words carrying no tag with any user credential', () => {
+      const recoverySecret = api.recoverySecret(getRandom(api.RECOVERYID_BYTES), randomUserId());
+      const words = entropyToMnemonic(recoverySecret, wordlist);
+
+      expect(() => checkRecovery(words, getRandom(cc.USERCRED_BYTES))).not.toThrow();
+   });
+
+   it('rejects a tag moved to another word set of the same account', () => {
+      const userId = randomUserId();
+      const userCred = getRandom(cc.USERCRED_BYTES);
+      const fromSet = wordsToBytes(newRecovery(userId, userCred).recoveryWords);
+      const toSet = wordsToBytes(newRecovery(userId, userCred).recoveryWords);
+      expect(() => checkRecovery(bytesToWords(toSet), userCred)).not.toThrow();
+
+      const toSecret = toSet.subarray(0, api.RECOVERY_SECRET_BYTES);
+      const fromTag = fromSet.subarray(api.RECOVERY_SECRET_BYTES);
+      const moved = new Uint8Array([...toSecret, ...fromTag]);
+      expect(() => checkRecovery(bytesToWords(moved), userCred)).toThrow();
    });
 
    it('rejects a word count that is neither tagged nor untagged', () => {
-      const words = randomWords();
+      const words = PINNED_WORDS.split(' ');
       expect(validRecoveryWords(words.join(' '))).toBe(true);
 
       for (const count of [12, 15, UNTAGGED_RECOVERY_WORD_COUNT, RECOVERY_WORD_COUNT - 1]) {
@@ -111,7 +151,7 @@ describe('recovery words', () => {
    });
 
    it('rejects swapped phrases', () => {
-      const words = randomWords();
+      const words = PINNED_WORDS.split(' ');
       expect(validRecoveryWords(words.join(' '))).toBe(true);
 
       const first = words.slice(0, RECOVERY_PHRASE1_COUNT);
@@ -136,7 +176,8 @@ describe('recovery words', () => {
       expect(decodeRecovery(PINNED_WORDS)).toEqual({
          recoverySecret,
          userId: api.recoverySecretUserId(recoverySecret),
-         userCredTag: PINNED_TAG,
       });
+      expect(() => checkRecovery(PINNED_WORDS, base64ToBytes(PINNED_USERCRED))).not.toThrow();
+      expect(() => checkRecovery(PINNED_WORDS, getRandom(cc.USERCRED_BYTES))).toThrow();
    });
 });

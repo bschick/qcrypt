@@ -23,69 +23,74 @@ SOFTWARE. */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { base64ToBytes, bytesToBase64, cryptoReady, getRandom } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
-import { createHandle, decodeHandle, getUserCredTag, USERCRED_TAG_BYTES } from './credentialtag';
+import { checkHandle, createHandle, userIdFromHandle } from './credentialtag';
+
+function randomUserId(): string {
+   return bytesToBase64(getRandom(cc.USERID_BYTES));
+}
+
+function handleFromText(text: string): string {
+   return bytesToBase64(new TextEncoder().encode(text));
+}
 
 // Passkeys registered before tagging hold this handle
 function untaggedHandle(userId: string): string {
-   return bytesToBase64(new TextEncoder().encode(userId));
+   return handleFromText(userId);
 }
 
-describe('credential tag', () => {
-   beforeEach(async () => {
-      await cryptoReady();
-   });
-
-   it('derives a tag of USERCRED_TAG_BYTES', () => {
-      const tag = getUserCredTag(getRandom(cc.USERCRED_BYTES));
-      expect(base64ToBytes(tag).byteLength).toBe(USERCRED_TAG_BYTES);
-   });
-
-   it('derives a different tag for a different userCred', () => {
-      const tag = getUserCredTag(getRandom(cc.USERCRED_BYTES));
-      expect(getUserCredTag(getRandom(cc.USERCRED_BYTES))).not.toBe(tag);
-   });
-
-   it('rejects a userCred that is not USERCRED_BYTES', () => {
-      expect(getUserCredTag(getRandom(cc.USERCRED_BYTES))).toBeTruthy();
-
-      for (const length of [0, cc.USERCRED_BYTES - 1, cc.USERCRED_BYTES + 1]) {
-         expect(() => getUserCredTag(getRandom(length))).toThrow();
-      }
-   });
-
-   it('derived tags match expected values', () => {
-      const userCreds = [
-         'dJSUi6L-p9ErmjPtEwdnTB2FxeJ3axgAYNB0wyhMgdY',
-         'b-82e8UjFTYSP-TevQav_TDw6VFJHWMyc7ROM3B6PYg',
-         'zgdgQRth8-vlwtciOHmONX0FHgMbhqBE_1dUR_2Rslg',
-      ];
-
-      const tags = userCreds.map((userCred) => getUserCredTag(base64ToBytes(userCred)));
-      expect(tags).toEqual(['YMChzg', '1_CVog', '0RU_8Q']);
-   });
-});
+function handleTag(userId: string, userCred: Uint8Array): string {
+   const text = new TextDecoder().decode(base64ToBytes(createHandle(userId, userCred)));
+   return text.slice(userId.length);
+}
 
 describe('passkey handle', () => {
    beforeEach(async () => {
       await cryptoReady();
    });
 
-   it('round trips a user id with no tag', () => {
-      const userId = bytesToBase64(getRandom(cc.USERID_BYTES));
-      expect(decodeHandle(untaggedHandle(userId))).toEqual({ userId, userCredTag: null });
+   it('returns the user id of a tagged handle', () => {
+      const userId = randomUserId();
+      expect(userIdFromHandle(createHandle(userId, getRandom(cc.USERCRED_BYTES)))).toBe(userId);
    });
 
-   it('round trips a user id and tag', () => {
-      const userId = bytesToBase64(getRandom(cc.USERID_BYTES));
+   it('returns the user id of an untagged handle', () => {
+      const userId = randomUserId();
+      expect(userIdFromHandle(untaggedHandle(userId))).toBe(userId);
+   });
+
+   it('rejects a handle created from a different user credential', () => {
       const userCred = getRandom(cc.USERCRED_BYTES);
-      expect(decodeHandle(createHandle(userId, userCred))).toEqual({
-         userId,
-         userCredTag: getUserCredTag(userCred),
-      });
+      const userHandle = createHandle(randomUserId(), userCred);
+      expect(() => checkHandle(userHandle, userCred)).not.toThrow();
+
+      expect(() => checkHandle(userHandle, getRandom(cc.USERCRED_BYTES))).toThrow();
+   });
+
+   it('accepts an untagged handle with any user credential', () => {
+      expect(() => checkHandle(untaggedHandle(randomUserId()), getRandom(cc.USERCRED_BYTES))).not.toThrow();
+   });
+
+   it('rejects a tag moved to a handle for another user id', () => {
+      const userCred = getRandom(cc.USERCRED_BYTES);
+      const userId = randomUserId();
+      const otherUserId = randomUserId();
+      expect(() => checkHandle(handleFromText(userId + handleTag(userId, userCred)), userCred)).not.toThrow();
+
+      const moved = handleFromText(otherUserId + handleTag(userId, userCred));
+      expect(() => checkHandle(moved, userCred)).toThrow();
+   });
+
+   it('rejects a user credential that is not USERCRED_BYTES', () => {
+      const userId = randomUserId();
+      expect(createHandle(userId, getRandom(cc.USERCRED_BYTES))).toBeTruthy();
+
+      for (const length of [0, cc.USERCRED_BYTES - 1, cc.USERCRED_BYTES + 1]) {
+         expect(() => createHandle(userId, getRandom(length))).toThrow();
+      }
    });
 
    it('rejects a user id that is not USERID_BYTES', () => {
-      const userId = bytesToBase64(getRandom(cc.USERID_BYTES));
+      const userId = randomUserId();
       const userCred = getRandom(cc.USERCRED_BYTES);
       expect(createHandle(userId, userCred)).toBeTruthy();
 
@@ -95,22 +100,39 @@ describe('passkey handle', () => {
    });
 
    it('rejects a handle that is neither tagged nor untagged', () => {
-      const userId = bytesToBase64(getRandom(cc.USERID_BYTES));
-      const tag = getUserCredTag(getRandom(cc.USERCRED_BYTES));
-      expect(decodeHandle(untaggedHandle(userId)).userId).toBe(userId);
+      const userId = randomUserId();
+      const tag = handleTag(userId, getRandom(cc.USERCRED_BYTES));
+      expect(userIdFromHandle(handleFromText(userId + tag))).toBe(userId);
 
-      for (const text of [userId.slice(1), userId + tag.slice(1), `${userId}${tag}A`]) {
-         expect(() => decodeHandle(bytesToBase64(new TextEncoder().encode(text)))).toThrow();
+      // The last case is a handle with the shorter tag of earlier development builds
+      for (const text of [userId.slice(1), userId + tag.slice(1), `${userId}${tag}A`, userId + tag.slice(0, 6)]) {
+         expect(() => userIdFromHandle(handleFromText(text))).toThrow();
       }
    });
 
    it('rejects a handle of the right length that is not base64', () => {
-      const userId = bytesToBase64(getRandom(cc.USERID_BYTES));
-      const tag = getUserCredTag(getRandom(cc.USERCRED_BYTES));
-      expect(decodeHandle(untaggedHandle(userId)).userId).toBe(userId);
+      const userId = randomUserId();
+      const tag = handleTag(userId, getRandom(cc.USERCRED_BYTES));
+      expect(userIdFromHandle(handleFromText(userId + tag))).toBe(userId);
 
       for (const text of ['!'.repeat(userId.length), userId + '!'.repeat(tag.length)]) {
-         expect(() => decodeHandle(bytesToBase64(new TextEncoder().encode(text)))).toThrow();
+         expect(() => userIdFromHandle(handleFromText(text))).toThrow();
       }
+   });
+
+   it('created handles match expected values', () => {
+      const userId = '7cNNQtGJ8x5vNcw965Tt0A';
+      const userCreds = [
+         'dJSUi6L-p9ErmjPtEwdnTB2FxeJ3axgAYNB0wyhMgdY',
+         'b-82e8UjFTYSP-TevQav_TDw6VFJHWMyc7ROM3B6PYg',
+         'zgdgQRth8-vlwtciOHmONX0FHgMbhqBE_1dUR_2Rslg',
+      ];
+
+      const handles = userCreds.map((userCred) => createHandle(userId, base64ToBytes(userCred)));
+      expect(handles).toEqual([
+         'N2NOTlF0R0o4eDV2TmN3OTY1VHQwQVIyRFZTcEhVckdxbk4xUzZZelNDNHc',
+         'N2NOTlF0R0o4eDV2TmN3OTY1VHQwQW1LY0hHbmtHaHAtek41UG8wSHZDNFE',
+         'N2NOTlF0R0o4eDV2TmN3OTY1VHQwQWRiU19mZE81VEgwcnRHd2t6UGFkOXc',
+      ]);
    });
 });

@@ -24,16 +24,19 @@ import { base64ToBytes, bytesToBase64, deriveTag } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
 
 const USERCRED_TAG_PURPOSE = 'UCredTag';
-export const USERCRED_TAG_BYTES = 4;
+const USERCRED_TAG_BYTES = 16;
 const USERID_B64_LEN = Math.ceil((cc.USERID_BYTES * 4) / 3);
 const TAG_B64_LEN = Math.ceil((USERCRED_TAG_BYTES * 4) / 3);
 
-export function getUserCredTag(userCred: Uint8Array): string {
+// Credential tags are long enough to be safe if published, so they are not treated as secret
+function getUserCredTag(userCred: Uint8Array, userId: string): string {
    if (userCred.byteLength !== cc.USERCRED_BYTES) {
       throw new Error(`Invalid userCred length of: ${userCred.byteLength}`);
    }
 
-   return bytesToBase64(deriveTag(userCred, USERCRED_TAG_PURPOSE, 1, USERCRED_TAG_BYTES));
+   const userIdBytes = base64ToBytes(userId, cc.USERID_BYTES, 'userId');
+   const userCredTag = deriveTag(userCred, USERCRED_TAG_PURPOSE, 1, USERCRED_TAG_BYTES, [userIdBytes]);
+   return bytesToBase64(userCredTag);
 }
 
 // SimpleWebAuthn v10+ encodes credential user.id as b64 rather than utf as older versions,
@@ -44,11 +47,14 @@ export function createHandle(userId: string, userCred: Uint8Array): string {
       throw new Error(`Invalid userId length of: ${userId.length}`);
    }
 
-   return bytesToBase64(new TextEncoder().encode(userId + getUserCredTag(userCred)));
+   const userCredTag = getUserCredTag(userCred, userId);
+   return bytesToBase64(new TextEncoder().encode(userId + userCredTag));
 }
 
-export function decodeHandle(handle: string): { userId: string; userCredTag: string | null } {
-   const text = new TextDecoder('utf-8').decode(base64ToBytes(handle));
+// A tagged handle is the user id text followed by the tag text.
+// Passkeys created before tagging hold the user id text alone.
+function decodeHandle(userHandle: string): { userId: string; userCredTag: string | null } {
+   const text = new TextDecoder('utf-8').decode(base64ToBytes(userHandle));
    if (text.length !== USERID_B64_LEN && text.length !== USERID_B64_LEN + TAG_B64_LEN) {
       throw new Error('invalid passkey handle');
    }
@@ -62,4 +68,15 @@ export function decodeHandle(handle: string): { userId: string; userCredTag: str
    }
 
    return { userId, userCredTag };
+}
+
+export function userIdFromHandle(userHandle: string): string {
+   return decodeHandle(userHandle).userId;
+}
+
+export function checkHandle(userHandle: string, userCred: Uint8Array): void {
+   const { userId, userCredTag } = decodeHandle(userHandle);
+   if (userCredTag && userCredTag !== getUserCredTag(userCred, userId)) {
+      throw new Error('user credential does not match the passkey handle');
+   }
 }

@@ -9,7 +9,9 @@ import {
    toggleCredentials,
    expectPrfBadge,
 } from '.././common';
-import { decodeHandle } from '../../src/app/services/credentialtag';
+import { checkHandle, userIdFromHandle } from '../../src/app/services/credentialtag';
+import { cryptoReady, getRandom } from '@qcrypt/crypto';
+import * as cc from '@qcrypt/crypto/consts';
 
 // The other keeper specs pass whichever mode an account was created in, so without
 // this a keeper provisioned in the wrong mode is only noticed when it silently stops
@@ -23,11 +25,14 @@ for (const [keeper, { prf, tagged }] of Object.entries(keepers)) {
 
       const testHost = new URL(page.url()).hostname as hosts;
 
-      const { userCredTag } = decodeHandle(keeperHandle(testHost, keeper));
+      await cryptoReady();
+      const userHandle = keeperHandle(testHost, keeper);
+      expect(userIdFromHandle(userHandle)).toBeTruthy();
+      const unrelated = getRandom(cc.USERCRED_BYTES);
       if (tagged) {
-         expect(userCredTag).not.toBeNull();
+         expect(() => checkHandle(userHandle, unrelated)).toThrow();
       } else {
-         expect(userCredTag).toBeNull();
+         expect(() => checkHandle(userHandle, unrelated)).not.toThrow();
       }
 
       const authenticator = authFixture.loadAuthenticator(keeperDir(testHost, keeper));

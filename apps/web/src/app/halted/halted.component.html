@@ -5,9 +5,14 @@
     </mat-card-header>
     <mat-card-content>
       <p>
-        The account details returned by the Quick Crypt server are less secure
-        than the previously stored account information. Quick Crypt stopped to
-        prevent this error from causing problems.
+        The account details returned by the Quick Crypt server do not match
+        your passkey, your recovery words, or account information this browser
+        saved earlier. Quick Crypt stopped to prevent this mismatch from causing
+        problems.
+      </p>
+      <p>
+        If this happened while you were entering recovery words, reload the page
+        and enter them again carefully. A mistyped word can cause this error.
       </p>
       <p>
         <a
@@ -15,7 +20,7 @@
           [queryParams]="{ search: 'detected problem' }"
         >
           Read more about why this happens</a
-        >, and please
+        >, and if it continues, please
         <a
           href="https://github.com/bschick/qcrypt/issues/new/choose"
           target="_blank"
