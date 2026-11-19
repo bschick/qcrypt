@@ -27,6 +27,7 @@ import {
    bytesToBase64,
    BYOBStreamReader,
    bytesFromUTF8String,
+   constantTimeCompare,
    cryptoReady,
    expired,
 } from '../index';
@@ -121,6 +122,29 @@ describe('getRandom48 tests', () => {
       expect(r1.byteLength).toBe(48);
       expect(r2.byteLength).toBe(48);
       expect(isEqualArray(r1, r2)).toBe(false);
+   });
+});
+
+describe('constantTimeCompare', () => {
+   beforeEach(async () => {
+      await cryptoReady();
+   });
+
+   it('reports bytes that differ in one bit as unequal', () => {
+      const bytes = getRandom(32);
+      expect(constantTimeCompare(bytes, bytes.slice())).toBe(true);
+
+      const changed = bytes.slice();
+      changed[31] ^= 1;
+      expect(constantTimeCompare(bytes, changed)).toBe(false);
+   });
+
+   it('reports a length mismatch as unequal', () => {
+      const bytes = getRandom(32);
+      expect(constantTimeCompare(bytes, bytes.slice())).toBe(true);
+
+      expect(constantTimeCompare(bytes, bytes.slice(0, 31))).toBe(false);
+      expect(constantTimeCompare(bytes, new Uint8Array(0))).toBe(false);
    });
 });
 

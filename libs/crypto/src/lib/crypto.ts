@@ -35,3 +35,7 @@ export function getCrux(): Crux {
 export function hashString(data: string, byteLength = 32): string {
    return getSodium().crypto_generichash(byteLength, data, null, 'base64');
 }
+
+export function constantTimeCompare(first: Uint8Array, second: Uint8Array): boolean {
+   return first.byteLength === second.byteLength && getSodium().memcmp(first, second);
+}

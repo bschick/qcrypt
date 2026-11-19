@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { getSodium } from './crypto';
+import { constantTimeCompare, getSodium } from './crypto';
 import * as cc from './cipher.consts';
 import { numToBytes, BYOBStreamReader, ensureArrayBuffer, concatArrays, logError } from './utils';
 
@@ -475,7 +475,7 @@ export class DecipherV4 extends Decipher {
       sodium.crypto_generichash_update(state, this._blockData.encryptedData);
 
       const testMac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
-      const validMac: boolean = sodium.memcmp(this._blockData.mac, testMac);
+      const validMac: boolean = constantTimeCompare(this._blockData.mac, testMac);
 
       if (validMac) {
          return;
@@ -560,7 +560,7 @@ export class DecipherV5 extends DecipherV4 {
       sodium.crypto_generichash_update(state, this._lastMac);
 
       const testMac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
-      const validMac: boolean = sodium.memcmp(this._blockData.mac, testMac);
+      const validMac: boolean = constantTimeCompare(this._blockData.mac, testMac);
 
       if (validMac) {
          this._lastMac = testMac;

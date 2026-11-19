@@ -37,25 +37,26 @@ const KDF_CTX_COMMIT_V7 = 'Cmit_Key';
 const KDF_INFO_SIGNING_V1 = 'cipherdata signing key';
 const KDF_INFO_HINT_V1 = 'hint encryption key';
 
-// Merges a key and any number of values into a single key with a keyed hash.
-export function mixKey(
+// Keyed hash over the values in order. The values are hashed as one concatenation with no
+// separators, so each value needs a fixed length or its own length field.
+export function keyedHash(
    key: Uint8Array,
    values: Uint8Array[],
-   keyLength: number = cc.KEY_BYTES,
+   hashLength: number = cc.KEY_BYTES,
 ): Uint8Array<ArrayBuffer> {
    const sodium = getSodium();
    if (key.byteLength === 0) {
       throw new Error(`Invalid key length of: ${key.byteLength}`);
    }
-   if (keyLength < sodium.crypto_generichash_BYTES_MIN || keyLength > sodium.crypto_generichash_BYTES_MAX) {
-      throw new Error(`Invalid mixed key length of: ${keyLength}`);
+   if (hashLength < sodium.crypto_generichash_BYTES_MIN || hashLength > sodium.crypto_generichash_BYTES_MAX) {
+      throw new Error(`Invalid hash length of: ${hashLength}`);
    }
 
-   const state = sodium.crypto_generichash_init(key, keyLength);
+   const state = sodium.crypto_generichash_init(key, hashLength);
    for (const value of values) {
       sodium.crypto_generichash_update(state, value);
    }
-   return ensureArrayBuffer(sodium.crypto_generichash_final(state, keyLength));
+   return ensureArrayBuffer(sodium.crypto_generichash_final(state, hashLength));
 }
 
 // SECURITY WARNING: a short tag is a truncation of the longer derivation. A 4 byte tag is the
@@ -72,8 +73,11 @@ export function deriveTag(
    const keyLength = Math.max(idLength, sodium.crypto_kdf_BYTES_MIN);
 
    const derivedKey = deriveKey(master, purpose, instance, keyLength);
-
-   return derivedKey.slice(0, idLength);
+   try {
+      return derivedKey.slice(0, idLength);
+   } finally {
+      derivedKey.fill(0);
+   }
 }
 
 // KDF based on `master` input key with a `purpose` string that must be exactly 8 bytes.
@@ -694,7 +698,7 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
          throw new Error('Invalid ic, not used by masterkey keyprovider');
       }
 
-      return mixKey(master, [this._cdInfo.slt, ...extraContext]);
+      return keyedHash(master, [this._cdInfo.slt, ...extraContext]);
    }
 }
 
@@ -860,7 +864,7 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
          throw new Error(`Invalid version: ${this._cdInfo.ver}`);
       }
 
-      return mixKey(master, [this._cdInfo.slt, ...extraContext]);
+      return keyedHash(master, [this._cdInfo.slt, ...extraContext]);
    }
 }
 

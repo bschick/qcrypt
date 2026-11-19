@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
-import { getSodium } from './crypto';
+import { constantTimeCompare, getSodium } from './crypto';
 import * as cc from './cipher.consts';
 
 import {
@@ -746,7 +746,7 @@ export abstract class Decipher extends Ciphers {
 
          if (keyCommitment?.byteLength) {
             const expected = await this._keyProvider.getKeyCommitment();
-            if (!getSodium().memcmp(expected, keyCommitment)) {
+            if (!constantTimeCompare(expected, keyCommitment)) {
                // Mismatch means a wrong password unless the data was forged, but that is rare so don't raise it
                throw new WrongPasswordError();
             }
@@ -1270,7 +1270,7 @@ export class DecipherV678 extends Decipher {
       sodium.crypto_generichash_update(state, this._lastMac);
 
       const testMac = sodium.crypto_generichash_final(state, cc.MAC_BYTES);
-      const validMac: boolean = sodium.memcmp(this._blockData.mac, testMac);
+      const validMac: boolean = constantTimeCompare(this._blockData.mac, testMac);
 
       if (validMac) {
          this._lastMac = this._blockData.mac;
