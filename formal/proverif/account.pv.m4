@@ -109,6 +109,8 @@ m4_changequote({{,}})m4_dnl
      malicious-noprf-nohandletag  SCN_MALICIOUS NOPRF MUT_NOHANDLETAG
      malicious-recovery-nowordstag  SCN_MALICIOUS MAL_RECOVERY MUT_NOWORDSTAG
      malicious-recovery-serverhandle  SCN_MALICIOUS MAL_RECOVERY MUT_SERVERHANDLE
+     malicious-recovery-stolenwords  SCN_MALICIOUS MAL_RECOVERY STOLENWORDS PRECISE
+     malicious-recovery-stolenwords-unsaltedwordstag  SCN_MALICIOUS MAL_RECOVERY STOLENWORDS PRECISE MUT_UNSALTEDWORDSTAG
      malicious-nouicheck-login  SCN_MALICIOUS MUT_NOUICHECK_LOGIN
      malicious-recovery-nouicheck-reg  SCN_MALICIOUS MAL_RECOVERY MUT_NOUICHECK_REG
      malicious-recovery-nouicheck-recoververify  SCN_MALICIOUS MAL_RECOVERY MUT_NOUICHECK_RECOVERVERIFY
@@ -247,12 +249,36 @@ letfun openAtRest(k: key, e: bitstring, cd: bitstring) = bs2key(ar_dec(k, e, cd)
 letfun proofKey(uc: key) = kdf(ID1, kpU, uc).
 letfun recoveryKey(ur: bitstring, ui: bitstring) = kdf(ID1, kpR, rsec(ur, ui)).
 
-(* The account tag in a passkey's user handle and in a recovery word set: the u_c id, D_H keyed
-   with u_c under its own purpose and truncated to 32 bits. Modeled as
-   a one-way function of u_c with no inverse, so the attacker computes a tag only from a u_c it
-   knows; the 2^-32 chance of a guess matching is outside the model. NOTAG marks an untagged
-   handle or a 24-word set. *)
-fun ucid(key): bitstring.
+(* The user credential tag u_t in a passkey's user handle: 128 bits of D_H under kp_T, keyed with
+   H_{u_c}(u_i), where u_i is the handle's user id. Modeled as a one-way function with no inverse,
+   so the attacker computes a tag only from a u_c it knows. The tag is public: older clients send
+   the whole handle to the server, so every passkey's tag is output on c when it is created. *)
+fun uctag(key, bitstring): bitstring.
+
+(* The recovery words tag u_w in a 27-word set: 32 bits of D_H under kp_W, keyed with
+   H_{u_c}(u_r || u_i), so each set has its own tag. 32 bits can be matched by search once known:
+   whoever holds a set's recovery secret s and its tag t can compute a u_c whose tag under s is
+   t, which rcforge models. The 2^-32 chance of matching a tag that is not known is outside the
+   model. The equation is defined only where the attacker can hold a recovery secret, with
+   LEAK_WORDS or STOLENWORDS; elsewhere it cannot apply, and it stops trace reconstruction in
+   some variants. MUT_UNSALTEDWORDSTAG derives the tag from u_c alone, with the public NOSALT in
+   place of the recovery secret. *)
+fun rctag(key, key): bitstring.
+m4_ifdef({{LEAK_WORDS}}, {{m4_define({{WORDSFORGE}})}})
+m4_ifdef({{STOLENWORDS}}, {{m4_define({{WORDSFORGE}})}})
+m4_ifdef({{WORDSFORGE}}, {{
+fun rcforge(key, bitstring): key.
+equation forall s: key, t: bitstring; rctag(rcforge(s, t), s) = t.
+}})
+const NOSALT: key [data].
+m4_ifdef({{MUT_UNSALTEDWORDSTAG}}, {{
+(* MUTATION: the words tag ignores the recovery secret *)
+m4_define({{WORDSTAG}}, {{rctag($1, NOSALT)}})
+}}, {{
+m4_define({{WORDSTAG}}, {{rctag($1, rsec($2, $3))}})
+}})
+
+(* NOTAG marks an untagged handle or a 24-word set *)
 const NOTAG: bitstring [data].
 
 (* KMS (server.ts:encryptField): encryption under a key only the server's role can use, with the
@@ -324,6 +350,12 @@ event PasskeyHandle(bitstring, bitstring).
    started from (NOTAG for an untagged one, the browser's own tag at registration), and the
    account mode the server returned *)
 event Adopted(bitstring, bitstring, key, bitstring, bitstring).
+
+m4_ifdef({{STOLENWORDS}}, {{
+(* A recovery's u_c passed the words' tag check: browser, the u_r of the words used, and that
+   u_c *)
+event RecoveryWords(bitstring, bitstring, key).
+}})
 
 (* A server reply's user id passed the browser's checks: the user id the browser already held
    for the flow (the passkey handle's, the one from reg/options, or the recovery words'), and the
@@ -966,7 +998,9 @@ HANDLEUSER(oui, ui)
    let credPk = wa_pk(credKey) in
    event AliceCredCreated(ui, credId, credPk);
    event PasskeyHandle(ui, hui);
-   insert passkeys(aid, hui, ucid(uc), credId, credKey);
+   let htg = uctag(uc, hui) in
+   insert passkeys(aid, hui, htg, credId, credKey);
+   out(c, htg);
    let rr = regr(credId, credPk, adata(RPID, UV1), cdj(WA_CREATE, ch, ORIGIN)) in
 m4_ifdef({{NOPRF}}, {{
    (* A no-PRF account sends no cd_p (authenticator.service.ts:addPasskey) *)
@@ -978,16 +1012,14 @@ m4_ifdef({{NOPRF}}, {{
    out(tls, ((PKVER, ck, cs, sig_sign(proofKey(uc), muc(ui, POST, PATH_PKVER, ch, sha256(bd)), SCP, r2), bd), rc2));
    in(rc2, resp: bitstring).
 
-(* The tag check on a credential with tag $2, for the u_c $3 the browser resolved: a tagged
-   credential's tag must be that u_c's id. MUT_NO$1TAG removes it. On a mismatch the process
-   stops. The browser then completes the flow it was in, so that a halt tells the server nothing,
-   but those messages carry only the server's own u_c and fresh values, so the model leaves them
-   out. *)
+(* The tag check on a credential with tag $2: a tagged credential's tag must equal $3, the tag
+   computed from the u_c the browser resolved. MUT_NO$1TAG removes it. On a mismatch the browser
+   halts. *)
 m4_define({{TAGCHECK}}, {{
 m4_ifdef({{MUT_NO$1TAG}}, {{
    (* MUTATION: the tag is not checked *)
 }}, {{
-   if $2 = NOTAG || ucid($3) = $2 then
+   if $2 = NOTAG || $3 = $2 then
 }})
 }})
 
@@ -1016,7 +1048,7 @@ UICHECK({{LOGIN}}, ui, sui)
       sends u_c itself. Then the tag check, and _pinAccount. *)
    get pins(=bid, =sui, =PRF1, ppk: bitstring) suchthat sprf = PRF0 in 0 else
    let uc = (if sprf = PRF1 then openAtRest(wa_prf(credKey, PS), sui, sdata) else if sprf = PRF0 then bs2key(sdata)) in
-TAGCHECK({{HANDLE}}, tg, uc)
+TAGCHECK({{HANDLE}}, tg, uctag(uc, ui))
    get pins(=bid, =sui, pprf: bitstring, ppk: bitstring) suchthat ppk <> sig_pk(proofKey(uc)) in 0 else
    insert pins(bid, sui, sprf, sig_pk(proofKey(uc)));
 m4_ifdef({{STRIPLOGIN}}, {{   event SignedInWith(bid, sui, credId, ch, ck, uc);}})
@@ -1055,7 +1087,7 @@ UICHECK({{LOGIN}}, ui, sui)
       get pins(=aid, =rui, pprf: bitstring, ppk: bitstring) in
       if pprf = PRF1 && sprf = PRF0 then 0 else
       let uc = (if sprf = PRF1 then openAtRest(wa_prf(credKey, PS), sui, sdata) else if sprf = PRF0 then bs2key(sdata)) in
-TAGCHECK({{HANDLE}}, tg, uc)
+TAGCHECK({{HANDLE}}, tg, uctag(uc, ui))
       if ppk = sig_pk(proofKey(uc)) then
       insert pins(aid, rui, sprf, sig_pk(proofKey(uc)));
       event SessionUser(ui, rui);
@@ -1064,7 +1096,7 @@ TAGCHECK({{HANDLE}}, tg, uc)
    ) else (
       get pins(=aid, =sui, =PRF1, ppk: bitstring) suchthat sprf = PRF0 in 0 else
       let uc = (if sprf = PRF1 then openAtRest(wa_prf(credKey, PS), sui, sdata) else if sprf = PRF0 then bs2key(sdata)) in
-TAGCHECK({{HANDLE}}, tg, uc)
+TAGCHECK({{HANDLE}}, tg, uctag(uc, ui))
       get pins(=aid, =sui, pprf: bitstring, ppk: bitstring) suchthat ppk <> sig_pk(proofKey(uc)) in 0 else
       insert pins(aid, sui, sprf, sig_pk(proofKey(uc)));
       event SessionUser(ui, sui);
@@ -1088,7 +1120,9 @@ HANDLEUSER(oui, ui)
    let credPk = wa_pk(credKey) in
    event AliceCredCreated(ui, credId, credPk);
    event PasskeyHandle(ui, hui);
-   insert passkeys(aid, hui, ucid(uc), credId, credKey);
+   let htg = uctag(uc, hui) in
+   insert passkeys(aid, hui, htg, credId, credKey);
+   out(c, htg);
    let rr = regr(credId, credPk, adata(RPID, UV1), cdj(WA_CREATE, ch, ORIGIN)) in
    (* cd_p is sent only for a PRF account (authenticator.service.ts:_finishRecovery) *)
    let cdp = (if sprf = PRF1 then mkAtRest(wa_prf(credKey, PS), ui, nS, key2bs(uc)) else EMPTY) in
@@ -1134,7 +1168,8 @@ let Recovery(aid: bitstring, bid: bitstring) =
       (authenticator.service.ts:recover3). Then the words' tag check, and _pinAccount under the
       words' u_i: the account-mode pin check, then the userCred compare. *)
    let uc = (if sprf = PRF1 then openAtRest(rsec(ur, ui), ui, sdata) else if sprf = PRF0 then bs2key(sdata)) in
-TAGCHECK({{WORDS}}, wtg, uc)
+TAGCHECK({{WORDS}}, wtg, WORDSTAG(uc, ur, ui))
+m4_ifdef({{STOLENWORDS}}, {{   event RecoveryWords(bid, ur, uc);}})
    get pins(=bid, =ui, =PRF1, ppk: bitstring) suchthat sprf = PRF0 in 0 else
    get pins(=bid, =ui, pprf: bitstring, ppk: bitstring) suchthat ppk <> sig_pk(proofKey(uc)) in 0 else
    FinishRecovery(aid, bid, ui, uc, sprf, chR, r2, r3, credKey, credId, nS, rc2, rc3, kKS, nS2, wtg).
@@ -1159,7 +1194,8 @@ let RecoveryRegistered(aid: bitstring) =
       (authenticator.service.ts:recover3). Then the words' tag check, and _pinAccount under the
       words' u_i: the account-mode pin check, then the userCred compare. *)
    let uc = (if sprf = PRF1 then openAtRest(rsec(ur, ui), ui, sdata) else if sprf = PRF0 then bs2key(sdata)) in
-TAGCHECK({{WORDS}}, wtg, uc)
+TAGCHECK({{WORDS}}, wtg, WORDSTAG(uc, ur, ui))
+m4_ifdef({{STOLENWORDS}}, {{   event RecoveryWords(aid, ur, uc);}})
    if rui = ui then (
       get pins(=aid, =ui, pprf: bitstring, ppk: bitstring) in
       if pprf = PRF1 && sprf = PRF0 then 0 else
@@ -1178,7 +1214,7 @@ let ReplaceWords(aid: bitstring) =
    new nS: bitstring; new rc: channel;
    get sessions(=aid, bid: bitstring, ui: bitstring, uc: key, pkId: bitstring, ck: bitstring, cs: bitstring) in
    (* 27 words, tagged with the session's u_c *)
-   insert words(aid, ui, ur2, ucid(uc));
+   insert words(aid, ui, ur2, WORDSTAG(uc, ur2, ui));
    let skR = recoveryKey(ur2, ui) in
 m4_ifdef({{MUT_ONECTX}}, {{
    (* MUTATION: the replace proof is signed under sc_R *)
@@ -1201,14 +1237,15 @@ m4_ifdef({{NOPRF}}, {{
 m4_ifdef({{NOPRF}}, {{m4_define({{ACCTMODE}}, {{PRF0}})}}, {{m4_define({{ACCTMODE}}, {{PRF1}})}})
 
 (* Registration (tex: Registration by A; authenticator.service.ts:newUser). The browser creates
-   u_c in both modes and sends pk_U in reg/options. The passkey's handle and the words carry the
-   tag of that u_c, and reg/verify carries proofs under sk_U and sk_R. u_i is public: it is in the
+   u_c in both modes and sends pk_U in reg/options. The passkey's handle and the words carry
+   their tags of that u_c, and reg/verify carries proofs under sk_U and sk_R. u_i is public: it is in the
    recovery words and in URLs. *)
 let Register(aid: bitstring) =
    new rc1: channel; new rc2: channel;
    new credKey: key; new credId: bitstring; new ur: bitstring; new ucA: key;
    new nS1: bitstring; new nS2: bitstring; new kKS: key; new nS3: bitstring;
    new rU: bitstring; new rR: bitstring;
+m4_ifdef({{STOLENWORDS}}, {{   new urS: bitstring;}})
    let uc = ucA in
    let pkU = sig_pk(proofKey(uc)) in
    out(tls, ((REGOPT, pkU), rc1));
@@ -1223,11 +1260,12 @@ m4_ifdef({{SCN_MALICIOUS}}, {{
    in(rc1, (ch: bitstring, ui: bitstring))PREC_STRIP;
 }})
    event AliceUi(ui);
-   let tg = ucid(uc) in
+   let tg = uctag(uc, ui) in
    let credPk = wa_pk(credKey) in
    let rr = regr(credId, credPk, adata(RPID, UV1), cdj(WA_CREATE, ch, ORIGIN)) in
    event AliceCredCreated(ui, credId, credPk);
    insert passkeys(aid, ui, tg, credId, credKey);
+   out(c, tg);
 m4_ifdef({{LEAK_WORDS}}, {{   out(c, ur); }})
    let skR = recoveryKey(ur, ui) in
    let sigR = sig_sign(skR, mrg(ui, ch, REGSIGR_PKU(pkU)), SCG, rR) in
@@ -1274,7 +1312,18 @@ UICHECK({{REG}}, ui, sui)
    insert registered(aid, ui, sui);
    (* The words are shown only in a signed-in session, so Alice has them only once registration
       completes (authenticator.service.ts:consumeRecoveryWords) *)
-   insert words(aid, ui, ur, tg);
+   insert words(aid, ui, ur, WORDSTAG(uc, ur, ui));
+m4_ifdef({{STOLENWORDS}}, {{
+   (* A superseded word set that the attacker has stolen. Alice made it from her u_c and kept
+      it, and the server holds no cd_r for it: the server overwrote that when the set was
+      replaced, or never received it when the replacement was not confirmed. A server that kept
+      that cd_r learns u_c from the stolen set directly, so that case needs no tag. Nothing of
+      this set reaches the server, and the attacker holds its u_r and tag. The set is made here
+      rather than in a later session so that its u_c cannot be one the attacker chose, which
+      would let forged values nest without bound. *)
+   insert words(aid, ui, urS, WORDSTAG(uc, urS, ui));
+   out(c, (urS, WORDSTAG(uc, urS, ui)));
+}})
    out(c, ui);
    event SessionUser(ui, sui);
    StartSession(aid, aid, sui, uc, credId, ck, cs, kKS, nS3, tg, ACCTMODE).
@@ -1329,8 +1378,9 @@ let SecondAccount(aid: bitstring) =
    let credPk = wa_pk(credKey) in
    event AliceUi(ui);
    event AliceCredCreated(ui, credId, credPk);
-   insert passkeys(aid, ui, ucid(ucB), credId, credKey);
-   insert words(aid, ui, ur, ucid(ucB));
+   insert passkeys(aid, ui, uctag(ucB, ui), credId, credKey);
+   out(c, uctag(ucB, ui));
+   insert words(aid, ui, ur, WORDSTAG(ucB, ur, ui));
    insert registered(aid, ui, ui);
    insert pins(aid, ui, PRF1, pkU);
    out(c, (ui, pkU, sig_pk(recoveryKey(ur, ui)), credId, credPk,
@@ -1358,7 +1408,7 @@ UICHECK({{LOGIN}}, ui, sui)
 UICHECK({{REAUTH}}, sui0, sui)
    get pins(=bid, =sui, =PRF1, ppk: bitstring) suchthat sprf = PRF0 in 0 else
    let uc = (if sprf = PRF1 then openAtRest(wa_prf(credKey, PS), sui, sdata) else if sprf = PRF0 then bs2key(sdata)) in
-TAGCHECK({{HANDLE}}, tg, uc)
+TAGCHECK({{HANDLE}}, tg, uctag(uc, ui))
    get pins(=bid, =sui, pprf: bitstring, ppk: bitstring) suchthat ppk <> sig_pk(proofKey(uc)) in 0 else
    insert pins(bid, sui, sprf, sig_pk(proofKey(uc)));
    event SessionUser(ui, sui);
@@ -1716,12 +1766,14 @@ m4_ifdef({{EXISTING}}, {{
    written while the server was honest, never lets a browser adopt a u_c the server knows. An
    untagged one does, on a browser with no pin: the gap until untagged credentials are
    migrated. *)
-query b: bitstring, u: bitstring, x: key, m: bitstring; event(Adopted(b, u, x, ucid(new ucA), m)) && attacker(x).
+query b: bitstring, u: bitstring, x: key, v: bitstring, m: bitstring; event(Adopted(b, u, x, uctag(new ucA, v), m)) && attacker(x).
+query b: bitstring, u: bitstring, x: key, s: key, m: bitstring; event(Adopted(b, u, x, rctag(new ucA, s), m)) && attacker(x).
 query b: bitstring, u: bitstring, x: key, m: bitstring; event(Adopted(b, u, x, NOTAG, m)) && attacker(x).
 m4_ifdef({{FIRSTUSE}}, {{
 (* With the server dishonest from the start, a session that trusted it on first use writes tags
    from the server's u_c, and a later sign-in with such a credential accepts that u_c *)
-query b: bitstring, u: bitstring, x: key, y: key, m: bitstring; event(Adopted(b, u, x, ucid(y), m)) && attacker(x).
+query b: bitstring, u: bitstring, x: key, y: key, v: bitstring, m: bitstring; event(Adopted(b, u, x, uctag(y, v), m)) && attacker(x).
+query b: bitstring, u: bitstring, x: key, y: key, s: key, m: bitstring; event(Adopted(b, u, x, rctag(y, s), m)) && attacker(x).
 }})
 
 (* A-S3 for the browser that registered the account: its pin and the user-id checks protect even
@@ -1734,14 +1786,14 @@ m4_ifdef({{PHASED}}, {{
    tagged passkey and holds Alice's own u_c. *)
 query u: bitstring, m: bitstring, alice: sid;
    event(Adopted(new bidF0[!1 = alice], u, new ucA[!1 = alice], NOTAG, m)).
-query u: bitstring, m: bitstring, alice: sid;
-   event(Adopted(new bidF[!1 = alice], u, new ucA[!1 = alice], ucid(new ucA[!1 = alice]), m)).
+query u: bitstring, v: bitstring, m: bitstring, alice: sid;
+   event(Adopted(new bidF[!1 = alice], u, new ucA[!1 = alice], uctag(new ucA[!1 = alice], v), m)).
 
 (* Reachability of recoveries, which run only in phase 1: on a browser with no pin, with tagged
    words and with the untagged words, and on the registering browser, each ending with Alice's
    own u_c *)
-query u: bitstring, m: bitstring, alice: sid;
-   event(Adopted(new bidR[!1 = alice], u, new ucA[!1 = alice], ucid(new ucA[!1 = alice]), m)).
+query u: bitstring, s: key, m: bitstring, alice: sid;
+   event(Adopted(new bidR[!1 = alice], u, new ucA[!1 = alice], rctag(new ucA[!1 = alice], s), m)).
 query u: bitstring, m: bitstring, alice: sid;
    event(Adopted(new bidR[!1 = alice], u, new ucA[!1 = alice], NOTAG, m)).
 query u: bitstring, alice: sid; event(ClientRecovered(new aid[!1 = alice], u, new ucA[!1 = alice])).
@@ -1750,9 +1802,10 @@ query u: bitstring, alice: sid; event(ClientRecovered(new aid[!1 = alice], u, ne
 (* A-E1: every u_c any of Alice's browsers adopts stays secret from the server *)
 query b: bitstring, u: bitstring, x: key, t: bitstring, m: bitstring; event(Adopted(b, u, x, t, m)) && attacker(x).
 
-(* A-D1: a browser never treats Alice's PRF account as no-PRF when it uses a credential tagged
-   with her u_c *)
-query b: bitstring, u: bitstring, x: key; event(Adopted(b, u, x, ucid(new ucA), PRF0)).
+(* A-D1: a browser never treats Alice's PRF account as no-PRF when it uses a passkey or word set
+   tagged with her u_c *)
+query b: bitstring, u: bitstring, x: key, v: bitstring; event(Adopted(b, u, x, uctag(new ucA, v), PRF0)).
+query b: bitstring, u: bitstring, x: key, s: key; event(Adopted(b, u, x, rctag(new ucA, s), PRF0)).
 
 (* A-S3: once registration has completed in a browser, that browser never adopts a u_c the
    server knows, whether it signs in or, with MAL_RECOVERY, recovers *)
@@ -1788,13 +1841,25 @@ query alice: sid, ui: bitstring, user: bitstring, userCred: key;
 query user: bitstring, ui: bitstring, alice: sid;
    event(ClientRecovered(new aid[!1 = alice], user, new ucA[!1 = alice])) && event(Registered(new aid[!1 = alice], ui, ui)).
 query user: bitstring, alice: sid; event(ClientRecovered(new bidR[!1 = alice], user, new ucA[!1 = alice])).
+
+m4_ifdef({{STOLENWORDS}}, {{
+(* A-W1: after the attacker steals a superseded word set, a recovery with Alice's registration
+   words never adopts a u_c the server knows *)
+query b: bitstring, x: key, u: bitstring, t: bitstring, m: bitstring;
+   event(RecoveryWords(b, new ur, x)) && event(Adopted(b, u, x, t, m)) && attacker(x).
+
+(* The accepted residual: a recovery with the stolen set itself adopts a u_c the server chose *)
+query b: bitstring, x: key, u: bitstring, t: bitstring, m: bitstring;
+   event(RecoveryWords(b, new urS, x)) && event(Adopted(b, u, x, t, m)) && attacker(x).
+}})
 }})
 }})
 }})
 
-(* A-T1: a session started from a tagged credential holds the u_c the tag was made from. In
-   no-PRF mode this is all the tag gives. *)
-query b: bitstring, u: bitstring, x: key, y: key, m: bitstring; event(Adopted(b, u, x, ucid(y), m)) ==> x = y.
+(* A-T1: a session started from a passkey holds the u_c the passkey's tag was made from. The
+   handle tag has no equation, so this holds even where the attacker knows Alice's u_c, as in
+   no-PRF mode. *)
+query b: bitstring, u: bitstring, x: key, y: key, v: bitstring, m: bitstring; event(Adopted(b, u, x, uctag(y, v), m)) ==> x = y.
 
 (* A-U1: a browser accepts a server reply only with the user id it already holds for the flow *)
 query expected: bitstring, actual: bitstring; event(SessionUser(expected, actual)) ==> expected = actual.
@@ -2219,19 +2284,21 @@ END *)}})
 m4_ifdef({{VARIANT_malicious}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_3]) is true.
 RESULT not (event(Adopted(b,u,x,t,m)) && attacker(x)) is true.
-RESULT not event(Adopted(b,u,x,ucid(ucA[!1 = v_3]),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,uctag(ucA[!1 = v_3],v_4),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,rctag(ucA[!1 = v_3],s),PRF0)) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_3],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_3,!1 = v_4],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_4,ui_4))) is false.
 RESULT not event(ClientSignedIn(bidF[!2 = v_3,!1 = alice],user,ucA[!1 = alice])) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m)) ==> x = y is true.
+RESULT event(Adopted(b,u,x,uctag(y,v_3),m)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious_recovery}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_8]) is true.
 RESULT not (event(Adopted(b,u,x,t,m)) && attacker(x)) is true.
-RESULT not event(Adopted(b,u,x,ucid(ucA[!1 = v_8]),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,uctag(ucA[!1 = v_8],v_9),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,rctag(ucA[!1 = v_8],s),PRF0)) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_8],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_8,!1 = v_9],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
@@ -2241,7 +2308,7 @@ RESULT not (event(ClientRecovered(aid[!1 = v_8],user,userCred)) && attacker(user
 RESULT not (event(ClientRecovered(aid[!1 = alice],user,userCred)) && event(Registered(aid[!1 = alice],ui_6,ui_6)) && attacker(userCred)) is true.
 RESULT not (event(ClientRecovered(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
 RESULT not event(ClientRecovered(bidR[!2 = v_8,!1 = alice],user,ucA[!1 = alice])) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m)) ==> x = y is true.
+RESULT event(Adopted(b,u,x,uctag(y,v_8),m)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
@@ -2517,7 +2584,7 @@ RESULT not attacker(ur2[!2 = v_10,!1 = v_11]) is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious_noprf}}, {{(* EXPECTPV
 RESULT not (event(AliceUc(a,x)) && attacker(x)) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m)) ==> x = y is true.
+RESULT event(Adopted(b,u,x,uctag(y,v_3),m)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
@@ -2674,25 +2741,27 @@ END *)}})
 m4_ifdef({{VARIANT_malicious_nohandletag}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_3]) is true.
 RESULT not (event(Adopted(b,u,x,t,m)) && attacker(x)) is false.
-RESULT not event(Adopted(b,u,x,ucid(ucA[!1 = v_3]),PRF0)) is false.
+RESULT not event(Adopted(b,u,x,uctag(ucA[!1 = v_3],v_4),PRF0)) is false.
+RESULT not event(Adopted(b,u,x,rctag(ucA[!1 = v_3],s),PRF0)) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_3],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_3,!1 = v_4],u,x)) && attacker(x)) is false.
 RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_4,ui_4))) is false.
 RESULT not event(ClientSignedIn(bidF[!2 = v_3,!1 = alice],user,ucA[!1 = alice])) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m)) ==> x = y is false.
+RESULT event(Adopted(b,u,x,uctag(y,v_3),m)) ==> x = y is false.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious_noprf_nohandletag}}, {{(* EXPECTPV
 RESULT not (event(AliceUc(a,x)) && attacker(x)) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m)) ==> x = y is false.
+RESULT event(Adopted(b,u,x,uctag(y,v_3),m)) ==> x = y is false.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious_recovery_nowordstag}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_8]) is true.
 RESULT not (event(Adopted(b,u,x,t,m)) && attacker(x)) is false.
-RESULT not event(Adopted(b,u,x,ucid(ucA[!1 = v_8]),PRF0)) is false.
+RESULT not event(Adopted(b,u,x,uctag(ucA[!1 = v_8],v_9),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,rctag(ucA[!1 = v_8],s),PRF0)) is false.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_8],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_8,!1 = v_9],u,x)) && attacker(x)) is false.
 RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
@@ -2702,14 +2771,15 @@ RESULT not (event(ClientRecovered(aid[!1 = v_8],user,userCred)) && attacker(user
 RESULT not (event(ClientRecovered(aid[!1 = alice],user,userCred)) && event(Registered(aid[!1 = alice],ui_6,ui_6)) && attacker(userCred)) is true.
 RESULT not (event(ClientRecovered(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
 RESULT not event(ClientRecovered(bidR[!2 = v_8,!1 = alice],user,ucA[!1 = alice])) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m)) ==> x = y is false.
+RESULT event(Adopted(b,u,x,uctag(y,v_8),m)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious_recovery_serverhandle}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_8]) is true.
 RESULT not (event(Adopted(b,u,x,t,m)) && attacker(x)) is true.
-RESULT not event(Adopted(b,u,x,ucid(ucA[!1 = v_8]),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,uctag(ucA[!1 = v_8],v_9),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,rctag(ucA[!1 = v_8],s),PRF0)) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_8],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_8,!1 = v_9],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
@@ -2719,26 +2789,68 @@ RESULT not (event(ClientRecovered(aid[!1 = v_8],user,userCred)) && attacker(user
 RESULT not (event(ClientRecovered(aid[!1 = alice],user,userCred)) && event(Registered(aid[!1 = alice],ui_6,ui_6)) && attacker(userCred)) is true.
 RESULT not (event(ClientRecovered(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
 RESULT not event(ClientRecovered(bidR[!2 = v_8,!1 = alice],user,ucA[!1 = alice])) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m)) ==> x = y is true.
+RESULT event(Adopted(b,u,x,uctag(y,v_8),m)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is false.
+END *)}})
+m4_ifdef({{VARIANT_malicious_recovery_stolenwords}}, {{(* EXPECTPV
+RESULT not attacker(ucA[!1 = v_8]) is true.
+RESULT not (event(Adopted(b,u,x,t,m)) && attacker(x)) is false.
+RESULT not event(Adopted(b,u,x,uctag(ucA[!1 = v_8],v_9),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,rctag(ucA[!1 = v_8],s),PRF0)) is false.
+RESULT not (event(ClientLoggedIn(aid[!1 = v_8],u,x)) && attacker(x)) is true.
+RESULT not (event(ClientLoggedIn(bidF[!2 = v_8,!1 = v_9],u,x)) && attacker(x)) is false.
+RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
+RESULT not event(ClientSignedIn(bidF[!2 = v_8,!1 = alice],user,ucA[!1 = alice])) is false.
+RESULT not (event(ClientLoggedIn(bidR[!2 = v_8,!1 = v_9],user,userCred)) && attacker(userCred)) is false.
+RESULT not (event(ClientRecovered(aid[!1 = v_8],user,userCred)) && attacker(userCred)) is true.
+RESULT not (event(ClientRecovered(aid[!1 = alice],user,userCred)) && event(Registered(aid[!1 = alice],ui_6,ui_6)) && attacker(userCred)) is true.
+RESULT not (event(ClientRecovered(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
+RESULT not event(ClientRecovered(bidR[!2 = v_8,!1 = alice],user,ucA[!1 = alice])) is false.
+RESULT not (event(RecoveryWords(b,ur[!1 = v_8],x)) && event(Adopted(b,u,x,t,m)) && attacker(x)) is true.
+RESULT not (event(RecoveryWords(b,urS[!1 = v_8],x)) && event(Adopted(b,u,x,t,m)) && attacker(x)) is false.
+RESULT event(Adopted(b,u,x,uctag(y,v_8),m)) ==> x = y is true.
+RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
+RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
+END *)}})
+m4_ifdef({{VARIANT_malicious_recovery_stolenwords_unsaltedwordstag}}, {{(* EXPECTPV
+RESULT not attacker(ucA[!1 = v_8]) is true.
+RESULT not (event(Adopted(b,u,x,t,m)) && attacker(x)) is false.
+RESULT not event(Adopted(b,u,x,uctag(ucA[!1 = v_8],v_9),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,rctag(ucA[!1 = v_8],s),PRF0)) is false.
+RESULT not (event(ClientLoggedIn(aid[!1 = v_8],u,x)) && attacker(x)) is true.
+RESULT not (event(ClientLoggedIn(bidF[!2 = v_8,!1 = v_9],u,x)) && attacker(x)) is false.
+RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
+RESULT not event(ClientSignedIn(bidF[!2 = v_8,!1 = alice],user,ucA[!1 = alice])) is false.
+RESULT not (event(ClientLoggedIn(bidR[!2 = v_8,!1 = v_9],user,userCred)) && attacker(userCred)) is false.
+RESULT not (event(ClientRecovered(aid[!1 = v_8],user,userCred)) && attacker(userCred)) is true.
+RESULT not (event(ClientRecovered(aid[!1 = alice],user,userCred)) && event(Registered(aid[!1 = alice],ui_6,ui_6)) && attacker(userCred)) is true.
+RESULT not (event(ClientRecovered(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
+RESULT not event(ClientRecovered(bidR[!2 = v_8,!1 = alice],user,ucA[!1 = alice])) is false.
+RESULT not (event(RecoveryWords(b,ur[!1 = v_8],x)) && event(Adopted(b,u,x,t,m)) && attacker(x)) is false.
+RESULT not (event(RecoveryWords(b,urS[!1 = v_8],x)) && event(Adopted(b,u,x,t,m)) && attacker(x)) is false.
+RESULT event(Adopted(b,u,x,uctag(y,v_8),m)) ==> x = y is true.
+RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
+RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious_nouicheck_login}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_3]) is true.
 RESULT not (event(Adopted(b,u,x,t,m)) && attacker(x)) is true.
-RESULT not event(Adopted(b,u,x,ucid(ucA[!1 = v_3]),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,uctag(ucA[!1 = v_3],v_4),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,rctag(ucA[!1 = v_3],s),PRF0)) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_3],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_3,!1 = v_4],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_4,ui_4))) is false.
 RESULT not event(ClientSignedIn(bidF[!2 = v_3,!1 = alice],user,ucA[!1 = alice])) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m)) ==> x = y is true.
+RESULT event(Adopted(b,u,x,uctag(y,v_3),m)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious_recovery_nouicheck_reg}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_8]) is true.
 RESULT not (event(Adopted(b,u,x,t,m)) && attacker(x)) is true.
-RESULT not event(Adopted(b,u,x,ucid(ucA[!1 = v_8]),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,uctag(ucA[!1 = v_8],v_9),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,rctag(ucA[!1 = v_8],s),PRF0)) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_8],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_8,!1 = v_9],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
@@ -2748,14 +2860,15 @@ RESULT not (event(ClientRecovered(aid[!1 = v_8],user,userCred)) && attacker(user
 RESULT not (event(ClientRecovered(aid[!1 = alice],user,userCred)) && event(Registered(aid[!1 = alice],ui_6,ui_6)) && attacker(userCred)) is true.
 RESULT not (event(ClientRecovered(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
 RESULT not event(ClientRecovered(bidR[!2 = v_8,!1 = alice],user,ucA[!1 = alice])) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m)) ==> x = y is true.
+RESULT event(Adopted(b,u,x,uctag(y,v_8),m)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is false.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious_recovery_nouicheck_recoververify}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_8]) is true.
 RESULT not (event(Adopted(b,u,x,t,m)) && attacker(x)) is true.
-RESULT not event(Adopted(b,u,x,ucid(ucA[!1 = v_8]),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,uctag(ucA[!1 = v_8],v_9),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,rctag(ucA[!1 = v_8],s),PRF0)) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_8],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_8,!1 = v_9],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
@@ -2765,7 +2878,7 @@ RESULT not (event(ClientRecovered(aid[!1 = v_8],user,userCred)) && attacker(user
 RESULT not (event(ClientRecovered(aid[!1 = alice],user,userCred)) && event(Registered(aid[!1 = alice],ui_6,ui_6)) && attacker(userCred)) is true.
 RESULT not (event(ClientRecovered(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_6,ui_6))) is false.
 RESULT not event(ClientRecovered(bidR[!2 = v_8,!1 = alice],user,ucA[!1 = alice])) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m)) ==> x = y is true.
+RESULT event(Adopted(b,u,x,uctag(y,v_8),m)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is false.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
@@ -2776,12 +2889,13 @@ RESULT not event(Reauthenticated(aid[!1 = alice],u,ucA[!1 = alice])) is false.
 RESULT not event(Reauthenticated(aid[!1 = alice],u,ucB[!1 = alice])) is false.
 RESULT not event(Reauthenticated(bidF[!2 = v_4,!1 = alice],u,ucA[!1 = alice])) is false.
 RESULT not (event(Adopted(b,u,x,t,m_2)) && attacker(x)) is true.
-RESULT not event(Adopted(b,u,x,ucid(ucA[!1 = v_4]),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,uctag(ucA[!1 = v_4],v_5),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,rctag(ucA[!1 = v_4],s),PRF0)) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_4],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_4,!1 = v_5],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_7,ui_7))) is false.
 RESULT not event(ClientSignedIn(bidF[!2 = v_4,!1 = alice],user,ucA[!1 = alice])) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m_2)) ==> x = y is true.
+RESULT event(Adopted(b,u,x,uctag(y,v_4),m_2)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
@@ -2792,80 +2906,88 @@ RESULT not event(Reauthenticated(aid[!1 = alice],u,ucA[!1 = alice])) is false.
 RESULT not event(Reauthenticated(aid[!1 = alice],u,ucB[!1 = alice])) is false.
 RESULT not event(Reauthenticated(bidF[!2 = v_4,!1 = alice],u,ucA[!1 = alice])) is false.
 RESULT not (event(Adopted(b,u,x,t,m_2)) && attacker(x)) is true.
-RESULT not event(Adopted(b,u,x,ucid(ucA[!1 = v_4]),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,uctag(ucA[!1 = v_4],v_5),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,rctag(ucA[!1 = v_4],s),PRF0)) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_4],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientLoggedIn(bidF[!2 = v_4,!1 = v_5],u,x)) && attacker(x)) is true.
 RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_7,ui_7))) is false.
 RESULT not event(ClientSignedIn(bidF[!2 = v_4,!1 = alice],user,ucA[!1 = alice])) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m_2)) ==> x = y is true.
+RESULT event(Adopted(b,u,x,uctag(y,v_4),m_2)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is false.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious_existing}}, {{(* EXPECTPV
 RESULT not attacker_p1(ucA[!1 = v_35]) is true.
-RESULT not (event(Adopted(b,u,x,ucid(ucA[!1 = v_35]),m_2)) && attacker_p1(x)) is true.
+RESULT not (event(Adopted(b,u,x,uctag(ucA[!1 = v_35],v_36),m_2)) && attacker_p1(x)) is true.
+RESULT not (event(Adopted(b,u,x,rctag(ucA[!1 = v_35],s),m_2)) && attacker_p1(x)) is true.
 RESULT not (event(Adopted(b,u,x,NOTAG,m_2)) && attacker_p1(x)) is false.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_35],u,x)) && attacker_p1(x)) is true.
 RESULT not event(Adopted(bidF0[!2 = v_35,!1 = alice],u,ucA[!1 = alice],NOTAG,m_2)) is false.
-RESULT not event(Adopted(bidF[!2 = v_35,!1 = alice],u,ucA[!1 = alice],ucid(ucA[!1 = alice]),m_2)) is false.
-RESULT not event(Adopted(bidR[!2 = v_35,!1 = alice],u,ucA[!1 = alice],ucid(ucA[!1 = alice]),m_2)) is false.
+RESULT not event(Adopted(bidF[!2 = v_35,!1 = alice],u,ucA[!1 = alice],uctag(ucA[!1 = alice],v_36),m_2)) is false.
+RESULT not event(Adopted(bidR[!2 = v_35,!1 = alice],u,ucA[!1 = alice],rctag(ucA[!1 = alice],s),m_2)) is false.
 RESULT not event(Adopted(bidR[!2 = v_35,!1 = alice],u,ucA[!1 = alice],NOTAG,m_2)) is false.
 RESULT not event(ClientRecovered(aid[!1 = alice],u,ucA[!1 = alice])) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m_2)) ==> x = y is true.
+RESULT event(Adopted(b,u,x,uctag(y,v_35),m_2)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious_existing_nohandletag}}, {{(* EXPECTPV
 RESULT not attacker_p1(ucA[!1 = v_35]) is true.
-RESULT not (event(Adopted(b,u,x,ucid(ucA[!1 = v_35]),m_2)) && attacker_p1(x)) is false.
+RESULT not (event(Adopted(b,u,x,uctag(ucA[!1 = v_35],v_36),m_2)) && attacker_p1(x)) is false.
+RESULT not (event(Adopted(b,u,x,rctag(ucA[!1 = v_35],s),m_2)) && attacker_p1(x)) is true.
 RESULT not (event(Adopted(b,u,x,NOTAG,m_2)) && attacker_p1(x)) is false.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_35],u,x)) && attacker_p1(x)) is true.
 RESULT not event(Adopted(bidF0[!2 = v_35,!1 = alice],u,ucA[!1 = alice],NOTAG,m_2)) is false.
-RESULT not event(Adopted(bidF[!2 = v_35,!1 = alice],u,ucA[!1 = alice],ucid(ucA[!1 = alice]),m_2)) is false.
-RESULT not event(Adopted(bidR[!2 = v_35,!1 = alice],u,ucA[!1 = alice],ucid(ucA[!1 = alice]),m_2)) is false.
+RESULT not event(Adopted(bidF[!2 = v_35,!1 = alice],u,ucA[!1 = alice],uctag(ucA[!1 = alice],v_36),m_2)) is false.
+RESULT not event(Adopted(bidR[!2 = v_35,!1 = alice],u,ucA[!1 = alice],rctag(ucA[!1 = alice],s),m_2)) is false.
 RESULT not event(Adopted(bidR[!2 = v_35,!1 = alice],u,ucA[!1 = alice],NOTAG,m_2)) is false.
 RESULT not event(ClientRecovered(aid[!1 = alice],u,ucA[!1 = alice])) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m_2)) ==> x = y is false.
+RESULT event(Adopted(b,u,x,uctag(y,v_35),m_2)) ==> x = y is false.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious_existing_nowordstag}}, {{(* EXPECTPV
 RESULT not attacker_p1(ucA[!1 = v_35]) is true.
-RESULT not (event(Adopted(b,u,x,ucid(ucA[!1 = v_35]),m_2)) && attacker_p1(x)) is false.
+RESULT not (event(Adopted(b,u,x,uctag(ucA[!1 = v_35],v_36),m_2)) && attacker_p1(x)) is true.
+RESULT not (event(Adopted(b,u,x,rctag(ucA[!1 = v_35],s),m_2)) && attacker_p1(x)) is false.
 RESULT not (event(Adopted(b,u,x,NOTAG,m_2)) && attacker_p1(x)) is false.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_35],u,x)) && attacker_p1(x)) is true.
 RESULT not event(Adopted(bidF0[!2 = v_35,!1 = alice],u,ucA[!1 = alice],NOTAG,m_2)) is false.
-RESULT not event(Adopted(bidF[!2 = v_35,!1 = alice],u,ucA[!1 = alice],ucid(ucA[!1 = alice]),m_2)) is false.
-RESULT not event(Adopted(bidR[!2 = v_35,!1 = alice],u,ucA[!1 = alice],ucid(ucA[!1 = alice]),m_2)) is false.
+RESULT not event(Adopted(bidF[!2 = v_35,!1 = alice],u,ucA[!1 = alice],uctag(ucA[!1 = alice],v_36),m_2)) is false.
+RESULT not event(Adopted(bidR[!2 = v_35,!1 = alice],u,ucA[!1 = alice],rctag(ucA[!1 = alice],s),m_2)) is false.
 RESULT not event(Adopted(bidR[!2 = v_35,!1 = alice],u,ucA[!1 = alice],NOTAG,m_2)) is false.
 RESULT not event(ClientRecovered(aid[!1 = alice],u,ucA[!1 = alice])) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m_2)) ==> x = y is false.
+RESULT event(Adopted(b,u,x,uctag(y,v_35),m_2)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious_existing_noprf}}, {{(* EXPECTPV
 RESULT not (event(AliceUc(a,x)) && attacker_p1(x)) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m)) ==> x = y is true.
+RESULT event(Adopted(b,u,x,uctag(y,v_35),m)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious_existing_firstuse}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_8]) is true.
-RESULT not (event(Adopted(b,u,x,ucid(ucA[!1 = v_8]),m_2)) && attacker(x)) is true.
+RESULT not (event(Adopted(b,u,x,uctag(ucA[!1 = v_8],v_9),m_2)) && attacker(x)) is true.
+RESULT not (event(Adopted(b,u,x,rctag(ucA[!1 = v_8],s),m_2)) && attacker(x)) is true.
 RESULT not (event(Adopted(b,u,x,NOTAG,m_2)) && attacker(x)) is false.
-RESULT not (event(Adopted(b,u,x,ucid(y),m_2)) && attacker(x)) is false.
+RESULT not (event(Adopted(b,u,x,uctag(y,v_8),m_2)) && attacker(x)) is false.
+RESULT not (event(Adopted(b,u,x,rctag(y,s),m_2)) && attacker(x)) is false.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_8],u,x)) && attacker(x)) is true.
-RESULT event(Adopted(b,u,x,ucid(y),m_2)) ==> x = y is true.
+RESULT event(Adopted(b,u,x,uctag(y,v_8),m_2)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious_existing_firstuse_nouicheck_login}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_3]) is true.
-RESULT not (event(Adopted(b,u,x,ucid(ucA[!1 = v_3]),m_2)) && attacker(x)) is true.
+RESULT not (event(Adopted(b,u,x,uctag(ucA[!1 = v_3],v_4),m_2)) && attacker(x)) is true.
+RESULT not (event(Adopted(b,u,x,rctag(ucA[!1 = v_3],s),m_2)) && attacker(x)) is true.
 RESULT not (event(Adopted(b,u,x,NOTAG,m_2)) && attacker(x)) is false.
-RESULT not (event(Adopted(b,u,x,ucid(y),m_2)) && attacker(x)) is false.
+RESULT not (event(Adopted(b,u,x,uctag(y,v_3),m_2)) && attacker(x)) is false.
+RESULT not (event(Adopted(b,u,x,rctag(y,s),m_2)) && attacker(x)) is true.
 RESULT not (event(ClientLoggedIn(aid[!1 = v_3],u,x)) && attacker(x)) is false.
-RESULT event(Adopted(b,u,x,ucid(y),m_2)) ==> x = y is true.
+RESULT event(Adopted(b,u,x,uctag(y,v_3),m_2)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is false.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
