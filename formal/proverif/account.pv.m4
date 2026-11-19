@@ -109,6 +109,8 @@ m4_changequote({{,}})m4_dnl
      malicious-noprf-nohandletag  SCN_MALICIOUS NOPRF MUT_NOHANDLETAG
      malicious-recovery-nowordstag  SCN_MALICIOUS MAL_RECOVERY MUT_NOWORDSTAG
      malicious-recovery-serverhandle  SCN_MALICIOUS MAL_RECOVERY MUT_SERVERHANDLE
+     malicious-noadd      SCN_MALICIOUS NOADDPASSKEY
+     malicious-noadd-shorthandletag  SCN_MALICIOUS NOADDPASSKEY MUT_SHORTHANDLETAG
      malicious-recovery-stolenwords  SCN_MALICIOUS MAL_RECOVERY STOLENWORDS PRECISE
      malicious-recovery-stolenwords-unsaltedwordstag  SCN_MALICIOUS MAL_RECOVERY STOLENWORDS PRECISE MUT_UNSALTEDWORDSTAG
      malicious-nouicheck-login  SCN_MALICIOUS MUT_NOUICHECK_LOGIN
@@ -252,8 +254,16 @@ letfun recoveryKey(ur: bitstring, ui: bitstring) = kdf(ID1, kpR, rsec(ur, ui)).
 (* The user credential tag u_t in a passkey's user handle: 128 bits of D_H under kp_T, keyed with
    H_{u_c}(u_i), where u_i is the handle's user id. Modeled as a one-way function with no inverse,
    so the attacker computes a tag only from a u_c it knows. The tag is public: older clients send
-   the whole handle to the server, so every passkey's tag is output on c when it is created. *)
+   the whole handle to the server, so every passkey's tag is output on c when it is created.
+   MUT_SHORTHANDLETAG makes the tag short enough to match by search once known, as the 32-bit tag
+   of earlier builds was: whoever knows a handle's user id v and tag t can compute a u_c whose tag
+   under v is t. *)
 fun uctag(key, bitstring): bitstring.
+m4_ifdef({{MUT_SHORTHANDLETAG}}, {{
+(* MUTATION: the handle tag can be matched once known *)
+fun ucforge(bitstring, bitstring): key.
+equation forall v: bitstring, t: bitstring; uctag(ucforge(v, t), v) = t.
+}})
 
 (* The recovery words tag u_w in a 27-word set: 32 bits of D_H under kp_W, keyed with
    H_{u_c}(u_r || u_i), so each set has its own tag. 32 bits can be matched by search once known:
@@ -1441,9 +1451,14 @@ m4_ifdef({{LEAK_KMS_OLD}}, {{   | out(c, kmsOld)}})
    .
 }})
 
-(* What Alice does against a malicious server *)
+(* What Alice does against a malicious server. NOADDPASSKEY leaves out adding passkeys: with a
+   forgeable tag, a session holding a forged u_c adds a passkey tagged from it, and the forged
+   values then nest without bound. *)
 m4_define({{MALICIOUS_ACTIVITY}}, {{
-    !LoginRegistered(aid) | AddPasskey(aid)
+    !LoginRegistered(aid)
+m4_ifdef({{NOADDPASSKEY}}, {{}}, {{
+    | AddPasskey(aid)
+}})
     (* Sign-ins from browsers with no pin: a new device or profile, cleared storage, or the
        registering browser before registration completed *)
     | (!new bidF: bitstring; Login(aid, bidF))
@@ -1859,7 +1874,13 @@ query b: bitstring, x: key, u: bitstring, t: bitstring, m: bitstring;
 (* A-T1: a session started from a passkey holds the u_c the passkey's tag was made from. The
    handle tag has no equation, so this holds even where the attacker knows Alice's u_c, as in
    no-PRF mode. *)
+m4_ifdef({{MUT_SHORTHANDLETAG}}, {{
+(* ProVerif rejects a free u_c inside uctag once uctag has an equation, so this form names
+   Alice's own u_c *)
+query b: bitstring, u: bitstring, x: key, v: bitstring, m: bitstring; event(Adopted(b, u, x, uctag(new ucA, v), m)) ==> x = new ucA.
+}}, {{
 query b: bitstring, u: bitstring, x: key, y: key, v: bitstring, m: bitstring; event(Adopted(b, u, x, uctag(y, v), m)) ==> x = y.
+}})
 
 (* A-U1: a browser accepts a server reply only with the user id it already holds for the flow *)
 query expected: bitstring, actual: bitstring; event(SessionUser(expected, actual)) ==> expected = actual.
@@ -2792,6 +2813,32 @@ RESULT not event(ClientRecovered(bidR[!2 = v_8,!1 = alice],user,ucA[!1 = alice])
 RESULT event(Adopted(b,u,x,uctag(y,v_8),m)) ==> x = y is true.
 RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
 RESULT event(PasskeyHandle(u,h)) ==> u = h is false.
+END *)}})
+m4_ifdef({{VARIANT_malicious_noadd}}, {{(* EXPECTPV
+RESULT not attacker(ucA[!1 = v_3]) is true.
+RESULT not (event(Adopted(b,u,x,t,m)) && attacker(x)) is true.
+RESULT not event(Adopted(b,u,x,uctag(ucA[!1 = v_3],v_4),PRF0)) is true.
+RESULT not event(Adopted(b,u,x,rctag(ucA[!1 = v_3],s),PRF0)) is true.
+RESULT not (event(ClientLoggedIn(aid[!1 = v_3],u,x)) && attacker(x)) is true.
+RESULT not (event(ClientLoggedIn(bidF[!2 = v_3,!1 = v_4],u,x)) && attacker(x)) is true.
+RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_3,ui_3))) is false.
+RESULT not event(ClientSignedIn(bidF[!2 = v_3,!1 = alice],user,ucA[!1 = alice])) is false.
+RESULT event(Adopted(b,u,x,uctag(y,v_3),m)) ==> x = y is true.
+RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
+RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
+END *)}})
+m4_ifdef({{VARIANT_malicious_noadd_shorthandletag}}, {{(* EXPECTPV
+RESULT not attacker(ucA[!1 = v_3]) is true.
+RESULT not (event(Adopted(b,u,x,t,m)) && attacker(x)) is false.
+RESULT not event(Adopted(b,u,x,uctag(ucA[!1 = v_3],v_4),PRF0)) is false.
+RESULT not event(Adopted(b,u,x,rctag(ucA[!1 = v_3],s),PRF0)) is true.
+RESULT not (event(ClientLoggedIn(aid[!1 = v_3],u,x)) && attacker(x)) is true.
+RESULT not (event(ClientLoggedIn(bidF[!2 = v_3,!1 = v_4],u,x)) && attacker(x)) is false.
+RESULT not (event(ClientSignedIn(aid[!1 = alice],user,ucA[!1 = alice])) && event(Registered(aid[!1 = alice],ui_3,ui_3))) is false.
+RESULT not event(ClientSignedIn(bidF[!2 = v_3,!1 = alice],user,ucA[!1 = alice])) is false.
+RESULT event(Adopted(b,u,x,uctag(ucA[!1 = v_3],v_4),m)) ==> x = ucA[!1 = v_5] is false.
+RESULT event(SessionUser(expected,actual)) ==> expected = actual is true.
+RESULT event(PasskeyHandle(u,h)) ==> u = h is true.
 END *)}})
 m4_ifdef({{VARIANT_malicious_recovery_stolenwords}}, {{(* EXPECTPV
 RESULT not attacker(ucA[!1 = v_8]) is true.
