@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 import { cryptoReady } from './crypto';
 import * as cc from './cipher.consts';
-import { type KeyProvider, MasterKeyKeyProvider, PWDKeyProvider } from './keys';
+import { deriveKey, type KeyProvider, MasterKeyKeyProvider, PWDKeyProvider } from './keys';
 import { Ciphers } from './ciphers';
 import { getRandom } from './utils';
 import { isEqualArray } from './test-helpers';
@@ -2654,6 +2654,34 @@ describe('Key generation', () => {
          keyProvider.purge();
          // Same backing buffer; purge wipes it in place
          expect(commit.every((byte) => byte === 0)).toBe(true);
+      }
+   });
+});
+
+describe('Key derivation master length', () => {
+   beforeEach(async () => {
+      await cryptoReady();
+   });
+
+   function filled(length: number): Uint8Array {
+      return new Uint8Array(length).fill(7);
+   }
+
+   it('requires a 32 byte master without a salt', () => {
+      expect(deriveKey(filled(32), 'Test_Key', 1, cc.KEY_BYTES).byteLength).toBe(cc.KEY_BYTES);
+
+      for (const length of [0, 12, 31, 33, 64]) {
+         expect(() => deriveKey(filled(length), 'Test_Key', 1, cc.KEY_BYTES)).toThrow();
+      }
+   });
+
+   it('requires a 1 to 64 byte master with a salt', () => {
+      for (const length of [1, 12, 32, 64]) {
+         expect(deriveKey(filled(length), 'Test_Key', 1, cc.KEY_BYTES, [filled(16)]).byteLength).toBe(cc.KEY_BYTES);
+      }
+
+      for (const length of [0, 65]) {
+         expect(() => deriveKey(filled(length), 'Test_Key', 1, cc.KEY_BYTES, [filled(16)])).toThrow();
       }
    });
 });

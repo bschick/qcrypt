@@ -45,7 +45,7 @@ export function keyedHash(
    hashLength: number = cc.KEY_BYTES,
 ): Uint8Array<ArrayBuffer> {
    const sodium = getSodium();
-   if (key.byteLength === 0) {
+   if (key.byteLength === 0 || key.byteLength > sodium.crypto_generichash_KEYBYTES_MAX) {
       throw new Error(`Invalid key length of: ${key.byteLength}`);
    }
    if (hashLength < sodium.crypto_generichash_BYTES_MIN || hashLength > sodium.crypto_generichash_BYTES_MAX) {
@@ -59,20 +59,20 @@ export function keyedHash(
    return ensureArrayBuffer(sodium.crypto_generichash_final(state, hashLength));
 }
 
-// SECURITY WARNING: a short tag is a truncation of the longer derivation. A 4 byte tag is the
-//   prefix of the 16 byte one derived from the same master, purpose and instance. A published
-//   tag therefore reveals the leading bytes of those keys. Give each tag its own purpose or
-//   instance.
+// SECURITY WARNING: a short tag is a truncation of the longer derivation. For example, a 4 byte
+//   tag is the prefix of the 16 byte one derived from the same master, salt, purpose and instance.
+//   To prevent overlap, give each tag its own purpose or instance.
 export function deriveTag(
    master: Uint8Array,
    purpose: string,
    instance: number,
    idLength: number,
+   salt?: Uint8Array[],
 ): Uint8Array<ArrayBuffer> {
    const sodium = getSodium();
    const keyLength = Math.max(idLength, sodium.crypto_kdf_BYTES_MIN);
 
-   const derivedKey = deriveKey(master, purpose, instance, keyLength);
+   const derivedKey = deriveKey(master, purpose, instance, keyLength, salt);
    try {
       return derivedKey.slice(0, idLength);
    } finally {
@@ -80,26 +80,37 @@ export function deriveTag(
    }
 }
 
-// KDF based on `master` input key with a `purpose` string that must be exactly 8 bytes.
+// KDF based on `master` input key with a `purpose` string that must be exactly 8 bytes
+// and optional salt values.
 // `keyLength` is the output key length in bytes and must be >= 16 and <= 64.
+// `master` must be 32 bytes without `salt`, and 1 to 64 bytes with it. Each salt should
+// be either a fixed length or have an embedded length value.
 export function deriveKey(
    master: Uint8Array,
    purpose: string,
    instance: number,
    keyLength: number,
+   salt?: Uint8Array[],
 ): Uint8Array<ArrayBuffer> {
    const sodium = getSodium();
    if (purpose.length !== sodium.crypto_kdf_CONTEXTBYTES) {
       throw new Error(`Invalid purpose length of: ${purpose.length}`);
    }
-   if (master.byteLength === 0) {
+   if (salt === undefined && master.byteLength !== sodium.crypto_kdf_KEYBYTES) {
       throw new Error(`Invalid master key length of: ${master.byteLength}`);
    }
    if (keyLength < sodium.crypto_kdf_BYTES_MIN || keyLength > sodium.crypto_kdf_BYTES_MAX) {
       throw new Error(`Invalid derived key length of: ${keyLength}`);
    }
 
-   return ensureArrayBuffer(sodium.crypto_kdf_derive_from_key(keyLength, instance, purpose, master));
+   const kdfKey = salt === undefined ? master : keyedHash(master, salt);
+   try {
+      return ensureArrayBuffer(sodium.crypto_kdf_derive_from_key(keyLength, instance, purpose, kdfKey));
+   } finally {
+      if (kdfKey !== master) {
+         kdfKey.fill(0);
+      }
+   }
 }
 
 export type PWDProvider =
@@ -658,7 +669,8 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       instance: number,
       extraContext: Uint8Array<ArrayBuffer>[] = [],
    ): Uint8Array<ArrayBuffer> {
-      return deriveKey(this._mixMaster(master, purpose, extraContext), purpose, instance, cc.KEY_BYTES);
+      const salt = this._kdfSalt(extraContext);
+      return deriveKey(master, purpose, instance, cc.KEY_BYTES, salt);
    }
 
    // Returned IVs are always the same length as the baseIV. Because the baseIV can be shorter than the
@@ -670,23 +682,13 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
       instance: number,
       extraContext: Uint8Array<ArrayBuffer>[] = [],
    ): Uint8Array<ArrayBuffer> {
-      return deriveTag(this._mixMaster(baseIV, purpose, extraContext), purpose, instance, baseIV.byteLength);
+      const salt = this._kdfSalt(extraContext);
+      return deriveTag(baseIV, purpose, instance, baseIV.byteLength, salt);
    }
 
-   private _mixMaster(
-      master: Uint8Array<ArrayBuffer>,
-      purpose: string,
-      extraContext: Uint8Array<ArrayBuffer>[],
-   ): Uint8Array<ArrayBuffer> {
-      if (!master || master.byteLength < cc.IV_MIN_BYTES) {
-         throw new Error(`Invalid master key length of: ${master?.byteLength}`);
-      }
+   private _kdfSalt(extraContext: Uint8Array<ArrayBuffer>[]): Uint8Array<ArrayBuffer>[] {
       if (!this._cdInfo) {
          throw new Error('Invalid state for key derivation');
-      }
-      const sodium = getSodium();
-      if (!purpose || purpose.length !== sodium.crypto_kdf_CONTEXTBYTES) {
-         throw new Error(`Invalid purpose length of: ${purpose?.length}`);
       }
       if (!this._cdInfo.slt || this._cdInfo.slt.byteLength !== cc.SLT_BYTES) {
          throw new Error(`Invalid salt length of: ${this._cdInfo.slt?.byteLength}`);
@@ -698,7 +700,7 @@ export class MasterKeyKeyProvider extends BaseKeyProvider {
          throw new Error('Invalid ic, not used by masterkey keyprovider');
       }
 
-      return keyedHash(master, [this._cdInfo.slt, ...extraContext]);
+      return [this._cdInfo.slt, ...extraContext];
    }
 }
 
@@ -828,7 +830,8 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       instance: number,
       extraContext: Uint8Array<ArrayBuffer>[] = [],
    ): Uint8Array<ArrayBuffer> {
-      return deriveKey(this._mixMaster(master, purpose, extraContext), purpose, instance, cc.KEY_BYTES);
+      const salt = this._kdfSalt(extraContext);
+      return deriveKey(master, purpose, instance, cc.KEY_BYTES, salt);
    }
 
    // Returned IVs are always the same length as the baseIV. Because the baseIV can be shorter than the
@@ -840,22 +843,13 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
       instance: number,
       extraContext: Uint8Array<ArrayBuffer>[] = [],
    ): Uint8Array<ArrayBuffer> {
-      return deriveTag(this._mixMaster(baseIV, purpose, extraContext), purpose, instance, baseIV.byteLength);
+      const salt = this._kdfSalt(extraContext);
+      return deriveTag(baseIV, purpose, instance, baseIV.byteLength, salt);
    }
 
-   private _mixMaster(
-      master: Uint8Array<ArrayBuffer>,
-      purpose: string,
-      extraContext: Uint8Array<ArrayBuffer>[],
-   ): Uint8Array<ArrayBuffer> {
-      if (!master || master.byteLength < cc.IV_MIN_BYTES) {
-         throw new Error(`Invalid master key length of: ${master?.byteLength}`);
-      }
+   private _kdfSalt(extraContext: Uint8Array<ArrayBuffer>[]): Uint8Array<ArrayBuffer>[] {
       if (!this._cdInfo?.slt) {
          throw new Error('Invalid state for key derivation');
-      }
-      if (purpose?.length !== 8) {
-         throw new Error(`Invalid purpose length of: ${purpose?.length}`);
       }
       if (this._cdInfo.slt.byteLength !== cc.SLT_BYTES) {
          throw new Error(`Invalid salt length of: ${this._cdInfo.slt.byteLength}`);
@@ -864,7 +858,7 @@ export class PWDKeyProviderV7 extends BasePWDKeyProvider {
          throw new Error(`Invalid version: ${this._cdInfo.ver}`);
       }
 
-      return keyedHash(master, [this._cdInfo.slt, ...extraContext]);
+      return [this._cdInfo.slt, ...extraContext];
    }
 }
 
