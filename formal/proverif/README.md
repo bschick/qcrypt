@@ -116,7 +116,7 @@ The name each model uses for a `main.tex` symbol.
 |---|---|---|
 | u_i | `ui` | |
 | u_i^* in a reply | `sui` | |
-| u_i^* in ro | `oui`; `ui` at registration | |
+| ro.u_i | `oui`; `ui` at registration | |
 | u_i in the new passkey's user handle | `hui` | at add passkey and recovery, the session's or words' `ui`, checked against `oui`; `MUT_SERVERHANDLE` takes `oui` |
 | ar.u_h, which the browser sets to u_i | `uh` | the user id the server's auth/verify handler receives |
 | u_r, u_r‖u_i | `ur`, `rsec(ur, ui)` | |
@@ -125,9 +125,9 @@ The name each model uses for a `main.tex` symbol.
 | p_S, p_R | `PS`, `wa_prf(credKey, PS)` | |
 | cd_p, cd_r, cd_u | `cdp`, `cdr`, `cdu` | |
 | u_t, the user credential tag in a user handle | `uctag(uc, ui)`; `NOTAG` for an untagged handle | a one-way function of u_c, output on c when each passkey is created |
-| the recovery tag in a 27-word set | `rctag(uc, rsec(ur, ui))`; `NOTAG` for a 24-word set | can be matched by whoever holds the set's u_r, which `LEAK_WORDS` and `STOLENWORDS` give the attacker |
+| u_w, the recovery tag in a 27-word set | `rctag(uc, rsec(ur, ui))`; `NOTAG` for a 24-word set | can be matched by whoever holds the set's u_r, which `LEAK_WORDS` and `STOLENWORDS` give the attacker |
 | prf | `PRF0`, `PRF1`; `sprf`, `sprf2` in replies | `sprf2` is the tex's prf^* |
-| pkId, pk_M | `credId`, `credPk` = `wa_pk(credKey)` | `spkId` in a reply |
+| pkId, pk_M | `credId`, `credPk` = `wa_pk(credKey)` | `spkId` in a sign-in reply, which the session uses without the tex's comparison with ar.pkId. Registration and recovery replies carry no pkId, and the session uses `credId` |
 | M's passkey secret | `credKey` | |
 | ro, rr | `(ch, oui)`, `regr(credId, credPk, adata(RPID, UV1), cdj(WA_CREATE, ch, ORIGIN))` | |
 | ar | `(credId, uh, ad, cd, wa_sign(credKey, (ad, cd)))` | `cdj(WA_GET, ch, ORIGIN)` |
@@ -218,10 +218,10 @@ encoding:
   base64url(u_i) followed by base64url(u_t), 44 bytes; an untagged handle is the 22-byte text of
   u_i alone. Both parts have fixed lengths, so a handle splits one way. No other derivation uses
   kp_T. Source: `credentialtag.ts`.
-- **E9b. Recovery tag.** D_H(1, "RecovTag", H_{u_c}(u_r ‖ u_i)), derived at the KDF's 128-bit
+- **E9b. Recovery tag.** u_w = D_H(1, kp_W, H_{u_c}(u_r ‖ u_i)), derived at the KDF's 128-bit
   minimum and truncated to 32 bits. H is keyed with u_c over the set's 32-byte recovery secret, so
-  each set has its own tag. No other derivation uses that purpose, so the 32 bits are the prefix
-  of nothing else. Source: `recoverywords.ts:getRecoveryTag`.
+  each set has its own tag. No other derivation uses kp_W, so the 32 bits are the prefix of
+  nothing else. Source: `recoverywords.ts:getRecoveryTag`.
 - **E10. Challenge binding.** H(pk_U) for registration and add-passkey challenges. For confirm and
   recover challenges, H(pk_R ‖ ":" ‖ authCount ‖ ":" ‖ pk_U), where pk_R and pk_U are base64 text
   and so contain no ":", authCount is decimal, and pk_R may be empty. Source:

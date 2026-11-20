@@ -1875,8 +1875,8 @@ query b: bitstring, x: key, u: bitstring, t: bitstring, m: bitstring;
    handle tag has no equation, so this holds even where the attacker knows Alice's u_c, as in
    no-PRF mode. *)
 m4_ifdef({{MUT_SHORTHANDLETAG}}, {{
-(* ProVerif rejects a free u_c inside uctag once uctag has an equation, so this form names
-   Alice's own u_c *)
+(* ProVerif rejects a free u_c inside uctag once uctag has an equation, so this form refers to
+   Alice's own u_c with new ucA *)
 query b: bitstring, u: bitstring, x: key, v: bitstring, m: bitstring; event(Adopted(b, u, x, uctag(new ucA, v), m)) ==> x = new ucA.
 }}, {{
 query b: bitstring, u: bitstring, x: key, y: key, v: bitstring, m: bitstring; event(Adopted(b, u, x, uctag(y, v), m)) ==> x = y.
