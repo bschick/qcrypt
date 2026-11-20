@@ -4,11 +4,14 @@
 
 #### Changes
 
-- new recovery word patterns have 27 words to connect them to a specific user credential
+- new recovery word patterns have 27 words to connect them to a specific user credential; existing 24-word patterns keep working
+- passkeys and recovery words created by this version require this version or later
 
 #### Security
 
 - passkeys and recovery words now carry a check value so a dishonest server cannot send an alternative user credential
+- passkey managers are told about deleted or replaced passkeys created before this release
+- the browser now confirms the user id and passkey the server returns at sign in, registration, and recovery
 - updated packages
 
 ## 8.0.5 (2026-11-06)
