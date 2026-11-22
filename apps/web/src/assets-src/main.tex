@@ -482,7 +482,7 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 
 \vspace{\notegap}
 
-{\leftskip=\parindent\noindent\textit{No-PRF fallback:} $S.user$ holds $u_c$ under two KMS keys in place of $cd_r$, and $S.pk$ holds no $cd_p$.\par}
+{\leftskip=\parindent\noindent\textit{No-PRF mode:} $S.user$ holds $u_c$ under two KMS keys in place of $cd_r$, and $S.pk$ holds no $cd_p$.\par}
 \end{stanza}
 
 \begin{stanza}
@@ -604,7 +604,7 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 
 \vspace{\notegap}
 
-{\leftskip=\parindent\noindent\textit{No-PRF fallback:} If $M$ returns no $p_R$, $bd$ carries $u_c$ in place of $cd_p, cd_r$. $S$ checks that $u_c$ derives $pk_U$, sets $prf = 0$, stores $u_c$, and also returns it. $B$ checks $prf^* == 0$ in place of $prf^* == 1$ and runs Session Start with its own $u_c$.\par}
+{\leftskip=\parindent\noindent\textit{No-PRF mode:} If $M$ returns no $p_R$, $bd$ carries $u_c$ in place of $cd_p, cd_r$. $S$ checks that $u_c$ derives $pk_U$, sets $prf = 0$, stores $u_c$, and also returns it. $B$ checks $prf^* == 0$ in place of $prf^* == 1$ and runs Session Start with its own $u_c$.\par}
 
 \vspace{\notegap}
 
@@ -642,7 +642,7 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 
 \vspace{\notegap}
 
-{\leftskip=\parindent\noindent\textit{No-PRF fallback:} $S$ returns $prf = 0$ and $u_c$ in place of $cd_p$; $B$ omits the $cd_p$ decryption.\par}
+{\leftskip=\parindent\noindent\textit{No-PRF mode:} $S$ returns $prf = 0$ and $u_c$ in place of $cd_p$; $B$ omits the $cd_p$ decryption.\par}
 \end{stanza}
 
 \begin{stanza}[\widestanzawidth]
@@ -677,7 +677,7 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 
 \vspace{\notegap}
 
-{\leftskip=\parindent\noindent\textit{No-PRF fallback:} $B$ omits $p_S$ and $cd_p$; $S$ stores the new passkey.\par}
+{\leftskip=\parindent\noindent\textit{No-PRF mode:} $B$ omits $p_S$ and $cd_p$; $S$ stores the new passkey.\par}
 \end{stanza}
 
 \begin{stanza}
@@ -711,10 +711,10 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 
 \vspace{\notegap}
 
-{\leftskip=\parindent\noindent\textit{No-PRF fallback:} $B$ omits $cd_r$; $S$ stores $pk_R$.\par}
+{\leftskip=\parindent\noindent\textit{No-PRF mode:} $B$ omits $cd_r$; $S$ stores $pk_R$.\par}
 \end{stanza}
 
-\begin{stanza}
+\begin{stanza}[\widestanzawidth]
 \underline{Recovery from Lost Passkey by A}\\
 
 \begin{tabular}{@{}p{5mm} l}
@@ -773,10 +773,10 @@ $B.key$ & \textrm{ - Key slots in IndexedDB by }$[s] : k_{KS}$\\
 \multicolumn{2}{@{}l}{$B\textrm{ check }u_i^* == u_i\textrm{ and }pkId^* == rr.pkId\textrm{ else }err$} \\
 \multicolumn{2}{@{}l}{$B\textrm{ run Session Start for }u_i, rr.pkId, prf^*$} \\
 \end{tabular}
-\end{stanza}
 
-\begin{stanza}[\widestanzawidth]
-{\leftskip=\parindent\noindent\textit{No-PRF fallback:} $S$ returns $prf = 0$ and $u_c$ in place of $cd_r$; $B$ omits $p_S$, the $cd_r$ decryption and $cd_p$. $S$ stores the new passkey and also returns $u_c$.\par}
+\vspace{\notegap}
+
+{\leftskip=\parindent\noindent\textit{No-PRF mode:} $S$ returns $prf = 0$ and $u_c$ in place of $cd_r$; $B$ omits $p_S$, the $cd_r$ decryption and $cd_p$. $S$ stores the new passkey and also returns $u_c$.\par}
 \end{stanza}
 
 \end{document}
