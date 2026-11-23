@@ -34,6 +34,8 @@
     "verify:libs:crux": "node libs/crypto/crux/regen.mjs --check",
     "build:libs:sodium": "node libs/crypto/sodium/regen.mjs",
     "verify:libs:sodium": "node libs/crypto/sodium/regen.mjs --check",
+    "build:protocol": "node apps/web/scripts/protocol/regen.mjs",
+    "verify:protocol": "node apps/web/scripts/protocol/regen.mjs --check",
     "verify:proverif": "node formal/proverif/run.mjs",
     "verify:tlaplus": "node formal/tlaplus/run.mjs",
     "test:cli": "nx test cli",

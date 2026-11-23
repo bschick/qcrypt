@@ -1,4 +1,29 @@
-Protocol latext text:
+Protocol PDF and Stanza Images
+
+* Edit apps/web/src/assets-src/main.tex
+* To add, remove, rename or reorder a stanza, first update its <h2> heading and <img> entry in
+  apps/web/src/app/help/protocol/protocol8.component.html. The build pairs stanzas with those entries in
+  order, takes each image's file name from its <img>, and stops if a heading does not match its stanza's title.
+* Run "pnpm build:protocol" (needs Podman, or Docker). In a pinned container it:
+  - builds apps/web/src/assets/protocol8.pdf from main.tex with pdfLaTeX (TeX Live 2026, as Overleaf uses)
+  - builds a copy with \parindent 0pt and invisible titles, and renders each stanza at 255 PPI with a
+    transparent background, cropped to the text and run through optipng
+  - sets each image's width and height in protocol8.component.html to half its pixel size
+  - writes only the files whose content changed, and lists them
+* Review the images and PDF, then commit the files it lists
+* "pnpm verify:protocol" rebuilds and fails unless the committed PDF, images and sizes match
+* For a new protocol version, update the protocol8 file names in apps/web/scripts/protocol/regen.mjs
+
+
+SVG Download and Resize
+(if needed, see https://www.fullstackfoundations.com/blog/web-developer-svg)
+
+* Make changes in LucidChart
+* Export SVG with transparent background (manually crop)
+* For a flow diagram, save it in apps/web/src/assets/flow and run "pnpm svgo:flow <file>.svg", which tags the clickable regions, optimizes the SVG and updates the integrity hashes in flow.config.ts
+
+
+Protocol latext text (outdated):
 
 * Open overleaf latex project https://www.overleaf.com/project/67205ec95b8198e39816e3b4
 * Set \setlength\parindent{0pt}
@@ -11,11 +36,3 @@ Protocol latext text:
 * Set the image width and height in protocol7.component.html to 50% of actual image size
 * Set \setlength\parindent{20pt}
 * Recompile, download seachable pdf
-
-
-SVG Download and Resize
-(if needed, see https://www.fullstackfoundations.com/blog/web-developer-svg)
-
-* Make changes in LucidChart
-* Export SVG with transparent background (manually crop)
-* For a flow diagram, save it in apps/web/src/assets/flow and run "pnpm svgo:flow <file>.svg", which tags the clickable regions, optimizes the SVG and updates the integrity hashes in flow.config.ts

@@ -1,0 +1,27 @@
+# Toolchain for protocol8.pdf and the protocol page's stanza images. regen.mjs builds this image and runs the build
+# in it. Every tool is pinned: TeX Live by image digest, and the image tools by a dated Debian snapshot.
+
+# TeX Live 2026 (pdfTeX 1.40.29) from the TeX Live project's own image, tag latest-small. Its tree is self-contained
+# and its binaries need only libc, so it is copied into the Debian stage below.
+FROM docker.io/texlive/texlive@sha256:599dc1873d60026497881a1437a88d02a2eefcadf9e041ed2e0181e7537c15b5 AS texlive
+
+# Debian 13 (trixie), tag trixie-slim
+FROM docker.io/library/debian@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
+
+# snapshot.debian.org serves the archive exactly as it was at this time, for every architecture
+ARG SNAPSHOT=20261120T000000Z
+RUN rm -f /etc/apt/sources.list.d/debian.sources \
+   && printf '%s\n' \
+      "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${SNAPSHOT} trixie main" \
+      "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${SNAPSHOT} trixie-updates main" \
+      "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/${SNAPSHOT} trixie-security main" \
+      > /etc/apt/sources.list \
+   && apt-get update \
+   && apt-get install -y --no-install-recommends poppler-utils imagemagick optipng \
+   && rm -rf /var/lib/apt/lists/*
+
+COPY --from=texlive /usr/local/texlive /usr/local/texlive
+# TeX Live names its binary directory by architecture, for example aarch64-linux or x86_64-linux
+RUN ln -s "$(echo /usr/local/texlive/*/bin/"$(uname -m)"-linux)" /usr/local/texlive/bin \
+   && /usr/local/texlive/bin/pdflatex --version | head -1
+ENV PATH=/usr/local/texlive/bin:${PATH}
