@@ -125,7 +125,7 @@ letfun tagOf(b: bitstring) = let blk(t: bitstring, v: bitstring, adf: bitstring,
 (* u_c at rest (tex: u_c Encryption Under k by B, cd_x Decryption Under k by B;
    keys.ts:MasterKeyKeyProvider):
    the same block format, with both the cipher and signing keys derived from the master key k,
-   e = u_i (so e_l = 16), i = 0, and no commitment field from V8 on. Decryption accepts any
+   e = u_i (so |e| = 16), i = 0, and no commitment field from V8 on. Decryption accepts any
    algorithm and loop fields. *)
 letfun xAR(nS: bitstring, a: alg, lp: bitstring, e: bitstring) = xctx8(nS, a, V8, lp, EL16, e).
 
@@ -355,7 +355,7 @@ let EncARK() =
    out(c, mkAR(k, e, nS, nIV, m)).
 
 m4_ifdef({{USE_V7}}, {{
-(* V7 block 0 (keys.ts:PWDKeyProviderV7): no e_l in the context, no p_l in the PBKDF2 material,
+(* V7 block 0 (keys.ts:PWDKeyProviderV7): no |e| in the context, no |p| in the PBKDF2 material,
    and k_C is folded into the AEAD AD instead of being stored and compared. *)
 let DecK() =
    in(c, (b0: bitstring, pw: password, u: key));

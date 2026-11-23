@@ -86,14 +86,14 @@ The name each model uses for a `main.tex` symbol.
 | a | `GCM`, `XCC`, `AEGIS` | type `alg` |
 | v | `V8`, `V7` | |
 | f | `F0`, `F1` | |
-| e_l | `EL0`, `EL16` | messages, data at rest |
+| \|e\| | `EL0`, `EL16` | messages, data at rest |
 | i | `IC`, `IC0` | a valid count, and 0 |
 | lp, le | `lp`, `le` (`LP1`, `LP2`) | |
 | n_S, n_IV | `nS`, `nIV` | |
 | t_L at the start of a loop | `TL0` | |
 | kp_S, kp_H, kp_B, kp_C, kp_M, kp_U, kp_R | `kpS`, `kpH`, `kpB`, `kpC`, `kpM`, `kpU`, `kpR` | |
 | D_H(n, kp, k) | `kdf(n, kp, k)` | subkey numbers `ID0`-`ID2`, blocks `B1`, `B2` |
-| H_k(n_S, a, v, lp, e_l[, e]) | `hmix(k, xctx8(...))` | `mkX8`, `xAR` build the second argument |
+| H_k(n_S, a, v, lp, \|e\|[, e]) | `hmix(k, xctx8(...))` | `mkX8`, `xAR` build the second argument |
 | D_P and its material | `pbkdf`, `pwmat8` (`pwmat7`) | |
 | E_a, E_a⁻¹ | `aead_enc`, `aead_dec` | |
 | H_{k_S}(v‖l‖ad_F‖m_E‖t_L) | `mac(kS, macin(...))` | |
@@ -170,19 +170,19 @@ stronger:
 **Encodings.** Every byte concatenation is modeled as an unambiguous tuple. That is sound only if
 each real encoding can be parsed back into its fields in exactly one way. The argument for each
 encoding:
-- **E1. H_k(n_S‖a‖v‖lp‖e_l‖e).** Fields are 16, 2, 2 and 1 bytes, then the e_l byte, then e.
-  e_l gives the length of e. For messages e_l = 0, so e is empty. For data at rest, e_l = |u_i|.
-  The `u_i` length is capped at 255 but not fixed at 16; that is still injective because e_l
+- **E1. H_k(n_S‖a‖v‖lp‖|e|‖e).** Fields are 16, 2, 2 and 1 bytes, then the |e| byte, then e.
+  |e| gives the length of e. For messages |e| = 0, so e is empty. For data at rest, |e| = |u_i|.
+  The `u_i` length is capped at 255 but not fixed at 16; that is still injective because |e|
   records it. Source: `keys.ts:MasterKeyKeyProvider._extraContext`,
   `keys.ts:PWDKeyProviderV8._extraContext`.
-- **E2. PBKDF2 material (V8).** p_l (4 bytes, LE) ‖ p ‖ u_c (32) ‖ a ‖ v ‖ lp ‖ e_l ‖ e. p_l
-  delimits p, the next fields have fixed widths, and e_l delimits e. Source:
-  `keys.ts:PWDKeyProviderV8._cipherKeyMaterial`. V7 had no p_l, but the web app always passes an
+- **E2. PBKDF2 material (V8).** |p| (4 bytes, LE) ‖ p ‖ u_c (32) ‖ a ‖ v ‖ lp ‖ |e| ‖ e. |p|
+  delimits p, the next fields have fixed widths, and |e| delimits e. Source:
+  `keys.ts:PWDKeyProviderV8._cipherKeyMaterial`. V7 had no |p|, but the web app always passes an
   empty e, so V7 parses uniquely from the end.
 - **E3. k_C input.** H_{k_M0}(n_S): a single fixed-width field.
 - **E4. MAC input.** v (2) ‖ l (3) ‖ ad_F ‖ m_E ‖ t_L.
   - l fixes |ad_F‖m_E|.
-  - Inside block 0's ad_F, a fixes the n_IV width, and h_El and k_Cl delimit h_E and k_C. m_E is
+  - Inside block 0's ad_F, a fixes the n_IV width, and |h_E| and |k_C| delimit h_E and k_C. m_E is
     whatever remains of l.
   - t_L is the rest of the input: 1 byte for block 0 and 32 bytes for every later block. So the
     two kinds of block can never be confused. This justifies using separate constructors for

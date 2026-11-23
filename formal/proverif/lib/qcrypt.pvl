@@ -26,7 +26,7 @@ const V8: bitstring [data].
 const F0: bitstring [data].
 const F1: bitstring [data].
 
-(* e_l values: 0 for messages, 16 for u_c at rest *)
+(* |e| values: 0 for messages, 16 for u_c at rest *)
 const EL0: bitstring [data].
 const EL16: bitstring [data].
 
@@ -57,7 +57,7 @@ const kpM: bitstring [data].
 const kpU: bitstring [data].
 const kpR: bitstring [data].
 
-(* k_C field when absent (k_Cl = 0), and h_E when there is no hint (h_El = 0) *)
+(* k_C field when absent (|k_C| = 0), and h_E when there is no hint (|h_E| = 0) *)
 const NOKC: key [data].
 const NOHINT: bitstring [data].
 
@@ -70,10 +70,10 @@ const AEGIS: alg [data].
    key before D_H, since D_H takes no salt. *)
 fun hmix(key, bitstring): key.
 
-(* X = n_S || a || v || lp || e_l || e, the context mixed into every V8 subkey *)
+(* X = n_S || a || v || lp || |e| || e, the context mixed into every V8 subkey *)
 fun xctx8(bitstring, alg, bitstring, bitstring, bitstring, bitstring): bitstring [data].
 
-(* V7 context: n_S || a || v || lp || e, with no e_l byte *)
+(* V7 context: n_S || a || v || lp || e, with no |e| byte *)
 fun xctx7(bitstring, alg, bitstring, bitstring, bitstring): bitstring [data].
 
 (* D_H(id, purpose, key): crypto_kdf_derive_from_key. The id and purpose sit in separate BLAKE2b
@@ -83,7 +83,7 @@ fun kdf(bitstring, bitstring, key): key.
 (* D_P(material, salt, iterations): PBKDF2-HMAC-SHA512 *)
 fun pbkdf(bitstring, bitstring, bitstring): key.
 
-(* V8 PBKDF2 material: p_l || p || u_c || a || v || lp || e_l || e. Here p_l is implicit in the
+(* V8 PBKDF2 material: |p| || p || u_c || a || v || lp || |e| || e. Here |p| is implicit in the
    password term. *)
 fun pwmat8(password, key, alg, bitstring, bitstring, bitstring, bitstring): bitstring.
 
