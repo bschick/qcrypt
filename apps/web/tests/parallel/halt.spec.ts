@@ -56,6 +56,37 @@ testWithAuth('stops when a PRF account is reported as no-PRF at sign in', async 
    await restoreApp(page);
 });
 
+testWithAuth('stops a browser with no pin when the passkey tag rejects the credential', async ({ authFixture }) => {
+   const { page } = authFixture;
+   test.setTimeout(45000);
+
+   const authenticator = authFixture.memAuthenticator('hmac-secret-mc');
+   const testUser = await authFixture.createTestUser(authenticator);
+
+   await toggleCredentials(page);
+   await page.getByRole('button', { name: /Sign out/ }).click();
+
+   // Without the pin, the passkey's tag is the only check that can reject the reply
+   await page.evaluate((key) => localStorage.removeItem(key), `${testUser.userId}accountpin`);
+
+   await page.route('**/v1/auth/verify', async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as LoginBody;
+      body.prf = false;
+      body.userCred = randomBytes(cc.USERCRED_BYTES).toString('base64url');
+      body.passkeyUserCredEnc = undefined;
+      await route.fulfill({ response, json: body });
+   });
+
+   await authFixture.passkeyAuth(authenticator, async () => {
+      await page.getByRole('button', { name: new RegExp(`Sign in as ${testUser.userName}`) }).click();
+   });
+
+   await expectStopped(page);
+
+   await restoreApp(page);
+});
+
 testWithAuth('stops when a PRF account returns a substituted credential', async ({ authFixture }) => {
    const { page } = authFixture;
    test.setTimeout(45000);

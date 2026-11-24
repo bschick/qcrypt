@@ -27,10 +27,9 @@ All 22 variants pass. Each takes under 20 s.
 | C-A2 | The at-rest format commits to (k, u_i) | always (`commit-*`) | — |
 | C-A3 | No block is accepted both as a message and as u_c at rest | always, under any keys (`commit-*`) | — |
 
-**About `commit-v7`.** It decodes through the V7 block 0 (`USE_V7`), and reproduces the
-externally reported V7 key-commitment incompleteness: one u_c, two passwords, and one block 0
-accepted under both. It fails for exactly the algorithms the report names, and holds for AEGIS.
-V8 closes it for every algorithm.
+**About `commit-v7`.** It decodes through the V7 block 0 (`USE_V7`): one u_c, two passwords, and
+one block 0 accepted under both, with AES-GCM and XChaCha20-Poly1305. It holds for AEGIS, and V8
+closes it for every algorithm.
 
 **About `loops-uc-pout`.** The attacker holds u_c and the outer password, so as expected it can
 replace the outer layer of Alice's two-loop message. In that trace the inner layer, and so the
@@ -71,8 +70,7 @@ Variant names in the table drop the `login-` prefix.
 | A-S1, A-K1 | Alice's u_c stays secret, including when cd_u or the session cookie leaks, or TLS is broken | every variant except `device-nouv` | `device-nouv` (sign-in without UV yields cd_p, and the device yields the PRF output) |
 
 **What the mutations and leaks show:**
-- **`login-unbound-trace` rediscovers C1**, a bug fixed before the models, as a full trace. A
-  signed-in attacker posts `passkeys/verify` with a body naming Alice's u_i and any outstanding
+- **`login-unbound-trace` shows C1** as a full trace. A signed-in attacker posts `passkeys/verify` with a body naming Alice's u_i and any outstanding
   challenge. The mutated server takes the user from the body and binds the attacker's passkey to
   Alice's account, and the attacker then signs in to her account with it. Even then, A-Z1 holds
   and u_c stays secret: the proof of userCred contains the damage. `login-unbound` proves those
@@ -380,16 +378,24 @@ The variants:
   `malicious-existing-firstuse` (`FIRSTUSE`) makes the attacker the server from the start.
 - **`malicious-noprf`, `malicious-existing-noprf`:** the same in no-PRF mode, where the server
   knows u_c by design.
+- **`malicious-recovery-stolenwords`** (`STOLENWORDS`) adds a superseded word set the attacker has
+  stolen, one the server holds no cd_r for.
+- **`malicious-noadd`** (`NOADDPASSKEY`) leaves out adding passkeys. It is the baseline for
+  `malicious-noadd-shorthandletag`, below.
+
+In every variant the attacker receives each passkey's user credential tag when the passkey is
+created, so every result holds with that tag public.
 
 | ID | Property | Result |
 |---|---|---|
 | A-S2 | In PRF mode the server never learns Alice's u_c | **true** in every PRF variant |
-| A-E1 | Every u_c any of Alice's browsers adopts stays secret from the server | **true** for new accounts; for existing ones, see below |
-| A-D1 | A browser never treats Alice's PRF account as no-PRF when it uses a credential tagged with her u_c | **true** |
+| A-E1 | Every u_c any of Alice's browsers adopts stays secret from the server | **true** for new accounts, except with a stolen word set; for existing ones, see below |
+| A-D1 | A browser never treats Alice's PRF account as no-PRF when it uses a passkey or word set tagged with her u_c | **true**, except with a stolen word set (below) |
 | A-S3 | Once registration has completed in a browser, that browser never adopts a u_c the server knows | **true**, including for an existing account's untagged credentials |
-| A-S4 | A browser with no pin for the account never adopts a u_c the server knows when it signs in | **true** |
+| A-S4 | A browser with no pin for the account never adopts a u_c the server knows when it signs in | **true**, except with a stolen word set |
 | A-S3R, A-S4R | The same two, by recovery | **true** in `malicious-recovery`, where A-S3R is also checked for a registration whose reply named Alice's user id |
-| A-T1 | A session started from a tagged credential holds the u_c the tag was made from | **true** in every variant; in no-PRF mode this is all the tag gives |
+| A-T1 | A session started from a passkey holds the u_c its user credential tag was made from | **true** in every variant, including no-PRF mode |
+| A-W1 | After the attacker steals a superseded word set, a recovery with Alice's registration words never adopts a u_c the server knows | **true** in `malicious-recovery-stolenwords` |
 | A-U1 | A browser accepts a server reply only with the user id it already holds for the flow | **true** in every variant |
 | — | A passkey Alice creates carries the user id of the session she added it in, or of her words | **true** in every variant |
 | — | In no-PRF mode, the u_c Alice's browser holds stays secret from the server | attack, by design |
@@ -407,24 +413,34 @@ pin and the user-id checks. In `malicious-existing-firstuse`, a first-use sessio
 server's u_c and writes tagged words from it, and a later recovery with those words accepts that
 u_c. Credentials tagged with Alice's own u_c still hold.
 
-**Mutations.** Each removes one of the browser's checks:
+**Stolen word set.** In `malicious-recovery-stolenwords` the attacker holds a superseded word set,
+and the server holds no cd_r for it. A recovery with Alice's registration words holds (A-W1). A
+recovery with the stolen set itself, on a browser with no pin, accepts a u_c the attacker forged
+from that set's tag, in either mode, since the set's recovery secret also lets the attacker build a
+cd_r. The recovered session then tags a new passkey from the forged u_c, so a later sign-in on a new
+browser accepts it too (A-S4). This is the accepted residual.
+
+**Mutations.** Each removes or weakens one of the browser's checks:
 
 | Variant | Check removed | Result |
 |---|---|---|
-| `malicious-nohandletag` | the tag check at sign-in | A-E1, A-D1, A-S4 and A-T1 **attack**; the registering browser still holds, through its pin |
+| `malicious-nohandletag` | the user credential tag check at sign-in | A-E1, A-D1 and A-S4 **attack** through a passkey, and A-T1 **attack**; the registering browser still holds, through its pin |
 | `malicious-noprf-nohandletag` | the same, in no-PRF mode | A-T1 **attack** |
-| `malicious-recovery-nowordstag` | the tag check at recover3 | A-S4R **attack**, and A-S4: the recovered session tags a new passkey with the server's u_c, and a later sign-in on a new browser accepts it. A-E1, A-D1 and A-T1 **attack** too |
-| `malicious-existing-nohandletag` | the tag check at sign-in, on an existing account | **attack** on credentials tagged with Alice's u_c: a passkey tagged by the registering browser's phase-1 recovery, used on a browser with no pin, accepts "no-PRF" with the server's u_c |
-| `malicious-existing-nowordstag` | the tag check at recover3, on an existing account | **attack** on credentials tagged with Alice's u_c: words a session tagged from her u_c, used on a browser with no pin, accept "no-PRF" with the server's u_c |
+| `malicious-recovery-nowordstag` | the recovery tag check at recover3 | A-S4R **attack**, and A-S4: the recovered session tags a new passkey with the server's u_c, and a later sign-in on a new browser accepts it. A-E1 and A-D1 **attack** through a word set too. A-T1 holds, since that passkey's tag matches the u_c the session holds |
+| `malicious-existing-nohandletag` | the user credential tag check at sign-in, on an existing account | **attack** on passkeys tagged with Alice's u_c: a passkey tagged by the registering browser's phase-1 recovery, used on a browser with no pin, accepts "no-PRF" with the server's u_c |
+| `malicious-existing-nowordstag` | the recovery tag check at recover3, on an existing account | **attack** on word sets tagged with Alice's u_c: words a session tagged from her u_c, used on a browser with no pin, accept "no-PRF" with the server's u_c |
 | `malicious-recovery-serverhandle` | the browser building the user handle, at add passkey and recovery | passkey-handle **attack**: a new passkey carries the server's user id. A-E1 holds, because the handle's tag protects that passkey |
 | `malicious-nouicheck-login` | the sign-in user-id check | everything holds: a tagged passkey switched to another account fails the tag check, because the server cannot produce that account's u_c with Alice's tag |
 | `malicious-existing-firstuse-nouicheck-login` | the sign-in user-id check, on an existing account | A-S3 and A-U1 **attack**: on the registering browser, a sign-in with its untagged passkey is switched to an account the server controls, with "no-PRF" and the server's u_c |
 | `malicious-recovery-nouicheck-reg` | the registration user-id check | A-U1 **attack**: registration pins and signs in under the user id the reply carries. A-S3R holds, because the words' tag protects a later recover3 |
 | `malicious-recovery-nouicheck-recoververify` | the recover/verify user-id check | A-U1 **attack**: recovery ends on another user id, with Alice's own u_c |
 | `malicious-twoaccounts-nouicheck-reauth` | the reauthentication user-id check | A-U1 **attack**: a reauthentication moves the session to Alice's other account |
+| `malicious-recovery-stolenwords-unsaltedwordstag` | the recovery tag's salt: the tag comes from u_c alone | A-W1 **attack**: the tag read from the stolen set is also the registration words' tag, and a recovery with those words accepts a u_c forged from it |
+| `malicious-noadd-shorthandletag` | the user credential tag's length: it can be matched once known | A-E1, A-D1, A-S4 and A-T1 **attack**: a sign-in on a browser with no pin accepts "no-PRF" with a u_c forged from the tag registration published. The registering browser holds through its pin, and `malicious-noadd` holds throughout |
 
-So for tagged credentials, the tags protect u_c, and the user-id checks keep the pin and the
-session on the right account. For untagged credentials, the sign-in check is what protects a
+So for tagged credentials, the tags protect u_c: the user credential tag even when public, and the
+recovery tag while its word set stays secret. The user-id checks keep the pin and the session on
+the right account. For untagged credentials, the sign-in check is what protects a
 browser that holds a pin.
 
 **Reachability.** Each query requires the browser and the u_c to come from the same Alice, so a

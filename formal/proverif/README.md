@@ -46,8 +46,8 @@ flags. The main flag groups are:
 - `MUT_*` deliberately breaks one protocol mechanism.
 - The rest set options, described where they are used, here or in `RESULTS.md`: `NOPRF`,
   `DUALMODE`, `STRIPLOGIN`, `STORE`, `RCV`, `UNIQUSER`, `NOBT`, `PRECISE`, `KEY_UI`, `REACH_ONLY`,
-  `MAL_RECOVERY`, `USE_V7`, `GENERIC_API`, `LOG_NOREGVER`, `EXISTING`, `FIRSTUSE`, `TWOACCOUNTS`
-  and `REAUTH`.
+  `MAL_RECOVERY`, `USE_V7`, `GENERIC_API`, `LOG_NOREGVER`, `EXISTING`, `FIRSTUSE`, `TWOACCOUNTS`,
+  `REAUTH`, `STOLENWORDS` and `NOADDPASSKEY`.
 
 The expected results for each variant sit at the end of the template in ProVerif's own
 `EXPECTPV … END` comment format, so each generated `.pv` file is self-checking.
@@ -86,14 +86,14 @@ The name each model uses for a `main.tex` symbol.
 | a | `GCM`, `XCC`, `AEGIS` | type `alg` |
 | v | `V8`, `V7` | |
 | f | `F0`, `F1` | |
-| e_l | `EL0`, `EL16` | messages, data at rest |
+| \|e\| | `EL0`, `EL16` | messages, data at rest |
 | i | `IC`, `IC0` | a valid count, and 0 |
 | lp, le | `lp`, `le` (`LP1`, `LP2`) | |
 | n_S, n_IV | `nS`, `nIV` | |
 | t_L at the start of a loop | `TL0` | |
 | kp_S, kp_H, kp_B, kp_C, kp_M, kp_U, kp_R | `kpS`, `kpH`, `kpB`, `kpC`, `kpM`, `kpU`, `kpR` | |
 | D_H(n, kp, k) | `kdf(n, kp, k)` | subkey numbers `ID0`-`ID2`, blocks `B1`, `B2` |
-| H_k(n_S, a, v, lp, e_l[, e]) | `hmix(k, xctx8(...))` | `mkX8`, `xAR` build the second argument |
+| H_k(n_S, a, v, lp, \|e\|[, e]) | `hmix(k, xctx8(...))` | `mkX8`, `xAR` build the second argument |
 | D_P and its material | `pbkdf`, `pwmat8` (`pwmat7`) | |
 | E_a, E_a⁻¹ | `aead_enc`, `aead_dec` | |
 | H_{k_S}(v‖l‖ad_F‖m_E‖t_L) | `mac(kS, macin(...))` | |
@@ -116,17 +116,18 @@ The name each model uses for a `main.tex` symbol.
 |---|---|---|
 | u_i | `ui` | |
 | u_i^* in a reply | `sui` | |
-| u_i^* in ro | `oui`; `ui` at registration | |
+| ro.u_i | `oui`; `ui` at registration | |
 | u_i in the new passkey's user handle | `hui` | at add passkey and recovery, the session's or words' `ui`, checked against `oui`; `MUT_SERVERHANDLE` takes `oui` |
-| u_i in ar, the user handle | `uh` | |
+| ar.u_h, which the browser sets to u_i | `uh` | the user id the server's auth/verify handler receives |
 | u_r, u_r‖u_i | `ur`, `rsec(ur, ui)` | |
 | sk_U, pk_U | `proofKey(uc)`, `pkU` = `sig_pk(proofKey(uc))` | |
 | sk_R, pk_R | `recoveryKey(ur, ui)`, `pkR` | |
 | p_S, p_R | `PS`, `wa_prf(credKey, PS)` | |
 | cd_p, cd_r, cd_u | `cdp`, `cdr`, `cdu` | |
-| account tag in a user handle or word set | `ucid(uc)`; `NOTAG` for an untagged handle or 24-word set | a one-way function of u_c |
+| u_t, the user credential tag in a user handle | `uctag(uc, ui)`; `NOTAG` for an untagged handle | a one-way function of u_c, output on c when each passkey is created |
+| u_w, the recovery tag in a 27-word set | `rctag(uc, rsec(ur, ui))`; `NOTAG` for a 24-word set | can be matched by whoever holds the set's u_r, which `LEAK_WORDS` and `STOLENWORDS` give the attacker |
 | prf | `PRF0`, `PRF1`; `sprf`, `sprf2` in replies | `sprf2` is the tex's prf^* |
-| pkId, pk_M | `credId`, `credPk` = `wa_pk(credKey)` | `spkId` in a reply |
+| pkId, pk_M | `credId`, `credPk` = `wa_pk(credKey)` | `spkId` in a sign-in reply, which the session uses without the tex's comparison with ar.pkId. Registration and recovery replies carry no pkId, and the session uses `credId` |
 | M's passkey secret | `credKey` | |
 | ro, rr | `(ch, oui)`, `regr(credId, credPk, adata(RPID, UV1), cdj(WA_CREATE, ch, ORIGIN))` | |
 | ar | `(credId, uh, ad, cd, wa_sign(credKey, (ad, cd)))` | `cdj(WA_GET, ch, ORIGIN)` |
@@ -155,7 +156,7 @@ The name each model uses for a `main.tex` symbol.
 | B.pin | `pins(bid, ui, prf, pkU)` | |
 | B.sess | `sessions(aid, bid, ui, uc, pkId, ck, cs)` | holds u_c rather than cd_u |
 | B.key | not a table; `kKS` per session | |
-| M's passkeys, Alice's words | `passkeys(aid, uh, tag, credId, credKey)`, `words(aid, ui, ur, tag)` | |
+| M's passkeys, Alice's words | `passkeys(aid, ui, tag, credId, credKey)`, `words(aid, ui, ur, tag)` | a passkey's `ui` and `tag` are its handle's |
 
 ## Shared assumptions
 
@@ -169,19 +170,19 @@ stronger:
 **Encodings.** Every byte concatenation is modeled as an unambiguous tuple. That is sound only if
 each real encoding can be parsed back into its fields in exactly one way. The argument for each
 encoding:
-- **E1. H_k(n_S‖a‖v‖lp‖e_l‖e).** Fields are 16, 2, 2 and 1 bytes, then the e_l byte, then e.
-  e_l gives the length of e. For messages e_l = 0, so e is empty. For data at rest, e_l = |u_i|.
-  The `u_i` length is capped at 255 but not fixed at 16; that is still injective because e_l
+- **E1. H_k(n_S‖a‖v‖lp‖|e|‖e).** Fields are 16, 2, 2 and 1 bytes, then the |e| byte, then e.
+  |e| gives the length of e. For messages |e| = 0, so e is empty. For data at rest, |e| = |u_i|.
+  The `u_i` length is capped at 255 but not fixed at 16; that is still injective because |e|
   records it. Source: `keys.ts:MasterKeyKeyProvider._extraContext`,
   `keys.ts:PWDKeyProviderV8._extraContext`.
-- **E2. PBKDF2 material (V8).** p_l (4 bytes, LE) ‖ p ‖ u_c (32) ‖ a ‖ v ‖ lp ‖ e_l ‖ e. p_l
-  delimits p, the next fields have fixed widths, and e_l delimits e. Source:
-  `keys.ts:PWDKeyProviderV8._cipherKeyMaterial`. V7 had no p_l, but the web app always passes an
+- **E2. PBKDF2 material (V8).** |p| (4 bytes, LE) ‖ p ‖ u_c (32) ‖ a ‖ v ‖ lp ‖ |e| ‖ e. |p|
+  delimits p, the next fields have fixed widths, and |e| delimits e. Source:
+  `keys.ts:PWDKeyProviderV8._cipherKeyMaterial`. V7 had no |p|, but the web app always passes an
   empty e, so V7 parses uniquely from the end.
 - **E3. k_C input.** H_{k_M0}(n_S): a single fixed-width field.
 - **E4. MAC input.** v (2) ‖ l (3) ‖ ad_F ‖ m_E ‖ t_L.
   - l fixes |ad_F‖m_E|.
-  - Inside block 0's ad_F, a fixes the n_IV width, and h_El and k_Cl delimit h_E and k_C. m_E is
+  - Inside block 0's ad_F, a fixes the n_IV width, and |h_E| and |k_C| delimit h_E and k_C. m_E is
     whatever remains of l.
   - t_L is the rest of the input: 1 byte for block 0 and 32 bytes for every later block. So the
     two kinds of block can never be confused. This justifies using separate constructors for
@@ -208,7 +209,19 @@ encoding:
   number.
 - **E8. k_L input.** s (the fixed 13-byte string `user-cred-key`) ‖ pkId. Source:
   `keystore.service.ts:_deriveKey`.
-- **E9. Recovery secret.** u_r (16) ‖ u_i (16), taken from 32 bytes of BIP39 entropy.
+- **E9. Recovery secret.** u_r (16) ‖ u_i (16). A tagged word set appends the 4-byte recovery tag
+  and encodes the 36 bytes as two BIP39 mnemonics, 15 words then 12, each with its own checksum; an
+  untagged set is one 24-word mnemonic. Both forms carry a 32-byte recovery secret in the same
+  layout, so recover and replace treat them the same way. Source: `recoverywords.ts`.
+- **E9a. User credential tag and user handle.** u_t = D_H(1, kp_T, H_{u_c}(u_i)), 128 bits, where
+  H is keyed with u_c over the 16 decoded bytes of u_i. The handle is the UTF-8 text of
+  base64url(u_i) followed by base64url(u_t), 44 bytes; an untagged handle is the 22-byte text of
+  u_i alone. Both parts have fixed lengths, so a handle splits one way. No other derivation uses
+  kp_T. Source: `credentialtag.ts`.
+- **E9b. Recovery tag.** u_w = D_H(1, kp_W, H_{u_c}(u_r ‖ u_i)), derived at the KDF's 128-bit
+  minimum and truncated to 32 bits. H is keyed with u_c over the set's 32-byte recovery secret, so
+  each set has its own tag. No other derivation uses kp_W, so the 32 bits are the prefix of
+  nothing else. Source: `recoverywords.ts:getRecoveryTag`.
 - **E10. Challenge binding.** H(pk_U) for registration and add-passkey challenges. For confirm and
   recover challenges, H(pk_R ‖ ":" ‖ authCount ‖ ":" ‖ pk_U), where pk_R and pk_U are base64 text
   and so contain no ":", authCount is decimal, and pk_R may be empty. Source:
@@ -221,6 +234,7 @@ encoding:
 - the origin and rpId the server builds from headers CloudFront sets, which the models fix as
   constants;
 - WebAuthn sign counters, which the server ignores;
+- WebAuthn signals, which only ask a passkey manager to hide or rename passkeys;
 - the legacy `/v1/recover` path, and the endpoints outside registration, sign-in, authorized
   requests, adding passkeys, replacing words and recovery: session and user reads, passkey and
   user updates, passkey deletion, invitables and the internal routes.
@@ -246,15 +260,19 @@ it Alice's secrets.
 - **`SCN_MALICIOUS`:** registration, sign-in and adding passkeys against a malicious server.
   `MAL_RECOVERY` adds recovery, both from the registering browser and from a browser with no pin.
   `TWOACCOUNTS` adds a second account on the same browser, and `REAUTH` reauthentication.
-  `EXISTING` starts from an account registered before the account tags, with an untagged passkey
-  and 24-word set: the server is honest in phase 0 and the attacker takes it over in phase 1, or
-  with `FIRSTUSE` the attacker is the server from the start.
+  `EXISTING` starts from an account registered before tagging, with an untagged passkey and
+  24-word set: the server is honest in phase 0 and the attacker takes it over in phase 1, or with
+  `FIRSTUSE` the attacker is the server from the start. `STOLENWORDS` gives the attacker a
+  superseded word set, one the server holds no cd_r for. `NOADDPASSKEY` leaves out adding
+  passkeys, so that a forgeable handle tag still terminates.
 
 **The browser's checks.** Alice's browser compares the user id in each server reply with the one
-it already holds for that flow. It also checks the u_c it resolves against the account tag in her
-passkey's user handle or her recovery words. Every session writes that tag, from the u_c it holds,
-into each passkey and word set it creates. A credential without a tag falls back to the browser's
-pin, or to trust on first use when there is none. A failed check stops the flow.
+it already holds for that flow. It also checks the u_c it resolves against the user credential
+tag in her passkey's user handle, or the recovery tag in her word set. Every session writes those
+tags, from the u_c it holds, into each passkey and word set it creates. The user credential tag is
+long enough to be safe when public, and the model gives every one to the attacker; the recovery
+tag is short and stays secret while its word set does. A credential without a tag falls back to the
+browser's pin, or to trust on first use when there is none. A failed check stops the flow.
 
 **Account modes.** Accounts are in PRF mode unless `NOPRF` is set. With `NOPRF`, Alice's
 authenticator has no PRF and the server takes the code's no-PRF branches:
@@ -373,6 +391,7 @@ what each trace shows. The headline properties, for PRF accounts:
 | A-N1 | A logged request of Alice's is never accepted again | a request log | — |
 | A-S2, A-E1 | A malicious server never learns Alice's PRF u_c, and every u_c her browsers adopt stays secret from it | a malicious server, for new accounts | a malicious server, for an existing account's untagged credentials (A-E1) |
 | A-D1, A-S3, A-S4, A-S3R, A-S4R, A-T1, A-U1 | The browser's pin, tag and user-id checks keep it on Alice's account and her u_c | a malicious server | — |
+| A-W1 | A recovery with a word set the attacker has not stolen never adopts a u_c the server knows | a malicious server holding one of Alice's superseded word sets | a recovery with that stolen set itself (the accepted residual) |
 | A-S5 | Messages Alice encrypts stay secret from a malicious server, even one that learns her password | for new accounts, by A-E1 and C-S1 together (two separate models) | — |
 
 **No-PRF accounts.** The server keeps u_c, so a malicious server knows it by design, and broken

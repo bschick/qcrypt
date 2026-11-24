@@ -21,6 +21,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { describe, it, expect } from 'vitest';
+import { randomBytes } from 'node:crypto';
+import * as api from '@qcrypt/api';
 import { API_SERVER, RP_ORIGIN, sha256Hex } from './common';
 
 // Stock Chrome UA — explicitly omits the QCTestClient marker so the server's
@@ -29,7 +31,9 @@ const REAL_CLIENT_UA =
    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 async function postRegOptionsAsRealClient(userName: string) {
-   const body = Buffer.from(JSON.stringify({ userName }), 'utf8');
+   // reg/options checks the public key's length and encoding, not that it can verify a signature
+   const userCredPubKey = randomBytes(api.PROOF_PUBKEY_BYTES).toString('base64url');
+   const body = Buffer.from(JSON.stringify({ userName, userCredPubKey }), 'utf8');
    const res = await fetch(`${API_SERVER}/v1/reg/options`, {
       method: 'POST',
       headers: {

@@ -1,9 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { cryptoReady, getRandom, bytesToBase64, base64ToBytes, getProofKeyPair, createProof } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
+import { ParamError } from '@qcrypt/crypto';
 import {
    recoverySecret,
+   recoverySecretUserId,
    RECOVERYID_BYTES,
+   RECOVERY_SECRET_BYTES,
    CHALLENGE_BYTES,
    PROOF_PUBKEY_BYTES,
    getUserCredPubKey,
@@ -224,6 +227,20 @@ describe('recovery nonce proof', () => {
       }
       // Client and server derive this independently; they must produce identical bytes.
       expect(getRecoveryPubKey(secret)).toBe(RECOVERY_VECTOR);
+   });
+
+   it('reads back the userId a secret was built from', () => {
+      const secret = recoverySecret(getRandom(RECOVERYID_BYTES), userId);
+      expect(secret.byteLength).toBe(RECOVERY_SECRET_BYTES);
+      expect(recoverySecretUserId(secret)).toBe(userId);
+   });
+
+   it('rejects a secret of the wrong length', () => {
+      expect(recoverySecretUserId(recoverySecret(getRandom(RECOVERYID_BYTES), userId))).toBe(userId);
+
+      for (const length of [RECOVERY_SECRET_BYTES - 1, RECOVERY_SECRET_BYTES + 1]) {
+         expect(() => recoverySecretUserId(getRandom(length))).toThrow(ParamError);
+      }
    });
 
    it('does not collide with the userCred proof for the same secret', () => {

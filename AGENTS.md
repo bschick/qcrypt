@@ -84,6 +84,8 @@ The `pnpm` scripts in `package.json` call `nx` under the hood. You can use eithe
 | libcrux WASM (`crux`) verify | `pnpm verify:libs:crux` | *(container; see below)* |
 | libsodium.js (`sodium`) rebuild | `pnpm build:libs:sodium` | *(container; see below)* |
 | libsodium.js (`sodium`) verify | `pnpm verify:libs:sodium` | *(container; see below)* |
+| Protocol PDF and stanza images rebuild | `pnpm build:protocol` | *(container; see below)* |
+| Protocol PDF and stanza images verify | `pnpm verify:protocol` | *(container; see below)* |
 
 `build:server` writes `dist/server-test` unminified; `build:server:prod` writes `dist/server` minified.
 Either takes `--min` or `--no-min` to override the minification default, and `QC_SERVER_OUT` to
@@ -104,6 +106,16 @@ Two libraries are built in a container. Their outputs are committed, so normal b
 **Verify** with `pnpm verify:libs:crux` or `pnpm verify:libs:sodium` when reviewing a change to either library. They rebuild and fail unless the committed files match.
 
 Each library's `regen.mjs` and `Containerfile` describe how its build pins and checks its inputs.
+
+#### Rebuilding the protocol document (`protocol8.pdf`, stanza images)
+
+`apps/web/src/assets-src/main.tex` is the source of `apps/web/src/assets/protocol8.pdf`, of the stanza PNGs that the help page's protocol section shows, and of each image's `width` and `height` in `protocol8.component.html`. All three are built in a container, so they are byte-identical on any machine.
+
+**Rebuild** with `pnpm build:protocol` after changing `main.tex`, then commit the files it lists. It writes only files whose content changed.
+
+**Verify** with `pnpm verify:protocol`. It rebuilds and fails unless the committed PDF, images and sizes match.
+
+The build pairs stanzas with the page's `<h2>`/`<img>` entries in order and stops if a heading does not match its stanza's title. To add or move a stanza, update the page's entries first; the image names come from there. `apps/web/scripts/protocol/regen.mjs` and its `Containerfile` describe the build and its pins.
 
 ### Code Quality (Biome)
 
@@ -180,6 +192,7 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 | API library unit tests | `pnpm test:libs:api` | `pnpm nx test api` | |
 | CLI unit tests | `pnpm test:cli` | `pnpm nx test cli` | |
 | ProVerif protocol models | `pnpm verify:proverif` | | *needs ProVerif 2.05 from opam; not in any aggregate. See [`formal/proverif/README.md`](formal/proverif/README.md)* |
+| TLA+ server state models | `pnpm verify:tlaplus` | | *needs a Java 11+ runtime; downloads the TLA+ tools jar into `~/.cache/qcrypt/` once; not in any aggregate. See [`formal/tlaplus/README.md`](formal/tlaplus/README.md)* |
 
 > **Note:** Every `test:*:prod` script first asks whether the prod WAF `APIRateLimit` rule is set to Count, because a blocking rule fails many prod tests, and reminds you to set it back to Block when the run ends. Pipe the answer to run one non-interactively: `echo y | pnpm test:server:prod`. With `CI` set, it does not ask.
 > **Note:** When passing flags through `nx`, use camelCase for config options (e.g., `--runnerConfig=` not `--runner-config`).

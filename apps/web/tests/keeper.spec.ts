@@ -5,7 +5,7 @@
 import { test, expect } from '@playwright/test';
 import { HmacSecretMode } from 'nid-webauthn-emulator';
 import { existsSync, readdirSync } from 'node:fs';
-import { hosts, keeperDir, keeperPrf, testWithAuth, toggleCredentials, expectPrfBadge } from './common';
+import { hosts, keeperDir, keepers, testWithAuth, toggleCredentials, expectPrfBadge } from './common';
 
 // Manual tool (not run by the e2e runner) that provisions a persistent keeper account
 // and writes its passkey to the gitignored keeper-creds dir. Edit the constants (the
@@ -16,16 +16,21 @@ testWithAuth('provision keeper', async ({ authFixture }) => {
 
    // Edit per keeper before running.
    const config: { host: hosts; keeper: string; userName: string } = {
-      host: 'quickcrypt.org',
-      keeper: 'keeper1',
-      userName: 'KeeperOne',
+      host: 't1.quickcrypt.org',
+      keeper: 'keeper4',
+      userName: 'KeeperFour',
    };
    const { host, keeper, userName } = config;
 
-   const prf = keeperPrf[keeper];
-   if (prf === undefined) {
-      throw new Error(`${keeper} has no keeperPrf entry`);
+   const entry = keepers[keeper];
+   if (entry === undefined) {
+      throw new Error(`${keeper} has no keepers entry`);
    }
+   // This tool writes a tagged handle, so it cannot replace a keeper whose entry claims untagged
+   if (!entry.tagged) {
+      throw new Error(`${keeper} is meant to hold an untagged handle, which this tool cannot create`);
+   }
+   const prf = entry.prf;
    const mode: HmacSecretMode = prf ? 'hmac-secret-mc' : 'none';
 
    const dir = keeperDir(host, keeper);

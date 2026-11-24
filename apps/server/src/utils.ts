@@ -75,9 +75,7 @@ export function isReservedTestUserName(userName: string): boolean {
 
 export type Challenge = { challenge: string } & (
    | { purpose: 'auth'; userId: string; binding?: never }
-   // BACKWARD COMPAT: the binding is optional only for clients that omit userCredPubKey
-   | { purpose: 'reg'; userId: string; binding?: string }
-   | { purpose: 'add' | 'recover' | 'confirm'; userId: string; binding: string }
+   | { purpose: 'reg' | 'add' | 'recover' | 'confirm'; userId: string; binding: string }
 );
 
 // The challenge must match the given userId, unless it is an auth challenge created with UNKNOWN_USER_ID.
@@ -162,7 +160,7 @@ export async function verifyUserCredNonceProof(
    try {
       // A stale userCredPubKey after rotation surfaces here as a spurious 401.
       api.verifyUserCredNonceProof(
-         verifiedUser.userCredPubKey!,
+         verifiedUser.userCredPubKey,
          verifiedUser.userId,
          httpDetails.method,
          httpDetails.path,
@@ -203,7 +201,7 @@ export function verifyUserCredChallengeProof(
    const bodyHashHex = crypto.createHash('sha256').update(httpDetails.rawBody, 'utf8').digest('hex');
    try {
       api.verifyUserCredChallengeProof(
-         user.userCredPubKey!,
+         user.userCredPubKey,
          user.userId,
          httpDetails.method,
          httpDetails.path,
@@ -217,29 +215,6 @@ export function verifyUserCredChallengeProof(
       console.error(`challenge proof ${label}`, err);
       throw new AuthError();
    }
-}
-
-// BACKWARD COMPAT: checks a recover/confirm proof carried in the body, signed with the nonce
-// context. Delete once x-challenge-proof is required.
-export function verifyRecoverConfirmProof(
-   confirm: api.RecoverConfirmRequest,
-   userCredPubKey: string,
-   httpDetails: HttpDetails,
-): void {
-   const { userId, challenge, timestamp, signature } = confirm;
-   // There is no body beyond the signature fields, so hash is for empty string
-   const bodyHashHex = crypto.createHash('sha256').update('', 'utf8').digest('hex');
-   api.verifyUserCredNonceProof(
-      userCredPubKey,
-      userId,
-      httpDetails.method,
-      httpDetails.path,
-      timestamp!,
-      challenge,
-      bodyHashHex,
-      signature!,
-      httpDetails.rawQueryString,
-   );
 }
 
 // Never throws: an error from the store itself is reported as 'failed'.

@@ -1,5 +1,18 @@
 # CHANGELOG.md
 
+## 8.0.6 (2026-11-23)
+
+#### Changes
+
+- new recovery word patterns have 27 words to connect them to a user credential
+
+#### Security
+
+- new passkeys and recovery words now carry a check value so a dishonest server cannot send an alternative user credential
+- browsers now confirm the user id and passkey id the server returns at sign-in, registration, and recovery
+- added TLA+ formal models of server state
+- updated packages
+
 ## 8.0.5 (2026-11-06)
 
 #### Changes

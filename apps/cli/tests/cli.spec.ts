@@ -68,13 +68,19 @@ describe('CLI App', () => {
    });
 
    describe('enc command', () => {
+      const encArgs = (cred: string) => ['enc', '--cred', cred, '--silent', '--iters', '1000000', '--pwds', 'pass'];
+
+      it('should throw error when provided a cred that is not base64', () => {
+         expect(execCli(encArgs(userCred), clearText).status).toBe(0);
+
+         expect(execCli(encArgs('SHORT'), clearText).status).toBe(1);
+      });
+
+      // Valid base64url for 16 bytes, which is a legal encoding of the wrong length
       it('should throw error when provided invalid cred length', () => {
-         const result = execCli(
-            ['enc', '--cred', 'SHORT', '--silent', '--iters', '1000000', '--pwds', 'pass'],
-            clearText,
-         );
-         expect(result.status).toBe(1);
-         expect(result.stderr).toContain('Invalid character');
+         expect(execCli(encArgs(userCred), clearText).status).toBe(0);
+
+         expect(execCli(encArgs('AAAAAAAAAAAAAAAAAAAAAA'), clearText).status).toBe(1);
       });
 
       it('should throw error for non-digit iters', () => {

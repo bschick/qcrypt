@@ -89,8 +89,7 @@ export async function makeNonceProofHeaders(
    body: Buffer | undefined,
    userCred: string,
    userId: string,
-   // BACKWARD COMPAT: legacyHeader sends the proof in the x-proof header
-   opts: { timestampMs?: string; tamperSig?: boolean; nonce?: string; legacyHeader?: boolean } = {},
+   opts: { timestampMs?: string; tamperSig?: boolean; nonce?: string } = {},
 ): Promise<Record<string, string>> {
    await cryptoReady();
    const timestamp = opts.timestampMs ?? String(Date.now());
@@ -120,8 +119,7 @@ export async function makeNonceProofHeaders(
    }
 
    return {
-      // BACKWARD COMPAT: x-proof only when legacyHeader is set
-      [opts.legacyHeader ? 'x-proof' : 'x-nonce-proof']: `${sigStr},${timestamp},${nonce}`,
+      'x-nonce-proof': `${sigStr},${timestamp},${nonce}`,
    };
 }
 
@@ -307,8 +305,8 @@ async function request(
    }
 
    // The server rejects a request with more than one proof header, so a proof header passed in
-   // replaces the session nonce proof. BACKWARD COMPAT: x-proof is the compat nonce proof header.
-   const hasProof = ['x-nonce-proof', 'x-challenge-proof', 'x-proof'].some((name) => name in headers);
+   // replaces the session nonce proof.
+   const hasProof = ['x-nonce-proof', 'x-challenge-proof'].some((name) => name in headers);
    if (cookie && !hasProof && !NO_NONCE_PROOF.includes(path)) {
       Object.assign(headers, await proofHeaders(method, path, body));
    }
@@ -566,8 +564,6 @@ export function postPasskeyVerify(
 export async function buildRegBody(
    userName: string,
    prf: boolean,
-   // BACKWARD COMPAT: false leaves the challenge unbound, as reg/options does for clients that omit userCredPubKey
-   bindKey: boolean = true,
 ): Promise<{
    userId: string;
    body: api.RegVerifyRequest;
@@ -582,7 +578,7 @@ export async function buildRegBody(
    await cryptoReady();
    const userCred = getRandom(cc.USERCRED_BYTES);
    const userCredPubKey = api.getUserCredPubKey(userCred);
-   const regOpts = await postJson('/v1/reg/options', bindKey ? { userName, userCredPubKey } : { userName }, {}, '');
+   const regOpts = await postJson('/v1/reg/options', { userName, userCredPubKey }, {}, '');
    expect(regOpts.status).toBe(200);
    expect(regOpts.data.user.name).toBe(userName);
 
@@ -605,8 +601,6 @@ export async function buildRegBody(
    const riders: api.RegVerifyRiders = {
       userId,
       challenge,
-      // BACKWARD COMPAT: a client that omits userCredPubKey from reg/options sends it here
-      userCredPubKey: bindKey ? undefined : userCredPubKey,
       recoveryPubKey: api.getRecoveryPubKey(secret),
       recoveryTimestamp,
       recoverySignature: api.createRecoveryChallengeProof(secret, userId, recoveryTimestamp, challenge, userCredPubKey),
@@ -655,14 +649,8 @@ export async function expectRegistered(reg: Registration, opts: RegVerifyOpts = 
 // reg/verify reports every rejection as a uniform 401 because it is unauthenticated. The request
 // without overrides is then sent on the same challenge and must succeed. Its success proves the
 // rejection did not consume the challenge, and that the overrides alone caused the rejection.
-export async function expectRegRejected(
-   reg: Registration,
-   opts: RegVerifyOpts,
-   // BACKWARD COMPAT: the old-format request to send after the rejection
-   retry: RegVerifyOpts = {},
-): Promise<void> {
+export async function expectRegRejected(reg: Registration, opts: RegVerifyOpts): Promise<void> {
    const bad = await postRegVerify(reg, opts);
    expect(bad.status).toBe(401);
-   // BACKWARD COMPAT: send the request without overrides once old-format requests are gone
-   await expectRegistered(reg, retry);
+   await expectRegistered(reg);
 }

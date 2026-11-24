@@ -261,40 +261,6 @@ describe('proof of userCred enforcement', () => {
          return makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId);
       }
 
-      // BACKWARD COMPAT
-      it('accepts a nonce proof in x-proof', async () => {
-         const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId, {
-            legacyHeader: true,
-         });
-         const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
-         expect(res.status).toBe(200);
-      });
-
-      // BACKWARD COMPAT
-      it('rejects a tampered nonce proof in x-proof', async () => {
-         const ok = await getJson('/v1/user', { 'x-csrf-token': csrf, ...(await userProof()) }, cookie);
-         expect(ok.status).toBe(200);
-
-         const proof = await makeNonceProofHeaders('GET', '/v1/user', undefined, userCred, userId, {
-            legacyHeader: true,
-            tamperSig: true,
-         });
-         const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
-         expect(res.status).toBe(401);
-      });
-
-      // BACKWARD COMPAT. Two full proofs exceed the edge's request header limit, which returns 413
-      // before the server sees them, so x-proof carries a short placeholder.
-      it('rejects a request carrying both x-nonce-proof and x-proof', async () => {
-         const proof = await userProof();
-         const ok = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof }, cookie);
-         expect(ok.status).toBe(200);
-
-         const legacy = { 'x-proof': 'signature,timestamp,nonce' };
-         const res = await getJson('/v1/user', { 'x-csrf-token': csrf, ...proof, ...legacy }, cookie);
-         expect(res.status).toBe(400);
-      });
-
       // Two full proofs exceed the edge's request header limit, which returns 413 before the server
       // sees them, so x-challenge-proof carries a short placeholder
       it('rejects an x-challenge-proof on a route that takes a nonce proof', async () => {
@@ -332,21 +298,6 @@ describe('proof of userCred enforcement', () => {
          );
          const withChallenge = await postJson('/v1/auth/options', body, challengeProof, '');
          expect(withChallenge.status).toBe(401);
-      });
-
-      // BACKWARD COMPAT: a signed-in client sends x-proof with every request
-      it('ignores x-proof on a route that takes no proof', async () => {
-         const body = { userId };
-         const legacy = await makeNonceProofHeaders(
-            'POST',
-            '/v1/auth/options',
-            Buffer.from(JSON.stringify(body)),
-            userCred,
-            userId,
-            { legacyHeader: true },
-         );
-         const res = await postJson('/v1/auth/options', body, legacy, '');
-         expect(res.status).toBe(200);
       });
    });
 });

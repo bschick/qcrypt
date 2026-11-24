@@ -170,7 +170,7 @@ async function getUserCred(
       credText = new URL(credText).searchParams.get('usercred') ?? credText;
    } catch {}
 
-   return base64ToBytes(credText.trim());
+   return base64ToBytes(credText.trim(), cc.USERCRED_BYTES, 'user credential');
 }
 
 async function getCipherStream(io: IO, silent?: boolean): Promise<ReadableStream<Uint8Array>> {

@@ -15,20 +15,15 @@
          <li><a href="/help/flow">Cipher flow diagrams</a></li>
       </ul>
       <p>
-         Quick Crypt uses WebAuthn (
-         <span
+         Quick Crypt uses WebAuthn (<span
             class="tip"
             matTooltip="You can create a
       passkey from a physical FIDO2
       device, a mobile phone, a browser based password manager, or a dedicated password
       manager. Dedicated password managers like Bitwarden and 1Password are
-      the easiest to use, work consistently across devices, and support backup.">
-            Passkeys
-         </span>
-         ) to create and authenticate user identities. Since this is a standard protocol described in detail elsewhere,
+      the easiest to use, work consistently across devices, and support backup.">Passkeys</span>) to create and authenticate user identities. Since this is a standard protocol described in detail elsewhere,
          including the
-         <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API">Mozilla developer network</a>
-         , WebAuthn is described only at a high level to illustrate how user IDs and credentials are created and
+         <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API">Mozilla developer network</a>, WebAuthn is described only at a high level to illustrate how user IDs and credentials are created and
          retrieved for cryptographic functions.
       </p>
       <h1 class="section">Cipher Data Structure</h1>
@@ -70,8 +65,7 @@
                </td>
                <td class="header" colspan="2" rowspan="3">Header</td>
                <td class="header">
-                  MAC
-                  <sub>0</sub>
+                  MAC<sub>0</sub>
                </td>
                <td class="header">no</td>
                <td class="header">bytes</td>
@@ -79,8 +73,7 @@
             </tr>
             <tr>
                <td class="header">
-                  Version
-                  <sub>0</sub>
+                  Version<sub>0</sub>
                </td>
                <td class="header">no</td>
                <td class="header">bytes</td>
@@ -88,8 +81,7 @@
             </tr>
             <tr>
                <td class="header">
-                  Payload Length
-                  <sub>0</sub>
+                  Payload Length<sub>0</sub>
                </td>
                <td class="header">no</td>
                <td class="header">uint le</td>
@@ -103,8 +95,7 @@
                   Data
                </td>
                <td class="adata">
-                  Flags
-                  <sub>0</sub>
+                  Flags<sub>0</sub>
                </td>
                <td class="adata">no</td>
                <td class="adata">bitfield</td>
@@ -112,8 +103,7 @@
             </tr>
             <tr>
                <td class="adata">
-                  AEAD Cipher Id
-                  <sub>0</sub>
+                  AEAD Cipher Id<sub>0</sub>
                </td>
                <td class="adata">no</td>
                <td class="adata">uint le</td>
@@ -121,8 +111,7 @@
             </tr>
             <tr>
                <td class="adata">
-                  Init Vector or Nonce
-                  <sub>0</sub>
+                  Init Vector or Nonce<sub>0</sub>
                </td>
                <td class="adata">yes</td>
                <td class="adata">bytes</td>
@@ -161,8 +150,7 @@
             <tr>
                <td class="message">Data</td>
                <td class="message">
-                  Encrypted Message
-                  <sub>0</sub>
+                  Encrypted Message<sub>0</sub>
                </td>
                <td class="message">yes</td>
                <td class="message">bytes</td>
@@ -176,8 +164,7 @@
                </td>
                <td class="header" colspan="2" rowspan="3">Header</td>
                <td class="header">
-                  MAC
-                  <sub>N</sub>
+                  MAC<sub>N</sub>
                </td>
                <td class="header">no</td>
                <td class="header">bytes</td>
@@ -185,8 +172,7 @@
             </tr>
             <tr>
                <td class="header">
-                  Version
-                  <sub>N</sub>
+                  Version<sub>N</sub>
                </td>
                <td class="header">no</td>
                <td class="header">bytes</td>
@@ -194,8 +180,7 @@
             </tr>
             <tr>
                <td class="header">
-                  Payload Length
-                  <sub>N</sub>
+                  Payload Length<sub>N</sub>
                </td>
                <td class="header">no</td>
                <td class="header">uint le</td>
@@ -209,8 +194,7 @@
                   Data
                </td>
                <td class="adata">
-                  Flags
-                  <sub>N</sub>
+                  Flags<sub>N</sub>
                </td>
                <td class="adata">no</td>
                <td class="adata">bitfield</td>
@@ -218,8 +202,7 @@
             </tr>
             <tr>
                <td class="adata">
-                  AEAD Cipher Id
-                  <sub>N</sub>
+                  AEAD Cipher Id<sub>N</sub>
                </td>
                <td class="adata">no</td>
                <td class="adata">uint le</td>
@@ -227,8 +210,7 @@
             </tr>
             <tr>
                <td class="adata">
-                  Init Vector or Nonce
-                  <sub>N</sub>
+                  Init Vector or Nonce<sub>N</sub>
                </td>
                <td class="adata">yes</td>
                <td class="adata">bytes</td>
@@ -237,8 +219,7 @@
             <tr>
                <td class="message">Data</td>
                <td class="message">
-                  Encrypted Message
-                  <sub>N</sub>
+                  Encrypted Message<sub>N</sub>
                </td>
                <td class="message">yes</td>
                <td class="message">bytes</td>
@@ -265,37 +246,13 @@
       <img src="/assets/decrypt_b07.png" width="240" height="45" />
       <h2>Block N Decryption by B</h2>
       <img src="/assets/decrypt_bN7.png" width="255" height="187" />
-      <h2>
-         <i>
-            u
-            <sub>c</sub>
-         </i>
-         Encryption at Rest Variables
-      </h2>
+      <h2><i>u<sub>c</sub></i> Encryption at Rest Variables</h2>
       <img src="/assets/atrest_variables7.png" width="565" height="779" />
-      <h2>
-         <i>
-            k
-            <sub>L</sub>
-         </i>
-         Derivation by B
-      </h2>
+      <h2><i>k<sub>L</sub></i> Derivation by B</h2>
       <img src="/assets/atrest_derivation7.png" width="245" height="66" />
-      <h2>
-         <i>
-            u
-            <sub>c</sub>
-         </i>
-         Encryption under k by B
-      </h2>
+      <h2><i>u<sub>c</sub></i> Encryption under k by B</h2>
       <img src="/assets/atrest_encrypt7.png" width="393" height="273" />
-      <h2>
-         <i>
-            cd
-            <sub>x</sub>
-         </i>
-         Decryption under k by B
-      </h2>
+      <h2><i>cd<sub>x</sub></i> Decryption under k by B</h2>
       <img src="/assets/atrest_decrypt7.png" width="393" height="252" />
       <h2>Authentication Variables</h2>
       <img src="/assets/webauthn_variables7.png" width="485" height="843" />

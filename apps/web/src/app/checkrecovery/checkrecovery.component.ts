@@ -124,7 +124,7 @@ export class CheckRecoveryComponent implements OnInit, OnDestroy {
       if (words) {
          this.showProgress.set(true);
          this.authSvc
-            .checkRecoveryWords(words)
+            .verifyRecoveryWords(words)
             .then((state) => this.result.set(state))
             .catch((err) => {
                console.error(err);

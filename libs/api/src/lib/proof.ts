@@ -27,6 +27,7 @@ import {
    base64ToBytes,
    bytesToBase64,
    concatArrays,
+   hashString,
    ParamError,
 } from '@qcrypt/crypto';
 import * as cc from '@qcrypt/crypto/consts';
@@ -55,6 +56,7 @@ export const RECOVERY_SIG_CONTEXTS: Readonly<Record<RecoveryOp, string>> = {
 const RECOVERY_COMPAT_SIG_CONTEXT = 'qcrypt/recovery/nonce/v1';
 
 export const RECOVERYID_BYTES = 16;
+export const RECOVERY_SECRET_BYTES = RECOVERYID_BYTES + cc.USERID_BYTES;
 export const CHALLENGE_BYTES = 32;
 export const PROOF_SKEW_MS = 120 * 1000;
 
@@ -183,7 +185,25 @@ export function recoverySecret(recoveryId: Uint8Array, userId: string): Uint8Arr
    if (recoveryId.every((b) => b === 0)) {
       throw new Error('Invalid recoveryId: all zero bytes');
    }
-   return concatArrays([recoveryId, base64ToBytes(userId)]);
+   const userIdBytes = base64ToBytes(userId, cc.USERID_BYTES, 'userId');
+   return concatArrays([recoveryId, userIdBytes]);
+}
+
+export function recoverySecretUserId(recoverySecret: Uint8Array): string {
+   if (recoverySecret.byteLength !== RECOVERY_SECRET_BYTES) {
+      throw new ParamError('invalid recoverySecret length');
+   }
+   return bytesToBase64(recoverySecret.subarray(RECOVERYID_BYTES));
+}
+
+export function getRecoveryPubKey(recoverySecret: Uint8Array): string {
+   const { pubKey, secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
+   secKey.fill(0);
+   return bytesToBase64(pubKey);
+}
+
+export function getRecoveryKeyId(recoveryPubKey: string): string {
+   return hashString(recoveryPubKey);
 }
 
 function buildRecoveryNonceMessage(userId: string, timestampMs: string, nonce: string): Uint8Array<ArrayBuffer> {
@@ -191,12 +211,6 @@ function buildRecoveryNonceMessage(userId: string, timestampMs: string, nonce: s
    base64ToBytes(nonce, CHALLENGE_BYTES, 'nonce');
    const message = [userId, timestampMs, nonce].join('\n');
    return new TextEncoder().encode(message);
-}
-
-export function getRecoveryPubKey(recoverySecret: Uint8Array): string {
-   const { pubKey, secKey } = getProofKeyPair(recoverySecret, RECOVERY_KEY_CONTEXT);
-   secKey.fill(0);
-   return bytesToBase64(pubKey);
 }
 
 export function createRecoveryNonceProof(

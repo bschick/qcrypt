@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { testWithAuth, toggleCredentials } from '.././common';
 
-// When a registering passkey has no PRF, the client offers a dialog: 'standard'
-// completes that same passkey (one create) as a no-PRF account, 'different' discards
-// it and registers a fresh one (a second create).
+// When a registering passkey has no PRF, the client offers a dialog with two choices.
+// Standard protection keeps that same passkey as a no-PRF account, for one create in
+// total. A different passkey discards it and registers another, for two creates.
 
 test.describe('prf fallback', () => {
-   testWithAuth('standard completes the same passkey as a no-PRF account', async ({ authFixture }) => {
+   testWithAuth('one no-PRF authenticator registers a no-PRF account', async ({ authFixture }) => {
       const { page } = authFixture;
       test.setTimeout(45000);
 
@@ -25,7 +25,7 @@ test.describe('prf fallback', () => {
    // account with no passkey. The client reuses the entered name for the retry, so both accounts
    // carry the lky mark rather than only the abandoned one.
    testWithAuth(
-      'different discards and recreates as a PRF account',
+      'a no-PRF authenticator followed by a PRF one registers a PRF account',
       { tag: '@u:lky_prffal' },
       async ({ authFixture }) => {
          const { page } = authFixture;

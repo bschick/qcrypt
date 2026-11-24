@@ -81,7 +81,7 @@ const AUTH_OK_KEY = Symbol('awsAuthOk');
 // Ensure the resolved profile has a live session before any AWS work. A
 // quick `sts get-caller-identity` probe; on failure, run the interactive
 // `aws sso login --use-device-code` and stream its output, injecting a
-// copy-pasteable macOS Chrome-profile launch command when the device URL
+// copy-pasteable macOS Chrome-profile launch command when the sign-in URL
 // appears (QC_{PROD,TEST}_CHROME_PROFILE, picked by --prod) — the
 // wrong-Identity-Center-account guard. Memoized per argv so it runs once.
 // Lives here (not the bash wrapper) so the prod confirm can run first and
@@ -108,20 +108,25 @@ export async function ensureAuth(argv) {
          stdio: ['inherit', 'pipe', 'pipe'],
       });
       const relay = (buf) => {
-         const text = buf.toString();
-         process.stdout.write(text);
-         if (chromeProfile) {
-            const match = /(https:\/\/\S*device\S*)/.exec(text);
-            if (match) {
-               process.stdout.write(
-                  `\n-> To open this URL in the right Chrome profile, run on your local macOS terminal:\n` +
-                     `open -na "Google Chrome" --args --profile-directory='${chromeProfile}' '${match[1]}'\n\n`,
-               );
-            }
+         process.stdout.write(buf.toString());
+      };
+      const hint = (line) => {
+         // The sign-in URL prints alone on its line. The closing "Successfully
+         // logged into Start URL" line also contains a URL, so it must not match.
+         const match = /^\s*(https:\/\/\S+)\s*$/.exec(line);
+         if (match) {
+            process.stdout.write(
+               `\n-> To open this URL in the right Chrome profile, run on your local macOS terminal:\n` +
+                  `open -na "Google Chrome" --args --profile-directory='${chromeProfile}' '${match[1]}'\n\n`,
+            );
          }
       };
       child.stdout.on('data', relay);
       child.stderr.on('data', relay);
+      if (chromeProfile) {
+         createInterface({ input: child.stdout }).on('line', hint);
+         createInterface({ input: child.stderr }).on('line', hint);
+      }
       child.on('error', rejectLogin);
       child.on('close', (code) => {
          if (code === 0) {

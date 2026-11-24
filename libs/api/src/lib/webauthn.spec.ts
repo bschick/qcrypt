@@ -120,9 +120,10 @@ describe('webauthn request builders', () => {
          userId: 'user-id',
          challenge: 'chal',
          recoveryPubKey: 'recovery-pub-key',
+         recoveryTimestamp: 'recovery-timestamp',
+         recoverySignature: 'recovery-signature',
          passkeyUserCredEnc: 'passkey-enc',
          recoveryUserCredEnc: 'recovery-enc',
-         userCredPubKey: 'user-cred-pub-key',
       });
       expectNoUnwanteds(request, REG_UNWANTED);
    });
@@ -206,6 +207,8 @@ describe('webauthn round trip', () => {
          userId: 'user-id',
          challenge: regOptions.challenge,
          recoveryPubKey: 'recovery-pub-key',
+         recoveryTimestamp: 'recovery-timestamp',
+         recoverySignature: 'recovery-signature',
       });
 
       const registered = await verifyRegistrationResponse({

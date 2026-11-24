@@ -11,6 +11,7 @@ import {
 } from '@playwright/test';
 import * as api from '@qcrypt/api';
 import {
+   bytesToBase64,
    cryptoReady,
    MasterKeyKeyProvider,
    decryptStream,
@@ -143,11 +144,25 @@ export function keeperDir(host: hosts, keeper: string): string {
    return join(keeperCredsDir, host, keeper);
 }
 
-// Intended PRF account mode per keeper.
-export const keeperPrf: Record<string, boolean> = {
-   keeper1: false,
-   keeper2: true,
+// Intended account mode and handle format per keeper. Keepers provisioned before tagging hold an
+// untagged handle, which no current client can create, so they are the only coverage of that path.
+export const keepers: Record<string, { prf: boolean; tagged: boolean }> = {
+   keeper1: { prf: false, tagged: false },
+   keeper2: { prf: true, tagged: false },
+   keeper3: { prf: true, tagged: true },
+   keeper4: { prf: false, tagged: true },
 };
+
+// Returns the handle a keeper's passkey holds, in the encoding checkHandle accepts. This is the
+// credential source field an assertion returns, so it is the value a sign-in checks its tag against.
+export function keeperHandle(host: hosts, keeper: string): string {
+   const stored = new PasskeysCredentialsFileRepository(keeperDir(host, keeper)).loadCredentials();
+   const userHandle = stored[0]?.publicKeyCredentialSource.userHandle;
+   if (!userHandle) {
+      throw new Error(`keeperHandle: no credential with a user handle in ${keeperDir(host, keeper)}`);
+   }
+   return bytesToBase64(userHandle);
+}
 
 export type CreatedTestUser = {
    userId: string;
@@ -184,10 +199,10 @@ export type AuthFixture = {
    // stored credential.
    loadAuthenticator: (dir: string) => Authenticator;
    // Creates a fresh PWTesty_e2e_<timestamp> user on the authenticator via the UI
-   // registration flow. A 'none' authenticator hits the fallback dialog: without
-   // differentAuth it takes 'standard' (same passkey, no-PRF account); with
-   // differentAuth it takes 'different', discarding that passkey and registering a
-   // fresh one on differentAuth. Returns signed-in on '/' (Encryption Mode visible).
+   // registration flow. A 'none' authenticator reaches the fallback dialog.
+   // Without differentAuth, the new passkey is kept and the account is no-PRF.
+   // With differentAuth, the new passkey is discarded and a fresh one is registered
+   // on differentAuth. Returns signed-in on '/' (Encryption Mode visible).
    createTestUser: (authenticator: Authenticator, differentAuth?: Authenticator) => Promise<CreatedTestUser>;
    // Number of navigator.credentials.create calls the emulators have handled so far.
    credentialCreateCount: () => number;
@@ -423,8 +438,6 @@ export const testWithAuth = test.extend<{ authFixture: AuthFixture }>({
                await page.getByRole('button', { name: 'Continue with standard protection' }).click();
             }
          }
-         // The emulator that produced the account's passkey (differentAuth's after a
-         // 'different' fallback, otherwise the original).
          const finalEmulator = active;
 
          const verifyResp = await verifyPromise;

@@ -32,8 +32,11 @@ const ML_DSA_65 = -49;
 // TODO: register and authenticate with an ML-DSA credential once nid-webauthn-emulator can
 // create one.
 describe('registration options', () => {
+   beforeAll(cryptoReady);
+
    it('should offer the supported algorithms, most preferred first', async () => {
-      const res = await postJson('/v1/reg/options', { userName: testUserName() }, {}, '');
+      const userCredPubKey = api.getUserCredPubKey(getRandom(cc.USERCRED_BYTES));
+      const res = await postJson('/v1/reg/options', { userName: testUserName(), userCredPubKey }, {}, '');
       expect(res.status).toBe(200);
 
       const algs = res.data.pubKeyCredParams.map((param: { alg: number }) => param.alg);
@@ -55,7 +58,8 @@ describe('registration options input validation', () => {
 
    // reg/options is unauthenticated, so every rejection is a uniform 401. A valid request goes first
    // to show that the replaced fields alone cause the rejection.
-   async function expectRejected(fields: Record<string, string | null>): Promise<void> {
+   // An undefined field is dropped from the request body rather than sent
+   async function expectRejected(fields: Record<string, string | null | undefined>): Promise<void> {
       const valid = { userName: testUserName(), userCredPubKey: api.getUserCredPubKey(getRandom(cc.USERCRED_BYTES)) };
       const ok = await postJson('/v1/reg/options', valid, {}, '');
       expect(ok.status).toBe(200);
@@ -70,8 +74,9 @@ describe('registration options input validation', () => {
    it('rejects a wrong-length userCredPubKey', () =>
       expectRejected({ userCredPubKey: bytesToBase64(getRandom(cc.USERCRED_BYTES)) }));
    it('rejects a non-base64 userCredPubKey', () => expectRejected({ userCredPubKey: 'not b64 $$$' }));
-   it('rejects an empty or null userCredPubKey', async () => {
+   it('rejects an empty, null or omitted userCredPubKey', async () => {
       await expectRejected({ userCredPubKey: '' });
       await expectRejected({ userCredPubKey: null });
+      await expectRejected({ userCredPubKey: undefined });
    });
 });

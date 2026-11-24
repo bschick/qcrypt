@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 import { type AfterViewInit, Component, type OnDestroy, type OnInit, Renderer2, inject, signal } from '@angular/core';
-import { AuthenticatorService, normalizeRecoveryWords } from '../services/authenticator.service';
+import { AuthenticatorService } from '../services/authenticator.service';
 import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -30,8 +30,7 @@ import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { validateMnemonic } from '@scure/bip39';
-import { wordlist } from '@scure/bip39/wordlists/english.js';
+import { decodeRecovery, validRecoveryWords } from '../services/recoverywords';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
 import { NoAssistDirective } from '../ui/noassist.directive';
@@ -124,14 +123,13 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
          if (!rawString) {
             this.error.set('No recovery words were entered.');
          } else {
-            const cleanedWords = normalizeRecoveryWords(rawString);
-            if (!validateMnemonic(cleanedWords, wordlist)) {
+            if (!validRecoveryWords(rawString)) {
                this.error.set('The recovery pattern contains incorrect words.');
             } else {
-               const proceed = await this._checkProceed(cleanedWords);
+               const proceed = await this._checkProceed(rawString);
                if (proceed) {
                   this.showProgress.set(true);
-                  await this._authSvc.recover3(cleanedWords);
+                  await this._authSvc.recover3(rawString);
                   this._router.navigateByUrl('/');
                }
             }
@@ -150,8 +148,10 @@ export class Recovery3Component implements OnInit, OnDestroy, AfterViewInit {
       }
    }
 
-   private async _checkProceed(recoveryWords: string): Promise<boolean> {
-      const userId = this._authSvc.getRecoveryUserId(recoveryWords);
+   private async _checkProceed(rawWords: string): Promise<boolean> {
+      const { recoverySecret, userId } = decodeRecovery(rawWords);
+      recoverySecret.fill(0);
+
       if (!this._authSvc.hasSession() || userId === this._authSvc.userId) {
          return true;
       }
