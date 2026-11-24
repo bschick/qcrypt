@@ -163,7 +163,7 @@ export function matchEvent(event: APIGatewayProxyEventV2, methodMap: MethodMap):
          pathname: path,
       });
 
-      // Compared as a canonical string because Number() accepts non-canonical spellings
+      // Compared as a canonical string because Number() accepts non-canonical forms
       if (match && match.pathname.groups.ver === String(handerInfo.version)) {
          // biome-ignore lint/suspicious/noExplicitAny: request bodies are arbitrary JSON
          let body: Record<string, any> = {};
