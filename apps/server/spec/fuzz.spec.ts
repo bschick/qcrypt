@@ -28,6 +28,7 @@ import {
    postJson,
    patchJson,
    deleteJson,
+   requestRaw,
    expectPasskeyDeleted,
    registerTestUser,
    setSessionSigner,
@@ -228,6 +229,34 @@ describe('api fuzzing (authenticated)', () => {
       },
       180000,
    );
+
+   it('returns 404 for HEAD and OPTIONS', async () => {
+      const ok = await getJson('/v1/user', { 'x-csrf-token': csrf }, cookie);
+      expect(ok.status).toBe(200);
+
+      for (const method of ['HEAD', 'OPTIONS']) {
+         const res = await requestRaw(method, '/v1/user');
+         expect(res.status).toBe(404);
+      }
+   });
+
+   it('rejects a JSON body that is not an object', async () => {
+      const auth = { 'x-csrf-token': csrf };
+      const ok = await patchJson(`/v1/passkeys/${credId}`, { description: 'valid description' }, auth, cookie);
+      expect(ok.status).toBe(200);
+
+      for (const json of ['null', '[]', '"text"']) {
+         const patchUser = await requestRaw('PATCH', '/v1/user', json, auth, cookie);
+         expect(patchUser.status).toBe(400);
+
+         const proved = { ...auth, 'x-challenge-proof': 'signature,timestamp' };
+         const addPasskey = await requestRaw('POST', '/v1/passkeys/verify', json, proved, cookie);
+         expect(addPasskey.status).toBe(400);
+
+         const authOptions = await requestRaw('POST', '/v1/auth/options', json);
+         expect(authOptions.status).toBe(400);
+      }
+   });
 });
 
 describe('api fuzzing (unauthenticated)', () => {

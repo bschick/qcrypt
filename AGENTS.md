@@ -184,6 +184,7 @@ pnpm exec tsc --noEmit -p apps/cli/tsconfig.json
 | Web heap secret scans (prod) | `pnpm test:secrets:prod` | | *Playwright against quickcrypt.org; creates and deletes two test accounts* |
 | API full fuzz tests (test) | `pnpm test:fuzz` | | *Vitest against test.quickcrypt.org (`QC_FULL_FUZZ=true`); the small fuzz also runs in every `pnpm test:server`* |
 | API full fuzz tests (prod) | `pnpm test:fuzz:prod` | | *Vitest against quickcrypt.org* |
+| API penetration tests (test) | `pnpm test:pentest` | | *Vitest against test.quickcrypt.org only (`QC_PENTEST=true`); sends attack requests at throwaway accounts and the e2e keeper accounts; under a minute; skipped in `pnpm test:server`* |
 | Server unit tests | `pnpm test:server` | `pnpm nx test server` | |
 | Server unit tests (prod) | `pnpm test:server:prod` | `pnpm nx test-prod server` | |
 | Lint e2e specs | `pnpm lint:e2e` | | *ESLint `playwright/missing-playwright-await`; also runs first in `build:web` and `build:web:prod`* |

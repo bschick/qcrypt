@@ -277,19 +277,19 @@ export function createCredential(
    return created;
 }
 
-async function request(
+export async function requestRaw(
    method: string,
    path: string,
-   bodyObj: any = null,
+   json?: string,
    extraHeaders: Record<string, string> = {},
    cookie = '',
 ) {
    const headers: Record<string, string> = {
-      ...extraHeaders,
       // QCTestClient marker lets the server's PWTesty_ prefix guard recognize
       // these vitest specs as a known test client.
       'User-Agent': 'Mozilla/5.0 QCTestClient',
       Origin: RP_ORIGIN,
+      ...extraHeaders,
    };
 
    if (cookie) {
@@ -297,8 +297,7 @@ async function request(
    }
 
    let body: Buffer | undefined;
-   if (bodyObj) {
-      const json = JSON.stringify(bodyObj);
+   if (json !== undefined) {
       body = Buffer.from(json, 'utf8');
       headers['Content-Type'] = 'application/json';
       headers['x-amz-content-sha256'] = sha256Hex(body);
@@ -332,7 +331,17 @@ async function request(
       responseCookie = match[1];
    }
 
-   return { status: res.status, data, cookie: responseCookie, rawText: raw };
+   return { status: res.status, data, cookie: responseCookie, rawText: raw, headers: res.headers };
+}
+
+function request(
+   method: string,
+   path: string,
+   bodyObj: any = null,
+   extraHeaders: Record<string, string> = {},
+   cookie = '',
+) {
+   return requestRaw(method, path, bodyObj ? JSON.stringify(bodyObj) : undefined, extraHeaders, cookie);
 }
 
 export const postJson = (p: string, b: any, h: any, c: string) => request('POST', p, b, h, c);
