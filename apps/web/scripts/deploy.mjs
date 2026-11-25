@@ -678,12 +678,13 @@ async function runDeploy(argv) {
    const uploadedKeys = parseUploadedKeys(bulkResult.stdout);
 
    if (mutableKeys.length > 0) {
+      // sync skips a file whose bytes match the bucket, which leaves the Cache-Control stored with it unchanged. cp
+      // uploads every file.
       const mutableResult = aws(argv, [
          's3',
-         'sync',
-         localSrc,
-         s3Dest,
-         '--exact-timestamps',
+         ...(argv.recachectl
+            ? ['cp', localSrc, s3Dest, '--recursive']
+            : ['sync', localSrc, s3Dest, '--exact-timestamps']),
          '--no-progress',
          '--exclude',
          '*',
@@ -1253,6 +1254,13 @@ const deployOpts = (y) =>
          type: 'string',
          default: 'public, max-age=31536000, immutable',
          describe: `Cache-Control header for uploaded files, except those in MUTABLE_FILES, which get "${MUTABLE_CACHE_CONTROL}"`,
+      })
+      .option('recachectl', {
+         type: 'boolean',
+         default: false,
+         describe:
+            'Upload every file in MUTABLE_FILES even when unchanged, which replaces the Cache-Control stored with ' +
+            'the copies already in the bucket',
       })
       .option('expiration-days', { type: 'number', default: 30, describe: 'Days an orphan persists before deletion' })
       .option('cf-distribution', {
