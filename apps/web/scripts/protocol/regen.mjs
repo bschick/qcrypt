@@ -28,7 +28,7 @@ const protocolDir = path.join(repoRoot, 'apps/web/scripts/protocol');
 const buildDir = path.join(protocolDir, 'build');
 const texPath = path.join(repoRoot, 'apps/web/src/assets-src/main.tex');
 const htmlPath = path.join(repoRoot, 'apps/web/src/app/help/protocol/protocol8.component.html');
-const assetsDir = path.join(repoRoot, 'apps/web/src/assets');
+const assetsDir = path.join(repoRoot, 'apps/web/src/assets/protocol8');
 const pdfPath = path.join(assetsDir, 'protocol8.pdf');
 const check = process.argv.includes('--check');
 
@@ -118,10 +118,12 @@ function pairImages(tex, html) {
          .replace(/<[^>]*>/g, '')
          .replace(/[^A-Za-z0-9]/g, '');
    const titles = [...tex.matchAll(/\\underline\{(.*)\}\\\\/g)].map((match) => match[1]);
-   const images = [...html.matchAll(/<h2>([\s\S]*?)<\/h2>\s*<img src="\/assets\/([\w]+\.png)"/g)].map((match) => ({
-      title: match[1],
-      name: match[2],
-   }));
+   const images = [...html.matchAll(/<h2>([\s\S]*?)<\/h2>\s*<img src="\/assets\/protocol8\/([\w]+\.png)"/g)].map(
+      (match) => ({
+         title: match[1],
+         name: match[2],
+      }),
+   );
    if (titles.length !== images.length) {
       throw new Error(
          `protocol: main.tex has ${titles.length} stanza titles but the page shows ${images.length} images`,
@@ -199,7 +201,7 @@ for (const name of names) {
    outputs.set(path.join(assetsDir, name), content);
    // The page shows each image at half its pixel size, rounding an odd pixel count up
    const { width, height } = pngSize(content);
-   const tag = new RegExp(`(<img src="/assets/${name}" )width="\\d+" height="\\d+"`);
+   const tag = new RegExp(`(<img src="/assets/protocol8/${name}" )width="\\d+" height="\\d+"`);
    page = page.replace(tag, `$1width="${Math.ceil(width / 2)}" height="${Math.ceil(height / 2)}"`);
 }
 outputs.set(htmlPath, Buffer.from(page));

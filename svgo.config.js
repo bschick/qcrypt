@@ -1,6 +1,6 @@
 // svgo.config.js
 // Default optimization config for SVGs in this repo (currently used by the
-// `svgo:flow` script for files under apps/web/src/assets/flow/).
+// `svgo:flow` script for files under apps/web/src/assets/protocol8/flow/).
 //
 // Picked up automatically by `svgo` from the working directory.
 

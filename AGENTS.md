@@ -109,7 +109,7 @@ Each library's `regen.mjs` and `Containerfile` describe how its build pins and c
 
 #### Rebuilding the protocol document (`protocol8.pdf`, stanza images)
 
-`apps/web/src/assets-src/main.tex` is the source of `apps/web/src/assets/protocol8.pdf`, of the stanza PNGs that the help page's protocol section shows, and of each image's `width` and `height` in `protocol8.component.html`. All three are built in a container, so they are byte-identical on any machine.
+`apps/web/src/assets-src/main.tex` is the source of `apps/web/src/assets/protocol8/protocol8.pdf`, of the stanza PNGs that the help page's protocol section shows, and of each image's `width` and `height` in `protocol8.component.html`. All three are built in a container, so they are byte-identical on any machine.
 
 **Rebuild** with `pnpm build:protocol` after changing `main.tex`, then commit the files it lists. It writes only files whose content changed.
 
@@ -300,6 +300,7 @@ The wrappers exit with a clear error when a required var is missing. The AWS CLI
 
 - **`--comment`** — recorded in the deploy manifest (web `deployComment` field) or in `publish-version` / `update-alias` `Description` (server). Defaults to the latest git tag (`git describe --tags --abbrev=0`) when not passed; pass `--comment ''` to suppress the git-tag fallback for a single run. `info` surfaces the current value.
 - **`--dry-run`** (alias `--dryrun`) — logs every mutating `aws` call as `[dry-run] aws ...` instead of executing it. Read-only AWS calls (manifest fetch, list-versions, etc.) still run so the diagnostic output is accurate.
+- **Web cache headers** — a web deploy uploads every file as immutable for a year, except the files in `MUTABLE_FILES` in `apps/web/scripts/deploy.mjs`, which browsers recheck on each load. A file that changes under the same name must be in that list. Any other file needs a new name when its bytes change, or returning browsers keep the old copy.
 - **Web requires `--prod <alias>`** — single-environment design. Pass any alias name; the value isn't currently used by the web `deploy.mjs` but is kept symmetric with the server.
 - **Server `--prod <alias>`** — optional. Presence enables prod-mode (publish-version + alias bump); the value is the alias name to point at (typically `prod`). Without `--prod`, server deploy hits `$LATEST` only (test mode).
 - **Server `--no-alias`** (prod-mode `deploy` / `bdeploy`) — publishes the version but leaves the alias pointing where it was, so prod traffic stays on the old code while the new version is reachable by number. Move the alias afterwards with `pnpm deploy:server:prod version <n>`. This is what a migration that must run before its own cutover needs.
