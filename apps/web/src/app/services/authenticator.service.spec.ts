@@ -131,6 +131,14 @@ describe('AuthenticatorService', () => {
       });
       window.fetch = fetchMock as typeof fetch;
 
+      // Playwright's WebKit for Linux has no navigator.credentials, so define one with placeholder methods
+      if (!navigator.credentials) {
+         Object.defineProperty(navigator, 'credentials', {
+            configurable: true,
+            value: { get: vi.fn(), create: vi.fn() },
+         });
+      }
+
       TestBed.configureTestingModule({
          providers: [{ provide: KEYSTORE_DB_NAME, useValue: 'quickcrypt-authenticator-spec' }],
       });
@@ -144,6 +152,9 @@ describe('AuthenticatorService', () => {
       peerResponder.close();
       TestBed.inject(BroadcastService).close();
       window.fetch = originalFetch;
+      if (Object.hasOwn(navigator, 'credentials')) {
+         Reflect.deleteProperty(navigator, 'credentials');
+      }
       localStorage.clear();
       sessionStorage.clear();
       await TestBed.inject(KeystoreService).flush();
@@ -701,19 +712,16 @@ describe('AuthenticatorService', () => {
          } as unknown as Credential;
       }
 
-      it.skipIf(!window.PublicKeyCredential || !navigator.credentials)(
-         'rejects a PRF read from an assertion without user verification',
-         async () => {
-            vi.spyOn(navigator.credentials, 'get')
-               .mockResolvedValueOnce(assertionWithFlags(userPresent | userVerified))
-               .mockResolvedValueOnce(assertionWithFlags(userPresent));
+      it('rejects a PRF read from an assertion without user verification', async () => {
+         vi.spyOn(navigator.credentials, 'get')
+            .mockResolvedValueOnce(assertionWithFlags(userPresent | userVerified))
+            .mockResolvedValueOnce(assertionWithFlags(userPresent));
 
-            // @ts-expect-error — exercising private path
-            await expect(service._readPrfViaAssertion('Y3JlZA')).resolves.toBeTruthy();
-            // @ts-expect-error — exercising private path
-            await expect(service._readPrfViaAssertion('Y3JlZA')).rejects.toThrow(/user verification/);
-         },
-      );
+         // @ts-expect-error — exercising private path
+         await expect(service._readPrfViaAssertion('Y3JlZA')).resolves.toBeTruthy();
+         // @ts-expect-error — exercising private path
+         await expect(service._readPrfViaAssertion('Y3JlZA')).rejects.toThrow(/user verification/);
+      });
    });
 
    describe('user verification requests', () => {
@@ -727,30 +735,24 @@ describe('AuthenticatorService', () => {
          });
       }
 
-      it.skipIf(!window.PublicKeyCredential || !navigator.credentials)(
-         'passes the server user verification request through at sign-in',
-         async () => {
-            serveAuthOptions();
-            const getSpy = vi.spyOn(navigator.credentials, 'get').mockRejectedValue(new Error('stopped'));
+      it('passes the server user verification request through at sign-in', async () => {
+         serveAuthOptions();
+         const getSpy = vi.spyOn(navigator.credentials, 'get').mockRejectedValue(new Error('stopped'));
 
-            await expect(service.createSession()).rejects.toThrow();
-            expect(getSpy.mock.calls[0][0]?.publicKey?.userVerification).toBe('preferred');
-         },
-      );
+         await expect(service.createSession()).rejects.toThrow();
+         expect(getSpy.mock.calls[0][0]?.publicKey?.userVerification).toBe('preferred');
+      });
 
-      it.skipIf(!window.PublicKeyCredential || !navigator.credentials)(
-         'requires user verification to re-authenticate',
-         async () => {
-            primeLocalStorage();
-            // @ts-expect-error — exercising private path
-            await service._loginUser(sessionResponse, base64ToBytes(userCred));
-            serveAuthOptions();
-            const getSpy = vi.spyOn(navigator.credentials, 'get').mockRejectedValue(new Error('stopped'));
+      it('requires user verification to re-authenticate', async () => {
+         primeLocalStorage();
+         // @ts-expect-error — exercising private path
+         await service._loginUser(sessionResponse, base64ToBytes(userCred));
+         serveAuthOptions();
+         const getSpy = vi.spyOn(navigator.credentials, 'get').mockRejectedValue(new Error('stopped'));
 
-            await expect(service.reauthenticate()).rejects.toThrow();
-            expect(getSpy.mock.calls[0][0]?.publicKey?.userVerification).toBe('required');
-         },
-      );
+         await expect(service.reauthenticate()).rejects.toThrow();
+         expect(getSpy.mock.calls[0][0]?.publicKey?.userVerification).toBe('required');
+      });
    });
 
    describe('session user binding', () => {

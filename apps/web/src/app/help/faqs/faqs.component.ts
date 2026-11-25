@@ -681,7 +681,7 @@ const ELEMENT_DATA: FAQElement[] = [
       file, click the <i>Files</i> button next to the <i>Decrypt</i>
       button and then choose <i>Select Cipher File</i> from the menu.
       <p>You can inspect the layout of encrypted data within a Quick Crypt file by
-      adding this <a href="/assets/quickcrypt.tcl" download>template file</a> to the
+      adding this <a href="/assets/protocol8/quickcrypt.tcl" download>template file</a> to the
       <a href='https://hexfiend.com/' target="_blank">Hex Fiend</a> macOS application.
       </p>`,
    },

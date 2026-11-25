@@ -92,6 +92,7 @@ pnpm test:server        # run against test.quickcrypt.org (includes the small in
 pnpm test:server:prod   # run against quickcrypt.org
 pnpm test:fuzz          # full input fuzz against test.quickcrypt.org (sets QC_FULL_FUZZ=true)
 pnpm test:fuzz:prod     # full input fuzz against quickcrypt.org
+pnpm test:pentest       # attack requests against test.quickcrypt.org only (sets QC_PENTEST=true)
 ```
 
 Direct HTTP API tests — contract, negative, and input fuzzing — live in `apps/server/spec/` (`api.spec.ts`, `fuzz.spec.ts`). The full fuzz is gated behind `QC_FULL_FUZZ`; a small fuzz subset runs on every `pnpm test:server`. Backend behavior is also exercised end-to-end through the web client in `apps/web/`; see the root `AGENTS.md` for those.

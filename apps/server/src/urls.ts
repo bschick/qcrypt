@@ -26,6 +26,9 @@ import type { UnverifiedUserItem, VerifiedUserItem } from './models';
 import type { Response } from './server';
 export type QParams = Record<string, string>;
 export const INTERNAL_VERSION = 0;
+
+// Every origin that serves the web client: production, test, and the local dev server
+const RP_ORIGINS = ['https://quickcrypt.org', 'https://test.quickcrypt.org', 'https://t1.quickcrypt.org:4200'];
 export type Method = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 export type Version = typeof INTERNAL_VERSION | 1;
 
@@ -143,12 +146,15 @@ export function matchEvent(event: APIGatewayProxyEventV2, methodMap: MethodMap):
    if (event.headers['x-passkey-port']) {
       rpOrigin += `:${event.headers['x-passkey-port']}`;
    }
+   if (!RP_ORIGINS.includes(rpOrigin)) {
+      throw new ParamError('invalid request, unsupported origin');
+   }
 
    const method = event.requestContext.http.method.toUpperCase() as Method;
    const path = event.requestContext.http.path;
    // console.log(`${method} ${path}`);
 
-   const handlerInfos: HandlerInfo[] = methodMap[method];
+   const handlerInfos: HandlerInfo[] = methodMap[method] ?? [];
 
    // rpID and therefore hostname is constrained to *.quickcrypt.org by cloudfront
    for (const handerInfo of handlerInfos) {
@@ -157,7 +163,7 @@ export function matchEvent(event: APIGatewayProxyEventV2, methodMap: MethodMap):
          pathname: path,
       });
 
-      // Compared as a canonical string because Number() accepts non-canonical spellings
+      // Compared as a canonical string because Number() accepts non-canonical forms
       if (match && match.pathname.groups.ver === String(handerInfo.version)) {
          // biome-ignore lint/suspicious/noExplicitAny: request bodies are arbitrary JSON
          let body: Record<string, any> = {};
@@ -172,6 +178,9 @@ export function matchEvent(event: APIGatewayProxyEventV2, methodMap: MethodMap):
                   rawBody = new TextDecoder().decode(base64Decode(rawBody));
                }
                body = JSON.parse(rawBody);
+               if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+                  throw new Error('body is not a json object');
+               }
             } catch (err) {
                console.error(err);
                throw new ParamError('invalid json in body');

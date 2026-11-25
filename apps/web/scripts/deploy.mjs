@@ -66,8 +66,8 @@
  * `index.html` will never find a missing chunk from the current deploy.
  * (The Lambda in `apps/server/src/nonce/lambda_function.py` rewrites the
  * index.html's `Cache-Control` header per-request, so the S3 object's
- * cache-control is arbitrary for index.html — we give it the same immutable
- * value as everything else to avoid implying the S3-level value has meaning.)
+ * cache-control is arbitrary for index.html — we give it the hashed bundles'
+ * value to avoid implying the S3-level value has meaning.)
  *
  * ============================================================
  * AWS auth
@@ -131,6 +131,22 @@ const METADATA_SKIP_RE = /^(?:\.DS_Store|\._.*|Thumbs\.db|desktop\.ini)$/;
 
 // Bundles named by a hash of their content, which index.html pins with sha384 and browsers cache as immutable
 const HASHED_BUNDLE_RE = /^(?:main|chunk|styles)-[A-Za-z0-9_-]+\.(?:js|css)$/;
+
+// Files whose bytes change while the name stays the same: the protocol 8 images, PDF, Tcl template and flow
+// diagrams, and files read by crawlers, mail servers and the edge. Any other file is cached as immutable, so one that
+// changes needs a new name.
+const MUTABLE_FILES = [
+   'robots.txt',
+   'sitemap.xml',
+   'maintenance.html',
+   '.well-known/*',
+   'assets/error.html',
+   'assets/protocol8/*',
+];
+
+// Browsers revalidate a mutable file before each reuse (max-age=0). The edge caches it (s-maxage) until a deploy
+// invalidates the edge cache.
+const MUTABLE_CACHE_CONTROL = 'public, max-age=0, s-maxage=31536000';
 
 function collectLocalFiles(root, recursive) {
    const out = [];
@@ -602,6 +618,7 @@ async function runDeploy(argv) {
    // right spot.
    const localSrc = scope.localSubpath ? join(argv.buildDir, scope.localSubpath) : argv.buildDir;
    const s3Dest = `s3://${argv.bucket}/${scope.s3Prefix}`;
+   const mutableKeys = [...newKeys].filter(matcherFor(MUTABLE_FILES));
    const bulkArgs = [
       's3',
       'sync',
@@ -627,6 +644,7 @@ async function runDeploy(argv) {
       'desktop.ini',
       '--exclude',
       '*/desktop.ini',
+      ...mutableKeys.flatMap((key) => ['--exclude', key]),
       '--cache-control',
       argv.cacheControl,
    ];
@@ -658,6 +676,26 @@ async function runDeploy(argv) {
       return keys;
    };
    const uploadedKeys = parseUploadedKeys(bulkResult.stdout);
+
+   if (mutableKeys.length > 0) {
+      // sync skips a file whose bytes match the bucket, which leaves the Cache-Control stored with it unchanged. cp
+      // uploads every file.
+      const mutableResult = aws(argv, [
+         's3',
+         ...(argv.recachectl
+            ? ['cp', localSrc, s3Dest, '--recursive']
+            : ['sync', localSrc, s3Dest, '--exact-timestamps']),
+         '--no-progress',
+         '--exclude',
+         '*',
+         ...mutableKeys.flatMap((key) => ['--include', key]),
+         '--cache-control',
+         MUTABLE_CACHE_CONTROL,
+      ]);
+      for (const k of parseUploadedKeys(mutableResult.stdout)) {
+         uploadedKeys.add(k);
+      }
+   }
 
    // index.html is sync'd separately so it lands AFTER its chunks. Using sync
    // (not cp) means it's skipped when unchanged.
@@ -1215,7 +1253,14 @@ const deployOpts = (y) =>
       .option('cache-control', {
          type: 'string',
          default: 'public, max-age=31536000, immutable',
-         describe: 'Cache-Control header for uploaded files',
+         describe: `Cache-Control header for uploaded files, except those in MUTABLE_FILES, which get "${MUTABLE_CACHE_CONTROL}"`,
+      })
+      .option('recachectl', {
+         type: 'boolean',
+         default: false,
+         describe:
+            'Upload every file in MUTABLE_FILES even when unchanged, which replaces the Cache-Control stored with ' +
+            'the copies already in the bucket',
       })
       .option('expiration-days', { type: 'number', default: 30, describe: 'Days an orphan persists before deletion' })
       .option('cf-distribution', {
