@@ -83,6 +83,11 @@ export const Users = new Entity(
             default: () => 0,
             required: true,
          },
+         passkeySetVersion: {
+            type: 'number',
+            default: () => 0,
+            required: true,
+         },
          createdAt: {
             type: 'number',
             default: () => Date.now(),

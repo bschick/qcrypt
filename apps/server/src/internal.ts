@@ -382,64 +382,25 @@ export async function postCleanupTestUsers(httpDetails: HttpDetails): Promise<Re
 }
 
 export async function postMunge(_httpDetails: HttpDetails): Promise<Response> {
-   // const batchSize = 14;
-   // const userAttrs = ["userId", "verified", "recoveryIdEnc", "recoveryPubKey"] as const;
-   // let users = await Users.scan.go({
-   //    attributes: userAttrs,
-   //    limit: batchSize
-   // });
+   const batchSize = 50;
+   let users = await Users.scan.go({ attributes: ['userId'], limit: batchSize });
+   let total = 0;
 
-   // let total = 0;
-   // let updated = 0;
+   while (users.data.length > 0) {
+      total += users.data.length;
+      for (const user of users.data) {
+         // fake user to prevent Id use
+         if (user.userId !== 'AAAAAAAAAAAAAAAAAAAAAA') {
+            await Users.patch({ userId: user.userId }).set({ passkeySetVersion: 0 }).go();
+         }
+      }
 
-   // while (users && users.data && users.data.length > 0) {
-   //    total += users.data.length
+      if (!users.cursor) {
+         break;
+      }
+      users = await Users.scan.go({ attributes: ['userId'], limit: batchSize, cursor: users.cursor });
+   }
 
-   //    for (let user of users.data) {
-   //       // fake user to prevent Id use
-   //       if (user.userId === 'AAAAAAAAAAAAAAAAAAAAAA') {
-   //          continue;
-   //       }
-
-   //       // recoveryPubKey can only be derived where a recoveryIdEnc exists, and skip
-   //       // any already backfilled
-   //       if (!user.verified || !user.recoveryIdEnc || user.recoveryPubKey) {
-   //          continue;
-   //       }
-
-   //       try {
-   //          const recoveryId = await decryptField(
-   //             user.recoveryIdEnc,
-   //             { userId: user.userId },
-   //             cc.RECOVERYID_BYTES
-   //          );
-   //          const recoveryPubKey = base64UrlEncode(
-   //             getRecoveryPubKey(recoverySecret(recoveryId, user.userId))
-   //          )!;
-
-   //          await Users.patch({
-   //             userId: user.userId
-   //          }).set({
-   //             recoveryPubKey: recoveryPubKey
-   //          }).go();
-
-   //          updated += 1;
-   //       } catch (error) {
-   //          console.error(`Error for ${user.userId}`, error);
-   //       }
-   //    }
-
-   //    if (!users.cursor) {
-   //       break;
-   //    }
-   //    users = await Users.scan.go({
-   //       attributes: userAttrs,
-   //       limit: batchSize,
-   //       cursor: users.cursor
-   //    });
-   // }
-
-   // console.log(`${total} users total, ${updated} recoveryPubKey backfilled`);
-
-   return { content: { message: `success: ...` } };
+   console.log(`${total} users scanned, passkeySetVersion set to 0`);
+   return { content: { message: `success: ${total} users scanned` } };
 }
