@@ -382,25 +382,30 @@ export async function postCleanupTestUsers(httpDetails: HttpDetails): Promise<Re
 }
 
 export async function postMunge(_httpDetails: HttpDetails): Promise<Response> {
-   const batchSize = 50;
-   let users = await Users.scan.go({ attributes: ['userId'], limit: batchSize });
+   // Ten writes a second stays under the Users table's maximum on-demand throughput
+   const batchSize = 10;
+   const userAttrs = ['userId', 'passkeySetVersion'] as const;
+   let users = await Users.scan.go({ attributes: userAttrs, limit: batchSize });
    let total = 0;
+   let updated = 0;
 
    while (users.data.length > 0) {
       total += users.data.length;
       for (const user of users.data) {
          // fake user to prevent Id use
-         if (user.userId !== 'AAAAAAAAAAAAAAAAAAAAAA') {
+         if (user.userId !== 'AAAAAAAAAAAAAAAAAAAAAA' && user.passkeySetVersion === undefined) {
             await Users.patch({ userId: user.userId }).set({ passkeySetVersion: 0 }).go();
+            updated += 1;
          }
       }
 
       if (!users.cursor) {
          break;
       }
-      users = await Users.scan.go({ attributes: ['userId'], limit: batchSize, cursor: users.cursor });
+      await setTimeout(1000);
+      users = await Users.scan.go({ attributes: userAttrs, limit: batchSize, cursor: users.cursor });
    }
 
-   console.log(`${total} users scanned, passkeySetVersion set to 0`);
-   return { content: { message: `success: ${total} users scanned` } };
+   console.log(`${total} users scanned, ${updated} set passkeySetVersion to 0`);
+   return { content: { message: `success: ${total} users scanned, ${updated} updated` } };
 }
